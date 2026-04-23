@@ -28,7 +28,6 @@ from app.constants import ComponentName, EventType, ExecutionStatus, HeartbeatTy
 
 from .base import G8eBaseModel, UTCDatetime
 from .tool_results import AuditEvent, AuditSessionMetadata, FileDiffEntry, FileHistoryEntry, FsListEntry
-from .mcp import JSONRPCRequest
 
 from app.utils.timestamp import now, parse_iso
 
@@ -36,6 +35,7 @@ from app.utils.timestamp import now, parse_iso
 from app.models.command_request_payloads import (
     CommandRequestPayload,
     CommandCancelRequestPayload,
+    CheckPortRequestPayload,
     FileEditRequestPayload,
     FsListRequestPayload,
     FsReadRequestPayload,
@@ -462,6 +462,7 @@ G8eoResultPayload = Union[
 G8eOutboundPayload = Union[
     CommandRequestPayload,
     CommandCancelRequestPayload,
+    CheckPortRequestPayload,
     FileEditRequestPayload,
     FsListRequestPayload,
     FsReadRequestPayload,
@@ -471,7 +472,6 @@ G8eOutboundPayload = Union[
     FetchFileDiffRequestPayload,
     RestoreFileRequestPayload,
     DirectCommandAuditRequestPayload,
-    JSONRPCRequest,
 ]
 
 

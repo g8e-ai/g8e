@@ -35,7 +35,6 @@ from app.constants.status import (
     FileOperation,
     OperatorToolName,
 )
-from app.services.mcp.adapter import build_tool_call_request
 from app.constants.events import (
     EventType,
 )
@@ -201,29 +200,17 @@ class OperatorFileService:
                     )
 
             # 5. Dispatch
-            mcp_payload = build_tool_call_request(
-                tool_name=OperatorToolName.FILE_READ if op_name == FileOperation.READ else (OperatorToolName.FILE_CREATE if op_name == FileOperation.WRITE and getattr(args, "create_if_missing", False) else (OperatorToolName.FILE_WRITE if op_name == FileOperation.WRITE else OperatorToolName.FILE_UPDATE)),
-                execution_id=exec_id,
-                arguments={
-                    "file_path": args.file_path,
-                    "content": args.content,
-                    "operation": args.operation,
-                    "create_if_missing": getattr(args, "create_if_missing", False),
-                    "target_operator": args.target_operator,
-                },
-            )
-
             g8e_message = G8eMessage(
                 id=exec_id,
                 source_component=ComponentName.G8EE,
-                event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
+                event_type=EventType.OPERATOR_FILE_EDIT_REQUESTED,
                 case_id=g8e_context.case_id,
                 task_id=AITaskId.FILE_EDIT,
                 investigation_id=g8e_context.investigation_id,
                 web_session_id=g8e_context.web_session_id,
                 operator_session_id=operator_session_id,
                 operator_id=operator_id,
-                payload=mcp_payload,
+                payload=args,
             )
 
             # Notify start
@@ -315,26 +302,17 @@ class OperatorFileService:
             self.execution_registry.allocate(exec_id)
 
             try:
-                mcp_payload = build_tool_call_request(
-                    tool_name=OperatorToolName.FETCH_FILE_HISTORY,
-                    execution_id=exec_id,
-                    arguments={
-                        "file_path": args.file_path,
-                        "target_operator": args.target_operator,
-                    },
-                )
-
                 g8e_message = G8eMessage(
                     id=exec_id,
                     source_component=ComponentName.G8EE,
-                    event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
+                    event_type=EventType.OPERATOR_FILE_HISTORY_FETCH_REQUESTED,
                     case_id=g8e_context.case_id,
                     task_id=AITaskId.FETCH_FILE_HISTORY,
                     investigation_id=g8e_context.investigation_id,
                     web_session_id=g8e_context.web_session_id,
                     operator_session_id=operator_session_id,
                     operator_id=operator_id,
-                    payload=mcp_payload,
+                    payload=args,
                 )
 
                 # Notify start
@@ -440,26 +418,17 @@ class OperatorFileService:
             self.execution_registry.allocate(exec_id)
 
             try:
-                mcp_payload = build_tool_call_request(
-                    tool_name=OperatorToolName.FETCH_FILE_DIFF,
-                    execution_id=exec_id,
-                    arguments={
-                        "file_path": args.file_path,
-                        "target_operator": args.target_operator,
-                    },
-                )
-
                 g8e_message = G8eMessage(
                     id=exec_id,
                     source_component=ComponentName.G8EE,
-                    event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
+                    event_type=EventType.OPERATOR_FILE_DIFF_FETCH_REQUESTED,
                     case_id=g8e_context.case_id,
                     task_id=AITaskId.FETCH_FILE_DIFF,
                     investigation_id=g8e_context.investigation_id,
                     web_session_id=g8e_context.web_session_id,
                     operator_session_id=operator_session_id,
                     operator_id=operator_id,
-                    payload=mcp_payload,
+                    payload=args,
                 )
 
                 # Notify start

@@ -329,10 +329,9 @@ On subscription, an automatic heartbeat is sent immediately. Reconnection uses e
 | `g8e.v1.operator.audit.ai.recorded` | Record AI message to audit log |
 | `g8e.v1.operator.audit.direct.command.recorded` | Record a direct terminal command to audit log |
 | `g8e.v1.operator.audit.direct.command.result.recorded` | Record the result of a direct terminal command |
-| `g8e.v1.operator.mcp.tools.call` | Call an MCP (Model Context Protocol) tool — translated to one of the inbound events above, then dispatched |
 | `g8e.v1.operator.shutdown.requested` | Acknowledge shutdown |
 
-**Note:** Only `g8e.v1.operator.mcp.tools.call` is accepted as an inbound MCP event. `mcp.tools.result` is outbound-only; the operator emits it to wrap execution payloads before they return to g8ed. `g8e.v1.operator.intent.approval.requested` is defined in the event constants but is not currently dispatched.
+**Note:** The operator command channel (`cmd:{operator_id}:{operator_session_id}`) accepts native g8e event types directly (listed above). MCP (Model Context Protocol) is a translator-only concern at the g8ee gateway layer for external MCP-speaking clients — the core operator protocol uses native g8e events end-to-end. `g8e.v1.operator.intent.approval.requested` is defined in the event constants but is not currently dispatched.
 
 ---
 

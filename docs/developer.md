@@ -180,9 +180,10 @@ AI Pipeline
 ├── GenerationConfigBuilder
 └── EvalJudge
 
-MCP Services
+MCP Gateway Services (External Client Integration)
 ├── MCPGatewayService ──────────> AIToolService, InvestigationService,
 │                                 OperatorDataService
+│                                 (Translates MCP tool calls to native g8e events)
 └── MCPAdapter
 ```
 

@@ -220,7 +220,7 @@ class TestPortCheckSuccess:
 
         assert len(pubsub.published_commands) == 1
         msg = pubsub.published_commands[0]
-        assert msg.event_type == EventType.OPERATOR_MCP_TOOLS_CALL
+        assert msg.event_type == EventType.OPERATOR_NETWORK_PORT_CHECK_REQUESTED
         assert msg.operator_id == "op-1"
         assert msg.operator_session_id == "session-1"
 

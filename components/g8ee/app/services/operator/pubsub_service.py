@@ -26,12 +26,10 @@ import json
 import logging
 from collections.abc import Callable, Coroutine
 from typing import cast
-from uuid import uuid4
 
 from app.clients.pubsub_client import PubSubClient
 from app.constants.events import EventType
 from app.constants.channels import OperatorChannel, PubSubChannel
-from pydantic import ValidationError as PydanticValidationError
 
 from app.errors import ValidationError
 from app.models.pubsub_messages import (
@@ -56,8 +54,6 @@ from app.models.pubsub_messages import (
     G8eoResultPayload,
     G8eMessage,
 )
-from app.services.mcp.adapter import parse_tool_call_result
-from app.constants.status import ExecutionStatus
 
 logger = logging.getLogger(__name__)
 
@@ -97,42 +93,6 @@ def _parse_g8eo_payload(event_type_raw: str | EventType, payload_raw: dict[str, 
         return ExecutionStatusPayload.model_validate(payload_raw)
     if event_type == EventType.OPERATOR_COMMAND_CANCELLED:
         return CancellationResultPayload.model_validate(payload_raw)
-
-    if event_type == EventType.OPERATOR_MCP_TOOLS_RESULT:
-        # MCP results contain structured data. Reconstruct the original typed payload.
-        mcp_result = parse_tool_call_result(payload_raw)
-        
-        # Metadata check (Smell #1 Fix)
-        if mcp_result.metadata and "original_payload" in mcp_result.metadata:
-            original_payload = mcp_result.metadata["original_payload"]
-            mcp_event_type_raw = mcp_result.metadata.get("event_type")
-
-            if mcp_event_type_raw:
-                try:
-                    mcp_event_type = EventType(mcp_event_type_raw)
-                    if model_cls := _PAYLOAD_MODELS.get(mcp_event_type):
-                        return model_cls.model_validate(original_payload)
-                except (ValueError, PydanticValidationError) as exc:
-                    logger.warning(
-                        "[MCP] Failed to reconstruct typed payload from metadata, "
-                        "falling back to ExecutionResultsPayload: %s",
-                        exc,
-                    )
-
-        # Command execution results have no _metadata (standard stdout/stderr output)
-        stdout = "\n".join(c.text for c in mcp_result.content if c.type == "text" and c.text and not mcp_result.isError)
-        stderr = "\n".join(c.text for c in mcp_result.content if c.type == "text" and c.text and mcp_result.isError)
-        
-        # execution_id: try MCP metadata first, then the JSON-RPC envelope ID, finally a fresh UUID
-        envelope_id = payload_raw.get("id")
-        execution_id = mcp_result.execution_id or (str(envelope_id) if envelope_id else None) or str(uuid4())
-
-        return ExecutionResultsPayload(
-            execution_id=execution_id,
-            status=ExecutionStatus.COMPLETED if not mcp_result.isError else ExecutionStatus.FAILED,
-            stdout=stdout.strip(),
-            stderr=stderr.strip(),
-        )
 
     if event_type in _PAYLOAD_MODELS:
         return _PAYLOAD_MODELS[event_type].model_validate(payload_raw)

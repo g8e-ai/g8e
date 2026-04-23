@@ -116,22 +116,19 @@ def test_build_tool_call_request_is_only_defined_once() -> None:
     )
 
 
-@pytest.mark.parametrize("file_rel", [
-    "services/operator/execution_service.py",
-    "services/operator/command_service.py",
-    "services/operator/port_service.py",
-    "services/operator/file_service.py",
-    "services/operator/filesystem_service.py",
-    "services/operator/intent_service.py",
-])
-def test_operator_services_use_build_tool_call_request(file_rel: str) -> None:
+def test_operator_services_use_build_tool_call_request() -> None:
     """Every operator service file that dispatches an MCP tool call must
     import and invoke ``build_tool_call_request``. This catches a service
-    being added that rolls its own JSON-RPC envelope off-list."""
-    path = REPO_APP_ROOT / file_rel
-    source = path.read_text(encoding="utf-8")
-    assert "build_tool_call_request" in source, (
-        f"{file_rel} does not reference build_tool_call_request; if this file "
-        "no longer dispatches MCP tool calls, remove it from this parametrize "
-        "list. Otherwise, route through the blessed constructor."
+    being added that rolls its own JSON-RPC envelope off-list.
+
+    Note: After removing MCP wrapping from the operator command dispatch path
+    (April 2026), all operator services now use native g8e event types.
+    The MCP adapter (build_tool_call_request) is only used at the gateway layer
+    for external MCP-speaking clients, not by operator services.
+    This test is kept as a placeholder for future enforcement if MCP is
+    re-introduced at the operator service layer.
+    """
+    pytest.skip(
+        "All operator services now use native g8e event types. "
+        "MCP wrapping was removed from the operator command dispatch path in April 2026."
     )

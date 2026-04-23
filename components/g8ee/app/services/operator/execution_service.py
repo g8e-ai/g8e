@@ -39,7 +39,7 @@ from app.services.protocols import (
 )
 
 from app.models.tool_results import CommandExecutionResult
-from app.models.command_request_payloads import CommandCancelRequestPayload
+from app.models.command_request_payloads import CommandCancelRequestPayload, CommandRequestPayload
 from app.models.internal_api import DirectCommandRequest
 from app.models.operators import (
     CancelCommandResult,
@@ -49,7 +49,6 @@ from app.models.operators import (
     TargetSystem,
 )
 from app.models.pubsub_messages import G8eMessage
-from app.services.mcp.adapter import build_tool_call_request
 from app.models.tool_results import CommandInternalResult
 from app.models.http_context import G8eHttpContext
 from app.models.settings import G8eePlatformSettings
@@ -386,25 +385,20 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         operator_id = bound.operator_id
         operator_session_id = bound.operator_session_id
 
-        mcp_payload = build_tool_call_request(
-            tool_name="run_commands_with_operator",
-            execution_id=execution_id,
-            arguments={
-                "command": command,
-            },
-        )
-
         command_data = G8eMessage(
             id=execution_id,
             source_component=ComponentName.G8EE,
-            event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
+            event_type=EventType.OPERATOR_COMMAND_REQUESTED,
             case_id=g8e_context.case_id,
             task_id=AITaskId.DIRECT_COMMAND,
             investigation_id=g8e_context.investigation_id,
             web_session_id=g8e_context.web_session_id,
             operator_session_id=operator_session_id,
             operator_id=operator_id,
-            payload=mcp_payload,
+            payload=CommandRequestPayload(
+                command=command,
+                execution_id=execution_id,
+            ),
         )
 
         subscribers = await self.pubsub_service.publish_command(

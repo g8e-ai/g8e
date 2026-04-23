@@ -30,7 +30,6 @@ from app.constants.status import (
     AITaskId,
     OperatorToolName,
 )
-from app.services.mcp.adapter import build_tool_call_request
 from app.constants.events import (
     EventType,
 )
@@ -80,26 +79,17 @@ class OperatorFilesystemService:
         self.execution_registry.allocate(exec_id)
 
         try:
-            mcp_payload = build_tool_call_request(
-                tool_name=OperatorToolName.LIST_FILES,
-                execution_id=exec_id,
-                arguments={
-                    "path": args.path,
-                    "target_operator": args.target_operator,
-                },
-            )
-
             g8e_message = G8eMessage(
                 id=exec_id,
                 source_component=ComponentName.G8EE,
-                event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
+                event_type=EventType.OPERATOR_FILESYSTEM_LIST_REQUESTED,
                 case_id=g8e_context.case_id,
                 task_id=AITaskId.FS_LIST,
                 investigation_id=g8e_context.investigation_id,
                 web_session_id=g8e_context.web_session_id,
                 operator_session_id=resolved_operator.operator_session_id,
                 operator_id=resolved_operator.id,
-                payload=mcp_payload,
+                payload=args,
             )
 
             # Notify start
@@ -183,26 +173,17 @@ class OperatorFilesystemService:
         self.execution_registry.allocate(exec_id)
 
         try:
-            mcp_payload = build_tool_call_request(
-                tool_name=OperatorToolName.FILE_READ,
-                execution_id=exec_id,
-                arguments={
-                    "path": args.path,
-                    "target_operator": args.target_operator,
-                },
-            )
-
             g8e_message = G8eMessage(
                 id=exec_id,
                 source_component=ComponentName.G8EE,
-                event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
+                event_type=EventType.OPERATOR_FILESYSTEM_READ_REQUESTED,
                 case_id=g8e_context.case_id,
                 task_id=AITaskId.FS_READ,
                 investigation_id=g8e_context.investigation_id,
                 web_session_id=g8e_context.web_session_id,
                 operator_session_id=resolved_operator.operator_session_id,
                 operator_id=resolved_operator.id,
-                payload=mcp_payload,
+                payload=args,
             )
 
             # Notify start

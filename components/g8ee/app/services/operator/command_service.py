@@ -26,6 +26,7 @@ from app.models.tool_args import (
 )
 from app.models.command_request_payloads import (
     CheckPortRequestPayload,
+    CommandRequestPayload,
     FetchFileHistoryRequestPayload,
     FetchFileDiffRequestPayload,
     FileEditRequestPayload,
@@ -81,7 +82,6 @@ from .intent_service import OperatorIntentService
 from .lfaa_service import OperatorLFAAService
 from .port_service import OperatorPortService
 from .pubsub_service import OperatorPubSubService
-from app.services.mcp.adapter import build_tool_call_request
 from app.utils.safety import validate_command_safety
 from app.utils.ids import generate_command_execution_id, generate_batch_id
 from app.errors import ValidationError, BusinessLogicError
@@ -404,26 +404,22 @@ class OperatorCommandService:
                         success=False, error="Cancelled by fail-fast",
                     )
 
-                mcp_payload = build_tool_call_request(
-                    tool_name="run_commands_with_operator",
-                    execution_id=exec_id,
-                    arguments={
-                        "command": command,
-                        "justification": justification,
-                        "timeout_seconds": args.timeout_seconds,
-                    },
-                )
                 g8e_message = G8eMessage(
                     id=exec_id,
                     source_component=ComponentName.G8EE,
-                    event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
+                    event_type=EventType.OPERATOR_COMMAND_REQUESTED,
                     case_id=g8e_context.case_id,
                     task_id=AITaskId.COMMAND,
                     investigation_id=g8e_context.investigation_id,
                     web_session_id=g8e_context.web_session_id,
                     operator_session_id=op_session_id,
                     operator_id=op_id,
-                    payload=mcp_payload,
+                    payload=CommandRequestPayload(
+                        command=command,
+                        execution_id=exec_id,
+                        justification=justification,
+                        timeout_seconds=args.timeout_seconds,
+                    ),
                 )
 
                 await self.g8ed_event_service.publish_command_event(

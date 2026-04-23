@@ -338,47 +338,41 @@ class TestHandlePubSubResultMessage:
         )
 
 
-class TestParseG8eoPayloadMCPReconstruction:
-    """Test MCP payload reconstruction in _parse_g8eo_payload."""
+class TestParseG8eoPayloadNativeEventTypes:
+    """Regression coverage: g8ee dispatches native operator event types only.
 
-    async def test_reconstructs_port_check_payload_from_mcp_metadata(self):
-        """Test reconstructs PortCheckResultPayload from MCP metadata."""
+    g8eo never replies with OPERATOR_MCP_TOOLS_RESULT on the operator command
+    channel in the standard/pub-sub flow, so _parse_g8eo_payload must dispatch
+    each native result event type to its typed payload model directly.
+    """
+
+    async def test_port_check_completed_parses_as_port_check_result_payload(self):
         from app.services.operator.pubsub_service import _parse_g8eo_payload
         from app.models.pubsub_messages import PortCheckResultPayload
 
-        # MCP result with structured metadata (Smell #1 Fix pattern)
-        original_payload = {
+        payload_raw = {
             "execution_id": "exec-123",
             "host": "192.168.1.1",
             "port": 8080,
             "protocol": "tcp",
             "is_open": True,
-            "latency_ms": 5.0
-        }
-        payload_raw = {
-            "id": "exec-123",
-            "result": {
-                "content": [{"type": "text", "text": "Host 192.168.1.1 Port 8080 is OPEN"}],
-                "isError": False,
-                "_metadata": {
-                    "original_payload": original_payload,
-                    "event_type": EventType.OPERATOR_NETWORK_PORT_CHECK_COMPLETED
-                }
-            }
+            "latency_ms": 5.0,
+            "status": "completed",
+            "operator_id": "op-1",
+            "operator_session_id": "sess-1",
         }
 
-        result = _parse_g8eo_payload(EventType.OPERATOR_MCP_TOOLS_RESULT, payload_raw)
+        result = _parse_g8eo_payload(EventType.OPERATOR_NETWORK_PORT_CHECK_COMPLETED, payload_raw)
         assert isinstance(result, PortCheckResultPayload)
         assert result.execution_id == "exec-123"
         assert result.host == "192.168.1.1"
         assert result.is_open is True
 
-    async def test_reconstructs_fs_list_payload_from_mcp_metadata(self):
-        """Test reconstructs FsListResultPayload from MCP metadata."""
+    async def test_fs_list_completed_parses_as_fs_list_result_payload(self):
         from app.services.operator.pubsub_service import _parse_g8eo_payload
         from app.models.pubsub_messages import FsListResultPayload
 
-        original_payload = {
+        payload_raw = {
             "execution_id": "exec-456",
             "path": "/tmp",
             "status": "completed",
@@ -386,70 +380,20 @@ class TestParseG8eoPayloadMCPReconstruction:
             "operator_session_id": "sess-1",
             "entries": [
                 {"name": "file1.txt", "path": "/tmp/file1.txt", "is_dir": False, "size": 123},
-                {"name": "dir1", "path": "/tmp/dir1", "is_dir": True, "size": 4096}
+                {"name": "dir1", "path": "/tmp/dir1", "is_dir": True, "size": 4096},
             ],
             "total_count": 2,
             "truncated": False,
             "duration_seconds": 0.5,
             "stdout_size": 0,
             "stderr_size": 0,
-            "stored_locally": False
-        }
-        payload_raw = {
-            "id": "exec-456",
-            "result": {
-                "content": [{"type": "text", "text": "file1.txt\ndir1/"}],
-                "isError": False,
-                "_metadata": {
-                    "original_payload": original_payload,
-                    "event_type": EventType.OPERATOR_FILESYSTEM_LIST_COMPLETED
-                }
-            }
+            "stored_locally": False,
         }
 
-        result = _parse_g8eo_payload(EventType.OPERATOR_MCP_TOOLS_RESULT, payload_raw)
+        result = _parse_g8eo_payload(EventType.OPERATOR_FILESYSTEM_LIST_COMPLETED, payload_raw)
         assert isinstance(result, FsListResultPayload)
         assert len(result.entries) == 2
         assert result.entries[0].name == "file1.txt"
-        assert result.entries[0].path == "/tmp/file1.txt"
-
-    async def test_falls_back_to_execution_results_on_missing_metadata(self):
-        """Test falls back to ExecutionResultsPayload when metadata is missing."""
-        from app.services.operator.pubsub_service import _parse_g8eo_payload
-        from app.models.pubsub_messages import ExecutionResultsPayload
-
-        # MCP result with non-JSON text content and NO metadata
-        payload_raw = {
-            "id": "exec-202",
-            "result": {
-                "_metadata": {"execution_id": "exec-202"},
-                "content": [{"type": "text", "text": "Plain text output"}],
-                "isError": False
-            }
-        }
-
-        result = _parse_g8eo_payload(EventType.OPERATOR_MCP_TOOLS_RESULT, payload_raw)
-        assert isinstance(result, ExecutionResultsPayload)
-        assert result.stdout == "Plain text output"
-
-    async def test_handles_mcp_error_with_stderr(self):
-        """Test MCP errors are routed to stderr in ExecutionResultsPayload."""
-        from app.services.operator.pubsub_service import _parse_g8eo_payload
-        from app.models.pubsub_messages import ExecutionResultsPayload
-
-        payload_raw = {
-            "id": "exec-404",
-            "result": {
-                "_metadata": {"execution_id": "exec-404"},
-                "content": [{"type": "text", "text": "Tool execution failed"}],
-                "isError": True
-            }
-        }
-
-        result = _parse_g8eo_payload(EventType.OPERATOR_MCP_TOOLS_RESULT, payload_raw)
-        assert isinstance(result, ExecutionResultsPayload)
-        assert result.status == ExecutionStatus.FAILED
-        assert "Tool execution failed" in result.stderr
 
 
 class TestOnG8eoResultCorrelation:

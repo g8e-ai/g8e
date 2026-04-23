@@ -33,7 +33,6 @@ from app.constants.status import (
     OperatorType,
     OperatorToolName,
 )
-from app.services.mcp.adapter import build_tool_call_request
 from app.constants.events import (
     EventType,
 )
@@ -46,6 +45,7 @@ from app.models.tool_args import GrantIntentArgs, RevokeIntentArgs
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.tool_results import FailedIntentResult, IamIntentResult, IntentPermissionResult
+from app.models.command_request_payloads import CommandRequestPayload
 from app.models.operators import IntentApprovalRequest, CommandExecutingBroadcastEvent, CommandResultBroadcastEvent, CloudSubtype
 from app.models.pubsub_messages import G8eMessage
 from app.services.operator.iam_command_builder import IamCommandBuilder
@@ -228,25 +228,21 @@ class OperatorIntentService:
         for intent in all_intents:
             attach_cmd = self._build_iam_attach_command(intent)
             exec_id = generate_iam_execution_id(intent)
-            mcp_payload = build_tool_call_request(
-                tool_name=OperatorToolName.RUN_COMMANDS,
-                execution_id=exec_id,
-                arguments={
-                    "command": attach_cmd,
-                    "justification": "IAM Policy Update",
-                },
-            )
             msg = G8eMessage(
                 id=exec_id,
                 source_component=ComponentName.G8EE,
-                event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
+                event_type=EventType.OPERATOR_COMMAND_REQUESTED,
                 case_id=g8e_context.case_id,
                 task_id=AITaskId.COMMAND,
                 investigation_id=g8e_context.investigation_id,
                 web_session_id=g8e_context.web_session_id,
                 operator_session_id=final_session_id,
                 operator_id=final_op_id,
-                payload=mcp_payload,
+                payload=CommandRequestPayload(
+                    command=attach_cmd,
+                    execution_id=exec_id,
+                    justification="IAM Policy Update",
+                ),
             )
             
             iam_result = await self.execution_service.execute(msg, g8e_context)
@@ -259,25 +255,21 @@ class OperatorIntentService:
                 if v_action:
                     v_cmd = self._build_iam_verify_command(intent, v_action)
                     v_exec_id = generate_iam_verify_execution_id(intent)
-                    v_mcp_payload = build_tool_call_request(
-                        tool_name=OperatorToolName.RUN_COMMANDS,
-                        execution_id=v_exec_id,
-                        arguments={
-                            "command": v_cmd,
-                            "justification": "IAM Verification",
-                        },
-                    )
                     v_msg = G8eMessage(
                         id=v_exec_id,
                         source_component=ComponentName.G8EE,
-                        event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
+                        event_type=EventType.OPERATOR_COMMAND_REQUESTED,
                         case_id=g8e_context.case_id,
                         task_id=AITaskId.COMMAND,
                         investigation_id=g8e_context.investigation_id,
                         web_session_id=g8e_context.web_session_id,
                         operator_session_id=final_session_id,
                         operator_id=final_op_id,
-                        payload=v_mcp_payload,
+                        payload=CommandRequestPayload(
+                            command=v_cmd,
+                            execution_id=v_exec_id,
+                            justification="IAM Verification",
+                        ),
                     )
                     await self.execution_service.execute(v_msg, g8e_context)
 
@@ -337,25 +329,21 @@ class OperatorIntentService:
         for intent in requested_intents:
             detach_cmd = self._build_iam_detach_command(intent)
             exec_id = generate_iam_revoke_intent_execution_id(intent)
-            mcp_payload = build_tool_call_request(
-                tool_name=OperatorToolName.RUN_COMMANDS,
-                execution_id=exec_id,
-                arguments={
-                    "command": detach_cmd,
-                    "justification": "IAM Revoke",
-                },
-            )
             msg = G8eMessage(
                 id=exec_id,
                 source_component=ComponentName.G8EE,
-                event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
+                event_type=EventType.OPERATOR_COMMAND_REQUESTED,
                 case_id=g8e_context.case_id,
                 task_id=AITaskId.COMMAND,
                 investigation_id=g8e_context.investigation_id,
                 web_session_id=g8e_context.web_session_id,
                 operator_session_id=op_doc.operator_session_id,
                 operator_id=op_doc.id,
-                payload=mcp_payload,
+                payload=CommandRequestPayload(
+                    command=detach_cmd,
+                    execution_id=exec_id,
+                    justification="IAM Revoke",
+                ),
             )
             res = await self.execution_service.execute(msg, g8e_context)
             iam_results.append(IamIntentResult(intent=intent, result=res))

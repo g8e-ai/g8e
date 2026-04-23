@@ -5,7 +5,7 @@ parent: Architecture
 
 # Model Context Protocol (MCP) Integration
 
-g8e implements the Model Context Protocol (MCP) as a provider-agnostic translation layer on top of its internal event system. The platform is designed to support multiple protocol translators (MCP, and future protocols) through a unified event-based architecture.
+g8e implements the Model Context Protocol (MCP) as a **thin translation layer** at the gateway for external MCP-speaking clients. The core operator command dispatch protocol uses native g8e event types end-to-end; MCP is only used when an external AI tool (Claude Code, Windsurf, Cursor, etc.) connects via the MCP endpoint.
 
 > **Note:** The file `docs/reference/mcp.yaml` is the official MCP Registry API specification, not g8e-specific documentation. This document describes g8e' MCP implementation.
 
@@ -286,77 +286,41 @@ External Protocol (e.g., MCP)
 
 ## MCP Implementation Overview
 
-g8e implements MCP in three layers:
+g8e implements MCP as a gateway translation layer:
 
-1. **g8eo (Go)** - Protocol translation layer on the operator
-2. **g8ee (Python)** - Gateway service for external MCP clients
+1. **g8ee (Python)** - Gateway service for external MCP clients (Claude Code, Windsurf, Cursor, etc.)
+2. **g8eo (Go)** - Result wrapping layer (only wraps results when inbound event_type == OPERATOR_MCP_TOOLS_CALL)
 3. **Shared** - Canonical wire format models
+
+**Architecture Note:** The core operator command dispatch protocol uses native g8e event types end-to-end. MCP is only invoked when an external AI tool connects via the `/mcp` endpoint. The g8ee gateway translates MCP tool calls to native g8e event types before dispatching to g8eo, and g8eo only wraps results in MCP format when the original request came via MCP.
 
 ### Component Breakdown
 
-#### g8eo - Protocol Translator
+#### g8eo - Result Wrapping Layer
 
 **Location:** `components/g8eo/services/mcp/`
 
 | File | Purpose |
 |------|---------|
-| `translator.go` | Core translation logic: MCP tool names → g8e event types, g8e payloads → MCP JSON-RPC responses |
+| `translator.go` | Result wrapping logic: wraps g8e payloads in MCP JSON-RPC format when inbound event_type == OPERATOR_MCP_TOOLS_CALL |
 | `types.go` | Go structs for MCP wire format (JSON-RPC 2.0, Content, Resources) |
 
-**Key Function: `MCPToolNameToEventType()`**
+**Key Function: `WrapResult()`**
 
-Maps MCP tool names to internal g8e event types:
-
-```go
-func MCPToolNameToEventType(toolName string) string {
-    switch toolName {
-    case "run_commands_with_operator":
-        return constants.Event.Operator.Command.Requested
-    case "file_create_on_operator", "file_write_on_operator", "file_read_on_operator", "file_update_on_operator":
-        return constants.Event.Operator.FileEdit.Requested
-    case "check_port_status":
-        return constants.Event.Operator.PortCheck.Requested
-    case "list_files_and_directories_with_detailed_metadata":
-        return constants.Event.Operator.FsList.Requested
-    case "fetch_file_history":
-        return constants.Event.Operator.FetchFileHistory.Requested
-    case "fetch_file_diff":
-        return constants.Event.Operator.FetchFileDiff.Requested
-    case "grant_intent_permission":
-        return constants.Event.Operator.Intent.ApprovalRequested
-    default:
-        return ""
-    }
-}
-```
+Wraps g8e execution payloads in MCP JSON-RPC format when the original request came via MCP. Native event types flow through unchanged.
 
 **Translation Functions:**
 
-- `TranslateToolCallToCommand()` - Converts MCP `tools/call` JSON-RPC to internal `G8eMessage`
-- `TranslateResultToMCP()` - Converts internal g8e payload to MCP JSON-RPC response
+- `TranslateResultToMCP()` - Converts internal g8e payload to MCP JSON-RPC response (only when inbound was MCP)
 - `WrapResult()` - Convenience wrapper for result translation
 
-**Metadata Preservation:**
-
-The translator preserves original payload information in MCP responses via `_metadata`:
-
-```go
-type MCPResultMetadata struct {
-    OriginalPayload interface{} `json:"original_payload"`
-    EventType       string      `json:"event_type"`
-    ExecutionID     string      `json:"execution_id"`
-}
-```
-
-g8ee uses this metadata to reconstruct typed payloads from MCP results (see `_parse_g8eo_payload` in `pubsub_service.py`).
-
-#### g8ee - Gateway Service
+#### g8ee - Gateway Service (Primary Translation Layer)
 
 **Location:** `components/g8ee/app/services/mcp/`
 
 | File | Purpose |
 |------|---------|
-| `gateway_service.py` | `MCPGatewayService` - enables external MCP clients (e.g., Claude Code) to execute g8e tools |
+| `gateway_service.py` | `MCPGatewayService` - enables external MCP clients (e.g., Claude Code) to execute g8e tools; translates MCP tool calls to native g8e event types |
 | `adapter.py` | Helper functions for building/parsing MCP JSON-RPC payloads |
 | `types.py` | Pydantic models for MCP wire format (matches Go types) |
 
@@ -365,7 +329,17 @@ g8ee uses this metadata to reconstruct typed payloads from MCP results (see `_pa
 | Endpoint | Purpose |
 |----------|---------|
 | `POST /api/internal/mcp/tools/list` | Returns tool declarations formatted as MCP `tools/list` response |
-| `POST /api/internal/mcp/tools/call` | Executes a tool call through `AIToolService.execute_tool()` with full governance |
+| `POST /api/internal/mcp/tools/call` | Executes a tool call by translating to native g8e event types and dispatching through operator services |
+
+**Translation Flow:**
+
+The gateway service is now the primary MCP translation layer. When an external MCP client makes a tool call:
+
+1. MCP tool name is mapped to native g8e event type (e.g., `run_commands_with_operator` → `OPERATOR_COMMAND_REQUESTED`)
+2. MCP arguments are converted to the corresponding native payload type (e.g., `CommandRequestPayload`)
+3. The native event is published to the operator command channel via `OperatorPubSubService`
+4. Results flow back as native event types
+5. g8eo wraps results in MCP format only if the original request was MCP (detected via inbound event type)
 
 **Tool Listing:**
 
@@ -486,20 +460,11 @@ These tests verify that both language implementations match the canonical JSON s
 
 ## Event System Integration
 
-MCP events are integrated into the g8e event system via dedicated event types under the `operator.mcp.*` namespace.
-
-### MCP Event Types
-
-**Location:** `shared/constants/events.json` and `components/g8ee/app/constants/events.py`
-
-| Event Type | Purpose |
-|------------|---------|
-| `g8e.v1.operator.mcp.tools.call` | MCP tool call request from external client |
-| `g8e.v1.operator.mcp.tools.result` | MCP tool call result returned to external client |
+MCP is integrated into the g8e event system as a gateway translation layer. The core operator command dispatch uses native g8e event types end-to-end; MCP is only used when an external AI tool connects via the `/mcp` endpoint.
 
 ### Event Flow
 
-**External MCP Client → g8eo:**
+**External MCP Client → g8eo (via Native Events):**
 
 ```
 Claude Code (MCP client)
@@ -509,29 +474,38 @@ g8ed (mcp_routes.js)
     │ POST /api/internal/mcp/tools/call
     ▼
 g8ee (MCPGatewayService.call_tool)
-    │ AIToolService.execute_tool
+    │ Translates MCP tool name → native event type
+    │ (e.g., run_commands_with_operator → OPERATOR_COMMAND_REQUESTED)
+    │ Converts MCP arguments → native payload type
+    │ (e.g., CommandRequestPayload)
     ▼
-g8es pub/sub: g8e.v1.operator.mcp.tools.call
-    │
+g8es pub/sub: cmd:{operator_id}:{operator_session_id}
+    │ (Native g8e event type, not MCP)
     ▼
 g8eo (pubsub_commands.go)
-    │ handleMCPToolsCall()
-    │ mcp.TranslateToolCallToCommand()
+    │ Handles native event type directly
     ▼
-g8eo executes command (using translated event type)
+g8eo executes command (using native event type)
     │ (dispatches to: Command.Requested, FileEdit.Requested,
     │  FsList.Requested, FsRead.Requested, PortCheck.Requested,
+    │  FetchLogs.Requested, FetchHistory.Requested,
     │  FetchFileHistory.Requested, FetchFileDiff.Requested)
     │
     ▼
-g8es pub/sub: g8e.v1.operator.mcp.tools.result
+g8es pub/sub: res:{operator_id}:{operator_session_id}
+    │ (Native result event type)
     │
     ▼
-g8ee (pubsub_service.py)
-    │ _parse_g8eo_payload (handles OPERATOR_MCP_TOOLS_RESULT)
+g8eo (wraps in MCP format only if original request was MCP)
+    │ (detects via inbound event_type == OPERATOR_MCP_TOOLS_CALL)
     ▼
-g8ee returns result to MCP client
+g8ee returns result to MCP client (if MCP) or native format (if native)
 ```
+
+**Key Architecture Change (April 2026):**
+- **Before:** MCP tool calls were published as `g8e.v1.operator.mcp.tools.call` and translated by g8eo
+- **After:** MCP tool calls are translated to native g8e event types at the g8ee gateway, then published directly to the operator command channel
+- **Result:** The core operator protocol uses native event types end-to-end; MCP is only a thin translation layer at the gateway for external clients
 
 ---
 

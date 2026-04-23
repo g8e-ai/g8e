@@ -35,7 +35,6 @@ from app.constants.status import (
     NetworkProtocol,
     OperatorToolName,
 )
-from app.services.mcp.adapter import build_tool_call_request
 from app.constants.settings import (
     OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS,
 )
@@ -138,30 +137,22 @@ class OperatorPortService:
             self.execution_registry.allocate(exec_id)
             max_wait_time = OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS
 
-            mcp_payload = build_tool_call_request(
-                tool_name=OperatorToolName.CHECK_PORT,
-                execution_id=exec_id,
-                arguments={
-                    "host": host,
-                    "port": port,
-                    "protocol": protocol,
-                    "requested_at": now().isoformat(),
-                    "source": EventType.EVENT_SOURCE_AI_PRIMARY,
-                    "user_id": user_id,
-                },
-            )
-
             command_data = G8eMessage(
                 id=exec_id,
                 source_component=ComponentName.G8EE,
-                event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
+                event_type=EventType.OPERATOR_NETWORK_PORT_CHECK_REQUESTED,
                 case_id=case_id,
                 investigation_id=investigation.id if investigation else "",
                 task_id=AITaskId.PORT_CHECK,
                 web_session_id=web_session_id,
                 operator_session_id=operator_session_id,
                 operator_id=operator_id,
-                payload=mcp_payload,
+                payload=CheckPortRequestPayload(
+                    execution_id=exec_id,
+                    host=host,
+                    port=port,
+                    protocol=protocol.value,
+                ),
             )
 
             logger.info("[PORT_CHECK] Publishing port check request via g8es pub/sub")
