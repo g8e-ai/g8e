@@ -872,9 +872,97 @@ case "$TOP" in
     # ------------------------------------------------------------------
     demo)
         DEMO_DIR="$SCRIPT_DIR/demo"
+        PROFILES_DIR="$SCRIPT_DIR/demo_profiles"
         if [[ ! -d "$DEMO_DIR" ]]; then
             echo "[g8e] demo directory not found: $DEMO_DIR" >&2
             exit 1
+        fi
+
+        # Profile management subcommands
+        if [[ "$SUB" == "profile" ]]; then
+            mkdir -p "$PROFILES_DIR"
+            _PROF_CMD="${3:-}"
+            _PROF_NAME="${4:-}"
+            _ACTIVE_FILE="$PROFILES_DIR/.active"
+
+            case "$_PROF_CMD" in
+                list)
+                    _banner "demo profile list"
+                    _active=$(cat "$_ACTIVE_FILE" 2>/dev/null || echo "default")
+                    echo "Available profiles:"
+                    echo "  * default (active: $([[ "$_active" == "default" ]] && echo "yes" || echo "no"))"
+                    for d in "$PROFILES_DIR"/*/; do
+                        [[ -d "$d" ]] || continue
+                        p=$(basename "$d")
+                        echo "  * $p (active: $([[ "$_active" == "$p" ]] && echo "yes" || echo "no"))"
+                    done
+                    exit 0 ;;
+                create)
+                    [[ -z "$_PROF_NAME" ]] && { echo "[g8e] usage: ./g8e demo profile create <name>"; exit 1; }
+                    [[ "$_PROF_NAME" == "default" ]] && { echo "[g8e] 'default' is a reserved profile name"; exit 1; }
+                    _banner "demo profile create $_PROF_NAME"
+                    if [[ -d "$PROFILES_DIR/$_PROF_NAME" ]]; then
+                        echo "[g8e] profile '$_PROF_NAME' already exists" >&2
+                        exit 1
+                    fi
+                    cp -a "$DEMO_DIR" "$PROFILES_DIR/$_PROF_NAME"
+                    echo "[g8e] profile '$_PROF_NAME' created from current demo/"
+                    exit 0 ;;
+                switch)
+                    [[ -z "$_PROF_NAME" ]] && { echo "[g8e] usage: ./g8e demo profile switch <name>"; exit 1; }
+                    _banner "demo profile switch $_PROF_NAME"
+                    
+                    # Check if demo is running
+                    if docker ps --format '{{.Names}}' | grep -q "^web-node-"; then
+                        echo "[g8e] demo fleet is currently running. Stop it first: ./g8e demo down" >&2
+                        exit 1
+                    fi
+
+                    _current_active=$(cat "$_ACTIVE_FILE" 2>/dev/null || echo "default")
+                    [[ "$_current_active" == "$_PROF_NAME" ]] && { echo "[g8e] profile '$_PROF_NAME' is already active"; exit 0; }
+
+                    if [[ "$_PROF_NAME" != "default" && ! -d "$PROFILES_DIR/$_PROF_NAME" ]]; then
+                        echo "[g8e] profile '$_PROF_NAME' not found" >&2
+                        exit 1
+                    fi
+
+                    # Save current demo/ to its profile directory
+                    if [[ "$_current_active" == "default" ]]; then
+                        # Moving default is actually just backing it up to a special location if we want to preserve it
+                        # For simplicity, we'll store 'default' in PROFILES_DIR/.default_bak
+                        mkdir -p "$PROFILES_DIR/.default_bak"
+                        rm -rf "$PROFILES_DIR/.default_bak"/*
+                        cp -a "$DEMO_DIR"/. "$PROFILES_DIR/.default_bak/"
+                    else
+                        rm -rf "$PROFILES_DIR/$_current_active"
+                        cp -a "$DEMO_DIR" "$PROFILES_DIR/$_current_active"
+                    fi
+
+                    # Swap in the new profile
+                    rm -rf "$DEMO_DIR"/*
+                    if [[ "$_PROF_NAME" == "default" ]]; then
+                        cp -a "$PROFILES_DIR/.default_bak"/. "$DEMO_DIR/"
+                    else
+                        cp -a "$PROFILES_DIR/$_PROF_NAME"/. "$DEMO_DIR/"
+                    fi
+                    
+                    echo "$_PROF_NAME" > "$_ACTIVE_FILE"
+                    echo "[g8e] switched to profile: $_PROF_NAME"
+                    exit 0 ;;
+                delete)
+                    [[ -z "$_PROF_NAME" ]] && { echo "[g8e] usage: ./g8e demo profile delete <name>"; exit 1; }
+                    [[ "$_PROF_NAME" == "default" ]] && { echo "[g8e] cannot delete default profile"; exit 1; }
+                    _active=$(cat "$_ACTIVE_FILE" 2>/dev/null || echo "default")
+                    [[ "$_active" == "$_PROF_NAME" ]] && { echo "[g8e] cannot delete active profile"; exit 1; }
+                    _banner "demo profile delete $_PROF_NAME"
+                    rm -rf "$PROFILES_DIR/$_PROF_NAME"
+                    echo "[g8e] profile '$_PROF_NAME' deleted"
+                    exit 0 ;;
+                *)
+                    echo "[g8e] unknown demo profile subcommand: '$_PROF_CMD'" >&2
+                    echo "  Valid: list, create, switch, delete" >&2
+                    exit 1 ;;
+            esac
         fi
         # Parse -d flag for device token shorthand
         demo_args=("${@:3}")

@@ -145,6 +145,11 @@ demo - Fleet demo (host)
     discover-hosts  List discovered demo fleet hosts
     operators       Show operator status across the fleet
     vanish          Remove all operators (zero trace cleanup)
+  Profile management:
+    profile list             List available demo profiles
+    profile create <name>    Create a new profile from current demo/
+    profile switch <name>    Switch current demo/ to a profile
+    profile delete <name>    Delete a profile
   Inspection:
     health          Check Flask backend health on all nodes
     nginx-check     Check nginx status and HTTP response codes
