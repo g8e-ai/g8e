@@ -34,11 +34,49 @@ type PubSubBroker struct {
 }
 
 // wsSubscriber represents a single WebSocket connection.
+//
+// Shutdown is expressed as a single atomic event: shutdown() closes done
+// (the sole "closed?" signal) and the underlying websocket, guarded by
+// sync.Once so repeated calls from any lifecycle path (writer error, read
+// loop exit, broker Close) are safe and coalesced. The send channel is
+// deliberately never closed: the writer goroutine exits via <-done, and
+// trySend is fully non-blocking, so there is no sender/close race and
+// therefore no need to track a separate "send closed" flag.
+//
+// mu is a narrow lock that exists only to make the drop-oldest
+// drain+enqueue sequence atomic with respect to concurrent trySend calls
+// on the same subscriber. It does NOT participate in shutdown tracking.
 type wsSubscriber struct {
-	ws      *websocket.Conn
-	send    chan []byte
-	closed  bool
-	closeMu sync.Mutex
+	ws           *websocket.Conn
+	send         chan []byte
+	done         chan struct{}
+	shutdownOnce sync.Once
+
+	mu      sync.Mutex
+	dropped uint64 // cumulative back-pressure drops; guarded by mu
+}
+
+// isDone reports whether shutdown has been initiated.
+func (s *wsSubscriber) isDone() bool {
+	select {
+	case <-s.done:
+		return true
+	default:
+		return false
+	}
+}
+
+// shutdown atomically tears down the subscriber exactly once: it signals
+// done (causing the writer goroutine to exit and future trySends to fail
+// fast) and closes the underlying websocket. Safe to call from any
+// goroutine and any number of times.
+func (s *wsSubscriber) shutdown() {
+	s.shutdownOnce.Do(func() {
+		close(s.done)
+		if s.ws != nil {
+			_ = s.ws.Close()
+		}
+	})
 }
 
 // NewPubSubBroker creates a new pub/sub broker.
@@ -72,9 +110,9 @@ type PubSubEvent struct {
 // Publish sends a message to all subscribers of a channel (exact + pattern matches).
 func (b *PubSubBroker) Publish(channel string, data json.RawMessage) int {
 	// Snapshot targets and precomputed payloads under RLock, then release the
-	// broker lock before invoking trySend. trySend's drop path needs to take
-	// b.mu.Lock() synchronously (via removeSub) to evict zombies; holding the
-	// RLock here would deadlock.
+	// broker lock before invoking trySend. trySend may block briefly on a
+	// per-subscriber mutex; doing that under the broker RLock would stall
+	// subscribe/unsubscribe/Close for unrelated subscribers.
 	type delivery struct {
 		sub *wsSubscriber
 		msg []byte
@@ -122,6 +160,7 @@ func (b *PubSubBroker) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		sub: &wsSubscriber{
 			ws:   ws,
 			send: make(chan []byte, 4096),
+			done: make(chan struct{}),
 		},
 	}
 	handler.run()
@@ -134,14 +173,20 @@ type pubSubSessionHandler struct {
 }
 
 func (h *pubSubSessionHandler) run() {
-	// Start write loop. On any exit path (write error or send channel
-	// closed externally by trySend/Close), evict from broker maps so the
-	// subscriber cannot linger as a zombie in the routing table.
+	// Writer goroutine: drains send until either shutdown is signalled or a
+	// websocket write fails. On any exit path it triggers shutdown (idempotent)
+	// and evicts from broker maps so the subscriber cannot linger as a zombie.
 	go func() {
 		defer h.broker.removeSub(h.sub)
-		for msg := range h.sub.send {
-			if err := h.sub.ws.WriteMessage(websocket.TextMessage, msg); err != nil {
+		defer h.sub.shutdown()
+		for {
+			select {
+			case <-h.sub.done:
 				return
+			case msg := <-h.sub.send:
+				if err := h.sub.ws.WriteMessage(websocket.TextMessage, msg); err != nil {
+					return
+				}
 			}
 		}
 	}()
@@ -181,13 +226,7 @@ func (h *pubSubSessionHandler) handleAction(msg PubSubMessage) {
 
 func (h *pubSubSessionHandler) cleanup() {
 	h.broker.removeSub(h.sub)
-	h.sub.closeMu.Lock()
-	if !h.sub.closed {
-		h.sub.closed = true
-		close(h.sub.send)
-	}
-	h.sub.closeMu.Unlock()
-	h.sub.ws.Close()
+	h.sub.shutdown()
 }
 
 func (b *PubSubBroker) sendAck(sub *wsSubscriber, channel string) {
@@ -256,80 +295,85 @@ func (b *PubSubBroker) removeSub(sub *wsSubscriber) {
 }
 
 func (b *PubSubBroker) trySend(sub *wsSubscriber, msg []byte) bool {
-	sub.closeMu.Lock()
+	sub.mu.Lock()
+	defer sub.mu.Unlock()
 
-	if sub.closed {
-		sub.closeMu.Unlock()
+	if sub.isDone() {
 		return false
 	}
 
 	select {
 	case sub.send <- msg:
-		sub.closeMu.Unlock()
 		return true
 	default:
-		sub.closed = true
-		close(sub.send)
+		// Back-pressure: drop-oldest policy. Evict one queued frame to make
+		// room for the newer one, keeping the subscriber connected. This
+		// trades lossy delivery for connection stability under bursts
+		// (e.g., large stdout frame followed by rapid heartbeats), which is
+		// the correct trade-off for status/heartbeat streams where newer
+		// frames supersede older ones.
+		//
+		// sub.mu is held across the drain+enqueue, so no other trySend can
+		// race us on this subscriber. The writer goroutine only receives
+		// from sub.send, so capacity can only increase during this window;
+		// the second send is guaranteed to succeed.
+		select {
+		case <-sub.send:
+		default:
+		}
+		sub.dropped++
+		dropped := sub.dropped
 		remote := ""
 		if sub.ws != nil {
 			remote = sub.ws.RemoteAddr().String()
 		}
-		// Release sub.closeMu before taking b.mu to preserve the broker-lock
-		// -> sub-lock ordering used by Close(); otherwise we risk deadlock.
-		sub.closeMu.Unlock()
-
-		// Synchronously evict from broker routing tables so no zombie entry
-		// remains. Previously this relied on the write-loop observing the
-		// closed channel and the async ws.Close() eventually failing the read
-		// loop, leaving a window where Publish would still target this sub.
-		b.removeSub(sub)
-
-		if sub.ws != nil {
-			go sub.ws.Close()
+		select {
+		case sub.send <- msg:
+			b.logger.Warn("pubsub back-pressure: dropped oldest queued message",
+				"remote", remote,
+				"buffer_capacity", cap(sub.send),
+				"message_bytes", len(msg),
+				"dropped_total", dropped,
+			)
+			return true
+		default:
+			// Defensive: enqueue should always succeed after drain under
+			// sub.mu. If it does not, something is deeply wrong; surface it
+			// rather than silently losing the message.
+			b.logger.Error("pubsub back-pressure: enqueue failed after drop-oldest",
+				"remote", remote,
+				"buffer_capacity", cap(sub.send),
+				"dropped_total", dropped,
+			)
+			return false
 		}
-		b.logger.Warn("pubsub subscriber dropped: send buffer full (back-pressure)",
-			"remote", remote,
-			"buffer_capacity", cap(sub.send),
-			"message_bytes", len(msg),
-		)
-		return false
 	}
 }
 
 // Close disconnects all subscribers.
 func (b *PubSubBroker) Close() {
 	b.mu.Lock()
-	defer b.mu.Unlock()
-
+	// Collect unique subscribers under the lock, then shutdown outside the
+	// lock. shutdown() is idempotent via sync.Once, so a subscriber that
+	// appears in both maps is torn down exactly once.
+	seen := make(map[*wsSubscriber]struct{})
 	for _, subs := range b.subscribers {
 		for sub := range subs {
-			sub.closeMu.Lock()
-			if !sub.closed {
-				sub.closed = true
-				close(sub.send)
-				if sub.ws != nil {
-					sub.ws.Close()
-				}
-			}
-			sub.closeMu.Unlock()
+			seen[sub] = struct{}{}
 		}
 	}
 	for _, subs := range b.patterns {
 		for sub := range subs {
-			sub.closeMu.Lock()
-			if !sub.closed {
-				sub.closed = true
-				close(sub.send)
-				if sub.ws != nil {
-					sub.ws.Close()
-				}
-			}
-			sub.closeMu.Unlock()
+			seen[sub] = struct{}{}
 		}
 	}
-
 	b.subscribers = make(map[string]map[*wsSubscriber]struct{})
 	b.patterns = make(map[string]map[*wsSubscriber]struct{})
+	b.mu.Unlock()
+
+	for sub := range seen {
+		sub.shutdown()
+	}
 }
 
 // globMatch matches a Redis-style glob pattern against a string.

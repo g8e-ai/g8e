@@ -280,27 +280,22 @@ Passing raw dicts between services, storing unvalidated JSON in the database, or
 
 ### LFAA Result Payload Requirements
 
-All LFAA (Local Function Access & Audit) result payloads published by g8eo MUST include an `execution_id` field for request-response correlation. This field is automatically injected by the `setExecutionIDOnPayload()` helper in `components/g8eo/services/pubsub/publish_helpers.go` before serialization.
+All LFAA (Local Function Access & Audit) result payloads published by g8eo MUST include an `execution_id` field for request-response correlation. This field is automatically stamped by `setExecutionIDOnPayload()` in `components/g8eo/services/pubsub/publish_helpers.go` before serialization, via the `models.ExecutionIDSetter` interface defined in `components/g8eo/models/execution_id_setter.go`.
 
-The following result payload types support execution_id injection:
-- CancellationResultPayload
-- FileEditResultPayload
-- FsListResultPayload
-- ExecutionStatusPayload
-- PortCheckResultPayload
-- FetchLogsResultPayload
-- FsReadResultPayload
-- LFAAErrorPayload
-- FetchFileDiffResultPayload
-- FetchHistoryResultPayload
-- FetchFileHistoryResultPayload
-- RestoreFileResultPayload
-- ExecutionResultsPayload
+Participating payloads implement:
 
-When adding new result payload types, ensure they:
-1. Declare an `ExecutionID string` field with JSON tag `execution_id`
-2. Add a case in `setExecutionIDOnPayload()` to inject the execution_id
-3. Add a unit test in `publish_helpers_test.go` to verify injection works
+```go
+type ExecutionIDSetter interface {
+    SetExecutionID(string)
+}
+```
+
+When adding a new result payload type, do the following:
+1. Declare an `ExecutionID string` field with JSON tag `execution_id`.
+2. Implement `SetExecutionID(id string)` by adding a one-line method in `components/g8eo/models/execution_id_setter.go`.
+3. Register the type in `TestExecutionIDSetter_Implementations` and `TestExecutionIDSetter_CoversAllPayloads` in `components/g8eo/models/execution_id_setter_test.go` so the reflective guardrail catches regressions.
+
+The publisher does not need changes — it dispatches through the interface, not a concrete type switch.
 
 ---
 

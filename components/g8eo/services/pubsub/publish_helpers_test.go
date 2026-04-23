@@ -14,12 +14,44 @@
 package pubsub
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/models"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestExecutionIDFromMessage_PrefersPayloadExecutionID(t *testing.T) {
+	payload, err := json.Marshal(map[string]string{"execution_id": "exec-123"})
+	assert.NoError(t, err)
+	msg := PubSubCommandMessage{ID: "envelope-abc", Payload: payload}
+	assert.Equal(t, "exec-123", executionIDFromMessage(msg))
+}
+
+func TestExecutionIDFromMessage_FallsBackToEnvelopeID(t *testing.T) {
+	payload, err := json.Marshal(map[string]string{"other": "value"})
+	assert.NoError(t, err)
+	msg := PubSubCommandMessage{ID: "envelope-abc", Payload: payload}
+	assert.Equal(t, "envelope-abc", executionIDFromMessage(msg))
+}
+
+func TestExecutionIDFromMessage_EmptyPayload(t *testing.T) {
+	msg := PubSubCommandMessage{ID: "envelope-abc"}
+	assert.Equal(t, "envelope-abc", executionIDFromMessage(msg))
+}
+
+func TestExecutionIDFromMessage_MalformedPayloadFallsBack(t *testing.T) {
+	msg := PubSubCommandMessage{ID: "envelope-abc", Payload: []byte("not json")}
+	assert.Equal(t, "envelope-abc", executionIDFromMessage(msg))
+}
+
+func TestExecutionIDFromMessage_EmptyExecutionIDInPayloadFallsBack(t *testing.T) {
+	payload, err := json.Marshal(map[string]string{"execution_id": ""})
+	assert.NoError(t, err)
+	msg := PubSubCommandMessage{ID: "envelope-abc", Payload: payload}
+	assert.Equal(t, "envelope-abc", executionIDFromMessage(msg))
+}
 
 func TestSetExecutionIDOnPayload_LFAAErrorPayload(t *testing.T) {
 	payload := &models.LFAAErrorPayload{

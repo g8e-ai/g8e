@@ -24,37 +24,35 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/services/mcp"
 )
 
+// executionIDFromMessage resolves the execution_id for a command by inspecting
+// the inbound payload's execution_id field, falling back to the command
+// envelope's id only when the payload does not carry one.
+//
+// The envelope id (msg.ID) is the message/correlation id of the command itself
+// and is NOT guaranteed to equal the execution_id of the in-flight operation;
+// g8ee may generate envelope ids independently (e.g. as fresh UUIDs). Use this
+// helper anywhere a result needs to be stamped with the execution_id of the
+// originating command rather than the envelope id.
+func executionIDFromMessage(msg PubSubCommandMessage) string {
+	if len(msg.Payload) > 0 {
+		var probe struct {
+			ExecutionID string `json:"execution_id"`
+		}
+		if err := json.Unmarshal(msg.Payload, &probe); err == nil && probe.ExecutionID != "" {
+			return probe.ExecutionID
+		}
+	}
+	return msg.ID
+}
+
 // setExecutionIDOnPayload sets the ExecutionID field on typed payloads that support it.
 // This is done before serialization to avoid manipulating JSON mid-stream.
 func setExecutionIDOnPayload(payload interface{}, executionID string) {
 	if executionID == "" {
 		return
 	}
-	switch p := payload.(type) {
-	case *models.CancellationResultPayload:
-		p.ExecutionID = executionID
-	case *models.FileEditResultPayload:
-		p.ExecutionID = executionID
-	case *models.FsListResultPayload:
-		p.ExecutionID = executionID
-	case *models.ExecutionStatusPayload:
-		p.ExecutionID = executionID
-	case *models.PortCheckResultPayload:
-		p.ExecutionID = executionID
-	case *models.FetchLogsResultPayload:
-		p.ExecutionID = executionID
-	case *models.FsReadResultPayload:
-		p.ExecutionID = executionID
-	case *models.LFAAErrorPayload:
-		p.ExecutionID = executionID
-	case *models.FetchFileDiffResultPayload:
-		p.ExecutionID = executionID
-	case *models.FetchHistoryResultPayload:
-		p.ExecutionID = executionID
-	case *models.FetchFileHistoryResultPayload:
-		p.ExecutionID = executionID
-	case *models.RestoreFileResultPayload:
-		p.ExecutionID = executionID
+	if setter, ok := payload.(models.ExecutionIDSetter); ok {
+		setter.SetExecutionID(executionID)
 	}
 }
 
@@ -69,7 +67,7 @@ func publishLFAATypedResponseTo(
 	eventType string,
 	payload interface{},
 ) {
-	setExecutionIDOnPayload(payload, msg.ID)
+	setExecutionIDOnPayload(payload, executionIDFromMessage(msg))
 
 	resultMsg, err := models.NewG8eMessage(
 		eventType, msg.CaseID,
@@ -122,7 +120,7 @@ func publishLFAAErrorTo(
 	payload := models.LFAAErrorPayload{
 		Success:           false,
 		Error:             errorMsg,
-		ExecutionID:       msg.ID,
+		ExecutionID:       executionIDFromMessage(msg),
 		OperatorID:        cfg.OperatorID,
 		OperatorSessionID: cfg.OperatorSessionId,
 	}
