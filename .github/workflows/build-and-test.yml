@@ -38,7 +38,7 @@ jobs:
           ./g8e test g8ee
           -p gemini
           -k "$GEMINI_API_KEY"
-          -m gemini-3.1-pro-preview
+          -m gemini-3.1-pro-preview-customtools
           -a gemini-3-flash-preview
           -l gemini-3.1-flash-lite-preview
           -j auto
