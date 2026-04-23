@@ -216,6 +216,14 @@ class OperatorPubSubService:
         if self.pubsub_client is None:
             raise ValidationError("pubsub_client not initialized — call set_pubsub_client() first", component="g8ee")
         results_ch = PubSubChannel.results(operator_id, operator_session_id)
+        logger.info(
+            "[PUBSUB] Constructing results channel for registration",
+            extra={
+                "operator_id": operator_id,
+                "operator_session_id": operator_session_id,
+                "results_channel": results_ch,
+            },
+        )
         self.pubsub_client.on_channel_message(results_ch, self._dispatch_results_message)
         await self.pubsub_client.subscribe(results_ch)
         self._active_operator_sessions_set.add(key)

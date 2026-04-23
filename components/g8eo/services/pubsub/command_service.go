@@ -108,6 +108,13 @@ func (cs *CommandService) SetSentinel(s *sentinel.Sentinel) {
 
 // HandleExecutionRequest processes an inbound command execution request.
 func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSubCommandMessage) {
+	cs.logger.Info("HandleExecutionRequest called",
+		"message_id", msg.ID,
+		"message_event_type", msg.EventType,
+		"message_operator_session_id", msg.OperatorSessionID,
+		"config_operator_session_id", cs.config.OperatorSessionId,
+		"config_operator_id", cs.config.OperatorID)
+
 	var p models.CommandRequestPayload
 	if err := json.Unmarshal(msg.Payload, &p); err != nil {
 		cs.logger.Error("Failed to decode command payload", "error", err)
@@ -198,6 +205,10 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 			"status_updates", statusUpdateCount,
 			"total_elapsed", fmt.Sprintf("%.1fs", time.Since(startTime).Seconds()))
 	}
+
+	cs.logger.Info("About to publish execution result",
+		"execution_id", result.ExecutionID,
+		"results_publisher_nil", cs.results == nil)
 
 	rawStdoutSize := len(result.Stdout)
 	rawStderrSize := len(result.Stderr)

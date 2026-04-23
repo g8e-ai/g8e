@@ -138,12 +138,13 @@ def _make_success_envelope(
     )
 
 
-def _make_failed_envelope(error: str = "Connection refused") -> G8eoResultEnvelope:
+def _make_failed_envelope(error: str = "Connection refused", execution_id: str = "test") -> G8eoResultEnvelope:
     return G8eoResultEnvelope(
         event_type=EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED,
         operator_id="op-1",
         operator_session_id="session-1",
         payload=PortCheckResultPayload(
+            execution_id=execution_id,
             host="google.com",
             port=443,
             protocol="tcp",
@@ -459,14 +460,15 @@ class TestG8eoResultHandling:
     async def test_failed_event_type_returns_port_check_failed(self, task_tracker):
         service, pubsub, registry, _ = _make_service()
         investigation = _make_investigation()
+        exec_id = _exec_id()
 
         async def _simulate():
             await asyncio.sleep(0.01)
             for eid in list(registry._events):
-                registry.complete(eid, _make_failed_envelope("Connection refused"))
+                registry.complete(eid, _make_failed_envelope("Connection refused", execution_id=eid))
 
         task = task_tracker.track(asyncio.create_task(_simulate()))
-        result = await service.execute_port_check(_make_args(), investigation, _make_context(), _exec_id())
+        result = await service.execute_port_check(_make_args(), investigation, _make_context(), exec_id)
         await task
 
         assert result.success is False

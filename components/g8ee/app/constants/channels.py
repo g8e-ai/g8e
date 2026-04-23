@@ -49,7 +49,6 @@ class PubSubChannel(str, Enum):
 
     @classmethod
     def parse(cls, channel: str) -> tuple[str, str, str]:
-        """Parse a structured channel string into (prefix, operator_id, session_id)."""
         parts = channel.split(cls.SEPARATOR)
         if len(parts) == cls.SEGMENT_COUNT:
             return parts[0], parts[1], parts[2]

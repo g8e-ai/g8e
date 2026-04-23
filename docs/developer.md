@@ -295,6 +295,7 @@ The following result payload types support execution_id injection:
 - FetchHistoryResultPayload
 - FetchFileHistoryResultPayload
 - RestoreFileResultPayload
+- ExecutionResultsPayload
 
 When adding new result payload types, ensure they:
 1. Declare an `ExecutionID string` field with JSON tag `execution_id`

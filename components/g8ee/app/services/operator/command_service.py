@@ -203,7 +203,7 @@ class OperatorCommandService:
                 return
             execution_id = payload.execution_id
             if not execution_id:
-                logger.warning("[G8EO_RESULT] Missing execution_id in payload type %s", type(payload).__name__)
+                logger.error("[G8EO_RESULT] Missing execution_id in payload type %s - cannot complete execution registry entry. Envelope ID: %s. The corresponding waiter will timeout.", type(payload).__name__, envelope.id)
                 return
             execution_registry.complete(execution_id, envelope)
 

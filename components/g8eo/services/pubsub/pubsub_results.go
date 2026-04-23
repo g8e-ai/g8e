@@ -28,7 +28,12 @@ import (
 )
 
 func (rr *PubSubResultsService) resultsChannel(operatorSessionID string) string {
-	return constants.ResultsChannel(rr.config.OperatorID, operatorSessionID)
+	channel := constants.ResultsChannel(rr.config.OperatorID, operatorSessionID)
+	rr.logger.Info("[G8EO-PUBSUB] Constructing results channel for publishing",
+		"operator_id", rr.config.OperatorID,
+		"operator_session_id", operatorSessionID,
+		"channel", channel)
+	return channel
 }
 
 // PubSubResultsService handles publishing results back to AI Agent Services via g8es pub/sub
@@ -50,9 +55,21 @@ func NewPubSubResultsService(cfg *config.Config, logger *slog.Logger, client Pub
 }
 
 func (rr *PubSubResultsService) wrapMCPIfNecessary(msg *models.G8eMessage, originalMsg PubSubCommandMessage, eventType string, payload interface{}) error {
+	rr.logger.Debug("Checking if MCP wrapping is necessary",
+		"original_event_type", originalMsg.EventType,
+		"target_event_type", eventType,
+		"mcp_tools_call", constants.Event.Operator.MCP.ToolsCall)
+
 	if originalMsg.EventType != constants.Event.Operator.MCP.ToolsCall {
+		rr.logger.Debug("Skipping MCP wrapping - not an MCP tools call")
 		return nil
 	}
+
+	rr.logger.Info("MCP wrapping triggered - wrapping result as MCP JSON-RPC response",
+		"original_event_type", originalMsg.EventType,
+		"target_event_type", eventType,
+		"original_msg_id", originalMsg.ID,
+		"original_msg_operator_session_id", originalMsg.OperatorSessionID)
 
 	// If it was an MCP request, we wrap the entire result payload as an MCP JSON-RPC response
 	mcpResp, err := mcp.TranslateResultToMCP(originalMsg.ID, originalMsg.ID, eventType, payload)
@@ -65,12 +82,25 @@ func (rr *PubSubResultsService) wrapMCPIfNecessary(msg *models.G8eMessage, origi
 	}
 	msg.EventType = constants.Event.Operator.MCP.ToolsResult
 	msg.Payload = mcpRaw
+
+	rr.logger.Info("MCP wrapping completed",
+		"new_event_type", msg.EventType,
+		"payload_size", len(mcpRaw))
+
 	return nil
 }
 
 // PublishExecutionResult publishes command execution result via g8es pub/sub
 // Stdout/stderr have already been sentinel.Sentinel-scrubbed by pubsub_commands.go before this is called.
 func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, result *models.ExecutionResultsPayload, originalMsg PubSubCommandMessage) error {
+	rr.logger.Info("PublishExecutionResult called",
+		"execution_id", result.ExecutionID,
+		"status", result.Status,
+		"config_operator_id", rr.config.OperatorID,
+		"config_operator_session_id", rr.config.OperatorSessionId,
+		"original_msg_operator_session_id", originalMsg.OperatorSessionID,
+		"original_msg_event_type", originalMsg.EventType)
+
 	eventType := constants.Event.Operator.Command.Completed
 	if result.Status == constants.ExecutionStatusFailed || result.Status == constants.ExecutionStatusTimeout {
 		eventType = constants.Event.Operator.Command.Failed
@@ -118,6 +148,13 @@ func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, resu
 	msg.TaskID = result.TaskID
 	msg.InvestigationID = result.InvestigationID
 	msg.OperatorSessionID = originalMsg.OperatorSessionID
+
+	rr.logger.Info("About to publish result message",
+		"message_id", msg.ID,
+		"message_event_type", msg.EventType,
+		"message_operator_id", msg.OperatorID,
+		"message_operator_session_id", msg.OperatorSessionID,
+		"original_msg_operator_session_id", originalMsg.OperatorSessionID)
 
 	if err := rr.publish(ctx, msg); err != nil {
 		return fmt.Errorf("failed to publish result: %w", err)
@@ -419,7 +456,14 @@ func (rr *PubSubResultsService) publish(ctx context.Context, msg *models.G8eMess
 	if err != nil {
 		return fmt.Errorf("failed to marshal result message: %w", err)
 	}
-	return rr.client.Publish(ctx, rr.resultsChannel(msg.OperatorSessionID), data)
+	channel := rr.resultsChannel(msg.OperatorSessionID)
+	rr.logger.Info("Publishing result to channel",
+		"channel", channel,
+		"event_type", msg.EventType,
+		"message_id", msg.ID,
+		"operator_session_id", msg.OperatorSessionID,
+		"operator_id", msg.OperatorID)
+	return rr.client.Publish(ctx, channel, data)
 }
 
 // timeNowNano returns the current time as a Unix nanosecond timestamp.

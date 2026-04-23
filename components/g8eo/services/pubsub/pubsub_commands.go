@@ -144,7 +144,9 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 
 	rs.buildHandlers()
 
-	c.Logger.Info("g8e connectivity initialized")
+	c.Logger.Info("g8e connectivity initialized",
+		"config_operator_id", c.Config.OperatorID,
+		"config_operator_session_id", c.Config.OperatorSessionId)
 	return rs, nil
 }
 
@@ -187,7 +189,8 @@ func (rs *PubSubCommandService) Start(ctx context.Context) error {
 	channelName := constants.CmdChannel(rs.config.OperatorID, rs.config.OperatorSessionId)
 	rs.logger.Info("Establishing connection with g8ed",
 		"operator_id", rs.config.OperatorID,
-		"operator_session_id", rs.config.OperatorSessionId)
+		"operator_session_id", rs.config.OperatorSessionId,
+		"cmd_channel", channelName)
 
 	rs.wg.Add(1)
 	go func() {
@@ -257,7 +260,9 @@ func (rs *PubSubCommandService) listenForCommands(channelName string) {
 			return
 		}
 
-		rs.logger.Info("Subscribing to operator command channel", "operator_session_id", rs.config.OperatorSessionId)
+		rs.logger.Info("Subscribing to operator command channel",
+			"operator_session_id", rs.config.OperatorSessionId,
+			"channel_name", channelName)
 
 		msgCh, err := rs.client.Subscribe(rs.ctx, channelName)
 		if err != nil {
@@ -409,11 +414,20 @@ func (rs *PubSubCommandService) handleMCPToolsCall(ctx context.Context, msg PubS
 		return
 	}
 
+	rs.logger.Info("MCP tool call translated successfully",
+		"original_event_type", msg.EventType,
+		"translated_event_type", g8eMsg.EventType,
+		"mcp_request_id", req.ID)
+
 	// Update the message with translated data but keep the EventType as MCP.ToolsCall
 	// so the results publisher knows to wrap the result.
 	// We only change the Payload to what the handlers expect.
 	msg.Payload = g8eMsg.Payload
 	msg.ID = g8eMsg.ID // MCP request ID
+
+	rs.logger.Info("Dispatching to handler",
+		"handler_event_type", g8eMsg.EventType,
+		"preserving_original_event_type", msg.EventType)
 
 	// Now dispatch based on the translated EventType using the same dispatch table
 	handler, ok := rs.handlers[g8eMsg.EventType]
