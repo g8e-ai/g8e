@@ -336,7 +336,7 @@ class GeminiProvider(LLMProvider):
                 if hasattr(api, '_async_httpx_client') and api._async_httpx_client:
                     await api._async_httpx_client.aclose()
         except Exception as exc:
-            logger.debug("Gemini cleanup error (non-fatal): %s", exc)
+            logger.info("Gemini cleanup error (non-fatal): %s", exc)
         logger.info("Gemini provider closed")
 
     @staticmethod
@@ -412,7 +412,7 @@ class GeminiProvider(LLMProvider):
                 f"tool_calling_mode={fc_cfg.mode if settings.tool_config and settings.tool_config.tool_calling_config else None}",
                 f"allowed_tools={len(fc_cfg.allowed_tool_names) if fc_cfg and fc_cfg.allowed_tool_names else 0}",
             ])
-            logger.debug(" ".join(log_parts))
+            logger.info(" ".join(log_parts))
             
             config_kwargs = {
                 "max_output_tokens": settings.max_output_tokens,
@@ -524,7 +524,7 @@ class GeminiProvider(LLMProvider):
         if response.candidates:
             grounding_raw = _grounding_from_sdk_candidate(response.candidates[0])
 
-        logger.debug(
+        logger.info(
             "[GEMINI] Parsed response: parts=%d finish_reason=%s has_usage=%s has_grounding=%s",
             len(parts),
             finish_reason,

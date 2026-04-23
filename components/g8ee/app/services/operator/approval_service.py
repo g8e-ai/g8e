@@ -222,7 +222,7 @@ class OperatorApprovalService:
                 )
                 logger.info("[%s] Recorded in operator activity_log", log_tag)
             except ResourceNotFoundError:
-                logger.debug("[%s] Operator document not found (may be deleted during test cleanup)", log_tag)
+                logger.info("[%s] Operator document not found (may be deleted during test cleanup)", log_tag)
             except Exception as e:
                 logger.error("[AUDIT-FAILURE] %s operator: %s", log_tag, e, exc_info=True)
 
@@ -234,7 +234,7 @@ class OperatorApprovalService:
             )
             logger.info("[%s] Recorded in conversation_history", log_tag)
         except ResourceNotFoundError:
-            logger.debug("[%s] Investigation document not found (may be deleted during test cleanup)", log_tag)
+            logger.info("[%s] Investigation document not found (may be deleted during test cleanup)", log_tag)
         except Exception as e:
             logger.warning("[AUDIT-FAILURE] %s investigation: %s", log_tag, e)
 

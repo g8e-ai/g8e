@@ -546,7 +546,7 @@ def build_modular_system_prompt(
             contexts_to_render[0].hostname if contexts_to_render and contexts_to_render[0] else None,
             contexts_to_render[0].os if contexts_to_render and contexts_to_render[0] else None,
         )
-        logger.debug("[PROMPT] full system_context:\n%s", system_context_str[:5000])
+        logger.info("[PROMPT] full system_context:\n%s", system_context_str[:5000])
 
     if investigation and investigation.sentinel_mode is True:
         sections.append(load_prompt(PromptFile.SYSTEM_SENTINEL_MODE))
@@ -595,7 +595,7 @@ def build_modular_system_prompt(
     if user_memories or case_memories:
         section_labels.append(PromptSection.LEARNED_CONTEXT)
 
-    logger.debug(
+    logger.info(
         "[PROMPT] sections=%d total_chars=%d operator_bound=%s sections=[%s]",
         len(sections), len(full_prompt), operator_bound, ", ".join(section_labels)
     )

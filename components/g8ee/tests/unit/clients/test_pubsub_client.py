@@ -12,6 +12,7 @@
 # limitations under the License.
 
 import asyncio
+import json
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import aiohttp
@@ -260,6 +261,129 @@ class TestWsReaderReconnection:
                 ANY,
                 exc_info=True,
             )
+
+
+@pytest.mark.asyncio
+class TestResultDispatchDespiteMatchingEnvelopeId:
+    """Regression: inbound messages must be dispatched to handlers even when
+    the envelope `id` matches an id the client recently published.
+
+    g8eo reuses the command's execution_id as the envelope `id` on the
+    corresponding result message (shared/models/wire/envelope.json `id` is
+    treated as a correlation token on results). Previously, pubsub_client
+    tracked outbound envelope ids in `_sent_ids` and dropped any inbound
+    message whose id matched -- labelling it a "self-broadcast". g8ee
+    publishes only to `cmd:*` and subscribes only to `results:*` / `heartbeat:*`
+    (disjoint channels), so there is no real self-broadcast scenario on this
+    wire path. The filter silently ate legitimate results, causing
+    `execution_registry.wait()` to time out and the UI spinner to spin forever.
+
+    These tests pin the correct behaviour: a MESSAGE / PMESSAGE event whose
+    envelope `id` was just seen on `publish()` MUST still reach the handler.
+    """
+
+    @staticmethod
+    def _make_text_frame(event: dict) -> MagicMock:
+        msg = MagicMock()
+        msg.type = aiohttp.WSMsgType.TEXT
+        msg.data = json.dumps(event)
+        return msg
+
+    async def test_result_with_matching_envelope_id_is_dispatched(self, connected_client):
+        exec_id = "cmd_shared_correlation_id_1234"
+        cmd_channel = "cmd:op-1:sess-1"
+        results_channel = "results:op-1:sess-1"
+
+        delivered = asyncio.Event()
+        captured: list[tuple[str, object]] = []
+
+        async def handler(channel: str, data: object) -> None:
+            captured.append((channel, data))
+            delivered.set()
+
+        connected_client.on_channel_message(results_channel, handler)
+
+        await connected_client.publish(
+            cmd_channel,
+            {"id": exec_id, "event_type": "g8e.v1.operator.command.requested"},
+        )
+
+        result_frame = self._make_text_frame(
+            {
+                "type": PubSubWireEventType.MESSAGE.value,
+                "channel": results_channel,
+                "data": {
+                    "id": exec_id,
+                    "event_type": "g8e.v1.operator.command.completed",
+                    "payload": {"execution_id": exec_id, "status": "completed"},
+                },
+            }
+        )
+        mock_ws = connected_client._ws
+        mock_ws.__aiter__ = MagicMock(return_value=iter([result_frame]))
+
+        reader_task = asyncio.create_task(connected_client._ws_reader())
+        try:
+            await asyncio.wait_for(delivered.wait(), timeout=1.0)
+        finally:
+            reader_task.cancel()
+            await asyncio.gather(reader_task, return_exceptions=True)
+
+        assert len(captured) == 1
+        channel, data = captured[0]
+        assert channel == results_channel
+        assert isinstance(data, dict)
+        assert data["id"] == exec_id
+        assert data["payload"]["execution_id"] == exec_id
+
+    async def test_pmessage_with_matching_envelope_id_is_dispatched(self, connected_client):
+        exec_id = "cmd_shared_correlation_id_pmsg"
+        cmd_channel = "cmd:op-2:sess-2"
+        results_pattern = "results:*"
+        results_channel = "results:op-2:sess-2"
+
+        delivered = asyncio.Event()
+        captured: list[tuple[str, str, object]] = []
+
+        async def handler(pattern: str, channel: str, data: object) -> None:
+            captured.append((pattern, channel, data))
+            delivered.set()
+
+        connected_client._pmessage_handlers.setdefault(results_pattern, []).append(handler)
+
+        await connected_client.publish(
+            cmd_channel,
+            {"id": exec_id, "event_type": "g8e.v1.operator.command.requested"},
+        )
+
+        pmsg_frame = self._make_text_frame(
+            {
+                "type": PubSubWireEventType.PMESSAGE.value,
+                "pattern": results_pattern,
+                "channel": results_channel,
+                "data": {
+                    "id": exec_id,
+                    "event_type": "g8e.v1.operator.command.completed",
+                    "payload": {"execution_id": exec_id, "status": "completed"},
+                },
+            }
+        )
+        mock_ws = connected_client._ws
+        mock_ws.__aiter__ = MagicMock(return_value=iter([pmsg_frame]))
+
+        reader_task = asyncio.create_task(connected_client._ws_reader())
+        try:
+            await asyncio.wait_for(delivered.wait(), timeout=1.0)
+        finally:
+            reader_task.cancel()
+            await asyncio.gather(reader_task, return_exceptions=True)
+
+        assert len(captured) == 1
+        pattern, channel, data = captured[0]
+        assert pattern == results_pattern
+        assert channel == results_channel
+        assert isinstance(data, dict)
+        assert data["id"] == exec_id
 
 
 @pytest.mark.asyncio

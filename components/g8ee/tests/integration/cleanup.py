@@ -57,7 +57,7 @@ class IntegrationCleanupTracker:
             try:
                 await self._cache_aside.delete_document(collection, doc_id)
             except Exception as exc:
-                logger.debug(
+                logger.info(
                     "Cleanup: could not delete %s/%s: %s",
                     collection, doc_id, exc,
                 )

@@ -160,7 +160,7 @@ class BackgroundTaskManager:
             tasks = list(self._active_tasks.values())
 
         if not tasks:
-            logger.debug("No tasks to await")
+            logger.info("No tasks to await")
             return
 
         logger.info("Awaiting completion of %d tracked tasks", len(tasks))

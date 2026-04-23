@@ -50,23 +50,10 @@ func NewPubSubResultsService(cfg *config.Config, logger *slog.Logger, client Pub
 }
 
 func (rr *PubSubResultsService) wrapMCPIfNecessary(msg *models.G8eMessage, originalMsg PubSubCommandMessage, eventType string, payload interface{}) error {
-	rr.logger.Debug("Checking if MCP wrapping is necessary",
-		"original_event_type", originalMsg.EventType,
-		"target_event_type", eventType,
-		"mcp_tools_call", constants.Event.Operator.MCP.ToolsCall)
-
 	if originalMsg.EventType != constants.Event.Operator.MCP.ToolsCall {
-		rr.logger.Debug("Skipping MCP wrapping - not an MCP tools call")
 		return nil
 	}
 
-	rr.logger.Info("MCP wrapping triggered - wrapping result as MCP JSON-RPC response",
-		"original_event_type", originalMsg.EventType,
-		"target_event_type", eventType,
-		"original_msg_id", originalMsg.ID,
-		"original_msg_operator_session_id", originalMsg.OperatorSessionID)
-
-	// If it was an MCP request, we wrap the entire result payload as an MCP JSON-RPC response
 	mcpResp, err := mcp.TranslateResultToMCP(originalMsg.ID, originalMsg.ID, eventType, payload)
 	if err != nil {
 		return fmt.Errorf("failed to wrap result for MCP: %w", err)
@@ -78,7 +65,8 @@ func (rr *PubSubResultsService) wrapMCPIfNecessary(msg *models.G8eMessage, origi
 	msg.EventType = constants.Event.Operator.MCP.ToolsResult
 	msg.Payload = mcpRaw
 
-	rr.logger.Info("MCP wrapping completed",
+	rr.logger.Debug("Wrapped result as MCP JSON-RPC response",
+		"original_msg_id", originalMsg.ID,
 		"new_event_type", msg.EventType,
 		"payload_size", len(mcpRaw))
 
@@ -147,7 +135,7 @@ func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, resu
 	if result.ReturnCode != nil {
 		logArgs = append(logArgs, "return_code", *result.ReturnCode)
 	}
-	rr.logger.Debug("Result transmitted to g8e", logArgs...)
+	rr.logger.Info("Result transmitted to g8e", logArgs...)
 	return nil
 }
 
