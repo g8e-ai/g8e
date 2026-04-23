@@ -43,13 +43,10 @@ from app.models.agents.tribunal import (
 )
 from app.services.ai.command_generator import (
     _build_and_emit_result,
-    _build_operator_context_string,
-    _format_forbidden_patterns_message,
     _is_system_error,
     _MAX_TOKENS_GENERATION,
     _MAX_TOKENS_VERIFIER,
     _member_for_pass,
-    _prompt_fields,
     _resolve_model,
     _run_generation_pass,
     _run_generation_stage,
@@ -58,6 +55,11 @@ from app.services.ai.command_generator import (
     _run_voting_stage,
     generate_command,
     TribunalEmitter,
+)
+from app.llm.prompts import (
+    build_tribunal_operator_context_string as _build_operator_context_string,
+    build_forbidden_patterns_message as _format_forbidden_patterns_message,
+    build_tribunal_prompt_fields as _prompt_fields,
 )
 from app.utils.agent_persona_loader import get_agent_persona
 from app.models.http_context import G8eHttpContext
@@ -2265,9 +2267,8 @@ class TestForbiddenPatternsMessage:
 
     def test_message_always_critical_and_never(self):
         message = _format_forbidden_patterns_message()
-        assert "CRITICAL" in message
-        assert "NEVER" in message
-        assert "privilege escalation" in message
+        assert "FORBIDDEN" in message
+        assert "rejected" in message
 
     def test_message_lists_all_forbidden_base_patterns(self):
         from app.constants import FORBIDDEN_COMMAND_PATTERNS
@@ -2316,6 +2317,7 @@ class TestPromptFields:
     """_prompt_fields returns all keys required by every Tribunal persona template."""
 
     def test_returns_all_required_keys(self):
+        from app.constants import DEFAULT_OS_NAME, DEFAULT_SHELL, DEFAULT_WORKING_DIRECTORY
         fields = _prompt_fields(
             OperatorContext(
                 operator_id="op",
@@ -2327,28 +2329,35 @@ class TestPromptFields:
             ),
             request="test request",
             guidelines="test guidelines",
+            default_os=DEFAULT_OS_NAME,
+            default_shell=DEFAULT_SHELL,
+            default_working_directory=DEFAULT_WORKING_DIRECTORY,
         )
         assert fields["os"] == "linux"
         assert fields["shell"] == "bash"
         assert fields["working_directory"] == "/home/alice"
         assert fields["user_context"] == "alice (uid=1000)"
         assert "alice" in fields["operator_context"]
-        assert "CRITICAL" in fields["forbidden_patterns_message"]
+        assert "FORBIDDEN" in fields["forbidden_patterns_message"]
 
     def test_defaults_applied_when_context_none(self):
         from app.constants import DEFAULT_OS_NAME, DEFAULT_SHELL, DEFAULT_WORKING_DIRECTORY
 
-        fields = _prompt_fields(None, request="", guidelines="")
+        fields = _prompt_fields(None, request="", guidelines="", default_os=DEFAULT_OS_NAME, default_shell=DEFAULT_SHELL, default_working_directory=DEFAULT_WORKING_DIRECTORY)
         assert fields["os"] == DEFAULT_OS_NAME
         assert fields["shell"] == DEFAULT_SHELL
         assert fields["working_directory"] == DEFAULT_WORKING_DIRECTORY
         assert fields["user_context"] == "unknown"
 
     def test_root_uid_is_preserved_in_user_context(self):
+        from app.constants import DEFAULT_OS_NAME, DEFAULT_SHELL, DEFAULT_WORKING_DIRECTORY
         fields = _prompt_fields(
             OperatorContext(operator_id="op", username="root", uid=0),
             request="",
             guidelines="",
+            default_os=DEFAULT_OS_NAME,
+            default_shell=DEFAULT_SHELL,
+            default_working_directory=DEFAULT_WORKING_DIRECTORY,
         )
         assert fields["user_context"] == "root (uid=0)"
 
@@ -2360,10 +2369,12 @@ class TestPromptFields:
         guards against drift in either the templates or _prompt_fields.
         """
         from app.utils.agent_persona_loader import get_agent_persona, get_tribunal_member
-        from app.services.ai.command_generator import (
-            TRIBUNAL_PROMPT_TEMPLATE,
-            TRIBUNAL_VERIFIER_TEMPLATE,
-        )
+        from app.prompts_data.loader import load_prompt
+        from app.llm.prompts import PromptFile
+        from app.constants import DEFAULT_OS_NAME, DEFAULT_SHELL, DEFAULT_WORKING_DIRECTORY
+
+        TRIBUNAL_PROMPT_TEMPLATE = load_prompt(PromptFile.TRIBUNAL_GENERATOR)
+        TRIBUNAL_VERIFIER_TEMPLATE = load_prompt(PromptFile.TRIBUNAL_VERIFIER)
 
         fields = _prompt_fields(
             OperatorContext(
@@ -2378,6 +2389,9 @@ class TestPromptFields:
             ),
             request="test request",
             guidelines="test guidelines",
+            default_os=DEFAULT_OS_NAME,
+            default_shell=DEFAULT_SHELL,
+            default_working_directory=DEFAULT_WORKING_DIRECTORY,
         )
         common = dict(
             command_constraints_message="No whitelist or blacklist constraints are active.",
@@ -2392,7 +2406,7 @@ class TestPromptFields:
                 "TRIBUNAL_PROMPT_TEMPLATE missing {operator_context} placeholder"
             )
             assert "host1" in rendered, f"{member_id}: operator_context did not render"
-            assert "CRITICAL" in rendered, f"{member_id}: forbidden_patterns missing"
+            assert "FORBIDDEN" in rendered, f"{member_id}: forbidden_patterns missing"
 
         auditor = get_agent_persona("auditor")
         rendered = TRIBUNAL_VERIFIER_TEMPLATE.format(
@@ -2401,7 +2415,7 @@ class TestPromptFields:
             **fields,
         )
         assert "host1" in rendered
-        assert "CRITICAL" in rendered
+        assert "FORBIDDEN" in rendered
 
 
 class TestTribunalMemberCycling:

@@ -40,6 +40,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/components/g8eo/config"
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/models"
 	execution "github.com/g8e-ai/g8e/components/g8eo/services/execution"
@@ -88,16 +89,32 @@ func newLoopbackService(t *testing.T, f *loopbackFixture) (*PubSubCommandService
 	return svc, resultsSvc
 }
 
-// injectCmd publishes a PubSubCommandMessage on the cmd channel for cfg using an
+// newTestG8eMessage creates a models.G8eMessage for testing with required fields populated.
+func newTestG8eMessage(t *testing.T, cfg *config.Config, eventType, caseID string, payload interface{}) *models.G8eMessage {
+	t.Helper()
+	msg, err := models.NewG8eMessage(
+		fmt.Sprintf("test-%d", time.Now().UnixNano()),
+		eventType,
+		caseID,
+		cfg.OperatorID,
+		cfg.OperatorSessionId,
+		cfg.SystemFingerprint,
+		payload,
+	)
+	require.NoError(t, err)
+	return msg
+}
+
+// injectCmd publishes a models.G8eMessage on the cmd channel for cfg using an
 // injector client connected to the loopback broker.
-func injectCmd(t *testing.T, f *loopbackFixture, svc *PubSubCommandService, msg PubSubCommandMessage) {
+func injectCmd(t *testing.T, f *loopbackFixture, svc *PubSubCommandService, msg *models.G8eMessage) {
 	t.Helper()
 	cmdCh := constants.CmdChannel(svc.config.OperatorID, svc.config.OperatorSessionId)
 
 	// Confirm the service's subscription is registered before publishing.
 	f.subscribeAndWait(t, cmdCh)
 
-	raw, err := json.Marshal(msg)
+	raw, err := msg.Marshal()
 	require.NoError(t, err)
 
 	injector := f.newClient(t)
@@ -155,14 +172,11 @@ func TestLoopback_CommandDispatch_ExecutionRequest_EchoCommand(t *testing.T) {
 	// Consume the automatic heartbeat published on connect.
 	_ = drainOne(t, hbSub)
 
-	injectCmd(t, f, svc, PubSubCommandMessage{
-		ID:              "exec-loop-echo-1",
-		EventType:       constants.Event.Operator.Command.Requested,
-		CaseID:          "case-echo",
-		InvestigationID: "inv-echo",
-		Payload:         json.RawMessage(`{"command":"echo hello loopback","justification":"test"}`),
-		Timestamp:       time.Now().UTC(),
-	})
+	payload := json.RawMessage(`{"command":"echo hello loopback","justification":"test"}`)
+	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.Command.Requested, "case-echo", payload)
+	cmdMsg.ID = "exec-loop-echo-1"
+	cmdMsg.InvestigationID = "inv-echo"
+	injectCmd(t, f, svc, cmdMsg)
 
 	msg := drainOne(t, resultsSub)
 	assert.Contains(t, string(msg), constants.Event.Operator.Command.Completed)
@@ -184,13 +198,10 @@ func TestLoopback_CommandDispatch_ExecutionRequest_InvalidCommand(t *testing.T) 
 	startService(t, svc)
 	_ = drainOne(t, hbSub)
 
-	injectCmd(t, f, svc, PubSubCommandMessage{
-		ID:        "exec-loop-fail-1",
-		EventType: constants.Event.Operator.Command.Requested,
-		CaseID:    "case-fail",
-		Payload:   json.RawMessage(`{"command":"__no_such_exec_xyzzy__","justification":"test"}`),
-		Timestamp: time.Now().UTC(),
-	})
+	payload := json.RawMessage(`{"command":"__no_such_exec_xyzzy__","justification":"test"}`)
+	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.Command.Requested, "case-fail", payload)
+	cmdMsg.ID = "exec-loop-fail-1"
+	injectCmd(t, f, svc, cmdMsg)
 
 	msg := drainOne(t, resultsSub)
 	// Non-existent command completes with failed status.
@@ -209,13 +220,10 @@ func TestLoopback_CommandDispatch_ExecutionRequest_StdoutContent(t *testing.T) {
 	_ = drainOne(t, hbSub)
 
 	const sentinel = "loopback-output-sentinel-42"
-	injectCmd(t, f, svc, PubSubCommandMessage{
-		ID:        "exec-loop-stdout-1",
-		EventType: constants.Event.Operator.Command.Requested,
-		CaseID:    "case-stdout",
-		Payload:   json.RawMessage(fmt.Sprintf(`{"command":"echo %s","justification":"test"}`, sentinel)),
-		Timestamp: time.Now().UTC(),
-	})
+	payload := json.RawMessage(fmt.Sprintf(`{"command":"echo %s","justification":"test"}`, sentinel))
+	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.Command.Requested, "case-stdout", payload)
+	cmdMsg.ID = "exec-loop-stdout-1"
+	injectCmd(t, f, svc, cmdMsg)
 
 	msg := drainOne(t, resultsSub)
 	assert.Contains(t, string(msg), constants.Event.Operator.Command.Completed)
@@ -233,15 +241,12 @@ func TestLoopback_CommandDispatch_ExecutionRequest_TaskIDThreaded(t *testing.T) 
 	_ = drainOne(t, hbSub)
 
 	taskID := "task-loop-99"
-	injectCmd(t, f, svc, PubSubCommandMessage{
-		ID:              "exec-loop-task-1",
-		EventType:       constants.Event.Operator.Command.Requested,
-		CaseID:          "case-task",
-		InvestigationID: "inv-task",
-		TaskID:          &taskID,
-		Payload:         json.RawMessage(`{"command":"echo task","justification":"test"}`),
-		Timestamp:       time.Now().UTC(),
-	})
+	payload := json.RawMessage(`{"command":"echo task threaded","justification":"test"}`)
+	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.Command.Requested, "case-task", payload)
+	cmdMsg.ID = "exec-loop-task-1"
+	cmdMsg.InvestigationID = "inv-task"
+	cmdMsg.TaskID = &taskID
+	injectCmd(t, f, svc, cmdMsg)
 
 	msg := drainOne(t, resultsSub)
 	assert.Contains(t, string(msg), constants.Event.Operator.Command.Completed)
@@ -269,24 +274,18 @@ func TestLoopback_CommandDispatch_CancelRequest_RunningCommand(t *testing.T) {
 
 	// Start a long-running command.
 	execID := "cancel-target-exec-1"
-	injectCmd(t, f, svc, PubSubCommandMessage{
-		ID:        execID,
-		EventType: constants.Event.Operator.Command.Requested,
-		CaseID:    "case-cancel",
-		Payload:   json.RawMessage(fmt.Sprintf(`{"command":"sleep 30","execution_id":"%s","justification":"test"}`, execID)),
-		Timestamp: time.Now().UTC(),
-	})
+	payload := json.RawMessage(fmt.Sprintf(`{"command":"sleep 30","execution_id":"%s","justification":"test"}`, execID))
+	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.Command.Requested, "case-cancel", payload)
+	cmdMsg.ID = execID
+	injectCmd(t, f, svc, cmdMsg)
 
 	// Give the command time to start executing before sending cancel.
 	time.Sleep(150 * time.Millisecond)
 
-	injectCmd(t, f, svc, PubSubCommandMessage{
-		ID:        "cancel-req-1",
-		EventType: constants.Event.Operator.Command.CancelRequested,
-		CaseID:    "case-cancel",
-		Payload:   json.RawMessage(fmt.Sprintf(`{"execution_id":"%s"}`, execID)),
-		Timestamp: time.Now().UTC(),
-	})
+	cancelPayload := json.RawMessage(fmt.Sprintf(`{"execution_id":"%s"}`, execID))
+	cancelMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.Command.CancelRequested, "case-cancel", cancelPayload)
+	cancelMsg.ID = "cancel-req-1"
+	injectCmd(t, f, svc, cancelMsg)
 
 	// Expect either a cancellation result or a completed result (race window).
 	msg := drainOne(t, resultsSub)
@@ -316,13 +315,10 @@ func TestLoopback_CommandDispatch_CancelRequest_NotFound(t *testing.T) {
 	_ = drainOne(t, hbSub)
 
 	// Cancel a command that was never started — should publish a failure result.
-	injectCmd(t, f, svc, PubSubCommandMessage{
-		ID:        "cancel-ghost-1",
-		EventType: constants.Event.Operator.Command.CancelRequested,
-		CaseID:    "case-ghost",
-		Payload:   json.RawMessage(`{"execution_id":"nonexistent-exec-id"}`),
-		Timestamp: time.Now().UTC(),
-	})
+	payload := json.RawMessage(`{"execution_id":"nonexistent-exec-id"}`)
+	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.Command.CancelRequested, "case-ghost", payload)
+	cmdMsg.ID = "cancel-ghost-1"
+	injectCmd(t, f, svc, cmdMsg)
 
 	msg := drainOne(t, resultsSub)
 	assert.Contains(t, string(msg), constants.Event.Operator.Command.Cancelled,
@@ -345,17 +341,14 @@ func TestLoopback_CommandDispatch_FileEdit_WriteAndRead(t *testing.T) {
 
 	targetPath := filepath.Join(t.TempDir(), "loopback-write.txt")
 
-	injectCmd(t, f, svc, PubSubCommandMessage{
-		ID:              "file-write-1",
-		EventType:       constants.Event.Operator.FileEdit.Requested,
-		CaseID:          "case-file-write",
-		InvestigationID: "inv-file-write",
-		Payload: json.RawMessage(fmt.Sprintf(
-			`{"file_path":%q,"operation":"write","content":"hello from loopback\n","create_if_missing":true,"justification":"test"}`,
-			targetPath,
-		)),
-		Timestamp: time.Now().UTC(),
-	})
+	payload := json.RawMessage(fmt.Sprintf(
+		`{"file_path":%q,"operation":"write","content":"hello from loopback\n","create_if_missing":true,"justification":"test"}`,
+		targetPath,
+	))
+	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.FileEdit.Requested, "case-file-write", payload)
+	cmdMsg.ID = "file-write-1"
+	cmdMsg.InvestigationID = "inv-file-write"
+	injectCmd(t, f, svc, cmdMsg)
 
 	msg := drainOne(t, resultsSub)
 	assert.Contains(t, string(msg), constants.Event.Operator.FileEdit.Completed)
@@ -381,13 +374,10 @@ func TestLoopback_CommandDispatch_FileEdit_SentinelBlocked(t *testing.T) {
 	// pattern matches without touching any real system file.
 	tmpDir := t.TempDir()
 	targetPath := filepath.Join(tmpDir, "etc", "passwd")
-	injectCmd(t, f, svc, PubSubCommandMessage{
-		ID:        "file-sentinel-1",
-		EventType: constants.Event.Operator.FileEdit.Requested,
-		CaseID:    "case-sentinel",
-		Payload:   json.RawMessage(`{"file_path":"/etc/passwd","operation":"write","content":"injected","justification":"test"}`),
-		Timestamp: time.Now().UTC(),
-	})
+	payload := json.RawMessage(`{"file_path":"/etc/passwd","operation":"write","content":"injected","justification":"test"}`)
+	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.FileEdit.Requested, "case-sentinel", payload)
+	cmdMsg.ID = "file-sentinel-1"
+	injectCmd(t, f, svc, cmdMsg)
 
 	msg := drainOne(t, resultsSub)
 	assert.Contains(t, string(msg), constants.Event.Operator.FileEdit.Failed, "sentinel must block writes to /etc/passwd, got: %s", string(msg))
@@ -407,13 +397,10 @@ func TestLoopback_CommandDispatch_FileEdit_MissingPath(t *testing.T) {
 
 	// Missing file_path — handler should log and not publish (no result expected).
 	// We assert no message arrives within a short window.
-	injectCmd(t, f, svc, PubSubCommandMessage{
-		ID:        "file-no-path-1",
-		EventType: constants.Event.Operator.FileEdit.Requested,
-		CaseID:    "case-no-path",
-		Payload:   json.RawMessage(`{"operation":"write","content":"x","justification":"test"}`),
-		Timestamp: time.Now().UTC(),
-	})
+	payload := json.RawMessage(`{"operation":"write","content":"x","justification":"test"}`)
+	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.FileEdit.Requested, "case-no-path", payload)
+	cmdMsg.ID = "file-no-path-1"
+	injectCmd(t, f, svc, cmdMsg)
 
 	drainNone(t, resultsSub, 200*time.Millisecond)
 }
@@ -434,16 +421,13 @@ func TestLoopback_CommandDispatch_FileEdit_NilResultNoPanic(t *testing.T) {
 	// error path; even if it somehow returned (nil, nil), the nil guard must
 	// synthesise a failed result rather than dereferencing nil.
 	targetPath := filepath.Join(t.TempDir(), "does-not-exist.txt")
-	injectCmd(t, f, svc, PubSubCommandMessage{
-		ID:        "nil-result-guard-1",
-		EventType: constants.Event.Operator.FileEdit.Requested,
-		CaseID:    "case-nil-guard",
-		Payload: json.RawMessage(fmt.Sprintf(
-			`{"file_path":%q,"operation":"delete","justification":"regression test"}`,
-			targetPath,
-		)),
-		Timestamp: time.Now().UTC(),
-	})
+	payload := json.RawMessage(fmt.Sprintf(
+		`{"file_path":%q,"operation":"delete","justification":"regression test"}`,
+		targetPath,
+	))
+	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.FileEdit.Requested, "case-nil-guard", payload)
+	cmdMsg.ID = "nil-result-guard-1"
+	injectCmd(t, f, svc, cmdMsg)
 
 	msg := drainOne(t, resultsSub)
 	// Must receive either a completed or failed result — never a panic or silence.
@@ -466,14 +450,11 @@ func TestLoopback_CommandDispatch_FsList_WorkDir(t *testing.T) {
 	startService(t, svc)
 	_ = drainOne(t, hbSub)
 
-	injectCmd(t, f, svc, PubSubCommandMessage{
-		ID:              "fslist-1",
-		EventType:       constants.Event.Operator.FsList.Requested,
-		CaseID:          "case-fslist",
-		InvestigationID: "inv-fslist",
-		Payload:         json.RawMessage(`{"path":".","max_entries":50}`),
-		Timestamp:       time.Now().UTC(),
-	})
+	payload := json.RawMessage(`{"path":".","max_entries":50}`)
+	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.FsList.Requested, "case-fslist", payload)
+	cmdMsg.ID = "fslist-1"
+	cmdMsg.InvestigationID = "inv-fslist"
+	injectCmd(t, f, svc, cmdMsg)
 
 	msg := drainOne(t, resultsSub)
 	assert.Contains(t, string(msg), constants.Event.Operator.FsList.Completed)
@@ -490,13 +471,10 @@ func TestLoopback_CommandDispatch_FsList_NonExistentPath(t *testing.T) {
 	startService(t, svc)
 	_ = drainOne(t, hbSub)
 
-	injectCmd(t, f, svc, PubSubCommandMessage{
-		ID:        "fslist-missing-1",
-		EventType: constants.Event.Operator.FsList.Requested,
-		CaseID:    "case-fslist-miss",
-		Payload:   json.RawMessage(`{"path":"/no/such/path/xyzzy","max_entries":10}`),
-		Timestamp: time.Now().UTC(),
-	})
+	payload := json.RawMessage(`{"path":"/no/such/path/xyzzy","max_entries":10}`)
+	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.FsList.Requested, "case-fslist-miss", payload)
+	cmdMsg.ID = "fslist-missing-1"
+	injectCmd(t, f, svc, cmdMsg)
 
 	msg := drainOne(t, resultsSub)
 	assert.Contains(t, string(msg), constants.Event.Operator.FsList.Failed)
@@ -522,13 +500,10 @@ func TestLoopback_CommandDispatch_FsRead_ExistingFile(t *testing.T) {
 	const content = "loopback fs read test content"
 	require.NoError(t, os.WriteFile(target, []byte(content), 0o644))
 
-	injectCmd(t, f, svc, PubSubCommandMessage{
-		ID:        "fsread-1",
-		EventType: constants.Event.Operator.FsRead.Requested,
-		CaseID:    "case-fsread",
-		Payload:   json.RawMessage(fmt.Sprintf(`{"path":%q,"max_size":4096}`, target)),
-		Timestamp: time.Now().UTC(),
-	})
+	payload := json.RawMessage(fmt.Sprintf(`{"path":%q,"max_size":4096}`, target))
+	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.FsRead.Requested, "case-fsread", payload)
+	cmdMsg.ID = "fsread-1"
+	injectCmd(t, f, svc, cmdMsg)
 
 	msg := drainOne(t, resultsSub)
 	assert.Contains(t, string(msg), constants.Event.Operator.FsRead.Completed)
@@ -545,13 +520,10 @@ func TestLoopback_CommandDispatch_FsRead_MissingFile(t *testing.T) {
 	startService(t, svc)
 	_ = drainOne(t, hbSub)
 
-	injectCmd(t, f, svc, PubSubCommandMessage{
-		ID:        "fsread-miss-1",
-		EventType: constants.Event.Operator.FsRead.Requested,
-		CaseID:    "case-fsread-miss",
-		Payload:   json.RawMessage(`{"path":"/no/such/file/xyzzy.txt","max_size":4096}`),
-		Timestamp: time.Now().UTC(),
-	})
+	payload := json.RawMessage(`{"path":"/no/such/file/xyzzy.txt","max_size":4096}`)
+	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.FsRead.Requested, "case-fsread-miss", payload)
+	cmdMsg.ID = "fsread-miss-1"
+	injectCmd(t, f, svc, cmdMsg)
 
 	msg := drainOne(t, resultsSub)
 	assert.Contains(t, string(msg), constants.Event.Operator.FsRead.Failed)
@@ -584,13 +556,10 @@ func TestLoopback_CommandDispatch_FanOut_MultipleResultSubscribers(t *testing.T)
 	startService(t, svc)
 	_ = drainOne(t, hbSub)
 
-	injectCmd(t, f, svc, PubSubCommandMessage{
-		ID:        "fanout-1",
-		EventType: constants.Event.Operator.Command.Requested,
-		CaseID:    "case-fanout",
-		Payload:   json.RawMessage(`{"command":"echo fanout","justification":"test"}`),
-		Timestamp: time.Now().UTC(),
-	})
+	payload := json.RawMessage(`{"command":"echo fanout","justification":"test"}`)
+	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.Command.Requested, "case-fanout", payload)
+	cmdMsg.ID = "fanout-1"
+	injectCmd(t, f, svc, cmdMsg)
 
 	for i, sub := range subs {
 		msg := drainOne(t, sub)
@@ -614,14 +583,11 @@ func TestLoopback_CommandDispatch_HeartbeatRequested_CaseIDThreaded(t *testing.T
 	// Consume the automatic heartbeat.
 	_ = drainOne(t, hbSub)
 
-	injectCmd(t, f, svc, PubSubCommandMessage{
-		ID:              "hb-req-case-1",
-		EventType:       constants.Event.Operator.HeartbeatRequested,
-		CaseID:          "case-hb-req",
-		InvestigationID: "inv-hb-req",
-		Payload:         json.RawMessage(`{}`),
-		Timestamp:       time.Now().UTC(),
-	})
+	payload := json.RawMessage(`{}`)
+	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.HeartbeatRequested, "case-hb-req", payload)
+	cmdMsg.ID = "hb-req-case-1"
+	cmdMsg.InvestigationID = "inv-hb-req"
+	injectCmd(t, f, svc, cmdMsg)
 
 	msg := drainOne(t, hbSub)
 	assert.Contains(t, string(msg), constants.Event.Operator.Heartbeat)
@@ -649,13 +615,10 @@ func TestLoopback_CommandDispatch_UnknownEventType_NoResult(t *testing.T) {
 	startService(t, svc)
 	_ = drainOne(t, hbSub)
 
-	injectCmd(t, f, svc, PubSubCommandMessage{
-		ID:        "unknown-event-1",
-		EventType: "operator.unknown.made_up_type",
-		CaseID:    "case-unknown",
-		Payload:   json.RawMessage(`{}`),
-		Timestamp: time.Now().UTC(),
-	})
+	payload := json.RawMessage(`{}`)
+	cmdMsg := newTestG8eMessage(t, svc.config, "operator.unknown.made_up_type", "case-unknown", payload)
+	cmdMsg.ID = "unknown-event-1"
+	injectCmd(t, f, svc, cmdMsg)
 
 	// Unknown event types are silently dropped — no result is published.
 	drainNone(t, resultsSub, 200*time.Millisecond)

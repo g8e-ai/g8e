@@ -377,27 +377,32 @@ func (rs *PubSubCommandService) handleMCPToolsCall(ctx context.Context, msg PubS
 			JSONRPC: "2.0",
 			ID:      req.ID,
 			Error: &mcp.JSONRPCError{
-				Code:    mcp.MethodNotFound, // Or InvalidParams depending on err
+				Code:    mcp.MethodNotFound,
 				Message: err.Error(),
 			},
 		}
 
-		// We need a way to publish this back. We can use rs.results.PublishResult
-		// but we need to build a G8eMessage for it.
 		if msg.OperatorID == nil {
 			rs.logger.Error("Cannot send MCP error response: operator_id is nil (required for routing)")
 			return
 		}
-		payloadRaw, _ := json.Marshal(errResp)
-		respMsg := &models.G8eMessage{
-			ID:                req.ID,
-			EventType:         constants.Event.Operator.MCP.ToolsResult,
-			CaseID:            msg.CaseID,
-			InvestigationID:   msg.InvestigationID,
-			OperatorID:        *msg.OperatorID,
-			OperatorSessionID: msg.OperatorSessionID,
-			Payload:           payloadRaw,
+
+		respMsg, err := models.NewG8eMessage(
+			req.ID,
+			constants.Event.Operator.MCP.ToolsResult,
+			msg.CaseID,
+			*msg.OperatorID,
+			msg.OperatorSessionID,
+			rs.config.SystemFingerprint,
+			errResp,
+		)
+		if err != nil {
+			rs.logger.Error("Failed to build MCP error response message", "error", err)
+			return
 		}
+		respMsg.InvestigationID = msg.InvestigationID
+		respMsg.TaskID = msg.TaskID
+
 		if rs.results != nil {
 			_ = rs.results.PublishResult(ctx, respMsg)
 		}

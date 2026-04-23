@@ -291,8 +291,9 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         )
 
         if subscribers == 0:
-            error_msg = f"No Operator listening on command channel for {operator_id}"
-            logger.error("[NO-SUBSCRIBERS] %s", error_msg)
+            channel = f"cmd:{operator_id}:{operator_session_id}"
+            error_msg = f"No Operator listening on command channel '{channel}'"
+            logger.error("[NO-SUBSCRIBERS] %s", error_msg, extra={"operator_id": operator_id, "operator_session_id": operator_session_id, "channel": channel})
             self.execution_registry.release(execution_id)
             return CommandInternalResult(
                 execution_id=execution_id,
@@ -414,6 +415,8 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         )
 
         if subscribers == 0:
+            channel = f"cmd:{operator_id}:{operator_session_id}"
+            logger.error("[NO-SUBSCRIBERS] No Operator listening on command channel '%s'", channel, extra={"operator_id": operator_id, "operator_session_id": operator_session_id, "channel": channel})
             return DirectCommandResult(execution_id=execution_id, status=ExecutionStatus.FAILED, error="No Operator listening")
 
         return DirectCommandResult(execution_id=execution_id, status=ExecutionStatus.EXECUTING)

@@ -55,6 +55,14 @@ import (
 var sharedWireModelsDir string
 
 func init() {
+	if g8eoRoot == "" {
+		var err error
+		g8eoRoot, err = filepath.Abs(filepath.Join(".."))
+		if err != nil {
+			panic(fmt.Sprintf("failed to resolve g8eo root: %v", err))
+		}
+	}
+
 	dir, err := filepath.Abs(filepath.Join(g8eoRoot, "../../shared/models/wire"))
 	if err != nil {
 		panic(fmt.Sprintf("failed to resolve shared wire models dir: %v", err))
@@ -488,7 +496,7 @@ func TestPortCheckResultPayloadMatchesSchema(t *testing.T) {
 func TestLFAAErrorPayloadMatchesSchema(t *testing.T) {
 	tags := jsonTagsOf(models.LFAAErrorPayload{})
 
-	fields := []string{"success", "error", "operator_id", "operator_session_id"}
+	fields := []string{"success", "error", "execution_id", "operator_id", "operator_session_id"}
 	for _, f := range fields {
 		assertFieldPresent(t, tags, f, "LFAAErrorPayload")
 	}

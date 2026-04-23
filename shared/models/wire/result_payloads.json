@@ -588,6 +588,11 @@
         "required": true,
         "description": "Human-readable error description"
       },
+      "execution_id": {
+        "type": "string",
+        "required": true,
+        "description": "Execution identifier for correlation with the originating request"
+      },
       "operator_id": { "type": "string", "required": true },
       "operator_session_id": { "type": "string", "required": true }
     }

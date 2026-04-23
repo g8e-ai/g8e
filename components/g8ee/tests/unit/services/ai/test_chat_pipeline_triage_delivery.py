@@ -78,6 +78,8 @@ def _make_pipeline() -> ChatPipelineService:
     svc.investigation_service.persist_ai_message = AsyncMock(return_value=True)
     svc.memory_generation_service = MagicMock()
     svc.memory_generation_service.update_memory_from_conversation = AsyncMock()
+    svc.agent_activity_data_service = MagicMock()
+    svc.agent_activity_data_service.record_activity = AsyncMock()
     return svc
 
 def _make_chat_context(triage_result: TriageResult) -> tuple[AgentInputs, AgentStreamState]:

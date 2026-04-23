@@ -91,7 +91,7 @@ class ChatPipelineService:
         g8e_agent: g8eEngine,
         memory_service: MemoryDataService,
         memory_generation_service: MemoryGenerationService,
-        agent_activity_data_service: AgentActivityDataService | None = None,
+        agent_activity_data_service: AgentActivityDataService,
     ) -> None:
         self.g8ed_event_service = g8ed_event_service
         self.investigation_service = investigation_service
@@ -363,9 +363,6 @@ class ChatPipelineService:
         telemetry including model usage, token consumption, tool execution,
         triage classification, and performance metrics.
         """
-        if not self.agent_activity_data_service:
-            return
-
         try:
             duration_seconds = time.time() - start_time
             

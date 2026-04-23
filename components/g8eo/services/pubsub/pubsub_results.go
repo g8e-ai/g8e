@@ -27,8 +27,8 @@ import (
 	storage "github.com/g8e-ai/g8e/components/g8eo/services/storage"
 )
 
-func (rr *PubSubResultsService) resultsChannel() string {
-	return constants.ResultsChannel(rr.config.OperatorID, rr.config.OperatorSessionId)
+func (rr *PubSubResultsService) resultsChannel(operatorSessionID string) string {
+	return constants.ResultsChannel(rr.config.OperatorID, operatorSessionID)
 }
 
 // PubSubResultsService handles publishing results back to AI Agent Services via g8es pub/sub
@@ -405,11 +405,11 @@ func (rr *PubSubResultsService) PublishHeartbeat(ctx context.Context, heartbeat 
 	if err != nil {
 		return fmt.Errorf("failed to marshal heartbeat: %w", err)
 	}
-	channelName := constants.HeartbeatChannel(rr.config.OperatorID, rr.config.OperatorSessionId)
+	channelName := constants.HeartbeatChannel(rr.config.OperatorID, heartbeat.OperatorSessionID)
 	if err := rr.client.Publish(ctx, channelName, data); err != nil {
 		return fmt.Errorf("failed to send heartbeat: %w", err)
 	}
-	rr.logger.Info("Heartbeat transmitted", "operator_session_id", rr.config.OperatorSessionId)
+	rr.logger.Info("Heartbeat transmitted", "operator_session_id", heartbeat.OperatorSessionID)
 	return nil
 }
 
@@ -419,7 +419,7 @@ func (rr *PubSubResultsService) publish(ctx context.Context, msg *models.G8eMess
 	if err != nil {
 		return fmt.Errorf("failed to marshal result message: %w", err)
 	}
-	return rr.client.Publish(ctx, rr.resultsChannel(), data)
+	return rr.client.Publish(ctx, rr.resultsChannel(msg.OperatorSessionID), data)
 }
 
 // timeNowNano returns the current time as a Unix nanosecond timestamp.

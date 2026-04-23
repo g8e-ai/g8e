@@ -24,31 +24,30 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/services/mcp"
 )
 
-// mergeExecutionID ensures every outbound LFAA payload carries an execution_id
-// matching the inbound msg.ID. g8ee correlates operator responses by either
-// payload.execution_id or the top-level envelope id; injecting it here makes
-// every LFAA response correlatable without each typed payload having to define
-// its own ExecutionID field. Typed payloads that already set execution_id are
-// preserved unchanged.
-func mergeExecutionID(raw json.RawMessage, executionID string) json.RawMessage {
-	if executionID == "" || len(raw) == 0 {
-		return raw
+// setExecutionIDOnPayload sets the ExecutionID field on typed payloads that support it.
+// This is done before serialization to avoid manipulating JSON mid-stream.
+func setExecutionIDOnPayload(payload interface{}, executionID string) {
+	if executionID == "" {
+		return
 	}
-	var asMap map[string]interface{}
-	if err := json.Unmarshal(raw, &asMap); err != nil || asMap == nil {
-		return raw
+	switch p := payload.(type) {
+	case *models.CancellationResultPayload:
+		p.ExecutionID = executionID
+	case *models.FileEditResultPayload:
+		p.ExecutionID = executionID
+	case *models.FsListResultPayload:
+		p.ExecutionID = executionID
+	case *models.ExecutionStatusPayload:
+		p.ExecutionID = executionID
+	case *models.PortCheckResultPayload:
+		p.ExecutionID = executionID
+	case *models.FetchLogsResultPayload:
+		p.ExecutionID = executionID
+	case *models.FsReadResultPayload:
+		p.ExecutionID = executionID
+	case *models.LFAAErrorPayload:
+		p.ExecutionID = executionID
 	}
-	if existing, ok := asMap["execution_id"]; ok {
-		if s, isStr := existing.(string); isStr && s != "" {
-			return raw
-		}
-	}
-	asMap["execution_id"] = executionID
-	merged, err := json.Marshal(asMap)
-	if err != nil {
-		return raw
-	}
-	return merged
 }
 
 // publishLFAATypedResponseTo builds a G8eMessage from a typed payload and publishes it to the
@@ -62,6 +61,8 @@ func publishLFAATypedResponseTo(
 	eventType string,
 	payload interface{},
 ) {
+	setExecutionIDOnPayload(payload, msg.ID)
+
 	resultMsg, err := models.NewG8eMessage(
 		msg.ID, eventType, msg.CaseID,
 		cfg.OperatorID, cfg.OperatorSessionId, cfg.SystemFingerprint,
@@ -71,7 +72,6 @@ func publishLFAATypedResponseTo(
 		logger.Error("Failed to build LFAA typed response", "error", err)
 		return
 	}
-	resultMsg.Payload = mergeExecutionID(resultMsg.Payload, msg.ID)
 
 	if msg.EventType == constants.Event.Operator.MCP.ToolsCall {
 		mcpRaw, err := mcp.WrapResult(msg.ID, msg.ID, eventType, payload)
@@ -114,6 +114,7 @@ func publishLFAAErrorTo(
 	payload := models.LFAAErrorPayload{
 		Success:           false,
 		Error:             errorMsg,
+		ExecutionID:       msg.ID,
 		OperatorID:        cfg.OperatorID,
 		OperatorSessionID: cfg.OperatorSessionId,
 	}
@@ -127,7 +128,6 @@ func publishLFAAErrorTo(
 		logger.Error("Failed to build LFAA error message", "error", err)
 		return
 	}
-	resultMsg.Payload = mergeExecutionID(resultMsg.Payload, msg.ID)
 
 	if msg.EventType == constants.Event.Operator.MCP.ToolsCall {
 		mcpRaw, err := mcp.WrapResult(msg.ID, msg.ID, eventType, &payload)
@@ -156,6 +156,7 @@ func publishLFAAErrorTo(
 }
 
 // publishLFAAResponseTo publishes a pre-marshalled JSON response to the results channel.
+// The responseJSON must already include execution_id if needed for correlation.
 func publishLFAAResponseTo(
 	ctx context.Context,
 	client PubSubClient,
@@ -174,7 +175,6 @@ func publishLFAAResponseTo(
 		logger.Error("Failed to build LFAA response", "error", err)
 		return
 	}
-	resultMsg.Payload = mergeExecutionID(resultMsg.Payload, msg.ID)
 
 	if msg.EventType == constants.Event.Operator.MCP.ToolsCall {
 		mcpRaw, err := mcp.WrapResult(msg.ID, msg.ID, eventType, responseJSON)

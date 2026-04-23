@@ -15,7 +15,6 @@
 Metadata models for AI agent activity tracking and data science analysis.
 """
 
-from typing import Any
 from pydantic import Field
 
 from app.constants import AgentMode, TriageComplexityClassification, TriageConfidence
@@ -80,7 +79,3 @@ class AgentActivityMetadata(G8eIdentifiableModel):
     
     error: str | None = Field(default=None, description="Error message if execution failed")
     error_type: str | None = Field(default=None, description="Type of error if execution failed")
-    
-    additional_metadata: dict[str, Any] = Field(
-        default_factory=dict, description="Flexible field for additional metadata"
-    )

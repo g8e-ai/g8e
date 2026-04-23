@@ -159,7 +159,10 @@ class TestPipelineTemplateContract:
     def test_tribunal_prompt_template_renders_with_member_voice(self):
         """The shared TRIBUNAL_PROMPT_TEMPLATE must render cleanly using the
         kwargs command_generator._run_generation_pass supplies."""
-        from app.services.ai.command_generator import TRIBUNAL_PROMPT_TEMPLATE
+        from app.prompts_data.loader import load_prompt
+        from app.llm.prompts import PromptFile
+
+        template = load_prompt(PromptFile.TRIBUNAL_GENERATOR)
 
         kwargs = dict(
             forbidden_patterns_message="FORBIDDEN",
@@ -173,14 +176,18 @@ class TestPipelineTemplateContract:
             operator_context="Hostname: host1\nOS: linux",
         )
         for member_id in ("axiom", "concord", "variance", "pragma", "nemesis"):
-            formatted = TRIBUNAL_PROMPT_TEMPLATE.format(**kwargs)
+            formatted = template.format(**kwargs)
             for needle in ("FORBIDDEN", "CONSTRAINTS", "list processes", "linux", "bash"):
                 assert needle in formatted, f"{member_id}: template dropped '{needle}'"
 
     def test_verifier_template_renders_and_enforces_ok_contract(self):
         """TRIBUNAL_VERIFIER_TEMPLATE must carry the terse
         'ok / corrected-command' output contract that the pipeline parses."""
-        from app.services.ai.command_generator import TRIBUNAL_VERIFIER_TEMPLATE, _build_verifier_prompt_content, VerifierInput
+        from app.prompts_data.loader import load_prompt
+        from app.llm.prompts import PromptFile, build_tribunal_verifier_context
+        from app.services.ai.command_generator import VerifierInput
+
+        template = load_prompt(PromptFile.TRIBUNAL_VERIFIER)
 
         verifier_input = VerifierInput(
             mode="unanimous",
@@ -189,9 +196,9 @@ class TestPipelineTemplateContract:
             request="list files",
             guidelines="",
         )
-        verifier_context = _build_verifier_prompt_content(verifier_input)
+        verifier_context = build_tribunal_verifier_context(verifier_input.mode, verifier_input.winner, [])
 
-        formatted = TRIBUNAL_VERIFIER_TEMPLATE.format(
+        formatted = template.format(
             forbidden_patterns_message="FORBIDDEN",
             command_constraints_message="CONSTRAINTS",
             request="list files",

@@ -86,7 +86,7 @@ class TestAgentActivityDataService:
         assert isinstance(result, AgentActivityMetadata)
         assert result.id == activity_id
         assert result.user_id == "user-123"
-        mock_cache.get_document.assert_called_once_with(service.collection, activity_id)
+        mock_cache.get_document.assert_called_once_with(collection=service.collection, document_id=activity_id)
 
     async def test_get_activity_not_found(self, service, mock_cache):
         mock_cache.get_document.return_value = None
@@ -139,7 +139,7 @@ class TestAgentActivityDataService:
 
         await service.delete_activity(activity_id)
 
-        mock_cache.delete_document.assert_called_once_with(service.collection, activity_id)
+        mock_cache.delete_document.assert_called_once_with(collection=service.collection, document_id=activity_id)
 
     async def test_delete_activity_empty_id_raises_error(self, service):
         with pytest.raises(ValidationError, match="Activity ID is required"):

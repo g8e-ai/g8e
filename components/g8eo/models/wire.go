@@ -162,6 +162,7 @@ type PortCheckResultPayload struct {
 type LFAAErrorPayload struct {
 	Success           bool   `json:"success"`
 	Error             string `json:"error"`
+	ExecutionID       string `json:"execution_id"`
 	OperatorID        string `json:"operator_id"`
 	OperatorSessionID string `json:"operator_session_id"`
 }

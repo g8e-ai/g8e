@@ -72,6 +72,8 @@ def _make_pipeline() -> ChatPipelineService:
     svc.g8e_agent = MagicMock()
     svc.investigation_service = MagicMock()
     svc.investigation_service.add_chat_message = AsyncMock(return_value=True)
+    svc.agent_activity_data_service = MagicMock()
+    svc.agent_activity_data_service.record_activity = AsyncMock()
 
     async def _fake_persist_ai_message(
         investigation_id,
