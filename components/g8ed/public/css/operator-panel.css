@@ -486,7 +486,6 @@
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
   white-space: nowrap;
 }
 
@@ -913,7 +912,7 @@
 .operator-item-hostname {
   font-size: 13px;
   font-weight: 400;
-  color: var(--text-primary);
+  color: var(--text-muted);
   font-family: var(--font-mono);
   overflow: hidden;
   text-overflow: ellipsis;
