@@ -23,7 +23,6 @@
 
         <header class="console-header">
             <div class="console-header-left">
-                <span class="material-symbols-outlined console-header-icon">admin_panel_settings</span>
                 <div>
                     <h1 class="console-title">Console</h1>
                     <p class="console-subtitle">Platform visibility — health, data, and live logs</p>
@@ -45,23 +44,18 @@
         <!-- Tab Bar -->
         <nav class="console-tabs" role="tablist">
             <button class="console-tab active" data-tab="overview" role="tab" aria-selected="true">
-                <span class="material-symbols-outlined">dashboard</span>
                 Overview
             </button>
             <button class="console-tab" data-tab="components" role="tab" aria-selected="false">
-                <span class="material-symbols-outlined">device_hub</span>
                 Components
             </button>
             <button class="console-tab" data-tab="kv" role="tab" aria-selected="false">
-                <span class="material-symbols-outlined">storage</span>
                 KV Store
             </button>
             <button class="console-tab" data-tab="db" role="tab" aria-selected="false">
-                <span class="material-symbols-outlined">table_view</span>
                 Database
             </button>
             <button class="console-tab" data-tab="logs" role="tab" aria-selected="false">
-                <span class="material-symbols-outlined">terminal</span>
                 Logs
             </button>
         </nav>
@@ -73,15 +67,13 @@
 
             <!-- System Health Banner -->
             <div class="console-health-banner" id="health-banner">
-                <span class="material-symbols-outlined console-health-icon" id="health-icon">sync</span>
                 <span id="health-text">Loading system health...</span>
             </div>
 
-            <!-- Stats Grid -->
-            <div class="console-stats-grid">
+            <!-- Unified Grid -->
+            <div class="console-unified-grid">
                 <div class="console-stat-card">
                     <div class="console-stat-header">
-                        <span class="material-symbols-outlined console-stat-icon blue">group</span>
                         <span class="console-stat-label">Total Users</span>
                     </div>
                     <div class="console-stat-value" id="stat-users-total">--</div>
@@ -89,7 +81,6 @@
                 </div>
                 <div class="console-stat-card">
                     <div class="console-stat-header">
-                        <span class="material-symbols-outlined console-stat-icon green">computer</span>
                         <span class="console-stat-label">Operators</span>
                     </div>
                     <div class="console-stat-value" id="stat-operators-total">--</div>
@@ -97,7 +88,6 @@
                 </div>
                 <div class="console-stat-card">
                     <div class="console-stat-header">
-                        <span class="material-symbols-outlined console-stat-icon purple">hub</span>
                         <span class="console-stat-label">Active Sessions</span>
                     </div>
                     <div class="console-stat-value" id="stat-sessions-total">--</div>
@@ -105,63 +95,48 @@
                 </div>
                 <div class="console-stat-card">
                     <div class="console-stat-header">
-                        <span class="material-symbols-outlined console-stat-icon orange">psychology</span>
                         <span class="console-stat-label">Investigations (7d)</span>
                     </div>
                     <div class="console-stat-value" id="stat-investigations-total">--</div>
                     <div class="console-stat-sub" id="stat-investigations-active">-- active</div>
                 </div>
-            </div>
-
-            <!-- Two-column layout -->
-            <div class="console-grid-2col">
-
                 <div class="console-panel">
                     <div class="console-panel-header">
-                        <span class="material-symbols-outlined console-panel-icon">computer</span>
                         <h2 class="console-panel-title">Operator Status</h2>
                     </div>
                     <div class="console-panel-body" id="operator-status-panel">
                         <div class="console-loading"><span class="material-symbols-outlined spin">sync</span>Loading...</div>
                     </div>
                 </div>
-
                 <div class="console-panel">
                     <div class="console-panel-header">
-                        <span class="material-symbols-outlined console-panel-icon">hub</span>
                         <h2 class="console-panel-title">WebSession Overview</h2>
                     </div>
                     <div class="console-panel-body" id="session-stats-panel">
                         <div class="console-loading"><span class="material-symbols-outlined spin">sync</span>Loading...</div>
                     </div>
                 </div>
-
                 <div class="console-panel">
                     <div class="console-panel-header">
-                        <span class="material-symbols-outlined console-panel-icon">group</span>
                         <h2 class="console-panel-title">User Activity</h2>
                     </div>
                     <div class="console-panel-body" id="user-activity-panel">
                         <div class="console-loading"><span class="material-symbols-outlined spin">sync</span>Loading...</div>
                     </div>
                 </div>
-
                 <div class="console-panel">
                     <div class="console-panel-header">
-                        <span class="material-symbols-outlined console-panel-icon">lock</span>
                         <h2 class="console-panel-title">Login Activity (24h)</h2>
                     </div>
                     <div class="console-panel-body" id="login-audit-panel">
                         <div class="console-loading"><span class="material-symbols-outlined spin">sync</span>Loading...</div>
                     </div>
                 </div>
-
             </div>
 
             <!-- Cache & Runtime -->
             <div class="console-panel console-panel-wide">
                 <div class="console-panel-header">
-                    <span class="material-symbols-outlined console-panel-icon">memory</span>
                     <h2 class="console-panel-title">Cache Performance</h2>
                     <span class="console-realtime-badge">Live</span>
                 </div>
@@ -179,7 +154,6 @@
 
             <div class="console-panel console-panel-wide">
                 <div class="console-panel-header">
-                    <span class="material-symbols-outlined console-panel-icon">device_hub</span>
                     <h2 class="console-panel-title">Component Health</h2>
                     <span class="console-realtime-badge" id="comp-overall-badge">Checking...</span>
                     <button class="console-btn console-btn-sm console-btn-header-right" id="comp-refresh-btn">
@@ -201,7 +175,6 @@
 
             <div class="console-panel console-panel-wide">
                 <div class="console-panel-header">
-                    <span class="material-symbols-outlined console-panel-icon">storage</span>
                     <h2 class="console-panel-title">KV Store Browser</h2>
                 </div>
                 <div class="console-panel-body">
@@ -221,7 +194,6 @@
             <!-- KV Key detail -->
             <div class="console-panel console-panel-wide console-detail-panel" id="kv-detail-panel">
                 <div class="console-panel-header">
-                    <span class="material-symbols-outlined console-panel-icon">key</span>
                     <h2 class="console-panel-title" id="kv-detail-key-title">Key Detail</h2>
                     <button class="console-btn-icon" id="kv-detail-close" title="Close">
                         <span class="material-symbols-outlined">close</span>
@@ -241,7 +213,6 @@
 
             <div class="console-panel console-panel-wide">
                 <div class="console-panel-header">
-                    <span class="material-symbols-outlined console-panel-icon">table_view</span>
                     <h2 class="console-panel-title">Document Store Browser</h2>
                 </div>
                 <div class="console-panel-body">
@@ -263,7 +234,6 @@
             <!-- Document detail -->
             <div class="console-panel console-panel-wide console-detail-panel" id="db-detail-panel">
                 <div class="console-panel-header">
-                    <span class="material-symbols-outlined console-panel-icon">description</span>
                     <h2 class="console-panel-title" id="db-detail-title">Document</h2>
                     <button class="console-btn-icon" id="db-detail-close" title="Close">
                         <span class="material-symbols-outlined">close</span>
@@ -281,7 +251,6 @@
 
             <div class="console-panel console-panel-wide console-logs-panel">
                 <div class="console-panel-header">
-                    <span class="material-symbols-outlined console-panel-icon">terminal</span>
                     <h2 class="console-panel-title">Platform Logs</h2>
                     <span class="console-realtime-badge" id="logs-status-badge">Connecting...</span>
                     <div class="console-logs-controls">
@@ -381,13 +350,11 @@
 
         function renderHealth(system) {
             const banner = document.getElementById('health-banner');
-            const icon   = document.getElementById('health-icon');
             const text   = document.getElementById('health-text');
             if (!system) return;
 
             const healthy = system.overall === 'healthy';
             banner.className = 'console-health-banner ' + (healthy ? 'healthy' : 'degraded');
-            icon.textContent = healthy ? 'check_circle' : 'warning';
 
             const g8es = system.g8es?.status === 'healthy'
                 ? `g8es ${system.g8es.latencyMs}ms`
@@ -513,7 +480,6 @@
         function showBannerError(msg) {
             const banner = document.getElementById('health-banner');
             banner.className = 'console-health-banner degraded';
-            setEl('health-icon', 'error');
             setEl('health-text', msg);
         }
 

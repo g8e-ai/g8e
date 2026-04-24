@@ -63,14 +63,14 @@ header h1 {
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 5px;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 4px;
 }
 
 .card {
-  border-radius: 8px;
+  border-radius: 6px;
   border: 1px solid #30363d;
-  padding: 10px 12px;
+  padding: 8px 10px;
   background: #161b22;
   transition: border-color 0.2s, box-shadow 0.2s;
   position: relative;
@@ -97,17 +97,17 @@ header h1 {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .node-id {
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   font-weight: 600;
 }
 
 .status-dot {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
 }
@@ -119,11 +119,11 @@ header h1 {
 
 .profile-badge {
   display: inline-block;
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   font-weight: 600;
-  padding: 2px 7px;
-  border-radius: 4px;
-  margin-bottom: 8px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  margin-bottom: 6px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -135,8 +135,8 @@ header h1 {
 .metrics {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  font-size: 0.8rem;
+  gap: 2px;
+  font-size: 0.72rem;
   color: #8b949e;
 }
 
@@ -144,13 +144,13 @@ header h1 {
 .metrics .val { color: #e6edf3; }
 
 .error-msg {
-  margin-top: 8px;
-  font-size: 0.72rem;
+  margin-top: 6px;
+  font-size: 0.68rem;
   color: #f85149;
   background: #2a0d0d;
   border: 1px solid #3a1010;
-  border-radius: 5px;
-  padding: 5px 8px;
+  border-radius: 4px;
+  padding: 4px 6px;
   word-break: break-all;
 }
 
