@@ -411,6 +411,7 @@ describe('SSEConnectionManager.handleSSEEvent — eventBus dispatch [FRONTEND - 
             investigation_id: 'inv_001',
             web_session_id: 'session_abc',
             approval_id: 'approval_001',
+            correlation_id: 'corr_001',
             command: 'rm -rf /tmp/test',
         };
 
@@ -487,6 +488,7 @@ describe('SSEConnectionManager.handleSSEEvent — eventBus dispatch [FRONTEND - 
             investigation_id: 'inv_001',
             web_session_id: 'session_abc',
             approval_id: 'approval_file_001',
+            correlation_id: 'corr_file_001',
             file_path: '/etc/hosts',
         };
 
@@ -560,6 +562,7 @@ describe('SSEConnectionManager.handleSSEEvent — eventBus dispatch [FRONTEND - 
             investigation_id: 'inv_001',
             web_session_id: 'session_abc',
             approval_id: 'approval_intent_001',
+            correlation_id: 'corr_intent_001',
         };
 
         manager.handleSSEEvent({

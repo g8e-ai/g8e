@@ -1144,6 +1144,8 @@ describe('ChatComponent — handleNetworkPortCheckIndicator / handleNetworkPortC
             investigation_id: INVESTIGATION_ID,
             web_session_id: WEB_SESSION_ID,
             execution_id: EXECUTION_ID,
+            display_icon: 'search',
+            category: 'search',
         });
 
         expect(terminalSpy.appendActivityIndicator).toHaveBeenCalledOnce();
@@ -1195,6 +1197,8 @@ describe('ChatComponent — handleNetworkPortCheckIndicator / handleNetworkPortC
             investigation_id: INVESTIGATION_ID,
             web_session_id: WEB_SESSION_ID,
             execution_id: EXECUTION_ID,
+            display_icon: 'tool',
+            category: 'execution',
         });
 
         expect(terminalSpy.appendActivityIndicator).toHaveBeenCalledOnce();

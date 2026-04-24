@@ -524,25 +524,22 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
                 createMockOperator({ operator_id: TEST_OPERATOR_ID_2, status: OperatorStatus.BOUND }),
             ];
             ctx.boundOperatorIds = [TEST_OPERATOR_ID_2];
-            ctx.downloadCollapsibleContent = document.createElement('div');
-            ctx.expandDownloadSection = vi.fn();
+            ctx.operatorPanelWrapper = document.createElement('div');
 
             await ctx.showBindAllConfirmationOverlay();
 
-            expect(ctx.expandDownloadSection).toHaveBeenCalled();
-            expect(ctx.downloadCollapsibleContent.querySelector('.operator-bind-all-overlay')).toBeTruthy();
+            expect(ctx.operatorPanelWrapper.querySelector('.operator-bind-all-overlay')).toBeTruthy();
         });
 
         it('includes operator list in overlay', async () => {
             const ctx = createMixinContext();
             ctx.operators = [createMockOperator({ status: OperatorStatus.ACTIVE })];
             ctx.boundOperatorIds = [];
-            ctx.downloadCollapsibleContent = document.createElement('div');
-            ctx.expandDownloadSection = vi.fn();
+            ctx.operatorPanelWrapper = document.createElement('div');
 
             await ctx.showBindAllConfirmationOverlay();
 
-            const overlay = ctx.downloadCollapsibleContent.querySelector('.operator-bind-all-overlay');
+            const overlay = ctx.operatorPanelWrapper.querySelector('.operator-bind-all-overlay');
             expect(overlay).toBeTruthy();
             expect(overlay.querySelector('#operator-bind-all-operators-list')).toBeTruthy();
         });
@@ -702,12 +699,11 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
             const ctx = createMixinContext();
             ctx.operators = [createMockOperator({ status: OperatorStatus.ACTIVE })];
             ctx.boundOperatorIds = [];
-            ctx.downloadCollapsibleContent = document.createElement('div');
-            ctx.expandDownloadSection = vi.fn();
+            ctx.operatorPanelWrapper = document.createElement('div');
 
             await ctx.showBindAllConfirmationOverlay();
 
-            expect(ctx.downloadCollapsibleContent.querySelector('.operator-bind-all-overlay')).toBeTruthy();
+            expect(ctx.operatorPanelWrapper.querySelector('.operator-bind-all-overlay')).toBeTruthy();
         });
     });
 
@@ -789,13 +785,11 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
             ];
             ctx.boundOperatorIds = [TEST_OPERATOR_ID, TEST_OPERATOR_ID_2];
             global.window = { authState: { getWebSessionId: () => TEST_WEB_SESSION_ID } };
-            ctx.downloadCollapsibleContent = document.createElement('div');
-            ctx.expandDownloadSection = vi.fn();
+            ctx.operatorPanelWrapper = document.createElement('div');
 
             await ctx.showUnbindAllConfirmationOverlay();
 
-            expect(ctx.expandDownloadSection).toHaveBeenCalled();
-            expect(ctx.downloadCollapsibleContent.querySelector('.operator-unbind-all-overlay')).toBeTruthy();
+            expect(ctx.operatorPanelWrapper.querySelector('.operator-unbind-all-overlay')).toBeTruthy();
         });
     });
 
