@@ -394,8 +394,13 @@ export const OperatorListMixin = {
                     const isStaleState = bindBtn.getAttribute('data-is-stale') === 'true';
                     if (isBoundState || isStaleState) {
                         await this.unbindOperatorWithConfirmation(operatorId, isStaleState);
+                        return;
+                    }
+                    if (bindBtn.getAttribute('data-confirming') === 'true') {
+                        this._exitBindConfirmMode(bindBtn);
+                        await this.bindOperator(operatorId);
                     } else {
-                        await this.bindOperatorWithConfirmation(operatorId);
+                        this._enterBindConfirmMode(bindBtn);
                     }
                 });
             }
@@ -821,6 +826,58 @@ export const OperatorListMixin = {
             devLogger.error('[OPERATOR] Failed to stop operator:', error);
             notificationService.error(`Failed to stop operator: ${error.message}`);
         }
+    },
+
+    _enterBindConfirmMode(bindBtn) {
+        if (this._pendingBindBtn && this._pendingBindBtn !== bindBtn) {
+            this._exitBindConfirmMode(this._pendingBindBtn);
+        }
+        const icon = bindBtn.querySelector('.material-symbols-outlined');
+        if (icon) {
+            bindBtn.setAttribute('data-prev-icon', icon.textContent);
+            bindBtn.setAttribute('data-prev-title', bindBtn.getAttribute('title') || '');
+            icon.textContent = 'check';
+        }
+        bindBtn.setAttribute('data-confirming', 'true');
+        bindBtn.setAttribute('title', 'Click to confirm bind');
+        this._pendingBindBtn = bindBtn;
+
+        this._bindConfirmOutsideHandler = (ev) => {
+            if (!bindBtn.contains(ev.target)) {
+                this._exitBindConfirmMode(bindBtn);
+            }
+        };
+        this._bindConfirmKeyHandler = (ev) => {
+            if (ev.key === 'Escape') this._exitBindConfirmMode(bindBtn);
+        };
+        // Defer registration so this click doesn't immediately cancel
+        setTimeout(() => {
+            if (this._pendingBindBtn !== bindBtn) return;
+            document.addEventListener('mousedown', this._bindConfirmOutsideHandler, true);
+            document.addEventListener('keydown', this._bindConfirmKeyHandler, true);
+        }, 0);
+    },
+
+    _exitBindConfirmMode(bindBtn) {
+        if (!bindBtn) return;
+        const icon = bindBtn.querySelector('.material-symbols-outlined');
+        const prevIcon = bindBtn.getAttribute('data-prev-icon');
+        const prevTitle = bindBtn.getAttribute('data-prev-title');
+        if (icon && prevIcon) icon.textContent = prevIcon;
+        if (prevTitle !== null) bindBtn.setAttribute('title', prevTitle);
+        bindBtn.removeAttribute('data-prev-icon');
+        bindBtn.removeAttribute('data-prev-title');
+        bindBtn.removeAttribute('data-confirming');
+
+        if (this._bindConfirmOutsideHandler) {
+            document.removeEventListener('mousedown', this._bindConfirmOutsideHandler, true);
+            this._bindConfirmOutsideHandler = null;
+        }
+        if (this._bindConfirmKeyHandler) {
+            document.removeEventListener('keydown', this._bindConfirmKeyHandler, true);
+            this._bindConfirmKeyHandler = null;
+        }
+        if (this._pendingBindBtn === bindBtn) this._pendingBindBtn = null;
     },
 
 };
