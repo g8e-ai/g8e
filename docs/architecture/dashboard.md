@@ -196,7 +196,12 @@ Pagination: 10 operators per page. Each operator card (`operator-list-item`) sho
 - Name and hostname
 - Status badge (color class from `operator.status_class`)
 - First deployed / last heartbeat timestamps
-- Expand/collapse for metrics when bound to current session
+- Expand/collapse to reveal the EKG-style details panel (`.operator-item-expanded-details`) with:
+  - Status pill + concentric usage ring (outer=CPU, middle=MEM, inner=DISK)
+  - Stats strip: LATENCY / UPTIME / USER
+  - Per-metric sparkline rows for CPU / MEM / DISK (color-thresholded: `good` <65%, `warn` 65–84%, `crit` ≥85%)
+  - System info grid (OS, ARCH, CPUs, MEM, public IP with obfuscation toggle, internal IP)
+  - Animated EKG trace pinned to the bottom; color + scroll speed derive from overall `healthClass` (`healthy` / `loaded` / `crit` / `muted`)
 
 Action buttons:
 - **Get Device Link Token** (`dns`)

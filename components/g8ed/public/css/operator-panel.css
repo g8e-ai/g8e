@@ -1506,6 +1506,226 @@
   gap: 8px 12px;
 }
 
+/* ------------------------------------------------------------------
+ * Expanded "EKG" card layout (.operator-item-expanded-details)
+ * ------------------------------------------------------------------ */
+.operator-item-expanded-details {
+  position: relative;
+  background: rgba(var(--text-rgb), 0.025);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  padding: 14px 14px 52px;
+  color: var(--text-primary);
+}
+
+.operator-list-item .operator-item-expanded-details.op-card-healthy,
+.operator-list-item.expanded .operator-item-expanded-details.op-card-healthy { border-color: rgba(var(--accent-green-rgb), 0.35); }
+.operator-list-item .operator-item-expanded-details.op-card-loaded,
+.operator-list-item.expanded .operator-item-expanded-details.op-card-loaded  { border-color: rgba(var(--accent-amber-rgb), 0.38); }
+.operator-list-item .operator-item-expanded-details.op-card-crit,
+.operator-list-item.expanded .operator-item-expanded-details.op-card-crit    { border-color: rgba(var(--accent-red-rgb), 0.40); }
+.operator-list-item .operator-item-expanded-details.op-card-muted,
+.operator-list-item.expanded .operator-item-expanded-details.op-card-muted   { border-color: var(--border-color); }
+
+/* Top row: status pill + concentric usage ring */
+.op-card-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.op-status-pill {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  padding: 3px 8px;
+  border-radius: 3px;
+  text-transform: uppercase;
+}
+.op-status-pill.healthy { color: var(--accent-green); background: rgba(var(--accent-green-rgb), 0.12); }
+.op-status-pill.loaded  { color: var(--accent-amber); background: rgba(var(--accent-amber-rgb), 0.14); }
+.op-status-pill.crit    { color: var(--accent-red);   background: rgba(var(--accent-red-rgb), 0.14); }
+.op-status-pill.muted   { color: var(--text-muted);   background: rgba(var(--text-muted-rgb), 0.12); }
+
+.op-ring .op-ring-track { stroke: rgba(var(--text-rgb), 0.08); }
+.op-ring .op-ring-cpu   { stroke: var(--accent-green); }
+.op-ring .op-ring-mem   { stroke: var(--accent-amber); }
+.op-ring .op-ring-disk  { stroke: var(--accent-orange); }
+.op-card-crit .op-ring .op-ring-cpu { stroke: var(--accent-red); }
+
+/* Stats strip: LATENCY / UPTIME / USER */
+.op-card-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(var(--text-rgb), 0.06);
+  border-bottom: 1px solid rgba(var(--text-rgb), 0.06);
+  margin-top: 12px;
+  font-family: var(--font-mono);
+}
+.op-stat-label {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+  margin-bottom: 3px;
+  text-transform: uppercase;
+}
+.op-stat-value {
+  font-size: 12px;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.op-stat-value.good  { color: var(--accent-green); }
+.op-stat-value.warn  { color: var(--accent-amber); }
+.op-stat-value.crit  { color: var(--accent-red); }
+.op-stat-value.muted { color: var(--text-muted); }
+
+/* Per-metric sparklines */
+.op-card-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 12px;
+}
+.op-metric {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.op-metric-label {
+  color: var(--text-secondary);
+  letter-spacing: 0.1em;
+  width: 34px;
+  flex-shrink: 0;
+}
+.op-metric-value {
+  color: var(--text-primary);
+  width: 42px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.op-metric-value.good  { color: var(--accent-green); }
+.op-metric-value.warn  { color: var(--accent-amber); }
+.op-metric-value.crit  { color: var(--accent-red); }
+.op-metric-value.muted { color: var(--text-muted); }
+
+.op-spark {
+  flex: 1;
+  height: 14px;
+  min-width: 0;
+}
+.op-spark-line {
+  fill: none;
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+.op-spark-line.good  { stroke: var(--accent-green); }
+.op-spark-line.warn  { stroke: var(--accent-amber); }
+.op-spark-line.crit  { stroke: var(--accent-red); }
+.op-spark-line.muted { stroke: var(--text-muted); }
+
+/* Secondary system info grid (OS / ARCH / CPUs / MEM / IPs) */
+.op-card-sysinfo {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px 12px;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(var(--text-rgb), 0.06);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.op-card-sysinfo > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.op-card-sysinfo .op-sys-wide { grid-column: span 2; }
+.op-sys-label {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+.op-sys-value {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.op-sys-value.ip-value-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.op-sys-value .ip-visibility-toggle {
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: color 0.15s ease;
+}
+.op-sys-value .ip-visibility-toggle:hover {
+  color: var(--text-primary);
+}
+
+/* EKG trace strip pinned to bottom of the card */
+.op-card-ekg {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 42px;
+  overflow: hidden;
+  border-top: 1px solid rgba(var(--text-rgb), 0.06);
+  pointer-events: none;
+}
+.op-ekg-svg {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+.op-ekg-line {
+  animation: op-ekg-scroll 2.1s linear infinite;
+  will-change: transform;
+}
+.op-ekg-line.slow    { animation-duration: 3.8s; }
+.op-ekg-line.fast    { animation-duration: 1.3s; }
+.op-ekg-line.stopped { animation: none; opacity: 0.35; }
+
+.op-ekg-path { opacity: 0.9; }
+.op-ekg-path.healthy { stroke: var(--accent-green); }
+.op-ekg-path.loaded  { stroke: var(--accent-amber); }
+.op-ekg-path.crit    { stroke: var(--accent-red); }
+.op-ekg-path.muted   { stroke: var(--text-muted); opacity: 0.5; }
+
+@keyframes op-ekg-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-80px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .op-ekg-line { animation: none; }
+}
+
+/* Responsive: collapse sysinfo to 2 cols on narrow drawers */
+@media (max-width: 480px) {
+  .op-card-sysinfo { grid-template-columns: repeat(2, 1fr); }
+  .op-card-sysinfo .op-sys-wide { grid-column: span 2; }
+}
+
 .operator-toggle-btn {
   display: flex;
   align-items: center;
