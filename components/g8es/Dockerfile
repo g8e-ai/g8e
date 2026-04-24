@@ -44,7 +44,7 @@ RUN set -ex; \
     && adduser -u 1001 -G g8e -H -D -s /sbin/nologin g8e
 
 COPY --from=g8es-builder --chmod=755 /out/linux-amd64/g8e.operator /usr/local/bin/g8e.operator
-COPY --from=g8es-builder --chmod=644 /out/ /opt/operator-binaries/
+COPY --from=g8es-builder --chmod=755 /out/ /opt/operator-binaries/
 
 RUN mkdir -p /data /ssl \
     && chown -R g8e:g8e /data /ssl
