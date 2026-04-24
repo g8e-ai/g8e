@@ -36,7 +36,7 @@ from app.constants.message_sender import MessageSender
 from app.models.agents.triage import TriageRequest, TriageResult
 from app.models.investigations import ConversationHistoryMessage
 from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
-from app.utils.agent_persona_loader import get_agent_persona
+from app.utils.agent_persona_loader import get_agent_persona, AgentPersona
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +98,9 @@ class TriageAgent:
 
             persona = get_agent_persona("triage")
             prompt_template = persona.get_system_prompt()
-            prompt = f"{prompt_template}\n\n<conversation_tail>\n{conversation_tail}\n</conversation_tail>\n\n<message>\n{request.message}\n</message>"
+            conversation_tail_xml = AgentPersona.format_xml_tag("conversation_tail", conversation_tail)
+            message_xml = AgentPersona.format_xml_tag("message", request.message)
+            prompt = f"{prompt_template}\n\n{conversation_tail_xml}\n\n{message_xml}"
 
             config = AIGenerationConfigBuilder.build_lite_settings(
                 model=model,

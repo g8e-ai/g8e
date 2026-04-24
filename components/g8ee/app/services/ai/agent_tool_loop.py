@@ -168,6 +168,7 @@ class TribunalInvoker:
             target_operators=sage_request.target_operators,
             expected_output_lines=sage_request.expected_output_lines,
             timeout_seconds=sage_request.timeout_seconds,
+            correlation_id=gen_result.correlation_id,
         )
         return executor_args, gen_result
 

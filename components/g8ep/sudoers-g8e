@@ -65,3 +65,6 @@ g8e ALL=(root) NOPASSWD: /usr/bin/ssh-copy-id
 g8e ALL=(root) NOPASSWD: /bin/tar
 g8e ALL=(root) NOPASSWD: /bin/gzip
 g8e ALL=(root) NOPASSWD: /usr/bin/bzip2
+
+# g8e operator binary
+g8e ALL=(root) NOPASSWD: /home/g8e/g8e.operator

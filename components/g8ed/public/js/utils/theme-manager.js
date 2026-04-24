@@ -64,14 +64,19 @@
         document.querySelectorAll('iframe').forEach(function (iframe) {
             try {
                 iframe.contentWindow.postMessage({ type: 'g8e-theme-change', theme: theme }, '*');
-            } catch (_) {}
+            } catch (err) {
+                // Cross-origin or detached iframe errors may indicate integration issues
+                console.warn('[THEME] Failed to broadcast to iframe:', err);
+            }
         });
     }
 
     function dispatchChangeEvent(theme) {
         try {
             document.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: { theme: theme } }));
-        } catch (_) {}
+        } catch (err) {
+            console.error('[THEME] Failed to dispatch theme change event:', err);
+        }
     }
 
     var ThemeManager = {

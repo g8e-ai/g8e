@@ -1,13 +1,39 @@
-g8e Web Search - search the web for current technical information.
+g8e Web Search - search the web for current technical information. This is a custom g8e implementation, not Google's native search_web.
 
 <parameters>
 - query: Specific, technical search query
 - num: Number of results to return (1-10, default: 5)
 </parameters>
 
+<behavior>
+1. Use for current technical documentation, troubleshooting guides, and version-specific information
+2. This is a read-only operation that does not require operator approval
+3. Results are returned as summaries with source URLs
+4. Use the `site:` operator to restrict searches to trusted sources
+5. Include version numbers and specific error messages for better results
+6. This tool is only available when web search is enabled in the environment
+</behavior>
+
+<when_to_use>
+- When you need current technical documentation or best practices
+- Troubleshooting specific error messages or behaviors
+- Finding version-specific configuration examples
+- Getting information about recent changes or updates
+- When local knowledge is insufficient or outdated
+</when_to_use>
+
 <query_tips>
 - Use `site:` operator for trusted sources (official docs, vendor sites)
 - Include version numbers for accuracy
 - Be specific: `nginx 502 bad gateway upstream timeout` not `nginx error`
-- This is g8e' custom web search implementation, not Google's native search_web
+- This is g8e's custom web search implementation, not Google's native search_web
+- Include error messages, stack traces, or specific symptoms
+- Use quotes for exact phrases: `"permission denied" postgres`
 </query_tips>
+
+<examples>
+<example>User: "How to configure a systemd service?" → g8e_web_search(query="site:freedesktop.org systemd.service examples")</example>
+<example>User: "Why does postgres fail with signal 9?" → g8e_web_search(query="postgresql 'signal 9' OOM killer troubleshooting")</example>
+<example>User: "What's the current nginx config syntax?" → g8e_web_search(query="nginx 1.24 configuration syntax example")</example>
+<example>User: "How to fix this docker error?" → g8e_web_search(query="docker 'permission denied while trying to connect to the Docker daemon socket'")</example>
+</examples>

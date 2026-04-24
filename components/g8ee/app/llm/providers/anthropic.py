@@ -267,7 +267,7 @@ class AnthropicProvider(LLMProvider):
             thinking=thinking_config_dict,
         )
 
-        logger.debug(
+        logger.info(
             "[ANTHROPIC] Building API request: model=%s max_tokens=%d "
             "top_k=%s system_instructions_len=%d tools_count=%d thinking_enabled=%s",
             model,

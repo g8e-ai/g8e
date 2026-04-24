@@ -270,14 +270,34 @@ class OllamaProvider(LLMProvider):
             )
             raise
 
+        thinking_buffer = []
+        
         async for chunk in stream:
             msg = chunk.message
             if getattr(msg, "thinking", None):
-                yield StreamChunkFromModel(text=msg.thinking, thought=True)
+                thinking = msg.thinking
+                if thinking and "\\n" in thinking:
+                    thinking = thinking.replace("\\n", "\n")
+                thinking_buffer.append(thinking)
+                combined = "".join(thinking_buffer)
+                should_flush = combined and any(combined.endswith(delim) for delim in ['. ', '! ', '? ', '\n', '\t'])
+                if should_flush or len(combined) > 200:
+                    yield StreamChunkFromModel(text=combined, thought=True)
+                    thinking_buffer.clear()
             if getattr(msg, "content", None):
+                if thinking_buffer:
+                    combined = "".join(thinking_buffer)
+                    if combined:
+                        yield StreamChunkFromModel(text=combined, thought=True)
+                    thinking_buffer.clear()
                 yield StreamChunkFromModel(text=msg.content)
             
             if getattr(msg, "tool_calls", None):
+                if thinking_buffer:
+                    combined = "".join(thinking_buffer)
+                    if combined:
+                        yield StreamChunkFromModel(text=combined, thought=True)
+                    thinking_buffer.clear()
                 calls = []
                 for tc in msg.tool_calls:
                     args = tc.function.arguments
@@ -285,6 +305,12 @@ class OllamaProvider(LLMProvider):
                 yield StreamChunkFromModel(tool_calls=calls)
                 
             if chunk.done:
+                if thinking_buffer:
+                    combined = "".join(thinking_buffer)
+                    if combined:
+                        yield StreamChunkFromModel(text=combined, thought=True)
+                    thinking_buffer.clear()
+                
                 usage = None
                 if getattr(chunk, "prompt_eval_count", None) is not None and getattr(chunk, "eval_count", None) is not None:
                     usage = UsageMetadata(

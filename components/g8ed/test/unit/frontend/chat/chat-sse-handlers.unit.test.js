@@ -1137,35 +1137,75 @@ describe('ChatComponent — handleNetworkPortCheckIndicator / handleNetworkPortC
         expect(terminalSpy.completeActivityIndicator).toHaveBeenCalledWith(`port-check-${EXECUTION_ID}`);
     });
 
-    it('Generic tool-call indicator is suppressed for check_port_status (uses dedicated port-check sidecar)', () => {
+    it('Universal tool indicator is created for web search', () => {
         chat.setupSSEListeners();
 
-        eventBus.emit(EventType.LLM_CHAT_ITERATION_TOOL_CALL_STARTED, {
+        eventBus.emit(EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED, {
             investigation_id: INVESTIGATION_ID,
             web_session_id: WEB_SESSION_ID,
             execution_id: EXECUTION_ID,
-            tool_name: 'check_port_status',
-        });
-
-        expect(terminalSpy.appendActivityIndicator).not.toHaveBeenCalled();
-    });
-
-    it('Generic tool-call indicator IS created for g8e_web_search (sidecars removed; generic path owns the indicator)', () => {
-        chat.setupSSEListeners();
-
-        eventBus.emit(EventType.LLM_CHAT_ITERATION_TOOL_CALL_STARTED, {
-            investigation_id: INVESTIGATION_ID,
-            web_session_id: WEB_SESSION_ID,
-            execution_id: EXECUTION_ID,
-            tool_name: 'g8e_web_search',
-            display_label: 'Searching the web',
-            display_detail: 'CVE-2025-1234',
+            display_icon: 'search',
+            category: 'search',
         });
 
         expect(terminalSpy.appendActivityIndicator).toHaveBeenCalledOnce();
         const [opts] = terminalSpy.appendActivityIndicator.mock.calls[0];
-        expect(opts.id).toBe(`tool-${EXECUTION_ID}`);
-        expect(opts.detail).toBe('CVE-2025-1234');
+        expect(opts.id).toBe(`web-search-${EXECUTION_ID}`);
+        expect(opts.label).toBe('Searching web');
+        expect(opts.icon).toBe('search');
+        expect(opts.category).toBe('search');
+    });
+
+    it('Universal tool indicator is completed for web search', () => {
+        chat.setupSSEListeners();
+
+        eventBus.emit(EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED, {
+            investigation_id: INVESTIGATION_ID,
+            web_session_id: WEB_SESSION_ID,
+            execution_id: EXECUTION_ID,
+        });
+
+        eventBus.emit(EventType.LLM_TOOL_G8E_WEB_SEARCH_COMPLETED, {
+            investigation_id: INVESTIGATION_ID,
+            web_session_id: WEB_SESSION_ID,
+            execution_id: EXECUTION_ID,
+        });
+
+        expect(terminalSpy.completeActivityIndicator).toHaveBeenCalledWith(`web-search-${EXECUTION_ID}`);
+    });
+
+    it('Universal tool indicator is created for investigation query', () => {
+        chat.setupSSEListeners();
+
+        eventBus.emit(EventType.LLM_TOOL_G8E_INVESTIGATION_QUERY_REQUESTED, {
+            investigation_id: INVESTIGATION_ID,
+            web_session_id: WEB_SESSION_ID,
+            execution_id: EXECUTION_ID,
+        });
+
+        expect(terminalSpy.appendActivityIndicator).toHaveBeenCalledOnce();
+        const [opts] = terminalSpy.appendActivityIndicator.mock.calls[0];
+        expect(opts.id).toBe(`investigation-query-${EXECUTION_ID}`);
+        expect(opts.label).toBe('Querying investigation');
+        expect(opts.category).toBe('general');
+    });
+
+    it('Universal tool indicator is created for command constraints', () => {
+        chat.setupSSEListeners();
+
+        eventBus.emit(EventType.LLM_TOOL_G8E_COMMAND_CONSTRAINTS_REQUESTED, {
+            investigation_id: INVESTIGATION_ID,
+            web_session_id: WEB_SESSION_ID,
+            execution_id: EXECUTION_ID,
+            display_icon: 'tool',
+            category: 'execution',
+        });
+
+        expect(terminalSpy.appendActivityIndicator).toHaveBeenCalledOnce();
+        const [opts] = terminalSpy.appendActivityIndicator.mock.calls[0];
+        expect(opts.id).toBe(`command-constraints-${EXECUTION_ID}`);
+        expect(opts.label).toBe('Checking constraints');
+        expect(opts.category).toBe('execution');
     });
 });
 

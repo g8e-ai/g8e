@@ -410,6 +410,7 @@ describe('SSE pipeline — OPERATOR_COMMAND_APPROVAL_REQUESTED [INTEGRATION - js
                 investigation_id: INVESTIGATION_ID,
                 web_session_id: WEB_SESSION_ID,
                 approval_id: 'approval_exec_001',
+                correlation_id: 'corr_exec_001',
                 command: 'rm -rf /tmp/stale',
             },
         };
@@ -500,6 +501,7 @@ describe('SSE pipeline — OPERATOR_FILE_EDIT_APPROVAL_REQUESTED [INTEGRATION - 
                 investigation_id: INVESTIGATION_ID,
                 web_session_id: WEB_SESSION_ID,
                 approval_id: 'approval_file_001',
+                correlation_id: 'corr_file_001',
                 file_path: '/etc/nginx/nginx.conf',
             },
         };
@@ -584,6 +586,7 @@ describe('SSE pipeline — OPERATOR_INTENT_APPROVAL_REQUESTED [INTEGRATION - jsd
                 investigation_id: INVESTIGATION_ID,
                 web_session_id: WEB_SESSION_ID,
                 approval_id: 'approval_intent_001',
+                correlation_id: 'corr_intent_001',
             },
         };
 

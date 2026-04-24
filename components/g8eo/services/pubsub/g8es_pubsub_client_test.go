@@ -185,3 +185,46 @@ func TestG8esPubSubClient_WaitForSubscribedACK_ContextCancellation(t *testing.T)
 	assert.Less(t, elapsed, 2*time.Second,
 		"Subscribe took too long after context cancellation: %v", elapsed)
 }
+
+// TestG8esPubSubClient_Publish_AppliesWriteDeadline verifies that Publish sets
+// a write deadline on the underlying WebSocket so a half-open TCP connection
+// cannot block the shared mutex indefinitely. The test proves the deadline is
+// applied by shrinking pubSubWriteTimeout to a value already in the past: the
+// server reads frames normally, yet every write must fail immediately because
+// the deadline has expired before Write is called.
+func TestG8esPubSubClient_Publish_AppliesWriteDeadline(t *testing.T) {
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool { return true },
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ws, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer ws.Close()
+		for {
+			if _, _, err := ws.ReadMessage(); err != nil {
+				return
+			}
+		}
+	}))
+	defer server.Close()
+
+	orig := pubSubWriteTimeout
+	pubSubWriteTimeout = -1 * time.Millisecond
+	defer func() { pubSubWriteTimeout = orig }()
+
+	wsURL := "ws://" + strings.TrimPrefix(server.Listener.Addr().String(), "http://")
+	logger := testutil.NewTestLogger()
+	client, err := NewG8esPubSubClient(wsURL, "", logger)
+	require.NoError(t, err)
+	defer client.Close()
+
+	start := time.Now()
+	err = client.Publish(context.Background(), "ch", []byte(`{}`))
+	elapsed := time.Since(start)
+
+	require.Error(t, err, "Publish must error when the write deadline has expired")
+	assert.Less(t, elapsed, 2*time.Second,
+		"Publish must return promptly instead of blocking on a hung write: %v", elapsed)
+}

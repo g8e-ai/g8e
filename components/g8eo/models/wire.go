@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
+	"github.com/google/uuid"
 )
 
 type G8eMessage struct {
@@ -34,13 +35,17 @@ type G8eMessage struct {
 	InvestigationID   string          `json:"investigation_id"`
 }
 
-func NewG8eMessage(id, eventType, caseID, operatorID, operatorSessionID, systemFingerprint string, payload interface{}) (*G8eMessage, error) {
+// NewG8eMessage builds a wire envelope with a freshly generated UUID v4 as `id`.
+// The envelope id is NEVER a correlation key — it is unique per message. Callers
+// that need to correlate a result back to an in-flight command MUST use
+// payload.execution_id (see shared/models/wire/envelope.json for the contract).
+func NewG8eMessage(eventType, caseID, operatorID, operatorSessionID, systemFingerprint string, payload interface{}) (*G8eMessage, error) {
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
 	}
 	return &G8eMessage{
-		ID:                id,
+		ID:                uuid.NewString(),
 		Timestamp:         NowTimestamp(),
 		SourceComponent:   constants.Status.ComponentName.G8EO,
 		EventType:         eventType,

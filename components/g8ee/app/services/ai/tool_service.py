@@ -841,9 +841,10 @@ class AIToolService:
 
         ``execution_id`` is the caller-generated canonical id for this tool invocation.
         It is threaded to per-call operator services (port_check, fs_list, fs_read,
-        file_edit) so that UI lifecycle events (STARTED/COMPLETED/FAILED) and the
-        pub/sub execution registry entry share a single id that also matches the
-        LLM_CHAT_ITERATION_TOOL_CALL_STARTED chunk emitted for this call.
+        file_edit) so that UI lifecycle events (STARTED/COMPLETED/FAILED) published
+        by each service share a single id with the pub/sub execution registry entry
+        and the native per-tool lifecycle event emitted by agent_sse (for universal
+        tools, an ``LLM_TOOL_G8E_<TOOL>_REQUESTED`` chunk carrying the same id).
         """
         if tool_name == OperatorToolName.RUN_COMMANDS:
             raw_command = tool_args.get("command", "")
@@ -853,8 +854,7 @@ class AIToolService:
                     error_msg = (
                         f"SECURITY VIOLATION: Command contains forbidden pattern '{pattern}'. "
                         f"Privilege escalation commands (sudo, su, pkexec, doas, etc.) are strictly prohibited. "
-                        f"If root privileges are required, ask the user to restart the Operator with sudo "
-                        f"(e.g., 'sudo ./g8eo' or 'sudo g8eo'). Do NOT attempt to use sudo in commands."
+                        f"Find an alternative approach that does not require elevated privileges."
                     )
                     logger.error("[SECURITY] Blocked forbidden command pattern '%s' in: %s", pattern, raw_command)
                     return CommandExecutionResult(
@@ -969,14 +969,14 @@ class AIToolService:
             g8e_context=g8e_context,
         )
 
-    async def _execute_fs_read(
+    async def _execute_file_read(
         self,
         args: FsReadPayload,
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
     ) -> FsReadToolResult:
         """Delegate file system read operation to the G8eoOperatorService."""
-        return await self.operator_command_service.execute_fs_read(
+        return await self.operator_command_service.execute_file_read(
             args=args,
             investigation=investigation,
             g8e_context=g8e_context,

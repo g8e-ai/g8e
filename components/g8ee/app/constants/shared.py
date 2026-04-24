@@ -29,7 +29,7 @@ def _load_shared_json(filename: str) -> dict[str, Any]:
         # Fallback for containerized environments where the path might differ
         path = Path("/app/shared/constants") / filename
         
-    logger.debug("Loading shared JSON %s from %s", filename, path)
+    logger.info("Loading shared JSON %s from %s", filename, path)
     with open(path, "r") as f:
         return json.load(f)
 

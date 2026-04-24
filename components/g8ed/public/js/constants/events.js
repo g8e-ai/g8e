@@ -166,6 +166,14 @@ export const EventType = Object.freeze({
     LLM_TOOL_G8E_WEB_SEARCH_RECEIVED: 'g8e.v1.ai.llm.tool.g8e.web.search.received',
     LLM_TOOL_G8E_WEB_SEARCH_COMPLETED: 'g8e.v1.ai.llm.tool.g8e.web.search.completed',
     LLM_TOOL_G8E_WEB_SEARCH_FAILED: 'g8e.v1.ai.llm.tool.g8e.web.search.failed',
+    LLM_TOOL_G8E_INVESTIGATION_QUERY_REQUESTED: 'g8e.v1.ai.llm.tool.g8e.investigation.query.requested',
+    LLM_TOOL_G8E_INVESTIGATION_QUERY_RECEIVED: 'g8e.v1.ai.llm.tool.g8e.investigation.query.received',
+    LLM_TOOL_G8E_INVESTIGATION_QUERY_COMPLETED: 'g8e.v1.ai.llm.tool.g8e.investigation.query.completed',
+    LLM_TOOL_G8E_INVESTIGATION_QUERY_FAILED: 'g8e.v1.ai.llm.tool.g8e.investigation.query.failed',
+    LLM_TOOL_G8E_COMMAND_CONSTRAINTS_REQUESTED: 'g8e.v1.ai.llm.tool.g8e.command.constraints.requested',
+    LLM_TOOL_G8E_COMMAND_CONSTRAINTS_RECEIVED: 'g8e.v1.ai.llm.tool.g8e.command.constraints.received',
+    LLM_TOOL_G8E_COMMAND_CONSTRAINTS_COMPLETED: 'g8e.v1.ai.llm.tool.g8e.command.constraints.completed',
+    LLM_TOOL_G8E_COMMAND_CONSTRAINTS_FAILED: 'g8e.v1.ai.llm.tool.g8e.command.constraints.failed',
     LLM_CHAT_MESSAGE_SENT: 'g8e.v1.ai.llm.chat.message.sent',
     LLM_CHAT_MESSAGE_REPLAYED: 'g8e.v1.ai.llm.chat.message.replayed',
     LLM_CHAT_MESSAGE_PROCESSING_FAILED: 'g8e.v1.ai.llm.chat.message.processing.failed',
@@ -177,8 +185,6 @@ export const EventType = Object.freeze({
     LLM_CHAT_ITERATION_RETRY: 'g8e.v1.ai.llm.chat.iteration.retry',
     LLM_CHAT_ITERATION_THINKING_STARTED: 'g8e.v1.ai.llm.chat.iteration.thinking.started',
     LLM_CHAT_ITERATION_CITATIONS_RECEIVED: 'g8e.v1.ai.llm.chat.iteration.citations.received',
-    LLM_CHAT_ITERATION_TOOL_CALL_STARTED: 'g8e.v1.ai.llm.chat.iteration.tool.call.started',
-    LLM_CHAT_ITERATION_TOOL_CALL_COMPLETED: 'g8e.v1.ai.llm.chat.iteration.tool.call.completed',
     LLM_CHAT_ITERATION_TEXT_RECEIVED: 'g8e.v1.ai.llm.chat.iteration.text.received',
     LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED: 'g8e.v1.ai.llm.chat.iteration.text.chunk.received',
     LLM_CHAT_ITERATION_TEXT_COMPLETED: 'g8e.v1.ai.llm.chat.iteration.text.completed',
@@ -272,6 +278,7 @@ export const TribunalOutcome = Object.freeze({
     VERIFICATION_FAILED: 'verification_failed',
     CONSENSUS:           'consensus',
     VERIFIED:            'verified',
+    CONSENSUS_FAILED:    'consensus_failed',
 });
 
 // Terminal Tribunal states are distinguished by event type, not by a shared

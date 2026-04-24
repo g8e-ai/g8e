@@ -145,20 +145,27 @@ Domain Layer (Orchestration)
 
 Operator Services
 ├── HeartbeatService ───────────> OperatorDataService, EventService, PubSubClient
-├── ExecutionRegistryService
-├── ExecutionService ───────────> ExecutionRegistryService, PubSubClient
+├── PubSubService ──────────────> PubSubClient
+│                                 (owns asyncio.Future registry for result correlation;
+│                                  Futures are keyed on payload.execution_id)
+├── ExecutionService ───────────> PubSubService, ApprovalService, EventService,
+│                                 AIResponseAnalyzer, OperatorDataService,
+│                                 InvestigationService
 ├── ApprovalService ────────────> EventService, OperatorDataService,
 │                                 InvestigationDataService
 ├── CommandService ─────────────> CacheAsideService, OperatorDataService,
 │                                 InvestigationService, EventService,
-│                                 ExecutionRegistryService, ApprovalService,
-│                                 InternalHttpClient, PubSubClient
-├── FileService ────────────────> CommandService
-├── FilesystemService ──────────> CommandService
-├── PortService ────────────────> CommandService
-├── LFAAService ────────────────> CommandService
-├── IntentService ──────────────> CommandService
-└── PubSubService ──────────────> PubSubClient
+│                                 ApprovalService, ExecutionService,
+│                                 InternalHttpClient, PubSubService
+├── FileService ────────────────> PubSubService, ApprovalService, EventService,
+│                                 ExecutionService, AIResponseAnalyzer,
+│                                 InvestigationService
+├── FilesystemService ──────────> PubSubService, ExecutionService,
+│                                 InvestigationService
+├── PortService ────────────────> PubSubService, ExecutionService
+├── LFAAService ────────────────> PubSubService
+└── IntentService ──────────────> ApprovalService, ExecutionService, EventService,
+                                  InvestigationService, G8edClient
 
 AI Pipeline
 ├── AIToolService ──────────────> CommandService, InvestigationService,
@@ -180,10 +187,6 @@ AI Pipeline
 ├── GenerationConfigBuilder
 └── EvalJudge
 
-MCP Services
-├── MCPGatewayService ──────────> AIToolService, InvestigationService,
-│                                 OperatorDataService
-└── MCPAdapter
 ```
 
 ---
@@ -242,7 +245,7 @@ The AI pipeline in g8ee consists of several specialized services that orchestrat
   - Uses a dispatch table `_tool_handlers` for efficient tool lookup.
   - Uniform handler signature: `(tool_args, investigation, g8e_context, request_settings)`.
   - Integrated Tribunal oversight via `orchestrate_tool_execution`.
-  - Support for multiple tool types: Operator commands, MCP tools, and internal utility tools.
+  - Support for multiple tool types: Operator commands and internal utility tools.
 
 ---
 
@@ -280,27 +283,23 @@ Passing raw dicts between services, storing unvalidated JSON in the database, or
 
 ### LFAA Result Payload Requirements
 
-All LFAA (Local Function Access & Audit) result payloads published by g8eo MUST include an `execution_id` field for request-response correlation. This field is automatically injected by the `setExecutionIDOnPayload()` helper in `components/g8eo/services/pubsub/publish_helpers.go` before serialization.
+All LFAA (Local Function Access & Audit) result payloads published by g8eo MUST include an `execution_id` field for request-response correlation. This field is automatically stamped by `setExecutionIDOnPayload()` in `components/g8eo/services/pubsub/publish_helpers.go` before serialization, via the `models.ExecutionIDSetter` interface defined in `components/g8eo/models/execution_id_setter.go`.
 
-The following result payload types support execution_id injection:
-- CancellationResultPayload
-- FileEditResultPayload
-- FsListResultPayload
-- ExecutionStatusPayload
-- PortCheckResultPayload
-- FetchLogsResultPayload
-- FsReadResultPayload
-- LFAAErrorPayload
-- FetchFileDiffResultPayload
-- FetchHistoryResultPayload
-- FetchFileHistoryResultPayload
-- RestoreFileResultPayload
-- ExecutionResultsPayload
+Participating payloads implement:
 
-When adding new result payload types, ensure they:
-1. Declare an `ExecutionID string` field with JSON tag `execution_id`
-2. Add a case in `setExecutionIDOnPayload()` to inject the execution_id
-3. Add a unit test in `publish_helpers_test.go` to verify injection works
+```go
+type ExecutionIDSetter interface {
+    SetExecutionID(string)
+}
+```
+
+When adding a new result payload type, do the following:
+1. Declare an `ExecutionID string` field with JSON tag `execution_id`.
+2. Implement `SetExecutionID(id string)` by adding a one-line method in `components/g8eo/models/execution_id_setter.go`.
+
+No test registration is required. The AST-based guardrails in `components/g8eo/models/execution_id_setter_test.go` auto-discover every struct whose name ends in `ResultPayload`, `StatusPayload`, or `ErrorPayload` and carries an `ExecutionID` field, and fail the build if its `SetExecutionID` method is missing or non-trivial. The publisher does not need changes — it dispatches through the interface, not a concrete type switch.
+
+All result publishers — both the consolidated `publishResultEnvelope` helper in `components/g8eo/services/pubsub/pubsub_results.go` (command/cancellation/file-edit/fs-list) and the `publishLFAA*` helpers in `components/g8eo/services/pubsub/publish_helpers.go` (file read, port check, fetch logs/history, restore file) — MUST stamp `msg.APIKey = cfg.APIKey` on the outbound `G8eMessage` for operator identity continuity across pub/sub. Regression coverage lives in `TestPublishLFAA_StampsAPIKeyFromConfig` (LFAA path) and the `api_key` assertions in `components/g8eo/services/pubsub/pubsub_results_test.go` (envelope path).
 
 ---
 

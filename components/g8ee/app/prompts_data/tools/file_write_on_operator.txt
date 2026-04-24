@@ -1,4 +1,6 @@
-Write content to a file, completely replacing existing content.
+Write content to a file on the target system through the deployed g8e Operator. The Operator is deployed directly on the target system and writes the file there. This tool overwrites the ENTIRE file with new content.
+
+ALWAYS use list_files_and_directories_with_detailed_metadata BEFORE this tool to verify the file exists (or its parent directory exists if create_if_missing=true).
 
 <parameters>
 <required>
@@ -9,9 +11,34 @@ Write content to a file, completely replacing existing content.
 <optional>
 - create_if_missing: Create file if it doesn't exist (default: false)
 - create_backup: Backup before overwriting (default: true)
+- target_operator: operator_id or hostname — REQUIRED when multiple operators bound (prefer hostname when available)
 </optional>
 </parameters>
 
-<scope>
-Replaces the ENTIRE file. For surgical find-and-replace edits, `file_update_on_operator` is the authorized tool.
-</scope>
+<behavior>
+1. Replaces the ENTIRE file content - nothing is preserved
+2. Use list_files_and_directories_with_detailed_metadata first to verify the file exists
+3. For surgical find-and-replace edits, use file_update_on_operator instead
+4. For creating new files, use file_create_on_operator instead (fails if file exists)
+5. Use this when you need to completely regenerate or reset a file
+6. Automatic backup created by default (create_backup=true) for rollback capability
+7. Changes are tracked in file history for auditing
+</behavior>
+
+<when_to_use>
+- Completely regenerating a configuration file
+- Resetting a file to a known state
+- Replacing entire file content with new version
+- When create_if_missing=true: creating a file that may or may not exist
+</when_to_use>
+
+<never>
+- Never use this for small edits - use file_update_on_operator for surgical changes
+- Never use this to create new files that shouldn't exist yet - use file_create_on_operator
+</never>
+
+<examples>
+<example>User: "Overwrite the entire config with this new content" → file_write_on_operator(file_path="/etc/app/config.yaml", content="key: value...", justification="Full config replacement")</example>
+<example>User: "Reset the credentials file" → file_write_on_operator(file_path="/app/.env", content="DB_USER=root\nDB_PASS=secret", justification="Reset environment variables")</example>
+<example>User: "Regenerate the nginx config from scratch" → file_write_on_operator(file_path="/etc/nginx/nginx.conf", content="events { ... }", justification="Complete nginx config regeneration")</example>
+</examples>

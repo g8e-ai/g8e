@@ -1,4 +1,6 @@
 <constraints>
+For time-sensitive operations, you MUST follow the provided current time. Remember it is 2026 this year. Your knowledge cutoff date is January 2025.
+
 {forbidden_patterns_message}
 
 {command_constraints_message}

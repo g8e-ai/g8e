@@ -595,6 +595,10 @@ class ApprovalRequestBase(G8eBaseModel):
         default=None,
         description="Correlates multiple per-operator executions dispatched from a single approval.",
     )
+    correlation_id: str | None = Field(
+        default=None,
+        description="Tribunal correlation ID linking approval to the originating Tribunal session",
+    )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -658,6 +662,10 @@ class ApprovalContext(G8eBaseModel):
     batch_id: str | None = Field(
         default=None,
         description="Batch correlation ID when the approval covers multiple operators.",
+    )
+    correlation_id: str | None = Field(
+        default=None,
+        description="Tribunal correlation ID linking approval to the originating Tribunal session",
     )
 
 
@@ -833,6 +841,7 @@ class CommandExecutingBroadcastEvent(G8eBaseModel):
     message: str | None = None
     approval_id: str | None = None
     batch_id: str | None = None
+    per_operator_execution_ids: list[str] = Field(default_factory=list)
     timestamp: UTCDatetime = Field(default_factory=now)
 
 

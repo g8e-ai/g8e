@@ -73,7 +73,7 @@ flowchart TD
 1. **Context assembly** — `InvestigationService` resolves the investigation, enriches it with bound operator metadata, retrieved memory, and triage classification.
 2. **LLM Proposer call** — The **High Reasoning AI** (Sage) or **Assistant AI** (Dash) performs the turn based on triage complexity.
 3. **Tool execution** — Tool calls are dispatched sequentially through `execute_turn_tool_calls` in `agent_tool_loop.py`. 
-4. **Tribunal Refinement** — `run_commands_with_operator` tool calls pass through the Tribunal (Voting Swarm + Verifier) in `agent_tool_loop.py` before execution. Parallel generation (up to 5 passes) surfaces ideologically distinct candidates; weighted majority voting converges them; the Verifier (The Auditor) confirms or minimally corrects the winner.
+4. **Tribunal Refinement** — `run_commands_with_operator` tool calls pass through the Tribunal (Voting Swarm + Auditor) in `agent_tool_loop.py` before execution. The reasoning agent sends a natural-language **request** plus optional **guidelines** — never a command string. Five parallel generation passes (Axiom, Concord, Variance, Pragma, Nemesis) each translate intent into a candidate; uniform per-member voting selects a winner with deterministic tie-breaking; the Auditor verifies the winner against the intent using anonymized cluster IDs and one of three modes (unanimous, majority, tied). See the [Tribunal Pipeline](#run_commands-and-the-tribunal) section for the full flow, including `CONSENSUS_FAILED` handling and Auditor swap authority.
 5. **SSE delivery** — Chunks are translated via `deliver_via_sse` and forwarded to the browser via g8ed in real time.
 6. **Persistence** — Conversation history is written incrementally: each ReAct iteration's pre-tool commentary is persisted as a `MessageSender.AI_PRIMARY` row through an `on_iteration_text` callback wired by `_run_chat_impl`, and the final segment (with aggregate `token_usage` and `grounding_metadata`) is written by `_persist_ai_response` in `chat_pipeline.py` after the stream closes. Background memory update tasks are then fired.
 
@@ -218,7 +218,7 @@ After the AI response is persisted, an `OPERATOR_AUDIT_AI_RECORDED` event is sen
 
 ### Command Execution Audit
 
-When the AI proposes a command via `run_commands_with_operator`, the tool routes through the Tribunal in `agent_tool_loop.py`, then dispatches an approval request to the user via g8ed SSE. The Tribunal uses up to five independent AI passes — Axiom (The Minimalist), Concord (The Guardian), Variance (The Exhaustive), Pragma (The Conventional), and Nemesis (The Adversary) — to refine the command. The `execution_id` (format: `cmd_<12-char-hex>_<unix-ts>`) is stamped on the tool call before dispatch. On user approval, g8eo executes the command locally, audits the result, and returns it through g8ed back to G8EE. The result is then fed back into the AI's ReAct loop as a function response. `OperatorLFAAService` handles direct terminal execution audits (`OPERATOR_AUDIT_DIRECT_COMMAND_RECORDED`).
+When the AI calls `run_commands_with_operator`, the tool routes through the Tribunal in `agent_tool_loop.py`, then dispatches an approval request to the user via g8ed SSE. The reasoning agent does **not** propose a command — it provides an intent (`request` + optional `guidelines`). The Tribunal uses five independent AI passes — Axiom (The Composer), Concord (The Guardian), Variance (The Exhaustive), Pragma (The Conventional), and Nemesis (The Adversary) — to translate intent into a candidate command. Nemesis is always present as adversarial pressure. The `execution_id` (format: `cmd_<12-char-hex>_<unix-ts>`) is stamped on the tool call before dispatch. On user approval, g8eo executes the command locally, audits the result, and returns it through g8ed back to G8EE. The result is then fed back into the AI's ReAct loop as a function response. `OperatorLFAAService` handles direct terminal execution audits (`OPERATOR_AUDIT_DIRECT_COMMAND_RECORDED`).
 
 ### Tool Call ID Propagation
 
@@ -250,8 +250,9 @@ When you send a message, the AI processes it through a multi-stage pipeline that
    - This loop continues until the AI has enough information to provide a complete answer.
 
 4. **Operator Actions** — For commands that run on your operators:
-   - The AI's natural language request goes through a Tribunal (up to five AI agents generate and vote on the best command).
-   - You must approve the command before it executes.
+   - The AI articulates its intent as natural language; it never writes a shell command directly.
+   - The intent goes through the Tribunal: five AI members (Axiom, Concord, Variance, Pragma, Nemesis) translate intent into candidate commands in parallel, a uniform per-member vote selects a winner, and the Auditor verifies against the intent using anonymized cluster IDs.
+   - You must approve the verified command before it executes.
    - The command runs on the operator and results are returned to the AI.
    - The AI incorporates the results into its response.
 
@@ -457,13 +458,13 @@ g8ee publishes events using `EventType` constants defined in `components/g8ee/ap
 | `AIToolService` | `components/g8ee/app/services/ai/tool_service.py` | Tool registration, declaration building, tool call dispatch |
 | `MemoryGenerationService` | `components/g8ee/app/services/ai/memory_generation_service.py` | AI-backed memory analysis and update using the `codex` persona. |
 | `MemoryDataService` | `components/g8ee/app/services/investigation/memory_data_service.py` | (Data Layer) Pure CRUD for InvestigationMemory |
-| `TriageAgent.triage` | `components/g8ee/app/services/ai/triage.py` | Route to main vs assistant model via intent and complexity classification. Persona loaded from `agents.json` (`triage`). |
+| `TriageAgent.triage` | `components/g8ee/app/services/ai/triage.py` | Route to main vs assistant model via intent and complexity classification. Persona loaded from `agents.json` (`triage`). **WIP (Phase 1.1):** a four-route refactor (`SIMPLE`, `NEEDS_CLARIFICATION`, `READY_FOR_REASONING`, `CONTINUATION`) is planned per `docs/.projects/tribunal-voting.md`. Current `TriageResult` still uses the `complexity` + `intent` + `request_posture` axes documented below. |
 | `process_provider_turn` | `components/g8ee/app/services/ai/agent_turn.py` | Thinking state machine, chunk parsing, TurnResult assembly. Handles thinking state transitions (INACTIVE → ACTIVE → INACTIVE), consolidates model parts, normalizes finish reasons, and extracts token usage. Emits THINKING/THINKING_END chunks for models with thinking capabilities. |
-| `TribunalInvoker` | `components/g8ee/app/services/ai/agent_tool_loop.py` | Encapsulates Tribunal pipeline invocation for `run_commands_with_operator`, including command constraints (whitelist/blacklist) fetch and SSE event emission. |
-| `execute_turn_tool_calls` | `components/g8ee/app/services/ai/agent_tool_loop.py` | Sequential tool call dispatch via `orchestrate_tool_execution` + grounding merge; `ToolCallResult.tribunal_result` surfaces the full `CommandGenerationResult` (original_command, final_command, outcome, vote_score, verifier_passed, verifier_revision, candidates). This field is populated for `run_commands_with_operator` tools after Tribunal succeeds, and is `None` for non-command tools, Tribunal errors, or when command arg is missing. |
+| `TribunalInvoker` | `components/g8ee/app/services/ai/agent_tool_loop.py` | Encapsulates Tribunal pipeline invocation for `run_commands_with_operator`. Converts the Sage-facing `SageOperatorRequest` (intent-only: `request`, `guidelines`, target/timeout fields) into an executor-facing `ExecutorCommandArgs` (`command` required) by running the Tribunal pipeline. Fetches command constraints (whitelist/blacklist) and emits SSE events. |
+| `execute_turn_tool_calls` | `components/g8ee/app/services/ai/agent_tool_loop.py` | Sequential tool call dispatch via `orchestrate_tool_execution` + grounding merge; `ToolCallResult.tribunal_result` surfaces the full `CommandGenerationResult` (`request`, `guidelines`, `final_command`, `outcome`, `vote_winner`, `vote_score`, `vote_breakdown`, `auditor_passed`, `auditor_revision`, `auditor_reason`, `candidates`). This field is populated for `run_commands_with_operator` tools after Tribunal succeeds, and is `None` for non-command tools, Tribunal errors, or when the request is missing. |
 | `execute_tool_call` | `components/g8ee/app/services/ai/tool_service.py` | Single function dispatch via `_tool_handlers` dict — returns `ToolResult`. |
 | `deliver_via_sse` | `components/g8ee/app/services/ai/agent_sse.py` | StreamChunkFromModel → g8ed SSE event translation. |
-| `generate_command` | `components/g8ee/app/services/ai/command_generator.py` | Tribunal: N generation passes + uniform per-member voting + verifier. Persona templates in `agents.json`. |
+| `generate_command` | `components/g8ee/app/services/ai/generator.py` | Tribunal pipeline orchestrator: five generation passes + uniform per-member voting (`voter.py`) + three-mode Auditor verification (`auditor_service.py`). Persona templates in `agents.json`. |
 | `EventService` | `components/g8ee/app/services/infra/g8ed_event_service.py` | g8ee → g8ed HTTP event push. |
 | `AIRequestBuilder` | `components/g8ee/app/services/ai/request_builder.py` | `build_contents_from_history`, generation config, attachment parts. |
 | `AIGenerationConfigBuilder` | `components/g8ee/app/services/ai/generation_config_builder.py` | Provider-specific generation config construction. |
@@ -476,7 +477,7 @@ g8ee publishes events using `EventType` constants defined in `components/g8ee/ap
 
 ## AI Persona Registry
 
-Every AI in the platform has a first-class persona definition in `shared/constants/AIs.json` under `AI.metadata`. The schema ensures every AI is fully self-describing for runtime introspection, UI rendering, and prompt engineering.
+Every AI in the platform has a first-class persona definition in `shared/constants/agents.json` under `agent.metadata`. The schema ensures every AI is fully self-describing for runtime introspection, UI rendering, and prompt engineering.
 
 ### Persona Schema
 
@@ -491,7 +492,8 @@ Every AI in the platform has a first-class persona definition in `shared/constan
 | `tools` | `string[]` | List of tool names available to this AI (empty for non-tool-calling AIs) |
 | `identity` | `string` | Deep persona description — who the AI is, how it thinks, its behavioral characteristics |
 | `purpose` | `string` | Specific mission statement — what the AI does and the standards it must meet |
-| `autonomy` | `string` | Empowering directive prose addressed to the agent. Affirms the agent's maximum agency within its role, blending its identity, purpose, and persona. Free-form string, not an enum; the platform's actual governance (human approval for state-changing operator actions) is enforced structurally, not via this field. |
+| `autonomy` | `string` | Empowering directive prose addressed to the agent. Affirms the agent's maximum agency within its role. |
+| `persona` | `string` | The full prompt template for the agent |
 
 ### AI Registry
 
@@ -516,23 +518,25 @@ Each agent's `autonomy` field is a per-agent empowering directive; see `shared/c
 
 ### Contract Tests
 
-Both g8ed and g8ee have contract tests that validate every AI metadata entry has all required persona fields with correct types:
+Both g8ed and g8ee have contract tests that validate every agent metadata entry has all required persona fields with correct types:
 
-- **g8ed**: `components/g8ed/test/contracts/shared-AI-constants.test.js`
-- **g8ee**: `components/g8ee/tests/unit/utils/test_shared_AI_constants.py`
+- **g8ed**: `components/g8ed/test/contracts/shared-agents-constants.test.js`
+- **g8ee**: `components/g8ee/tests/unit/utils/test_shared_agents_constants.py`
+
+> **WIP (Phase 1.14).** A parameterized persona contract test that walks every persona in `agent.metadata` and asserts required fields, valid `model_tier`, and that every `tools` entry resolves in the tool registry is planned per `docs/.projects/tribunal-voting.md`. The existing contract tests cover metadata shape but not tool-registry alignment.
 
 ### Model Definitions
 
-Each AI that has a distinct request/response contract also has a JSON schema in `shared/models/agents/`:
+Each agent that has a distinct request/response contract also has a JSON schema in `shared/models/agents/`:
 
-| AI | File |
+| Agent | File |
 |---|---|
-| Triage | `shared/models/AIs/triage.json` |
-| Primary | `shared/models/AIs/primary.json` |
-| Assistant | `shared/models/AIs/assistant.json` |
-| Tribunal | `shared/models/AIs/tribunal.json` |
-| Verifier | `shared/models/AIs/verifier.json` |
-| Title Generator | `shared/models/AIs/title_generator.json` |
+| Triage | `shared/models/agents/triage.json` |
+| Primary | `shared/models/agents/primary.json` |
+| Assistant | `shared/models/agents/assistant.json` |
+| Tribunal | `shared/models/agents/tribunal.json` |
+| Auditor | `shared/models/agents/auditor.json` |
+| Title Generator | `shared/models/agents/title_generator.json` |
 
 Tribunal members (Axiom, Concord, Variance, Pragma, Nemesis) share the Tribunal model definition — they are roles within the Tribunal, not independent AIs.
 
@@ -588,6 +592,8 @@ Triage uses the `triage` persona defined in `shared/constants/agents.json`. It i
 - **complexity**: `simple` | `complex` — routes to Assistant vs Primary model tier.
 - **intent**: `information` | `action` | `unknown` — shapes tool selection and follow-up behavior.
 - **request_posture**: `normal` | `escalated` | `adversarial` | `confused` — calibrates how the responding agent applies the dissent and denial-memory protocols.
+
+> **WIP (Phase 1.1 / Phase 6).** `docs/.projects/tribunal-voting.md` calls for collapsing the triple-axis output into a single four-route classification (`SIMPLE`, `NEEDS_CLARIFICATION`, `READY_FOR_REASONING`, `CONTINUATION`) that also routes ambiguous messages to a dedicated Interrogator agent. That refactor is not yet landed; the three-axis output above remains the source of truth in code.
 
 `request_posture` is the loyal-friction signal. A `normal` message gets default behavior; an `escalated` message tightens prose without weakening safety work; an `adversarial` message (which requires prior context — first-turn messages cannot be adversarial) triggers full denial-memory; a `confused` message requires naming the contradiction before acting. The posture is injected as a `<triage_context>` tag in the Primary/Assistant system prompt by `build_triage_context_section` in `components/g8ee/app/llm/prompts.py`. The prompt is loaded via `get_agent_persona("triage")` in `triage.py`.
 
@@ -676,7 +682,7 @@ g8ee distinguishes between **Tool Declarations** (the schema provided to the LLM
 
 ### `run_commands` and the Tribunal
 
-When the LLM calls `run_commands_with_operator`, `execute_tool_call` intercepts it. The command passes through the Tribunal (`components/g8ee/app/services/ai/command_generator.py`) to ensure syntactic precision and cross-model consensus.
+When the LLM calls `run_commands_with_operator`, `execute_tool_call` intercepts it. The reasoning agent passes a `SageOperatorRequest` containing a natural-language **`request`** and optional **`guidelines`** — it does **not** write a shell command. The intent passes through the Tribunal pipeline, orchestrated by `generate_command` in `components/g8ee/app/services/ai/generator.py` with voting logic in `voter.py` and Auditor verification in `auditor_service.py`. The Tribunal translates intent into a command with cross-persona consensus and three-mode Auditor verification.
 
 #### Target Operator Resolution
 
@@ -691,7 +697,9 @@ The resolved operator's OS context (OS name, shell, working directory) is passed
 
 #### Tribunal Model Resolution
 
-The Tribunal resolves its own (provider, model) pair via `_resolve_provider_and_model`. The model is chosen via the fallback chain (assistant_model -> primary_model -> provider default). The provider is then **sourced from the `assistant_provider` setting** (falling back to `primary_provider`) if the chosen model is the assistant model. This decouples the Tribunal model from the primary chat provider: e.g. a user with `primary_provider=gemini` and `assistant_provider=ollama` with `assistant_model=gemma4:e4b` will route Tribunal calls to the Ollama endpoint, not Gemini.
+The Tribunal resolves its own (provider, model) pair via `_resolve_provider_and_model` in `generator.py`. The model is chosen via the fallback chain (`assistant_model` → `primary_model` → provider default). The provider is sourced from the `assistant_provider` setting (falling back to `primary_provider`) if the chosen model is the assistant model. This decouples the Tribunal model from the primary chat provider: a user with `primary_provider=gemini` and `assistant_provider=anthropic` with an Anthropic assistant model will route Tribunal calls to Anthropic, not Gemini.
+
+> **WIP (Ollama fallback removal).** Per `docs/.projects/tribunal-voting.md`, implicit Ollama defaults have been removed from `LLMSettings` and the Tribunal no longer falls back silently to Ollama when provider configuration is incomplete. Tests aligning with the explicit-provider contract are still being reconciled.
 
 The Tribunal implements a **Stochastic Multi-AI Consensus** pattern using five distinct roles:
 
@@ -726,32 +734,42 @@ flowchart TD
     VerifierEnabled -- No --> OutVote[CONSENSUS: vote winner]
     VerifierEnabled -- Yes --> Verify[Auditor SLM]
 
+    Vote -- Below consensus threshold --> ConsFail[TRIBUNAL_VOTING_CONSENSUS_FAILED<br/>tool call fails]
     Verify --> Review{Verdict}
-    Review -- OK --> OutVerified[VERIFIED: vote winner]
-    Review -- Revised --> OutRev[VERIFICATION_FAILED: auditor revision]
+    Review -- ok --> OutVerified[VERIFIED: vote winner]
+    Review -- swap:cluster_id --> OutSwap[VERIFIED: swapped to dissenter]
+    Review -- revised:command --> OutRev[VERIFICATION_FAILED: auditor revision]
     Review -- Empty/No valid revision/Exception --> VerFail[TRIBUNAL_SESSION_VERIFIER_FAILED<br/>tool call fails]
 ```
 
-#### 1. The Proposer (Primary AI)
-- **Role**: Heavy lifting, generating initial complex code or architectural plans.
-- **Thinking Level**: Set to high for deep logical exploration.
-- **Temperature**: Governed by the configured model's default temperature (e.g. Gemini 3 requires 1.0). Not overridden per-agent.
+#### 1. The Intent Source (Sage or Dash)
+- **Role**: Articulates investigative intent as a natural-language `request` plus optional `guidelines`. The intent source is the senior engineer who has forgotten shell syntax but knows the investigation completely — it describes goals, information targets, known state, and signal discipline without ever naming a tool or writing a flag.
+- **Schema**: `SageOperatorRequest` in `app/models/agent.py`. There is no `command` field — this invariant is structural, enforced by the tool schema in `tool_service.py`.
+- **Thinking Level**: Inherits the reasoning agent's model config (primary for Sage, assistant for Dash).
 
-#### 2. The Voting Swarm (Validators / Skeptics)
-- **Role**: Inducing candidate diversity to catch hallucinations and edge cases.
+#### 2. The Voting Swarm (Five Tribunal Members)
+- **Role**: Each member translates the same intent into a candidate command, blind to the other members' outputs. Amnesia is structural — members cannot coordinate, soften, or blend.
+- **Pass count**: Always five. `LLM_COMMAND_GEN_PASSES` defaults to `5` and Nemesis is always present at pass index 4.
 - **Thinking Level**: Set to lowest supported (minimal/low) to save compute/latency while relying on aggregate accuracy.
 - **Temperature**: Every pass uses the configured model's `default_temperature` (resolved via `get_model_config`, falling back to `LLM_DEFAULT_TEMPERATURE`). Per-pass temperature spreads are **not** hardcoded — some providers (e.g. Gemini 3+) require a fixed temperature of 1.0, so forcing per-member values would break them.
-- **Diversity Source**: Distinct personas, not distinct temperatures. Each pass loads a different Tribunal member persona from `shared/constants/agents.json`:
-    - **Axiom** (Pass 0) — The Minimalist. Optimizes for simplicity.
-    - **Concord** (Pass 1) — The Guardian. Optimizes for safety with defensive flags.
-    - **Variance** (Pass 2) — The Exhaustive. Optimizes for edge case handling and robustness.
-    - **Pragma** (Pass 3) — The Conventional. Optimizes for idiomatic, community-standard patterns.
-    - **Nemesis** (Pass 4) — The Adversary. Optimizes for adversarial robustness by testing attack surfaces.
+- **Diversity Source**: Distinct personas, not distinct temperatures. Each pass loads a different Tribunal member persona from `shared/constants/agents.json` via `_member_for_pass` in `generator.py`:
+    - **Axiom** (Pass 0) — The Composer. Translates intent into the most coherent composed command that fulfills the full intent in one invocation; pressure against fragmentation.
+    - **Concord** (Pass 1) — The Guardian. Defensive discipline, tightest scope the intent allows.
+    - **Variance** (Pass 2) — The Exhaustive. Handles edge cases a naive translation misses.
+    - **Pragma** (Pass 3) — The Conventional. Idiomatic, community-standard patterns for the target OS/shell.
+    - **Nemesis** (Pass 4) — The Adversary. Always present. Produces a plausibly-flawed command or honestly abstains when no attack surface exists. Flaws are correctness-only — Nemesis never produces anything Sentinel would block.
 
-#### 3. The Final Verifier (Consensus Orchestrator)
-- **Role**: Deterministic arbitration and final verdict formatting.
-- **Thinking Level**: Set to low or off to avoid overthinking penalties.
-- **Temperature**: The configured model's `default_temperature`. The Auditor's convergent behavior is enforced through its persona (`get_agent_persona("auditor")`) and the strict `ok`/corrected-command wire contract — not by forcing a numeric temperature that many providers reject.
+> **WIP (Phase 4).** Per `docs/.projects/tribunal-voting.md`, Nemesis-participation tracking (`nemesis_slot`, `nemesis_candidate`, `nemesis_abstained`, `verifier_selected_nemesis`) on `CommandGenerationResult` and the `TRIBUNAL_NEMESIS_PARTICIPATED` / `_DETECTED` / `_MISSED` SSE events are planned but not yet implemented. Always-present Nemesis (the structural change) is in place.
+
+#### 3. The Auditor (Dissent-Aware Verifier)
+- **Role**: Final checkpoint before human approval. Evaluates the vote winner against the articulated intent with dissent awareness and anonymized cluster evaluation. Can accept, revise, or swap to a dissenting cluster.
+- **Anonymization**: Candidates are presented as opaque cluster IDs (`cluster_a`, `cluster_b`, …) with per-round shuffled assignment. The Auditor cannot see which member produced which cluster; judgment rests on the command against the intent, not on persona reputation.
+- **Three modes** (selected by consensus strength):
+    - **Unanimous (5/5)**: one cluster, one candidate. Accept with `ok` or propose a revision with `revised:<command>`. Swap is not possible — nothing to swap to.
+    - **Majority (3-4 supporters)**: winner plus 1-2 dissenting clusters. Accept the winner (`ok`), revise (`revised:<command>`), or swap to a dissenter (`swap:<cluster_id>`).
+    - **Tied (2/2/1 or similar)**: tied clusters shown. Must swap or revise — `ok` is rejected because there is no unique winner to accept.
+- **Thinking Level**: Low or off.
+- **Temperature**: The configured model's `default_temperature`. Convergent behavior is enforced through the persona (`get_agent_persona("auditor")`) and the strict wire contract, not through temperature manipulation.
 
 #### Configuration
 
@@ -773,53 +791,66 @@ Raw output is normalised by `_normalise_command`: strips surrounding whitespace,
 
 Thinking is enabled for models that support it but forced to the lowest available level (`get_lowest_thinking_level`) with `include_thoughts=False` — minimises latency on this fast-path.
 
-**Stage 2 — Uniform Per-Member Voting (`_run_voting_stage`)**
+**Stage 2 — Uniform Per-Member Voting (`voter.weighted_vote`)**
 
 Each member contributes exactly 1 vote per candidate. Candidates that are identical (after normalisation) accumulate votes. The string with the highest vote count is the vote winner. The normalised score is `winner_votes / total_members` — a value between 0 and 1 representing consensus strength.
 
+**Consensus threshold.** `TRIBUNAL_MIN_CONSENSUS = 2`. If the winner's vote count is below threshold, the voter returns `None` and the pipeline emits `TRIBUNAL_VOTING_CONSENSUS_FAILED` with the full candidate breakdown, raising `TribunalConsensusFailedError` so Sage can rephrase or abort per its persona.
+
 Tie-breaking ladder (when multiple candidates have the same highest vote count):
-1. Shortest command wins (maximizes signal density for approval fatigue reduction)
+1. Shortest command wins (compositional pressure; smaller attack surface)
 2. Non-Nemesis cluster wins over Nemesis-including cluster
 3. Alphabetical fallback (deterministic)
 
-If no candidates were produced (all passes failed), the voting stage returns `(None, 0.0)` and the pipeline falls back.
+The emitted `VoteBreakdown` carries `candidates_by_member`, `candidates_by_command`, `winner`, `winner_supporters`, `dissenters_by_command`, `consensus_strength`, `tie_broken`, and `tie_break_reason`. A `ConsensusConfidence` qualitative descriptor is derived from the breakdown (`unanimous_verified`, `strong_verified`, `majority_with_intervention`, `tied_verifier_resolved`, `consensus_failed`, etc.).
 
-A `TRIBUNAL_VOTING_CONSENSUS_REACHED` SSE event is emitted carrying `vote_winner`, `vote_score`, `num_candidates`, and `original_command`.
+A `TRIBUNAL_VOTING_CONSENSUS_REACHED` SSE event is emitted carrying the `request`, the full `VoteBreakdown`, and the `ConsensusConfidence`. One `TRIBUNAL_DISSENT_RECORDED` event is emitted per losing cluster, carrying the losing command, dissenting member IDs, winner, and breakdown.
 
-**Stage 3 — Verification (`_run_verification_stage` / `_run_verifier`)**
+> **WIP (Phase 5).** A `fewest_operations` tie-breaker (between *shortest* and *non-Nemesis*) is declared as an enum value in `agents.json` but not yet wired into `voter.py`. The logical-operation counter and Sentinel bare-`;` detector are planned per `docs/.projects/tribunal-voting.md`.
 
-Skipped when `LLM_COMMAND_GEN_VERIFIER=false`. Otherwise, a single SLM call at temperature `0.0` evaluates the vote winner against `_VERIFIER_PROMPT_TEMPLATE`. The verifier receives the intent, OS, and the candidate command, and must respond with exactly one of:
+**Stage 3 — Auditor Verification (`auditor_service`)**
 
-- `ok` — command is syntactically correct and fulfils the intent
-- A corrected command string — if there is a syntax error, wrong quoting, wrong escaping, or a missing flag
+Skipped when `LLM_COMMAND_GEN_VERIFIER=false`. Otherwise, a single SLM call evaluates the vote winner against the articulated intent using anonymized cluster IDs and the three-mode contract described in the Auditor section above. The Auditor receives the `request`, `guidelines`, operator context, forbidden patterns, and the cluster-ID view of candidates — never persona names.
 
-The verifier emits `TRIBUNAL_VOTING_REVIEW_STARTED` before the call and `TRIBUNAL_VOTING_REVIEW_COMPLETED` after, carrying a `VerifierReason`:
+The Auditor must respond with exactly one of:
 
-| `VerifierReason` | Meaning |
+- `ok` — winner stands (unanimous and majority modes only)
+- `revised:<command>` — winner replaced by a freshly-written command
+- `swap:<cluster_id>` — winner replaced by a dissenter's cluster (majority and tied modes only)
+
+Malformed responses (e.g., `ok` in tied mode, unparseable output) trigger a single retry. Persistent failure falls back to `CONSENSUS_FAILED`.
+
+The Auditor emits `TRIBUNAL_AUDITOR_STARTED` before the call and `TRIBUNAL_AUDITOR_COMPLETED` after, carrying an `AuditorReason`:
+
+| `AuditorReason` | Meaning |
 |---|---|
-| `ok` | Verifier returned `"ok"` — command approved as-is |
-| `revised` | Verifier returned a different command — revision adopted |
-| `empty_response` | Verifier returned nothing — raises `TribunalVerifierFailedError` |
-| `no_valid_revision` | Verifier returned non-ok but revision equals original or is empty — raises `TribunalVerifierFailedError` |
-| `verifier_error` | Verifier call threw an exception — raises `TribunalVerifierFailedError` |
+| `ok` | Auditor returned `ok` — winner approved as-is |
+| `revised` | Auditor returned a revised command — treated as `VERIFICATION_FAILED` outcome |
+| `revised_from_dissent` | Auditor revised after seeing a dissenting cluster (majority/tied mode) |
+| `swapped_to_dissenter` | Auditor swapped to a dissenter's cluster — treated as `VERIFIED` |
+| `whitelist_violation` | Candidate violated the user's command whitelist; Auditor rejected |
+| `empty_response` | Auditor returned nothing — raises `TribunalAuditorFailedError` |
+| `no_valid_revision` | Auditor produced a non-`ok` response whose revision equals the original or is empty |
+| `auditor_error` | Auditor call threw an exception — raises `TribunalAuditorFailedError` |
 
-Verifier failures raise `TribunalVerifierFailedError` and halt command execution.
+Auditor failures raise `TribunalAuditorFailedError` and halt command execution.
 
 **Stage 4 — Outcome**
 
-The `CommandGenerationResult` carries `original_command`, `final_command`, `outcome`, `candidates`, `vote_winner`, `vote_score`, `verifier_passed`, and optionally `verifier_revision`.
+The `CommandGenerationResult` carries `request`, `guidelines`, `final_command`, `outcome`, `candidates`, `vote_winner`, `vote_score`, `vote_breakdown`, `auditor_passed`, `auditor_revision`, and `auditor_reason`. There is **no `original_command` field** — intent is the only caller-facing contract.
 
-Successful outcomes carried on `CommandGenerationResult.outcome`:
+Successful and terminal outcomes carried on `CommandGenerationResult.outcome`:
 
 | `CommandGenerationOutcome` | Condition |
 |---|---|
 | `CONSENSUS` | Verifier disabled — `final_command` is the vote winner |
-| `VERIFIED` | Verifier enabled and approved the vote winner |
-| `VERIFICATION_FAILED` | Verifier enabled and produced a revision — `final_command` is the verifier's output |
+| `VERIFIED` | Verifier enabled and accepted the winner (`ok`) or swapped to a dissenter (`swapped_to_dissenter`) |
+| `VERIFICATION_FAILED` | Verifier enabled and produced a revision — `final_command` is the Auditor's output |
+| `CONSENSUS_FAILED` | No two members agreed, or post-safety validation rejected the final command — `final_command` is `None` and `TribunalConsensusFailedError` is raised |
 
-There is no fallback outcome. Sage never proposes a command, so a Tribunal that cannot reach a successful outcome has no candidate to fall back to — the tool call fails with one of the typed terminal events below.
+There is no silent fallback. Sage never proposes a command, so a Tribunal that cannot reach a successful outcome has no candidate to fall back to — `CONSENSUS_FAILED` surfaces the full candidate breakdown to Sage (via `TribunalConsensusFailedError`) so Sage can decide whether to rephrase, clarify, or abort per its persona. All other error classes raise the typed terminal events below.
 
-On success, `TRIBUNAL_SESSION_COMPLETED` is emitted and `agent_tool_loop` injects `final_command` into the tool args before dispatching to `AIToolService.execute_tool_call`.
+On success, `TRIBUNAL_SESSION_COMPLETED` is emitted and `agent_tool_loop` builds `ExecutorCommandArgs` with `final_command` before dispatching to `AIToolService.execute_tool_call`.
 
 #### Terminal Failure States
 
@@ -832,7 +863,9 @@ Each scenario is its own event type — the event type is the discriminator, not
 | `TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE` | `TribunalProviderUnavailableError` | LLM provider failed to initialize (bad credentials, unsupported provider) |
 | `TRIBUNAL_SESSION_SYSTEM_ERROR` | `TribunalSystemError` | All generation passes failed with system-class errors (401, connection refused, DNS, SSL) |
 | `TRIBUNAL_SESSION_GENERATION_FAILED` | `TribunalGenerationFailedError` | All generation passes failed for non-system reasons (refusals, hallucinations, rate limits) |
-| `TRIBUNAL_SESSION_VERIFIER_FAILED` | `TribunalVerifierFailedError` | Verifier returned empty, produced no valid revision, or threw — no trusted command produced |
+| `TRIBUNAL_VOTING_CONSENSUS_FAILED` | `TribunalConsensusFailedError` | No two members agreed on any candidate, or post-vote safety validation rejected the final command — Sage receives the full breakdown and chooses rephrase / clarify / abort |
+| `TRIBUNAL_VOTING_DISSENT_RECORDED` | — (informational) | One event per losing cluster; carries losing command, dissenting member IDs, winner, vote breakdown |
+| `TRIBUNAL_SESSION_VERIFIER_FAILED` | `TribunalAuditorFailedError` | Auditor returned empty, produced no valid revision, or threw — no trusted command produced |
 
 #### Tribunal Error Handling
 

@@ -54,33 +54,14 @@ export const ChatSSEHandlersMixin = {
             this.handleChatRetry(data);
         });
 
-        this.eventBus.on(EventType.LLM_CHAT_ITERATION_TOOL_CALL_STARTED, (data) => {
-            this.handleToolCallStarted(data);
-        });
-
-        this.eventBus.on(EventType.LLM_CHAT_ITERATION_TOOL_CALL_COMPLETED, (data) => {
-            this.handleToolCallCompleted(data);
-        });
 
         this.eventBus.on(EventType.LLM_CHAT_ITERATION_STOPPED, (data) => {
             this.handleChatStopped(data);
         });
 
-        // IMPORTANT: Do NOT subscribe to OPERATOR_NETWORK_PORT_CHECK_REQUESTED for UI
-        // indicator creation. STARTED owns the indicator lifecycle.
-        //
-        // OPERATOR_NETWORK_PORT_CHECK_REQUESTED serves two distinct roles:
-        //   1. MCP tool-call event dispatched to the operator (g8eo).
-        //   2. A frontend notification emitted by agent_sse when the LLM's TOOL_CALL
-        //      stream chunk is processed (see agent_sse.py).
-        //
-        // Although the execution_id on REQUESTED now matches the one used by
-        // port_service for STARTED/COMPLETED/FAILED (both originate from
-        // orchestrate_tool_execution's generate_command_execution_id), the TOOL_CALL
-        // chunk is yielded by execute_turn_tool_calls AFTER it awaits the full
-        // port-check, so REQUESTED arrives AFTER STARTED/COMPLETED. An indicator
-        // created from REQUESTED would therefore never be completed.
-        // Only STARTED/COMPLETED/FAILED drive the UI indicator lifecycle.
+        // STARTED/COMPLETED/FAILED emitted by port_service drive the indicator
+        // lifecycle for this tool. agent_sse no longer emits a parallel generic
+        // tool-call event for operator-gated tools.
         this.eventBus.on(EventType.OPERATOR_NETWORK_PORT_CHECK_STARTED, (data) => {
             this.handleNetworkPortCheckIndicator(data);
         });
@@ -91,6 +72,43 @@ export const ChatSSEHandlersMixin = {
 
         this.eventBus.on(EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED, (data) => {
             this.handleNetworkPortCheckFailed(data);
+        });
+
+        // Universal tool handlers for native lifecycle events
+        this.eventBus.on(EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED, (data) => {
+            this.handleUniversalToolStarted(data, 'web-search', data.display_label || 'Searching web', data.display_icon, data.category);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_WEB_SEARCH_COMPLETED, (data) => {
+            this.handleUniversalToolCompleted(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_WEB_SEARCH_FAILED, (data) => {
+            this.handleUniversalToolFailed(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_INVESTIGATION_QUERY_REQUESTED, (data) => {
+            this.handleUniversalToolStarted(data, 'investigation-query', data.display_label || 'Querying investigation', data.display_icon, data.category);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_INVESTIGATION_QUERY_COMPLETED, (data) => {
+            this.handleUniversalToolCompleted(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_INVESTIGATION_QUERY_FAILED, (data) => {
+            this.handleUniversalToolFailed(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_COMMAND_CONSTRAINTS_REQUESTED, (data) => {
+            this.handleUniversalToolStarted(data, 'command-constraints', data.display_label || 'Checking constraints', data.display_icon, data.category);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_COMMAND_CONSTRAINTS_COMPLETED, (data) => {
+            this.handleUniversalToolCompleted(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_COMMAND_CONSTRAINTS_FAILED, (data) => {
+            this.handleUniversalToolFailed(data);
         });
 
         this.eventBus.on(EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED, (data) => {
@@ -359,6 +377,15 @@ export const ChatSSEHandlersMixin = {
             this.thinkingManager.hideThinkingIndicator(data.web_session_id);
         }
 
+        // Hide processing indicator when text streaming starts
+        if (this._processingIndicators && this.anchoredTerminal) {
+            const processingIndicatorId = this._processingIndicators.get(data.web_session_id);
+            if (processingIndicatorId) {
+                this.anchoredTerminal.completeActivityIndicator(processingIndicatorId);
+                this._processingIndicators.delete(data.web_session_id);
+            }
+        }
+
         this.streamingActive = true;
         this.showAIStopButton();
 
@@ -426,15 +453,34 @@ export const ChatSSEHandlersMixin = {
             this.anchoredTerminal.sealStreamingResponse(webSessionId);
             this.streamingActive = false;
         }
+
+        // Show processing indicator after tool execution (turn > 0), before next AI response
+        // Only show on subsequent turns to indicate processing of tool results
+        const turnNumber = data.turn || 0;
+        if (turnNumber > 0 && this.anchoredTerminal) {
+            const processingIndicatorId = `processing-${webSessionId}-${turnNumber}`;
+            if (!this._processingIndicators) this._processingIndicators = new Map();
+            this._processingIndicators.set(webSessionId, processingIndicatorId);
+
+            this.anchoredTerminal.appendActivityIndicator({
+                id: processingIndicatorId,
+                icon: 'developer_board',
+                label: 'Reviewing results',
+                category: ToolDisplayCategory.GENERAL,
+            });
+        }
     },
 
     handleTribunalStarted(data) {
         if (!this.anchoredTerminal) return;
 
-        const widgetId = `tribunal-${data.web_session_id}-${Date.now()}`;
+        const correlationId = data.correlation_id;
+        const widgetId = correlationId || `tribunal-${data.web_session_id}-${Date.now()}`;
 
         if (!this._tribunalWidgetIds) this._tribunalWidgetIds = new Map();
-        this._tribunalWidgetIds.set(data.web_session_id, widgetId);
+        // Use correlation_id as primary key if available, otherwise web_session_id
+        const key = correlationId || data.web_session_id;
+        this._tribunalWidgetIds.set(key, widgetId);
 
         this.anchoredTerminal.showTribunal({
             id: widgetId,
@@ -443,6 +489,7 @@ export const ChatSSEHandlersMixin = {
             request: data.request,
             guidelines: data.guidelines,
             webSessionId: data.web_session_id,
+            correlationId: correlationId,
         });
 
         const webSessionId = data.web_session_id;
@@ -455,17 +502,24 @@ export const ChatSSEHandlersMixin = {
         }
     },
 
+    _getTribunalWidgetId(data) {
+        if (!this._tribunalWidgetIds) return null;
+        // 1. Try correlation_id (deterministic match)
+        if (data.correlation_id) {
+            const id = this._tribunalWidgetIds.get(data.correlation_id);
+            if (id) return id;
+        }
+        // 2. Fallback to web_session_id (concurrency hazard)
+        return this._tribunalWidgetIds.get(data.web_session_id);
+    },
+
     handleTribunalPassCompleted(data) {
         console.log('[TRIBUNAL] Pass completed event received:', data);
-        if (!this.anchoredTerminal || !this._tribunalWidgetIds) {
-            console.log('[TRIBUNAL] Missing anchoredTerminal or _tribunalWidgetIds');
-            return;
-        }
+        if (!this.anchoredTerminal) return;
 
-        const widgetId = this._tribunalWidgetIds.get(data.web_session_id);
+        const widgetId = this._getTribunalWidgetId(data);
         if (!widgetId) {
-            console.log('[TRIBUNAL] No widget ID found for web_session_id:', data.web_session_id);
-            console.log('[TRIBUNAL] Available widget IDs:', Array.from(this._tribunalWidgetIds.entries()));
+            console.log('[TRIBUNAL] No widget ID found for event:', data.correlation_id || data.web_session_id);
             return;
         }
 
@@ -478,27 +532,27 @@ export const ChatSSEHandlersMixin = {
     },
 
     handleTribunalVotingCompleted(data) {
-        if (!this.anchoredTerminal || !this._tribunalWidgetIds) return;
+        if (!this.anchoredTerminal) return;
 
-        const widgetId = this._tribunalWidgetIds.get(data.web_session_id);
+        const widgetId = this._getTribunalWidgetId(data);
         if (!widgetId) return;
 
         this.anchoredTerminal.updateTribunalStatus(widgetId, 'Verifying command\u2026');
     },
 
     handleTribunalAuditorStarted(data) {
-        if (!this.anchoredTerminal || !this._tribunalWidgetIds) return;
+        if (!this.anchoredTerminal) return;
 
-        const widgetId = this._tribunalWidgetIds.get(data.web_session_id);
+        const widgetId = this._getTribunalWidgetId(data);
         if (!widgetId) return;
 
         this.anchoredTerminal.updateTribunalStatus(widgetId, 'Verifying\u2026');
     },
 
     handleTribunalAuditorCompleted(data) {
-        if (!this.anchoredTerminal || !this._tribunalWidgetIds) return;
+        if (!this.anchoredTerminal) return;
 
-        const widgetId = this._tribunalWidgetIds.get(data.web_session_id);
+        const widgetId = this._getTribunalWidgetId(data);
         if (!widgetId) return;
 
         const label = data.passed
@@ -508,9 +562,9 @@ export const ChatSSEHandlersMixin = {
     },
 
     handleTribunalCompleted(data) {
-        if (!this.anchoredTerminal || !this._tribunalWidgetIds) return;
+        if (!this.anchoredTerminal) return;
 
-        const widgetId = this._tribunalWidgetIds.get(data.web_session_id);
+        const widgetId = this._getTribunalWidgetId(data);
         if (!widgetId) return;
 
         this.anchoredTerminal.completeTribunal({
@@ -519,13 +573,14 @@ export const ChatSSEHandlersMixin = {
             outcome: data.outcome,
         });
 
+        if (data.correlation_id) this._tribunalWidgetIds.delete(data.correlation_id);
         this._tribunalWidgetIds.delete(data.web_session_id);
     },
 
     handleTribunalSessionFailed(eventType, data) {
-        if (!this.anchoredTerminal || !this._tribunalWidgetIds) return;
+        if (!this.anchoredTerminal) return;
 
-        const widgetId = this._tribunalWidgetIds.get(data.web_session_id);
+        const widgetId = this._getTribunalWidgetId(data);
         if (!widgetId) return;
 
         this.anchoredTerminal.failTribunal({
@@ -533,6 +588,7 @@ export const ChatSSEHandlersMixin = {
             eventType,
         });
 
+        if (data.correlation_id) this._tribunalWidgetIds.delete(data.correlation_id);
         this._tribunalWidgetIds.delete(data.web_session_id);
     },
 
@@ -541,6 +597,15 @@ export const ChatSSEHandlersMixin = {
         if (!this.shouldProcessEvent(data)) return;
 
         const webSessionId = data.web_session_id;
+
+        // Clear processing indicator if it exists
+        if (this._processingIndicators && this.anchoredTerminal) {
+            const processingIndicatorId = this._processingIndicators.get(webSessionId);
+            if (processingIndicatorId) {
+                this.anchoredTerminal.completeActivityIndicator(processingIndicatorId);
+                this._processingIndicators.delete(webSessionId);
+            }
+        }
 
         this.anchoredTerminal?.hideWaitingIndicator();
         this.anchoredTerminal?.clearActivityIndicators();
@@ -570,6 +635,15 @@ export const ChatSSEHandlersMixin = {
         if (!this.shouldProcessEvent(data)) return;
         const webSessionId = data.web_session_id;
 
+        // Clear processing indicator if it exists
+        if (this._processingIndicators && this.anchoredTerminal) {
+            const processingIndicatorId = this._processingIndicators.get(webSessionId);
+            if (processingIndicatorId) {
+                this.anchoredTerminal.completeActivityIndicator(processingIndicatorId);
+                this._processingIndicators.delete(webSessionId);
+            }
+        }
+
         if (this.anchoredTerminal) {
             this.anchoredTerminal.hideWaitingIndicator();
             if (webSessionId) {
@@ -591,6 +665,15 @@ export const ChatSSEHandlersMixin = {
     handleChatError(data = {}) {
         if (!this.shouldProcessEvent(data)) return;
         const webSessionId = data.web_session_id;
+
+        // Clear processing indicator if it exists
+        if (this._processingIndicators && this.anchoredTerminal) {
+            const processingIndicatorId = this._processingIndicators.get(webSessionId);
+            if (processingIndicatorId) {
+                this.anchoredTerminal.completeActivityIndicator(processingIndicatorId);
+                this._processingIndicators.delete(webSessionId);
+            }
+        }
 
         if (this.anchoredTerminal && webSessionId) {
             const entry = document.getElementById(`ai-response-${webSessionId}`);
@@ -643,43 +726,45 @@ export const ChatSSEHandlersMixin = {
         this.anchoredTerminal.appendSystemMessage(message);
     },
 
-    handleToolCallStarted(data) {
+    handleUniversalToolStarted(data, toolName, displayLabel, icon, category) {
         if (!this.shouldProcessEvent(data)) return;
         if (!this.anchoredTerminal) return;
 
         const executionId = data.execution_id;
         if (!executionId) return;
 
-        // check_port_status has a dedicated sidecar indicator driven by
-        // OPERATOR_NETWORK_PORT_CHECK_STARTED/COMPLETED/FAILED from port_service
-        // (which fires in the correct order relative to this generic STARTED event).
-        const toolName = data.tool_name;
-        if (toolName === 'check_port_status') {
-            return;
-        }
-
-        const indicatorId = `tool-${executionId}`;
-        if (!this._toolCallIndicators) this._toolCallIndicators = new Map();
-        this._toolCallIndicators.set(executionId, indicatorId);
+        const indicatorId = `${toolName}-${executionId}`;
+        if (!this._universalToolIndicators) this._universalToolIndicators = new Map();
+        this._universalToolIndicators.set(executionId, indicatorId);
 
         this.anchoredTerminal.appendActivityIndicator({
             id: indicatorId,
-            icon: data.display_icon || 'tool',
-            label: data.display_label || 'Processing',
-            detail: data.display_detail,
-            category: data.category,
+            icon: icon || 'tool',
+            label: displayLabel || 'Processing',
+            category: category || ToolDisplayCategory.GENERAL,
         });
     },
 
-    handleToolCallCompleted(data) {
+    handleUniversalToolCompleted(data) {
         if (!this.shouldProcessEvent(data)) return;
-        if (!this.anchoredTerminal || !this._toolCallIndicators) return;
+        if (!this.anchoredTerminal || !this._universalToolIndicators) return;
 
-        const indicatorId = this._toolCallIndicators.get(data.execution_id);
+        const indicatorId = this._universalToolIndicators.get(data.execution_id);
         if (!indicatorId) return;
 
         this.anchoredTerminal.completeActivityIndicator(indicatorId);
-        this._toolCallIndicators.delete(data.execution_id);
+        this._universalToolIndicators.delete(data.execution_id);
+    },
+
+    handleUniversalToolFailed(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        if (!this.anchoredTerminal || !this._universalToolIndicators) return;
+
+        const indicatorId = this._universalToolIndicators.get(data.execution_id);
+        if (!indicatorId) return;
+
+        this.anchoredTerminal.completeActivityIndicator(indicatorId);
+        this._universalToolIndicators.delete(data.execution_id);
     },
 
     handleCommandCancelled(data) {
@@ -692,7 +777,14 @@ export const ChatSSEHandlersMixin = {
         if (data.execution_id && this.anchoredTerminal) {
             const execId = data.execution_id;
             this.anchoredTerminal.completeActivityIndicator(`fn-${execId}`);
-            this.anchoredTerminal.completeActivityIndicator(`tool-${execId}`);
+            // Clear universal tool indicators
+            if (this._universalToolIndicators) {
+                const indicatorId = this._universalToolIndicators.get(execId);
+                if (indicatorId) {
+                    this.anchoredTerminal.completeActivityIndicator(indicatorId);
+                    this._universalToolIndicators.delete(execId);
+                }
+            }
         }
     },
 

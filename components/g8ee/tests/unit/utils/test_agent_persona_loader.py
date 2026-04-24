@@ -56,6 +56,22 @@ class TestGetAgentPersona:
         nemesis = get_tribunal_member("nemesis")
         assert nemesis.agent_id == "nemesis"
 
+    def test_tribunal_members_have_explicit_output_contract(self):
+        """Test that Tribunal members have explicit output_contract field."""
+        for member_id in ("axiom", "concord", "variance", "pragma", "nemesis"):
+            member = get_tribunal_member(member_id)
+            assert member.output_contract is not None, f"{member_id} should have output_contract field"
+            assert "shell command string" in member.output_contract
+            assert "nothing else" in member.output_contract
+
+    def test_tribunal_member_system_prompt_includes_output_contract(self):
+        """Test that Tribunal member system prompts include output_contract from explicit field."""
+        axiom = get_tribunal_member("axiom")
+        system_prompt = axiom.get_system_prompt()
+        assert "<output_contract>" in system_prompt
+        assert "shell command string" in system_prompt
+        assert "nothing else" in system_prompt
+
     def test_get_invalid_agent_raises_keyerror(self):
         """Test that requesting an invalid agent ID raises KeyError."""
         with pytest.raises(KeyError) as exc_info:
@@ -324,4 +340,31 @@ class TestAgentPersonaValidation:
         }
         persona = AgentPersona.model_validate(data)
         assert isinstance(persona.autonomy, str) and persona.autonomy
+
+
+class TestCentralizedXmlFormatting:
+    """Tests for centralized XML formatting methods in AgentPersona."""
+
+    def test_format_xml_tag_enforces_structural_boundaries(self):
+        """format_xml_tag enforces the canonical XML scaffolding pattern."""
+        result = AgentPersona.format_xml_tag("tag_name", "content")
+        assert result == "<tag_name>\ncontent\n</tag_name>"
+
+    def test_format_xml_tag_handles_multiline_content(self):
+        """format_xml_tag correctly handles multiline content."""
+        content = "line1\nline2\nline3"
+        result = AgentPersona.format_xml_tag("tag", content)
+        assert result == "<tag>\nline1\nline2\nline3\n</tag>"
+
+    def test_format_xml_tag_handles_empty_content(self):
+        """format_xml_tag correctly handles empty content."""
+        result = AgentPersona.format_xml_tag("tag", "")
+        assert result == "<tag>\n\n</tag>"
+
+    def test_format_xml_tag_is_static_method(self):
+        """format_xml_tag is a static method that can be called without instance."""
+        result = AgentPersona.format_xml_tag("test", "value")
+        assert "<test>" in result
+        assert "value" in result
+        assert "</test>" in result
 

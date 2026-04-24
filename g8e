@@ -69,11 +69,14 @@ _test_runner_for() {
 
 _exec_in_test_runner() {
     local runner="$1"; shift
-    _ensure_container "$runner" "$TOP${SUB:+ $SUB}"
+    local env_args=()
+    if [[ -n "$OPERATOR_SESSION_ID" ]]; then
+        env_args=(-e "OPERATOR_SESSION_ID=$OPERATOR_SESSION_ID")
+    fi
     if [ -t 0 ] && [ -t 1 ]; then
-        exec docker exec -it "$runner" "$@"
+        exec docker compose run --rm ${env_args[@]+"${env_args[@]}"} -it "$runner" "$@"
     else
-        exec docker exec -i "$runner" "$@"
+        exec docker compose run --rm ${env_args[@]+"${env_args[@]}"} "$runner" "$@"
     fi
 }
 
@@ -540,9 +543,8 @@ case "$TOP" in
 
             init)
                 _banner "operator init"
-                _ensure_container "$TR_G8EO" "operator init"
                 _version="$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null | tr -d '[:space:]' || echo 'v0.0.0')"
-                docker exec "$TR_G8EO" bash -c "
+                docker compose run --rm "$TR_G8EO" bash -c "
                     set -e
                     cd /app/components/g8eo
                     mkdir -p certs
@@ -775,11 +777,10 @@ case "$TOP" in
         [[ -n "${TEST_WEB_SEARCH_LOCATION:-}" ]]        && _TEST_ENV_ARGS+=(-e "TEST_WEB_SEARCH_LOCATION=$TEST_WEB_SEARCH_LOCATION")
         [[ -n "${DEVICE_TOKEN:-}" ]]                    && _TEST_ENV_ARGS+=(-e "DEVICE_TOKEN=$DEVICE_TOKEN")
 
-        _ensure_container "$_TEST_RUNNER" "test $_TEST_COMPONENT"
         if [ -t 0 ] && [ -t 1 ]; then
-            exec docker exec -it "${_TEST_ENV_ARGS[@]}" "$_TEST_RUNNER" /app/scripts/testing/run_tests.sh "${_TEST_PASSTHROUGH[@]}"
+            exec docker compose run --rm ${_TEST_ENV_ARGS[@]+"${_TEST_ENV_ARGS[@]}"} -it "$_TEST_RUNNER" /app/scripts/testing/run_tests.sh "${_TEST_PASSTHROUGH[@]}"
         else
-            exec docker exec -i "${_TEST_ENV_ARGS[@]}" "$_TEST_RUNNER" /app/scripts/testing/run_tests.sh "${_TEST_PASSTHROUGH[@]}"
+            exec docker compose run --rm ${_TEST_ENV_ARGS[@]+"${_TEST_ENV_ARGS[@]}"} "$_TEST_RUNNER" /app/scripts/testing/run_tests.sh "${_TEST_PASSTHROUGH[@]}"
         fi ;;
 
     # ------------------------------------------------------------------
@@ -872,9 +873,103 @@ case "$TOP" in
     # ------------------------------------------------------------------
     demo)
         DEMO_DIR="$SCRIPT_DIR/demo"
+        PROFILES_DIR="$DEMO_DIR/profiles"
         if [[ ! -d "$DEMO_DIR" ]]; then
             echo "[g8e] demo directory not found: $DEMO_DIR" >&2
             exit 1
+        fi
+
+        # Profile management subcommands
+        if [[ "$SUB" == "profile" ]]; then
+            mkdir -p "$PROFILES_DIR"
+            _PROF_CMD="${3:-}"
+            _PROF_NAME="${4:-}"
+            _ACTIVE_FILE="$PROFILES_DIR/.active"
+
+            # Helper to perform actions on demo/ while excluding profiles/
+            _demo_items() {
+                find "$DEMO_DIR" -maxdepth 1 ! -name "profiles" ! -name "." ! -name ".."
+            }
+
+            case "$_PROF_CMD" in
+                list)
+                    _banner "demo profile list"
+                    _active=$(cat "$_ACTIVE_FILE" 2>/dev/null || echo "default")
+                    echo "Available profiles:"
+                    echo "  * default (active: $([[ "$_active" == "default" ]] && echo "yes" || echo "no"))"
+                    for d in "$PROFILES_DIR"/*/; do
+                        [[ -d "$d" ]] || continue
+                        p=$(basename "$d")
+                        [[ "$p" == ".default_bak" ]] && continue
+                        echo "  * $p (active: $([[ "$_active" == "$p" ]] && echo "yes" || echo "no"))"
+                    done
+                    exit 0 ;;
+                create)
+                    [[ -z "$_PROF_NAME" ]] && { echo "[g8e] usage: ./g8e demo profile create <name>"; exit 1; }
+                    [[ "$_PROF_NAME" == "default" ]] && { echo "[g8e] 'default' is a reserved profile name"; exit 1; }
+                    _banner "demo profile create $_PROF_NAME"
+                    if [[ -d "$PROFILES_DIR/$_PROF_NAME" ]]; then
+                        echo "[g8e] profile '$_PROF_NAME' already exists" >&2
+                        exit 1
+                    fi
+                    mkdir -p "$PROFILES_DIR/$_PROF_NAME"
+                    _demo_items | xargs -I {} cp -a {} "$PROFILES_DIR/$_PROF_NAME/"
+                    echo "[g8e] profile '$_PROF_NAME' created from current demo/"
+                    exit 0 ;;
+                switch)
+                    [[ -z "$_PROF_NAME" ]] && { echo "[g8e] usage: ./g8e demo profile switch <name>"; exit 1; }
+                    _banner "demo profile switch $_PROF_NAME"
+                    
+                    # Check if demo is running
+                    if docker ps --format '{{.Names}}' | grep -q "^web-node-"; then
+                        echo "[g8e] demo fleet is currently running. Stop it first: ./g8e demo down" >&2
+                        exit 1
+                    fi
+
+                    _current_active=$(cat "$_ACTIVE_FILE" 2>/dev/null || echo "default")
+                    [[ "$_current_active" == "$_PROF_NAME" ]] && { echo "[g8e] profile '$_PROF_NAME' is already active"; exit 0; }
+
+                    if [[ "$_PROF_NAME" != "default" && ! -d "$PROFILES_DIR/$_PROF_NAME" ]]; then
+                        echo "[g8e] profile '$_PROF_NAME' not found" >&2
+                        exit 1
+                    fi
+
+                    # Save current demo/ to its profile directory
+                    if [[ "$_current_active" == "default" ]]; then
+                        mkdir -p "$PROFILES_DIR/.default_bak"
+                        rm -rf "$PROFILES_DIR/.default_bak"/*
+                        _demo_items | xargs -I {} cp -a {} "$PROFILES_DIR/.default_bak/"
+                    else
+                        rm -rf "$PROFILES_DIR/$_current_active"
+                        mkdir -p "$PROFILES_DIR/$_current_active"
+                        _demo_items | xargs -I {} cp -a {} "$PROFILES_DIR/$_current_active/"
+                    fi
+
+                    # Swap in the new profile
+                    _demo_items | xargs rm -rf
+                    if [[ "$_PROF_NAME" == "default" ]]; then
+                        cp -a "$PROFILES_DIR/.default_bak"/. "$DEMO_DIR/"
+                    else
+                        cp -a "$PROFILES_DIR/$_PROF_NAME"/. "$DEMO_DIR/"
+                    fi
+                    
+                    echo "$_PROF_NAME" > "$_ACTIVE_FILE"
+                    echo "[g8e] switched to profile: $_PROF_NAME"
+                    exit 0 ;;
+                delete)
+                    [[ -z "$_PROF_NAME" ]] && { echo "[g8e] usage: ./g8e demo profile delete <name>"; exit 1; }
+                    [[ "$_PROF_NAME" == "default" ]] && { echo "[g8e] cannot delete default profile"; exit 1; }
+                    _active=$(cat "$_ACTIVE_FILE" 2>/dev/null || echo "default")
+                    [[ "$_active" == "$_PROF_NAME" ]] && { echo "[g8e] cannot delete active profile"; exit 1; }
+                    _banner "demo profile delete $_PROF_NAME"
+                    rm -rf "$PROFILES_DIR/$_PROF_NAME"
+                    echo "[g8e] profile '$_PROF_NAME' deleted"
+                    exit 0 ;;
+                *)
+                    echo "[g8e] unknown demo profile subcommand: '$_PROF_CMD'" >&2
+                    echo "  Valid: list, create, switch, delete" >&2
+                    exit 1 ;;
+            esac
         fi
         # Parse -d flag for device token shorthand
         demo_args=("${@:3}")

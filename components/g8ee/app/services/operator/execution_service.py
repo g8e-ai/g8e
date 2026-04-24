@@ -17,6 +17,7 @@ Handles g8eo execution dispatch, validation, security checks, operator resolutio
 and result assembly.
 """
 
+import asyncio
 import logging
 
 from app.constants.events import EventType
@@ -31,7 +32,6 @@ from app.services.protocols import (
     AIResponseAnalyzerProtocol,
     ApprovalServiceProtocol,
     EventServiceProtocol,
-    ExecutionRegistryProtocol,
     ExecutionServiceProtocol,
     InvestigationServiceProtocol,
     OperatorDataServiceProtocol,
@@ -39,7 +39,7 @@ from app.services.protocols import (
 )
 
 from app.models.tool_results import CommandExecutionResult
-from app.models.command_request_payloads import CommandCancelRequestPayload
+from app.models.command_request_payloads import CommandCancelRequestPayload, CommandRequestPayload
 from app.models.internal_api import DirectCommandRequest
 from app.models.operators import (
     CancelCommandResult,
@@ -48,8 +48,7 @@ from app.models.operators import (
     OperatorDocument,
     TargetSystem,
 )
-from app.models.pubsub_messages import G8eMessage
-from app.services.mcp.adapter import build_tool_call_request
+from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope, ExecutionResultsPayload
 from app.models.tool_results import CommandInternalResult
 from app.models.http_context import G8eHttpContext
 from app.models.settings import G8eePlatformSettings
@@ -63,7 +62,6 @@ class OperatorExecutionService(ExecutionServiceProtocol):
     def __init__(
         self,
         pubsub_service: PubSubServiceProtocol,
-        execution_registry: ExecutionRegistryProtocol,
         approval_service: ApprovalServiceProtocol,
         g8ed_event_service: EventServiceProtocol,
         settings: G8eePlatformSettings,
@@ -72,7 +70,6 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         investigation_service: InvestigationServiceProtocol,
     ) -> None:
         self.pubsub_service = pubsub_service
-        self.execution_registry = execution_registry
         self.approval_service = approval_service
         self.g8ed_event_service = g8ed_event_service
         self._settings = settings
@@ -146,6 +143,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         self,
         operator_documents: list[OperatorDocument],
         target_operator: str | None,
+        tool_name: str | None = None,
     ) -> OperatorDocument:
         if not operator_documents:
             raise BusinessLogicError("No operators bound to this session", component="g8ee")
@@ -159,11 +157,26 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                 f"({op.id}) - {op.operator_type}"
                 for i, op in enumerate(operator_documents)
             ]
-            raise ValidationError(
+            error_msg = (
                 f"Multiple operators ({len(operator_documents)}) are bound to this session. "
-                f"You MUST specify either target_operator (single host: operator_id, hostname, or index) "
-                f"or target_operators (list of hosts for batch execution under one approval).\n"
-                f"Available operators:\n" + "\n".join(available),
+            )
+            
+            if tool_name and "command" in tool_name.lower():
+                error_msg += (
+                    f"You MUST specify either target_operator (single host: operator_id, hostname, or index) "
+                    f"or target_operators (list of hosts for batch execution under one approval).\n"
+                )
+            else:
+                error_msg += (
+                    f"This tool only supports single-target execution. "
+                    f"You MUST specify target_operator (operator_id or hostname).\n"
+                    f"Note: target_operators (batch execution) is only supported by run_commands_with_operator.\n"
+                )
+            
+            error_msg += f"Available operators:\n" + "\n".join(available)
+            
+            raise ValidationError(
+                error_msg,
                 component="g8ee",
             )
 
@@ -255,7 +268,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         g8e_message: G8eMessage,
         g8e_context: G8eHttpContext,
         timeout_seconds: int = 60,
-    ) -> CommandInternalResult:
+    ) -> tuple[CommandInternalResult, G8eoResultEnvelope | None]:
         """Generic execution entry point for any G8eMessage."""
         return await self.dispatch_command(g8e_message, g8e_context, timeout_seconds)
 
@@ -264,9 +277,20 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         g8e_message: G8eMessage,
         g8e_context: G8eHttpContext,
         timeout_seconds: int = 60,
-    ) -> CommandInternalResult:
+    ) -> tuple[CommandInternalResult, G8eoResultEnvelope | None]:
         """Authors authoritative execution for any G8eMessage."""
-        execution_id = g8e_context.execution_id
+        # Correlation key: always the per-message execution_id that g8eo echoes back
+        # in the result payload. g8e_context.execution_id is the HTTP request id and
+        # is NOT the same as the per-operator/per-message execution_id that the
+        # pubsub result dispatcher uses to complete Futures. See the docstring on
+        # G8eoResultEnvelope.id in app/models/pubsub_messages.py.
+        payload = g8e_message.payload
+        execution_id = getattr(payload, "execution_id", None) or g8e_message.id
+        if not execution_id:
+            raise ValidationError(
+                "g8e_message must carry an execution_id (payload.execution_id or message.id)",
+                component="g8ee",
+            )
         operator_id = g8e_message.operator_id
         operator_session_id = g8e_message.operator_session_id
 
@@ -279,9 +303,9 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                 status=ExecutionStatus.FAILED,
                 error="Pub/sub pattern subscription not ready",
                 error_type=CommandErrorType.PUBSUB_SUBSCRIPTION_NOT_READY,
-            )
+            ), None
 
-        self.execution_registry.allocate(execution_id)
+        future = self.pubsub_service.register_future(execution_id)
         await self.pubsub_service.register_operator_session(operator_id, operator_session_id)
 
         subscribers = await self.pubsub_service.publish_command(
@@ -294,39 +318,37 @@ class OperatorExecutionService(ExecutionServiceProtocol):
             channel = f"cmd:{operator_id}:{operator_session_id}"
             error_msg = f"No Operator listening on command channel '{channel}'"
             logger.error("[NO-SUBSCRIBERS] %s", error_msg, extra={"operator_id": operator_id, "operator_session_id": operator_session_id, "channel": channel})
-            self.execution_registry.release(execution_id)
+            self.pubsub_service.release_future(execution_id)
             return CommandInternalResult(
                 execution_id=execution_id,
                 status=ExecutionStatus.FAILED,
                 error=error_msg,
                 error_type=CommandErrorType.NO_OPERATORS_AVAILABLE,
-            )
+            ), None
 
-        completed = await self.execution_registry.wait(execution_id, timeout=timeout_seconds)
-
-        if not completed:
-            self.execution_registry.release(execution_id)
+        try:
+            envelope = await asyncio.wait_for(future, timeout=timeout_seconds)
+        except (asyncio.TimeoutError, TimeoutError):
+            self.pubsub_service.release_future(execution_id)
             return CommandInternalResult(
                 execution_id=execution_id,
                 status=ExecutionStatus.TIMEOUT,
                 error=f"Execution timed out after {timeout_seconds}s",
                 error_type=CommandErrorType.COMMAND_TIMEOUT,
-            )
+            ), None
 
-        from app.models.pubsub_messages import G8eoResultEnvelope, ExecutionResultsPayload
-        envelope = self.execution_registry.get_result(execution_id)
-
-        if not isinstance(envelope, G8eoResultEnvelope) or not isinstance(envelope.payload, ExecutionResultsPayload):
-            self.execution_registry.release(execution_id)
+        if not isinstance(envelope.payload, ExecutionResultsPayload):
+            self.pubsub_service.release_future(execution_id)
             return CommandInternalResult(
                 execution_id=execution_id,
                 status=ExecutionStatus.COMPLETED,
                 output="",
-            )
+            ), envelope
 
         payload = envelope.payload
         status = payload.status if payload.status else ExecutionStatus.COMPLETED
 
+        self.pubsub_service.release_future(execution_id)
         return CommandInternalResult(
             execution_id=execution_id,
             status=status,
@@ -337,7 +359,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
             execution_time_seconds=payload.duration_seconds or 0,
             operator_id=envelope.operator_id,
             completed_at=payload.completed_at,
-        )
+        ), envelope
 
     async def cancel_command(
         self,
@@ -386,26 +408,20 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         operator_id = bound.operator_id
         operator_session_id = bound.operator_session_id
 
-        mcp_payload = build_tool_call_request(
-            tool_name="run_commands_with_operator",
-            arguments={
-                "execution_id": execution_id,
-                "command": command,
-            },
-            request_id=execution_id,
-        )
-
         command_data = G8eMessage(
             id=execution_id,
             source_component=ComponentName.G8EE,
-            event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
+            event_type=EventType.OPERATOR_COMMAND_REQUESTED,
             case_id=g8e_context.case_id,
             task_id=AITaskId.DIRECT_COMMAND,
             investigation_id=g8e_context.investigation_id,
             web_session_id=g8e_context.web_session_id,
             operator_session_id=operator_session_id,
             operator_id=operator_id,
-            payload=mcp_payload,
+            payload=CommandRequestPayload(
+                command=command,
+                execution_id=execution_id,
+            ),
         )
 
         subscribers = await self.pubsub_service.publish_command(

@@ -2,7 +2,7 @@ Retrieve git version history for a file from the Operator's Ledger. Only files m
 
 <parameters>
 - file_path: REQUIRED — absolute path
-- limit: default 50 | target_operator: REQUIRED when multiple operators bound
+- limit: default 50 | target_operator: operator_id or hostname — REQUIRED when multiple operators bound (prefer hostname when available)
 </parameters>
 
 <returns>
@@ -14,3 +14,8 @@ Retrieve git version history for a file from the Operator's Ledger. Only files m
 - Need restore points before calling restore_file
 - Debugging when/how a config was changed
 </when_to_use>
+
+<examples>
+<example>User: "What's the history of nginx.conf?" → fetch_file_history(file_path="/etc/nginx/nginx.conf")</example>
+<example>User: "Show me recent changes to app.py" → fetch_file_history(file_path="/app/app.py", limit=10)</example>
+</examples>

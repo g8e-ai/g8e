@@ -87,6 +87,15 @@ def make_agent_inputs(
             user_id=user_id,
         )
 
+    request_settings = G8eeUserSettings(
+        llm=LLMSettings(
+            primary_model="test-model",
+            assistant_model="test-model",
+            assistant_provider="ollama",
+            primary_provider="ollama"
+        )
+    )
+
     if request_settings is None:
         request_settings = G8eeUserSettings(llm=LLMSettings(primary_model="test-model"))
 

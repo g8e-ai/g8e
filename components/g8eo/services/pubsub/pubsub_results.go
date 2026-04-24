@@ -18,12 +18,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"time"
 
 	"github.com/g8e-ai/g8e/components/g8eo/config"
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/models"
-	"github.com/g8e-ai/g8e/components/g8eo/services/mcp"
 	storage "github.com/g8e-ai/g8e/components/g8eo/services/storage"
 )
 
@@ -49,40 +47,35 @@ func NewPubSubResultsService(cfg *config.Config, logger *slog.Logger, client Pub
 	}, nil
 }
 
-func (rr *PubSubResultsService) wrapMCPIfNecessary(msg *models.G8eMessage, originalMsg PubSubCommandMessage, eventType string, payload interface{}) error {
-	rr.logger.Debug("Checking if MCP wrapping is necessary",
-		"original_event_type", originalMsg.EventType,
-		"target_event_type", eventType,
-		"mcp_tools_call", constants.Event.Operator.MCP.ToolsCall)
-
-	if originalMsg.EventType != constants.Event.Operator.MCP.ToolsCall {
-		rr.logger.Debug("Skipping MCP wrapping - not an MCP tools call")
-		return nil
-	}
-
-	rr.logger.Info("MCP wrapping triggered - wrapping result as MCP JSON-RPC response",
-		"original_event_type", originalMsg.EventType,
-		"target_event_type", eventType,
-		"original_msg_id", originalMsg.ID,
-		"original_msg_operator_session_id", originalMsg.OperatorSessionID)
-
-	// If it was an MCP request, we wrap the entire result payload as an MCP JSON-RPC response
-	mcpResp, err := mcp.TranslateResultToMCP(originalMsg.ID, originalMsg.ID, eventType, payload)
+// publishResultEnvelope builds a G8eMessage for a typed result payload,
+// stamps the envelope metadata copied from the originating command, and
+// publishes it on the results channel. All result-publishing paths that carry
+// an originalMsg (command-completed, command-cancelled, file-edit, fs-list)
+// share this helper so none can drift out of sync on API key, task/investigation
+// propagation.
+func (rr *PubSubResultsService) publishResultEnvelope(
+	ctx context.Context,
+	eventType, caseID string,
+	taskID *string,
+	investigationID string,
+	originalMsg PubSubCommandMessage,
+	payload interface{},
+) error {
+	msg, err := models.NewG8eMessage(
+		eventType, caseID,
+		rr.config.OperatorID, rr.config.OperatorSessionId, rr.config.SystemFingerprint,
+		payload,
+	)
 	if err != nil {
-		return fmt.Errorf("failed to wrap result for MCP: %w", err)
+		return fmt.Errorf("failed to build %s message: %w", eventType, err)
 	}
-	mcpRaw, err := json.Marshal(mcpResp)
-	if err != nil {
-		return fmt.Errorf("failed to marshal MCP response: %w", err)
-	}
-	msg.EventType = constants.Event.Operator.MCP.ToolsResult
-	msg.Payload = mcpRaw
 
-	rr.logger.Info("MCP wrapping completed",
-		"new_event_type", msg.EventType,
-		"payload_size", len(mcpRaw))
+	msg.APIKey = rr.config.APIKey
+	msg.TaskID = taskID
+	msg.InvestigationID = investigationID
+	msg.OperatorSessionID = originalMsg.OperatorSessionID
 
-	return nil
+	return rr.publish(ctx, msg)
 }
 
 // PublishExecutionResult publishes command execution result via g8es pub/sub
@@ -118,25 +111,7 @@ func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, resu
 			"stderr_size", len(result.Stderr))
 	}
 
-	msg, err := models.NewG8eMessage(
-		result.ExecutionID, eventType, result.CaseID,
-		rr.config.OperatorID, rr.config.OperatorSessionId, rr.config.SystemFingerprint,
-		payload,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to build result message: %w", err)
-	}
-
-	if err := rr.wrapMCPIfNecessary(msg, originalMsg, eventType, &payload); err != nil {
-		return err
-	}
-
-	msg.APIKey = rr.config.APIKey
-	msg.TaskID = result.TaskID
-	msg.InvestigationID = result.InvestigationID
-	msg.OperatorSessionID = originalMsg.OperatorSessionID
-
-	if err := rr.publish(ctx, msg); err != nil {
+	if err := rr.publishResultEnvelope(ctx, eventType, result.CaseID, result.TaskID, result.InvestigationID, originalMsg, &payload); err != nil {
 		return fmt.Errorf("failed to publish result: %w", err)
 	}
 
@@ -147,7 +122,7 @@ func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, resu
 	if result.ReturnCode != nil {
 		logArgs = append(logArgs, "return_code", *result.ReturnCode)
 	}
-	rr.logger.Debug("Result transmitted to g8e", logArgs...)
+	rr.logger.Info("Result transmitted to g8e", logArgs...)
 	return nil
 }
 
@@ -163,25 +138,7 @@ func (rr *PubSubResultsService) PublishCancellationResult(ctx context.Context, r
 		ErrorType:         result.ErrorType,
 	}
 
-	msg, err := models.NewG8eMessage(
-		result.ExecutionID, eventType, result.CaseID,
-		rr.config.OperatorID, rr.config.OperatorSessionId, rr.config.SystemFingerprint,
-		payload,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to build cancellation message: %w", err)
-	}
-
-	if err := rr.wrapMCPIfNecessary(msg, originalMsg, eventType, &payload); err != nil {
-		return err
-	}
-
-	msg.APIKey = rr.config.APIKey
-	msg.TaskID = result.TaskID
-	msg.InvestigationID = result.InvestigationID
-	msg.OperatorSessionID = originalMsg.OperatorSessionID
-
-	if err := rr.publish(ctx, msg); err != nil {
+	if err := rr.publishResultEnvelope(ctx, eventType, result.CaseID, result.TaskID, result.InvestigationID, originalMsg, &payload); err != nil {
 		return fmt.Errorf("failed to publish cancellation result: %w", err)
 	}
 
@@ -235,25 +192,7 @@ func (rr *PubSubResultsService) PublishFileEditResult(ctx context.Context, resul
 			"content_size", len(contentStr))
 	}
 
-	msg, err := models.NewG8eMessage(
-		result.ExecutionID, eventType, result.CaseID,
-		rr.config.OperatorID, rr.config.OperatorSessionId, rr.config.SystemFingerprint,
-		payload,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to build file edit message: %w", err)
-	}
-
-	if err := rr.wrapMCPIfNecessary(msg, originalMsg, eventType, &payload); err != nil {
-		return err
-	}
-
-	msg.APIKey = rr.config.APIKey
-	msg.TaskID = result.TaskID
-	msg.InvestigationID = result.InvestigationID
-	msg.OperatorSessionID = originalMsg.OperatorSessionID
-
-	if err := rr.publish(ctx, msg); err != nil {
+	if err := rr.publishResultEnvelope(ctx, eventType, result.CaseID, result.TaskID, result.InvestigationID, originalMsg, &payload); err != nil {
 		return fmt.Errorf("failed to publish file edit result: %w", err)
 	}
 
@@ -304,25 +243,7 @@ func (rr *PubSubResultsService) PublishFsListResult(ctx context.Context, result 
 			"entries_count", result.TotalCount)
 	}
 
-	msg, err := models.NewG8eMessage(
-		result.ExecutionID, eventType, result.CaseID,
-		rr.config.OperatorID, rr.config.OperatorSessionId, rr.config.SystemFingerprint,
-		payload,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to build fs list message: %w", err)
-	}
-
-	if err := rr.wrapMCPIfNecessary(msg, originalMsg, eventType, &payload); err != nil {
-		return err
-	}
-
-	msg.APIKey = rr.config.APIKey
-	msg.TaskID = result.TaskID
-	msg.InvestigationID = result.InvestigationID
-	msg.OperatorSessionID = originalMsg.OperatorSessionID
-
-	if err := rr.publish(ctx, msg); err != nil {
+	if err := rr.publishResultEnvelope(ctx, eventType, result.CaseID, result.TaskID, result.InvestigationID, originalMsg, &payload); err != nil {
 		return fmt.Errorf("failed to publish fs list result: %w", err)
 	}
 
@@ -377,9 +298,8 @@ func (rr *PubSubResultsService) PublishExecutionStatus(ctx context.Context, stat
 		eventType = constants.Event.Operator.Command.StatusUpdated.Cancelled
 	}
 
-	msgID := fmt.Sprintf("%s_status_%d", status.ExecutionID, timeNowNano())
 	msg, err := models.NewG8eMessage(
-		msgID, eventType, status.CaseID,
+		eventType, status.CaseID,
 		rr.config.OperatorID, rr.config.OperatorSessionId, rr.config.SystemFingerprint,
 		payload,
 	)
@@ -410,9 +330,6 @@ func (rr *PubSubResultsService) PublishResult(ctx context.Context, result *model
 	if result.OperatorID == "" {
 		result.OperatorID = rr.config.OperatorID
 	}
-	if result.ID == "" {
-		result.ID = fmt.Sprintf("result_%d", timeNowNano())
-	}
 	return rr.publish(ctx, result)
 }
 
@@ -437,14 +354,9 @@ func (rr *PubSubResultsService) publish(ctx context.Context, msg *models.G8eMess
 		return fmt.Errorf("failed to marshal result message: %w", err)
 	}
 	channel := rr.resultsChannel(msg.OperatorSessionID)
-	rr.logger.Debug("Publishing result",
+	rr.logger.Info("Publishing result",
 		"channel", channel,
 		"event_type", msg.EventType,
 		"message_id", msg.ID)
 	return rr.client.Publish(ctx, channel, data)
-}
-
-// timeNowNano returns the current time as a Unix nanosecond timestamp.
-func timeNowNano() int64 {
-	return time.Now().UnixNano()
 }

@@ -129,6 +129,7 @@ export class HeartbeatSSEEvent extends G8eBaseModel {
 
 export class AuditDownloadResponse extends G8eBaseModel {
     static fields = {
+        success:              { type: F.boolean, default: true },
         exported_at:          { type: F.date,   default: () => now() },
         user_id:              { type: F.string, required: true },
         total_events:         { type: F.number, default: 0 },

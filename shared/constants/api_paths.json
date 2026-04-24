@@ -15,9 +15,7 @@
     "operator_approval_respond": "/operator/approval/respond",
     "operator_approval_pending": "/operator/approval/pending",
     "health": "/health",
-    "settings_user": "/settings/user",
-    "mcp_tools_list": "/mcp/tools/list",
-    "mcp_tools_call": "/mcp/tools/call"
+    "settings_user": "/settings/user"
   },
   "g8ed": {
     "sse_push": "/sse/push",

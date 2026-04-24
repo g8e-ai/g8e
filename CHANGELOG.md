@@ -7,24 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [0.1.3] - 2026-04-23
 
 ### Added
-- **Iteration-Scoped AI Message Persistence:** Per-tool-iteration AI commentary now lands in `conversation_history` as `MessageSender.AI_PRIMARY` rows tagged with `EventType.EVENT_SOURCE_AI_PRIMARY`, preserving the agent's running narrative across restores. The SSE delivery layer fires an `on_iteration_text` callback at each `TOOL_RESULT` boundary, which `ChatPipelineService` binds to a persistence helper. Final post-stream persistence still runs and skips whitespace-only text.
-- **`InvestigationService.persist_ai_message(...)`:** New domain-layer helper that centralizes the strip-guard and `AIResponseMetadata` construction previously duplicated between the per-iteration and final AI persist paths. Accepts optional `grounding_metadata` and `token_usage` for the final-row case.
-- **`BackgroundTaskManager.track_detached(...)`:** Synchronous tracking helper for fire-and-forget tasks dispatched from inside coroutines that cannot `await`. Auto-removes completed tasks via done-callback; surfaces uncaught exceptions at `WARNING` with `exc_info=True`.
-- **`AgentInputs` / `AgentStreamState` split:** Request-scoped immutable inputs (`AgentInputs`) are now separate from the mutable per-run stream sinks (`AgentStreamState`). Both use `extra='forbid'`. Replaces the previous combined `AgentStreamContext` / `make_streaming_context`.
+- **Iteration-Scoped AI Message Persistence:** Per-tool-iteration AI commentary now lands in `conversation_history` as `MessageSender.AI_PRIMARY` rows tagged with `EventType.EVENT_SOURCE_AI_PRIMARY`, preserving the agent's running narrative across restores.
+- **`InvestigationService.persist_ai_message(...)`:** Centralized domain-layer helper for AI message persistence with strip-guards and metadata construction.
+- **`BackgroundTaskManager.track_detached(...)`:** Synchronous tracking helper for fire-and-forget tasks dispatched from coroutines.
+- **`AgentInputs` / `AgentStreamState` split:** Clean separation of request-scoped immutable inputs from mutable per-run stream sinks.
+- **Tribunal Voting Breakdown:** Enhanced tribunal consensus events now include detailed voting breakdowns and dissent records.
 
 ### Changed
-- **Memory Generation Off The Response Path:** `update_memory_from_conversation` is no longer awaited inline in `_persist_ai_response`. It is dispatched as a tracked background task via `BackgroundTaskManager.track_detached`, so memory generation can no longer block SSE completion or silently swallow errors. Failures are logged at `WARNING` level with `exc_info=True` (previously `INFO`, which hid real errors).
-- **SSE Event Publishing:** `deliver_via_sse` now publishes through a single `_publish(event_type, payload)` closure that captures the fixed `(investigation_id, web_session_id, case_id, user_id)` routing tuple. Eliminates 14 call sites where a new event could accidentally drop a routing field.
-- **Validation Messages in `deliver_via_sse`:** Split the single multi-field guard into three precise checks with correct `field=` identifiers for `investigation_id`, `web_session_id`, and `case_id`.
-- **`ExecutorCommandArgs` Cleanup:** Removed dead `execution_id` and `web_session_id` fields that were never populated from the caller surface.
+- **Memory Generation Off The Response Path:** `update_memory_from_conversation` is now dispatched as a tracked background task, preventing memory generation from blocking SSE completion.
+- **SSE Event Publishing:** Refactored `deliver_via_sse` to use a captured routing tuple, eliminating potential for dropped fields across call sites.
+- **Validation Messages:** Precision field-specific guards in `deliver_via_sse` for `investigation_id`, `web_session_id`, and `case_id`.
 
 ### Fixed
-- **`OPERATOR_COMMAND_APPROVAL_*` Render Leak:** `ConversationMessageMetadata` now carries `event_type: EventType | None`, and `add_approval_record` populates it so the frontend filter in `chat-history.js` can correctly suppress approval-lifecycle system rows that were leaking into the visible conversation.
-- **Duplicate Import:** Removed redundant `ConversationMessageMetadata` re-import inside `investigation_data_service.add_chat_message` (already imported at module top).
-- **Stale Test Fixtures:** `test_chat_pipeline_iteration_persistence.py` mutated an outer `state` fixture (including one `NameError` on an undefined `ctx`) that was not the `AgentStreamState` instance constructed inside `_run_chat_impl`. Tests now mutate `kwargs["state"]` so the final persist path is actually exercised.
+- **`OPERATOR_COMMAND_APPROVAL_*` Render Leak:** Fixed frontend leak of approval-lifecycle system rows in `chat-history.js` using new `event_type` metadata.
+- **Stale Test Fixtures:** Fixed `AgentStreamState` mutation in chat pipeline tests to ensure final persist path is correctly exercised.
+- **Auditor Command Generation:** Refactored command generator and cleaned up auditor-related events.
 
 ---
 

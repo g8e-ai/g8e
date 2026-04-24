@@ -176,7 +176,7 @@ deploy:
 				-o g8e.operator.sha256 "https://g8e.local/operator/download/linux/amd64/sha256" && \
 			sha256sum -c g8e.operator.sha256 && \
 			chmod +x g8e.operator && \
-			nohup ./g8e.operator -D "$$DEVICE_TOKEN" -e g8e.local > g8e.operator.log 2>&1 & \
+			nohup sudo ./g8e.operator -D "$$DEVICE_TOKEN" -e g8e.local > g8e.operator.log 2>&1 & \
 			echo "    operator started (pid: $$!)"' || true; \
 	done; \
 	echo "Done."
@@ -205,7 +205,7 @@ stream:
 		HOSTS=$$(docker ps --filter "label=demo.service=web-node" --format '$(SSH_USER)@{{.Names}}' | sort | tr '\n' ' '); \
 	fi; \
 	echo "  Streaming to: $$HOSTS"; \
-	docker exec g8ep /home/g8e/g8e.operator stream \
+	docker exec g8ep sudo /home/g8e/g8e.operator stream \
 		--endpoint g8e.local \
 		--device-token "$$TOKEN" \
 		$$HOSTS

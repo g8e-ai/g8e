@@ -287,13 +287,13 @@ describe('ChatComponent core class methods [FRONTEND - jsdom]', () => {
             expect(result).toBe(false);
         });
 
-        it('returns false when no active operation', async () => {
+        it('returns true when investigation exists and stop succeeds', async () => {
             chat.streamingActive = false;
             chat.executionActive = false;
             chat.thinkingManager.thinkingActive = false;
             chat.approvalPending = false;
             const result = await chat.stopAIProcessing();
-            expect(result).toBe(false);
+            expect(result).toBe(true);
         });
 
         it('sends stop request to correct endpoint with investigation_id and reason', async () => {

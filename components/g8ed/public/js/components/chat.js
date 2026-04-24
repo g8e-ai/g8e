@@ -107,14 +107,6 @@ export class ChatComponent {
             return false;
         }
 
-        const thinkingActive = this.thinkingManager?.thinkingActive;
-        const hasActiveOperation = this.streamingActive || this.executionActive || thinkingActive || this.approvalPending;
-
-        if (!hasActiveOperation) {
-            if (!silent) console.warn('[CHAT] No active AI operation to stop');
-            return false;
-        }
-
         try {
             const response = await this.serviceClient.post('g8ed', ApiPaths.chat.stop(), {
                 investigation_id: investigationId,
@@ -130,7 +122,6 @@ export class ChatComponent {
             if (this.approvalPending) {
                 this.eventBus.emit(EventType.OPERATOR_TERMINAL_APPROVAL_DENIED, { reason, statusMessage: 'Cancelled' });
                 this.approvalPending = false;
-                this.hideAIStopButton();
             }
 
             this.streamingActive = false;
@@ -236,6 +227,7 @@ export class ChatComponent {
         this.hideAIStopButton();
         this._portCheckIndicators?.clear();
         this._searchWebIndicators?.clear();
+        this._processingIndicators?.clear();
         this.pendingCitations.clear();
         this.streamingContent.clear();
         this._hasResetAutoScrollForSession.clear();

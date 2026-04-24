@@ -65,10 +65,7 @@ func (ps *PortService) HandlePortCheckRequest(ctx context.Context, msg PubSubCom
 		protocol = "tcp"
 	}
 
-	executionID := msg.ID
-	if p.ExecutionID != "" {
-		executionID = p.ExecutionID
-	}
+	executionID := executionIDFromMessage(msg)
 
 	ps.logger.Info("Port check requested", "host", host, "port", p.Port, "protocol", protocol)
 

@@ -292,7 +292,7 @@ func TestPubSubResultsService_MessageFormatting(t *testing.T) {
 
 		// Simulate what would be published
 		envelope, err := models.NewG8eMessage(
-			result.ExecutionID, constants.Event.Operator.Command.Completed, result.CaseID,
+			constants.Event.Operator.Command.Completed, result.CaseID,
 			"", "", "", result,
 		)
 		require.NoError(t, err)
@@ -313,7 +313,7 @@ func TestPubSubResultsService_MessageFormatting(t *testing.T) {
 		}
 
 		envelope, err := models.NewG8eMessage(
-			result.ExecutionID, constants.Event.Operator.FileEdit.Completed, result.CaseID,
+			constants.Event.Operator.FileEdit.Completed, result.CaseID,
 			"", "", "", result,
 		)
 		require.NoError(t, err)
@@ -687,7 +687,7 @@ func TestPubSubResultsService_PublishResult(t *testing.T) {
 			Count       int    `json:"count"`
 		}
 		result, err := models.NewG8eMessage(
-			"test-id-1", "custom.event.type", "test-case",
+			"custom.event.type", "test-case",
 			cfg.OperatorID, cfg.OperatorSessionId, "",
 			customPayload{CustomField: "custom_value", Count: 42},
 		)
@@ -718,7 +718,7 @@ func TestPubSubResultsService_PublishResult(t *testing.T) {
 			Array  []string               `json:"array"`
 		}
 		result, err := models.NewG8eMessage(
-			"test-id-2", "nested.event", "test-case",
+			"nested.event", "test-case",
 			"test-operator-complex", "test-session-complex", "",
 			nestedPayload{
 				Nested: map[string]interface{}{"key1": "value1", "key2": 123},
@@ -731,7 +731,7 @@ func TestPubSubResultsService_PublishResult(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("auto-populates missing fields", func(t *testing.T) {
+	t.Run("populates missing operator fields", func(t *testing.T) {
 		db := NewMockG8esPubSubClient()
 
 		cfg := testutil.NewTestConfig(t)
@@ -741,7 +741,7 @@ func TestPubSubResultsService_PublishResult(t *testing.T) {
 		require.NoError(t, err)
 
 		result, err := models.NewG8eMessage(
-			"", "test.auto.populate", "test-case",
+			"test.auto.populate", "test-case",
 			"", "", "",
 			struct{}{},
 		)

@@ -43,6 +43,7 @@ from app.models.pubsub_messages import (
     ExecutionResultsPayload,
     ExecutionStatusPayload,
     FetchLogsResultPayload,
+    FetchLogsErrorPayload,
     PortCheckResultPayload,
 )
 
@@ -87,6 +88,7 @@ class TestLFAAExecutionIdFieldPresence:
             FetchFileDiffErrorPayload,
             RestoreFileErrorPayload,
             FetchHistoryErrorPayload,
+            FetchLogsErrorPayload,
         ]
         for payload_type in error_payloads:
             assert "execution_id" in payload_type.model_fields, (

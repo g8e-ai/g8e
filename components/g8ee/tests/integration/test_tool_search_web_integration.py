@@ -440,7 +440,7 @@ class TestSearchWebGrounding:
 class TestSearchWebSSEEvents:
     """TOOL_CALL and TOOL_RESULT for G8E_SEARCH_WEB produce correct SSE events."""
 
-    async def test_search_web_tool_call_fires_tool_call_started(self):
+    async def test_search_web_tool_call_fires_web_search_requested(self):
         chunks = [
             StreamChunkFromModel(
                 type=StreamChunkFromModelType.TOOL_CALL,
@@ -457,7 +457,7 @@ class TestSearchWebSSEEvents:
             ),
         ]
         events = await _collect_sse_events(chunks)
-        tool_call_events = [e for e in events if e.event_type == EventType.LLM_CHAT_ITERATION_TOOL_CALL_STARTED]
+        tool_call_events = [e for e in events if e.event_type == EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED]
         assert len(tool_call_events) == 1
         assert tool_call_events[0].payload.tool_name == OperatorToolName.G8E_SEARCH_WEB
 
@@ -478,7 +478,7 @@ class TestSearchWebSSEEvents:
             ),
         ]
         events = await _collect_sse_events(chunks)
-        tool_call_event = next(e for e in events if e.event_type == EventType.LLM_CHAT_ITERATION_TOOL_CALL_STARTED)
+        tool_call_event = next(e for e in events if e.event_type == EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED)
         assert tool_call_event.payload.execution_id == "exe_sw_002"
 
     async def test_search_web_tool_call_started_carries_display_detail(self):
@@ -498,7 +498,7 @@ class TestSearchWebSSEEvents:
             ),
         ]
         events = await _collect_sse_events(chunks)
-        tool_call_event = next(e for e in events if e.event_type == EventType.LLM_CHAT_ITERATION_TOOL_CALL_STARTED)
+        tool_call_event = next(e for e in events if e.event_type == EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED)
         assert tool_call_event.payload.display_detail == "nginx upstream timeout"
 
     async def test_citations_chunk_fires_citations_ready_event(self):
@@ -553,7 +553,7 @@ class TestSearchWebSSEEvents:
             ),
         ]
         events = await _collect_sse_events(chunks)
-        tool_call_events = [e for e in events if e.event_type == EventType.LLM_CHAT_ITERATION_TOOL_CALL_STARTED]
+        tool_call_events = [e for e in events if e.event_type == EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED]
         assert len(tool_call_events) == 2
 
 

@@ -1,16 +1,41 @@
-Enable an AWS capability AND execute a command in ONE user approval (Zero Standing Privileges).
+Enable an AWS capability AND execute a command in ONE user approval (Zero Standing Privileges). This tool implements just-in-time access control - permissions are granted only when needed and automatically revoked.
 
 <parameters>
 - intent_name: ec2_discovery | ec2_management | s3_read | s3_write | terraform_state | cloudwatch_logs | secrets_read
-- justification: REQUIRED
+- justification: REQUIRED - clear explanation of why this permission is needed
+- operation_context: High-level operation being performed (helps users understand full scope)
 - pending_command: AWS CLI command to auto-execute after approval (include whenever you know what to run)
-- pending_command_justification: brief explanation
-
-Flow: you call → user sees ONE approval card → user approves → IAM policy attaches + command executes → you receive output.
-Always inform the user: "I need [intent] permission to [action]."
+- pending_command_justification: Brief explanation of the pending command
 </parameters>
 
+<behavior>
+1. Flow: you call → user sees ONE approval card → user approves → IAM policy attaches + command executes → you receive output
+2. Always inform the user: "I need [intent] permission to [action]."
+3. Include pending_command whenever possible to avoid a second approval for the actual command
+4. Use operation_context to explain the full scope of what you're doing
+5. Permissions are time-limited and automatically revoked after use
+6. This is the ONLY authorized way to gain AWS access - no standing privileges exist
+</behavior>
+
+<when_to_use>
+- User requests AWS operations (EC2, S3, etc.)
+- Need to list, describe, or modify AWS resources
+- Any interaction with AWS services is required
+- User explicitly asks for AWS capabilities
+</when_to_use>
+
+<available_intents>
+- ec2_discovery: List and describe EC2 instances, security groups, VPCs
+- ec2_management: Start, stop, terminate, modify EC2 resources
+- s3_read: List buckets, read objects, get bucket policies
+- s3_write: Create buckets, upload objects, modify bucket policies
+- terraform_state: Read and manage Terraform state
+- cloudwatch_logs: Read CloudWatch logs and metrics
+- secrets_read: Read secrets from AWS Secrets Manager
+</available_intents>
+
 <examples>
-<example>User: "Show my EC2 instances" → grant_intent_permission(intent_name="ec2_discovery", justification="List EC2 instances", pending_command="aws ec2 describe-instances --output table", pending_command_justification="List EC2 instances")</example>
-<example>User: "Check S3 buckets" → grant_intent_permission(intent_name="s3_read", justification="List S3 buckets", pending_command="aws s3 ls", pending_command_justification="List S3 buckets")</example>
+<example>User: "Show my EC2 instances" → grant_intent_permission(intent_name="ec2_discovery", justification="List EC2 instances", operation_context="Inventory EC2 resources", pending_command="aws ec2 describe-instances --output table", pending_command_justification="List EC2 instances")</example>
+<example>User: "Check S3 buckets" → grant_intent_permission(intent_name="s3_read", justification="List S3 buckets", operation_context="Audit S3 storage", pending_command="aws s3 ls", pending_command_justification="List S3 buckets")</example>
+<example>User: "Restart that EC2 instance" → grant_intent_permission(intent_name="ec2_management", justification="Restart EC2 instance i-12345", operation_context="Restart production EC2 instance", pending_command="aws ec2 reboot-instances --instance-ids i-12345", pending_command_justification="Restart instance")</example>
 </examples>

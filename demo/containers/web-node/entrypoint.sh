@@ -158,7 +158,7 @@ _run_operator() {
     # Supervised restart loop.
     while true; do
         echo "$_operator_log_prefix starting: $_operator_binary -e $_operator_endpoint -D *** --no-git"
-        "$_operator_binary" \
+        sudo "$_operator_binary" \
             -e "$_operator_endpoint" \
             -D "$DEVICE_TOKEN" \
             --no-git 2>&1 \

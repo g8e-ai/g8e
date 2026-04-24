@@ -32,6 +32,10 @@ export class AuditPage {
         this.tableContainer   = null;
         this.loadingIndicator = null;
         this.totalEventsEl    = null;
+        this.chatCountEl      = null;
+        this.approvalCountEl  = null;
+        this.commandCountEl   = null;
+        this.fileEditCountEl  = null;
         this.dateRangeEl      = null;
         this.fromDateInput    = null;
         this.toDateInput      = null;
@@ -52,6 +56,10 @@ export class AuditPage {
         this.tableContainer   = document.getElementById('audit-table-container');
         this.loadingIndicator = document.getElementById('loading-indicator');
         this.totalEventsEl    = document.getElementById('total-events');
+        this.chatCountEl      = document.getElementById('chat-count');
+        this.approvalCountEl  = document.getElementById('approval-count');
+        this.commandCountEl   = document.getElementById('command-count');
+        this.fileEditCountEl  = document.getElementById('file-edit-count');
         this.dateRangeEl      = document.getElementById('date-range');
         this.fromDateInput    = document.getElementById('from-date');
         this.toDateInput      = document.getElementById('to-date');
@@ -116,6 +124,29 @@ export class AuditPage {
 
     updateStats(events) {
         this.totalEventsEl.textContent = events.length.toLocaleString();
+
+        let chatCount = 0;
+        let approvalCount = 0;
+        let commandCount = 0;
+        let fileEditCount = 0;
+
+        for (const event of events) {
+            const type = event.event_type || '';
+            if (type.includes('.chat.')) {
+                chatCount++;
+            } else if (type.includes('.approval.')) {
+                approvalCount++;
+            } else if (type.includes('.command.')) {
+                commandCount++;
+            } else if (type.includes('.file.edit.')) {
+                fileEditCount++;
+            }
+        }
+
+        if (this.chatCountEl) this.chatCountEl.textContent = chatCount.toLocaleString();
+        if (this.approvalCountEl) this.approvalCountEl.textContent = approvalCount.toLocaleString();
+        if (this.commandCountEl) this.commandCountEl.textContent = commandCount.toLocaleString();
+        if (this.fileEditCountEl) this.fileEditCountEl.textContent = fileEditCount.toLocaleString();
 
         if (events.length > 0) {
             const timestamps = events.map(e => new Date(e.timestamp)).filter(d => !isNaN(d));
@@ -197,6 +228,10 @@ export class AuditPage {
         this.tableContainer   = null;
         this.loadingIndicator = null;
         this.totalEventsEl    = null;
+        this.chatCountEl      = null;
+        this.approvalCountEl  = null;
+        this.commandCountEl   = null;
+        this.fileEditCountEl  = null;
         this.dateRangeEl      = null;
         this.fromDateInput    = null;
         this.toDateInput      = null;
