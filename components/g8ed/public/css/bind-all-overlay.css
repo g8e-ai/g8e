@@ -255,7 +255,7 @@
 .bind-all-operator-hostname {
     font-size: 13px;
     font-weight: 600;
-    color: var(--text-primary);
+    color: var(--text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
