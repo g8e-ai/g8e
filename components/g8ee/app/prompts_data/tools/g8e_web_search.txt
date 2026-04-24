@@ -11,3 +11,8 @@ g8e Web Search - search the web for current technical information.
 - Be specific: `nginx 502 bad gateway upstream timeout` not `nginx error`
 - This is g8e' custom web search implementation, not Google's native search_web
 </query_tips>
+
+<examples>
+<example>User: "How to configure a systemd service?" -> g8e_web_search(query="site:freedesktop.org systemd.service examples")</example>
+<example>User: "Why does postgres fail with signal 9?" -> g8e_web_search(query="postgresql 'signal 9' OOM killer troubleshooting")</example>
+</examples>

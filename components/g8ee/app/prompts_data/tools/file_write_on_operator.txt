@@ -15,3 +15,8 @@ Write content to a file, completely replacing existing content.
 <scope>
 Replaces the ENTIRE file. For surgical find-and-replace edits, `file_update_on_operator` is the authorized tool.
 </scope>
+
+<examples>
+<example>User: "Overwrite the entire config with this new content" → file_write_on_operator(file_path="/etc/app/config.yaml", content="key: value...", justification="Full config replacement")</example>
+<example>User: "Reset the credentials file" → file_write_on_operator(file_path="/app/.env", content="DB_USER=root\nDB_PASS=secret", justification="Reset environment variables")</example>
+</examples>

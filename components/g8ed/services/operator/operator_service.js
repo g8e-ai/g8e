@@ -190,15 +190,18 @@ class OperatorService {
         return true;
     }
 
-    async getUserVisibleOperatorStats(userId) {
+    async getUserVisibleOperatorStats(userId, allStatuses = false) {
         const allOperators = await this.operatorDataService.queryOperators([{ field: 'user_id', operator: '==', value: userId }]);
-        const operators = allOperators.filter(op => op.status !== OperatorStatus.UNAVAILABLE && op.status !== OperatorStatus.TERMINATED);
+        let operators = allOperators;
+        if (!allStatuses) {
+            operators = allOperators.filter(op => op.status !== OperatorStatus.UNAVAILABLE && op.status !== OperatorStatus.TERMINATED);
+        }
         const activeCount = operators.filter(op => op.status === OperatorStatus.ACTIVE || op.status === OperatorStatus.BOUND).length;
         return { operators, totalCount: operators.length, activeCount };
     }
 
-    async getUserOperators(userId) {
-        const stats = await this.getUserVisibleOperatorStats(userId);
+    async getUserOperators(userId, allStatuses = false) {
+        const stats = await this.getUserVisibleOperatorStats(userId, allStatuses);
         const { usedSlots } = this.calculateSlotUsage(stats.operators);
         const slots = stats.operators.map(op => OperatorSlot.fromOperator(op));
 
@@ -211,6 +214,28 @@ class OperatorService {
             max_slots: slots.length,
             timestamp: now(),
         });
+    }
+
+    /**
+     * Get all operators across all users.
+     * Excludes terminated operators by default.
+     */
+    async getAllOperators(allStatuses = false) {
+        const filters = [];
+        const allOperators = await this.operatorDataService.queryOperators(filters);
+        
+        let filtered = allOperators;
+        if (!allStatuses) {
+            filtered = allOperators.filter(op => op.status !== OperatorStatus.TERMINATED);
+        }
+
+        const activeCount = filtered.filter(op => op.status === OperatorStatus.ACTIVE || op.status === OperatorStatus.BOUND).length;
+
+        return {
+            operators: filtered,
+            total_count: filtered.length,
+            active_count: activeCount
+        };
     }
 
     /**

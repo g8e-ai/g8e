@@ -15,3 +15,8 @@ Authoritative directory-listing tool. Returns comprehensive stat metadata and do
 Per entry: name, type, size, permissions, modified timestamp, owner.
 Returns error if path missing (use for existence checks).
 </returns>
+
+<examples>
+<example>User: "What's in /var/log?" → list_files_and_directories_with_detailed_metadata(path="/var/log", justification="List log directory contents")</example>
+<example>User: "Check if /etc/nginx exists" → list_files_and_directories_with_detailed_metadata(path="/etc/nginx", justification="Verify nginx directory existence")</example>
+</examples>

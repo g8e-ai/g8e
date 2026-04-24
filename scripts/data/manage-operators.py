@@ -137,11 +137,26 @@ class OperatorManager:
     # =========================================================================
 
     def list_operators(self, user_id: Optional[str], email: Optional[str], all_statuses: bool = False) -> List[Dict]:
-        uid = resolve_user_id(user_id, email)
-        if not uid:
-            return []
+        if user_id or email:
+            uid = resolve_user_id(user_id, email)
+            if not uid:
+                return []
+            endpoint = f'{INTERNAL_OPERATORS_BASE}/user/{uid}'
+            header_text = f"Operators for user {uid}"
+        else:
+            endpoint = INTERNAL_OPERATORS_BASE
+            header_text = "All Operators"
 
-        result = g8ed_request('GET', f'{INTERNAL_OPERATORS_BASE}/user/{uid}')
+        params = {}
+        if all_statuses:
+            params['all'] = 'true'
+
+        if params:
+            import urllib.parse
+            query = urllib.parse.urlencode(params)
+            endpoint = f"{endpoint}?{query}"
+
+        result = g8ed_request('GET', endpoint)
         if not result.get('success'):
             raise RuntimeError(result.get('error', 'Failed to list operators'))
 
@@ -149,10 +164,14 @@ class OperatorManager:
         total = result.get('total_count', len(operators))
         active = result.get('active_count', 0)
 
-        if not all_statuses:
-            operators = [op for op in operators if op.get('status') != 'terminated']
+        # The internal user endpoint filters terminated by default unless all_statuses is true
+        # but the new listAllOperators also does this, so we don't necessarily need to filter here
+        # but for consistency with existing behavior of list_operators we will.
+        if not all_statuses and (user_id or email):
+            # This is already handled by g8ed for the user-specific endpoint
+            pass
 
-        print(f"\nOperators for user {uid} ({len(operators)} shown, {active} active)")
+        print(f"\n{header_text} ({len(operators)} shown, {active} active)")
         print("=" * 140)
         if not operators:
             print("  No operators found")
@@ -384,9 +403,6 @@ def run(argv: List[str]) -> int:
 
     try:
         if args.command == 'list':
-            if not args.user_id and not args.email:
-                print("Error: provide --user-id or --email")
-                return 1
             manager.list_operators(
                 user_id=args.user_id,
                 email=args.email,

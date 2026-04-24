@@ -1,1 +1,12 @@
-Retrieve the active command whitelist and blacklist constraints for this session. Returns which commands are allowed (whitelist) and which are forbidden (blacklist), along with their enforcement status. You MUST call this tool before proposing any commands via run_commands_with_operator to understand what is permitted. Commands that violate these constraints will be blocked downstream regardless, so consulting this tool first avoids wasted attempts and failed executions. No parameters required.
+<description>
+Retrieve the active command whitelist and blacklist constraints for this session. Returns which commands are allowed (whitelist) and which are forbidden (blacklist), along with their enforcement status. You MUST call this tool before proposing any commands via run_commands_with_operator to understand what is permitted. Commands that violate these constraints will be blocked downstream regardless, so consulting this tool first avoids wasted attempts and failed executions.
+</description>
+
+<parameters>
+- None required
+</parameters>
+
+<examples>
+<example>User: "Restart nginx" → get_command_constraints()</example>
+<example>User: "Check disk space" → get_command_constraints()</example>
+</examples>

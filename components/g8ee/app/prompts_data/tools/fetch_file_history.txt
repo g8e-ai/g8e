@@ -14,3 +14,8 @@ Retrieve git version history for a file from the Operator's Ledger. Only files m
 - Need restore points before calling restore_file
 - Debugging when/how a config was changed
 </when_to_use>
+
+<examples>
+<example>User: "What's the history of nginx.conf?" → fetch_file_history(file_path="/etc/nginx/nginx.conf")</example>
+<example>User: "Show me recent changes to app.py" → fetch_file_history(file_path="/app/app.py", limit=10)</example>
+</examples>

@@ -492,7 +492,8 @@ Every AI in the platform has a first-class persona definition in `shared/constan
 | `tools` | `string[]` | List of tool names available to this AI (empty for non-tool-calling AIs) |
 | `identity` | `string` | Deep persona description — who the AI is, how it thinks, its behavioral characteristics |
 | `purpose` | `string` | Specific mission statement — what the AI does and the standards it must meet |
-| `autonomy` | `string` | Empowering directive prose addressed to the agent. Affirms the agent's maximum agency within its role, blending its identity, purpose, and persona. Free-form string, not an enum; the platform's actual governance (human approval for state-changing operator actions) is enforced structurally, not via this field. |
+| `autonomy` | `string` | Empowering directive prose addressed to the agent. Affirms the agent's maximum agency within its role. |
+| `persona` | `string` | The full prompt template for the agent |
 
 ### AI Registry
 

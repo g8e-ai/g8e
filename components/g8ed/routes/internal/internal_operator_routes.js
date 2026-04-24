@@ -29,6 +29,38 @@ export function createInternalOperatorRouter({ services, authorizationMiddleware
     const router = express.Router();
 
     /**
+     * GET /api/internal/operators
+     */
+    router.get('/', requireInternalOrigin, async (req, res, next) => {
+        try {
+            const allStatuses = req.query.all === 'true';
+            logger.info('[INTERNAL-HTTP] Listing all operators', { allStatuses });
+
+            const { operators, total_count, active_count } = await operatorService.getAllOperators(allStatuses);
+
+            logger.info('[INTERNAL-HTTP] All operators listed', {
+                total_count,
+                active_count
+            });
+
+            return res.json(new OperatorListResponse({
+                success: true,
+                data: operators,
+                total_count: total_count,
+                active_count: active_count
+            }).forWire());
+        } catch (error) {
+            logger.error('[INTERNAL-HTTP] Failed to list all operators', {
+                error: error.message
+            });
+
+            return res.status(500).json(new ErrorResponse({
+                error: error.message || 'Failed to list operators'
+            }).forWire());
+        }
+    });
+
+    /**
      * POST /api/internal/operators/:operatorId/refresh-key
      */
     router.post('/:operatorId/refresh-key', requireInternalOrigin, async (req, res, next) => {
@@ -221,10 +253,11 @@ export function createInternalOperatorRouter({ services, authorizationMiddleware
     router.get('/user/:userId', requireInternalOrigin, async (req, res, next) => {
         try {
             const { userId } = req.params;
+            const allStatuses = req.query.all === 'true';
 
-            logger.info('[INTERNAL-HTTP] Listing operators for user', { userId });
+            logger.info('[INTERNAL-HTTP] Listing operators for user', { userId, allStatuses });
 
-            const { operators, total_count, active_count } = await operatorService.getUserOperators(userId);
+            const { operators, total_count, active_count } = await operatorService.getUserOperators(userId, allStatuses);
 
             logger.info('[INTERNAL-HTTP] Operators listed for user', {
                 userId,

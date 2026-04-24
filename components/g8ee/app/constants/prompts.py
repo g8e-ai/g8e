@@ -87,9 +87,6 @@ class PromptFile(str, Enum):
     TOOL_GET_COMMAND_CONSTRAINTS = "tools/get_command_constraints.txt"
 
     # Analysis
-    ANALYSIS_COMMAND_RISK = "analysis/command_risk.txt"
-    ANALYSIS_ERROR_SUGGESTION = "analysis/error_analysis.txt"
-    ANALYSIS_FILE_RISK = "analysis/file_risk.txt"
 
     # Tribunal
     TRIBUNAL_GENERATOR = "tribunal/generator.txt"

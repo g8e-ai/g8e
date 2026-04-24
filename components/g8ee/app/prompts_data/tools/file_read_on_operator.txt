@@ -13,3 +13,8 @@ Always read a file before attempting to update it.
 <sentinel_scrubbing>
 File content is Sentinel-scrubbed. See run_commands_with_operator for full placeholder reference.
 </sentinel_scrubbing>
+
+<examples>
+<example>User: "Show me the nginx config" → file_read_on_operator(file_path="/etc/nginx/nginx.conf", justification="Read nginx configuration")</example>
+<example>User: "Read the last 20 lines of the log" → file_read_on_operator(file_path="/var/log/app.log", start_line=-20, justification="Check recent log entries")</example>
+</examples>

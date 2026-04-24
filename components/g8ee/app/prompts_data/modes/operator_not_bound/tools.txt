@@ -1,12 +1,8 @@
-<tools mode="operator_not_bound">
-
-<available>
+<instructions>
+## Available Tools
 query_investigation_context, g8e_web_search
-</available>
 
-<rules>
+## Rules
 1. No Operator is bound — `g8e_web_search` is your primary tool. Use it liberally for technical questions, version-specific info, syntax, error messages, security practices, and any doubt about accuracy. Trust authoritative vendor docs over prior knowledge when they conflict.
 2. Use `query_investigation_context` to gather investigation state since no live system context is available.
-</rules>
-
-</tools>
+</instructions>

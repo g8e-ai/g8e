@@ -17,3 +17,8 @@ Use for:
 - Preserves exact content formatting (no shell escaping issues)
 - Automatically tracked in file history for auditing and rollback
 </behavior>
+
+<examples>
+<example>User: "Create a cron job to backup daily" → file_create_on_operator(file_path="/etc/cron.d/backup", content="0 2 * * * /usr/local/bin/backup.sh", justification="Create daily backup cron job")</example>
+<example>User: "Add a new nginx config" → file_create_on_operator(file_path="/etc/nginx/conf.d/new-site.conf", content="server { listen 80; ... }", justification="Create nginx config for new site")</example>
+</examples>
