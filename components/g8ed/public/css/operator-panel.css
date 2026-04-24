@@ -1834,6 +1834,30 @@
   border-top: 1px solid var(--border-color);
 }
 
+.operator-auth-info-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.operator-auth-info-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.operator-auth-info-icon {
+  font-size: 16px;
+  color: var(--text-muted);
+}
+
+.operator-auth-info-text {
+  flex: 1;
+}
+
 .operator-deploy-section {
   display: flex;
   flex-direction: column;
@@ -1948,8 +1972,9 @@
 .operator-device-link-generate-btn {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
+  align-self: center;
+  gap: 0.5rem;
+  padding: 0.7rem 0.5rem;
   background: var(--bg-hover);
   border: 1px solid var(--border-color);
   border-radius: 4px;
