@@ -179,6 +179,75 @@ export const OperatorListMixin = {
             const publicIp = this._obfuscateIp(actualPublicIp);
             const internalIp = network.internal_ip || ' - ';
 
+            // Expanded card visuals (EKG-style): metric class + ring/spark coords
+            const CPU_R = 22, MEM_R = 16, DISK_R = 10;
+            const cpuCirc = 2 * Math.PI * CPU_R;   // ~138.23
+            const memCirc = 2 * Math.PI * MEM_R;   // ~100.53
+            const diskCirc = 2 * Math.PI * DISK_R; // ~62.83
+
+            const metricClass = (pct) => {
+                if (pct === null || pct === undefined || Number.isNaN(pct)) return 'muted';
+                if (pct >= 85) return 'crit';
+                if (pct >= 65) return 'warn';
+                return 'good';
+            };
+            const ringOffset = (pct, circ) => {
+                if (pct === null || pct === undefined || Number.isNaN(pct)) return circ.toFixed(2);
+                const clamped = Math.max(0, Math.min(100, pct));
+                return (circ * (1 - clamped / 100)).toFixed(2);
+            };
+            const sparkY = (pct) => {
+                // SVG viewBox 0..16; higher value = lower y (closer to top)
+                if (pct === null || pct === undefined || Number.isNaN(pct)) return 8;
+                const clamped = Math.max(0, Math.min(100, pct));
+                return (15 - (clamped / 100) * 13).toFixed(2);
+            };
+
+            const cpuRaw = typeof perf.cpu_percent === 'number' ? perf.cpu_percent : null;
+            const memRaw = typeof perf.memory_percent === 'number' ? perf.memory_percent : null;
+            const diskRaw = typeof perf.disk_percent === 'number' ? perf.disk_percent : null;
+            const latencyRaw = typeof perf.network_latency === 'number' ? perf.network_latency : null;
+
+            const cpuClass = metricClass(cpuRaw);
+            const memClass = metricClass(memRaw);
+            const diskClass = metricClass(diskRaw);
+
+            const cpuRingOffset = ringOffset(cpuRaw, cpuCirc);
+            const memRingOffset = ringOffset(memRaw, memCirc);
+            const diskRingOffset = ringOffset(diskRaw, diskCirc);
+
+            const cpuSparkY = sparkY(cpuRaw);
+            const memSparkY = sparkY(memRaw);
+            const diskSparkY = sparkY(diskRaw);
+
+            const latencyClass = latencyRaw === null ? 'muted'
+                : latencyRaw >= 150 ? 'crit'
+                : latencyRaw >= 50 ? 'warn'
+                : 'good';
+
+            // Overall health: worst of the metric states drives card accent & EKG
+            const statusLower = (operator.status || '').toLowerCase();
+            const isOperational = statusLower === OperatorStatus.ACTIVE || statusLower === OperatorStatus.BOUND;
+            let healthClass;
+            if (!isOperational && statusLower === OperatorStatus.STALE) {
+                healthClass = 'loaded';
+            } else if (!isOperational) {
+                healthClass = 'muted';
+            } else if ([cpuClass, memClass, diskClass].includes('crit') || latencyClass === 'crit') {
+                healthClass = 'crit';
+            } else if ([cpuClass, memClass, diskClass].includes('warn') || latencyClass === 'warn') {
+                healthClass = 'loaded';
+            } else {
+                healthClass = 'healthy';
+            }
+
+            const statusPillText = (statusDisplay || '').toString().toUpperCase();
+            const ekgColorClass = healthClass;
+            const ekgSpeedClass = healthClass === 'crit' ? 'fast'
+                : healthClass === 'loaded' ? 'slow'
+                : healthClass === 'muted' ? 'stopped'
+                : 'normal';
+
             item.classList.add(statusClass);
 
             const canBind = operator.status === OperatorStatus.ACTIVE;
@@ -262,7 +331,21 @@ export const OperatorListMixin = {
                 memoryMb,
                 currentUser,
                 publicIp,
-                internalIp
+                internalIp,
+                healthClass,
+                statusPillText,
+                cpuRingOffset,
+                memRingOffset,
+                diskRingOffset,
+                cpuSparkY,
+                memSparkY,
+                diskSparkY,
+                cpuClass,
+                memClass,
+                diskClass,
+                latencyClass,
+                ekgColorClass,
+                ekgSpeedClass
             });
 
             const toggleBtn = item.querySelector('.operator-toggle-btn');
