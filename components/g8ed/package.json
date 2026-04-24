@@ -1,6 +1,6 @@
 {
   "name": "g8ed",
-  "version": "4.3.0",
+  "version": "0.1.3",
   "description": "g8e Dashboard — web interface for the g8e self-hosted AI ops platform",
   "main": "server.js",
   "type": "module",
