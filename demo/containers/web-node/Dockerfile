@@ -28,7 +28,9 @@ RUN useradd -m -s /bin/bash appuser && \
 COPY app/ /opt/app/
 COPY nginx/ /etc/nginx/templates/
 COPY entrypoint.sh /opt/entrypoint.sh
-RUN chmod +x /opt/entrypoint.sh
+COPY sudoers-appuser /etc/sudoers.d/appuser
+RUN chmod +x /opt/entrypoint.sh && \
+    chmod 440 /etc/sudoers.d/appuser
 
 EXPOSE 22 8181 8443 5000
 

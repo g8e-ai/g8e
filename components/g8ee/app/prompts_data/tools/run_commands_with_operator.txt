@@ -1,4 +1,4 @@
-Execute shell commands on the connected system through the g8e Operator.
+Execute shell commands on the target system through the deployed g8e Operator. The Operator is deployed directly on the target system and executes the command there.
 
 IMPORTANT: You DO NOT propose shell commands directly. The Tribunal — a five-member AI panel — is the sole authority for producing the command string. You describe what you want accomplished; the Tribunal translates that into precise shell syntax for the target OS/shell.
 

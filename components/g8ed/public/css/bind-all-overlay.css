@@ -198,7 +198,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px;
+    padding: 0.2rem 0.5rem;
     background: var(--surface-secondary);
     border: 1px solid var(--border-color);
     border-radius: 0.25rem;

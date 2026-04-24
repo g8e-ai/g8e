@@ -511,6 +511,7 @@ class OperatorCommandService:
         return [self._execution_service.resolve_target_operator(
             operator_documents=operator_documents,
             target_operator=args.target_operator or "",
+            tool_name="run_commands_with_operator",
         )]
 
     def _assemble_result(
@@ -599,8 +600,8 @@ class OperatorCommandService:
     async def execute_fs_list(self, args: FsListRequestPayload, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> FsListToolResult:
         return await self._filesystem_service.execute_fs_list(args, investigation, g8e_context=g8e_context)
 
-    async def execute_fs_read(self, args: FsReadRequestPayload, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> FsReadToolResult:
-        return await self._filesystem_service.execute_fs_read(args, investigation, g8e_context=g8e_context)
+    async def execute_file_read(self, args: FsReadRequestPayload, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> FsReadToolResult:
+        return await self._filesystem_service.execute_file_read(args, investigation, g8e_context=g8e_context)
 
     async def execute_intent_permission_request(self, args: GrantIntentArgs, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> IntentPermissionResult:
         return await self._intent_service.execute_intent_permission_request(

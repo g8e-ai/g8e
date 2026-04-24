@@ -119,6 +119,7 @@ class OperatorFileService:
                 resolved_operator = self.execution_service.resolve_target_operator(
                     operator_documents=operator_documents,
                     target_operator=args.target_operator,
+                    tool_name="file_edit_on_operator",
                 )
             except Exception as e:
                 logger.error("[FILE-ERROR] Operator resolution failed: %s", e, exc_info=True)
@@ -282,6 +283,7 @@ class OperatorFileService:
                 resolved_operator = self.execution_service.resolve_target_operator(
                     operator_documents=operator_documents,
                     target_operator=args.target_operator,
+                    tool_name="fetch_file_history",
                 )
             except Exception as e:
                 logger.error("[FILE-ERROR] Operator resolution failed: %s", e, exc_info=True)
@@ -393,6 +395,7 @@ class OperatorFileService:
                 resolved_operator = self.execution_service.resolve_target_operator(
                     operator_documents=operator_documents,
                     target_operator=args.target_operator,
+                    tool_name="fetch_file_diff",
                 )
             except Exception as e:
                 logger.error("[FILE-ERROR] Operator resolution failed: %s", e, exc_info=True)

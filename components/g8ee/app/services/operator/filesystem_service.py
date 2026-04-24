@@ -71,6 +71,7 @@ class OperatorFilesystemService:
         resolved_operator = self.execution_service.resolve_target_operator(
             operator_documents=operator_documents,
             target_operator=args.target_operator,
+            tool_name="list_files_and_directories_with_detailed_metadata",
         )
 
         g8e_message = G8eMessage(
@@ -143,7 +144,7 @@ class OperatorFilesystemService:
             error=error,
         )
 
-    async def execute_fs_read(
+    async def execute_file_read(
         self,
         args: FsReadRequestPayload,
         investigation: EnrichedInvestigationContext,
@@ -159,6 +160,7 @@ class OperatorFilesystemService:
         resolved_operator = self.execution_service.resolve_target_operator(
             operator_documents=operator_documents,
             target_operator=args.target_operator,
+            tool_name="file_read_on_operator",
         )
 
         g8e_message = G8eMessage(

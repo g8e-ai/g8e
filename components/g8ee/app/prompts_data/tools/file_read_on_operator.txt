@@ -1,11 +1,11 @@
-Read content from a file on the g8e Operator system. This is the high-level file reading tool that should be used for most file reading operations.
+Read content from a file on the target system through the deployed g8e Operator. The Operator is deployed directly on the target system and reads the file there. This is the high-level file reading tool that should be used for most file reading operations.
 
 ALWAYS use list_files_and_directories_with_detailed_metadata BEFORE this tool to verify the file exists and get the exact filename.
 
 <parameters>
 - file_path, justification: REQUIRED
 - start_line, end_line, max_lines: for large files
-- target_operator: REQUIRED when multiple operators bound
+- target_operator: operator_id or hostname — REQUIRED when multiple operators bound (prefer hostname when available)
 </parameters>
 
 <behavior>

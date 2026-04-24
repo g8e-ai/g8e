@@ -103,6 +103,7 @@ class OperatorPortService:
             resolved_operator = self.execution_service.resolve_target_operator(
                 operator_documents=operator_documents,
                 target_operator=args.target_operator,
+                tool_name="check_port",
             )
         except (ValidationError, BusinessLogicError, ValueError) as e:
             logger.error("[PORT_CHECK] Operator resolution failed: %s", e, exc_info=True)

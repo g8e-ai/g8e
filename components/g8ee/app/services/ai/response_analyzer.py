@@ -84,13 +84,13 @@ Working Directory: {working_dir}"""
     parts.append(AgentPersona.format_xml_tag("context", context))
 
     auto_fixable_errors = """- Missing dependencies (ModuleNotFoundError, command not found): pip install / npm install / apt install
-- Permission denied on a LOCAL project file (chmod, chown — NOT SSH auth): chmod / chown scoped to project directory
 - Syntax errors in commands (wrong flags, typos): corrected command
 - Missing directories (No such file or directory for expected paths): mkdir -p
 - Port conflicts (Address already in use): kill process on port or use different port"""
     parts.append(AgentPersona.format_xml_tag("auto_fixable_errors", auto_fixable_errors))
 
     escalate_to_human = """- SSH authentication failures (exit code 255, "Permission denied (publickey...)"): MUST escalate, cannot auto-fix
+- Permission denied errors (cannot auto-fix): escalate to user with specific manual steps
 - Invalid API keys or credentials: MUST escalate
 - System-level failures: kernel errors, hardware issues
 - Data corruption: file system errors, database corruption

@@ -2,7 +2,7 @@ Retrieve git version history for a file from the Operator's Ledger. Only files m
 
 <parameters>
 - file_path: REQUIRED — absolute path
-- limit: default 50 | target_operator: REQUIRED when multiple operators bound
+- limit: default 50 | target_operator: operator_id or hostname — REQUIRED when multiple operators bound (prefer hostname when available)
 </parameters>
 
 <returns>

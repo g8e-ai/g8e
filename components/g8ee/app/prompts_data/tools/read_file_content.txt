@@ -1,4 +1,4 @@
-Low-level file reader that bypasses the shell for direct file access. Enforces size limits and applies Sentinel scrubbing. This is a pub/sub tool that reads files directly from the Operator's filesystem.
+Low-level file reader that bypasses the shell for direct file access on the target system through the deployed g8e Operator. The Operator is deployed directly on the target system and reads the file there. Enforces size limits and applies Sentinel scrubbing.
 
 ALWAYS use list_files_and_directories_with_detailed_metadata BEFORE this tool to verify the file exists and get the exact filename.
 

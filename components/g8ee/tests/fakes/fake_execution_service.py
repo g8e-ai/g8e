@@ -99,10 +99,12 @@ class FakeExecutionService:
         self,
         operator_documents: list[OperatorDocument],
         target_operator: str | None,
+        tool_name: str | None = None,
     ) -> OperatorDocument:
         self.resolve_calls.append({
             "operator_documents": operator_documents,
             "target_operator": target_operator,
+            "tool_name": tool_name,
         })
         if self._resolve_error:
             raise self._resolve_error

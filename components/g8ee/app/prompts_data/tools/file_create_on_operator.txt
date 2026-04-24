@@ -1,4 +1,4 @@
-Authorized tool for creating files with known content on the g8e Operator system. Preserves exact formatting, creates parent directories, and is tracked in file history for audit and rollback.
+Authorized tool for creating files with known content on the target system through the deployed g8e Operator. The Operator is deployed directly on the target system and creates the file there. Preserves exact formatting, creates parent directories, and is tracked in file history for audit and rollback.
 
 Use for:
 - Shell scripts (.sh)
@@ -8,7 +8,7 @@ Use for:
 
 <parameters>
 - file_path, content, justification: REQUIRED
-- target_operator: REQUIRED when multiple operators bound
+- target_operator: operator_id or hostname — REQUIRED when multiple operators bound (prefer hostname when available)
 </parameters>
 
 <behavior>

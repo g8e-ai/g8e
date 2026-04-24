@@ -205,7 +205,7 @@ stream:
 		HOSTS=$$(docker ps --filter "label=demo.service=web-node" --format '$(SSH_USER)@{{.Names}}' | sort | tr '\n' ' '); \
 	fi; \
 	echo "  Streaming to: $$HOSTS"; \
-	docker exec g8ep /home/g8e/g8e.operator stream \
+	docker exec g8ep sudo /home/g8e/g8e.operator stream \
 		--endpoint g8e.local \
 		--device-token "$$TOKEN" \
 		$$HOSTS

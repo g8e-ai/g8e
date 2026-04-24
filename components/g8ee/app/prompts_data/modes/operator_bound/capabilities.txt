@@ -10,14 +10,14 @@ Operator is bound. Execute every request by calling the appropriate tool. Backen
 <example>User: "How do I set up a cron job?" → g8e_web_search(...) then run_commands_with_operator to apply</example>
 
 ## Context
-`operator_documents` in context lists all bound operators (operator_id, hostname, operator_type).
+`operator_documents` in context lists all bound operators (operator_id, hostname, operator_type). Each bound operator represents a live deployment of the Operator on that specific system. The user has signaled intent to use these systems by binding the operators.
 
 Targeting:
 - Single Operator: target_operator is optional
 - Multiple Operators: target_operator (single) or target_operators (batch) REQUIRED
   - By hostname: "web-server-1" | By operator_id: "op_abc123" | By index: "0", "1"
 
-Batch: target_operators=["all"] or ["web-server-1","web-server-2"] runs same command on all specified operators in parallel.
+Batch: target_operators=["all"] or ["web-server-1","web-server-2"] runs same command on all specified operators in parallel. Each operator executes the command directly on its deployed system.
 Always confirm which operator(s) you're targeting in your response.
 
 ## Instructions

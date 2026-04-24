@@ -201,10 +201,6 @@ export const TEMPLATE_FIXTURES = {
         </button>
     </div>
 
-    <div class="operator-bind-all-description">
-        The following operators will be bound to your current web session. You will be able to interact with all of them through the chat interface.
-    </div>
-
     <div class="operator-bind-all-operators-container">
         <div class="operator-bind-all-operators-header">
             <input type="checkbox" id="operator-select-all-operators" class="operator-select-all-checkbox" checked>
@@ -244,10 +240,6 @@ export const TEMPLATE_FIXTURES = {
         <button class="operator-unbind-all-close-btn" id="operator-unbind-all-close-btn">
             <span class="material-symbols-outlined">close</span>
         </button>
-    </div>
-
-    <div class="operator-unbind-all-description">
-        The following operators will be unbound from your current web session. You will no longer be able to interact with them until they are rebound.
     </div>
 
     <div class="operator-unbind-all-operators-container">

@@ -627,7 +627,7 @@ class AIToolService:
         args = self._convert_args_to_payload(tool_args, FsListRequestPayload, execution_id)
         logger.info("[LIST_DIRECTORY] Path: %s max_depth: %s max_entries: %s",
             args.path, args.max_depth, args.max_entries)
-        result = await self._execute_fs_list(
+        result = await self._execute_file_list(
             args, investigation, g8e_context
         )
         logger.info("[LIST_DIRECTORY] entries=%d truncated=%s",
@@ -969,14 +969,14 @@ class AIToolService:
             g8e_context=g8e_context,
         )
 
-    async def _execute_fs_read(
+    async def _execute_file_read(
         self,
         args: FsReadPayload,
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
     ) -> FsReadToolResult:
         """Delegate file system read operation to the G8eoOperatorService."""
-        return await self.operator_command_service.execute_fs_read(
+        return await self.operator_command_service.execute_file_read(
             args=args,
             investigation=investigation,
             g8e_context=g8e_context,

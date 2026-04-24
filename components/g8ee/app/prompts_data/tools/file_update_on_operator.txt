@@ -1,4 +1,4 @@
-Surgical find-and-replace on a file.
+Surgical find-and-replace on a file on the target system through the deployed g8e Operator. The Operator is deployed directly on the target system and modifies the file there.
 
 <parameters>
 <required>
@@ -9,6 +9,7 @@ Surgical find-and-replace on a file.
 </required>
 <optional>
 - create_backup: Backup before modifying (default: true)
+- target_operator: operator_id or hostname — REQUIRED when multiple operators bound (prefer hostname when available)
 </optional>
 </parameters>
 

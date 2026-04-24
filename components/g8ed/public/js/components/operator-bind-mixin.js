@@ -276,23 +276,21 @@ export const BindOperatorsMixin = {
             return;
         }
 
-        if (!this.downloadCollapsibleContent) {
-            devLogger.error('[OPERATOR] Download collapsible content not found');
+        if (!this.operatorPanelWrapper) {
+            devLogger.error('[OPERATOR] Operator panel wrapper not found');
             notificationService.error('Unable to show bind overlay. Please try again.');
             return;
         }
 
-        this.expandDownloadSection();
-
         const operatorsListHtml = activeOperators.map(op => this._createBindAllOperatorItem(op)).join('');
-        
+
         const template = templateLoader.cache.get('operator-bind-all-overlay');
         const overlayHtml = templateLoader.replace(template, {});
-        
+
         const overlayContainer = document.createElement('div');
         overlayContainer.innerHTML = overlayHtml;
         const overlay = overlayContainer.firstElementChild;
-        
+
         const countSpan = overlay.querySelector('#operator-bind-all-count');
         if (countSpan) {
             countSpan.textContent = `${activeOperators.length} operator${activeOperators.length !== 1 ? 's' : ''}`;
@@ -303,7 +301,7 @@ export const BindOperatorsMixin = {
             operatorsList.innerHTML = operatorsListHtml;
         }
 
-        this.downloadCollapsibleContent.prepend(overlay);
+        this.operatorPanelWrapper.prepend(overlay);
         overlay.classList.add('active');
 
         const selectAllCheckbox = overlay.querySelector('#operator-select-all-operators');
@@ -488,23 +486,21 @@ export const BindOperatorsMixin = {
             return;
         }
 
-        if (!this.downloadCollapsibleContent) {
-            devLogger.error('[OPERATOR] Download collapsible content not found');
+        if (!this.operatorPanelWrapper) {
+            devLogger.error('[OPERATOR] Operator panel wrapper not found');
             notificationService.error('Unable to show unbind overlay. Please try again.');
             return;
         }
 
-        this.expandDownloadSection();
-
         const operatorsListHtml = boundOperators.map(op => this._createUnbindAllOperatorItem(op)).join('');
-        
+
         const template = templateLoader.cache.get('operator-unbind-all-overlay');
         const overlayHtml = templateLoader.replace(template, {});
-        
+
         const overlayContainer = document.createElement('div');
         overlayContainer.innerHTML = overlayHtml;
         const overlay = overlayContainer.firstElementChild;
-        
+
         const countSpan = overlay.querySelector('#operator-unbind-all-count');
         if (countSpan) {
             countSpan.textContent = `${boundOperators.length} operator${boundOperators.length !== 1 ? 's' : ''}`;
@@ -515,7 +511,7 @@ export const BindOperatorsMixin = {
             operatorsList.innerHTML = operatorsListHtml;
         }
 
-        this.downloadCollapsibleContent.prepend(overlay);
+        this.operatorPanelWrapper.prepend(overlay);
         overlay.classList.add('active');
 
         const closeBtn = overlay.querySelector('#operator-unbind-all-close-btn');

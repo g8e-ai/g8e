@@ -304,6 +304,9 @@ export class OperatorPanel {
 
         devLogger.log('[OPERATOR] DOM references set - operatorList:', !!this.operatorList, 'drawerFooter:', !!this.drawerFooter, 'bindAllBtn:', !!this.bindAllBtn, 'unbindAllBtn:', !!this.unbindAllBtn);
 
+        // Operator panel wrapper
+        this.operatorPanelWrapper = document.getElementById('operator-panel-wrapper');
+
         // Download section
         this.downloadCollapsible = document.getElementById('operator-download-collapsible');
         this.downloadCollapsibleBar = document.getElementById('operator-download-collapsible-bar');

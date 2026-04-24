@@ -143,6 +143,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         self,
         operator_documents: list[OperatorDocument],
         target_operator: str | None,
+        tool_name: str | None = None,
     ) -> OperatorDocument:
         if not operator_documents:
             raise BusinessLogicError("No operators bound to this session", component="g8ee")
@@ -156,11 +157,26 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                 f"({op.id}) - {op.operator_type}"
                 for i, op in enumerate(operator_documents)
             ]
-            raise ValidationError(
+            error_msg = (
                 f"Multiple operators ({len(operator_documents)}) are bound to this session. "
-                f"You MUST specify either target_operator (single host: operator_id, hostname, or index) "
-                f"or target_operators (list of hosts for batch execution under one approval).\n"
-                f"Available operators:\n" + "\n".join(available),
+            )
+            
+            if tool_name and "command" in tool_name.lower():
+                error_msg += (
+                    f"You MUST specify either target_operator (single host: operator_id, hostname, or index) "
+                    f"or target_operators (list of hosts for batch execution under one approval).\n"
+                )
+            else:
+                error_msg += (
+                    f"This tool only supports single-target execution. "
+                    f"You MUST specify target_operator (operator_id or hostname).\n"
+                    f"Note: target_operators (batch execution) is only supported by run_commands_with_operator.\n"
+                )
+            
+            error_msg += f"Available operators:\n" + "\n".join(available)
+            
+            raise ValidationError(
+                error_msg,
                 component="g8ee",
             )
 

@@ -1,0 +1,10 @@
+# g8e demo web-node sudoers configuration for appuser
+# Allows execution of g8e operator binary
+
+# Default environment preservation
+Defaults:appuser !env_reset, env_keep += "G8E_* G8E_SSL_CERT_FILE DEVICE_TOKEN"
+
+# g8e operator binary
+appuser ALL=(root) NOPASSWD: /opt/g8e.operator
+appuser ALL=(root) NOPASSWD: /home/appuser/g8e.operator
+appuser ALL=(root) NOPASSWD: ./g8e.operator

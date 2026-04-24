@@ -4,7 +4,7 @@
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  width: 440px;
+  width: 400px;
   align-self: stretch;
   min-height: 0;
   border-right: none;
@@ -615,6 +615,7 @@
   opacity: 0;
   overflow: hidden;
   transition: opacity 0.3s ease, height 0.3s ease;
+  position: relative;
 }
 
 .operator-download-collapsible.expanded .operator-download-collapsible-content {
@@ -1834,10 +1835,9 @@
 }
 
 .operator-deploy-section {
-  margin-top: 12px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 1rem;
 }
 
 .operator-deploy-row {
@@ -1940,7 +1940,7 @@
 .operator-device-link-generate-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 1rem;
   flex-wrap: wrap;
   margin-bottom: 4px;
 }
