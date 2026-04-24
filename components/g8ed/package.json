@@ -1,6 +1,6 @@
 {
   "name": "g8ed",
-  "version": "4.3.0",
+  "version": "0.1.4",
   "description": "g8e Dashboard — web interface for the g8e self-hosted AI ops platform",
   "main": "server.js",
   "type": "module",
@@ -24,7 +24,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
     "helmet": "^8.1.0",
-    "uuid": "^13.0.0",
+    "uuid": "^14.0.0",
     "winston": "^3.18.3",
     "ws": "^8.18.0"
   },
