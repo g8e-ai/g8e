@@ -26,8 +26,7 @@ RUN mkdir -p /opt/g8e /var/log/app /etc/app && \
     chown -R appuser:appuser /opt/g8e /var/log/app /etc/app
 
 # Copy entrypoint
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
 
 # Switch to non-root user
 USER appuser

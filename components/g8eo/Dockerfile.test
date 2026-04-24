@@ -37,16 +37,11 @@ WORKDIR /app
 RUN addgroup -g 1001 g8e \
     && adduser -u 1001 -G g8e -D -s /bin/bash g8e
 
-COPY components/g8eo/go.mod components/g8eo/go.sum /app/components/g8eo/
-COPY components/g8eo/vendor/ /app/components/g8eo/vendor/
-COPY components/g8eo/tools/ /app/components/g8eo/tools/
+USER g8e
+
+COPY --chown=g8e:g8e components/g8eo/go.mod components/g8eo/go.sum /app/components/g8eo/
+COPY --chown=g8e:g8e components/g8eo/vendor/ /app/components/g8eo/vendor/
+COPY --chown=g8e:g8e components/g8eo/tools/ /app/components/g8eo/tools/
 
 RUN cd /app/components/g8eo/tools \
-    && go build -mod=vendor -o /usr/local/bin/gotestsum gotest.tools/gotestsum
-
-# The gotestsum build above runs as root and populates GOPATH/GOCACHE under
-# /home/g8e. Hand ownership to the g8e user so the shared Go build cache is
-# writable at test time (otherwise `go test` fails with EACCES on cache files).
-RUN chown -R g8e:g8e /home/g8e
-
-USER g8e
+    && go build -mod=vendor -o /home/g8e/go/bin/gotestsum gotest.tools/gotestsum
