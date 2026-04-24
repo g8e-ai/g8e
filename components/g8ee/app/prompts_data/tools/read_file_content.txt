@@ -1,4 +1,6 @@
-Authorized reader for text file contents. Bypasses the shell, enforces size limits, and applies Sentinel scrubbing.
+Low-level file reader that bypasses the shell for direct file access. Enforces size limits and applies Sentinel scrubbing. This is a pub/sub tool that reads files directly from the Operator's filesystem.
+
+ALWAYS use list_files_and_directories_with_detailed_metadata BEFORE this tool to verify the file exists and get the exact filename.
 
 <parameters>
 - path: REQUIRED — absolute or relative to operator working directory
@@ -7,8 +9,28 @@ Authorized reader for text file contents. Bypasses the shell, enforces size limi
 </parameters>
 
 <behavior>
-Binary files rejected. Large files truncated with warning. Symlinks followed.
+1. Bypasses shell completely - direct filesystem read operation
+2. Binary files are rejected with error
+3. Large files truncated with warning at max_size limit
+4. Symlinks are followed to their target
+5. Content is Sentinel-scrubbed before transmission
+6. This is a low-level tool - use file_read_on_operator for most file reading needs
+7. Does not support line-based reading (use file_read_on_operator for start_line/end_line)
 </behavior>
+
+<when_to_use>
+- When you need direct filesystem access without shell overhead
+- Reading small files where shell escaping might be an issue
+- When file_read_on_operator is not available or appropriate
+- Quick reads of configuration or log files
+</when_to_use>
+
+<never>
+- Never use for large files - will be truncated
+- Never use for binary files - will be rejected
+- Never use when you need line-based reading (start_line/end_line) - use file_read_on_operator instead
+- Never use without first verifying the file exists with list_files_and_directories_with_detailed_metadata
+</never>
 
 <sentinel_scrubbing>
 File content is Sentinel-scrubbed. See run_commands_with_operator for full placeholder reference.
@@ -17,4 +39,5 @@ File content is Sentinel-scrubbed. See run_commands_with_operator for full place
 <examples>
 <example>User: "Show me the nginx config" → read_file_content(path="/etc/nginx/nginx.conf")</example>
 <example>User: "Read the application log" → read_file_content(path="/var/log/app.log")</example>
+<example>User: "What's in the .env file?" → read_file_content(path="/app/.env")</example>
 </examples>

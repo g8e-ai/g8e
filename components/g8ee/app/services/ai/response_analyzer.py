@@ -31,118 +31,117 @@ from app.models.tool_results import (
     FileOperationRiskContext,
 )
 from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
-from app.utils.agent_persona_loader import get_agent_persona
+from app.utils.agent_persona_loader import get_agent_persona, AgentPersona
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar('T', bound=G8eBaseModel)
 
 
-# Warden template scaffolding - these hold the context-specific structure
-# that is formatted at runtime, separate from the persona voice in agents.json
+def _build_warden_command_risk_template(
+    command: str,
+    justification: str,
+    working_dir: str,
+) -> str:
+    """Build the Warden command risk analysis template using centralized XML formatting.
 
-WARDEN_COMMAND_RISK_TEMPLATE = """\
+    Uses AgentPersona.format_xml_tag to guarantee hard structural boundaries.
+    """
+    parts = []
 
-<command>
-{command}
-</command>
+    parts.append(AgentPersona.format_xml_tag("command", command))
+    parts.append(AgentPersona.format_xml_tag("justification", justification))
+    parts.append(AgentPersona.format_xml_tag("working_directory", working_dir))
 
-<justification>
-{justification}
-</justification>
+    output_format = """Respond with ONLY a JSON object matching this exact schema, with no prose, no markdown fences, and no additional fields:
+{{"risk_level": "LOW"}}  OR  {{"risk_level": "MEDIUM"}}  OR  {{"risk_level": "HIGH"}}"""
+    parts.append(AgentPersona.format_xml_tag("output_format", output_format))
 
-<working_directory>
-{working_dir}
-</working_directory>
+    return "\n\n".join(parts)
 
-<output_format>
-Respond with ONLY a JSON object matching this exact schema, with no prose, no markdown fences, and no additional fields:
-{{"risk_level": "LOW"}}  OR  {{"risk_level": "MEDIUM"}}  OR  {{"risk_level": "HIGH"}}
-</output_format>
-"""
 
-WARDEN_ERROR_TEMPLATE = """\
+def _build_warden_error_template(
+    command: str,
+    exit_code: int | None,
+    stdout: str,
+    stderr: str,
+    retry_count: int,
+    working_dir: str,
+) -> str:
+    """Build the Warden error analysis template using centralized XML formatting.
 
-<failed_command>
-{command}
-</failed_command>
+    Uses AgentPersona.format_xml_tag to guarantee hard structural boundaries.
+    """
+    parts = []
 
-<exit_code>
-{exit_code}
-</exit_code>
+    parts.append(AgentPersona.format_xml_tag("failed_command", command))
+    parts.append(AgentPersona.format_xml_tag("exit_code", str(exit_code)))
+    parts.append(AgentPersona.format_xml_tag("stdout", stdout))
+    parts.append(AgentPersona.format_xml_tag("stderr", stderr))
 
-<stdout>
-{stdout}
-</stdout>
+    context = f"""Retry Count: {retry_count}
+Working Directory: {working_dir}"""
+    parts.append(AgentPersona.format_xml_tag("context", context))
 
-<stderr>
-{stderr}
-</stderr>
-
-<context>
-Retry Count: {retry_count}
-Working Directory: {working_dir}
-</context>
-
-<auto_fixable_errors>
-- Missing dependencies (ModuleNotFoundError, command not found): pip install / npm install / apt install
+    auto_fixable_errors = """- Missing dependencies (ModuleNotFoundError, command not found): pip install / npm install / apt install
 - Permission denied on a LOCAL project file (chmod, chown — NOT SSH auth): chmod / chown scoped to project directory
 - Syntax errors in commands (wrong flags, typos): corrected command
 - Missing directories (No such file or directory for expected paths): mkdir -p
-- Port conflicts (Address already in use): kill process on port or use different port
-</auto_fixable_errors>
+- Port conflicts (Address already in use): kill process on port or use different port"""
+    parts.append(AgentPersona.format_xml_tag("auto_fixable_errors", auto_fixable_errors))
 
-<escalate_to_human>
-- SSH authentication failures (exit code 255, "Permission denied (publickey...)"): MUST escalate, cannot auto-fix
+    escalate_to_human = """- SSH authentication failures (exit code 255, "Permission denied (publickey...)"): MUST escalate, cannot auto-fix
 - Invalid API keys or credentials: MUST escalate
 - System-level failures: kernel errors, hardware issues
 - Data corruption: file system errors, database corruption
 - Ambiguous errors: multiple possible root causes
 - Retry limit exceeded: same error after 2+ attempts (retry_count >= 2 MUST escalate)
-- Configuration issues requiring human access: environment setup, server-side config
-</escalate_to_human>
+- Configuration issues requiring human access: environment setup, server-side config"""
+    parts.append(AgentPersona.format_xml_tag("escalate_to_human", escalate_to_human))
 
-Based on the information above, analyze the failure and fill in ALL response fields.
-"""
+    parts.append("Based on the information above, analyze the failure and fill in ALL response fields.")
 
-WARDEN_FILE_RISK_TEMPLATE = """\
+    return "\n\n".join(parts)
 
-<operation>
-{operation}
-</operation>
 
-<file_path>
-{file_path}
-</file_path>
+def _build_warden_file_risk_template(
+    operation: str,
+    file_path: str,
+    content_preview: str,
+    git_status: str,
+    backup_available: bool,
+) -> str:
+    """Build the Warden file operation risk template using centralized XML formatting.
 
-<content_preview>
-{content_preview}
-</content_preview>
+    Uses AgentPersona.format_xml_tag to guarantee hard structural boundaries.
+    """
+    parts = []
 
-<context>
-Git Status: {git_status}
-Backup Available: {backup_available}
-</context>
+    parts.append(AgentPersona.format_xml_tag("operation", operation))
+    parts.append(AgentPersona.format_xml_tag("file_path", file_path))
+    parts.append(AgentPersona.format_xml_tag("content_preview", content_preview))
 
-<system_file_patterns>
-HIGH risk paths: /etc/, /usr/, /sys/, /proc/, /bin/, /sbin/, /boot/, /lib/
-HIGH risk files: /etc/passwd, /etc/shadow, /etc/fstab, kernel files, system binaries
-</system_file_patterns>
+    context = f"""Git Status: {git_status}
+Backup Available: {backup_available}"""
+    parts.append(AgentPersona.format_xml_tag("context", context))
 
-<risk_levels>
-LOW: Build artifacts, temp files (/tmp), generated output
+    system_file_patterns = """HIGH risk paths: /etc/, /usr/, /sys/, /proc/, /bin/, /sbin/, /boot/, /lib/
+HIGH risk files: /etc/passwd, /etc/shadow, /etc/fstab, kernel files, system binaries"""
+    parts.append(AgentPersona.format_xml_tag("system_file_patterns", system_file_patterns))
+
+    risk_levels = """LOW: Build artifacts, temp files (/tmp), generated output
 MEDIUM: Project source files, config files (package.json, requirements.txt)
-HIGH: System files, irreversible deletes, dirty git + destructive operation
-</risk_levels>
+HIGH: System files, irreversible deletes, dirty git + destructive operation"""
+    parts.append(AgentPersona.format_xml_tag("risk_levels", risk_levels))
 
-<blocking_conditions>
-- System file path without explicit override
+    blocking_conditions = """- System file path without explicit override
 - Delete operation with no backup available
-- Dirty git state combined with a destructive operation
-</blocking_conditions>
+- Dirty git state combined with a destructive operation"""
+    parts.append(AgentPersona.format_xml_tag("blocking_conditions", blocking_conditions))
 
-Based on the information above, assess the risk and fill in ALL response fields. You MUST set is_system_file to true or false (never omit it). You MUST set safe_to_proceed to false for any HIGH risk system file operation.
-"""
+    parts.append("Based on the information above, assess the risk and fill in ALL response fields. You MUST set is_system_file to true or false (never omit it). You MUST set safe_to_proceed to false for any HIGH risk system file operation.")
+
+    return "\n\n".join(parts)
 
 
 class AIResponseAnalyzer:
@@ -212,12 +211,12 @@ class AIResponseAnalyzer:
         resolved_settings = settings
 
         command_risk_persona = get_agent_persona("warden_command_risk")
-        template = WARDEN_COMMAND_RISK_TEMPLATE.format(
+        template = _build_warden_command_risk_template(
             command=command,
             justification=justification,
             working_dir=working_dir
         )
-        prompt = f"{command_risk_persona.get_system_prompt()}{template}"
+        prompt = f"{command_risk_persona.get_system_prompt()}\n\n{template}"
 
         assistant_model = resolved_settings.llm.resolved_assistant_model
 
@@ -265,7 +264,7 @@ class AIResponseAnalyzer:
             )
 
         error_persona = get_agent_persona("warden_error")
-        template = WARDEN_ERROR_TEMPLATE.format(
+        template = _build_warden_error_template(
             command=command,
             exit_code=exit_code,
             stdout=stdout[:1000],
@@ -273,7 +272,7 @@ class AIResponseAnalyzer:
             retry_count=retry_count,
             working_dir=working_dir
         )
-        prompt = f"{error_persona.get_system_prompt()}{template}"
+        prompt = f"{error_persona.get_system_prompt()}\n\n{template}"
 
         assistant_model = resolved_settings.llm.resolved_assistant_model
 
@@ -336,14 +335,14 @@ class AIResponseAnalyzer:
         content_preview = content[:500] if content else "N/A"
 
         file_risk_persona = get_agent_persona("warden_file_risk")
-        template = WARDEN_FILE_RISK_TEMPLATE.format(
+        template = _build_warden_file_risk_template(
             operation=operation,
             file_path=file_path,
             content_preview=content_preview,
             git_status=git_status,
             backup_available=backup_available
         )
-        prompt = f"{file_risk_persona.get_system_prompt()}{template}"
+        prompt = f"{file_risk_persona.get_system_prompt()}\n\n{template}"
 
         assistant_model = resolved_settings.llm.resolved_assistant_model
 

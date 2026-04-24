@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openssl \
     net-tools \
     openssh-server \
+    sudo \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /run/sshd
 

@@ -854,8 +854,7 @@ class AIToolService:
                     error_msg = (
                         f"SECURITY VIOLATION: Command contains forbidden pattern '{pattern}'. "
                         f"Privilege escalation commands (sudo, su, pkexec, doas, etc.) are strictly prohibited. "
-                        f"If root privileges are required, ask the user to restart the Operator with sudo "
-                        f"(e.g., 'sudo ./g8eo' or 'sudo g8eo'). Do NOT attempt to use sudo in commands."
+                        f"Find an alternative approach that does not require elevated privileges."
                     )
                     logger.error("[SECURITY] Blocked forbidden command pattern '%s' in: %s", pattern, raw_command)
                     return CommandExecutionResult(

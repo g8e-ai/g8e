@@ -76,7 +76,7 @@ export const ChatSSEHandlersMixin = {
 
         // Universal tool handlers for native lifecycle events
         this.eventBus.on(EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED, (data) => {
-            this.handleUniversalToolStarted(data, 'web-search', 'Searching web', 'search', ToolDisplayCategory.SEARCH);
+            this.handleUniversalToolStarted(data, 'web-search', data.display_label || 'Searching web', data.display_icon, data.category);
         });
 
         this.eventBus.on(EventType.LLM_TOOL_G8E_WEB_SEARCH_COMPLETED, (data) => {
@@ -88,7 +88,7 @@ export const ChatSSEHandlersMixin = {
         });
 
         this.eventBus.on(EventType.LLM_TOOL_G8E_INVESTIGATION_QUERY_REQUESTED, (data) => {
-            this.handleUniversalToolStarted(data, 'investigation-query', 'Querying investigation', 'search', ToolDisplayCategory.GENERAL);
+            this.handleUniversalToolStarted(data, 'investigation-query', data.display_label || 'Querying investigation', data.display_icon, data.category);
         });
 
         this.eventBus.on(EventType.LLM_TOOL_G8E_INVESTIGATION_QUERY_COMPLETED, (data) => {
@@ -100,7 +100,7 @@ export const ChatSSEHandlersMixin = {
         });
 
         this.eventBus.on(EventType.LLM_TOOL_G8E_COMMAND_CONSTRAINTS_REQUESTED, (data) => {
-            this.handleUniversalToolStarted(data, 'command-constraints', 'Checking constraints', 'tool', ToolDisplayCategory.EXECUTION);
+            this.handleUniversalToolStarted(data, 'command-constraints', data.display_label || 'Checking constraints', data.display_icon, data.category);
         });
 
         this.eventBus.on(EventType.LLM_TOOL_G8E_COMMAND_CONSTRAINTS_COMPLETED, (data) => {

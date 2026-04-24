@@ -1,5 +1,7 @@
 Authoritative directory-listing tool. Returns comprehensive stat metadata and doubles as an existence check.
 
+ALWAYS use this tool BEFORE attempting file operations (file_read_on_operator, file_write_on_operator, run_commands_with_operator) to verify the target path exists. This prevents errors from missing directories or files and provides context about what's available.
+
 <parameters>
 <required>
 - path: Absolute path to the directory to list
@@ -11,6 +13,13 @@ Authoritative directory-listing tool. Returns comprehensive stat metadata and do
 </optional>
 </parameters>
 
+<behavior>
+1. Before reading any file: list its parent directory first to confirm the file exists and get exact filename
+2. Before running commands on files: list the directory to verify the target file/directory exists
+3. Use for existence checks: returns error if path is missing — this is the canonical way to check if a directory exists
+4. Use max_depth=0 for current directory only, max_depth=1 for immediate subdirectories
+</behavior>
+
 <returns>
 Per entry: name, type, size, permissions, modified timestamp, owner.
 Returns error if path missing (use for existence checks).
@@ -19,4 +28,5 @@ Returns error if path missing (use for existence checks).
 <examples>
 <example>User: "What's in /var/log?" → list_files_and_directories_with_detailed_metadata(path="/var/log", justification="List log directory contents")</example>
 <example>User: "Check if /etc/nginx exists" → list_files_and_directories_with_detailed_metadata(path="/etc/nginx", justification="Verify nginx directory existence")</example>
+<example>User: "Read nginx error logs" → list_files_and_directories_with_detailed_metadata(path="/var/log/nginx", justification="Verify nginx log directory exists before reading logs")</example>
 </examples>

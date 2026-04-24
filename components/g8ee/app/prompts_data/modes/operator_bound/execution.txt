@@ -35,7 +35,7 @@ User: "Deploy this nginx config"
 3. Error handling patterns:
   - Configuration file errors (nginx: invalid directive, syntax errors, missing values): STOP retrying commands. Use file_read_on_operator to read the config file, then file_update_on_operator to fix the error, then validate with config test command before restarting the service.
   - Missing files/directories: Use file_create_on_operator or run_commands_with_operator(mkdir -p) depending on whether content needs to be written.
-  - Permission errors on local files: Use run_commands_with_operator(chmod/chown) scoped to the affected directory.
+  - Permission errors: The AI operates within fixed permission boundaries and cannot escalate. If a file/directory is inaccessible, find an alternative approach that works within current permissions (different location, read-only alternatives, or escalate to user with specific manual steps). Never attempt chmod/chown/sudo or assume you can fix permission issues.
   - Dependency errors: Use run_commands_with_operator to install missing packages (pip, npm, apt).
   NEVER attempt to start/restart a service with a known configuration error. Fix the config file first using file edit tools.
 </instructions>

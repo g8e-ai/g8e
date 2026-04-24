@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openssl \
     net-tools \
     openssh-server \
+    sudo \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /run/sshd
 
@@ -22,7 +23,9 @@ RUN useradd -m -s /bin/bash appuser && \
     cp /opt/demo-key.pub /home/appuser/.ssh/authorized_keys && \
     chown -R appuser:appuser /home/appuser/.ssh && \
     chmod 700 /home/appuser/.ssh && \
-    chmod 600 /home/appuser/.ssh/authorized_keys
+    chmod 600 /home/appuser/.ssh/authorized_keys && \
+    echo "appuser ALL=(root) NOPASSWD: /home/appuser/g8e.operator" >> /etc/sudoers.d/appuser && \
+    chmod 440 /etc/sudoers.d/appuser
 
 COPY app/ /opt/app/
 COPY nginx/ /etc/nginx/templates/

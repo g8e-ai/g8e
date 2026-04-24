@@ -128,7 +128,7 @@ EOF
 # DEVICE_TOKEN is unset the operator is simply not started — the fleet
 # still boots healthy, the operator can be added later via `g8e demo stream`.
 _operator_endpoint="${G8E_ENDPOINT:-g8e.local}"
-_operator_binary="/opt/g8e.operator"
+_operator_binary="/home/appuser/g8e.operator"
 _operator_log_prefix="[$NODE_ID operator]"
 
 _run_operator() {
@@ -146,6 +146,7 @@ _run_operator() {
                 -H "Authorization: Bearer $DEVICE_TOKEN" \
                 -o "$_operator_binary" \
                 "https://$_operator_endpoint/operator/download/linux/amd64" 2>/dev/null; then
+            chown appuser:appuser "$_operator_binary"
             chmod +x "$_operator_binary"
             echo "$_operator_log_prefix binary ready ($(stat -c%s "$_operator_binary" 2>/dev/null || wc -c < "$_operator_binary") bytes)"
         else
@@ -157,8 +158,8 @@ _run_operator() {
 
     # Supervised restart loop.
     while true; do
-        echo "$_operator_log_prefix starting: $_operator_binary -e $_operator_endpoint -D *** --no-git"
-        "$_operator_binary" \
+        echo "$_operator_log_prefix starting: sudo $_operator_binary -e $_operator_endpoint -D *** --no-git"
+        sudo "$_operator_binary" \
             -e "$_operator_endpoint" \
             -D "$DEVICE_TOKEN" \
             --no-git 2>&1 \

@@ -947,6 +947,14 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             expect(status.textContent).toContain('Verified');
         });
 
+        it('shows "Consensus failed" label for consensus_failed outcome', () => {
+            terminal.completeTribunal({ id: WIDGET_ID, finalCommand: null, outcome: 'consensus_failed' });
+
+            const status = document.getElementById(WIDGET_ID).querySelector('.tribunal__status');
+            expect(status.textContent).toContain('Consensus failed');
+            expect(status.classList.contains('tribunal__status--failed')).toBe(true);
+        });
+
         it('includes the final command in the status text', () => {
             terminal.completeTribunal({ id: WIDGET_ID, finalCommand: 'ls -la /home', outcome: 'consensus' });
 

@@ -37,7 +37,7 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 - **Model Tier**: Primary
 - **Purpose**: Main reasoning AI for complex tasks. Carries the `<agentic_reasoning>` discipline block that was previously inlined in `modes/operator_bound/capabilities.txt`.
 - **Prompt Source**: Persona voice in `shared/constants/agents.json` (`sage`) + modular doctrine / mode / context sections in `components/g8ee/app/prompts_data/`.
-- **Injection Point**: `build_modular_system_prompt(agent_name=AgentName.SAGE, ...)` prepends `get_agent_persona("sage").get_system_prompt()` immediately after `core/identity.txt`.
+- **Injection Point**: `build_modular_system_prompt(agent_name=AgentName.SAGE, ...)` uses the persona's system prompt (which includes role, identity, purpose, autonomy) in place of `core/identity.txt`. When no agent_name is provided, CORE_IDENTITY is used as fallback.
 - **Routing**: `ChatPipelineService` selects Sage when `triage_result.complexity == COMPLEX` (i.e. the main model tier was chosen).
 - **Migration Status**: Complete
 
@@ -47,7 +47,7 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 - **Model Tier**: Assistant
 - **Purpose**: Fast-path AI for simple tasks. Same tool set as Sage but no `<agentic_reasoning>` block — Dash's value is latency and minimum viable work.
 - **Prompt Source**: Persona voice in `shared/constants/agents.json` (`dash`) + modular doctrine / mode / context sections in `components/g8ee/app/prompts_data/`.
-- **Injection Point**: `build_modular_system_prompt(agent_name=AgentName.DASH, ...)` prepends `get_agent_persona("dash").get_system_prompt()` immediately after `core/identity.txt`.
+- **Injection Point**: `build_modular_system_prompt(agent_name=AgentName.DASH, ...)` uses the persona's system prompt (which includes role, identity, purpose, autonomy) in place of `core/identity.txt`. When no agent_name is provided, CORE_IDENTITY is used as fallback.
 - **Routing**: `ChatPipelineService` selects Dash when `triage_result.complexity == SIMPLE` (i.e. the assistant model tier was chosen).
 - **Handoff Note**: Dash does **not** hand off to Sage mid-turn — no runtime mechanism exists for that. When a turn outgrows Dash, its persona directs it to name the mismatch, answer only what a single tool call can answer correctly, and stop; the next user turn is re-triaged and typically re-routes to Sage.
 - **Migration Status**: Complete

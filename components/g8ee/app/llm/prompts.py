@@ -425,12 +425,12 @@ def build_modular_system_prompt(
     """
     sections = []
 
-    sections.append(load_prompt(PromptFile.CORE_IDENTITY))
-
     if agent_name is not None:
         persona = get_agent_persona(agent_name.value).get_system_prompt()
         if persona:
             sections.append(persona)
+    else:
+        sections.append(load_prompt(PromptFile.CORE_IDENTITY))
 
     # Context blocks first (Gemini 3 best practices)
     if system_context:

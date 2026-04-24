@@ -278,6 +278,7 @@ export const TribunalOutcome = Object.freeze({
     VERIFICATION_FAILED: 'verification_failed',
     CONSENSUS:           'consensus',
     VERIFIED:            'verified',
+    CONSENSUS_FAILED:    'consensus_failed',
 });
 
 // Terminal Tribunal states are distinguished by event type, not by a shared

@@ -686,10 +686,14 @@ export class TerminalOutputMixin {
                 outcomeLabel = 'Revised';
             } else if (outcome === TribunalOutcome.CONSENSUS) {
                 outcomeLabel = 'Consensus';
+            } else if (outcome === TribunalOutcome.CONSENSUS_FAILED) {
+                outcomeLabel = 'Consensus failed';
+                statusEl.classList.add('tribunal__status--failed');
             } else {
                 outcomeLabel = 'Verified';
             }
-            statusEl.textContent = `${outcomeLabel} · ${finalCommand}`;
+            const statusText = finalCommand ? `${outcomeLabel} · ${finalCommand}` : outcomeLabel;
+            statusEl.textContent = statusText;
             statusEl.classList.add('tribunal__status--done');
         }
     }
