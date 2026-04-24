@@ -210,31 +210,12 @@ export class OperatorPanel {
         this.isConnected         = this._isConnected;
         this.lastHeartbeat       = this._lastHeartbeat;
 
-        if (cause === 'heartbeat' && this._isConnected) {
-            // If no operator is selected for metrics yet, try to default to the primary operator
-            if (!this.selectedMetricsOperatorId && this.webSessionModel?.operator_id) {
-                this.selectedMetricsOperatorId = this.webSessionModel.operator_id;
-            }
-
-            const heartbeatData = this.operators.find(op => op.operator_id === this.selectedMetricsOperatorId);
-            if (heartbeatData) {
-                this.updateMetrics(heartbeatData);
-                this.updateStatus(heartbeatData.status || OperatorStatus.ACTIVE);
-            }
-            // Re-render operator list to show updated heartbeat metrics in expanded details
-            this.displayOperators(this.operators);
-
-            // Also update the overall panel status if not bound
-            this.updatePanelStatusFromOperatorCounts();
-            return;
-        }
-
         if (cause === 'scheduled') {
-            // Full render from accumulated state - handles re-sort, pagination, and slots that never received a heartbeat
             this.updatePanelStatusFromOperatorCounts();
             this.displayOperators(this.operators);
             this.updateBindAllButtonVisibility();
             this.updateUnbindAllButtonVisibility();
+            this._heartbeatDirty = false;
             return;
         }
 
@@ -244,9 +225,7 @@ export class OperatorPanel {
                 this.clearPanelMetrics();
             }
             this._heartbeatDirty = false;
-        }
-
-        if (cause === 'list_updated') {
+        } else if (cause === 'list_updated') {
             this._heartbeatDirty = false;
         }
 

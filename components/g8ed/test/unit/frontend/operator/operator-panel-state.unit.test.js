@@ -64,6 +64,8 @@ function createPanel(initialOperators) {
     panel.updateMetrics = vi.fn();
     panel.updateStatus = vi.fn();
     panel.updatePanelStatusFromOperatorCounts = vi.fn();
+    panel.updateBindAllButtonVisibility = vi.fn();
+    panel.updateUnbindAllButtonVisibility = vi.fn();
     return panel;
 }
 
@@ -235,6 +237,7 @@ describe('OperatorPanel._onStatusUpdated [UNIT - PURE LOGIC]', () => {
         const panel = createPanel([
             { operator_id: 'op-1', status: OperatorStatus.AVAILABLE },
         ]);
+        panel._isRendered = true;
         panel._heartbeatDirty = true;
 
         panel._onStatusUpdated({
@@ -251,6 +254,7 @@ describe('OperatorPanel.heartbeat buffering [UNIT - PURE LOGIC]', () => {
         const panel = createPanel([
             { operator_id: 'op-1', status: OperatorStatus.AVAILABLE },
         ]);
+        panel._isRendered = true;
         panel._heartbeatDirty = true;
 
         panel._onListUpdated({
