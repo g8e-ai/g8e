@@ -392,13 +392,13 @@ export const OperatorListMixin = {
                     const operatorId = bindBtn.getAttribute('data-operator-id');
                     const isBoundState = bindBtn.getAttribute('data-is-bound') === 'true';
                     const isStaleState = bindBtn.getAttribute('data-is-stale') === 'true';
-                    if (isBoundState || isStaleState) {
-                        await this.unbindOperatorWithConfirmation(operatorId, isStaleState);
-                        return;
-                    }
                     if (bindBtn.getAttribute('data-confirming') === 'true') {
                         this._exitBindConfirmMode(bindBtn);
-                        await this.bindOperator(operatorId);
+                        if (isBoundState || isStaleState) {
+                            await this.unbindOperator(operatorId, isStaleState);
+                        } else {
+                            await this.bindOperator(operatorId);
+                        }
                     } else {
                         this._enterBindConfirmMode(bindBtn);
                     }
