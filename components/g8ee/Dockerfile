@@ -35,11 +35,10 @@ COPY --from=g8ee-builder /install /usr/local
 
 COPY components/g8ee/app/ /app/components/g8ee/app/
 COPY components/g8ee/config/ /app/components/g8ee/config/
-COPY components/g8ee/entrypoint.sh /app/components/g8ee/entrypoint.sh
+COPY --chmod=755 components/g8ee/entrypoint.sh /app/components/g8ee/entrypoint.sh
 COPY shared/ /app/shared/
 
-RUN chmod +x /app/components/g8ee/entrypoint.sh && \
-    mkdir -p /data && chown -R g8e:g8e /data
+RUN mkdir -p /data && chown -R g8e:g8e /data
 
 USER g8e
 

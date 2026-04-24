@@ -36,10 +36,9 @@ COPY --from=g8ed-builder /app/node_modules ./node_modules
 COPY shared/ /shared/
 
 COPY components/g8ed/ .
-COPY components/g8ed/entrypoint.sh ./entrypoint.sh
+COPY --chmod=755 components/g8ed/entrypoint.sh ./entrypoint.sh
 
-RUN chmod +x ./entrypoint.sh && \
-    mkdir -p logs /data && chown -R g8e:g8e logs /data
+RUN mkdir -p logs /data && chown -R g8e:g8e logs /data
 
 USER g8e
 

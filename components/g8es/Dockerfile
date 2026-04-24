@@ -43,16 +43,13 @@ RUN set -ex; \
     && addgroup -g 1001 g8e \
     && adduser -u 1001 -G g8e -H -D -s /sbin/nologin g8e
 
-COPY --from=g8es-builder /out/linux-amd64/g8e.operator /usr/local/bin/g8e.operator
-COPY --from=g8es-builder /out/ /opt/operator-binaries/
+COPY --from=g8es-builder --chmod=755 /out/linux-amd64/g8e.operator /usr/local/bin/g8e.operator
+COPY --from=g8es-builder --chmod=644 /out/ /opt/operator-binaries/
 
-RUN chmod +x /usr/local/bin/g8e.operator \
-    && chmod -R +r /opt/operator-binaries/ \
-    && mkdir -p /data /ssl \
+RUN mkdir -p /data /ssl \
     && chown -R g8e:g8e /data /ssl
 
-COPY components/g8es/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY --chmod=755 components/g8es/entrypoint.sh /entrypoint.sh
 
 EXPOSE 9000 9001
 
