@@ -50,7 +50,7 @@
 
 /* Thinking group - unique group for thinking events */
 .anchored-terminal__agent-message-group--thinking {
-    border-left-color: var(--accent-yellow);
+    border-left-color: var(--accent-green-muted);
 }
 
 .anchored-terminal__agent-message-group--thinking .anchored-terminal__thinking {

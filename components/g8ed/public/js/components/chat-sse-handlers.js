@@ -377,6 +377,15 @@ export const ChatSSEHandlersMixin = {
             this.thinkingManager.hideThinkingIndicator(data.web_session_id);
         }
 
+        // Hide processing indicator when text streaming starts
+        if (this._processingIndicators && this.anchoredTerminal) {
+            const processingIndicatorId = this._processingIndicators.get(data.web_session_id);
+            if (processingIndicatorId) {
+                this.anchoredTerminal.completeActivityIndicator(processingIndicatorId);
+                this._processingIndicators.delete(data.web_session_id);
+            }
+        }
+
         this.streamingActive = true;
         this.showAIStopButton();
 
@@ -443,6 +452,22 @@ export const ChatSSEHandlersMixin = {
         if (this.streamingActive && this.anchoredTerminal) {
             this.anchoredTerminal.sealStreamingResponse(webSessionId);
             this.streamingActive = false;
+        }
+
+        // Show processing indicator after tool execution (turn > 0), before next AI response
+        // Only show on subsequent turns to indicate processing of tool results
+        const turnNumber = data.turn || 0;
+        if (turnNumber > 0 && this.anchoredTerminal) {
+            const processingIndicatorId = `processing-${webSessionId}-${turnNumber}`;
+            if (!this._processingIndicators) this._processingIndicators = new Map();
+            this._processingIndicators.set(webSessionId, processingIndicatorId);
+
+            this.anchoredTerminal.appendActivityIndicator({
+                id: processingIndicatorId,
+                icon: 'developer_board',
+                label: 'Reviewing results',
+                category: ToolDisplayCategory.GENERAL,
+            });
         }
     },
 
@@ -573,6 +598,15 @@ export const ChatSSEHandlersMixin = {
 
         const webSessionId = data.web_session_id;
 
+        // Clear processing indicator if it exists
+        if (this._processingIndicators && this.anchoredTerminal) {
+            const processingIndicatorId = this._processingIndicators.get(webSessionId);
+            if (processingIndicatorId) {
+                this.anchoredTerminal.completeActivityIndicator(processingIndicatorId);
+                this._processingIndicators.delete(webSessionId);
+            }
+        }
+
         this.anchoredTerminal?.hideWaitingIndicator();
         this.anchoredTerminal?.clearActivityIndicators();
         this._portCheckIndicators?.clear();
@@ -601,6 +635,15 @@ export const ChatSSEHandlersMixin = {
         if (!this.shouldProcessEvent(data)) return;
         const webSessionId = data.web_session_id;
 
+        // Clear processing indicator if it exists
+        if (this._processingIndicators && this.anchoredTerminal) {
+            const processingIndicatorId = this._processingIndicators.get(webSessionId);
+            if (processingIndicatorId) {
+                this.anchoredTerminal.completeActivityIndicator(processingIndicatorId);
+                this._processingIndicators.delete(webSessionId);
+            }
+        }
+
         if (this.anchoredTerminal) {
             this.anchoredTerminal.hideWaitingIndicator();
             if (webSessionId) {
@@ -622,6 +665,15 @@ export const ChatSSEHandlersMixin = {
     handleChatError(data = {}) {
         if (!this.shouldProcessEvent(data)) return;
         const webSessionId = data.web_session_id;
+
+        // Clear processing indicator if it exists
+        if (this._processingIndicators && this.anchoredTerminal) {
+            const processingIndicatorId = this._processingIndicators.get(webSessionId);
+            if (processingIndicatorId) {
+                this.anchoredTerminal.completeActivityIndicator(processingIndicatorId);
+                this._processingIndicators.delete(webSessionId);
+            }
+        }
 
         if (this.anchoredTerminal && webSessionId) {
             const entry = document.getElementById(`ai-response-${webSessionId}`);

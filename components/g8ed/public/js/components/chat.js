@@ -236,6 +236,7 @@ export class ChatComponent {
         this.hideAIStopButton();
         this._portCheckIndicators?.clear();
         this._searchWebIndicators?.clear();
+        this._processingIndicators?.clear();
         this.pendingCitations.clear();
         this.streamingContent.clear();
         this._hasResetAutoScrollForSession.clear();

@@ -415,8 +415,13 @@ export class TerminalOutputMixin {
 
             const renderer = this.markdownRenderer;
             if (renderer) {
-                // TRUSTED: HTML from markdown renderer (should be sanitized by markdown-it with DOMPurify)
-                contentEl.innerHTML = renderer.parseMarkdown(newRaw);
+                // Only render markdown at sentence boundaries to avoid processing word-per-chunk
+                const shouldRender = newRaw.match(/[.!?]\s*$/);
+                if (shouldRender) {
+                    // TRUSTED: HTML from markdown renderer (should be sanitized by markdown-it with DOMPurify)
+                    contentEl.innerHTML = renderer.parseMarkdown(newRaw);
+                }
+                // For incomplete sentences, don't re-render - keep previous markdown until next complete sentence
             } else {
                 contentEl.textContent = newRaw;
             }
