@@ -14,6 +14,7 @@
 // @vitest-environment jsdom
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { devLogger } from '@g8ed/public/js/utils/dev-logger.js';
 import markdownitFactory from 'markdown-it';
 import domPurifyImpl from 'dompurify';
 import { MockEventBus, MockTemplateLoader } from '@test/mocks/mock-browser-env.js';
@@ -179,18 +180,24 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             expect(el).not.toBeNull();
         });
 
-        it('throws error if element already exists', () => {
+        it('throws error if element already exists and is NOT sealed', () => {
             terminal.createAIResponse(WEB_SESSION_ID);
 
-            expect(() => terminal.createAIResponse(WEB_SESSION_ID)).toThrow();
+            expect(() => terminal.createAIResponse(WEB_SESSION_ID)).toThrow(/already exists and is not sealed/);
         });
 
-        it('creates independent elements for different session IDs', () => {
-            terminal.createAIResponse('session-A');
-            terminal.createAIResponse('session-B');
+        it('renames existing sealed element and creates a new one', () => {
+            terminal.createAIResponse(WEB_SESSION_ID);
+            terminal.sealStreamingResponse(WEB_SESSION_ID);
 
-            expect(document.getElementById('ai-response-session-A')).not.toBeNull();
-            expect(document.getElementById('ai-response-session-B')).not.toBeNull();
+            const oldEl = document.getElementById(`ai-response-${WEB_SESSION_ID}`);
+            expect(oldEl.dataset.sealed).toBe('true');
+
+            terminal.createAIResponse(WEB_SESSION_ID);
+            const newEl = document.getElementById(`ai-response-${WEB_SESSION_ID}`);
+            expect(newEl).not.toBe(oldEl);
+            expect(newEl.dataset.sealed).not.toBe('true');
+            expect(oldEl.id).toMatch(new RegExp(`ai-response-${WEB_SESSION_ID}-\\d+`));
         });
     });
 
@@ -200,37 +207,37 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             expect(content).toBeNull();
         });
 
-        it('returns content element if exists', () => {
+        it('returns streaming text container element if exists', () => {
             terminal.createAIResponse(WEB_SESSION_ID);
             const content = terminal.getAIResponse(WEB_SESSION_ID);
 
             expect(content).not.toBeNull();
-            expect(content.className).toBe('anchored-terminal__agent-message-content');
+            expect(content.className).toBe('anchored-terminal__streaming-text-container');
         });
     });
 
     describe('appendStreamingTextChunk', () => {
-        it('appends text nodes to the content element', () => {
+        it('appends text nodes to the streaming text container', () => {
             terminal.appendStreamingTextChunk(WEB_SESSION_ID, 'Hello');
 
-            const content = terminal.outputContainer.querySelector('.anchored-terminal__agent-message-content');
-            expect(content.textContent).toBe('Hello');
+            const streamingContainer = terminal.outputContainer.querySelector('.anchored-terminal__streaming-text-container');
+            expect(streamingContainer.textContent).toBe('Hello');
         });
 
         it('accumulates text on subsequent calls (not replacement)', () => {
             terminal.appendStreamingTextChunk(WEB_SESSION_ID, 'Hello');
             terminal.appendStreamingTextChunk(WEB_SESSION_ID, ' world');
 
-            const content = terminal.outputContainer.querySelector('.anchored-terminal__agent-message-content');
-            expect(content.textContent).toBe('Hello world');
+            const streamingContainer = terminal.outputContainer.querySelector('.anchored-terminal__streaming-text-container');
+            expect(streamingContainer.textContent).toBe('Hello world');
         });
 
         it('does not render HTML markup (text nodes, not innerHTML)', () => {
             terminal.appendStreamingTextChunk(WEB_SESSION_ID, '<strong>bold</strong>');
 
-            const content = terminal.outputContainer.querySelector('.anchored-terminal__agent-message-content');
-            expect(content.innerHTML).toBe('&lt;strong&gt;bold&lt;/strong&gt;');
-            expect(content.querySelector('strong')).toBeNull();
+            const streamingContainer = terminal.outputContainer.querySelector('.anchored-terminal__streaming-text-container');
+            expect(streamingContainer.innerHTML).toBe('&lt;strong&gt;bold&lt;/strong&gt;');
+            expect(streamingContainer.querySelector('strong')).toBeNull();
         });
 
         it('calls scrollToBottom after each chunk', () => {
@@ -252,26 +259,26 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
     });
 
     describe('replaceStreamingHtml', () => {
-        it('sets innerHTML of the content element to the provided HTML', () => {
+        it('sets innerHTML of the streaming text container to the provided HTML', () => {
             terminal.replaceStreamingHtml(WEB_SESSION_ID, '<p>Good morning</p>');
 
-            const content = terminal.outputContainer.querySelector('.anchored-terminal__agent-message-content');
-            expect(content.innerHTML).toBe('<p>Good morning</p>');
+            const streamingContainer = terminal.outputContainer.querySelector('.anchored-terminal__streaming-text-container');
+            expect(streamingContainer.innerHTML).toBe('<p>Good morning</p>');
         });
 
         it('replaces content on subsequent calls (full re-render, not accumulation)', () => {
             terminal.replaceStreamingHtml(WEB_SESSION_ID, '<p>first</p>');
             terminal.replaceStreamingHtml(WEB_SESSION_ID, '<p>first second</p>');
 
-            const content = terminal.outputContainer.querySelector('.anchored-terminal__agent-message-content');
-            expect(content.innerHTML).toBe('<p>first second</p>');
+            const streamingContainer = terminal.outputContainer.querySelector('.anchored-terminal__streaming-text-container');
+            expect(streamingContainer.innerHTML).toBe('<p>first second</p>');
         });
 
         it('renders HTML markup (not escaped)', () => {
             terminal.replaceStreamingHtml(WEB_SESSION_ID, '<strong>bold</strong>');
 
-            const content = terminal.outputContainer.querySelector('.anchored-terminal__agent-message-content');
-            expect(content.querySelector('strong')).not.toBeNull();
+            const streamingContainer = terminal.outputContainer.querySelector('.anchored-terminal__streaming-text-container');
+            expect(streamingContainer.querySelector('strong')).not.toBeNull();
         });
 
         it('calls scrollToBottom after each chunk', () => {
@@ -669,16 +676,19 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
     });
 
     describe('sealStreamingResponse', () => {
-        it('renames the element ID so appendStreamingTextChunk creates a new bubble', () => {
+        it('marks the element as sealed so appendStreamingTextChunk creates a new bubble', () => {
             terminal.appendStreamingTextChunk(WEB_SESSION_ID, 'first message');
             terminal.sealStreamingResponse(WEB_SESSION_ID);
 
-            expect(document.getElementById(`ai-response-${WEB_SESSION_ID}`)).toBeNull();
+            const firstBubble = document.querySelector(`[data-sealed="true"]`);
+            expect(firstBubble).not.toBeNull();
 
             terminal.appendStreamingTextChunk(WEB_SESSION_ID, 'second message');
 
             const allBubbles = terminal.outputContainer.querySelectorAll('.anchored-terminal__agent-message-group');
             expect(allBubbles.length).toBe(2);
+            expect(allBubbles[0]).toBe(firstBubble);
+            expect(allBubbles[1].id).toBe(`ai-response-${WEB_SESSION_ID}`);
         });
 
         it('removes the streaming class from the sealed bubble', () => {
@@ -689,6 +699,7 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             terminal.sealStreamingResponse(WEB_SESSION_ID);
 
             expect(entry.classList.contains('streaming')).toBe(false);
+            expect(entry.dataset.sealed).toBe('true');
         });
 
         it('clears the text accumulator for the session', () => {
@@ -697,8 +708,8 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
 
             terminal.appendStreamingTextChunk(WEB_SESSION_ID, 'fresh start');
             const newEntry = document.getElementById(`ai-response-${WEB_SESSION_ID}`);
-            const content = newEntry.querySelector('.anchored-terminal__agent-message-content');
-            expect(content.textContent).toBe('fresh start');
+            const streamingContainer = newEntry.querySelector('.anchored-terminal__streaming-text-container');
+            expect(streamingContainer.textContent).toBe('fresh start');
         });
 
         it('does not throw when no streaming entry exists', () => {
@@ -1081,6 +1092,9 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             await terminal.handleApprovalRequest({
                 execution_id: executionId,
                 approval_id: 'approval-456',
+                case_id: 'case-1',
+                investigation_id: 'inv-1',
+                task_id: 'task-1',
                 command: command,
                 justification: 'Test justification'
             });
@@ -1111,6 +1125,9 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             await terminal.handleApprovalRequest({
                 execution_id: executionId2,
                 approval_id: 'approval-789',
+                case_id: 'case-1',
+                investigation_id: 'inv-1',
+                task_id: 'task-1',
                 command: 'different-command',
                 justification: 'Test justification'
             });
@@ -1126,6 +1143,9 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             await terminal.handleApprovalRequest({
                 execution_id: executionId,
                 approval_id: 'approval-456',
+                case_id: 'case-1',
+                investigation_id: 'inv-1',
+                task_id: 'task-1',
                 command: 'ls -la',
                 justification: 'Test justification'
             });
@@ -1183,6 +1203,9 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             await terminal.handleApprovalRequest({
                 execution_id: executionId,
                 approval_id: 'approval-reuse-1',
+                case_id: 'case-1',
+                investigation_id: 'inv-1',
+                task_id: 'task-1',
                 command: 'rm -rf /tmp/test',
                 justification: 'Cleanup'
             });
@@ -1199,6 +1222,9 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             await terminal.handleApprovalRequest({
                 execution_id: 'exec-new-1',
                 approval_id: 'approval-new-1',
+                case_id: 'case-1',
+                investigation_id: 'inv-1',
+                task_id: 'task-1',
                 command: 'uname -a',
                 justification: 'System info'
             });
@@ -1234,6 +1260,9 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             await terminal.handleApprovalRequest({
                 execution_id: executionId,
                 approval_id: 'approval-keep-1',
+                case_id: 'case-1',
+                investigation_id: 'inv-1',
+                task_id: 'task-1',
                 command: 'ls',
                 justification: 'List'
             });
@@ -1425,7 +1454,7 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
                 webSessionId: WEB_SESSION_ID, correlationId: 'tribunal_orphan_1',
             });
 
-            const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+            const errSpy = vi.spyOn(devLogger, 'error').mockImplementation(() => {});
 
             await terminal.handleApprovalRequest({
                 execution_id: 'exec-orphan',
@@ -1469,6 +1498,9 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             });
 
             // A subsequent approval event (no linkage) must not re-upgrade the already-claimed card.
+            // Mock devLogger.error since we expect it to be called for the linkage-less request.
+            const errSpy = vi.spyOn(devLogger, 'error').mockImplementation(() => {});
+            
             await terminal.handleApprovalRequest({
                 execution_id: 'exec-second',
                 approval_id: 'approval-second',
@@ -1479,10 +1511,77 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
                 justification: 'Second',
             });
 
+            errSpy.mockRestore();
+
             const approvals = terminal.outputContainer.querySelectorAll('.anchored-terminal__approval');
             expect(approvals.length).toBe(2);
             const ids = Array.from(approvals).map(el => el.getAttribute('data-approval-id')).sort();
             expect(ids).toEqual(['approval-first', 'approval-second']);
+        });
+    });
+
+    // Regression: when OPERATOR_COMMAND_APPROVAL_PREPARING fires first, the
+    // showTribunal call that follows must absorb (hide + remove) the preparing
+    // indicator instead of rendering the refining widget alongside it.
+    // Otherwise "Preparing: <cmd>" lingers below the approval card because
+    // OPERATOR_COMMAND_STARTED uses a different per-operator exec_id and
+    // never matches the preparing activeExecutions entry.
+    describe('Preparing indicator absorption by Tribunal widget', () => {
+        const APPROVAL_EXEC_ID = 'approval-exec-1';
+        const CORRELATION_ID = 'tribunal_corr_1';
+        const TRIBUNAL_ID = 'tribunal-absorb-1';
+
+        it('removes the preparing indicator and reuses its bubble when showTribunal runs', async () => {
+            await terminal.handleCommandExecutionEvent({
+                eventType: EventType.OPERATOR_COMMAND_APPROVAL_PREPARING,
+                execution_id: APPROVAL_EXEC_ID,
+                command: 'uptime',
+            });
+
+            expect(terminal.outputContainer.querySelectorAll('.anchored-terminal__executing').length).toBe(1);
+            expect(terminal.activeExecutions.has(APPROVAL_EXEC_ID)).toBe(true);
+
+            await terminal.showTribunal({
+                id: TRIBUNAL_ID,
+                model: 'test-model',
+                numPasses: 3,
+                request: 'uptime',
+                webSessionId: WEB_SESSION_ID,
+                correlationId: CORRELATION_ID,
+            });
+
+            expect(terminal.outputContainer.querySelectorAll('.anchored-terminal__executing').length).toBe(0);
+            expect(terminal.activeExecutions.has(APPROVAL_EXEC_ID)).toBe(false);
+            // The tribunal widget should live in the (reused) bubble.
+            const widget = document.getElementById(TRIBUNAL_ID);
+            expect(widget).not.toBeNull();
+            expect(widget.closest('.anchored-terminal__agent-message-group')).not.toBeNull();
+        });
+
+        it('keeps the approval card intact through the full preparing → tribunal → approval flow', async () => {
+            await terminal.handleCommandExecutionEvent({
+                eventType: EventType.OPERATOR_COMMAND_APPROVAL_PREPARING,
+                execution_id: APPROVAL_EXEC_ID,
+                command: 'uptime',
+            });
+            await terminal.showTribunal({
+                id: TRIBUNAL_ID, model: 'test-model', numPasses: 3, request: 'uptime',
+                webSessionId: WEB_SESSION_ID, correlationId: CORRELATION_ID,
+            });
+            await terminal.handleApprovalRequest({
+                execution_id: APPROVAL_EXEC_ID,
+                approval_id: 'approval-uptime',
+                correlation_id: CORRELATION_ID,
+                case_id: 'case-1', investigation_id: 'inv-1', task_id: 'task-1',
+                command: 'uptime', justification: 'Check uptime',
+            });
+
+            // No lingering preparing indicator; exactly one approval card bearing the tribunal votes.
+            expect(terminal.outputContainer.querySelectorAll('.anchored-terminal__executing').length).toBe(0);
+            const approvals = terminal.outputContainer.querySelectorAll('.anchored-terminal__approval');
+            expect(approvals.length).toBe(1);
+            expect(approvals[0].getAttribute('data-approval-id')).toBe('approval-uptime');
+            expect(approvals[0].querySelectorAll('.tribunal__dot').length).toBe(3);
         });
     });
 });

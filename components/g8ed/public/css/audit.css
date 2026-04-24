@@ -8,6 +8,12 @@
     background: var(--bg-primary);
 }
 
+/* Main container - handles scrolling */
+.audit-container {
+    flex: 1;
+    overflow-y: auto;
+}
+
 /* Back to Chat Link */
 .back-to-chat-link {
     display: inline-flex;

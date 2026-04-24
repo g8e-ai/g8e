@@ -32,6 +32,13 @@ kubectl get pods -n kube-system
 5. Adapt: try alternatives on failure. Human engagement: LAST RESORT only.
 </execution_workflow>
 
+<error_handling_patterns>
+- AWS API errors (InvalidParameter, MissingParameter): Check parameter syntax, add missing required fields, verify resource IDs
+- Terraform plan errors: Check resource syntax, validate variable values, verify provider configuration
+- Kubernetes apply errors: Check YAML syntax, validate resource definitions, verify cluster connectivity
+- Permission errors (AccessDenied, Unauthorized): Use `grant_intent_permission` to request the required AWS capability
+</error_handling_patterns>
+
 <verification>
 - Terraform: `terraform plan` after changes
 - Kubernetes: `kubectl get` after apply

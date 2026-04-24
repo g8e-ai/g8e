@@ -107,15 +107,24 @@ class TribunalEmitter:
         self,
         event_service: EventService,
         g8e_context: G8eHttpContext,
+        correlation_id: str | None = None,
     ):
         self.event_service = event_service
         self.g8e_context = g8e_context
+        self.correlation_id = correlation_id
 
-    async def emit(self, event_type: EventType, payload: G8eBaseModel) -> None:
+    async def emit(self, event_type: EventType, payload: G8eBaseModel, correlation_id: str | None = None) -> None:
         """Emit an SSE event. Re-raises if event_type is terminal."""
         try:
             if self.event_service is None or self.g8e_context is None:
                 return
+
+            # Inject correlation_id if provided and supported by the payload
+            # If not provided to emit, try to use the one stored on the emitter
+            corr_id = correlation_id or getattr(self, "correlation_id", None)
+            if corr_id and hasattr(payload, "correlation_id"):
+                payload.correlation_id = corr_id
+
             event = SessionEvent(
                 event_type=event_type,
                 payload=payload,
@@ -570,7 +579,8 @@ async def generate_command(
         investigation_id=investigation_id,
         source_component=ComponentName.G8EE,
     )
-    emitter = TribunalEmitter(g8ed_event_service, g8e_context)
+    correlation_id = generate_tribunal_correlation_id()
+    emitter = TribunalEmitter(g8ed_event_service, g8e_context, correlation_id=correlation_id)
 
     if not request:
         raise TribunalGenerationFailedError(
@@ -600,7 +610,6 @@ async def generate_command(
 
     num_passes = max(1, settings.llm.llm_command_gen_passes)
     members = [_member_for_pass(i) for i in range(num_passes)]
-    correlation_id = generate_tribunal_correlation_id()
 
     await emitter.emit(
         EventType.TRIBUNAL_SESSION_STARTED,

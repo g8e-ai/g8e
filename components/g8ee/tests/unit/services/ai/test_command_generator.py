@@ -38,6 +38,10 @@ from app.models.agents.tribunal import (
     TribunalSessionModelNotConfiguredPayload,
     TribunalSessionStartedPayload,
     TribunalSessionSystemErrorPayload,
+    TribunalSessionCompletedPayload,
+    TribunalSessionDisabledPayload,
+    TribunalSessionProviderUnavailablePayload,
+    TribunalAuditorFailedPayload,
     TribunalSystemError,
     TribunalAuditorFailedError,
 )
@@ -169,6 +173,7 @@ class TestTribunalSessionStartedPayloadRegression:
                 model=None,
                 num_passes=3,
                 members=[],
+                correlation_id="test-corr-id"
                 )
 
     def test_payload_accepts_resolved_model(self):
@@ -179,6 +184,7 @@ class TestTribunalSessionStartedPayloadRegression:
             model=model,
             num_passes=3,
             members=[],
+            correlation_id="test-corr-id"
         )
         assert payload.model == "gemma3:1b"
 
@@ -2526,8 +2532,25 @@ class TestTribunalEmitter:
         emitter = TribunalEmitter(event_service=mock_event_service, g8e_context=ctx)
 
         terminal_events = [
-            (EventType.TRIBUNAL_SESSION_STARTED, TribunalSessionStartedPayload(request="test", model="gemma3:1b", num_passes=3, members=[TribunalMember.AXIOM])),
-            (EventType.TRIBUNAL_SESSION_COMPLETED, TribunalSessionStartedPayload(request="test", model="gemma3:1b", num_passes=3, members=[TribunalMember.AXIOM])),
+            (
+                EventType.TRIBUNAL_SESSION_STARTED,
+                TribunalSessionStartedPayload(
+                    request="test",
+                    model="gemma3:1b",
+                    num_passes=3,
+                    members=[TribunalMember.AXIOM],
+                    correlation_id="test-corr-id",
+                ),
+            ),
+            (
+                EventType.TRIBUNAL_SESSION_COMPLETED,
+                TribunalSessionCompletedPayload(
+                    request="test",
+                    final_command="test",
+                    outcome=CommandGenerationOutcome.VERIFIED,
+                    vote_score=1.0,
+                ),
+            ),
             (EventType.TRIBUNAL_SESSION_DISABLED, TribunalSessionDisabledPayload(request="test")),
             (
                 EventType.TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED,

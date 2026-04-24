@@ -27,6 +27,7 @@ Working Directory: {working_dir}
 - Syntax errors in commands (wrong flags, typos): corrected command
 - Missing directories (No such file or directory for expected paths): mkdir -p
 - Port conflicts (Address already in use): kill process on port or use different port
+- Configuration file errors (nginx: invalid directive, syntax errors, missing values): use file_read_on_operator then file_update_on_operator to fix the config file, then validate with config test command (nginx -t, apache2ctl -t)
 </auto_fixable_errors>
 
 <escalate_to_human>
@@ -36,7 +37,6 @@ Working Directory: {working_dir}
 - Data corruption: file system errors, database corruption
 - Ambiguous errors: multiple possible root causes
 - Retry limit exceeded: same error after 2+ attempts (retry_count >= 2 MUST escalate)
-- Configuration issues requiring human access: environment setup, server-side config
 </escalate_to_human>
 
 Based on the information above, analyze the failure and fill in ALL response fields.

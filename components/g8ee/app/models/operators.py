@@ -841,6 +841,7 @@ class CommandExecutingBroadcastEvent(G8eBaseModel):
     message: str | None = None
     approval_id: str | None = None
     batch_id: str | None = None
+    per_operator_execution_ids: list[str] = Field(default_factory=list)
     timestamp: UTCDatetime = Field(default_factory=now)
 
 

@@ -353,11 +353,13 @@ class TribunalPassCompletedPayload(G8eBaseModel):
     candidate: str | None = None
     success: bool = False
     error: str | None = None
+    correlation_id: str | None = Field(default=None, description="Correlation ID for the Tribunal session")
 
 
 class TribunalAuditorStartedPayload(G8eBaseModel):
     """SSE payload for TRIBUNAL_VOTING_AUDIT_STARTED events."""
     candidate_command: str
+    correlation_id: str | None = Field(default=None, description="Correlation ID for the Tribunal session")
 
 
 class TribunalAuditorCompletedPayload(G8eBaseModel):
@@ -374,6 +376,7 @@ class TribunalAuditorCompletedPayload(G8eBaseModel):
         default=None,
         description="TribunalMember id resolved from swap_to_cluster (internal mapping, safe to surface downstream)",
     )
+    correlation_id: str | None = Field(default=None, description="Correlation ID for the Tribunal session")
 
 
 class TribunalSessionStartedPayload(G8eBaseModel):
@@ -467,6 +470,7 @@ class TribunalVotingCompletedPayload(G8eBaseModel):
     num_candidates: int = Field(ge=0)
     request: str
     vote_breakdown: VoteBreakdown
+    correlation_id: str | None = Field(default=None, description="Correlation ID for the Tribunal session")
 
 
 class TribunalConsensusFailedPayload(G8eBaseModel):
@@ -483,6 +487,7 @@ class TribunalConsensusFailedPayload(G8eBaseModel):
         default="no_agreement",
         description="Short machine-readable reason (always 'no_agreement' today)",
     )
+    correlation_id: str | None = Field(default=None, description="Correlation ID for the Tribunal session")
 
 
 class TribunalDissentRecordedPayload(G8eBaseModel):
@@ -513,4 +518,5 @@ class TribunalSessionCompletedPayload(G8eBaseModel):
     final_command: str
     outcome: CommandGenerationOutcome
     vote_score: float
+    correlation_id: str | None = Field(default=None, description="Correlation ID for the Tribunal session")
 

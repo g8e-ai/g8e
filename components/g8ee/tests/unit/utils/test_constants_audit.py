@@ -210,11 +210,13 @@ class TestBroadcastEventModelsAreTyped:
             web_session_id="web-456",
             message="Command sent to operator, awaiting execution...",
             approval_id="appr-789",
+            per_operator_execution_ids=["exec-op-1", "exec-op-2"],
         )
         assert event.command == "df -h"
         assert event.message == "Command sent to operator, awaiting execution..."
         assert event.approval_id == "appr-789"
         assert event.status == "executing"
+        assert event.per_operator_execution_ids == ["exec-op-1", "exec-op-2"]
 
     def test_batch_command_broadcast_event_construction(self):
         event = BatchCommandBroadcastEvent(

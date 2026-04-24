@@ -196,6 +196,14 @@ class OperatorPortService:
                     error_type=CommandErrorType.OPERATION_TIMEOUT,
                 )
 
+            if not hasattr(envelope, "payload"):
+                logger.error("[PORT_CHECK] Unexpected envelope type: %s", type(envelope))
+                return PortCheckToolResult(
+                    success=False,
+                    error="Unexpected result format from operator",
+                    error_type=CommandErrorType.EXECUTION_ERROR,
+                )
+
             if isinstance(envelope.payload, PortCheckResultPayload):
                 payload = envelope.payload
                 failed = envelope.event_type == EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED

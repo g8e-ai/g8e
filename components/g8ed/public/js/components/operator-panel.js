@@ -246,8 +246,7 @@ export class OperatorPanel {
                 'executing-indicator',
                 'preparing-indicator',
                 'results-toggle',
-                'activity-indicator',
-                'tribunal'
+                'activity-indicator'
             ]);
         } catch (error) {
             devLogger.error('[OPERATOR] Failed to preload templates:', error);

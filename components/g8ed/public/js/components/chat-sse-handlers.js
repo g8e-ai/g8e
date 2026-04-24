@@ -449,10 +449,13 @@ export const ChatSSEHandlersMixin = {
     handleTribunalStarted(data) {
         if (!this.anchoredTerminal) return;
 
-        const widgetId = `tribunal-${data.web_session_id}-${Date.now()}`;
+        const correlationId = data.correlation_id;
+        const widgetId = correlationId || `tribunal-${data.web_session_id}-${Date.now()}`;
 
         if (!this._tribunalWidgetIds) this._tribunalWidgetIds = new Map();
-        this._tribunalWidgetIds.set(data.web_session_id, widgetId);
+        // Use correlation_id as primary key if available, otherwise web_session_id
+        const key = correlationId || data.web_session_id;
+        this._tribunalWidgetIds.set(key, widgetId);
 
         this.anchoredTerminal.showTribunal({
             id: widgetId,
@@ -461,7 +464,7 @@ export const ChatSSEHandlersMixin = {
             request: data.request,
             guidelines: data.guidelines,
             webSessionId: data.web_session_id,
-            correlationId: data.correlation_id,
+            correlationId: correlationId,
         });
 
         const webSessionId = data.web_session_id;
@@ -474,17 +477,24 @@ export const ChatSSEHandlersMixin = {
         }
     },
 
+    _getTribunalWidgetId(data) {
+        if (!this._tribunalWidgetIds) return null;
+        // 1. Try correlation_id (deterministic match)
+        if (data.correlation_id) {
+            const id = this._tribunalWidgetIds.get(data.correlation_id);
+            if (id) return id;
+        }
+        // 2. Fallback to web_session_id (concurrency hazard)
+        return this._tribunalWidgetIds.get(data.web_session_id);
+    },
+
     handleTribunalPassCompleted(data) {
         console.log('[TRIBUNAL] Pass completed event received:', data);
-        if (!this.anchoredTerminal || !this._tribunalWidgetIds) {
-            console.log('[TRIBUNAL] Missing anchoredTerminal or _tribunalWidgetIds');
-            return;
-        }
+        if (!this.anchoredTerminal) return;
 
-        const widgetId = this._tribunalWidgetIds.get(data.web_session_id);
+        const widgetId = this._getTribunalWidgetId(data);
         if (!widgetId) {
-            console.log('[TRIBUNAL] No widget ID found for web_session_id:', data.web_session_id);
-            console.log('[TRIBUNAL] Available widget IDs:', Array.from(this._tribunalWidgetIds.entries()));
+            console.log('[TRIBUNAL] No widget ID found for event:', data.correlation_id || data.web_session_id);
             return;
         }
 
@@ -497,27 +507,27 @@ export const ChatSSEHandlersMixin = {
     },
 
     handleTribunalVotingCompleted(data) {
-        if (!this.anchoredTerminal || !this._tribunalWidgetIds) return;
+        if (!this.anchoredTerminal) return;
 
-        const widgetId = this._tribunalWidgetIds.get(data.web_session_id);
+        const widgetId = this._getTribunalWidgetId(data);
         if (!widgetId) return;
 
         this.anchoredTerminal.updateTribunalStatus(widgetId, 'Verifying command\u2026');
     },
 
     handleTribunalAuditorStarted(data) {
-        if (!this.anchoredTerminal || !this._tribunalWidgetIds) return;
+        if (!this.anchoredTerminal) return;
 
-        const widgetId = this._tribunalWidgetIds.get(data.web_session_id);
+        const widgetId = this._getTribunalWidgetId(data);
         if (!widgetId) return;
 
         this.anchoredTerminal.updateTribunalStatus(widgetId, 'Verifying\u2026');
     },
 
     handleTribunalAuditorCompleted(data) {
-        if (!this.anchoredTerminal || !this._tribunalWidgetIds) return;
+        if (!this.anchoredTerminal) return;
 
-        const widgetId = this._tribunalWidgetIds.get(data.web_session_id);
+        const widgetId = this._getTribunalWidgetId(data);
         if (!widgetId) return;
 
         const label = data.passed
@@ -527,9 +537,9 @@ export const ChatSSEHandlersMixin = {
     },
 
     handleTribunalCompleted(data) {
-        if (!this.anchoredTerminal || !this._tribunalWidgetIds) return;
+        if (!this.anchoredTerminal) return;
 
-        const widgetId = this._tribunalWidgetIds.get(data.web_session_id);
+        const widgetId = this._getTribunalWidgetId(data);
         if (!widgetId) return;
 
         this.anchoredTerminal.completeTribunal({
@@ -538,13 +548,14 @@ export const ChatSSEHandlersMixin = {
             outcome: data.outcome,
         });
 
+        if (data.correlation_id) this._tribunalWidgetIds.delete(data.correlation_id);
         this._tribunalWidgetIds.delete(data.web_session_id);
     },
 
     handleTribunalSessionFailed(eventType, data) {
-        if (!this.anchoredTerminal || !this._tribunalWidgetIds) return;
+        if (!this.anchoredTerminal) return;
 
-        const widgetId = this._tribunalWidgetIds.get(data.web_session_id);
+        const widgetId = this._getTribunalWidgetId(data);
         if (!widgetId) return;
 
         this.anchoredTerminal.failTribunal({
@@ -552,6 +563,7 @@ export const ChatSSEHandlersMixin = {
             eventType,
         });
 
+        if (data.correlation_id) this._tribunalWidgetIds.delete(data.correlation_id);
         this._tribunalWidgetIds.delete(data.web_session_id);
     },
 

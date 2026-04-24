@@ -286,7 +286,13 @@ class OperatorCommandService:
         primary_operator_id = primary.id
         primary_session_id = primary.operator_session_id or ""
         batch_id = generate_batch_id() if is_batch else None
-        approval_execution_id = generate_command_execution_id()
+        
+        # Generate per-operator execution IDs upfront so PREPARING can correlate with STARTED
+        per_operator_exec_ids = [generate_command_execution_id() for _ in target_operator_docs]
+        
+        # For single operator, use its exec_id as the approval_execution_id to unify IDs
+        # For batch, use a separate approval_execution_id but include per-operator IDs in PREPARING
+        approval_execution_id = per_operator_exec_ids[0] if not is_batch else generate_command_execution_id()
 
         # 3. Notify preparing (one event for the approval card).
         await self.g8ed_event_service.publish_command_event(
@@ -297,6 +303,7 @@ class OperatorCommandService:
                 operator_session_id=primary_session_id,
                 operator_id=primary_operator_id,
                 batch_id=batch_id,
+                per_operator_execution_ids=per_operator_exec_ids if is_batch else [],
             ),
             g8e_context,
             task_id=AITaskId.COMMAND,
@@ -367,8 +374,7 @@ class OperatorCommandService:
             except Exception as e:  # noqa: BLE001 — best-effort notification
                 logger.warning("[COMMAND] Failed to publish FAILED event for %s: %s", op_id, e)
 
-        async def _dispatch(op: OperatorDocument) -> BatchOperatorExecutionResult:
-            exec_id = generate_command_execution_id()
+        async def _dispatch(op: OperatorDocument, exec_id: str) -> BatchOperatorExecutionResult:
             op_id = op.id
             op_session_id = op.operator_session_id or ""
             hostname = op.current_hostname or (op.system_info.hostname if op.system_info else None) or op_id
@@ -476,7 +482,7 @@ class OperatorCommandService:
 
         logger.info("[COMMAND] Dispatching to %d operator(s) (batch_id=%s)", len(target_operator_docs), batch_id)
         per_operator_results: list[BatchOperatorExecutionResult] = await asyncio.gather(
-            *[_dispatch(op) for op in target_operator_docs]
+            *[_dispatch(op, per_operator_exec_ids[i]) for i, op in enumerate(target_operator_docs)]
         )
 
         return self._assemble_result(

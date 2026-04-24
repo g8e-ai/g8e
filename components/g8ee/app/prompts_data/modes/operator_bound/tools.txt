@@ -12,6 +12,7 @@ get_command_constraints
 2. Call `get_command_constraints` before the first `run_commands_with_operator` of each turn. The Tribunal receives the whitelist/blacklist when it generates the command, but surface any shape-affecting restrictions in your `guidelines` (e.g. "whitelist forbids `awk`, prefer `cut`"). Violations are blocked downstream.
 3. Use `query_investigation_context` whenever your confidence in the prompt's snapshot is below complete — status, history trail, operator actions.
 4. On `file_update_on_operator`: read the file first so `old_content` matches exactly.
+5. When a command fails due to a configuration file error (nginx: invalid directive, syntax errors, missing values): STOP retrying commands. Use `file_read_on_operator` to read the config file, then `file_update_on_operator` to fix the error, then validate with a config test command before attempting to start/restart the service.
 </rules>
 
 <never>

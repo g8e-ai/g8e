@@ -12,6 +12,7 @@
 // limitations under the License.
 
 import { EventType } from '../constants/events.js';
+import { devLogger } from '../utils/dev-logger.js';
 import { nowISOString, formatForDisplay } from '../utils/timestamp.js';
 import { templateLoader } from '../utils/template-loader.js';
 import { escapeHtml } from '../utils/html.js';
@@ -148,7 +149,12 @@ export class TerminalExecutionMixin {
                 indicator.remove();
                 if (parentGroup) {
                     const content = parentGroup.querySelector('.anchored-terminal__agent-message-content');
-                    if (content && content.children.length === 0) {
+                    const hasPersistentContent = content && (
+                        content.querySelector('.anchored-terminal__approval') || 
+                        content.querySelector('.anchored-terminal__results-group')
+                    );
+
+                    if (content && content.children.length === 0 && !hasPersistentContent) {
                         parentGroup.remove();
                     }
                 }
@@ -169,7 +175,7 @@ export class TerminalExecutionMixin {
         const execId = data.execution_id;
         const approvalId = data.approval_id;
         if (!approvalId) {
-            console.error('[ANCHORED TERMINAL] Approval event missing approval_id — backend contract violation', data);
+            devLogger.error('[ANCHORED TERMINAL] Approval event missing approval_id — backend contract violation', data);
             throw new Error('Approval event must include approval_id');
         }
         const webSessionId = data.web_session_id;
@@ -196,7 +202,7 @@ export class TerminalExecutionMixin {
             // Fallback: use web_session_id for non-Tribunal flows
             refiningWidget = unclaimedRefining.find(el => el.dataset.webSessionId === webSessionId) ?? null;
         } else {
-            console.error('[ANCHORED TERMINAL] Approval event missing both correlation_id and web_session_id — cannot safely claim refining widget, rendering separate card', data);
+            devLogger.error('[ANCHORED TERMINAL] Approval event missing both correlation_id and web_session_id — cannot safely claim refining widget, rendering separate card', data);
         }
 
         let group = null;
@@ -204,26 +210,41 @@ export class TerminalExecutionMixin {
             group = refiningWidget.closest('.anchored-terminal__agent-message-group');
         }
 
-        if (!group && execId) {
+        // Always clean up any pending preparing indicator for this execId.
+        // Run this even when a refining widget already claimed the group:
+        // the preparing indicator may live in a separate bubble (when PREPARING
+        // fires after TRIBUNAL_SESSION_STARTED, or when correlation_id differs),
+        // and OPERATOR_COMMAND_STARTED uses a per-operator exec_id which will
+        // not match this approval_execution_id, so the indicator would otherwise
+        // never be removed.
+        if (execId) {
             const preparingExec = this.activeExecutions.get(execId);
             if (preparingExec && preparingExec.indicatorId) {
-                group = this._findBubbleByExecId(preparingExec.indicatorId);
                 const indicator = document.getElementById(preparingExec.indicatorId);
+                const prepGroup = indicator?.closest('.anchored-terminal__agent-message-group') ?? null;
                 if (indicator) indicator.remove();
+                // If we don't yet have a group, reuse the preparing bubble.
+                if (!group && prepGroup) {
+                    group = prepGroup;
+                } else if (prepGroup && prepGroup !== group) {
+                    // Preparing lived in its own bubble; drop it if now empty.
+                    const prepContent = prepGroup.querySelector('.anchored-terminal__agent-message-content');
+                    if (prepContent && prepContent.children.length === 0) {
+                        prepGroup.remove();
+                    }
+                }
                 this.activeExecutions.delete(execId);
             }
         }
 
         if (!group) {
-            // Reuse existing agent message group if exists, otherwise create new execution group
-            const lastAgentGroup = this.outputContainer.querySelector('.anchored-terminal__agent-message-group:last-of-type');
+            // Prefer an existing execution bubble. Never reuse a streaming AI
+            // response group (id="ai-response-<wsid>"): its innerHTML is
+            // overwritten by subsequent text chunks, which would wipe the
+            // approval card after the user approves.
             const lastExecutionGroup = this.outputContainer.querySelector('.anchored-terminal__agent-message-group--execution:last-of-type');
-
             if (lastExecutionGroup) {
                 group = lastExecutionGroup;
-            } else if (lastAgentGroup) {
-                group = lastAgentGroup;
-                group.classList.add('anchored-terminal__agent-message-group--execution');
             } else {
                 group = this._createAIBubbleWrapper(approvalId);
                 this.outputContainer.appendChild(group);
@@ -240,7 +261,7 @@ export class TerminalExecutionMixin {
         const isBatchExecution = data.is_batch_execution && targetSystems && targetSystems.length > 1;
 
         if (!data.case_id || !data.investigation_id || !data.task_id) {
-            console.error('[ANCHORED TERMINAL] Approval data missing required fields (case_id, investigation_id, task_id)', data);
+            devLogger.error('[ANCHORED TERMINAL] Approval data missing required fields (case_id, investigation_id, task_id)', data);
             throw new Error('Approval data must include case_id, investigation_id, and task_id');
         }
 
@@ -593,9 +614,19 @@ export class TerminalExecutionMixin {
             || eventType === EventType.OPERATOR_FILE_EDIT_APPROVAL_REJECTED;
 
         if (eventType === EventType.OPERATOR_COMMAND_APPROVAL_PREPARING) {
+            const perOperatorExecIds = data.per_operator_execution_ids || [];
+            
             if (execId && !this.activeExecutions.has(execId)) {
                 const indicatorId = await this.showPreparingIndicator(command);
                 this.activeExecutions.set(execId, { command, startedAt: Date.now(), indicatorId });
+                
+                // For batch operations, also map each per-operator execution ID to the same indicator
+                // so STARTED events can find and clean it up
+                for (const perOpExecId of perOperatorExecIds) {
+                    if (!this.activeExecutions.has(perOpExecId)) {
+                        this.activeExecutions.set(perOpExecId, { command, startedAt: Date.now(), indicatorId });
+                    }
+                }
             }
         } else if (eventType === EventType.OPERATOR_COMMAND_STARTED) {
             if (execId) {
