@@ -76,7 +76,7 @@ export const TEMPLATE_FIXTURES = {
 
     'activity-indicator': `<div class="anchored-terminal__activity-content"><span class="material-symbols-outlined anchored-terminal__activity-icon">{{{icon}}}</span><span class="anchored-terminal__activity-label">{{{label}}}</span>{{{detailHtml}}}<span class="anchored-terminal__activity-spinner"></span></div>`,
 
-    'operator-deployment': `<div class="opdeploy"><div class="opdeploy__header"><span class="opdeploy__header-text">Getting Started</span></div><div class="opdeploy__steps"></div><div class="opdeploy__footer"></div></div>`,
+    'operator-deployment': `<div class="opdeploy"><div class="opdeploy__header"><span class="opdeploy__header-text">Getting Started</span></div><div class="opdeploy__steps"></div></div>`,
 
     'bind-single-confirmation-overlay': `<div class="bind-single-confirmation-overlay">
     <div class="bind-single-header">

@@ -1,6 +1,5 @@
 <div class="opdeploy">
     <div class="opdeploy__header">
-        <span class="material-symbols-outlined opdeploy__header-icon">rocket_launch</span>
         <span class="opdeploy__header-text">Getting Started</span>
     </div>
 
@@ -8,23 +7,12 @@
         <div class="opdeploy__step">
             <div class="opdeploy__step-number">
                 <span class="opdeploy__step-badge">1</span>
-                <span class="material-symbols-outlined opdeploy__step-arrow" data-direction="left">arrow_back</span>
+                <span class="material-symbols-outlined opdeploy__step-arrow" data-direction="down">arrow_downward</span>
             </div>
             <div class="opdeploy__step-content">
-                <div class="opdeploy__step-title">Deploy an Operator</div>
-                <div class="opdeploy__step-desc">Download the binary, get an API key, or generate a link in <strong>Operator Deployment</strong>.</div>
-                <div class="opdeploy__step-note">g8ep is ready. Click the <span class="material-symbols-outlined opdeploy__step-inline-icon">link</span> icon to begin.</div>
-            </div>
-        </div>
-
-        <div class="opdeploy__step-auth">
-            <div class="opdeploy__auth-item">
-                <span class="material-symbols-outlined opdeploy__auth-icon">key</span>
-                <span class="opdeploy__auth-text"><strong>API Keys:</strong> Persistent keys.</span>
-            </div>
-            <div class="opdeploy__auth-item">
-                <span class="material-symbols-outlined opdeploy__auth-icon">link</span>
-                <span class="opdeploy__auth-text"><strong>Device Links:</strong> Temporary links.</span>
+                <div class="opdeploy__step-title">Download the Operator</div>
+                <div class="opdeploy__step-desc">Run the deployment script on your target host to download and launch the operator binary.</div>
+                <div class="opdeploy__step-note"><code>curl -fsSL http://&lt;host&gt;/g8e | sh -s -- &lt;token&gt;</code></div>
             </div>
         </div>
 
@@ -34,8 +22,21 @@
                 <span class="material-symbols-outlined opdeploy__step-arrow" data-direction="down">arrow_downward</span>
             </div>
             <div class="opdeploy__step-content">
-                <div class="opdeploy__step-title">Start a Conversation</div>
-                <div class="opdeploy__step-desc">Describe your task in the chat to begin execution.</div>
+                <div class="opdeploy__step-title">Authenticate the Session</div>
+                <div class="opdeploy__step-desc">Establish a secure session and verify your identity using the CLI.</div>
+                <div class="opdeploy__step-note"><code>./g8e login --device-token &lt;token&gt;</code></div>
+            </div>
+        </div>
+
+        <div class="opdeploy__step">
+            <div class="opdeploy__step-number">
+                <span class="opdeploy__step-badge">3</span>
+                <span class="material-symbols-outlined opdeploy__step-arrow" data-direction="left">arrow_back</span>
+            </div>
+            <div class="opdeploy__step-content">
+                <div class="opdeploy__step-title">Manually Bind to Web Session</div>
+                <div class="opdeploy__step-desc">Explicitly bind the operator to your web session in the dashboard. This manual step is a critical layer of human intent in the g8e security model.</div>
+                <div class="opdeploy__step-note">g8ep is ready. Click the <span class="material-symbols-outlined opdeploy__step-inline-icon">link</span> icon to begin.</div>
             </div>
         </div>
     </div>
