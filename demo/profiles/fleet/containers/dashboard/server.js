@@ -77,10 +77,6 @@ app.get('/api/fleet', async (req, res) => {
   res.json({ nodes: results, checked_at: new Date().toISOString() });
 });
 
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
 app.listen(PORT, () => {
   console.log(`Fleet dashboard running on http://0.0.0.0:${PORT}`);
 });

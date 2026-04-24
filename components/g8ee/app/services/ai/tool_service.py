@@ -627,7 +627,7 @@ class AIToolService:
         args = self._convert_args_to_payload(tool_args, FsListRequestPayload, execution_id)
         logger.info("[LIST_DIRECTORY] Path: %s max_depth: %s max_entries: %s",
             args.path, args.max_depth, args.max_entries)
-        result = await self._execute_file_list(
+        result = await self._execute_fs_list(
             args, investigation, g8e_context
         )
         logger.info("[LIST_DIRECTORY] entries=%d truncated=%s",

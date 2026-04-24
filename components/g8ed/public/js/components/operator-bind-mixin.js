@@ -267,7 +267,8 @@ export const BindOperatorsMixin = {
 
         const activeOperators = this.operators.filter(op =>
             op.status === OperatorStatus.ACTIVE &&
-            !this.boundOperatorIds.includes(op.operator_id)
+            !this.boundOperatorIds.includes(op.operator_id) &&
+            op.operator_id !== 0  // Exclude g8ep operator (operator 0) - usually individually scoped
         );
 
         if (activeOperators.length === 0) {
@@ -458,7 +459,8 @@ export const BindOperatorsMixin = {
 
         const unboundActiveCount = this.operators.filter(op =>
             op.status === OperatorStatus.ACTIVE &&
-            !this.boundOperatorIds.includes(op.operator_id)
+            !this.boundOperatorIds.includes(op.operator_id) &&
+            op.operator_id !== 0  // Exclude g8ep operator (operator 0) - usually individually scoped
         ).length;
 
         if (unboundActiveCount > 0) {
@@ -476,8 +478,9 @@ export const BindOperatorsMixin = {
         const currentWebSessionId = window.authState?.getWebSessionId();
 
         const boundOperators = this.operators.filter(op =>
-            (op.status === OperatorStatus.BOUND && op.bound_web_session_id === currentWebSessionId) ||
-            (op.status === OperatorStatus.STALE && (op.bound_web_session_id === currentWebSessionId || this.boundOperatorIds.includes(op.operator_id)))
+            op.operator_id !== 0 &&  // Exclude g8ep operator (operator 0) - usually individually scoped
+            ((op.status === OperatorStatus.BOUND && op.bound_web_session_id === currentWebSessionId) ||
+            (op.status === OperatorStatus.STALE && (op.bound_web_session_id === currentWebSessionId || this.boundOperatorIds.includes(op.operator_id))))
         );
 
         if (boundOperators.length === 0) {
@@ -638,8 +641,9 @@ export const BindOperatorsMixin = {
         const currentWebSessionId = window.authState?.getWebSessionId();
 
         const boundOperators = this.operators.filter(op =>
-            (op.status === OperatorStatus.BOUND && op.bound_web_session_id === currentWebSessionId) ||
-            (op.status === OperatorStatus.STALE && (op.bound_web_session_id === currentWebSessionId || this.boundOperatorIds.includes(op.operator_id)))
+            op.operator_id !== 0 &&  // Exclude g8ep operator (operator 0) - usually individually scoped
+            ((op.status === OperatorStatus.BOUND && op.bound_web_session_id === currentWebSessionId) ||
+            (op.status === OperatorStatus.STALE && (op.bound_web_session_id === currentWebSessionId || this.boundOperatorIds.includes(op.operator_id))))
         );
 
         const boundToMeCount = boundOperators.length;
