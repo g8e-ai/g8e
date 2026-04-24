@@ -384,52 +384,6 @@ class InternalHttpClient{
     }
 
     /**
-     * List available MCP tools via G8EE.
-     *
-     * @param {Object} g8eContext - REQUIRED G8eHttpContext with session/user info
-     * @returns {Object} JSON response { tools: [...] }
-     */
-    async mcpToolsList(g8eContext) {
-        if (!g8eContext) {
-            throw new Error('ENFORCEMENT VIOLATION: g8eContext is REQUIRED for g8ee calls');
-        }
-
-        logger.info('[HTTP-INTERNAL] MCP tools/list request', {
-            userId: g8eContext.user_id,
-        });
-
-        return this.request('g8ee', ApiPaths.g8ee.mcpToolsList(), {
-            method: 'POST',
-            body: {},
-            g8eContext,
-        });
-    }
-
-    /**
-     * Execute an MCP tool call via G8EE.
-     *
-     * @param {Object} toolCallData - { tool_name, arguments, request_id }
-     * @param {Object} g8eContext - REQUIRED G8eHttpContext with session/user info
-     * @returns {Object} MCPToolCallResponse { jsonrpc, id, result|error }
-     */
-    async mcpToolsCall(toolCallData, g8eContext) {
-        if (!g8eContext) {
-            throw new Error('ENFORCEMENT VIOLATION: g8eContext is REQUIRED for g8ee calls');
-        }
-
-        logger.info('[HTTP-INTERNAL] MCP tools/call request', {
-            toolName: toolCallData.tool_name,
-            requestId: toolCallData.request_id,
-        });
-
-        return this.request('g8ee', ApiPaths.g8ee.mcpToolsCall(), {
-            method: 'POST',
-            body: toolCallData,
-            g8eContext,
-        });
-    }
-
-    /**
      * Check health of all internal services
      */
     async healthCheck() {

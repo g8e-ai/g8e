@@ -27,7 +27,6 @@ from app.models.cache import CacheOperationResult
 from .fake_ai_response_analyzer import FakeAIResponseAnalyzer
 from .fake_approval_service import FakeApprovalService
 from tests.fakes.fake_g8es_clients import FakeKVClient, FakeDBClient, FakePubSubClient
-from .fake_execution_registry import FakeExecutionRegistry
 from .fake_db_service import FakeDBService
 from .fake_event_service import FakeEventService
 from .fake_execution_service import FakeExecutionService
@@ -117,7 +116,6 @@ def build_command_service(
     ai_response_analyzer: FakeAIResponseAnalyzer | None = None,
     g8ed_client: FakeG8edClient | None = None,
     investigation_service: FakeInvestigationService | None = None,
-    execution_registry: FakeExecutionRegistry | None = None,
     pubsub_client: FakePubSubClient | None = None,
     settings: G8eePlatformSettings | None = None,
     approval_service: FakeApprovalService | None = None,
@@ -133,7 +131,6 @@ def build_command_service(
     
     # Ensure all required fakes are present
     event_service = event_service or FakeEventService()
-    execution_registry = execution_registry or FakeExecutionRegistry()
     ai_response_analyzer = ai_response_analyzer or FakeAIResponseAnalyzer()
     investigation_service = investigation_service or FakeInvestigationService()
     settings = settings or G8eePlatformSettings(port=443)
@@ -146,7 +143,6 @@ def build_command_service(
         cache_aside_service=cache_aside_service,
         operator_data_service=operator_data_service,
         g8ed_event_service=event_service,
-        execution_registry=execution_registry,
         settings=settings,
         ai_response_analyzer=ai_response_analyzer,
         internal_http_client=internal_http_client,

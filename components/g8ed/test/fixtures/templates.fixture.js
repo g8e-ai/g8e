@@ -16,6 +16,7 @@ export const TEMPLATE_FIXTURES = {
     <div class="approval-compact__header">
         <span class="material-symbols-outlined approval-compact__icon {{!iconModifier}}">{{{icon}}}</span>
         <span class="approval-compact__title">{{headerText}}</span>
+        {{{tribunalHtml}}}
         {{{riskBadgeHtml}}}
     </div>
     <div class="approval-compact__command">{{{promptHtml}}}{{commandDisplay}}</div>
@@ -76,15 +77,6 @@ export const TEMPLATE_FIXTURES = {
     'activity-indicator': `<div class="anchored-terminal__activity-content"><span class="material-symbols-outlined anchored-terminal__activity-icon">{{{icon}}}</span><span class="anchored-terminal__activity-label">{{{label}}}</span>{{{detailHtml}}}<span class="anchored-terminal__activity-spinner"></span></div>`,
 
     'operator-deployment': `<div class="opdeploy"><div class="opdeploy__header"><span class="opdeploy__header-text">Getting Started</span></div><div class="opdeploy__steps"></div><div class="opdeploy__footer"></div></div>`,
-
-    'tribunal': `<div class="tribunal__header">
-    <span class="material-symbols-outlined tribunal__icon">auto_fix_high</span>
-    <span class="tribunal__title">Refining command</span>
-    <span class="tribunal__spinner"></span>
-</div>
-<div class="tribunal__command"></div>
-<div class="tribunal__passes">{{{dots}}}</div>
-<div class="tribunal__status">Generating alternatives...</div>`,
 
     'bind-single-confirmation-overlay': `<div class="bind-single-confirmation-overlay">
     <div class="bind-single-header">
@@ -209,10 +201,6 @@ export const TEMPLATE_FIXTURES = {
         </button>
     </div>
 
-    <div class="operator-bind-all-description">
-        The following operators will be bound to your current web session. You will be able to interact with all of them through the chat interface.
-    </div>
-
     <div class="operator-bind-all-operators-container">
         <div class="operator-bind-all-operators-header">
             <input type="checkbox" id="operator-select-all-operators" class="operator-select-all-checkbox" checked>
@@ -252,10 +240,6 @@ export const TEMPLATE_FIXTURES = {
         <button class="operator-unbind-all-close-btn" id="operator-unbind-all-close-btn">
             <span class="material-symbols-outlined">close</span>
         </button>
-    </div>
-
-    <div class="operator-unbind-all-description">
-        The following operators will be unbound from your current web session. You will no longer be able to interact with them until they are rebound.
     </div>
 
     <div class="operator-unbind-all-operators-container">

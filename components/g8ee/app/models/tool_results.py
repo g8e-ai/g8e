@@ -216,7 +216,7 @@ class FsListToolResult(G8eBaseModel):
 
 
 class FsReadToolResult(G8eBaseModel):
-    """Result returned by FilesystemMixin._execute_fs_read."""
+    """Result returned by FilesystemMixin._execute_file_read."""
     success: bool = True
     error: str | None = None
     error_type: CommandErrorType | None = None

@@ -25,7 +25,7 @@ describe('version utility', () => {
     });
 
     it('should read version from VERSION file', () => {
-        const spy = vi.spyOn(fs, 'readFileSync').mockReturnValue('v4.2.0\n');
+        const spy = vi.spyOn(fs, 'readFileSync').mockReturnValue('v0.1.3\n');
         
         const info = getVersionInfo();
         // Note: because of internal caching in version.js, this might return 

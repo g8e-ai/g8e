@@ -38,5 +38,3 @@ RUN pip install --no-cache-dir --upgrade pip && \
 RUN mkdir -p /data && chown -R g8e:g8e /data
 
 USER g8e
-
-CMD ["sleep", "infinity"]

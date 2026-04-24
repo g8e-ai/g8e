@@ -19,17 +19,36 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+// TestNewG8eMessage_IDIsUniquePerMessage pins the envelope contract: the
+// envelope id is unique per message and MUST NOT be reused as a correlation
+// key, even when two messages describe the same underlying execution. See
+// shared/models/wire/envelope.json.
+func TestNewG8eMessage_IDIsUniquePerMessage(t *testing.T) {
+	a, err := NewG8eMessage(constants.Event.Operator.Command.Completed, "c", "o", "s", "f", struct{}{})
+	require.NoError(t, err)
+	b, err := NewG8eMessage(constants.Event.Operator.Command.Completed, "c", "o", "s", "f", struct{}{})
+	require.NoError(t, err)
+	assert.NotEqual(t, a.ID, b.ID, "two envelopes must have distinct ids")
+	_, err = uuid.Parse(a.ID)
+	assert.NoError(t, err)
+	_, err = uuid.Parse(b.ID)
+	assert.NoError(t, err)
+}
+
 func TestNewG8eMessage_BasicFields(t *testing.T) {
 	payload := map[string]string{"key": "value"}
-	msg, err := NewG8eMessage("id-1", constants.Event.Operator.Heartbeat, "case-1", "op-1", "sess-1", "fp-1", payload)
+	msg, err := NewG8eMessage(constants.Event.Operator.Heartbeat, "case-1", "op-1", "sess-1", "fp-1", payload)
 
 	require.NoError(t, err)
 	require.NotNil(t, msg)
-	assert.Equal(t, "id-1", msg.ID)
+	assert.NotEmpty(t, msg.ID, "envelope id must be auto-generated")
+	_, uerr := uuid.Parse(msg.ID)
+	assert.NoError(t, uerr, "envelope id must be a valid UUID")
 	assert.Equal(t, constants.Event.Operator.Heartbeat, msg.EventType)
 	assert.Equal(t, "case-1", msg.CaseID)
 	assert.Equal(t, "op-1", msg.OperatorID)
@@ -41,7 +60,7 @@ func TestNewG8eMessage_BasicFields(t *testing.T) {
 
 func TestNewG8eMessage_TimestampIsUTC(t *testing.T) {
 	before := time.Now().UTC()
-	msg, err := NewG8eMessage("id-ts", constants.Event.Operator.Heartbeat, "c", "o", "s", "f", struct{}{})
+	msg, err := NewG8eMessage(constants.Event.Operator.Heartbeat, "c", "o", "s", "f", struct{}{})
 	after := time.Now().UTC()
 
 	require.NoError(t, err)
@@ -59,7 +78,7 @@ func TestNewG8eMessage_PayloadIsMarshalledJSON(t *testing.T) {
 	}
 	payload := inner{Command: "ls", ExitCode: 0}
 
-	msg, err := NewG8eMessage("id-2", constants.Event.Operator.Command.Completed, "c", "o", "s", "f", payload)
+	msg, err := NewG8eMessage(constants.Event.Operator.Command.Completed, "c", "o", "s", "f", payload)
 	require.NoError(t, err)
 
 	var decoded inner
@@ -69,21 +88,21 @@ func TestNewG8eMessage_PayloadIsMarshalledJSON(t *testing.T) {
 }
 
 func TestNewG8eMessage_NilPayload(t *testing.T) {
-	msg, err := NewG8eMessage("id-nil", constants.Event.Operator.Heartbeat, "c", "o", "s", "f", nil)
+	msg, err := NewG8eMessage(constants.Event.Operator.Heartbeat, "c", "o", "s", "f", nil)
 	require.NoError(t, err)
 	assert.NotNil(t, msg)
 	assert.Equal(t, json.RawMessage("null"), msg.Payload)
 }
 
 func TestNewG8eMessage_TaskIDInitiallyNil(t *testing.T) {
-	msg, err := NewG8eMessage("id-3", constants.Event.Operator.Heartbeat, "c", "o", "s", "f", struct{}{})
+	msg, err := NewG8eMessage(constants.Event.Operator.Heartbeat, "c", "o", "s", "f", struct{}{})
 	require.NoError(t, err)
 	assert.Nil(t, msg.TaskID)
 }
 
 func TestG8eMessage_Marshal_RoundTrip(t *testing.T) {
 	payload := map[string]int{"count": 42}
-	msg, err := NewG8eMessage("id-rt", constants.Event.Operator.Command.Completed, "case-rt", "op-rt", "sess-rt", "fp-rt", payload)
+	msg, err := NewG8eMessage(constants.Event.Operator.Command.Completed, "case-rt", "op-rt", "sess-rt", "fp-rt", payload)
 	require.NoError(t, err)
 
 	data, err := msg.Marshal()
@@ -102,7 +121,7 @@ func TestG8eMessage_Marshal_RoundTrip(t *testing.T) {
 }
 
 func TestG8eMessage_Marshal_ProducesValidJSON(t *testing.T) {
-	msg, err := NewG8eMessage("id-json", constants.Event.Operator.Heartbeat, "c", "o", "s", "f", struct{}{})
+	msg, err := NewG8eMessage(constants.Event.Operator.Heartbeat, "c", "o", "s", "f", struct{}{})
 	require.NoError(t, err)
 
 	data, err := msg.Marshal()

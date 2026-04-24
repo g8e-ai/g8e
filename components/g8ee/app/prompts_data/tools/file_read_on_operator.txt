@@ -1,15 +1,34 @@
-Read content from a file on the g8e Operator system.
+Read content from a file on the target system through the deployed g8e Operator. The Operator is deployed directly on the target system and reads the file there. This is the high-level file reading tool that should be used for most file reading operations.
+
+ALWAYS use list_files_and_directories_with_detailed_metadata BEFORE this tool to verify the file exists and get the exact filename.
 
 <parameters>
 - file_path, justification: REQUIRED
 - start_line, end_line, max_lines: for large files
-- target_operator: REQUIRED when multiple operators bound
+- target_operator: operator_id or hostname — REQUIRED when multiple operators bound (prefer hostname when available)
 </parameters>
 
 <behavior>
-Always read a file before attempting to update it.
+1. ALWAYS read a file before attempting to update it with file_update_on_operator to ensure old_content matches exactly
+2. Use list_files_and_directories_with_detailed_metadata first to verify the file exists
+3. For large files, use start_line/end_line/max_lines to limit output
+4. This tool is tracked in file history for auditing
+5. Content is Sentinel-scrubbed before transmission
 </behavior>
+
+<when_to_use>
+- Reading configuration files before making changes
+- Examining log files for debugging
+- Getting file content to prepare for file_update_on_operator
+- Any situation where you need to see file contents
+</when_to_use>
 
 <sentinel_scrubbing>
 File content is Sentinel-scrubbed. See run_commands_with_operator for full placeholder reference.
 </sentinel_scrubbing>
+
+<examples>
+<example>User: "Show me the nginx config" → file_read_on_operator(file_path="/etc/nginx/nginx.conf", justification="Read nginx configuration")</example>
+<example>User: "Read the last 20 lines of the log" → file_read_on_operator(file_path="/var/log/app.log", start_line=-20, justification="Check recent log entries")</example>
+<example>User: "What's in the app config?" → file_read_on_operator(file_path="/app/config.yaml", justification="Read application configuration")</example>
+</examples>

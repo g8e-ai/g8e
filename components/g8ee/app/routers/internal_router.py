@@ -43,9 +43,6 @@ from app.models.internal_api import (
     ChatStartedResponse,
     DirectCommandRequest,
     DirectCommandSentResponse,
-    MCPToolCallRequest,
-    MCPToolCallResponse,
-    MCPToolListResponse,
     OperatorApprovalResponse,
     OperatorSessionRegisteredResponse,
     OperatorSessionRegistrationRequest,
@@ -72,7 +69,6 @@ from ..dependencies import (
     get_g8ee_case_data_service,
     get_g8ee_chat_pipeline,
     get_g8ee_chat_task_manager,
-    get_g8ee_mcp_gateway_service,
     get_g8ee_event_service,
     get_g8ee_heartbeat_service,
     get_g8ee_investigation_service,
@@ -91,7 +87,6 @@ from ..models.http_context import G8eHttpContext
 from ..services.operator.approval_service import OperatorApprovalService
 from ..services.operator.command_service import OperatorCommandService
 from ..services.operator.heartbeat_service import OperatorHeartbeatService
-from ..services.mcp.gateway_service import MCPGatewayService
 from ..services.ai.title_generator import generate_case_title
 
 logger = logging.getLogger(__name__)
@@ -760,59 +755,6 @@ async def get_investigation(
     return investigation
 
 
-@router.post(API_PATHS["g8ee"]["mcp_tools_list"], response_model=MCPToolListResponse)
-async def mcp_tools_list(
-    g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
-    mcp_service: MCPGatewayService = Depends(get_g8ee_mcp_gateway_service),
-    investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
-):
-    agent_mode = AgentMode.OPERATOR_BOUND if any(op.status == OperatorStatus.BOUND for op in g8e_context.bound_operators) else AgentMode.OPERATOR_NOT_BOUND
-
-    logger.info(
-        "[INTERNAL-HTTP] MCP tools/list request",
-        extra={
-            "agent_mode": agent_mode,
-            "bound_operators": len(g8e_context.bound_operators) if g8e_context.bound_operators else 0,
-        }
-    )
-
-    tools = mcp_service.list_tools(agent_mode)
-    return MCPToolListResponse(tools=tools)
-
-
-@router.post(API_PATHS["g8ee"]["mcp_tools_call"], response_model=MCPToolCallResponse)
-async def mcp_tools_call(
-    request: MCPToolCallRequest,
-    g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
-    mcp_service: MCPGatewayService = Depends(get_g8ee_mcp_gateway_service),
-    user_settings: G8eeUserSettings = Depends(get_g8ee_user_settings),
-):
-    logger.info(
-        "[INTERNAL-HTTP] MCP tools/call request",
-        extra={
-            "tool_name": request.tool_name,
-            "request_id": request.request_id,
-            "bound_operators": len(g8e_context.bound_operators) if g8e_context.bound_operators else 0,
-        }
-    )
-
-    try:
-        result = await mcp_service.call_tool(
-            tool_name=request.tool_name,
-            arguments=request.arguments,
-            g8e_context=g8e_context,
-            user_settings=user_settings,
-            sentinel_mode=request.sentinel_mode,
-        )
-        return MCPToolCallResponse(id=request.request_id, result=result)
-    except Exception as e:
-        logger.error("[INTERNAL-HTTP] MCP tools/call failed: %s", e, exc_info=True)
-        return MCPToolCallResponse(
-            id=request.request_id,
-            error={"code": -32603, "message": str(e)},
-        )
-
-
 @router.get(API_PATHS["g8ee"]["health"])
 async def health_check():
     """Health check for internal API"""
@@ -828,7 +770,5 @@ async def health_check():
             InternalApiPaths.G8EE_CASE,
             InternalApiPaths.G8EE_INVESTIGATIONS,
             InternalApiPaths.G8EE_INVESTIGATION,
-            InternalApiPaths.G8EE_MCP_TOOLS_LIST,
-            InternalApiPaths.G8EE_MCP_TOOLS_CALL,
         ]
     }

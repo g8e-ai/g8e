@@ -41,12 +41,73 @@ class AgentPersona(BaseModel):
     identity: str = Field(..., alias="identity")
     purpose: str = Field(..., alias="purpose")
     autonomy: str = Field(..., alias="autonomy")
+    output_contract: str | None = Field(default=None, alias="output_contract")
 
     model_config = ConfigDict(populate_by_name=True)
 
+    @staticmethod
+    def format_xml_tag(tag_name: str, content: str) -> str:
+        """Format content within XML tags with consistent structure.
+
+        Enforces the canonical XML scaffolding pattern:
+        - Opening tag on its own line
+        - Content on its own line
+        - Closing tag on its own line
+
+        This guarantees hard structural boundaries required by the architecture.
+
+        Args:
+            tag_name: The XML tag name (without angle brackets)
+            content: The content to wrap in the tag
+
+        Returns:
+            Formatted XML string with the tag structure
+        """
+        return f"<{tag_name}>\n{content}\n</{tag_name}>"
+
     def get_system_prompt(self) -> str:
-        """Build a system prompt from identity, purpose, role, and autonomy fields."""
-        return f"<role>\n{self.role}\n</role>\n\n<identity>\n{self.identity}\n</identity>\n\n<purpose>\n{self.purpose}\n</purpose>\n\n<autonomy>\n{self.autonomy}\n</autonomy>"
+        """Build a system prompt from persona fields following the canonical layout.
+
+        Canonical layout per docs/architecture/agent_personas.md:
+        1. <role>
+        2. <output_contract> (if present as explicit field or in identity)
+        3. <identity> / <principles>
+        4. <purpose>
+        5. <autonomy>
+        """
+        parts = []
+
+        # 1. Role
+        parts.append(self.format_xml_tag("role", self.role))
+
+        # 2. Output Contract & 3. Identity/Principles
+        # Prefer explicit output_contract field if present
+        if self.output_contract:
+            parts.append(self.format_xml_tag("output_contract", self.output_contract))
+            parts.append(self.format_xml_tag("identity", self.identity))
+        else:
+            # Fallback: check if output_contract is embedded in identity
+            import re
+            contract_match = re.search(r"(<output_contract>.*?</output_contract>)", self.identity, re.DOTALL)
+            if contract_match:
+                contract = contract_match.group(1)
+                parts.append(contract)
+                # Remove contract from identity to avoid duplication
+                identity_clean = self.identity.replace(contract, "").strip()
+                if identity_clean:
+                    parts.append(self.format_xml_tag("identity", identity_clean))
+            else:
+                parts.append(self.format_xml_tag("identity", self.identity))
+
+        # 4. Purpose
+        if self.purpose:
+            parts.append(self.format_xml_tag("purpose", self.purpose))
+
+        # 5. Autonomy
+        if self.autonomy:
+            parts.append(self.format_xml_tag("autonomy", self.autonomy))
+
+        return "\n\n".join(parts)
 
 
 def _load_agents_json() -> dict[str, Any]:
@@ -99,10 +160,10 @@ def list_all_agents() -> list[str]:
 
 def get_tribunal_member(member_id: str) -> AgentPersona:
     """Retrieve a Tribunal member persona by member ID.
-    
+
     Args:
-        member_id: Tribunal member identifier (atom, clio, nemesis)
-        
+        member_id: Tribunal member identifier (axiom, concord, variance, pragma, nemesis)
+
     Returns:
         AgentPersona for the specified Tribunal member
     """

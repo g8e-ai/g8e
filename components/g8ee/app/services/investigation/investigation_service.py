@@ -506,7 +506,7 @@ class InvestigationService:
 
 
 
-def _extract_single_operator_context(op: OperatorDocument) -> OperatorContext:
+def extract_single_operator_context(op: OperatorDocument) -> OperatorContext:
     """Extract typed system context from a single OperatorDocument."""
     sys_info = op.system_info
     hb = op.latest_heartbeat_snapshot
@@ -572,7 +572,7 @@ def extract_system_context(
         return None
 
     operator_doc = investigation.operator_documents[0]
-    context = _extract_single_operator_context(operator_doc)
+    context = extract_single_operator_context(operator_doc)
     logger.info(
         "[CONTEXT] Primary operator context: operator_id=%s hostname=%s os=%s "
         "arch=%s memory_mb=%s cpu_count=%s public_ip=%s operator_type=%s "
@@ -600,7 +600,7 @@ def extract_all_operators_context(
 
     contexts: list[OperatorContext] = []
     for operator_doc in investigation.operator_documents:
-        context = _extract_single_operator_context(operator_doc)
+        context = extract_single_operator_context(operator_doc)
         logger.info(
             "[CONTEXT] Operator[%d] context: operator_id=%s hostname=%s os=%s "
             "arch=%s operator_type=%s is_cloud=%s granted_intents=%s",
@@ -641,23 +641,23 @@ def extract_operator_context_by_target(
     
     # If no target specified, use first operator (backward compatibility)
     if not target_operator:
-        return _extract_single_operator_context(investigation.operator_documents[0])
+        return extract_single_operator_context(investigation.operator_documents[0])
     
     # Try to find operator by operator_id
     for operator_doc in investigation.operator_documents:
         if operator_doc.id == target_operator:
-            return _extract_single_operator_context(operator_doc)
+            return extract_single_operator_context(operator_doc)
     
     # Try to find operator by hostname
     for operator_doc in investigation.operator_documents:
         if operator_doc.hostname == target_operator:
-            return _extract_single_operator_context(operator_doc)
+            return extract_single_operator_context(operator_doc)
     
     # Try to parse as index (e.g., "0", "1", "2")
     try:
         index = int(target_operator)
         if 0 <= index < len(investigation.operator_documents):
-            return _extract_single_operator_context(investigation.operator_documents[index])
+            return extract_single_operator_context(investigation.operator_documents[index])
     except ValueError:
         pass
     
@@ -666,4 +666,4 @@ def extract_operator_context_by_target(
         "[CONTEXT] Target operator '%s' not found, falling back to first operator",
         target_operator,
     )
-    return _extract_single_operator_context(investigation.operator_documents[0])
+    return extract_single_operator_context(investigation.operator_documents[0])

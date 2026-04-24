@@ -262,3 +262,6 @@ Thumbs.db
 
 # Windsurf
 .windsurf
+
+# project / local-only docs
+docs/.projects

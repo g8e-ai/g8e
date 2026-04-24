@@ -17,6 +17,7 @@ import { SessionAuthListener } from '@g8ed/services/auth/session_auth_listener.j
 import { PubSubChannel } from '@g8ed/constants/channels.js';
 import { ApiKeyError, SESSION_AUTH_LISTEN_TTL_MS } from '@g8ed/constants/auth.js';
 import { DEFAULT_OPERATOR_CONFIG } from '@g8ed/constants/operator_defaults.js';
+import { logger } from '@g8ed/utils/logger.js';
 
 describe('SessionAuthListener', () => {
     let listener;
@@ -24,6 +25,7 @@ describe('SessionAuthListener', () => {
     let mockOperatorSessionService;
     let mockOperatorService;
     let messageHandlers = [];
+    let loggerErrorSpy;
 
     const mockG8eContext = {
         operator_session_id: 'sess-123',
@@ -39,6 +41,7 @@ describe('SessionAuthListener', () => {
     beforeEach(() => {
         vi.useFakeTimers();
         messageHandlers = [];
+        loggerErrorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
 
         mockPubSubClient = {
             on: vi.fn().mockImplementation((event, handler) => {
@@ -83,6 +86,7 @@ describe('SessionAuthListener', () => {
     afterEach(() => {
         vi.useRealTimers();
         vi.restoreAllMocks();
+        loggerErrorSpy?.mockRestore();
     });
 
     describe('constructor', () => {
@@ -208,6 +212,34 @@ describe('SessionAuthListener', () => {
             // The listener is called fire-and-forget from the HTTP handler — it
             // MUST NOT propagate synchronous errors back to the request path.
             expect(() => listener.listen(mockG8eContext)).not.toThrow();
+        });
+
+        it('should log error when publish fails during error handling', async () => {
+            listener.listen(mockG8eContext);
+
+            const validationError = new Error('DB Error');
+            const publishError = new Error('Redis connection lost');
+
+            mockOperatorSessionService.validateSession.mockRejectedValue(validationError);
+            mockPubSubClient.publish.mockRejectedValueOnce(publishError);
+
+            await mockPubSubClient.emitMessage(authChannel, {});
+            await vi.runAllTimersAsync();
+
+            // Should attempt to publish failure response
+            expect(mockPubSubClient.publish).toHaveBeenCalledWith(responseChannel, expect.objectContaining({
+                success: false,
+                error: ApiKeyError.AUTH_FAILED
+            }));
+
+            // Should log the publish failure
+            expect(loggerErrorSpy).toHaveBeenCalledWith(
+                '[SESSION-AUTH-LISTENER] Failed to publish auth failure response',
+                { error: publishError.message }
+            );
+
+            expect(mockPubSubClient.removeListener).toHaveBeenCalled();
+            expect(mockPubSubClient.unsubscribe).toHaveBeenCalledWith(authChannel);
         });
     });
 });

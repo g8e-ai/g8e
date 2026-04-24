@@ -3,7 +3,7 @@ Retrieve file diffs from the Operator's Sentinel-scrubbed vault. The scrubbed va
 <parameters>
 - diff_id: retrieve full diff content for a specific diff
 - web_session_id: list all diffs for a session (at least one required)
-- file_path: filter by path (with web_session_id only) | limit: default 50 | target_operator: REQUIRED when multiple operators bound
+- file_path: filter by path (with web_session_id only) | limit: default 50 | target_operator: operator_id or hostname — REQUIRED when multiple operators bound (prefer hostname when available)
 </parameters>
 
 <returns>
@@ -20,3 +20,8 @@ By web_session_id: array of diff summaries (no full content), total, web_session
 - User asks "what changes were made?" or needs to audit file modifications
 - Debugging by reviewing exact diff content
 </when_to_use>
+
+<examples>
+<example>User: "What changes were made to nginx.conf?" → fetch_file_diff(web_session_id="current", file_path="/etc/nginx/nginx.conf")</example>
+<example>User: "Show me the full diff for change abc123" → fetch_file_diff(diff_id="abc123")</example>
+</examples>

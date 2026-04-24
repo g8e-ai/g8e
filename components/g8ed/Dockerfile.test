@@ -32,5 +32,3 @@ RUN npm config set update-notifier false -g \
     && chown -R g8e:g8e /app/components/g8ed
 
 USER g8e
-
-CMD ["sleep", "infinity"]

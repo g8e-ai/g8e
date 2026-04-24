@@ -305,12 +305,12 @@ class TestSSEEventContract:
         )
 
         published = event_svc._published_events
-        tool_call_started_events = [e for e in published if e.event_type == EventType.LLM_CHAT_ITERATION_TOOL_CALL_STARTED]
-        
+        tool_call_started_events = [e for e in published if e.event_type == EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED]
+
         assert len(tool_call_started_events) >= 1
         actual_event = tool_call_started_events[0]
 
-        # Verify the generic tool call started event carries the search web tool metadata
+        # Verify the native per-tool requested event carries the search web tool metadata
         assert actual_event.payload.tool_name == OperatorToolName.G8E_SEARCH_WEB
         assert actual_event.payload.execution_id == "contract-search-001"
         assert actual_event.payload.display_detail == "contract test query"

@@ -498,3 +498,102 @@ def test_operator_not_bound_prompt_does_not_contradict_capabilities():
     # The acknowledgement anchor must appear before any "command" guidance.
     ack_pos = prompt.find("No Operator is currently bound")
     assert ack_pos != -1, "acknowledgement directive missing from execution section"
+
+
+# ---------------------------------------------------------------------------
+# Fragmented prompt logic regression tests
+#
+# These tests verify that the prompt building logic is consolidated and does
+# not include duplicate role tags or inconsistent layouts when agent_name is
+# provided. Regression protection for the fix that ensures persona system
+# prompt replaces CORE_IDENTITY instead of being appended after it.
+# ---------------------------------------------------------------------------
+
+def test_build_modular_system_prompt_with_agent_name_uses_persona_not_core_identity(mock_loader, operator_context):
+    """When agent_name is provided, the persona's system prompt should be used
+    instead of CORE_IDENTITY to avoid duplicate role tags."""
+    from app.constants import AgentName
+    
+    prompt = prompts.build_modular_system_prompt(
+        operator_bound=True,
+        system_context=operator_context,
+        user_memories=[],
+        case_memories=[],
+        investigation=None,
+        agent_name=AgentName.SAGE,
+    )
+    
+    # Should NOT contain CORE_IDENTITY when agent_name is provided
+    assert f"Content of {PromptFile.CORE_IDENTITY}" not in prompt
+    
+    # Should contain the persona's system prompt (which includes role, identity, purpose, autonomy)
+    # The persona prompt will contain the agent's role from agents.json
+    assert "reasoner" in prompt.lower() or "sage" in prompt.lower()
+    
+    # Should still contain the core doctrine sections (safety, loyalty, dissent)
+    assert f"Content of {PromptFile.CORE_SAFETY}" in prompt
+    assert f"Content of {PromptFile.CORE_LOYALTY}" in prompt
+    assert f"Content of {PromptFile.CORE_DISSENT}" in prompt
+
+
+def test_build_modular_system_prompt_without_agent_name_uses_core_identity(mock_loader, operator_context):
+    """When agent_name is NOT provided, CORE_IDENTITY should be used as fallback."""
+    prompt = prompts.build_modular_system_prompt(
+        operator_bound=True,
+        system_context=operator_context,
+        user_memories=[],
+        case_memories=[],
+        investigation=None,
+        agent_name=None,
+    )
+    
+    # Should contain CORE_IDENTITY when no agent_name is provided
+    assert f"Content of {PromptFile.CORE_IDENTITY}" in prompt
+    
+    # Should still contain the core doctrine sections
+    assert f"Content of {PromptFile.CORE_SAFETY}" in prompt
+    assert f"Content of {PromptFile.CORE_LOYALTY}" in prompt
+    assert f"Content of {PromptFile.CORE_DISSENT}" in prompt
+
+
+def test_build_modular_system_prompt_no_duplicate_role_tags_with_agent_name(mock_loader, operator_context):
+    """When agent_name is provided, there should be no duplicate <role> tags.
+    This regression test ensures the fix for fragmented prompt logic prevents
+    CORE_IDENTITY and persona system prompt from both adding role tags."""
+    from app.constants import AgentName
+    
+    prompt = prompts.build_modular_system_prompt(
+        operator_bound=True,
+        system_context=operator_context,
+        user_memories=[],
+        case_memories=[],
+        investigation=None,
+        agent_name=AgentName.DASH,
+    )
+    
+    # Count occurrences of <role> tag - should be exactly 1 (from persona)
+    role_count = prompt.count("<role>")
+    assert role_count == 1, f"Expected exactly 1 <role> tag, found {role_count}"
+    
+    # Verify CORE_IDENTITY is not included (which would add a second role tag)
+    assert f"Content of {PromptFile.CORE_IDENTITY}" not in prompt
+
+
+def test_build_modular_system_prompt_dash_uses_persona_not_core_identity(mock_loader, operator_context):
+    """Dash agent should use its persona system prompt, not CORE_IDENTITY."""
+    from app.constants import AgentName
+    
+    prompt = prompts.build_modular_system_prompt(
+        operator_bound=True,
+        system_context=operator_context,
+        user_memories=[],
+        case_memories=[],
+        investigation=None,
+        agent_name=AgentName.DASH,
+    )
+    
+    # Should NOT contain CORE_IDENTITY
+    assert f"Content of {PromptFile.CORE_IDENTITY}" not in prompt
+    
+    # Should contain Dash-specific content from its persona
+    assert "responder" in prompt.lower() or "dash" in prompt.lower()

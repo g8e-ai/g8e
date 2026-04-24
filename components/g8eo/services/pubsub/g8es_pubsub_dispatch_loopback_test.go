@@ -93,7 +93,6 @@ func newLoopbackService(t *testing.T, f *loopbackFixture) (*PubSubCommandService
 func newTestG8eMessage(t *testing.T, cfg *config.Config, eventType, caseID string, payload interface{}) *models.G8eMessage {
 	t.Helper()
 	msg, err := models.NewG8eMessage(
-		fmt.Sprintf("test-%d", time.Now().UnixNano()),
 		eventType,
 		caseID,
 		cfg.OperatorID,

@@ -2325,11 +2325,18 @@
     text-decoration: underline;
 }
 /* Base activity indicator - appears inline in chat flow, right-aligned */
-
+.activity-indicator {
+    animation: messageFadeIn 0.4s ease-out;
+}
 
 .activity-indicator.visible {
     opacity: 1;
     transform: translateX(0);
+}
+
+/* Base tool call indicator - appears inline in chat flow */
+.tool-call-indicator {
+    animation: messageFadeIn 0.4s ease-out;
 }
 
 .activity-indicator.completed {

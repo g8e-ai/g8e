@@ -85,12 +85,7 @@ class PubSubClient:
         # Maps target (channel or pattern) to list of events to set on SUBSCRIBED
         self._pending_acks: dict[str, list[asyncio.Event]] = {}
         self._disconnect_handlers: list[Callable[[], Coroutine[Any, Any, None]]] = []
-        
-        # Recently sent message IDs to filter self-broadcasts
-        # (Since broker currently strips the 'sender' field)
-        self._sent_ids: set[str] = set()
-        self._sent_ids_max = 1000
-        
+
         self._closing = False
         self._reconnect_task: asyncio.Task | None = None
 
@@ -157,14 +152,6 @@ class PubSubClient:
                         if event_type == PubSubWireEventType.MESSAGE:
                             channel = event.get(PubSubField.CHANNEL)
                             data = event.get(PubSubField.DATA)
-                            
-                            # Filter self-broadcast by checking message ID if present
-                            if isinstance(data, dict):
-                                msg_id = data.get("id")
-                                async with self._lock:
-                                    if msg_id in self._sent_ids:
-                                        logger.debug("[PUBSUB-CLIENT] Ignoring self-broadcast message %s on channel '%s'", msg_id, channel)
-                                        continue
 
                             if not channel:
                                 continue
@@ -183,14 +170,6 @@ class PubSubClient:
                             pattern = event.get(PubSubField.PATTERN, "")
                             channel = event.get(PubSubField.CHANNEL, "")
                             data = event.get(PubSubField.DATA)
-
-                            # Filter self-broadcast
-                            if isinstance(data, dict):
-                                msg_id = data.get("id")
-                                async with self._lock:
-                                    if msg_id in self._sent_ids:
-                                        logger.debug("[PUBSUB-CLIENT] Ignoring self-broadcast message %s for pattern '%s'", msg_id, pattern)
-                                        continue
 
                             if not pattern:
                                 continue
@@ -214,22 +193,22 @@ class PubSubClient:
                                 ack.set()
                             
                             if not acks:
-                                logger.debug("[PUBSUB-CLIENT] Received redundant SUBSCRIBED for target '%s'", target)
+                                logger.info("[PUBSUB-CLIENT] Received redundant SUBSCRIBED for target '%s'", target)
                         
                         else:
                             logger.warning("[PUBSUB-CLIENT] Unknown wire event type '%s'", event_type)
                             
                     except json.JSONDecodeError:
                         logger.error("[PUBSUB-CLIENT] Malformed JSON from pub/sub: %r", msg.data[:200])
-                    except Exception as e:
-                        logger.error("[PUBSUB-CLIENT] Error processing message: %s", e, exc_info=True)
+                    except (KeyError, ValueError, AttributeError) as e:
+                        logger.error("[PUBSUB-CLIENT] Malformed event shape from pub/sub: %s", e, exc_info=True)
                         
                 elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
                     logger.info("[PUBSUB-CLIENT] WebSocket closed or error: %s", msg.type)
                     break
-        except Exception as e:
+        except (aiohttp.ClientError, ConnectionError, OSError, asyncio.IncompleteReadError) as e:
             if not self._closing:
-                logger.error("[PUBSUB-CLIENT] WS reader crashed: %s", e, exc_info=True)
+                logger.error("[PUBSUB-CLIENT] WS reader transport error: %s", e, exc_info=True)
         finally:
             await self._handle_disconnect()
 
@@ -319,7 +298,6 @@ class PubSubClient:
             self._channel_refcounts.clear()
             self._pattern_refcounts.clear()
             self._pending_acks.clear()
-            self._sent_ids.clear()
             logger.info("[PUBSUB-CLIENT] Closed and state cleared")
 
     async def ensure_connected(self) -> None:
@@ -346,9 +324,9 @@ class PubSubClient:
                 if channel in self._pending_acks:
                     ack = asyncio.Event()
                     self._pending_acks[channel].append(ack)
-                    logger.debug("[PUBSUB-CLIENT] Joined existing wait for channel '%s' (refcount=%d)", channel, count + 1)
+                    logger.info("[PUBSUB-CLIENT] Joined existing wait for channel '%s' (refcount=%d)", channel, count + 1)
                 else:
-                    logger.debug("[PUBSUB-CLIENT] Using existing subscription for channel '%s' (refcount=%d)", channel, count + 1)
+                    logger.info("[PUBSUB-CLIENT] Using existing subscription for channel '%s' (refcount=%d)", channel, count + 1)
                     return
 
             if ack is None:
@@ -396,9 +374,9 @@ class PubSubClient:
                 if pattern in self._pending_acks:
                     ack = asyncio.Event()
                     self._pending_acks[pattern].append(ack)
-                    logger.debug("[PUBSUB-CLIENT] Joined existing wait for pattern '%s' (refcount=%d)", pattern, count + 1)
+                    logger.info("[PUBSUB-CLIENT] Joined existing wait for pattern '%s' (refcount=%d)", pattern, count + 1)
                 else:
-                    logger.debug("[PUBSUB-CLIENT] Using existing subscription for pattern '%s' (refcount=%d)", pattern, count + 1)
+                    logger.info("[PUBSUB-CLIENT] Using existing subscription for pattern '%s' (refcount=%d)", pattern, count + 1)
                     return
 
             if ack is None:
@@ -447,7 +425,7 @@ class PubSubClient:
             self._channel_refcounts[channel] = new_count
             
             if new_count > 0:
-                logger.debug("[PUBSUB-CLIENT] Decremented refcount for channel '%s' to %d", channel, new_count)
+                logger.info("[PUBSUB-CLIENT] Decremented refcount for channel '%s' to %d", channel, new_count)
                 return
 
             logger.info("[PUBSUB-CLIENT] Unsubscribing from channel '%s'", channel)
@@ -469,7 +447,7 @@ class PubSubClient:
             self._pattern_refcounts[pattern] = new_count
             
             if new_count > 0:
-                logger.debug("[PUBSUB-CLIENT] Decremented refcount for pattern '%s' to %d", pattern, new_count)
+                logger.info("[PUBSUB-CLIENT] Decremented refcount for pattern '%s' to %d", pattern, new_count)
                 return
 
             logger.info("[PUBSUB-CLIENT] Unsubscribing from pattern '%s'", pattern)
@@ -487,17 +465,6 @@ class PubSubClient:
             if self._ws is None or self._ws.closed:
                 logger.error("[PUBSUB-CLIENT] Cannot publish: WebSocket is not connected")
                 return 0
-
-            # Track sent message ID to filter self-broadcast
-            msg_id = data.get("id")
-            if isinstance(msg_id, str):
-                async with self._lock:
-                    self._sent_ids.add(msg_id)
-                    # Simple LRU-ish cleanup
-                    if len(self._sent_ids) > self._sent_ids_max:
-                        # Convert to list to pop first element (oldest)
-                        oldest = next(iter(self._sent_ids))
-                        self._sent_ids.remove(oldest)
 
             await self._ws.send_json({
                 PubSubField.ACTION: PubSubAction.PUBLISH,
@@ -565,7 +532,7 @@ class PubSubClient:
         result = await self.publish(channel, command_data.model_dump(mode="json"))
         
         if result > 0:
-            logger.debug(
+            logger.info(
                 "[PUBSUB-CLIENT] Command published successfully for operator %s session %s",
                 operator_id,
                 operator_session_id,
@@ -692,7 +659,7 @@ class PubSubClient:
     ) -> bool:
         channel = PubSubChannel.cmd(operator_id, operator_session_id)
         
-        logger.debug(
+        logger.info(
             "[PUBSUB-CLIENT] Checking if operator %s session %s is online",
             operator_id,
             operator_session_id,
@@ -713,7 +680,7 @@ class PubSubClient:
             receivers = await self.publish(channel, ping.model_dump(mode="json"))
             
             is_online = receivers > 0
-            logger.debug(
+            logger.info(
                 "[PUBSUB-CLIENT] Operator %s session %s online check result: %s (receivers: %d)",
                 operator_id,
                 operator_session_id,

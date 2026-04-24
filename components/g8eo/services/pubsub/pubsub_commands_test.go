@@ -906,33 +906,35 @@ func TestPubSubCommandService_PublishLFAAError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// publishFetchLogsFailure — via HistoryService
+// FetchLogs.Failed — unified LFAA error envelope
 //
-// The fetch-logs failure path publishes a FetchLogsResultPayload-shaped
-// message (not an LFAAErrorPayload) because the g8ee side expects that
-// typed payload on this event type. This test pins the shape + the
-// FetchLogs.Failed routing.
+// FetchLogs failures publish the standard LFAAErrorPayload shape (via
+// publishLFAAErrorTo), matching FetchHistory.Failed / FetchFileHistory.Failed
+// and letting g8ee dispatch through the single LFAA error handler path.
+// executionIDFromMessage resolves the execution_id from the request payload
+// so correlation is preserved.
 // ---------------------------------------------------------------------------
 
 func TestPubSubCommandService_PublishFetchLogsFailure(t *testing.T) {
-	t.Run("publishes fetch logs failure", func(t *testing.T) {
+	t.Run("publishes fetch logs failure via LFAA error envelope", func(t *testing.T) {
 		f := newPubsubFixture(t)
 
 		msg := PubSubCommandMessage{
 			ID:        "msg-123",
 			EventType: constants.Event.Operator.FetchLogs.Requested,
 			CaseID:    "case-789",
-			Payload:   mustMarshalJSON(t, models.FetchLogsRequestPayload{}),
+			Payload:   mustMarshalJSON(t, models.FetchLogsRequestPayload{ExecutionID: "exec-123"}),
 			Timestamp: time.Now().UTC(),
 		}
 
-		f.Svc.history.publishFetchLogsFailure(context.Background(), msg, "exec-123", "execution not found")
+		publishLFAAErrorTo(context.Background(), f.DB, f.Cfg, f.Logger, msg, constants.Event.Operator.FetchLogs.Failed, "execution not found")
 
 		published := f.DB.LastPublished()
 		require.NotNil(t, published, "expected fetch logs failure to be published")
 		assert.Contains(t, string(published.Data), constants.Event.Operator.FetchLogs.Failed)
 		assert.Contains(t, string(published.Data), "execution not found")
 		assert.Contains(t, string(published.Data), "exec-123")
+		assert.Contains(t, string(published.Data), `"success":false`)
 	})
 }
 
@@ -1018,62 +1020,6 @@ func TestPubSubCommandService_HandleShutdownRequest(t *testing.T) {
 		case <-time.After(1 * time.Second):
 			t.Fatal("shutdown reason not received on channel")
 		}
-	})
-}
-
-// ---------------------------------------------------------------------------
-// handleMCPToolsCall
-// ---------------------------------------------------------------------------
-
-func TestPubSubCommandService_HandleMCPToolsCall(t *testing.T) {
-	t.Run("handles nil OperatorID gracefully without panic", func(t *testing.T) {
-		f := newPubsubFixture(t)
-
-		// Create an invalid MCP JSON-RPC request that will fail translation
-		invalidReq := json.RawMessage(`{"jsonrpc":"2.0","id":"req-123","method":"tools/call","params":{"name":"unknown_tool"}}`)
-
-		msg := PubSubCommandMessage{
-			ID:                "req-123",
-			EventType:         constants.Event.Operator.MCP.ToolsCall,
-			CaseID:            "case-456",
-			InvestigationID:   "inv-789",
-			OperatorSessionID: "session-abc",
-			OperatorID:        nil, // This is the key condition being tested
-			Payload:           invalidReq,
-			Timestamp:         time.Now().UTC(),
-		}
-
-		// Call the function - it should log an error and return without panicking
-		// Since OperatorID is nil, it cannot publish a response
-		assert.NotPanics(t, func() {
-			f.Svc.handleMCPToolsCall(context.Background(), msg)
-		})
-
-		// Verify no message was published (since OperatorID is nil)
-		published := f.DB.LastPublished()
-		assert.Nil(t, published, "expected no message to be published when OperatorID is nil")
-	})
-
-	t.Run("handles JSON parsing error gracefully", func(t *testing.T) {
-		f := newPubsubFixture(t)
-
-		msg := PubSubCommandMessage{
-			ID:                "req-456",
-			EventType:         constants.Event.Operator.MCP.ToolsCall,
-			CaseID:            "case-789",
-			InvestigationID:   "inv-012",
-			OperatorSessionID: "session-def",
-			OperatorID:        nil,
-			Payload:           json.RawMessage(`invalid json`),
-			Timestamp:         time.Now().UTC(),
-		}
-
-		assert.NotPanics(t, func() {
-			f.Svc.handleMCPToolsCall(context.Background(), msg)
-		})
-
-		published := f.DB.LastPublished()
-		assert.Nil(t, published, "expected no message to be published when JSON parsing fails")
 	})
 }
 

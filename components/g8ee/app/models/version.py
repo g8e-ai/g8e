@@ -18,4 +18,4 @@ from app.models.base import G8eBaseModel
 
 class VersionInfo(G8eBaseModel):
     """Version information for a g8e component."""
-    version: str = Field(description="Semver version string (e.g. v4.2.0)")
+    version: str = Field(description="Semver version string (e.g. v0.1.3)")

@@ -187,11 +187,12 @@ async def run_auditor(
         ))
         idx += 1
 
-    # auditor_input = AuditorInput(winner=target_cmd, mode=mode, clusters=clusters)
-    
+    correlation_id = getattr(emitter, "correlation_id", None)
+
     await emitter.emit(
         EventType.TRIBUNAL_VOTING_AUDIT_STARTED,
         TribunalAuditorStartedPayload(candidate_command=target_cmd),
+        correlation_id=correlation_id,
     )
 
     fields = build_tribunal_prompt_fields(
@@ -280,6 +281,7 @@ async def run_auditor(
                 await emitter.emit(
                     EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED,
                     TribunalAuditorCompletedPayload(passed=True, reason=AuditorReason.OK),
+                    correlation_id=correlation_id,
                 )
                 return True, target_cmd, None, AuditorReason.OK, None, None
 
@@ -301,6 +303,7 @@ async def run_auditor(
                         swap_to_cluster=swap_to_cluster,
                         swap_to_member=swap_to_member
                     ),
+                    correlation_id=correlation_id,
                 )
                 return True, final_cmd, None, AuditorReason.SWAPPED_TO_DISSENTER, swap_to_cluster, swap_to_member
 
@@ -319,6 +322,7 @@ async def run_auditor(
             await emitter.emit(
                 EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED,
                 TribunalAuditorCompletedPayload(passed=False, revision=revised, reason=reason),
+                correlation_id=correlation_id,
             )
             return False, revised, revised, reason, None, None
 

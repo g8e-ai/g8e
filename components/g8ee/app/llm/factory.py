@@ -117,7 +117,7 @@ async def clear_provider_cache() -> None:
         try:
             await provider.force_close()
         except Exception as exc:
-            logger.debug("Error closing provider during cache clear: %s", exc)
+            logger.info("Error closing provider during cache clear: %s", exc)
     _provider_cache.clear()
 
 

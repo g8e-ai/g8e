@@ -21,8 +21,20 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/config"
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/models"
-	"github.com/g8e-ai/g8e/components/g8eo/services/mcp"
 )
+
+// executionIDFromMessage resolves the execution_id for a command from the
+// inbound payload's execution_id field. If the payload does not carry one it
+// falls back to the envelope id (msg.ID).
+func executionIDFromMessage(msg PubSubCommandMessage) string {
+	var probe struct {
+		ExecutionID string `json:"execution_id"`
+	}
+	if err := json.Unmarshal(msg.Payload, &probe); err == nil && probe.ExecutionID != "" {
+		return probe.ExecutionID
+	}
+	return msg.ID
+}
 
 // setExecutionIDOnPayload sets the ExecutionID field on typed payloads that support it.
 // This is done before serialization to avoid manipulating JSON mid-stream.
@@ -30,31 +42,8 @@ func setExecutionIDOnPayload(payload interface{}, executionID string) {
 	if executionID == "" {
 		return
 	}
-	switch p := payload.(type) {
-	case *models.CancellationResultPayload:
-		p.ExecutionID = executionID
-	case *models.FileEditResultPayload:
-		p.ExecutionID = executionID
-	case *models.FsListResultPayload:
-		p.ExecutionID = executionID
-	case *models.ExecutionStatusPayload:
-		p.ExecutionID = executionID
-	case *models.PortCheckResultPayload:
-		p.ExecutionID = executionID
-	case *models.FetchLogsResultPayload:
-		p.ExecutionID = executionID
-	case *models.FsReadResultPayload:
-		p.ExecutionID = executionID
-	case *models.LFAAErrorPayload:
-		p.ExecutionID = executionID
-	case *models.FetchFileDiffResultPayload:
-		p.ExecutionID = executionID
-	case *models.FetchHistoryResultPayload:
-		p.ExecutionID = executionID
-	case *models.FetchFileHistoryResultPayload:
-		p.ExecutionID = executionID
-	case *models.RestoreFileResultPayload:
-		p.ExecutionID = executionID
+	if setter, ok := payload.(models.ExecutionIDSetter); ok {
+		setter.SetExecutionID(executionID)
 	}
 }
 
@@ -69,10 +58,11 @@ func publishLFAATypedResponseTo(
 	eventType string,
 	payload interface{},
 ) {
-	setExecutionIDOnPayload(payload, msg.ID)
+	executionID := executionIDFromMessage(msg)
+	setExecutionIDOnPayload(payload, executionID)
 
 	resultMsg, err := models.NewG8eMessage(
-		msg.ID, eventType, msg.CaseID,
+		eventType, msg.CaseID,
 		cfg.OperatorID, cfg.OperatorSessionId, cfg.SystemFingerprint,
 		payload,
 	)
@@ -81,16 +71,7 @@ func publishLFAATypedResponseTo(
 		return
 	}
 
-	if msg.EventType == constants.Event.Operator.MCP.ToolsCall {
-		mcpRaw, err := mcp.WrapResult(msg.ID, msg.ID, eventType, payload)
-		if err != nil {
-			logger.Error("Failed to wrap result for MCP", "error", err)
-		} else {
-			resultMsg.EventType = constants.Event.Operator.MCP.ToolsResult
-			resultMsg.Payload = mcpRaw
-		}
-	}
-
+	resultMsg.APIKey = cfg.APIKey
 	resultMsg.TaskID = msg.TaskID
 	resultMsg.InvestigationID = msg.InvestigationID
 	resultMsg.OperatorSessionID = msg.OperatorSessionID
@@ -119,16 +100,17 @@ func publishLFAAErrorTo(
 	msg PubSubCommandMessage,
 	eventType, errorMsg string,
 ) {
+	executionID := executionIDFromMessage(msg)
 	payload := models.LFAAErrorPayload{
 		Success:           false,
 		Error:             errorMsg,
-		ExecutionID:       msg.ID,
+		ExecutionID:       executionID,
 		OperatorID:        cfg.OperatorID,
 		OperatorSessionID: cfg.OperatorSessionId,
 	}
 
 	resultMsg, err := models.NewG8eMessage(
-		msg.ID, eventType, msg.CaseID,
+		eventType, msg.CaseID,
 		cfg.OperatorID, cfg.OperatorSessionId, cfg.SystemFingerprint,
 		payload,
 	)
@@ -137,16 +119,7 @@ func publishLFAAErrorTo(
 		return
 	}
 
-	if msg.EventType == constants.Event.Operator.MCP.ToolsCall {
-		mcpRaw, err := mcp.WrapResult(msg.ID, msg.ID, eventType, &payload)
-		if err != nil {
-			logger.Error("Failed to wrap error for MCP", "error", err)
-		} else {
-			resultMsg.EventType = constants.Event.Operator.MCP.ToolsResult
-			resultMsg.Payload = mcpRaw
-		}
-	}
-
+	resultMsg.APIKey = cfg.APIKey
 	resultMsg.TaskID = msg.TaskID
 	resultMsg.InvestigationID = msg.InvestigationID
 	resultMsg.OperatorSessionID = msg.OperatorSessionID
@@ -175,7 +148,7 @@ func publishLFAAResponseTo(
 	responseJSON []byte,
 ) {
 	resultMsg, err := models.NewG8eMessage(
-		msg.ID, eventType, msg.CaseID,
+		eventType, msg.CaseID,
 		cfg.OperatorID, cfg.OperatorSessionId, cfg.SystemFingerprint,
 		json.RawMessage(responseJSON),
 	)
@@ -184,16 +157,7 @@ func publishLFAAResponseTo(
 		return
 	}
 
-	if msg.EventType == constants.Event.Operator.MCP.ToolsCall {
-		mcpRaw, err := mcp.WrapResult(msg.ID, msg.ID, eventType, responseJSON)
-		if err != nil {
-			logger.Error("Failed to wrap result for MCP", "error", err)
-		} else {
-			resultMsg.EventType = constants.Event.Operator.MCP.ToolsResult
-			resultMsg.Payload = mcpRaw
-		}
-	}
-
+	resultMsg.APIKey = cfg.APIKey
 	resultMsg.TaskID = msg.TaskID
 	resultMsg.InvestigationID = msg.InvestigationID
 	resultMsg.OperatorSessionID = msg.OperatorSessionID

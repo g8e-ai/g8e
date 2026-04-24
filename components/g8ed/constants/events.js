@@ -189,9 +189,6 @@ export const EventType = Object.freeze({
     OPERATOR_TERMINAL_APPROVAL_DENIED:   _EVENTS['operator']['terminal']['approval']['denied'],
     OPERATOR_TERMINAL_AUTH_STATE_CHANGED: _EVENTS['operator']['terminal']['auth']['state']['changed'],
 
-    OPERATOR_MCP_TOOLS_CALL:    _EVENTS['operator']['mcp']['tools']['call'],
-    OPERATOR_MCP_TOOLS_RESULT:  _EVENTS['operator']['mcp']['tools']['result'],
-
     LLM_CONFIG_REQUESTED: _EVENTS['ai']['llm']['config']['requested'],
     LLM_CONFIG_RECEIVED:  _EVENTS['ai']['llm']['config']['received'],
     LLM_CONFIG_FAILED:    _EVENTS['ai']['llm']['config']['failed'],

@@ -1,4 +1,4 @@
-Execute shell commands on the connected system through the g8e Operator.
+Execute shell commands on the target system through the deployed g8e Operator. The Operator is deployed directly on the target system and executes the command there.
 
 IMPORTANT: You DO NOT propose shell commands directly. The Tribunal — a five-member AI panel — is the sole authority for producing the command string. You describe what you want accomplished; the Tribunal translates that into precise shell syntax for the target OS/shell.
 
@@ -11,11 +11,9 @@ IMPORTANT: You DO NOT propose shell commands directly. The Tribunal — a five-m
 </parameters>
 
 <examples>
-GOOD: request="Show disk usage under /home broken down per-user, sorted largest first, top 10."
-GOOD: request="Find all files modified in the last 24 hours under /var/log"; guidelines="Prefer a portable find invocation over locate; exclude compressed archives."
-GOOD: request="Locate the nginx binary and list running nginx processes and listening ports." (one intent per call; do not bundle unrelated operations behind output labels)
-BAD: request="du -sh /home/*/ | sort -rh | head -10"  — that is a command string, which is the Tribunal's job to write.
-BAD: guidelines="Keep output organized with echo headers."  — guidelines describe the command, not its output.
+<example>User: "Show disk usage under /home broken down per-user, sorted largest first, top 10." → run_commands_with_operator(request="Show disk usage under /home broken down per-user, sorted largest first, top 10.")</example>
+<example>User: "Find all files modified in the last 24 hours under /var/log" → run_commands_with_operator(request="Find all files modified in the last 24 hours under /var/log", guidelines="Prefer a portable find invocation over locate; exclude compressed archives.")</example>
+<example>User: "Check nginx status" → run_commands_with_operator(request="Locate the nginx binary and list running nginx processes and listening ports.")</example>
 </examples>
 
 <batch_execution>

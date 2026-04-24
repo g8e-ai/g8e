@@ -55,9 +55,6 @@ class EventType(str, Enum):
     LLM_CHAT_ITERATION_TEXT_COMPLETED = "g8e.v1.ai.llm.chat.iteration.text.completed"
     LLM_CHAT_ITERATION_TEXT_TRUNCATED = "g8e.v1.ai.llm.chat.iteration.text.truncated"
     LLM_CHAT_ITERATION_RETRY = "g8e.v1.ai.llm.chat.iteration.retry"
-    LLM_CHAT_ITERATION_TOOL_CALL_STARTED = "g8e.v1.ai.llm.chat.iteration.tool.call.started"
-    LLM_CHAT_ITERATION_TOOL_CALL_COMPLETED = "g8e.v1.ai.llm.chat.iteration.tool.call.completed"
-
     LLM_CHAT_ITERATION_STREAM_STARTED = "g8e.v1.ai.llm.chat.iteration.stream.started"
     LLM_CHAT_ITERATION_STREAM_DELTA_RECEIVED = "g8e.v1.ai.llm.chat.iteration.stream.delta.received"
     LLM_CHAT_ITERATION_STREAM_COMPLETED = "g8e.v1.ai.llm.chat.iteration.stream.completed"
@@ -253,10 +250,6 @@ class EventType(str, Enum):
     OPERATOR_TERMINAL_APPROVAL_DENIED = "g8e.v1.operator.terminal.approval.denied"
     OPERATOR_TERMINAL_AUTH_STATE_CHANGED = "g8e.v1.operator.terminal.auth.state.changed"
 
-    # g8e.mcp
-    OPERATOR_MCP_TOOLS_CALL = "g8e.v1.operator.mcp.tools.call"
-    OPERATOR_MCP_TOOLS_RESULT = "g8e.v1.operator.mcp.tools.result"
-
     # ai.agent
     AI_AGENT_CONTINUE_APPROVAL_REQUESTED = "g8e.v1.ai.agent.continue.approval.requested"
     AI_AGENT_CONTINUE_APPROVAL_GRANTED = "g8e.v1.ai.agent.continue.approval.granted"
@@ -344,3 +337,13 @@ class EventType(str, Enum):
     LLM_TOOL_G8E_WEB_SEARCH_RECEIVED = "g8e.v1.ai.llm.tool.g8e.web.search.received"
     LLM_TOOL_G8E_WEB_SEARCH_COMPLETED = "g8e.v1.ai.llm.tool.g8e.web.search.completed"
     LLM_TOOL_G8E_WEB_SEARCH_FAILED = "g8e.v1.ai.llm.tool.g8e.web.search.failed"
+
+    LLM_TOOL_G8E_INVESTIGATION_QUERY_REQUESTED = "g8e.v1.ai.llm.tool.g8e.investigation.query.requested"
+    LLM_TOOL_G8E_INVESTIGATION_QUERY_RECEIVED = "g8e.v1.ai.llm.tool.g8e.investigation.query.received"
+    LLM_TOOL_G8E_INVESTIGATION_QUERY_COMPLETED = "g8e.v1.ai.llm.tool.g8e.investigation.query.completed"
+    LLM_TOOL_G8E_INVESTIGATION_QUERY_FAILED = "g8e.v1.ai.llm.tool.g8e.investigation.query.failed"
+
+    LLM_TOOL_G8E_COMMAND_CONSTRAINTS_REQUESTED = "g8e.v1.ai.llm.tool.g8e.command.constraints.requested"
+    LLM_TOOL_G8E_COMMAND_CONSTRAINTS_RECEIVED = "g8e.v1.ai.llm.tool.g8e.command.constraints.received"
+    LLM_TOOL_G8E_COMMAND_CONSTRAINTS_COMPLETED = "g8e.v1.ai.llm.tool.g8e.command.constraints.completed"
+    LLM_TOOL_G8E_COMMAND_CONSTRAINTS_FAILED = "g8e.v1.ai.llm.tool.g8e.command.constraints.failed"

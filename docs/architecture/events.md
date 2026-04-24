@@ -139,7 +139,7 @@ The protocol defines five top-level domains. Total event count: **241**.
 | Wire Value | Description |
 |------------|-------------|
 | `g8e.v1.operator.shutdown.requested` | Graceful shutdown requested |
-| `g8e.v1.operator.shutdown.acknowledged` | Operator acknowledged shutdown |
+| `g8e.v1.operator.shutdown.acknowledged` | Reserved — constant defined in shared events but not yet emitted by g8eo. When implemented, it must flow on a lifecycle channel (not the per-session results channel) because it has no `execution_id` correlation key. |
 
 ### `operator.panel` -- Panel
 

@@ -103,12 +103,12 @@ class CacheAsideService(CacheAsideProtocol):
             if hasattr(self._kv, 'close'):
                 await self._kv.close()  # type: ignore[attr-defined]
         except Exception as exc:
-            logger.debug("Error closing KV service: %s", exc)
+            logger.info("Error closing KV service: %s", exc)
         try:
             if hasattr(self._db, 'close'):
                 await self._db.close()  # type: ignore[attr-defined]
         except Exception as exc:
-            logger.debug("Error closing DB service: %s", exc)
+            logger.info("Error closing DB service: %s", exc)
 
     @property
     def db(self) -> DBServiceProtocol:

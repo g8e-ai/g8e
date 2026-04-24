@@ -42,6 +42,8 @@ describe('Internal Operator Routes [UNIT]', () => {
             requireInternalOrUserAuth: vi.fn((req, res, next) => next())
         };
 
+        mockOperatorService.getAllOperators = vi.fn();
+
         router = createInternalOperatorRouter({
             services: {
                 operatorService: mockOperatorService,
@@ -64,6 +66,47 @@ describe('Internal Operator Routes [UNIT]', () => {
         res.json = vi.fn().mockReturnValue(res);
         return res;
     };
+
+    describe('GET /', () => {
+        const getRoute = () => {
+            const layer = router.stack.find(s => s.route?.path === '/' && s.route?.methods?.get);
+            return layer.route.stack[layer.route.stack.length - 1].handle;
+        };
+
+        it('should list all operators', async () => {
+            const req = createMockReq({ query: { all: 'false' } });
+            const res = createMockRes();
+
+            mockOperatorService.getAllOperators.mockResolvedValue({
+                operators: [{ operator_id: 'op_1' }],
+                total_count: 1,
+                active_count: 1
+            });
+
+            await getRoute()(req, res);
+
+            expect(mockOperatorService.getAllOperators).toHaveBeenCalledWith(false);
+            expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+                success: true,
+                total_count: 1
+            }));
+        });
+
+        it('should pass allStatuses=true if query param all is true', async () => {
+            const req = createMockReq({ query: { all: 'true' } });
+            const res = createMockRes();
+
+            mockOperatorService.getAllOperators.mockResolvedValue({
+                operators: [],
+                total_count: 0,
+                active_count: 0
+            });
+
+            await getRoute()(req, res);
+
+            expect(mockOperatorService.getAllOperators).toHaveBeenCalledWith(true);
+        });
+    });
 
     describe('POST /:operatorId/refresh-key', () => {
         const getRoute = () => {
@@ -180,7 +223,10 @@ describe('Internal Operator Routes [UNIT]', () => {
         };
 
         it('should list operators for a user', async () => {
-            const req = createMockReq({ params: { userId: 'user_123' } });
+            const req = createMockReq({ 
+                params: { userId: 'user_123' },
+                query: { all: 'false' }
+            });
             const res = createMockRes();
 
             mockOperatorService.getUserOperators.mockResolvedValue(
@@ -194,11 +240,32 @@ describe('Internal Operator Routes [UNIT]', () => {
 
             await getRoute()(req, res);
 
-            expect(mockOperatorService.getUserOperators).toHaveBeenCalledWith('user_123');
+            expect(mockOperatorService.getUserOperators).toHaveBeenCalledWith('user_123', false);
             expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
                 success: true,
                 total_count: 1
             }));
+        });
+
+        it('should pass allStatuses=true if query param all is true', async () => {
+            const req = createMockReq({ 
+                params: { userId: 'user_123' },
+                query: { all: 'true' }
+            });
+            const res = createMockRes();
+
+            mockOperatorService.getUserOperators.mockResolvedValue(
+                new OperatorListUpdatedEvent({
+                    type: 'operator.list.updated',
+                    operators: [],
+                    total_count: 0,
+                    active_count: 0
+                })
+            );
+
+            await getRoute()(req, res);
+
+            expect(mockOperatorService.getUserOperators).toHaveBeenCalledWith('user_123', true);
         });
     });
 
@@ -341,6 +408,28 @@ describe('Internal Operator Routes [UNIT]', () => {
             expect(res.status).toHaveBeenCalledWith(404);
             expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
                 error: DeviceLinkError.OPERATOR_NOT_FOUND
+            }));
+        });
+    });
+
+    describe('GET /:operatorId', () => {
+        const getRoute = () => {
+            const layer = router.stack.find(s => s.route?.path === '/:operatorId' && s.route?.methods?.get);
+            return layer.route.stack[layer.route.stack.length - 1].handle;
+        };
+
+        it('should return operator details directly', async () => {
+            const operator = mockOperators.activeOperator;
+            const req = createMockReq({ params: { operatorId: operator.id } });
+            const res = createMockRes();
+
+            mockOperatorService.getOperator.mockResolvedValue(operator);
+
+            await getRoute()(req, res);
+
+            expect(mockOperatorService.getOperator).toHaveBeenCalledWith(operator.id);
+            expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+                id: operator.id
             }));
         });
     });

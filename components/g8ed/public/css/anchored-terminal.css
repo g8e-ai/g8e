@@ -50,7 +50,7 @@
 
 /* Thinking group - unique group for thinking events */
 .anchored-terminal__agent-message-group--thinking {
-    border-left-color: var(--accent-yellow);
+    border-left-color: var(--accent-green-muted);
 }
 
 .anchored-terminal__agent-message-group--thinking .anchored-terminal__thinking {
@@ -76,6 +76,10 @@
     line-height: 1.5;
     font-size: 0.85rem;
     gap: 0.5rem;
+}
+
+.anchored-terminal__streaming-text-container {
+    width: 100%;
 }
 
 /* Waiting cursor */
@@ -330,52 +334,7 @@
     color: var(--text-primary);
 }
 
-/* Tribunal command refinement widget */
-.tribunal {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 8px 12px;
-    margin: 4px 0;
-    min-width: 300px;
-    background: var(--surface-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    font-family: var(--font-sans, system-ui, sans-serif);
-    font-size: 0.9rem;
-    transition: opacity 0.4s ease, transform 0.4s ease;
-}
-
-.tribunal--fading {
-    opacity: 0;
-    transform: translateY(-4px);
-}
-
-.tribunal__header {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.tribunal__icon {
-    font-size: 15px;
-    color: var(--accent-blue);
-}
-
-.tribunal__icon--failed {
-    color: var(--text-secondary);
-}
-
-.tribunal--done .tribunal__icon {
-    color: var(--accent-green);
-}
-
-.tribunal__title {
-    font-weight: 600;
-    color: var(--text-primary);
-    flex: 1;
-}
-
+/* Tribunal vote indicators embedded inside approval-compact header */
 .tribunal__spinner {
     width: 10px;
     height: 10px;
@@ -390,17 +349,8 @@
     to { transform: rotate(360deg); }
 }
 
-.tribunal__command {
-    font-family: var(--font-mono, 'JetBrains Mono', monospace);
-    font-size: 11px;
-    color: var(--text-secondary);
-    white-space: normal;
-    word-break: break-word;
-    padding: 2px 0;
-}
-
 .tribunal__passes {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 5px;
 }
@@ -449,14 +399,8 @@
     font-weight: 500;
 }
 
-.tribunal--failed .tribunal__status {
+.tribunal__status--failed {
     color: var(--text-muted);
-}
-
-/* Light theme overrides */
-[data-theme="light"] .tribunal {
-    background: rgba(var(--text-rgb), 0.03);
-    border-color: rgba(var(--text-rgb), 0.1);
 }
 
 /* Error message in terminal - within agent-message-group */
@@ -1663,7 +1607,7 @@
     border: 1px solid rgba(var(--accent-green-rgb), 0.2);
     border-top: none;
     border-radius: 0 0 6px 6px;
-    align-self: flex-end;
+    align-self: flex-start;
     transition: border-color 0.2s ease;
 }
 

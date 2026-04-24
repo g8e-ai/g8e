@@ -587,9 +587,8 @@ fi
 # ─── operator-build ─────────────────────────────────────────────────────────────
 
 if [[ "$COMMAND" == "operator-build" ]]; then
-    _ensure_g8eo_test_runner
     echo "Building linux/amd64 operator binary and uploading to g8es blob store..."
-    docker exec g8eo-test-runner bash -c "cd /app/components/g8eo && make build"
+    docker compose -f "$PROJECT_ROOT/docker-compose.yml" run --rm g8eo-test-runner bash -c "cd /app/components/g8eo && make build"
     echo ""
     echo "Operator binary built and uploaded to g8es blob store."
     exit 0
@@ -598,9 +597,8 @@ fi
 # ─── operator-build-all ─────────────────────────────────────────────────────────
 
 if [[ "$COMMAND" == "operator-build-all" ]]; then
-    _ensure_g8eo_test_runner
     echo "Building all operator architectures and uploading to g8es blob store..."
-    docker exec g8eo-test-runner bash -c "cd /app/components/g8eo && make build-all"
+    docker compose -f "$PROJECT_ROOT/docker-compose.yml" run --rm g8eo-test-runner bash -c "cd /app/components/g8eo && make build-all"
     echo ""
     echo "All operator binaries built and uploaded to g8es blob store."
     exit 0

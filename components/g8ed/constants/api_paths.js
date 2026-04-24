@@ -49,9 +49,7 @@ try {
             operator_direct_command: '/operator/direct-command',
             operator_approval_respond: '/operator/approval/respond',
             health: '/health',
-            settings_user: '/settings/user',
-            mcp_tools_list: '/mcp/tools/list',
-            mcp_tools_call: '/mcp/tools/call'
+            settings_user: '/settings/user'
         },
         g8ed: {
             sse_push: '/sse/push',
@@ -101,7 +99,6 @@ export const BasePaths = Object.freeze({
     INTERNAL_SESSION:  '/api/internal/session',
     DOCS:             '/api/docs',
     SETUP:            '/api/setup',
-    MCP:              '/mcp',
 });
 
 // ---------------------------------------------------------------------------
@@ -429,7 +426,6 @@ export const SettingsPaths = Object.freeze({
 });
 
 export const MCPPaths = Object.freeze({
-    ROOT: '/',
 });
 
 // --- SETUP domain ---
@@ -494,8 +490,6 @@ export const apiPaths = {
         operatorApprovalPending:   () => InternalApiPaths.g8ee.operator_approval_pending,
         health:                    () => InternalApiPaths.g8ee.health,
         settingsUser:              () => InternalApiPaths.g8ee.settings_user,
-        mcpToolsList:              () => InternalApiPaths.g8ee.mcp_tools_list,
-        mcpToolsCall:              () => InternalApiPaths.g8ee.mcp_tools_call,
     },
     operator: {
         bind:           () => `${Operator.BASE}/${Operator.BIND}`,

@@ -13,7 +13,7 @@
 
 /**
  * Version utility - reads VERSION file.
- * The VERSION file at the component root contains the platform semver (e.g., v4.2.0).
+ * The VERSION file at the component root contains the platform semver (e.g., v0.1.3).
  */
 
 import { readFileSync } from 'fs';

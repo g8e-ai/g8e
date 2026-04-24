@@ -13,3 +13,8 @@ Revoke an AWS capability that was previously granted through the g8e platform.
 - After capability is revoked, confirm to the user that the permission has been removed
 - Use this when the user asks to remove a previously granted permission
 </behavior>
+
+<examples>
+<example>User: "Revoke my S3 write permissions" → revoke_intent_permission(intent_name="s3_write", justification="Task completed, revoking write access")</example>
+<example>User: "Remove EC2 management access" → revoke_intent_permission(intent_name="ec2_management", justification="Cleanup of temporary permissions")</example>
+</examples>

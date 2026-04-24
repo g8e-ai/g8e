@@ -442,6 +442,7 @@ export class InternalUserResponse extends G8eBaseModel {
 
 export class AuditEventResponse extends G8eBaseModel {
     static fields = {
+        success: { type: F.boolean, default: true },
         events:  { type: F.array,   default: () => [] },
         count:   { type: F.number,  default: 0 },
         total_investigations: { type: F.number, default: 0 },

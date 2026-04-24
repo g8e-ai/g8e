@@ -18,176 +18,106 @@ Owns all g8eo pub/sub lifecycle state:
   - _pubsub_ready flag
   - _active_operator_sessions_set
 
-Exposes wait_for_result(execution_id, timeout) to replace every hand-rolled
-polling loop that previously lived across every mixin.
+Handles all inbound g8eo result payloads by mapping event types to their
+corresponding Pydantic models for type-safe parsing.
 """
 
+import asyncio
 import json
 import logging
 from collections.abc import Callable, Coroutine
-from typing import cast
-from uuid import uuid4
+
+from pydantic import ValidationError as PydanticValidationError
 
 from app.clients.pubsub_client import PubSubClient
 from app.constants.events import EventType
 from app.constants.channels import OperatorChannel, PubSubChannel
-from pydantic import ValidationError as PydanticValidationError
 
 from app.errors import ValidationError
 from app.models.pubsub_messages import (
-    CancellationResultPayload,
-    ExecutionResultsPayload,
-    ExecutionStatusPayload,
-    FetchFileDiffByIdSuccessPayload,
-    FetchFileDiffErrorPayload,
-    FetchFileHistorySuccessPayload,
-    FetchFileHistoryErrorPayload,
-    FetchHistorySuccessPayload,
-    FetchHistoryErrorPayload,
-    FetchLogsResultPayload,
-    FileEditResultPayload,
-    FsListResultPayload,
-    FsReadResultPayload,
-    PortCheckResultPayload,
-    RestoreFileSuccessPayload,
-    RestoreFileErrorPayload,
-    ShutdownAckPayload,
     G8eoResultEnvelope,
     G8eoResultPayload,
+    G8eoResultPayloadAdapter,
     G8eMessage,
 )
-from app.services.mcp.adapter import parse_tool_call_result
-from app.constants.status import ExecutionStatus
 
 logger = logging.getLogger(__name__)
 
-_FILE_EDIT_EVENTS = frozenset({
-    EventType.OPERATOR_FILE_EDIT_COMPLETED,
-    EventType.OPERATOR_FILE_EDIT_FAILED,
-})
 
+def parse_inbound_g8eo_payload(payload_raw: dict[str, object]) -> G8eoResultPayload:
+    """Parse inbound g8eo payload using discriminator-based union parsing.
 
-# Map event types to payload models for reconstruction
-_PAYLOAD_MODELS = {
-    EventType.OPERATOR_FILE_EDIT_COMPLETED: FileEditResultPayload,
-    EventType.OPERATOR_FILE_EDIT_FAILED: FileEditResultPayload,
-    EventType.OPERATOR_NETWORK_PORT_CHECK_COMPLETED: PortCheckResultPayload,
-    EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED: PortCheckResultPayload,
-    EventType.OPERATOR_FILESYSTEM_LIST_COMPLETED: FsListResultPayload,
-    EventType.OPERATOR_FILESYSTEM_LIST_FAILED: FsListResultPayload,
-    EventType.OPERATOR_FILESYSTEM_READ_COMPLETED: FsReadResultPayload,
-    EventType.OPERATOR_FILESYSTEM_READ_FAILED: FsReadResultPayload,
-    EventType.OPERATOR_FILE_HISTORY_FETCH_COMPLETED: FetchFileHistorySuccessPayload,
-    EventType.OPERATOR_FILE_HISTORY_FETCH_FAILED: FetchFileHistoryErrorPayload,
-    EventType.OPERATOR_FILE_RESTORE_COMPLETED: RestoreFileSuccessPayload,
-    EventType.OPERATOR_FILE_RESTORE_FAILED: RestoreFileErrorPayload,
-    EventType.OPERATOR_FILE_DIFF_FETCH_COMPLETED: FetchFileDiffByIdSuccessPayload,
-    EventType.OPERATOR_FILE_DIFF_FETCH_FAILED: FetchFileDiffErrorPayload,
-    EventType.OPERATOR_LOGS_FETCH_COMPLETED: FetchLogsResultPayload,
-    EventType.OPERATOR_LOGS_FETCH_FAILED: FetchLogsResultPayload,
-    EventType.OPERATOR_HISTORY_FETCH_COMPLETED: FetchHistorySuccessPayload,
-    EventType.OPERATOR_HISTORY_FETCH_FAILED: FetchHistoryErrorPayload,
-}
+    The payload models use a 'payload_type' discriminator field that Pydantic uses
+    to automatically determine the correct model class. This matches the wire
+    deserialization pattern used for outbound payloads.
 
+    Args:
+        payload_raw: The raw payload dict from the pub/sub message
 
-def _parse_g8eo_payload(event_type_raw: str | EventType, payload_raw: dict[str, object]) -> G8eoResultPayload:
-    event_type = EventType(event_type_raw) if isinstance(event_type_raw, str) else event_type_raw  # type: ignore[reportUnnecessaryIsInstance]
+    Returns:
+        A validated G8eoResultPayload instance
 
-    if event_type == EventType.OPERATOR_SHUTDOWN_ACKNOWLEDGED:
-        return ShutdownAckPayload.model_validate(payload_raw)
-    if event_type == EventType.OPERATOR_COMMAND_STATUS_UPDATED_RUNNING:
-        return ExecutionStatusPayload.model_validate(payload_raw)
-    if event_type == EventType.OPERATOR_COMMAND_CANCELLED:
-        return CancellationResultPayload.model_validate(payload_raw)
-
-    if event_type == EventType.OPERATOR_MCP_TOOLS_RESULT:
-        # MCP results contain structured data. Reconstruct the original typed payload.
-        mcp_result = parse_tool_call_result(payload_raw)
-        
-        # Metadata check (Smell #1 Fix)
-        if mcp_result.metadata and "original_payload" in mcp_result.metadata:
-            original_payload = mcp_result.metadata["original_payload"]
-            mcp_event_type_raw = mcp_result.metadata.get("event_type")
-
-            if mcp_event_type_raw:
-                try:
-                    mcp_event_type = EventType(mcp_event_type_raw)
-                    if model_cls := _PAYLOAD_MODELS.get(mcp_event_type):
-                        return model_cls.model_validate(original_payload)
-                except (ValueError, PydanticValidationError) as exc:
-                    logger.warning(
-                        "[MCP] Failed to reconstruct typed payload from metadata, "
-                        "falling back to ExecutionResultsPayload: %s",
-                        exc,
-                    )
-
-        # Command execution results have no _metadata (standard stdout/stderr output)
-        stdout = "\n".join(c.text for c in mcp_result.content if c.type == "text" and c.text and not mcp_result.isError)
-        stderr = "\n".join(c.text for c in mcp_result.content if c.type == "text" and c.text and mcp_result.isError)
-        
-        # execution_id: try MCP metadata first, then the JSON-RPC envelope ID, finally a fresh UUID
-        _id_raw = payload_raw.get("id")
-        execution_id = mcp_result.execution_id
-
-        return ExecutionResultsPayload(
-            execution_id=execution_id,
-            status=ExecutionStatus.COMPLETED if not mcp_result.isError else ExecutionStatus.FAILED,
-            stdout=stdout.strip(),
-            stderr=stderr.strip(),
-        )
-
-    if event_type in _PAYLOAD_MODELS:
-        return _PAYLOAD_MODELS[event_type].model_validate(payload_raw)
-
-    return ExecutionResultsPayload.model_validate(payload_raw)
+    Raises:
+        ValidationError: If the payload_type is invalid or payload validation fails
+    """
+    try:
+        return G8eoResultPayloadAdapter.validate_python(payload_raw)
+    except PydanticValidationError as e:
+        raise ValidationError(
+            f"Invalid g8eo result payload: {e}",
+            component="g8ee",
+        ) from e
 
 
 class OperatorPubSubService:
     """Owns all g8eo pub/sub lifecycle state and result dispatch.
 
-    Consumers call wait_for_result(execution_id, timeout) instead of spinning
-    on asyncio.sleep(). Before publishing a command, call allocate_event(id).
-    After consuming the result, call release_event(id).
+    Manages asyncio.Future objects for execution tracking:
+    - register_future(execution_id) creates a Future
+    - await_future(execution_id, timeout) waits for the result
+    - complete_future(execution_id, envelope) sets the Future result
+    - release_future(execution_id) removes the Future from tracking
 
-    Result routing is delegated to an injectable result_handler callback so
-    the service that owns the pending command store can update it without
-    creating a circular dependency.
+    Result routing is handled internally by completing the registered Future
+    when a result message arrives.
     """
 
     def __init__(self) -> None:
         self.pubsub_client: PubSubClient | None = None
         self._pubsub_ready: bool = False
         self._active_operator_sessions_set: set[tuple[str, str]] = set()
-        self._result_handlers: list[Callable[[G8eoResultEnvelope], Coroutine[object, object, None]]] = []
+        self._pending_futures: dict[str, asyncio.Future[G8eoResultEnvelope]] = {}
 
-    def subscribe_results(self, handler: Callable[[G8eoResultEnvelope], Coroutine[object, object, None]]) -> None:
-        """Register a callback for inbound g8eo result messages."""
-        if handler not in self._result_handlers:
-            self._result_handlers.append(handler)
+    def register_future(self, execution_id: str) -> asyncio.Future[G8eoResultEnvelope]:
+        """Register a Future for tracking execution results.
+
+        Args:
+            execution_id: Unique identifier for the execution
+
+        Returns:
+            The Future that will be completed when the result arrives
+        """
+        if not execution_id:
+            raise ValueError("execution_id cannot be empty")
+        if execution_id in self._pending_futures:
+            logger.warning("[PUBSUB] Re-registering existing execution_id: %s", execution_id)
+        future: asyncio.Future[G8eoResultEnvelope] = asyncio.Future()
+        self._pending_futures[execution_id] = future
+        return future
+
+    def release_future(self, execution_id: str) -> None:
+        """Remove a Future from tracking after use.
+
+        Args:
+            execution_id: Unique identifier for the execution
+        """
+        self._pending_futures.pop(execution_id, None)
 
     def set_pubsub_client(self, client: PubSubClient) -> None:
         if not client:
             raise ValidationError("client is required for g8eo command communication", component="g8ee")
         self.pubsub_client = client
         logger.info("[PUBSUB] Pub/sub client configured")
-
-    def _install_msg_capture(self) -> list[G8eMessage]:
-        """Capture all published commands for verification in tests."""
-        if not hasattr(self, "_captured_publish_commands"):
-            self._captured_publish_commands: list[G8eMessage] = []
-
-        async def _capture_publish(operator_id: str, operator_session_id: str, command_data: G8eMessage):
-            self._captured_publish_commands.append(command_data)
-            if self.pubsub_client:
-                return await self.pubsub_client.publish_command(
-                    operator_id=operator_id,
-                    operator_session_id=operator_session_id,
-                    command_data=command_data
-                )
-            return 1
-
-        self._capture_publish_internal = _capture_publish
-        return self._captured_publish_commands
 
     async def start(self) -> None:
         if self._pubsub_ready:
@@ -228,8 +158,6 @@ class OperatorPubSubService:
         await self._unsubscribe_results_channel(operator_id, operator_session_id)
 
     async def publish_command(self, operator_id: str, operator_session_id: str, command_data: G8eMessage) -> int:
-        if hasattr(self, "_capture_publish_internal"):
-            return await self._capture_publish_internal(operator_id, operator_session_id, command_data)
         if self.pubsub_client is None:
             raise ValidationError("pubsub_client not initialized — call set_pubsub_client() first", component="g8ee")
         return await self.pubsub_client.publish_command(
@@ -283,22 +211,23 @@ class OperatorPubSubService:
             for id_field in ("case_id", "investigation_id", "task_id"):
                 if not raw.get(id_field) and payload_raw.get(id_field):
                     raw[id_field] = payload_raw[id_field]
-            payload = _parse_g8eo_payload(cast(str | EventType, event_type_raw), payload_raw)
+            payload = parse_inbound_g8eo_payload(payload_raw)
             envelope = G8eoResultEnvelope.model_validate({
                 **raw,
                 "operator_id": operator_id,
                 "operator_session_id": operator_session_id,
-                "payload": payload_raw,
+                "payload": payload,
             })
-            envelope = envelope.model_copy(update={"payload": payload})
             logger.info(
                 "[PUBSUB] Received message from Operator",
                 extra={"operator_id": operator_id, "event_type": envelope.event_type},
             )
-            for handler in self._result_handlers:
-                try:
-                    await handler(envelope)
-                except Exception:
-                    logger.error("[PUBSUB] Result handler failed", exc_info=True)
+            execution_id = payload.execution_id if hasattr(payload, "execution_id") else None
+            if execution_id:
+                future = self._pending_futures.get(execution_id)
+                if future and not future.done():
+                    future.set_result(envelope)
+                else:
+                    logger.info("[PUBSUB] No pending Future for execution_id: %s", execution_id)
         except Exception:
             logger.error("[PUBSUB] _handle_pubsub_result_message error", exc_info=True)

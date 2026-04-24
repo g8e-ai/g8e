@@ -401,10 +401,7 @@ func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg PubSubCom
 
 	fs.logger.Info("File system read requested", "path", p.Path)
 
-	requestID := msg.ID
-	if p.ExecutionID != "" {
-		requestID = p.ExecutionID
-	}
+	requestID := executionIDFromMessage(msg)
 
 	start := time.Now()
 
@@ -523,10 +520,7 @@ func payloadToFileEditRequest(msg PubSubCommandMessage) (*models.FileEditRequest
 		return nil, fmt.Errorf("missing operation in payload")
 	}
 
-	requestID := msg.ID
-	if p.ExecutionID != "" {
-		requestID = p.ExecutionID
-	}
+	requestID := executionIDFromMessage(msg)
 
 	justification := p.Justification
 	if justification == "" {
@@ -586,10 +580,7 @@ func payloadToFsListRequest(msg PubSubCommandMessage) (*models.FsListRequest, er
 		path = "."
 	}
 
-	requestID := msg.ID
-	if p.ExecutionID != "" {
-		requestID = p.ExecutionID
-	}
+	requestID := executionIDFromMessage(msg)
 
 	maxEntries := p.MaxEntries
 	if maxEntries <= 0 {

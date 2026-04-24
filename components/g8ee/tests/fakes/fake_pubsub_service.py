@@ -13,6 +13,7 @@
 
 """Typed fake for PubSubServiceProtocol."""
 
+import asyncio
 from typing import Callable, Coroutine
 from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope
 from app.services.protocols import PubSubServiceProtocol
@@ -22,11 +23,9 @@ class FakePubSubService:
     """Typed fake implementing PubSubServiceProtocol.
 
     Records all calls for assertion in tests. Does not perform any real I/O.
-    wait_for_result returns True (result ready) by default.
     """
 
-    def __init__(self, *, wait_result: bool = True) -> None:
-        self._wait_result = wait_result
+    def __init__(self) -> None:
         self._ready = False
         self.started = False
         self.stopped = False
@@ -34,25 +33,22 @@ class FakePubSubService:
         self.deregistered_sessions: list[tuple[str, str]] = []
         self.published_commands: list[G8eMessage] = []
         self.pubsub_client: object | None = None
-        self._result_handlers: list[Callable[[G8eoResultEnvelope], Coroutine[object, object, None]]] = []
+        self.register_future_calls: list[str] = []
+        self.release_future_calls: list[str] = []
 
-    def subscribe_results(self, handler: Callable[[G8eoResultEnvelope], Coroutine[object, object, None]]) -> None:
-        if handler not in self._result_handlers:
-            self._result_handlers.append(handler)
+    def register_future(self, execution_id: str) -> asyncio.Future[G8eoResultEnvelope]:
+        self.register_future_calls.append(execution_id)
+        return asyncio.Future()
 
-    def set_result_handler(self, handler: Callable[[G8eoResultEnvelope], Coroutine[object, object, None]]) -> None:
-        self._result_handlers = [handler]
+    def release_future(self, execution_id: str) -> None:
+        self.release_future_calls.append(execution_id)
 
     @property
     def is_ready(self) -> bool:
         return self._ready
 
     def set_pubsub_client(self, client: object) -> None:
-        self._pubsub_client = client
-
-    def _install_msg_capture(self) -> list[G8eMessage]:
-        """Capture all published commands for verification in tests."""
-        return self.published_commands
+        self.pubsub_client = client
 
     async def start(self) -> None:
         self._ready = True
@@ -61,9 +57,6 @@ class FakePubSubService:
     async def stop(self) -> None:
         self._ready = False
         self.stopped = True
-
-    async def wait_for_result(self, execution_id: str, timeout: float) -> bool:
-        return self._wait_result
 
     async def register_operator_session(
         self, operator_id: str, operator_session_id: str
@@ -82,6 +75,12 @@ class FakePubSubService:
         command_data: G8eMessage,
     ) -> int:
         self.published_commands.append(command_data)
+        if self.pubsub_client:
+            await self.pubsub_client.publish_command(
+                operator_id=operator_id,
+                operator_session_id=operator_session_id,
+                command_data=command_data,
+            )
         return 1
 
 

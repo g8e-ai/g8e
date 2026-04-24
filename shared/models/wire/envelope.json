@@ -10,7 +10,7 @@
         "type": "string",
         "format": "uuid",
         "required": true,
-        "description": "Unique message identifier (UUID v4)"
+        "description": "Unique per-message identifier (UUID v4). MUST be freshly generated for every envelope crossing the wire — including multiple status updates or results emitted for the same execution. This field is NOT a correlation key. For request/response correlation use payload.execution_id (command/result pairs) or the JSON-RPC id embedded inside MCP payloads. Consumers MUST NOT deduplicate results by envelope id."
       },
       "timestamp": {
         "type": "string",

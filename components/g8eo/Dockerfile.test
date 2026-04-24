@@ -50,5 +50,3 @@ RUN cd /app/components/g8eo/tools \
 RUN chown -R g8e:g8e /home/g8e
 
 USER g8e
-
-CMD ["sleep", "infinity"]

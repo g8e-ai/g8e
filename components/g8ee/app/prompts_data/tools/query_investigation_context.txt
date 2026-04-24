@@ -32,8 +32,7 @@ Use this tool to retrieve investigation-specific data on-demand without relying 
 </behavior>
 
 <examples>
-- Get recent conversation: data_type='conversation_history', limit=50
-- Check investigation status: data_type='investigation_status'
-- Review command history: data_type='history_trail', limit=100
-- See operator actions: data_type='operator_actions'
+<example>User: "What did we do so far?" → query_investigation_context(data_type="history_trail", limit=50)</example>
+<example>User: "Show me the case details" → query_investigation_context(data_type="investigation_status")</example>
+<example>User: "What was the previous conversation?" → query_investigation_context(data_type="conversation_history", limit=20)</example>
 </examples>

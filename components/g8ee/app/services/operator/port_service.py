@@ -17,11 +17,11 @@ Port check operations via g8eo operators. No approval required.
 Replaces PortOperationsMixin. Uses pubsub_service.wait_for_result().
 """
 
+import asyncio
 import logging
 from typing import cast
 
 from app.services.protocols import (
-    ExecutionRegistryProtocol,
     ExecutionServiceProtocol,
     PubSubServiceProtocol,
 )
@@ -33,14 +33,11 @@ from app.constants.status import (
     ComponentName,
     ExecutionStatus,
     NetworkProtocol,
-    OperatorToolName,
 )
-from app.services.mcp.adapter import build_tool_call_request
 from app.constants.settings import (
     OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS,
 )
 from app.errors import BusinessLogicError, ValidationError
-from app.models.tool_args import CheckPortArgs
 from app.models.command_request_payloads import CheckPortRequestPayload
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
@@ -58,11 +55,9 @@ class OperatorPortService:
     def __init__(
         self,
         pubsub_service: PubSubServiceProtocol,
-        execution_registry: ExecutionRegistryProtocol,
         execution_service: ExecutionServiceProtocol,
     ) -> None:
         self.pubsub_service = pubsub_service
-        self.execution_registry = execution_registry
         self.execution_service = execution_service
 
     async def execute_port_check(
@@ -74,10 +69,11 @@ class OperatorPortService:
         """Execute a single port check.
 
         ``execution_id`` is extracted from args.execution_id; it
-        is used as the registry key and appears in the STARTED / COMPLETED /
-        FAILED UI lifecycle events. Using a per-call id (rather than
-        ``g8e_context.execution_id``) ensures that concurrent port checks in a
-        single chat turn do not collide in ``execution_registry``.
+        is used as the Future correlation key on ``PubSubService`` and appears
+        in the STARTED / COMPLETED / FAILED UI lifecycle events. Using a
+        per-call id (rather than ``g8e_context.execution_id``) ensures that
+        concurrent port checks in a single chat turn do not collide on the
+        pending-Future registry.
         """
         exec_id = args.execution_id
         logger.info("[PORT_CHECK] Starting port check operation (execution_id=%s)", exec_id)
@@ -107,6 +103,7 @@ class OperatorPortService:
             resolved_operator = self.execution_service.resolve_target_operator(
                 operator_documents=operator_documents,
                 target_operator=args.target_operator,
+                tool_name="check_port",
             )
         except (ValidationError, BusinessLogicError, ValueError) as e:
             logger.error("[PORT_CHECK] Operator resolution failed: %s", e, exc_info=True)
@@ -136,34 +133,22 @@ class OperatorPortService:
             return PortCheckToolResult(success=False, error=error_msg, error_type=CommandErrorType.PUBSUB_SUBSCRIPTION_NOT_READY)
 
         try:
-            self.execution_registry.allocate(exec_id)
-            max_wait_time = OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS
-
-            mcp_payload = build_tool_call_request(
-                tool_name=OperatorToolName.CHECK_PORT,
-                arguments={
-                    "execution_id": exec_id,
-                    "host": host,
-                    "port": port,
-                    "protocol": protocol,
-                    "requested_at": now().isoformat(),
-                    "source": EventType.EVENT_SOURCE_AI_PRIMARY,
-                    "user_id": user_id,
-                },
-                request_id=exec_id,
-            )
-
             command_data = G8eMessage(
                 id=exec_id,
                 source_component=ComponentName.G8EE,
-                event_type=EventType.OPERATOR_MCP_TOOLS_CALL,
+                event_type=EventType.OPERATOR_NETWORK_PORT_CHECK_REQUESTED,
                 case_id=case_id,
                 investigation_id=investigation.id if investigation else "",
                 task_id=AITaskId.PORT_CHECK,
                 web_session_id=web_session_id,
                 operator_session_id=operator_session_id,
                 operator_id=operator_id,
-                payload=mcp_payload,
+                payload=CheckPortRequestPayload(
+                    execution_id=exec_id,
+                    host=host,
+                    port=port,
+                    protocol=protocol.value,
+                ),
             )
 
             logger.info("[PORT_CHECK] Publishing port check request via g8es pub/sub")
@@ -181,17 +166,14 @@ class OperatorPortService:
                 task_id=AITaskId.PORT_CHECK,
             )
 
-            subscribers = await self.pubsub_service.publish_command(
-                operator_id=operator_id,
-                operator_session_id=operator_session_id,
-                command_data=command_data,
+            internal_result, envelope = await self.execution_service.execute(
+                g8e_message=command_data,
+                g8e_context=g8e_context,
+                timeout_seconds=OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS,
             )
-            logger.info("[PORT_CHECK] Port check request published successfully (subscribers: %d)", subscribers)
 
-            completed = await self.execution_registry.wait(exec_id, timeout=max_wait_time)
-
-            if not completed:
-                timeout_error = f"Port check timed out after {max_wait_time} seconds"
+            if not envelope:
+                timeout_error = f"Port check timed out after {OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS} seconds"
                 logger.warning("[PORT_CHECK] %s", timeout_error)
 
                 # Notify failure (timeout)
@@ -215,9 +197,15 @@ class OperatorPortService:
                     error_type=CommandErrorType.OPERATION_TIMEOUT,
                 )
 
-            envelope = self.execution_registry.get_result(exec_id)
+            if not hasattr(envelope, "payload"):
+                logger.error("[PORT_CHECK] Unexpected envelope type: %s", type(envelope))
+                return PortCheckToolResult(
+                    success=False,
+                    error="Unexpected result format from operator",
+                    error_type=CommandErrorType.EXECUTION_ERROR,
+                )
 
-            if isinstance(envelope, G8eoResultEnvelope) and isinstance(envelope.payload, PortCheckResultPayload):
+            if isinstance(envelope.payload, PortCheckResultPayload):
                 payload = envelope.payload
                 failed = envelope.event_type == EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED
                 
@@ -269,5 +257,3 @@ class OperatorPortService:
         except Exception as e:
             logger.error("[PORT_CHECK] Unexpected error: %s", e, exc_info=True)
             return PortCheckToolResult(success=False, error=f"Port check execution failed: {e}. Check operator status and retry.", error_type=CommandErrorType.EXECUTION_ERROR)
-        finally:
-            self.execution_registry.release(exec_id)

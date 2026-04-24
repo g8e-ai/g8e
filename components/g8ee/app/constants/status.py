@@ -204,10 +204,9 @@ class OperatorToolName(str, Enum):
     surface is not yet shipped (e.g. during phased restoration work).
 
     This is NOT a wire-protocol command enum — values named here are the
-    identifiers the LLM sees. The g8ee → g8eo transport routes through
-    ``EventType.OPERATOR_*_REQUESTED`` constants via either
-    ``app.services.mcp.adapter.build_tool_call_request`` (MCP wrap) or a
-    direct event publish, and g8eo dispatches in
+    identifiers the LLM sees. The g8ee → g8eo transport publishes
+    ``EventType.OPERATOR_*_REQUESTED`` events directly (one event family per
+    tool; no generic umbrella), and g8eo dispatches in
     ``components/g8eo/services/pubsub/pubsub_commands.go``. Drift between
     this enum and either side of the wire is the class of bug
     ``test_tool_registry_invariants`` guards against.

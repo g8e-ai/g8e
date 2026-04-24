@@ -49,7 +49,6 @@ import { createOperatorAuthRouter } from './routes/operator/operator_auth_routes
 import { createOperatorStatusRouter } from './routes/operator/operator_status_routes.js';
 import { createBindOperatorsRouter } from './routes/operator/operator_bind_routes.js';
 import { createOperatorApiKeyRouter } from './routes/operator/operator_api_key_routes.js';
-import { createMCPRouter } from './routes/platform/mcp_routes.js';
 
 import { cspNonce } from './middleware/csp_nonce.js';
 import { globalContextMiddleware } from './middleware/context.js';
@@ -341,12 +340,6 @@ function mountRoutes(app, {
     app.use(BasePaths.DOCS, createDocsRouter({ 
         services,
         authMiddleware 
-    }));
-
-    app.use(BasePaths.MCP, createMCPRouter({
-        services,
-        authMiddleware,
-        rateLimiters
     }));
 
     // Auth Routes

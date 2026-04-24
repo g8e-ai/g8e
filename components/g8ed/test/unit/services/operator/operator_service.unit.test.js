@@ -161,6 +161,29 @@ describe('OperatorService', () => {
             expect(slot).not.toHaveProperty('granted_intents');
             expect(slot).not.toHaveProperty('runtime_config');
         });
+
+        it('should filter out terminated operators by default', async () => {
+            const operators = [
+                new OperatorDocument({ id: 'op-1', user_id: 'u-1', status: OperatorStatus.ACTIVE }),
+                new OperatorDocument({ id: 'op-2', user_id: 'u-1', status: OperatorStatus.TERMINATED })
+            ];
+            mocks.operatorDataService.queryOperators.mockResolvedValue(operators);
+
+            const result = await service.getUserOperators('u-1');
+            expect(result.operators).toHaveLength(1);
+            expect(result.operators[0].operator_id).toBe('op-1');
+        });
+
+        it('should include terminated operators if allStatuses is true', async () => {
+            const operators = [
+                new OperatorDocument({ id: 'op-1', user_id: 'u-1', status: OperatorStatus.ACTIVE }),
+                new OperatorDocument({ id: 'op-2', user_id: 'u-1', status: OperatorStatus.TERMINATED })
+            ];
+            mocks.operatorDataService.queryOperators.mockResolvedValue(operators);
+
+            const result = await service.getUserOperators('u-1', true);
+            expect(result.operators).toHaveLength(2);
+        });
     });
 
     describe('syncSessionOnConnect', () => {
@@ -178,6 +201,38 @@ describe('OperatorService', () => {
             await service.syncSessionOnConnect(userId, webSessionId);
 
             expect(service.updateWebSessionLink).toHaveBeenCalledWith('op-1', webSessionId);
+        });
+    });
+
+    describe('getAllOperators', () => {
+        it('should return all non-terminated operators by default', async () => {
+            const operators = [
+                new OperatorDocument({ id: 'op-1', user_id: 'u-1', status: OperatorStatus.ACTIVE }),
+                new OperatorDocument({ id: 'op-2', user_id: 'u-2', status: OperatorStatus.AVAILABLE }),
+                new OperatorDocument({ id: 'op-3', user_id: 'u-1', status: OperatorStatus.TERMINATED })
+            ];
+            mocks.operatorDataService.queryOperators.mockResolvedValue(operators);
+
+            const result = await service.getAllOperators();
+
+            expect(result.operators).toHaveLength(2);
+            expect(result.total_count).toBe(2);
+            expect(result.active_count).toBe(1);
+            expect(result.operators.find(op => op.id === 'op-3')).toBeUndefined();
+        });
+
+        it('should return all operators including terminated if allStatuses is true', async () => {
+            const operators = [
+                new OperatorDocument({ id: 'op-1', user_id: 'u-1', status: OperatorStatus.ACTIVE }),
+                new OperatorDocument({ id: 'op-2', user_id: 'u-1', status: OperatorStatus.TERMINATED })
+            ];
+            mocks.operatorDataService.queryOperators.mockResolvedValue(operators);
+
+            const result = await service.getAllOperators(true);
+
+            expect(result.operators).toHaveLength(2);
+            expect(result.total_count).toBe(2);
+            expect(result.operators.find(op => op.id === 'op-2')).toBeDefined();
         });
     });
 
