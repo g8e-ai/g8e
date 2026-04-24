@@ -20,7 +20,6 @@ let templateLoader;
 
 const TEST_TEMPLATE = `<div class="opdeploy">
     <div class="opdeploy__header">
-        <span class="material-symbols-outlined opdeploy__header-icon">rocket_launch</span>
         <span class="opdeploy__header-text">Getting Started</span>
     </div>
     <div class="opdeploy__steps">
