@@ -573,6 +573,19 @@
   background: var(--accent-green);
 }
 
+/* Light theme for operator-download-collapsible-bar */
+[data-theme="light"] .operator-download-collapsible-bar {
+  background: linear-gradient(135deg,
+    rgba(var(--accent-blue-rgb), 0.25) 0%,
+    rgba(var(--accent-blue-dark-rgb), 0.15) 100%);
+}
+
+[data-theme="light"] .operator-download-collapsible-bar:hover {
+  background: linear-gradient(135deg,
+    rgba(var(--accent-blue-rgb), 0.35) 0%,
+    rgba(var(--accent-blue-dark-rgb), 0.25) 100%);
+}
+
 .operator-download-collapsible.expanded .operator-download-collapsible-bar {
   color: var(--text-bright);
   border-bottom: 1px solid rgba(255, 255, 255, 0.3);

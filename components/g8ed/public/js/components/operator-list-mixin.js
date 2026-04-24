@@ -21,6 +21,77 @@ import { OperatorDialogs, OperatorAlerts } from '../constants/operator-messages.
 import { notificationService } from '../utils/notification-service.js';
 import { showConfirmationModal } from '../utils/ui-utils.js';
 
+const formatTimestamp = (timestamp) => {
+    if (!timestamp) return ' - ';
+    const date = parseISOString(timestamp);
+    const diffMs = Date.now() - date.getTime();
+    if (diffMs < 7 * 24 * 60 * 60 * 1000) return timeAgoShort(date);
+    return formatForDisplay(date);
+};
+
+const formatPercent = (value) => {
+    if (value === null || value === undefined) return ' - ';
+    return `${Math.round(value)}%`;
+};
+
+const formatLatency = (latency) => {
+    if (latency === null || latency === undefined) return ' - ';
+    if (typeof latency === 'number') return `${latency.toFixed(0)}ms`;
+    return String(latency);
+};
+
+const formatUptime = (uptime) => {
+    if (!uptime) return ' - ';
+    if (typeof uptime === 'string') return uptime;
+    if (typeof uptime === 'number') {
+        const seconds = uptime;
+        const days = Math.floor(seconds / 86400);
+        const hours = Math.floor((seconds % 86400) / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        if (days > 0) return `${days}d ${hours}h`;
+        if (hours > 0) return `${hours}h ${minutes}m`;
+        return `${minutes}m`;
+    }
+    return ' - ';
+};
+
+const metricClass = (pct) => {
+    if (pct === null || pct === undefined || Number.isNaN(pct)) return 'muted';
+    if (pct >= 85) return 'crit';
+    if (pct >= 65) return 'warn';
+    return 'good';
+};
+
+const ringOffset = (pct, circ) => {
+    if (pct === null || pct === undefined || Number.isNaN(pct)) return circ.toFixed(2);
+    const clamped = Math.max(0, Math.min(100, pct));
+    return (circ * (1 - clamped / 100)).toFixed(2);
+};
+
+const sparkY = (pct) => {
+    if (pct === null || pct === undefined || Number.isNaN(pct)) return 8;
+    const clamped = Math.max(0, Math.min(100, pct));
+    return (15 - (clamped / 100) * 13).toFixed(2);
+};
+
+const computeHealthClass = (operator, cpuClass, memClass, diskClass, latencyClass) => {
+    const statusLower = (operator.status || '').toLowerCase();
+    const isOperational = statusLower === OperatorStatus.ACTIVE || statusLower === OperatorStatus.BOUND;
+    let healthClass;
+    if (!isOperational && statusLower === OperatorStatus.STALE) {
+        healthClass = 'loaded';
+    } else if (!isOperational) {
+        healthClass = 'muted';
+    } else if ([cpuClass, memClass, diskClass].includes('crit') || latencyClass === 'crit') {
+        healthClass = 'crit';
+    } else if ([cpuClass, memClass, diskClass].includes('warn') || latencyClass === 'warn') {
+        healthClass = 'loaded';
+    } else {
+        healthClass = 'healthy';
+    }
+    return healthClass;
+};
+
 /**
  * OperatorListMixin - Operator list rendering, pagination, and card management.
  *
@@ -122,42 +193,8 @@ export const OperatorListMixin = {
             const isStoppable = [OperatorStatus.ACTIVE, OperatorStatus.BOUND, OperatorStatus.STALE].includes(operator.status);
             const hasName = !!operator.name;
 
-            const formatTimestamp = (timestamp) => {
-                if (!timestamp) return ' - ';
-                const date = parseISOString(timestamp);
-                const diffMs = Date.now() - date.getTime();
-                if (diffMs < 7 * 24 * 60 * 60 * 1000) return timeAgoShort(date);
-                return formatForDisplay(date);
-            };
-
             const firstDeployedText = operator.first_deployed ? formatTimestamp(operator.first_deployed) : ' - ';
             const lastHeartbeatText = operator.last_heartbeat ? formatTimestamp(operator.last_heartbeat) : ' - ';
-
-            const formatPercent = (value) => {
-                if (value === null || value === undefined) return ' - ';
-                return `${Math.round(value)}%`;
-            };
-
-            const formatLatency = (latency) => {
-                if (latency === null || latency === undefined) return ' - ';
-                if (typeof latency === 'number') return `${latency.toFixed(0)}ms`;
-                return String(latency);
-            };
-
-            const formatUptime = (uptime) => {
-                if (!uptime) return ' - ';
-                if (typeof uptime === 'string') return uptime;
-                if (typeof uptime === 'number') {
-                    const seconds = uptime;
-                    const days = Math.floor(seconds / 86400);
-                    const hours = Math.floor((seconds % 86400) / 3600);
-                    const minutes = Math.floor((seconds % 3600) / 60);
-                    if (days > 0) return `${days}d ${hours}h`;
-                    if (hours > 0) return `${hours}h ${minutes}m`;
-                    return `${minutes}m`;
-                }
-                return ' - ';
-            };
 
             // latest_heartbeat_snapshot is the canonical OperatorHeartbeat shape
             // (shared/models/wire/heartbeat.json#operator_heartbeat) — same shape
@@ -185,24 +222,6 @@ export const OperatorListMixin = {
             const memCirc = 2 * Math.PI * MEM_R;   // ~100.53
             const diskCirc = 2 * Math.PI * DISK_R; // ~62.83
 
-            const metricClass = (pct) => {
-                if (pct === null || pct === undefined || Number.isNaN(pct)) return 'muted';
-                if (pct >= 85) return 'crit';
-                if (pct >= 65) return 'warn';
-                return 'good';
-            };
-            const ringOffset = (pct, circ) => {
-                if (pct === null || pct === undefined || Number.isNaN(pct)) return circ.toFixed(2);
-                const clamped = Math.max(0, Math.min(100, pct));
-                return (circ * (1 - clamped / 100)).toFixed(2);
-            };
-            const sparkY = (pct) => {
-                // SVG viewBox 0..16; higher value = lower y (closer to top)
-                if (pct === null || pct === undefined || Number.isNaN(pct)) return 8;
-                const clamped = Math.max(0, Math.min(100, pct));
-                return (15 - (clamped / 100) * 13).toFixed(2);
-            };
-
             const cpuRaw = typeof perf.cpu_percent === 'number' ? perf.cpu_percent : null;
             const memRaw = typeof perf.memory_percent === 'number' ? perf.memory_percent : null;
             const diskRaw = typeof perf.disk_percent === 'number' ? perf.disk_percent : null;
@@ -225,21 +244,7 @@ export const OperatorListMixin = {
                 : latencyRaw >= 50 ? 'warn'
                 : 'good';
 
-            // Overall health: worst of the metric states drives card accent & EKG
-            const statusLower = (operator.status || '').toLowerCase();
-            const isOperational = statusLower === OperatorStatus.ACTIVE || statusLower === OperatorStatus.BOUND;
-            let healthClass;
-            if (!isOperational && statusLower === OperatorStatus.STALE) {
-                healthClass = 'loaded';
-            } else if (!isOperational) {
-                healthClass = 'muted';
-            } else if ([cpuClass, memClass, diskClass].includes('crit') || latencyClass === 'crit') {
-                healthClass = 'crit';
-            } else if ([cpuClass, memClass, diskClass].includes('warn') || latencyClass === 'warn') {
-                healthClass = 'loaded';
-            } else {
-                healthClass = 'healthy';
-            }
+            const healthClass = computeHealthClass(operator, cpuClass, memClass, diskClass, latencyClass);
 
             const statusPillText = (statusDisplay || '').toString().toUpperCase();
             const ekgColorClass = healthClass;
@@ -557,15 +562,149 @@ export const OperatorListMixin = {
                 this.operators[index] = updatedOperator;
             }
 
-            const cardElement = this.operatorList.querySelector(`[data-operator-id="${operatorId}"]`);
-            if (cardElement) {
-                this.displayOperators(this.operators);
-            }
-
+            this._patchOperatorCard(operatorId);
             devLogger.log('[OPERATOR] Card updated in place for:', operatorId);
         } catch (error) {
             devLogger.error('[OPERATOR] Failed to update Operator card:', error);
         }
+    },
+
+    _patchOperatorCard(operatorId) {
+        if (!this.operatorList || !operatorId) return;
+
+        const cardElement = this.operatorList.querySelector(`[data-operator-id="${operatorId}"]`);
+        if (!cardElement) {
+            return;
+        }
+
+        const operator = this.operators.find(op => op.operator_id === operatorId);
+        if (!operator) return;
+
+        const latestSnapshot = operator.latest_heartbeat_snapshot || {};
+        const perf = latestSnapshot.performance || {};
+        const uptimeInfo = latestSnapshot.uptime || {};
+
+        const CPU_R = 22, MEM_R = 16, DISK_R = 10;
+        const cpuCirc = 2 * Math.PI * CPU_R;
+        const memCirc = 2 * Math.PI * MEM_R;
+        const diskCirc = 2 * Math.PI * DISK_R;
+
+        const cpuRaw = typeof perf.cpu_percent === 'number' ? perf.cpu_percent : null;
+        const memRaw = typeof perf.memory_percent === 'number' ? perf.memory_percent : null;
+        const diskRaw = typeof perf.disk_percent === 'number' ? perf.disk_percent : null;
+        const latencyRaw = typeof perf.network_latency === 'number' ? perf.network_latency : null;
+
+        const cpuClass = metricClass(cpuRaw);
+        const memClass = metricClass(memRaw);
+        const diskClass = metricClass(diskRaw);
+
+        const cpuRingOffset = ringOffset(cpuRaw, cpuCirc);
+        const memRingOffset = ringOffset(memRaw, memCirc);
+        const diskRingOffset = ringOffset(diskRaw, diskCirc);
+
+        const cpuSparkY = sparkY(cpuRaw);
+        const memSparkY = sparkY(memRaw);
+        const diskSparkY = sparkY(diskRaw);
+
+        const latencyClass = latencyRaw === null ? 'muted'
+            : latencyRaw >= 150 ? 'crit'
+            : latencyRaw >= 50 ? 'warn'
+            : 'good';
+
+        const healthClass = computeHealthClass(operator, cpuClass, memClass, diskClass, latencyClass);
+
+        const cpuPercent = formatPercent(perf.cpu_percent);
+        const memoryPercent = formatPercent(perf.memory_percent);
+        const diskPercent = formatPercent(perf.disk_percent);
+        const networkLatency = formatLatency(perf.network_latency);
+        const uptime = formatUptime(uptimeInfo.uptime_display ?? uptimeInfo.uptime_seconds);
+        const lastHeartbeatText = operator.last_heartbeat ? formatTimestamp(operator.last_heartbeat) : ' - ';
+
+        const statusDisplay = operator.status_display || operator.status || OperatorStatus.OFFLINE;
+        const statusPillText = (statusDisplay || '').toString().toUpperCase();
+
+        const cardContainer = cardElement.querySelector('[data-metric="card-container"]');
+        if (cardContainer) {
+            cardContainer.className = `operator-item-expanded-details op-card-${healthClass}`;
+        }
+
+        const statusPill = cardElement.querySelector('[data-metric="status-pill"]');
+        if (statusPill) {
+            statusPill.className = `op-status-pill ${healthClass}`;
+            statusPill.textContent = `● ${statusPillText}`;
+        }
+
+        const cpuRing = cardElement.querySelector('[data-metric="cpu-ring"]');
+        if (cpuRing) {
+            cpuRing.setAttribute('stroke-dashoffset', cpuRingOffset);
+            cpuRing.setAttribute('class', `op-ring-arc op-ring-cpu ${cpuClass}`);
+        }
+
+        const memRing = cardElement.querySelector('[data-metric="mem-ring"]');
+        if (memRing) {
+            memRing.setAttribute('stroke-dashoffset', memRingOffset);
+            memRing.setAttribute('class', `op-ring-arc op-ring-mem ${memClass}`);
+        }
+
+        const diskRing = cardElement.querySelector('[data-metric="disk-ring"]');
+        if (diskRing) {
+            diskRing.setAttribute('stroke-dashoffset', diskRingOffset);
+            diskRing.setAttribute('class', `op-ring-arc op-ring-disk ${diskClass}`);
+        }
+
+        const latencyEl = cardElement.querySelector('[data-metric="latency"]');
+        if (latencyEl) {
+            latencyEl.textContent = networkLatency;
+            latencyEl.className = `op-stat-value ${latencyClass}`;
+        }
+
+        const uptimeEl = cardElement.querySelector('[data-metric="uptime"]');
+        if (uptimeEl) {
+            uptimeEl.textContent = uptime;
+        }
+
+        const lastHeartbeatEl = cardElement.querySelector('[data-metric="last-heartbeat"]');
+        if (lastHeartbeatEl) {
+            lastHeartbeatEl.textContent = lastHeartbeatText;
+        }
+
+        const cpuSpark = cardElement.querySelector('[data-metric="cpu-spark"]');
+        if (cpuSpark) {
+            cpuSpark.setAttribute('points', `0,${cpuSparkY} 80,${cpuSparkY}`);
+            cpuSpark.setAttribute('class', `op-spark-line ${cpuClass}`);
+        }
+
+        const cpuPercentEl = cardElement.querySelector('[data-metric="cpu-percent"]');
+        if (cpuPercentEl) {
+            cpuPercentEl.textContent = cpuPercent;
+            cpuPercentEl.className = `op-metric-value ${cpuClass}`;
+        }
+
+        const memSpark = cardElement.querySelector('[data-metric="mem-spark"]');
+        if (memSpark) {
+            memSpark.setAttribute('points', `0,${memSparkY} 80,${memSparkY}`);
+            memSpark.setAttribute('class', `op-spark-line ${memClass}`);
+        }
+
+        const memPercentEl = cardElement.querySelector('[data-metric="mem-percent"]');
+        if (memPercentEl) {
+            memPercentEl.textContent = memoryPercent;
+            memPercentEl.className = `op-metric-value ${memClass}`;
+        }
+
+        const diskSpark = cardElement.querySelector('[data-metric="disk-spark"]');
+        if (diskSpark) {
+            diskSpark.setAttribute('points', `0,${diskSparkY} 80,${diskSparkY}`);
+            diskSpark.setAttribute('class', `op-spark-line ${diskClass}`);
+        }
+
+        const diskPercentEl = cardElement.querySelector('[data-metric="disk-percent"]');
+        if (diskPercentEl) {
+            diskPercentEl.textContent = diskPercent;
+            diskPercentEl.className = `op-metric-value ${diskClass}`;
+        }
+
+        devLogger.log(`[OPERATOR-PANEL] Patched card ${operatorId}`);
     },
 
     _selectMetricsOperator(operatorId) {

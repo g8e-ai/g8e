@@ -30,40 +30,40 @@
             </div>
             <div class="operator-detail-item">
                 <span class="detail-label">HEARTBEAT</span>
-                <span class="detail-value">{{lastHeartbeatText}}</span>
+                <span class="detail-value" data-metric="last-heartbeat">{{lastHeartbeatText}}</span>
             </div>
             <div class="operator-detail-item">
                 <span class="detail-label">OPERATOR</span>
                 <span class="detail-value {{nameClass}}">{{operatorName}}</span>
             </div>
         </div>
-        <div class="operator-item-expanded-details op-card-{{healthClass}}">
+        <div class="operator-item-expanded-details op-card-{{healthClass}}" data-metric="card-container">
             <div class="op-card-top-row">
-                <span class="op-status-pill {{healthClass}}">&#9679; {{statusPillText}}</span>
+                <span class="op-status-pill {{healthClass}}" data-metric="status-pill">&#9679; {{statusPillText}}</span>
                 <svg class="op-ring" width="44" height="44" viewBox="0 0 48 48" aria-hidden="true">
                     <circle cx="24" cy="24" r="22" class="op-ring-track" stroke-width="2.5" fill="none"/>
                     <circle cx="24" cy="24" r="22" class="op-ring-arc op-ring-cpu" stroke-width="2.5" fill="none"
                             stroke-dasharray="138.23" stroke-dashoffset="{{cpuRingOffset}}" stroke-linecap="round"
-                            transform="rotate(-90 24 24)"/>
+                            transform="rotate(-90 24 24)" data-metric="cpu-ring"/>
                     <circle cx="24" cy="24" r="16" class="op-ring-track" stroke-width="2.5" fill="none"/>
                     <circle cx="24" cy="24" r="16" class="op-ring-arc op-ring-mem" stroke-width="2.5" fill="none"
                             stroke-dasharray="100.53" stroke-dashoffset="{{memRingOffset}}" stroke-linecap="round"
-                            transform="rotate(-90 24 24)"/>
+                            transform="rotate(-90 24 24)" data-metric="mem-ring"/>
                     <circle cx="24" cy="24" r="10" class="op-ring-track" stroke-width="2.5" fill="none"/>
                     <circle cx="24" cy="24" r="10" class="op-ring-arc op-ring-disk" stroke-width="2.5" fill="none"
                             stroke-dasharray="62.83" stroke-dashoffset="{{diskRingOffset}}" stroke-linecap="round"
-                            transform="rotate(-90 24 24)"/>
+                            transform="rotate(-90 24 24)" data-metric="disk-ring"/>
                 </svg>
             </div>
 
             <div class="op-card-stats">
                 <div>
                     <div class="op-stat-label">LATENCY</div>
-                    <div class="op-stat-value {{latencyClass}}">{{networkLatency}}</div>
+                    <div class="op-stat-value {{latencyClass}}" data-metric="latency">{{networkLatency}}</div>
                 </div>
                 <div>
                     <div class="op-stat-label">UPTIME</div>
-                    <div class="op-stat-value">{{uptime}}</div>
+                    <div class="op-stat-value" data-metric="uptime">{{uptime}}</div>
                 </div>
                 <div>
                     <div class="op-stat-label">USER</div>
@@ -75,23 +75,23 @@
                 <div class="op-metric">
                     <span class="op-metric-label">CPU</span>
                     <svg class="op-spark" viewBox="0 0 80 16" preserveAspectRatio="none" aria-hidden="true">
-                        <polyline points="0,{{cpuSparkY}} 80,{{cpuSparkY}}" class="op-spark-line {{cpuClass}}" vector-effect="non-scaling-stroke"/>
+                        <polyline points="0,{{cpuSparkY}} 80,{{cpuSparkY}}" class="op-spark-line {{cpuClass}}" vector-effect="non-scaling-stroke" data-metric="cpu-spark"/>
                     </svg>
-                    <span class="op-metric-value {{cpuClass}}">{{cpuPercent}}</span>
+                    <span class="op-metric-value {{cpuClass}}" data-metric="cpu-percent">{{cpuPercent}}</span>
                 </div>
                 <div class="op-metric">
                     <span class="op-metric-label">MEM</span>
                     <svg class="op-spark" viewBox="0 0 80 16" preserveAspectRatio="none" aria-hidden="true">
-                        <polyline points="0,{{memSparkY}} 80,{{memSparkY}}" class="op-spark-line {{memClass}}" vector-effect="non-scaling-stroke"/>
+                        <polyline points="0,{{memSparkY}} 80,{{memSparkY}}" class="op-spark-line {{memClass}}" vector-effect="non-scaling-stroke" data-metric="mem-spark"/>
                     </svg>
-                    <span class="op-metric-value {{memClass}}">{{memoryPercent}}</span>
+                    <span class="op-metric-value {{memClass}}" data-metric="mem-percent">{{memoryPercent}}</span>
                 </div>
                 <div class="op-metric">
                     <span class="op-metric-label">DISK</span>
                     <svg class="op-spark" viewBox="0 0 80 16" preserveAspectRatio="none" aria-hidden="true">
-                        <polyline points="0,{{diskSparkY}} 80,{{diskSparkY}}" class="op-spark-line {{diskClass}}" vector-effect="non-scaling-stroke"/>
+                        <polyline points="0,{{diskSparkY}} 80,{{diskSparkY}}" class="op-spark-line {{diskClass}}" vector-effect="non-scaling-stroke" data-metric="disk-spark"/>
                     </svg>
-                    <span class="op-metric-value {{diskClass}}">{{diskPercent}}</span>
+                    <span class="op-metric-value {{diskClass}}" data-metric="disk-percent">{{diskPercent}}</span>
                 </div>
             </div>
 

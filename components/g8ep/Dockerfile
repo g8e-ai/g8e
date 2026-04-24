@@ -63,15 +63,12 @@ RUN addgroup -g 1001 g8e \
     && addgroup docker 2>/dev/null || true \
     && addgroup g8e docker 2>/dev/null || true
 
-COPY components/g8ep/sudoers-g8e /etc/sudoers.d/g8e
-RUN chmod 440 /etc/sudoers.d/g8e \
-    && chown root:root /etc/sudoers.d/g8e
+COPY --chmod=440 --chown=root:root components/g8ep/sudoers-g8e /etc/sudoers.d/g8e
 
 RUN mkdir -p /var/log/supervisor \
     && chown -R g8e:g8e /var/log/supervisor
 
-COPY components/g8ep/scripts/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY --chmod=755 components/g8ep/scripts/entrypoint.sh /entrypoint.sh
 
 USER g8e
 
