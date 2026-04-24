@@ -14,7 +14,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // Regression coverage for OperatorPanel state-mutation handlers
-// (_onHeartbeat, _onStatusUpdated).
+// (_onHeartbeat, _onStatusUpdated, heartbeat buffering).
 //
 // Payloads here mirror what sse-connection-manager actually emits on the
 // eventBus: the INNER `data` body only, with the `{ type, data }` transport
@@ -57,6 +57,13 @@ function createPanel(initialOperators) {
     const panel = new OperatorPanel(eventBus);
     panel._operators = initialOperators;
     panel._isRendered = false;
+    panel._heartbeatDirty = false;
+    panel._fullRenderTimerId = null;
+    panel.displayOperators = vi.fn();
+    panel._patchOperatorCard = vi.fn();
+    panel.updateMetrics = vi.fn();
+    panel.updateStatus = vi.fn();
+    panel.updatePanelStatusFromOperatorCounts = vi.fn();
     return panel;
 }
 
@@ -91,6 +98,44 @@ describe('OperatorPanel._onHeartbeat [UNIT - PURE LOGIC]', () => {
 
         // Unrelated slot untouched
         expect(panel._operators[1].latest_heartbeat_snapshot).toBeNull();
+    });
+
+    it('sets _heartbeatDirty = true and calls _patchOperatorCard, not displayOperators', () => {
+        const panel = createPanel([
+            { operator_id: 'op-1', status: OperatorStatus.AVAILABLE, latest_heartbeat_snapshot: null },
+        ]);
+
+        panel._onHeartbeat({
+            operator_id: 'op-1',
+            status: OperatorStatus.ACTIVE,
+            metrics: {
+                timestamp: '2026-04-21T21:30:10.683Z',
+                performance: { cpu_percent: 42.1 },
+            },
+        });
+
+        expect(panel._heartbeatDirty).toBe(true);
+        expect(panel._patchOperatorCard).toHaveBeenCalledWith('op-1');
+        expect(panel.displayOperators).not.toHaveBeenCalled();
+    });
+
+    it('updates metrics panel for selected operator on heartbeat', () => {
+        const panel = createPanel([
+            { operator_id: 'op-1', status: OperatorStatus.ACTIVE, latest_heartbeat_snapshot: null },
+        ]);
+        panel.selectedMetricsOperatorId = 'op-1';
+
+        panel._onHeartbeat({
+            operator_id: 'op-1',
+            status: OperatorStatus.ACTIVE,
+            metrics: {
+                timestamp: '2026-04-21T21:30:10.683Z',
+                performance: { cpu_percent: 42.1 },
+            },
+        });
+
+        expect(panel.updateMetrics).toHaveBeenCalled();
+        expect(panel.updateStatus).toHaveBeenCalledWith(OperatorStatus.ACTIVE);
     });
 
     it('leaves operators untouched when no operator_id matches', () => {
@@ -184,5 +229,66 @@ describe('OperatorPanel._onStatusUpdated [UNIT - PURE LOGIC]', () => {
 
         expect(panel._totalOperatorCount).toBe(7);
         expect(panel._activeOperatorCount).toBe(3);
+    });
+
+    it('clears _heartbeatDirty after immediate render', () => {
+        const panel = createPanel([
+            { operator_id: 'op-1', status: OperatorStatus.AVAILABLE },
+        ]);
+        panel._heartbeatDirty = true;
+
+        panel._onStatusUpdated({
+            operator_id: 'op-1',
+            status: OperatorStatus.ACTIVE,
+        });
+
+        expect(panel._heartbeatDirty).toBe(false);
+    });
+});
+
+describe('OperatorPanel.heartbeat buffering [UNIT - PURE LOGIC]', () => {
+    it('_onListUpdated clears _heartbeatDirty after immediate render', () => {
+        const panel = createPanel([
+            { operator_id: 'op-1', status: OperatorStatus.AVAILABLE },
+        ]);
+        panel._heartbeatDirty = true;
+
+        panel._onListUpdated({
+            operators: panel._operators,
+            total_count: 1,
+            active_count: 1,
+            used_slots: 0,
+            max_slots: 1,
+        });
+
+        expect(panel._heartbeatDirty).toBe(false);
+    });
+
+    it('scheduled full render with _heartbeatDirty = true triggers render and clears flag', () => {
+        const panel = createPanel([
+            { operator_id: 'op-1', status: OperatorStatus.ACTIVE },
+        ]);
+        panel._isRendered = true;
+        panel._heartbeatDirty = true;
+        panel.isCollapsed = false;
+
+        panel._applyOperatorState({ cause: 'scheduled' });
+
+        expect(panel.displayOperators).toHaveBeenCalled();
+        expect(panel._heartbeatDirty).toBe(false);
+    });
+
+    it('scheduled full render with _heartbeatDirty = false is a no-op', () => {
+        const panel = createPanel([
+            { operator_id: 'op-1', status: OperatorStatus.ACTIVE },
+        ]);
+        panel._isRendered = true;
+        panel._heartbeatDirty = false;
+        panel.isCollapsed = false;
+
+        panel._applyOperatorState({ cause: 'scheduled' });
+
+        expect(panel.displayOperators).toHaveBeenCalled();
+        expect(panel._heartbeatDirty).toBe(false);
     });
 });

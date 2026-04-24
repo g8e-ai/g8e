@@ -69,6 +69,11 @@ export class OperatorPanel {
         this._isRendered = false;
         this._pendingRender = null;
 
+        // Heartbeat buffering state
+        this._fullRenderIntervalMs = 20000;
+        this._fullRenderTimerId = null;
+        this._heartbeatDirty = false;
+
         // DOM elements — populated in render()
         this.panelContainer = null;
 
@@ -96,6 +101,7 @@ export class OperatorPanel {
             this._applyOperatorState(this._pendingRender);
             this._pendingRender = null;
         }
+        this._startFullRenderTimer();
         this.eventBus.emit(EventType.AUTH_COMPONENT_INITIALIZED_OPERATOR, {
             isAuthenticated: true
         });
@@ -176,7 +182,18 @@ export class OperatorPanel {
             };
         }
 
-        this._applyOperatorState({ cause: 'heartbeat' });
+        this._heartbeatDirty = true;
+        this._patchOperatorCard(parsed.operator_id);
+
+        if (parsed.operator_id === this.selectedMetricsOperatorId) {
+            const heartbeatData = this._operators.find(op => op.operator_id === parsed.operator_id);
+            if (heartbeatData) {
+                this.updateMetrics(heartbeatData);
+                this.updateStatus(heartbeatData.status || OperatorStatus.ACTIVE);
+            }
+        }
+
+        this.updatePanelStatusFromOperatorCounts();
     }
 
     _applyOperatorState({ cause }) {
@@ -206,9 +223,18 @@ export class OperatorPanel {
             }
             // Re-render operator list to show updated heartbeat metrics in expanded details
             this.displayOperators(this.operators);
-            
+
             // Also update the overall panel status if not bound
             this.updatePanelStatusFromOperatorCounts();
+            return;
+        }
+
+        if (cause === 'scheduled') {
+            // Full render from accumulated state - handles re-sort, pagination, and slots that never received a heartbeat
+            this.updatePanelStatusFromOperatorCounts();
+            this.displayOperators(this.operators);
+            this.updateBindAllButtonVisibility();
+            this.updateUnbindAllButtonVisibility();
             return;
         }
 
@@ -217,6 +243,11 @@ export class OperatorPanel {
             if (selectedOp && !_ACTIVE_STATUSES.has(selectedOp.status)) {
                 this.clearPanelMetrics();
             }
+            this._heartbeatDirty = false;
+        }
+
+        if (cause === 'list_updated') {
+            this._heartbeatDirty = false;
         }
 
         this.updatePanelStatusFromOperatorCounts();
@@ -475,6 +506,8 @@ export class OperatorPanel {
     }
 
     destroy() {
+        this._stopFullRenderTimer();
+
         if (this._wireHandlers) {
             this.eventBus.off(EventType.OPERATOR_PANEL_LIST_UPDATED, this._wireHandlers.onListUpdated);
             this.eventBus.off(EventType.OPERATOR_HEARTBEAT_RECEIVED, this._wireHandlers.onHeartbeat);
@@ -495,6 +528,29 @@ export class OperatorPanel {
         }
 
         this.panelContainer = null;
+    }
+
+    _startFullRenderTimer() {
+        if (this._fullRenderTimerId) {
+            clearInterval(this._fullRenderTimerId);
+        }
+
+        this._fullRenderTimerId = setInterval(() => {
+            if (!this._isRendered) return;
+            if (this.isCollapsed) return;
+            if (document.visibilityState !== 'visible') return;
+            if (!this._heartbeatDirty) return;
+
+            this._applyOperatorState({ cause: 'scheduled' });
+            this._heartbeatDirty = false;
+        }, this._fullRenderIntervalMs);
+    }
+
+    _stopFullRenderTimer() {
+        if (this._fullRenderTimerId) {
+            clearInterval(this._fullRenderTimerId);
+            this._fullRenderTimerId = null;
+        }
     }
 }
 
