@@ -174,6 +174,8 @@ class TestGenerateCommandSafety:
                     case_id="case-1",
                     investigation_id="inv-1",
                     settings=mock_settings,
+                    reputation_data_service=MagicMock(),
+                    auditor_hmac_key="test-key",
                 )
             
             assert "safety validation failed" in exc_info.value.pass_errors[0].lower()

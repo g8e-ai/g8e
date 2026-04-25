@@ -86,6 +86,9 @@ def mock_tool_executor():
     executor._whitelist_validator = get_whitelist_validator()
     executor._blacklist_validator = get_blacklist_validator()
     
+    executor.reputation_data_service = MagicMock()
+    executor.auditor_hmac_key = "test-hmac-key"
+    
     return executor
 
 
@@ -164,6 +167,7 @@ def _noop_generate_command(request: str, **_kwargs):
         request=request,
         final_command=request,
         outcome=CommandGenerationOutcome.CONSENSUS,
+        reputation_commitment_id=None,
     )
 
 
@@ -174,6 +178,7 @@ def _refining_generate_command(request: str, refined: str, **_kwargs):
         request=request,
         final_command=refined,
         outcome=CommandGenerationOutcome.CONSENSUS,
+        reputation_commitment_id=None,
     )
 
 

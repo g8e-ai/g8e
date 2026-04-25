@@ -69,7 +69,7 @@ class TestTribunalApprovalCorrelation:
                 consensus_strength=1.0
             ), None)
             # Mock audit to pass
-            mock_audit.return_value = ("ls -la", CommandGenerationOutcome.VERIFIED, True, None, "ok")
+            mock_audit.return_value = ("ls -la", CommandGenerationOutcome.VERIFIED, True, None, "ok", None)
 
             # Generate command via Tribunal
             gen_result = await generate_command(
@@ -82,6 +82,8 @@ class TestTribunalApprovalCorrelation:
                 case_id=inputs.case_id,
                 investigation_id=inputs.investigation_id,
                 settings=inputs.request_settings,
+                reputation_data_service=AsyncMock(),
+                auditor_hmac_key="test-key",
                 whitelisting_enabled=False,
                 blacklisting_enabled=False,
                 whitelisted_commands=[],
@@ -130,7 +132,7 @@ class TestTribunalApprovalCorrelation:
                 winner_supporters=["axiom"],
                 consensus_strength=1.0
             ), None)
-            mock_audit.return_value = ("ls", CommandGenerationOutcome.VERIFIED, True, None, "ok")
+            mock_audit.return_value = ("ls", CommandGenerationOutcome.VERIFIED, True, None, "ok", None)
 
             # Generate command via Tribunal
             await generate_command(
@@ -143,6 +145,8 @@ class TestTribunalApprovalCorrelation:
                 case_id=inputs.case_id,
                 investigation_id=inputs.investigation_id,
                 settings=inputs.request_settings,
+                reputation_data_service=AsyncMock(),
+                auditor_hmac_key="test-key",
                 whitelisting_enabled=False,
                 blacklisting_enabled=False,
                 whitelisted_commands=[],

@@ -53,6 +53,8 @@ def mock_tool_executor():
     tool_executor.user_settings.operator_context.os = "linux"
     tool_executor.whitelist_validator = MagicMock(spec=CommandWhitelistValidator)
     tool_executor.blacklist_validator = MagicMock(spec=CommandBlacklistValidator)
+    tool_executor.reputation_data_service = MagicMock()
+    tool_executor.auditor_hmac_key = "test-hmac-key"
     return tool_executor
 
 
@@ -235,6 +237,7 @@ class TestTribunalInvokerRun:
             auditor_passed=True,
             auditor_revision=None,
             candidates=[],
+            reputation_commitment_id=None,
         )
 
         with patch(
@@ -287,6 +290,7 @@ class TestTribunalInvokerRun:
             auditor_passed=True,
             auditor_revision=None,
             candidates=[],
+            reputation_commitment_id=None,
         )
 
         with patch(
@@ -336,6 +340,7 @@ class TestTribunalInvokerRun:
             auditor_passed=True,
             auditor_revision=None,
             candidates=[],
+            reputation_commitment_id=None,
         )
 
         with patch(
