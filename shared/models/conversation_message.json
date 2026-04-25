@@ -31,6 +31,16 @@
       "required": true,
       "description": "When the message was created. ISO 8601 string on the wire."
     },
+    "prev_hash": {
+      "type": "string",
+      "required": false,
+      "description": "Hash of previous entry in the chain (hex SHA256, 64 chars). Forms the hash chain for ledger integrity."
+    },
+    "entry_hash": {
+      "type": "string",
+      "required": false,
+      "description": "Hash of this entry (hex SHA256, 64 chars). Computed from entry content plus prev_hash."
+    },
     "metadata": {
       "type": "object",
       "required": false,

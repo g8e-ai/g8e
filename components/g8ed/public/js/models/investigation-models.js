@@ -81,6 +81,8 @@ export class InvestigationHistoryEntry extends FrontendIdentifiableModel {
         troubleshooting_step:    { type: F.any,     default: null },
         refinement_cycle:        { type: F.any,     default: null },
         phase:                   { type: F.any,     default: null },
+        prev_hash:               { type: F.string,  default: null },
+        entry_hash:              { type: F.string,  default: null },
     };
 
     /**

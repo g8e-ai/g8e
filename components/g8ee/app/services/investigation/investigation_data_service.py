@@ -15,6 +15,8 @@ import logging
 
 from pydantic import TypeAdapter
 
+from app.utils.ledger_hash import compute_entry_hash, genesis_hash
+
 from app.constants import (
     DB_COLLECTION_INVESTIGATIONS,
     ComponentName,
@@ -183,11 +185,28 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         if not investigation_id:
             return True
 
+        # Get previous hash from last entry in conversation history.
+        # Fall back to genesis if there is no prior entry, or if the prior entry
+        # is legacy data without an entry_hash (backward compat).
+        investigation = await self.get_investigation(investigation_id)
+        prev_hash = None
+        if investigation:
+            if investigation.conversation_history:
+                last_entry = investigation.conversation_history[-1]
+                prev_hash = last_entry.entry_hash
+            if not prev_hash:
+                prev_hash = genesis_hash(investigation.id, investigation.created_at.isoformat())
+
         message = ConversationHistoryMessage(
             sender=sender,
             content=content,
             metadata=metadata or ConversationMessageMetadata(),
+            prev_hash=prev_hash,
         )
+
+        # Compute entry hash
+        entry_dict = message.model_dump(mode="json", exclude={"entry_hash"})
+        message.entry_hash = compute_entry_hash(entry_dict, prev_hash)
 
         await self.cache.append_to_array(
             collection=self.collection,
@@ -216,6 +235,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
                 resource_id=investigation_id,
             )
 
+        # Single chokepoint: delegate to model method which handles hash chaining.
         investigation.add_history_entry(
             event_type=event_type,
             actor=actor,
@@ -225,7 +245,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
 
         await self.update_investigation_raw(
             investigation_id=investigation_id,
-            updates={"history_trail": [entry.model_dump(mode="json") for entry in investigation.history_trail]},
+            updates={"history_trail": [e.model_dump(mode="json") for e in investigation.history_trail]},
         )
 
         return investigation

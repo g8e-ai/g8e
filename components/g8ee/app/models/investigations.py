@@ -185,7 +185,9 @@ class ConversationHistoryMessage(G8eIdentifiableModel):
     content: str = Field(default="", description="Message content")
     timestamp: UTCDatetime = Field(default_factory=now, description="When the message was sent")
     metadata: ConversationMessageMetadata = Field(default_factory=ConversationMessageMetadata, description="Message metadata")
-    hash: str | None = Field(default=None, description="Cryptographic hash of the message (The Blockchain)")
+    prev_hash: str | None = Field(default=None, description="Hash of previous entry in the chain (hex SHA256, 64 chars)")
+    entry_hash: str | None = Field(default=None, description="Hash of this entry (hex SHA256, 64 chars)")
+    hash: str | None = Field(default=None, description="Legacy hash field - deprecated, use entry_hash instead")
 
     def calculate_hash(self, previous_hash: str | None = None) -> str:
         """Calculate the cryptographic hash for this block (message).
@@ -282,6 +284,8 @@ class InvestigationHistoryEntry(G8eBaseModel):
     summary: str = Field(..., description="Brief summary of what happened")
     investigation_attempt: G8eBaseModel | None = Field(default=None, description="Investigation attempt data")
     details: ConversationMessageMetadata = Field(default_factory=ConversationMessageMetadata, description="Detailed event information")
+    prev_hash: str | None = Field(default=None, description="Hash of previous entry in the chain (hex SHA256, 64 chars)")
+    entry_hash: str | None = Field(default=None, description="Hash of this entry (hex SHA256, 64 chars)")
 
 
 class InvestigationModel(G8eIdentifiableModel):
@@ -394,8 +398,14 @@ class InvestigationModel(G8eIdentifiableModel):
         investigation_attempt: G8eBaseModel | None = None,
         details: ConversationMessageMetadata | None = None
     ) -> None:
+        from app.utils.ledger_hash import compute_entry_hash, genesis_hash
+
         if attempt_number is None:
             attempt_number = (self.current_state.active_attempt if self.current_state else 1)
+
+        prev_hash = self.history_trail[-1].entry_hash if self.history_trail else None
+        if not prev_hash:
+            prev_hash = genesis_hash(self.id, self.created_at.isoformat())
 
         entry = InvestigationHistoryEntry(
             attempt_number=attempt_number,
@@ -404,8 +414,12 @@ class InvestigationModel(G8eIdentifiableModel):
             summary=summary,
             investigation_attempt=investigation_attempt,
             details=details or ConversationMessageMetadata(),
-            timestamp=now()
+            timestamp=now(),
+            prev_hash=prev_hash,
         )
+
+        entry_dict = entry.model_dump(mode="json", exclude={"entry_hash"})
+        entry.entry_hash = compute_entry_hash(entry_dict, prev_hash)
 
         self.history_trail.append(entry)
         self.update_timestamp()
