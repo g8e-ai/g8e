@@ -18,7 +18,7 @@
  * Moved from settings_service.js to follow proper model separation.
  */
 
-import { LLMProvider, SearchProvider, GeminiModel, OpenAIModel, AnthropicModel, OllamaModel, PROVIDER_MODELS } from '../constants/ai.js';
+import { LLMProvider, SearchProvider, GeminiModel, OpenAIModel, AnthropicModel, OllamaModel, LlamaCppModel, PROVIDER_MODELS } from '../constants/ai.js';
 
 // All models for each provider are available at every tier; the user decides
 // which model serves primary / assistant / lite.
@@ -32,6 +32,9 @@ const ANTHROPIC_MODEL_OPTIONS = Object.freeze([
     Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6,   label: 'Claude Opus 4.6' }),
     Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6, label: 'Claude Sonnet 4.6' }),
     Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5,  label: 'Claude Haiku 4.5' }),
+]);
+const LLAMACPP_MODEL_OPTIONS = Object.freeze([
+    Object.freeze({ value: LlamaCppModel.GEMMA4_E2B, label: 'Gemma 4 E2B (llama.cpp)' }),
 ]);
 
 // ---------------------------------------------------------------------------
@@ -53,6 +56,7 @@ export const USER_SETTINGS = Object.freeze([
             Object.freeze({ value: LLMProvider.OLLAMA,    label: 'Ollama' }),
             Object.freeze({ value: LLMProvider.GEMINI,    label: 'Gemini (Google)' }),
             Object.freeze({ value: LLMProvider.ANTHROPIC, label: 'Anthropic (Claude)' }),
+            Object.freeze({ value: LLMProvider.LLAMACPP,  label: 'llama.cpp' }),
         ]),
         secret: false,
         placeholder: '',
@@ -69,6 +73,7 @@ export const USER_SETTINGS = Object.freeze([
             Object.freeze({ value: LLMProvider.OLLAMA,    label: 'Ollama' }),
             Object.freeze({ value: LLMProvider.GEMINI,    label: 'Gemini (Google)' }),
             Object.freeze({ value: LLMProvider.ANTHROPIC, label: 'Anthropic (Claude)' }),
+            Object.freeze({ value: LLMProvider.LLAMACPP,  label: 'llama.cpp' }),
         ]),
         secret: false,
         placeholder: '',
@@ -85,6 +90,7 @@ export const USER_SETTINGS = Object.freeze([
             Object.freeze({ value: LLMProvider.OLLAMA,    label: 'Ollama' }),
             Object.freeze({ value: LLMProvider.GEMINI,    label: 'Gemini (Google)' }),
             Object.freeze({ value: LLMProvider.ANTHROPIC, label: 'Anthropic (Claude)' }),
+            Object.freeze({ value: LLMProvider.LLAMACPP,  label: 'llama.cpp' }),
         ]),
         secret: false,
         placeholder: '',
@@ -230,6 +236,68 @@ export const USER_SETTINGS = Object.freeze([
         provider: LLMProvider.ANTHROPIC,
         secret: true,
         placeholder: 'your-anthropic-api-key-here',
+        default: '',
+    }),
+
+    // -------------------------------------------------------------------------
+    // llama.cpp Specific
+    // -------------------------------------------------------------------------
+    Object.freeze({
+        key: 'llm_model',
+        section: 'llm',
+        label: 'Primary LLM Model',
+        description: 'Main model used for investigations and AI reasoning.',
+        type: 'select',
+        provider: LLMProvider.LLAMACPP,
+        options: LLAMACPP_MODEL_OPTIONS,
+        secret: false,
+        placeholder: '',
+        default: ''
+    }),
+    Object.freeze({
+        key: 'llm_assistant_model',
+        section: 'llm',
+        label: 'Assistant LLM Model',
+        description: 'Lightweight model for assistant tasks and command generation.',
+        type: 'select',
+        provider: LLMProvider.LLAMACPP,
+        options: LLAMACPP_MODEL_OPTIONS,
+        secret: false,
+        placeholder: '',
+        default: ''
+    }),
+    Object.freeze({
+        key: 'llm_lite_model',
+        section: 'llm',
+        label: 'Lite LLM Model',
+        description: 'Ultra-lightweight model for quick tasks.',
+        type: 'select',
+        provider: LLMProvider.LLAMACPP,
+        options: LLAMACPP_MODEL_OPTIONS,
+        secret: false,
+        placeholder: '',
+        default: ''
+    }),
+    Object.freeze({
+        key: 'llamacpp_endpoint',
+        section: 'llm',
+        label: 'llama.cpp Host',
+        description: 'Host and port of your llama.cpp server (e.g. g8el:11444). Do not include a scheme or path.',
+        type: 'text',
+        provider: LLMProvider.LLAMACPP,
+        secret: false,
+        placeholder: 'g8el:11444',
+        default: '',
+    }),
+    Object.freeze({
+        key: 'llamacpp_api_key',
+        section: 'llm',
+        label: 'llama.cpp API Key',
+        description: 'API key for llama.cpp (optional - only required for authenticated instances).',
+        type: 'password',
+        provider: LLMProvider.LLAMACPP,
+        secret: true,
+        placeholder: '',
         default: '',
     }),
     Object.freeze({
@@ -454,6 +522,7 @@ const PROVIDER_CREDENTIAL_REQUIREMENTS = Object.freeze({
     [LLMProvider.OLLAMA]: ['ollama_endpoint'],
     [LLMProvider.GEMINI]: ['gemini_api_key'],
     [LLMProvider.ANTHROPIC]: ['anthropic_api_key'],
+    [LLMProvider.LLAMACPP]: ['llamacpp_endpoint'],
 });
 
 /**
@@ -634,6 +703,8 @@ const LLM_KEY_MAP = Object.freeze({
     ollama_api_key:         'ollama_api_key',
     gemini_api_key:         'gemini_api_key',
     anthropic_api_key:      'anthropic_api_key',
+    llamacpp_endpoint:      'llamacpp_endpoint',
+    llamacpp_api_key:       'llamacpp_api_key',
     llm_max_tokens:         'llm_max_tokens',
     llm_command_gen_enabled:  'llm_command_gen_enabled',
     llm_command_gen_verifier: 'llm_command_gen_verifier',
@@ -693,6 +764,8 @@ const REVERSE_LLM_MAP    = Object.freeze({
     ollama_api_key: 'ollama_api_key',
     gemini_api_key:         'gemini_api_key',
     anthropic_api_key:      'anthropic_api_key',
+    llamacpp_endpoint:      'llamacpp_endpoint',
+    llamacpp_api_key:       'llamacpp_api_key',
     llm_max_tokens:         'llm_max_tokens',
     llm_command_gen_enabled: 'llm_command_gen_enabled',
     llm_command_gen_verifier: 'llm_command_gen_verifier',

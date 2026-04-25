@@ -32,6 +32,7 @@ from app.constants import (
     OPENAI_DEFAULT_ENDPOINT,
     OLLAMA_DEFAULT_ENDPOINT,
     ANTHROPIC_DEFAULT_ENDPOINT,
+    LLAMACPP_DEFAULT_ENDPOINT,
     LLMProvider,
     LogLevel,
 )
@@ -184,6 +185,10 @@ class LLMSettings(G8eBaseModel):
     anthropic_api_key: str | None = Field(default=None)
     ollama_assistant_model: str | None = Field(default=None)
 
+    llamacpp_endpoint: str | None = Field(default=LLAMACPP_DEFAULT_ENDPOINT)
+    llamacpp_api_key: str | None = Field(default=None)
+    llamacpp_assistant_model: str | None = Field(default=None)
+
     llm_max_tokens: int | None = Field(default=None)
     llm_command_gen_enabled: bool = Field(default=True)
     llm_command_gen_auditor: bool = Field(default=True)
@@ -202,6 +207,7 @@ class LLMSettings(G8eBaseModel):
             LLMProvider.ANTHROPIC: self.anthropic_endpoint,
             LLMProvider.OLLAMA: self.ollama_endpoint,
             LLMProvider.GEMINI: None,
+            LLMProvider.LLAMACPP: self.llamacpp_endpoint,
         }
         return endpoints.get(self.primary_provider)
 
@@ -213,26 +219,18 @@ class LLMSettings(G8eBaseModel):
             LLMProvider.ANTHROPIC: self.anthropic_endpoint,
             LLMProvider.OLLAMA: self.ollama_endpoint,
             LLMProvider.GEMINI: None,
+            LLMProvider.LLAMACPP: self.llamacpp_endpoint,
         }
         return endpoints.get(self.assistant_provider)
 
 class ReputationSettings(G8eBaseModel):
     """Phase 3 reputation-resolution configuration (GDD §14.5, §15 Phase 3).
 
-    Disabled by default during initial rollout; flipping
-    ``resolution_enabled`` activates the post-execution `ReputationService`
-    dispatch from `orchestrate_tool_execution` without any other code change.
+    Reputation resolution is always enabled in the ephemeral architecture.
+    The per-tool-call reputation hook runs after every Tribunal-backed
+    `run_commands_with_operator` invocation via `orchestrate_tool_execution`.
     """
 
-    resolution_enabled: bool = Field(
-        default=False,
-        description=(
-            "When True, the per-tool-call reputation hook runs after every "
-            "Tribunal-backed `run_commands_with_operator` invocation. When "
-            "False, the scoreboard remains static (Phase 2 commitments still "
-            "succeed over the bootstrap-seeded scalars)."
-        ),
-    )
     ema_half_life: int = Field(
         default=50,
         ge=1,

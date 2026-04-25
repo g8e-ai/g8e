@@ -121,14 +121,14 @@ Sections are concatenated in this fixed order:
 | 6 | `capabilities` | mode file | loaded file is non-empty |
 | 7 | `execution` | mode file | loaded file is non-empty |
 | 8 | `tools` | mode file | `operator_bound or g8e_web_search_available` |
-| 9 | `system_context` | rendered from `OperatorContext` | an Operator context was provided |
-| 10 | `sentinel_mode` | `PromptFile.SYSTEM_SENTINEL_MODE` | `investigation.sentinel_mode is True` |
-| 11 | `triage_context` | rendered from `TriageResult` | a triage result was provided |
-| 12 | `investigation_context` | rendered from `EnrichedInvestigationContext` | investigation context provided |
-| 13 | `response_constraints` | `PromptFile.SYSTEM_RESPONSE_CONSTRAINTS` | always |
+| 9 | `response_constraints` | `PromptFile.SYSTEM_RESPONSE_CONSTRAINTS` | always |
+| 10 | `system_context` | rendered from `OperatorContext` | an Operator context was provided |
+| 11 | `sentinel_mode` | `PromptFile.SYSTEM_SENTINEL_MODE` | `investigation.sentinel_mode is True` |
+| 12 | `triage_context` | rendered from `TriageResult` | a triage result was provided |
+| 13 | `investigation_context` | rendered from `EnrichedInvestigationContext` | investigation context provided |
 | 14 | `learned_context` | rendered from user + case memories | any memory is present |
 
-Section order is deliberate. Identity comes first because everything after it should be interpreted inside that envelope. The agent-specific persona (`sage` or `dash`) loads immediately after identity so the voice is established before safety, doctrine, and mode-specific capabilities are read. Loyalty and dissent come before mode-specific capabilities so that the doctrine governs how capabilities are exercised. `response_constraints` comes last among the static sections so its formatting rules are the most recent instruction in the prompt before learned context and the user turn.
+Section order is deliberate. Static platform guidelines and core persona instructions come first (identity, safety, loyalty, dissent, capabilities, execution, tools, response_constraints) to establish the agent's operating principles before any dynamic context. Dynamic variables, user data, and context (system_context, sentinel_mode, triage_context, investigation_context, learned_context) are placed at the bottom. This ensures that unchanging platform guidelines are always at the absolute top of the system prompt, while dynamic per-turn data appears immediately before the user's message.
 
 ### Agent persona selection
 

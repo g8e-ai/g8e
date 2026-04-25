@@ -212,10 +212,14 @@ class OperatorDataService(OperatorDataServiceProtocol):
     ) -> bool:
         """Add activity entry to operator log."""
 
+        from app.utils.ledger_hash import genesis_hash
+
         activity_entry = ConversationHistoryMessage(
             sender=sender,
             content=content,
             metadata=metadata or ConversationMessageMetadata(),
+            prev_hash="0" * 64,
+            entry_hash=genesis_hash(operator_id, now().isoformat()),
         )
 
         result = await self.cache.append_to_array(

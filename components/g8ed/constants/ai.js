@@ -116,6 +116,7 @@ export const LLMProvider = Object.freeze({
     OLLAMA:    'ollama',
     GEMINI:    'gemini',
     ANTHROPIC: 'anthropic',
+    LLAMACPP:  'llamacpp',
 });
 
 /**
@@ -171,9 +172,18 @@ export const OllamaModel = Object.freeze({
     GEMMA4_26B:      _STATUS['llm.models']['ollama']['gemma4.26b'],
     GEMMA4_E4B:      _STATUS['llm.models']['ollama']['gemma4.e4b'],
     GEMMA4_E2B:      _STATUS['llm.models']['ollama']['gemma4.e2b'],
+    GEMMA4_E2B_G8EA: _STATUS['llm.models']['ollama']['gemma4.e2b.g8ea'],
     NEMOTRON_3_30B:  _STATUS['llm.models']['ollama']['nemotron.3.30b'],
     LLAMA_3_2_3B:    _STATUS['llm.models']['ollama']['llama.3.2.3b'],
     QWEN3_5_2B:      _STATUS['llm.models']['ollama']['qwen3.5.2b'],
+});
+
+/**
+ * llama.cpp model identifiers.
+ * Must match g8ee's constants/settings.py LLAMACPP_* constants exactly.
+ */
+export const LlamaCppModel = Object.freeze({
+    GEMMA4_E2B: 'google_gemma-4-E2B-it-Q4_K_M.gguf',
 });
 
 // Every model is available at every tier for every provider. The user picks
@@ -203,9 +213,13 @@ export const PROVIDER_MODELS = Object.freeze({
         { id: OllamaModel.GEMMA4_26B, label: 'Gemma 4 26B' },
         { id: OllamaModel.GEMMA4_E4B, label: 'Gemma 4 E4B' },
         { id: OllamaModel.GEMMA4_E2B, label: 'Gemma 4 E2B' },
+        { id: OllamaModel.GEMMA4_E2B_G8EA, label: 'Gemma 4 E2B*' },
         { id: OllamaModel.NEMOTRON_3_30B, label: 'Nemotron 3 Nano 30B' },
         { id: OllamaModel.LLAMA_3_2_3B, label: 'Llama 3.2 3B' },
         { id: OllamaModel.QWEN3_5_2B, label: 'Qwen 3.5 2B' },
+    ]),
+    [LLMProvider.LLAMACPP]: _tierAll([
+        { id: LlamaCppModel.GEMMA4_E2B, label: 'Gemma 4 E2B (llama.cpp)' },
     ]),
 });
 

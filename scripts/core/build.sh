@@ -40,6 +40,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 MANAGED_SERVICES=(g8es g8ee g8ed g8ep)
 TEST_RUNNER_SERVICES=(g8ee-test-runner g8ed-test-runner g8eo-test-runner)
+OPTIONAL_SERVICES=(g8el)
 
 _service_volume() {
     case "$1" in
@@ -60,11 +61,11 @@ Commands:
   status                          Show container status and component versions
   up [component ...]              Start managed services -- no build
                                   Default (no components): g8es g8ee g8ed g8ep
-                                  Valid: g8es g8ee g8ed g8ep
+                                  Valid: g8es g8ee g8ed g8ep g8el
   down                            Stop managed containers -- nothing is removed
   rebuild [component ...]         Rebuild + restart of managed services using layer cache (no volume wipe)
                                   Default (no components): g8es g8ee g8ed g8ep
-                                  Valid: g8es g8ee g8ed g8es-test-runner g8ee-test-runner g8eo-test-runner
+                                  Valid: g8es g8ee g8ed g8ep g8el g8es-test-runner g8ee-test-runner g8eo-test-runner
   reset                           Wipe DB data volumes + rebuild images from scratch
                                   Removes: g8es, g8ee, g8ed volumes; SSL certs preserved
   wipe                            Clear app data from the database (all collections except platform settings)
@@ -104,9 +105,9 @@ while [[ $# -gt 0 ]]; do
             COMMAND="$1"
             shift
             while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do
-                if ! printf '%s\n' g8es g8ee g8ed g8ep | grep -qx "$1"; then
+                if ! printf '%s\n' g8es g8ee g8ed g8ep g8el g8eo-test-runner g8ee-test-runner g8ed-test-runner | grep -qx "$1"; then
                     echo "Error: Invalid component '$1'" >&2
-                    echo "Valid: g8es g8ee g8ed g8ep g8eo-test-runner g8ee-test-runner g8ed-test-runner " >&2
+                    echo "Valid: g8es g8ee g8ed g8ep g8el g8eo-test-runner g8ee-test-runner g8ed-test-runner " >&2
                     exit 1
                 fi
                 REBUILD_COMPONENTS+=("$1")
@@ -117,9 +118,9 @@ while [[ $# -gt 0 ]]; do
             COMMAND="rebuild"
             shift
             while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do
-                if ! printf '%s\n' g8es g8ee g8ed g8ep g8eo-test-runner g8ee-test-runner g8ed-test-runner | grep -qx "$1"; then
+                if ! printf '%s\n' g8es g8ee g8ed g8ep g8el g8eo-test-runner g8ee-test-runner g8ed-test-runner | grep -qx "$1"; then
                     echo "Error: Invalid component '$1'" >&2
-                    echo "Valid: g8es g8ee g8ed g8ep g8eo-test-runner g8ee-test-runner g8ed-test-runner " >&2
+                    echo "Valid: g8es g8ee g8ed g8ep g8ea g8eo-test-runner g8ee-test-runner g8ed-test-runner " >&2
                     exit 1
                 fi
                 REBUILD_COMPONENTS+=("$1")
@@ -514,6 +515,7 @@ if [[ "$COMMAND" == "up" ]]; then
     printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8ee  && _wait_healthy g8ee    120 2
     printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8ed && _wait_curl    g8ed "https://localhost/health" '"status"' 120 2
     printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8ep  && _wait_healthy g8ep    30  2
+    printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8el  && _wait_healthy g8el    300  5
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -573,6 +575,7 @@ if [[ "$COMMAND" == "rebuild" ]]; then
     printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8ee  && _wait_healthy g8ee    120 2
     printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8ed && _wait_curl    g8ed "https://localhost/health" '"status"' 30 2
     printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8ep && _wait_healthy g8ep    30  2
+    printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8el && _wait_healthy g8el    300  5
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

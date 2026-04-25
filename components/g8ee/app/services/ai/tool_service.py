@@ -103,15 +103,15 @@ class AIToolService:
         self,
         operator_command_service: "OperatorCommandService",
         investigation_service: InvestigationService,
+        reputation_data_service: ReputationDataService,
+        reputation_service: ReputationService,
+        stake_resolution_data_service: StakeResolutionDataService,
+        chat_task_manager: BackgroundTaskManager,
         web_search_provider: WebSearchProvider | None,
         platform_settings: G8eePlatformSettings | None = None,
         user_settings: G8eeUserSettings | None = None,
         whitelist_validator: CommandWhitelistValidator | None = None,
         blacklist_validator: CommandBlacklistValidator | None = None,
-        reputation_data_service: ReputationDataService | None = None,
-        reputation_service: ReputationService | None = None,
-        stake_resolution_data_service: StakeResolutionDataService | None = None,
-        chat_task_manager: BackgroundTaskManager | None = None,
     ):
         self.operator_command_service = operator_command_service
         self.investigation_service = investigation_service
@@ -243,22 +243,11 @@ class AIToolService:
 
     @property
     def user_settings(self) -> G8eeUserSettings | None:
-        """The configured user settings."""
         return self._user_settings
 
     @property
     def reputation_data_service(self) -> ReputationDataService:
-        """The configured ``ReputationDataService``.
-
-        Tribunal-path invocations require it; constructing an
-        ``AIToolService`` without one and then invoking the Tribunal is
-        a configuration error surfaced at the call site.
-        """
-        if self._reputation_data_service is None:
-            raise ConfigurationError(
-                "AIToolService constructed without reputation_data_service; "
-                "Tribunal path requires it. Wire it in service_factory."
-            )
+        """The configured ``ReputationDataService`` (required)."""
         return self._reputation_data_service
 
     @property
@@ -281,55 +270,18 @@ class AIToolService:
 
     @property
     def reputation_service(self) -> ReputationService:
-        """The configured ``ReputationService``.
-
-        Tribunal-path invocations require it; constructing an
-        ``AIToolService`` without one and then invoking the Tribunal is
-        a configuration error surfaced at the call site.
-        """
-        if self._reputation_service is None:
-            raise ConfigurationError(
-                "AIToolService constructed without reputation_service; "
-                "Tribunal path requires it. Wire it in service_factory."
-            )
+        """The configured ``ReputationService`` (required)."""
         return self._reputation_service
 
     @property
     def stake_resolution_data_service(self) -> StakeResolutionDataService:
-        """The configured ``StakeResolutionDataService``.
-
-        Tribunal-path invocations require it; constructing an
-        ``AIToolService`` without one and then invoking the Tribunal is
-        a configuration error surfaced at the call site.
-        """
-        if self._stake_resolution_data_service is None:
-            raise ConfigurationError(
-                "AIToolService constructed without stake_resolution_data_service; "
-                "Tribunal path requires it. Wire it in service_factory."
-            )
+        """The configured ``StakeResolutionDataService`` (required)."""
         return self._stake_resolution_data_service
 
     @property
     def chat_task_manager(self) -> BackgroundTaskManager:
-        """The configured ``BackgroundTaskManager``.
-
-        Tribunal-path invocations require it for detached reputation updates;
-        constructing an ``AIToolService`` without one and then invoking the
-        Tribunal is a configuration error surfaced at the call site.
-        """
-        if self._chat_task_manager is None:
-            raise ConfigurationError(
-                "AIToolService constructed without chat_task_manager; "
-                "Tribunal path requires it for detached updates. Wire it in service_factory."
-            )
+        """The configured ``BackgroundTaskManager`` (required)."""
         return self._chat_task_manager
-
-    @property
-    def reputation_resolution_enabled(self) -> bool:
-        """True if reputation resolution (GDD Phase 3) is enabled in settings."""
-        if not self._platform_settings:
-            return False
-        return self._platform_settings.reputation.resolution_enabled
 
     @property
     def whitelist_validator(self) -> CommandWhitelistValidator:

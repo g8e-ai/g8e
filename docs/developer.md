@@ -38,6 +38,7 @@ The platform is a stateless relay. Raw command output and file contents stay on 
 3.  **g8ee (Python/FastAPI):** The AI Engine. Manages chat pipelines, AI reasoning, tool orchestration, and coordinates with g8es for persistence.
 4.  **g8eo (Go):** The Operator reference implementation. Executes commands on target systems, enforces LFAA, and reports results via pub/sub. Any client following the g8e events protocol can act as an Operator.
 5.  **g8es (Go/SQLite):** A standalone Go service providing persistence (SQLite document store), KV cache, and pub/sub messaging. The g8eo binary can run in multiple modes: standard operator mode (executes commands on target systems), listen mode (acts as the platform's central persistence and pub/sub broker), or OpenClaw node host mode (connects to an OpenClaw Gateway).
+6.  **g8el (llama.cpp):** Optional local LLM inference server. Provides OpenAI-compatible API for running quantized models (e.g., Gemma 4 E2B) using the llama.cpp library. Integrates with g8ee as the LLAMACPP provider.
 
 ### Communication Flow
 - **g8ed ↔ g8ee:** Synchronous HTTP for orchestration and state management.

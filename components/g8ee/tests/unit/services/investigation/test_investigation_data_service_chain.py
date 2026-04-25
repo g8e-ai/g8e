@@ -191,7 +191,7 @@ async def test_first_entry_uses_genesis_hash(investigation_data_service):
 
 @pytest.mark.asyncio
 async def test_backward_compat_without_hash_fields(investigation_data_service):
-    """Entries without hash fields are handled gracefully for backward compatibility."""
+    """Entries without hash fields are rejected - no backward compatibility for hash fields."""
     # Create an investigation
     request = InvestigationCreateRequest(
         case_id="test-case",
@@ -200,7 +200,7 @@ async def test_backward_compat_without_hash_fields(investigation_data_service):
         user_id="test-user",
     )
     investigation = await investigation_data_service.create_investigation(request)
-    
+
     # Manually add an entry without hash fields (simulating old data)
     await investigation_data_service.cache.append_to_array(
         collection=investigation_data_service.collection,
@@ -215,19 +215,8 @@ async def test_backward_compat_without_hash_fields(investigation_data_service):
         }],
         additional_updates={},
     )
-    
-    # New message should still work
-    metadata = ConversationMessageMetadata(event_type=EventType.INVESTIGATION_CHAT_MESSAGE_USER)
-    await investigation_data_service.add_chat_message(
-        investigation_id=investigation.id,
-        sender="user.chat",
-        content="New message with hash",
-        metadata=metadata,
-    )
-    
-    # The new message should have hash fields
-    updated_investigation = await investigation_data_service.get_investigation(investigation.id)
-    new_entry = updated_investigation.conversation_history[-1]
-    
-    assert new_entry.entry_hash is not None
-    assert new_entry.prev_hash is not None
+
+    # Attempting to retrieve the investigation should fail validation
+    # because old entries lack required hash fields
+    with pytest.raises(Exception):  # Pydantic ValidationError
+        await investigation_data_service.get_investigation(investigation.id)

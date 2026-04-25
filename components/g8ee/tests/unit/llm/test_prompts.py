@@ -60,7 +60,9 @@ def enriched_investigation():
     msg = ConversationHistoryMessage(
         sender=EventType.EVENT_SOURCE_USER_CHAT,
         content="Help me with my server",
-        metadata=ConversationMessageMetadata()
+        metadata=ConversationMessageMetadata(),
+        prev_hash="0" * 64,
+        entry_hash="0" * 64,
     )
     return EnrichedInvestigationContext(
         case_id="case_123",

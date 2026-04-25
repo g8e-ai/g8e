@@ -16,9 +16,8 @@ Integration test for the reputation resolution pipeline (GDD Phase 3).
 
 Verifies that:
 1. Post-execution hook in agent_tool_loop.py correctly identifies Tribunal commands.
-2. Reputation resolution is gated by REPUTATION_RESOLUTION_ENABLED.
-3. Detached tasks are scheduled and execute resolution.
-4. SSE events (STATE_UPDATED, SLASH_TIERN) are emitted on resolution.
+2. Detached tasks are scheduled and execute resolution.
+3. SSE events (STATE_UPDATED, SLASH_TIERN) are emitted on resolution.
 """
 
 import pytest
@@ -54,17 +53,15 @@ class TestReputationPipelineIntegration:
     @pytest.fixture
     def mock_tool_executor(self):
         executor = MagicMock()
-        executor.reputation_resolution_enabled = True
         executor.reputation_service = AsyncMock()
         executor.chat_task_manager = MagicMock()
         
         # Capture the detached task for manual execution/awaiting
         detached_tasks = []
-        def track_detached(coro, name=None):
-            task = asyncio.create_task(coro)
+        def track_detached(task_id, task):
             detached_tasks.append(task)
             return task
-        
+
         executor.chat_task_manager.track_detached.side_effect = track_detached
         executor._detached_tasks = detached_tasks
         
@@ -229,50 +226,6 @@ class TestReputationPipelineIntegration:
         published = [e.event_type for e in event_svc._published_events]
         assert EventType.REPUTATION_STATE_UPDATED in published
         assert EventType.REPUTATION_SLASH_TIER2 in published
-
-    async def test_resolution_disabled_skips_hook(self, mock_tool_executor):
-        """When REPUTATION_RESOLUTION_ENABLED is False, no resolution should occur."""
-        mock_tool_executor.reputation_resolution_enabled = False
-        inputs, _ = make_agent_run_args()
-        event_svc = make_g8ed_event_service()
-        
-        tool_call = ToolCall(id="call_789", name=OperatorToolName.RUN_COMMANDS, args={"request": "ls"})
-        gen_result = CommandGenerationResult(
-            correlation_id="tribunal_789",
-            outcome=CommandGenerationOutcome.VERIFIED,
-            final_command="ls",
-            audit_reason="OK",
-            request="ls"
-        )
-        exec_result = CommandExecutionResult(success=True)
-        
-        mock_tool_executor.execute_tool_call = AsyncMock(return_value=exec_result)
-
-        with patch("app.services.ai.agent_tool_loop.TribunalInvoker.run", new_callable=AsyncMock) as mock_tribunal:
-            mock_tribunal.return_value = (MagicMock(), gen_result)
-            await orchestrate_tool_execution(
-                tool_call=tool_call,
-                tool_executor=mock_tool_executor,
-                investigation=EnrichedInvestigationContext(
-                    id="inv",
-                    case_id="case",
-                    user_id="user",
-                    sentinel_mode=False
-                ),
-                g8e_context=G8eHttpContext(
-                    web_session_id="sess",
-                    user_id="user",
-                    case_id="case",
-                    investigation_id="inv",
-                    source_component=ComponentName.G8EE
-                ),
-                g8ed_event_service=event_svc,
-                request_settings=inputs.request_settings
-            )
-
-        # Verify no tasks were scheduled
-        assert len(mock_tool_executor._detached_tasks) == 0
-        mock_tool_executor.reputation_service.resolve_stakes.assert_not_called()
 
     async def test_non_tribunal_tool_skips_resolution(self, mock_tool_executor):
         """Non-Tribunal tools (e.g. file_read) should never trigger reputation resolution."""

@@ -194,6 +194,10 @@ async def test_handle_get_command_constraints_both_disabled(
     tool_service = AIToolService(
         operator_command_service=mock_operator_command_service,
         investigation_service=mock_investigation_service,
+        reputation_data_service=AsyncMock(),
+        reputation_service=AsyncMock(),
+        stake_resolution_data_service=AsyncMock(),
+        chat_task_manager=MagicMock(),
         web_search_provider=None,
         platform_settings=None,
         user_settings=mock_user_settings_disabled,
@@ -235,6 +239,10 @@ async def test_handle_get_command_constraints_whitelist_only(
     tool_service = AIToolService(
         operator_command_service=mock_operator_command_service,
         investigation_service=mock_investigation_service,
+        reputation_data_service=AsyncMock(),
+        reputation_service=AsyncMock(),
+        stake_resolution_data_service=AsyncMock(),
+        chat_task_manager=MagicMock(),
         web_search_provider=None,
         platform_settings=None,
         user_settings=mock_user_settings_whitelist_only,
@@ -276,6 +284,10 @@ async def test_handle_get_command_constraints_blacklist_only(
     tool_service = AIToolService(
         operator_command_service=mock_operator_command_service,
         investigation_service=mock_investigation_service,
+        reputation_data_service=AsyncMock(),
+        reputation_service=AsyncMock(),
+        stake_resolution_data_service=AsyncMock(),
+        chat_task_manager=MagicMock(),
         web_search_provider=None,
         platform_settings=None,
         user_settings=mock_user_settings_blacklist_only,
@@ -318,9 +330,14 @@ async def test_handle_get_command_constraints_both_enabled(
     mock_blacklist_validator,
 ):
     """Test handler returns both whitelist and blacklist data when both enabled."""
+    from unittest.mock import AsyncMock, MagicMock
     tool_service = AIToolService(
         operator_command_service=mock_operator_command_service,
         investigation_service=mock_investigation_service,
+        reputation_data_service=AsyncMock(),
+        reputation_service=AsyncMock(),
+        stake_resolution_data_service=AsyncMock(),
+        chat_task_manager=MagicMock(),
         web_search_provider=None,
         platform_settings=None,
         user_settings=mock_user_settings_both,
@@ -475,6 +492,10 @@ async def test_get_tools_includes_get_command_constraints(
     tool_service = AIToolService(
         operator_command_service=MagicMock(),
         investigation_service=MagicMock(),
+        reputation_data_service=AsyncMock(),
+        reputation_service=AsyncMock(),
+        stake_resolution_data_service=AsyncMock(),
+        chat_task_manager=MagicMock(),
         web_search_provider=None,
         platform_settings=None,
         user_settings=mock_user_settings_both,

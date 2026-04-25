@@ -185,9 +185,17 @@ class ConversationHistoryMessage(G8eIdentifiableModel):
     content: str = Field(default="", description="Message content")
     timestamp: UTCDatetime = Field(default_factory=now, description="When the message was sent")
     metadata: ConversationMessageMetadata = Field(default_factory=ConversationMessageMetadata, description="Message metadata")
-    prev_hash: str | None = Field(default=None, description="Hash of previous entry in the chain (hex SHA256, 64 chars)")
+    prev_hash: str = Field(..., description="Hash of previous entry in the chain (hex SHA256, 64 chars)")
     entry_hash: str | None = Field(default=None, description="Hash of this entry (hex SHA256, 64 chars)")
-    hash: str | None = Field(default=None, description="Legacy hash field - deprecated, use entry_hash instead")
+
+    @field_validator("entry_hash", mode="after")
+    @classmethod
+    def validate_entry_hash(cls, v):
+        if v is None:
+            raise ValueError("entry_hash must be computed and set before use")
+        if len(v) != 64:
+            raise ValueError("entry_hash must be 64 characters (hex SHA256)")
+        return v
 
     def calculate_hash(self, previous_hash: str | None = None) -> str:
         """Calculate the cryptographic hash for this block (message).
@@ -284,8 +292,17 @@ class InvestigationHistoryEntry(G8eBaseModel):
     summary: str = Field(..., description="Brief summary of what happened")
     investigation_attempt: G8eBaseModel | None = Field(default=None, description="Investigation attempt data")
     details: ConversationMessageMetadata = Field(default_factory=ConversationMessageMetadata, description="Detailed event information")
-    prev_hash: str | None = Field(default=None, description="Hash of previous entry in the chain (hex SHA256, 64 chars)")
+    prev_hash: str = Field(..., description="Hash of previous entry in the chain (hex SHA256, 64 chars)")
     entry_hash: str | None = Field(default=None, description="Hash of this entry (hex SHA256, 64 chars)")
+
+    @field_validator("entry_hash", mode="after")
+    @classmethod
+    def validate_entry_hash(cls, v):
+        if v is None:
+            raise ValueError("entry_hash must be computed and set before use")
+        if len(v) != 64:
+            raise ValueError("entry_hash must be 64 characters (hex SHA256)")
+        return v
 
 
 class InvestigationModel(G8eIdentifiableModel):
@@ -419,8 +436,9 @@ class InvestigationModel(G8eIdentifiableModel):
         )
 
         entry_dict = entry.model_dump(mode="json", exclude={"entry_hash"})
-        entry.entry_hash = compute_entry_hash(entry_dict, prev_hash)
+        computed_hash = compute_entry_hash(entry_dict, prev_hash)
 
+        entry = entry.model_copy(update={"entry_hash": computed_hash})
         self.history_trail.append(entry)
         self.update_timestamp()
 

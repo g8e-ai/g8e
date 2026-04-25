@@ -40,6 +40,7 @@ const PROVIDER_KEY_FIELDS = {
     anthropic: 'anthropic_api_key',
     openai:    'openai_api_key',
     ollama:    'ollama_url',
+    llamacpp:  null,
 };
 
 const PROVIDER_LABELS = {
@@ -47,6 +48,7 @@ const PROVIDER_LABELS = {
     anthropic: 'Anthropic',
     openai:    'OpenAI',
     ollama:    'Ollama',
+    llamacpp:  'g8el',
 };
 
 const PROVIDER_DEFAULT_MODELS = {
@@ -69,6 +71,11 @@ const PROVIDER_DEFAULT_MODELS = {
         primary: PROVIDER_MODELS.ollama?.all?.find(m => m.label === 'Qwen 3.5 122B')?.id,
         assistant: PROVIDER_MODELS.ollama?.all?.find(m => m.label === 'GLM 5.1')?.id,
         lite: PROVIDER_MODELS.ollama?.all?.find(m => m.label === 'Llama 3.2 3B')?.id,
+    },
+    llamacpp: {
+        primary: PROVIDER_MODELS.llamacpp?.all?.find(m => m.label === 'Gemma 4 E2B (llama.cpp)')?.id,
+        assistant: PROVIDER_MODELS.llamacpp?.all?.find(m => m.label === 'Gemma 4 E2B (llama.cpp)')?.id,
+        lite: PROVIDER_MODELS.llamacpp?.all?.find(m => m.label === 'Gemma 4 E2B (llama.cpp)')?.id,
     },
 };
 
@@ -141,6 +148,7 @@ export class SetupPage {
         this._initModelDropdowns();
         this._updateProviderStates();
         this._updateNav();
+        this._preselectLlamacppModels();
     }
 
     // ---------------------------------------------------------------------------
@@ -325,6 +333,10 @@ export class SetupPage {
     _getActiveProviders() {
         const active = [];
         for (const [provider, fieldId] of Object.entries(PROVIDER_KEY_FIELDS)) {
+            if (provider === 'llamacpp') {
+                active.push(provider);
+                continue;
+            }
             const el = document.getElementById(fieldId);
             if (el && el.value.trim()) active.push(provider);
         }
@@ -592,6 +604,27 @@ export class SetupPage {
         const assistant = this._selectedModels.assistant;
         const lite = this._selectedModels.lite;
         return !!(primary && assistant && lite);
+    }
+
+    _preselectLlamacppModels() {
+        const defaults = PROVIDER_DEFAULT_MODELS.llamacpp;
+        if (!defaults) return;
+
+        const roles = ['primary', 'assistant', 'lite'];
+        roles.forEach(role => {
+            if (defaults[role]) {
+                this._selectedModels[role] = defaults[role];
+                const dropdown = document.getElementById(`${role}_model`);
+                const text = dropdown?.querySelector('.llm-model-dropdown__text');
+                if (text) {
+                    const model = PROVIDER_MODELS.llamacpp?.all?.find(m => m.id === defaults[role]);
+                    if (model) text.textContent = model.label;
+                }
+            }
+        });
+
+        this._updateModelDropdowns();
+        this._updateNav();
     }
 
     // ---------------------------------------------------------------------------

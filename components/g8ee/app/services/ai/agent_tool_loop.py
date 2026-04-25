@@ -18,6 +18,7 @@ Function call execution — tool display metadata, grounding merge, single
 tool call dispatch, and sequential turn-level execution loop.
 """
 
+import asyncio
 import logging
 from typing import Any, List, Dict, Tuple
 from collections.abc import AsyncGenerator
@@ -360,7 +361,6 @@ async def orchestrate_tool_execution(
     if (
         gen_result is not None
         and tool_name == OperatorToolName.RUN_COMMANDS
-        and tool_executor.reputation_resolution_enabled
         and isinstance(result, CommandExecutionResult)
     ):
         # Schedule fire-and-forget reputation resolution
@@ -392,10 +392,9 @@ async def orchestrate_tool_execution(
             except Exception as e:
                 logger.error("[REPUTATION] Failed to resolve stakes: %s", e, exc_info=True)
 
-        tool_executor.chat_task_manager.track_detached(
-            _resolve_and_emit(),
-            name=f"reputation_resolution_{execution_id}"
-        )
+        task_id = f"reputation_resolution_{execution_id}"
+        task = asyncio.create_task(_resolve_and_emit(), name=task_id)
+        tool_executor.chat_task_manager.track_detached(task_id, task)
 
     logger.info(
         "[AGENT] Function result: name=%s success=%s execution_id=%s error_type=%s",

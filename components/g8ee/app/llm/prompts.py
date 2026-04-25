@@ -396,18 +396,18 @@ def build_modular_system_prompt(
     """
     Build system prompt using modular architecture.
 
-    Section order (Gemini 3 best practices - context first, instructions last):
-      1. identity   — who the agent is
-      2. system_context (injected from operator(s))
-      3. sentinel_mode (if active)
-      4. triage_context (request_posture from Triage, if available)
-      5. investigation_context
-      6. learned_context (user + case memories)
-      7. safety     — absolute forbidden operations
-      8. loyalty    — mission-over-moment doctrine
-      9. dissent    — warning protocol, denial memory, escalation response
-      10. capabilities / execution / tools (mode-dependent)
-      11. response_constraints
+    Section order (static platform guidelines first, dynamic content last):
+      1. identity   — who the agent is (static)
+      2. safety     — absolute forbidden operations (static)
+      3. loyalty    — mission-over-moment doctrine (static)
+      4. dissent    — warning protocol, denial memory, escalation response (static)
+      5. capabilities / execution / tools (mode-dependent, static)
+      6. response_constraints (static)
+      7. system_context (injected from operator(s), dynamic)
+      8. sentinel_mode (if active, dynamic)
+      9. triage_context (request_posture from Triage, if available, dynamic)
+      10. investigation_context (dynamic)
+      11. learned_context (user + case memories, dynamic)
 
     Args:
         operator_bound: Whether Operator is connected for command execution
@@ -432,7 +432,44 @@ def build_modular_system_prompt(
     else:
         sections.append(load_prompt(PromptFile.CORE_IDENTITY))
 
-    # Context blocks first (Gemini 3 best practices)
+    # Static platform guidelines and core persona instructions at the top
+    sections.append(load_prompt(PromptFile.CORE_SAFETY))
+    sections.append(load_prompt(PromptFile.CORE_LOYALTY))
+    sections.append(load_prompt(PromptFile.CORE_DISSENT))
+
+    # Determine if any operator is a cloud operator for mode selection
+    is_cloud_operator = False
+    if system_context:
+        if isinstance(system_context, list):
+            is_cloud_operator = any(ctx.is_cloud_operator for ctx in system_context if ctx)
+        else:
+            is_cloud_operator = system_context.is_cloud_operator
+
+    mode_prompts = load_mode_prompts(
+        operator_bound,
+        is_cloud_operator=is_cloud_operator,
+        g8e_web_search_available=g8e_web_search_available,
+    )
+
+    if mode_prompts.get(PromptSection.CAPABILITIES):
+        sections.append(mode_prompts[PromptSection.CAPABILITIES])
+    if mode_prompts.get(PromptSection.EXECUTION):
+        sections.append(mode_prompts[PromptSection.EXECUTION])
+    include_tools_section = bool(mode_prompts.get(PromptSection.TOOLS)) and (
+        operator_bound or g8e_web_search_available
+    )
+    logger.info(
+        "[PROMPT] tools_section: include=%s operator_bound=%s g8e_web_search_available=%s",
+        include_tools_section, operator_bound, g8e_web_search_available
+    )
+    if include_tools_section:
+        sections.append(mode_prompts[PromptSection.TOOLS])
+
+    response_constraints = build_response_constraints_section()
+    if response_constraints:
+        sections.append(response_constraints)
+
+    # Dynamic variables, user data, and context at the bottom
     if system_context:
         system_parts = ["<system_context>"]
 
@@ -534,43 +571,6 @@ def build_modular_system_prompt(
         if learned_section:
             sections.append(learned_section)
 
-    # Safety and execution instructions at the end (Gemini 3 best practices)
-    sections.append(load_prompt(PromptFile.CORE_SAFETY))
-    sections.append(load_prompt(PromptFile.CORE_LOYALTY))
-    sections.append(load_prompt(PromptFile.CORE_DISSENT))
-
-    # Determine if any operator is a cloud operator for mode selection
-    is_cloud_operator = False
-    if system_context:
-        if isinstance(system_context, list):
-            is_cloud_operator = any(ctx.is_cloud_operator for ctx in system_context if ctx)
-        else:
-            is_cloud_operator = system_context.is_cloud_operator
-    
-    mode_prompts = load_mode_prompts(
-        operator_bound,
-        is_cloud_operator=is_cloud_operator,
-        g8e_web_search_available=g8e_web_search_available,
-    )
-
-    if mode_prompts.get(PromptSection.CAPABILITIES):
-        sections.append(mode_prompts[PromptSection.CAPABILITIES])
-    if mode_prompts.get(PromptSection.EXECUTION):
-        sections.append(mode_prompts[PromptSection.EXECUTION])
-    include_tools_section = bool(mode_prompts.get(PromptSection.TOOLS)) and (
-        operator_bound or g8e_web_search_available
-    )
-    logger.info(
-        "[PROMPT] tools_section: include=%s operator_bound=%s g8e_web_search_available=%s",
-        include_tools_section, operator_bound, g8e_web_search_available
-    )
-    if include_tools_section:
-        sections.append(mode_prompts[PromptSection.TOOLS])
-
-    response_constraints = build_response_constraints_section()
-    if response_constraints:
-        sections.append(response_constraints)
-
     full_prompt = "\n".join(sections)
 
     section_labels = [
@@ -585,6 +585,7 @@ def build_modular_system_prompt(
         section_labels.append(PromptSection.EXECUTION)
     if include_tools_section:
         section_labels.append(PromptSection.TOOLS)
+    section_labels.append(PromptSection.RESPONSE_CONSTRAINTS)
     if system_context:
         section_labels.append(PromptSection.SYSTEM_CONTEXT)
     if investigation and investigation.sentinel_mode is True:
@@ -593,7 +594,6 @@ def build_modular_system_prompt(
         section_labels.append(PromptSection.TRIAGE_CONTEXT)
     if investigation:
         section_labels.append(PromptSection.INVESTIGATION_CONTEXT)
-    section_labels.append(PromptSection.RESPONSE_CONSTRAINTS)
     if user_memories or case_memories:
         section_labels.append(PromptSection.LEARNED_CONTEXT)
 

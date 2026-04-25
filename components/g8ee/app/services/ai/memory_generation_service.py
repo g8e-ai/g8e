@@ -144,29 +144,42 @@ class MemoryGenerationService:
         memory_persona = get_agent_persona("codex")
         system_instructions = f"You are analyzing a technical support conversation for case: {memory.case_title}. {memory_persona.get_system_prompt()}"
 
-        assistant_model = settings.llm.resolved_assistant_model
-        if not assistant_model:
-            logger.warning("[MEMORY-GEN] No assistant_model configured, skipping AI memory update")
+        from app.constants import LLMProvider
+        from app.llm import get_llm_provider
+
+        # Determine which model to use based on configured lite_provider
+        if settings.llm.lite_provider == LLMProvider.LLAMACPP:
+            lite_model = settings.llm.llamacpp_assistant_model or settings.llm.lite_model or settings.llm.resolved_assistant_model
+        elif settings.llm.lite_provider == LLMProvider.OLLAMA:
+            lite_model = settings.llm.ollama_assistant_model or settings.llm.lite_model or settings.llm.resolved_assistant_model
+        else:
+            lite_model = settings.llm.lite_model or settings.llm.resolved_assistant_model
+
+        if not lite_model:
+            logger.warning("[MEMORY-GEN] No lite_model configured, skipping AI memory update")
             return
 
-        provider = get_llm_provider(settings.llm, is_assistant=True)
+        # Use the configured lite_provider, fallback to llamacpp if not configured
+        provider_to_use = settings.llm.lite_provider or LLMProvider.LLAMACPP
+        llm_settings_copy = settings.llm.model_copy(update={"assistant_provider": provider_to_use})
+        provider = get_llm_provider(llm_settings_copy, is_assistant=True)
 
         config = AIGenerationConfigBuilder.build_assistant_settings(
-            model=assistant_model,
+            model=lite_model,
             max_tokens=None,
             system_instructions=system_instructions,
             response_format=types.ResponseFormat.from_pydantic_schema(MemoryAnalysis.model_json_schema()),
         )
         try:
             response = await provider.generate_content_assistant(
-                model=assistant_model,
+                model=lite_model,
                 contents=contents,
                 assistant_llm_settings=config,
             )
             if response.text is None:
                 raise OllamaEmptyResponseError(
                     "LLM returned empty response",
-                    model=assistant_model,
+                    model=lite_model,
                     channel="assistant",
                     done_reason="stop",
                     prompt_eval_count=None,

@@ -179,6 +179,8 @@ def create_conversation_message(
     message_id: str | None = None,
     timestamp: datetime | None = None,
     metadata: ConversationMessageMetadata | None = None,
+    prev_hash: str = "0" * 64,
+    entry_hash: str = "0" * 64,
 ) -> ConversationHistoryMessage:
     """Create a ConversationHistoryMessage for testing."""
     return ConversationHistoryMessage(
@@ -187,6 +189,8 @@ def create_conversation_message(
         content=content,
         timestamp=timestamp or now(),
         metadata=metadata or ConversationMessageMetadata(),
+        prev_hash=prev_hash,
+        entry_hash=entry_hash,
     )
 
 

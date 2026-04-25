@@ -42,19 +42,13 @@ def test_conversation_history_message_with_hash_fields():
 
 
 def test_conversation_history_message_without_hash_fields():
-    """ConversationHistoryMessage defaults prev_hash and entry_hash to None for backward compatibility."""
-    message = ConversationHistoryMessage(
-        sender="user.chat",
-        content="Test message",
-    )
-    
-    assert message.prev_hash is None
-    assert message.entry_hash is None
-    
-    # Test serialization: exclude_none=True is the model default, so None hash fields are stripped.
-    dumped = message.model_dump(mode="json")
-    assert "prev_hash" not in dumped
-    assert "entry_hash" not in dumped
+    """ConversationHistoryMessage requires prev_hash and entry_hash (no backward compat in ephemeral architecture)."""
+    import pytest
+    with pytest.raises(ValueError, match="prev_hash|entry_hash"):
+        ConversationHistoryMessage(
+            sender="user.chat",
+            content="Test message",
+        )
 
 
 def test_conversation_history_message_round_trip_with_hashes():
@@ -78,7 +72,8 @@ def test_conversation_history_message_round_trip_with_hashes():
 
 
 def test_conversation_history_message_round_trip_without_hashes():
-    """ConversationHistoryMessage round-trips correctly without hash fields (old data)."""
+    """ConversationHistoryMessage requires hash fields - old data without hashes fails validation."""
+    import pytest
     original_data = {
         "id": "test-id",
         "sender": "user.chat",
@@ -87,12 +82,8 @@ def test_conversation_history_message_round_trip_without_hashes():
         "metadata": {},
     }
     
-    loaded = ConversationHistoryMessage.model_validate(original_data)
-    
-    assert loaded.sender == "user.chat"
-    assert loaded.content == "Old message"
-    assert loaded.prev_hash is None
-    assert loaded.entry_hash is None
+    with pytest.raises(ValueError, match="prev_hash|entry_hash"):
+        ConversationHistoryMessage.model_validate(original_data)
 
 
 def test_investigation_history_entry_with_hash_fields():
@@ -118,21 +109,15 @@ def test_investigation_history_entry_with_hash_fields():
 
 
 def test_investigation_history_entry_without_hash_fields():
-    """InvestigationHistoryEntry defaults prev_hash and entry_hash to None for backward compatibility."""
-    entry = InvestigationHistoryEntry(
-        attempt_number=1,
-        event_type=EventType.INVESTIGATION_CREATED,
-        actor=ComponentName.G8EE,
-        summary="Test entry",
-    )
-    
-    assert entry.prev_hash is None
-    assert entry.entry_hash is None
-    
-    # exclude_none=True default strips None hash fields from output.
-    dumped = entry.model_dump(mode="json")
-    assert "prev_hash" not in dumped
-    assert "entry_hash" not in dumped
+    """InvestigationHistoryEntry requires prev_hash and entry_hash (no backward compat in ephemeral architecture)."""
+    import pytest
+    with pytest.raises(ValueError, match="prev_hash|entry_hash"):
+        InvestigationHistoryEntry(
+            attempt_number=1,
+            event_type=EventType.INVESTIGATION_CREATED,
+            actor=ComponentName.G8EE,
+            summary="Test entry",
+        )
 
 
 def test_investigation_history_entry_round_trip_with_hashes():
@@ -159,7 +144,8 @@ def test_investigation_history_entry_round_trip_with_hashes():
 
 
 def test_investigation_history_entry_round_trip_without_hashes():
-    """InvestigationHistoryEntry round-trips correctly without hash fields (old data)."""
+    """InvestigationHistoryEntry requires hash fields - old data without hashes fails validation."""
+    import pytest
     original_data = {
         "attempt_number": 1,
         "timestamp": "2024-01-01T00:00:00Z",
@@ -169,14 +155,8 @@ def test_investigation_history_entry_round_trip_without_hashes():
         "details": {},
     }
     
-    loaded = InvestigationHistoryEntry.model_validate(original_data)
-    
-    assert loaded.attempt_number == 1
-    assert loaded.event_type == EventType.INVESTIGATION_CREATED
-    assert loaded.actor == ComponentName.G8EE
-    assert loaded.summary == "Old entry"
-    assert loaded.prev_hash is None
-    assert loaded.entry_hash is None
+    with pytest.raises(ValueError, match="prev_hash|entry_hash"):
+        InvestigationHistoryEntry.model_validate(original_data)
 
 
 def test_hash_field_validation_length():
@@ -195,13 +175,12 @@ def test_hash_field_validation_length():
 
 
 def test_hash_field_accepts_none():
-    """Hash fields accept None for backward compatibility."""
-    message = ConversationHistoryMessage(
-        sender="user.chat",
-        content="Test",
-        prev_hash=None,
-        entry_hash=None,
-    )
-    
-    assert message.prev_hash is None
-    assert message.entry_hash is None
+    """Hash fields do not accept None (no backward compat in ephemeral architecture)."""
+    import pytest
+    with pytest.raises(ValueError):
+        ConversationHistoryMessage(
+            sender="user.chat",
+            content="Test",
+            prev_hash=None,
+            entry_hash=None,
+        )

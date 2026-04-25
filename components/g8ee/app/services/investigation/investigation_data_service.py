@@ -186,16 +186,19 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
             return True
 
         # Get previous hash from last entry in conversation history.
-        # Fall back to genesis if there is no prior entry, or if the prior entry
-        # is legacy data without an entry_hash (backward compat).
+        # All entries must have entry_hash - no legacy data support.
         investigation = await self.get_investigation(investigation_id)
-        prev_hash = None
-        if investigation:
-            if investigation.conversation_history:
-                last_entry = investigation.conversation_history[-1]
-                prev_hash = last_entry.entry_hash
-            if not prev_hash:
-                prev_hash = genesis_hash(investigation.id, investigation.created_at.isoformat())
+        if not investigation:
+            raise ValueError(f"Investigation {investigation_id} not found")
+        
+        if not investigation.conversation_history:
+            # First entry - use genesis hash
+            prev_hash = genesis_hash(investigation.id, investigation.created_at.isoformat())
+        else:
+            last_entry = investigation.conversation_history[-1]
+            if not last_entry.entry_hash:
+                raise ValueError(f"Previous entry in conversation history lacks entry_hash - chain integrity violation for investigation {investigation_id}")
+            prev_hash = last_entry.entry_hash
 
         message = ConversationHistoryMessage(
             sender=sender,
@@ -206,7 +209,8 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
 
         # Compute entry hash
         entry_dict = message.model_dump(mode="json", exclude={"entry_hash"})
-        message.entry_hash = compute_entry_hash(entry_dict, prev_hash)
+        computed_hash = compute_entry_hash(entry_dict, prev_hash)
+        message = message.model_copy(update={"entry_hash": computed_hash})
 
         await self.cache.append_to_array(
             collection=self.collection,

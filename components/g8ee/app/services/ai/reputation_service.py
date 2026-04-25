@@ -23,9 +23,7 @@ Pure-function classifier and EMA helper plus an async dispatcher that:
 
 The slashing classifier is intentionally side-effect-free so it can be
 tested exhaustively against the §14.5 table. The writer is the only side
-effect carrier and is gated on the env flag ``REPUTATION_RESOLUTION_ENABLED``
-at the call site (Phase 3 Slice B will add the env-flag wiring; the dispatcher
-itself is always safe to invoke).
+effect carrier and is invoked from the call site in `agent_tool_loop.py`.
 
 Vortex (GDD §3) is preserved: this module reads `reputation_state` (sole
 post-execution writer) but is not visible to any persona prompt builder.

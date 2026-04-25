@@ -88,6 +88,49 @@ services:
     depends_on:
       g8es:
         condition: service_healthy
+      g8el:
+        condition: service_healthy
+
+  # g8el (g8el) - llama.cpp inference server
+  g8el:
+    build:
+      context: .
+      dockerfile: ./components/g8el/Dockerfile
+      labels:
+        - "io.g8e.managed=true"
+    container_name: g8el
+    labels:
+      - "io.g8e.managed=true"
+    restart: unless-stopped
+    ports:
+      - "11444:11444"
+    volumes:
+      - ./components/g8ee/models:/models
+    environment:
+      - G8EL_MODEL_NAME=google_gemma-4-E2B-it-Q4_K_M.gguf
+      - G8EL_MODEL_URL=https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf
+      - G8EL_CONTEXT_SIZE=8192
+      - G8EL_THREADS=8
+      - G8EL_HOST=0.0.0.0
+      - G8EL_PORT=11444
+      - OMP_NUM_THREADS=8
+    cpuset: "0-7"
+    ulimits:
+      memlock: -1
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      g8e-network:
+        aliases:
+          - g8el
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:11444/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 300s
 
   # g8ed (g8ed) - Web frontend + single external entry point
   #

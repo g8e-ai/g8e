@@ -41,7 +41,7 @@ All tests use mocked pubsub and deterministic payloads to verify AI tool handlin
 
 import pytest
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 from app.constants import (
     InvestigationStatus,
@@ -118,6 +118,10 @@ def tool_service(
     return AIToolService(
         operator_command_service=mock_operator_command_service,
         investigation_service=mock_investigation_service,
+        reputation_data_service=AsyncMock(),
+        reputation_service=AsyncMock(),
+        stake_resolution_data_service=AsyncMock(),
+        chat_task_manager=MagicMock(),
         web_search_provider=mock_web_search_provider,
     )
 
@@ -910,6 +914,10 @@ class TestNetworkSearchTools:
         tool_service_no_search = AIToolService(
             operator_command_service=AsyncMock(spec=OperatorCommandService),
             investigation_service=AsyncMock(spec=InvestigationService),
+            reputation_data_service=AsyncMock(),
+            reputation_service=AsyncMock(),
+            stake_resolution_data_service=AsyncMock(),
+            chat_task_manager=MagicMock(),
             web_search_provider=None,  # No provider
         )
         

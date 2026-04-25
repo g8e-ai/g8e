@@ -12,7 +12,7 @@
 # limitations under the License.
 
 import pytest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 from app.services.infra.settings_service import SettingsService
 from app.constants.collections import (
     PLATFORM_SETTINGS_DOC,
@@ -235,7 +235,7 @@ class TestG8eeSettingsOverlayIntegration:
         assert user_settings.llm.primary_model == "gpt-4o"
         assert user_settings.llm.openai_api_key == "user-key"
 
-    async def test_overlay_carries_auditor_hmac_key_from_platform_settings(self, settings_service, cache_service):
+    async def test_overlay_carries_auditor_hmac_key_from_platform_settings(self, cache_service):
         """Overlay must propagate ``auditor_hmac_key`` from the platform DB
         document onto local bootstrap settings when the bootstrap volume
         has not surfaced one (e.g. on a g8ee process that started before
@@ -261,6 +261,18 @@ class TestG8eeSettingsOverlayIntegration:
             "updated_at": "2026-01-01T00:00:00Z",
         }
         cache_service.get_document.return_value = platform_data
+
+        # Stub bootstrap so it reports no on-disk secrets; this isolates the
+        # platform-DB-overlay path described in the docstring.
+        bootstrap = MagicMock()
+        bootstrap.load_internal_auth_token.return_value = None
+        bootstrap.load_session_encryption_key.return_value = None
+        bootstrap.load_auditor_hmac_key.return_value = None
+        bootstrap.load_ca_cert_path.return_value = None
+        settings_service = SettingsService(
+            cache_aside_service=cache_service,
+            bootstrap_service=bootstrap,
+        )
 
         settings = await settings_service.get_platform_settings()
 

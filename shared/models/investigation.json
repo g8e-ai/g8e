@@ -175,12 +175,12 @@
         },
         "prev_hash": {
           "type": "string",
-          "required": false,
+          "required": true,
           "description": "Hash of previous entry in the chain (hex SHA256, 64 chars). Forms the hash chain for ledger integrity."
         },
         "entry_hash": {
           "type": "string",
-          "required": false,
+          "required": true,
           "description": "Hash of this entry (hex SHA256, 64 chars). Computed from entry content plus prev_hash."
         },
         "metadata": {
@@ -233,12 +233,12 @@
         "details": { "type": "object", "required": false, "default": {} },
         "prev_hash": {
           "type": "string",
-          "required": false,
+          "required": true,
           "description": "Hash of previous entry in the chain (hex SHA256, 64 chars). Forms the hash chain for ledger integrity."
         },
         "entry_hash": {
           "type": "string",
-          "required": false,
+          "required": true,
           "description": "Hash of this entry (hex SHA256, 64 chars). Computed from entry content plus prev_hash."
         }
       }

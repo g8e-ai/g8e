@@ -88,7 +88,7 @@ def mock_tool_executor():
     
     executor.reputation_data_service = MagicMock()
     executor.auditor_hmac_key = "test-hmac-key"
-    
+
     return executor
 
 

@@ -42,6 +42,10 @@ def _build_tool_service(web_search_provider: WebSearchProvider | None = None) ->
     return AIToolService(
         operator_command_service=MagicMock(spec=OperatorCommandService),
         investigation_service=AsyncMock(spec=InvestigationService),
+        reputation_data_service=AsyncMock(),
+        reputation_service=AsyncMock(),
+        stake_resolution_data_service=AsyncMock(),
+        chat_task_manager=MagicMock(),
         web_search_provider=web_search_provider,
     )
 

@@ -296,12 +296,12 @@ class ServiceFactory:
         tool_executor = AIToolService(
             operator_command_service=operator_command_service,
             investigation_service=cast(InvestigationService, domain_services['investigation_service']),
-            web_search_provider=web_search_provider,
-            platform_settings=settings,
             reputation_data_service=data_services['reputation_data_service'],
             reputation_service=domain_services['reputation_service'],
             stake_resolution_data_service=data_services['stake_resolution_data_service'],
             chat_task_manager=chat_task_manager,
+            web_search_provider=web_search_provider,
+            platform_settings=settings,
         )
 
         request_builder = AIRequestBuilder(

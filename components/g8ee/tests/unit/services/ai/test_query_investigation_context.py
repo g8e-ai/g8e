@@ -37,6 +37,10 @@ def tool_service(mock_investigation_service):
     return AIToolService(
         operator_command_service=mock_op_cmd_svc,
         investigation_service=mock_investigation_service,
+        reputation_data_service=AsyncMock(),
+        reputation_service=AsyncMock(),
+        stake_resolution_data_service=AsyncMock(),
+        chat_task_manager=MagicMock(),
         web_search_provider=mock_web_search,
     )
 

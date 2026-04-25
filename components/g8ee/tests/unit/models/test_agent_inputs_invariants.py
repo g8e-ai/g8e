@@ -152,6 +152,22 @@ class TestAgentInputsImmutability:
         g8e_ctx = build_g8e_http_context(user_id="user-immutable-test")
         request_settings = G8eeUserSettings(llm=LLMSettings())
 
+        from app.models.investigations import ConversationHistoryMessage
+        from app.utils.ledger_hash import genesis_hash
+
+        genesis = genesis_hash("inv-immutable-test", inv.created_at.isoformat())
+        test_hash = "0" * 64
+
+        conversation_history = [
+            ConversationHistoryMessage(
+                id="msg-1",
+                sender="user.chat",
+                content="test",
+                prev_hash=genesis,
+                entry_hash=test_hash,
+            )
+        ]
+
         original_inputs = AgentInputs(
             case_id="case-immutable",
             investigation_id="inv-immutable-test",
@@ -165,7 +181,7 @@ class TestAgentInputsImmutability:
             operator_bound=True,
             model_to_use="test-model",
             max_tokens=2048,
-            conversation_history=[{"role": "user", "content": "test", "sender": "user"}],
+            conversation_history=conversation_history,
             system_instructions="You are a helpful assistant",
             contents=[{"role": "user", "parts": [{"text": "hello"}]}],
             user_memories=[{"id": "mem-1", "content": "test memory", "case_id": "case-immutable", "investigation_id": "inv-immutable-test", "user_id": "user-immutable-test", "status": "Open", "case_title": "test case"}],
