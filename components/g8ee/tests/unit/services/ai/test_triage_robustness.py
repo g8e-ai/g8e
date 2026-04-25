@@ -36,7 +36,8 @@ def mock_settings():
         llm=LLMSettings(
             primary_provider=LLMProvider.OLLAMA,
             primary_model="main-model",
-            assistant_model="lite-model"
+            lite_provider=LLMProvider.OLLAMA,
+            lite_model="lite-model"
         )
     )
 

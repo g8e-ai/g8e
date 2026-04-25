@@ -196,8 +196,10 @@ class ChatPipelineService:
             tier="primary" if needs_main_model else "assistant",
             primary_override=model_overrides.for_main_generation(needs_primary=True),
             assistant_override=model_overrides.for_main_generation(needs_primary=False),
+            lite_override=None,
             settings_primary_model=request_settings.llm.primary_model,
             settings_assistant_model=request_settings.llm.resolved_assistant_model,
+            settings_lite_model=request_settings.llm.lite_model,
         )
         
         if not model_to_use:
@@ -493,8 +495,10 @@ class ChatPipelineService:
         sentinel_mode: bool,
         llm_primary_provider: str | None,
         llm_assistant_provider: str | None,
+        llm_lite_provider: str | None,
         llm_primary_model: str,
         llm_assistant_model: str,
+        llm_lite_model: str,
         _task_manager: BackgroundTaskManager,
         user_settings: G8eeUserSettings,
         _track_task: bool = True,
@@ -523,8 +527,8 @@ class ChatPipelineService:
 
         try:
             logger.info(
-                "[SSE-CHAT] About to call _run_chat_impl: message_len=%d sentinel_mode=%s primary_provider=%s assistant_provider=%s primary=%s assistant=%s",
-                len(message), sentinel_mode, llm_primary_provider, llm_assistant_provider, llm_primary_model, llm_assistant_model
+                "[SSE-CHAT] About to call _run_chat_impl: message_len=%d sentinel_mode=%s primary_provider=%s assistant_provider=%s lite_provider=%s primary=%s assistant=%s lite=%s",
+                len(message), sentinel_mode, llm_primary_provider, llm_assistant_provider, llm_lite_provider, llm_primary_model, llm_assistant_model, llm_lite_model
             )
             await self._run_chat_impl(
                 message=message,
@@ -533,8 +537,10 @@ class ChatPipelineService:
                 sentinel_mode=sentinel_mode,
                 llm_primary_provider=llm_primary_provider,
                 llm_assistant_provider=llm_assistant_provider,
+                llm_lite_provider=llm_lite_provider,
                 llm_primary_model=llm_primary_model,
                 llm_assistant_model=llm_assistant_model,
+                llm_lite_model=llm_lite_model,
                 user_settings=user_settings,
                 task_manager=_task_manager,
             )
@@ -574,8 +580,10 @@ class ChatPipelineService:
         sentinel_mode: bool,
         llm_primary_provider: str | None,
         llm_assistant_provider: str | None,
+        llm_lite_provider: str | None,
         llm_primary_model: str,
         llm_assistant_model: str,
+        llm_lite_model: str,
         user_settings: G8eeUserSettings,
         task_manager: BackgroundTaskManager | None = None,
     ) -> None:
@@ -597,11 +605,15 @@ class ChatPipelineService:
         if llm_assistant_provider:
             logger.info("[SSE-CHAT] Applying assistant_provider override: %s", llm_assistant_provider)
             resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"assistant_provider": LLMProvider(llm_assistant_provider)})})
+        if llm_lite_provider:
+            logger.info("[SSE-CHAT] Applying lite_provider override: %s", llm_lite_provider)
+            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"lite_provider": LLMProvider(llm_lite_provider)})})
 
         logger.info("[SSE-CHAT] About to call _prepare_chat_context")
         model_overrides = ModelOverrideResolver(
             primary_model=llm_primary_model,
             assistant_model=llm_assistant_model,
+            lite_model=llm_lite_model,
         )
         inputs = await self._prepare_chat_context(
             message=message,
@@ -615,13 +627,13 @@ class ChatPipelineService:
 
         state = AgentStreamState()
 
-        is_assistant_provider = (
-            inputs.triage_result.complexity != TriageComplexityClassification.COMPLEX
+        is_lite = (
+            inputs.triage_result.complexity == TriageComplexityClassification.SIMPLE
             if inputs.triage_result
             else False
         )
-        llm_provider = get_llm_provider(resolved_settings.llm, is_assistant=is_assistant_provider)
-        logger.info("[SSE-CHAT] LLM provider resolved: %s (is_assistant=%s)", type(llm_provider).__name__, is_assistant_provider)
+        llm_provider = get_llm_provider(resolved_settings.llm, is_lite=is_lite)
+        logger.info("[SSE-CHAT] LLM provider resolved: %s (is_lite=%s)", type(llm_provider).__name__, is_lite)
 
         logger.info(
             "[SSE-CHAT] Starting LLM call: model=%s workflow=%s contents=%d max_tokens=%s",

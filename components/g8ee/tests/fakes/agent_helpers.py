@@ -87,17 +87,22 @@ def make_agent_inputs(
             user_id=user_id,
         )
 
-    request_settings = G8eeUserSettings(
-        llm=LLMSettings(
-            primary_model="test-model",
-            assistant_model="test-model",
-            assistant_provider="ollama",
-            primary_provider="ollama"
-        )
-    )
-
     if request_settings is None:
-        request_settings = G8eeUserSettings(llm=LLMSettings(primary_model="test-model"))
+        from app.llm.factory import get_llm_settings
+        llm_from_env = get_llm_settings()
+        if llm_from_env:
+            request_settings = G8eeUserSettings(llm=llm_from_env)
+        else:
+            request_settings = G8eeUserSettings(
+                llm=LLMSettings(
+                    primary_model="test-model",
+                    assistant_model="test-model",
+                    lite_model="test-model",
+                    assistant_provider="ollama",
+                    lite_provider="ollama",
+                    primary_provider="ollama"
+                )
+            )
 
     if generation_config is None:
         generation_config = make_gen_config(

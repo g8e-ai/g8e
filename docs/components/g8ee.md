@@ -113,12 +113,12 @@ All LLM communication passes through the `LLMProvider` abstract base class (`app
 |--------|---------|----------|
 | `generate_content_stream_primary` | `AsyncGenerator[StreamChunkFromModel]` | Main primary loop — yields chunks as they arrive |
 | `generate_content_primary` | `GenerateContentResponse` | Non-streaming primary model calls |
-| `generate_content_stream_assistant` | `AsyncGenerator[StreamChunkFromModel]` | Streaming assistant model calls |
-| `generate_content_assistant` | `GenerateContentResponse` | Risk analysis, memory, title generation |
+| `generate_content_stream_assistant` | `AsyncGenerator[StreamChunkFromModel]` | Streaming assistant model calls (deprecated) |
+| `generate_content_assistant` | `GenerateContentResponse` | Risk analysis, memory, title generation (deprecated) |
 | `generate_content_stream_lite` | `AsyncGenerator[StreamChunkFromModel]` | Streaming lite model calls |
-| `generate_content_lite` | `GenerateContentResponse` | Triage, eval |
+| `generate_content_lite` | `GenerateContentResponse` | Triage, Tribunal, eval |
 
-Each method accepts a role-specific settings dataclass (`PrimaryLLMSettings`, `AssistantLLMSettings`, `LiteLLMSettings`) that carries the generation parameters appropriate for that role. LLM configuration is sourced from `G8eeUserSettings.llm` — there is no platform-level LLM default. The `get_llm_provider(settings.llm, is_assistant=False)` factory constructs a provider from user settings on each request. The `is_assistant` flag determines whether to use the `primary_provider` or `assistant_provider` configuration.
+Each method accepts a role-specific settings dataclass (`PrimaryLLMSettings`, `AssistantLLMSettings`, `LiteLLMSettings`) that carries the generation parameters appropriate for that role. LLM configuration is sourced from `G8eeUserSettings.llm` — there is no platform-level LLM default. The `get_llm_provider(settings.llm, is_lite=True)` factory constructs a provider from user settings on each request. The `is_lite` flag determines whether to use the `lite_provider` or `primary_provider` configuration.
 
 `StreamChunkFromModel` is the canonical inter-layer type (`app/models/agent.py`). Its `type` field is a `StreamChunkFromModelType` enum (`app/constants/__init__.py`) with values: `text`, `thinking`, `thinking.update`, `thinking.end`, `tool.call`, `tool.result`, `citations`, `complete`, `error`, `retry`. All provider-specific types are translated to `StreamChunkFromModel` at the provider boundary — nothing above the provider layer touches SDK types. `StreamChunkData` carries the typed payload for every chunk type, including labels, icons, and categories for tool calls.
 
@@ -387,14 +387,15 @@ The `MODEL_REGISTRY` provides runtime access to model configurations via `get_mo
 
 ### Model Roles
 
-| Role | Env Variable | Provider Setting | Used For |
-|------|-------------|------------------|----------|
-| **Primary** | `LLM_MODEL` | `primary_provider` | All chat, reasoning, and operator-bound workflows |
-| **Assistant** | `LLM_ASSISTANT_MODEL` | `assistant_provider` | Triage, risk analysis, memory updates, Tribunal, title generation |
+| Role | Provider Setting | Used For |
+|------|------------------|----------|
+| **Primary** | `primary_provider` | Complex reasoning, Sage (main chat), Auditor (Tribunal verification), Judge (evaluation) |
+| **Lite** | `lite_provider` | Triage, Tribunal members (Axiom, Concord, Variance, Pragma, Nemesis), Dash, Scribe, Codex, Warden |
+| **Assistant** | `assistant_provider` | **Deprecated** - being phased out in favor of Lite tier |
 
-The assistant model always has thinking disabled regardless of capability.
+The lite tier always has thinking disabled regardless of capability. The primary tier supports thinking when the model capability allows it.
 
-All services access the assistant model via `LLMSettings.resolved_assistant_model`, which returns the configured value or `None`. This centralizes the "no model configured" check so that every consumer handles missing models consistently.
+All services access models via tier-specific settings (`primary_model`, `lite_model`, `assistant_model`). The `get_llm_provider(settings.llm, is_lite=True)` factory constructs a provider from user settings on each request. The `is_lite` flag determines whether to use the `lite_provider` or `primary_provider` configuration.
 
 ### Per-Message Model Override
 
@@ -406,12 +407,12 @@ On SSE connect, g8ed pushes a `llm.config` event containing provider-specific `p
 
 ### Triage & Routing
 
-Before invoking the primary model, g8ee classifies each incoming message as `simple` or `complex` using the `triage_message` utility. This avoids the full model for messages that can be handled cheaply by the `assistant` model. 
+Before invoking the primary model, g8ee classifies each incoming message as `simple` or `complex` using the `triage_message` utility. This avoids the full model for messages that can be handled cheaply by the `lite` model.
 
 **Classification Rules:**
 - **Short-circuit:** Messages with attachments always escalate to the primary model (multimodal analysis).
 - **Empty messages:** Escalated to primary model with a default follow-up question.
-- **Complexity signals:** Assistant model looks for technical depth, reasoning chains, or explicit requests for action.
+- **Complexity signals:** Lite model looks for technical depth, reasoning chains, or explicit requests for action.
 - **Short-circuit Follow-up:** If triage returns a `follow_up_question` with low confidence, `ChatPipelineService` emits `LLM_CHAT_ITERATION_STARTED` (with `ChatProcessingStartedPayload`), then delivers the follow-up question via `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` and `LLM_CHAT_ITERATION_TEXT_COMPLETED`, and stops further processing.
 
 ---

@@ -6,14 +6,6 @@ For time-sensitive operations, you MUST follow the provided current time. Rememb
 {command_constraints_message}
 </constraints>
 
-<request>
-{request}
-</request>
-
-<guidelines>
-{guidelines}
-</guidelines>
-
 <system_context>
 OS: {os}
 Shell: {shell}
@@ -24,5 +16,13 @@ Working directory: {working_directory}
 <operator_context>
 {operator_context}
 </operator_context>
+
+<guidelines>
+{guidelines}
+</guidelines>
+
+<request>
+{request}
+</request>
 
 Respond now with the exact command string and nothing else.

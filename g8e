@@ -677,6 +677,10 @@ case "$TOP" in
                     _require_value "-a/--assistant-model"
                     export TEST_LLM_ASSISTANT_MODEL="${_args[1]}"
                     _args=("${_args[@]:2}") ;;
+                -l|--lite-model)
+                    _require_value "-l/--lite-model"
+                    export TEST_LLM_LITE_MODEL="${_args[1]}"
+                    _args=("${_args[@]:2}") ;;
                 -e|--llm-endpoint-url)
                     _require_value "-e/--llm-endpoint-url"
                     export TEST_LLM_ENDPOINT_URL="${_args[1]}"
@@ -726,8 +730,10 @@ case "$TOP" in
 
         [[ -n "${TEST_LLM_PROVIDER:-}" ]]              && _TEST_ENV_ARGS+=(-e "TEST_LLM_PROVIDER=$TEST_LLM_PROVIDER")
         [[ -n "${TEST_LLM_ASSISTANT_PROVIDER:-}" ]]     && _TEST_ENV_ARGS+=(-e "TEST_LLM_ASSISTANT_PROVIDER=$TEST_LLM_ASSISTANT_PROVIDER")
+        [[ -n "${TEST_LLM_LITE_PROVIDER:-}" ]]          && _TEST_ENV_ARGS+=(-e "TEST_LLM_LITE_PROVIDER=$TEST_LLM_LITE_PROVIDER")
         [[ -n "${TEST_LLM_PRIMARY_MODEL:-}" ]]          && _TEST_ENV_ARGS+=(-e "TEST_LLM_PRIMARY_MODEL=$TEST_LLM_PRIMARY_MODEL")
         [[ -n "${TEST_LLM_ASSISTANT_MODEL:-}" ]]        && _TEST_ENV_ARGS+=(-e "TEST_LLM_ASSISTANT_MODEL=$TEST_LLM_ASSISTANT_MODEL")
+        [[ -n "${TEST_LLM_LITE_MODEL:-}" ]]             && _TEST_ENV_ARGS+=(-e "TEST_LLM_LITE_MODEL=$TEST_LLM_LITE_MODEL")
         [[ -n "${TEST_LLM_ENDPOINT_URL:-}" ]]           && _TEST_ENV_ARGS+=(-e "TEST_LLM_ENDPOINT_URL=$TEST_LLM_ENDPOINT_URL")
         [[ -n "${TEST_LLM_API_KEY:-}" ]]                && _TEST_ENV_ARGS+=(-e "TEST_LLM_API_KEY=$TEST_LLM_API_KEY")
         [[ -n "${TEST_LLM_ASSISTANT_ENDPOINT_URL:-}" ]] && _TEST_ENV_ARGS+=(-e "TEST_LLM_ASSISTANT_ENDPOINT_URL=$TEST_LLM_ASSISTANT_ENDPOINT_URL")

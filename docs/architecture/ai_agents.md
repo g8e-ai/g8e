@@ -81,6 +81,21 @@ All state-changing operator actions require explicit user approval. The platform
 
 ---
 
+## Tribunal Prefix Cache Optimization
+
+The Tribunal pipeline uses static-prefix-first template ordering to maximize llama.cpp KV cache reuse effectiveness. Per-session-stable sections (`<constraints>`, `<system_context>`, `<operator_context>`) precede per-turn dynamic sections (`<guidelines>`, `<request>`, `{auditor_context}`).
+
+**Required llama.cpp configuration** for this optimization to be effective:
+- `--cache-reuse 256` — enables KV cache reuse up to 256 tokens
+- `--keep -1` — keeps the KV cache between requests (default is to clear)
+- `--parallel <n_slots ≥ 6>` — Tribunal emits 5 parallel members + 1 auditor in a round; without sufficient parallel slots, cache reuse is defeated by sequential processing
+
+These flags should be configured in the g8el entrypoint script. See `docs/components/g8el.md` for full configuration details.
+
+Without these flags, the prefix cache optimization buys nothing measurable — the structural ordering is correct but llama.cpp clears the cache after each request or processes sequentially, negating the benefit.
+
+---
+
 ## Investigation Context
 
 ### Pull and Enrichment
@@ -458,7 +473,7 @@ g8ee publishes events using `EventType` constants defined in `components/g8ee/ap
 | `AIToolService` | `components/g8ee/app/services/ai/tool_service.py` | Tool registration, declaration building, tool call dispatch |
 | `MemoryGenerationService` | `components/g8ee/app/services/ai/memory_generation_service.py` | AI-backed memory analysis and update using the `codex` persona. |
 | `MemoryDataService` | `components/g8ee/app/services/investigation/memory_data_service.py` | (Data Layer) Pure CRUD for InvestigationMemory |
-| `TriageAgent.triage` | `components/g8ee/app/services/ai/triage.py` | Route to main vs assistant model via intent and complexity classification. Persona loaded from `agents.json` (`triage`). **WIP (Phase 1.1):** a four-route refactor (`SIMPLE`, `NEEDS_CLARIFICATION`, `READY_FOR_REASONING`, `CONTINUATION`) is planned per `docs/.projects/tribunal-voting.md`. Current `TriageResult` still uses the `complexity` + `intent` + `request_posture` axes documented below. |
+| `TriageAgent.triage` | `components/g8ee/app/services/ai/triage.py` | Route to primary vs lite model via intent and complexity classification. Persona loaded from `agents.json` (`triage`). Uses the lite tier for all triage operations. **WIP (Phase 1.1):** a four-route refactor (`SIMPLE`, `NEEDS_CLARIFICATION`, `READY_FOR_REASONING`, `CONTINUATION`) is planned per `docs/.projects/tribunal-voting.md`. Current `TriageResult` still uses the `complexity` + `intent` + `request_posture` axes documented below. |
 | `process_provider_turn` | `components/g8ee/app/services/ai/agent_turn.py` | Thinking state machine, chunk parsing, TurnResult assembly. Handles thinking state transitions (INACTIVE → ACTIVE → INACTIVE), consolidates model parts, normalizes finish reasons, and extracts token usage. Emits THINKING/THINKING_END chunks for models with thinking capabilities. |
 | `TribunalInvoker` | `components/g8ee/app/services/ai/agent_tool_loop.py` | Encapsulates Tribunal pipeline invocation for `run_commands_with_operator`. Converts the Sage-facing `SageOperatorRequest` (intent-only: `request`, `guidelines`, target/timeout fields) into an executor-facing `ExecutorCommandArgs` (`command` required) by running the Tribunal pipeline. Fetches command constraints (whitelist/blacklist) and emits SSE events. |
 | `execute_turn_tool_calls` | `components/g8ee/app/services/ai/agent_tool_loop.py` | Sequential tool call dispatch via `orchestrate_tool_execution` + grounding merge; `ToolCallResult.tribunal_result` surfaces the full `CommandGenerationResult` (`request`, `guidelines`, `final_command`, `outcome`, `vote_winner`, `vote_score`, `vote_breakdown`, `auditor_passed`, `auditor_revision`, `auditor_reason`, `candidates`). This field is populated for `run_commands_with_operator` tools after Tribunal succeeds, and is `None` for non-command tools, Tribunal errors, or when the request is missing. |
@@ -487,8 +502,8 @@ Every AI in the platform has a first-class persona definition in `shared/constan
 | `display_name` | `string` | Human-readable name for UI display |
 | `icon` | `string` | Lucide icon name for UI rendering |
 | `description` | `string` | One-line functional summary |
-| `role` | `string` | Functional role (`classifier`, `reasoner`, `responder`, `arbitrator`, `validator`, `summarizer`, `tribunal_member`) |
-| `model_tier` | `string` | LLM tier used at runtime (`primary` = high-reasoning model, `assistant` = fast/lightweight model) |
+| `role` | `string` | Functional role (`classifier`, `reasoner`, `responder`, `arbitrator`, `auditor`, `evaluator`, `summarizer`, `tribunal_member`, `defender`) |
+| `model_tier` | `string` | LLM tier used at runtime (`primary` = high-reasoning model, `lite` = fast/lightweight model, `assistant` = deprecated) |
 | `tools` | `string[]` | List of tool names available to this AI (empty for non-tool-calling AIs) |
 | `identity` | `string` | Deep persona description — who the AI is, how it thinks, its behavioral characteristics |
 | `purpose` | `string` | Specific mission statement — what the AI does and the standards it must meet |

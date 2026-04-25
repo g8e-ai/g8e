@@ -187,8 +187,10 @@ async def test_intermediate_iteration_text_persists_as_ai_primary_rows():
             sentinel_mode=True,
             llm_primary_provider=None,
             llm_assistant_provider=None,
+            llm_lite_provider=None,
             llm_primary_model="",
             llm_assistant_model="",
+            llm_lite_model="",
             user_settings=user_settings,
         )
 
@@ -243,8 +245,10 @@ async def test_final_persist_skipped_when_response_text_is_whitespace_only():
             sentinel_mode=True,
             llm_primary_provider=None,
             llm_assistant_provider=None,
+            llm_lite_provider=None,
             llm_primary_model="",
             llm_assistant_model="",
+            llm_lite_model="",
             user_settings=user_settings,
         )
 
@@ -281,8 +285,10 @@ async def test_iteration_callback_skips_whitespace_only_text():
             sentinel_mode=True,
             llm_primary_provider=None,
             llm_assistant_provider=None,
+            llm_lite_provider=None,
             llm_primary_model="",
             llm_assistant_model="",
+            llm_lite_model="",
             user_settings=user_settings,
         )
 
@@ -327,8 +333,10 @@ async def test_iteration_callback_passed_to_run_with_sse():
             sentinel_mode=True,
             llm_primary_provider=None,
             llm_assistant_provider=None,
+            llm_lite_provider=None,
             llm_primary_model="",
             llm_assistant_model="",
+            llm_lite_model="",
             user_settings=user_settings,
         )
 

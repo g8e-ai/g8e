@@ -333,10 +333,7 @@ export class SetupPage {
     _getActiveProviders() {
         const active = [];
         for (const [provider, fieldId] of Object.entries(PROVIDER_KEY_FIELDS)) {
-            if (provider === 'llamacpp') {
-                active.push(provider);
-                continue;
-            }
+            if (!fieldId) continue;
             const el = document.getElementById(fieldId);
             if (el && el.value.trim()) active.push(provider);
         }

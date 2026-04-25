@@ -159,44 +159,44 @@ def _make_mock_g8e_context() -> G8eHttpContext:
 class TestResolveModel:
     """_resolve_model returns a concrete model string with proper fallback chain."""
 
-    def test_returns_assistant_model_when_set(self):
-        llm = LLMSettings(assistant_model="custom-assistant")
-        assert _resolve_model(llm) == "custom-assistant"
+    def test_returns_lite_model_when_set(self):
+        llm = LLMSettings(lite_model="custom-lite")
+        assert _resolve_model(llm, tier="lite") == "custom-lite"
 
-    def test_falls_back_to_primary_model_when_assistant_is_none(self):
+    def test_falls_back_to_primary_model_when_lite_is_none(self):
         llm = LLMSettings(primary_model="custom-primary")
-        assert llm.assistant_model is None
-        assert _resolve_model(llm) == "custom-primary"
+        assert llm.lite_model is None
+        assert _resolve_model(llm, tier="lite") == "custom-primary"
 
     def test_raises_when_both_models_none(self):
         llm = LLMSettings(primary_provider=LLMProvider.OLLAMA)
-        assert llm.assistant_model is None
+        assert llm.lite_model is None
         assert llm.primary_model is None
         with pytest.raises(TribunalModelNotConfiguredError) as exc_info:
-            _resolve_model(llm)
+            _resolve_model(llm, tier="lite")
         assert exc_info.value.provider == "ollama"
 
     def test_raises_for_openai_when_no_model_configured(self):
         llm = LLMSettings(primary_provider=LLMProvider.OPENAI)
         with pytest.raises(TribunalModelNotConfiguredError) as exc_info:
-            _resolve_model(llm)
+            _resolve_model(llm, tier="lite")
         assert exc_info.value.provider == "openai"
 
     def test_raises_for_anthropic_when_no_model_configured(self):
         llm = LLMSettings(primary_provider=LLMProvider.ANTHROPIC)
         with pytest.raises(TribunalModelNotConfiguredError) as exc_info:
-            _resolve_model(llm)
+            _resolve_model(llm, tier="lite")
         assert exc_info.value.provider == "anthropic"
 
     def test_raises_for_gemini_when_no_model_configured(self):
         llm = LLMSettings(primary_provider=LLMProvider.GEMINI)
         with pytest.raises(TribunalModelNotConfiguredError) as exc_info:
-            _resolve_model(llm)
+            _resolve_model(llm, tier="lite")
         assert exc_info.value.provider == "gemini"
 
-    def test_assistant_takes_priority_over_primary(self):
-        llm = LLMSettings(primary_model="primary", assistant_model="assistant")
-        assert _resolve_model(llm) == "assistant"
+    def test_lite_takes_priority_over_primary(self):
+        llm = LLMSettings(primary_model="primary", lite_model="lite")
+        assert _resolve_model(llm, tier="lite") == "lite"
 
 
 class TestTribunalSessionStartedPayloadRegression:
@@ -213,8 +213,8 @@ class TestTribunalSessionStartedPayloadRegression:
                 )
 
     def test_payload_accepts_resolved_model(self):
-        llm = LLMSettings(primary_provider=LLMProvider.OLLAMA, assistant_model="gemma3:1b")
-        model = _resolve_model(llm)
+        llm = LLMSettings(primary_provider=LLMProvider.OLLAMA, lite_model="gemma3:1b")
+        model = _resolve_model(llm, tier="lite")
         payload = TribunalSessionStartedPayload(
             request="list files",
             model=model,
@@ -496,7 +496,8 @@ class TestGenerateCommandSystemError:
     async def test_raises_on_all_system_errors(self):
         llm = LLMSettings(
             primary_provider=LLMProvider.OLLAMA,
-            assistant_model="gemma3:1b",
+            lite_provider=LLMProvider.OLLAMA,
+            lite_model="gemma3:1b",
         )
         settings = G8eeUserSettings(llm=llm)
 
@@ -533,7 +534,8 @@ class TestGenerateCommandSystemError:
         """Non-system errors now raise TribunalGenerationFailedError instead of silent fallback."""
         llm = LLMSettings(
             primary_provider=LLMProvider.OLLAMA,
-            assistant_model="gemma3:1b",
+            lite_provider=LLMProvider.OLLAMA,
+            lite_model="gemma3:1b",
         )
         settings = G8eeUserSettings(llm=llm)
 
@@ -569,8 +571,8 @@ class TestGenerateCommandSystemError:
     async def test_provider_routing_uses_settings_provider(self):
         llm = LLMSettings(
             primary_provider=LLMProvider.GEMINI,
-            assistant_provider=LLMProvider.OLLAMA,
-            assistant_model="gemma3:1b",
+            lite_provider=LLMProvider.OLLAMA,
+            lite_model="gemma3:1b",
         )
         settings = G8eeUserSettings(llm=llm)
 
@@ -607,7 +609,12 @@ class TestGenerateCommandSystemError:
                 **_REPUTATION_KWARGS,
             )
 
-            mock_factory.assert_called_once_with(settings.llm, is_assistant=True)
+            # Tribunal generation uses lite tier, auditor uses primary tier
+            assert mock_factory.call_count == 2
+            # First call is for tribunal generation (lite)
+            assert mock_factory.call_args_list[0] == ((settings.llm,), {"is_lite": True})
+            # Second call is for auditor (primary)
+            assert mock_factory.call_args_list[1] == ((settings.llm,), {"is_assistant": False, "is_lite": False})
             assert result.final_command == "ls -la"
 
 
@@ -619,7 +626,8 @@ class TestMixedErrorFallback:
         """1 system error + 2 non-system errors must raise TribunalGenerationFailedError."""
         llm = LLMSettings(
             primary_provider=LLMProvider.OLLAMA,
-            assistant_model="gemma3:1b",
+            lite_provider=LLMProvider.OLLAMA,
+            lite_model="gemma3:1b",
             llm_command_gen_passes=3,
         )
         settings = G8eeUserSettings(llm=llm)
@@ -677,8 +685,8 @@ class TestTribunalProviderUnavailableError:
     async def test_raises_on_provider_init_failure(self):
         """Provider init failure raises TribunalProviderUnavailableError instead of silent fallback."""
         llm = LLMSettings(
-            assistant_provider=LLMProvider.OLLAMA,
-            assistant_model="gemma3:1b",
+            lite_provider=LLMProvider.OLLAMA,
+            lite_model="gemma3:1b",
         )
         settings = G8eeUserSettings(llm=llm)
 
@@ -1577,13 +1585,15 @@ class TestGenerateCommandHappyPath:
     @staticmethod
     def _settings(
         primary_provider=LLMProvider.OLLAMA,
-        assistant_model="gemma3:1b",
+        lite_provider=LLMProvider.OLLAMA,
+        lite_model="gemma3:1b",
         auditor=True,
         passes=3,
     ):
         llm = LLMSettings(
             primary_provider=primary_provider,
-            assistant_model=assistant_model,
+            lite_provider=lite_provider,
+            lite_model=lite_model,
             llm_command_gen_passes=passes,
             llm_command_gen_auditor=auditor,
         )
@@ -2006,12 +2016,14 @@ class TestGenerateCommandAuditorFailure:
     @staticmethod
     def _settings(
         primary_provider=LLMProvider.OLLAMA,
-        assistant_model="gemma3:1b",
+        lite_provider=LLMProvider.OLLAMA,
+        lite_model="gemma3:1b",
         passes=3,
     ):
         llm = LLMSettings(
             primary_provider=primary_provider,
-            assistant_model=assistant_model,
+            lite_provider=lite_provider,
+            lite_model=lite_model,
             llm_command_gen_passes=passes,
             llm_command_gen_auditor=True,
         )

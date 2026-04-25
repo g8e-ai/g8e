@@ -154,11 +154,11 @@ class AIResponseAnalyzer:
     def __init__(self):
         logger.info("AIResponseAnalyzer initialized")
 
-    async def _run_assistant_analysis(
+    async def _run_lite_analysis(
         self,
         prompt: str,
         response_model: type[T],
-        assistant_model: str | None,
+        lite_model: str | None,
         settings: G8eeUserSettings,
         fallback_no_model: Callable[[], T],
         fallback_no_response: Callable[[], T],
@@ -166,22 +166,22 @@ class AIResponseAnalyzer:
         log_context: str,
         post_process: Callable[[T], None] | None = None,
     ) -> T:
-        if not assistant_model:
-            logger.warning("%s: no assistant_model configured", log_context)
+        if not lite_model:
+            logger.warning("%s: no lite_model configured", log_context)
             return fallback_no_model()
 
         try:
-            client = get_llm_provider(settings.llm, is_assistant=True)
-            config = AIGenerationConfigBuilder.build_assistant_settings(
-                model=assistant_model,
+            client = get_llm_provider(settings.llm, is_lite=True)
+            config = AIGenerationConfigBuilder.build_lite_settings(
+                model=lite_model,
                 max_tokens=settings.llm.llm_max_tokens,
                 system_instructions=prompt,
                 response_format=types.ResponseFormat.from_pydantic_schema(response_model.model_json_schema()),
             )
-            response = await client.generate_content_assistant(
-                model=assistant_model,
+            response = await client.generate_content_lite(
+                model=lite_model,
                 contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
-                assistant_llm_settings=config,
+                lite_llm_settings=config,
             )
 
             response_text = response.text
@@ -218,15 +218,15 @@ class AIResponseAnalyzer:
         )
         prompt = f"{command_risk_persona.get_system_prompt()}\n\n{template}"
 
-        assistant_model = resolved_settings.llm.resolved_assistant_model
+        lite_model = resolved_settings.llm.lite_model
 
         def log_result(analysis: CommandRiskAnalysis) -> None:
             logger.info("Command risk analysis completed: command=%s risk_level=%s", command[:60], analysis.risk_level)
 
-        return await self._run_assistant_analysis(
+        return await self._run_lite_analysis(
             prompt=prompt,
             response_model=CommandRiskAnalysis,
-            assistant_model=assistant_model,
+            lite_model=lite_model,
             settings=resolved_settings,
             fallback_no_model=lambda: CommandRiskAnalysis(risk_level=RiskLevel.HIGH),
             fallback_no_response=lambda: CommandRiskAnalysis(risk_level=RiskLevel.HIGH),
@@ -274,7 +274,7 @@ class AIResponseAnalyzer:
         )
         prompt = f"{error_persona.get_system_prompt()}\n\n{template}"
 
-        assistant_model = resolved_settings.llm.resolved_assistant_model
+        lite_model = resolved_settings.llm.lite_model
 
         def post_process(analysis: ErrorAnalysisResult) -> None:
             if retry_count >= 2:
@@ -286,17 +286,17 @@ class AIResponseAnalyzer:
                 command[:60], analysis.error_category, analysis.can_auto_fix, analysis.should_escalate,
             )
 
-        return await self._run_assistant_analysis(
+        return await self._run_lite_analysis(
             prompt=prompt,
             response_model=ErrorAnalysisResult,
-            assistant_model=assistant_model,
+            lite_model=lite_model,
             settings=resolved_settings,
             fallback_no_model=lambda: ErrorAnalysisResult(
                 error_category=ErrorAnalysisCategory.UNKNOWN,
-                root_cause="No assistant model configured for error analysis",
+                root_cause="No lite model configured for error analysis",
                 can_auto_fix=False,
                 should_escalate=True,
-                reasoning="No assistant_model configured in platform settings",
+                reasoning="No lite_model configured in platform settings",
                 user_message=f"Command failed with exit code {exit_code}. Error analysis unavailable - manual intervention required.",
             ),
             fallback_no_response=lambda: ErrorAnalysisResult(
@@ -344,7 +344,7 @@ class AIResponseAnalyzer:
         )
         prompt = f"{file_risk_persona.get_system_prompt()}\n\n{template}"
 
-        assistant_model = resolved_settings.llm.resolved_assistant_model
+        lite_model = resolved_settings.llm.lite_model
 
         def post_process(analysis: FileOperationRiskAnalysis) -> None:
             system_prefixes = ("/etc/", "/usr/", "/sys/", "/proc/", "/bin/", "/sbin/", "/boot/", "/lib/")
@@ -358,10 +358,10 @@ class AIResponseAnalyzer:
                 operation, file_path, analysis.risk_level, analysis.is_system_file, analysis.safe_to_proceed,
             )
 
-        return await self._run_assistant_analysis(
+        return await self._run_lite_analysis(
             prompt=prompt,
             response_model=FileOperationRiskAnalysis,
-            assistant_model=assistant_model,
+            lite_model=lite_model,
             settings=resolved_settings,
             fallback_no_model=lambda: FileOperationRiskAnalysis(risk_level=RiskLevel.HIGH, safe_to_proceed=False, is_system_file=True),
             fallback_no_response=lambda: FileOperationRiskAnalysis(

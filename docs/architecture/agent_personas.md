@@ -45,9 +45,9 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 - **Icon**: `zap`
 - **Role**: Responder
 - **Model Tier**: Assistant
-- **Purpose**: Fast-path AI for simple tasks. Same tool set as Sage but no `<agentic_reasoning>` block — Dash's value is latency and minimum viable work.
-- **Prompt Source**: Persona voice in `shared/constants/agents.json` (`dash`) + modular doctrine / mode / context sections in `components/g8ee/app/prompts_data/`.
-- **Injection Point**: `build_modular_system_prompt(agent_name=AgentName.DASH, ...)` uses the persona's system prompt (which includes role, identity, purpose, autonomy) in place of `core/identity.txt`. When no agent_name is provided, CORE_IDENTITY is used as fallback.
+- **Purpose**: Fast-path AI for simple tasks. Carries a surgical tool-bearing posture — Dash has access to the full tool surface (13 tools, same as Sage) but operates under a "one well-aimed call beats a chain" discipline. Dash's value is latency and minimum viable work; when a turn requires multi-step reasoning or chaining, its persona directs it to name the mismatch, answer only what a single tool call can answer correctly, and stop. The next user turn is re-triaged and typically re-routes to Sage.
+- **Prompt Source**: Persona voice in `shared/constants/agents.json` (`dash`) + modular doctrine / mode / context sections in `components/g8ee/app/prompts_data/`. Dash uses a slim builder variant that omits `<agentic_reasoning>` and other heavyweight sections to minimize prefill cost.
+- **Injection Point**: `build_modular_system_prompt(agent_name=AgentName.DASH, ...)` uses the persona's system prompt (which includes role, identity, purpose, autonomy) in place of `core/identity.txt`. The Dash path skips heavy sections (learned context, full tool descriptions) to reduce prompt size.
 - **Routing**: `ChatPipelineService` selects Dash when `triage_result.complexity == SIMPLE` (i.e. the assistant model tier was chosen).
 - **Handoff Note**: Dash does **not** hand off to Sage mid-turn — no runtime mechanism exists for that. When a turn outgrows Dash, its persona directs it to name the mismatch, answer only what a single tool call can answer correctly, and stop; the next user turn is re-triaged and typically re-routes to Sage.
 - **Migration Status**: Complete
@@ -116,6 +116,10 @@ All agent definitions are centralized in `shared/constants/agents.json`. This fi
 ## Persona Loader Utility
 
 The utility `components/g8ee/app/utils/agent_persona_loader.py` provides:
+
+- **`@lru_cache(maxsize=1)` decorator** on `_load_agents_json()` — the `agents.json` file is cached at process startup for the lifetime of the g8ee service. This ensures persona definitions are immutable during process lifetime and provides O(1) lookup performance. A `clear_agents_json_cache()` function exists for testing purposes only.
+
+**Important**: Tooling that edits `agents.json` and expects to see changes without a process restart will silently get stale data due to the cache. The file is process-lifetime-immutable by design.
 
 ```python
 from app.utils.agent_persona_loader import get_agent_persona, get_tribunal_member
@@ -256,6 +260,32 @@ Ordering rules (Gemini 3 best practice, applied uniformly):
   instead (e.g. "prefer staged download-inspect-execute over piping remote
   content into a shell").
 
+### Prefix Cache Optimization (Tribunal Templates)
+
+Tribunal generator and auditor templates are ordered **static-prefix-first** to maximize llama.cpp `--cache-reuse` effectiveness. Per-session-stable sections (`<constraints>`, `<system_context>`, `<operator_context>`) precede per-turn dynamic sections (`<guidelines>`, `<request>`, `{auditor_context}`). This ordering ensures that when llama.cpp receives a second request in the same session, the KV cache can reuse the static prefix tokens, reducing prefill cost.
+
+**Generator template** (`prompts_data/tribunal/generator.txt`):
+1. `<constraints>` — forbidden patterns, command constraints (session-stable)
+2. `<system_context>` — OS, shell, user, working directory (session-stable)
+3. `<operator_context>` — bound operator metadata (session-stable)
+4. `<guidelines>` — per-turn operator-provided guidance (dynamic)
+5. `<request>` — the natural-language intent (dynamic)
+
+**Auditor template** (`prompts_data/tribunal/auditor.txt`):
+1. `<constraints>` — forbidden patterns, command constraints (session-stable)
+2. `<system_context>` — OS, shell, user (session-stable)
+3. `<operator_context>` — bound operator metadata (session-stable)
+4. `<guidelines>` — per-turn operator-provided guidance (dynamic)
+5. `<request>` — the natural-language intent (dynamic)
+6. `{auditor_context}` — candidate command and cluster IDs (dynamic)
+
+**Required llama.cpp flags** for this optimization to be effective:
+- `--cache-reuse 256` — enables KV cache reuse up to 256 tokens
+- `--keep -1` — keeps the KV cache between requests (default is to clear)
+- `--parallel <n_slots ≥ 6>` — Tribunal emits 5 parallel members + 1 auditor in a round; without sufficient parallel slots, cache reuse is defeated by sequential processing
+
+See `docs/components/g8el.md` for full configuration details.
+
 ```text
 <role>
 [one or two sentences: who, what one thing, for whom]
@@ -300,6 +330,32 @@ Respond now with [exactly the required output format, one sentence].
 
 The Verifier uses the same pattern with `<candidate_command>` in place of
 `<operator_context>` and shares the same context fields.
+
+## output_contract Field
+
+The `output_contract` field in persona definitions is the **canonical and only** location for specifying the expected output format. Previously, a regex fallback existed to extract `<output_contract>` tags embedded in the `identity` field. This fallback has been removed — all personas must use the explicit `output_contract` field in `agents.json`.
+
+**Contract test**: `TestOutputContractIsExplicitField` in `tests/unit/test_prompt_alignment.py` enforces this invariant by asserting that no persona embeds the tag in its `identity`. If a violation is introduced, the test fires immediately and points to migrating to the explicit field.
+
+## Model Tier Values and Runtime Alignment
+
+The `model_tier` field in `agents.json` is constrained to three valid values:
+- `primary` — high-reasoning model (Sage, Judge, Auditor)
+- `assistant` — assistant model (Dash, Tribunal members, Scribe, Codex, Warden)
+- `lite` — fast/lightweight model (Triage)
+
+**Contract test**: `test_model_tier_is_valid_value` in `tests/unit/utils/test_shared_agent_constants.py` enforces this by asserting every agent's `model_tier` is one of the three valid values. This catches typos like `"liter"`.
+
+**Runtime-tier alignment**: The declared tier in `agents.json` must match the tier the production path actually requests. A contract test `test_model_tier_matches_runtime_routing` pins per-agent declared tier to the tier its production path requests:
+- Triage: declared `lite` → runtime uses `lite`
+- Sage: declared `primary` → runtime uses `primary`
+- Dash: declared `assistant` → runtime uses `assistant`
+- Tribunal members: declared `lite` → runtime uses `assistant` (generator hardcode)
+- Auditor: declared `lite` → runtime uses `assistant` (generator hardcode)
+- Judge: declared `primary` → runtime uses `primary`
+- Scribe/Codex/Warden: declared `assistant` → runtime uses `assistant`
+
+This test catches drift in either direction — if `agents.json` is edited without updating the runtime hardcodes, or vice versa.
 
 ## Current Prompt File Structure
 

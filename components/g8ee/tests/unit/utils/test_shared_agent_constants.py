@@ -98,6 +98,63 @@ class TestAgentMetadataPersonaFields:
         for key, agent in _AGENTS["agent.metadata"].items():
             assert isinstance(agent["model_tier"], str) and agent["model_tier"], f"Agent '{key}' model_tier must be a non-empty string"
 
+    def test_model_tier_is_valid_value(self):
+        """model_tier must be one of the three tiers resolve_model() understands.
+
+        Pinning the valid set prevents typos like 'liter' or 'assistants' from
+        silently slipping into agents.json. resolve_model() raises ValueError on
+        unknown tiers, but agents.json values are declarative metadata that is
+        not always passed through resolve_model() at runtime, so a typo would
+        otherwise go undetected.
+        """
+        valid_tiers = {"primary", "assistant", "lite"}
+        for key, agent in _AGENTS["agent.metadata"].items():
+            tier = agent["model_tier"]
+            assert tier in valid_tiers, (
+                f"Agent '{key}' has invalid model_tier '{tier}'. "
+                f"Must be one of {sorted(valid_tiers)}."
+            )
+
+    def test_model_tier_matches_runtime_routing(self):
+        """Each agent's declared model_tier must match the tier its production
+        code path actually requests from resolve_model().
+
+        This catches drift between the persona declaration and the hardcoded
+        runtime selection. If a runtime path changes its hardcoded tier (e.g.
+        Tribunal members switch from 'lite' to 'assistant'), agents.json must
+        be updated in lockstep so the declared persona reflects reality.
+
+        Routing references:
+        - triage:    chat_pipeline -> model_overrides.for_triage() -> lite
+        - sage:      chat_pipeline COMPLEX -> 'primary'
+        - dash:      chat_pipeline SIMPLE  -> 'assistant'
+        - tribunal members (axiom/concord/variance/pragma/nemesis):
+                     generator._resolve_model(tier='lite')
+        - auditor:   generator._resolve_model(tier='primary')
+        Other agents (scribe, codex, judge, warden*, tribunal coordinator)
+        have their own paths or are coordinator metadata; they are checked
+        only for tier validity, not lockstep alignment.
+        """
+        expected = {
+            "triage": "lite",
+            "sage": "primary",
+            "dash": "assistant",
+            "axiom": "lite",
+            "concord": "lite",
+            "variance": "lite",
+            "pragma": "lite",
+            "nemesis": "lite",
+            "auditor": "primary",
+        }
+        metadata = _AGENTS["agent.metadata"]
+        for agent_key, expected_tier in expected.items():
+            actual_tier = metadata[agent_key]["model_tier"]
+            assert actual_tier == expected_tier, (
+                f"Agent '{agent_key}' declares model_tier='{actual_tier}' "
+                f"but its runtime path requests tier='{expected_tier}'. "
+                f"Update agents.json or the runtime hardcode in lockstep."
+            )
+
     def test_tools_is_list(self):
         for key, agent in _AGENTS["agent.metadata"].items():
             assert isinstance(agent["tools"], list), f"Agent '{key}' tools must be a list"

@@ -156,6 +156,33 @@ class TestTribunalPersonaOutputContract:
         )
 
 
+class TestOutputContractIsExplicitField:
+    """The canonical home for ``<output_contract>`` is the persona's explicit
+    ``output_contract`` field, not the ``identity`` field. ``get_system_prompt``
+    used to carry a regex fallback that pulled an embedded ``<output_contract>``
+    tag out of ``identity``; that fallback was removed because no live persona
+    relied on it. This test enforces the invariant that lets the fallback stay
+    gone — if any persona ever embeds the tag in ``identity`` again, both this
+    test fires and the system prompt will (correctly) show the tag in the wrong
+    place, prompting a migration to the explicit field instead of resurrecting
+    a regex.
+    """
+
+    def test_no_persona_embeds_output_contract_in_identity(self) -> None:
+        from app.utils.agent_persona_loader import _load_agents_json
+
+        offenders: list[str] = []
+        for agent_id, agent in _load_agents_json()["agent.metadata"].items():
+            if "<output_contract>" in agent.get("identity", ""):
+                offenders.append(agent_id)
+        assert not offenders, (
+            "Personas embedded <output_contract> in their identity field: "
+            f"{offenders}. Move the contract to the explicit "
+            "agent.metadata.<id>.output_contract field instead — see "
+            "AgentPersona.get_system_prompt()."
+        )
+
+
 class TestModeToolsFilesAreRulesOnly:
     """``modes/<mode>/tools.txt`` files carry mode-specific rules and
     tool-advertisement lists. Per-tool parameter descriptions live in

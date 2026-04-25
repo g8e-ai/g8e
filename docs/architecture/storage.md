@@ -344,6 +344,9 @@ The document store provides a Firestore-style `collection/document` interface. D
 | `passkey_challenges` | g8ed | Pending WebAuthn challenges keyed by user ID. Challenges are single-use nonces consumed on read during verification (see `PasskeyAuthService._consumeChallenge`), so rows are always deleted after verification regardless of outcome. |
 | `tribunal_commands` | g8ee | Tribunal command history — stores Tribunal-generated commands for audit and replay |
 | `agent_activity_metadata` | g8ee | Agent activity tracking metadata — records agent execution context and performance metrics |
+| `reputation_state` | g8ee | Reputation state records — tracks agent reputation scores and status |
+| `reputation_commitments` | g8ee | Reputation commitment records — stores reputation commitments and pledges |
+| `stake_resolutions` | g8ee | Stake resolution records — tracks stake resolution outcomes and history |
 
 ### Session Documents
 

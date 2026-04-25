@@ -58,10 +58,10 @@ async def generate_case_title(
         )
 
     try:
-        provider = get_llm_provider(settings.llm, is_assistant=True)
-        model = settings.llm.resolved_assistant_model
+        provider = get_llm_provider(settings.llm, is_lite=True)
+        model = settings.llm.lite_model
         if not model:
-            logger.warning("[TITLE-GEN] No assistant_model configured, using fallback title")
+            logger.warning("[TITLE-GEN] No lite_model configured, using fallback title")
             return CaseTitleResult(
                 generated_title=_create_fallback_title(description, max_length),
                 fallback=True

@@ -89,10 +89,16 @@ def get_search_settings() -> SearchSettings | None:
     return _search_settings
 
 
-def _get_provider_cache_key(settings: LLMSettings, is_assistant: bool) -> str:
+def _get_provider_cache_key(settings: LLMSettings, is_assistant: bool = False, is_lite: bool = False) -> str:
     """Generate a cache key for provider instances based on configuration."""
-    provider_type: LLMProvider = settings.assistant_provider if is_assistant else settings.primary_provider
-    provider_value = provider_type.value
+    if is_lite:
+        provider_type = settings.lite_provider
+    elif is_assistant:
+        provider_type = settings.assistant_provider
+    else:
+        provider_type = settings.primary_provider
+    
+    provider_value = provider_type.value if provider_type else "none"
     key_parts = [provider_value]
 
     if provider_value == LLMProvider.GEMINI.value:
@@ -133,7 +139,7 @@ def reset_settings() -> None:
     _search_settings = None
 
 
-def get_llm_provider(settings: LLMSettings, is_assistant: bool = False) -> LLMProviderBase:
+def get_llm_provider(settings: LLMSettings, is_assistant: bool = False, is_lite: bool = False) -> LLMProviderBase:
     """Return a configured LLMProvider instance based on settings.
 
     SSL strategy:
@@ -148,11 +154,16 @@ def get_llm_provider(settings: LLMSettings, is_assistant: bool = False) -> LLMPr
     """
     from app.errors import ConfigurationError
 
-    cache_key = _get_provider_cache_key(settings, is_assistant)
+    cache_key = _get_provider_cache_key(settings, is_assistant, is_lite)
     if cache_key in _provider_cache:
         return _provider_cache[cache_key]
 
-    provider_type = settings.assistant_provider if is_assistant else settings.primary_provider
+    if is_lite:
+        provider_type = settings.lite_provider
+    elif is_assistant:
+        provider_type = settings.assistant_provider
+    else:
+        provider_type = settings.primary_provider
 
     if provider_type == LLMProvider.OLLAMA:
         from .providers.ollama import OllamaProvider

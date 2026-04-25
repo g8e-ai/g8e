@@ -172,15 +172,26 @@ def _member_for_pass(pass_index: int) -> TribunalMember:
     ]
     return members[pass_index % len(members)]
 
-def _resolve_model(llm_settings: LLMSettings, request: str = "") -> str:
-    """Resolve the concrete model string from settings."""
+def _resolve_model(llm_settings: LLMSettings, tier: str = "assistant", request: str = "") -> str:
+    """Resolve the concrete model string from settings based on tier."""
+    if tier == "lite" and llm_settings.lite_model:
+        return llm_settings.lite_model
+    
+    if tier == "assistant" and llm_settings.assistant_model:
+        return llm_settings.assistant_model
+    
+    if tier == "primary" and llm_settings.primary_model:
+        return llm_settings.primary_model
+
+    # Fallback chain: lite -> assistant -> primary
+    if llm_settings.lite_model:
+        return llm_settings.lite_model
     if llm_settings.assistant_model:
         return llm_settings.assistant_model
-
     if llm_settings.primary_model:
         return llm_settings.primary_model
 
-    provider = llm_settings.primary_provider or llm_settings.assistant_provider
+    provider = llm_settings.primary_provider or llm_settings.assistant_provider or llm_settings.lite_provider
     raise TribunalModelNotConfiguredError(
         provider=provider.value if provider else "unknown",
         request=request,
@@ -660,7 +671,8 @@ async def generate_command(
         raise TribunalDisabledError(request=request)
 
     try:
-        model = _resolve_model(settings.llm, request=request)
+        generation_model = _resolve_model(settings.llm, tier="lite", request=request)
+        auditor_model = _resolve_model(settings.llm, tier="primary", request=request)
     except TribunalModelNotConfiguredError as exc:
         await emitter.emit(
             EventType.TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED,
@@ -680,7 +692,7 @@ async def generate_command(
         TribunalSessionStartedPayload(
             request=request,
             guidelines=guidelines,
-            model=model,
+            model=generation_model,
             num_passes=num_passes,
             members=members,
             correlation_id=correlation_id,
@@ -688,10 +700,10 @@ async def generate_command(
     )
 
     try:
-        provider = get_llm_provider(settings.llm, is_assistant=True)
+        generation_provider = get_llm_provider(settings.llm, is_lite=True)
     except Exception as exc:
-        assistant_provider = settings.llm.assistant_provider
-        provider_name = assistant_provider.value if assistant_provider else "not_configured"
+        lite_provider = settings.llm.lite_provider
+        provider_name = lite_provider.value if lite_provider else "not_configured"
         await emitter.emit(
             EventType.TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE,
             TribunalSessionProviderUnavailablePayload(
@@ -701,13 +713,13 @@ async def generate_command(
             ),
         )
         raise TribunalProviderUnavailableError(
-            provider=assistant_provider,
+            provider=lite_provider,
             error=str(exc),
             request=request,
         ) from exc
 
     candidates = await _run_generation_stage(
-        provider=provider, model=model, request=request, guidelines=guidelines,
+        provider=generation_provider, model=generation_model, request=request, guidelines=guidelines,
         operator_context=operator_context, num_passes=num_passes, emitter=emitter,
         command_constraints_message=command_constraints_message,
     )
@@ -737,9 +749,18 @@ async def generate_command(
         )
         raise TribunalConsensusFailedError(request=request, vote_breakdown=vote_breakdown)
 
+    try:
+        auditor_provider = get_llm_provider(settings.llm, is_assistant=False, is_lite=False)
+    except Exception as exc:
+        primary_provider = settings.llm.primary_provider
+        provider_name = primary_provider.value if primary_provider else "not_configured"
+        logger.warning("[TRIBUNAL] Auditor provider unavailable: %s", exc)
+        # Auditor failure is non-fatal if consensus was reached, but here we can't even start it
+        auditor_provider = None
+
     final_command, outcome, auditor_passed, auditor_revision, auditor_reason, commitment_id = await _run_audit_stage(
-        provider=provider,
-        model=model,
+        provider=auditor_provider or generation_provider,
+        model=auditor_model if auditor_provider else generation_model,
         request=request,
         guidelines=guidelines,
         vote_winner=vote_winner,

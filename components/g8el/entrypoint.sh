@@ -13,4 +13,4 @@ if [ ! -f "/models/${MODEL_NAME}" ]; then
     curl -L -o "/models/${MODEL_NAME}" "${MODEL_URL}"
 fi
 
-exec /app/llama-server -m "/models/${MODEL_NAME}" -c "${CONTEXT_SIZE}" --host "${HOST}" --port "${PORT}" -t "${THREADS}" --mlock 
+exec /app/llama-server -m "/models/${MODEL_NAME}" -c "${CONTEXT_SIZE}" --host "${HOST}" --port "${PORT}" -t "${THREADS}" --mlock --cache-reuse 256 --keep -1 --parallel 6 

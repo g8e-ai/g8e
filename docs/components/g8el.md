@@ -149,6 +149,17 @@ g8el supports any GGUF-format model compatible with llama.cpp. The container use
 - `-ub 512`: Physical micro-batch size
 - `--flash-attn on`: Enables Flash Attention for faster computation
 
+### Prefix Cache Optimization
+
+For optimal Tribunal pipeline performance, g8el should be configured with KV cache reuse flags. The Tribunal generator emits 5 parallel members plus 1 auditor per round; without sufficient parallel slots and cache reuse, the static-prefix-first template ordering is defeated.
+
+**Recommended flags** (add to `entrypoint.sh` llama.cpp server command):
+- `--cache-reuse 256` — enables KV cache reuse up to 256 tokens, allowing llama.cpp to reuse the static prefix (constraints, system context, operator context) across Tribunal rounds
+- `--keep -1` — keeps the KV cache between requests (default is to clear after each request)
+- `--parallel <n_slots ≥ 6>` — configures parallel processing slots; Tribunal requires at least 6 (5 members + 1 auditor) to avoid sequential processing that defeats cache reuse
+
+These flags work in conjunction with the static-prefix-first template ordering documented in `docs/architecture/agent_personas.md`. Without them, the prefix cache optimization buys nothing measurable.
+
 For different use cases:
 
 - **Faster inference**: Use smaller models (Q3_K quantization)

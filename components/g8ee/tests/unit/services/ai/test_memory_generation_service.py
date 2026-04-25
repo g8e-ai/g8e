@@ -60,7 +60,7 @@ class TestUpdateMemoryFromConversation:
             sentinel_mode=False,
         )
         settings = G8eeUserSettings(
-            llm=LLMSettings(provider="gemini", assistant_model="gemini-3.1-flash")
+            llm=LLMSettings(provider="gemini", lite_provider="gemini", lite_model="gemini-3.1-flash")
         )
 
         result = await service.update_memory_from_conversation(
@@ -99,7 +99,7 @@ class TestUpdateMemoryFromConversation:
             sentinel_mode=False,
         )
         settings = G8eeUserSettings(
-            llm=LLMSettings(provider="gemini", assistant_model="gemini-3.1-flash")
+            llm=LLMSettings(provider="gemini", lite_provider="gemini", lite_model="gemini-3.1-flash")
         )
 
         result = await service.update_memory_from_conversation(
@@ -140,7 +140,7 @@ class TestUpdateMemoryFromConversation:
         ]
 
         settings = G8eeUserSettings(
-            llm=LLMSettings(provider="gemini", assistant_model="gemini-3.1-flash")
+            llm=LLMSettings(provider="gemini", lite_provider="gemini", lite_model="gemini-3.1-flash")
         )
 
         # Mock _ai_update_memory to prevent actual LLM call
@@ -713,7 +713,7 @@ class TestMemoryMergeLogic:
             id="inv-1", case_id="case-1", user_id="user-1",
             status=InvestigationStatus.OPEN, case_title="Test", sentinel_mode=False,
         )
-        settings = G8eeUserSettings(llm=LLMSettings(provider="ollama", assistant_model="test"))
+        settings = G8eeUserSettings(llm=LLMSettings(provider="ollama", lite_provider="ollama", lite_model="test"))
 
         result = await service.update_memory_from_conversation(
             conversation_history=[ConversationHistoryMessage(
@@ -763,7 +763,7 @@ class TestMemoryMergeLogic:
             id="inv-1", case_id="case-1", user_id="user-1",
             status=InvestigationStatus.OPEN, case_title="Test", sentinel_mode=False,
         )
-        settings = G8eeUserSettings(llm=LLMSettings(provider="ollama", assistant_model="test"))
+        settings = G8eeUserSettings(llm=LLMSettings(provider="ollama", lite_provider="ollama", lite_model="test"))
 
         result = await service.update_memory_from_conversation(
             conversation_history=[ConversationHistoryMessage(
@@ -802,7 +802,7 @@ class TestMemoryMergeLogic:
             id="inv-1", case_id="case-1", user_id="user-1",
             status=InvestigationStatus.OPEN, case_title="Test", sentinel_mode=False,
         )
-        settings = G8eeUserSettings(llm=LLMSettings(provider="ollama", assistant_model="test"))
+        settings = G8eeUserSettings(llm=LLMSettings(provider="ollama", lite_provider="ollama", lite_model="test"))
 
         result = await service.update_memory_from_conversation(
             conversation_history=[ConversationHistoryMessage(

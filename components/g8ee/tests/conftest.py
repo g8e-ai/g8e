@@ -92,19 +92,32 @@ def _llm_settings_from_env() -> LLMSettings | None:
     else:
         assistant_provider = provider
 
+    lite_provider_str = os.environ.get("TEST_LLM_LITE_PROVIDER", "").strip()
+    if lite_provider_str:
+        try:
+            lite_provider = LLMProvider(lite_provider_str)
+        except ValueError:
+            logger.warning("TEST_LLM_LITE_PROVIDER=%s is not a valid provider, falling back to assistant", lite_provider_str)
+            lite_provider = assistant_provider
+    else:
+        lite_provider = assistant_provider
+
     api_key = os.environ.get("TEST_LLM_API_KEY", "").strip() or None
     endpoint = os.environ.get("TEST_LLM_ENDPOINT_URL", "").strip() or None
     assistant_api_key = os.environ.get("TEST_LLM_ASSISTANT_API_KEY", "").strip() or None
     assistant_endpoint = os.environ.get("TEST_LLM_ASSISTANT_ENDPOINT_URL", "").strip() or None
     primary = os.environ.get("TEST_LLM_PRIMARY_MODEL", "").strip() or None
     assistant = os.environ.get("TEST_LLM_ASSISTANT_MODEL", "").strip() or None
+    lite = os.environ.get("TEST_LLM_LITE_MODEL", "").strip() or None
     max_tokens_str = os.environ.get("TEST_LLM_MAX_TOKENS", "").strip() or None
 
-    kwargs: dict = {"primary_provider": provider, "assistant_provider": assistant_provider}
+    kwargs: dict = {"primary_provider": provider, "assistant_provider": assistant_provider, "lite_provider": lite_provider}
     if primary:
         kwargs["primary_model"] = primary
     if assistant:
         kwargs["assistant_model"] = assistant
+    if lite:
+        kwargs["lite_model"] = lite
     if max_tokens_str:
         try:
             kwargs["llm_max_tokens"] = int(max_tokens_str)

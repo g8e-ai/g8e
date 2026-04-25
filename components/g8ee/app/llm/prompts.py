@@ -449,6 +449,7 @@ def _build_dash_slim_prompt(
         "[PROMPT] dash_slim sections=%d total_chars=%d sections=[%s]",
         len(sections), len(full_prompt), ", ".join(section_labels),
     )
+    logger.info("[PROMPT] dash_slim full_prompt:\n%s", full_prompt)
     return full_prompt, context_sizes
 
 
