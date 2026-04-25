@@ -25,8 +25,9 @@ from dataclasses import dataclass, field
 
 from pydantic import ValidationError
 
-from app.constants.status import (
+from app.constants import (
     CommandErrorType,
+    EventType,
     OperatorToolName,
 )
 from app.services.ai.tool_registry import OPERATOR_TOOLS, get_tool_spec
@@ -50,6 +51,7 @@ from app.services.ai.generator import generate_command
 from app.models.grounding import GroundingMetadata
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
+from app.models.reputation import StakeResolutionPayload
 from app.models.tool_results import CommandExecutionResult, ToolResult, SearchWebResult
 from app.models.settings import G8eeUserSettings
 
@@ -354,6 +356,46 @@ async def orchestrate_tool_execution(
         request_settings=request_settings,
         execution_id=execution_id,
     )
+
+    if (
+        gen_result is not None
+        and tool_name == OperatorToolName.RUN_COMMANDS
+        and tool_executor.reputation_resolution_enabled
+        and isinstance(result, CommandExecutionResult)
+    ):
+        # Schedule fire-and-forget reputation resolution
+        async def _resolve_and_emit():
+            try:
+                res = await tool_executor.reputation_service.resolve_stakes(
+                    tribunal_command_id=gen_result.correlation_id,
+                    investigation_id=investigation.id,
+                    gen_result=gen_result,
+                    execution_result=result,
+                    warden_risk=result.warden_risk,
+                )
+
+                for outcome in res.resolutions:
+                    payload = StakeResolutionPayload.model_validate(outcome.model_dump())
+                    await g8ed_event_service.publish_reputation_event(
+                        EventType.REPUTATION_STATE_UPDATED,
+                        payload,
+                        g8e_context
+                    )
+
+                    if outcome.slash_tier:
+                        slash_event = getattr(EventType, f"REPUTATION_SLASH_TIER{outcome.slash_tier.value}")
+                        await g8ed_event_service.publish_reputation_event(
+                            slash_event,
+                            payload,
+                            g8e_context
+                        )
+            except Exception as e:
+                logger.error("[REPUTATION] Failed to resolve stakes: %s", e, exc_info=True)
+
+        tool_executor.chat_task_manager.track_detached(
+            _resolve_and_emit(),
+            name=f"reputation_resolution_{execution_id}"
+        )
 
     logger.info(
         "[AGENT] Function result: name=%s success=%s execution_id=%s error_type=%s",

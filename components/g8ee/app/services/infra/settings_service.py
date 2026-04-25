@@ -150,6 +150,9 @@ class SettingsService:
         if platform_settings.auth.g8e_api_key:
             settings.auth.g8e_api_key = platform_settings.auth.g8e_api_key
 
+        # Reputation (Phase 3 — GDD §14.5)
+        settings.reputation = platform_settings.reputation
+
         return settings
 
     def _build_llm_settings(self, user_settings: G8eeUserSettings) -> LLMSettings:

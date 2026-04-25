@@ -292,6 +292,20 @@ def make_g8ed_event_service():
     svc.publish_command_event = AsyncMock()
     svc.publish_investigation_event = AsyncMock(side_effect=capture_publish_investigation_event)
     
+    async def capture_publish_reputation(event_type, data, g8e_context):
+        """Capture reputation event calls and create proper SessionEvent."""
+        session_event = SessionEvent(
+            event_type=event_type,
+            payload=data,
+            web_session_id=g8e_context.web_session_id,
+            user_id=g8e_context.user_id,
+            case_id=g8e_context.case_id,
+            investigation_id=g8e_context.investigation_id,
+        )
+        return await capture_publish(session_event)
+    
+    svc.publish_reputation_event = AsyncMock(side_effect=capture_publish_reputation)
+    
     # Store the captured events on the service for test access
     svc._published_events = published_events
     return svc

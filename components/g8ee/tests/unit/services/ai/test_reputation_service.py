@@ -511,25 +511,20 @@ class TestResolveStakes:
     ):
         # Pre-populate every agent so resolve_stakes treats the verdict as
         # already-resolved.
-        existing = StakeResolution(
-            id="placeholder",
-            investigation_id="inv-1",
-            tribunal_command_id="tc-1",
-            agent_id="placeholder",
-            outcome_score=1.0,
-            rationale="winner_supporter_verified",
-            slash_tier=None,
-            scalar_before=0.5,
-            scalar_after=0.51,
-            half_life=DEFAULT_EMA_HALF_LIFE,
-            created_at=datetime(2026, 4, 24, 12, 0, 0, tzinfo=UTC),
-        )
-
         async def _existing_get(tribunal_command_id, agent_id):
-            return existing.model_copy(update={
-                "id": stake_resolution_id(tribunal_command_id, agent_id),
-                "agent_id": agent_id,
-            })
+            return StakeResolution(
+                id=stake_resolution_id(tribunal_command_id, agent_id),
+                investigation_id="inv-1",
+                tribunal_command_id=tribunal_command_id,
+                agent_id=agent_id,
+                outcome_score=1.0,
+                rationale="winner_supporter_verified",
+                slash_tier=None,
+                scalar_before=0.5,
+                scalar_after=0.51,
+                half_life=DEFAULT_EMA_HALF_LIFE,
+                created_at=datetime(2026, 4, 24, 12, 0, 0, tzinfo=UTC),
+            )
 
         stake_data.get.side_effect = _existing_get
 

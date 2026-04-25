@@ -492,6 +492,7 @@ class OperatorCommandService:
             approval_id=approval_result.approval_id,
             is_batch=is_batch,
             batch_id=batch_id,
+            warden_risk=risk_analysis.risk_level if risk_analysis else None,
         )
 
     # ------------------------------------------------------------------
@@ -523,6 +524,7 @@ class OperatorCommandService:
         approval_id: str | None,
         is_batch: bool,
         batch_id: str | None,
+        warden_risk: RiskLevel | None = None,
     ) -> CommandExecutionResult:
         """Collapse per-operator results into a single CommandExecutionResult.
 
@@ -550,6 +552,7 @@ class OperatorCommandService:
                 approval_id=approval_id,
                 batch_id=batch_id,
                 error=only.error,
+                warden_risk=warden_risk,
             )
 
         # Batch: aggregate outputs with host headers for the agent.
@@ -589,6 +592,7 @@ class OperatorCommandService:
             approval_id=approval_id,
             batch_id=batch_id,
             error=aggregate_error,
+            warden_risk=warden_risk,
         )
 
     async def execute_file_edit(self, args: FileEditRequestPayload, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FileEditResult:

@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from contextvars import ContextVar, Token as ContextVarToken
-from typing import Any, Awaitable, TypeVar
+from typing import Any, Awaitable, TYPE_CHECKING, TypeVar
 from app.services.operator.command_service import OperatorCommandService
 
 import app.llm.llm_types as types
@@ -76,6 +76,7 @@ from app.models.command_request_payloads import (
     FetchFileHistoryRequestPayload,
     FetchFileDiffRequestPayload,
     FsListRequestPayload,
+    FsReadRequestPayload,
 )
 
 from app.utils.blacklist_validator import CommandBlacklistValidator
@@ -84,6 +85,11 @@ from app.utils.safety import map_os_string_to_platform
 from .grounding.web_search_provider import WebSearchProvider
 from ..data.reputation_data_service import ReputationDataService
 from ..investigation.investigation_service import InvestigationService
+
+if TYPE_CHECKING:
+    from .reputation_service import ReputationService
+    from .chat_task_manager import BackgroundTaskManager
+    from ..data.stake_resolution_data_service import StakeResolutionDataService
 
 T = TypeVar("T")
 
@@ -103,6 +109,9 @@ class AIToolService:
         whitelist_validator: CommandWhitelistValidator | None = None,
         blacklist_validator: CommandBlacklistValidator | None = None,
         reputation_data_service: ReputationDataService | None = None,
+        reputation_service: ReputationService | None = None,
+        stake_resolution_data_service: StakeResolutionDataService | None = None,
+        chat_task_manager: BackgroundTaskManager | None = None,
     ):
         self.operator_command_service = operator_command_service
         self.investigation_service = investigation_service
@@ -110,6 +119,9 @@ class AIToolService:
         self._platform_settings = platform_settings
         self._user_settings = user_settings
         self._reputation_data_service = reputation_data_service
+        self._reputation_service = reputation_service
+        self._stake_resolution_data_service = stake_resolution_data_service
+        self._chat_task_manager = chat_task_manager
 
         from app.utils.validators import get_blacklist_validator, get_whitelist_validator
         self._whitelist_validator = whitelist_validator if whitelist_validator is not None else get_whitelist_validator()
@@ -266,6 +278,58 @@ class AIToolService:
                 "AuthSettings.auditor_hmac_key."
             )
         return key
+
+    @property
+    def reputation_service(self) -> ReputationService:
+        """The configured ``ReputationService``.
+
+        Tribunal-path invocations require it; constructing an
+        ``AIToolService`` without one and then invoking the Tribunal is
+        a configuration error surfaced at the call site.
+        """
+        if self._reputation_service is None:
+            raise ConfigurationError(
+                "AIToolService constructed without reputation_service; "
+                "Tribunal path requires it. Wire it in service_factory."
+            )
+        return self._reputation_service
+
+    @property
+    def stake_resolution_data_service(self) -> StakeResolutionDataService:
+        """The configured ``StakeResolutionDataService``.
+
+        Tribunal-path invocations require it; constructing an
+        ``AIToolService`` without one and then invoking the Tribunal is
+        a configuration error surfaced at the call site.
+        """
+        if self._stake_resolution_data_service is None:
+            raise ConfigurationError(
+                "AIToolService constructed without stake_resolution_data_service; "
+                "Tribunal path requires it. Wire it in service_factory."
+            )
+        return self._stake_resolution_data_service
+
+    @property
+    def chat_task_manager(self) -> BackgroundTaskManager:
+        """The configured ``BackgroundTaskManager``.
+
+        Tribunal-path invocations require it for detached reputation updates;
+        constructing an ``AIToolService`` without one and then invoking the
+        Tribunal is a configuration error surfaced at the call site.
+        """
+        if self._chat_task_manager is None:
+            raise ConfigurationError(
+                "AIToolService constructed without chat_task_manager; "
+                "Tribunal path requires it for detached updates. Wire it in service_factory."
+            )
+        return self._chat_task_manager
+
+    @property
+    def reputation_resolution_enabled(self) -> bool:
+        """True if reputation resolution (GDD Phase 3) is enabled in settings."""
+        if not self._platform_settings:
+            return False
+        return self._platform_settings.reputation.resolution_enabled
 
     @property
     def whitelist_validator(self) -> CommandWhitelistValidator:
@@ -1007,7 +1071,7 @@ class AIToolService:
 
     async def _execute_file_read(
         self,
-        args: FsReadPayload,
+        args: FsReadRequestPayload,
         investigation: EnrichedInvestigationContext,
         g8e_context: G8eHttpContext,
     ) -> FsReadToolResult:

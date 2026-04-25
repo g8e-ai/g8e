@@ -191,7 +191,9 @@ class ServiceFactory:
         )
     
     @staticmethod
-    def create_domain_services(data_services: DataServices) -> DomainServices:
+    def create_domain_services(
+        settings: G8eePlatformSettings, data_services: DataServices
+    ) -> DomainServices:
         """Create domain services that orchestrate business logic."""
         investigation_service = InvestigationService(
             investigation_data_service=data_services['investigation_data_service'],
@@ -206,6 +208,7 @@ class ServiceFactory:
         reputation_service = ReputationService(
             reputation_data_service=data_services['reputation_data_service'],
             stake_resolution_data_service=data_services['stake_resolution_data_service'],
+            half_life=settings.reputation.ema_half_life,
         )
 
         return DomainServices(
@@ -248,7 +251,7 @@ class ServiceFactory:
         """
         core_services = ServiceFactory.create_core_services(settings, cache_aside_service)
         data_services = ServiceFactory.create_data_services(settings, cache_aside_service, core_services)
-        domain_services = ServiceFactory.create_domain_services(data_services)
+        domain_services = ServiceFactory.create_domain_services(settings, data_services)
         operator_services = ServiceFactory.create_operator_services(core_services, data_services)
 
         attachment_service = AttachmentService(
@@ -294,6 +297,9 @@ class ServiceFactory:
             web_search_provider=web_search_provider,
             platform_settings=settings,
             reputation_data_service=data_services['reputation_data_service'],
+            reputation_service=domain_services['reputation_service'],
+            stake_resolution_data_service=data_services['stake_resolution_data_service'],
+            chat_task_manager=chat_task_manager,
         )
 
         request_builder = AIRequestBuilder(

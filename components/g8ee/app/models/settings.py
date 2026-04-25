@@ -216,6 +216,33 @@ class LLMSettings(G8eBaseModel):
         }
         return endpoints.get(self.assistant_provider)
 
+class ReputationSettings(G8eBaseModel):
+    """Phase 3 reputation-resolution configuration (GDD §14.5, §15 Phase 3).
+
+    Disabled by default during initial rollout; flipping
+    ``resolution_enabled`` activates the post-execution `ReputationService`
+    dispatch from `orchestrate_tool_execution` without any other code change.
+    """
+
+    resolution_enabled: bool = Field(
+        default=False,
+        description=(
+            "When True, the per-tool-call reputation hook runs after every "
+            "Tribunal-backed `run_commands_with_operator` invocation. When "
+            "False, the scoreboard remains static (Phase 2 commitments still "
+            "succeed over the bootstrap-seeded scalars)."
+        ),
+    )
+    ema_half_life: int = Field(
+        default=50,
+        ge=1,
+        description=(
+            "EMA half-life in resolutions; alpha = 1 / half_life. GDD §14.10 "
+            "suggests 50 as the start point."
+        ),
+    )
+
+
 class G8eePlatformSettings(G8eBaseModel):
     """Platform-level deployment configuration."""
     port: int = Field(443)
@@ -243,6 +270,7 @@ class G8eePlatformSettings(G8eBaseModel):
     command_validation: CommandValidationSettings = Field(default_factory=CommandValidationSettings)
     search: SearchSettings = Field(default_factory=SearchSettings)
     eval_judge: EvalJudgeSettings = Field(default_factory=EvalJudgeSettings)
+    reputation: ReputationSettings = Field(default_factory=ReputationSettings)
 
     @property
     def ca_cert_path(self) -> str | None:

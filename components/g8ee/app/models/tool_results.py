@@ -435,6 +435,10 @@ class CommandExecutionResult(G8eBaseModel):
         description="Batch correlation ID when this result represents a multi-operator fan-out; matches the batch_id on per-operator events.",
     )
     available_operators: int | None = Field(default=None)
+    warden_risk: RiskLevel | None = Field(
+        default=None,
+        description="Warden-classified risk level from the approval gate, used for Tier 1 reputation resolution."
+    )
     blocked_pattern: str | None = Field(default=None)
     blocked_command: str | None = Field(default=None)
     validation_details: dict[str, Any] | None = Field(default=None)
