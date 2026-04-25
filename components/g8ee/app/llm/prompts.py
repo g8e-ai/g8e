@@ -392,7 +392,7 @@ def build_modular_system_prompt(
     g8e_web_search_available: bool = True,
     triage_result: TriageResult | None = None,
     agent_name: AgentName | None = None,
-) -> str:
+) -> tuple[str, dict[str, int]]:
     """
     Build system prompt using modular architecture.
 
@@ -421,7 +421,7 @@ def build_modular_system_prompt(
                        the dissent protocol reads at inference time.
 
     Returns:
-        Complete system prompt string
+        Tuple of (complete system prompt string, context_sizes dict with character counts)
     """
     sections = []
 
@@ -605,4 +605,9 @@ def build_modular_system_prompt(
         logger.info("[PROMPT] section=%-24s chars=%d", label, len(section))
     logger.info("[PROMPT] full_prompt:\n%s", full_prompt)
 
-    return full_prompt
+    context_sizes = {
+        label: len(section) for label, section in zip(section_labels, sections)
+    }
+    context_sizes["total"] = len(full_prompt)
+
+    return full_prompt, context_sizes

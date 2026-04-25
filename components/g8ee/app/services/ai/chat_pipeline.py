@@ -249,7 +249,7 @@ class ChatPipelineService:
 
         all_operator_contexts = extract_all_operators_context(investigation)
         active_agent = AgentName.SAGE if needs_main_model else AgentName.DASH
-        system_instructions = build_modular_system_prompt(
+        system_instructions, context_sizes = build_modular_system_prompt(
             operator_bound=operator_bound,
             system_context=all_operator_contexts,
             user_memories=user_memories,
@@ -355,6 +355,7 @@ class ChatPipelineService:
         state: AgentStreamState,
         start_time: float,
         attachments: list[AttachmentMetadata],
+        context_sizes: dict[str, int] | None = None,
         error: str | None = None,
     ) -> None:
         """Record agent activity metadata for data science analysis.
@@ -365,7 +366,17 @@ class ChatPipelineService:
         """
         try:
             duration_seconds = time.time() - start_time
-            
+
+            attachment_total_bytes = sum(att.file_size or 0 for att in attachments) if attachments else 0
+
+            contents_total = 0
+            for content in inputs.contents:
+                content_str = str(content)
+                contents_total += len(content_str)
+
+            if context_sizes:
+                context_sizes["contents_total"] = contents_total
+
             metadata = AgentActivityMetadata(
                 user_id=inputs.user_id,
                 user_email=inputs.investigation.user_email if inputs.investigation else None,
@@ -393,6 +404,9 @@ class ChatPipelineService:
                 operator_bound=inputs.operator_bound,
                 bound_operator_count=len(inputs.g8e_context.bound_operators) if inputs.g8e_context.bound_operators else 0,
                 response_length=len(state.response_text),
+                context_sizes=context_sizes,
+                attachment_total_bytes=attachment_total_bytes if attachment_total_bytes > 0 else None,
+                tool_response_sizes=state.tool_response_sizes if state.tool_response_sizes else None,
                 error=error,
             )
 
@@ -686,6 +700,7 @@ class ChatPipelineService:
             state=state,
             start_time=start_time,
             attachments=attachments,
+            context_sizes=context_sizes,
         )
 
         logger.info(

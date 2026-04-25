@@ -44,6 +44,10 @@ class BootstrapServiceProtocol(Protocol):
         """Load session encryption key from g8es volume."""
         ...
 
+    def load_auditor_hmac_key(self) -> str | None:
+        """Load Tribunal auditor HMAC-SHA256 signing key from g8es volume."""
+        ...
+
     def load_ca_cert_path(self) -> str | None:
         """Load CA certificate path from g8es volume."""
         ...
@@ -73,6 +77,7 @@ class BootstrapService:
         self._logger = logging.getLogger(__name__)
         self._cached_token: str | None = None
         self._cached_key: str | None = None
+        self._cached_auditor_hmac_key: str | None = None
         self._cached_ca_path: str | None = None
 
     def load_internal_auth_token(self) -> str | None:
@@ -111,6 +116,30 @@ class BootstrapService:
             self._logger.warning(f"Failed to read session encryption key: {e}")
             return None
 
+    def load_auditor_hmac_key(self) -> str | None:
+        """Load Tribunal auditor HMAC-SHA256 signing key from g8es volume.
+
+        Paired with ``internal_auth_token`` / ``session_encryption_key``:
+        the same SecretManager pattern on the g8eo side generates and
+        persists this key, and the same bootstrap_digest.json entry is
+        used for tamper verification by the caller.
+        """
+        if self._cached_auditor_hmac_key is not None:
+            return self._cached_auditor_hmac_key
+
+        key_path = self._volume_path / "auditor_hmac_key"
+        try:
+            if key_path.exists():
+                self._cached_auditor_hmac_key = key_path.read_text().strip()
+                self._logger.info("Loaded auditor HMAC key from g8es volume")
+                return self._cached_auditor_hmac_key
+            else:
+                self._logger.info("Auditor HMAC key not found in g8es volume")
+                return None
+        except Exception as e:
+            self._logger.warning(f"Failed to read auditor HMAC key: {e}")
+            return None
+
     def load_ca_cert_path(self) -> str | None:
         """Load CA certificate path from g8es volume."""
         if self._cached_ca_path is not None:
@@ -140,6 +169,7 @@ class BootstrapService:
             self._volume_path.exists() and
             (self.load_internal_auth_token() is not None or
              self.load_session_encryption_key() is not None or
+             self.load_auditor_hmac_key() is not None or
              self.load_ca_cert_path() is not None)
         )
 
@@ -147,6 +177,7 @@ class BootstrapService:
         """Clear cached values - useful for testing or re-initialization."""
         self._cached_token = None
         self._cached_key = None
+        self._cached_auditor_hmac_key = None
         self._cached_ca_path = None
 
     def verify_against_manifest(self, secret_name: str, value: str | None) -> None:

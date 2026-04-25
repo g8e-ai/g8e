@@ -112,3 +112,49 @@ def test_verify_session_key_independently(volume: Path, bootstrap: BootstrapServ
     bootstrap.verify_against_manifest("session_encryption_key", key)
     with pytest.raises(BootstrapSecretTamperError):
         bootstrap.verify_against_manifest("session_encryption_key", "b" * 64)
+
+
+def test_verify_auditor_hmac_key_independently(volume: Path, bootstrap: BootstrapService) -> None:
+    # GDD §14.4 Artifact B: the auditor HMAC key must have the same
+    # tamper-evidence guarantees as the other bootstrap secrets. A
+    # divergent key would silently poison the reputation commitment
+    # chain with signatures that look valid to g8ee but cannot be
+    # reproduced from the DB-authoritative key.
+    key = "d" * 64
+    _write_manifest(
+        volume,
+        {
+            "internal_auth_token": "tok",
+            "session_encryption_key": "s" * 64,
+            "auditor_hmac_key": key,
+        },
+    )
+
+    bootstrap.verify_against_manifest("auditor_hmac_key", key)
+    with pytest.raises(BootstrapSecretTamperError):
+        bootstrap.verify_against_manifest("auditor_hmac_key", "e" * 64)
+
+
+def test_load_auditor_hmac_key_reads_file_and_caches(volume: Path, bootstrap: BootstrapService) -> None:
+    (volume / "auditor_hmac_key").write_text("hmac-value\n")
+
+    # First read hits disk.
+    assert bootstrap.load_auditor_hmac_key() == "hmac-value"
+
+    # Mutating the file after the first successful load must not affect
+    # subsequent reads — the cache is the whole point of the loader (one
+    # value per process lifetime; rotation requires restart, mirrored on
+    # the g8eo side).
+    (volume / "auditor_hmac_key").write_text("rotated")
+    assert bootstrap.load_auditor_hmac_key() == "hmac-value"
+
+
+def test_load_auditor_hmac_key_returns_none_when_missing(volume: Path, bootstrap: BootstrapService) -> None:
+    assert bootstrap.load_auditor_hmac_key() is None
+
+
+def test_is_available_true_when_only_auditor_hmac_key_present(volume: Path, bootstrap: BootstrapService) -> None:
+    # Reputation-only Phase 2 deployments that boot without legacy auth
+    # secrets must still be reported as bootstrap-available.
+    (volume / "auditor_hmac_key").write_text("h")
+    assert bootstrap.is_available() is True

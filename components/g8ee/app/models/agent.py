@@ -195,6 +195,7 @@ class AgentStreamState(G8eBaseModel):
     grounding_metadata: GroundingMetadata | None = None
     tool_call_count: int = 0
     tool_types_used: list[str] = Field(default_factory=list)
+    tool_response_sizes: list[int] = Field(default_factory=list, description="Character sizes of individual tool responses")
 
 
 class StreamChunkData(G8eBaseModel):
@@ -227,6 +228,7 @@ class StreamChunkData(G8eBaseModel):
     result: ToolResult | None = None
     attempt: int | None = None
     max_attempts: int | None = None
+    tool_response_sizes: list[int] | None = None
     investigation_id: str | None = None
     case_id: str | None = None
 

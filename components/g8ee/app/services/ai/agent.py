@@ -289,6 +289,7 @@ class g8eEngine:
         total_tokens = 0
         grounding_metadata: GroundingMetadata | None = None
         final_finish_reason: str = DEFAULT_FINISH_REASON
+        tool_response_sizes: list[int] = []
 
         loop_turn = 0
         while True:
@@ -395,6 +396,9 @@ class g8eEngine:
                 )
                 for r in fc_responses
             ]
+            for r in fc_responses:
+                response_str = str(r.flattened_response)
+                tool_response_sizes.append(len(response_str))
             contents.append(types.Content(role=types.Role.USER, parts=tool_response_parts))
             logger.info("[AGENT] Added %d tool responses, looping...", len(tool_response_parts))
 
@@ -421,5 +425,6 @@ class g8eEngine:
             data=StreamChunkData(
                 finish_reason=final_finish_reason or DEFAULT_FINISH_REASON,
                 token_usage=token_usage,
+                tool_response_sizes=tool_response_sizes if tool_response_sizes else None,
             ),
         )

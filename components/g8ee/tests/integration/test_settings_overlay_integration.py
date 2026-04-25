@@ -235,6 +235,37 @@ class TestG8eeSettingsOverlayIntegration:
         assert user_settings.llm.primary_model == "gpt-4o"
         assert user_settings.llm.openai_api_key == "user-key"
 
+    async def test_overlay_carries_auditor_hmac_key_from_platform_settings(self, settings_service, cache_service):
+        """Overlay must propagate ``auditor_hmac_key`` from the platform DB
+        document onto local bootstrap settings when the bootstrap volume
+        has not surfaced one (e.g. on a g8ee process that started before
+        the SecretManager ran). The auditor commit step in GDD §14.4
+        relies on this key being present in the platform settings object
+        the AI pipeline reads from."""
+        hmac_key = "f" * 64
+        platform_data = {
+            "id": "platform-doc-id",
+            "settings": {
+                "port": 443,
+                "host": "0.0.0.0",
+                "log_level": "INFO",
+                "enable_logging": True,
+                "auth": {
+                    "internal_auth_token": None,
+                    "session_encryption_key": None,
+                    "auditor_hmac_key": hmac_key,
+                    "g8e_api_key": None,
+                },
+            },
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z",
+        }
+        cache_service.get_document.return_value = platform_data
+
+        settings = await settings_service.get_platform_settings()
+
+        assert settings.auth.auditor_hmac_key == hmac_key
+
     async def test_get_user_settings_falls_back_to_empty_llm_when_missing(self, settings_service, cache_service):
         """Verify user settings return empty LLMSettings with None provider when UserSettingsDocument is missing."""
         user_id = "new-user"

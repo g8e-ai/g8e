@@ -39,6 +39,7 @@ class TribunalCommandAuditor(G8eIdentifiableModel.model.__base__):
     auditor_reason: AuditorReason | None = Field(default=None, description="The auditor's stated reason")
     swap_to_cluster: str | None = Field(default=None, description="Opaque cluster id the Auditor swapped to (set only on reason=swapped_to_dissenter)")
     swap_to_member: str | None = Field(default=None, description="TribunalMember id resolved from swap_to_cluster")
+    reputation_commitment_id: str | None = Field(default=None, description="FK to the reputation_commitment row written inside this verdict (Phase 2; null when REPUTATION_COMMITMENT_ENABLED=false or commit step skipped/failed)")
 
 
 class TribunalCommandPipelineMetadata(G8eIdentifiableModel.model.__base__):

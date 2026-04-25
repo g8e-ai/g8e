@@ -279,6 +279,15 @@ class EventType(str, Enum):
     TRIBUNAL_VOTING_AUDIT_STARTED = "g8e.v1.ai.tribunal.voting.audit.started"
     TRIBUNAL_VOTING_AUDIT_COMPLETED = "g8e.v1.ai.tribunal.voting.audit.completed"
 
+    # reputation (Phase 2 — auditor-as-oracle scoreboard)
+    REPUTATION_COMMITMENT_CREATED  = "g8e.v1.ai.reputation.commitment.created"
+    REPUTATION_COMMITMENT_VERIFIED = "g8e.v1.ai.reputation.commitment.verified"
+    REPUTATION_COMMITMENT_FAILED   = "g8e.v1.ai.reputation.commitment.failed"
+    REPUTATION_STATE_UPDATED       = "g8e.v1.ai.reputation.state.updated"
+    REPUTATION_SLASH_TIER1         = "g8e.v1.ai.reputation.slash.tier1"
+    REPUTATION_SLASH_TIER2         = "g8e.v1.ai.reputation.slash.tier2"
+    REPUTATION_SLASH_TIER3         = "g8e.v1.ai.reputation.slash.tier3"
+
     # platform
     PLATFORM_USAGE_UPDATED = "g8e.v1.platform.usage.updated"
     PLATFORM_NOTIFICATION = "g8e.v1.platform.notification"

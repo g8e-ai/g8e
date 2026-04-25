@@ -316,6 +316,21 @@
         }
       }
     },
+    "reputation": {
+      "commitment": {
+        "created": "g8e.v1.ai.reputation.commitment.created",
+        "verified": "g8e.v1.ai.reputation.commitment.verified",
+        "failed": "g8e.v1.ai.reputation.commitment.failed"
+      },
+      "state": {
+        "updated": "g8e.v1.ai.reputation.state.updated"
+      },
+      "slash": {
+        "tier1": "g8e.v1.ai.reputation.slash.tier1",
+        "tier2": "g8e.v1.ai.reputation.slash.tier2",
+        "tier3": "g8e.v1.ai.reputation.slash.tier3"
+      }
+    },
     "llm": {
       "config": {
         "requested": "g8e.v1.ai.llm.config.requested",

@@ -1,0 +1,77 @@
+{
+  "_comment": "Canonical ReputationCommitment document shape. Per-verdict cryptographic commitment to the reputation_state scoreboard, written exclusively by the Auditor inside its verdict step (GDD §14.4 Artifact B). Forms the cross-chain spine: each commitment links to the previous via prev_root, producing a verifiable hash chain over the entire reputation history. A field mismatch here breaks falsifiable citation (GDD §7) and peer-auditor replay (GDD §14.7).",
+  "_authority": "g8ee (Python — ReputationCommitment in app/models/reputation.py)",
+  "_consumers": [
+    "g8ee (Auditor — writes one commitment per passing verdict; reads prev_root from latest commitment)",
+    "g8ee (peer auditor replay — recomputes Merkle root over historical reputation_state to verify)",
+    "g8ee (TribunalCommandAuditor.reputation_commitment_id — FK reference)"
+  ],
+
+  "reputation_commitment": {
+    "_description": "Auditor-signed Merkle commitment binding a tribunal verdict to the reputation scoreboard at verdict time. Append-only; commitments are never revised. Genesis commitment uses the deployment-scoped sentinel prev_root '0' * 64.",
+
+    "core_identity": {
+      "id": {
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "description": "Stable document identifier (UUID4). Referenced by tribunal_command.auditor.reputation_commitment_id."
+      }
+    },
+
+    "binding": {
+      "investigation_id": {
+        "type": "string",
+        "required": true,
+        "description": "Investigation that produced this verdict. Binds the commitment to a specific chain (block producer)."
+      },
+      "tribunal_command_id": {
+        "type": "string",
+        "required": true,
+        "description": "TribunalCommand whose auditor verdict triggered this commitment. The block being committed."
+      }
+    },
+
+    "merkle": {
+      "merkle_root": {
+        "type": "string",
+        "required": true,
+        "description": "SHA-256 hex (64 chars) Merkle root over the sorted (agent_id, scalar) leaves of reputation_state at verdict time. Recomputable by any party with a snapshot of reputation_state."
+      },
+      "prev_root": {
+        "type": "string",
+        "required": true,
+        "description": "merkle_root of the previous commitment in the deployment, or sentinel ('0' * 64) for the genesis commitment. Forms the cross-chain spine."
+      },
+      "leaves_count": {
+        "type": "integer",
+        "required": true,
+        "minimum": 0,
+        "description": "Number of (agent_id, scalar) leaves included in the Merkle tree. Equals the number of reputation_state rows at commit time."
+      }
+    },
+
+    "signature": {
+      "signed_by": {
+        "type": "string",
+        "required": true,
+        "enum": ["auditor"],
+        "description": "Identity of the signer. Day 1: always literal 'auditor'. Future: persona id of the specific auditor instance."
+      },
+      "signature": {
+        "type": "string",
+        "required": true,
+        "description": "HMAC-SHA256 hex (64 chars) over canonical_input = `merkle_root || prev_root || tribunal_command_id` using the auditor's HMAC key. Day-1 key custody: g8eo SecretManager (see GDD §14.10 resolved decisions)."
+      }
+    },
+
+    "timestamps": {
+      "created_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true,
+        "description": "When the commitment was written (UTC, ISO 8601 with Z suffix)."
+      }
+    }
+  }
+}

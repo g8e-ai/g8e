@@ -64,6 +64,15 @@ class AuthSettings(G8eBaseModel):
     internal_auth_token: str | None = Field(None)
     session_encryption_key: str | None = Field(None)
     g8e_api_key: str | None = Field(None)
+    auditor_hmac_key: str | None = Field(
+        None,
+        description=(
+            "HMAC-SHA256 key used by the Tribunal auditor to sign reputation "
+            "commitments (GDD §14.4 Artifact B). Generated and rotated by "
+            "g8eo SecretManager; mirrored into g8ee via the bootstrap volume "
+            "and tamper-verified against bootstrap_digest.json on load."
+        ),
+    )
 
 class ComponentURLsSettings(G8eBaseModel):
     """Internal and external component URL configuration."""

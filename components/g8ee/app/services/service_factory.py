@@ -30,6 +30,7 @@ from app.services.investigation.investigation_data_service import InvestigationD
 from app.services.investigation.memory_data_service import MemoryDataService
 from app.services.operator.approval_service import OperatorApprovalService
 from app.services.data.agent_activity_data_service import AgentActivityDataService
+from app.services.data.reputation_data_service import ReputationDataService
 from app.services.infra.http_service import HTTPService
 from app.services.infra.internal_http_client import InternalHttpClient
 from app.services.infra.g8ed_event_service import EventService
@@ -74,6 +75,7 @@ class DataServices(TypedDict):
     memory_data_service: MemoryDataService | MemoryDataServiceProtocol
     case_data_service: CaseDataService
     agent_activity_data_service: AgentActivityDataService
+    reputation_data_service: ReputationDataService
 
 
 class DomainServices(TypedDict):
@@ -166,12 +168,17 @@ class ServiceFactory:
             cache=cache_aside_service
         )
 
+        reputation_data_service = ReputationDataService(
+            cache=cache_aside_service
+        )
+
         return DataServices(
             investigation_data_service=investigation_data_service,
             operator_data_service=operator_data_service,
             memory_data_service=memory_data_service,
             case_data_service=case_data_service,
             agent_activity_data_service=agent_activity_data_service,
+            reputation_data_service=reputation_data_service,
         )
     
     @staticmethod

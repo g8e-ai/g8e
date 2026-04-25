@@ -75,6 +75,12 @@ func TestSecretManager_InitPlatformSettings_CreatesSecretsAndFiles(t *testing.T)
 	key := strings.TrimSpace(string(keyBytes))
 	assert.NotEmpty(t, key)
 	assert.Equal(t, key, readSecretFromDB(t, db, "session_encryption_key"))
+
+	hmacBytes, err := os.ReadFile(filepath.Join(sslDir, "auditor_hmac_key"))
+	require.NoError(t, err)
+	hmacKey := strings.TrimSpace(string(hmacBytes))
+	assert.NotEmpty(t, hmacKey)
+	assert.Equal(t, hmacKey, readSecretFromDB(t, db, "auditor_hmac_key"))
 }
 
 func TestSecretManager_InitPlatformSettings_FailsWhenFileWriteFails(t *testing.T) {
@@ -144,7 +150,7 @@ func TestSecretManager_InitPlatformSettings_WritesDigestManifest(t *testing.T) {
 	assert.Equal(t, 1, manifest.Version)
 	assert.NotEmpty(t, manifest.UpdatedAt)
 
-	for _, name := range []string{"internal_auth_token", "session_encryption_key"} {
+	for _, name := range []string{"internal_auth_token", "session_encryption_key", "auditor_hmac_key"} {
 		secret := readSecretFromDB(t, db, name)
 		require.NotEmpty(t, secret)
 		sum := sha256.Sum256([]byte(secret))
@@ -192,6 +198,56 @@ func TestSecretManager_InitPlatformSettings_RewritesManifestOnSecretRotation(t *
 	assert.Equal(t, hex.EncodeToString(expected[:]),
 		manifest.Secrets["internal_auth_token"].SHA256,
 		"manifest must be rewritten to reflect rotated secret")
+}
+
+func TestSecretManager_InitPlatformSettings_SyncsAuditorHmacKeyFromFile(t *testing.T) {
+	db := newSecretManagerTestDB(t)
+	sslDir := t.TempDir()
+	logger := testutil.NewTestLogger()
+
+	// Pre-seed the on-disk file before any DB row exists. File-wins semantics
+	// (mirroring internal_auth_token/session_encryption_key) must copy the
+	// provided value into the DB rather than generate a fresh one.
+	preSeeded := strings.Repeat("c", 64)
+	require.NoError(t, os.WriteFile(filepath.Join(sslDir, "auditor_hmac_key"), []byte(preSeeded), 0600))
+
+	require.NoError(t, NewSecretManager(db, sslDir, logger).InitPlatformSettings())
+
+	assert.Equal(t, preSeeded, readSecretFromDB(t, db, "auditor_hmac_key"))
+}
+
+func TestSecretManager_InitPlatformSettings_SyncsAuditorHmacKeyFromDB(t *testing.T) {
+	db := newSecretManagerTestDB(t)
+	sslDir := t.TempDir()
+	logger := testutil.NewTestLogger()
+
+	// First run creates the secret. Remove the on-disk file to simulate a
+	// volume that was wiped but whose DB still carries the authoritative
+	// value; the next init must recreate the file from the DB.
+	require.NoError(t, NewSecretManager(db, sslDir, logger).InitPlatformSettings())
+	dbValue := readSecretFromDB(t, db, "auditor_hmac_key")
+	require.NotEmpty(t, dbValue)
+	require.NoError(t, os.Remove(filepath.Join(sslDir, "auditor_hmac_key")))
+
+	require.NoError(t, NewSecretManager(db, sslDir, logger).InitPlatformSettings())
+
+	restored, err := os.ReadFile(filepath.Join(sslDir, "auditor_hmac_key"))
+	require.NoError(t, err)
+	assert.Equal(t, dbValue, strings.TrimSpace(string(restored)))
+}
+
+func TestSecretManager_verifyDBMatchesFile_DetectsAuditorHmacKeyDivergence(t *testing.T) {
+	db := newSecretManagerTestDB(t)
+	sslDir := t.TempDir()
+	sm := NewSecretManager(db, sslDir, testutil.NewTestLogger())
+	require.NoError(t, sm.InitPlatformSettings())
+
+	hmacPath := filepath.Join(sslDir, "auditor_hmac_key")
+	require.NoError(t, os.WriteFile(hmacPath, []byte("tampered-hmac"), 0600))
+
+	err := sm.verifyDBMatchesFile(hmacPath, "auditor_hmac_key")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "differs between volume file and platform_settings DB")
 }
 
 func TestSecretManager_verifyDBMatchesFile_ReturnsErrorOnMismatch(t *testing.T) {

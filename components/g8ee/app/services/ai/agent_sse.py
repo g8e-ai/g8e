@@ -281,6 +281,8 @@ async def deliver_via_sse(
                 state.token_usage = chunk.data.token_usage
                 token_usage = chunk.data.token_usage
                 state.finish_reason = chunk.data.finish_reason
+                if chunk.data.tool_response_sizes:
+                    state.tool_response_sizes = chunk.data.tool_response_sizes
                 logger.info(
                     "[SSE] COMPLETE chunk received: finish_reason=%s response_chars=%d",
                     chunk.data.finish_reason, len(state.response_text),

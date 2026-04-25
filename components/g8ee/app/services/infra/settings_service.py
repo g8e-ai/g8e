@@ -121,6 +121,13 @@ class SettingsService:
         else:
             self._logger.info("Session encryption key not available from bootstrap service")
 
+        auditor_hmac_key = self._bootstrap.load_auditor_hmac_key()
+        if auditor_hmac_key:
+            self._bootstrap.verify_against_manifest("auditor_hmac_key", auditor_hmac_key)
+            settings.auth.auditor_hmac_key = auditor_hmac_key
+        else:
+            self._logger.info("Auditor HMAC key not available from bootstrap service")
+
         return settings
 
     def overlay_platform_data(self, settings: G8eePlatformSettings, platform_settings: G8eePlatformSettings) -> G8eePlatformSettings:
@@ -138,6 +145,8 @@ class SettingsService:
             settings.auth.internal_auth_token = platform_settings.auth.internal_auth_token
         if platform_settings.auth.session_encryption_key and not settings.auth.session_encryption_key:
             settings.auth.session_encryption_key = platform_settings.auth.session_encryption_key
+        if platform_settings.auth.auditor_hmac_key and not settings.auth.auditor_hmac_key:
+            settings.auth.auditor_hmac_key = platform_settings.auth.auditor_hmac_key
         if platform_settings.auth.g8e_api_key:
             settings.auth.g8e_api_key = platform_settings.auth.g8e_api_key
 

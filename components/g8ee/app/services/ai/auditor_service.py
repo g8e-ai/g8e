@@ -11,12 +11,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import hashlib
+import hmac
 import logging
 from typing import Any, List, NoReturn, Optional
 
 from app.errors import OllamaEmptyResponseError
 from app.models.base import G8eBaseModel
 from app.models.agent import OperatorContext
+from app.models.reputation import GENESIS_PREV_ROOT, ReputationCommitment
+from app.services.data.reputation_data_service import ReputationDataService
+from app.utils.merkle import leaf_bytes, merkle_root
 from app.constants import (
     DEFAULT_OS_NAME,
     DEFAULT_SHELL,
@@ -349,3 +354,51 @@ async def run_auditor(
         error=f"Exhausted {max_attempts} attempts without success. Last error: {last_error}",
         candidate_command=target_cmd,
     )
+
+
+async def commit_reputation(
+    reputation_data_service: ReputationDataService,
+    tribunal_command_id: str,
+    investigation_id: str,
+    hmac_key: str,
+) -> ReputationCommitment:
+    """Compute, sign, and persist a Merkle commitment over the reputation scoreboard.
+
+    GDD §14.4 Artifact B: the Auditor, during its verdict step, binds the
+    verdict to a snapshot of `reputation_state` by writing a signed Merkle
+    commitment. The commitment chains across verdicts via ``prev_root``
+    (deployment-scoped) so any party with the hash-chained history can
+    verify the Auditor's claims without re-executing the verdict path.
+
+    This function is single-responsibility by design: it does not emit
+    events or populate downstream models. Callers own side-effects.
+    """
+    if not tribunal_command_id:
+        raise ValueError("tribunal_command_id is required")
+    if not investigation_id:
+        raise ValueError("investigation_id is required")
+    if not hmac_key:
+        raise ValueError("hmac_key is required")
+
+    states = await reputation_data_service.list_states()
+    leaves = [leaf_bytes(s.agent_id, s.scalar) for s in states]
+    root = merkle_root(leaves)
+
+    latest = await reputation_data_service.get_latest_commitment()
+    prev_root = latest.merkle_root if latest is not None else GENESIS_PREV_ROOT
+
+    signature = hmac.new(
+        hmac_key.encode("utf-8"),
+        (root + prev_root + tribunal_command_id).encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+    commitment = ReputationCommitment(
+        investigation_id=investigation_id,
+        tribunal_command_id=tribunal_command_id,
+        merkle_root=root,
+        prev_root=prev_root,
+        leaves_count=len(states),
+        signature=signature,
+    )
+    return await reputation_data_service.create_commitment(commitment)

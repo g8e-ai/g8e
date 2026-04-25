@@ -91,7 +91,7 @@ async def test_ollama_accuracy(
         logger.info(f"[OLLAMA_EVAL] Running scenario {scenario['id']} with model {model_name}")
 
         # Step 1: Build system prompt (minimal, no investigation context)
-        system_prompt = build_modular_system_prompt(
+        system_prompt, context_sizes = build_modular_system_prompt(
             operator_bound=False,
             system_context=None,
             user_memories=[],

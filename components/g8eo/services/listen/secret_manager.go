@@ -48,6 +48,7 @@ func NewSecretManager(db *sqliteutil.DB, sslDir string, logger *slog.Logger) *Se
 func (m *SecretManager) InitPlatformSettings() error {
 	tokenPath := filepath.Join(m.sslDir, "internal_auth_token")
 	sessionKeyPath := filepath.Join(m.sslDir, "session_encryption_key")
+	auditorHmacKeyPath := filepath.Join(m.sslDir, "auditor_hmac_key")
 
 	var internalAuthToken string
 	if data, err := os.ReadFile(tokenPath); err == nil {
@@ -57,6 +58,11 @@ func (m *SecretManager) InitPlatformSettings() error {
 	var sessionEncryptionKey string
 	if data, err := os.ReadFile(sessionKeyPath); err == nil {
 		sessionEncryptionKey = strings.TrimSpace(string(data))
+	}
+
+	var auditorHmacKey string
+	if data, err := os.ReadFile(auditorHmacKeyPath); err == nil {
+		auditorHmacKey = strings.TrimSpace(string(data))
 	}
 
 	var exists bool
@@ -76,11 +82,15 @@ func (m *SecretManager) InitPlatformSettings() error {
 		if sessionEncryptionKey == "" {
 			sessionEncryptionKey = m.generateSecureToken(32)
 		}
+		if auditorHmacKey == "" {
+			auditorHmacKey = m.generateSecureToken(32)
+		}
 
 		platformSettings := models.SettingsDocument{}
 		platformSettings.Settings = map[string]interface{}{
 			"internal_auth_token":    internalAuthToken,
 			"session_encryption_key": sessionEncryptionKey,
+			"auditor_hmac_key":       auditorHmacKey,
 		}
 		platformSettings.CreatedAt = now
 		platformSettings.UpdatedAt = now
@@ -137,6 +147,23 @@ func (m *SecretManager) InitPlatformSettings() error {
 						m.logger.Info("[SecretManager] Synchronized session_encryption_key from file to DB")
 					}
 				}
+				if auditorHmacKey != "" {
+					if val, ok := settings.Settings["auditor_hmac_key"].(string); !ok || val != auditorHmacKey {
+						settings.Settings["auditor_hmac_key"] = auditorHmacKey
+						changed = true
+						m.logger.Info("[SecretManager] Synchronized auditor_hmac_key from file to DB")
+					}
+				} else {
+					// First-time upgrade path: DB predates auditor_hmac_key. Generate
+					// lazily on the existing platform_settings row so Phase 2 can boot
+					// without requiring a fresh install.
+					if _, ok := settings.Settings["auditor_hmac_key"].(string); !ok {
+						auditorHmacKey = m.generateSecureToken(32)
+						settings.Settings["auditor_hmac_key"] = auditorHmacKey
+						changed = true
+						m.logger.Info("[SecretManager] Generated auditor_hmac_key for existing platform_settings")
+					}
+				}
 
 				if changed {
 					settings.UpdatedAt = now
@@ -170,6 +197,11 @@ func (m *SecretManager) InitPlatformSettings() error {
 						sessionEncryptionKey = val
 					}
 				}
+				if auditorHmacKey == "" {
+					if val, ok := settings.Settings["auditor_hmac_key"].(string); ok {
+						auditorHmacKey = val
+					}
+				}
 			}
 		}
 	}
@@ -184,6 +216,11 @@ func (m *SecretManager) InitPlatformSettings() error {
 			return err
 		}
 	}
+	if auditorHmacKey != "" {
+		if err := m.writeSecretFile(auditorHmacKeyPath, auditorHmacKey, "auditor_hmac_key"); err != nil {
+			return err
+		}
+	}
 
 	if err := m.verifyDBMatchesFile(tokenPath, "internal_auth_token"); err != nil {
 		return err
@@ -191,10 +228,14 @@ func (m *SecretManager) InitPlatformSettings() error {
 	if err := m.verifyDBMatchesFile(sessionKeyPath, "session_encryption_key"); err != nil {
 		return err
 	}
+	if err := m.verifyDBMatchesFile(auditorHmacKeyPath, "auditor_hmac_key"); err != nil {
+		return err
+	}
 
 	if err := m.writeDigestManifest(map[string]string{
 		"internal_auth_token":    internalAuthToken,
 		"session_encryption_key": sessionEncryptionKey,
+		"auditor_hmac_key":       auditorHmacKey,
 	}, now); err != nil {
 		return err
 	}

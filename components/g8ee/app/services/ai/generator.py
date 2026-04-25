@@ -46,6 +46,10 @@ from app.llm.prompts import (
 from app.llm.factory import get_llm_provider
 from app.llm.llm_types import Content, Part, Role, LiteLLMSettings, ResponseFormat
 from app.llm.provider import LLMProvider
+from app.models.reputation import (
+    ReputationCommitmentCreatedPayload,
+    ReputationCommitmentFailedPayload,
+)
 from app.models.agents.tribunal import (
     CandidateCommand,
     CommandGenerationResult,
@@ -81,9 +85,11 @@ from app.services.ai.voter import (
     weighted_vote,
 )
 from app.services.ai.auditor_service import (
+    commit_reputation,
     run_auditor,
     validate_command_safety,
 )
+from app.services.data.reputation_data_service import ReputationDataService
 
 logger = logging.getLogger(__name__)
 
@@ -437,10 +443,22 @@ async def _run_audit_stage(
     emitter: TribunalEmitter,
     command_constraints_message: str,
     tied_candidates: list[CandidateCommand] | None = None,
-) -> tuple[str | None, CommandGenerationOutcome, bool, str | None, AuditorReason]:
-    """Stage 3: optionally audit the vote winner and determine outcome."""
+    reputation_data_service: ReputationDataService | None = None,
+    auditor_hmac_key: str | None = None,
+    investigation_id: str | None = None,
+) -> tuple[str | None, CommandGenerationOutcome, bool, str | None, AuditorReason, str | None]:
+    """Stage 3: optionally audit the vote winner and determine outcome.
+
+    When `auditor_passed=True` and reputation dependencies are wired
+    (``reputation_data_service`` + ``auditor_hmac_key``), the auditor's
+    verdict step also writes a Merkle commitment over the reputation
+    scoreboard (GDD §14.4 Artifact B). The returned `commitment_id` is the
+    row id, or ``None`` if the step was skipped or failed (failures are
+    logged and surfaced via `REPUTATION_COMMITMENT_FAILED` but never fail
+    the verdict itself in Phase 2).
+    """
     if not auditor_enabled:
-        return vote_winner, CommandGenerationOutcome.CONSENSUS, True, None, AuditorReason.OK
+        return vote_winner, CommandGenerationOutcome.CONSENSUS, True, None, AuditorReason.OK, None
 
     if vote_breakdown.consensus_strength == 1.0:
         mode = "unanimous"
@@ -465,11 +483,52 @@ async def _run_audit_stage(
     )
 
     outcome = CommandGenerationOutcome.VERIFIED if auditor_passed else CommandGenerationOutcome.VERIFICATION_FAILED
-    
+
     if not auditor_passed and auditor_reason == AuditorReason.REVISED:
         outcome = CommandGenerationOutcome.VERIFICATION_FAILED
 
-    return final_command, outcome, auditor_passed, auditor_revision, auditor_reason
+    commitment_id: str | None = None
+    if auditor_passed and reputation_data_service is not None and auditor_hmac_key and investigation_id:
+        correlation_id = getattr(emitter, "correlation_id", None)
+        try:
+            commitment = await commit_reputation(
+                reputation_data_service=reputation_data_service,
+                tribunal_command_id=correlation_id or "",
+                investigation_id=investigation_id,
+                hmac_key=auditor_hmac_key,
+            )
+            commitment_id = commitment.id
+            await emitter.emit(
+                EventType.REPUTATION_COMMITMENT_CREATED,
+                ReputationCommitmentCreatedPayload(
+                    commitment_id=commitment.id,
+                    tribunal_command_id=commitment.tribunal_command_id,
+                    investigation_id=commitment.investigation_id,
+                    merkle_root=commitment.merkle_root,
+                    prev_root=commitment.prev_root,
+                    leaves_count=commitment.leaves_count,
+                    correlation_id=correlation_id,
+                ),
+                correlation_id=correlation_id,
+            )
+        except Exception as exc:
+            logger.error(
+                "[TRIBUNAL-AUDITOR] reputation commitment failed (non-fatal): %s",
+                exc,
+                exc_info=True,
+            )
+            await emitter.emit(
+                EventType.REPUTATION_COMMITMENT_FAILED,
+                ReputationCommitmentFailedPayload(
+                    tribunal_command_id=correlation_id or "",
+                    investigation_id=investigation_id,
+                    error=str(exc),
+                    correlation_id=correlation_id,
+                ),
+                correlation_id=correlation_id,
+            )
+
+    return final_command, outcome, auditor_passed, auditor_revision, auditor_reason, commitment_id
 
 async def _build_and_emit_result(
     request: str,
