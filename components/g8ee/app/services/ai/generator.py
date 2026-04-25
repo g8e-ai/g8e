@@ -442,20 +442,21 @@ async def _run_audit_stage(
     auditor_enabled: bool,
     emitter: TribunalEmitter,
     command_constraints_message: str,
+    reputation_data_service: ReputationDataService,
+    auditor_hmac_key: str,
+    investigation_id: str,
     tied_candidates: list[CandidateCommand] | None = None,
-    reputation_data_service: ReputationDataService | None = None,
-    auditor_hmac_key: str | None = None,
-    investigation_id: str | None = None,
 ) -> tuple[str | None, CommandGenerationOutcome, bool, str | None, AuditorReason, str | None]:
     """Stage 3: optionally audit the vote winner and determine outcome.
 
-    When `auditor_passed=True` and reputation dependencies are wired
-    (``reputation_data_service`` + ``auditor_hmac_key``), the auditor's
-    verdict step also writes a Merkle commitment over the reputation
-    scoreboard (GDD §14.4 Artifact B). The returned `commitment_id` is the
-    row id, or ``None`` if the step was skipped or failed (failures are
-    logged and surfaced via `REPUTATION_COMMITMENT_FAILED` but never fail
-    the verdict itself in Phase 2).
+    On `auditor_passed=True` the auditor's verdict step also writes a
+    Merkle commitment over the reputation scoreboard (GDD §14.4
+    Artifact B). The returned `commitment_id` is the row id. Commitment
+    failures (DB write error, etc.) emit `REPUTATION_COMMITMENT_FAILED`
+    and are logged but non-fatal — the verdict still stands. The
+    reputation dependencies are mandatory and have no "disabled" mode;
+    operating without them is a configuration error surfaced at the
+    ``generate_command`` call site.
     """
     if not auditor_enabled:
         return vote_winner, CommandGenerationOutcome.CONSENSUS, True, None, AuditorReason.OK, None
@@ -488,12 +489,12 @@ async def _run_audit_stage(
         outcome = CommandGenerationOutcome.VERIFICATION_FAILED
 
     commitment_id: str | None = None
-    if auditor_passed and reputation_data_service is not None and auditor_hmac_key and investigation_id:
-        correlation_id = getattr(emitter, "correlation_id", None)
+    if auditor_passed:
+        correlation_id = getattr(emitter, "correlation_id", None) or ""
         try:
             commitment = await commit_reputation(
                 reputation_data_service=reputation_data_service,
-                tribunal_command_id=correlation_id or "",
+                tribunal_command_id=correlation_id,
                 investigation_id=investigation_id,
                 hmac_key=auditor_hmac_key,
             )
@@ -507,9 +508,9 @@ async def _run_audit_stage(
                     merkle_root=commitment.merkle_root,
                     prev_root=commitment.prev_root,
                     leaves_count=commitment.leaves_count,
-                    correlation_id=correlation_id,
+                    correlation_id=correlation_id or None,
                 ),
-                correlation_id=correlation_id,
+                correlation_id=correlation_id or None,
             )
         except Exception as exc:
             logger.error(
@@ -520,12 +521,12 @@ async def _run_audit_stage(
             await emitter.emit(
                 EventType.REPUTATION_COMMITMENT_FAILED,
                 ReputationCommitmentFailedPayload(
-                    tribunal_command_id=correlation_id or "",
+                    tribunal_command_id=correlation_id,
                     investigation_id=investigation_id,
                     error=str(exc),
-                    correlation_id=correlation_id,
+                    correlation_id=correlation_id or None,
                 ),
-                correlation_id=correlation_id,
+                correlation_id=correlation_id or None,
             )
 
     return final_command, outcome, auditor_passed, auditor_revision, auditor_reason, commitment_id
@@ -547,6 +548,7 @@ async def _build_and_emit_result(
     blacklisting_enabled: bool = False,
     operator_context: OperatorContext | None = None,
     correlation_id: str | None = None,
+    reputation_commitment_id: str | None = None,
 ) -> CommandGenerationResult:
     """Stage 4: assemble the result model and emit the session-completed event."""
     is_safe = True
@@ -577,6 +579,7 @@ async def _build_and_emit_result(
         auditor_revision=auditor_revision,
         auditor_reason=auditor_reason,
         correlation_id=correlation_id,
+        reputation_commitment_id=reputation_commitment_id,
     )
 
     await emitter.emit(
@@ -600,6 +603,8 @@ async def generate_command(
     case_id: str,
     investigation_id: str,
     settings: G8eeUserSettings,
+    reputation_data_service: ReputationDataService,
+    auditor_hmac_key: str,
     whitelisting_enabled: bool = False,
     blacklisting_enabled: bool = False,
     whitelisted_commands: list[dict[str, Any]] | None = None,
@@ -732,7 +737,7 @@ async def generate_command(
         )
         raise TribunalConsensusFailedError(request=request, vote_breakdown=vote_breakdown)
 
-    final_command, outcome, auditor_passed, auditor_revision, auditor_reason = await _run_audit_stage(
+    final_command, outcome, auditor_passed, auditor_revision, auditor_reason, commitment_id = await _run_audit_stage(
         provider=provider,
         model=model,
         request=request,
@@ -744,6 +749,9 @@ async def generate_command(
         auditor_enabled=settings.llm.llm_command_gen_auditor,
         emitter=emitter,
         command_constraints_message=command_constraints_message,
+        reputation_data_service=reputation_data_service,
+        auditor_hmac_key=auditor_hmac_key,
+        investigation_id=investigation_id,
     )
 
     return await _build_and_emit_result(
@@ -763,4 +771,5 @@ async def generate_command(
         blacklisting_enabled=blacklisting_enabled,
         operator_context=operator_context,
         correlation_id=correlation_id,
+        reputation_commitment_id=commitment_id,
     )

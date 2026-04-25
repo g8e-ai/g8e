@@ -278,6 +278,7 @@ class ServiceFactory:
             investigation_service=cast(InvestigationService, domain_services['investigation_service']),
             web_search_provider=web_search_provider,
             platform_settings=settings,
+            reputation_data_service=data_services['reputation_data_service'],
         )
 
         request_builder = AIRequestBuilder(

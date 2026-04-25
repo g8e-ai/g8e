@@ -82,6 +82,7 @@ from app.utils.blacklist_validator import CommandBlacklistValidator
 from app.utils.whitelist_validator import CommandWhitelistValidator
 from app.utils.safety import map_os_string_to_platform
 from .grounding.web_search_provider import WebSearchProvider
+from ..data.reputation_data_service import ReputationDataService
 from ..investigation.investigation_service import InvestigationService
 
 T = TypeVar("T")
@@ -101,12 +102,14 @@ class AIToolService:
         user_settings: G8eeUserSettings | None = None,
         whitelist_validator: CommandWhitelistValidator | None = None,
         blacklist_validator: CommandBlacklistValidator | None = None,
+        reputation_data_service: ReputationDataService | None = None,
     ):
         self.operator_command_service = operator_command_service
         self.investigation_service = investigation_service
         self._web_search_provider: WebSearchProvider | None = web_search_provider
         self._platform_settings = platform_settings
         self._user_settings = user_settings
+        self._reputation_data_service = reputation_data_service
 
         from app.utils.validators import get_blacklist_validator, get_whitelist_validator
         self._whitelist_validator = whitelist_validator if whitelist_validator is not None else get_whitelist_validator()
@@ -230,6 +233,39 @@ class AIToolService:
     def user_settings(self) -> G8eeUserSettings | None:
         """The configured user settings."""
         return self._user_settings
+
+    @property
+    def reputation_data_service(self) -> ReputationDataService:
+        """The configured ``ReputationDataService``.
+
+        Tribunal-path invocations require it; constructing an
+        ``AIToolService`` without one and then invoking the Tribunal is
+        a configuration error surfaced at the call site.
+        """
+        if self._reputation_data_service is None:
+            raise ConfigurationError(
+                "AIToolService constructed without reputation_data_service; "
+                "Tribunal path requires it. Wire it in service_factory."
+            )
+        return self._reputation_data_service
+
+    @property
+    def auditor_hmac_key(self) -> str:
+        """The auditor HMAC key from the wired platform settings.
+
+        Tribunal-path invocations require it; absence is a configuration
+        error surfaced at the call site.
+        """
+        key = None
+        if self._platform_settings is not None:
+            key = self._platform_settings.auth.auditor_hmac_key
+        if not key:
+            raise ConfigurationError(
+                "AIToolService has no auditor_hmac_key available; the key "
+                "must be seeded via g8eo SecretManager and overlaid onto "
+                "AuthSettings.auditor_hmac_key."
+            )
+        return key
 
     @property
     def whitelist_validator(self) -> CommandWhitelistValidator:

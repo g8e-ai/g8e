@@ -73,6 +73,42 @@ from app.llm.prompts import (
 )
 from app.utils.agent_persona_loader import get_agent_persona
 from app.models.http_context import G8eHttpContext
+from app.models.reputation import ReputationCommitment
+
+
+_TEST_HMAC_KEY = "a" * 64
+
+
+def _make_mock_reputation_service() -> MagicMock:
+    """Stub ReputationDataService sufficient for ``commit_reputation``.
+
+    These tests assert Tribunal verdict-path behavior; commitment
+    semantics are covered in ``test_auditor_commitment.py``. The stub
+    returns an empty scoreboard and no prior commitment, so the commit
+    step produces a deterministic genesis commitment without hitting any
+    real cache/DB client.
+    """
+    svc = MagicMock()
+    svc.list_states = AsyncMock(return_value=[])
+    svc.get_latest_commitment = AsyncMock(return_value=None)
+
+    async def _create_commitment(commitment: ReputationCommitment) -> ReputationCommitment:
+        return commitment
+
+    svc.create_commitment = AsyncMock(side_effect=_create_commitment)
+    return svc
+
+
+_REPUTATION_KWARGS = {
+    "reputation_data_service": _make_mock_reputation_service(),
+    "auditor_hmac_key": _TEST_HMAC_KEY,
+}
+
+
+_AUDIT_STAGE_REPUTATION_KWARGS = {
+    **_REPUTATION_KWARGS,
+    "investigation_id": "inv-test",
+}
 
 
 def _make_mock_provider(generate_content_lite_side_effect=None, generate_content_lite_return=None):
@@ -447,6 +483,7 @@ class TestGenerateCommandOutcomes:
                 case_id="case-1",
                 investigation_id="inv-1",
                 settings=settings,
+                **_REPUTATION_KWARGS,
             )
 
         assert exc_info.value.request == "list files"
@@ -485,6 +522,7 @@ class TestGenerateCommandSystemError:
                     case_id="case-1",
                     investigation_id="inv-1",
                     settings=settings,
+                    **_REPUTATION_KWARGS,
                 )
 
             assert len(exc_info.value.pass_errors) > 0
@@ -521,6 +559,7 @@ class TestGenerateCommandSystemError:
                     case_id="case-1",
                     investigation_id="inv-1",
                     settings=settings,
+                    **_REPUTATION_KWARGS,
                 )
 
             assert exc_info.value.request == "list files"
@@ -565,6 +604,7 @@ class TestGenerateCommandSystemError:
                 case_id="case-1",
                 investigation_id="inv-1",
                 settings=settings,
+                **_REPUTATION_KWARGS,
             )
 
             mock_factory.assert_called_once_with(settings.llm, is_assistant=True)
@@ -613,6 +653,7 @@ class TestMixedErrorFallback:
                     case_id="case-1",
                     investigation_id="inv-1",
                     settings=settings,
+                    **_REPUTATION_KWARGS,
                 )
 
             assert exc_info.value.request == "list files"
@@ -659,6 +700,7 @@ class TestTribunalProviderUnavailableError:
                     case_id="case-1",
                     investigation_id="inv-1",
                     settings=settings,
+                    **_REPUTATION_KWARGS,
                 )
 
             assert exc_info.value.provider == "ollama"
@@ -694,6 +736,7 @@ class TestTribunalModelNotConfiguredError:
                     case_id="case-1",
                     investigation_id="inv-1",
                     settings=settings,
+                    **_REPUTATION_KWARGS,
                 )
 
             assert exc_info.value.provider == "ollama"
@@ -1212,12 +1255,16 @@ class TestRunVerificationStage:
             dissenters_by_command={},
             consensus_strength=1.0,
         )
-        final_cmd, outcome, passed, revision, auditor_reason = await _run_audit_stage(
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
+
+        final_cmd, outcome, passed, revision, auditor_reason, commitment_id = await _run_audit_stage(
             provider=MagicMock(), model="test-model", request="list files", guidelines="",
             vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=None,
             operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-            auditor_enabled=False, emitter=TribunalEmitter(None, None),
+            auditor_enabled=False,
+            emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+            **_AUDIT_STAGE_REPUTATION_KWARGS,
         )
 
         assert final_cmd == "ls -la"
@@ -1240,13 +1287,16 @@ class TestRunVerificationStage:
         mock_response = MagicMock()
         mock_response.text = '{"status": "ok"}'
         mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
-        final_cmd, outcome, passed, revision, auditor_reason = await _run_audit_stage(
+        final_cmd, outcome, passed, revision, auditor_reason, commitment_id = await _run_audit_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",
             vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=None,
             operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-            auditor_enabled=True, emitter=TribunalEmitter(None, None),
+            auditor_enabled=True,
+            emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+            **_AUDIT_STAGE_REPUTATION_KWARGS,
         )
 
         assert final_cmd == "ls -la"
@@ -1269,13 +1319,16 @@ class TestRunVerificationStage:
         mock_response = MagicMock()
         mock_response.text = '{"status": "revised", "revised_command": "ls -la --color=auto"}'
         mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
-        final_cmd, outcome, passed, revision, auditor_reason = await _run_audit_stage(
+        final_cmd, outcome, passed, revision, auditor_reason, commitment_id = await _run_audit_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",
             vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=None,
             operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-            auditor_enabled=True, emitter=TribunalEmitter(None, None),
+            auditor_enabled=True,
+            emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+            **_AUDIT_STAGE_REPUTATION_KWARGS,
         )
 
         assert final_cmd == "ls -la --color=auto"
@@ -1303,13 +1356,16 @@ class TestRunVerificationStage:
         mock_response = MagicMock()
         mock_response.text = '{"status": "swap", "swap_to_cluster": "cluster_b"}'
         mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
-        final_cmd, outcome, passed, revision, auditor_reason = await _run_audit_stage(
+        final_cmd, outcome, passed, revision, auditor_reason, commitment_id = await _run_audit_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",
             vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=tied_candidates,
             operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-            auditor_enabled=True, emitter=TribunalEmitter(None, None),
+            auditor_enabled=True,
+            emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+            **_AUDIT_STAGE_REPUTATION_KWARGS,
         )
 
         assert final_cmd == "ls -l"
@@ -1337,13 +1393,16 @@ class TestRunVerificationStage:
         mock_response = MagicMock()
         mock_response.text = '{"status": "revised", "revised_command": "ls -la --color=auto"}'
         mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
-        final_cmd, outcome, passed, revision, auditor_reason = await _run_audit_stage(
+        final_cmd, outcome, passed, revision, auditor_reason, commitment_id = await _run_audit_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",
             vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=tied_candidates,
             operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-            auditor_enabled=True, emitter=TribunalEmitter(None, None),
+            auditor_enabled=True,
+            emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+            **_AUDIT_STAGE_REPUTATION_KWARGS,
         )
 
         assert final_cmd == "ls -la --color=auto"
@@ -1373,13 +1432,16 @@ class TestRunVerificationStage:
         mock_response = MagicMock()
         mock_response.text = '{"status": "swap", "swap_to_cluster": "cluster_a"}'
         mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
-        final_cmd, outcome, passed, revision, auditor_reason = await _run_audit_stage(
+        final_cmd, outcome, passed, revision, auditor_reason, commitment_id = await _run_audit_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",
             vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=tied_candidates,
             operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-            auditor_enabled=True, emitter=TribunalEmitter(None, None),
+            auditor_enabled=True,
+            emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+            **_AUDIT_STAGE_REPUTATION_KWARGS,
         )
 
         assert final_cmd == "ls -la"
@@ -1413,13 +1475,16 @@ class TestRunVerificationStage:
             return mock_response
 
         mock_provider = _make_mock_provider(generate_content_lite_side_effect=_side_effect)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
-        final_cmd, outcome, passed, revision, auditor_reason = await _run_audit_stage(
+        final_cmd, outcome, passed, revision, auditor_reason, commitment_id = await _run_audit_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",
             vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=None,
             operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-            auditor_enabled=True, emitter=TribunalEmitter(None, None),
+            auditor_enabled=True,
+            emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+            **_AUDIT_STAGE_REPUTATION_KWARGS,
         )
 
         assert call_count == 2  # Initial call + one retry
@@ -1443,15 +1508,22 @@ class TestRunVerificationStage:
         mock_provider = _make_mock_provider(
             generate_content_lite_side_effect=RuntimeError("timeout")
         )
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
-        with pytest.raises(TribunalAuditorFailedError):
+        with pytest.raises(TribunalAuditorFailedError) as exc_info:
             await _run_audit_stage(
                 provider=mock_provider, model="test-model", request="list files", guidelines="",
                 vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=None,
                 operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-                auditor_enabled=True, emitter=TribunalEmitter(None, None),
+                auditor_enabled=True,
+                emitter=emitter,
                 command_constraints_message="No whitelist or blacklist constraints are active.",
+                **_AUDIT_STAGE_REPUTATION_KWARGS,
             )
+
+        assert exc_info.value.reason == AuditorReason.AUDITOR_ERROR
+        assert "timeout" in exc_info.value.error
+        assert exc_info.value.request == "list files"
 
 
 class TestBuildAndEmitResult:
@@ -1480,6 +1552,7 @@ class TestBuildAndEmitResult:
             vote_winner="ls -la", vote_score=1.0, vote_breakdown=vote_breakdown,
             auditor_passed=True, auditor_revision=None, auditor_reason=AuditorReason.OK,
             emitter=emitter,
+            reputation_commitment_id="comm-1",
         )
 
         assert result.request == "list files"
@@ -1572,6 +1645,7 @@ class TestGenerateCommandHappyPath:
                 case_id="case-happy-1",
                 investigation_id="inv-happy-1",
                 settings=settings,
+                **_REPUTATION_KWARGS,
             )
 
         assert result.outcome == CommandGenerationOutcome.CONSENSUS
@@ -1617,6 +1691,7 @@ class TestGenerateCommandHappyPath:
                 case_id="case-happy-2",
                 investigation_id="inv-happy-2",
                 settings=settings,
+                **_REPUTATION_KWARGS,
             )
 
         assert result.outcome == CommandGenerationOutcome.VERIFIED
@@ -1661,6 +1736,7 @@ class TestGenerateCommandHappyPath:
                 case_id="case-happy-3",
                 investigation_id="inv-happy-3",
                 settings=settings,
+                **_REPUTATION_KWARGS,
             )
 
         assert result.outcome == CommandGenerationOutcome.VERIFICATION_FAILED
@@ -1714,6 +1790,7 @@ class TestGenerateCommandHappyPath:
                 case_id="case-happy-4",
                 investigation_id="inv-happy-4",
                 settings=settings,
+                **_REPUTATION_KWARGS,
             )
 
         assert result.outcome == CommandGenerationOutcome.VERIFIED
@@ -1745,6 +1822,7 @@ class TestGenerateCommandHappyPath:
                 case_id="case-happy-5",
                 investigation_id="inv-happy-5",
                 settings=settings,
+                **_REPUTATION_KWARGS,
             )
 
         assert result.outcome == CommandGenerationOutcome.VERIFIED
@@ -1776,6 +1854,7 @@ class TestGenerateCommandHappyPath:
                 case_id="case-happy-6",
                 investigation_id="inv-happy-6",
                 settings=settings,
+                **_REPUTATION_KWARGS,
             )
 
         from app.constants import EventType
@@ -1820,6 +1899,7 @@ class TestGenerateCommandHappyPath:
                 case_id="case-happy-7",
                 investigation_id="inv-happy-7",
                 settings=settings,
+                **_REPUTATION_KWARGS,
             )
 
         assert result.request == "list files in /tmp with details"
@@ -1859,6 +1939,7 @@ class TestGenerateCommandHappyPath:
                 case_id="case-happy-8",
                 investigation_id="inv-happy-8",
                 settings=settings,
+                **_REPUTATION_KWARGS,
             )
 
         assert result.final_command != result.request
@@ -1897,6 +1978,7 @@ class TestGenerateCommandHappyPath:
                 case_id="case-happy-9",
                 investigation_id="inv-happy-9",
                 settings=settings,
+                **_REPUTATION_KWARGS,
             )
 
         assert result.final_command == result.request
@@ -2004,6 +2086,7 @@ class TestGenerateCommandAuditorFailure:
                     case_id="case-vf-1",
                     investigation_id="inv-vf-1",
                     settings=settings,
+                    **_REPUTATION_KWARGS,
                 )
 
             assert exc_info.value.reason == AuditorReason.EMPTY_RESPONSE
@@ -2052,6 +2135,7 @@ class TestGenerateCommandAuditorFailure:
                     case_id="case-vf-2",
                     investigation_id="inv-vf-2",
                     settings=settings,
+                    **_REPUTATION_KWARGS,
                 )
 
             assert exc_info.value.reason == AuditorReason.NO_VALID_REVISION
@@ -2096,6 +2180,7 @@ class TestGenerateCommandAuditorFailure:
                     case_id="case-vf-3",
                     investigation_id="inv-vf-3",
                     settings=settings,
+                    **_REPUTATION_KWARGS,
                 )
 
             assert exc_info.value.reason == AuditorReason.AUDITOR_ERROR
@@ -2143,6 +2228,7 @@ class TestGenerateCommandAuditorFailure:
                     case_id="case-vf-4",
                     investigation_id="inv-vf-4",
                     settings=settings,
+                    **_REPUTATION_KWARGS,
                 )
 
             assert exc_info.value.request == "show system hostname"
@@ -2176,6 +2262,7 @@ class TestGenerateCommandAuditorFailure:
                     case_id="case-vf-5",
                     investigation_id="inv-vf-5",
                     settings=settings,
+                    **_REPUTATION_KWARGS,
                 )
 
             assert exc_info.value.reason == AuditorReason.AUDITOR_ERROR
@@ -2210,7 +2297,6 @@ class TestMaxTokensConstants:
             emitter=emitter,
             pass_errors=[],
             command_constraints_message="No whitelist or blacklist constraints are active.",
-
         )
 
         call_kwargs = mock_provider.generate_content_lite.call_args
@@ -2244,7 +2330,6 @@ class TestMaxTokensConstants:
                 winner="ls -la",
                 winner_supporters=["axiom"],
                 dissenters_by_command={},
-                consensus_strength=1.0,
             )
 
             await run_auditor(
@@ -2258,7 +2343,7 @@ class TestMaxTokensConstants:
                 tied_candidates=None,
                 operator_context=_make_mock_operator_context(os="linux"),
                 emitter=emitter,
-                command_constraints_message="No whitelist or blacklist constraints are active.",
+                command_constraints_message="No whitelist or blacklist constraints are active",
                 auditor_persona=get_agent_persona("auditor"),
             )
 

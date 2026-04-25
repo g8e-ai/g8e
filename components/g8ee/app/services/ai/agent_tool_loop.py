@@ -150,6 +150,8 @@ class TribunalInvoker:
             case_id=g8e_context.case_id,
             investigation_id=investigation.id,
             settings=request_settings,
+            reputation_data_service=tool_executor.reputation_data_service,
+            auditor_hmac_key=tool_executor.auditor_hmac_key,
             whitelisting_enabled=whitelisting_enabled,
             blacklisting_enabled=blacklisting_enabled,
             whitelisted_commands=whitelisted_commands,
