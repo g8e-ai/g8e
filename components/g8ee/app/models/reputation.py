@@ -28,6 +28,8 @@ and are kept aligned via the contract test in
 
 from __future__ import annotations
 
+from enum import IntEnum
+
 from pydantic import Field
 
 from .base import G8eBaseModel, G8eIdentifiableModel, UTCDatetime
@@ -38,8 +40,27 @@ __all__ = [
     "ReputationCommitmentCreatedPayload",
     "ReputationCommitmentFailedPayload",
     "ReputationLeaf",
+    "SlashTier",
+    "StakeResolution",
+    "StakeResolutionPayload",
     "GENESIS_PREV_ROOT",
 ]
+
+
+class SlashTier(IntEnum):
+    """Slash tiers per GDD §6.
+
+    TIER_1: correlated / catastrophic (50-100% stake; destructive outcomes)
+    TIER_2: provable faults (5-20% stake; verifier/auditor objective failures)
+    TIER_3: liveness (0.1-1% stake; missed passes, ignored questions)
+
+    Int values are preserved in the `stake_resolution.slash_tier` column and
+    mirror the literal values in the shared schema enum.
+    """
+
+    TIER_1 = 1
+    TIER_2 = 2
+    TIER_3 = 3
 
 
 # Sentinel `prev_root` used by the genesis commitment in a deployment.
@@ -187,3 +208,81 @@ class ReputationCommitmentFailedPayload(G8eBaseModel):
     investigation_id: str = Field(..., description="Investigation id the verdict was produced for.")
     error: str = Field(..., description="Human-readable failure reason.")
     correlation_id: str | None = Field(default=None, description="Tribunal session correlation id, if any.")
+
+
+class StakeResolution(G8eBaseModel):
+    """Per-agent stake resolution record tied to a specific tribunal verdict.
+
+    Written by the Phase 3 `reputation_service` after each verdict. Document
+    id is the composite ``{tribunal_command_id}:{agent_id}`` which gives
+    write-once idempotency: replaying the same verdict cannot double-resolve.
+
+    ``scalar_before`` and ``scalar_after`` are captured so peer auditors can
+    replay the EMA trajectory without reconstructing the scoreboard
+    snapshot at the time of the resolution.
+    """
+
+    id: str = Field(
+        ...,
+        description="Composite document id `{tribunal_command_id}:{agent_id}`. Write-once idempotency guard.",
+    )
+    investigation_id: str = Field(
+        ...,
+        description="Investigation that produced the verdict this resolution is attributed to.",
+    )
+    tribunal_command_id: str = Field(
+        ...,
+        description="TribunalCommand whose outcome drove this stake resolution.",
+    )
+    agent_id: str = Field(
+        ...,
+        description="Stable persona id whose scalar was updated.",
+    )
+    outcome_score: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Scalar in [0.0, 1.0] fed into the agent's EMA update.",
+    )
+    rationale: str = Field(
+        ...,
+        description="Short machine-readable reason code grounding the scalar.",
+    )
+    slash_tier: SlashTier | None = Field(
+        default=None,
+        description="Slash tier applied. Null when no slash was applied.",
+    )
+    scalar_before: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Agent's EMA scalar prior to this resolution.",
+    )
+    scalar_after: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Agent's EMA scalar after applying ema_update and any slash-tier adjustment.",
+    )
+    half_life: int = Field(
+        ...,
+        ge=1,
+        description="EMA half-life used for this resolution (captured for replayability).",
+    )
+    created_at: UTCDatetime = Field(
+        ...,
+        description="When the resolution was written (UTC, ISO 8601 with Z suffix).",
+    )
+
+
+class StakeResolutionPayload(G8eBaseModel):
+    """SSE payload for REPUTATION_STATE_UPDATED and REPUTATION_SLASH_* events."""
+
+    agent_id: str = Field(..., description="Persona id whose scalar changed.")
+    investigation_id: str = Field(..., description="Investigation the resolution is attributed to.")
+    tribunal_command_id: str = Field(..., description="Tribunal command id the resolution resolves.")
+    scalar_before: float = Field(..., ge=0.0, le=1.0)
+    scalar_after: float = Field(..., ge=0.0, le=1.0)
+    outcome_score: float = Field(..., ge=0.0, le=1.0)
+    rationale: str = Field(...)
+    slash_tier: SlashTier | None = Field(default=None)

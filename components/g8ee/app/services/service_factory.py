@@ -29,8 +29,10 @@ from app.services.investigation.investigation_service import InvestigationServic
 from app.services.investigation.investigation_data_service import InvestigationDataService
 from app.services.investigation.memory_data_service import MemoryDataService
 from app.services.operator.approval_service import OperatorApprovalService
+from app.services.ai.reputation_service import ReputationService
 from app.services.data.agent_activity_data_service import AgentActivityDataService
 from app.services.data.reputation_data_service import ReputationDataService
+from app.services.data.stake_resolution_data_service import StakeResolutionDataService
 from app.services.infra.http_service import HTTPService
 from app.services.infra.internal_http_client import InternalHttpClient
 from app.services.infra.g8ed_event_service import EventService
@@ -76,11 +78,13 @@ class DataServices(TypedDict):
     case_data_service: CaseDataService
     agent_activity_data_service: AgentActivityDataService
     reputation_data_service: ReputationDataService
+    stake_resolution_data_service: StakeResolutionDataService
 
 
 class DomainServices(TypedDict):
     investigation_service: InvestigationService | InvestigationServiceProtocol
     memory_generation_service: MemoryGenerationService
+    reputation_service: ReputationService
 
 
 class OperatorServices(TypedDict):
@@ -172,6 +176,10 @@ class ServiceFactory:
             cache=cache_aside_service
         )
 
+        stake_resolution_data_service = StakeResolutionDataService(
+            cache=cache_aside_service
+        )
+
         return DataServices(
             investigation_data_service=investigation_data_service,
             operator_data_service=operator_data_service,
@@ -179,6 +187,7 @@ class ServiceFactory:
             case_data_service=case_data_service,
             agent_activity_data_service=agent_activity_data_service,
             reputation_data_service=reputation_data_service,
+            stake_resolution_data_service=stake_resolution_data_service,
         )
     
     @staticmethod
@@ -194,9 +203,15 @@ class ServiceFactory:
             memory_crud=data_services['memory_data_service'],
         )
 
+        reputation_service = ReputationService(
+            reputation_data_service=data_services['reputation_data_service'],
+            stake_resolution_data_service=data_services['stake_resolution_data_service'],
+        )
+
         return DomainServices(
             investigation_service=investigation_service,
             memory_generation_service=memory_generation_service,
+            reputation_service=reputation_service,
         )
     
     @staticmethod

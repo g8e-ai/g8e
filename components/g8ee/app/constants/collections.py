@@ -48,6 +48,7 @@ DB_COLLECTION_TRIBUNAL_COMMANDS = _c["tribunal_commands"]
 DB_COLLECTION_AGENT_ACTIVITY_METADATA = _c["agent_activity_metadata"]
 DB_COLLECTION_REPUTATION_STATE        = _c["reputation_state"]
 DB_COLLECTION_REPUTATION_COMMITMENTS  = _c["reputation_commitments"]
+DB_COLLECTION_STAKE_RESOLUTIONS       = _c["stake_resolutions"]
 
 # Document IDs for settings collection
 PLATFORM_SETTINGS_DOC = _d["platform_settings"]
