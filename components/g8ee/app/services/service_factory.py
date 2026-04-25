@@ -291,6 +291,8 @@ class ServiceFactory:
             operator_command_service.set_pubsub_client(cast("PubSubClient", pubsub_client))
             operator_services['heartbeat_service'].set_pubsub_client(cast("PubSubClient", pubsub_client))
 
+        chat_task_manager = BackgroundTaskManager()
+
         tool_executor = AIToolService(
             operator_command_service=operator_command_service,
             investigation_service=cast(InvestigationService, domain_services['investigation_service']),
@@ -311,8 +313,6 @@ class ServiceFactory:
             grounding_service=grounding_service,
             approval_service=approval_service,
         )
-
-        chat_task_manager = BackgroundTaskManager()
 
         chat_pipeline = ChatPipelineService(
             g8ed_event_service=core_services['g8ed_event_service'],  # type: ignore[arg-type]
