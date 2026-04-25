@@ -30,7 +30,8 @@ from __future__ import annotations
 
 from enum import IntEnum
 
-from pydantic import Field
+from typing import Self
+from pydantic import Field, model_validator
 
 from .base import G8eBaseModel, G8eIdentifiableModel, UTCDatetime
 
@@ -273,6 +274,19 @@ class StakeResolution(G8eBaseModel):
         ...,
         description="When the resolution was written (UTC, ISO 8601 with Z suffix).",
     )
+
+    @model_validator(mode="after")
+    def validate_id_matches_composite(self) -> Self:
+        """Enforce the composite-id format {tribunal_command_id}:{agent_id}.
+
+        The data service computes this correctly, but the model layer locks
+        it to prevent future callers from writing inconsistent ids that
+        would undermine the write-once idempotency guarantee.
+        """
+        expected = f"{self.tribunal_command_id}:{self.agent_id}"
+        if self.id != expected:
+            raise ValueError(f"StakeResolution.id must be '{expected}', got '{self.id}'")
+        return self
 
 
 class StakeResolutionPayload(G8eBaseModel):

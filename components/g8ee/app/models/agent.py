@@ -176,6 +176,7 @@ class AgentInputs(G8eBaseModel):
     case_memories: list[InvestigationMemory] = Field(default_factory=list)
     triage_result: TriageResult | None = None
     sentinel_mode: bool = True
+    context_sizes: dict[str, int] = Field(default_factory=dict)
 
 
 class AgentStreamState(G8eBaseModel):

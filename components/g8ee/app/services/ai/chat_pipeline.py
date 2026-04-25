@@ -306,6 +306,7 @@ class ChatPipelineService:
             user_memories=user_memories,
             case_memories=case_memories,
             triage_result=triage_result,
+            context_sizes=context_sizes,
         )
 
     async def _persist_ai_response(
@@ -700,7 +701,7 @@ class ChatPipelineService:
             state=state,
             start_time=start_time,
             attachments=attachments,
-            context_sizes=context_sizes,
+            context_sizes=inputs.context_sizes,
         )
 
         logger.info(

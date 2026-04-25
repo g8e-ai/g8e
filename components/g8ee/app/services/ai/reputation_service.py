@@ -537,8 +537,13 @@ class ReputationService:
 
             current_state = await self.reputation_data_service.get_state(outcome.agent_id)
             scalar_before = current_state.scalar if current_state is not None else BOOTSTRAP_SCALAR
-            scalar_after = ema_update(scalar_before, outcome.outcome_score, self.half_life)
-            scalar_after = apply_slash(scalar_after, outcome.slash_tier)
+
+            if outcome.rationale == "no_signal":
+                # Phase 4 hook: neutral signal should be a no-op, not a decay toward 0.5.
+                scalar_after = scalar_before
+            else:
+                scalar_after = ema_update(scalar_before, outcome.outcome_score, self.half_life)
+                scalar_after = apply_slash(scalar_after, outcome.slash_tier)
 
             now = datetime.now(UTC)
 
