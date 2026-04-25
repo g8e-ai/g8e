@@ -25,6 +25,7 @@ from app.constants import (
     InvestigationStatus,
 )
 from app.llm import prompts
+from app.utils.agent_persona_loader import get_agent_persona
 from app.models.agent import OperatorContext
 from app.models.investigations import EnrichedInvestigationContext, ConversationHistoryMessage, ConversationMessageMetadata
 from app.models.memory import InvestigationMemory
@@ -599,3 +600,72 @@ def test_build_modular_system_prompt_dash_uses_persona_not_core_identity(mock_lo
     
     # Should contain Dash-specific content from its persona
     assert "responder" in prompt.lower() or "dash" in prompt.lower()
+
+
+def test_build_modular_system_prompt_dash_slim_path_excludes_heavy_stack(mock_loader, operator_context):
+    """Dash is the fast-path responder — no tools, no execution surface.
+
+    The slim path must skip the full safety / loyalty / dissent / mode
+    governance bundle that only applies to tool-calling agents. Loading
+    that ~15 kB stack on every Dash call dominates llama.cpp prefill
+    latency for turns that only need a short informational reply.
+    """
+    from app.constants import AgentName
+
+    prompt, _ = prompts.build_modular_system_prompt(
+        operator_bound=True,
+        system_context=operator_context,
+        user_memories=[],
+        case_memories=[],
+        investigation=None,
+        agent_name=AgentName.DASH,
+    )
+
+    # The heavy stack must not appear in Dash's slim prompt.
+    for absent in (
+        PromptFile.CORE_SAFETY,
+        PromptFile.CORE_LOYALTY,
+        PromptFile.CORE_DISSENT,
+        PromptFile.CORE_IDENTITY,
+        PromptFile.SYSTEM_RESPONSE_CONSTRAINTS,
+    ):
+        assert f"Content of {absent}" not in prompt, (
+            f"Dash slim path must not include {absent}"
+        )
+    # Mode prompts (capabilities/execution/tools) must also be absent.
+    assert "Capabilities prompt" not in prompt
+    assert "Execution prompt" not in prompt
+    assert "Tools prompt" not in prompt
+
+    # But the slim path must still load the Dash-specific rules file.
+    assert f"Content of {PromptFile.AGENT_DASH_RULES}" in prompt
+
+
+def test_build_modular_system_prompt_shared_prefix_precedes_persona(mock_loader, operator_context):
+    """For non-Dash agents the shared static block (safety/loyalty/dissent +
+    mode prompts + response constraints) must appear before the agent
+    persona so llama-server / vLLM prefix caches can reuse that prefix
+    across every agent that shares the mode.
+    """
+    from app.constants import AgentName
+
+    prompt, _ = prompts.build_modular_system_prompt(
+        operator_bound=True,
+        system_context=operator_context,
+        user_memories=[],
+        case_memories=[],
+        investigation=None,
+        agent_name=AgentName.SAGE,
+    )
+
+    safety_pos = prompt.index(f"Content of {PromptFile.CORE_SAFETY}")
+    dissent_pos = prompt.index(f"Content of {PromptFile.CORE_DISSENT}")
+    capabilities_pos = prompt.index("Capabilities prompt")
+    # Sage persona contains the literal role "reasoner" per agents.json.
+    sage = get_agent_persona("sage")
+    persona_marker = sage.role
+    persona_pos = prompt.index(persona_marker)
+
+    assert safety_pos < dissent_pos < capabilities_pos < persona_pos, (
+        "Shared static block must precede agent persona for prefix-cache reuse"
+    )

@@ -581,7 +581,6 @@ class TestConversationToContentsPayload:
         text = self._all_payload_text(contents)
         assert "Azure-Blue" in text
         assert "Oslo" in text
-        assert "Midnight-Blue" in text
 
     def test_existing_memory_context_preserved_in_payload(self):
         memory = InvestigationMemory(

@@ -124,15 +124,22 @@ class TestGetAgentPersona:
         assert "<autonomy>" in prompt
         assert sage.identity in prompt
 
-    def test_dash_system_prompt_is_fast_path_and_shares_sage_toolset(self):
-        """Dash is the fast-path voice but keeps Sage's full tool set."""
+    def test_dash_system_prompt_is_fast_path_and_has_no_tools(self):
+        """Dash is the fast-path informational responder. Per the Tribunal GDD,
+        only Sage (the deep-reasoning agent) carries the operator tool surface;
+        Dash resolves simple requests from context alone and escalates anything
+        that needs tool calling. An empty tool list is the contract.
+        """
         dash = get_agent_persona("dash")
         sage = get_agent_persona("sage")
         prompt = dash.get_system_prompt()
         assert "<role>" in prompt
         assert "<identity>" in prompt
         assert dash.identity in prompt
-        assert set(dash.tools) == set(sage.tools)
+        assert dash.tools == [], (
+            "Dash must not expose tools; tool-calling work routes to Sage."
+        )
+        assert len(sage.tools) > 0, "Sage remains the tool-bearing reasoning agent."
 
     def test_tools_is_list(self):
         """Test that tools field is always a list."""
