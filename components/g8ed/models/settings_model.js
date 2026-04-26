@@ -440,6 +440,16 @@ export const USER_SETTINGS = Object.freeze([
         default: false,
     }),
     Object.freeze({
+        key: 'whitelisted_commands_csv',
+        section: 'validation',
+        label: 'Whitelisted Commands',
+        description: 'Comma-separated list of whitelisted commands (e.g., uptime,df,free). Only used when Command Whitelisting is enabled.',
+        type: 'text',
+        secret: false,
+        placeholder: 'uptime,df,free,ps',
+        default: '',
+    }),
+    Object.freeze({
         key: 'enable_command_blacklisting',
         section: 'validation',
         label: 'Command Blacklisting',
@@ -726,6 +736,7 @@ const EVAL_JUDGE_KEY_MAP = Object.freeze({
 
 const COMMAND_VALIDATION_KEY_MAP = Object.freeze({
     enable_command_whitelisting: 'enable_whitelisting',
+    whitelisted_commands_csv: 'whitelisted_commands',
     enable_command_blacklisting: 'enable_blacklisting',
 });
 

@@ -29,6 +29,7 @@ from ..models.agent import OperatorContext
 from ..models.agents import TriageResult
 from ..models.investigations import EnrichedInvestigationContext
 from ..models.memory import InvestigationMemory
+from ..models.whitelist import WhitelistedCommand
 from ..prompts_data.loader import load_mode_prompts, load_prompt
 from ..utils.agent_persona_loader import get_agent_persona
 
@@ -152,29 +153,29 @@ def build_learned_context_section(
 def build_command_constraints_message(
     whitelisting_enabled: bool,
     blacklisting_enabled: bool,
-    whitelisted_commands: List[dict[str, Any]] | None,
-    blacklisted_commands: List[dict[str, str]] | None,
+    whitelisted_commands: list[WhitelistedCommand] | None,
+    blacklisted_commands: list[dict[str, str]] | None,
 ) -> str:
     """Generate a human-readable message describing active command constraints.
     
     Args:
         whitelisting_enabled: Whether whitelist enforcement is active
         blacklisting_enabled: Whether blacklist enforcement is active
-        whitelisted_commands: List of command metadata dicts with safe_options and validation patterns
+        whitelisted_commands: List of WhitelistedCommand objects
         blacklisted_commands: List of blacklisted command dicts
     """
     parts = []
     if whitelisting_enabled:
         if whitelisted_commands:
-            command_names = [cmd.get("command", "unknown") for cmd in whitelisted_commands]
+            command_names = [cmd.command for cmd in whitelisted_commands]
             parts.append(f"Whitelisting is ENABLED. Only these commands are allowed: {', '.join(command_names)}")
             
             # Add detailed constraint information for each command
             constraint_details = []
             for cmd in whitelisted_commands:
-                cmd_name = cmd.get("command", "unknown")
-                safe_options = cmd.get("safe_options", [])
-                validation = cmd.get("validation", {})
+                cmd_name = cmd.command
+                safe_options = cmd.safe_options
+                validation = cmd.validation
                 
                 if safe_options or validation:
                     details = f"{cmd_name}:"

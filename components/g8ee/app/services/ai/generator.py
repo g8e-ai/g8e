@@ -46,6 +46,7 @@ from app.llm.prompts import (
 from app.llm.factory import get_llm_provider
 from app.llm.llm_types import Content, Part, Role, LiteLLMSettings, ResponseFormat
 from app.llm.provider import LLMProvider
+from app.models.whitelist import WhitelistedCommand
 from app.models.reputation import (
     ReputationCommitmentCreatedPayload,
     ReputationCommitmentFailedPayload,
@@ -621,7 +622,7 @@ async def generate_command(
     auditor_hmac_key: str,
     whitelisting_enabled: bool = False,
     blacklisting_enabled: bool = False,
-    whitelisted_commands: list[dict[str, Any]] | None = None,
+    whitelisted_commands: list[WhitelistedCommand] | None = None,
     blacklisted_commands: list[dict[str, str]] | None = None,
 ) -> CommandGenerationResult:
     """Run the Tribunal pipeline to generate a command from the caller's request."""

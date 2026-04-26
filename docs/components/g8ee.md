@@ -1039,6 +1039,11 @@ The `agent_tool_loop.py` extracts these constraints from `tool_executor._user_se
 |-----|---------|---------|
 | `enable_whitelisting` | `false` | Restrict commands to an allowlist |
 | `enable_blacklisting` | `false` | Block commands matching a denylist |
+| `whitelisted_commands` | — | CSV string of allowed commands (overrides default whitelist) |
+
+**Whitelist Mode Semantics:**
+- **JSON mode (default):** When `whitelisted_commands` is empty, the system uses a rich JSON whitelist (`config/whitelist.json`) with per-command `safe_options` and `validation` patterns.
+- **CSV mode (override):** When `whitelisted_commands` contains a comma-separated list (e.g., `uptime,df,free`), this list **entirely replaces** the JSON whitelist. Every argument must pass basic shell safety checks (`_is_safe_value`). Rich per-command patterns from the JSON whitelist are NOT used in this mode.
 
 > **Note:** Command validation is configured per-user via user settings, not platform settings. Users can enable/disable whitelist and blacklist through the Settings UI or API. See [Security Architecture — Command Allowlist and Denylist](../architecture/security.md#command-allowlist-and-denylist) for details on how to configure these controls.
 

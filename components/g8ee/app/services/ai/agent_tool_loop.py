@@ -61,11 +61,13 @@ from app.models.agents.tribunal import (
     TribunalError,
     TribunalConsensusFailedError,
 )
-from app.services.investigation.investigation_service import extract_operator_context_by_target
+from app.services.investigation.investigation_service import extract_operator_context_by_target, extract_single_operator_context
 from app.services.ai.tool_service import AIToolService
 from app.services.infra.g8ed_event_service import EventService
 from app.utils.ids import generate_command_execution_id
 from app.utils.safety import map_os_string_to_platform
+from app.utils.whitelist_validator import parse_whitelisted_commands_csv
+from app.models.whitelist import WhitelistedCommand
 
 class TribunalInvoker:
     """Encapsulates Tribunal invocation logic for run_commands_with_operator.
@@ -77,14 +79,15 @@ class TribunalInvoker:
     @staticmethod
     def _fetch_command_constraints(
         tool_executor: AIToolService,
-    ) -> tuple[bool, bool, list[dict[str, Any]], list[dict[str, str]]]:
+        investigation: EnrichedInvestigationContext,
+    ) -> tuple[bool, bool, list[WhitelistedCommand], list[dict[str, str]]]:
         """Fetch command validation constraints from tool executor settings.
         
         Returns metadata-rich command list with safe_options and validation patterns.
         """
         whitelisting_enabled = False
         blacklisting_enabled = False
-        whitelisted_commands: list[dict[str, Any]] = []
+        whitelisted_commands: list[WhitelistedCommand] = []
         blacklisted_commands: list[dict[str, str]] = []
 
         cv = tool_executor.user_settings
@@ -93,10 +96,20 @@ class TribunalInvoker:
             blacklisting_enabled = cv.command_validation.enable_blacklisting
             if whitelisting_enabled:
                 # Map OS string to Platform enum using centralized function
-                os_name = tool_executor.user_settings.operator_context.os if tool_executor.user_settings and tool_executor.user_settings.operator_context else DEFAULT_OS_NAME
+                primary_operator = investigation.operator_documents[0] if investigation.operator_documents else None
+                operator_context = extract_single_operator_context(primary_operator) if primary_operator else None
+                os_name = operator_context.os if operator_context else DEFAULT_OS_NAME
                 platform = map_os_string_to_platform(os_name)
-                
-                whitelisted_commands = tool_executor.whitelist_validator.get_available_commands_with_metadata(platform)
+
+                # Check if CSV override is active
+                csv_override = cv.command_validation.whitelisted_commands
+                csv_commands = parse_whitelisted_commands_csv(csv_override) if csv_override else []
+                if csv_commands:
+                    # CSV mode: construct simple metadata from CSV commands (no rich safe_options/validation)
+                    whitelisted_commands = [WhitelistedCommand(command=cmd) for cmd in csv_commands]
+                else:
+                    # JSON mode: use rich metadata from validator
+                    whitelisted_commands = tool_executor.whitelist_validator.get_available_commands_with_metadata(platform)
             if blacklisting_enabled:
                 blacklisted_commands = tool_executor.blacklist_validator.get_forbidden_commands()
 
@@ -134,7 +147,7 @@ class TribunalInvoker:
         )
 
         whitelisting_enabled, blacklisting_enabled, whitelisted_commands, blacklisted_commands = (
-            TribunalInvoker._fetch_command_constraints(tool_executor)
+            TribunalInvoker._fetch_command_constraints(tool_executor, investigation)
         )
 
         logger.info(

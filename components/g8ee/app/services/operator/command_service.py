@@ -36,6 +36,7 @@ from app.models.command_request_payloads import (
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.operators import (
+    ApprovalResult,
     BatchOperatorExecutionResult,
     CommandApprovalRequest,
     OperatorDocument,
@@ -82,6 +83,7 @@ from .lfaa_service import OperatorLFAAService
 from .port_service import OperatorPortService
 from .pubsub_service import OperatorPubSubService
 from app.utils.safety import validate_command_safety
+from app.utils.whitelist_validator import parse_whitelisted_commands_csv
 from app.utils.ids import generate_command_execution_id, generate_batch_id
 from app.errors import ValidationError, BusinessLogicError
 import asyncio
@@ -266,12 +268,17 @@ class OperatorCommandService:
         primary = target_operator_docs[0]
 
         # 2. Command validation (L1 technical bedrock: whitelist/blacklist/forbidden patterns)
+        # Prefer the per-request (user) command_validation settings — get_user_settings
+        # already falls back to platform defaults when no user document exists.
+        cv = request_settings.command_validation if request_settings else self._cv
+        whitelist_override = parse_whitelisted_commands_csv(cv.whitelisted_commands)
         operator_context = extract_single_operator_context(primary) if primary else None
         is_safe, safety_err = validate_command_safety(
             command,
-            whitelisting_enabled=self._cv.enable_whitelisting,
-            blacklisting_enabled=self._cv.enable_blacklisting,
-            operator_context=operator_context
+            whitelisting_enabled=cv.enable_whitelisting,
+            blacklisting_enabled=cv.enable_blacklisting,
+            operator_context=operator_context,
+            whitelisted_commands_override=whitelist_override,
         )
         if not is_safe:
             error_type = CommandErrorType.WHITELIST_VIOLATION if "whitelisted" in (safety_err or "").lower() else CommandErrorType.BLACKLIST_VIOLATION
@@ -286,28 +293,37 @@ class OperatorCommandService:
         primary_operator_id = primary.id
         primary_session_id = primary.operator_session_id or ""
         batch_id = generate_batch_id() if is_batch else None
-        
+
         # Generate per-operator execution IDs upfront so PREPARING can correlate with STARTED
         per_operator_exec_ids = [generate_command_execution_id() for _ in target_operator_docs]
-        
+
         # For single operator, use its exec_id as the approval_execution_id to unify IDs
         # For batch, use a separate approval_execution_id but include per-operator IDs in PREPARING
         approval_execution_id = per_operator_exec_ids[0] if not is_batch else generate_command_execution_id()
 
+        # When whitelisting is enabled and validate_command_safety passed above,
+        # the command is — by definition — whitelisted. Auto-approve to bypass
+        # human approval. No second validator call required.
+        is_whitelisted = cv.enable_whitelisting
+        if is_whitelisted:
+            logger.info("[COMMAND] Command is whitelisted - bypassing human approval: %s", command)
+
         # 3. Notify preparing (one event for the approval card).
-        await self.g8ed_event_service.publish_command_event(
-            EventType.OPERATOR_COMMAND_APPROVAL_PREPARING,
-            self._CommandExecutingBroadcastEvent(
-                command=command,
-                execution_id=approval_execution_id,
-                operator_session_id=primary_session_id,
-                operator_id=primary_operator_id,
-                batch_id=batch_id,
-                per_operator_execution_ids=per_operator_exec_ids if is_batch else [],
-            ),
-            g8e_context,
-            task_id=AITaskId.COMMAND,
-        )
+        # Skip for whitelisted commands since they auto-approve.
+        if not is_whitelisted:
+            await self.g8ed_event_service.publish_command_event(
+                EventType.OPERATOR_COMMAND_APPROVAL_PREPARING,
+                self._CommandExecutingBroadcastEvent(
+                    command=command,
+                    execution_id=approval_execution_id,
+                    operator_session_id=primary_session_id,
+                    operator_id=primary_operator_id,
+                    batch_id=batch_id,
+                    per_operator_execution_ids=per_operator_exec_ids if is_batch else [],
+                ),
+                g8e_context,
+                task_id=AITaskId.COMMAND,
+            )
 
         risk_analysis = await self._execution_service.ai_response_analyzer.analyze_command_risk(
             command=command,
@@ -317,7 +333,15 @@ class OperatorCommandService:
         )
 
         # 4. Approval gate — a single approval covers the whole batch.
-        approval_result = await self._approval_service.request_command_approval(
+        # Whitelisted commands auto-approve (rubber-stamped).
+        if is_whitelisted:
+            approval_result = ApprovalResult(
+                approved=True,
+                reason="Command is whitelisted - auto-approved",
+                approval_id=None,
+            )
+        else:
+            approval_result = await self._approval_service.request_command_approval(
             CommandApprovalRequest(
                 g8e_context=g8e_context,
                 timeout_seconds=args.timeout_seconds,

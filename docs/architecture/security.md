@@ -695,7 +695,8 @@ Command validation is configured per-user via the `command_validation` field in 
   "settings": {
     "command_validation": {
       "enable_whitelisting": false,
-      "enable_blacklisting": false
+      "enable_blacklisting": false,
+      "whitelisted_commands": ""
     },
     "llm": { ... },
     "search": { ... },
@@ -704,8 +705,13 @@ Command validation is configured per-user via the `command_validation` field in 
 }
 ```
 
-- `enable_whitelisting` (bool, default: `false`) — When enabled, only commands in the whitelist are permitted
-- `enable_blacklisting` (bool, default: `false`) — When enabled, commands matching blacklist patterns are blocked
+- `enable_whitelisting` (bool, default: `false`) — When enabled, only commands in the whitelist are permitted.
+- `enable_blacklisting` (bool, default: `false`) — When enabled, commands matching blacklist patterns are blocked.
+- `whitelisted_commands` (string, default: `""`) — Optional comma-separated list of allowed base commands (e.g. `uptime,df,free`).
+
+**Whitelist Mode Semantics:**
+- **JSON mode (default):** When `whitelisted_commands` is empty, the system uses a rich JSON whitelist (`config/whitelist.json`) with per-command `safe_options` and `validation` patterns.
+- **CSV mode (override):** When `whitelisted_commands` contains a comma-separated list, this list **entirely replaces** the JSON whitelist. Every argument must pass basic shell safety checks (`_is_safe_value`). Rich per-command patterns from the JSON whitelist are NOT used in this mode.
 
 Users can configure these settings through:
 1. **Settings UI** — Navigate to Settings → Command Validation to enable/disable whitelist and blacklist

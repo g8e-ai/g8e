@@ -34,6 +34,7 @@ from app.constants import (
     RiskLevel,
 )
 from app.models.base import G8eBaseModel, UTCDatetime
+from app.models.whitelist import CommandValidationResult, WhitelistedCommand
 
 
 class FsListEntry(G8eBaseModel):
@@ -378,7 +379,7 @@ class CommandConstraintsResult(G8eBaseModel):
     error_type: CommandErrorType | None = None
     whitelisting_enabled: bool = False
     blacklisting_enabled: bool = False
-    whitelisted_commands: list[str] = Field(default_factory=list)
+    whitelisted_commands: list[WhitelistedCommand] = Field(default_factory=list)
     blacklisted_commands: list[dict[str, str]] = Field(default_factory=list)
     blacklisted_substrings: list[dict[str, str]] = Field(default_factory=list)
     blacklisted_patterns: list[dict[str, str]] = Field(default_factory=list)

@@ -19,7 +19,7 @@ from typing import Any
 
 from app.constants import Platform
 from app.errors import ConfigurationError
-from app.models.whitelist import CommandValidationResult
+from app.models.whitelist import CommandValidationResult, WhitelistedCommand
 
 logger = logging.getLogger(__name__)
 
@@ -93,14 +93,26 @@ class CommandWhitelistValidator:
 
         logger.info("Parsed whitelist: %d categories, %d forbidden patterns", len(self.commands_by_category), len(self.forbidden_patterns))
 
-    def validate_command(self, command_string: str, platform: Platform = Platform.LINUX) -> CommandValidationResult:
+    def validate_command(
+        self,
+        command_string: str,
+        platform: Platform = Platform.LINUX,
+        allowed_commands_override: list[str] | None = None,
+    ) -> CommandValidationResult:
         """
         Validate a command string against the whitelist.
-        
+
         Args:
             command_string: Full command to validate (e.g., "ping -c 4 google.com")
             platform: Target platform
-            
+            allowed_commands_override: Optional list of base commands that fully
+                replaces the JSON whitelist when non-empty. When provided, the
+                command is validated as: (1) global forbidden patterns/directories,
+                (2) base command must be in the override set, (3) every argument
+                must pass ``_is_safe_value``. The JSON whitelist's per-command
+                ``safe_options`` and ``validation`` patterns are NOT consulted in
+                this mode. An empty/None override falls back to the JSON whitelist.
+
         Returns:
             CommandValidationResult with validation details
         """
@@ -142,6 +154,38 @@ class CommandWhitelistValidator:
                     reason=f"Accesses forbidden directory: {forbidden_dir}",
                     violations=[f"forbidden_directory: {forbidden_dir}"]
                 )
+
+        # CSV override mode: if user supplied an explicit allow-list, replace the
+        # JSON whitelist entirely (per design choice). Per-command arg metadata is
+        # not available, so we fall back to the conservative `_is_safe_value`
+        # check on every argument.
+        if allowed_commands_override:
+            if base_command not in allowed_commands_override:
+                logger.info(
+                    "Command '%s' not in user-configured whitelist (override)", base_command
+                )
+                return CommandValidationResult(
+                    is_valid=False,
+                    command=base_command,
+                    reason=f"Command '{base_command}' not in whitelist",
+                )
+            violations: list[str] = []
+            for arg in command_args:
+                if not self._is_safe_value(arg):
+                    violations.append(f"Argument '{arg}' contains unsafe characters or format")
+            if violations:
+                return CommandValidationResult(
+                    is_valid=False,
+                    command=base_command,
+                    reason=f"Invalid arguments: {'; '.join(violations)}",
+                    violations=violations,
+                )
+            return CommandValidationResult(
+                is_valid=True,
+                command=base_command,
+                category="user_whitelist",
+                platform=platform,
+            )
 
         command_config = self._find_command_config(base_command)
         if not command_config:
@@ -311,7 +355,7 @@ class CommandWhitelistValidator:
         match = re.search(r"<(\w+)>", safe_option)
         return match.group(1) if match else None
 
-    def get_command_metadata(self, command: str, platform: Platform = Platform.LINUX) -> dict[str, Any] | None:
+    def get_command_metadata(self, command: str, platform: Platform = Platform.LINUX) -> WhitelistedCommand | None:
         """Get full metadata for a command, including safe options and validation."""
         command_config = self._find_command_config(command)
         if not command_config:
@@ -325,17 +369,17 @@ class CommandWhitelistValidator:
         else:
             platform_options = safe_options
             
-        return {
-            "command": config.get("command", command),
-            "category": category,
-            "description": config.get("description"),
-            "safe_options": platform_options,
-            "validation": config.get("validation", {}),
-            "examples": config.get("examples", []),
-            "max_execution_time": config.get("max_execution_time")
-        }
+        return WhitelistedCommand(
+            command=config.get("command", command),
+            category=category,
+            description=config.get("description"),
+            safe_options=platform_options,
+            validation=config.get("validation", {}),
+            examples=config.get("examples", []),
+            max_execution_time=config.get("max_execution_time")
+        )
 
-    def get_available_commands_with_metadata(self, platform: Platform = Platform.LINUX) -> list[dict[str, Any]]:
+    def get_available_commands_with_metadata(self, platform: Platform = Platform.LINUX) -> list[WhitelistedCommand]:
         """Get list of all available commands for a platform with their metadata."""
         available = []
         for category_name, commands in self.commands_by_category.items():
@@ -344,7 +388,7 @@ class CommandWhitelistValidator:
                     metadata = self.get_command_metadata(config.get("command", exec_name), platform)
                     if metadata:
                         available.append(metadata)
-        return sorted(available, key=lambda x: x["command"])
+        return sorted(available, key=lambda x: x.command)
 
     def get_available_commands(self, platform: Platform = Platform.LINUX) -> list[str]:
         """Get list of all available commands for a platform."""
@@ -383,10 +427,44 @@ def get_whitelist_validator(whitelist_path: str | None = None) -> CommandWhiteli
     return _validator_instance
 
 
-def validate_command_against_whitelist(command: str, platform: Platform = Platform.LINUX) -> CommandValidationResult:
-    """Validate a command against the whitelist (convenience function)."""
+def validate_command_against_whitelist(
+    command: str,
+    platform: Platform = Platform.LINUX,
+    allowed_commands_override: list[str] | None = None,
+) -> CommandValidationResult:
+    """Validate a command against the whitelist (convenience function).
+
+    See ``CommandWhitelistValidator.validate_command`` for the semantics of
+    ``allowed_commands_override``.
+    """
     validator = get_whitelist_validator()
-    return validator.validate_command(command, platform)
+    return validator.validate_command(command, platform, allowed_commands_override)
+
+
+def parse_whitelisted_commands_csv(csv: str | None) -> list[str]:
+    """Parse a comma-separated whitelist string into an ordered, deduplicated list.
+
+    Whitespace around entries is stripped. Empty fragments (e.g. trailing commas
+    or back-to-back commas) are dropped. Order of first occurrence is preserved.
+    A ``None`` or empty input yields an empty list.
+
+    Examples:
+        "uptime,df,free"        -> ["uptime", "df", "free"]
+        " uptime , df ,, free " -> ["uptime", "df", "free"]
+        "uptime,uptime,df"      -> ["uptime", "df"]
+        ""                      -> []
+    """
+    if not csv:
+        return []
+    seen: set[str] = set()
+    out: list[str] = []
+    for raw in csv.split(","):
+        token = raw.strip()
+        if not token or token in seen:
+            continue
+        seen.add(token)
+        out.append(token)
+    return out
 
 
 def get_whitelisted_commands(platform: Platform = Platform.LINUX) -> list[str]:

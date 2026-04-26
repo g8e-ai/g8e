@@ -113,6 +113,7 @@ export function createOperatorApprovalRouter({ services, authMiddleware, rateLim
                 operatorId: operatorSession.operator_id
             });
 
+            req.g8eContext.execution_id = execution_id;
             const response = await relay.relayDirectCommandToG8ee(directCommandRequest.forWire(), req.g8eContext);
 
             logger.info('[OPERATOR-DIRECT] Sent direct command to g8ee', {

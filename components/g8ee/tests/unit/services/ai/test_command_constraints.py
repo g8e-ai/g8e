@@ -40,8 +40,9 @@ from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.settings import CommandValidationSettings, G8eeUserSettings
 from app.models.tool_results import CommandConstraintsResult
+from app.models.whitelist import CommandValidationResult, WhitelistedCommand
 from app.services.ai.tool_service import AIToolService
-from app.utils.whitelist_validator import CommandWhitelistValidator, CommandValidationResult
+from app.utils.whitelist_validator import CommandWhitelistValidator
 from app.utils.blacklist_validator import CommandBlacklistValidator, CommandBlacklistResult
 
 pytestmark = [pytest.mark.unit]
@@ -115,9 +116,9 @@ def mock_whitelist_validator():
         command="ping",
     ))
     validator.get_available_commands_with_metadata = MagicMock(return_value=[
-        "cat",
-        "ls",
-        "ping",
+        WhitelistedCommand(command="cat"),
+        WhitelistedCommand(command="ls"),
+        WhitelistedCommand(command="ping"),
     ])
     return validator
 
@@ -151,7 +152,9 @@ def mock_g8e_context():
 @pytest.fixture
 def mock_investigation():
     """Mock EnrichedInvestigationContext."""
-    return MagicMock(spec=EnrichedInvestigationContext)
+    investigation = MagicMock(spec=EnrichedInvestigationContext)
+    investigation.operator_documents = []
+    return investigation
 
 
 @pytest.fixture
@@ -262,7 +265,7 @@ async def test_handle_get_command_constraints_whitelist_only(
     assert result.success is True
     assert result.whitelisting_enabled is True
     assert result.blacklisting_enabled is False
-    assert sorted(result.whitelisted_commands) == ["cat", "ls", "ping"]
+    assert sorted([cmd.command for cmd in result.whitelisted_commands]) == ["cat", "ls", "ping"]
     assert result.global_forbidden_patterns == [r"rm -rf", r"format"]
     assert result.global_forbidden_directories == ["/etc", "/boot"]
     assert result.blacklisted_commands == []
@@ -357,10 +360,67 @@ async def test_handle_get_command_constraints_both_enabled(
     assert result.success is True
     assert result.whitelisting_enabled is True
     assert result.blacklisting_enabled is True
-    assert sorted(result.whitelisted_commands) == ["cat", "ls", "ping"]
+    assert sorted([cmd.command for cmd in result.whitelisted_commands]) == ["cat", "ls", "ping"]
     assert len(result.blacklisted_commands) == 2
     assert "Whitelisting ENABLED" in result.message
     assert "Blacklisting ENABLED" in result.message
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_handle_get_command_constraints_csv_override(
+    mock_operator_command_service,
+    mock_investigation_service,
+    mock_g8e_context,
+    mock_investigation,
+    mock_whitelist_validator,
+    mock_blacklist_validator,
+):
+    """Test handler returns CSV override commands when whitelisted_commands CSV is set."""
+    from unittest.mock import AsyncMock, MagicMock
+    
+    # Create settings with CSV override
+    settings = MagicMock(spec=G8eeUserSettings)
+    settings.command_validation = CommandValidationSettings(
+        enable_whitelisting=True,
+        enable_blacklisting=False,
+        whitelisted_commands="uptime,df,free",
+    )
+    
+    tool_service = AIToolService(
+        operator_command_service=mock_operator_command_service,
+        investigation_service=mock_investigation_service,
+        reputation_data_service=AsyncMock(),
+        reputation_service=AsyncMock(),
+        stake_resolution_data_service=AsyncMock(),
+        chat_task_manager=MagicMock(),
+        web_search_provider=None,
+        platform_settings=None,
+        user_settings=settings,
+        whitelist_validator=mock_whitelist_validator,
+        blacklist_validator=mock_blacklist_validator,
+    )
+
+    result = await tool_service._handle_get_command_constraints(
+        tool_args={},
+        investigation=mock_investigation,
+        g8e_context=mock_g8e_context,
+        request_settings=settings,
+        execution_id=None,
+    )
+
+    assert isinstance(result, CommandConstraintsResult)
+    assert result.success is True
+    assert result.whitelisting_enabled is True
+    assert result.blacklisting_enabled is False
+    # Should return CSV commands, not JSON validator commands
+    assert len(result.whitelisted_commands) == 3
+    assert result.whitelisted_commands == [
+        WhitelistedCommand(command="uptime"),
+        WhitelistedCommand(command="df"),
+        WhitelistedCommand(command="free"),
+    ]
+    assert result.blacklisted_commands == []
+    assert "Whitelisting ENABLED" in result.message
 
 # =============================================================================
 # TESTS: CommandBlacklistValidator Public Methods
@@ -436,7 +496,10 @@ def test_command_constraints_result_serialization():
         success=True,
         whitelisting_enabled=True,
         blacklisting_enabled=False,
-        whitelisted_commands=["ping", "ls"],
+        whitelisted_commands=[
+            WhitelistedCommand(command="ping"),
+            WhitelistedCommand(command="ls"),
+        ],
         blacklisted_commands=[],
         blacklisted_substrings=[],
         blacklisted_patterns=[],
@@ -450,7 +513,8 @@ def test_command_constraints_result_serialization():
     assert data["success"] is True
     assert data["whitelisting_enabled"] is True
     assert data["blacklisting_enabled"] is False
-    assert data["whitelisted_commands"] == ["ping", "ls"]
+    assert data["whitelisted_commands"][0]["command"] == "ping"
+    assert data["whitelisted_commands"][1]["command"] == "ls"
     assert data["message"] == "Whitelisting ENABLED"
 
 
@@ -461,7 +525,10 @@ def test_command_constraints_result_deserialization():
         "success": True,
         "whitelisting_enabled": True,
         "blacklisting_enabled": False,
-        "whitelisted_commands": ["ping", "ls"],
+        "whitelisted_commands": [
+            {"command": "ping"},
+            {"command": "ls"},
+        ],
         "blacklisted_commands": [],
         "blacklisted_substrings": [],
         "blacklisted_patterns": [],
@@ -475,7 +542,8 @@ def test_command_constraints_result_deserialization():
     assert result.success is True
     assert result.whitelisting_enabled is True
     assert result.blacklisting_enabled is False
-    assert result.whitelisted_commands == ["ping", "ls"]
+    assert result.whitelisted_commands[0].command == "ping"
+    assert result.whitelisted_commands[1].command == "ls"
     assert result.message == "Whitelisting ENABLED"
 
 

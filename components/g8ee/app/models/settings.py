@@ -83,6 +83,10 @@ class ComponentURLsSettings(G8eBaseModel):
 class CommandValidationSettings(G8eBaseModel):
     """Operator command safety and validation configuration."""
     enable_whitelisting: bool = Field(False)
+    whitelisted_commands: str = Field(
+        "",
+        description="Comma-separated list of whitelisted commands (e.g., uptime,df,free). Only used when enable_whitelisting is true.",
+    )
     enable_blacklisting: bool = Field(False)
     max_batch_concurrency: int = Field(
         10,

@@ -100,6 +100,23 @@ class TestValidateCommandSafety:
         assert not is_safe
         assert "not whitelisted" in error.lower()
 
+    @patch("app.utils.safety.validate_command_against_whitelist")
+    def test_whitelist_override_forwarded_to_validator(self, mock_whitelist):
+        """The CSV-derived override list must be threaded into the whitelist validator."""
+        from app.models.whitelist import CommandValidationResult
+        mock_whitelist.return_value = CommandValidationResult(is_valid=True, command="uptime")
+
+        ctx = _make_mock_operator_context()
+        is_safe, error = validate_command_safety(
+            "uptime", True, False, ctx,
+            whitelisted_commands_override=["uptime", "df"],
+        )
+        assert is_safe
+        assert error is None
+        # Validator must have been called with the override kwarg
+        _, kwargs = mock_whitelist.call_args
+        assert kwargs.get("allowed_commands_override") == ["uptime", "df"]
+
 class TestAuditorSafety:
     @pytest.mark.asyncio
     async def test_rejects_unsafe_revision(self):
