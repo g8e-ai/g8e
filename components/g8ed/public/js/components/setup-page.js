@@ -14,7 +14,7 @@
 import { ApiPaths } from '../constants/api-paths.js';
 import { ComponentName } from '../constants/service-client-constants.js';
 
-const LAST_STEP = 4;
+const LAST_STEP = 2;
 
 /**
  * LLM provider catalog is server-injected as a JSON script tag in setup.ejs
@@ -191,10 +191,6 @@ export class SetupPage {
         this._updateNav();
         this._clearStatus();
 
-        if (step === 3) {
-            this._updateUseGeminiKeyVisibility();
-        }
-
         if (step === LAST_STEP) {
             this._renderSummary();
         }
@@ -212,13 +208,14 @@ export class SetupPage {
 
         if (backBtn) backBtn.style.display = this._step > 1 ? '' : 'none';
         if (nextBtn) {
-            const show = this._step < 2 || (this._step === 2 && this._isProviderStepReady()) || this._step === 3;
+            const show = this._step === 1 && this._isProviderStepReady();
             nextBtn.style.display = show ? '' : 'none';
         }
     }
 
     _validateStep(step) {
         if (step === 1) {
+            // Validate account email
             const email = document.getElementById('account_email').value.trim();
             if (!email) {
                 this._showStatus('error', 'Email address is required');
@@ -231,9 +228,8 @@ export class SetupPage {
                 document.getElementById('account_email').focus();
                 return false;
             }
-        }
 
-        if (step === 2) {
+            // Validate AI providers
             const active = this._getActiveProviders();
             if (active.length === 0) {
                 this._showStatus('error', 'Configure at least one provider (API key or Ollama endpoint)');
@@ -276,6 +272,17 @@ export class SetupPage {
                     return false;
                 }
             }
+
+            // Validate web search if Google is selected
+            if (this._searchProvider === 'google') {
+                const searchKey = document.getElementById('search_api_key')?.value.trim();
+                const projectId = document.getElementById('google_project_id')?.value.trim();
+                const appId = document.getElementById('vertex_ai_search_app_id')?.value.trim();
+                if (!searchKey || !projectId || !appId) {
+                    this._showStatus('error', 'Complete Google search configuration or select "None"');
+                    return false;
+                }
+            }
         }
 
         return true;
@@ -294,7 +301,7 @@ export class SetupPage {
         });
 
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && this._step >= 2 && this._step <= LAST_STEP - 1) {
+            if (e.key === 'Enter' && this._step === 1 && this._isProviderStepReady()) {
                 const activeEl = document.activeElement;
                 if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'SELECT')) {
                     e.preventDefault();

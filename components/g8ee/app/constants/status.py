@@ -143,6 +143,7 @@ class CommandErrorType(str, Enum):
     PORT_CHECK_FAILED = "port.check.failed"
     APPROVAL_TIMEOUT = "approval.timeout"
     PERMISSION_ERROR = "permission.error"
+    CONFIGURATION_ERROR = "configuration.error"
 
 class ConversationStatus(str, Enum):
     ACTIVE = "active"

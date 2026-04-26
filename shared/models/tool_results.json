@@ -407,6 +407,39 @@
     }
   },
 
+  "ssh_host_item": {
+    "_description": "A single SSH target parsed from ~/.ssh/config. Embedded as items in ssh_inventory_result.hosts.",
+    "_authority": "g8ee",
+    "_consumers": ["g8ee (tool_results.py, ssh_inventory_service.py)"],
+    "fields": {
+      "host": { "type": "string", "required": true, "description": "SSH alias from the Host directive" },
+      "hostname": { "type": "string", "required": true, "description": "Resolved hostname or IP from HostName, or host when absent" },
+      "user": { "type": "string", "required": false, "description": "Login user from User directive, if set" },
+      "port": { "type": "integer", "required": false, "description": "SSH port from Port directive, if set" },
+      "environment": { "type": "string", "required": false, "description": "User-defined environment label. Reserved; not inferred from SSH config." },
+      "group": { "type": "string", "required": false, "description": "User-defined group label. Reserved; not inferred from SSH config." },
+      "is_wildcard": { "type": "boolean", "required": true, "description": "True when the Host directive is a wildcard pattern (e.g. 'Host *'). Wildcards cannot be streamed to directly." }
+    }
+  },
+
+  "ssh_inventory_result": {
+    "_description": "Result returned by the list_ssh_inventory tool call. g8ee-only: parsed from the ssh_config mounted into the g8ee container, never crosses a g8eo wire boundary. Extends operation_error_base.",
+    "_authority": "g8ee",
+    "_consumers": ["g8ee (agent.py, tool_service.py, tools/ssh_inventory.py)"],
+    "_tool_names": ["list_ssh_inventory"],
+    "extends": "operation_error_base",
+    "fields": {
+      "source_path": { "type": "string", "required": false, "description": "Filesystem path the inventory was parsed from" },
+      "hosts": {
+        "type": "array",
+        "required": false,
+        "description": "All parsed Host blocks, in declaration order. Items are SshHost.",
+        "items": "$ref:ssh_host_item"
+      },
+      "total_count": { "type": "integer", "required": false, "description": "Number of host entries in hosts (including wildcards)" }
+    }
+  },
+
   "command_risk_analysis": {
     "_description": "Risk analysis result for shell commands. Produced by the AI assistant model before command dispatch.",
     "_authority": "g8ee",

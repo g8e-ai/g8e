@@ -346,6 +346,15 @@ class OperatorDataServiceProtocol(Protocol):
         """Retrieve operator metadata."""
         ...
 
+    async def query_operators(
+        self,
+        field_filters: list[dict[str, object]] | None = None,
+        limit: int = 1000,
+        bypass_cache: bool = False,
+    ) -> list[OperatorDocument]:
+        """Query operator documents. ``bypass_cache=True`` skips the query cache."""
+        ...
+
     async def update_operator_status(self, operator_id: str, status: OperatorStatus) -> bool:
         """Update operator status."""
         ...

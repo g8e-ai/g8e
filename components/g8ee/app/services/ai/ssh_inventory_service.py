@@ -273,16 +273,6 @@ def _parse_ssh_config(
     yield from flush()
 
 
-    async def get_inventory(self) -> dict:
-        """Fetch and return the SSH inventory as a dict for AI tool consumption."""
-        try:
-            inventory = self.load()
-            return inventory.model_dump(mode="json")
-        except ConfigurationError as exc:
-            logger.warning("[SSH_INVENTORY] %s", exc)
-            return {"source_path": self._ssh_config_path, "hosts": []}
-
-
 def default_ssh_inventory_service() -> SshInventoryService:
     """Construct an :class:`SshInventoryService` using the canonical mount path.
 

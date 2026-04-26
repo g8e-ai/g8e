@@ -72,6 +72,26 @@ class OperatorDataService(OperatorDataServiceProtocol):
 
         return OperatorDocument.model_validate(data)
 
+    async def query_operators(
+        self,
+        field_filters: list[dict[str, object]] | None = None,
+        limit: int = 1000,
+        bypass_cache: bool = False,
+    ) -> list[OperatorDocument]:
+        """Query Operator documents.
+
+        ``bypass_cache=True`` mirrors g8ed's ``queryOperatorsFresh`` and is used
+        by reconcilers (e.g. HeartbeatStaleMonitorService) where stale query
+        cache results would produce false STALE/OFFLINE transitions.
+        """
+        rows = await self.cache.query_documents(
+            collection=self.collection,
+            field_filters=field_filters or [],
+            limit=limit,
+            bypass_cache=bypass_cache,
+        )
+        return [OperatorDocument.model_validate(row) for row in rows]
+
     async def create_operator(self, operator: OperatorDocument) -> bool:
         """Create a new Operator document in the database."""
         if not operator.id:

@@ -377,6 +377,7 @@ class CacheAsideService(CacheAsideProtocol):
         limit: int = 100,
         select_fields: list[str] | None = None,
         ttl: int | None = CACHE_TTL_SHORT,
+        bypass_cache: bool = False,
     ) -> list[dict[str, Any]]:
         order_by = order_by or {}
         query_params: dict[str, Any] = {
@@ -386,9 +387,10 @@ class CacheAsideService(CacheAsideProtocol):
             "limit": limit,
             "select_fields": select_fields or [],
         }
-        cached = await self.get_query_result(collection, query_params, ttl=ttl)
-        if cached is not None:
-            return cached
+        if not bypass_cache:
+            cached = await self.get_query_result(collection, query_params, ttl=ttl)
+            if cached is not None:
+                return cached
 
         result = await self.db.query_collection(
             collection=collection,
@@ -399,7 +401,8 @@ class CacheAsideService(CacheAsideProtocol):
         )
 
         data: list[dict[str, Any]] = result.data if result.success else []
-        await self.set_query_result(collection, query_params, data, ttl=ttl)
+        if not bypass_cache:
+            await self.set_query_result(collection, query_params, data, ttl=ttl)
 
         logger.info(
             f"[{self.component_name.upper()}-CACHE] Query executed and cached",

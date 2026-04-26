@@ -56,6 +56,7 @@ from app.utils.blacklist_validator import CommandBlacklistValidator
 from app.utils.whitelist_validator import CommandWhitelistValidator
 
 from .grounding.web_search_provider import WebSearchProvider
+from .ssh_inventory_service import SshInventoryService
 from ..data.reputation_data_service import ReputationDataService
 
 if TYPE_CHECKING:
@@ -77,6 +78,7 @@ class AIToolService:
         reputation_service: ReputationService,
         stake_resolution_data_service: StakeResolutionDataService,
         chat_task_manager: BackgroundTaskManager,
+        ssh_inventory_service: SshInventoryService,
         web_search_provider: WebSearchProvider | None,
         platform_settings: G8eePlatformSettings | None = None,
         user_settings: G8eeUserSettings | None = None,
@@ -92,6 +94,7 @@ class AIToolService:
         self._reputation_service = reputation_service
         self._stake_resolution_data_service = stake_resolution_data_service
         self._chat_task_manager = chat_task_manager
+        self._ssh_inventory_service = ssh_inventory_service
 
         from app.utils.validators import get_blacklist_validator, get_whitelist_validator
         self._whitelist_validator = (
@@ -229,6 +232,11 @@ class AIToolService:
     def chat_task_manager(self) -> BackgroundTaskManager:
         """The configured ``BackgroundTaskManager`` (required)."""
         return self._chat_task_manager
+
+    @property
+    def ssh_inventory_service(self) -> SshInventoryService:
+        """The configured ``SshInventoryService`` (required)."""
+        return self._ssh_inventory_service
 
     @property
     def whitelist_validator(self) -> CommandWhitelistValidator:

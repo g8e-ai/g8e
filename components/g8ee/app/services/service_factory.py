@@ -22,7 +22,7 @@ from app.services.ai.grounding import GroundingService, WebSearchProvider
 from app.services.ai.memory_generation_service import MemoryGenerationService
 from app.services.ai.request_builder import AIRequestBuilder
 from app.services.ai.response_analyzer import AIResponseAnalyzer
-from app.services.ai.ssh_inventory_service import SshInventoryService
+from app.services.ai.ssh_inventory_service import SshInventoryService, default_ssh_inventory_service
 from app.services.ai.tool_service import AIToolService
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.data.attachment_store_service import AttachmentService
@@ -210,9 +210,7 @@ class ServiceFactory:
             half_life=settings.reputation.ema_half_life,
         )
 
-        ssh_inventory_service = SshInventoryService(
-            ssh_config_path=settings.paths.ssh_config_path
-        )
+        ssh_inventory_service = default_ssh_inventory_service()
 
         return DomainServices(
             investigation_service=investigation_service,

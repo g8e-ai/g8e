@@ -34,6 +34,7 @@ from app.constants import (
     RiskLevel,
 )
 from app.models.base import G8eBaseModel, UTCDatetime
+from app.models.ssh_inventory import SshHost
 from app.models.whitelist import CommandValidationResult, WhitelistedCommand
 
 
@@ -406,12 +407,15 @@ class InvestigationContextResult(G8eBaseModel):
 
 
 class SshInventoryToolResult(G8eBaseModel):
-    """Result returned by the ssh_inventory tool executor."""
+    """Result returned by the list_ssh_inventory tool.
+
+    Canonical shape: shared/models/tool_results.json ssh_inventory_result.
+    """
     success: bool = True
     error: str | None = None
     error_type: CommandErrorType | None = None
     source_path: str | None = None
-    hosts: list[dict[str, Any]] = Field(default_factory=list)
+    hosts: list[SshHost] = Field(default_factory=list)
     total_count: int = 0
 
 

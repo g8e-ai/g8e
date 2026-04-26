@@ -59,6 +59,7 @@ from app.services.ai.tools import (
     revoke_intent,
     run_commands,
     search_web,
+    ssh_inventory,
 )
 
 
@@ -112,6 +113,16 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         handler=get_command_constraints.handle,
         display_label="Checking constraints",
         display_icon="shield-check",
+        display_category=ToolDisplayCategory.GENERAL,
+    ),
+    ToolSpec(
+        name=OperatorToolName.SSH_INVENTORY,
+        scope=ToolScope.UNIVERSAL,
+        agent_modes=_ALL_MODES,
+        builder=ssh_inventory.build,
+        handler=ssh_inventory.handle,
+        display_label="Listing SSH inventory",
+        display_icon="server",
         display_category=ToolDisplayCategory.GENERAL,
     ),
     ToolSpec(
