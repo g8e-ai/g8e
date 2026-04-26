@@ -595,6 +595,7 @@ curl -fsSL http://<host>/g8e | sh -s -- <device-link-token>
 **Key rules:**
 - `available` is the default state — operator has been provisioned but never authenticated
 - `stale` is set by g8ee's `HeartbeatStaleMonitorService` when a heartbeat has not been received within the stale threshold (60s). g8ee is authoritative for heartbeat status decay since it ingests all heartbeats.
+- `terminated` — decommissioning completed; document is preserved for audit but excluded from UI lists. Termination is a status transition; the operator document is preserved for audit; only TERMINATED-status operators are excluded from default listings.
 - Successful auth transitions directly from `available` to `active`
 - Binding is **always manual** — user clicks "Bind" in the UI
 - Each web session can bind to **multiple** operators simultaneously

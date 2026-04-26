@@ -899,8 +899,8 @@ async def generate_command(
             blacklisting_enabled=blacklisting_enabled,
             operator_context=operator_context,
             correlation_id=correlation_id,
-            round_2_candidates=round_2_candidates,
-            round_2_vote_breakdown=round_2_vote_breakdown,
+            round_2_candidates=None,
+            round_2_vote_breakdown=None,
         )
         raise TribunalConsensusFailedError(request=request, vote_breakdown=vote_breakdown)
 

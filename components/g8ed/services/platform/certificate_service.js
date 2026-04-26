@@ -31,6 +31,8 @@ import { now, addSeconds } from '../../models/base.js';
 import { GeneratedCertificate } from '../../models/operator_model.js';
 import { CLIENT_CERT_VALIDITY_DAYS, DEFAULT_SSL_DIR, CERT_SUBJECT_ORG, CERT_SUBJECT_COUNTRY, CRL_ISSUER } from '../../constants/service_config.js';
 import { G8eHttpContext } from '../../models/request_models.js';
+import * as x509 from '@peculiar/x509';
+import crypto from 'crypto';
 
 x509.cryptoProvider.set(crypto.webcrypto);
 

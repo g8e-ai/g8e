@@ -240,6 +240,13 @@ class OperatorDataService(OperatorDataServiceProtocol):
                 "history_trail": [e.model_dump(mode="json") for e in operator.history_trail],
             }
 
+            # Update in-memory object for the return value
+            operator.status = OperatorStatus.TERMINATED
+            operator.terminated_at = terminated_at
+            operator.updated_at = terminated_at
+            operator.operator_session_id = None
+            operator.bound_web_session_id = None
+
             result = await self.cache.update_document(
                 collection=self.collection,
                 document_id=operator_id,

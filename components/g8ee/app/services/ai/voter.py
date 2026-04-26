@@ -35,7 +35,7 @@ def weighted_vote(candidates: list[CandidateCommand], total_members: int) -> tup
 
     Each member contributes exactly 1 vote per candidate (no position decay).
     Tie-breaker ladder:
-      1. Longest command wins (compositional pressure)
+      1. Shortest command wins (compositional pressure)
       2. Non-Nemesis cluster wins over Nemesis-including cluster
       3. Alphabetical (deterministic fallback)
 
@@ -100,11 +100,11 @@ def weighted_vote(candidates: list[CandidateCommand], total_members: int) -> tup
         ), None
 
     # Tie detected - apply tie-breaker ladder
-    # 1. Longest command wins (compositional pressure)
-    longest_cmd = max(top_candidates, key=len)
+    # 1. Shortest command wins (compositional pressure)
+    shortest_cmd = min(top_candidates, key=len)
     if len(set(len(c) for c in top_candidates)) > 1:
-        # Multiple lengths, pick longest
-        winner = longest_cmd
+        # Multiple lengths, pick shortest
+        winner = shortest_cmd
         dissenters = {cmd: members for cmd, members in candidates_by_command.items() if cmd != winner}
         tied_candidates = [CandidateCommand(command=cmd, pass_index=0, member=TribunalMember.AXIOM) for cmd in top_candidates]
         return winner, max_votes / total_members, VoteBreakdown(
@@ -115,7 +115,7 @@ def weighted_vote(candidates: list[CandidateCommand], total_members: int) -> tup
             dissenters_by_command=dissenters,
             consensus_strength=max_votes / total_members,
             tie_broken=True,
-            tie_break_reason=TieBreakReason.LONGEST,
+            tie_break_reason=TieBreakReason.SHORTEST,
         ), tied_candidates
 
     # 2. Non-Nemesis cluster wins over Nemesis-including cluster

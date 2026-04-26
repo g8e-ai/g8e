@@ -265,7 +265,7 @@ describe('OperatorService', () => {
     });
 
     describe('terminateOperator', () => {
-        it('should relay termination to g8ee before deleting operator document', async () => {
+        it('should relay termination to g8ee and NOT delete operator document', async () => {
             const existing = {
                 id: 'op-1',
                 user_id: 'u-1',
@@ -290,27 +290,26 @@ describe('OperatorService', () => {
             expect(result.id).toBe('op-1');
             expect(service.relayTerminateOperatorToG8ee).toHaveBeenCalledWith('op-1', g8eContext);
             expect(service.relay.deregisterOperatorSessionInG8ee).toHaveBeenCalledWith(g8eContext);
-            expect(mocks.operatorDataService.deleteOperator).toHaveBeenCalledWith('op-1');
+            expect(mocks.operatorDataService.deleteOperator).not.toHaveBeenCalled();
             expect(mocks.operatorDataService.createOperator).not.toHaveBeenCalled();
         });
 
-        it('should handle missing g8eContext gracefully', async () => {
+        it('should return error if relay fails and NOT delete operator document', async () => {
             const existing = {
                 id: 'op-1',
                 user_id: 'u-1',
-                organization_id: 'org-1',
-                name: 'op-1',
-                slot_number: 1,
-                api_key: 'key-1'
+                organization_id: 'org-1'
             };
+            const g8eContext = { user_id: 'u-1' };
             mocks.operatorDataService.getOperator.mockResolvedValue(existing);
-            vi.spyOn(service, 'getOperatorWithSessionContext').mockResolvedValue(null);
+            vi.spyOn(service, 'getOperatorWithSessionContext').mockResolvedValue(g8eContext);
+            vi.spyOn(service, 'relayTerminateOperatorToG8ee').mockRejectedValue(new Error('Relay failed'));
 
             const result = await service.terminateOperator('op-1');
 
-            expect(result.success).toBe(true);
-            expect(result.id).toBe('op-1');
-            expect(mocks.operatorDataService.deleteOperator).toHaveBeenCalledWith('op-1');
+            expect(result.success).toBe(false);
+            expect(result.error).toBe('Relay failed');
+            expect(mocks.operatorDataService.deleteOperator).not.toHaveBeenCalled();
         });
 
         it('should return error if operator not found', async () => {

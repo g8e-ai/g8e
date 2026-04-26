@@ -1129,8 +1129,8 @@ class TestRunVotingStage:
         assert tied_candidates is None
 
     @pytest.mark.asyncio
-    async def test_two_two_one_tied_top_breaks_by_longest_command(self):
-        """2/2/1 tie broken by longest command rule (compositional pressure)."""
+    async def test_two_two_one_tied_top_breaks_by_shortest_command(self):
+        """2/2/1 tie broken by shortest command rule (compositional pressure)."""
         from app.models.agents.tribunal import CandidateCommand
 
         candidates = [
@@ -1146,11 +1146,11 @@ class TestRunVotingStage:
             candidates=candidates, request="check docker state", emitter=emitter, total_members=5,
         )
 
-        assert winner == "docker ps -a && docker images && docker volume ls && docker network ls && docker system df"
+        assert winner == "docker ps"
         assert score == 0.4
         assert vote_breakdown.consensus_strength == 0.4
         assert vote_breakdown.tie_broken is True
-        assert vote_breakdown.tie_break_reason == TieBreakReason.LONGEST
+        assert vote_breakdown.tie_break_reason == TieBreakReason.SHORTEST
         assert len(vote_breakdown.winner_supporters) == 2
         assert tied_candidates is not None
         assert len(tied_candidates) == 2

@@ -106,3 +106,64 @@ async def test_concurrent_appends_preserve_chain_under_load(service, mock_cache_
         created_at=created_at
     )
     assert is_valid is True, f"Chain integrity check failed at index {bad_idx}"
+
+
+@pytest.mark.asyncio
+async def test_concurrent_termination_is_serialized(service, mock_cache_aside_service):
+    """
+    Verify that concurrent terminate_operator + add_history_entry calls are
+    serialized correctly and do not result in data loss or chain corruption.
+    """
+    operator_id = "op-term-concurrent"
+    initial_operator = OperatorDocument(
+        id=operator_id,
+        user_id="user-1",
+        status=OperatorStatus.ACTIVE
+    )
+    created_at = initial_operator.created_at.isoformat()
+    shared_db_state = [initial_operator.model_dump(mode="json")]
+
+    async def mock_get_document(collection, doc_id):
+        await asyncio.sleep(0.01)
+        return shared_db_state[0].copy()
+
+    async def mock_update_document(collection, document_id, data, merge=True):
+        await asyncio.sleep(0.01)
+        new_state = shared_db_state[0].copy()
+        for k, v in data.items():
+            new_state[k] = v
+        shared_db_state[0] = new_state
+        return CacheOperationResult(success=True)
+
+    mock_cache_aside_service.get_document_with_cache.side_effect = mock_get_document
+    mock_cache_aside_service.update_document.side_effect = mock_update_document
+
+    # Mix 10 terminate calls and 10 regular history appends
+    tasks = []
+    for i in range(10):
+        tasks.append(service.add_history_entry(
+            operator_id=operator_id,
+            event_type=OperatorHistoryEventType.HEARTBEAT_RECEIVED,
+            summary=f"Heartbeat {i}"
+        ))
+        tasks.append(service.terminate_operator(
+            operator_id=operator_id,
+            actor=ComponentName.G8ED,
+            summary=f"Terminate attempt {i}"
+        ))
+
+    await asyncio.gather(*tasks)
+
+    history = shared_db_state[0].get("history_trail", [])
+    
+    # We expect exactly 20 entries (10 heartbeats + 10 terminates)
+    assert len(history) == 20
+    assert shared_db_state[0]["status"] == OperatorStatus.TERMINATED
+    
+    # Verify chain
+    is_valid, bad_idx = verify_chain(
+        entries=history,
+        investigation_id=operator_id,
+        created_at=created_at
+    )
+    assert is_valid is True, f"Chain integrity failed after concurrent termination at index {bad_idx}"

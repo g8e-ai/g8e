@@ -29,7 +29,7 @@ ChatPipelineService
   ├── AIRequestBuilder        — Generation config, thinking config, attachments
   ├── InvestigationService    — (Domain Layer) Workflow determination, context enrichment, history management
   │     ├── InvestigationDataService — (Data Layer) Pure CRUD for investigations
-  │     ├── OperatorDataService      — (Data Layer) Pure CRUD for operators
+  │     ├── OperatorDataService      — (Data Layer) Authoritative writer for operator documents; handles termination and history
   │     └── MemoryDataService        — (Data Layer) Pure CRUD for memories
   ├── BackgroundTaskManager     — Task lifecycle and cancellation
   ├── CaseDataService         — Case management and SSE updates

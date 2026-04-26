@@ -17,7 +17,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.constants import OperatorStatus
+from app.constants import OperatorStatus, ComponentName
 from app.errors import ExternalServiceError, ValidationError
 from app.models.operators import (
     CommandResultRecord,
@@ -82,8 +82,11 @@ class TestOperatorDataService:
         success = await service.update_operator_status(operator_id, OperatorStatus.ACTIVE)
 
         assert success is True
-        mock_cache.update_document.assert_called_once()
-        _, kwargs = mock_cache.update_document.call_args
+        # update_operator_status calls update_document for status, then add_history_entry calls it for history.
+        assert mock_cache.update_document.call_count == 2
+        
+        # Check first call (status update)
+        args, kwargs = mock_cache.update_document.call_args_list[0]
         assert kwargs["document_id"] == operator_id
         assert kwargs["data"]["status"] == OperatorStatus.ACTIVE
 
@@ -100,8 +103,9 @@ class TestOperatorDataService:
 
         await service.update_operator_status(operator_id, OperatorStatus.ACTIVE)
 
-        _, kwargs = mock_cache.update_document.call_args
-        assert "last_heartbeat"not in kwargs["data"]
+        # First call is status update, second is history
+        args, kwargs = mock_cache.update_document.call_args_list[0]
+        assert "last_heartbeat" not in kwargs["data"]
 
     async def test_update_operator_status_not_found_returns_false(self, service, mock_cache):
         mock_cache.get_document_with_cache.return_value = None
@@ -168,3 +172,56 @@ class TestOperatorDataService:
         _, kwargs = mock_cache.append_to_array.call_args
         assert kwargs["document_id"] == operator_id
         assert kwargs["array_field"] == "activity_log"
+
+    async def test_terminate_operator_success(self, service, mock_cache):
+        operator_id = "op-terminate-test"
+        mock_cache.get_document_with_cache.return_value = {
+            "id": operator_id,
+            "user_id": "user-test",
+            "status": OperatorStatus.ACTIVE,
+            "created_at": now().isoformat(),
+        }
+        mock_cache.update_document.return_value = CacheOperationResult(success=True)
+
+        result = await service.terminate_operator(
+            operator_id=operator_id,
+            actor=ComponentName.G8ED,
+            summary="Manual termination"
+        )
+
+        assert result.status == OperatorStatus.TERMINATED
+        assert result.terminated_at is not None
+        assert result.operator_session_id is None
+        assert result.bound_web_session_id is None
+        
+        # Verify history entry
+        assert len(result.history_trail) == 1
+        entry = result.history_trail[0]
+        assert entry.event_type == "terminated"
+        assert entry.actor == ComponentName.G8ED
+        assert entry.entry_hash is not None
+        
+        mock_cache.update_document.assert_called_once()
+        _, kwargs = mock_cache.update_document.call_args
+        assert kwargs["document_id"] == operator_id
+        assert kwargs["data"]["status"] == OperatorStatus.TERMINATED
+        assert "history_trail" in kwargs["data"]
+
+    async def test_terminate_operator_not_found_raises_validation_error(self, service, mock_cache):
+        mock_cache.get_document_with_cache.return_value = None
+        
+        with pytest.raises(ValidationError, match="Operator missing not found"):
+            await service.terminate_operator("missing")
+
+    async def test_terminate_operator_cache_failure_raises_external_service_error(self, service, mock_cache):
+        operator_id = "op-fail"
+        mock_cache.get_document_with_cache.return_value = {
+            "id": operator_id,
+            "user_id": "user-test",
+            "status": OperatorStatus.ACTIVE,
+            "created_at": now().isoformat(),
+        }
+        mock_cache.update_document.return_value = CacheOperationResult(success=False, error="cache down")
+        
+        with pytest.raises(ExternalServiceError, match=f"Failed to terminate operator {operator_id}: cache down"):
+            await service.terminate_operator(operator_id)

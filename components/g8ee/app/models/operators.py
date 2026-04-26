@@ -211,6 +211,7 @@ class OperatorDocument(G8eIdentifiableModel):
     bound_web_session_id: str | None = Field(default=None, description="Bound web session ID")
     operator_session_id: str | None = Field(default=None, description="Current Operator session ID")
     last_heartbeat: UTCDatetime | None = Field(default=None, description="Last heartbeat timestamp")
+    terminated_at: UTCDatetime | None = Field(default=None, description="When the operator was terminated")
     system_info: OperatorSystemInfo | None = Field(default=None, description="System information")
     latest_heartbeat_snapshot: Optional["OperatorHeartbeat"] = Field(default=None, description="Latest heartbeat metrics")
     investigation_id: str | None = Field(default=None, description="Current investigation ID")
