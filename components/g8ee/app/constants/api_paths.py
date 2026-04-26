@@ -48,7 +48,8 @@ class InternalApiPaths:
     G8EE_SETTINGS_USER: str = PREFIX + API_PATHS["g8ee"]["settings_user"]
     
     # g8ed Endpoints (relative to PREFIX)
-    G8ED_SSE_PUSH: str = "/sse/push"
-    G8ED_GRANT_INTENT: str = "/operators/{operator_id}/grant-intent"
-    G8ED_REVOKE_INTENT: str = "/operators/{operator_id}/revoke-intent"
-    G8ED_HEALTH: str = "/health"
+    G8ED_SSE_PUSH: str = API_PATHS["g8ed"]["sse_push"]
+    G8ED_GRANT_INTENT: str = API_PATHS["g8ed"]["grant_intent"]
+    G8ED_REVOKE_INTENT: str = API_PATHS["g8ed"]["revoke_intent"]
+    G8ED_CREATE_OPERATOR_LINK: str = API_PATHS["g8ed"]["create_operator_link"]
+    G8ED_HEALTH: str = API_PATHS["g8ed"]["health"]

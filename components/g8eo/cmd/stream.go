@@ -287,6 +287,10 @@ func collectHosts(positional []string, hostsFile string) ([]string, error) {
 // buildOperatorArgs constructs the shell-safe argument string for the remote
 // operator invocation. Returns empty string when no endpoint is specified
 // (inject-only mode).
+//
+// NOTE: Host-key policy is not passed here because strict mode is enforced on
+// the outgoing dial from g8ep (stream phase). If remote operators ever make
+// their own SSH connections, a --strict arg should be added here.
 func buildOperatorArgs(endpoint, deviceToken, apiKey string, noGit bool) string {
 	if endpoint == "" {
 		return ""

@@ -16,7 +16,6 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import app.llm.llm_types as types
@@ -38,18 +37,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def build() -> tuple[types.ToolDeclaration, Callable[..., ToolResult]]:
-    def list_files_and_directories_with_detailed_metadata(args: FsListArgs) -> ToolResult:
-        raise NotImplementedError(
-            "list_files_and_directories_with_detailed_metadata should be called via execute_tool_call"
-        )
-
+def build() -> types.ToolDeclaration:
     declaration = types.ToolDeclaration(
         name=OperatorToolName.LIST_FILES,
         description=load_prompt(PromptFile.TOOL_LIST_FILES),
         parameters=schema_from_model(FsListArgs),
     )
-    return declaration, list_files_and_directories_with_detailed_metadata
+    return declaration
 
 
 async def handle(

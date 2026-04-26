@@ -86,6 +86,8 @@ class PromptFile(str, Enum):
     TOOL_FETCH_FILE_DIFF = "tools/fetch_file_diff.txt"
     TOOL_QUERY_INVESTIGATION_CONTEXT = "tools/query_investigation_context.txt"
     TOOL_GET_COMMAND_CONSTRAINTS = "tools/get_command_constraints.txt"
+    TOOL_SSH_INVENTORY = "tools/list_ssh_inventory.txt"
+    TOOL_STREAM_OPERATOR = "tools/stream_operator_to_ssh_fleet.txt"
 
     # Analysis
 

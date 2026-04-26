@@ -240,11 +240,13 @@ The AI pipeline in g8ee consists of several specialized services that orchestrat
   - All functions are stateless and accept typed inputs for testability
 
 ### Tool Execution (tool_service.py)
-- **Location:** `app/services/ai/tool_service.py`
+- **Location:** `app/services/ai/tool_service.py` plus per-tool modules under `app/services/ai/tools/`.
 - **Purpose:** Orchestrates the execution of AI tool calls, including dispatching to specific handlers and managing Tribunal oversight.
 - **Key Features:**
+  - Each tool lives in its own module under `app/services/ai/tools/<tool>.py` exporting `build()` and `handle()` callables.
+  - `ToolSpec` entries in `tool_registry.py` reference these callables directly; `AIToolService` is just registry wiring + dispatch.
   - Uses a dispatch table `_tool_handlers` for efficient tool lookup.
-  - Uniform handler signature: `(tool_args, investigation, g8e_context, request_settings)`.
+  - Uniform handler signature: `handle(svc, tool_args, investigation, g8e_context, request_settings, execution_id) -> ToolResult`.
   - Integrated Tribunal oversight via `orchestrate_tool_execution`.
   - Support for multiple tool types: Operator commands and internal utility tools.
 

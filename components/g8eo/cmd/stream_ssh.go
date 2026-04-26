@@ -336,9 +336,9 @@ func streamToHost(
 		return
 	}
 
-	hostKeyCallback, err := buildHostKeyCallback()
-	if err != nil {
-		emit(constants.StreamStatusFailed, err.Error())
+	hostKeyCallback, cbErr := buildHostKeyCallback()
+	if cbErr != nil {
+		emit(constants.StreamStatusFailed, cbErr.Error())
 		return
 	}
 

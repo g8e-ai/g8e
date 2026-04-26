@@ -3,11 +3,6 @@
 #
 # Subcommands:
 #   ssh-config   Configure ~/.ssh/config for high-concurrency operator streaming.
-#   (default)    Mount an SSH directory into g8ep for operator streaming.
-#                Run once; re-run to change the key path.
-#
-# Non-interactive setup usage:
-#   --ssh-dir  path to SSH directory (default: ~/.ssh)
 
 set -euo pipefail
 
@@ -144,74 +139,5 @@ STANZA
     exit 0
 fi
 
-# =============================================================================
-# setup subcommand (default)
-# =============================================================================
-
-ARG_SSH_DIR=""
-NON_INTERACTIVE=false
-
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --ssh-dir) ARG_SSH_DIR="$2"; shift 2 ;;
-        --help|-h)
-            echo "Usage: setup-ssh.sh [options]"
-            echo ""
-            echo "Options:"
-            echo "  --ssh-dir  path to SSH directory to mount (default: ~/.ssh)"
-            exit 0 ;;
-        *) echo "Unknown option: $1" >&2; exit 1 ;;
-    esac
-done
-
-if [[ -n "$ARG_SSH_DIR" ]]; then
-    NON_INTERACTIVE=true
-fi
-
-RED=$'\033[0;31m'
-GREEN=$'\033[0;32m'
-BLUE=$'\033[0;34m'
-YELLOW=$'\033[1;33m'
-CYAN=$'\033[0;36m'
-BOLD=$'\033[1m'
-NC=$'\033[0m'
-
-_header() { echo -e "\n${BLUE}${BOLD}$1${NC}"; }
-_ok()     { echo -e "  ${GREEN}[OK]${NC} $1"; }
-_warn()   { echo -e "  ${YELLOW}[WARN]${NC} $1"; }
-_err()    { echo -e "  ${RED}[ERROR]${NC} $1" >&2; }
-_info()   { echo -e "  ${CYAN}$1${NC}"; }
-
-_header "SSH Configuration"
-echo
-_info "g8ep mounts your SSH keys for operator streaming."
-_info "The mounted directory is configured in docker-compose.yml as \${HOME}/.ssh."
-echo
-_info "  Default: ~/.ssh  — uses your existing SSH keys and config"
-_info "  To use a custom directory, update the volume mount in docker-compose.yml"
-echo
-
-_default_ssh_dir="${HOME}/.ssh"
-
-if [[ "$NON_INTERACTIVE" == true ]]; then
-    SSH_DIR="$ARG_SSH_DIR"
-else
-    printf "  SSH directory to verify [%s]: " "$_default_ssh_dir"
-    IFS= read -r _input
-    SSH_DIR="${_input:-$_default_ssh_dir}"
-fi
-
-SSH_DIR="${SSH_DIR/#\~/$HOME}"
-
-if [[ ! -d "$SSH_DIR" ]]; then
-    _err "Directory not found: $SSH_DIR"
-    exit 1
-fi
-
-_ok "SSH directory exists: $SSH_DIR"
-
-echo
-_info "g8ep mounts \${HOME}/.ssh from docker-compose.yml."
-_info "If you need a custom path, update the ssh volume mount in docker-compose.yml"
-_info "and run: ./g8e platform restart"
-echo
+echo "Error: Unknown subcommand. Use 'ssh-config' or --help for usage." >&2
+exit 1

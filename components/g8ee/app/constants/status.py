@@ -229,6 +229,8 @@ class OperatorToolName(str, Enum):
     G8E_SEARCH_WEB = "g8e_web_search"
     QUERY_INVESTIGATION_CONTEXT = "query_investigation_context"
     GET_COMMAND_CONSTRAINTS = "get_command_constraints"
+    SSH_INVENTORY = "list_ssh_inventory"
+    STREAM_OPERATOR = "stream_operator_to_ssh_fleet"
 
 # OPERATOR_TOOLS and AI_UNIVERSAL_TOOLS moved to app.services.ai.tool_registry
 # where they are derived from the single TOOL_SPECS declaration. Importers must

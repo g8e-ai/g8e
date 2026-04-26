@@ -22,8 +22,9 @@ needs to know about a tool:
 - ``agent_modes`` -- the set of ``AgentMode`` values in which the tool is
   exposed to the LLM
 - ``builder`` / ``handler`` -- direct callable references into the per-tool
-  modules under ``app.services.ai.tools`` that build the declaration and
-  dispatch execution. No string-based lookup; typos fail at import time.
+  modules under ``app.services.ai.tools``. ``builder()`` returns the
+  ``ToolDeclaration`` registered with the LLM; ``handler(svc, ...)``
+  dispatches execution. No string-based lookup; typos fail at import time.
 - ``requires_web_search`` -- conditional registration gate for the
   ``g8e_web_search`` tool
 
@@ -74,7 +75,7 @@ _BOUND_MODES: frozenset[AgentMode] = frozenset({
 })
 
 
-ToolBuilder = Callable[[], tuple[types.ToolDeclaration, Callable[..., ToolResult]]]
+ToolBuilder = Callable[[], types.ToolDeclaration]
 ToolHandler = Callable[..., Awaitable[ToolResult]]
 
 

@@ -16,7 +16,6 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import app.llm.llm_types as types
@@ -41,18 +40,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def build() -> tuple[types.ToolDeclaration, Callable[..., ToolResult]]:
-    def get_command_constraints() -> ToolResult:
-        raise NotImplementedError(
-            "get_command_constraints should be called via execute_tool_call"
-        )
-
+def build() -> types.ToolDeclaration:
     declaration = types.ToolDeclaration(
         name=OperatorToolName.GET_COMMAND_CONSTRAINTS,
         description=load_prompt(PromptFile.TOOL_GET_COMMAND_CONSTRAINTS),
         parameters=types.Schema(type=types.Type.OBJECT, properties={}, required=None),
     )
-    return declaration, get_command_constraints
+    return declaration
 
 
 async def handle(

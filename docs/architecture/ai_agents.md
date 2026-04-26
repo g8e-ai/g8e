@@ -477,7 +477,7 @@ g8ee publishes events using `EventType` constants defined in `components/g8ee/ap
 | `process_provider_turn` | `components/g8ee/app/services/ai/agent_turn.py` | Thinking state machine, chunk parsing, TurnResult assembly. Handles thinking state transitions (INACTIVE → ACTIVE → INACTIVE), consolidates model parts, normalizes finish reasons, and extracts token usage. Emits THINKING/THINKING_END chunks for models with thinking capabilities. |
 | `TribunalInvoker` | `components/g8ee/app/services/ai/agent_tool_loop.py` | Encapsulates Tribunal pipeline invocation for `run_commands_with_operator`. Converts the Sage-facing `SageOperatorRequest` (intent-only: `request`, `guidelines`, target/timeout fields) into an executor-facing `ExecutorCommandArgs` (`command` required) by running the Tribunal pipeline. Fetches command constraints (whitelist/blacklist) and emits SSE events. |
 | `execute_turn_tool_calls` | `components/g8ee/app/services/ai/agent_tool_loop.py` | Sequential tool call dispatch via `orchestrate_tool_execution` + grounding merge; `ToolCallResult.tribunal_result` surfaces the full `CommandGenerationResult` (`request`, `guidelines`, `final_command`, `outcome`, `vote_winner`, `vote_score`, `vote_breakdown`, `auditor_passed`, `auditor_revision`, `auditor_reason`, `candidates`). This field is populated for `run_commands_with_operator` tools after Tribunal succeeds, and is `None` for non-command tools, Tribunal errors, or when the request is missing. |
-| `execute_tool_call` | `components/g8ee/app/services/ai/tool_service.py` | Single function dispatch via `_tool_handlers` dict — returns `ToolResult`. |
+| `execute_tool_call` | `components/g8ee/app/services/ai/tool_service.py` | Single function dispatch via `_tool_handlers` dict (per-tool `handle()` callables under `app/services/ai/tools/`) — returns `ToolResult`. |
 | `deliver_via_sse` | `components/g8ee/app/services/ai/agent_sse.py` | StreamChunkFromModel → g8ed SSE event translation. |
 | `generate_command` | `components/g8ee/app/services/ai/generator.py` | Tribunal pipeline orchestrator: five generation passes + uniform per-member voting (`voter.py`) + three-mode Auditor verification (`auditor_service.py`). Persona templates in `agents.json`. |
 | `EventService` | `components/g8ee/app/services/infra/g8ed_event_service.py` | g8ee → g8ed HTTP event push. |
@@ -625,7 +625,7 @@ Together they replace sycophantic compliance with guarded service: the agent rem
 
 ## Tools
 
-`AIToolService` (`components/g8ee/app/services/ai/tool_service.py`) registers all tools at construction time, driven by the single declarative registry in `components/g8ee/app/services/ai/tool_registry.py`. Each tool is a pair of `(FunctionDeclaration, executor)` stored in `_tool_declarations` and `_tool_executors` dicts keyed by `OperatorToolName`.
+`AIToolService` (`components/g8ee/app/services/ai/tool_service.py`) registers all tools at construction time, driven by the single declarative registry in `components/g8ee/app/services/ai/tool_registry.py`. Each tool lives in its own module under `components/g8ee/app/services/ai/tools/<tool>.py` exporting a `build()` factory (returning a `(FunctionDeclaration, executor_stub)` pair) and an `async handle(svc, ...)` function. The declarations are stored in `_tool_declarations` and the handlers in `_tool_handlers`, both keyed by `OperatorToolName`.
 
 ### Tool Registry (`tool_registry.py`)
 
@@ -634,20 +634,20 @@ Together they replace sycophantic compliance with guarded service: the agent rem
 - `name` — the `OperatorToolName` enum value
 - `scope` — `UNIVERSAL` or `OPERATOR_GATED` (the latter gates the bound-operator auth check in `execute_tool_call` and Tribunal routing in `agent_tool_loop`)
 - `agent_modes` — the set of `AgentMode` values in which the tool is advertised to the LLM
-- `builder_attr` / `handler_attr` — method names on `AIToolService` that build the declaration and dispatch execution
+- `builder` / `handler` — direct callable references into the per-tool modules under `app/services/ai/tools/` that build the declaration and dispatch execution. No string-based lookup; typos fail at import time.
 - `display_label` — human-readable label for UI display (e.g., "Executing command")
 - `display_icon` — Lucide icon name for UI rendering (e.g., "terminal")
 - `display_category` — UI category for grouping (e.g., `ToolDisplayCategory.EXECUTION`)
 - `requires_web_search` — conditional registration gate (used only by `g8e_web_search`)
 
-`OPERATOR_TOOLS` and `AI_UNIVERSAL_TOOLS` are **derived** from `TOOL_SPECS` (they are no longer hand-maintained in `status.py`). `AIToolService.__init__`, `get_tools`, and the per-tool handler dispatch table are all populated by iterating `TOOL_SPECS`, so adding a new tool means adding exactly one `ToolSpec` entry plus the corresponding `_build_*` and `_handle_*` methods.
+`OPERATOR_TOOLS` and `AI_UNIVERSAL_TOOLS` are **derived** from `TOOL_SPECS` (they are no longer hand-maintained in `status.py`). `AIToolService.__init__`, `get_tools`, and the per-tool handler dispatch table are all populated by iterating `TOOL_SPECS`, so adding a new tool means creating one module under `app/services/ai/tools/` exporting `build()` and `handle()` callables, then adding exactly one `ToolSpec` entry referencing them.
 
 ### Tool Dispatch Mechanism
 
 Tool execution uses a dispatch table pattern:
-- `_tool_handlers` (dict[str, Callable]) is populated in `__init__` from `spec.handler_attr` for each registered tool
-- Each tool has a `_handle_*` method with uniform signature: `(self, tool_args, investigation, g8e_context, request_settings) -> ToolResult`
-- Handler lookup: `self._tool_handlers.get(tool_name)`
+- `_tool_handlers` (dict[str, Callable]) is populated in `__init__` from `spec.handler` for each registered tool
+- Each tool's module exports an `async handle()` function with the uniform signature: `(svc, tool_args, investigation, g8e_context, request_settings, execution_id) -> ToolResult`
+- Handler lookup: `self._tool_handlers.get(tool_name)`, then invoked as `await handler(self, ...)`
 
 At startup, `AIToolService._assert_tool_registry_invariants()` enforces that every `OPERATOR_TOOLS` / required `AI_UNIVERSAL_TOOLS` entry has a registered `ToolDeclaration` and that no registered declaration is unclassified — a safety net against module-level monkeypatching and future refactors.
 

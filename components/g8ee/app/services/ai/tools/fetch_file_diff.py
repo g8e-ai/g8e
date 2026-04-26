@@ -16,7 +16,6 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import app.llm.llm_types as types
@@ -38,18 +37,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def build() -> tuple[types.ToolDeclaration, Callable[..., ToolResult]]:
-    def fetch_file_diff(args: FetchFileDiffArgs) -> ToolResult:
-        raise NotImplementedError(
-            "fetch_file_diff should be called via execute_tool_call"
-        )
-
+def build() -> types.ToolDeclaration:
     declaration = types.ToolDeclaration(
         name=OperatorToolName.FETCH_FILE_DIFF,
         description=load_prompt(PromptFile.TOOL_FETCH_FILE_DIFF),
         parameters=schema_from_model(FetchFileDiffArgs),
     )
-    return declaration, fetch_file_diff
+    return declaration
 
 
 async def handle(

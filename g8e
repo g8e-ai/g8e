@@ -74,9 +74,9 @@ _exec_in_test_runner() {
         env_args=(-e "OPERATOR_SESSION_ID=$OPERATOR_SESSION_ID")
     fi
     if [ -t 0 ] && [ -t 1 ]; then
-        exec docker compose run --rm ${env_args[@]+"${env_args[@]}"} -it "$runner" "$@"
+        exec $COMPOSE run --rm ${env_args[@]+"${env_args[@]}"} -it "$runner" "$@
     else
-        exec docker compose run --rm ${env_args[@]+"${env_args[@]}"} "$runner" "$@"
+        exec $COMPOSE run --rm ${env_args[@]+"${env_args[@]}"} "$runner" "$@
     fi
 }
 
@@ -505,7 +505,7 @@ case "$TOP" in
             init)
                 _banner "operator init"
                 _version="$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null | tr -d '[:space:]' || echo 'v0.0.0')"
-                docker compose run --rm "$TR_G8EO" bash -c "
+                $COMPOSE run --rm "$TR_G8EO" bash -c "
                     set -e
                     cd /app/components/g8eo
                     mkdir -p certs
@@ -745,9 +745,9 @@ case "$TOP" in
         [[ -n "${DEVICE_TOKEN:-}" ]]                    && _TEST_ENV_ARGS+=(-e "DEVICE_TOKEN=$DEVICE_TOKEN")
 
         if [ -t 0 ] && [ -t 1 ]; then
-            exec docker compose run --rm ${_TEST_ENV_ARGS[@]+"${_TEST_ENV_ARGS[@]}"} -it "$_TEST_RUNNER" /app/scripts/testing/run_tests.sh "${_TEST_PASSTHROUGH[@]}"
+            exec $COMPOSE run --rm ${_TEST_ENV_ARGS[@]+"${_TEST_ENV_ARGS[@]}"} -it "$_TEST_RUNNER" /app/scripts/testing/run_tests.sh "${_TEST_PASSTHROUGH[@]}"
         else
-            exec docker compose run --rm ${_TEST_ENV_ARGS[@]+"${_TEST_ENV_ARGS[@]}"} "$_TEST_RUNNER" /app/scripts/testing/run_tests.sh "${_TEST_PASSTHROUGH[@]}"
+            exec $COMPOSE run --rm ${_TEST_ENV_ARGS[@]+"${_TEST_ENV_ARGS[@]}"} "$_TEST_RUNNER" /app/scripts/testing/run_tests.sh "${_TEST_PASSTHROUGH[@]}"
         fi ;;
 
     # ------------------------------------------------------------------
@@ -799,7 +799,7 @@ case "$TOP" in
                 fi
                 echo "  Token written to g8es."
                 echo "  Restarting g8ed and g8ee to pick up new token..."
-                docker compose -f "$SCRIPT_DIR/docker-compose.yml" restart g8ed g8ee
+                $COMPOSE restart g8ed g8ee
                 echo ""
                 echo "  Done. All components now use the new internal auth token." ;;
             *)

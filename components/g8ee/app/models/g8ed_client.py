@@ -223,3 +223,25 @@ class IntentOperationResult(G8eBaseModel):
     success: bool = Field(description="Whether the operation succeeded")
     granted_intents: list[str] = Field(default_factory=list, description="Current granted intents after the operation")
     error: str | None = Field(default=None, description="Error message if the operation failed")
+
+
+class OperatorLinkResponse(G8eBaseModel):
+    """Response from POST /api/internal/device-links/operator-link.
+
+    Mirrors g8ed DeviceLinkResponse shape: { success, token, operator_command, expires_at }
+    """
+
+    success: bool = Field(description="Whether the token was generated")
+    token: str | None = Field(default=None, description="The dlk_ token")
+    operator_command: str | None = Field(default=None, description="One-liner to run on the fleet")
+    expires_at: UTCDatetime | None = Field(default=None, description="Expiry of the token")
+    error: str | None = Field(default=None, description="Error message when unsuccessful")
+
+
+class OperatorLinkRequestPayload(G8eBaseModel):
+    """Request payload for generating an operator device link."""
+
+    user_id: str = Field(description="User ID who will own the link")
+    organization_id: str | None = Field(default=None, description="Organization ID")
+    operator_id: str = Field(description="Operator ID to pre-authorize")
+    web_session_id: str = Field(description="Web session ID to notify on handshake")

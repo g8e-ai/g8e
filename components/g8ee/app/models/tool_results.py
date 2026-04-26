@@ -405,6 +405,16 @@ class InvestigationContextResult(G8eBaseModel):
     investigation_id: str | None = None
 
 
+class SshInventoryToolResult(G8eBaseModel):
+    """Result returned by the ssh_inventory tool executor."""
+    success: bool = True
+    error: str | None = None
+    error_type: CommandErrorType | None = None
+    source_path: str | None = None
+    hosts: list[dict[str, Any]] = Field(default_factory=list)
+    total_count: int = 0
+
+
 class CommandExecutionResult(G8eBaseModel):
     """Typed result returned by _execute_g8eo_command through the entire call chain.
 
@@ -478,4 +488,5 @@ ToolResult = Union[
     IntentPermissionResult,
     SearchWebResult,
     InvestigationContextResult,
+    SshInventoryToolResult,
 ]

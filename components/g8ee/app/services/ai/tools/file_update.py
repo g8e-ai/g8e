@@ -16,7 +16,6 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import app.llm.llm_types as types
@@ -37,18 +36,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def build() -> tuple[types.ToolDeclaration, Callable[..., ToolResult]]:
-    def file_update_on_operator(args: FileEditRequestPayload) -> ToolResult:
-        raise NotImplementedError(
-            "file_update_on_operator should be called via execute_tool_call"
-        )
-
+def build() -> types.ToolDeclaration:
     declaration = types.ToolDeclaration(
         name=OperatorToolName.FILE_UPDATE,
         description=load_prompt(PromptFile.TOOL_FILE_UPDATE),
         parameters=schema_from_model(FileUpdateArgs),
     )
-    return declaration, file_update_on_operator
+    return declaration
 
 
 async def handle(

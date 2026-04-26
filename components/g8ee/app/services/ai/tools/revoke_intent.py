@@ -16,7 +16,6 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import app.llm.llm_types as types
@@ -36,18 +35,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def build() -> tuple[types.ToolDeclaration, Callable[..., ToolResult]]:
-    def revoke_intent_permission(args: RevokeIntentArgs) -> ToolResult:
-        raise NotImplementedError(
-            "revoke_intent_permission should be called via execute_tool_call"
-        )
-
+def build() -> types.ToolDeclaration:
     declaration = types.ToolDeclaration(
         name=OperatorToolName.REVOKE_INTENT,
         description=load_prompt(PromptFile.TOOL_REVOKE_INTENT),
         parameters=schema_from_model(RevokeIntentArgs),
     )
-    return declaration, revoke_intent_permission
+    return declaration
 
 
 async def handle(

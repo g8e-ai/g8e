@@ -16,7 +16,6 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import app.llm.llm_types as types
@@ -37,18 +36,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def build() -> tuple[types.ToolDeclaration, Callable[..., ToolResult]]:
-    def g8e_web_search(args: SearchWebArgs) -> ToolResult:
-        raise NotImplementedError(
-            "g8e_web_search should be called via execute_tool_call"
-        )
-
+def build() -> types.ToolDeclaration:
     declaration = types.ToolDeclaration(
         name=OperatorToolName.G8E_SEARCH_WEB,
         description=load_prompt(PromptFile.TOOL_SEARCH_WEB),
         parameters=schema_from_model(SearchWebArgs),
     )
-    return declaration, g8e_web_search
+    return declaration
 
 
 async def handle(

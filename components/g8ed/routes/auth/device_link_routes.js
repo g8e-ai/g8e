@@ -11,7 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { CreateDeviceLinkRequest, GenerateDeviceLinkRequest, RegisterDeviceRequest } from '../../models/request_models.js';
+import { 
+    CreateDeviceLinkRequest, 
+    GenerateDeviceLinkRequest, 
+    RegisterDeviceRequest,
+    OperatorLinkRequest 
+} from '../../models/request_models.js';
 import express from 'express';
 import { ApiKeyError, DeviceLinkError, DEVICE_LINK_TTL_SECONDS, WEB_SESSION_ID_HEADER } from '../../constants/auth.js';
 import { logger } from '../../utils/logger.js';

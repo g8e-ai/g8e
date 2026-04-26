@@ -38,6 +38,8 @@ echo ""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
+COMPOSE="docker compose -f $PROJECT_ROOT/docker-compose.yml"
+
 MANAGED_SERVICES=(g8es g8ee g8ed g8ep)
 TEST_RUNNER_SERVICES=(g8ee-test-runner g8ed-test-runner g8eo-test-runner)
 OPTIONAL_SERVICES=(g8el)
@@ -145,7 +147,7 @@ _is_running() {
 _ensure_g8ep() {
     if ! _is_running "g8ep"; then
         echo "g8ep container is not running — starting it..."
-        docker compose -f "$PROJECT_ROOT/docker-compose.yml" up -d g8ep
+        $COMPOSE up -d g8ep
         _wait_healthy g8ep 30 1
     fi
 }
@@ -153,7 +155,7 @@ _ensure_g8ep() {
 _ensure_g8eo_test_runner() {
     if ! _is_running "g8eo-test-runner"; then
         echo "g8eo-test-runner container is not running — starting it..."
-        docker compose -f "$PROJECT_ROOT/docker-compose.yml" up -d g8eo-test-runner
+        $COMPOSE up -d g8eo-test-runner
     fi
 }
 
@@ -327,7 +329,7 @@ if [[ "$COMMAND" == "status" ]]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Container Status"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || true
+    $COMPOSE ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || true
     exit 0
 fi
 
@@ -335,7 +337,7 @@ fi
 
 if [[ "$COMMAND" == "down" ]]; then
     echo "Stopping managed containers (g8es, g8ee, g8ed, g8ep)..."
-    docker compose stop g8es g8ee g8ed g8ep 2>/dev/null || true
+    $COMPOSE stop g8es g8ee g8ed g8ep 2>/dev/null || true
     echo "Done. Volumes, images, and networks are preserved."
     exit 0
 fi
@@ -345,8 +347,8 @@ fi
 if [[ "$COMMAND" == "restart" ]]; then
     _preflight
     echo "Restarting managed containers (g8es, g8ee, g8ed, g8ep)..."
-    docker compose stop g8es g8ee g8ed g8ep 2>/dev/null || true
-    docker compose up -d g8es g8ee g8ed g8ep
+    $COMPOSE stop g8es g8ee g8ed g8ep 2>/dev/null || true
+    $COMPOSE up -d g8es g8ee g8ed g8ep
     echo ""
     echo "Waiting for services..."
     _wait_healthy g8es     60  1
@@ -357,7 +359,7 @@ if [[ "$COMMAND" == "restart" ]]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Restart complete."
     echo ""
-    docker compose ps --format "table {{.Name}}\t{{.Status}}"
+    $COMPOSE ps --format "table {{.Name}}\t{{.Status}}"
     exit 0
 fi
 
@@ -370,7 +372,7 @@ if [[ "$COMMAND" == "reset" ]]; then
     REBUILD_COMPONENTS=(g8es g8ee g8ed)
 
     echo "Wiping DB data volumes (g8es, g8ee, g8ed) — SSL certs preserved..."
-    docker compose stop g8es g8ee g8ed g8ep 2>/dev/null || true
+    $COMPOSE stop g8es g8ee g8ed g8ep 2>/dev/null || true
     docker ps -aq --filter "name=^g8es$|^g8ee$|^g8ed$|^g8ep$" 2>/dev/null | xargs -r docker rm -f 2>/dev/null || true
     for svc in g8es g8ee g8ed; do
         vol="$(_service_volume "$svc")"
@@ -382,7 +384,7 @@ if [[ "$COMMAND" == "reset" ]]; then
     _preflight
 
     echo "Building and starting all services..."
-    docker compose up -d --build --force-recreate g8es g8ee g8ed g8ep
+    $COMPOSE up -d --build --force-recreate g8es g8ee g8ed g8ep
     echo ""
     echo "Waiting for services..."
     _wait_healthy g8es     300 2
@@ -394,7 +396,7 @@ if [[ "$COMMAND" == "reset" ]]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Reset complete. SSL certs preserved — no need to re-trust."
     echo ""
-    docker compose ps --format "table {{.Name}}\t{{.Status}}"
+    $COMPOSE ps --format "table {{.Name}}\t{{.Status}}"
     exit 0
 fi
 
@@ -409,12 +411,12 @@ if [[ "$COMMAND" == "wipe" ]]; then
     _ensure_g8ep
 
     echo "Stopping g8ee, g8ed, and g8es..."
-    docker compose stop g8ee g8ed g8es 2>/dev/null || true
-    docker compose rm -f g8ee g8ed g8es 2>/dev/null || true
+    $COMPOSE stop g8ee g8ed g8es 2>/dev/null || true
+    $COMPOSE rm -f g8ee g8ed g8es 2>/dev/null || true
     echo ""
 
     echo "Restarting g8es (compiles and publishes operator binaries)..."
-    docker compose up -d --force-recreate g8es
+    $COMPOSE up -d --force-recreate g8es
     _wait_healthy g8es 120 2
 
     echo "Clearing app data from g8es..."
@@ -422,7 +424,7 @@ if [[ "$COMMAND" == "wipe" ]]; then
     echo ""
 
     echo "Restarting g8ee and g8ed..."
-    docker compose up -d --force-recreate g8ee g8ed
+    $COMPOSE up -d --force-recreate g8ee g8ed
     echo ""
     echo "Waiting for services..."
     _wait_healthy g8ee    120 2
@@ -432,7 +434,7 @@ if [[ "$COMMAND" == "wipe" ]]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Wipe complete. Platform settings, SSL certs, and auth token preserved."
     echo ""
-    docker compose ps --format "table {{.Name}}\t{{.Status}}"
+    $COMPOSE ps --format "table {{.Name}}\t{{.Status}}"
     exit 0
 fi
 
@@ -508,7 +510,7 @@ if [[ "$COMMAND" == "up" ]]; then
         UP_COMPONENTS=(g8es g8ee g8ed g8ep)
     fi
     echo "Starting services (no build): ${UP_COMPONENTS[*]}..."
-    docker compose up -d $(printf '%s\n' "${UP_COMPONENTS[@]}" | tr '\n' ' ')
+    $COMPOSE up -d $(printf '%s\n' "${UP_COMPONENTS[@]}" | tr '\n' ' ')
     echo ""
     echo "Waiting for services..."
     printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8es     && _wait_healthy g8es     60  1
@@ -521,7 +523,7 @@ if [[ "$COMMAND" == "up" ]]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Environment ready."
     echo ""
-    docker compose ps --format "table {{.Name}}\t{{.Status}}"
+    $COMPOSE ps --format "table {{.Name}}\t{{.Status}}"
     echo ""
     _print_platform_info
     exit 0
@@ -535,11 +537,11 @@ fi
 
 if [[ "$COMMAND" == "setup" ]]; then
     echo "Stopping all managed containers..."
-    docker compose stop g8es g8ee g8ed g8ep 2>/dev/null || true
-    docker compose rm -f g8es g8ee g8ed g8ep 2>/dev/null || true
+    $COMPOSE stop g8es g8ee g8ed g8ep 2>/dev/null || true
+    $COMPOSE rm -f g8es g8ee g8ed g8ep 2>/dev/null || true
 
     echo "Building and starting all services..."
-    docker compose up -d --build --force-recreate g8es g8ee g8ed g8ep
+    $COMPOSE up -d --build --force-recreate g8es g8ee g8ed g8ep
     echo ""
     echo "Waiting for services..."
     _wait_healthy g8es     300 2
@@ -551,7 +553,7 @@ if [[ "$COMMAND" == "setup" ]]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Setup complete."
     echo ""
-    docker compose ps --format "table {{.Name}}\t{{.Status}}"
+    $COMPOSE ps --format "table {{.Name}}\t{{.Status}}"
     echo ""
     _print_platform_info
     exit 0
@@ -565,10 +567,10 @@ if [[ "$COMMAND" == "rebuild" ]]; then
     fi
 
     echo "Removing containers for: ${REBUILD_COMPONENTS[*]}..."
-    docker compose rm -f "${REBUILD_COMPONENTS[@]}" 2>/dev/null || true
+    $COMPOSE rm -f "${REBUILD_COMPONENTS[@]}" 2>/dev/null || true
 
     echo "Rebuilding and starting: ${REBUILD_COMPONENTS[*]}..."
-    docker compose up -d --build --force-recreate "${REBUILD_COMPONENTS[@]}"
+    $COMPOSE up -d --build --force-recreate "${REBUILD_COMPONENTS[@]}"
     echo ""
     echo "Waiting for services..."
     printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8es  && _wait_healthy g8es     300 2
@@ -581,7 +583,7 @@ if [[ "$COMMAND" == "rebuild" ]]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Rebuild complete."
     echo ""
-    docker compose ps --format "table {{.Name}}\t{{.Status}}"
+    $COMPOSE ps --format "table {{.Name}}\t{{.Status}}"
     echo ""
     _print_platform_info
     exit 0
@@ -591,7 +593,7 @@ fi
 
 if [[ "$COMMAND" == "operator-build" ]]; then
     echo "Building linux/amd64 operator binary and uploading to g8es blob store..."
-    docker compose -f "$PROJECT_ROOT/docker-compose.yml" run --rm g8eo-test-runner bash -c "cd /app/components/g8eo && make build"
+    $COMPOSE run --rm g8eo-test-runner bash -c "cd /app/components/g8eo && make build"
     echo ""
     echo "Operator binary built and uploaded to g8es blob store."
     exit 0
@@ -601,7 +603,7 @@ fi
 
 if [[ "$COMMAND" == "operator-build-all" ]]; then
     echo "Building all operator architectures and uploading to g8es blob store..."
-    docker compose -f "$PROJECT_ROOT/docker-compose.yml" run --rm g8eo-test-runner bash -c "cd /app/components/g8eo && make build-all"
+    $COMPOSE run --rm g8eo-test-runner bash -c "cd /app/components/g8eo && make build-all"
     echo ""
     echo "All operator binaries built and uploaded to g8es blob store."
     exit 0

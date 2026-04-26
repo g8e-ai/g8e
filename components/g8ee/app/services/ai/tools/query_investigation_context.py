@@ -16,7 +16,6 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 import app.llm.llm_types as types
@@ -37,18 +36,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def build() -> tuple[types.ToolDeclaration, Callable[..., ToolResult]]:
-    def query_investigation_context(args: QueryInvestigationContextArgs) -> ToolResult:
-        raise NotImplementedError(
-            "query_investigation_context should be called via execute_tool_call"
-        )
-
+def build() -> types.ToolDeclaration:
     declaration = types.ToolDeclaration(
         name=OperatorToolName.QUERY_INVESTIGATION_CONTEXT,
         description=load_prompt(PromptFile.TOOL_QUERY_INVESTIGATION_CONTEXT),
         parameters=schema_from_model(QueryInvestigationContextArgs),
     )
-    return declaration, query_investigation_context
+    return declaration
 
 
 async def _get_investigation_or_error(

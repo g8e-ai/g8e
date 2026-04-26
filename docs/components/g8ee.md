@@ -460,7 +460,7 @@ Automatic Function Calling (AFC) is always disabled. g8ee uses a custom sequenti
 
 `OperatorCommandService` (`app/services/operator/command_service.py`) is the entry point for operator tool execution. It is a pure injection target — business logic is owned by focused sub-services.
 
-`AIToolService` handles the dispatch from the AI loop. It uses a `_tool_handlers` dispatch table and uniform `_handle_*` methods for every tool. For `run_commands_with_operator`, it routes through `TribunalInvoker` to refine the natural-language request into a precise shell command.
+`AIToolService` handles the dispatch from the AI loop. It uses a `_tool_handlers` dispatch table populated from per-tool modules under `app/services/ai/tools/`, each exporting an `async handle()` function with a uniform signature. For `run_commands_with_operator`, dispatch routes through `TribunalInvoker` to refine the natural-language request into a precise shell command.
 
 `OperatorApprovalService` (`app/services/operator/approval_service.py`) is a first-class service on `app.state.approval_service`, independently constructed in `main.py` and injected into `OperatorCommandService.build()`. The g8ee router for `/api/internal/operator/approval/respond` depends on `OperatorApprovalService` directly — approval responses do not pass through `OperatorCommandService`.
 
@@ -938,7 +938,7 @@ app startup (lifespan)
 
 `SearchWebResult.results` is always `list[WebSearchResultItem]` — never `None`. On failure, `results` is an empty list. Callers must not test for `None`; test `result.success` to distinguish success from failure.
 
-- **Registered by:** `AIToolService._build_search_web_tool()`
+- **Registered by:** `app/services/ai/tools/search_web.py::build()` (referenced from `TOOL_SPECS`)
 - **Executor:** `WebSearchProvider` (`app/services/ai/grounding/web_search_provider.py`)
 - **SDK method:** `SearchServiceClient.search_lite()` (API key auth)
 - **Result type:** `SearchWebResult` (`success`, `query`, `results: list[WebSearchResultItem]`, `total_results`)

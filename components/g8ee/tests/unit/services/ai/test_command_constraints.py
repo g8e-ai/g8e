@@ -405,7 +405,8 @@ async def test_handle_get_command_constraints_csv_override(
         blacklist_validator=mock_blacklist_validator,
     )
 
-    result = await tool_service._handle_get_command_constraints(
+    result = await gcc_tool.handle(
+        tool_service,
         tool_args={},
         investigation=mock_investigation,
         g8e_context=mock_g8e_context,

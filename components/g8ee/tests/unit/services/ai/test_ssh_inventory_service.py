@@ -5,6 +5,7 @@
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
 
+import time
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,7 @@ from app.errors import ConfigurationError
 from app.services.ai.ssh_inventory_service import (
     SshInventoryService,
     default_ssh_inventory_service,
+    _load_cached,
 )
 
 
@@ -185,3 +187,261 @@ def test_default_service_falls_back_to_canonical_mount_path(monkeypatch: pytest.
     monkeypatch.delenv("G8E_SSH_CONFIG_PATH", raising=False)
     svc = default_ssh_inventory_service()
     assert svc.source_path == "/etc/g8e/ssh_config"
+
+
+def test_load_returns_cached_result_on_repeated_calls(tmp_path: Path) -> None:
+    """Verify that repeated calls to load() return the same cached result."""
+    cfg = _write(tmp_path, "Host alpha\n    HostName alpha.example.com\n")
+    svc = SshInventoryService(ssh_config_path=str(cfg))
+
+    inv1 = svc.load()
+    inv2 = svc.load()
+
+    assert inv1 is inv2
+
+
+def test_load_invalidates_cache_when_file_mtime_changes(tmp_path: Path) -> None:
+    """Verify that modifying the file invalidates the cache."""
+    cfg = _write(tmp_path, "Host alpha\n    HostName alpha.example.com\n")
+    svc = SshInventoryService(ssh_config_path=str(cfg))
+
+    inv1 = svc.load()
+    assert inv1.hosts[0].host == "alpha"
+
+    time.sleep(0.01)
+    cfg.write_text("Host beta\n    HostName beta.example.com\n", encoding="utf-8")
+
+    inv2 = svc.load()
+    assert inv2 is not inv1
+    assert inv2.hosts[0].host == "beta"
+
+
+def test_load_cache_keyed_by_path_and_mtime(tmp_path: Path) -> None:
+    """Verify that cache is keyed by both path and mtime."""
+    cfg1 = tmp_path / "config1"
+    cfg1.write_text("Host alpha\n", encoding="utf-8")
+
+    cfg2 = tmp_path / "config2"
+    cfg2.write_text("Host beta\n", encoding="utf-8")
+
+    mtime = cfg1.stat().st_mtime
+
+    inv1 = _load_cached(str(cfg1), mtime)
+    inv2 = _load_cached(str(cfg2), mtime)
+
+    assert inv1 is not inv2
+    assert inv1.hosts[0].host == "alpha"
+    assert inv2.hosts[0].host == "beta"
+
+
+def test_include_single_file(tmp_path: Path) -> None:
+    """Test Include directive with a single file."""
+    included = tmp_path / "included_config"
+    included.write_text(
+        "Host web-1\n    HostName 10.0.0.1\n    User deploy\n",
+        encoding="utf-8",
+    )
+
+    cfg = _write(
+        tmp_path,
+        f"""
+        Include {included}
+        
+        Host db-1
+            HostName 10.0.0.2
+        """,
+    )
+    inv = SshInventoryService(ssh_config_path=str(cfg)).load()
+    
+    hosts = {h.host: h for h in inv.hosts}
+    assert "web-1" in hosts
+    assert hosts["web-1"].hostname == "10.0.0.1"
+    assert hosts["web-1"].user == "deploy"
+    assert "db-1" in hosts
+    assert hosts["db-1"].hostname == "10.0.0.2"
+
+
+def test_include_with_glob_pattern(tmp_path: Path) -> None:
+    """Test Include directive with glob pattern."""
+    config_dir = tmp_path / "config.d"
+    config_dir.mkdir()
+    
+    (config_dir / "01-web.conf").write_text(
+        "Host web-1\n    HostName 10.0.1.1\n",
+        encoding="utf-8",
+    )
+    (config_dir / "02-db.conf").write_text(
+        "Host db-1\n    HostName 10.0.2.1\n",
+        encoding="utf-8",
+    )
+    
+    cfg = _write(
+        tmp_path,
+        f"""
+        Include {config_dir}/*
+        
+        Host local
+            HostName localhost
+        """,
+    )
+    inv = SshInventoryService(ssh_config_path=str(cfg)).load()
+    
+    hosts = {h.host: h for h in inv.hosts}
+    assert "web-1" in hosts
+    assert "db-1" in hosts
+    assert "local" in hosts
+
+
+def test_include_with_relative_path(tmp_path: Path) -> None:
+    """Test Include directive with relative path."""
+    subdir = tmp_path / "subdir"
+    subdir.mkdir()
+    
+    included = subdir / "config"
+    included.write_text("Host remote\n    HostName 10.0.0.1\n", encoding="utf-8")
+    
+    cfg = _write(tmp_path, f"Include subdir/config\n")
+    inv = SshInventoryService(ssh_config_path=str(cfg)).load()
+    
+    assert len(inv.hosts) == 1
+    assert inv.hosts[0].host == "remote"
+    assert inv.hosts[0].hostname == "10.0.0.1"
+
+
+def test_include_with_absolute_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test Include directive with absolute path."""
+    included = tmp_path / "included"
+    included.write_text("Host absolute\n    HostName 10.0.0.1\n", encoding="utf-8")
+    
+    cfg = _write(tmp_path, f"Include {included}\n")
+    inv = SshInventoryService(ssh_config_path=str(cfg)).load()
+    
+    assert len(inv.hosts) == 1
+    assert inv.hosts[0].host == "absolute"
+
+
+def test_include_nonexistent_path_is_ignored(tmp_path: Path) -> None:
+    """Test that Include directive with non-existent path is ignored gracefully."""
+    cfg = _write(
+        tmp_path,
+        """
+        Include /nonexistent/path/config
+        
+        Host fallback
+            HostName 10.0.0.1
+        """,
+    )
+    inv = SshInventoryService(ssh_config_path=str(cfg)).load()
+    
+    assert len(inv.hosts) == 1
+    assert inv.hosts[0].host == "fallback"
+
+
+def test_include_circular_detection(tmp_path: Path) -> None:
+    """Test that circular includes are detected and skipped."""
+    cfg1 = tmp_path / "config1"
+    cfg2 = tmp_path / "config2"
+    
+    cfg1.write_text(f"Include {cfg2}\nHost host1\n    HostName 10.0.0.1\n", encoding="utf-8")
+    cfg2.write_text(f"Include {cfg1}\nHost host2\n    HostName 10.0.0.2\n", encoding="utf-8")
+    
+    inv = SshInventoryService(ssh_config_path=str(cfg1)).load()
+    
+    # Should parse both hosts without infinite recursion
+    hosts = {h.host: h for h in inv.hosts}
+    assert "host1" in hosts
+    assert "host2" in hosts
+
+
+def test_match_block_with_hosts(tmp_path: Path) -> None:
+    """Test that Host directives within Match blocks are parsed."""
+    cfg = _write(
+        tmp_path,
+        """
+        Match host "bastion"
+            Host bastion
+                HostName 10.0.0.1
+                User ops
+        
+        Host regular
+            HostName 10.0.0.2
+        """,
+    )
+    inv = SshInventoryService(ssh_config_path=str(cfg)).load()
+    
+    hosts = {h.host: h for h in inv.hosts}
+    assert "bastion" in hosts
+    assert hosts["bastion"].hostname == "10.0.0.1"
+    assert hosts["bastion"].user == "ops"
+    assert "regular" in hosts
+    assert hosts["regular"].hostname == "10.0.0.2"
+
+
+def test_match_block_multiple_hosts(tmp_path: Path) -> None:
+    """Test Match block with multiple Host directives."""
+    cfg = _write(
+        tmp_path,
+        """
+        Match user "deploy"
+            Host web-1
+                HostName 10.0.1.1
+            Host web-2
+                HostName 10.0.1.2
+        """,
+    )
+    inv = SshInventoryService(ssh_config_path=str(cfg)).load()
+    
+    hosts = {h.host: h for h in inv.hosts}
+    assert "web-1" in hosts
+    assert "web-2" in hosts
+    assert hosts["web-1"].hostname == "10.0.1.1"
+    assert hosts["web-2"].hostname == "10.0.1.2"
+
+
+def test_match_block_with_port(tmp_path: Path) -> None:
+    """Test Match block with Port directive."""
+    cfg = _write(
+        tmp_path,
+        """
+        Match host "special"
+            Host special
+                HostName 10.0.0.1
+                Port 2222
+        """,
+    )
+    inv = SshInventoryService(ssh_config_path=str(cfg)).load()
+    
+    assert inv.hosts[0].host == "special"
+    assert inv.hosts[0].port == 2222
+
+
+def test_nested_includes(tmp_path: Path) -> None:
+    """Test nested Include directives."""
+    level2 = tmp_path / "level2.conf"
+    level2.write_text("Host level2-host\n    HostName 10.0.2.1\n", encoding="utf-8")
+    
+    level1 = tmp_path / "level1.conf"
+    level1.write_text(
+        f"Include {level2}\nHost level1-host\n    HostName 10.0.1.1\n",
+        encoding="utf-8",
+    )
+    
+    cfg = _write(tmp_path, f"Include {level1}\nHost main\n    HostName 10.0.0.1\n")
+    inv = SshInventoryService(ssh_config_path=str(cfg)).load()
+    
+    hosts = {h.host: h for h in inv.hosts}
+    assert "main" in hosts
+    assert "level1-host" in hosts
+    assert "level2-host" in hosts
+
+
+def test_include_with_equals_separator(tmp_path: Path) -> None:
+    """Test Include directive with equals separator."""
+    included = tmp_path / "included"
+    included.write_text("Host included-host\n    HostName 10.0.0.1\n", encoding="utf-8")
+    
+    cfg = _write(tmp_path, f"Include={included}\n")
+    inv = SshInventoryService(ssh_config_path=str(cfg)).load()
+    
+    assert len(inv.hosts) == 1
+    assert inv.hosts[0].host == "included-host"

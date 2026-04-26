@@ -22,11 +22,13 @@
  * - POST /user/:userId          - Create a device link for a user
  * - DELETE /:token              - Revoke a device link (default)
  * - DELETE /:token?action=delete - Permanently delete a device link
+ * - POST /operator-link         - Generate a single-operator handshake link
  */
 
 import express from 'express';
 import { logger } from '../../utils/logger.js';
 import { isValidTokenFormat } from '../../services/auth/device_link_service.js';
+import { OperatorLinkRequest } from '../../models/request_models.js';
 import { ErrorResponse, DeviceLinkResponse, DeviceLinkListResponse, SimpleSuccessResponse } from '../../models/response_models.js';
 import { AuthPaths, DeviceLinkPaths } from '../../constants/api_paths.js';
 import { DEVICE_LINK_TTL_SECONDS, DeviceLinkError, DeviceLinkSuccess, DEFAULT_DEVICE_LINK_MAX_USES } from '../../constants/auth.js';
@@ -180,6 +182,52 @@ export function createInternalDeviceLinkRouter({ services, authorizationMiddlewa
             logger.error('[INTERNAL-HTTP] Failed to process device link', {
                 error: error.message,
                 token_prefix: token.substring(0, 20) + '...'
+            });
+            return res.status(500).json(new ErrorResponse({ error: error.message }).forWire());
+        }
+    });
+
+    /**
+     * POST /api/internal/device-links/operator-link
+     *
+     * Generate a single-operator handshake link (dlk_ token).
+     *
+     * Body: { user_id, organization_id, operator_id, web_session_id }
+     *
+     * SECURITY: INTERNAL ONLY - cluster-only access
+     */
+    router.post('/operator-link', requireInternalOrUserAuth, async (req, res, next) => {
+        try {
+            const generateReq = OperatorLinkRequest.parse(req.body);
+
+            const result = await deviceLinkService.generateLink({
+                user_id: generateReq.user_id,
+                organization_id: generateReq.organization_id,
+                operator_id: generateReq.operator_id,
+                web_session_id: generateReq.web_session_id
+            });
+
+            if (!result.success) {
+                return res.status(400).json(new ErrorResponse({ error: result.error }).forWire());
+            }
+
+            logger.info('[INTERNAL-HTTP] Operator device link generated', {
+                userId: generateReq.user_id,
+                operatorId: generateReq.operator_id,
+                token_prefix: result.token.substring(0, 25) + '...'
+            });
+
+            return res.status(201).json(new DeviceLinkResponse({
+                success: true,
+                token: result.token,
+                operator_command: result.operator_command,
+                expires_at: result.expires_at
+            }).forWire());
+
+        } catch (error) {
+            logger.error('[INTERNAL-HTTP] Failed to generate operator device link', {
+                error: error.message,
+                body: req.body
             });
             return res.status(500).json(new ErrorResponse({ error: error.message }).forWire());
         }

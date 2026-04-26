@@ -138,7 +138,7 @@ Section order is deliberate. Static platform guidelines and core persona instruc
 
 ## Tool Descriptions
 
-Tool descriptions are prompt files loaded into the `description` field of each `ToolDeclaration` in `components/g8ee/app/services/ai/tool_service.py`. Each `_build_*_tool` method calls `load_prompt(PromptFile.TOOL_*)` and attaches the result to the declaration:
+Tool descriptions are prompt files loaded into the `description` field of each `ToolDeclaration` in the per-tool modules under `components/g8ee/app/services/ai/tools/`. Each module's `build()` factory calls `load_prompt(PromptFile.TOOL_*)` and attaches the result to the declaration:
 
 ```python
 declaration = types.ToolDeclaration(
@@ -239,9 +239,10 @@ The `<forbidden_operations>` list in `core/safety.txt` is the one exception to t
 
 1. Create `components/g8ee/app/prompts_data/tools/<tool_name>.txt` following the tool-description structure above.
 2. Add a `TOOL_<NAME>` member to the `PromptFile` enum pointing at the new file.
-3. Add a `_build_<name>_tool` method on `AIToolService` that loads the description via `load_prompt(PromptFile.TOOL_<NAME>)` and attaches it to the `ToolDeclaration`.
-4. Register the tool in `TOOL_SPECS` (`components/g8ee/app/services/ai/tool_registry.py`) with the appropriate `agent_modes`, `builder_attr`, `handler_attr`, and display metadata.
-5. Add a `_handle_<name>` handler method on `AIToolService` with the uniform signature: `(self, tool_args, investigation, g8e_context, request_settings) -> ToolResult`.
+3. Create `components/g8ee/app/services/ai/tools/<tool_name>.py` exporting:
+   - `build() -> tuple[ToolDeclaration, Callable]` that loads the description via `load_prompt(PromptFile.TOOL_<NAME>)` and attaches it to the `ToolDeclaration`.
+   - `async handle(svc, tool_args, investigation, g8e_context, request_settings, execution_id) -> ToolResult`.
+4. Register the tool in `TOOL_SPECS` (`components/g8ee/app/services/ai/tool_registry.py`) with the appropriate `agent_modes`, `builder=<module>.build`, `handler=<module>.handle`, and display metadata.
 
 ---
 

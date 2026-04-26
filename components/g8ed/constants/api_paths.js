@@ -48,6 +48,7 @@ try {
             operators_deregister_session: '/operators/deregister-operator-session',
             operator_direct_command: '/operator/direct-command',
             operator_approval_respond: '/operator/approval/respond',
+            operator_approval_pending: '/operator/approval/pending',
             health: '/health',
             settings_user: '/settings/user'
         },
@@ -55,6 +56,7 @@ try {
             sse_push: '/sse/push',
             grant_intent: '/operators/{operator_id}/grant-intent',
             revoke_intent: '/operators/{operator_id}/revoke-intent',
+            create_operator_link: '/device-links/operator-link',
             health: '/health'
         }
     };
@@ -268,6 +270,7 @@ const InternalDeviceLink = {
     PARAM_USER: ':userId',
     PARAM_TOKEN: ':token',
     DELETE:     'delete',
+    OPERATOR_LINK: 'operator-link',
 };
 
 // --- INTERNAL domain ---
@@ -441,6 +444,7 @@ export const InternalDeviceLinkPaths = Object.freeze({
     LIST_FOR_USER:   `/${InternalDeviceLink.USER}/${InternalDeviceLink.PARAM_USER}`,
     CREATE_FOR_USER: `/${InternalDeviceLink.USER}/${InternalDeviceLink.PARAM_USER}`,
     REVOKE:          `/${InternalDeviceLink.PARAM_TOKEN}`,
+    CREATE_OPERATOR_LINK: `/${InternalDeviceLink.OPERATOR_LINK}`,
 });
 
 export const InternalPaths = Object.freeze({
@@ -629,6 +633,7 @@ export const apiPaths = {
         createForUser: (userId) => `${InternalDeviceLink.BASE}/${InternalDeviceLink.USER}/${userId}`,
         revoke:        (token)  => `${InternalDeviceLink.BASE}/${token}`,
         delete:        (token)  => `${InternalDeviceLink.BASE}/${token}?action=${InternalDeviceLink.DELETE}`,
+        createOperatorLink: () => `${InternalDeviceLink.BASE}/${InternalDeviceLink.OPERATOR_LINK}`,
     },
 };
 

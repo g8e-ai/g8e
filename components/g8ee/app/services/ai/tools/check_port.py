@@ -16,7 +16,6 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import app.llm.llm_types as types
@@ -38,18 +37,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def build() -> tuple[types.ToolDeclaration, Callable[..., ToolResult]]:
-    def check_port_status(args: CheckPortArgs) -> ToolResult:
-        raise NotImplementedError(
-            "check_port_status should be called via execute_tool_call"
-        )
-
+def build() -> types.ToolDeclaration:
     declaration = types.ToolDeclaration(
         name=OperatorToolName.CHECK_PORT,
         description=load_prompt(PromptFile.TOOL_CHECK_PORT),
         parameters=schema_from_model(CheckPortArgs, required_override=["port"]),
     )
-    return declaration, check_port_status
+    return declaration
 
 
 async def handle(

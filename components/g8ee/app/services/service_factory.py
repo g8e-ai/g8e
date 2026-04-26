@@ -22,6 +22,7 @@ from app.services.ai.grounding import GroundingService, WebSearchProvider
 from app.services.ai.memory_generation_service import MemoryGenerationService
 from app.services.ai.request_builder import AIRequestBuilder
 from app.services.ai.response_analyzer import AIResponseAnalyzer
+from app.services.ai.ssh_inventory_service import SshInventoryService
 from app.services.ai.tool_service import AIToolService
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.data.attachment_store_service import AttachmentService
@@ -85,6 +86,7 @@ class DomainServices(TypedDict):
     investigation_service: InvestigationService | InvestigationServiceProtocol
     memory_generation_service: MemoryGenerationService
     reputation_service: ReputationService
+    ssh_inventory_service: SshInventoryService
 
 
 class OperatorServices(TypedDict):
@@ -155,9 +157,6 @@ class ServiceFactory:
             internal_http_client=core_services['internal_http_client'],  # type: ignore[arg-type]
         )
 
-        # Inject operator_data_service into internal_http_client to resolve circular dependency
-        core_services['internal_http_client'].set_operator_data_service(operator_data_service)
-
         memory_data_service = MemoryDataService(
             cache_aside_service=cache_aside_service
         )
@@ -211,10 +210,15 @@ class ServiceFactory:
             half_life=settings.reputation.ema_half_life,
         )
 
+        ssh_inventory_service = SshInventoryService(
+            ssh_config_path=settings.paths.ssh_config_path
+        )
+
         return DomainServices(
             investigation_service=investigation_service,
             memory_generation_service=memory_generation_service,
             reputation_service=reputation_service,
+            ssh_inventory_service=ssh_inventory_service,
         )
     
     @staticmethod
@@ -300,6 +304,7 @@ class ServiceFactory:
             reputation_service=domain_services['reputation_service'],
             stake_resolution_data_service=data_services['stake_resolution_data_service'],
             chat_task_manager=chat_task_manager,
+            ssh_inventory_service=domain_services['ssh_inventory_service'],
             web_search_provider=web_search_provider,
             platform_settings=settings,
         )

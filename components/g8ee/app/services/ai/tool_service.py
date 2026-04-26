@@ -109,7 +109,6 @@ class AIToolService:
         )
 
         self._tool_declarations: dict[str, types.ToolDeclaration] = {}
-        self._tool_executors: dict[str, Callable[..., ToolResult]] = {}
         self._tool_handlers: dict[str, Callable[..., Awaitable[ToolResult]]] = {}
 
         for spec in TOOL_SPECS:
@@ -119,9 +118,7 @@ class AIToolService:
                     spec.name.value,
                 )
                 continue
-            declaration, executor = spec.builder()
-            self._tool_declarations[spec.name] = declaration
-            self._tool_executors[spec.name] = executor
+            self._tool_declarations[spec.name] = spec.builder()
             self._tool_handlers[spec.name] = spec.handler
             if spec.requires_web_search:
                 logger.info("[TOOLS] %s enabled (Vertex AI Search configured)", spec.name.value)
@@ -349,10 +346,10 @@ class AIToolService:
         if not handler:
             error_msg = (
                 f"Unknown function: {tool_name}. "
-                f"Registered functions: {', '.join(self._tool_executors.keys())}"
+                f"Registered functions: {', '.join(self._tool_handlers.keys())}"
             )
             logger.error("[TOOL_CALL] Unregistered function called: %s", tool_name)
-            logger.error("[TOOL_CALL] Available functions: %s", list(self._tool_executors.keys()))
+            logger.error("[TOOL_CALL] Available functions: %s", list(self._tool_handlers.keys()))
             return CommandExecutionResult(
                 success=False,
                 error=error_msg,

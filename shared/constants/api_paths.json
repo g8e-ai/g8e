@@ -21,6 +21,7 @@
     "sse_push": "/sse/push",
     "grant_intent": "/operators/{operator_id}/grant-intent",
     "revoke_intent": "/operators/{operator_id}/revoke-intent",
+    "create_operator_link": "/device-links/operator-link",
     "health": "/health"
   }
 }

@@ -368,6 +368,19 @@ export class GenerateDeviceLinkRequest extends G8eBaseModel {
 }
 
 // ---------------------------------------------------------------------------
+// OperatorLinkRequest (internal single-operator handshake)
+// ---------------------------------------------------------------------------
+
+export class OperatorLinkRequest extends G8eBaseModel {
+    static fields = {
+        user_id:         { type: F.string, required: true },
+        organization_id: { type: F.string, default: null },
+        operator_id:     { type: F.string, required: true },
+        web_session_id:  { type: F.string, required: true },
+    };
+}
+
+// ---------------------------------------------------------------------------
 // RegisterDeviceRequest
 // ---------------------------------------------------------------------------
 
@@ -589,6 +602,7 @@ export class RequestModelFactory {
     static createCreateDeviceLinkRequest(data)           { return CreateDeviceLinkRequest.parse(data); }
     static createGenerateDeviceLinkRequest(data)         { return GenerateDeviceLinkRequest.parse(data); }
     static createRegisterDeviceRequest(data)             { return RegisterDeviceRequest.parse(data); }
+    static createOperatorLinkRequest(data)               { return OperatorLinkRequest.parse(data); }
     static createPasskeyRegisterChallengeRequest(data)   { return PasskeyRegisterChallengeRequest.parse(data); }
     static createPasskeyRegisterVerifyRequest(data)      { return PasskeyRegisterVerifyRequest.parse(data); }
     static createPasskeyAuthChallengeRequest(data)       { return PasskeyAuthChallengeRequest.parse(data); }

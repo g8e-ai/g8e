@@ -16,7 +16,6 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import app.llm.llm_types as types
@@ -37,18 +36,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def build() -> tuple[types.ToolDeclaration, Callable[..., ToolResult]]:
-    def file_read_on_operator(args: FileEditRequestPayload) -> ToolResult:
-        raise NotImplementedError(
-            "file_read_on_operator should be called via execute_tool_call"
-        )
-
+def build() -> types.ToolDeclaration:
     declaration = types.ToolDeclaration(
         name=OperatorToolName.FILE_READ,
         description=load_prompt(PromptFile.TOOL_FILE_READ),
         parameters=schema_from_model(FileReadArgs),
     )
-    return declaration, file_read_on_operator
+    return declaration
 
 
 async def handle(

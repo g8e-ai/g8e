@@ -16,7 +16,6 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import app.llm.llm_types as types
@@ -38,18 +37,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def build() -> tuple[types.ToolDeclaration, Callable[..., ToolResult]]:
-    def fetch_file_history(args: FetchFileHistoryArgs) -> ToolResult:
-        raise NotImplementedError(
-            "fetch_file_history should be called via execute_tool_call"
-        )
-
+def build() -> types.ToolDeclaration:
     declaration = types.ToolDeclaration(
         name=OperatorToolName.FETCH_FILE_HISTORY,
         description=load_prompt(PromptFile.TOOL_FETCH_FILE_HISTORY),
         parameters=schema_from_model(FetchFileHistoryArgs),
     )
-    return declaration, fetch_file_history
+    return declaration
 
 
 async def handle(

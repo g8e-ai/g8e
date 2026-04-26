@@ -25,6 +25,7 @@ from app.models.tool_results import (
     ErrorAnalysisResult,
     FileOperationRiskAnalysis,
     FileOperationRiskContext,
+    SshInventoryToolResult,
 )
 
 pytestmark = [pytest.mark.unit]
@@ -255,3 +256,43 @@ class TestFileOperationRiskAnalysis:
     def test_risk_level_stored_as_string_due_to_use_enum_values(self):
         analysis = FileOperationRiskAnalysis(risk_level=RiskLevel.MEDIUM, safe_to_proceed=True)
         assert analysis.risk_level == RiskLevel.MEDIUM
+
+
+class TestSshInventoryToolResult:
+
+    def test_defaults(self):
+        result = SshInventoryToolResult()
+        assert result.success is True
+        assert result.error is None
+        assert result.error_type is None
+        assert result.source_path is None
+        assert result.hosts == []
+        assert result.total_count == 0
+
+    def test_explicit_values(self):
+        result = SshInventoryToolResult(
+            success=True,
+            source_path="/etc/ssh/config",
+            hosts=[{"host": "web-1", "hostname": "10.0.0.1"}],
+            total_count=1,
+        )
+        assert result.success is True
+        assert result.source_path == "/etc/ssh/config"
+        assert len(result.hosts) == 1
+        assert result.hosts[0]["host"] == "web-1"
+        assert result.total_count == 1
+
+    def test_is_pydantic_model(self):
+        assert issubclass(SshInventoryToolResult, G8eBaseModel)
+
+    def test_error_case(self):
+        result = SshInventoryToolResult(
+            success=False,
+            error="SSH config not found",
+            source_path=None,
+            hosts=[],
+            total_count=0,
+        )
+        assert result.success is False
+        assert result.error == "SSH config not found"
+        assert result.total_count == 0

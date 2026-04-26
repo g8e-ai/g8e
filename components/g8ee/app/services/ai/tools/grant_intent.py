@@ -16,7 +16,6 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import app.llm.llm_types as types
@@ -36,18 +35,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def build() -> tuple[types.ToolDeclaration, Callable[..., ToolResult]]:
-    def grant_intent_permission(args: GrantIntentArgs) -> ToolResult:
-        raise NotImplementedError(
-            "grant_intent_permission should be called via execute_tool_call"
-        )
-
+def build() -> types.ToolDeclaration:
     declaration = types.ToolDeclaration(
         name=OperatorToolName.GRANT_INTENT,
         description=load_prompt(PromptFile.TOOL_GRANT_INTENT),
         parameters=schema_from_model(GrantIntentArgs),
     )
-    return declaration, grant_intent_permission
+    return declaration
 
 
 async def handle(
