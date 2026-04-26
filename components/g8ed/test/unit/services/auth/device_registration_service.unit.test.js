@@ -26,7 +26,7 @@ describe('DeviceRegistrationService', () => {
     let cleanup;
     let sseService;
     let operatorService;
-    let operatorSessionService;
+    let webSessionService;
     let userService;
 
     const mockG8eContext = {
@@ -51,15 +51,15 @@ describe('DeviceRegistrationService', () => {
         // Setup real services with spies for verification
         sseService = services.sseService;
         operatorService = services.operatorService;
-        operatorSessionService = services.operatorSessionService;
+        webSessionService = services.webSessionService;
         userService = services.userService;
 
         vi.spyOn(sseService, 'publishEvent').mockResolvedValue(true);
         vi.spyOn(operatorService, 'getOperator');
         vi.spyOn(operatorService, 'claimOperatorSlot');
         
-        vi.spyOn(operatorSessionService, 'createOperatorSession');
-        vi.spyOn(operatorSessionService, 'endSession').mockResolvedValue(true);
+        vi.spyOn(webSessionService, 'createWebSession');
+        vi.spyOn(webSessionService, 'endSession').mockResolvedValue(true);
         
         vi.spyOn(userService, 'getUser');
         vi.spyOn(userService, 'updateUserOperator').mockResolvedValue(true);

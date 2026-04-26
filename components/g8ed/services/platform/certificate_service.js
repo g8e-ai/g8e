@@ -42,14 +42,16 @@ class CertificateService {
     /**
      * @param {Object} options
      * @param {Object} options.bootstrapService - BootstrapService instance (for ssl_dir)
+     * @param {Object} options.internalHttpClient - InternalHttpClient instance (optional)
      */
-    constructor({ bootstrapService } = {}) {
+    constructor({ bootstrapService, internalHttpClient } = {}) {
         if (!bootstrapService) throw new Error('CertificateService requires bootstrapService');
         this.initialized = false;
         this.caCert = null;
         this.caKey = null;
         this.sslDir = bootstrapService.getSslDir() || DEFAULT_SSL_DIR;
         this._revokedSerials = new Set();
+        this._internalHttpClient = internalHttpClient;
     }
 
     async initialize() {
@@ -156,8 +158,8 @@ class CertificateService {
 
         try {
             // Authority: g8ee (Engine) owns CRL management
-            const internalHttpClient = getInternalHttpClient();
-            
+            const internalHttpClient = this._internalHttpClient || getInternalHttpClient();
+
             // Ensure we have a valid G8eHttpContext for the relay
             let g8eContext = actorContext;
             if (!g8eContext || !(g8eContext instanceof G8eHttpContext)) {

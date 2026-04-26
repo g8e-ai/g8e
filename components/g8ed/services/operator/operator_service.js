@@ -329,6 +329,10 @@ class OperatorService {
         const data = await this.operatorDataService.queryOperators(filters);
         return (data || []).map(op => OperatorDocument.fromDB(op));
     }
+
+    async queryListedOperators(filters) {
+        return this.operatorDataService.queryListedOperators(filters);
+    }
     
     async resetOperator(operatorId) {
         const existing = await this.getOperator(operatorId);

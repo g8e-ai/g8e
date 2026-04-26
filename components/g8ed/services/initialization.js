@@ -270,7 +270,7 @@ async function _doInitialize() {
         process.once('SIGINT',  _sigIntHandler);
 
         // --- Phase 5: Operator subsystem ---
-        certificateService = new CertificateService({ bootstrapService: bootstrapSvc });
+        certificateService = new CertificateService({ bootstrapService: bootstrapSvc, internalHttpClient: internalHttpClientInstance });
         await certificateService.initialize();
 
         investigationService = new InvestigationService({

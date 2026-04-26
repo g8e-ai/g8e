@@ -91,7 +91,6 @@ export async function initializeTestServices() {
                 pubSubClient:           initModule.getPubSubClient(),
                 cacheAsideService:       initModule.getCacheAsideService(),
                 webSessionService:      initModule.getWebSessionService(),
-                operatorSessionService: initModule.getOperatorSessionService(),
                 bindingService:         initModule.getBindingService(),
                 apiKeyService:          initModule.getApiKeyService(),
                 userService:            initModule.getUserService(),
