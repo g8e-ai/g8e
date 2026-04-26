@@ -43,6 +43,7 @@ class OperatorService {
      * @param {Object} [options.certificateService] - CertificateService instance
      * @param {Object} [options.webSessionService] - WebSessionService instance
      * @param {Object} [options.sseService] - SSEService instance
+     * @param {Object} [options.internalHttpClient] - InternalHttpClient instance
      */
     constructor({
         operatorDataService,
@@ -50,9 +51,11 @@ class OperatorService {
         apiKeyService,
         certificateService,
         webSessionService,
-        sseService
+        sseService,
+        internalHttpClient
     }) {
         if (!operatorDataService) throw new Error('operatorDataService is required');
+        if (!internalHttpClient) throw new Error('internalHttpClient is required');
         
         this.operatorDataService = operatorDataService;
         this.userService = userService;
@@ -60,6 +63,7 @@ class OperatorService {
         this.certificateService = certificateService;
         this.webSessionService = webSessionService;
         this.sseService = sseService;
+        this.internalHttpClient = internalHttpClient;
         
         this.collectionName = this.operatorDataService.collectionName;
 
@@ -71,7 +75,9 @@ class OperatorService {
             operatorService: this,
         });
 
-        this.relay = new OperatorRelayService();
+        this.relay = new OperatorRelayService({
+            internalHttpClient: this.internalHttpClient
+        });
 
         this.notifications = new OperatorNotificationService({
             webSessionService,
@@ -208,8 +214,8 @@ class OperatorService {
 
     // --- Slots ---
 
-    async initializeOperatorSlots(userId, organizationId) {
-        return this.slots.initializeOperatorSlots(userId, organizationId);
+    async initializeOperatorSlots(userId, organizationId, webSessionId) {
+        return this.slots.initializeOperatorSlots(userId, organizationId, webSessionId);
     }
 
     async refreshOperatorApiKey(operatorId, userId) {

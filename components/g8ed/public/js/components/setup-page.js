@@ -446,7 +446,7 @@ export class SetupPage {
                         if (defaultModel) {
                             prevValue = defaultModel.id;
                             this._selectedModels[role] = prevValue;
-                            if (text) text.textContent = defaultModel.label;
+                            if (text) text.textContent = `${defaultModel.label} (${defaultModel.id})`;
                         }
                     }
                 }
@@ -459,7 +459,7 @@ export class SetupPage {
                         if (roleModels.length > 0) {
                             prevValue = roleModels[0].id;
                             this._selectedModels[role] = prevValue;
-                            if (text) text.textContent = roleModels[0].label;
+                            if (text) text.textContent = `${roleModels[0].label} (${roleModels[0].id})`;
                             break;
                         }
                     }
@@ -484,18 +484,18 @@ export class SetupPage {
                 for (const model of models) {
                     const option = document.createElement('div');
                     option.className = 'llm-model-dropdown__option';
-                    option.textContent = model.label;
+                    option.textContent = `${model.label} (${model.id})`;
                     option.dataset.value = model.id;
                     option.dataset.provider = provider;
 
                     if (model.id === prevValue) {
                         option.classList.add('selected');
-                        if (text) text.textContent = model.label;
+                        if (text) text.textContent = `${model.label} (${model.id})`;
                     }
 
                     option.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        this._selectModel(role, model.id, model.label);
+                        this._selectModel(role, model.id, `${model.label} (${model.id})`);
                     });
 
                     menu.appendChild(option);
@@ -534,7 +534,7 @@ export class SetupPage {
             if (!config) continue;
             const models = config.all || [];
             const model = models.find(m => m.id === modelId);
-            if (model) return model.label;
+            if (model) return `${model.label} (${model.id})`;
         }
         return modelId;
     }
@@ -608,7 +608,7 @@ export class SetupPage {
                 const text = dropdown?.querySelector('.llm-model-dropdown__text');
                 if (text) {
                     const model = PROVIDER_MODELS.llamacpp?.all?.find(m => m.id === defaults[role]);
-                    if (model) text.textContent = model.label;
+                    if (model) text.textContent = `${model.label} (${model.id})`;
                 }
             }
         });

@@ -232,11 +232,11 @@ async function _doInitialize() {
         });
         userService = new UserService({ 
             cacheAsideService, 
-            organizationService: getOrganizationModel(), 
-            apiKeyService: getApiKeyService() 
+            organizationService: organizationModel, 
+            apiKeyService: apiKeyService 
         });
         passkeyAuthService = new PasskeyAuthService({ 
-            userService: getUserService(), 
+            userService: userService, 
             cacheAsideService, 
             settingsService: settingsSvc 
         });
@@ -245,8 +245,8 @@ async function _doInitialize() {
         });
         downloadAuthService = new DownloadAuthService({ 
             cacheAsideService, 
-            userService: getUserService(), 
-            apiKeyService: getApiKeyService() 
+            userService: userService, 
+            apiKeyService: apiKeyService 
         });
         logger.info('[G8ED-INIT] Phase 3 complete: auth services');
 
@@ -283,25 +283,26 @@ async function _doInitialize() {
 
         operatorServiceInstance = new OperatorService({
             operatorDataService,
-            userService: getUserService(),
-            apiKeyService: getApiKeyService(),
-            webSessionService: getWebSessionService(),
-            certificateService: getCertificateService(),
-            sseService: getSSEService(),
+            userService: userService,
+            apiKeyService: apiKeyService,
+            webSessionService: webSessionService,
+            certificateService: certificateService,
+            sseService: sseService,
+            internalHttpClient: internalHttpClientInstance,
         });
         
         operatorDownloadService = new OperatorDownloadService(listenUrl, internalAuthToken);
         boundSessionsService = new BoundSessionsService({
             cacheAsideService,
-            operatorService: getOperatorService(),
+            operatorService: operatorServiceInstance,
         });
 
         // Inject dependencies into SSEService after other services are ready
         sseService.setDependencies({
-            settingsService: getSettingsService(),
-            internalHttpClient: getInternalHttpClient(),
-            boundSessionsService: getBindingService(),
-            investigationService: getInvestigationService()
+            settingsService: settingsSvc,
+            internalHttpClient: internalHttpClientInstance,
+            boundSessionsService: boundSessionsService,
+            investigationService: investigationService
         });
 
         logger.info('[G8ED-INIT] Phase 5 complete: operator subsystem and SSE initialization');
@@ -309,56 +310,58 @@ async function _doInitialize() {
         // --- Phase 6: Other Platform services ---
         attachmentService = new AttachmentService({ 
             cacheAsideService, 
-            blobStorage: getG8esBlobClient() 
+            blobStorage: blobStorage 
         });
         consoleMetricsService = new ConsoleMetricsService({ 
             cacheAsideService, 
-            internalHttpClient: getInternalHttpClient() 
+            internalHttpClient: internalHttpClientInstance 
         });
         healthCheckService = new HealthCheckService({ 
             cacheAsideService, 
-            webSessionService: getWebSessionService() 
+            webSessionService: webSessionService 
         });
         
         g8eNodeOperatorService = new G8ENodeOperatorService({ 
             settingsService: settingsSvc, 
-            operatorService: getOperatorService() 
+            operatorService: operatorServiceInstance 
         });
 
         postLoginService = new PostLoginService({
-            webSessionService: getWebSessionService(),
-            apiKeyService: getApiKeyService(),
-            userService: getUserService(),
-            operatorService: getOperatorService(),
-            g8eNodeOperatorService: getG8ENodeOperatorService(),
+            webSessionService: webSessionService,
+            apiKeyService: apiKeyService,
+            userService: userService,
+            operatorService: operatorServiceInstance,
+            g8eNodeOperatorService: g8eNodeOperatorService,
+            sseService: sseService,
+            consoleMetricsService: consoleMetricsService,
         });
         
         // auditService already constructed in Phase 3 for CliSessionService
 
         deviceRegistrationService = new DeviceRegistrationService({
-            operatorService: getOperatorService(),
-            userService: getUserService(),
-            sseService: getSSEService(),
-            internalHttpClient: getInternalHttpClient(),
+            operatorService: operatorServiceInstance,
+            userService: userService,
+            sseService: sseService,
+            internalHttpClient: internalHttpClientInstance,
         });
         
         deviceLinkService = new DeviceLinkService({
             cacheAsideService,
-            operatorService: getOperatorService(),
-            webSessionService: getWebSessionService(),
-            deviceRegistrationService: getDeviceRegistrationService(),
+            operatorService: operatorServiceInstance,
+            webSessionService: webSessionService,
+            deviceRegistrationService: deviceRegistrationService,
         });
         
         setupService = new SetupService({ 
-            userService: getUserService(), 
+            userService: userService, 
             settingsService: settingsSvc 
         });
         
         bindOperatorsServiceInstance = new BindOperatorsService({
-            operatorService: getOperatorService(),
-            bindingService: getBindingService(),
-            webSessionService: getWebSessionService(),
-            sseService: getSSEService(),
+            operatorService: operatorServiceInstance,
+            bindingService: boundSessionsService,
+            webSessionService: webSessionService,
+            sseService: sseService,
         });
 
         logger.info('[G8ED-INIT] Phase 5 complete: platform services (SSE, attachments, device links, certificates, g8ep operator, console metrics, post-login, setup, audit, operator-bind)');

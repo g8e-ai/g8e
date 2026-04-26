@@ -46,7 +46,6 @@ import {
     NEW_CASE_ID
 } from '../../constants/http_client.js';
 import { ApiPaths, InternalApiPaths } from '../../constants/api_paths.js';
-import { getInternalHttpClient } from '../../services/initialization.js';
 
 class InternalHttpClient{
     /**
@@ -426,4 +425,4 @@ class InternalHttpClient{
 }
 
 // Singleton instance is now managed via initialization.js factory
-export { getInternalHttpClient, InternalHttpClient };
+export { InternalHttpClient };

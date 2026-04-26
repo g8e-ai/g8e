@@ -32,7 +32,7 @@ import {
     CloudOperatorSubtype,
 } from '../constants/operator.js';
 import { SourceComponent } from '../constants/ai.js';
-import { INTENT_TTL_SECONDS } from '../constants/auth.js';
+import { INTENT_TTL_SECONDS, API_KEY_COMBINED_REGEX } from '../constants/auth.js';
 import { G8eBaseModel, G8eIdentifiableModel, F, now, addSeconds } from './base.js';
 
 // ---------------------------------------------------------------------------
@@ -610,8 +610,7 @@ export class OperatorRefreshKeyResponse extends G8eBaseModel {
 
     _validate() {
         if (this.new_api_key) {
-            const apiKeyPattern = /^g8e_[a-f0-9]{8}_[a-f0-9]{64}$|^g8e_[a-f0-9]{64}$/;
-            if (!apiKeyPattern.test(this.new_api_key)) {
+            if (!API_KEY_COMBINED_REGEX.test(this.new_api_key)) {
                 throw new Error('new_api_key must match g8e API key format (g8e_ prefix followed by hex characters)');
             }
         }

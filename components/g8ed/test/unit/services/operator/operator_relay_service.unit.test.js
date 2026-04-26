@@ -13,13 +13,8 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OperatorRelayService } from '@g8ed/services/operator/operator_relay_service.js';
-import { getInternalHttpClient } from '@g8ed/services/clients/internal_http_client.js';
 import { G8eHttpContext } from '@g8ed/models/request_models.js';
 import { apiPaths } from '@g8ed/constants/api_paths.js';
-
-vi.mock('@g8ed/services/clients/internal_http_client.js', () => ({
-    getInternalHttpClient: vi.fn()
-}));
 
 describe('OperatorRelayService', () => {
     let service;
@@ -29,8 +24,9 @@ describe('OperatorRelayService', () => {
         mockHttpClient = {
             request: vi.fn().mockResolvedValue({ success: true })
         };
-        vi.mocked(getInternalHttpClient).mockReturnValue(mockHttpClient);
-        service = new OperatorRelayService();
+        service = new OperatorRelayService({
+            internalHttpClient: mockHttpClient
+        });
     });
 
     const context = new G8eHttpContext({

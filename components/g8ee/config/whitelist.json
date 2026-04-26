@@ -5,10 +5,10 @@
     "enforcement_policy": {
         "description": "When enabled, this whitelist defines commands and options permitted for Operator command execution. Currently disabled to allow full flexibility during development.",
         "restrictions": [
-            "GeminiAI must only use commands listed in the 'commands' section",
-            "GeminiAI must only use options listed in 'safe_options' for each command",
-            "GeminiAI must validate all parameters against the 'validation' rules",
-            "GeminiAI must respect all 'global_restrictions' and 'forbidden_patterns'",
+            "AI Agents must only use commands listed in the 'commands' section",
+            "AI Agents must only use options listed in 'safe_options' for each command",
+            "AI Agents must validate all parameters against the 'validation' rules",
+            "AI Agents must respect all 'global_restrictions' and 'forbidden_patterns'",
             "No command execution is permitted outside of this whitelist"
         ]
     },

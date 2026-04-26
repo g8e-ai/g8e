@@ -10,11 +10,11 @@ This document outlines the testing architecture, core principles, and how to wri
 
 ## Core Engineering Principles
 
-- **Hermetic Execution** — Each component runs tests inside a dedicated test-runner container (`g8ee-test-runner`, `g8ed-test-runner`, `g8eo-test-runner`). Source code is volume-mounted, meaning local development and CI execution are perfectly identical.
+- **Hermetic Execution** — Each component runs tests inside a dedicated test-runner container (`g8ee-test-runner`, `g8ed-test-runner`, `g8eo-test-runner`). Source code is volume-mounted, meaning local development and CI execution are perfectly identical. For manual troubleshooting, use the `g8ep` container which includes all necessary tooling.
 - **Real Infrastructure** — All testing must occur against real services and real inter-component communications. This means using a real `CacheAsideService` with a real `g8es` backend, real pub/sub over WebSockets, and real network stacks.
-- **The "No Mocks" Policy** — We strictly prohibit mocking internal services, database clients, or LLM providers. If a scenario is extremely difficult to test without a mock, you must define a shared test fixture in `shared/test-fixtures` and justify its necessity. Integration tests must use real services.
-- **Real LLM Calls** — AI tests use real provider API calls. No `MagicMock`, `AsyncMock`, or HTTP interception on LLM clients under any circumstances.
-- **Contract Enforcement** — We use AST-scanning contract tests to ensure our source-of-truth constants (events, statuses, JSON schemas) perfectly match the application code across Go, Python, and Node.js. A raw string literal where a constant should be is an instant build failure.
+- **The "No Mocks" Policy** — We strictly prohibit mocking internal services, database clients, or LLM providers. Integration tests must use real services. If a scenario is extremely difficult to test without a mock, you must justify its necessity in the PR.
+- **Real LLM Calls** — AI tests use real provider API calls. No `MagicMock`, `AsyncMock`, or HTTP interception on LLM clients. The system handles transient failures via exponential backoff in `EvalJudge`.
+- **Contract Enforcement** — We use AST-scanning contract tests to ensure our source-of-truth constants (events, statuses, JSON schemas) match the application code across Go, Python, and Node.js. Shared fixtures in `shared/test-fixtures/` (e.g., `sse-events.json`) are used to enforce cross-component wire compatibility.
 
 ## AI Benchmarks & Evaluations
 
@@ -22,11 +22,11 @@ Evaluating non-deterministic AI models requires a multi-layered approach. g8ee i
 
 ### Deterministic Benchmarks
 
-We grade the AI's **tool call payloads** against strict boolean criteria. No LLM is involved in grading. The `BenchmarkJudge` uses regex matching on the actual command arguments for a reproducible pass/fail metric.
+We grade the agent's tool call payloads against strict boolean criteria. No LLM is involved in grading. The `BenchmarkJudge` uses regex matching on the actual command arguments for a reproducible pass/fail metric.
 
 - **Binary pass/fail**: No partial credit. All payload matchers must pass for a scenario to pass.
 - **Payload grading**: Grades the actual `TOOL_CALL` arguments (e.g., the `command` field), not the text reasoning.
-- **Tribunal delta tracking**: Tracks whether the internal "Tribunal" pipeline improved the primary AI's command before execution.
+- **Tribunal analytics**: Records the final command and outcome from the "Tribunal" pipeline for each scenario.
 - **Aggregate percentage**: The true industry metric (`passed_scenarios / total_scenarios`).
 
 ```bash
@@ -37,10 +37,11 @@ We grade the AI's **tool call payloads** against strict boolean criteria. No LLM
 
 ### Subjective Evaluations (LLM-as-a-Judge)
 
-For reasoning and concept application, we use an "LLM-as-a-Judge" pattern. The `EvalJudge` uses the platform's Primary Model to score the Assistant Model.
+For reasoning and concept application, we use an "LLM-as-a-Judge" pattern. The `EvalJudge` uses the platform's Primary Model to score the Assistant Model (Sage).
 
 - **Deterministic thresholds**: `passed` is computed strictly from `score >= 3`. The LLM provides the score, the system determines the pass/fail.
 - **Error separation**: System failures (invalid JSON, missing fields) raise an `EvalJudgeError`. A low score is a valid evaluation; a system error is a test failure.
+- **Unified Reporting**: All results are collected by `unified_metrics_collector` and persisted to `reports/evals/<timestamp>/`.
 
 ```bash
 ./g8e login --api-key <key>
@@ -102,20 +103,21 @@ The Go operator enforces a strict separation between in-memory logic and wire-le
 
 ### Node.js (g8ed)
 
-The Node.js orchestration layer uses `vitest` for backend execution and `jsdom` for frontend rendering logic.
+The Node.js orchestration layer uses `vitest` for backend execution and integration testing.
 
 - **Integration via `getTestServices()`**: Tests requiring live services must use the global `getTestServices()` singleton. Never initialize core services manually in integration tests.
-- **Collection Isolation**: Tests never write to the real `operators` or `users` collections. We use automated test collection overrides (`_test` suffix) managed by `TestCleanupHelper` to prevent state bleed.
-- **SSE Testing**: Frontend Server-Sent Events are tested using a custom `MockSSEBrowser` that enforces W3C specs and simulates real-world network failures (broken pipes, slow connections, malformed frames).
-- **Mocks (Exception)**: Unit tests for individual services or route handlers in `test/unit/` may use mocks for direct dependencies to isolate logic, provided they do not cross into other service domains without a mock. Integration tests must use real services.
+- **Collection Isolation**: Tests never write to the real collections. We use automated test collection overrides (`_test` suffix) managed by `TestCleanupHelper` to prevent state bleed.
+- **SSE Testing**: Server-Sent Events are tested using `MockSSEResponse` and `MockSSEBrowser` which enforce W3C specs and simulate real-world network failures (broken pipes, slow connections, malformed frames).
+- **Mocks (Exception)**: Unit tests for individual services or route handlers in `test/unit/` may use mocks for direct dependencies to isolate logic. Integration tests must use real services.
 
 ### Python (g8ee)
 
 The Python execution engine runs `pytest` inside the `g8ee-test-runner` container.
 
 - **Pyright Integration**: Type checking is enforced at test time. Running `./g8e test g8ee --pyright` runs strict pyright checks before `pytest`, failing immediately on type errors.
-- **Real APIs Only**: No patches or mocks on LLM clients. All tests use real provider API calls.
-- **Web Search**: Tests requiring external capabilities (like Google Web Search) are isolated via markers and gracefully skip when credentials are not provided.
+- **Real APIs Only**: No patches or mocks on LLM clients. All tests use real provider API calls. The `ai_integration` marker ensures these tests skip if credentials are not provided.
+- **Web Search**: Tests requiring external capabilities (like Google Web Search) are isolated via the `requires_web_search` marker and gracefully skip when credentials are not provided.
+- **E2E Infrastructure**: E2E tests for the platform orchestration are primarily located in `components/g8ed/test/integration/setup/` and use real HTTP requests against the application.
 
 ### Security Audits
 
@@ -201,30 +203,30 @@ The platform maintains two distinct "real operator" test harnesses with **strict
 
 ### E2E Tests — Internal Lifecycle Path
 
-**Location:** `components/g8ee/tests/e2e/conftest.py`
+**Location:** `components/g8ed/test/integration/setup/` (and other `*.e2e.test.js` files)
 
 **Purpose:** Validate the internal operator lifecycle and platform infrastructure.
 
 **Pattern:**
-- Provisions operator slots via g8ed internal API (`/api/internal/operators/...`)
-- Reads API keys directly from g8es document store
+- Provisions operator slots via `g8ed` internal API (`/api/internal/operators/...`)
+- Reads API keys directly from `g8es` document store
 - Uses `X-Internal-Auth` header for all internal API calls
 - Subscribes to real PubSub heartbeat channels
 - Launches real operator binary in isolated sandbox
 
-**Correct because:** E2E tests validate the internal platform infrastructure. They are allowed to use internal auth tokens and direct g8es document access because they are testing the platform's own internal mechanisms.
+**Correct because:** E2E tests validate the internal platform infrastructure. They are allowed to use internal auth tokens and direct `g8es` document access because they are testing the platform's own internal mechanisms.
 
 ### Evals — Public Device-Token Path
 
-**Location:** `components/g8ee/evals/` (host-driven runner, see `docs/benchmarking/evals.md`)
+**Location:** `components/g8ee/tests/evals/` (and host-driven runners)
 
-**Purpose:** Evaluate AI agent behavior against the product surface that real users experience.
+**Purpose:** Evaluate AI agent (Sage) behavior against the product surface that real users experience.
 
 **Pattern:**
 - Uses device-link tokens generated from the dashboard (same as end users)
-- Hits public g8ed HTTPS API endpoints (chat, approvals, SSE)
+- Hits public `g8ed` HTTPS API endpoints (chat, approvals, SSE)
 - No `X-Internal-Auth` header usage
-- No direct g8es document writes
+- No direct `g8es` document writes
 - Operator containers authenticate via device token, not internal slot provisioning
 
 **Correct because:** Evals exercise the product as users experience it. They must not bypass the public authentication surface or use internal shortcuts, as that would invalidate the evaluation of real-world behavior.
@@ -232,12 +234,12 @@ The platform maintains two distinct "real operator" test harnesses with **strict
 ### Code Review Guidelines
 
 **For E2E test PRs:**
-- Internal auth and direct g8es access are expected and correct
+- Internal auth and direct `g8es` access are expected and correct
 - Review focus: infrastructure validation, lifecycle correctness, PubSub event handling
 
 **For evals PRs:**
 - **REJECT** any changes that introduce `X-Internal-Auth` usage
-- **REJECT** any changes that perform direct g8es document writes
+- **REJECT** any changes that perform direct `g8es` document writes
 - **REJECT** any changes that use internal API endpoints (`/api/internal/...`)
 - **REJECT** any changes that bypass device-token authentication
 - Review focus: public API correctness, device-token flow, realistic user scenarios

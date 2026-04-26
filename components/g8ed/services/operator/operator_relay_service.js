@@ -13,7 +13,6 @@
 
 import { logger } from '../../utils/logger.js';
 import { sessionIdTag } from '../../utils/session_log.js';
-import { getInternalHttpClient } from '../clients/internal_http_client.js';
 import { ApiPaths } from '../../constants/api_paths.js';
 import {
     StopOperatorRequest,
@@ -25,18 +24,14 @@ export class OperatorRelayService {
     constructor({
         internalHttpClient
     } = {}) {
+        if (!internalHttpClient) {
+            throw new Error('OperatorRelayService requires internalHttpClient');
+        }
         this.internalHttpClient = internalHttpClient;
     }
 
     _getHttpClient() {
-        if (this.internalHttpClient) return this.internalHttpClient;
-        try {
-            return getInternalHttpClient();
-        } catch (e) {
-            // During initialization, this may fail if called before Phase 5.
-            // This is expected for the initial construction inside OperatorService.
-            return null;
-        }
+        return this.internalHttpClient;
     }
 
     async relayStopCommandToG8ee(g8eContext) {

@@ -228,7 +228,7 @@ export class LlmModelManager {
             for (const model of models) {
                 const option = document.createElement('div');
                 option.className = 'llm-model-dropdown__option';
-                option.textContent = model.label || model.id;
+                option.textContent = `${model.label || model.id} (${model.id})`;
                 option.dataset.value = model.id;
                 option.dataset.provider = provider;
 
@@ -245,7 +245,7 @@ export class LlmModelManager {
 
                 option.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    this._selectModel(role, model.id, provider, model.label || model.id);
+                    this._selectModel(role, model.id, provider, `${model.label || model.id} (${model.id})`);
                 });
 
                 menuElement.appendChild(option);
@@ -298,7 +298,7 @@ export class LlmModelManager {
             const models = this.providerModels[provider][role] || [];
             const model = models.find(m => m.id === modelId);
             if (model) {
-                return model.label || model.id;
+                return `${model.label || model.id} (${model.id})`;
             }
         }
         return modelId || 'Not set';

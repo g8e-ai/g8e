@@ -762,6 +762,13 @@ describe('OperatorRefreshKeyResponse [UNIT - PURE LOGIC]', () => {
         })).toThrow('new_api_key must match g8e API key format');
     });
 
+    it('rejects API key with "operator" in prefix (regression test for g8ee format mismatch)', () => {
+        expect(() => OperatorRefreshKeyResponse.parse({
+            success: true,
+            new_api_key: 'g8e_operator_1a2b3c4d_' + '0'.repeat(64),
+        })).toThrow('new_api_key must match g8e API key format');
+    });
+
     it('forSuccess() creates success response with valid key, operator ID, and optional message', () => {
         const validKey = 'g8e_' + '0'.repeat(64);
         const response = OperatorRefreshKeyResponse.forSuccess(validKey, 'op-new-456', 'All good');

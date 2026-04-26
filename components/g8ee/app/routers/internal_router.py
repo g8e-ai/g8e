@@ -683,7 +683,7 @@ async def create_operator_slot(
         # Generate API key (authority: g8ee for operator bootstrap)
         operator_suffix = operator_id.split('-')[-1][:8]
         random_token = secrets.token_hex(32)
-        api_key = f"g8e_operator_{operator_suffix}_{random_token}"
+        api_key = f"g8e_{operator_suffix}_{random_token}"
 
         # Create operator document
         operator_doc = OperatorDocument(

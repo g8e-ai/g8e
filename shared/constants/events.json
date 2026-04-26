@@ -63,6 +63,16 @@
     }
   },
   "operator": {
+    "slot": {
+      "initialization": {
+        "failed": "g8e.v1.operator.slot.initialization.failed"
+      }
+    },
+    "g8ep": {
+      "activation": {
+        "failed": "g8e.v1.operator.g8ep.activation.failed"
+      }
+    },
     "heartbeat": {
       "sent": "g8e.v1.operator.heartbeat.sent",
       "requested": "g8e.v1.operator.heartbeat.requested",

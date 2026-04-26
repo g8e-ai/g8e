@@ -15,6 +15,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../../utils/logger.js';
 import { OperatorStatus, OperatorType, CloudOperatorSubtype, DEFAULT_OPERATOR_SLOTS } from '../../constants/operator.js';
 import { OperatorDocument, SystemInfo, OperatorRefreshKeyResponse, OperatorSlotCreationResponse } from '../../models/operator_model.js';
+import { G8eHttpContext } from '../../models/request_models.js';
 import { now } from '../../models/base.js';
 import { SourceComponent } from '../../constants/ai.js';
 import { ApiKeyStatus, ApiKeyClientName, ApiKeyPermission, DeviceLinkError } from '../../constants/auth.js';
@@ -29,7 +30,7 @@ export class OperatorSlotService {
         this.operatorService = operatorService;
     }
 
-    async initializeOperatorSlots(userId, organizationId) {
+    async initializeOperatorSlots(userId, organizationId, webSessionId) {
         const liveOperators = await this.operatorDataService.queryListedOperators([
             { field: 'user_id', operator: '==', value: userId }
         ], { fresh: true });
@@ -52,6 +53,7 @@ export class OperatorSlotService {
                     cloudSubtype: assignG8eNode ? CloudOperatorSubtype.G8E_POD : null,
                     namePrefix: 'operator',
                     isG8eNode: assignG8eNode,
+                    webSessionId,
                 });
                 if (creationResponse.success && creationResponse.operator_id) {
                     createdSlotIds.push(creationResponse.operator_id);
@@ -110,7 +112,7 @@ export class OperatorSlotService {
     }
 
     async createOperatorSlot(params) {
-        const { userId, organizationId, slotNumber, operatorType, cloudSubtype, namePrefix, isG8eNode } = params;
+        const { userId, organizationId, slotNumber, operatorType, cloudSubtype, namePrefix, isG8eNode, webSessionId } = params;
         
         // Use g8ee for operator slot creation to enforce architectural boundary
         // g8ed should not write to operators after auth
@@ -118,11 +120,16 @@ export class OperatorSlotService {
             throw new Error('operatorService is required for operator slot creation');
         }
 
-        const g8eContext = {
+        if (!webSessionId) {
+            throw new Error('webSessionId is required for operator slot creation (G8eHttpContext requires web_session_id)');
+        }
+
+        const g8eContext = G8eHttpContext.parse({
+            web_session_id: webSessionId,
             user_id: userId,
             organization_id: organizationId,
             source_component: SourceComponent.G8ED,
-        };
+        });
 
         const relayParams = {
             user_id: userId,

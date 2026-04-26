@@ -16,6 +16,7 @@ import { sessionIdTag } from '../../utils/session_log.js';
 import { DeviceLinkError } from '../../constants/auth.js';
 import { OperatorStatus } from '../../constants/operator.js';
 import { EventType } from '../../constants/events.js';
+import { SourceComponent } from '../../constants/ai.js';
 import { G8eHttpContext, BoundOperatorContext, UnbindOperatorsRequest } from '../../models/request_models.js';
 import {
     BindOperatorsResponse,

@@ -38,25 +38,21 @@ Terminal visibility is controlled by the event bus: `PLATFORM_TERMINAL_OPENED` /
 
 | Step | `data-panel` / `data-step` | Label | Content |
 |---|---|---|---|
-| 1 | 1 | Account | Full name (optional) + email address; passkey note |
-| 2 | 2 | AI Providers | Any combination of Gemini / Anthropic / OpenAI / Ollama keys, plus Primary / Assistant / Lite model dropdowns |
-| 3 | 3 | Web Search | Search provider (Google or None) + project / app / API key fields |
-| 4 | 4 | Finish | Summary + passkey registration button |
+| 1 | 1 | Configure | AI Providers (Gemini / Anthropic / OpenAI / Ollama) + model selection (Primary / Assistant / Lite); Web Search configuration |
+| 2 | 2 | Finish | Summary + passkey registration button |
 
-Navigation is managed by `_goToStep(step)`. Forward navigation validates the current step via `_validateStep`; back navigation skips validation. Steps are marked `active` (current) or `done` (completed) via CSS classes on `.wizard-step` elements. The `Back` / `Next` bar (`#wizard-nav`) is shown for steps 1–3 and hidden on step 4. Pressing Enter on an input or select on steps 2–3 advances to the next step.
+Navigation is managed by `_goToStep(step)`. Forward navigation validates the current step via `_validateStep`; back navigation skips validation. Steps are marked `active` (current) or `done` (completed) via CSS classes on `.wizard-step` elements. The `Back` / `Next` bar (`#wizard-nav`) is shown for step 1 and hidden on step 2. Pressing Enter on an input or select on step 1 advances to the next step.
 
 ### Step Validation (`_validateStep`)
 
 | Step | Validation rule |
 |---|---|
-| 1 | Email is required and must match `/^[^\s@]+@[^\s@]+\.[^\s@]+$/` |
-| 2 | At least one provider key/URL must be present, and Primary, Assistant, and Lite models must all be selected. If an Ollama URL is entered it must be `host:port` form — HTTPS and any path (e.g. `/v1`) are rejected |
-| 3 | No validation (Web Search is optional) |
-| 4 | No validation (passkey registration happens in the Finish handler) |
+| 1 | **AI Providers**: At least one provider key/URL must be present, and Primary, Assistant, and Lite models must all be selected. If an Ollama URL is entered it must be `host:port` form — HTTPS and any path (e.g. `/v1`) are rejected.<br>**Web Search**: If Google is selected, Project ID, App ID, and API Key are required. |
+| 2 | No validation (passkey registration happens in the Finish handler) |
 
 ### AI Provider UI
 
-Step 2 renders one `.wizard-provider-key-row[data-provider="<provider>"]` per supported provider, each holding its own API-key (or URL) input. The user may configure any subset of providers; there is no single "selected provider". As keys are typed, `_onProviderKeyChange` runs `_updateProviderStates` (which toggles the `has-value` class and "Configured" status label on each row) and `_updateModelDropdowns` (which rebuilds the three model menus over the union of configured providers). The Next button appears only when `_isProviderStepReady()` is true — at least one provider key is present and all three model roles are selected.
+Step 1 renders one `.wizard-provider-key-row[data-provider="<provider>"]` per supported provider, each holding its own API-key (or URL) input. The user may configure any subset of providers; there is no single "selected provider". As keys are typed, `_onProviderKeyChange` runs `_updateProviderStates` (which toggles the `has-value` class and "Configured" status label on each row) and `_updateModelDropdowns` (which rebuilds the three model menus over the union of configured providers). The Next button appears only when `_isProviderStepReady()` is true — at least one provider key is present and all three model roles are selected.
 
 ### LLM Provider Catalog (Single Source of Truth)
 
@@ -75,7 +71,7 @@ Model role dropdowns are custom `.llm-model-dropdown` elements (not native `<sel
 
 ### Finish
 
-The Finish button (`#finish-btn`) on step 4 runs a single atomic flow:
+The Finish button (`#finish-btn`) on step 2 runs a single atomic flow:
 
 1. `POST /api/auth/register` with `{ email, name, settings }` — creates the admin user and returns `{ user_id, challenge_options }` (a WebAuthn registration challenge). The platform is blocked from accepting additional `register` calls once any user exists.
 2. `navigator.credentials.create({ publicKey: options })` — prompts the browser for passkey registration.

@@ -25,7 +25,6 @@
  *       +-- CN contains operator_id for identification
  */
 
-import { getInternalHttpClient } from '../clients/internal_http_client.js';
 import { logger } from '../../utils/logger.js';
 import { now, addSeconds } from '../../models/base.js';
 import { GeneratedCertificate } from '../../models/operator_model.js';
@@ -158,7 +157,10 @@ class CertificateService {
 
         try {
             // Authority: g8ee (Engine) owns CRL management
-            const internalHttpClient = this._internalHttpClient || getInternalHttpClient();
+            const internalHttpClient = this._internalHttpClient;
+            if (!internalHttpClient) {
+                throw new Error('CertificateService: internalHttpClient is not initialized');
+            }
 
             // Ensure we have a valid G8eHttpContext for the relay
             let g8eContext = actorContext;
@@ -166,7 +168,8 @@ class CertificateService {
                 g8eContext = new G8eHttpContext({
                     source_component: 'g8ed',
                     user_id: 'system', // Fallback if no actor context provided
-                    organization_id: 'system'
+                    organization_id: 'system',
+                    web_session_id: 'system-session'
                 });
             }
 
@@ -177,6 +180,8 @@ class CertificateService {
             });
 
             if (response.success) {
+                // Authority: g8ee. We maintain a local set as a "hot" cache.
+                this._revokedSerials.add(serial);
                 logger.info('[CERT-SERVICE] Certificate revocation relayed successfully', { serial });
                 return true;
             } else {
@@ -194,20 +199,23 @@ class CertificateService {
     }
 
     isRevoked(serial) {
-        // Authority: g8ee. g8ed should not maintain a shadow CRL.
-        // For performance, this would ideally hit a local TTL cache.
-        // For now, we log and return false to force the transition to g8ee authority.
-        logger.warn('[CERT-SERVICE] isRevoked called on g8ed (authority shifted to g8ee)', { serial });
-        return false;
+        // Authority: g8ee. We check our local "hot" cache first.
+        // Full authority check would require a call to g8ee or checking Operator docs.
+        return this._revokedSerials.has(serial);
     }
 
     getCRL() {
-        // Authority: g8ee. 
-        logger.warn('[CERT-SERVICE] getCRL called on g8ed (authority shifted to g8ee)');
+        // Authority: g8ee. We return our local "hot" cache.
+        const revoked = Array.from(this._revokedSerials).map(serial => ({
+            serial,
+            revocation_date: now(),
+            reason: 'unspecified'
+        }));
+
         return {
             version: 1,
             issuer: CRL_ISSUER,
-            revoked_certificates: [],
+            revoked_certificates: revoked,
         };
     }
 

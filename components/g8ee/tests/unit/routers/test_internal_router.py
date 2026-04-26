@@ -12,6 +12,7 @@
 # limitations under the License.
 
 import pytest
+import re
 from unittest.mock import AsyncMock, MagicMock, patch
 from app.constants import ComponentName
 from app.routers.internal_router import (
@@ -43,6 +44,10 @@ from app.models.http_context import BoundOperator, G8eHttpContext
 from app.services.ai.chat_task_manager import BackgroundTaskManager
 from app.errors import ResourceNotFoundError
 from tests.fakes.factories import build_case_model, create_investigation_data
+
+# Canonical API key format from shared/constants/api_key_patterns.json
+API_KEY_OPERATOR_REGEX = re.compile(r'^g8e_[a-f0-9]{8}_[a-f0-9]{64}$')
+API_KEY_REGULAR_REGEX = re.compile(r'^g8e_[a-f0-9]{64}$')
 
 @pytest.fixture
 def g8e_context():
@@ -363,6 +368,10 @@ async def test_create_operator_slot_success(g8e_context):
     assert response.success is True
     assert response.operator_id is not None
     mock_operator_data_service.create_operator.assert_called_once()
+    
+    # Verify API key format in response matches canonical pattern
+    assert API_KEY_OPERATOR_REGEX.match(response.api_key), \
+        f"API key {response.api_key} does not match canonical format g8e_[8hex]_[64hex]"
 
 @pytest.mark.asyncio
 async def test_claim_operator_slot_success(g8e_context):

@@ -408,7 +408,7 @@ class UserService {
                 return { success: false, error: 'User already has a download API key' };
             }
 
-            const downloadApiKey = this._generateApiKey();
+            const downloadApiKey = await this._generateApiKey();
             const ts = now();
 
             const storeResult = await this._apiKeyService.issueKey(downloadApiKey, {

@@ -36,9 +36,6 @@ describe('BindOperatorsService', () => {
                 relayRegisterOperatorSessionToG8ee: vi.fn().mockResolvedValue({ success: true }),
                 relayBindOperatorsToG8ee: vi.fn().mockResolvedValue({ success: true, failed_count: 0 }),
                 relayUnbindOperatorsToG8ee: vi.fn().mockResolvedValue({ success: true, failed_count: 0 }),
-                operatorDataService: {
-                    updateOperator: vi.fn(),
-                },
             },
             bindingService: {
                 bind: vi.fn(),
@@ -377,7 +374,7 @@ describe('BindOperatorsService', () => {
             expect(result.success).toBe(true);
             expect(result.bound_count).toBe(1);
             expect(result.bound_operator_ids).toContain('op-already-bound');
-            expect(mocks.operatorService.operatorDataService.updateOperator).not.toHaveBeenCalled();
+            expect(mocks.operatorService.relayBindOperatorsToG8ee).not.toHaveBeenCalled();
             expect(mocks.bindingService.bind).not.toHaveBeenCalled();
             expect(mocks.webSessionService.bindOperatorToWebSession).not.toHaveBeenCalled();
         });

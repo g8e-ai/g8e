@@ -18,15 +18,9 @@ import { SettingsService } from '@g8ed/services/platform/settings_service.js';
 import { Collections } from '@g8ed/constants/collections.js';
 import { SETTINGS_DOC_ID } from '@g8ed/constants/service_config.js';
 import { apiPaths } from '@g8ed/constants/api_paths.js';
-import { getInternalHttpClient } from '@g8ed/services/clients/internal_http_client.js';
 
 // Mock InternalHttpClient to verify the sync call to g8ee
 const mockG8eeRequest = vi.fn();
-vi.mock('@g8ed/services/clients/internal_http_client.js', () => ({
-    getInternalHttpClient: vi.fn(() => ({
-        request: mockG8eeRequest.mockResolvedValue({ success: true })
-    }))
-}));
 
 describe('Settings -> g8ee Sync Integration [CROSS-SERVICE]', () => {
     let cacheAside;
@@ -42,7 +36,9 @@ describe('Settings -> g8ee Sync Integration [CROSS-SERVICE]', () => {
             createDocument: vi.fn(),
         };
 
-        internalHttpClient = getInternalHttpClient();
+        internalHttpClient = {
+            request: mockG8eeRequest.mockResolvedValue({ success: true })
+        };
         settingsService = new SettingsService({ cacheAsideService: cacheAside, internalHttpClient });
     });
 
