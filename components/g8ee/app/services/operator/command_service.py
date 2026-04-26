@@ -123,9 +123,9 @@ class OperatorCommandService:
         self._file_service = file_service
         self._intent_service = intent_service
         self._lfaa_service = lfaa_service
-        self.cache_aside_service = cache_aside_service
-        self.operator_data_service = operator_data_service
-        self.investigation_service = investigation_service
+        self._cache_aside_service = cache_aside_service
+        self._operator_data_service = operator_data_service
+        self._investigation_service = investigation_service
         self.g8ed_event_service = execution_service.g8ed_event_service
         self._settings = settings
 
@@ -134,7 +134,17 @@ class OperatorCommandService:
 
         self._CommandResultBroadcastEvent = CommandResultBroadcastEvent
         self._CommandExecutingBroadcastEvent = CommandExecutingBroadcastEvent
+        self._init_logic(settings)
 
+    @property
+    def operator_data_service(self) -> OperatorDataService:
+        return self._operator_data_service
+
+    @property
+    def investigation_service(self) -> InvestigationServiceProtocol:
+        return self._investigation_service
+
+    def _init_logic(self, settings: G8eePlatformSettings) -> None:
         self._cv = settings.command_validation
         logger.info(
             "OperatorCommandService initialized with PLATFORM DEFAULTS (per-user overrides apply) - whitelisting: %s, blacklisting: %s, auto-approve: %s",

@@ -53,34 +53,20 @@
             <div class="wizard-panel active" data-panel="1">
                 <!-- Account Section -->
                 <div class="wizard-panel-header">
-                    <span class="material-symbols-outlined wizard-panel-icon">person_add</span>
+                    <span class="material-symbols-outlined wizard-panel-icon">admin_panel_settings</span>
                     <div>
-                        <h2 class="wizard-panel-title">Create Your Account</h2>
-                        <p class="wizard-panel-desc">Your admin account — no password required.</p>
+                        <h2 class="wizard-panel-title">Administrative Account</h2>
+                        <p class="wizard-panel-subtitle">A default administrative account <strong>superadmin@g8e.local</strong> will be created.</p>
                     </div>
                 </div>
-                <div class="setup-fields">
-                    <div class="setup-fields-row">
-                        <div class="setup-field">
-                            <label class="setup-label" for="account_name">Full Name <span class="setup-label-optional">optional</span></label>
-                            <input type="text" id="account_name" name="account_name" class="setup-input" placeholder="Your name" autocomplete="name" spellcheck="false">
-                        </div>
-                        <div class="setup-field">
-                            <label class="setup-label" for="account_email">Email Address</label>
-                            <input type="email" id="account_email" name="account_email" class="setup-input" placeholder="admin@yourcompany.com" autocomplete="email" spellcheck="false">
-                        </div>
-                    </div>
-                    <div class="setup-passkey-note">
-                        <span class="material-symbols-outlined">fingerprint</span>
-                        <span>On the last step you'll register a passkey.</span>
-                    </div>
-                </div>
+                <input type="hidden" id="account_name" name="account_name" value="Super Admin">
+                <input type="hidden" id="account_email" name="account_email" value="superadmin@g8e.local">
 
                 <!-- AI Providers Section -->
                 <div class="wizard-panel-header">
                     <span class="material-symbols-outlined wizard-panel-icon">key</span>
                     <div>
-                        <h2 class="wizard-panel-title">Configure AI Providers and Models</h2>
+                        <h2 class="wizard-panel-title">AI Providers and Models</h2>
                     </div>
                 </div>
                 <div class="setup-fields">
@@ -124,10 +110,6 @@
                                 </div>
                             </div>
                         </div>
-                        </div>
-                        <div class="setup-model-note">
-                            <span class="material-symbols-outlined">info</span>
-                            <span>Primary for heavy reasoning, Assistant for tools and lite reasoning, Lite for fast, simple operations. All API keys are encrypted at rest.</span>
                         </div>
                     </div>
 
@@ -208,7 +190,6 @@
                     <span class="material-symbols-outlined wizard-panel-icon">travel_explore</span>
                     <div>
                         <h2 class="wizard-panel-title">Web Search</h2>
-                        <p class="wizard-panel-desc">Let the AI search the web when answering questions. Optional — can be configured later.</p>
                     </div>
                 </div>
                 <div class="setup-fields">
@@ -258,7 +239,6 @@
                     <span class="material-symbols-outlined wizard-panel-icon">check_circle</span>
                     <div>
                         <h2 class="wizard-panel-title">Almost Done</h2>
-                        <p class="wizard-panel-desc">Review your settings and register your passkey.</p>
                     </div>
                 </div>
 

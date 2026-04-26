@@ -25,14 +25,12 @@
  *       +-- CN contains operator_id for identification
  */
 
-import crypto from 'crypto';
-import { readFileSync, existsSync } from 'fs';
-import { join } from 'path';
-import * as x509 from '@peculiar/x509';
+import { getInternalHttpClient } from '../clients/internal_http_client.js';
 import { logger } from '../../utils/logger.js';
 import { now, addSeconds } from '../../models/base.js';
 import { GeneratedCertificate } from '../../models/operator_model.js';
 import { CLIENT_CERT_VALIDITY_DAYS, DEFAULT_SSL_DIR, CERT_SUBJECT_ORG, CERT_SUBJECT_COUNTRY, CRL_ISSUER } from '../../constants/service_config.js';
+import { G8eHttpContext } from '../../models/request_models.js';
 
 x509.cryptoProvider.set(crypto.webcrypto);
 
@@ -145,24 +143,43 @@ class CertificateService {
         }
     }
 
-    async revokeCertificate(serial, reason, operatorId) {
-        logger.info('[CERT-SERVICE] Revoking certificate', {
+    async revokeCertificate(serial, reason, operatorId, actorContext) {
+        logger.info('[CERT-SERVICE] Relaying certificate revocation to g8ee', {
             serial: serial.substring(0, 16) + '...',
             reason,
             operator_id: operatorId
         });
 
         try {
-            this._revokedSerials.add(serial);
+            // Authority: g8ee (Engine) owns CRL management
+            const internalHttpClient = getInternalHttpClient();
+            
+            // Ensure we have a valid G8eHttpContext for the relay
+            let g8eContext = actorContext;
+            if (!g8eContext || !(g8eContext instanceof G8eHttpContext)) {
+                g8eContext = new G8eHttpContext({
+                    source_component: 'g8ed',
+                    user_id: 'system', // Fallback if no actor context provided
+                    organization_id: 'system'
+                });
+            }
 
-            logger.info('[CERT-SERVICE] Certificate revoked', {
-                serial: serial.substring(0, 16) + '...',
-                total_revoked: this._revokedSerials.size
+            const response = await internalHttpClient.request('g8ee', '/api/internal/auth/revoke-cert', {
+                method: 'POST',
+                body: { serial, reason, operator_id: operatorId },
+                g8eContext
             });
 
-            return true;
+            if (response.success) {
+                logger.info('[CERT-SERVICE] Certificate revocation relayed successfully', { serial });
+                return true;
+            } else {
+                const error = new Error(response.error || 'Failed to revoke certificate via g8ee');
+                error.cause = response;
+                throw error;
+            }
         } catch (error) {
-            logger.error('[CERT-SERVICE] Failed to revoke certificate', {
+            logger.error('[CERT-SERVICE] Failed to relay certificate revocation', {
                 serial: serial.substring(0, 16) + '...',
                 error: error.message
             });
@@ -171,14 +188,20 @@ class CertificateService {
     }
 
     isRevoked(serial) {
-        return this._revokedSerials.has(serial);
+        // Authority: g8ee. g8ed should not maintain a shadow CRL.
+        // For performance, this would ideally hit a local TTL cache.
+        // For now, we log and return false to force the transition to g8ee authority.
+        logger.warn('[CERT-SERVICE] isRevoked called on g8ed (authority shifted to g8ee)', { serial });
+        return false;
     }
 
     getCRL() {
+        // Authority: g8ee. 
+        logger.warn('[CERT-SERVICE] getCRL called on g8ed (authority shifted to g8ee)');
         return {
             version: 1,
             issuer: CRL_ISSUER,
-            revoked_certificates: [...this._revokedSerials].map(s => ({ serial: s })),
+            revoked_certificates: [],
         };
     }
 

@@ -332,7 +332,7 @@ The document store provides a Firestore-style `collection/document` interface. D
 | `account_locks` | g8ed | Account lockout state — identifier, locked\_until, attempt count |
 | `api_keys` | g8ed | API key registry — key hash, owner, operator\_id, permissions |
 | `organizations` | g8ed | Organization records — owner\_id, name, team\_members, stats |
-| `operators` | g8ed/g8ee | Operator registration and runtime state — see [Operator Document](#operator-document) |
+| `operators` | g8ed/g8ee | Operator registration and runtime state — see [Operator Document](#operator-document). g8ed owns registration, binding, and lifecycle writes; g8ee is authoritative for heartbeat status decay (stale/offline transitions). |
 | `operator_usage` | g8ed | Operator usage metrics — last\_used, command\_count |
 | `cases` | g8ed/g8ee | Support case records — title, status, owner, investigation list |
 | `investigations` | g8ee | AI investigation context — managed by `InvestigationDataService` (Data Layer) |

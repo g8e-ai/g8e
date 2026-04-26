@@ -62,7 +62,7 @@ class StakeResolutionDataService:
     async def get(self, tribunal_command_id: str, agent_id: str) -> StakeResolution | None:
         doc_id = stake_resolution_id(tribunal_command_id, agent_id)
         try:
-            doc = await self.cache.get_document(
+            doc = await self.cache.get_document_with_cache(
                 collection=self.collection,
                 document_id=doc_id,
             )
@@ -90,7 +90,7 @@ class StakeResolutionDataService:
         if not resolution.id:
             raise ValidationError("StakeResolution.id is required")
 
-        existing = await self.cache.get_document(
+        existing = await self.cache.get_document_with_cache(
             collection=self.collection,
             document_id=resolution.id,
         )

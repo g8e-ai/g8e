@@ -49,6 +49,7 @@ def create_pure_mock_cache_aside():
     # CRUD operations
     mock.create_document = AsyncMock(return_value=CacheOperationResult(success=True))
     mock.get_document = AsyncMock(return_value=None)
+    mock.get_document_with_cache = AsyncMock(return_value=None)
     mock.update_document = AsyncMock(return_value=CacheOperationResult(success=True))
     mock.delete_document = AsyncMock(return_value=CacheOperationResult(success=True))
     mock.query_documents = AsyncMock(return_value=[])

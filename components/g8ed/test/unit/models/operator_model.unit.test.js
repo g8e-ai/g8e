@@ -315,6 +315,28 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
         expect(doc.fingerprint_details).toEqual({ cpu: 'x86_64' });
     });
 
+    it('fromOperator() syncs current_hostname from system_info.hostname', () => {
+        const operator = new OperatorDocument({
+            id: 'op-123',
+            user_id: 'user-456',
+            status: OperatorStatus.ACTIVE,
+            system_info: new SystemInfo({ hostname: 'test-hostname' }),
+        });
+        const info = OperatorStatusInfo.fromOperator(operator);
+        expect(info.current_hostname).toBe('test-hostname');
+    });
+
+    it('fromOperator() sets current_hostname to null when system_info.hostname is null', () => {
+        const operator = new OperatorDocument({
+            id: 'op-123',
+            user_id: 'user-456',
+            status: OperatorStatus.ACTIVE,
+            system_info: new SystemInfo({ hostname: null }),
+        });
+        const info = OperatorStatusInfo.fromOperator(operator);
+        expect(info.current_hostname).toBeNull();
+    });
+
     it('forWire() removes operator_cert, api_key, and operator_api_key fields', () => {
         const doc = new OperatorDocument({
             id: 'op-123',

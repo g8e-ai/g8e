@@ -181,6 +181,167 @@ export class OperatorRelayService {
         });
     }
 
+    async relayCreateOperatorSlotToG8ee(params, g8eContext) {
+        this._validateContext(g8eContext);
+        const httpClient = this._getHttpClient();
+        if (!httpClient) throw new Error('InternalHttpClient not initialized');
+
+        logger.info('[OPERATOR-RELAY] Creating operator slot via g8ee', {
+            user_id: params.user_id,
+            slot_number: params.slot_number,
+        });
+
+        return httpClient.request('g8ee', ApiPaths.g8ee.operatorsCreateSlot(), {
+            method: 'POST',
+            body: params,
+            g8eContext
+        });
+    }
+
+    async relayClaimOperatorSlotToG8ee(params, g8eContext) {
+        this._validateContext(g8eContext);
+        const httpClient = this._getHttpClient();
+        if (!httpClient) throw new Error('InternalHttpClient not initialized');
+
+        logger.info('[OPERATOR-RELAY] Claiming operator slot via g8ee', {
+            operator_id: params.operator_id,
+        });
+
+        return httpClient.request('g8ee', ApiPaths.g8ee.operatorsClaimSlot(), {
+            method: 'POST',
+            body: params,
+            g8eContext
+        });
+    }
+
+    async relayBindOperatorsToG8ee(params, g8eContext) {
+        this._validateContext(g8eContext);
+        const httpClient = this._getHttpClient();
+        if (!httpClient) throw new Error('InternalHttpClient not initialized');
+
+        logger.info('[OPERATOR-RELAY] Binding operators via g8ee', {
+            operator_ids: params.operator_ids,
+        });
+
+        return httpClient.request('g8ee', ApiPaths.g8ee.operatorsBind(), {
+            method: 'POST',
+            body: params,
+            g8eContext
+        });
+    }
+
+    async relayUnbindOperatorsToG8ee(params, g8eContext) {
+        this._validateContext(g8eContext);
+        const httpClient = this._getHttpClient();
+        if (!httpClient) throw new Error('InternalHttpClient not initialized');
+
+        logger.info('[OPERATOR-RELAY] Unbinding operators via g8ee', {
+            operator_ids: params.operator_ids,
+        });
+
+        return httpClient.request('g8ee', ApiPaths.g8ee.operatorsUnbind(), {
+            method: 'POST',
+            body: params,
+            g8eContext
+        });
+    }
+
+    async relayAuthenticateOperatorToG8ee(params, g8eContext) {
+        this._validateContext(g8eContext);
+        const httpClient = this._getHttpClient();
+        if (!httpClient) throw new Error('InternalHttpClient not initialized');
+
+        logger.info('[OPERATOR-RELAY] Authenticating operator via g8ee', {
+            auth_mode: params.auth_mode,
+        });
+
+        return httpClient.request('g8ee', ApiPaths.g8ee.operatorsAuthenticate(), {
+            method: 'POST',
+            body: params,
+            g8eContext
+        });
+    }
+
+    async relayValidateOperatorSessionToG8ee(operatorSessionId, g8eContext) {
+        this._validateContext(g8eContext);
+        const httpClient = this._getHttpClient();
+        if (!httpClient) throw new Error('InternalHttpClient not initialized');
+
+        logger.info('[OPERATOR-RELAY] Validating operator session via g8ee', {
+            operator_session_id_tag: sessionIdTag(operatorSessionId),
+        });
+
+        return httpClient.request('g8ee', ApiPaths.g8ee.operatorsValidateSession(), {
+            method: 'POST',
+            body: { operator_session_id: operatorSessionId },
+            g8eContext
+        });
+    }
+
+    async relayRefreshOperatorSessionToG8ee(operatorSessionId, g8eContext) {
+        this._validateContext(g8eContext);
+        const httpClient = this._getHttpClient();
+        if (!httpClient) throw new Error('InternalHttpClient not initialized');
+
+        logger.info('[OPERATOR-RELAY] Refreshing operator session via g8ee', {
+            operator_session_id_tag: sessionIdTag(operatorSessionId),
+        });
+
+        return httpClient.request('g8ee', ApiPaths.g8ee.operatorsRefreshSession(), {
+            method: 'POST',
+            body: { operator_session_id: operatorSessionId },
+            g8eContext
+        });
+    }
+
+    async relayEndOperatorSessionToG8ee(operatorSessionId, g8eContext) {
+        this._validateContext(g8eContext);
+        const httpClient = this._getHttpClient();
+        if (!httpClient) throw new Error('InternalHttpClient not initialized');
+
+        logger.info('[OPERATOR-RELAY] Ending operator session via g8ee', {
+            operator_session_id_tag: sessionIdTag(operatorSessionId),
+        });
+
+        return httpClient.request('g8ee', ApiPaths.g8ee.operatorsDeregisterSession(), {
+            method: 'POST',
+            body: { operator_session_id: operatorSessionId },
+            g8eContext,
+        });
+    }
+
+    async relayTerminateOperatorToG8ee(operatorId, g8eContext) {
+        this._validateContext(g8eContext);
+        const httpClient = this._getHttpClient();
+        if (!httpClient) throw new Error('InternalHttpClient not initialized');
+
+        logger.info('[OPERATOR-RELAY] Terminating operator via g8ee', {
+            operator_id: operatorId,
+        });
+
+        return httpClient.request('g8ee', ApiPaths.g8ee.operatorsTerminate(), {
+            method: 'POST',
+            body: { operator_id: operatorId },
+            g8eContext
+        });
+    }
+
+    async relayListenSessionAuthToG8ee(params, g8eContext) {
+        this._validateContext(g8eContext);
+        const httpClient = this._getHttpClient();
+        if (!httpClient) throw new Error('InternalHttpClient not initialized');
+
+        logger.info('[OPERATOR-RELAY] Starting session auth listener via g8ee', {
+            operator_id: params.operator_id,
+        });
+
+        return httpClient.request('g8ee', ApiPaths.g8ee.operatorsListenSessionAuth(), {
+            method: 'POST',
+            body: params,
+            g8eContext
+        });
+    }
+
     _validateContext(g8eContext) {
         if (!g8eContext) {
             throw new Error('ENFORCEMENT VIOLATION: g8eContext is REQUIRED for g8ee calls');

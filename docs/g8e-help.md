@@ -31,9 +31,11 @@ COMMON COMMANDS
 Platform:
   ./g8e platform setup
   ./g8e platform start
+  ./g8e platform start --dev      # Start with hot-reload for g8ee
   ./g8e platform stop
   ./g8e platform status
   ./g8e platform rebuild
+  ./g8e platform rebuild --dev    # Rebuild with hot-reload for g8ee
   ./g8e platform logs [service]
 
 Authentication:
@@ -73,6 +75,7 @@ platform - Docker services (host)
   start, stop, restart, status
   rebuild, reset, wipe, clean
   logs [service]
+  --dev                    Enable development mode with hot-reload bind mounts for g8ee
 
 operator - Build and deploy
   init, build, build-all

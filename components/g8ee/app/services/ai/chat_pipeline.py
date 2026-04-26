@@ -167,7 +167,7 @@ class ChatPipelineService:
 
         current_sentinel_mode = investigation.sentinel_mode
         if current_sentinel_mode != sentinel_mode:
-            await self.investigation_service.update_investigation_raw(
+            await self.investigation_service.investigation_data_service.update_investigation_raw(
                 investigation_id=investigation_id,
                 updates={"sentinel_mode": sentinel_mode},
             )
@@ -176,7 +176,7 @@ class ChatPipelineService:
         operator_bound = any(op.status == OperatorStatus.BOUND for op in g8e_context.bound_operators)
         agent_mode = AgentMode.OPERATOR_BOUND if operator_bound else AgentMode.OPERATOR_NOT_BOUND
 
-        prior_history = await self.investigation_service.get_chat_messages(
+        prior_history = await self.investigation_service.investigation_data_service.get_chat_messages(
             investigation_id=investigation_id
         )
 
@@ -223,14 +223,14 @@ class ChatPipelineService:
         attachment_filenames = [att.filename for att in attachments] if attachments else []
 
         if investigation_id:
-            await self.investigation_service.add_chat_message(
+            await self.investigation_service.investigation_data_service.add_chat_message(
                 investigation_id=investigation_id,
                 sender=MessageSender.USER_CHAT,
                 content=message,
                 metadata=ConversationMessageMetadata(attachment_filenames=attachment_filenames),
             )
 
-        conversation_history = await self.investigation_service.get_chat_messages(
+        conversation_history = await self.investigation_service.investigation_data_service.get_chat_messages(
             investigation_id=investigation_id
         )
 

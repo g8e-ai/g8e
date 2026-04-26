@@ -78,6 +78,11 @@ export function createAuthRouter({ services, authMiddleware }) {
             const isFirstRun = await setupService.isFirstRun();
             let { email, name, settings: userSettings } = req.body;
 
+            // Default for simplified flow
+            if (!email && isFirstRun) {
+                email = 'superadmin@g8e.local';
+            }
+
             if (!email) {
                 throw new ValidationError('email is required');
             }
@@ -92,6 +97,8 @@ export function createAuthRouter({ services, authMiddleware }) {
             // Sanitize name: trim and remove potential script tags (basic XSS protection for names)
             if (name) {
                 name = name.trim().replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gim, "");
+            } else if (isFirstRun) {
+                name = 'Super Admin';
             } else {
                 name = email.split('@')[0];
             }

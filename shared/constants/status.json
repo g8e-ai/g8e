@@ -111,7 +111,8 @@
     "command": "command",
     "file.edit": "file.edit",
     "intent": "intent",
-    "agent.continue": "agent.continue"
+    "agent.continue": "agent.continue",
+    "stream": "stream"
   },
 
   "approval.error.type": {

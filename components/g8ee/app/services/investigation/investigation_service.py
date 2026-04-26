@@ -55,9 +55,14 @@ class InvestigationService:
         operator_data_service: OperatorDataServiceProtocol,
         memory_data_service: MemoryDataServiceProtocol,
     ):
-        self.investigation_data_service = investigation_data_service
-        self.operator_data_service = operator_data_service
-        self.memory_data_service = memory_data_service
+        self._investigation_data_service = investigation_data_service
+        self._operator_data_service = operator_data_service
+        self._memory_data_service = memory_data_service
+
+    @property
+    def investigation_data_service(self) -> InvestigationDataServiceProtocol:
+        """Access the underlying investigation data service."""
+        return self._investigation_data_service
 
     async def create_investigation(
         self,
@@ -268,44 +273,6 @@ class InvestigationService:
 
         return context
 
-    async def query_investigations(
-        self, request: InvestigationQueryRequest
-    ) -> list[InvestigationModel]:
-        """Domain orchestration for querying investigations."""
-        return await self.investigation_data_service.query_investigations(request)
-
-    async def get_investigation(self, investigation_id: str) -> InvestigationModel | None:
-        """Domain orchestration for fetching an investigation by ID."""
-        return await self.investigation_data_service.get_investigation(investigation_id)
-
-    async def get_case_investigations(
-        self,
-        case_id: str,
-        user_id: str | None,
-    ) -> list[InvestigationModel]:
-        """Domain orchestration for fetching investigations by case ID."""
-        return await self.investigation_data_service.get_case_investigations(case_id=case_id, user_id=user_id)
-
-    async def get_chat_messages(self, investigation_id: str) -> list[ConversationHistoryMessage]:
-        """Domain orchestration for fetching full chat history."""
-        return await self.investigation_data_service.get_chat_messages(investigation_id)
-
-    async def update_investigation_raw(
-        self,
-        investigation_id: str,
-        updates: dict[str, object],
-        merge: bool = True,
-    ) -> None:
-        """Domain orchestration for low-level investigation updates."""
-        await self.investigation_data_service.update_investigation_raw(
-            investigation_id=investigation_id,
-            updates=updates,
-            merge=merge
-        )
-
-    async def delete_investigation(self, investigation_id: str) -> None:
-        """Domain orchestration for deleting an investigation."""
-        await self.investigation_data_service.delete_investigation(investigation_id)
 
     async def update_investigation(
         self,
@@ -377,80 +344,6 @@ class InvestigationService:
         logger.info(f"Updated investigation {investigation_id}")
         return investigation
 
-    async def add_history_entry(
-        self,
-        investigation_id: str,
-        event_type: EventType,
-        actor: ComponentName,
-        summary: str,
-        details: ConversationMessageMetadata,
-    ) -> InvestigationModel:
-        """Record an event in the investigation history trail."""
-        return await self.investigation_data_service.add_history_entry(
-            investigation_id=investigation_id,
-            event_type=event_type,
-            actor=actor,
-            summary=summary,
-            details=details,
-        )
-
-    async def add_command_execution_result(
-        self,
-        investigation_id: str,
-        execution_id: str,
-        command: str,
-        result: CommandInternalResult,
-        operator_id: str,
-        operator_session_id: str,
-        actor: ComponentName = ComponentName.G8EO,
-    ) -> InvestigationModel:
-        """Domain orchestration for recording a command execution result."""
-        return await self.investigation_data_service.add_command_execution_result(
-            investigation_id=investigation_id,
-            execution_id=execution_id,
-            command=command,
-            result=result,
-            operator_id=operator_id or "unknown",
-            operator_session_id=operator_session_id,
-        )
-
-    async def add_file_operation_result(
-        self,
-        investigation_id: str,
-        execution_id: str,
-        operator_id: str,
-        event_type: EventType,
-        file_path: str,
-        result: FileEditResult,
-        operation: FileOperation,
-        operator_session_id: str,
-    ) -> InvestigationModel:
-        """Domain orchestration for recording a file operation result."""
-        return await self.investigation_data_service.add_file_operation_result(
-            investigation_id=investigation_id,
-            execution_id=execution_id,
-            operator_id=operator_id,
-            event_type=event_type,
-            file_path=file_path,
-            result=result,
-            operation=operation,
-        )
-
-    async def add_chat_message(
-        self,
-        investigation_id: str | None,
-        sender: str,
-        content: str,
-        metadata: ConversationMessageMetadata,
-    ) -> bool:
-        """Domain-layer wrapper for adding a chat message to history."""
-        return await self.investigation_data_service.add_chat_message(
-            investigation_id=investigation_id,
-            sender=sender,
-            content=content,
-            metadata=metadata,
-        )
-
     async def persist_ai_message(
         self,
         investigation_id: str | None,
@@ -480,29 +373,6 @@ class InvestigationService:
                 token_usage=token_usage,
             ),
         )
-
-    async def add_approval_record(
-        self,
-        investigation_id: str,
-        event_type: EventType,
-        metadata: ConversationMessageMetadata,
-        actor: ComponentName = ComponentName.G8EE,
-    ) -> InvestigationModel:
-        """Domain orchestration for recording an approval lifecycle event."""
-        return await self.investigation_data_service.add_approval_record(
-            investigation_id=investigation_id,
-            event_type=event_type,
-            metadata=metadata,
-            actor=actor,
-        )
-
-    async def get_command_execution_history(self, investigation_id: str) -> list[InvestigationHistoryEntry]:
-        """Retrieve all command execution entries from investigation history."""
-        return await self.investigation_data_service.get_command_execution_history(investigation_id)
-
-    async def get_operator_actions_for_ai_context(self, investigation_id: str) -> str:
-        """Domain logic for formatting operator action history for LLM consumption."""
-        return await self.investigation_data_service.get_operator_actions_for_ai_context(investigation_id)
 
 
 

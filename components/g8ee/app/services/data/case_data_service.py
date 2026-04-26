@@ -152,7 +152,7 @@ class CaseDataService:
         logger.info(f"Retrieving case: {case_id}", extra={"case_id": case_id})
 
         try:
-            doc_data = await self.cache.get_document(
+            doc_data = await self.cache.get_document_with_cache(
                 collection=self.cases_collection,
                 document_id=case_id,
             )
@@ -246,10 +246,20 @@ class CaseDataService:
         await self.get_case(case_id)
 
         try:
-            await self.cache.delete_document(
+            result = await self.cache.db.delete_document(
                 collection=self.cases_collection,
                 document_id=case_id,
             )
+            if not result.success:
+                raise DatabaseError(
+                    message=f"Failed to delete case: {result.error}",
+                    code=ErrorCode.DB_WRITE_ERROR,
+                    details={"case_id": case_id},
+                    component=ComponentName.G8EE
+                )
+            key = self.cache._make_key(self.cases_collection, case_id)
+            await self.cache.kv.delete(key)
+            await self.cache.invalidate_query_cache(self.cases_collection)
 
             logger.info(f"Case deleted: {case_id}", extra={"case_id": case_id})
 

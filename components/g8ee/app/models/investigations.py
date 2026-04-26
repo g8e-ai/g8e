@@ -80,6 +80,9 @@ class ConversationMessageMetadata(G8eBaseModel):
     operation: FileOperation | None = Field(default=None, description="File operation type")
     intent_name: str | None = Field(default=None, description="AWS intent name for intent approvals")
     intent_question: str | None = Field(default=None, description="User-facing question for intent approval")
+    hosts: list[str] | None = Field(default=None, description="Hosts for stream approval")
+    arch: str | None = Field(default=None, description="Architecture for stream approval")
+    preview_command: str | None = Field(default=None, description="Preview command for stream approval")
     requested_at: UTCDatetime | None = Field(default=None, description="When the approval was requested")
     responded_at: UTCDatetime | None = Field(default=None, description="When the approval response was received")
     completed_at: UTCDatetime | None = Field(default=None, description="When the operation completed")
@@ -162,6 +165,9 @@ class ApprovalMetadata(ConversationMessageMetadata):
     responded_at: UTCDatetime | None = Field(default=None, description="When the approval response was received")
     intent_name: str | None = Field(default=None, description="AWS intent name for intent approvals")
     intent_question: str | None = Field(default=None, description="User-facing question for intent approval")
+    hosts: list[str] | None = Field(default=None, description="Hosts for stream approval")
+    arch: str | None = Field(default=None, description="Architecture for stream approval")
+    preview_command: str | None = Field(default=None, description="Preview command for stream approval")
 
 
 class FileEditMetadata(ConversationMessageMetadata):

@@ -179,7 +179,7 @@ class SettingsService:
         if not self._cache_aside:
             return self.get_local_settings()
 
-        doc_dict = await self._cache_aside.get_document(
+        doc_dict = await self._cache_aside.get_document_with_cache(
             collection=DB_COLLECTION_SETTINGS,
             document_id=PLATFORM_SETTINGS_DOC,
         )
@@ -201,7 +201,7 @@ class SettingsService:
              raise ConfigurationError("CacheAsideService required for user settings")
 
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
-        user_doc_dict = await self._cache_aside.get_document(
+        user_doc_dict = await self._cache_aside.get_document_with_cache(
             collection=DB_COLLECTION_SETTINGS,
             document_id=user_doc_id,
         )
@@ -209,7 +209,7 @@ class SettingsService:
         if not user_doc_dict:
             # LLM settings are user-specific only. Return empty LLMSettings if user doc missing.
             # Search settings can fall back to platform defaults.
-            platform_doc_dict = await self._cache_aside.get_document(
+            platform_doc_dict = await self._cache_aside.get_document_with_cache(
                 collection=DB_COLLECTION_SETTINGS,
                 document_id=PLATFORM_SETTINGS_DOC,
             )

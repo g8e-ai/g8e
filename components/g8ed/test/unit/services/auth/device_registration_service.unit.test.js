@@ -28,7 +28,6 @@ describe('DeviceRegistrationService', () => {
     let operatorService;
     let operatorSessionService;
     let userService;
-    let sessionAuthListener;
 
     const mockG8eContext = {
         user_id: 'user-123',
@@ -54,7 +53,6 @@ describe('DeviceRegistrationService', () => {
         operatorService = services.operatorService;
         operatorSessionService = services.operatorSessionService;
         userService = services.userService;
-        sessionAuthListener = services.sessionAuthListener;
 
         vi.spyOn(sseService, 'publishEvent').mockResolvedValue(true);
         vi.spyOn(operatorService, 'getOperator');
@@ -66,7 +64,13 @@ describe('DeviceRegistrationService', () => {
         vi.spyOn(userService, 'getUser');
         vi.spyOn(userService, 'updateUserOperator').mockResolvedValue(true);
         
-        vi.spyOn(sessionAuthListener, 'listen').mockImplementation(() => {});
+        vi.spyOn(operatorService, 'relayAuthenticateOperatorToG8ee').mockResolvedValue({
+            success: true,
+            operator_session_id: 'test-session-id'
+        });
+        vi.spyOn(operatorService, 'relayListenSessionAuthToG8ee').mockResolvedValue({
+            success: true
+        });
 
         cleanup = new TestCleanupHelper(services.cacheAsideService, null, {
             operatorsCollection: services.operatorService.collectionName
@@ -74,11 +78,9 @@ describe('DeviceRegistrationService', () => {
 
         service = new DeviceRegistrationService({
             operatorService,
-            operatorSessionService,
             userService,
             sseService,
-            internalHttpClient: services.internalHttpClient,
-            sessionAuthListener
+            internalHttpClient: services.internalHttpClient
         });
     });
 
@@ -138,8 +140,10 @@ describe('DeviceRegistrationService', () => {
                 status: OperatorStatus.AVAILABLE
             });
             userService.getUser.mockResolvedValue(mockUser);
-            operatorSessionService.createOperatorSession.mockResolvedValue({ id: operatorSessionId });
-            operatorService.claimOperatorSlot.mockResolvedValue(true);
+            operatorService.relayAuthenticateOperatorToG8ee.mockResolvedValue({
+                success: true,
+                operator_session_id: operatorSessionId
+            });
 
             const result = await service.registerDevice({
                 operator_id: operatorId,
@@ -151,17 +155,23 @@ describe('DeviceRegistrationService', () => {
             expect(result.operator_session_id).toBe(operatorSessionId);
             expect(result.system_info).toBeInstanceOf(SystemInfo);
             
-            expect(operatorService.claimOperatorSlot).toHaveBeenCalledWith(operatorId, expect.objectContaining({
-                operator_session_id: operatorSessionId,
-                bound_web_session_id: mockG8eContext.web_session_id
-            }));
+            expect(operatorService.relayAuthenticateOperatorToG8ee).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    auth_mode: 'operator_session',
+                    operator_id: operatorId,
+                    operator_type: OperatorType.SYSTEM
+                }),
+                mockG8eContext
+            );
             
-            const claimCall = operatorService.claimOperatorSlot.mock.calls[0][1];
-            expect(claimCall.system_info).toBeInstanceOf(SystemInfo);
-            expect(claimCall.system_info.system_fingerprint).toBe(mockDeviceInfo.system_fingerprint);
-            expect(claimCall.system_info.hostname).toBe(mockDeviceInfo.hostname);
-            
-            expect(userService.updateUserOperator).toHaveBeenCalledWith(mockG8eContext.user_id, operatorId, OperatorStatus.ACTIVE);
+            expect(operatorService.relayListenSessionAuthToG8ee).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    operator_session_id: operatorSessionId,
+                    operator_id: operatorId,
+                    user_id: mockG8eContext.user_id
+                }),
+                mockG8eContext
+            );
             
             // Verify direct SSE notification
             expect(sseService.publishEvent).toHaveBeenCalledWith(
@@ -170,8 +180,6 @@ describe('DeviceRegistrationService', () => {
                     type: EventType.OPERATOR_STATUS_UPDATED_ACTIVE
                 })
             );
-            
-            expect(sessionAuthListener.listen).toHaveBeenCalled();
         });
 
         it('should relay G8eHttpContext with bound_operators to g8ee', async () => {
@@ -189,9 +197,10 @@ describe('DeviceRegistrationService', () => {
                 status: OperatorStatus.AVAILABLE,
             });
             userService.getUser.mockResolvedValue(mockUser);
-            operatorSessionService.createOperatorSession.mockResolvedValue({ id: operatorSessionId });
-            operatorService.claimOperatorSlot.mockResolvedValue(true);
-            vi.spyOn(operatorService, 'relayRegisterOperatorSessionToG8ee').mockResolvedValue(true);
+            operatorService.relayAuthenticateOperatorToG8ee.mockResolvedValue({
+                success: true,
+                operator_session_id: operatorSessionId
+            });
 
             await service.registerDevice({
                 operator_id: operatorId,
@@ -199,28 +208,33 @@ describe('DeviceRegistrationService', () => {
                 g8eContext: mockG8eContext,
             });
 
-            expect(operatorService.relayRegisterOperatorSessionToG8ee).toHaveBeenCalledTimes(1);
-            const relayArg = operatorService.relayRegisterOperatorSessionToG8ee.mock.calls[0][0];
+            expect(operatorService.relayAuthenticateOperatorToG8ee).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    auth_mode: 'operator_session',
+                    operator_id: operatorId,
+                    operator_type: OperatorType.SYSTEM
+                }),
+                mockG8eContext
+            );
 
-            expect(relayArg.user_id).toBe(mockG8eContext.user_id);
-            expect(relayArg.bound_operators).toHaveLength(1);
-            expect(relayArg.bound_operators[0].operator_id).toBe(operatorId);
-            expect(relayArg.bound_operators[0].operator_session_id).toBe(operatorSessionId);
-            expect(relayArg.bound_operators[0].status).toBe(OperatorStatus.ACTIVE);
-
-            const listenerArg = sessionAuthListener.listen.mock.calls[0][0];
-            expect(listenerArg.operator_id).toBe(operatorId);
-            expect(listenerArg.operator_session_id).toBe(operatorSessionId);
-            expect(listenerArg.user_id).toBe(mockG8eContext.user_id);
+            expect(operatorService.relayListenSessionAuthToG8ee).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    operator_session_id: operatorSessionId,
+                    operator_id: operatorId,
+                    user_id: mockG8eContext.user_id
+                }),
+                mockG8eContext
+            );
         });
 
-        it('should rollback session if claiming slot fails', async () => {
+        it('should return failure if g8ee authentication fails', async () => {
             const operatorId = 'op-1';
-            const operatorSessionId = 'op-sess-999';
             operatorService.getOperator.mockResolvedValue({ status: OperatorStatus.AVAILABLE });
             userService.getUser.mockResolvedValue({ id: 'u1' });
-            operatorSessionService.createOperatorSession.mockResolvedValue({ id: operatorSessionId });
-            operatorService.claimOperatorSlot.mockResolvedValue(false);
+            operatorService.relayAuthenticateOperatorToG8ee.mockResolvedValue({
+                success: false,
+                error: 'Authentication failed'
+            });
 
             const result = await service.registerDevice({
                 operator_id: operatorId,
@@ -229,8 +243,7 @@ describe('DeviceRegistrationService', () => {
             });
 
             expect(result.success).toBe(false);
-            expect(result.error).toBe(DeviceLinkError.CLAIM_SLOT_FAILED);
-            expect(operatorSessionService.endSession).toHaveBeenCalledWith(operatorSessionId);
+            expect(result.error).toBe('Authentication failed');
         });
     });
 });

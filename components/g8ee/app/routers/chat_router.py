@@ -59,7 +59,7 @@ async def get_chat_session(
     """
     authenticated_user_id = user_info.uid
 
-    investigation = await investigation_service.get_investigation(web_session_id)
+    investigation = await investigation_service.investigation_data_service.get_investigation(web_session_id)
     if investigation:
         if investigation.user_id != authenticated_user_id:
             raise ResourceNotFoundError("Chat session not found", resource_type="chat_session", resource_id=web_session_id, component="g8ee")
@@ -104,7 +104,7 @@ async def get_latest_chat_session_for_case(
     if case_user_id != authenticated_user_id:
         raise ResourceNotFoundError("Case not found", resource_type="case", resource_id=case_id, component="g8ee")
 
-    raw_investigations = await investigation_service.get_case_investigations(
+    raw_investigations = await investigation_service.investigation_data_service.get_case_investigations(
         case_id=case_id,
         user_id=authenticated_user_id
     )

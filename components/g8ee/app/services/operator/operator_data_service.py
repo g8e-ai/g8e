@@ -32,8 +32,11 @@ from app.constants.events import (
     EventType,
 )
 from app.constants.status import (
+    OperatorHistoryEventType,
     OperatorStatus,
+    OperatorType,
 )
+from app.constants.status import ComponentName
 from app.errors import ExternalServiceError, NetworkError, ValidationError
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import ConversationHistoryMessage, ConversationMessageMetadata
@@ -66,7 +69,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
         if not operator_id:
             raise ValidationError("operator_id is required")
 
-        data = await self.cache.get_document(self.collection, operator_id)
+        data = await self.cache.get_document_with_cache(self.collection, operator_id)
         if not data:
             return None
 
@@ -98,7 +101,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
             raise ValidationError("id is required")
         
         # Convert to dict for storage
-        operator_data = operator.model_dump()
+        operator_data = operator.model_dump(mode="json")
         
         result = await self.cache.create_document(
             collection=self.collection,
@@ -110,6 +113,93 @@ class OperatorDataService(OperatorDataServiceProtocol):
             raise ExternalServiceError(f"Failed to create Operator {operator.id}: {result.error}", service_name="operator_service")
         
         return True
+
+    async def claim_operator_slot(
+        self,
+        operator_id: str,
+        operator_session_id: str,
+        bound_web_session_id: str | None,
+        system_info: dict,
+        operator_type: OperatorType | str | None = None
+    ) -> bool:
+        """Claim an operator slot for an active session."""
+        now_timestamp = now()
+        
+        update_data: dict[str, object] = {
+            "status": OperatorStatus.ACTIVE,
+            "operator_session_id": operator_session_id,
+            "bound_web_session_id": bound_web_session_id,
+            "system_info": system_info,
+            "system_fingerprint": system_info.get("system_fingerprint"),
+            "claimed": True,
+            "updated_at": now_timestamp,
+            "last_heartbeat": now_timestamp,
+        }
+
+        # Get existing to check first_deployed
+        operator = await self.get_operator(operator_id)
+        if not operator:
+            return False
+            
+        if not operator.first_deployed:
+            update_data["first_deployed"] = now_timestamp
+
+        if operator_type:
+            update_data["operator_type"] = operator_type
+
+        result = await self.cache.update_document(
+            collection=self.collection,
+            document_id=operator_id,
+            data=update_data,
+            merge=True
+        )
+        
+        if result.success:
+            # Add history entry (Authority: g8ee)
+            await self.add_history_entry(
+                operator_id=operator_id,
+                event_type=OperatorHistoryEventType.CLAIMED,
+                summary="Operator slot claimed and activated via device registration",
+                actor=ComponentName.G8ED,
+                details={
+                    "operator_session_id": operator_session_id,
+                    "bound_web_session_id": bound_web_session_id,
+                    "hostname": system_info.get("hostname"),
+                    "fingerprint": system_info.get("system_fingerprint"),
+                }
+            )
+        
+        return result.success
+
+    async def add_history_entry(
+        self,
+        operator_id: str,
+        event_type: OperatorHistoryEventType | str,
+        summary: str,
+        actor: ComponentName = ComponentName.G8EE,
+        details: dict[str, object] | None = None,
+    ) -> OperatorDocument:
+        """Record an event in the operator history trail."""
+        operator = await self.get_operator(operator_id)
+        if not operator:
+            raise ValidationError(f"Operator {operator_id} not found")
+
+        # Delegate to model method which handles hash chaining.
+        operator.add_history_entry(
+            event_type=event_type,
+            summary=summary,
+            actor=actor,
+            details=details or {},
+        )
+
+        await self.cache.update_document(
+            collection=self.collection,
+            document_id=operator_id,
+            data={"history_trail": [e.model_dump(mode="json") for e in operator.history_trail]},
+            merge=True,
+        )
+
+        return operator
 
     async def update_operator_status(self, operator_id: str, status: OperatorStatus) -> bool:
         """Update Operator status in both DB and cache."""
@@ -131,6 +221,15 @@ class OperatorDataService(OperatorDataServiceProtocol):
             data=updates,
             merge=True
         )
+
+        if result.success:
+            await self.add_history_entry(
+                operator_id=operator_id,
+                event_type=OperatorHistoryEventType.STATUS_CHANGED,
+                summary=f"Operator status updated to {status.value}",
+                details={"status": status.value}
+            )
+
         return result.success
 
     async def update_operator_heartbeat(

@@ -22,7 +22,6 @@ from app.models.tool_results import InvestigationContextResult
 from app.services.ai.tool_service import AIToolService
 from app.services.ai.tools import query_investigation_context as qic_tool
 from app.services.investigation.investigation_service import InvestigationService
-from app.services.operator.command_service import OperatorCommandService
 from app.services.ai.grounding.web_search_provider import WebSearchProvider
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
@@ -33,16 +32,12 @@ def mock_investigation_service():
 
 @pytest.fixture
 def tool_service(mock_investigation_service):
-    mock_op_cmd_svc = MagicMock(spec=OperatorCommandService)
+    from tests.fakes.tool_helpers import create_tool_service_fake
     mock_web_search = MagicMock(spec=WebSearchProvider)
-    return AIToolService(
-        operator_command_service=mock_op_cmd_svc,
+    return create_tool_service_fake(
         investigation_service=mock_investigation_service,
-        reputation_data_service=AsyncMock(),
-        reputation_service=AsyncMock(),
-        stake_resolution_data_service=AsyncMock(),
-        chat_task_manager=MagicMock(),
         web_search_provider=mock_web_search,
+        auto_approve=True
     )
 
 @pytest.fixture
@@ -90,7 +85,7 @@ class TestHandleQueryInvestigationContext:
     async def test_conversation_history_with_limit(self, tool_service, mock_investigation_service, investigation_context, g8e_context, user_settings):
         mock_msg = MagicMock()
         mock_msg.model_dump.return_value = {"text": "hello"}
-        mock_investigation_service.get_chat_messages.return_value = [mock_msg] * 5
+        mock_investigation_service.investigation_data_service.get_chat_messages = AsyncMock(return_value=[mock_msg] * 5)
         
         tool_args = {"data_type": "conversation_history", "limit": 2}
         result = await qic_tool.handle(tool_service,
@@ -101,12 +96,12 @@ class TestHandleQueryInvestigationContext:
         assert result.data_type == "conversation_history"
         assert len(result.data) == 2
         assert result.item_count == 2
-        mock_investigation_service.get_chat_messages.assert_called_once_with("inv-123")
+        mock_investigation_service.investigation_data_service.get_chat_messages.assert_called_once_with("inv-123")
 
     async def test_investigation_status_success(self, tool_service, mock_investigation_service, investigation_context, g8e_context, user_settings):
         mock_inv = MagicMock(spec=InvestigationModel)
         mock_inv.model_dump.return_value = {"id": "inv-123", "status": "Open"}
-        mock_investigation_service.get_investigation.return_value = mock_inv
+        mock_investigation_service.investigation_data_service.get_investigation = AsyncMock(return_value=mock_inv)
         
         tool_args = {"data_type": "investigation_status"}
         result = await qic_tool.handle(tool_service,
@@ -119,7 +114,7 @@ class TestHandleQueryInvestigationContext:
         assert result.item_count == 1
 
     async def test_investigation_status_not_found(self, tool_service, mock_investigation_service, investigation_context, g8e_context, user_settings):
-        mock_investigation_service.get_investigation.return_value = None
+        mock_investigation_service.investigation_data_service.get_investigation = AsyncMock(return_value=None)
         
         tool_args = {"data_type": "investigation_status"}
         result = await qic_tool.handle(tool_service,
@@ -131,7 +126,7 @@ class TestHandleQueryInvestigationContext:
         assert result.error_type == CommandErrorType.VALIDATION_ERROR
 
     async def test_operator_actions_success(self, tool_service, mock_investigation_service, investigation_context, g8e_context, user_settings):
-        mock_investigation_service.get_operator_actions_for_ai_context.return_value = "action1\naction2"
+        mock_investigation_service.investigation_data_service.get_operator_actions_for_ai_context = AsyncMock(return_value="action1\naction2")
         
         tool_args = {"data_type": "operator_actions"}
         result = await qic_tool.handle(tool_service,
@@ -143,7 +138,7 @@ class TestHandleQueryInvestigationContext:
         assert result.item_count == 1
 
     async def test_service_exception_handling(self, tool_service, mock_investigation_service, investigation_context, g8e_context, user_settings):
-        mock_investigation_service.get_chat_messages.side_effect = Exception("Service failure")
+        mock_investigation_service.investigation_data_service.get_chat_messages = AsyncMock(side_effect=Exception("Service failure"))
         
         tool_args = {"data_type": "conversation_history"}
         result = await qic_tool.handle(tool_service,

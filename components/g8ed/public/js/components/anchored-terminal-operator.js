@@ -64,6 +64,10 @@ export class TerminalOperatorMixin {
             await this.handleApprovalRequest(data);
         });
 
+        this.eventBus.on(EventType.OPERATOR_STREAM_APPROVAL_REQUESTED, async (data) => {
+            await this.handleApprovalRequest(data);
+        });
+
         this.eventBus.on(EventType.AI_AGENT_CONTINUE_APPROVAL_REQUESTED, async (data) => {
             await this.handleApprovalRequest(data);
         });

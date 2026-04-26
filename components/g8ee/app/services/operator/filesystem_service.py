@@ -51,9 +51,21 @@ class OperatorFilesystemService:
         execution_service: ExecutionServiceProtocol,
         investigation_service: InvestigationServiceProtocol,
     ) -> None:
-        self.pubsub_service = pubsub_service
-        self.execution_service = execution_service
-        self.investigation_service = investigation_service
+        self._pubsub_service = pubsub_service
+        self._execution_service = execution_service
+        self._investigation_service = investigation_service
+
+    @property
+    def pubsub_service(self) -> PubSubServiceProtocol:
+        return self._pubsub_service
+
+    @property
+    def execution_service(self) -> ExecutionServiceProtocol:
+        return self._execution_service
+
+    @property
+    def investigation_service(self) -> InvestigationServiceProtocol:
+        return self._investigation_service
 
     async def execute_fs_list(
         self,

@@ -21,9 +21,9 @@ Defines data structures for tracking g8eo operators and their runtime configurat
 
 import asyncio
 import logging
-from typing import Optional
+from typing import Any, Literal, Optional
 
-from pydantic import ConfigDict, Field, PrivateAttr, field_validator
+from pydantic import ConfigDict, Field, PrivateAttr, ValidationInfo, field_validator
 
 from app.models.http_context import G8eHttpContext
 
@@ -34,11 +34,13 @@ from app.constants import (
     CloudIntent,
     CloudSubtype,
     CommandErrorType,
+    ComponentName,
     ExecutionStatus,
     FileOperation,
     HeartbeatType,
     OperatorStatus,
     OperatorType,
+    OperatorHistoryEventType,
     VersionStability,
 )
 from app.models.pubsub_messages import G8eoHeartbeatPayload
@@ -161,7 +163,27 @@ class CommandResultRecord(G8eBaseModel):
     operator_session_id: str | None = Field(default=None, description="Associated operator session ID")
 
 
-class OperatorDocument(G8eBaseModel):
+class OperatorHistoryEntry(G8eBaseModel):
+    """Single entry in operator history trail."""
+    timestamp: UTCDatetime = Field(default_factory=now, description="When this event occurred")
+    event_type: OperatorHistoryEventType = Field(..., description="Type of event (canonical values from status.json)")
+    summary: str = Field(..., description="Brief summary of what happened")
+    actor: ComponentName = Field(default=ComponentName.G8EE, description="Who performed this action")
+    details: dict[str, object] = Field(default_factory=dict, description="Detailed event information")
+    prev_hash: str = Field(..., description="Hash of previous entry in the chain (hex SHA256, 64 chars)")
+    entry_hash: str | None = Field(default=None, description="Hash of this entry (hex SHA256, 64 chars)")
+
+    @field_validator("entry_hash", mode="after")
+    @classmethod
+    def validate_entry_hash(cls, v):
+        if v is None:
+            raise ValueError("entry_hash must be computed and set before use")
+        if len(v) != 64:
+            raise ValueError("entry_hash must be 64 characters (hex SHA256)")
+        return v
+
+
+class OperatorDocument(G8eIdentifiableModel):
     """g8ee read-side projection of the g8ed OperatorDocument.
 
     Maps to operator_status_info in shared/models/operator_document.json.
@@ -172,8 +194,8 @@ class OperatorDocument(G8eBaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    id: str = Field(description="Unique Operator identifier")
     user_id: str = Field(description="User ID who owns this operator (always set by g8ed)")
+    first_deployed: UTCDatetime | None = Field(default=None, description="When the operator was first deployed")
     name: str | None = Field(default=None, description="Human-readable operator name")
     organization_id: str | None = Field(default=None, description="Organization ID")
     status: OperatorStatus = Field(default=OperatorStatus.AVAILABLE, description="Current Operator status")
@@ -191,11 +213,53 @@ class OperatorDocument(G8eBaseModel):
     current_hostname: str | None = Field(default=None, description="Denormalized hostname from system_info for quick access")
     session_token: str | None = Field(default=None, description="Active session token for session-based auth validation")
     session_expires_at: UTCDatetime | None = Field(default=None, description="Session expiration timestamp")
+    history_trail: list[OperatorHistoryEntry] = Field(default_factory=list, description="Operator lifecycle history trail")
+
+    def add_history_entry(
+        self,
+        event_type: OperatorHistoryEventType | str,
+        summary: str,
+        actor: ComponentName = ComponentName.G8EE,
+        details: dict[str, object] | None = None
+    ) -> None:
+        """Record an event in the operator history trail with hash chaining."""
+        from app.utils.ledger_hash import compute_entry_hash, genesis_hash
+
+        prev_hash = self.history_trail[-1].entry_hash if self.history_trail else None
+        if not prev_hash:
+            # For operators, use ID + created_at as genesis seed
+            prev_hash = genesis_hash(self.id, self.created_at.isoformat())
+
+        entry = OperatorHistoryEntry(
+            event_type=event_type,
+            summary=summary,
+            actor=actor,
+            details=details or {},
+            timestamp=now(),
+            prev_hash=prev_hash,
+        )
+
+        entry_dict = entry.model_dump(mode="json", exclude={"entry_hash"})
+        computed_hash = compute_entry_hash(entry_dict, prev_hash)
+
+        entry = entry.model_copy(update={"entry_hash": computed_hash})
+        self.history_trail.append(entry)
+        self.update_timestamp()
 
     @property
     def hostname(self) -> str | None:
         """Get hostname from current_hostname for backward compatibility."""
         return self.current_hostname
+
+    @field_validator("current_hostname", mode="before")
+    @classmethod
+    def sync_current_hostname(cls, v: object, info: ValidationInfo) -> str | None:
+        """Ensure current_hostname stays in sync with system_info.hostname."""
+        if v is not None:
+            return v
+        if info.data.get("system_info") and isinstance(info.data["system_info"], OperatorSystemInfo):
+            return info.data["system_info"].hostname
+        return None
 
     @field_validator("status", mode="before")
     @classmethod
@@ -611,6 +675,22 @@ class CommandApprovalRequest(ApprovalRequestBase):
     task_id: str | None = Field(default=None, description="AI task identifier")
 
 
+class StreamApprovalRequest(ApprovalRequestBase):
+    """Typed request for operator stream approval."""
+    kind: Literal["stream"] = Field(default="stream")
+    hosts: list[str] = Field(description="Hosts to stream the operator to")
+    arch: str = Field(description="Binary architecture")
+    endpoint: str = Field(description="g8ed endpoint for handshake")
+    device_token: str = Field(description="dlk_ token (UI-redacted in event)")
+    concurrency: int = Field(default=5)
+    timeout: int = Field(default=300)
+
+    @property
+    def preview_command(self) -> str:
+        """Derived command for display in the UI."""
+        return f"g8e-operator stream --hosts {','.join(self.hosts)} --concurrency {self.concurrency}"
+
+
 class FileEditApprovalRequest(ApprovalRequestBase):
     """Typed request for file edit approval."""
     file_path: str = Field(description="File path pending approval")
@@ -679,6 +759,15 @@ class CommandApprovalEvent(ApprovalContext):
     def is_batch_execution(self) -> bool:
         """True if targeting multiple systems."""
         return len(self.target_systems) > 1
+
+
+class StreamApprovalEvent(ApprovalContext):
+    """Event payload published to g8ed when operator stream approval is requested."""
+    kind: Literal["stream"] = Field(default="stream")
+    hosts: list[str] = Field(description="Hosts to stream the operator to")
+    concurrency: int = Field(description="Maximum parallel hosts")
+    timeout: int = Field(description="Timeout per host in seconds")
+    preview_command: str = Field(description="The command that will be executed")
 
 
 class AgentContinueApprovalEvent(ApprovalContext):

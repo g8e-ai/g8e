@@ -384,6 +384,20 @@ class InternalHttpClient{
     }
 
     /**
+     * Generate a new API key via g8ee authority.
+     * @param {string} prefix - Key prefix (default: 'g8e_')
+     * @returns {Promise<{success: boolean, api_key?: string, error?: string}>}
+     */
+    async generateApiKey(prefix = 'g8e_') {
+        logger.info('[HTTP-INTERNAL] Requesting API key generation', { prefix });
+        
+        return this.request('g8ee', ApiPaths.g8ee.auth_generate_key(), {
+            method: 'POST',
+            body: { prefix },
+        });
+    }
+
+    /**
      * Check health of all internal services
      */
     async healthCheck() {

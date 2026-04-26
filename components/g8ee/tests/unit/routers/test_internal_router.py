@@ -22,12 +22,20 @@ from app.routers.internal_router import (
     update_case,
     delete_case,
     _generate_and_update_title,
+    create_operator_slot,
+    claim_operator_slot,
+    bind_operators,
+    unbind_operators,
 )
 from app.models.internal_api import (
     ChatMessageRequest,
     StopAIRequest,
     OperatorApprovalResponse,
     DirectCommandRequest,
+    OperatorSlotCreationRequest,
+    OperatorSlotClaimRequest,
+    OperatorBindRequest,
+    OperatorUnbindRequest,
 )
 from app.models.cases import CaseUpdateRequest
 from app.models.agents.title_generator import CaseTitleResult
@@ -328,3 +336,161 @@ async def test_delete_case_not_found_idempotent(g8e_context):
     )
     
     mock_case_service.delete_case.assert_not_called()
+
+@pytest.mark.asyncio
+async def test_create_operator_slot_success(g8e_context):
+    request = OperatorSlotCreationRequest(
+        user_id="user-123",
+        organization_id="org-123",
+        slot_number=1,
+        operator_type="cloud",
+        cloud_subtype="aws",
+        name_prefix="operator",
+        is_g8e_node=False,
+    )
+    
+    mock_operator_data_service = MagicMock()
+    mock_operator_data_service.create_operator = AsyncMock(return_value=True)
+    
+    response = await create_operator_slot(
+        request=request,
+        operator_data_service=mock_operator_data_service,
+        g8e_context=g8e_context
+    )
+    
+    assert response.success is True
+    assert response.operator_id is not None
+    mock_operator_data_service.create_operator.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_claim_operator_slot_success(g8e_context):
+    request = OperatorSlotClaimRequest(
+        operator_id="op-123",
+        operator_session_id="session-123",
+        bound_web_session_id="web-session-123",
+        system_info={"hostname": "test-host", "system_fingerprint": "fp-123"},
+        operator_type="CLOUD",
+    )
+    
+    mock_operator_data_service = MagicMock()
+    mock_operator = MagicMock()
+    mock_operator.first_deployed = None
+    mock_operator_data_service.get_operator = AsyncMock(return_value=mock_operator)
+    mock_operator_data_service.cache = MagicMock()
+    mock_result = MagicMock()
+    mock_result.success = True
+    mock_operator_data_service.cache.update_document = AsyncMock(return_value=mock_result)
+    
+    response = await claim_operator_slot(
+        request=request,
+        operator_data_service=mock_operator_data_service,
+        g8e_context=g8e_context
+    )
+    
+    assert response.success is True
+    mock_operator_data_service.cache.update_document.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_bind_operators_success(g8e_context):
+    request = OperatorBindRequest(
+        operator_ids=["op-123", "op-456"],
+        web_session_id="web-session-123",
+        user_id="user-123",
+    )
+    
+    mock_operator_data_service = MagicMock()
+    mock_operator = MagicMock()
+    mock_operator.user_id = "user-123"
+    mock_operator_data_service.get_operator = AsyncMock(return_value=mock_operator)
+    mock_operator_data_service.cache = MagicMock()
+    mock_result = MagicMock()
+    mock_result.success = True
+    mock_operator_data_service.cache.update_document = AsyncMock(return_value=mock_result)
+    
+    response = await bind_operators(
+        request=request,
+        operator_data_service=mock_operator_data_service,
+        g8e_context=g8e_context
+    )
+    
+    assert response.success is True
+    assert response.bound_count == 2
+    assert mock_operator_data_service.cache.update_document.call_count == 2
+
+@pytest.mark.asyncio
+async def test_bind_operators_unauthorized(g8e_context):
+    request = OperatorBindRequest(
+        operator_ids=["op-123"],
+        web_session_id="web-session-123",
+        user_id="user-123",
+    )
+    
+    mock_operator_data_service = MagicMock()
+    mock_operator = MagicMock()
+    mock_operator.user_id = "different-user"
+    mock_operator_data_service.get_operator = AsyncMock(return_value=mock_operator)
+    
+    response = await bind_operators(
+        request=request,
+        operator_data_service=mock_operator_data_service,
+        g8e_context=g8e_context
+    )
+    
+    assert response.success is False
+    assert response.failed_count == 1
+    assert len(response.errors) == 1
+    assert "Unauthorized" in response.errors[0]["error"]
+
+@pytest.mark.asyncio
+async def test_unbind_operators_success(g8e_context):
+    request = OperatorUnbindRequest(
+        operator_ids=["op-123", "op-456"],
+        web_session_id="web-session-123",
+        user_id="user-123",
+    )
+    
+    mock_operator_data_service = MagicMock()
+    mock_operator = MagicMock()
+    mock_operator.user_id = "user-123"
+    mock_operator_data_service.get_operator = AsyncMock(return_value=mock_operator)
+    mock_operator_data_service.cache = MagicMock()
+    mock_result = MagicMock()
+    mock_result.success = True
+    mock_operator_data_service.cache.update_document = AsyncMock(return_value=mock_result)
+    
+    response = await unbind_operators(
+        request=request,
+        operator_data_service=mock_operator_data_service,
+        g8e_context=g8e_context
+    )
+    
+    assert response.success is True
+    assert response.unbound_count == 2
+    assert response.failed_count == 0
+    assert len(response.unbound_operator_ids) == 2
+    assert mock_operator_data_service.cache.update_document.call_count == 2
+
+@pytest.mark.asyncio
+async def test_unbind_operators_unauthorized(g8e_context):
+    request = OperatorUnbindRequest(
+        operator_ids=["op-123"],
+        web_session_id="web-session-123",
+        user_id="user-123",
+    )
+    
+    mock_operator_data_service = MagicMock()
+    mock_operator = MagicMock()
+    mock_operator.user_id = "different-user"
+    mock_operator_data_service.get_operator = AsyncMock(return_value=mock_operator)
+    
+    response = await unbind_operators(
+        request=request,
+        operator_data_service=mock_operator_data_service,
+        g8e_context=g8e_context
+    )
+    
+    assert response.success is False
+    assert response.unbound_count == 0
+    assert response.failed_count == 1
+    assert len(response.errors) == 1
+    assert "Unauthorized" in response.errors[0]["error"]

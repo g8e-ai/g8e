@@ -162,8 +162,6 @@ Retry behaviour in `stream_response`: if the provider raises a retryable error a
 
 **Tool-loop turn limit:** `_stream_with_tool_loop` caps ReAct iterations at `AGENT_MAX_TOOL_TURNS` (default 25). When the cap is reached, the agent does **not** silently abort — instead it calls `OperatorApprovalService.request_command_approval` through the same approval pipeline that gates operator-bound tools, with a justification explaining the turn limit. On approve, the turn counter resets and the loop continues (so the operator can be asked again at the next 25-turn boundary); on deny, feedback, or timeout, the loop terminates cleanly with `finish_reason=stopped_by_operator`. If no approval service is wired (e.g., isolated test construction), the legacy behaviour of aborting at the cap is preserved.
 
-**Invocation context lifecycle:** `stream_response` is an `async generator`. Python dispatches async-generator cleanup (`async_generator_athrow`) in a new `asyncio` task that runs in a different `Context` than the request that created the generator. Because `ContextVar.reset(token)` requires the token to be reset in the exact same `Context` it was set in, the invocation context lifecycle **must not** be owned by `stream_response`. It is owned by `run_with_sse` (a normal `async def` coroutine with a stable `Context`) via `start_invocation_context` before iteration and `reset_invocation_context` in `finally`. `stream_response` reads the already-set context value; it never holds a token.
-
 `_process_provider_turn` owns all thinking state transitions for one LLM call. Thinking chunks are emitted as `StreamChunkFromModelType.THINKING` (or `THINKING_UPDATE`/`THINKING_END`) and delivered to g8ed for UI rendering if the model supports it. Text chunks are yielded as `StreamChunkFromModelType.TEXT` immediately.
 
 ### SSE Delivery Pipeline
@@ -492,6 +490,8 @@ All service contracts are defined as `Protocol` types in `app/services/protocols
 ### Heartbeat Flow
 
 g8ee is the persistence authority for heartbeats. It subscribes to `heartbeat:{operator_id}:{session}` channels, validates and persists each heartbeat (rolling buffer of last 10, latest snapshot, system info), then notifies g8ed for SSE fan-out to the browser. See [components/g8ed.md — Heartbeat Architecture](g8ed.md#heartbeat-architecture) for the full end-to-end flow including g8ed's role.
+
+g8ee also owns heartbeat status decay: `HeartbeatStaleMonitorService` (`app/services/operator/heartbeat_stale_monitor.py`) runs on a timer and transitions operator status to `stale` or `offline` when heartbeats stop arriving (60s threshold). This consolidates operator status ownership in g8ee, eliminating dual-writer race conditions on the `operators` collection.
 
 ### Defensive Safety
 

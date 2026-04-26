@@ -56,6 +56,12 @@ from .services.infra.internal_http_client import InternalHttpClient
 from .services.operator.approval_service import OperatorApprovalService
 from .services.operator.command_service import OperatorCommandService
 from .services.operator.heartbeat_service import OperatorHeartbeatService
+from .services.operator.operator_data_service import OperatorDataService
+from .services.operator.operator_session_service import OperatorSessionService
+from .services.operator.operator_auth_service import OperatorAuthService
+from .services.operator.session_auth_listener import SessionAuthListener
+from .services.auth.api_key_service import ApiKeyService
+from .services.auth.certificate_service import CertificateService
 logger = logging.getLogger(__name__)
 
 
@@ -230,6 +236,54 @@ async def get_g8ee_heartbeat_service(request: Request) -> OperatorHeartbeatServi
     return service
 
 
+async def get_g8ee_operator_data_service(request: Request) -> OperatorDataService:
+    service = getattr(request.app.state, "operator_data_service", None)
+    if not service:
+        logger.error("Operator Data Service not found in app state - g8ee initialization may have failed")
+        raise ServiceUnavailableError("Operator Data Service not available")
+    return service
+
+
+async def get_g8ee_operator_session_service(request: Request) -> OperatorSessionService:
+    service = getattr(request.app.state, "operator_session_service", None)
+    if not service:
+        logger.error("Operator Session Service not found in app state - g8ee initialization may have failed")
+        raise ServiceUnavailableError("Operator Session Service not available")
+    return service
+
+
+async def get_g8ee_operator_auth_service(request: Request) -> OperatorAuthService:
+    service = getattr(request.app.state, "operator_auth_service", None)
+    if not service:
+        logger.error("Operator Auth Service not found in app state - g8ee initialization may have failed")
+        raise ServiceUnavailableError("Operator Auth Service not available")
+    return service
+
+
+async def get_g8ee_session_auth_listener(request: Request) -> SessionAuthListener:
+    service = getattr(request.app.state, "session_auth_listener", None)
+    if not service:
+        logger.error("Session Auth Listener not found in app state - g8ee initialization may have failed")
+        raise ServiceUnavailableError("Session Auth Listener not available")
+    return service
+
+
+async def get_g8ee_api_key_service(request: Request) -> ApiKeyService:
+    service = getattr(request.app.state, "api_key_service", None)
+    if not service:
+        logger.error("API Key Service not found in app state - g8ee initialization may have failed")
+        raise ServiceUnavailableError("API Key Service not available")
+    return service
+
+
+async def get_g8ee_certificate_service(request: Request) -> CertificateService:
+    service = getattr(request.app.state, "certificate_service", None)
+    if not service:
+        logger.error("Certificate Service not found in app state - g8ee initialization may have failed")
+        raise ServiceUnavailableError("Certificate Service not available")
+    return service
+
+
 async def get_g8ee_blob_service(request: Request) -> BlobService:
     service = getattr(request.app.state, "blob_service", None)
     if not service:
@@ -323,6 +377,12 @@ __all__ = [
     "get_g8ee_operator_cache",
     "get_g8ee_approval_service",
     "get_g8ee_operator_command_service",
+    "get_g8ee_operator_data_service",
+    "get_g8ee_operator_session_service",
+    "get_g8ee_operator_auth_service",
+    "get_g8ee_session_auth_listener",
+    "get_g8ee_api_key_service",
+    "get_g8ee_certificate_service",
     "get_g8ee_attachment_service",
     "get_g8ee_g8ed_http_client",
     "get_g8ee_event_service",

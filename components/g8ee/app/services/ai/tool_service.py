@@ -13,12 +13,12 @@
 
 """AI tool orchestration surface.
 
-``AIToolService`` is intentionally thin: it owns the per-request context
-var, the dependency wiring shared by every tool, and the pre-dispatch
-guards (forbidden-pattern scan, bound-operator auth gate, web-search
-configuration check). Each tool's declaration build and execution body
-lives in its own module under :mod:`app.services.ai.tools`, referenced
-directly by callable on the corresponding :class:`ToolSpec`.
+``AIToolService`` is intentionally thin: it owns the dependency wiring
+shared by every tool and the pre-dispatch guards (forbidden-pattern scan,
+bound-operator auth gate, web-search configuration check). Each tool's
+declaration build and execution body lives in its own module under
+:mod:`app.services.ai.tools`, referenced directly by callable on the
+corresponding :class:`ToolSpec`.
 
 Adding a new tool means writing one module under ``tools/`` plus one
 ``ToolSpec`` entry — no method ever needs to be added here.
@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable
-from contextvars import ContextVar, Token as ContextVarToken
 from typing import TYPE_CHECKING
 
 import app.llm.llm_types as types
@@ -62,7 +61,6 @@ from ..data.reputation_data_service import ReputationDataService
 if TYPE_CHECKING:
     from .reputation_service import ReputationService
     from .chat_task_manager import BackgroundTaskManager
-    from ..data.stake_resolution_data_service import StakeResolutionDataService
 
 logger = logging.getLogger(__name__)
 
@@ -76,9 +74,9 @@ class AIToolService:
         investigation_service: InvestigationService,
         reputation_data_service: ReputationDataService,
         reputation_service: ReputationService,
-        stake_resolution_data_service: StakeResolutionDataService,
         chat_task_manager: BackgroundTaskManager,
         ssh_inventory_service: SshInventoryService,
+        stream_executor: "OperatorStreamExecutor",
         web_search_provider: WebSearchProvider | None,
         platform_settings: G8eePlatformSettings | None = None,
         user_settings: G8eeUserSettings | None = None,
@@ -92,9 +90,9 @@ class AIToolService:
         self._user_settings = user_settings
         self._reputation_data_service = reputation_data_service
         self._reputation_service = reputation_service
-        self._stake_resolution_data_service = stake_resolution_data_service
         self._chat_task_manager = chat_task_manager
         self._ssh_inventory_service = ssh_inventory_service
+        self._stream_executor = stream_executor
 
         from app.utils.validators import get_blacklist_validator, get_whitelist_validator
         self._whitelist_validator = (
@@ -105,11 +103,6 @@ class AIToolService:
         )
 
         logger.info("AIToolService initialized")
-
-        self._tool_context: ContextVar[G8eHttpContext | None] = ContextVar(
-            "g8ee_tool_context",
-            default=None,
-        )
 
         self._tool_declarations: dict[str, types.ToolDeclaration] = {}
         self._tool_handlers: dict[str, Callable[..., Awaitable[ToolResult]]] = {}
@@ -161,26 +154,6 @@ class AIToolService:
                 f"{sorted(unclassified)}. Add each tool to the appropriate frozenset in app/constants/status.py."
             )
 
-    def start_invocation_context(
-        self,
-        g8e_context: G8eHttpContext,
-    ) -> ContextVarToken[G8eHttpContext | None]:
-        """Set the g8e_context used by tool calls for the active request."""
-        token = self._tool_context.set(g8e_context)
-        bound_count = len(g8e_context.bound_operators) if g8e_context else 0
-        case_id = g8e_context.case_id if g8e_context else None
-        user_id = g8e_context.user_id if g8e_context else None
-        logger.info(
-            "[TOOL_CONTEXT] Context initialized: case_id=%s user_id=%s bound_operators=%d",
-            case_id, user_id, bound_count,
-        )
-        return token
-
-    def reset_invocation_context(self, token: ContextVarToken[G8eHttpContext | None]) -> None:
-        """Reset invocation context after request completion."""
-        self._tool_context.reset(token)
-        logger.info("[TOOL_CONTEXT] Context reset")
-
     @property
     def web_search_provider(self) -> WebSearchProvider | None:
         """The configured WebSearchProvider, or None if g8e_web_search is not enabled."""
@@ -197,7 +170,10 @@ class AIToolService:
 
     @property
     def reputation_data_service(self) -> ReputationDataService:
-        """The configured ``ReputationDataService`` (required)."""
+        """The configured ``ReputationDataService`` (required).
+
+        # vortex: deliberate exposure for tribunal path (verified by test_reputation_vortex.py)
+        """
         return self._reputation_data_service
 
     @property
@@ -224,11 +200,6 @@ class AIToolService:
         return self._reputation_service
 
     @property
-    def stake_resolution_data_service(self) -> StakeResolutionDataService:
-        """The configured ``StakeResolutionDataService`` (required)."""
-        return self._stake_resolution_data_service
-
-    @property
     def chat_task_manager(self) -> BackgroundTaskManager:
         """The configured ``BackgroundTaskManager`` (required)."""
         return self._chat_task_manager
@@ -237,6 +208,11 @@ class AIToolService:
     def ssh_inventory_service(self) -> SshInventoryService:
         """The configured ``SshInventoryService`` (required)."""
         return self._ssh_inventory_service
+
+    @property
+    def stream_executor(self) -> "OperatorStreamExecutor":
+        """The configured ``OperatorStreamExecutor`` (required)."""
+        return self._stream_executor
 
     @property
     def whitelist_validator(self) -> CommandWhitelistValidator:

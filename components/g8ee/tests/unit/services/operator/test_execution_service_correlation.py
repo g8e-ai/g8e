@@ -45,13 +45,13 @@ def _build_execution_service() -> tuple[OperatorExecutionService, OperatorPubSub
     pubsub_service.set_pubsub_client(pubsub_client)
     # Minimal collaborators not exercised by dispatch_command itself.
     svc = OperatorExecutionService.__new__(OperatorExecutionService)
-    svc.pubsub_service = pubsub_service
-    svc.approval_service = None
-    svc.g8ed_event_service = None
+    svc._pubsub_service = pubsub_service
+    svc._approval_service = None
+    svc._g8ed_event_service = None
     svc._settings = None
-    svc.operator_data_service = None
-    svc.ai_response_analyzer = None
-    svc.investigation_service = None
+    svc._operator_data_service = None
+    svc._ai_response_analyzer = None
+    svc._investigation_service = None
     return svc, pubsub_service, pubsub_client
 
 

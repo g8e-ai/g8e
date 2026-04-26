@@ -215,20 +215,6 @@ export class SetupPage {
 
     _validateStep(step) {
         if (step === 1) {
-            // Validate account email
-            const email = document.getElementById('account_email').value.trim();
-            if (!email) {
-                this._showStatus('error', 'Email address is required');
-                document.getElementById('account_email').focus();
-                return false;
-            }
-            const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRe.test(email)) {
-                this._showStatus('error', 'Enter a valid email address');
-                document.getElementById('account_email').focus();
-                return false;
-            }
-
             // Validate AI providers
             const active = this._getActiveProviders();
             if (active.length === 0) {

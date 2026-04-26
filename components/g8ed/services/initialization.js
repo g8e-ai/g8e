@@ -31,7 +31,6 @@ import { G8esPubSubClient } from './clients/g8es_pubsub_client.js';
 import { KVCacheClient } from './clients/g8es_kv_cache_client.js';
 import { g8esBlobClient } from './platform/g8es_blob_client.js';
 import { WebSessionService } from './auth/web_session_service.js';
-import { OperatorSessionService } from './auth/operator_session_service.js';
 import { CliSessionService } from './auth/cli_session_service.js';
 import { BoundSessionsService } from './auth/bound_sessions_service.js';
 import { CacheAsideService } from './cache/cache_aside_service.js';
@@ -44,7 +43,6 @@ import { OperatorDownloadService } from './operator/operator_download_service.js
 import { LoginSecurityService } from './auth/login_security_service.js';
 import { DownloadAuthService } from './auth/download_auth_service.js';
 import { DeviceRegistrationService } from './auth/device_registration_service.js';
-import { SessionAuthListener } from './auth/session_auth_listener.js';
 import { InternalHttpClient } from './clients/internal_http_client.js';
 import { InvestigationService } from './platform/investigation_service.js';
 import { logger } from '../utils/logger.js';
@@ -58,8 +56,6 @@ import { BootstrapService } from './platform/bootstrap_service.js';
 import { SettingsService } from './platform/settings_service.js';
 import { G8ENodeOperatorService } from './platform/g8ep_operator_service.js';
 import { BindOperatorsService } from './operator/operator_bind_service.js';
-import { OperatorAuthService } from './operator/operator_auth_service.js';
-import { HeartbeatMonitorService } from './operator/heartbeat_monitor_service.js';
 import { ConsoleMetricsService } from './platform/console_metrics_service.js';
 import { PostLoginService } from './auth/post_login_service.js';
 import { SetupService } from './platform/setup_service.js';
@@ -73,7 +69,6 @@ let organizationModel = null;
 let pubSubClient = null;
 let cacheAsideService = null;
 let webSessionService = null;
-let operatorSessionService = null;
 let cliSessionService = null;
 let boundSessionsService = null;
 let apiKeyService = null;
@@ -87,7 +82,6 @@ let sseService = null;
 let certificateService = null;
 let deviceLinkService = null;
 let deviceRegistrationService = null;
-let sessionAuthListener = null;
 let settingsService = null;
 let g8eNodeOperatorService = null;
 let consoleMetricsService = null;
@@ -97,8 +91,6 @@ let setupService = null;
 let auditService = null;
 let internalHttpClientInstance = null;
 let bindOperatorsServiceInstance = null;
-let operatorAuthService = null;
-let heartbeatMonitorService = null;
 let apiKeyDataService = null;
 let operatorDataService = null;
 let investigationService = null;
@@ -224,10 +216,6 @@ async function _doInitialize() {
             cacheAsideService, 
             bootstrapService: settingsSvc.getBootstrapService()
         });
-        operatorSessionService = new OperatorSessionService({
-            cacheAsideService,
-            bootstrapService: settingsSvc.getBootstrapService()
-        });
         // auditService is required by CliSessionService; construct it here
         // (moved up from Phase 6) before dependent services are wired.
         auditService = new AuditService();
@@ -273,11 +261,9 @@ async function _doInitialize() {
         if (_sigTermHandler) process.removeListener('SIGTERM', _sigTermHandler);
         if (_sigIntHandler) process.removeListener('SIGINT', _sigIntHandler);
         _sigTermHandler = async () => {
-            if (heartbeatMonitorService) heartbeatMonitorService.stop();
             if (sseService) await sseService.close();
         };
         _sigIntHandler  = async () => {
-            if (heartbeatMonitorService) heartbeatMonitorService.stop();
             if (sseService) await sseService.close();
         };
         process.once('SIGTERM', _sigTermHandler);
@@ -299,7 +285,6 @@ async function _doInitialize() {
             operatorDataService,
             userService: getUserService(),
             apiKeyService: getApiKeyService(),
-            operatorSessionService: getOperatorSessionService(),
             webSessionService: getWebSessionService(),
             certificateService: getCertificateService(),
             sseService: getSSEService(),
@@ -350,19 +335,11 @@ async function _doInitialize() {
         
         // auditService already constructed in Phase 3 for CliSessionService
 
-        sessionAuthListener = new SessionAuthListener({
-            pubSubClient: getPubSubClient(),
-            operatorSessionService: getOperatorSessionService(),
-            operatorService: getOperatorService(),
-        });
-        
         deviceRegistrationService = new DeviceRegistrationService({
             operatorService: getOperatorService(),
-            operatorSessionService: getOperatorSessionService(),
             userService: getUserService(),
             sseService: getSSEService(),
             internalHttpClient: getInternalHttpClient(),
-            sessionAuthListener: getSessionAuthListener(),
         });
         
         deviceLinkService = new DeviceLinkService({
@@ -380,26 +357,10 @@ async function _doInitialize() {
         bindOperatorsServiceInstance = new BindOperatorsService({
             operatorService: getOperatorService(),
             bindingService: getBindingService(),
-            operatorSessionService: getOperatorSessionService(),
             webSessionService: getWebSessionService(),
             sseService: getSSEService(),
-        });
-        
-        operatorAuthService = new OperatorAuthService({
-            apiKeyService: getApiKeyService(),
-            userService: getUserService(),
-            operatorService: getOperatorService(),
-            operatorSessionService: getOperatorSessionService(),
-            cliSessionService,
-            bindingService: getBindingService(),
-            webSessionService: getWebSessionService(),
         });
 
-        heartbeatMonitorService = new HeartbeatMonitorService({
-            operatorDataService: getOperatorDataService(),
-            sseService: getSSEService(),
-        });
-        heartbeatMonitorService.start();
         logger.info('[G8ED-INIT] Phase 5 complete: platform services (SSE, attachments, device links, certificates, g8ep operator, console metrics, post-login, setup, audit, operator-bind)');
 
         // --- Phase 6: Configuration ---
@@ -460,11 +421,6 @@ export function getCacheAsideService() {
 export function getWebSessionService() {
     if (!webSessionService) throw new Error('WebSessionService not initialized. Call initializeServices() first.');
     return webSessionService;
-}
-
-export function getOperatorSessionService() {
-    if (!operatorSessionService) throw new Error('OperatorSessionService not initialized. Call initializeServices() first.');
-    return operatorSessionService;
 }
 
 export function getCliSessionService() {
@@ -558,11 +514,6 @@ export function getBindOperatorsService() {
     return bindOperatorsServiceInstance;
 }
 
-export function getOperatorAuthService() {
-    if (!operatorAuthService) throw new Error('OperatorAuthService not initialized. Call initializeServices() first.');
-    return operatorAuthService;
-}
-
 export function getG8ENodeOperatorService() {
     if (!g8eNodeOperatorService) throw new Error('G8ENodeOperatorService not initialized. Call initializeServices() first.');
     return g8eNodeOperatorService;
@@ -576,11 +527,6 @@ export function getPostLoginService() {
 export function getDeviceRegistrationService() {
     if (!deviceRegistrationService) throw new Error('DeviceRegistrationService not initialized. Call initializeServices() first.');
     return deviceRegistrationService;
-}
-
-export function getSessionAuthListener() {
-    if (!sessionAuthListener) throw new Error('SessionAuthListener not initialized. Call initializeServices() first.');
-    return sessionAuthListener;
 }
 
 export function getAuditService() {
@@ -603,15 +549,6 @@ export function getHealthCheckService() {
     return healthCheckService;
 }
 
-export function getHeartbeatMonitorService() {
-    if (!heartbeatMonitorService) throw new Error('HeartbeatMonitorService not initialized. Call initializeServices() first.');
-    return heartbeatMonitorService;
-}
-
-
-// --- Test utilities ---
-// These exports exist solely for test isolation. Do not call in production code.
-
 export function resetInitialization() {
     if (_sigTermHandler) { process.removeListener('SIGTERM', _sigTermHandler); _sigTermHandler = null; }
     if (_sigIntHandler)  { process.removeListener('SIGINT', _sigIntHandler);  _sigIntHandler = null; }
@@ -626,7 +563,6 @@ export function resetInitialization() {
     certificateService = null;
     deviceLinkService = null;
     deviceRegistrationService = null;
-    sessionAuthListener = null;
     settingsService = null;
     g8eNodeOperatorService = null;
     consoleMetricsService = null;
@@ -634,7 +570,6 @@ export function resetInitialization() {
     organizationModel = null;
     pubSubClient = null;
     webSessionService = null;
-    operatorSessionService = null;
     boundSessionsService = null;
     apiKeyService = null;
     userService = null;
@@ -644,9 +579,6 @@ export function resetInitialization() {
     auditService = null;
     internalHttpClientInstance = null;
     bindOperatorsServiceInstance = null;
-    operatorAuthService = null;
-    if (heartbeatMonitorService) heartbeatMonitorService.stop();
-    heartbeatMonitorService = null;
     apiKeyDataService = null;
     operatorDataService = null;
     blobStorage = null;

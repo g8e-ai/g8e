@@ -68,7 +68,7 @@ class ReputationDataService:
         if not agent_id:
             raise ValidationError("agent_id is required")
         try:
-            doc = await self.cache.get_document(
+            doc = await self.cache.get_document_with_cache(
                 collection=self.state_collection,
                 document_id=agent_id,
             )
@@ -118,7 +118,7 @@ class ReputationDataService:
         if not state.agent_id:
             raise ValidationError("ReputationState.agent_id is required")
         try:
-            existing = await self.cache.get_document(
+            existing = await self.cache.get_document_with_cache(
                 collection=self.state_collection,
                 document_id=state.agent_id,
             )
@@ -188,7 +188,7 @@ class ReputationDataService:
         if not commitment_id:
             raise ValidationError("commitment_id is required")
         try:
-            doc = await self.cache.get_document(
+            doc = await self.cache.get_document_with_cache(
                 collection=self.commitments_collection,
                 document_id=commitment_id,
             )

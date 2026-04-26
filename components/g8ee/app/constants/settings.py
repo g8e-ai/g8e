@@ -435,6 +435,13 @@ MAX_COMMAND_RESULTS_HISTORY     = 50
 STALE_WARNING_THRESHOLD_SECONDS = 120
 MAX_OUTPUT_LENGTH               = 100_000
 
+# Certificates
+CLIENT_CERT_VALIDITY_DAYS = 365
+DEFAULT_SSL_DIR           = "/g8es"
+CERT_SUBJECT_ORG          = "g8e Operator"
+CERT_SUBJECT_COUNTRY      = "US"
+CRL_ISSUER                = "g8e Platform CA"
+
 OPERATOR_AVAILABLE_MESSAGE_TEMPLATE = "{count} operator(s) bound and available for command execution"
 OPERATOR_UNAVAILABLE_MESSAGE        = "NO OPERATOR BOUND - Cannot execute commands"
 

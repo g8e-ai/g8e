@@ -11,16 +11,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from app.errors import ValidationError
-
 """
 g8e Agent — orchestrates the ReAct streaming loop.
 
 Concerns handled here:
-  - Invocation context lifecycle (start / reset via AIToolExecutor) — owned by
-    run_with_sse, NOT by stream_response, because stream_response is an async
-    generator and Python runs its finally block in a different asyncio Context
-    during async-generator cleanup, which makes ContextVar.reset() raise ValueError.
   - Retry loop with backoff around _stream_with_tool_loop
   - ReAct loop: provider turn -> tool calls -> next turn contents -> repeat
   - SSE delivery via run_with_sse (delegates to agent_sse)
@@ -39,6 +33,7 @@ import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable
 
 import app.llm.llm_types as types
+from app.errors import ValidationError
 from app.constants import (
     AGENT_CONTINUE_APPROVAL_TIMEOUT_SECONDS,
     AGENT_MAX_RETRIES,
@@ -121,13 +116,6 @@ class g8eEngine:
 
         Yields StreamChunkFromModel objects. Callers deliver them via HTTP SSE
         (through run_with_sse) or consume them directly for pub/sub delivery.
-
-        IMPORTANT: The invocation context (ContextVar on AIToolService) must be
-        set by the caller before iterating this generator and reset after. This
-        generator must NOT own the ContextVar lifecycle: it is an async generator,
-        so Python runs its finally block in a different asyncio Context during
-        async-generator cleanup, which makes ContextVar.reset() raise ValueError.
-        run_with_sse owns this lifecycle via a normal try/finally.
         """
         case_id = inputs.case_id
         investigation_id = inputs.investigation_id
@@ -235,23 +223,17 @@ class g8eEngine:
             inputs.model_to_use, inputs.agent_mode,
             inputs.sentinel_mode, len(inputs.contents),
         )
-        context_token = self._tool_executor.start_invocation_context(
-            g8e_context=inputs.g8e_context,
-        )
-        try:
-            await deliver_via_sse(
-                stream=self.stream_response(
-                    inputs=inputs,
-                    llm_provider=llm_provider,
-                    g8ed_event_service=g8ed_event_service,
-                ),
+        await deliver_via_sse(
+            stream=self.stream_response(
                 inputs=inputs,
-                state=state,
+                llm_provider=llm_provider,
                 g8ed_event_service=g8ed_event_service,
-                on_iteration_text=on_iteration_text,
-            )
-        finally:
-            self._tool_executor.reset_invocation_context(context_token)
+            ),
+            inputs=inputs,
+            state=state,
+            g8ed_event_service=g8ed_event_service,
+            on_iteration_text=on_iteration_text,
+        )
 
     async def _stream_with_tool_loop(
         self,

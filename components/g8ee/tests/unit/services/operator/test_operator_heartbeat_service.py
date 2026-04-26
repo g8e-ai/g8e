@@ -611,13 +611,15 @@ class TestWsDisconnectHandler:
 
         assert service._ready is False
 
-    async def test_disconnect_clears_active_sessions(self, service):
+    async def test_disconnect_preserves_active_sessions(self, service):
+        """Disconnect should preserve active sessions for re-subscription on reconnect."""
         service._ready = True
         service._active_sessions = {("op-1", "sess-1"), ("op-2", "sess-2")}
 
         await service._on_ws_disconnect()
 
-        assert len(service._active_sessions) == 0
+        assert service._ready is False
+        assert service._active_sessions == {("op-1", "sess-1"), ("op-2", "sess-2")}
 
     async def test_disconnect_handler_registered_on_set_pubsub_client(self, service):
         client = _make_mock_pubsub_client()
@@ -637,6 +639,33 @@ class TestWsDisconnectHandler:
         assert service._ready is False
 
         await service.start()
+        assert service._ready is True
+
+    async def test_start_resubscribes_active_sessions_after_disconnect(self, service):
+        """After disconnect, start() should re-subscribe to all previously active sessions."""
+        client = _make_mock_pubsub_client()
+        service.set_pubsub_client(client)
+        
+        # Register sessions normally
+        await service.register_operator_session("op-1", "sess-1")
+        await service.register_operator_session("op-2", "sess-2")
+        assert service._active_sessions == {("op-1", "sess-1"), ("op-2", "sess-2")}
+        
+        # Reset mocks to track re-subscription calls
+        client.on_channel_message.reset_mock()
+        client.subscribe.reset_mock()
+        
+        # Simulate disconnect
+        await service._on_ws_disconnect()
+        assert service._ready is False
+        assert service._active_sessions == {("op-1", "sess-1"), ("op-2", "sess-2")}  # Sessions preserved
+        
+        # Re-start should re-subscribe to all active sessions
+        await service.start()
+        
+        # Verify re-subscription calls
+        assert client.on_channel_message.call_count == 2
+        assert client.subscribe.call_count == 2
         assert service._ready is True
 
 

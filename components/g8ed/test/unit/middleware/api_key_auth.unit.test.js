@@ -25,8 +25,8 @@ describe('ApiKeyAuth Middleware', () => {
 
     beforeEach(() => {
         apiKeyService = {
-            validateApiKey: vi.fn(),
-            updateLastUsed: vi.fn().mockResolvedValue()
+            validateKey: vi.fn(),
+            recordUsage: vi.fn().mockResolvedValue()
         };
         userService = {
             getUser: vi.fn()
@@ -80,7 +80,7 @@ describe('ApiKeyAuth Middleware', () => {
 
         it('should return 401 if API key validation fails', async () => {
             req.headers.authorization = `${BEARER_PREFIX}invalid-key`;
-            apiKeyService.validateApiKey.mockResolvedValue({ success: false, error: 'Invalid' });
+            apiKeyService.validateKey.mockResolvedValue({ success: false, error: 'Invalid' });
 
             await middleware.requireApiKey(req, res, next);
 
@@ -92,7 +92,7 @@ describe('ApiKeyAuth Middleware', () => {
 
         it('should return 401 if API key data is missing user_id', async () => {
             req.headers.authorization = `${BEARER_PREFIX}valid-key`;
-            apiKeyService.validateApiKey.mockResolvedValue({
+            apiKeyService.validateKey.mockResolvedValue({
                 success: true,
                 data: { organization_id: 'org-1' }
             });
@@ -107,7 +107,7 @@ describe('ApiKeyAuth Middleware', () => {
 
         it('should return 401 if user is not found', async () => {
             req.headers.authorization = `${BEARER_PREFIX}valid-key`;
-            apiKeyService.validateApiKey.mockResolvedValue({
+            apiKeyService.validateKey.mockResolvedValue({
                 success: true,
                 data: { user_id: 'user-1' }
             });
@@ -125,7 +125,7 @@ describe('ApiKeyAuth Middleware', () => {
             const keyData = { user_id: 'user-1', organization_id: 'org-1' };
             const user = { id: 'user-1', organization_id: 'org-1' };
             req.headers.authorization = `${BEARER_PREFIX}valid-key`;
-            apiKeyService.validateApiKey.mockResolvedValue({ success: true, data: keyData });
+            apiKeyService.validateKey.mockResolvedValue({ success: true, data: keyData });
             userService.getUser.mockResolvedValue(user);
 
             await middleware.requireApiKey(req, res, next);
@@ -134,13 +134,13 @@ describe('ApiKeyAuth Middleware', () => {
             expect(req.userId).toBe('user-1');
             expect(req.user).toBe(user);
             expect(req.apiKeyData).toBe(keyData);
-            expect(apiKeyService.updateLastUsed).toHaveBeenCalledWith('valid-key');
+            expect(apiKeyService.recordUsage).toHaveBeenCalledWith('valid-key');
             expect(next).toHaveBeenCalled();
         });
 
         it('should return 500 on unexpected errors', async () => {
             req.headers.authorization = `${BEARER_PREFIX}valid-key`;
-            apiKeyService.validateApiKey.mockRejectedValue(new Error('Unexpected'));
+            apiKeyService.validateKey.mockRejectedValue(new Error('Unexpected'));
 
             await middleware.requireApiKey(req, res, next);
 
@@ -159,7 +159,7 @@ describe('ApiKeyAuth Middleware', () => {
 
         it('should validate if Authorization header is present', async () => {
             req.headers.authorization = `${BEARER_PREFIX}valid-key`;
-            apiKeyService.validateApiKey.mockResolvedValue({ success: false });
+            apiKeyService.validateKey.mockResolvedValue({ success: false });
 
             await middleware.optionalApiKey(req, res, next);
 

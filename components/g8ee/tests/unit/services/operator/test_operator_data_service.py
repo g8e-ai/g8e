@@ -45,7 +45,7 @@ class TestOperatorDataService:
 
     async def test_get_operator_success(self, service, mock_cache):
         operator_id = "op-123"
-        mock_cache.get_document.return_value = {
+        mock_cache.get_document_with_cache.return_value = {
             "id": operator_id,
             "user_id": "user-test",
             "status": OperatorStatus.ACTIVE,
@@ -59,10 +59,10 @@ class TestOperatorDataService:
         assert isinstance(result, OperatorDocument)
         assert result.id == operator_id
         assert result.status == OperatorStatus.ACTIVE
-        mock_cache.get_document.assert_called_once_with(service.collection, operator_id)
+        mock_cache.get_document_with_cache.assert_called_once_with(service.collection, operator_id)
 
     async def test_get_operator_not_found(self, service, mock_cache):
-        mock_cache.get_document.return_value
+        mock_cache.get_document_with_cache.return_value = None
         result = await service.get_operator("nonexistent")
         assert result is None
 
@@ -73,7 +73,11 @@ class TestOperatorDataService:
     async def test_update_operator_status(self, service, mock_cache):
         operator_id = "op-123"
         mock_cache.update_document.return_value = CacheOperationResult(success=True)
-        mock_cache.get_document.return_value
+        mock_cache.get_document_with_cache.return_value = {
+            "id": operator_id,
+            "user_id": "user-test",
+            "status": OperatorStatus.BOUND,
+        }
 
         success = await service.update_operator_status(operator_id, OperatorStatus.ACTIVE)
 
@@ -86,7 +90,7 @@ class TestOperatorDataService:
     async def test_update_operator_status_active_does_not_overwrite_existing_heartbeat(self, service, mock_cache):
         operator_id = "op-hb-existing"
         existing_hb = now()
-        mock_cache.get_document.return_value = {
+        mock_cache.get_document_with_cache.return_value = {
             "id": operator_id,
             "user_id": "user-test",
             "status": OperatorStatus.BOUND,
@@ -100,7 +104,7 @@ class TestOperatorDataService:
         assert "last_heartbeat"not in kwargs["data"]
 
     async def test_update_operator_status_not_found_returns_false(self, service, mock_cache):
-        mock_cache.get_document.return_value
+        mock_cache.get_document_with_cache.return_value = None
         mock_cache.update_document.return_value = CacheOperationResult(success=False)
         
         success = await service.update_operator_status("missing", OperatorStatus.ACTIVE)

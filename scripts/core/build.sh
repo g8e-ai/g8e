@@ -38,6 +38,7 @@ echo ""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
+DEV_MODE=false
 COMPOSE="docker compose -f $PROJECT_ROOT/docker-compose.yml"
 
 MANAGED_SERVICES=(g8es g8ee g8ed g8ep)
@@ -102,6 +103,11 @@ while [[ $# -gt 0 ]]; do
         -h|--help)
             usage
             exit 0
+            ;;
+        --dev)
+            DEV_MODE=true
+            COMPOSE="$COMPOSE -f $PROJECT_ROOT/docker-compose.dev.yml"
+            shift
             ;;
         setup|up|down|restart|reset|wipe|clean|status|operator-build|operator-build-all)
             COMMAND="$1"
@@ -348,7 +354,11 @@ if [[ "$COMMAND" == "restart" ]]; then
     _preflight
     echo "Restarting managed containers (g8es, g8ee, g8ed, g8ep)..."
     $COMPOSE stop g8es g8ee g8ed g8ep 2>/dev/null || true
-    $COMPOSE up -d g8es g8ee g8ed g8ep
+    if [[ "$DEV_MODE" == true ]]; then
+        $COMPOSE --profile development up -d g8es g8ee g8ed g8ep
+    else
+        $COMPOSE up -d g8es g8ee g8ed g8ep
+    fi
     echo ""
     echo "Waiting for services..."
     _wait_healthy g8es     60  1
@@ -373,7 +383,7 @@ if [[ "$COMMAND" == "reset" ]]; then
 
     echo "Wiping DB data volumes (g8es, g8ee, g8ed) — SSL certs preserved..."
     $COMPOSE stop g8es g8ee g8ed g8ep 2>/dev/null || true
-    docker ps -aq --filter "name=^g8es$|^g8ee$|^g8ed$|^g8ep$" 2>/dev/null | xargs -r docker rm -f 2>/dev/null || true
+    $COMPOSE rm -f g8es g8ee g8ed g8ep 2>/dev/null || true
     for svc in g8es g8ee g8ed; do
         vol="$(_service_volume "$svc")"
         [[ -n "$vol" ]] && docker volume rm "$vol" 2>/dev/null || true
@@ -447,11 +457,10 @@ if [[ "$COMMAND" == "clean" ]]; then
 
     # 1. Stop and remove all containers with io.g8e.managed=true label
     echo "Stopping and removing containers..."
-    containers=$(docker ps -aq --filter "$FILTER_MANAGED" 2>/dev/null)
-    if [[ -n "$containers" ]]; then
-        echo "$containers" | xargs -r docker stop 2>/dev/null || true
-        echo "$containers" | xargs -r docker rm -f 2>/dev/null || true
-    fi
+    docker ps -aq --filter "$FILTER_MANAGED" 2>/dev/null | while read -r container; do
+        [[ -n "$container" ]] && docker stop "$container" 2>/dev/null || true
+        [[ -n "$container" ]] && docker rm -f "$container" 2>/dev/null || true
+    done
 
     # 2. Remove all volumes with io.g8e.managed=true label
     echo "Removing volumes..."
@@ -509,8 +518,13 @@ if [[ "$COMMAND" == "up" ]]; then
     if [[ ${#UP_COMPONENTS[@]} -eq 0 ]]; then
         UP_COMPONENTS=(g8es g8ee g8ed g8ep)
     fi
-    echo "Starting services (no build): ${UP_COMPONENTS[*]}..."
-    $COMPOSE up -d $(printf '%s\n' "${UP_COMPONENTS[@]}" | tr '\n' ' ')
+    if [[ "$DEV_MODE" == true ]]; then
+        echo "Starting services in development mode (hot-reload enabled): ${UP_COMPONENTS[*]}..."
+        $COMPOSE --profile development up -d $(printf '%s\n' "${UP_COMPONENTS[@]}" | tr '\n' ' ')
+    else
+        echo "Starting services (no build): ${UP_COMPONENTS[*]}..."
+        $COMPOSE up -d $(printf '%s\n' "${UP_COMPONENTS[@]}" | tr '\n' ' ')
+    fi
     echo ""
     echo "Waiting for services..."
     printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8es     && _wait_healthy g8es     60  1
@@ -569,8 +583,13 @@ if [[ "$COMMAND" == "rebuild" ]]; then
     echo "Removing containers for: ${REBUILD_COMPONENTS[*]}..."
     $COMPOSE rm -f "${REBUILD_COMPONENTS[@]}" 2>/dev/null || true
 
-    echo "Rebuilding and starting: ${REBUILD_COMPONENTS[*]}..."
-    $COMPOSE up -d --build --force-recreate "${REBUILD_COMPONENTS[@]}"
+    if [[ "$DEV_MODE" == true ]]; then
+        echo "Rebuilding and starting in development mode (hot-reload enabled): ${REBUILD_COMPONENTS[*]}..."
+        $COMPOSE --profile development up -d --build --force-recreate "${REBUILD_COMPONENTS[@]}"
+    else
+        echo "Rebuilding and starting: ${REBUILD_COMPONENTS[*]}..."
+        $COMPOSE up -d --build --force-recreate "${REBUILD_COMPONENTS[@]}"
+    fi
     echo ""
     echo "Waiting for services..."
     printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8es  && _wait_healthy g8es     300 2

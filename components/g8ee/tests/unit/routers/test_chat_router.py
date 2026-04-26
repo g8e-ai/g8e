@@ -48,7 +48,7 @@ class TestGetChatSession:
             user_id=user_id,
             case_id="case-789",
         )
-        mock_investigation_service.get_investigation = AsyncMock(return_value=investigation)
+        mock_investigation_service.investigation_data_service.get_investigation = AsyncMock(return_value=investigation)
 
         result = await get_chat_session(
             web_session_id=web_session_id,
@@ -82,7 +82,7 @@ class TestGetChatSession:
             user_id=owner_id,
             case_id="case-789",
         )
-        mock_investigation_service.get_investigation = AsyncMock(return_value=investigation)
+        mock_investigation_service.investigation_data_service.get_investigation = AsyncMock(return_value=investigation)
 
         with pytest.raises(ResourceNotFoundError) as exc_info:
             await get_chat_session(
@@ -107,7 +107,7 @@ class TestGetChatSession:
 
         mock_request = MagicMock(spec=Request)
         mock_investigation_service = MagicMock()
-        mock_investigation_service.get_investigation = AsyncMock(return_value=None)
+        mock_investigation_service.investigation_data_service.get_investigation = AsyncMock(return_value=None)
 
         with pytest.raises(ResourceNotFoundError) as exc_info:
             await get_chat_session(
@@ -140,7 +140,7 @@ class TestGetChatSession:
             case_id="case-789",
             status=InvestigationStatus.CLOSED,
         )
-        mock_investigation_service.get_investigation = AsyncMock(return_value=investigation)
+        mock_investigation_service.investigation_data_service.get_investigation = AsyncMock(return_value=investigation)
 
         result = await get_chat_session(
             web_session_id="session-closed",
@@ -183,7 +183,7 @@ class TestGetLatestChatSessionForCase:
         investigation.conversation_history = [
             create_conversation_message(sender=EventType.EVENT_SOURCE_USER_CHAT, content="Hello")
         ]
-        mock_investigation_service.get_case_investigations = AsyncMock(return_value=[investigation])
+        mock_investigation_service.investigation_data_service.get_case_investigations = AsyncMock(return_value=[investigation])
 
         result = await get_latest_chat_session_for_case(
             case_id="case-789",
@@ -216,7 +216,7 @@ class TestGetLatestChatSessionForCase:
 
         case = build_case_model(case_id="case-empty", user_id=user_id, title="Empty Case")
         mock_case_service.get_case = AsyncMock(return_value=case)
-        mock_investigation_service.get_case_investigations = AsyncMock(return_value=[])
+        mock_investigation_service.investigation_data_service.get_case_investigations = AsyncMock(return_value=[])
 
         result = await get_latest_chat_session_for_case(
             case_id="case-empty",
@@ -253,7 +253,7 @@ class TestGetLatestChatSessionForCase:
         inv_old.conversation_history = [create_conversation_message(sender=EventType.EVENT_SOURCE_USER_CHAT, content="Old")]
         inv_new = create_investigation_data(investigation_id="inv-new", case_id="case-789", user_id=user_id)
         inv_new.conversation_history = [create_conversation_message(sender=EventType.EVENT_SOURCE_USER_CHAT, content="New")]
-        mock_investigation_service.get_case_investigations = AsyncMock(
+        mock_investigation_service.investigation_data_service.get_case_investigations = AsyncMock(
             return_value=[inv_old, inv_new]
         )
 

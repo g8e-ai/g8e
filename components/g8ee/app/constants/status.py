@@ -29,6 +29,27 @@ def _load(filename: str) -> dict:
 
 _STATUS = _load("status.json")
 
+class OperatorHistoryEventType(str, Enum):
+    CREATED = _STATUS["history.event.type"]["created"]
+    SLOT_CREATED = _STATUS["history.event.type"]["slot.created"]
+    SLOT_CONSUMED = _STATUS["history.event.type"]["slot.consumed"]
+    SLOT_RELEASED = _STATUS["history.event.type"]["slot.released"]
+    BOUND = _STATUS["history.event.type"]["bound"]
+    UNBOUND = _STATUS["history.event.type"]["unbound"]
+    HEARTBEAT_RECEIVED = _STATUS["history.event.type"]["heartbeat.received"]
+    STATUS_CHANGED = _STATUS["history.event.type"]["status.changed"]
+    API_KEY_REFRESHED = _STATUS["history.event.type"]["api.key.refreshed"]
+    CREATED_FROM_REFRESH = _STATUS["history.event.type"]["created.from.refresh"]
+    TERMINATED_FOR_REFRESH = _STATUS["history.event.type"]["terminated.for.refresh"]
+    RESET = _STATUS["history.event.type"]["reset"]
+    TERMINATED = _STATUS["history.event.type"]["terminated"]
+    AUTHENTICATED = _STATUS["history.event.type"]["authenticated"]
+    DEACTIVATED = _STATUS["history.event.type"]["deactivated"]
+    STOPPED = _STATUS["history.event.type"]["stopped"]
+    SHUTDOWN_REQUESTED = _STATUS["history.event.type"]["shutdown.requested"]
+    CLAIMED = _STATUS["history.event.type"]["claimed"]
+    RECONNECTED = _STATUS["history.event.type"]["reconnected"]
+
 class OperatorStatus(str, Enum):
     AVAILABLE = _STATUS["g8e.status"]["available"]
     UNAVAILABLE = _STATUS["g8e.status"]["unavailable"]
@@ -89,6 +110,7 @@ class ApprovalType(str, Enum):
     FILE_EDIT = _STATUS["approval.type"]["file.edit"]
     INTENT = _STATUS["approval.type"]["intent"]
     AGENT_CONTINUE = _STATUS["approval.type"]["agent.continue"]
+    STREAM = _STATUS["approval.type"]["stream"]
 
 class CaseStatus(str, Enum):
     NEW = "New"
@@ -261,6 +283,25 @@ class RiskThreshold(str, Enum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
+
+class SessionEndReason(str, Enum):
+    LOGOUT = _STATUS["session.end.reason"]["user.logout"]
+    INTEGRITY_FAILURE = _STATUS["session.end.reason"]["integrity.failure"]
+    SESSION_REGENERATION = _STATUS["session.end.reason"]["session.regeneration"]
+    INVALIDATE_ALL = _STATUS["session.end.reason"]["invalidate.all"]
+    USER_DELETED = _STATUS["session.end.reason"]["user.deleted"]
+    TIMEOUT_ABSOLUTE = _STATUS["session.event.type"]["session.timeout.absolute"]
+    TIMEOUT_IDLE = _STATUS["session.event.type"]["session.timeout.idle"]
+
+class SessionEventType(str, Enum):
+    SESSION_CREATED = _STATUS["session.event.type"]["session.created"]
+    SESSION_ENDED = _STATUS["session.event.type"]["session.ended"]
+    SESSION_REGENERATED = _STATUS["session.event.type"]["session.regenerated"]
+    SESSION_TIMEOUT_ABSOLUTE = _STATUS["session.event.type"]["session.timeout.absolute"]
+    SESSION_TIMEOUT_IDLE = _STATUS["session.event.type"]["session.timeout.idle"]
+    SESSION_SUSPICIOUS_ACTIVITY = _STATUS["session.event.type"]["session.suspicious.activity"]
+    G8E_BOUND = _STATUS["session.event.type"]["g8e.bound"]
+    G8E_UNBOUND = _STATUS["session.event.type"]["g8e.unbound"]
 
 class SessionType(str, Enum):
     WEB = "web"

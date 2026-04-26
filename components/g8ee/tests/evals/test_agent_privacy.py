@@ -170,7 +170,7 @@ async def test_agent_privacy(
                 if "Sentinel scrubbed" in record.message:
                     scrub_types_logged.append(record.message)
 
-            conversation_history = await investigation_service.get_chat_messages(
+            conversation_history = await investigation_service.investigation_data_service.get_chat_messages(
                 investigation_id=created_investigation.id
             )
 

@@ -324,7 +324,7 @@ async def test_agent_benchmark(
         captured_tribunal = _extract_tribunal_from_events(fake_event_service.published)
         captured_tool_calls = _extract_tool_calls_from_events(fake_event_service.published)
 
-        conversation_history = await investigation_service.get_chat_messages(
+        conversation_history = await investigation_service.investigation_data_service.get_chat_messages(
             investigation_id=created_investigation.id
         )
         for msg in reversed(conversation_history):

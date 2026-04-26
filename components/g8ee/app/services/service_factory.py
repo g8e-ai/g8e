@@ -30,6 +30,7 @@ from app.services.investigation.investigation_service import InvestigationServic
 from app.services.investigation.investigation_data_service import InvestigationDataService
 from app.services.investigation.memory_data_service import MemoryDataService
 from app.services.operator.approval_service import OperatorApprovalService
+from app.services.operator.stream_executor import OperatorStreamExecutor
 from app.services.ai.reputation_service import ReputationService
 from app.services.data.agent_activity_data_service import AgentActivityDataService
 from app.services.data.reputation_data_service import ReputationDataService
@@ -37,6 +38,12 @@ from app.services.data.stake_resolution_data_service import StakeResolutionDataS
 from app.services.infra.http_service import HTTPService
 from app.services.infra.internal_http_client import InternalHttpClient
 from app.services.infra.g8ed_event_service import EventService
+from app.services.auth.api_key_service import ApiKeyService
+from app.services.auth.certificate_service import CertificateService
+from app.services.operator.operator_session_service import OperatorSessionService
+from app.services.operator.operator_auth_service import OperatorAuthService
+from app.services.operator.session_auth_listener import SessionAuthListener
+from app.services.operator.heartbeat_stale_monitor import HeartbeatStaleMonitorService
 from app.services.protocols import (
     HTTPServiceProtocol,
     InvestigationServiceProtocol,
@@ -44,6 +51,7 @@ from app.services.protocols import (
     OperatorDataServiceProtocol,
     MemoryDataServiceProtocol,
     OperatorHeartbeatServiceProtocol,
+    OperatorHeartbeatStaleMonitorServiceProtocol,
     EventServiceProtocol,
     AIResponseAnalyzerProtocol,
     ToolExecutorProtocol,
@@ -91,6 +99,12 @@ class DomainServices(TypedDict):
 
 class OperatorServices(TypedDict):
     heartbeat_service: OperatorHeartbeatService | OperatorHeartbeatServiceProtocol
+    heartbeat_stale_monitor: HeartbeatStaleMonitorService | OperatorHeartbeatStaleMonitorServiceProtocol
+    operator_session_service: OperatorSessionService
+    operator_auth_service: OperatorAuthService
+    session_auth_listener: SessionAuthListener
+    api_key_service: ApiKeyService
+    certificate_service: CertificateService
 
 
 class AllServices(CoreServices, DataServices, DomainServices, OperatorServices):
@@ -101,6 +115,7 @@ class AllServices(CoreServices, DataServices, DomainServices, OperatorServices):
     grounding_service: GroundingService
     web_search_provider: Optional[WebSearchProvider]
     approval_service: OperatorApprovalService | ApprovalServiceProtocol
+    stream_executor: OperatorStreamExecutor
     operator_command_service: OperatorCommandService
     tool_service: ToolExecutorProtocol
     tool_executor: ToolExecutorProtocol
@@ -223,15 +238,47 @@ class ServiceFactory:
     def create_operator_services(
         core_services: CoreServices,
         data_services: DataServices,
+        cache_aside_service: CacheAsideService,
     ) -> OperatorServices:
         """Create operator-specific services."""
+        api_key_service = ApiKeyService(cache_aside=cache_aside_service)
+        
+        operator_session_service = OperatorSessionService(cache_aside=cache_aside_service)
+        
+        certificate_service = CertificateService()
+
+        operator_auth_service = OperatorAuthService(
+            api_key_service=api_key_service,
+            session_service=operator_session_service,
+            operator_data_service=data_services['operator_data_service'], # type: ignore[arg-type]
+            certificate_service=certificate_service,
+            cache_aside=cache_aside_service
+        )
+
+        session_auth_listener = SessionAuthListener(
+            pubsub_client=None, # Will be set in create_all_services
+            session_service=operator_session_service,
+            operator_data_service=data_services['operator_data_service'], # type: ignore[arg-type]
+        )
+
         heartbeat_service = OperatorHeartbeatService(
+            operator_data_service=data_services['operator_data_service'],
+            event_service=core_services['g8ed_event_service'],
+        )
+
+        heartbeat_stale_monitor = HeartbeatStaleMonitorService(
             operator_data_service=data_services['operator_data_service'],
             event_service=core_services['g8ed_event_service'],
         )
 
         return OperatorServices(
             heartbeat_service=heartbeat_service,
+            heartbeat_stale_monitor=heartbeat_stale_monitor,
+            operator_session_service=operator_session_service,
+            operator_auth_service=operator_auth_service,
+            session_auth_listener=session_auth_listener,
+            api_key_service=api_key_service,
+            certificate_service=certificate_service,
         )
     
     @staticmethod
@@ -254,7 +301,7 @@ class ServiceFactory:
         core_services = ServiceFactory.create_core_services(settings, cache_aside_service)
         data_services = ServiceFactory.create_data_services(settings, cache_aside_service, core_services)
         domain_services = ServiceFactory.create_domain_services(settings, data_services)
-        operator_services = ServiceFactory.create_operator_services(core_services, data_services)
+        operator_services = ServiceFactory.create_operator_services(core_services, data_services, cache_aside_service)
 
         attachment_service = AttachmentService(
             blob_service=blob_service,  # type: ignore[arg-type]
@@ -278,6 +325,12 @@ class ServiceFactory:
             investigation_data_service=data_services['investigation_data_service'],
         )
 
+        stream_executor = OperatorStreamExecutor(
+            approval_service=approval_service,
+            internal_http_client=core_services['internal_http_client'],
+            settings=settings,
+        )
+
         operator_command_service = OperatorCommandService.build(
             cache_aside_service=cache_aside_service,
             operator_data_service=data_services['operator_data_service'],  # type: ignore[arg-type]
@@ -292,6 +345,7 @@ class ServiceFactory:
         if pubsub_client is not None:
             operator_command_service.set_pubsub_client(cast("PubSubClient", pubsub_client))
             operator_services['heartbeat_service'].set_pubsub_client(cast("PubSubClient", pubsub_client))
+            operator_services['session_auth_listener'].pubsub_client = cast("PubSubClient", pubsub_client)
 
         chat_task_manager = BackgroundTaskManager()
 
@@ -300,9 +354,9 @@ class ServiceFactory:
             investigation_service=cast(InvestigationService, domain_services['investigation_service']),
             reputation_data_service=data_services['reputation_data_service'],
             reputation_service=domain_services['reputation_service'],
-            stake_resolution_data_service=data_services['stake_resolution_data_service'],
             chat_task_manager=chat_task_manager,
             ssh_inventory_service=domain_services['ssh_inventory_service'],
+            stream_executor=stream_executor,
             web_search_provider=web_search_provider,
             platform_settings=settings,
         )
@@ -335,6 +389,7 @@ class ServiceFactory:
             grounding_service=grounding_service,
             web_search_provider=web_search_provider,
             approval_service=approval_service,
+            stream_executor=stream_executor,
             operator_command_service=operator_command_service,
             tool_service=tool_executor,
             tool_executor=tool_executor,
@@ -367,9 +422,11 @@ class ServiceFactory:
     @staticmethod
     async def start_services(services: AllServices) -> None:
         """Run lifecycle start hooks for services that require them."""
+        await services['certificate_service'].initialize()
         await services['operator_command_service'].start_pubsub_listeners()
         await services['http_service'].start()
         await services['heartbeat_service'].start()
+        await services['heartbeat_stale_monitor'].start()
 
     @staticmethod
     async def stop_services(services: AllServices) -> None:
@@ -385,6 +442,11 @@ class ServiceFactory:
             _logger.warning("Background tasks did not complete within 5s timeout, proceeding with shutdown")
         except Exception as exc:
             _logger.error("Error awaiting background tasks: %s", exc)
+
+        try:
+            await services['heartbeat_stale_monitor'].stop()
+        except Exception as exc:
+            _logger.error("Error stopping heartbeat stale monitor: %s", exc)
 
         try:
             await services['heartbeat_service'].stop()

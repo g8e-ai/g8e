@@ -173,8 +173,6 @@ def make_g8e_agent(
     if fn_handler is None:
         fn_handler = MagicMock()
         fn_handler._tool_declarations = {}
-        fn_handler.start_invocation_context = MagicMock(return_value=None)
-        fn_handler.reset_invocation_context = MagicMock()
 
     return g8eEngine(
         tool_executor=fn_handler,

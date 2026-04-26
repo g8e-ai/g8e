@@ -594,7 +594,7 @@ curl -fsSL http://<host>/g8e | sh -s -- <device-link-token>
 
 **Key rules:**
 - `available` is the default state — operator has been provisioned but never authenticated
-- `stale` is set by g8ed's `HeartbeatMonitorService` when a heartbeat has not been received within the stale threshold (`OperatorStaleThreshold.SECONDS`, default 60s). g8ed owns operator bind/auth state and is therefore authoritative for the staleness of that binding.
+- `stale` is set by g8ee's `HeartbeatStaleMonitorService` when a heartbeat has not been received within the stale threshold (60s). g8ee is authoritative for heartbeat status decay since it ingests all heartbeats.
 - Successful auth transitions directly from `available` to `active`
 - Binding is **always manual** — user clicks "Bind" in the UI
 - Each web session can bind to **multiple** operators simultaneously
@@ -658,12 +658,12 @@ Additionally, `OperatorService.syncSessionOnConnect(userId, webSessionId)` handl
 
 g8eo sends heartbeats every 30 seconds directly to g8es pub/sub. g8ee subscribes, validates, and persists `last_heartbeat` / `latest_heartbeat_snapshot` to the g8es document store, then notifies g8ed via HTTP POST so g8ed can broadcast the metrics envelope over SSE.
 
-Staleness reconciliation is owned by g8ed, not g8ee: `HeartbeatMonitorService` (`services/operator/heartbeat_monitor_service.js`) runs on a timer inside g8ed and reconciles operator `status` against the age of `last_heartbeat`. Transitions are bidirectional:
+Staleness reconciliation is owned by g8ee: `HeartbeatStaleMonitorService` (`app/services/operator/heartbeat_stale_monitor.py`) runs on a timer inside g8ee and reconciles operator `status` against the age of `last_heartbeat`. Transitions are bidirectional:
 
-- `BOUND → STALE` and `ACTIVE → OFFLINE` when `(now - last_heartbeat) > OperatorStaleThreshold.SECONDS`
+- `BOUND → STALE` and `ACTIVE → OFFLINE` when `(now - last_heartbeat) > 60s`
 - `STALE → BOUND` and `OFFLINE → ACTIVE` when a fresh heartbeat resumes
 
-On each transition the updated status is persisted via `CacheAsideService` and an `OPERATOR_STATUS_UPDATED_*` SSE event is fanned out to the owning user's active sessions.
+On each transition the updated status is persisted via g8ee's `CacheAsideService` and an `OPERATOR_STATUS_UPDATED_*` SSE event is published to g8ed for fanning out to the owning user's active sessions.
 
 ```
 g8eo (every 30s)

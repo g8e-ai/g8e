@@ -196,7 +196,7 @@ async def test_agent_accuracy(
         await auto_approve_pending(approval_service)
 
         # Step 4: Read conversation history from g8es to extract AI response
-        conversation_history = await investigation_service.get_chat_messages(
+        conversation_history = await investigation_service.investigation_data_service.get_chat_messages(
             investigation_id=created_investigation.id
         )
 

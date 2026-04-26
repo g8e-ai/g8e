@@ -318,8 +318,6 @@ describe('Setup Flow End-to-End Tests', () => {
 
             expect(response.text).toContain('data-step="1"');
             expect(response.text).toContain('data-step="2"');
-            expect(response.text).toContain('data-step="3"');
-            expect(response.text).toContain('data-step="4"');
 
             // Check for key elements
             expect(response.text).toContain('account_email');
@@ -451,11 +449,16 @@ describe('Setup Flow End-to-End Tests', () => {
             expect(dup.body.error.code).toBe('USER_ALREADY_EXISTS');
         });
 
-        it('should validate required fields in registration', async () => {
+        it('should default missing email in registration during first-run', async () => {
             const invalidData = {
                 email: '',
                 name: 'Test User',
-                settings: {}
+                settings: {
+                    llm_primary_provider: LLMProvider.GEMINI,
+                    llm_model: GeminiModel.PRO_PREVIEW,
+                    llm_assistant_model: GeminiModel.FLASH_PREVIEW,
+                    gemini_api_key: 'test-api-key-12345'
+                }
             };
 
             const response = await request(app)
@@ -463,10 +466,15 @@ describe('Setup Flow End-to-End Tests', () => {
                 .send(invalidData)
                 .timeout(5000);
 
-            expect(response.status).toBeGreaterThanOrEqual(400);
-            expect(response.body.error).toBeDefined();
-            expect(response.body.error.message).toBeDefined();
-            expect(response.body.success).toBeUndefined();
+            expect(response.status).toBe(201);
+            expect(response.body.user_id).toBeDefined();
+            
+            // Track created user for cleanup
+            cleanup.trackUser(response.body.user_id);
+
+            // Verify user was created with default email
+            const user = await userService.getUser(response.body.user_id);
+            expect(user.email).toBe('superadmin@g8e.local');
         });
     });
 

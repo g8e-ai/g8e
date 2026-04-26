@@ -153,6 +153,11 @@ class EventType(str, Enum):
     OPERATOR_COMMAND_APPROVAL_GRANTED = "g8e.v1.operator.command.approval.granted"
     OPERATOR_COMMAND_APPROVAL_REJECTED = "g8e.v1.operator.command.approval.rejected"
 
+    # operator.stream
+    OPERATOR_STREAM_APPROVAL_REQUESTED = "g8e.v1.operator.stream.approval.requested"
+    OPERATOR_STREAM_APPROVAL_GRANTED = "g8e.v1.operator.stream.approval.granted"
+    OPERATOR_STREAM_APPROVAL_REJECTED = "g8e.v1.operator.stream.approval.rejected"
+
     # operator.file
     OPERATOR_FILE_EDIT_REQUESTED = "g8e.v1.operator.file.edit.requested"
     OPERATOR_FILE_EDIT_STARTED = "g8e.v1.operator.file.edit.started"

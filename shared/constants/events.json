@@ -130,6 +130,13 @@
         "preparing": "g8e.v1.operator.command.approval.preparing"
       }
     },
+    "stream": {
+      "approval": {
+        "requested": "g8e.v1.operator.stream.approval.requested",
+        "granted": "g8e.v1.operator.stream.approval.granted",
+        "rejected": "g8e.v1.operator.stream.approval.rejected"
+      }
+    },
     "file": {
       "edit": {
         "requested": "g8e.v1.operator.file.edit.requested",

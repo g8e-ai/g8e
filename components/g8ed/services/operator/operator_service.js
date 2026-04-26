@@ -41,7 +41,6 @@ class OperatorService {
      * @param {Object} [options.userService] - UserService instance
      * @param {Object} [options.apiKeyService] - ApiKeyService instance
      * @param {Object} [options.certificateService] - CertificateService instance
-     * @param {Object} [options.operatorSessionService] - OperatorSessionService instance
      * @param {Object} [options.webSessionService] - WebSessionService instance
      * @param {Object} [options.sseService] - SSEService instance
      */
@@ -50,7 +49,6 @@ class OperatorService {
         userService,
         apiKeyService,
         certificateService,
-        operatorSessionService,
         webSessionService,
         sseService
     }) {
@@ -60,7 +58,6 @@ class OperatorService {
         this.userService = userService;
         this.apiKeyService = apiKeyService;
         this.certificateService = certificateService;
-        this.operatorSessionService = operatorSessionService;
         this.webSessionService = webSessionService;
         this.sseService = sseService;
         
@@ -71,7 +68,7 @@ class OperatorService {
             operatorDataService: this.operatorDataService,
             apiKeyService,
             certificateService,
-            operatorSessionService,
+            operatorService: this,
         });
 
         this.relay = new OperatorRelayService();
@@ -131,8 +128,15 @@ class OperatorService {
     async getOperatorWithSessionContext(operatorId) {
         const operator = await this.getOperator(operatorId);
         if (!operator) return null;
-        const operatorSession = operator.operator_session_id && this.operatorSessionService
-            ? await this.operatorSessionService.validateSession(operator.operator_session_id)
+        
+        const g8eContext = {
+            user_id: operator.user_id,
+            organization_id: operator.organization_id,
+            source_component: 'g8ed',
+        };
+
+        const operatorSession = operator.operator_session_id
+            ? await this.relay.relayValidateOperatorSessionToG8ee(operator.operator_session_id, g8eContext).then(res => res.session).catch(() => null)
             : null;
         const webSession = operator.bound_web_session_id && this.webSessionService
             ? await this.webSessionService.validateSession(operator.bound_web_session_id)
@@ -160,6 +164,42 @@ class OperatorService {
 
     async relayApprovalResponseToG8ee(approvalData, g8eContext) {
         return this.relay.relayApprovalResponseToG8ee(approvalData, g8eContext);
+    }
+
+    async relayCreateOperatorSlotToG8ee(params, g8eContext) {
+        return this.relay.relayCreateOperatorSlotToG8ee(params, g8eContext);
+    }
+
+    async relayClaimOperatorSlotToG8ee(params, g8eContext) {
+        return this.relay.relayClaimOperatorSlotToG8ee(params, g8eContext);
+    }
+
+    async relayBindOperatorsToG8ee(params, g8eContext) {
+        return this.relay.relayBindOperatorsToG8ee(params, g8eContext);
+    }
+
+    async relayUnbindOperatorsToG8ee(params, g8eContext) {
+        return this.relay.relayUnbindOperatorsToG8ee(params, g8eContext);
+    }
+
+    async relayAuthenticateOperatorToG8ee(params, g8eContext) {
+        return this.relay.relayAuthenticateOperatorToG8ee(params, g8eContext);
+    }
+
+    async relayValidateOperatorSessionToG8ee(operatorSessionId, g8eContext) {
+        return this.relay.relayValidateOperatorSessionToG8ee(operatorSessionId, g8eContext);
+    }
+
+    async relayRefreshOperatorSessionToG8ee(operatorSessionId, g8eContext) {
+        return this.relay.relayRefreshOperatorSessionToG8ee(operatorSessionId, g8eContext);
+    }
+
+    async relayEndOperatorSessionToG8ee(operatorSessionId, g8eContext) {
+        return this.relay.relayEndOperatorSessionToG8ee(operatorSessionId, g8eContext);
+    }
+
+    async relayListenSessionAuthToG8ee(params, g8eContext) {
+        return this.relay.relayListenSessionAuthToG8ee(params, g8eContext);
     }
 
     // --- Slots ---

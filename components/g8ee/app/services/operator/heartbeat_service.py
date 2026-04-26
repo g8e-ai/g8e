@@ -39,11 +39,19 @@ class OperatorHeartbeatService:
         operator_data_service: OperatorDataServiceProtocol,
         event_service: EventServiceProtocol,
     ):
-        self.operator_data_service = operator_data_service
-        self.event_service = event_service
+        self._operator_data_service = operator_data_service
+        self._event_service = event_service
         self._pubsub_client: PubSubClient | None = None
         self._active_sessions: set[tuple[str, str]] = set()
         self._ready = False
+
+    @property
+    def operator_data_service(self) -> OperatorDataServiceProtocol:
+        return self._operator_data_service
+
+    @property
+    def event_service(self) -> EventServiceProtocol:
+        return self._event_service
 
     def set_pubsub_client(self, client: PubSubClient) -> None:
         if not client:
@@ -58,6 +66,17 @@ class OperatorHeartbeatService:
         if not self._pubsub_client:
             raise ConfigurationError("pubsub_client must be set before calling start()", component="g8ee")
         await self._pubsub_client.ensure_connected()
+        
+        # Re-register all previously active sessions after reconnect
+        for operator_id, operator_session_id in list(self._active_sessions):
+            channel = PubSubChannel.heartbeat(operator_id, operator_session_id)
+            self._pubsub_client.on_channel_message(channel, self._on_heartbeat_message)
+            await self._pubsub_client.subscribe(channel)
+            logger.info(
+                "[HEARTBEAT] Re-registered operator session after reconnect",
+                extra={"operator_id": operator_id, "operator_session_id": operator_session_id},
+            )
+        
         self._ready = True
         logger.info("[HEARTBEAT] Pub/sub client ready")
 
@@ -69,8 +88,7 @@ class OperatorHeartbeatService:
 
     async def _on_ws_disconnect(self) -> None:
         self._ready = False
-        self._active_sessions.clear()
-        logger.warning("[HEARTBEAT] WebSocket disconnected — ready state reset, subscriptions cleared")
+        logger.warning("[HEARTBEAT] WebSocket disconnected — ready state reset, preserving active sessions for re-subscription")
 
     async def register_operator_session(self, operator_id: str, operator_session_id: str) -> None:
         key = (operator_id, operator_session_id)

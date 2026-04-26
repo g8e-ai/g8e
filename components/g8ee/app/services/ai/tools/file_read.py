@@ -24,6 +24,7 @@ from app.constants.status import FileOperation, OperatorToolName
 from app.llm.llm_types import schema_from_model
 from app.llm.prompts import load_prompt
 from app.models.command_request_payloads import FileEditRequestPayload
+from app.services.ai.tools._base import convert_args_to_payload
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.settings import G8eeUserSettings
@@ -53,11 +54,12 @@ async def handle(
     request_settings: G8eeUserSettings,
     execution_id: str,
 ) -> ToolResult:
-    args = FileEditRequestPayload.model_validate({
-        **tool_args,
-        "execution_id": execution_id,
-        "operation": FileOperation.READ,
-    })
+    args = convert_args_to_payload(
+        tool_args,
+        FileEditRequestPayload,
+        execution_id,
+        operation=FileOperation.READ,
+    )
     logger.info("[FILE_READ] File path: %s", args.file_path)
     result = await svc.operator_command_service.execute_file_edit(
         args=args, g8e_context=g8e_context, investigation=investigation,

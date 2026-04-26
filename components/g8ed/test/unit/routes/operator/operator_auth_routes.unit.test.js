@@ -32,19 +32,16 @@ import { OperatorAuthError, AuthError, ApiKeyError } from '@g8ed/constants/auth.
 
 describe('OperatorAuthRoutes Unit Tests', () => {
     let app;
-    let mockOperatorAuthService;
-    let mockOperatorSessionService;
+    let mockOperatorService;
     let mockCliSessionService;
     let mockRateLimiters;
     let mockRequestTimestampMiddleware;
 
     beforeEach(() => {
-        mockOperatorAuthService = {
-            authenticateOperator: vi.fn()
-        };
-        mockOperatorSessionService = {
-            validateSession: vi.fn(),
-            refreshSession: vi.fn()
+        mockOperatorService = {
+            relayAuthenticateOperatorToG8ee: vi.fn(),
+            relayRefreshOperatorSessionToG8ee: vi.fn(),
+            relayValidateOperatorSessionToG8ee: vi.fn()
         };
         mockCliSessionService = {
             validateSession: vi.fn()
@@ -56,10 +53,22 @@ describe('OperatorAuthRoutes Unit Tests', () => {
             requireRequestTimestamp: vi.fn(() => (req, res, next) => next())
         };
 
+        app = express();
+        app.use(express.json());
+        
+        // Mock middleware to set g8eContext on request
+        app.use((req, res, next) => {
+            req.g8eContext = {
+                web_session_id: 'test-web-session',
+                user_id: 'test-user-id',
+                organization_id: 'test-org-id'
+            };
+            next();
+        });
+
         const router = createOperatorAuthRouter({
             services: {
-                operatorAuthService: mockOperatorAuthService,
-                operatorSessionService: mockOperatorSessionService,
+                operatorService: mockOperatorService,
                 cliSessionService: mockCliSessionService
             },
 
@@ -67,18 +76,19 @@ describe('OperatorAuthRoutes Unit Tests', () => {
             requestTimestampMiddleware: mockRequestTimestampMiddleware
         });
 
-        app = express();
-        app.use(express.json());
         app.use('/api/auth', router);
     });
 
     describe(`POST ${AuthPaths.OPERATOR_AUTH}`, () => {
-        it('successfully authenticates operator', async () => {
-            mockOperatorAuthService.authenticateOperator.mockResolvedValue({
+        it('successfully authenticates operator via g8ee relay', async () => {
+            mockOperatorService.relayAuthenticateOperatorToG8ee.mockResolvedValue({
                 success: true,
-                response: {
-                    forClient: () => ({ success: true, operator_id: 'test-op-id' })
-                }
+                operator_session_id: 'test-session-id',
+                operator_id: 'test-op-id',
+                user_id: 'test-user-id',
+                api_key: 'test-api-key',
+                config: {},
+                session: { id: 'test-session-id', expires_at: null, created_at: null }
             });
 
             const res = await request(app)
@@ -88,18 +98,25 @@ describe('OperatorAuthRoutes Unit Tests', () => {
 
             expect(res.status).toBe(200);
             expect(res.body.success).toBe(true);
-            expect(mockOperatorAuthService.authenticateOperator).toHaveBeenCalledWith({
-                authorizationHeader: 'Bearer test-token',
-                body: { system_info: { os: 'linux' } }
-            });
+            expect(mockOperatorService.relayAuthenticateOperatorToG8ee).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    system_info: { os: 'linux' },
+                    authorization_header: 'Bearer test-token'
+                }),
+                expect.objectContaining({
+                    web_session_id: 'test-web-session',
+                    user_id: 'test-user-id',
+                    organization_id: 'test-org-id'
+                })
+            );
         });
 
-        it('returns error when authentication fails', async () => {
-            mockOperatorAuthService.authenticateOperator.mockResolvedValue({
+        it('returns error when g8ee authentication fails', async () => {
+            mockOperatorService.relayAuthenticateOperatorToG8ee.mockResolvedValue({
                 success: false,
                 statusCode: 401,
                 error: 'Invalid key',
-                code: 'INVALID_KEY'
+                message: 'Authentication failed'
             });
 
             const res = await request(app).post('/api/auth/operator');
@@ -109,7 +126,7 @@ describe('OperatorAuthRoutes Unit Tests', () => {
         });
 
         it('returns 500 on unexpected error', async () => {
-            mockOperatorAuthService.authenticateOperator.mockRejectedValue(new Error('Fatal'));
+            mockOperatorService.relayAuthenticateOperatorToG8ee.mockRejectedValue(new Error('Fatal'));
 
             const res = await request(app).post('/api/auth/operator');
 
@@ -119,18 +136,24 @@ describe('OperatorAuthRoutes Unit Tests', () => {
     });
 
     describe(`POST ${AuthPaths.OPERATOR_REFRESH}`, () => {
-        it('successfully refreshes operator session', async () => {
-            const mockSession = { operator_id: 'test-op-id', expires_at: 12345, operator_status: 'ACTIVE' };
-            mockOperatorSessionService.validateSession.mockResolvedValue(mockSession);
-            mockOperatorSessionService.refreshSession.mockResolvedValue(true);
+        it('successfully refreshes operator session via g8ee relay', async () => {
+            mockOperatorService.relayRefreshOperatorSessionToG8ee.mockResolvedValue({
+                success: true,
+                operator_id: 'test-op-id',
+                session: { expires_at: 12345 }
+            });
 
             const res = await request(app)
                 .post('/api/auth/operator/refresh')
                 .send({ operator_session_id: 'test-session-id' });
 
             expect(res.status).toBe(200);
-            expect(res.body.session.operator_id).toBe('test-op-id');
-            expect(mockOperatorSessionService.refreshSession).toHaveBeenCalledWith('test-session-id', mockSession);
+            expect(res.body.operator_id).toBe('test-op-id');
+            expect(mockOperatorService.relayRefreshOperatorSessionToG8ee).toHaveBeenCalledWith('test-session-id', expect.objectContaining({
+                web_session_id: 'test-web-session',
+                user_id: 'test-user-id',
+                organization_id: 'test-org-id'
+            }));
         });
 
         it('returns 400 if operator_session_id is missing', async () => {
@@ -140,8 +163,12 @@ describe('OperatorAuthRoutes Unit Tests', () => {
             expect(res.body.error).toBe(OperatorAuthError.MISSING_OPERATOR_SESSION_ID);
         });
 
-        it('returns 401 if session is invalid', async () => {
-            mockOperatorSessionService.validateSession.mockResolvedValue(null);
+        it('returns 401 if g8ee refresh fails', async () => {
+            mockOperatorService.relayRefreshOperatorSessionToG8ee.mockResolvedValue({
+                success: false,
+                statusCode: 401,
+                error: AuthError.INVALID_OR_EXPIRED_SESSION
+            });
 
             const res = await request(app)
                 .post('/api/auth/operator/refresh')
@@ -153,8 +180,9 @@ describe('OperatorAuthRoutes Unit Tests', () => {
     });
 
     describe(`POST ${AuthPaths.OPERATOR_VALIDATE}`, () => {
-        it('returns valid:true for a live operator session', async () => {
-            mockOperatorSessionService.validateSession.mockResolvedValue({
+        it('returns valid:true for a live operator session via g8ee relay', async () => {
+            mockOperatorService.relayValidateOperatorSessionToG8ee.mockResolvedValue({
+                valid: true,
                 user_id: 'u-1',
                 operator_id: 'op-1',
             });
@@ -187,11 +215,13 @@ describe('OperatorAuthRoutes Unit Tests', () => {
             expect(res.body.session_type).toBe('CLI');
             expect(res.body.user_id).toBe('u-2');
             expect(res.body.operator_id).toBeNull();
-            expect(mockOperatorSessionService.validateSession).not.toHaveBeenCalled();
+            expect(mockOperatorService.relayValidateOperatorSessionToG8ee).not.toHaveBeenCalled();
         });
 
-        it('returns 401 with valid:false when session is invalid', async () => {
-            mockOperatorSessionService.validateSession.mockResolvedValue(null);
+        it('returns 401 with valid:false when g8ee validation fails', async () => {
+            mockOperatorService.relayValidateOperatorSessionToG8ee.mockResolvedValue({
+                valid: false
+            });
 
             const res = await request(app)
                 .post('/api/auth/operator/validate')

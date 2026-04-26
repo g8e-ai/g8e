@@ -15,8 +15,8 @@
 
 Each module owns exactly one tool and exports two callables:
 
-- ``build()`` -> ``(types.ToolDeclaration, executor_stub)`` used at
-  ``AIToolService`` construction time to register the tool with the LLM.
+- ``build() -> types.ToolDeclaration`` used at ``AIToolService``
+  construction time to register the tool with the LLM.
 - ``handle(svc, tool_args, investigation, g8e_context, request_settings,
   execution_id) -> ToolResult`` invoked from ``execute_tool_call`` to
   dispatch a single tool call.

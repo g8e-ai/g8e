@@ -17,7 +17,7 @@ import logging
 from typing import Any, cast
 from app.db.db_service import DBService
 from app.db.kv_service import KVService
-from app.services.protocols import CacheAsideProtocol, KVServiceProtocol, DBServiceProtocol
+from app.services.protocols import DocumentServiceProtocol, KVServiceProtocol
 from app.constants import (
     CACHE_TTL_DEFAULT,
     CACHE_TTL_LONG,
@@ -51,7 +51,9 @@ from app.models.cache import (
     BatchWriteOperation,
     CacheOperationResult,
     CacheStats,
+    DocumentResult,
     FieldFilter,
+    QueryResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -74,7 +76,7 @@ TTL_STRATEGIES = {
     DB_COLLECTION_REPUTATION_COMMITMENTS: CACHE_TTL_SHORT,
 }
 
-class CacheAsideService(CacheAsideProtocol):
+class CacheAsideService(DocumentServiceProtocol):
     """
     Cache-aside pattern: DB-first writes, KV cache for reads.
 
@@ -118,9 +120,9 @@ class CacheAsideService(CacheAsideProtocol):
             logger.info("Error closing DB service: %s", exc)
 
     @property
-    def db(self) -> DBServiceProtocol:
+    def db(self) -> DocumentServiceProtocol:
         """Access the underlying DB service."""
-        return self._db
+        return cast(DocumentServiceProtocol, self._db)
 
     def _make_key(self, collection: str, document_id: str) -> str:
         return KVKey.doc(collection, document_id)
@@ -220,47 +222,25 @@ class CacheAsideService(CacheAsideProtocol):
             cache_invalidated=True
         )
 
-    async def delete_document(
+
+    async def cache_document(
         self,
         collection: str,
-        document_id: str
-    ) -> CacheOperationResult:
-        result = await self.db.delete_document(
-            collection=collection,
-            document_id=document_id
-        )
-
-        if not result.success:
-            raise DatabaseError(
-                f"Failed to delete document {document_id} in {collection}: {result.error or 'unknown error'}",
-                code=ErrorCode.DB_WRITE_ERROR,
-                component=self.component_name,
-            )
-
-        logger.info(
-            f"[{self.component_name.upper()}-CACHE] Document deleted from database",
-            extra={"collection": collection, "doc_id": document_id}
-        )
-
+        document_id: str,
+        data: dict[str, object],
+        ttl: int | None = None,
+    ) -> bool:
+        """Write data directly to the KV cache without touching the DB."""
         key = self._make_key(collection, document_id)
-        await self.kv.delete(key)
-        await self.invalidate_query_cache(collection)
+        resolved_ttl = ttl if ttl is not None else self._get_ttl_for_collection(collection)
+        return await self.kv.set_json(key, data, ex=resolved_ttl)
 
-        logger.info(
-            f"[{self.component_name.upper()}-CACHE] Document deleted from cache",
-            extra={"collection": collection, "doc_id": document_id}
-        )
-
-        return CacheOperationResult(
-            success=True,
-            document_id=document_id
-        )
-
-    async def get_document(
+    async def get_document_with_cache(
         self,
         collection: str,
         document_id: str
     ) -> dict[str, Any] | None:
+        """Get document with cache-aside pattern (check cache first, then DB, warm cache on miss)."""
         key = self._make_key(collection, document_id)
 
         cached_data: object | None = await self.kv.get_json(key)
@@ -300,18 +280,6 @@ class CacheAsideService(CacheAsideProtocol):
             )
 
         return db_data
-
-    async def cache_document(
-        self,
-        collection: str,
-        document_id: str,
-        data: dict[str, object],
-        ttl: int | None = None,
-    ) -> bool:
-        """Write data directly to the KV cache without touching the DB."""
-        key = self._make_key(collection, document_id)
-        resolved_ttl = ttl if ttl is not None else self._get_ttl_for_collection(collection)
-        return await self.kv.set_json(key, data, ex=resolved_ttl)
 
     async def invalidate_collection(self, collection: str) -> int:
         """Delete all document cache keys for a collection. Returns count deleted."""
@@ -369,46 +337,45 @@ class CacheAsideService(CacheAsideProtocol):
             )
         return success
 
-    async def query_documents(
+    async def query_collection(
         self,
         collection: str,
-        field_filters: list[dict[str, Any]],
-        order_by: dict[str, str] | None = None,
-        limit: int = 100,
+        field_filters: list[FieldFilter],
+        order_by: dict[str, str],
+        limit: int,
         select_fields: list[str] | None = None,
-        ttl: int | None = CACHE_TTL_SHORT,
-        bypass_cache: bool = False,
-    ) -> list[dict[str, Any]]:
+        ttl: int | None = 300,
+    ) -> QueryResult:
         order_by = order_by or {}
         query_params: dict[str, Any] = {
             "collection": collection,
-            "filters": field_filters,
+            "filters": [f.model_dump() if hasattr(f, "model_dump") else f for f in field_filters],
             "order_by": order_by,
             "limit": limit,
             "select_fields": select_fields or [],
         }
-        if not bypass_cache:
+        if ttl is not None:
             cached = await self.get_query_result(collection, query_params, ttl=ttl)
             if cached is not None:
-                return cached
+                return QueryResult(success=True, data=cached)
 
         result = await self.db.query_collection(
             collection=collection,
-            field_filters=[FieldFilter(**f) for f in field_filters],
+            field_filters=field_filters,
             order_by=order_by,
             limit=limit,
             select_fields=select_fields or [],
         )
 
         data: list[dict[str, Any]] = result.data if result.success else []
-        if not bypass_cache:
+        if ttl is not None and data:
             await self.set_query_result(collection, query_params, data, ttl=ttl)
 
         logger.info(
             f"[{self.component_name.upper()}-CACHE] Query executed and cached",
             extra={"collection": collection, "result_count": len(data)}
         )
-        return data
+        return result
 
     async def invalidate_document(
         self,
@@ -433,13 +400,13 @@ class CacheAsideService(CacheAsideProtocol):
         )
         return deleted
 
-    async def append_to_array(
+    async def update_with_array_union(
         self,
         collection: str,
         document_id: str,
         array_field: str,
-        items_to_add: list[Any],
-        additional_updates: dict[str, Any],
+        items_to_add: list[object],
+        additional_updates: dict[str, object],
     ) -> CacheOperationResult:
         result = await self.db.update_with_array_union(
             collection=collection,
@@ -471,6 +438,68 @@ class CacheAsideService(CacheAsideProtocol):
             cache_invalidated=True,
         )
 
+    async def delete_document(self, collection: str, document_id: str) -> CacheOperationResult:
+        result = await self.db.delete_document(collection=collection, document_id=document_id)
+
+        if not result.success:
+            raise DatabaseError(
+                f"Failed to delete document {document_id} in {collection}: {result.error or 'unknown error'}",
+                code=ErrorCode.DB_WRITE_ERROR,
+                component=self.component_name,
+            )
+
+        key = self._make_key(collection, document_id)
+        await self.kv.delete(key)
+        await self.invalidate_query_cache(collection)
+
+        logger.info(
+            f"[{self.component_name.upper()}-CACHE] Document deleted, cache invalidated",
+            extra={"collection": collection, "doc_id": document_id}
+        )
+
+        return CacheOperationResult(
+            success=True,
+            document_id=document_id,
+            cache_invalidated=True
+        )
+
+    async def get_document(self, collection: str, document_id: str) -> DocumentResult:
+        return await self.db.get_document(collection=collection, document_id=document_id)
+
+    async def batch_write(self, operations: list[BatchWriteOperation]) -> CacheOperationResult:
+        result = await self.db.batch_write(operations)
+
+        if not result.success:
+            raise DatabaseError(
+                f"Batch write failed: {result.error or 'unknown error'}",
+                code=ErrorCode.DB_WRITE_ERROR,
+                component=self.component_name,
+            )
+
+        logger.info(
+            f"[{self.component_name.upper()}-CACHE] Batch write completed",
+            extra={"operation_count": len(operations)}
+        )
+
+        collections_touched: set[str] = set()
+        for op in operations:
+            key = self._make_key(op.collection, op.doc_id)
+            await self.kv.delete(key)
+            collections_touched.add(op.collection)
+
+        for collection in collections_touched:
+            await self.invalidate_query_cache(collection)
+
+        logger.info(
+            f"[{self.component_name.upper()}-CACHE] KV batch cache invalidated",
+            extra={"operation_count": len(operations)}
+        )
+
+        return CacheOperationResult(
+            success=True,
+            cache_invalidated=True
+        )
+
     async def batch_create_documents(
         self,
         operations: list[BatchCreateDocumentOperation]
@@ -489,35 +518,50 @@ class CacheAsideService(CacheAsideProtocol):
             for op in operations
         ]
 
-        result = await self.db.batch_write(db_operations)
-
-        if not result.success:
-            raise DatabaseError(
-                f"Batch write failed: {result.error or 'unknown error'}",
-                code=ErrorCode.DB_WRITE_ERROR,
-                component=self.component_name,
-            )
+        result = await self.batch_write(db_operations)
 
         logger.info(
-            f"[{self.component_name.upper()}-CACHE] Batch write completed",
-            extra={"operation_count": len(operations)}
-        )
-
-        collections_touched: set[str] = set()
-        for op in operations:
-            key = self._make_key(op.collection, op.document_id)
-            await self.kv.delete(key)
-            collections_touched.add(op.collection)
-
-        for collection in collections_touched:
-            await self.invalidate_query_cache(collection)
-
-        logger.info(
-            f"[{self.component_name.upper()}-CACHE] KV batch cache invalidated",
+            f"[{self.component_name.upper()}-CACHE] Batch create completed",
             extra={"operation_count": len(operations)}
         )
 
         return BatchOperationResult(success=True, count=len(operations))
+
+    async def query_documents(
+        self,
+        collection: str,
+        field_filters: list[dict[str, Any]],
+        order_by: dict[str, str] | None = None,
+        limit: int = 100,
+        select_fields: list[str] | None = None,
+        ttl: int | None = CACHE_TTL_SHORT,
+        bypass_cache: bool = False,
+    ) -> list[dict[str, Any]]:
+        result = await self.query_collection(
+            collection=collection,
+            field_filters=[FieldFilter(**f) for f in field_filters],
+            order_by=order_by or {},
+            limit=limit,
+            select_fields=select_fields,
+            ttl=None if bypass_cache else ttl,
+        )
+        return result.data if result.success else []
+
+    async def append_to_array(
+        self,
+        collection: str,
+        document_id: str,
+        array_field: str,
+        items_to_add: list[Any],
+        additional_updates: dict[str, Any],
+    ) -> CacheOperationResult:
+        return await self.update_with_array_union(
+            collection=collection,
+            document_id=document_id,
+            array_field=array_field,
+            items_to_add=items_to_add,
+            additional_updates=additional_updates,
+        )
 
     async def get_stats(self) -> CacheStats:
         """Return a snapshot of current cache statistics."""

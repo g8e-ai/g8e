@@ -50,7 +50,7 @@ async def _get_investigation_or_error(
     investigation_id: str,
     data_type: str,
 ) -> tuple[dict[str, Any] | None, InvestigationContextResult | None]:
-    inv = await investigation_service.get_investigation(investigation_id)
+    inv = await investigation_service.investigation_data_service.get_investigation(investigation_id)
     if inv:
         return inv.model_dump(), None
     return None, InvestigationContextResult(
@@ -92,7 +92,7 @@ async def handle(
 
     try:
         if args.data_type == "conversation_history":
-            messages = await investigation_service.get_chat_messages(investigation_id)
+            messages = await investigation_service.investigation_data_service.get_chat_messages(investigation_id)
             if args.limit:
                 messages = messages[-args.limit:] if args.limit > 0 else messages
             data = [msg.model_dump() for msg in messages]
@@ -115,7 +115,7 @@ async def handle(
             item_count = 1
 
         elif args.data_type == "operator_actions":
-            data = await investigation_service.get_operator_actions_for_ai_context(
+            data = await investigation_service.investigation_data_service.get_operator_actions_for_ai_context(
                 investigation_id
             )
             item_count = 1

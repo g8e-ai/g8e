@@ -42,9 +42,15 @@ class InternalApiPaths:
     G8EE_OPERATORS_STOP: str = PREFIX + API_PATHS["g8ee"]["operators_stop"]
     G8EE_OPERATORS_REGISTER_SESSION: str = PREFIX + API_PATHS["g8ee"]["operators_register_session"]
     G8EE_OPERATORS_DEREGISTER_SESSION: str = PREFIX + API_PATHS["g8ee"]["operators_deregister_session"]
+    G8EE_OPERATORS_CREATE_SLOT: str = PREFIX + API_PATHS["g8ee"]["operators_create_slot"]
+    G8EE_OPERATORS_CLAIM_SLOT: str = PREFIX + API_PATHS["g8ee"]["operators_claim_slot"]
+    G8EE_OPERATORS_BIND: str = PREFIX + API_PATHS["g8ee"]["operators_bind"]
+    G8EE_OPERATORS_UNBIND: str = PREFIX + API_PATHS["g8ee"]["operators_unbind"]
     G8EE_OPERATOR_DIRECT_COMMAND: str = PREFIX + API_PATHS["g8ee"]["operator_direct_command"]
     G8EE_OPERATOR_APPROVAL_RESPOND: str = PREFIX + API_PATHS["g8ee"]["operator_approval_respond"]
     G8EE_OPERATOR_APPROVAL_PENDING: str = PREFIX + API_PATHS["g8ee"]["operator_approval_pending"]
+    G8EE_AUTH_GENERATE_KEY: str = PREFIX + API_PATHS["g8ee"]["auth_generate_key"]
+    G8EE_AUTH_REVOKE_CERT: str = PREFIX + API_PATHS["g8ee"]["auth_revoke_cert"]
     G8EE_SETTINGS_USER: str = PREFIX + API_PATHS["g8ee"]["settings_user"]
     
     # g8ed Endpoints (relative to PREFIX)

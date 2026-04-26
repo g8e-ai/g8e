@@ -11,14 +11,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Typed fake for OperatorCacheProtocol."""
+"""Typed fake for OperatorDataServiceProtocol."""
 
 from app.constants import OperatorStatus
-from app.services.protocols import OperatorCacheProtocol
+from app.services.protocols import OperatorDataServiceProtocol
 
 
 class FakeOperatorCache:
-    """Typed fake implementing OperatorCacheProtocol.
+    """Typed fake implementing OperatorDataServiceProtocol.
 
     Records all calls for assertion in tests. Does not perform any real I/O.
     """
@@ -30,5 +30,26 @@ class FakeOperatorCache:
         self.status_updates.append({"operator_id": operator_id, "status": status})
         return True
 
+    async def get_operator(self, operator_id: str):
+        return None
 
-_: OperatorCacheProtocol = FakeOperatorCache()
+    async def query_operators(self, field_filters=None, limit=1000, bypass_cache=False):
+        return []
+
+    async def update_operator_heartbeat(self, operator_id, heartbeat, investigation_id, case_id):
+        return True
+
+    async def append_command_result(self, operator_id, command_result):
+        return True
+
+    async def add_operator_activity(self, operator_id, sender, content, metadata):
+        return True
+
+    async def add_operator_approval(self, operator_id, event_type, metadata):
+        return True
+
+    async def bind_operators(self, operator_ids, web_session_id, context):
+        return True
+
+
+_: OperatorDataServiceProtocol = FakeOperatorCache()

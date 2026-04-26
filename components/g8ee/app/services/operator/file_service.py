@@ -66,12 +66,36 @@ class OperatorFileService:
         ai_response_analyzer: AIResponseAnalyzerProtocol,
         investigation_service: InvestigationServiceProtocol,
     ) -> None:
-        self.pubsub_service = pubsub_service
-        self.approval_service = approval_service
-        self.g8ed_event_service = g8ed_event_service
-        self.execution_service = execution_service
-        self.ai_response_analyzer = ai_response_analyzer
-        self.investigation_service = investigation_service
+        self._pubsub_service = pubsub_service
+        self._approval_service = approval_service
+        self._g8ed_event_service = g8ed_event_service
+        self._execution_service = execution_service
+        self._ai_response_analyzer = ai_response_analyzer
+        self._investigation_service = investigation_service
+
+    @property
+    def pubsub_service(self) -> PubSubServiceProtocol:
+        return self._pubsub_service
+
+    @property
+    def approval_service(self) -> ApprovalServiceProtocol:
+        return self._approval_service
+
+    @property
+    def g8ed_event_service(self) -> EventServiceProtocol:
+        return self._g8ed_event_service
+
+    @property
+    def execution_service(self) -> ExecutionServiceProtocol:
+        return self._execution_service
+
+    @property
+    def ai_response_analyzer(self) -> AIResponseAnalyzerProtocol:
+        return self._ai_response_analyzer
+
+    @property
+    def investigation_service(self) -> InvestigationServiceProtocol:
+        return self._investigation_service
 
     async def execute_file_edit(
         self,

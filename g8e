@@ -4,6 +4,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE="docker compose -f $SCRIPT_DIR/docker-compose.yml"
 CONTAINER="g8ep"
+DEV_MODE=false
 
 # Local credential store (like AWS ~/.aws/credentials or gcloud ~/.config/gcloud)
 G8E_CREDENTIALS_DIR="$HOME/.g8e"
@@ -192,6 +193,10 @@ while [[ $i -le $# ]]; do
                 ((i++))
                 DEVICE_TOKEN="${!i}"
             fi
+            ((i++))
+            ;;
+        --dev)
+            DEV_MODE=true
             ((i++))
             ;;
         -*)
@@ -423,11 +428,11 @@ case "$TOP" in
                 exec bash "$SCRIPT_DIR/scripts/core/logs.sh" "${@:3}" ;;
             status|start|stop|restart|rebuild|reset|wipe|clean)
                 case "$SUB" in
-                    start)   _banner "platform start";   exec bash "$SCRIPT_DIR/scripts/core/build.sh" up      "${@:3}" ;;
+                    start)   _banner "platform start";   exec bash "$SCRIPT_DIR/scripts/core/build.sh" $([[ "$DEV_MODE" == true ]] && echo "--dev") up      "${@:3}" ;;
                     stop)    _banner "platform stop";    exec bash "$SCRIPT_DIR/scripts/core/build.sh" down    "${@:3}" ;;
-                    restart) _banner "platform restart"; exec bash "$SCRIPT_DIR/scripts/core/build.sh" restart "${@:3}" ;;
+                    restart) _banner "platform restart"; exec bash "$SCRIPT_DIR/scripts/core/build.sh" $([[ "$DEV_MODE" == true ]] && echo "--dev") restart "${@:3}" ;;
                     status)  _banner "platform status";  exec bash "$SCRIPT_DIR/scripts/core/build.sh" status  "${@:3}" ;;
-                    rebuild) _banner "platform rebuild"; exec bash "$SCRIPT_DIR/scripts/core/build.sh" rebuild "${@:3}" ;;
+                    rebuild) _banner "platform rebuild"; exec bash "$SCRIPT_DIR/scripts/core/build.sh" $([[ "$DEV_MODE" == true ]] && echo "--dev") rebuild "${@:3}" ;;
                     reset)   _banner "platform reset";   exec bash "$SCRIPT_DIR/scripts/core/build.sh" reset   "${@:3}" ;;
                     wipe)    _banner "platform wipe";    exec bash "$SCRIPT_DIR/scripts/core/build.sh" wipe    "${@:3}" ;;
                     clean)   _banner "platform clean";   exec bash "$SCRIPT_DIR/scripts/core/build.sh" clean   "${@:3}" ;;

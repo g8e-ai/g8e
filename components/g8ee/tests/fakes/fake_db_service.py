@@ -11,15 +11,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Typed fake for DBServiceProtocol."""
+"""Typed fake for DocumentServiceProtocol."""
 
 from app.constants import EventType
 from app.models.operators import CommandResultRecord
-from app.services.protocols import DBServiceProtocol
+from app.services.protocols import DocumentServiceProtocol
 
 
 class FakeDBService:
-    """Typed fake implementing DBServiceProtocol.
+    """Typed fake implementing DocumentServiceProtocol.
 
     Records all calls for assertion in tests. Does not perform any real I/O.
     """
@@ -77,4 +77,4 @@ class FakeDBService:
         return True
 
 
-_: DBServiceProtocol = FakeDBService()
+_: DocumentServiceProtocol = FakeDBService()

@@ -95,9 +95,9 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
 
     async def get_investigation(self, investigation_id: str) -> InvestigationModel | None:
         """Fetch a single investigation document by ID."""
-        doc_data = await self.cache.get_document(
+        doc_data = await self.cache.get_document_with_cache(
             collection=self.collection,
-            document_id=investigation_id,
+                document_id=investigation_id,
         )
         if doc_data is None:
             return None
@@ -168,10 +168,20 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
 
     async def delete_investigation(self, investigation_id: str) -> None:
         """Hard-delete an investigation document."""
-        await self.cache.delete_document(
+        result = await self.cache.db.delete_document(
             collection=self.collection,
             document_id=investigation_id,
         )
+        if not result.success:
+            raise DatabaseError(
+                message=f"Failed to delete investigation: {result.error}",
+                code=ErrorCode.DB_WRITE_ERROR,
+                details={"investigation_id": investigation_id},
+                component=ComponentName.G8EE
+            )
+        key = self.cache._make_key(self.collection, investigation_id)
+        await self.cache.kv.delete(key)
+        await self.cache.invalidate_query_cache(self.collection)
         logger.info(f"Deleted investigation {investigation_id}")
 
     async def add_chat_message(
@@ -382,7 +392,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
 
     async def get_chat_messages(self, investigation_id: str) -> list[ConversationHistoryMessage]:
         """Retrieve full conversation history for an investigation."""
-        data = await self.cache.get_document(
+        data = await self.cache.get_document_with_cache(
             collection=self.collection,
             document_id=investigation_id,
         )

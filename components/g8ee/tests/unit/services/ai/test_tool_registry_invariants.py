@@ -32,6 +32,7 @@ from app.services.ai.tool_registry import (
 from app.errors import ConfigurationError
 from app.services.ai.grounding.web_search_provider import WebSearchProvider
 from app.services.ai.tool_service import AIToolService
+from app.services.ai.ssh_inventory_service import SshInventoryService
 from app.services.investigation.investigation_service import InvestigationService
 from app.services.operator.command_service import OperatorCommandService
 
@@ -39,15 +40,8 @@ pytestmark = [pytest.mark.unit]
 
 
 def _build_tool_service(web_search_provider: WebSearchProvider | None = None) -> AIToolService:
-    return AIToolService(
-        operator_command_service=MagicMock(spec=OperatorCommandService),
-        investigation_service=AsyncMock(spec=InvestigationService),
-        reputation_data_service=AsyncMock(),
-        reputation_service=AsyncMock(),
-        stake_resolution_data_service=AsyncMock(),
-        chat_task_manager=MagicMock(),
-        web_search_provider=web_search_provider,
-    )
+    from tests.fakes.tool_helpers import create_tool_service_fake
+    return create_tool_service_fake(web_search_provider=web_search_provider, auto_approve=True)
 
 
 # Enum values that are intentionally NOT yet registered as ToolSpecs.

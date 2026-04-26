@@ -69,19 +69,43 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         operator_data_service: OperatorDataServiceProtocol,
         investigation_service: InvestigationServiceProtocol,
     ) -> None:
-        self.pubsub_service = pubsub_service
-        self.approval_service = approval_service
-        self.g8ed_event_service = g8ed_event_service
+        self._pubsub_service = pubsub_service
+        self._approval_service = approval_service
+        self._g8ed_event_service = g8ed_event_service
         self._settings = settings
-        self.operator_data_service = operator_data_service
-        self.ai_response_analyzer = ai_response_analyzer
-        self.investigation_service = investigation_service
+        self._operator_data_service = operator_data_service
+        self._ai_response_analyzer = ai_response_analyzer
+        self._investigation_service = investigation_service
 
         from app.security.operator_command_validator import OperatorCommandValidator
         from app.utils.validators import get_blacklist_validator, get_whitelist_validator
         self.command_validator = OperatorCommandValidator(operator_data_service)
         self.whitelist_validator = get_whitelist_validator()
         self.blacklist_validator = get_blacklist_validator()
+
+    @property
+    def pubsub_service(self) -> PubSubServiceProtocol:
+        return self._pubsub_service
+
+    @property
+    def approval_service(self) -> ApprovalServiceProtocol:
+        return self._approval_service
+
+    @property
+    def g8ed_event_service(self) -> EventServiceProtocol:
+        return self._g8ed_event_service
+
+    @property
+    def operator_data_service(self) -> OperatorDataServiceProtocol:
+        return self._operator_data_service
+
+    @property
+    def ai_response_analyzer(self) -> AIResponseAnalyzerProtocol:
+        return self._ai_response_analyzer
+
+    @property
+    def investigation_service(self) -> InvestigationServiceProtocol:
+        return self._investigation_service
 
     # -------------------------------------------------------------------------
     # Failure helper

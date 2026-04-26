@@ -60,6 +60,7 @@ from app.services.ai.tools import (
     run_commands,
     search_web,
     ssh_inventory,
+    stream_operator,
 )
 
 
@@ -124,6 +125,19 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         display_label="Listing SSH inventory",
         display_icon="server",
         display_category=ToolDisplayCategory.GENERAL,
+    ),
+    ToolSpec(
+        name=OperatorToolName.STREAM_OPERATOR,
+        # must be ToolScope.UNIVERSAL despite being executor-shaped — the auth gate 
+        # rejects any OPERATOR_TOOLS member when no operator is bound, and 
+        # stream_operator is the whole point of running unbound.
+        scope=ToolScope.UNIVERSAL,
+        agent_modes=_ALL_MODES,
+        builder=stream_operator.build,
+        handler=stream_operator.handle,
+        display_label="Streaming operator",
+        display_icon="ship",
+        display_category=ToolDisplayCategory.EXECUTION,
     ),
     ToolSpec(
         name=OperatorToolName.G8E_SEARCH_WEB,

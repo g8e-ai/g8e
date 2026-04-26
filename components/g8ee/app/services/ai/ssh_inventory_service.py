@@ -69,12 +69,39 @@ class SshInventoryService:
 
         try:
             mtime = path.stat().st_mtime
+            # Track hash of all mtimes (main file + included files)
+            mtime_hash = self._compute_mtime_hash(path)
         except OSError as exc:
             raise ConfigurationError(
-                f"Failed to stat SSH config at {self._ssh_config_path}: {exc}"
+                f"Failed to stat SSH config or includes at {self._ssh_config_path}: {exc}"
             ) from exc
 
-        return _load_cached(self._ssh_config_path, mtime)
+        return _load_cached(self._ssh_config_path, mtime_hash)
+
+    def _compute_mtime_hash(self, path: Path, seen: set[str] | None = None) -> float:
+        """Recursively compute a combined mtime 'hash' (sum) for the config and its includes."""
+        if seen is None:
+            seen = set()
+            
+        canonical = str(path.resolve())
+        if canonical in seen:
+            return 0.0
+        seen.add(canonical)
+        
+        try:
+            total_mtime = path.stat().st_mtime
+            raw = path.read_text(encoding="utf-8", errors="replace")
+            
+            for line in raw.splitlines():
+                kv = _split_kv(line)
+                if kv and kv[0] == "include":
+                    include_paths = _resolve_include_path(kv[1], path.parent)
+                    for include_path in include_paths:
+                        if include_path.exists():
+                            total_mtime += self._compute_mtime_hash(include_path, seen)
+            return total_mtime
+        except (OSError, ValueError):
+            return 0.0
 
 
 @functools.lru_cache(maxsize=32)

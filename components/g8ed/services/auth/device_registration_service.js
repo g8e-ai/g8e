@@ -42,26 +42,20 @@ export class DeviceRegistrationService {
     /**
      * @param {Object} options
      * @param {Object} options.operatorService        - OperatorDataService instance
-     * @param {Object} options.operatorSessionService - OperatorSessionService instance
      * @param {Object} options.userService            - UserService instance
      * @param {Object} options.sseService             - SSEService instance
      * @param {Object} options.internalHttpClient     - InternalHttpClient instance
-     * @param {Object} options.sessionAuthListener    - SessionAuthListener instance
      */
-    constructor({ operatorService, operatorSessionService, userService, sseService, internalHttpClient, sessionAuthListener }) {
+    constructor({ operatorService, userService, sseService, internalHttpClient }) {
         if (!operatorService)        throw new Error('operatorService is required');
-        if (!operatorSessionService) throw new Error('operatorSessionService is required');
         if (!userService)            throw new Error('userService is required');
         if (!sseService)             throw new Error('sseService is required');
         if (!internalHttpClient)     throw new Error('internalHttpClient is required');
-        if (!sessionAuthListener)    throw new Error('sessionAuthListener is required');
 
         this._operatorService        = operatorService;
-        this._operatorSessionService = operatorSessionService;
         this._userService            = userService;
         this._sseService             = sseService;
         this._internalHttpClient     = internalHttpClient;
-        this._sessionAuthListener    = sessionAuthListener;
     }
 
     /**
@@ -119,9 +113,6 @@ export class DeviceRegistrationService {
             operator_id: id,
         };
 
-        const session = await this._operatorSessionService.createOperatorSession(sessionData);
-        const operator_session_id = session.id;
-
         const system_info = SystemInfo.parse({
             system_fingerprint: sanitized.system_fingerprint,
             hostname:           sanitized.hostname,
@@ -130,35 +121,19 @@ export class DeviceRegistrationService {
             current_user:       sanitized.username,
         });
 
-        const claimed = await this._operatorService.claimOperatorSlot(id, {
-            operator_session_id,
-            bound_web_session_id: web_session_id,
+        const result = await this._operatorService.relayAuthenticateOperatorToG8ee({
+            auth_mode: 'operator_session',
+            operator_session_id: web_session_id, // Use web_session_id as the seed if available, or it will be generated
+            operator_id: id,
             system_info,
             operator_type,
-        });
+        }, g8eContext);
 
-        if (!claimed) {
-            await this._operatorSessionService.endSession(operator_session_id);
-            return { success: false, error: DeviceLinkError.CLAIM_SLOT_FAILED };
+        if (!result.success) {
+            return { success: false, error: result.error || DeviceLinkError.CLAIM_SLOT_FAILED };
         }
 
-        await this._userService.updateUserOperator(user_id, id, OperatorStatus.ACTIVE);
-
-        const relayContext = G8eHttpContext.parse({
-            web_session_id:  web_session_id || operator_session_id,
-            user_id,
-            organization_id: g8eContext.organization_id || null,
-            bound_operators: [
-                BoundOperatorContext.parse({
-                    operator_id: id,
-                    operator_session_id,
-                    bound_web_session_id: web_session_id,
-                    status:        OperatorStatus.ACTIVE,
-                    operator_type,
-                    system_info,
-                })
-            ],
-        });
+        const operator_session_id = result.operator_session_id;
 
         if (web_session_id) {
             const event = OperatorStatusUpdatedEvent.parse({
@@ -172,29 +147,20 @@ export class DeviceRegistrationService {
             });
             
             await this._sseService.publishEvent(web_session_id, event);
-
-            try {
-                await this._operatorService.relayRegisterOperatorSessionToG8ee(relayContext);
-            } catch (hbError) {
-                logger.warn('[DEVICE-REGISTRATION] Failed to register operator session heartbeat subscription', {
-                    id,
-                    error: hbError.message,
-                });
-            }
         }
 
-        logger.info('[DEVICE-REGISTRATION] Device registered for operator', {
+        logger.info('[DEVICE-REGISTRATION] Device registered for operator via g8ee', {
             id,
             hostname:           sanitized.hostname,
             operator_session_id_tag: sessionIdTag(operator_session_id),
         });
 
-        this._sessionAuthListener.listen({
+        await this._operatorService.relayListenSessionAuthToG8ee({
             operator_session_id,
             operator_id: id,
             user_id,
             organization_id: g8eContext.organization_id || null,
-        });
+        }, g8eContext);
 
         return { success: true, operator_session_id, operator_id: id, system_info };
     }

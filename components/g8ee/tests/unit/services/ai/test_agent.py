@@ -134,9 +134,6 @@ class TestStreamResponseRetryLoop:
 
     async def test_retry_on_retryable_error_before_streaming_starts(self):
         tool_executor = MagicMock()
-        tool_executor.start_invocation_context = MagicMock(return_value="token")
-        tool_executor.reset_invocation_context = MagicMock()
-
         provider = MagicMock()
         call_count = 0
 
@@ -176,9 +173,6 @@ class TestStreamResponseRetryLoop:
 
     async def test_no_retry_after_streaming_starts(self):
         tool_executor = MagicMock()
-        tool_executor.start_invocation_context = MagicMock(return_value="token")
-        tool_executor.reset_invocation_context = MagicMock()
-
         provider = MagicMock()
 
         def stream_then_fail(**kwargs):
@@ -212,9 +206,6 @@ class TestStreamResponseRetryLoop:
 
     async def test_exponential_backoff_between_retries(self):
         tool_executor = MagicMock()
-        tool_executor.start_invocation_context = MagicMock(return_value="token")
-        tool_executor.reset_invocation_context = MagicMock()
-
         provider = MagicMock()
         call_count = 0
         sleep_calls = []
@@ -258,9 +249,6 @@ class TestStreamResponseRetryLoop:
 
     async def test_max_retries_respected(self):
         tool_executor = MagicMock()
-        tool_executor.start_invocation_context = MagicMock(return_value="token")
-        tool_executor.reset_invocation_context = MagicMock()
-
         provider = MagicMock()
 
         def always_failing_stream(**kwargs):
@@ -307,9 +295,6 @@ class TestStreamResponseErrorHandling:
 
     async def test_non_retryable_error_returns_immediately(self):
         tool_executor = MagicMock()
-        tool_executor.start_invocation_context = MagicMock(return_value="token")
-        tool_executor.reset_invocation_context = MagicMock()
-
         provider = MagicMock()
 
         def auth_error_stream(**kwargs):
@@ -341,9 +326,6 @@ class TestStreamResponseErrorHandling:
 
     async def test_success_returns_without_error(self):
         tool_executor = MagicMock()
-        tool_executor.start_invocation_context = MagicMock(return_value="token")
-        tool_executor.reset_invocation_context = MagicMock()
-
         provider = MagicMock()
 
         def success_stream(**kwargs):
@@ -370,101 +352,6 @@ class TestStreamResponseErrorHandling:
             chunks.append(chunk)
 
         assert all(c.type != StreamChunkFromModelType.ERROR for c in chunks)
-
-
-# =============================================================================
-# TEST: run_with_sse - ContextVar Lifecycle
-# =============================================================================
-
-@pytest.mark.asyncio(loop_scope="session")
-class TestRunWithSSEContextVarLifecycle:
-
-    async def test_starts_invocation_context_before_streaming(self):
-        tool_executor = MagicMock()
-        tool_executor.start_invocation_context = MagicMock(return_value="context-token")
-        tool_executor.reset_invocation_context = MagicMock()
-
-        provider = MagicMock()
-
-        def empty_stream(**kwargs):
-            async def _gen():
-                yield make_provider_chunk(finish_reason="STOP")
-            return _gen()
-
-        provider.generate_content_stream_primary = empty_stream
-
-        agent = make_g8e_agent(fn_handler=tool_executor)
-        context = make_agent_inputs()
-        g8ed_event_service = make_g8ed_event_service()
-
-        await agent.run_with_sse(
-            inputs=context,
-            state=make_agent_stream_state(),
-            g8ed_event_service=g8ed_event_service,
-            llm_provider=provider,
-        )
-
-        tool_executor.start_invocation_context.assert_called_once()
-        call_kwargs = tool_executor.start_invocation_context.call_args.kwargs
-        assert "g8e_context" in call_kwargs
-
-    async def test_resets_invocation_context_in_finally(self):
-        tool_executor = MagicMock()
-        tool_executor.start_invocation_context = MagicMock(return_value="context-token")
-        tool_executor.reset_invocation_context = MagicMock()
-
-        provider = MagicMock()
-
-        def error_stream(**kwargs):
-            async def _gen():
-                raise RuntimeError("Stream error")
-                yield
-            return _gen()
-
-        provider.generate_content_stream_primary = error_stream
-
-        agent = make_g8e_agent(fn_handler=tool_executor)
-        context = make_agent_inputs()
-        g8ed_event_service = make_g8ed_event_service()
-
-        try:
-            await agent.run_with_sse(
-                inputs=context,
-                state=make_agent_stream_state(),
-                g8ed_event_service=g8ed_event_service,
-                llm_provider=provider,
-            )
-        except RuntimeError:
-            pass
-
-        tool_executor.reset_invocation_context.assert_called_once_with("context-token")
-
-    async def test_resets_invocation_context_on_success(self):
-        tool_executor = MagicMock()
-        tool_executor.start_invocation_context = MagicMock(return_value="context-token")
-        tool_executor.reset_invocation_context = MagicMock()
-
-        provider = MagicMock()
-
-        def success_stream(**kwargs):
-            async def _gen():
-                yield make_provider_chunk(finish_reason="STOP")
-            return _gen()
-
-        provider.generate_content_stream_primary = success_stream
-
-        agent = make_g8e_agent(fn_handler=tool_executor)
-        context = make_agent_inputs()
-        g8ed_event_service = make_g8ed_event_service()
-
-        await agent.run_with_sse(
-            inputs=context,
-            state=make_agent_stream_state(),
-            g8ed_event_service=g8ed_event_service,
-            llm_provider=provider,
-        )
-
-        tool_executor.reset_invocation_context.assert_called_once_with("context-token")
 
 
 # =============================================================================

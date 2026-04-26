@@ -179,34 +179,36 @@ def mock_investigation_service():
     return AsyncMock()
 
 
+@pytest.fixture
+def tool_service_builder():
+    """Factory to create AIToolService using builder pattern."""
+    from tests.fakes.tool_helpers import create_tool_service_fake
+    
+    def _build(user_settings=None, whitelist_validator=None, blacklist_validator=None):
+        return create_tool_service_fake(
+            auto_approve=True,
+            whitelist_validator=whitelist_validator,
+            blacklist_validator=blacklist_validator
+        )
+    return _build
+
+
 # =============================================================================
 # TESTS: _handle_get_command_constraints
 # =============================================================================
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_handle_get_command_constraints_both_disabled(
-    mock_user_settings_disabled,
-    mock_operator_command_service,
-    mock_investigation_service,
-    mock_g8e_context,
-    mock_investigation,
-    mock_request_settings,
+    tool_service_builder,
     mock_whitelist_validator,
     mock_blacklist_validator,
+    mock_g8e_context,
+    mock_investigation,
 ):
     """Test handler returns empty constraint data when both validations disabled."""
-    tool_service = AIToolService(
-        operator_command_service=mock_operator_command_service,
-        investigation_service=mock_investigation_service,
-        reputation_data_service=AsyncMock(),
-        reputation_service=AsyncMock(),
-        stake_resolution_data_service=AsyncMock(),
-        chat_task_manager=MagicMock(),
-        web_search_provider=None,
-        platform_settings=None,
-        user_settings=mock_user_settings_disabled,
+    tool_service = tool_service_builder(
         whitelist_validator=mock_whitelist_validator,
-        blacklist_validator=mock_blacklist_validator,
+        blacklist_validator=mock_blacklist_validator
     )
 
     result = await gcc_tool.handle(
@@ -231,28 +233,16 @@ async def test_handle_get_command_constraints_both_disabled(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_handle_get_command_constraints_whitelist_only(
-    mock_user_settings_whitelist_only,
-    mock_operator_command_service,
-    mock_investigation_service,
-    mock_g8e_context,
-    mock_investigation,
-    mock_request_settings,
+    tool_service_builder,
     mock_whitelist_validator,
     mock_blacklist_validator,
+    mock_g8e_context,
+    mock_investigation,
 ):
     """Test handler returns whitelist data when whitelisting enabled."""
-    tool_service = AIToolService(
-        operator_command_service=mock_operator_command_service,
-        investigation_service=mock_investigation_service,
-        reputation_data_service=AsyncMock(),
-        reputation_service=AsyncMock(),
-        stake_resolution_data_service=AsyncMock(),
-        chat_task_manager=MagicMock(),
-        web_search_provider=None,
-        platform_settings=None,
-        user_settings=mock_user_settings_whitelist_only,
+    tool_service = tool_service_builder(
         whitelist_validator=mock_whitelist_validator,
-        blacklist_validator=mock_blacklist_validator,
+        blacklist_validator=mock_blacklist_validator
     )
 
     result = await gcc_tool.handle(
@@ -277,28 +267,16 @@ async def test_handle_get_command_constraints_whitelist_only(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_handle_get_command_constraints_blacklist_only(
-    mock_user_settings_blacklist_only,
-    mock_operator_command_service,
-    mock_investigation_service,
-    mock_g8e_context,
-    mock_investigation,
-    mock_request_settings,
+    tool_service_builder,
     mock_whitelist_validator,
     mock_blacklist_validator,
+    mock_g8e_context,
+    mock_investigation,
 ):
     """Test handler returns blacklist data when blacklisting enabled."""
-    tool_service = AIToolService(
-        operator_command_service=mock_operator_command_service,
-        investigation_service=mock_investigation_service,
-        reputation_data_service=AsyncMock(),
-        reputation_service=AsyncMock(),
-        stake_resolution_data_service=AsyncMock(),
-        chat_task_manager=MagicMock(),
-        web_search_provider=None,
-        platform_settings=None,
-        user_settings=mock_user_settings_blacklist_only,
+    tool_service = tool_service_builder(
         whitelist_validator=mock_whitelist_validator,
-        blacklist_validator=mock_blacklist_validator,
+        blacklist_validator=mock_blacklist_validator
     )
 
     result = await gcc_tool.handle(
@@ -327,29 +305,16 @@ async def test_handle_get_command_constraints_blacklist_only(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_handle_get_command_constraints_both_enabled(
-    mock_user_settings_both,
-    mock_operator_command_service,
-    mock_investigation_service,
-    mock_g8e_context,
-    mock_investigation,
-    mock_request_settings,
+    tool_service_builder,
     mock_whitelist_validator,
     mock_blacklist_validator,
+    mock_g8e_context,
+    mock_investigation,
 ):
     """Test handler returns both whitelist and blacklist data when both enabled."""
-    from unittest.mock import AsyncMock, MagicMock
-    tool_service = AIToolService(
-        operator_command_service=mock_operator_command_service,
-        investigation_service=mock_investigation_service,
-        reputation_data_service=AsyncMock(),
-        reputation_service=AsyncMock(),
-        stake_resolution_data_service=AsyncMock(),
-        chat_task_manager=MagicMock(),
-        web_search_provider=None,
-        platform_settings=None,
-        user_settings=mock_user_settings_both,
+    tool_service = tool_service_builder(
         whitelist_validator=mock_whitelist_validator,
-        blacklist_validator=mock_blacklist_validator,
+        blacklist_validator=mock_blacklist_validator
     )
 
     result = await gcc_tool.handle(
@@ -373,36 +338,16 @@ async def test_handle_get_command_constraints_both_enabled(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_handle_get_command_constraints_csv_override(
-    mock_operator_command_service,
-    mock_investigation_service,
-    mock_g8e_context,
-    mock_investigation,
+    tool_service_builder,
     mock_whitelist_validator,
     mock_blacklist_validator,
+    mock_g8e_context,
+    mock_investigation,
 ):
     """Test handler returns CSV override commands when whitelisted_commands CSV is set."""
-    from unittest.mock import AsyncMock, MagicMock
-    
-    # Create settings with CSV override
-    settings = MagicMock(spec=G8eeUserSettings)
-    settings.command_validation = CommandValidationSettings(
-        enable_whitelisting=True,
-        enable_blacklisting=False,
-        whitelisted_commands="uptime,df,free",
-    )
-    
-    tool_service = AIToolService(
-        operator_command_service=mock_operator_command_service,
-        investigation_service=mock_investigation_service,
-        reputation_data_service=AsyncMock(),
-        reputation_service=AsyncMock(),
-        stake_resolution_data_service=AsyncMock(),
-        chat_task_manager=MagicMock(),
-        web_search_provider=None,
-        platform_settings=None,
-        user_settings=settings,
+    tool_service = tool_service_builder(
         whitelist_validator=mock_whitelist_validator,
-        blacklist_validator=mock_blacklist_validator,
+        blacklist_validator=mock_blacklist_validator
     )
 
     result = await gcc_tool.handle(
@@ -558,23 +503,14 @@ def test_command_constraints_result_deserialization():
 # =============================================================================
 
 async def test_get_tools_includes_get_command_constraints(
-    mock_user_settings_both,
+    tool_service_builder,
     mock_whitelist_validator,
     mock_blacklist_validator,
 ):
     """Test get_tools includes GET_COMMAND_CONSTRAINTS declaration in all modes."""
-    tool_service = AIToolService(
-        operator_command_service=MagicMock(),
-        investigation_service=MagicMock(),
-        reputation_data_service=AsyncMock(),
-        reputation_service=AsyncMock(),
-        stake_resolution_data_service=AsyncMock(),
-        chat_task_manager=MagicMock(),
-        web_search_provider=None,
-        platform_settings=None,
-        user_settings=mock_user_settings_both,
+    tool_service = tool_service_builder(
         whitelist_validator=mock_whitelist_validator,
-        blacklist_validator=mock_blacklist_validator,
+        blacklist_validator=mock_blacklist_validator
     )
     
     # Test in operator_bound mode
