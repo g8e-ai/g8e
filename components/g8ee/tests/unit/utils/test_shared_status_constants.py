@@ -26,6 +26,8 @@ import pytest
 from app.constants import (
     CloudSubtype,
     OperatorType,
+    OperatorHistoryEventType,
+    OperatorStatus,
 )
 
 pytestmark = pytest.mark.unit
@@ -34,6 +36,48 @@ pytestmark = pytest.mark.unit
 def _load_status_json() -> dict:
     with open("/app/shared/constants/status.json") as f:
         return json.load(f)
+
+
+class TestOperatorStatusMatchesSharedJSON:
+    """OperatorStatus enum values must match shared/constants/status.json g8e.status."""
+
+    def test_all_json_operator_statuses_have_enum_members(self):
+        status = _load_status_json()["g8e.status"]
+        for key, value in status.items():
+            assert value in OperatorStatus._value2member_map_, (
+                f"shared/constants/status.json g8e.status.{key}={value!r} "
+                f"has no OperatorStatus member"
+            )
+
+    def test_no_extra_enum_members_beyond_json(self):
+        status = _load_status_json()["g8e.status"]
+        json_values = set(status.values())
+        for member in OperatorStatus:
+            assert member.value in json_values, (
+                f"OperatorStatus.{member.name}={member.value!r} "
+                f"not in shared/constants/status.json"
+            )
+
+
+class TestOperatorHistoryEventTypeMatchesSharedJSON:
+    """OperatorHistoryEventType enum values must match shared/constants/status.json history.event.type."""
+
+    def test_all_json_history_event_types_have_enum_members(self):
+        status = _load_status_json()["history.event.type"]
+        for key, value in status.items():
+            assert value in OperatorHistoryEventType._value2member_map_, (
+                f"shared/constants/status.json history.event.type.{key}={value!r} "
+                f"has no OperatorHistoryEventType member"
+            )
+
+    def test_no_extra_enum_members_beyond_json(self):
+        status = _load_status_json()["history.event.type"]
+        json_values = set(status.values())
+        for member in OperatorHistoryEventType:
+            assert member.value in json_values, (
+                f"OperatorHistoryEventType.{member.name}={member.value!r} "
+                f"not in shared/constants/status.json"
+            )
 
 
 class TestOperatorTypeMatchesSharedJSON:

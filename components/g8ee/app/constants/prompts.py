@@ -93,6 +93,7 @@ class PromptFile(str, Enum):
 
     # Tribunal
     TRIBUNAL_GENERATOR = "tribunal/generator.txt"
+    TRIBUNAL_GENERATOR_ROUND_2 = "tribunal/generator_round_2.txt"
     TRIBUNAL_AUDITOR = "tribunal/auditor.txt"
 
     @property

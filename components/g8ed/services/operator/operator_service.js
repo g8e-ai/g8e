@@ -202,6 +202,10 @@ class OperatorService {
         return this.relay.relayListenSessionAuthToG8ee(params, g8eContext);
     }
 
+    async relayTerminateOperatorToG8ee(operatorId, g8eContext) {
+        return this.relay.relayTerminateOperatorToG8ee(operatorId, g8eContext);
+    }
+
     // --- Slots ---
 
     async initializeOperatorSlots(userId, organizationId) {
@@ -352,13 +356,35 @@ class OperatorService {
         const existing = await this.getOperator(operatorId);
         if (!existing) return { success: false, operator: null, error: 'Operator not found' };
 
-        const userId = existing.user_id;
-
-        await this.operatorDataService.deleteOperator(operatorId);
-
         const g8eContext = await this.getOperatorWithSessionContext(operatorId);
-        if (g8eContext) {
-            await this.relay.deregisterOperatorSessionInG8ee(g8eContext).catch(() => {});
+        if (!g8eContext) {
+            // Should be unreachable: getOperatorWithSessionContext only returns null
+            // when the operator does not exist, which we just verified above.
+            return { success: false, error: 'Failed to build g8e context for terminate' };
+        }
+
+        // Authority: g8ee owns the operator document. It writes TERMINATED status
+        // and appends the audit history entry atomically. g8ed must NOT delete the
+        // document afterwards or the audit trail entry just written will be lost.
+        try {
+            await this.relayTerminateOperatorToG8ee(operatorId, g8eContext);
+        } catch (err) {
+            logger.error('[OPERATOR-SERVICE] Failed to relay terminate to g8ee', {
+                operatorId,
+                error: err.message,
+            });
+            return { success: false, id: operatorId, error: err.message };
+        }
+
+        try {
+            await this.relay.deregisterOperatorSessionInG8ee(g8eContext);
+        } catch (err) {
+            // Deregistration is best-effort cleanup — operator is already TERMINATED
+            // in the authoritative store, so we surface but do not fail the call.
+            logger.warn('[OPERATOR-SERVICE] Failed to deregister operator session after terminate', {
+                operatorId,
+                error: err.message,
+            });
         }
 
         return { success: true, id: operatorId, error: null };

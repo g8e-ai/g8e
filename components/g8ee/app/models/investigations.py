@@ -18,7 +18,7 @@ import json
 import logging
 
 
-from pydantic import ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from app.constants import (
     ComponentName,
@@ -194,6 +194,15 @@ class ConversationHistoryMessage(G8eIdentifiableModel):
     prev_hash: str = Field(..., description="Hash of previous entry in the chain (hex SHA256, 64 chars)")
     entry_hash: str | None = Field(default=None, description="Hash of this entry (hex SHA256, 64 chars)")
 
+    @model_validator(mode="after")
+    def _seal_entry_hash(self) -> "ConversationHistoryMessage":
+        """Auto-compute entry_hash if not provided."""
+        if self.entry_hash is None:
+            from app.utils.ledger_hash import compute_entry_hash
+            payload = self.model_dump(mode="json", exclude={"entry_hash"})
+            object.__setattr__(self, "entry_hash", compute_entry_hash(payload, self.prev_hash))
+        return self
+
     @field_validator("entry_hash", mode="after")
     @classmethod
     def validate_entry_hash(cls, v):
@@ -300,6 +309,15 @@ class InvestigationHistoryEntry(G8eBaseModel):
     details: ConversationMessageMetadata = Field(default_factory=ConversationMessageMetadata, description="Detailed event information")
     prev_hash: str = Field(..., description="Hash of previous entry in the chain (hex SHA256, 64 chars)")
     entry_hash: str | None = Field(default=None, description="Hash of this entry (hex SHA256, 64 chars)")
+
+    @model_validator(mode="after")
+    def _seal_entry_hash(self) -> "InvestigationHistoryEntry":
+        """Auto-compute entry_hash if not provided."""
+        if self.entry_hash is None:
+            from app.utils.ledger_hash import compute_entry_hash
+            payload = self.model_dump(mode="json", exclude={"entry_hash"})
+            object.__setattr__(self, "entry_hash", compute_entry_hash(payload, self.prev_hash))
+        return self
 
     @field_validator("entry_hash", mode="after")
     @classmethod
@@ -421,7 +439,7 @@ class InvestigationModel(G8eIdentifiableModel):
         investigation_attempt: G8eBaseModel | None = None,
         details: ConversationMessageMetadata | None = None
     ) -> None:
-        from app.utils.ledger_hash import compute_entry_hash, genesis_hash
+        from app.utils.ledger_hash import genesis_hash
 
         if attempt_number is None:
             attempt_number = (self.current_state.active_attempt if self.current_state else 1)
@@ -441,10 +459,6 @@ class InvestigationModel(G8eIdentifiableModel):
             prev_hash=prev_hash,
         )
 
-        entry_dict = entry.model_dump(mode="json", exclude={"entry_hash"})
-        computed_hash = compute_entry_hash(entry_dict, prev_hash)
-
-        entry = entry.model_copy(update={"entry_hash": computed_hash})
         self.history_trail.append(entry)
         self.update_timestamp()
 

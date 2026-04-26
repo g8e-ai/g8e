@@ -320,6 +320,16 @@
         },
         "dissent": {
           "recorded": "g8e.v1.ai.tribunal.voting.dissent.recorded"
+        },
+        "round": {
+          "started": "g8e.v1.ai.tribunal.voting.round.started",
+          "completed": "g8e.v1.ai.tribunal.voting.round.completed"
+        },
+        "round_2": {
+          "started": "g8e.v1.ai.tribunal.voting.round_2.started",
+          "pass_completed": "g8e.v1.ai.tribunal.voting.round_2.pass.completed",
+          "consensus_reached": "g8e.v1.ai.tribunal.voting.round_2.consensus.reached",
+          "consensus_failed": "g8e.v1.ai.tribunal.voting.round_2.consensus.failed"
         }
       }
     },

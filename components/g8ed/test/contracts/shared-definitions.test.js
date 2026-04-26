@@ -33,6 +33,7 @@ import {
     OperatorStatus,
     OperatorType,
     CloudOperatorSubtype,
+    HistoryEventType,
 } from '@g8ed/constants/operator.js';
 import { ApiKeyStatus } from '@g8ed/constants/auth.js';
 import {
@@ -66,6 +67,20 @@ describe('g8ed Shared Definitions Contract', () => {
         it('covers all keys in shared JSON', () => {
             const jsonKeys = Object.keys(STATUS['g8e.status']);
             const g8edKeys = Object.keys(OperatorStatus);
+            expect(g8edKeys.length).toBe(jsonKeys.length);
+        });
+    });
+
+    describe('HistoryEventType matches shared/constants/status.json', () => {
+        it('CREATED', () => expect(HistoryEventType.CREATED).toBe(STATUS['history.event.type']['created']));
+        it('STATUS_CHANGED', () => expect(HistoryEventType.STATUS_CHANGED).toBe(STATUS['history.event.type']['status.changed']));
+        it('AUTHENTICATED', () => expect(HistoryEventType.AUTHENTICATED).toBe(STATUS['history.event.type']['authenticated']));
+        it('TERMINATED', () => expect(HistoryEventType.TERMINATED).toBe(STATUS['history.event.type']['terminated']));
+        it('CLAIMED', () => expect(HistoryEventType.CLAIMED).toBe(STATUS['history.event.type']['claimed']));
+
+        it('covers all keys in shared JSON', () => {
+            const jsonKeys = Object.keys(STATUS['history.event.type']);
+            const g8edKeys = Object.keys(HistoryEventType);
             expect(g8edKeys.length).toBe(jsonKeys.length);
         });
     });

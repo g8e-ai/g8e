@@ -23,7 +23,7 @@ import asyncio
 import logging
 from typing import Any, Literal, Optional
 
-from pydantic import ConfigDict, Field, PrivateAttr, ValidationInfo, field_validator
+from pydantic import ConfigDict, Field, PrivateAttr, ValidationInfo, field_validator, model_validator
 
 from app.models.http_context import G8eHttpContext
 
@@ -173,6 +173,15 @@ class OperatorHistoryEntry(G8eBaseModel):
     prev_hash: str = Field(..., description="Hash of previous entry in the chain (hex SHA256, 64 chars)")
     entry_hash: str | None = Field(default=None, description="Hash of this entry (hex SHA256, 64 chars)")
 
+    @model_validator(mode="after")
+    def _seal_entry_hash(self) -> "OperatorHistoryEntry":
+        """Auto-compute entry_hash if not provided."""
+        if self.entry_hash is None:
+            from app.utils.ledger_hash import compute_entry_hash
+            payload = self.model_dump(mode="json", exclude={"entry_hash"})
+            object.__setattr__(self, "entry_hash", compute_entry_hash(payload, self.prev_hash))
+        return self
+
     @field_validator("entry_hash", mode="after")
     @classmethod
     def validate_entry_hash(cls, v):
@@ -223,7 +232,7 @@ class OperatorDocument(G8eIdentifiableModel):
         details: dict[str, object] | None = None
     ) -> None:
         """Record an event in the operator history trail with hash chaining."""
-        from app.utils.ledger_hash import compute_entry_hash, genesis_hash
+        from app.utils.ledger_hash import genesis_hash
 
         prev_hash = self.history_trail[-1].entry_hash if self.history_trail else None
         if not prev_hash:
@@ -239,10 +248,6 @@ class OperatorDocument(G8eIdentifiableModel):
             prev_hash=prev_hash,
         )
 
-        entry_dict = entry.model_dump(mode="json", exclude={"entry_hash"})
-        computed_hash = compute_entry_hash(entry_dict, prev_hash)
-
-        entry = entry.model_copy(update={"entry_hash": computed_hash})
         self.history_trail.append(entry)
         self.update_timestamp()
 
@@ -260,15 +265,6 @@ class OperatorDocument(G8eIdentifiableModel):
         if info.data.get("system_info") and isinstance(info.data["system_info"], OperatorSystemInfo):
             return info.data["system_info"].hostname
         return None
-
-    @field_validator("status", mode="before")
-    @classmethod
-    def coerce_status(cls, v: object) -> OperatorStatus:
-        try:
-            return OperatorStatus(v)
-        except (ValueError, KeyError):
-            logger.warning("Unknown OperatorStatus value %r — defaulting to AVAILABLE", v)
-            return OperatorStatus.AVAILABLE
 
     @field_validator("latest_heartbeat_snapshot", mode="before")
     @classmethod

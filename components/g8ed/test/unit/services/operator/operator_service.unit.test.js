@@ -265,7 +265,36 @@ describe('OperatorService', () => {
     });
 
     describe('terminateOperator', () => {
-        it('should delete operator document without recreating', async () => {
+        it('should relay termination to g8ee before deleting operator document', async () => {
+            const existing = {
+                id: 'op-1',
+                user_id: 'u-1',
+                organization_id: 'org-1',
+                name: 'op-1',
+                slot_number: 1,
+                api_key: 'key-1'
+            };
+            const g8eContext = {
+                user_id: 'u-1',
+                organization_id: 'org-1',
+                source_component: 'g8ed'
+            };
+            mocks.operatorDataService.getOperator.mockResolvedValue(existing);
+            vi.spyOn(service, 'getOperatorWithSessionContext').mockResolvedValue(g8eContext);
+            vi.spyOn(service, 'relayTerminateOperatorToG8ee').mockResolvedValue({ success: true });
+            vi.spyOn(service.relay, 'deregisterOperatorSessionInG8ee').mockResolvedValue({ success: true });
+
+            const result = await service.terminateOperator('op-1');
+
+            expect(result.success).toBe(true);
+            expect(result.id).toBe('op-1');
+            expect(service.relayTerminateOperatorToG8ee).toHaveBeenCalledWith('op-1', g8eContext);
+            expect(service.relay.deregisterOperatorSessionInG8ee).toHaveBeenCalledWith(g8eContext);
+            expect(mocks.operatorDataService.deleteOperator).toHaveBeenCalledWith('op-1');
+            expect(mocks.operatorDataService.createOperator).not.toHaveBeenCalled();
+        });
+
+        it('should handle missing g8eContext gracefully', async () => {
             const existing = {
                 id: 'op-1',
                 user_id: 'u-1',
@@ -282,7 +311,6 @@ describe('OperatorService', () => {
             expect(result.success).toBe(true);
             expect(result.id).toBe('op-1');
             expect(mocks.operatorDataService.deleteOperator).toHaveBeenCalledWith('op-1');
-            expect(mocks.operatorDataService.createOperator).not.toHaveBeenCalled();
         });
 
         it('should return error if operator not found', async () => {
@@ -391,6 +419,12 @@ describe('OperatorService', () => {
             const approval = { approved: true };
             await service.relayApprovalResponseToG8ee(approval, g8eContext);
             expect(service.relay.relayApprovalResponseToG8ee).toHaveBeenCalledWith(approval, g8eContext);
+        });
+
+        it('should delegate relayTerminateOperatorToG8ee to relay subservice', async () => {
+            vi.spyOn(service.relay, 'relayTerminateOperatorToG8ee').mockResolvedValue({ success: true });
+            await service.relayTerminateOperatorToG8ee('op-1', g8eContext);
+            expect(service.relay.relayTerminateOperatorToG8ee).toHaveBeenCalledWith('op-1', g8eContext);
         });
     });
 

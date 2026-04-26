@@ -344,8 +344,25 @@ def build_tribunal_generator_prompt(
     user_context: str,
     working_directory: str,
     operator_context_str: str,
+    round_num: int = 1,
+    cluster_context: str | None = None,
 ) -> str:
     """Build the prompt for a Tribunal generation pass."""
+    if round_num == 2 and cluster_context:
+        template = load_prompt(PromptFile.TRIBUNAL_GENERATOR_ROUND_2)
+        return template.format(
+            request=request,
+            guidelines=guidelines,
+            forbidden_patterns_message=forbidden_patterns_message,
+            command_constraints_message=command_constraints_message,
+            os=os,
+            shell=shell,
+            user_context=user_context,
+            working_directory=working_directory,
+            operator_context=operator_context_str,
+            cluster_context=cluster_context,
+        )
+    
     template = load_prompt(PromptFile.TRIBUNAL_GENERATOR)
     return template.format(
         request=request,

@@ -283,6 +283,12 @@ class EventType(str, Enum):
     TRIBUNAL_VOTING_DISSENT_RECORDED = "g8e.v1.ai.tribunal.voting.dissent.recorded"
     TRIBUNAL_VOTING_AUDIT_STARTED = "g8e.v1.ai.tribunal.voting.audit.started"
     TRIBUNAL_VOTING_AUDIT_COMPLETED = "g8e.v1.ai.tribunal.voting.audit.completed"
+    TRIBUNAL_VOTING_ROUND_STARTED = "g8e.v1.ai.tribunal.voting.round.started"
+    TRIBUNAL_VOTING_ROUND_COMPLETED = "g8e.v1.ai.tribunal.voting.round.completed"
+    TRIBUNAL_VOTING_ROUND_2_STARTED = "g8e.v1.ai.tribunal.voting.round_2.started"
+    TRIBUNAL_VOTING_ROUND_2_PASS_COMPLETED = "g8e.v1.ai.tribunal.voting.round_2.pass.completed"
+    TRIBUNAL_VOTING_ROUND_2_CONSENSUS_REACHED = "g8e.v1.ai.tribunal.voting.round_2.consensus.reached"
+    TRIBUNAL_VOTING_ROUND_2_CONSENSUS_FAILED = "g8e.v1.ai.tribunal.voting.round_2.consensus.failed"
 
     # reputation (Phase 2 — auditor-as-oracle scoreboard)
     REPUTATION_COMMITMENT_CREATED  = "g8e.v1.ai.reputation.commitment.created"

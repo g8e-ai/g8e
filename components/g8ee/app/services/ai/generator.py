@@ -89,6 +89,7 @@ from app.services.ai.auditor_service import (
     commit_reputation,
     run_auditor,
     validate_command_safety,
+    AuditorClusterInfo,
 )
 from app.services.data.reputation_data_service import ReputationDataService
 
@@ -215,6 +216,8 @@ async def _run_generation_pass(
     emitter: TribunalEmitter,
     pass_errors: list[str],
     command_constraints_message: str,
+    round_num: int = 1,
+    r1_clusters: list[Any] | None = None,
 ) -> str | None:
     """Run a single Tribunal generation pass."""
     member = _member_for_pass(pass_index)
@@ -228,6 +231,13 @@ async def _run_generation_pass(
         default_working_directory=DEFAULT_WORKING_DIRECTORY,
     )
 
+    cluster_context = None
+    if round_num == 2 and r1_clusters:
+        cluster_lines = []
+        for c in r1_clusters:
+            cluster_lines.append(f"[{c.cluster_id}] (support: {c.support_count})\n{c.command}")
+        cluster_context = "\n".join(cluster_lines)
+
     prompt = build_tribunal_generator_prompt(
         request=request,
         guidelines=guidelines,
@@ -238,6 +248,8 @@ async def _run_generation_pass(
         user_context=fields["user_context"],
         working_directory=fields["working_directory"],
         operator_context_str=fields["operator_context"],
+        round_num=round_num,
+        cluster_context=cluster_context,
     )
 
     logger.info(
@@ -330,6 +342,39 @@ async def _run_generation_pass(
         logger.error("[TRIBUNAL-PASS] %s", error_msg, exc_info=True)
         return None
 
+def _anonymize_clusters(candidates: list[CandidateCommand]) -> tuple[list[AuditorClusterInfo], dict[str, str], dict[str, list[str]]]:
+    """Anonymize R1 candidates as cluster_a, cluster_b, etc.
+
+    Reuses the auditor's cluster anonymization helper for Round 2 peer review.
+
+    Returns (clusters, cluster_to_cmd, cluster_to_members).
+    """
+    # Group candidates by command
+    candidates_by_command: dict[str, list[str]] = {}
+    for c in candidates:
+        if c.command not in candidates_by_command:
+            candidates_by_command[c.command] = []
+        candidates_by_command[c.command].append(c.member.value)
+
+    # Anonymize as cluster_a, cluster_b, ...
+    clusters: list[AuditorClusterInfo] = []
+    cluster_to_cmd: dict[str, str] = {}
+    cluster_to_members: dict[str, list[str]] = {}
+
+    idx = 0
+    for cmd, members in candidates_by_command.items():
+        c_id = f"cluster_{chr(ord('a') + idx)}"
+        cluster_to_cmd[c_id] = cmd
+        cluster_to_members[c_id] = members
+        clusters.append(AuditorClusterInfo(
+            cluster_id=c_id,
+            command=cmd,
+            support_count=len(members)
+        ))
+        idx += 1
+
+    return clusters, cluster_to_cmd, cluster_to_members
+
 async def _run_generation_stage(
     provider: LLMProvider,
     model: str,
@@ -339,14 +384,23 @@ async def _run_generation_stage(
     num_passes: int,
     emitter: TribunalEmitter,
     command_constraints_message: str,
+    round_num: int = 1,
+    r1_clusters: list[AuditorClusterInfo] | None = None,
 ) -> list[CandidateCommand]:
-    """Stage 1: run N parallel generation passes and return successful candidates."""
+    """Run N parallel generation passes and return successful candidates.
+
+    Args:
+        round_num: Round number (1 for initial, 2 for peer review)
+        r1_clusters: Anonymized R1 clusters for Round 2 peer review context
+    """
     pass_errors: list[str] = []
     pass_tasks = [
         _run_generation_pass(
             provider=provider, model=model, request=request, guidelines=guidelines,
             operator_context=operator_context, pass_index=i, emitter=emitter, pass_errors=pass_errors,
             command_constraints_message=command_constraints_message,
+            round_num=round_num,
+            r1_clusters=r1_clusters,
         )
         for i in range(num_passes)
     ]
@@ -564,6 +618,8 @@ async def _build_and_emit_result(
     operator_context: OperatorContext | None = None,
     correlation_id: str | None = None,
     reputation_commitment_id: str | None = None,
+    round_2_candidates: list[CandidateCommand] | None = None,
+    round_2_vote_breakdown: VoteBreakdown | None = None,
 ) -> CommandGenerationResult:
     """Stage 4: assemble the result model and emit the session-completed event."""
     is_safe = True
@@ -597,6 +653,8 @@ async def _build_and_emit_result(
         auditor_reason=auditor_reason,
         correlation_id=correlation_id,
         reputation_commitment_id=reputation_commitment_id,
+        round_2_candidates=round_2_candidates,
+        round_2_vote_breakdown=round_2_vote_breakdown,
     )
 
     await emitter.emit(
@@ -728,11 +786,100 @@ async def generate_command(
         provider=generation_provider, model=generation_model, request=request, guidelines=guidelines,
         operator_context=operator_context, num_passes=num_passes, emitter=emitter,
         command_constraints_message=command_constraints_message,
+        round_num=1,
     )
 
     vote_winner, vote_score, vote_breakdown, tied_candidates = await _run_voting_stage(
         candidates=candidates, request=request, emitter=emitter, total_members=num_passes,
     )
+
+    # Round 2: anonymized peer review if consensus is low and multi-round is enabled
+    round_2_candidates = None
+    round_2_vote_breakdown = None
+    rounds_executed = 1
+
+    if (vote_winner is None and
+        vote_breakdown.tie_break_reason != TieBreakReason.AUDITOR_DISAMBIGUATION and
+        settings.llm.llm_command_gen_rounds == 2):
+
+        logger.info("[TRIBUNAL] Consensus strength too low (%.2f < %d), initiating Round 2 peer review",
+                    vote_breakdown.consensus_strength, TRIBUNAL_MIN_CONSENSUS)
+
+        await emitter.emit(
+            EventType.TRIBUNAL_VOTING_ROUND_STARTED,
+            TribunalSessionStartedPayload(
+                request=request,
+                guidelines=guidelines,
+                model=generation_model,
+                num_passes=num_passes,
+                members=members,
+                correlation_id=correlation_id,
+            ),
+        )
+
+        # Anonymize R1 clusters for peer review context
+        r1_clusters, cluster_to_cmd, cluster_to_members = _anonymize_clusters(candidates)
+
+        await emitter.emit(
+            EventType.TRIBUNAL_VOTING_ROUND_2_STARTED,
+            TribunalSessionStartedPayload(
+                request=request,
+                guidelines=guidelines,
+                model=generation_model,
+                num_passes=num_passes,
+                members=members,
+                correlation_id=correlation_id,
+            ),
+        )
+
+        # Run Round 2 generation with anonymized cluster context
+        # TODO: Add persona-specific R2 prompt blocks to prompts_data/ and pass cluster context
+        round_2_candidates = await _run_generation_stage(
+            provider=generation_provider, model=generation_model, request=request, guidelines=guidelines,
+            operator_context=operator_context, num_passes=num_passes, emitter=emitter,
+            command_constraints_message=command_constraints_message,
+            round_num=2,
+            r1_clusters=r1_clusters,
+        )
+
+        # Run Round 2 voting
+        vote_winner, vote_score, vote_breakdown, tied_candidates = await _run_voting_stage(
+            candidates=round_2_candidates, request=request, emitter=emitter, total_members=num_passes,
+        )
+
+        rounds_executed = 2
+
+        if vote_winner is not None:
+            await emitter.emit(
+                EventType.TRIBUNAL_VOTING_ROUND_2_CONSENSUS_REACHED,
+                TribunalVotingCompletedPayload(
+                    vote_winner=vote_winner,
+                    vote_score=vote_score,
+                    num_candidates=len(round_2_candidates),
+                    request=request,
+                    vote_breakdown=vote_breakdown,
+                ),
+            )
+            round_2_vote_breakdown = vote_breakdown
+        else:
+            await emitter.emit(
+                EventType.TRIBUNAL_VOTING_ROUND_2_CONSENSUS_FAILED,
+                TribunalConsensusFailedPayload(
+                    request=request,
+                    vote_breakdown=vote_breakdown,
+                ),
+            )
+            round_2_vote_breakdown = vote_breakdown
+
+        await emitter.emit(
+            EventType.TRIBUNAL_VOTING_ROUND_COMPLETED,
+            TribunalSessionCompletedPayload(
+                request=request,
+                final_command=vote_winner or "",
+                outcome=CommandGenerationOutcome.CONSENSUS if vote_winner else CommandGenerationOutcome.CONSENSUS_FAILED,
+                vote_score=vote_score or 0.0,
+            ),
+        )
 
     if vote_winner is None and vote_breakdown.tie_break_reason != TieBreakReason.AUDITOR_DISAMBIGUATION:
         await _build_and_emit_result(
@@ -752,6 +899,8 @@ async def generate_command(
             blacklisting_enabled=blacklisting_enabled,
             operator_context=operator_context,
             correlation_id=correlation_id,
+            round_2_candidates=round_2_candidates,
+            round_2_vote_breakdown=round_2_vote_breakdown,
         )
         raise TribunalConsensusFailedError(request=request, vote_breakdown=vote_breakdown)
 
@@ -799,4 +948,6 @@ async def generate_command(
         operator_context=operator_context,
         correlation_id=correlation_id,
         reputation_commitment_id=commitment_id,
+        round_2_candidates=round_2_candidates,
+        round_2_vote_breakdown=round_2_vote_breakdown,
     )

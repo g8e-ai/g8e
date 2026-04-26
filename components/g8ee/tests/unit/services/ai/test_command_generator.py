@@ -1129,8 +1129,8 @@ class TestRunVotingStage:
         assert tied_candidates is None
 
     @pytest.mark.asyncio
-    async def test_two_two_one_tied_top_breaks_by_shortest_command(self):
-        """2/2/1 tie broken by shortest command rule (maximizes signal density for approval fatigue reduction)."""
+    async def test_two_two_one_tied_top_breaks_by_longest_command(self):
+        """2/2/1 tie broken by longest command rule (compositional pressure)."""
         from app.models.agents.tribunal import CandidateCommand
 
         candidates = [
@@ -1146,11 +1146,11 @@ class TestRunVotingStage:
             candidates=candidates, request="check docker state", emitter=emitter, total_members=5,
         )
 
-        assert winner == "docker ps"
+        assert winner == "docker ps -a && docker images && docker volume ls && docker network ls && docker system df"
         assert score == 0.4
         assert vote_breakdown.consensus_strength == 0.4
         assert vote_breakdown.tie_broken is True
-        assert vote_breakdown.tie_break_reason == TieBreakReason.SHORTEST
+        assert vote_breakdown.tie_break_reason == TieBreakReason.LONGEST
         assert len(vote_breakdown.winner_supporters) == 2
         assert tied_candidates is not None
         assert len(tied_candidates) == 2
@@ -2600,6 +2600,65 @@ class TestTribunalEmitter:
         )
 
         mock_event_service.publish.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_round_2_peer_review_flow(self):
+        """Test the full Round 2 peer review flow when consensus is low."""
+        llm = LLMSettings(
+            primary_provider=LLMProvider.OLLAMA,
+            lite_provider=LLMProvider.OLLAMA,
+            lite_model="gemma3:1b",
+            llm_command_gen_passes=3,
+            llm_command_gen_rounds=2,
+            llm_command_gen_auditor=False,
+        )
+        settings = G8eeUserSettings(llm=llm)
+
+        call_count = 0
+
+        async def round_based_side_effect(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            mock_response = MagicMock()
+            if call_count <= 3:
+                # Round 1: No consensus
+                if call_count == 1: mock_response.text = "cmd1"
+                elif call_count == 2: mock_response.text = "cmd2"
+                elif call_count == 3: mock_response.text = "cmd3"
+            else:
+                # Round 2: Consensus reached
+                mock_response.text = "cmd_consensus"
+            return mock_response
+
+        mock_provider = _make_mock_provider(generate_content_lite_side_effect=round_based_side_effect)
+
+        with patch("app.services.ai.generator.get_llm_provider", return_value=mock_provider):
+            mock_event_service = MagicMock()
+            mock_event_service.publish = AsyncMock()
+            
+            result = await generate_command(
+                request="test round 2",
+                guidelines="",
+                operator_context=_make_mock_operator_context(),
+                g8ed_event_service=mock_event_service,
+                web_session_id="ws-1",
+                user_id="user-1",
+                case_id="case-1",
+                investigation_id="inv-1",
+                settings=settings,
+                **_REPUTATION_KWARGS,
+            )
+
+            assert result.final_command == "cmd_consensus"
+            assert result.round_2_candidates is not None
+            assert len(result.round_2_candidates) == 3
+            assert result.round_2_vote_breakdown is not None
+            assert result.round_2_vote_breakdown.winner == "cmd_consensus"
+            
+            # Verify event emissions for Round 2
+            emitted_types = [args[0][0].event_type for args in mock_event_service.publish.call_args_list]
+            assert EventType.TRIBUNAL_VOTING_ROUND_2_STARTED in emitted_types
+            assert EventType.TRIBUNAL_VOTING_ROUND_2_CONSENSUS_REACHED in emitted_types
 
     @pytest.mark.asyncio
     async def test_all_terminal_events_raise_on_publish_failure(self):

@@ -26,8 +26,11 @@ from fastapi import APIRouter, Depends, Request, status
 
 from app.models.settings import G8eePlatformSettings, G8eeUserSettings
 from app.constants import (
+    ComponentName,
     DB_COLLECTION_MEMORIES,
     EventType,
+    OperatorHistoryEventType,
+    OperatorStatus,
     Priority,
     InternalApiPaths,
     API_PATHS,
@@ -608,46 +611,29 @@ async def terminate_operator(
     """
     Terminate an operator slot.
     
-    Sets operator status to TERMINATED and records termination timestamp.
+    Atomically marks operator status TERMINATED and appends a TERMINATED audit
+    history entry under a single per-operator lock so concurrent writes cannot
+    interleave a partial termination.
+
     Called by g8ed during API key refresh and manual termination.
     SECURITY: Internal only - g8ed component.
     """
-    from app.constants import OperatorStatus
-    from app.utils.timestamp import now
+    operator = await operator_data_service.get_operator(request.operator_id)
+    if not operator:
+        return OperatorTerminateResponse(success=False, error="Operator not found")
 
-    try:
-        operator = await operator_data_service.get_operator(request.operator_id)
-        if not operator:
-            return OperatorTerminateResponse(success=False, error="Operator not found")
+    await operator_data_service.terminate_operator(
+        operator_id=request.operator_id,
+        actor=ComponentName.G8ED,
+        summary="Operator terminated via g8ed relay",
+    )
 
-        updates = {
-            "status": OperatorStatus.TERMINATED,
-            "terminated_at": now(),
-            "updated_at": now(),
-            "operator_session_id": None,
-            "bound_web_session_id": None,
-        }
+    logger.info(
+        "[INTERNAL-HTTP] Operator terminated",
+        extra={"operator_id": request.operator_id, "user_id": operator.user_id}
+    )
 
-        await operator_data_service.cache.update_document(
-            collection=operator_data_service.collection,
-            document_id=request.operator_id,
-            data=updates,
-            merge=True
-        )
-
-        logger.info(
-            "[INTERNAL-HTTP] Operator terminated",
-            extra={"operator_id": request.operator_id, "user_id": operator.user_id}
-        )
-
-        return OperatorTerminateResponse(success=True)
-
-    except Exception as e:
-        logger.error(
-            "[INTERNAL-HTTP] Failed to terminate operator",
-            extra={"error": str(e), "operator_id": request.operator_id}
-        )
-        return OperatorTerminateResponse(success=False, error=str(e))
+    return OperatorTerminateResponse(success=True)
 
 
 @router.post(API_PATHS["g8ee"]["operators_listen_session_auth"])

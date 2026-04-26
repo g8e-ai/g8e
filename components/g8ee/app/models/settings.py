@@ -268,6 +268,7 @@ class LLMSettings(G8eBaseModel):
     llm_command_gen_enabled: bool = Field(default=True)
     llm_command_gen_auditor: bool = Field(default=True)
     llm_command_gen_passes: int = Field(default=5)
+    llm_command_gen_rounds: int = Field(default=2, ge=1, le=2, description="Number of Tribunal voting rounds (1=single-round, 2=two-round with peer review)")
 
     @property
     def resolved_assistant_model(self) -> str | None:

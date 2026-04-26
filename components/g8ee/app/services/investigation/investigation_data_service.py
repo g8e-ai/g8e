@@ -43,6 +43,7 @@ from app.models.operators import CommandInternalResult
 from app.models.tool_results import FileEditResult
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.protocols import InvestigationDataServiceProtocol
+from app.utils.keyed_lock import KeyedAsyncLock
 from app.utils.timestamp import now
 
 
@@ -56,6 +57,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
     def __init__(self, cache: CacheAsideService):
         self.cache = cache
         self.collection = DB_COLLECTION_INVESTIGATIONS
+        self._history_lock = KeyedAsyncLock()
 
     async def create_investigation(self, request: InvestigationCreateRequest) -> InvestigationModel:
         """Low-level persistence for a new investigation document."""
@@ -195,40 +197,41 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         if not investigation_id:
             return True
 
-        # Get previous hash from last entry in conversation history.
-        # All entries must have entry_hash - no legacy data support.
-        investigation = await self.get_investigation(investigation_id)
-        if not investigation:
-            raise ValueError(f"Investigation {investigation_id} not found")
-        
-        if not investigation.conversation_history:
-            # First entry - use genesis hash
-            prev_hash = genesis_hash(investigation.id, investigation.created_at.isoformat())
-        else:
-            last_entry = investigation.conversation_history[-1]
-            if not last_entry.entry_hash:
-                raise ValueError(f"Previous entry in conversation history lacks entry_hash - chain integrity violation for investigation {investigation_id}")
-            prev_hash = last_entry.entry_hash
+        async with self._history_lock.acquire(investigation_id):
+            # Get previous hash from last entry in conversation history.
+            # All entries must have entry_hash - no legacy data support.
+            investigation = await self.get_investigation(investigation_id)
+            if not investigation:
+                raise ValueError(f"Investigation {investigation_id} not found")
+            
+            if not investigation.conversation_history:
+                # First entry - use genesis hash
+                prev_hash = genesis_hash(investigation.id, investigation.created_at.isoformat())
+            else:
+                last_entry = investigation.conversation_history[-1]
+                if not last_entry.entry_hash:
+                    raise ValueError(f"Previous entry in conversation history lacks entry_hash - chain integrity violation for investigation {investigation_id}")
+                prev_hash = last_entry.entry_hash
 
-        message = ConversationHistoryMessage(
-            sender=sender,
-            content=content,
-            metadata=metadata or ConversationMessageMetadata(),
-            prev_hash=prev_hash,
-        )
+            message = ConversationHistoryMessage(
+                sender=sender,
+                content=content,
+                metadata=metadata or ConversationMessageMetadata(),
+                prev_hash=prev_hash,
+            )
 
-        # Compute entry hash
-        entry_dict = message.model_dump(mode="json", exclude={"entry_hash"})
-        computed_hash = compute_entry_hash(entry_dict, prev_hash)
-        message = message.model_copy(update={"entry_hash": computed_hash})
+            # Compute entry hash
+            entry_dict = message.model_dump(mode="json", exclude={"entry_hash"})
+            computed_hash = compute_entry_hash(entry_dict, prev_hash)
+            message = message.model_copy(update={"entry_hash": computed_hash})
 
-        await self.cache.append_to_array(
-            collection=self.collection,
-            document_id=investigation_id,
-            array_field="conversation_history",
-            items_to_add=[message.model_dump(mode="json")],
-            additional_updates={"created_at": now()},
-        )
+            await self.cache.append_to_array(
+                collection=self.collection,
+                document_id=investigation_id,
+                array_field="conversation_history",
+                items_to_add=[message.model_dump(mode="json")],
+                additional_updates={"created_at": now()},
+            )
 
         return True
 
@@ -241,28 +244,29 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         details: ConversationMessageMetadata,
     ) -> InvestigationModel:
         """Record an event in the investigation history trail."""
-        investigation = await self.get_investigation(investigation_id)
-        if not investigation:
-            raise ResourceNotFoundError(
-                f"Investigation {investigation_id} not found",
-                resource_type="investigation",
-                resource_id=investigation_id,
+        async with self._history_lock.acquire(investigation_id):
+            investigation = await self.get_investigation(investigation_id)
+            if not investigation:
+                raise ResourceNotFoundError(
+                    f"Investigation {investigation_id} not found",
+                    resource_type="investigation",
+                    resource_id=investigation_id,
+                )
+
+            # Single chokepoint: delegate to model method which handles hash chaining.
+            investigation.add_history_entry(
+                event_type=event_type,
+                actor=actor,
+                summary=summary,
+                details=details or ConversationMessageMetadata(),
             )
 
-        # Single chokepoint: delegate to model method which handles hash chaining.
-        investigation.add_history_entry(
-            event_type=event_type,
-            actor=actor,
-            summary=summary,
-            details=details or ConversationMessageMetadata(),
-        )
+            await self.update_investigation_raw(
+                investigation_id=investigation_id,
+                updates={"history_trail": [e.model_dump(mode="json") for e in investigation.history_trail]},
+            )
 
-        await self.update_investigation_raw(
-            investigation_id=investigation_id,
-            updates={"history_trail": [e.model_dump(mode="json") for e in investigation.history_trail]},
-        )
-
-        return investigation
+            return investigation
 
     async def add_approval_record(
         self,

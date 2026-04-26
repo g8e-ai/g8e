@@ -50,6 +50,7 @@ from app.models import BindOperatorsRequest, BindOperatorsResponse
 from app.models.cache import ArrayUnion
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.protocols import OperatorDataServiceProtocol
+from app.utils.keyed_lock import KeyedAsyncLock
 from app.utils.timestamp import now
 
 from app.clients.http_client import HTTPClient
@@ -63,6 +64,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
         self.cache = cache
         self.internal_http_client = internal_http_client
         self.collection = DB_COLLECTION_OPERATORS
+        self._history_lock = KeyedAsyncLock()
 
     async def get_operator(self, operator_id: str) -> OperatorDocument | None:
         """Get Operator document using cache-aside pattern."""
@@ -180,26 +182,77 @@ class OperatorDataService(OperatorDataServiceProtocol):
         details: dict[str, object] | None = None,
     ) -> OperatorDocument:
         """Record an event in the operator history trail."""
-        operator = await self.get_operator(operator_id)
-        if not operator:
-            raise ValidationError(f"Operator {operator_id} not found")
+        async with self._history_lock.acquire(operator_id):
+            operator = await self.get_operator(operator_id)
+            if not operator:
+                raise ValidationError(f"Operator {operator_id} not found")
 
-        # Delegate to model method which handles hash chaining.
-        operator.add_history_entry(
-            event_type=event_type,
-            summary=summary,
-            actor=actor,
-            details=details or {},
-        )
+            # Delegate to model method which handles hash chaining.
+            operator.add_history_entry(
+                event_type=event_type,
+                summary=summary,
+                actor=actor,
+                details=details or {},
+            )
 
-        await self.cache.update_document(
-            collection=self.collection,
-            document_id=operator_id,
-            data={"history_trail": [e.model_dump(mode="json") for e in operator.history_trail]},
-            merge=True,
-        )
+            await self.cache.update_document(
+                collection=self.collection,
+                document_id=operator_id,
+                data={"history_trail": [e.model_dump(mode="json") for e in operator.history_trail]},
+                merge=True,
+            )
 
-        return operator
+            return operator
+
+    async def terminate_operator(
+        self,
+        operator_id: str,
+        actor: ComponentName = ComponentName.G8EE,
+        summary: str = "Operator terminated",
+        details: dict[str, object] | None = None,
+    ) -> OperatorDocument:
+        """Atomically mark an operator TERMINATED and append a history entry.
+
+        Status update and audit-trail append happen under the same per-operator
+        keyed lock, so concurrent writes cannot interleave a partial termination.
+        Authority: g8ee (single writer for the operator document).
+        """
+        async with self._history_lock.acquire(operator_id):
+            operator = await self.get_operator(operator_id)
+            if not operator:
+                raise ValidationError(f"Operator {operator_id} not found")
+
+            terminated_at = now()
+
+            operator.add_history_entry(
+                event_type=OperatorHistoryEventType.TERMINATED,
+                summary=summary,
+                actor=actor,
+                details=details or {"terminated_at": terminated_at},
+            )
+
+            updates: dict[str, object] = {
+                "status": OperatorStatus.TERMINATED,
+                "terminated_at": terminated_at,
+                "updated_at": terminated_at,
+                "operator_session_id": None,
+                "bound_web_session_id": None,
+                "history_trail": [e.model_dump(mode="json") for e in operator.history_trail],
+            }
+
+            result = await self.cache.update_document(
+                collection=self.collection,
+                document_id=operator_id,
+                data=updates,
+                merge=True,
+            )
+
+            if not result.success:
+                raise ExternalServiceError(
+                    f"Failed to terminate operator {operator_id}: {result.error or 'unknown error'}"
+                )
+
+            return operator
 
     async def update_operator_status(self, operator_id: str, status: OperatorStatus) -> bool:
         """Update Operator status in both DB and cache."""

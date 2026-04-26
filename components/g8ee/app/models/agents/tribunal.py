@@ -353,6 +353,14 @@ class CommandGenerationResult(G8eBaseModel):
             "failed non-fatally."
         ),
     )
+    round_2_candidates: list[CandidateCommand] | None = Field(
+        default=None,
+        description="Round 2 candidates from anonymized peer review (null if single-round)",
+    )
+    round_2_vote_breakdown: VoteBreakdown | None = Field(
+        default=None,
+        description="Round 2 vote breakdown from anonymized peer review (null if single-round)",
+    )
 
 
 class TribunalPassCompletedPayload(G8eBaseModel):
