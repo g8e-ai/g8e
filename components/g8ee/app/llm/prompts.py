@@ -383,80 +383,10 @@ def build_tribunal_auditor_prompt(
     )
 
 
-def _build_dash_slim_prompt(
-    system_context: OperatorContext | list[OperatorContext] | None,
-    user_memories: list[InvestigationMemory],
-    case_memories: list[InvestigationMemory],
-    investigation: EnrichedInvestigationContext | None,
-    triage_result: TriageResult | None,
-) -> tuple[str, dict[str, int]]:
-    """Build Dash's slim system prompt.
-
-    Dash is the fast-path responder. It has no tools, does not execute,
-    and does not reason over multi-step plans — so it does not load the
-    full safety/loyalty/dissent/mode governance stack that heavy agents
-    need. Loading that stack is dead weight on cold start and dominates
-    prefill cost on llama.cpp.
-
-    The slim prompt is: persona + a single rules file + whatever dynamic
-    context is already available (system_context, triage_context,
-    investigation_context, learned_context). Static content is emitted
-    first to maximize llama-server prefix-cache reuse across invocations.
-    """
-    sections: list[str] = []
-    section_labels: list[str] = []
-
-    # Static prefix (cacheable across every Dash call)
-    sections.append(load_prompt(PromptFile.AGENT_DASH_RULES))
-    section_labels.append(PromptSection.AGENT_RULES)
-
-    persona = get_agent_persona(AgentName.DASH.value).get_system_prompt()
-    if persona:
-        sections.append(persona)
-        section_labels.append(PromptSection.AGENT_PERSONA)
-
-    # Dynamic suffix (varies per turn; placed last so the prefix above caches)
-    if system_context:
-        system_section = _build_system_context_section(system_context)
-        if system_section:
-            sections.append(system_section)
-            section_labels.append(PromptSection.SYSTEM_CONTEXT)
-
-    triage_section = build_triage_context_section(triage_result)
-    if triage_section:
-        sections.append(triage_section)
-        section_labels.append(PromptSection.TRIAGE_CONTEXT)
-
-    if investigation:
-        investigation_section = build_investigation_context_section(investigation)
-        if investigation_section:
-            sections.append(investigation_section)
-            section_labels.append(PromptSection.INVESTIGATION_CONTEXT)
-
-    if user_memories or case_memories:
-        learned_section = build_learned_context_section(user_memories, case_memories)
-        if learned_section:
-            sections.append(learned_section)
-            section_labels.append(PromptSection.LEARNED_CONTEXT)
-
-    full_prompt = "\n".join(sections)
-    context_sizes = {
-        label: len(section) for label, section in zip(section_labels, sections)
-    }
-    context_sizes["total"] = len(full_prompt)
-
-    logger.info(
-        "[PROMPT] dash_slim sections=%d total_chars=%d sections=[%s]",
-        len(sections), len(full_prompt), ", ".join(section_labels),
-    )
-    logger.info("[PROMPT] dash_slim full_prompt:\n%s", full_prompt)
-    return full_prompt, context_sizes
-
-
 def _build_system_context_section(
     system_context: OperatorContext | list[OperatorContext],
 ) -> str:
-    """Render the <system_context> block shared between full and slim builders."""
+    """Render the <system_context> block injected into the modular system prompt."""
     system_parts = ["<system_context>"]
 
     contexts_to_render = system_context if isinstance(system_context, list) else [system_context]
@@ -538,8 +468,14 @@ def build_modular_system_prompt(
     """
     Build system prompt using modular architecture.
 
-    Dash takes the slim fast path — see `_build_dash_slim_prompt`. Every
-    other agent goes through the full modular builder below.
+    Dash and Sage share this builder. Per the Tribunal GDD
+    (`.local.dev/dev/tribunal-game.md` §14.1), the GDD's interrogator
+    role ("Dash" in the doc) maps to the **triage** agent, not to the
+    code's `dash` agent. The code's `dash` is the fast-path responder
+    that plays the same game as Sage — same safety / loyalty / dissent
+    / mode / tools stack — just on the assistant model tier when triage
+    routes simple work to it. Only the persona block differs between
+    Sage and Dash.
 
     Section order is optimized for llama.cpp prefix-cache reuse: the
     shared platform-static block (safety/loyalty/dissent + mode files +
@@ -573,23 +509,13 @@ def build_modular_system_prompt(
     Returns:
         Tuple of (complete system prompt string, context_sizes dict with character counts)
     """
-    # Dash takes the slim fast path: no tools, no execution, no dissent stack.
-    if agent_name is AgentName.DASH:
-        return _build_dash_slim_prompt(
-            system_context=system_context,
-            user_memories=user_memories,
-            case_memories=case_memories,
-            investigation=investigation,
-            triage_result=triage_result,
-        )
-
     sections: list[str] = []
     section_labels: list[str] = []
 
     # ---------------------------------------------------------------------
-    # Shared static prefix (identical across every non-Dash agent using
-    # the same mode). Emitted first so llama.cpp / vLLM prefix caches hit
-    # across agent turns.
+    # Shared static prefix (identical across every agent using the same
+    # mode, including Dash). Emitted first so llama.cpp / vLLM prefix
+    # caches hit across agent turns.
     # ---------------------------------------------------------------------
     sections.append(load_prompt(PromptFile.CORE_SAFETY))
     section_labels.append(PromptSection.SAFETY)

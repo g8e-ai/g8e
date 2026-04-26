@@ -52,30 +52,34 @@ async def all_services(cache_aside_service, test_settings):
     Benchmark and eval tests use fake operators (documents only, no real process).
     Use auto_approve_pending helper to approve pending approvals during tests.
 
-    Injects a real WebSearchProvider if TEST_WEB_SEARCH_* env vars are set,
+    Injects a real WebSearchProvider if search settings are configured,
     ensuring the g8e_web_search tool is registered for eval scenarios that expect it.
     """
-    import os
+    from app.llm.factory import get_search_settings
     from app.services.ai.grounding.web_search_provider import WebSearchProvider
 
-    # Check if web search credentials are available via env vars
+    # Check if web search settings are configured
     web_search_provider = None
-    project_id = os.environ.get("TEST_WEB_SEARCH_PROJECT_ID", "").strip()
-    engine_id = os.environ.get("TEST_WEB_SEARCH_ENGINE_ID", "").strip()
-    api_key = os.environ.get("TEST_WEB_SEARCH_API_KEY", "").strip()
-    location = os.environ.get("TEST_WEB_SEARCH_LOCATION", "").strip() or "global"
-
-    if project_id and engine_id and api_key:
+    search_settings = get_search_settings()
+    logger.info("[EVAL-FIXTURE] search_settings=%s", search_settings)
+    if search_settings:
+        logger.info("[EVAL-FIXTURE] search_settings.enabled=%s", search_settings.enabled)
+        logger.info("[EVAL-FIXTURE] search_settings.project_id=%s", search_settings.project_id)
+        logger.info("[EVAL-FIXTURE] search_settings.engine_id=%s", search_settings.engine_id)
+        logger.info("[EVAL-FIXTURE] search_settings.api_key_set=%s", bool(search_settings.api_key))
+    if search_settings and search_settings.enabled:
         web_search_provider = WebSearchProvider(
-            project_id=project_id,
-            engine_id=engine_id,
-            api_key=api_key,
-            location=location,
+            project_id=search_settings.project_id,
+            engine_id=search_settings.engine_id,
+            api_key=search_settings.api_key,
+            location=search_settings.location,
         )
         logger.info(
-            "[EVAL-FIXTURE] Injecting real WebSearchProvider from env vars: project_id=%s engine_id=%s",
-            project_id, engine_id
+            "[EVAL-FIXTURE] Injecting real WebSearchProvider from search settings: project_id=%s engine_id=%s",
+            search_settings.project_id, search_settings.engine_id
         )
+    else:
+        logger.warning("[EVAL-FIXTURE] WebSearchProvider NOT injected - search settings not configured or not enabled")
 
     services = ServiceFactory.create_all_services(
         test_settings,
@@ -119,24 +123,28 @@ async def cleanup(cache_aside_service, all_services):
     await tracker.cleanup()
 
 
-@pytest.fixture(scope="session")
-def test_user_settings():
-    """Session-scoped fixture providing G8eeUserSettings for integration eval tests.
+@pytest_asyncio.fixture(scope="function", loop_scope="session")
+async def user_settings(cache_aside_service, test_settings):
+    """Returns user settings for integration eval tests.
 
-    Constructs user settings with LLM configuration from environment variables
-    (via get_llm_settings()) and search disabled by default. Tests that require
-    search enabled can override the search field on the returned object.
-
-    Eliminates duplication across test_agent_benchmark.py, test_agent_accuracy.py,
-    and provider-specific accuracy tests.
+    Uses TEST_LLM settings when available (set via ./g8e test flags),
+    otherwise loads user settings from g8es.
     """
-    llm_settings = get_llm_settings()
-    if not llm_settings or not llm_settings.primary_model:
-        pytest.skip("LLM provider is not configured")
+    from app.services.infra.settings_service import SettingsService
 
-    search_settings = SearchSettings(enabled=False)
-    eval_judge_settings = EvalJudgeSettings(model=llm_settings.primary_model)
-    return G8eeUserSettings(llm=llm_settings, search=search_settings, eval_judge=eval_judge_settings)
+    # Use TEST_LLM settings if available
+    llm = get_llm_settings()
+    if llm:
+        eval_judge_settings = EvalJudgeSettings(model=llm.primary_model)
+        return G8eeUserSettings(llm=llm, search=test_settings.search, eval_judge=eval_judge_settings)
+
+    # Otherwise load from g8es
+    settings_service = SettingsService(cache_aside_service=cache_aside_service)
+    loaded_settings = await settings_service.get_user_settings("test-user-id")
+    # Ensure eval_judge is set even when loading from g8es
+    if loaded_settings.llm and not loaded_settings.eval_judge:
+        loaded_settings.eval_judge = EvalJudgeSettings(model=loaded_settings.llm.primary_model)
+    return loaded_settings
 
 
 @pytest.fixture(scope="session")

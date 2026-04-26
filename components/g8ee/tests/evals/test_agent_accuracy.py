@@ -68,7 +68,7 @@ async def test_agent_accuracy(
     all_services,
     cache_aside_service,
     test_settings,
-    test_user_settings,
+    user_settings,
     cleanup,
     unique_investigation_id,
     unique_case_id,
@@ -97,7 +97,7 @@ async def test_agent_accuracy(
     chat_pipeline = all_services['chat_pipeline']
 
     try:
-        llm_settings = test_user_settings.llm
+        llm_settings = user_settings.llm
 
         # The Assistant Model is being tested
         model_name = llm_settings.assistant_model
@@ -144,14 +144,33 @@ async def test_agent_accuracy(
         )
 
         # Step 3: Call chat_pipeline.run_chat() with real services
-        # Enable web search for scenarios that expect it
-        search_settings = SearchSettings(enabled="g8e_web_search" in scenario.get("expected_tools", []))
-        user_settings = G8eeUserSettings(llm=test_user_settings.llm, search=search_settings)
+        # Enable web search for scenarios that expect it, preserving credentials from factory settings
+        from app.llm.factory import get_search_settings
+        factory_search_settings = get_search_settings()
+        if "g8e_web_search" in scenario.get("expected_tools", []):
+            # Use factory search settings with web search enabled
+            if factory_search_settings:
+                search_settings = SearchSettings(
+                    enabled=True,
+                    project_id=factory_search_settings.project_id,
+                    engine_id=factory_search_settings.engine_id,
+                    api_key=factory_search_settings.api_key,
+                    location=factory_search_settings.location,
+                )
+            else:
+                search_settings = SearchSettings(enabled=True)
+        else:
+            search_settings = SearchSettings(enabled=False)
+        user_settings = G8eeUserSettings(llm=user_settings.llm, search=search_settings)
         task_manager = ChatTaskManager()
 
         logger.info(f"[EVAL] Running scenario {scenario['id']} with model {model_name}")
         logger.info(f"[EVAL] Agent mode: {agent_mode}")
         logger.info(f"[EVAL] Investigation ID: {created_investigation.id}")
+        logger.info(f"[EVAL] Search settings: enabled={user_settings.search.enabled}, project_id={user_settings.search.project_id}, engine_id={user_settings.search.engine_id}")
+
+        tool_service = all_services['tool_service']
+        logger.info(f"[EVAL] g8e_web_search available: {tool_service.g8e_web_search_available}")
 
         user_query = scenario["user_query"]
 
@@ -163,8 +182,10 @@ async def test_agent_accuracy(
             sentinel_mode=False,
             llm_primary_provider=None,
             llm_assistant_provider=None,
+            llm_lite_provider=None,
             llm_primary_model=llm_settings.primary_model,
             llm_assistant_model=llm_settings.assistant_model,
+            llm_lite_model=llm_settings.lite_model,
             _task_manager=task_manager,
             user_settings=user_settings,
             _track_task=False,  # Don't track task for eval tests

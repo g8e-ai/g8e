@@ -33,7 +33,6 @@ class PromptSection(str, Enum):
     INVESTIGATION_CONTEXT = "investigation_context"
     RESPONSE_CONSTRAINTS = "response_constraints"
     LEARNED_CONTEXT = "learned_context"
-    AGENT_RULES = "agent_rules"
     AGENT_PERSONA = "agent_persona"
 
 
@@ -51,9 +50,6 @@ class PromptFile(str, Enum):
     CORE_LOYALTY = "core/loyalty.txt"
     CORE_DISSENT = "core/dissent.txt"
 
-    # Per-agent slim rule files (bypass the full modular stack)
-    AGENT_DASH_RULES = "agents/dash.txt"
-    
     # System
     SYSTEM_RESPONSE_CONSTRAINTS = "system/response_constraints.txt"
     SYSTEM_SENTINEL_MODE = "system/sentinel_mode.txt"

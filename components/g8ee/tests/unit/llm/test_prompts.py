@@ -602,13 +602,17 @@ def test_build_modular_system_prompt_dash_uses_persona_not_core_identity(mock_lo
     assert "responder" in prompt.lower() or "dash" in prompt.lower()
 
 
-def test_build_modular_system_prompt_dash_slim_path_excludes_heavy_stack(mock_loader, operator_context):
-    """Dash is the fast-path responder — no tools, no execution surface.
+def test_build_modular_system_prompt_dash_includes_full_governance_stack(mock_loader, operator_context):
+    """Dash plays the same game as Sage and must load the full shared stack.
 
-    The slim path must skip the full safety / loyalty / dissent / mode
-    governance bundle that only applies to tool-calling agents. Loading
-    that ~15 kB stack on every Dash call dominates llama.cpp prefill
-    latency for turns that only need a short informational reply.
+    Per the Tribunal GDD (`.local.dev/dev/tribunal-game.md` §14.1) the
+    GDD's interrogator role ("Dash" in the doc) maps to the **triage**
+    agent. The code's `dash` agent is the fast-path responder that
+    plays the same game as Sage — same safety / loyalty / dissent /
+    mode / tools / response-constraints stack — only the persona block
+    differs. A prior implementation routed Dash through a slim path
+    that stripped this governance bundle; this test pins the unified
+    behaviour so that regression cannot return without being seen.
     """
     from app.constants import AgentName
 
@@ -621,31 +625,34 @@ def test_build_modular_system_prompt_dash_slim_path_excludes_heavy_stack(mock_lo
         agent_name=AgentName.DASH,
     )
 
-    # The heavy stack must not appear in Dash's slim prompt.
-    for absent in (
+    # The shared governance stack must be present for Dash, exactly as
+    # it is for Sage.
+    for required in (
         PromptFile.CORE_SAFETY,
         PromptFile.CORE_LOYALTY,
         PromptFile.CORE_DISSENT,
-        PromptFile.CORE_IDENTITY,
         PromptFile.SYSTEM_RESPONSE_CONSTRAINTS,
     ):
-        assert f"Content of {absent}" not in prompt, (
-            f"Dash slim path must not include {absent}"
+        assert f"Content of {required}" in prompt, (
+            f"Dash must include {required} (same stack as Sage)"
         )
-    # Mode prompts (capabilities/execution/tools) must also be absent.
-    assert "Capabilities prompt" not in prompt
-    assert "Execution prompt" not in prompt
-    assert "Tools prompt" not in prompt
+    # Mode prompts (capabilities/execution/tools) must be present too —
+    # Dash carries the operator + g8e_web_search tool surface and
+    # therefore needs the same mode-driven scaffolding as Sage.
+    assert "Capabilities prompt" in prompt
+    assert "Execution prompt" in prompt
+    assert "Tools prompt" in prompt
 
-    # But the slim path must still load the Dash-specific rules file.
-    assert f"Content of {PromptFile.AGENT_DASH_RULES}" in prompt
+    # Dash uses its persona, not CORE_IDENTITY (that fallback is only
+    # for callers that pass agent_name=None).
+    assert f"Content of {PromptFile.CORE_IDENTITY}" not in prompt
 
 
 def test_build_modular_system_prompt_shared_prefix_precedes_persona(mock_loader, operator_context):
-    """For non-Dash agents the shared static block (safety/loyalty/dissent +
-    mode prompts + response constraints) must appear before the agent
-    persona so llama-server / vLLM prefix caches can reuse that prefix
-    across every agent that shares the mode.
+    """The shared static block (safety/loyalty/dissent + mode prompts +
+    response constraints) must appear before the agent persona so
+    llama-server / vLLM prefix caches can reuse that prefix across
+    every agent that shares the mode (Dash and Sage included).
     """
     from app.constants import AgentName
 

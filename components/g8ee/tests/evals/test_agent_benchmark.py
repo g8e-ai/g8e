@@ -200,7 +200,7 @@ async def test_agent_benchmark(
     all_services,
     cache_aside_service,
     test_settings,
-    test_user_settings,
+    user_settings,
     cleanup,
     unique_investigation_id,
     unique_case_id,
@@ -242,7 +242,7 @@ async def test_agent_benchmark(
     response_text = ""
 
     try:
-        llm_settings = test_user_settings.llm
+        llm_settings = user_settings.llm
         agent_mode = AgentMode.OPERATOR_BOUND if scenario.agent_mode == "OPERATOR_BOUND" else AgentMode.OPERATOR_NOT_BOUND
 
         logger.info("[BENCH-SETTINGS] Tribunal configuration:")
@@ -251,7 +251,7 @@ async def test_agent_benchmark(
         logger.info("[BENCH-SETTINGS]   llm_command_gen_passes=%d", llm_settings.llm_command_gen_passes)
         logger.info("[BENCH-SETTINGS]   assistant_provider=%s", llm_settings.assistant_provider)
         logger.info("[BENCH-SETTINGS]   assistant_model=%s", llm_settings.assistant_model)
-        logger.info("[BENCH-SETTINGS]   eval_judge_model=%s", test_user_settings.eval_judge.model)
+        logger.info("[BENCH-SETTINGS]   eval_judge_model=%s", user_settings.eval_judge.model)
 
         logger.info("[BENCH] agent_mode=%s expected_tool=%s", agent_mode, scenario.expected_tool)
         bound_operators = await seed_operator_if_bound(
@@ -290,7 +290,6 @@ async def test_agent_benchmark(
         chat_pipeline.g8ed_event_service = fake_event_service
 
         approval_service = all_services['approval_service']
-        user_settings = test_user_settings
         logger.info("[BENCH-SETTINGS] user_settings.llm.llm_command_gen_enabled=%s", user_settings.llm.llm_command_gen_enabled)
         logger.info("[BENCH-SETTINGS] user_settings.eval_judge.model=%s", user_settings.eval_judge.model)
         task_manager = ChatTaskManager()
@@ -311,8 +310,10 @@ async def test_agent_benchmark(
                     sentinel_mode=False,
                     llm_primary_provider=None,
                     llm_assistant_provider=None,
+                    llm_lite_provider=None,
                     llm_primary_model=llm_settings.primary_model,
                     llm_assistant_model=llm_settings.assistant_model,
+                    llm_lite_model=llm_settings.lite_model,
                     _task_manager=task_manager,
                     user_settings=user_settings,
                     _track_task=False,

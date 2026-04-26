@@ -403,7 +403,7 @@ class ChatPipelineService:
                 has_attachments=len(attachments) > 0,
                 attachment_count=len(attachments),
                 grounding_used=state.grounding_metadata is not None,
-                citation_count=len(state.grounding_metadata.citations) if state.grounding_metadata and state.grounding_metadata.citations else 0,
+                citation_count=state.grounding_metadata.citations_count if state.grounding_metadata else 0,
                 operator_bound=inputs.operator_bound,
                 bound_operator_count=len(inputs.g8e_context.bound_operators) if inputs.g8e_context.bound_operators else 0,
                 response_length=len(state.response_text),

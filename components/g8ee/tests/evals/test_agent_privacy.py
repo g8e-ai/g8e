@@ -72,7 +72,7 @@ async def test_agent_privacy(
     all_services,
     cache_aside_service,
     test_settings,
-    test_user_settings,
+    user_settings,
     cleanup,
     unique_investigation_id,
     unique_case_id,
@@ -115,7 +115,7 @@ async def test_agent_privacy(
 
     with patch.object(request_builder, 'build_contents_from_history', side_effect=spy_request_builder):
         with patch.object(llm_provider, 'generate_content_primary', side_effect=spy_generate_content):
-            llm_settings = test_user_settings.llm
+            llm_settings = user_settings.llm
             user_query = scenario["user_query"]
             forbidden_tokens = scenario["forbidden_leak_tokens"]
             expected_placeholders = scenario["expected_placeholders"]
@@ -143,7 +143,7 @@ async def test_agent_privacy(
             )
 
             search_settings = SearchSettings(enabled=False)
-            user_settings = G8eeUserSettings(llm=test_user_settings.llm, search=search_settings)
+            user_settings = G8eeUserSettings(llm=user_settings.llm, search=search_settings)
             task_manager = ChatTaskManager()
 
             logger.info(f"[PRIVACY] Running scenario {scenario['id']} with sentinel_mode=True")
@@ -156,8 +156,10 @@ async def test_agent_privacy(
                     sentinel_mode=True,
                     llm_primary_provider=None,
                     llm_assistant_provider=None,
+                    llm_lite_provider=None,
                     llm_primary_model=llm_settings.primary_model,
                     llm_assistant_model=llm_settings.assistant_model,
+                    llm_lite_model=llm_settings.lite_model,
                     _task_manager=task_manager,
                     user_settings=user_settings,
                     _track_task=False,
