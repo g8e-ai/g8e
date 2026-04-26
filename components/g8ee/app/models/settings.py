@@ -81,13 +81,55 @@ class ComponentURLsSettings(G8eBaseModel):
     g8ed_url: str = Field("https://g8ed")
 
 class CommandValidationSettings(G8eBaseModel):
-    """Operator command safety and validation configuration."""
+    """Operator command safety and validation configuration.
+
+    Three independent policies are surfaced here. They have distinct semantics
+    and MUST NOT be conflated:
+
+    - ``enable_whitelisting``: HARD ALLOW-LIST. When enabled, only whitelisted
+      commands are permitted to run AT ALL. Any non-listed command is blocked at
+      L1 safety validation, regardless of human approval. This is a *generation*
+      and *execution* constraint.
+
+      Two mutually exclusive whitelist sources exist:
+      
+      1. JSON whitelist (config/whitelist.json): Provides rich per-command
+         validation including safe_options and validation regexes for parameters.
+         This is the default and recommended mode for production use.
+      
+      2. CSV whitelist (whitelisted_commands field): A simple comma-separated
+         list of base commands. When non-empty, this REPLACES the JSON whitelist
+         entirely and uses only basic character-level validation. The JSON
+         whitelist's per-command safe_options and validation regexes are NOT
+         applied in CSV mode. Use CSV mode for simple deployments that don't
+         need fine-grained parameter validation.
+
+      Only one whitelist source should be active at a time: either leave
+      whitelisted_commands empty to use JSON mode, or populate it to use CSV mode.
+
+    - ``enable_blacklisting``: HARD BLOCK-LIST. Commands matching blacklist
+      entries are blocked at L1 safety validation.
+
+    - ``enable_auto_approve`` / ``auto_approved_commands``: SKIP-APPROVAL list.
+      When enabled, commands whose base verb is listed bypass the human
+      approval gate (rubber-stamped). This does NOT permit blacklisted or
+      forbidden commands, and does NOT widen the whitelist when whitelisting
+      is enabled — the command must still pass all hard gates first.
+    """
     enable_whitelisting: bool = Field(False)
     whitelisted_commands: str = Field(
         "",
-        description="Comma-separated list of whitelisted commands (e.g., uptime,df,free). Only used when enable_whitelisting is true.",
+        description="Comma-separated list of whitelisted commands (e.g., uptime,df,free). When non-empty, this REPLACES the JSON whitelist entirely and uses only basic character-level validation. The JSON whitelist's per-command safe_options and validation regexes are NOT applied in CSV mode. Leave empty to use JSON whitelist with rich validation.",
     )
     enable_blacklisting: bool = Field(False)
+    enable_auto_approve: bool = Field(
+        False,
+        description="If true, commands listed in auto_approved_commands bypass human approval. Independent of whitelisting.",
+    )
+    auto_approved_commands: str = Field(
+        "",
+        description="Comma-separated list of base commands that skip human approval (e.g., uptime,df,free). Only used when enable_auto_approve is true. The human is rubber-stamping these as benign.",
+    )
     max_batch_concurrency: int = Field(
         10,
         ge=1,
@@ -98,6 +140,35 @@ class CommandValidationSettings(G8eBaseModel):
         False,
         description="If true, remaining per-operator executions are cancelled after the first failure in a batch.",
     )
+
+    @staticmethod
+    def _validate_command_csv(v: str, field_label: str) -> str:
+        """Reject whitespace and shell metacharacters in CSV commands."""
+        if not v:
+            return v
+
+        parts = [p.strip() for p in v.split(",") if p.strip()]
+        unsafe_chars = set(";|`$<>&\n\r\t")
+
+        for part in parts:
+            if any(c in unsafe_chars for c in part) or " " in part:
+                raise ValueError(
+                    f"Invalid {field_label} command '{part}'. "
+                    "Commands cannot contain spaces or shell metacharacters (; | ` $ < > &). "
+                    "Enter base commands only (e.g., 'uptime', 'df')."
+                )
+
+        return v
+
+    @field_validator("whitelisted_commands", mode="after")
+    @classmethod
+    def _validate_whitelisted_commands(cls, v: str) -> str:
+        return cls._validate_command_csv(v, "whitelisted")
+
+    @field_validator("auto_approved_commands", mode="after")
+    @classmethod
+    def _validate_auto_approved_commands(cls, v: str) -> str:
+        return cls._validate_command_csv(v, "auto-approved")
 
 class SearchSettings(G8eBaseModel):
     """Unified search configuration (Vertex AI and Google Search)."""

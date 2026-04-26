@@ -610,6 +610,7 @@ class TestCommandGenerationIntegration:
     async def test_command_constraints_message_formatting(self, test_settings):
         """Test that command constraints (whitelist/blacklist) are properly formatted for Tribunal prompts."""
         from app.llm.prompts import build_command_constraints_message
+        from app.models.whitelist import WhitelistedCommand
         
         # Test with no constraints
         message = build_command_constraints_message(
@@ -620,20 +621,20 @@ class TestCommandGenerationIntegration:
         )
         assert "No whitelist or blacklist constraints are active" in message
         
-        # Test with metadata-rich whitelist
+        # Test with metadata-rich whitelist using WhitelistedCommand objects
         whitelisted_metadata = [
-            {
-                "command": "ping",
-                "category": "network",
-                "safe_options": ["-c <count>", "-W <timeout>"],
-                "validation": {"count": r"^\d+$", "timeout": r"^\d+$"}
-            },
-            {
-                "command": "ls",
-                "category": "filesystem",
-                "safe_options": ["-la", "-lh"],
-                "validation": {}
-            }
+            WhitelistedCommand(
+                command="ping",
+                category="network",
+                safe_options=["-c <count>", "-W <timeout>"],
+                validation={"count": r"^\d+$", "timeout": r"^\d+$"}
+            ),
+            WhitelistedCommand(
+                command="ls",
+                category="filesystem",
+                safe_options=["-la", "-lh"],
+                validation={}
+            )
         ]
         message = build_command_constraints_message(
             whitelisting_enabled=True,
@@ -647,11 +648,15 @@ class TestCommandGenerationIntegration:
         assert "safe_options" in message
         assert "validation_patterns" in message
         
-        # Test with whitelist only
+        # Test with whitelist only using WhitelistedCommand objects
         message = build_command_constraints_message(
             whitelisting_enabled=True,
             blacklisting_enabled=False,
-            whitelisted_commands=[{"command": "ls -la"}, {"command": "pwd"}, {"command": "whoami"}],
+            whitelisted_commands=[
+                WhitelistedCommand(command="ls -la"),
+                WhitelistedCommand(command="pwd"),
+                WhitelistedCommand(command="whoami")
+            ],
             blacklisted_commands=None,
         )
         assert "Whitelisting is ENABLED" in message
@@ -676,7 +681,7 @@ class TestCommandGenerationIntegration:
         message = build_command_constraints_message(
             whitelisting_enabled=True,
             blacklisting_enabled=True,
-            whitelisted_commands=[{"command": "ls"}],
+            whitelisted_commands=[WhitelistedCommand(command="ls")],
             blacklisted_commands=[{"command": "rm -rf"}],
         )
         assert "Whitelisting is ENABLED" in message
@@ -706,23 +711,26 @@ class TestCommandGenerationIntegration:
             architecture="x86_64",
         )
         
-        # Test 1: Valid whitelisted command should pass
-        is_safe, error = validate_command_safety(
+        # Test 1: Valid whitelisted command should pass (whitelisting disabled)
+        result = validate_command_safety(
             command="ping -c 4 google.com",
-            whitelisting_enabled=True,
+            whitelisting_enabled=False,
             blacklisting_enabled=False,
             operator_context=operator_context,
         )
+        assert result.is_safe, "ping command should pass when whitelist is disabled"
+        assert result.error_message is None
+        assert result.error_type is None
         
         # Test 2: Command with forbidden flag should fail
-        is_safe, error = validate_command_safety(
+        result = validate_command_safety(
             command="sudo ls",
             whitelisting_enabled=True,
             blacklisting_enabled=False,
             operator_context=operator_context,
         )
-        assert not is_safe, "sudo command should be blocked by forbidden patterns"
-        assert "forbidden" in error.lower() or "sudo" in error.lower()
+        assert not result.is_safe, "sudo command should be blocked by forbidden patterns"
+        assert "forbidden" in result.error_message.lower() or "sudo" in result.error_message.lower()
         
         # Test 3: Platform mapping works correctly
         assert map_os_string_to_platform("linux") == Platform.LINUX

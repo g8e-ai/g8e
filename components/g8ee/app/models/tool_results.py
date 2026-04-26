@@ -379,10 +379,16 @@ class CommandConstraintsResult(G8eBaseModel):
     error_type: CommandErrorType | None = None
     whitelisting_enabled: bool = False
     blacklisting_enabled: bool = False
+    auto_approve_enabled: bool = False
     whitelisted_commands: list[WhitelistedCommand] = Field(default_factory=list)
     blacklisted_commands: list[dict[str, str]] = Field(default_factory=list)
     blacklisted_substrings: list[dict[str, str]] = Field(default_factory=list)
     blacklisted_patterns: list[dict[str, str]] = Field(default_factory=list)
+    auto_approved_commands: list[str] = Field(
+        default_factory=list,
+        description="Base commands that bypass human approval when auto_approve_enabled is true. "
+                    "These commands still must pass all hard safety gates.",
+    )
     global_forbidden_patterns: list[str] = Field(default_factory=list)
     global_forbidden_directories: list[str] = Field(default_factory=list)
     message: str | None = None

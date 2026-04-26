@@ -204,23 +204,7 @@ class SettingsService:
             platform_doc = PlatformSettingsDocument.model_validate(platform_doc_dict)
             
             return G8eeUserSettings(
-                llm=LLMSettings(
-                    llm_model=None,
-                    llm_assistant_model=None,
-                    llm_lite_model=None,
-                    openai_endpoint=OPENAI_DEFAULT_ENDPOINT,
-                    openai_api_key=None,
-                    ollama_endpoint=None,
-                    ollama_api_key=None,
-                    gemini_api_key=None,
-                    anthropic_endpoint=ANTHROPIC_DEFAULT_ENDPOINT,
-                    anthropic_api_key=None,
-                    ollama_assistant_model=None,
-                    llm_max_tokens=4096,
-                    llm_command_gen_enabled=False,
-                    llm_command_gen_auditor=True,
-                    llm_command_gen_passes=3,
-                ),
+                llm=LLMSettings(),
                 search=self._build_search_settings(platform_doc.settings),
                 eval_judge=platform_doc.settings.eval_judge,
                 command_validation=platform_doc.settings.command_validation,

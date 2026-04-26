@@ -330,6 +330,31 @@ describe('validateUserSettings cross-field validation [UNIT]', () => {
         });
     });
 
+    describe('CSV Whitelist validation', () => {
+        it('passes when whitelisted_commands_csv is empty', () => {
+            const result = validateUserSettings({ whitelisted_commands_csv: '' });
+            expect(result.errors).toHaveLength(0);
+        });
+
+        it('passes when whitelisted_commands_csv contains valid commands', () => {
+            const result = validateUserSettings({ whitelisted_commands_csv: 'uptime,df,free,ps' });
+            expect(result.errors).toHaveLength(0);
+        });
+
+        it('fails when whitelisted_commands_csv contains spaces', () => {
+            const result = validateUserSettings({ whitelisted_commands_csv: 'ls -la,df' });
+            expect(result.errors).toContain('Invalid value for whitelisted_commands_csv: ls -la,df');
+        });
+
+        it('fails when whitelisted_commands_csv contains shell metacharacters', () => {
+            const result = validateUserSettings({ whitelisted_commands_csv: 'uptime;rm,df' });
+            expect(result.errors).toContain('Invalid value for whitelisted_commands_csv: uptime;rm,df');
+            
+            const result2 = validateUserSettings({ whitelisted_commands_csv: 'df|rm' });
+            expect(result2.errors).toContain('Invalid value for whitelisted_commands_csv: df|rm');
+        });
+    });
+
     describe('Combined validation scenarios', () => {
         it('validates both provider and search requirements together', () => {
             const result = validateUserSettings({

@@ -443,11 +443,18 @@ export const USER_SETTINGS = Object.freeze([
         key: 'whitelisted_commands_csv',
         section: 'validation',
         label: 'Whitelisted Commands',
-        description: 'Comma-separated list of whitelisted commands (e.g., uptime,df,free). Only used when Command Whitelisting is enabled.',
+        description: 'Comma-separated list of whitelisted commands (e.g., uptime,df,free). When non-empty, this REPLACES the JSON whitelist entirely and uses only basic character-level validation. The JSON whitelist\'s per-command safe_options and validation regexes are NOT applied in CSV mode. Leave empty to use JSON whitelist with rich validation.',
         type: 'text',
         secret: false,
         placeholder: 'uptime,df,free,ps',
         default: '',
+        validate: v => {
+            if (typeof v !== 'string') return false;
+            if (v === '') return true;
+            const parts = v.split(',').map(p => p.trim()).filter(Boolean);
+            const unsafeChars = /[;|`$<>&\n\r\t ]/;
+            return parts.every(part => !unsafeChars.test(part));
+        },
     }),
     Object.freeze({
         key: 'enable_command_blacklisting',

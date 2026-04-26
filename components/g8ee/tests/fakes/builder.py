@@ -22,6 +22,8 @@ from app.models.settings import G8eePlatformSettings
 from app.services.operator.command_service import OperatorCommandService
 from app.services.operator.intent_service import OperatorIntentService
 from app.services.operator.operator_data_service import OperatorDataService
+from app.utils.whitelist_validator import CommandWhitelistValidator
+from app.utils.blacklist_validator import CommandBlacklistValidator
 
 from app.models.cache import CacheOperationResult
 from .fake_ai_response_analyzer import FakeAIResponseAnalyzer
@@ -120,6 +122,8 @@ def build_command_service(
     settings: G8eePlatformSettings | None = None,
     approval_service: FakeApprovalService | None = None,
     skip_pubsub_client: bool = False,
+    whitelist_validator: CommandWhitelistValidator | None = None,
+    blacklist_validator: CommandBlacklistValidator | None = None,
 ) -> OperatorCommandService:
     """Build an OperatorCommandService with typed fakes for all dependencies.
 
@@ -128,30 +132,89 @@ def build_command_service(
     """
     cache_aside_service = create_mock_cache_aside_service()
     internal_http_client = g8ed_client or FakeG8edClient()
-    
+
     # Ensure all required fakes are present
     event_service = event_service or FakeEventService()
     ai_response_analyzer = ai_response_analyzer or FakeAIResponseAnalyzer()
     investigation_service = investigation_service or FakeInvestigationService()
     settings = settings or G8eePlatformSettings(port=443)
-    
+
     operator_data_service = OperatorDataService(cache=cache_aside_service, internal_http_client=internal_http_client)
-    
+
     approval_service = approval_service or FakeApprovalService()
 
-    svc = OperatorCommandService.build(
-        cache_aside_service=cache_aside_service,
-        operator_data_service=operator_data_service,
+    # Build sub-services manually (mirroring OperatorCommandService.build)
+    from app.services.operator.pubsub_service import OperatorPubSubService
+    from app.services.operator.lfaa_service import OperatorLFAAService
+    from app.services.operator.execution_service import OperatorExecutionService
+    from app.services.operator.filesystem_service import OperatorFilesystemService
+    from app.services.operator.port_service import OperatorPortService
+    from app.services.operator.file_service import OperatorFileService
+    from app.services.operator.intent_service import OperatorIntentService
+
+    pubsub_service = OperatorPubSubService()
+
+    lfaa_service = OperatorLFAAService(
+        pubsub_service=pubsub_service,
+    )
+
+    execution_service = OperatorExecutionService(
+        pubsub_service=pubsub_service,
+        approval_service=approval_service,
         g8ed_event_service=event_service,
         settings=settings,
         ai_response_analyzer=ai_response_analyzer,
-        internal_http_client=internal_http_client,
+        operator_data_service=operator_data_service,
         investigation_service=investigation_service,
+    )
+
+    filesystem_service = OperatorFilesystemService(
+        pubsub_service=pubsub_service,
+        execution_service=execution_service,
+        investigation_service=investigation_service,
+    )
+
+    port_service = OperatorPortService(
+        pubsub_service=pubsub_service,
+        execution_service=execution_service,
+    )
+
+    file_service = OperatorFileService(
+        pubsub_service=pubsub_service,
         approval_service=approval_service,
+        g8ed_event_service=event_service,
+        execution_service=execution_service,
+        ai_response_analyzer=ai_response_analyzer,
+        investigation_service=investigation_service,
+    )
+
+    intent_service = OperatorIntentService(
+        approval_service=approval_service,
+        execution_service=execution_service,
+        g8ed_event_service=event_service,
+        investigation_service=investigation_service,
+        g8ed_client=internal_http_client,
+    )
+
+    svc = OperatorCommandService(
+        pubsub_service=pubsub_service,
+        approval_service=approval_service,
+        execution_service=execution_service,
+        filesystem_service=filesystem_service,
+        port_service=port_service,
+        file_service=file_service,
+        intent_service=intent_service,
+        lfaa_service=lfaa_service,
+        cache_aside_service=cache_aside_service,
+        operator_data_service=operator_data_service,
+        investigation_service=investigation_service,
+        settings=settings,
+        whitelist_validator=whitelist_validator,
+        blacklist_validator=blacklist_validator,
     )
     if not skip_pubsub_client:
         svc.set_pubsub_client(pubsub_client or FakePubSubClient())
-        
+
     svc._store = {}
     return svc
 

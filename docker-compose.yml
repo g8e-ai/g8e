@@ -413,12 +413,20 @@ services:
       - RUNNING_IN_DOCKER=1
       - G8E_INTERNAL_AUTH_TOKEN
       - G8E_SESSION_ENCRYPTION_KEY
+      # SSH streaming: only set SSH_AUTH_SOCK in-container when the host has
+      # an agent. Empty value disables agent auth in g8eo.
+      - SSH_AUTH_SOCK=${SSH_AUTH_SOCK:+/run/host-ssh-agent.sock}
     volumes:
       - ./components/g8ep/scripts:/app/components/g8ep/scripts
       - ./shared:/app/shared
       - ./scripts:/app/scripts
       - g8es-ssl:/g8es:ro
       - /var/run/docker.sock:/var/run/docker.sock
+      # SSH streaming inputs (read-only). Mount the user's existing SSH config
+      # and known_hosts; agent socket falls through to /dev/null when no agent.
+      - ${HOME}/.ssh/config:/home/g8e/.ssh/config:ro
+      - ${HOME}/.ssh/known_hosts:/home/g8e/.ssh/known_hosts:ro
+      - ${SSH_AUTH_SOCK:-/dev/null}:/run/host-ssh-agent.sock
     group_add:
       - ${DOCKER_GID:-0}
     deploy:

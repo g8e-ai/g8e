@@ -388,7 +388,7 @@ case "$TOP" in
                 exec bash "$SCRIPT_DIR/scripts/core/build.sh" setup ;;
             build)
                 _banner "platform build"
-                exec bash "$SCRIPT_DIR/scripts/core/build.sh" rebuild ;;
+                exec bash "$SCRIPT_DIR/scripts/core/build.sh" rebuild "${@:3}" ;;
             settings)
                 _banner "platform settings"
                 _exec_in_pod python3 /app/scripts/data/manage-g8es.py settings show "${@:3}" ;;

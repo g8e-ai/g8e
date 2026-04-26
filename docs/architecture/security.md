@@ -680,7 +680,10 @@ Final command presented to human for approval
 
 Two optional operator-level controls are available as additional constraints — **disabled by default**, configured via user settings.
 
-- **Allowlist (whitelist)** — restricts the AI to pre-approved commands with validated parameters. Each allowlisted command defines permitted options, regex-validated parameters, and a `max_execution_time`.
+- **Allowlist (whitelist)** — restricts the AI to pre-approved commands with validated parameters. 
+  - **JSON Mode (default)**: Uses a rich JSON whitelist (`config/whitelist.json`) where each command defines permitted options, regex-validated parameters, and a `max_execution_time`.
+  - **CSV Mode (override)**: If a user specifies a comma-separated list of commands (e.g., `uptime,df,free`) in their settings, this entirely replaces the JSON whitelist. Only the base commands in the CSV are permitted, and arguments are validated using basic shell safety checks.
+  - **Auto-Approval Bypass**: When whitelisting is enabled and a command passes the validation, it is considered inherently safe and is **auto-approved**, bypassing the human-in-the-loop approval prompt.
 - **Denylist (blacklist)** — blocks specific commands, binaries, substrings, and regex patterns across four enforcement layers: forbidden commands, forbidden binaries, forbidden substrings, forbidden regex patterns.
 
 When the blacklist is enabled, a command matching any layer is rejected before the approval prompt — it never reaches the user for consideration.

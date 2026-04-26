@@ -31,6 +31,7 @@ from app.constants import (
     EventType,
     AuditorReason,
 )
+from app.constants.status import CommandErrorType
 from app.llm.prompts import (
     build_tribunal_auditor_prompt,
     build_tribunal_auditor_context,
@@ -295,10 +296,10 @@ async def run_auditor(
                 swap_to_member = cluster_to_members[swap_to_cluster][0] # Pick first member for telemetry
                 
                 # RE-VALIDATE SWAP TARGET SAFETY (L1 Technical Bedrock)
-                is_safe, safety_err = validate_command_safety(final_cmd, True, True, operator_context)
-                if not is_safe:
-                    reason = AuditorReason.WHITELIST_VIOLATION if "whitelisted" in (safety_err or "").lower() else AuditorReason.NO_VALID_REVISION
-                    await fail_auditor(emitter, request, reason, f"Swap target technical safety failure: {safety_err}", target_cmd)
+                safety_result = validate_command_safety(final_cmd, True, True, operator_context)
+                if not safety_result.is_safe:
+                    reason = AuditorReason.WHITELIST_VIOLATION if safety_result.error_type == CommandErrorType.WHITELIST_VIOLATION else AuditorReason.NO_VALID_REVISION
+                    await fail_auditor(emitter, request, reason, f"Swap target technical safety failure: {safety_result.error_message}", target_cmd)
 
                 await emitter.emit(
                     EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED,
@@ -318,10 +319,10 @@ async def run_auditor(
                 await fail_auditor(emitter, request, AuditorReason.NO_VALID_REVISION, "Empty revision", target_cmd)
 
             # RE-VALIDATE REVISION SAFETY (L1 Technical Bedrock)
-            is_safe, safety_err = validate_command_safety(revised, True, True, operator_context)
-            if not is_safe:
-                reason = AuditorReason.WHITELIST_VIOLATION if "whitelisted" in (safety_err or "").lower() else AuditorReason.NO_VALID_REVISION
-                await fail_auditor(emitter, request, reason, f"Revision technical safety failure: {safety_err}", target_cmd)
+            safety_result = validate_command_safety(revised, True, True, operator_context)
+            if not safety_result.is_safe:
+                reason = AuditorReason.WHITELIST_VIOLATION if safety_result.error_type == CommandErrorType.WHITELIST_VIOLATION else AuditorReason.NO_VALID_REVISION
+                await fail_auditor(emitter, request, reason, f"Revision technical safety failure: {safety_result.error_message}", target_cmd)
 
             reason = AuditorReason.REVISED_FROM_DISSENT if mode in ("majority", "tied") else AuditorReason.REVISED
             await emitter.emit(

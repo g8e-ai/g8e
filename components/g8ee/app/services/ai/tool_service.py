@@ -827,6 +827,12 @@ class AIToolService:
         cv = self._user_settings.command_validation if self._user_settings else None
         whitelisting_enabled = cv.enable_whitelisting if cv else False
         blacklisting_enabled = cv.enable_blacklisting if cv else False
+        auto_approve_enabled = cv.enable_auto_approve if cv else False
+        auto_approved_commands = (
+            parse_whitelisted_commands_csv(cv.auto_approved_commands)
+            if (cv and auto_approve_enabled)
+            else []
+        )
 
         whitelisted_commands: list[WhitelistedCommand] = []
         global_forbidden_patterns: list[str] = []
@@ -859,8 +865,8 @@ class AIToolService:
             blacklisted_patterns = self._blacklist_validator.get_forbidden_patterns()
 
         parts: list[str] = []
-        if not whitelisting_enabled and not blacklisting_enabled:
-            parts.append("No command constraints are currently enforced. All commands are permitted.")
+        if not whitelisting_enabled and not blacklisting_enabled and not auto_approve_enabled:
+            parts.append("No command constraints are currently enforced. All commands require human approval.")
         else:
             if whitelisting_enabled:
                 parts.append(
@@ -872,23 +878,37 @@ class AIToolService:
                 parts.append(
                     "Blacklisting ENABLED: commands matching blacklisted entries will be blocked."
                 )
+            if auto_approve_enabled:
+                if auto_approved_commands:
+                    parts.append(
+                        f"Auto-approve ENABLED: the {len(auto_approved_commands)} listed base commands "
+                        f"({', '.join(auto_approved_commands)}) skip the human approval prompt — the user has "
+                        "rubber-stamped them as benign. All other commands still require human approval. "
+                        "Auto-approve does NOT widen the whitelist or bypass the blacklist."
+                    )
+                else:
+                    parts.append(
+                        "Auto-approve ENABLED but auto_approved_commands list is empty: all commands still require human approval."
+                    )
 
         result = CommandConstraintsResult(
             success=True,
             whitelisting_enabled=whitelisting_enabled,
             blacklisting_enabled=blacklisting_enabled,
+            auto_approve_enabled=auto_approve_enabled,
             whitelisted_commands=whitelisted_commands,
             blacklisted_commands=blacklisted_commands,
             blacklisted_substrings=blacklisted_substrings,
             blacklisted_patterns=blacklisted_patterns,
+            auto_approved_commands=auto_approved_commands,
             global_forbidden_patterns=global_forbidden_patterns,
             global_forbidden_directories=global_forbidden_directories,
             message=" ".join(parts),
         )
         logger.info(
-            "[GET_COMMAND_CONSTRAINTS] whitelisting=%s blacklisting=%s whitelist_count=%d blacklist_count=%d",
-            whitelisting_enabled, blacklisting_enabled,
-            len(whitelisted_commands), len(blacklisted_commands),
+            "[GET_COMMAND_CONSTRAINTS] whitelisting=%s blacklisting=%s auto_approve=%s whitelist_count=%d blacklist_count=%d auto_approve_count=%d",
+            whitelisting_enabled, blacklisting_enabled, auto_approve_enabled,
+            len(whitelisted_commands), len(blacklisted_commands), len(auto_approved_commands),
         )
         return result
 

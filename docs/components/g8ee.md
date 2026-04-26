@@ -1045,6 +1045,9 @@ The `agent_tool_loop.py` extracts these constraints from `tool_executor._user_se
 - **JSON mode (default):** When `whitelisted_commands` is empty, the system uses a rich JSON whitelist (`config/whitelist.json`) with per-command `safe_options` and `validation` patterns.
 - **CSV mode (override):** When `whitelisted_commands` contains a comma-separated list (e.g., `uptime,df,free`), this list **entirely replaces** the JSON whitelist. Every argument must pass basic shell safety checks (`_is_safe_value`). Rich per-command patterns from the JSON whitelist are NOT used in this mode.
 
+**Auto-Approval Bypass Behavior:**
+When `enable_whitelisting` is true and a command successfully passes the whitelist validation (either JSON mode or CSV override mode), the command is **auto-approved**. It bypasses the human approval requirement and executes immediately.
+
 > **Note:** Command validation is configured per-user via user settings, not platform settings. Users can enable/disable whitelist and blacklist through the Settings UI or API. See [Security Architecture — Command Allowlist and Denylist](../architecture/security.md#command-allowlist-and-denylist) for details on how to configure these controls.
 
 #### Vertex AI Search (`VertexSearchSettings`)

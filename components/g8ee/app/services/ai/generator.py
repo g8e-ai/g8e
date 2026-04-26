@@ -295,9 +295,9 @@ async def _run_generation_pass(
             logger.error("[TRIBUNAL-PASS] %s (raw=%r)", error_msg, raw_command[:100])
             return None
 
-        is_safe, safety_err = validate_command_safety(normalised, False, False, operator_context)
-        if not is_safe:
-            error_msg = f"Pass {pass_index} ({member.value}): safety validation failed: {safety_err}"
+        safety_result = validate_command_safety(normalised, False, False, operator_context)
+        if not safety_result.is_safe:
+            error_msg = f"Pass {pass_index} ({member.value}): safety validation failed: {safety_result.error_message}"
             pass_errors.append(error_msg)
             logger.error("[TRIBUNAL-PASS] %s", error_msg)
             return None
@@ -569,12 +569,14 @@ async def _build_and_emit_result(
     is_safe = True
     safety_error = None
     if final_command:
-        is_safe, safety_error = validate_command_safety(
+        safety_result = validate_command_safety(
             final_command,
             whitelisting_enabled=whitelisting_enabled,
             blacklisting_enabled=blacklisting_enabled,
             operator_context=operator_context,
         )
+        is_safe = safety_result.is_safe
+        safety_error = safety_result.error_message
 
     if not is_safe:
         logger.error("[TRIBUNAL] Final command safety validation failed: %s", safety_error)

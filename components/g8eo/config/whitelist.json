@@ -809,6 +809,210 @@
                     "timedatectl list-timezones | grep America"
                 ],
                 "max_execution_time": 5
+            },
+            "htop": {
+                "description": "Interactive process viewer",
+                "command": "htop",
+                "platforms": [
+                    "linux"
+                ],
+                "safe_options": [],
+                "examples": [
+                    "htop"
+                ],
+                "max_execution_time": 30
+            },
+            "hostnamectl": {
+                "description": "Query and change system hostname and related settings",
+                "command": "hostnamectl",
+                "platforms": [
+                    "linux"
+                ],
+                "safe_options": [
+                    "status",
+                    "--static",
+                    "--transient",
+                    "--pretty"
+                ],
+                "examples": [
+                    "hostnamectl status",
+                    "hostnamectl --static"
+                ],
+                "max_execution_time": 5
+            },
+            "pgrep": {
+                "description": "Look up processes based on name",
+                "command": "pgrep",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "-f",
+                    "-l",
+                    "-n",
+                    "-o",
+                    "-u <user>",
+                    "-P <ppid>"
+                ],
+                "validation": {
+                    "user": "^[a-zA-Z0-9_-]+$",
+                    "ppid": "^[1-9][0-9]*$"
+                },
+                "examples": [
+                    "pgrep nginx",
+                    "pgrep -l python",
+                    "pgrep -u root sshd"
+                ],
+                "max_execution_time": 5
+            },
+            "lshw": {
+                "description": "List hardware configuration",
+                "command": "lshw",
+                "platforms": [
+                    "linux"
+                ],
+                "safe_options": [
+                    "-short",
+                    "-C <class>",
+                    "-json"
+                ],
+                "validation": {
+                    "class": "^(cpu|disk|network|memory|system)$"
+                },
+                "examples": [
+                    "lshw -short",
+                    "lshw -C disk",
+                    "lshw -json"
+                ],
+                "max_execution_time": 10
+            },
+            "compgen": {
+                "description": "Display possible completions",
+                "command": "compgen",
+                "platforms": [
+                    "linux"
+                ],
+                "safe_options": [
+                    "-c",
+                    "-a",
+                    "-f",
+                    "-d"
+                ],
+                "examples": [
+                    "compgen -c",
+                    "compgen -a",
+                    "compgen -f"
+                ],
+                "max_execution_time": 5
+            },
+            "which": {
+                "description": "Locate a command",
+                "command": "which",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "-a"
+                ],
+                "examples": [
+                    "which python",
+                    "which -a python"
+                ],
+                "max_execution_time": 2
+            },
+            "whereis": {
+                "description": "Locate binary, source, and manual page files",
+                "command": "whereis",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "-b",
+                    "-m",
+                    "-s"
+                ],
+                "examples": [
+                    "whereis python",
+                    "whereis -b nginx"
+                ],
+                "max_execution_time": 2
+            },
+            "type": {
+                "description": "Display information about command type",
+                "command": "type",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "-a",
+                    "-p"
+                ],
+                "examples": [
+                    "type python",
+                    "type -a ls"
+                ],
+                "max_execution_time": 2
+            },
+            "env": {
+                "description": "Display environment variables",
+                "command": "env",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "-i",
+                    "-u <name>"
+                ],
+                "validation": {
+                    "name": "^[a-zA-Z_][a-zA-Z0-9_]*$"
+                },
+                "examples": [
+                    "env",
+                    "env -i bash",
+                    "env -u PATH"
+                ],
+                "max_execution_time": 2
+            },
+            "apropos": {
+                "description": "Search manual page names and descriptions",
+                "command": "apropos",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [],
+                "examples": [
+                    "apropos network",
+                    "apropos -r disk"
+                ],
+                "max_execution_time": 5
+            },
+            "history": {
+                "description": "Display command history",
+                "command": "history",
+                "platforms": [
+                    "linux",
+                    "macos"
+                ],
+                "safe_options": [
+                    "-c",
+                    "-n <num>",
+                    "-w"
+                ],
+                "validation": {
+                    "num": "^[1-9][0-9]*$"
+                },
+                "examples": [
+                    "history",
+                    "history -n 20",
+                    "history -c"
+                ],
+                "max_execution_time": 2
             }
         },
         "service_diagnostics": {

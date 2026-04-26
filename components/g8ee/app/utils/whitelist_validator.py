@@ -162,7 +162,7 @@ class CommandWhitelistValidator:
         if allowed_commands_override:
             if base_command not in allowed_commands_override:
                 logger.info(
-                    "Command '%s' not in user-configured whitelist (override)", base_command
+                    "Command '%s' not in user-configured whitelist (CSV mode)", base_command
                 )
                 return CommandValidationResult(
                     is_valid=False,
@@ -183,7 +183,7 @@ class CommandWhitelistValidator:
             return CommandValidationResult(
                 is_valid=True,
                 command=base_command,
-                category="user_whitelist",
+                category="csv_whitelist",
                 platform=platform,
             )
 

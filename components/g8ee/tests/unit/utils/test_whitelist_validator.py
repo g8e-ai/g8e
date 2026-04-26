@@ -485,7 +485,7 @@ class TestValidateCommandWithOverride:
         )
         assert result.is_valid is True
         assert result.command == "uptime"
-        assert result.category == "user_whitelist"
+        assert result.category == "csv_whitelist"
 
     def test_override_rejects_command_not_in_override(self, validator):
         # `ping` IS in the JSON fixture, but should be rejected when overridden

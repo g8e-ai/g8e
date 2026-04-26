@@ -12,7 +12,7 @@
 # limitations under the License.
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch, ANY
 
 from app.services.ai.auditor_service import run_auditor
 from app.services.ai.generator import TribunalEmitter
@@ -77,45 +77,59 @@ class TestNormaliseCommand:
 
 class TestValidateCommandSafety:
     def test_forbidden_patterns(self):
-        is_safe, error = validate_command_safety("sudo ls", False, False, None)
-        assert not is_safe
-        assert "forbidden pattern" in error.lower()
+        result = validate_command_safety("sudo ls", False, False, None)
+        assert not result.is_safe
+        assert "forbidden pattern" in result.error_message.lower()
 
-    @patch("app.utils.safety.validate_command_against_blacklist")
-    def test_blacklist_enforcement(self, mock_blacklist):
+    def test_blacklist_enforcement(self):
         from app.utils.blacklist_validator import CommandBlacklistResult
-        mock_blacklist.return_value = CommandBlacklistResult(is_allowed=False, reason="Blocked")
-        
-        is_safe, error = validate_command_safety("ls /etc/shadow", False, True, None)
-        assert not is_safe
-        assert "blocked by blacklist" in error.lower()
+        mock_blacklist = MagicMock()
+        mock_blacklist.validate_command.return_value = CommandBlacklistResult(is_allowed=False, reason="Blocked")
 
-    @patch("app.utils.safety.validate_command_against_whitelist")
-    def test_whitelist_enforcement(self, mock_whitelist):
-        from app.models.whitelist import CommandValidationResult
-        mock_whitelist.return_value = CommandValidationResult(is_valid=False, command="unknown_cmd", reason="Not whitelisted")
-        
-        ctx = _make_mock_operator_context()
-        is_safe, error = validate_command_safety("unknown_cmd", True, False, ctx)
-        assert not is_safe
-        assert "not whitelisted" in error.lower()
-
-    @patch("app.utils.safety.validate_command_against_whitelist")
-    def test_whitelist_override_forwarded_to_validator(self, mock_whitelist):
-        """The CSV-derived override list must be threaded into the whitelist validator."""
-        from app.models.whitelist import CommandValidationResult
-        mock_whitelist.return_value = CommandValidationResult(is_valid=True, command="uptime")
-
-        ctx = _make_mock_operator_context()
-        is_safe, error = validate_command_safety(
-            "uptime", True, False, ctx,
-            whitelisted_commands_override=["uptime", "df"],
+        result = validate_command_safety(
+            "echo test",
+            whitelisting_enabled=False,
+            blacklisting_enabled=True,
+            operator_context=None,
+            blacklist_validator=mock_blacklist,
         )
-        assert is_safe
-        assert error is None
-        # Validator must have been called with the override kwarg
-        _, kwargs = mock_whitelist.call_args
-        assert kwargs.get("allowed_commands_override") == ["uptime", "df"]
+        assert not result.is_safe
+        assert "blocked by blacklist: blocked" in result.error_message.lower()
+        mock_blacklist.validate_command.assert_called_once_with("echo test")
+
+    def test_whitelist_enforcement(self):
+        from app.utils.whitelist_validator import CommandValidationResult
+        mock_whitelist = MagicMock()
+        mock_whitelist.validate_command.return_value = CommandValidationResult(is_valid=False, command="echo", reason="Not whitelisted")
+
+        result = validate_command_safety(
+            "echo test",
+            whitelisting_enabled=True,
+            blacklisting_enabled=False,
+            operator_context=None,
+            whitelist_validator=mock_whitelist,
+        )
+        assert not result.is_safe
+        assert "not whitelisted: not whitelisted" in result.error_message.lower()
+        mock_whitelist.validate_command.assert_called_once_with("echo test", ANY, allowed_commands_override=None)
+
+    def test_whitelist_override_forwarded_to_validator(self):
+        from app.utils.whitelist_validator import CommandValidationResult
+        mock_whitelist = MagicMock()
+        mock_whitelist.validate_command.return_value = CommandValidationResult(is_valid=True, command="uptime")
+        
+        result = validate_command_safety(
+            "uptime",
+            whitelisting_enabled=True,
+            blacklisting_enabled=False,
+            operator_context=None,
+            whitelisted_commands_override=["uptime", "df"],
+            whitelist_validator=mock_whitelist,
+        )
+        
+        assert result.is_safe
+        assert result.error_message is None
+        mock_whitelist.validate_command.assert_called_once_with("uptime", ANY, allowed_commands_override=["uptime", "df"])
 
 class TestAuditorSafety:
     @pytest.mark.asyncio
