@@ -120,7 +120,7 @@ class OperatorFilesystemService:
         # Extract typed payload data from envelope
         from app.models.pubsub_messages import FsListResultPayload
         entries = []
-        if isinstance(envelope.payload, FsListResultPayload):
+        if envelope and isinstance(envelope.payload, FsListResultPayload):
             entries = envelope.payload.entries or []
 
         # Notify completion/failure
@@ -209,7 +209,7 @@ class OperatorFilesystemService:
         # Extract typed payload data from envelope
         from app.models.pubsub_messages import FsReadResultPayload
         content = None
-        if isinstance(envelope.payload, FsReadResultPayload):
+        if envelope and isinstance(envelope.payload, FsReadResultPayload):
             content = envelope.payload.content
 
         # Notify completion/failure

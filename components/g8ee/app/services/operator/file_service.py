@@ -377,14 +377,14 @@ class OperatorFileService:
 
             from app.models.pubsub_messages import FetchFileHistorySuccessPayload, FetchFileHistoryErrorPayload
 
-            if isinstance(envelope.payload, FetchFileHistorySuccessPayload):
+            if envelope and isinstance(envelope.payload, FetchFileHistorySuccessPayload):
                 return FetchFileHistoryToolResult(
                     success=True,
                     file_path=envelope.payload.file_path,
                     history=envelope.payload.history,
                     error=None,
                 )
-            if isinstance(envelope.payload, FetchFileHistoryErrorPayload):
+            if envelope and isinstance(envelope.payload, FetchFileHistoryErrorPayload):
                 return FetchFileHistoryToolResult(
                     success=False,
                     file_path=file_path,
@@ -493,7 +493,7 @@ class OperatorFileService:
                 FetchFileDiffErrorPayload,
             )
 
-            if isinstance(envelope.payload, FetchFileDiffByIdSuccessPayload):
+            if envelope and isinstance(envelope.payload, FetchFileDiffByIdSuccessPayload):
                 return FetchFileDiffToolResult(
                     success=True,
                     diff=envelope.payload.diff,
@@ -501,7 +501,7 @@ class OperatorFileService:
                     error=None,
                     operator_session_id=operator_session_id,
                 )
-            if isinstance(envelope.payload, FetchFileDiffBySessionSuccessPayload):
+            if envelope and isinstance(envelope.payload, FetchFileDiffBySessionSuccessPayload):
                 return FetchFileDiffToolResult(
                     success=True,
                     diff=envelope.payload.diffs[0] if envelope.payload.diffs else None,
@@ -509,7 +509,7 @@ class OperatorFileService:
                     error=None,
                     operator_session_id=operator_session_id,
                 )
-            if isinstance(envelope.payload, FetchFileDiffErrorPayload):
+            if envelope and isinstance(envelope.payload, FetchFileDiffErrorPayload):
                 return FetchFileDiffToolResult(
                     success=False,
                     diff=None,

@@ -45,6 +45,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 from app.constants import (
     InvestigationStatus,
+    OperatorType,
+    CloudSubtype,
 )
 from app.constants.status import OperatorToolName
 from app.errors import  ExternalServiceError, ValidationError
@@ -109,12 +111,17 @@ def mock_g8ed_event_service():
 
 
 @pytest.fixture
-def tool_service(mock_web_search_provider):
+def tool_service(mock_web_search_provider, mock_operator_command_service, mock_investigation_service):
     """Create AIToolService with mocked dependencies."""
-    from tests.fakes.tool_helpers import create_tool_service_fake
-    return create_tool_service_fake(
+    return AIToolService(
+        operator_command_service=mock_operator_command_service,
+        investigation_service=mock_investigation_service,
+        reputation_data_service=AsyncMock(),
+        reputation_service=AsyncMock(),
+        chat_task_manager=MagicMock(),
+        ssh_inventory_service=MagicMock(),
+        stream_executor=MagicMock(),
         web_search_provider=mock_web_search_provider,
-        auto_approve=True
     )
 
 
@@ -149,6 +156,8 @@ def sample_investigation():
             "id": "op-123",
             "user_id": "user-303",
             "operator_session_id": "session-456",
+            "operator_type": OperatorType.CLOUD,
+            "cloud_subtype": CloudSubtype.AWS,
             "system_info": {
                 "os": "linux",
                 "hostname": "bobuntu",
@@ -919,7 +928,7 @@ class TestPermissionSessionTools:
         
         assert "args" in call_args
         args = call_args["args"]
-        assert args.intent_name == "file_access"
+        assert args.intent_name == "s3_read"
         assert args.justification == "Need to access user files for troubleshooting"
 
     async def test_revoke_intent_tool_payload_processing(
@@ -928,7 +937,7 @@ class TestPermissionSessionTools:
         """Test revoke_intent_permission tool processes payloads correctly."""
         # Mock successful intent revoke
         mock_result = IntentPermissionResult(
-            intent="file_access",
+            intent="s3_read",
             granted=False,
             reason="Permission revoked by user",
             success=True,
@@ -961,7 +970,7 @@ class TestPermissionSessionTools:
         
         assert "args" in call_args
         args = call_args["args"]
-        assert args.intent_name == "file_access"
+        assert args.intent_name == "s3_read"
         assert args.justification == "No longer need file access"
 
     

@@ -154,6 +154,7 @@ def build_command_service(
     from app.services.operator.intent_service import OperatorIntentService
 
     pubsub_service = OperatorPubSubService()
+    pubsub_service._pubsub_ready = True
 
     lfaa_service = OperatorLFAAService(
         pubsub_service=pubsub_service,
