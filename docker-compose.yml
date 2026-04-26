@@ -55,6 +55,8 @@ services:
       - ./shared:/app/shared:ro
       - g8ee-data:/data:noexec,nosuid,nodev
       - g8es-ssl:/g8es:ro
+      # SSH inventory source for the AI ssh_inventory tool. Read-only.
+      - ${HOME}/.ssh/config:/etc/g8e/ssh_config:ro
     read_only: true
     tmpfs:
       - /tmp

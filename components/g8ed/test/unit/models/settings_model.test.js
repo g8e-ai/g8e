@@ -46,6 +46,26 @@ describe('settings_model [UNIT - PURE LOGIC]', () => {
             });
         });
 
+        it('maps enable_command_auto_approve to command_validation.enable_auto_approve', () => {
+            const flat = {
+                enable_command_auto_approve: true,
+            };
+            const nested = structureUserSettings(flat);
+            expect(nested.command_validation).toEqual({
+                enable_auto_approve: true,
+            });
+        });
+
+        it('maps auto_approved_commands_csv to command_validation.auto_approved_commands', () => {
+            const flat = {
+                auto_approved_commands_csv: 'uptime,df,free',
+            };
+            const nested = structureUserSettings(flat);
+            expect(nested.command_validation).toEqual({
+                auto_approved_commands: 'uptime,df,free',
+            });
+        });
+
         it('maps both command validation settings together', () => {
             const flat = {
                 enable_command_whitelisting: true,
@@ -119,6 +139,26 @@ describe('settings_model [UNIT - PURE LOGIC]', () => {
             };
             const flat = flattenUserSettings(nested);
             expect(flat.enable_command_blacklisting).toBe(true);
+        });
+
+        it('maps command_validation.enable_auto_approve to enable_command_auto_approve', () => {
+            const nested = {
+                command_validation: {
+                    enable_auto_approve: true,
+                },
+            };
+            const flat = flattenUserSettings(nested);
+            expect(flat.enable_command_auto_approve).toBe(true);
+        });
+
+        it('maps command_validation.auto_approved_commands to auto_approved_commands_csv', () => {
+            const nested = {
+                command_validation: {
+                    auto_approved_commands: 'uptime,df',
+                },
+            };
+            const flat = flattenUserSettings(nested);
+            expect(flat.auto_approved_commands_csv).toBe('uptime,df');
         });
 
         it('maps both command validation settings together', () => {

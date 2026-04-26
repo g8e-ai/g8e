@@ -42,6 +42,7 @@ from app.models.settings import CommandValidationSettings, G8eeUserSettings
 from app.models.tool_results import CommandConstraintsResult
 from app.models.whitelist import CommandValidationResult, WhitelistedCommand
 from app.services.ai.tool_service import AIToolService
+from app.services.ai.tools import get_command_constraints as gcc_tool
 from app.utils.whitelist_validator import CommandWhitelistValidator
 from app.utils.blacklist_validator import CommandBlacklistValidator, CommandBlacklistResult
 
@@ -208,7 +209,8 @@ async def test_handle_get_command_constraints_both_disabled(
         blacklist_validator=mock_blacklist_validator,
     )
 
-    result = await tool_service._handle_get_command_constraints(
+    result = await gcc_tool.handle(
+        tool_service,
         tool_args={},
         investigation=mock_investigation,
         g8e_context=mock_g8e_context,
@@ -253,7 +255,8 @@ async def test_handle_get_command_constraints_whitelist_only(
         blacklist_validator=mock_blacklist_validator,
     )
 
-    result = await tool_service._handle_get_command_constraints(
+    result = await gcc_tool.handle(
+        tool_service,
         tool_args={},
         investigation=mock_investigation,
         g8e_context=mock_g8e_context,
@@ -298,7 +301,8 @@ async def test_handle_get_command_constraints_blacklist_only(
         blacklist_validator=mock_blacklist_validator,
     )
 
-    result = await tool_service._handle_get_command_constraints(
+    result = await gcc_tool.handle(
+        tool_service,
         tool_args={},
         investigation=mock_investigation,
         g8e_context=mock_g8e_context,
@@ -348,7 +352,8 @@ async def test_handle_get_command_constraints_both_enabled(
         blacklist_validator=mock_blacklist_validator,
     )
 
-    result = await tool_service._handle_get_command_constraints(
+    result = await gcc_tool.handle(
+        tool_service,
         tool_args={},
         investigation=mock_investigation,
         g8e_context=mock_g8e_context,

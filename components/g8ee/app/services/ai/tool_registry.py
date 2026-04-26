@@ -21,27 +21,44 @@ needs to know about a tool:
   (bound-operator auth required; also the Tribunal routing set)
 - ``agent_modes`` -- the set of ``AgentMode`` values in which the tool is
   exposed to the LLM
-- ``builder_attr`` / ``handler_attr`` -- method names on ``AIToolService`` that
-  build the declaration and dispatch execution
+- ``builder`` / ``handler`` -- direct callable references into the per-tool
+  modules under ``app.services.ai.tools`` that build the declaration and
+  dispatch execution. No string-based lookup; typos fail at import time.
 - ``requires_web_search`` -- conditional registration gate for the
   ``g8e_web_search`` tool
 
-Consumers that previously duplicated classification data
-(``OPERATOR_TOOLS`` / ``AI_UNIVERSAL_TOOLS`` frozensets, ``get_tools``
-partition branches, ``__init__`` registration blocks, ``_build_tool_handlers``
-dispatch table) now all derive from this one tuple. Adding a new tool means
-adding exactly one ``ToolSpec`` plus the corresponding ``_build_*`` /
-``_handle_*`` methods.
+Adding a new tool means creating one module under ``app/services/ai/tools/``
+exporting ``build()`` and ``handle()`` callables, then adding exactly one
+``ToolSpec`` entry referencing them.
 """
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import Enum
 
+import app.llm.llm_types as types
 from app.constants.prompts import AgentMode
 from app.constants.settings import ToolDisplayCategory
 from app.constants.status import OperatorToolName
+from app.models.tool_results import ToolResult
+from app.services.ai.tools import (
+    check_port,
+    fetch_file_diff,
+    fetch_file_history,
+    file_create,
+    file_read,
+    file_update,
+    file_write,
+    get_command_constraints,
+    grant_intent,
+    list_files,
+    query_investigation_context,
+    revoke_intent,
+    run_commands,
+    search_web,
+)
 
 
 class ToolScope(str, Enum):
@@ -57,13 +74,17 @@ _BOUND_MODES: frozenset[AgentMode] = frozenset({
 })
 
 
+ToolBuilder = Callable[[], tuple[types.ToolDeclaration, Callable[..., ToolResult]]]
+ToolHandler = Callable[..., Awaitable[ToolResult]]
+
+
 @dataclass(frozen=True)
 class ToolSpec:
     name: OperatorToolName
     scope: ToolScope
     agent_modes: frozenset[AgentMode]
-    builder_attr: str
-    handler_attr: str
+    builder: ToolBuilder
+    handler: ToolHandler
     display_label: str
     display_icon: str
     display_category: ToolDisplayCategory
@@ -76,8 +97,8 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         name=OperatorToolName.QUERY_INVESTIGATION_CONTEXT,
         scope=ToolScope.UNIVERSAL,
         agent_modes=_ALL_MODES,
-        builder_attr="_build_query_investigation_context_tool",
-        handler_attr="_handle_query_investigation_context",
+        builder=query_investigation_context.build,
+        handler=query_investigation_context.handle,
         display_label="Querying investigation",
         display_icon="database",
         display_category=ToolDisplayCategory.GENERAL,
@@ -86,8 +107,8 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         name=OperatorToolName.GET_COMMAND_CONSTRAINTS,
         scope=ToolScope.UNIVERSAL,
         agent_modes=_ALL_MODES,
-        builder_attr="_build_get_command_constraints_tool",
-        handler_attr="_handle_get_command_constraints",
+        builder=get_command_constraints.build,
+        handler=get_command_constraints.handle,
         display_label="Checking constraints",
         display_icon="shield-check",
         display_category=ToolDisplayCategory.GENERAL,
@@ -96,8 +117,8 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         name=OperatorToolName.G8E_SEARCH_WEB,
         scope=ToolScope.UNIVERSAL,
         agent_modes=_ALL_MODES,
-        builder_attr="_build_search_web_tool",
-        handler_attr="_handle_search_web",
+        builder=search_web.build,
+        handler=search_web.handle,
         requires_web_search=True,
         display_label="Searching the web",
         display_icon="search",
@@ -107,8 +128,8 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         name=OperatorToolName.RUN_COMMANDS,
         scope=ToolScope.OPERATOR_GATED,
         agent_modes=_BOUND_MODES,
-        builder_attr="_build_run_operator_commands_tool",
-        handler_attr="_handle_run_commands",
+        builder=run_commands.build,
+        handler=run_commands.handle,
         display_label="Executing command",
         display_icon="terminal",
         display_category=ToolDisplayCategory.EXECUTION,
@@ -117,8 +138,8 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         name=OperatorToolName.FILE_CREATE,
         scope=ToolScope.OPERATOR_GATED,
         agent_modes=_BOUND_MODES,
-        builder_attr="_build_file_create_tool",
-        handler_attr="_handle_file_create",
+        builder=file_create.build,
+        handler=file_create.handle,
         display_label="Creating file",
         display_icon="file-plus",
         display_category=ToolDisplayCategory.FILE,
@@ -127,8 +148,8 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         name=OperatorToolName.FILE_WRITE,
         scope=ToolScope.OPERATOR_GATED,
         agent_modes=_BOUND_MODES,
-        builder_attr="_build_file_write_tool",
-        handler_attr="_handle_file_write",
+        builder=file_write.build,
+        handler=file_write.handle,
         display_label="Writing file",
         display_icon="file-edit",
         display_category=ToolDisplayCategory.FILE,
@@ -137,8 +158,8 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         name=OperatorToolName.FILE_READ,
         scope=ToolScope.OPERATOR_GATED,
         agent_modes=_BOUND_MODES,
-        builder_attr="_build_file_read_tool",
-        handler_attr="_handle_file_read",
+        builder=file_read.build,
+        handler=file_read.handle,
         display_label="Reading file",
         display_icon="file-text",
         display_category=ToolDisplayCategory.FILE,
@@ -147,8 +168,8 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         name=OperatorToolName.FILE_UPDATE,
         scope=ToolScope.OPERATOR_GATED,
         agent_modes=_BOUND_MODES,
-        builder_attr="_build_file_update_tool",
-        handler_attr="_handle_file_update",
+        builder=file_update.build,
+        handler=file_update.handle,
         display_label="Updating file",
         display_icon="file-edit",
         display_category=ToolDisplayCategory.FILE,
@@ -157,8 +178,8 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         name=OperatorToolName.LIST_FILES,
         scope=ToolScope.OPERATOR_GATED,
         agent_modes=_BOUND_MODES,
-        builder_attr="_build_list_directory_tool",
-        handler_attr="_handle_list_files",
+        builder=list_files.build,
+        handler=list_files.handle,
         display_label="Listing directory",
         display_icon="folder",
         display_category=ToolDisplayCategory.FILE,
@@ -167,8 +188,8 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         name=OperatorToolName.FETCH_FILE_HISTORY,
         scope=ToolScope.OPERATOR_GATED,
         agent_modes=_BOUND_MODES,
-        builder_attr="_build_fetch_file_history_tool",
-        handler_attr="_handle_fetch_file_history",
+        builder=fetch_file_history.build,
+        handler=fetch_file_history.handle,
         display_label="Fetching file history",
         display_icon="history",
         display_category=ToolDisplayCategory.FILE,
@@ -177,8 +198,8 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         name=OperatorToolName.FETCH_FILE_DIFF,
         scope=ToolScope.OPERATOR_GATED,
         agent_modes=_BOUND_MODES,
-        builder_attr="_build_fetch_file_diff_tool",
-        handler_attr="_handle_fetch_file_diff",
+        builder=fetch_file_diff.build,
+        handler=fetch_file_diff.handle,
         display_label="Fetching file diff",
         display_icon="git-diff",
         display_category=ToolDisplayCategory.FILE,
@@ -187,8 +208,8 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         name=OperatorToolName.GRANT_INTENT,
         scope=ToolScope.OPERATOR_GATED,
         agent_modes=_BOUND_MODES,
-        builder_attr="_build_grant_intent_permission_tool",
-        handler_attr="_handle_grant_intent",
+        builder=grant_intent.build,
+        handler=grant_intent.handle,
         display_label="Requesting permission",
         display_icon="shield",
         display_category=ToolDisplayCategory.GENERAL,
@@ -197,8 +218,8 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         name=OperatorToolName.REVOKE_INTENT,
         scope=ToolScope.OPERATOR_GATED,
         agent_modes=_BOUND_MODES,
-        builder_attr="_build_revoke_intent_permission_tool",
-        handler_attr="_handle_revoke_intent",
+        builder=revoke_intent.build,
+        handler=revoke_intent.handle,
         display_label="Revoking permission",
         display_icon="shield-off",
         display_category=ToolDisplayCategory.GENERAL,
@@ -207,8 +228,8 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         name=OperatorToolName.CHECK_PORT,
         scope=ToolScope.OPERATOR_GATED,
         agent_modes=_BOUND_MODES,
-        builder_attr="_build_port_check_tool",
-        handler_attr="_handle_port_check",
+        builder=check_port.build,
+        handler=check_port.handle,
         display_label="Checking port",
         display_icon="network",
         display_category=ToolDisplayCategory.NETWORK,
@@ -230,6 +251,10 @@ def _validate_specs(specs: tuple[ToolSpec, ...]) -> None:
             )
         if not spec.agent_modes:
             raise RuntimeError(f"ToolSpec {spec.name.value} declares no agent_modes")
+        if not callable(spec.builder):
+            raise RuntimeError(f"ToolSpec {spec.name.value} has non-callable builder")
+        if not callable(spec.handler):
+            raise RuntimeError(f"ToolSpec {spec.name.value} has non-callable handler")
 
 
 _validate_specs(TOOL_SPECS)

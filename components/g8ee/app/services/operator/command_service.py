@@ -137,9 +137,10 @@ class OperatorCommandService:
 
         self._cv = settings.command_validation
         logger.info(
-            "OperatorCommandService initialized with PLATFORM DEFAULTS (per-user overrides apply) - whitelisting: %s, blacklisting: %s",
+            "OperatorCommandService initialized with PLATFORM DEFAULTS (per-user overrides apply) - whitelisting: %s, blacklisting: %s, auto-approve: %s",
             "ENABLED" if self._cv.enable_whitelisting else "DISABLED",
             "ENABLED" if self._cv.enable_blacklisting else "DISABLED",
+            "ENABLED" if self._cv.enable_auto_approve else "DISABLED",
         )
         if self._cv.whitelisted_commands:
             logger.warning(

@@ -20,6 +20,7 @@ from app.models.settings import G8eeUserSettings
 from app.models.http_context import G8eHttpContext
 from app.models.tool_results import InvestigationContextResult
 from app.services.ai.tool_service import AIToolService
+from app.services.ai.tools import query_investigation_context as qic_tool
 from app.services.investigation.investigation_service import InvestigationService
 from app.services.operator.command_service import OperatorCommandService
 from app.services.ai.grounding.web_search_provider import WebSearchProvider
@@ -67,7 +68,7 @@ class TestHandleQueryInvestigationContext:
         inv.id = None
         
         tool_args = {"data_type": "conversation_history"}
-        result = await tool_service._handle_query_investigation_context(
+        result = await qic_tool.handle(tool_service,
             tool_args, inv, g8e_context, user_settings, execution_id=None
         )
         
@@ -78,7 +79,7 @@ class TestHandleQueryInvestigationContext:
 
     async def test_invalid_data_type(self, tool_service, investigation_context, g8e_context, user_settings):
         tool_args = {"data_type": "invalid_type"}
-        result = await tool_service._handle_query_investigation_context(
+        result = await qic_tool.handle(tool_service,
             tool_args, investigation_context, g8e_context, user_settings, execution_id=None
         )
         
@@ -92,7 +93,7 @@ class TestHandleQueryInvestigationContext:
         mock_investigation_service.get_chat_messages.return_value = [mock_msg] * 5
         
         tool_args = {"data_type": "conversation_history", "limit": 2}
-        result = await tool_service._handle_query_investigation_context(
+        result = await qic_tool.handle(tool_service,
             tool_args, investigation_context, g8e_context, user_settings, execution_id=None
         )
         
@@ -108,7 +109,7 @@ class TestHandleQueryInvestigationContext:
         mock_investigation_service.get_investigation.return_value = mock_inv
         
         tool_args = {"data_type": "investigation_status"}
-        result = await tool_service._handle_query_investigation_context(
+        result = await qic_tool.handle(tool_service,
             tool_args, investigation_context, g8e_context, user_settings, execution_id=None
         )
         
@@ -121,7 +122,7 @@ class TestHandleQueryInvestigationContext:
         mock_investigation_service.get_investigation.return_value = None
         
         tool_args = {"data_type": "investigation_status"}
-        result = await tool_service._handle_query_investigation_context(
+        result = await qic_tool.handle(tool_service,
             tool_args, investigation_context, g8e_context, user_settings, execution_id=None
         )
         
@@ -133,7 +134,7 @@ class TestHandleQueryInvestigationContext:
         mock_investigation_service.get_operator_actions_for_ai_context.return_value = "action1\naction2"
         
         tool_args = {"data_type": "operator_actions"}
-        result = await tool_service._handle_query_investigation_context(
+        result = await qic_tool.handle(tool_service,
             tool_args, investigation_context, g8e_context, user_settings, execution_id=None
         )
         
@@ -145,7 +146,7 @@ class TestHandleQueryInvestigationContext:
         mock_investigation_service.get_chat_messages.side_effect = Exception("Service failure")
         
         tool_args = {"data_type": "conversation_history"}
-        result = await tool_service._handle_query_investigation_context(
+        result = await qic_tool.handle(tool_service,
             tool_args, investigation_context, g8e_context, user_settings, execution_id=None
         )
         

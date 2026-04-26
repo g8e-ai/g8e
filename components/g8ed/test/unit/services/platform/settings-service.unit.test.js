@@ -355,6 +355,28 @@ describe('validateUserSettings cross-field validation [UNIT]', () => {
         });
     });
 
+    describe('CSV Auto-Approve validation', () => {
+        it('passes when auto_approved_commands_csv is empty', () => {
+            const result = validateUserSettings({ auto_approved_commands_csv: '' });
+            expect(result.errors).toHaveLength(0);
+        });
+
+        it('passes when auto_approved_commands_csv contains valid commands', () => {
+            const result = validateUserSettings({ auto_approved_commands_csv: 'uptime,df,free' });
+            expect(result.errors).toHaveLength(0);
+        });
+
+        it('fails when auto_approved_commands_csv contains spaces', () => {
+            const result = validateUserSettings({ auto_approved_commands_csv: 'ls -la,df' });
+            expect(result.errors).toContain('Invalid value for auto_approved_commands_csv: ls -la,df');
+        });
+
+        it('fails when auto_approved_commands_csv contains shell metacharacters', () => {
+            const result = validateUserSettings({ auto_approved_commands_csv: 'uptime;rm,df' });
+            expect(result.errors).toContain('Invalid value for auto_approved_commands_csv: uptime;rm,df');
+        });
+    });
+
     describe('Combined validation scenarios', () => {
         it('validates both provider and search requirements together', () => {
             const result = validateUserSettings({

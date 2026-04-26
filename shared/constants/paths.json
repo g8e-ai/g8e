@@ -6,7 +6,8 @@
     "docs_dir": "/docs",
     "shared_dir": "/app/shared",
     "shared_constants_dir": "/app/shared/constants",
-    "shared_models_dir": "/app/shared/models"
+    "shared_models_dir": "/app/shared/models",
+    "ssh_config_path": "/etc/g8e/ssh_config"
   },
   "g8ee": {
     "app_dir": "/app/components/g8ee",

@@ -131,27 +131,39 @@ class SettingsService:
         return settings
 
     def overlay_platform_data(self, settings: G8eePlatformSettings, platform_settings: G8eePlatformSettings) -> G8eePlatformSettings:
-        """Overlay platform DB settings onto local bootstrap settings."""
-        
-        # Command Validation
-        settings.command_validation.enable_whitelisting = platform_settings.command_validation.enable_whitelisting
-        settings.command_validation.enable_blacklisting = platform_settings.command_validation.enable_blacklisting
+        """Overlay platform DB settings onto local bootstrap settings.
 
-        # Search (Merged Vertex/Google)
+        Model-driven by design: each nested settings model is overlaid as a
+        whole object, and the auth merge iterates ``AuthSettings`` fields
+        rather than hand-listing them. Adding a new field on any of these
+        nested models therefore flows through automatically — hand-listing
+        fields here is the bug class that previously dropped new fields
+        (e.g. command_validation auto-approve, auth auditor_hmac_key) on
+        the platform-bootstrap path.
+
+        Auth is the only sub-model that merges instead of being replaced,
+        because bootstrap-loaded secrets (verified against the on-disk
+        SecretManager digest) must take precedence over whatever the
+        platform document carries; the DB only fills gaps when the
+        bootstrap volume hasn't surfaced a value yet.
+        """
+        # Whole-object overlay for nested models where the platform DB
+        # document is authoritative. Any new field added inside these
+        # models flows through with no change here.
+        settings.command_validation = platform_settings.command_validation
         settings.search = platform_settings.search
-
-        # Auth
-        if platform_settings.auth.internal_auth_token and not settings.auth.internal_auth_token:
-            settings.auth.internal_auth_token = platform_settings.auth.internal_auth_token
-        if platform_settings.auth.session_encryption_key and not settings.auth.session_encryption_key:
-            settings.auth.session_encryption_key = platform_settings.auth.session_encryption_key
-        if platform_settings.auth.auditor_hmac_key and not settings.auth.auditor_hmac_key:
-            settings.auth.auditor_hmac_key = platform_settings.auth.auditor_hmac_key
-        if platform_settings.auth.g8e_api_key:
-            settings.auth.g8e_api_key = platform_settings.auth.g8e_api_key
-
-        # Reputation (Phase 3 — GDD §14.5)
         settings.reputation = platform_settings.reputation
+
+        # Auth: bootstrap value wins when present; platform DB fills gaps.
+        # Iterating AuthSettings.model_fields makes this structural — newly
+        # added auth tokens (e.g. future signing keys) overlay automatically
+        # without revisiting this method.
+        for field_name in type(settings.auth).model_fields:
+            platform_value = getattr(platform_settings.auth, field_name, None)
+            if not platform_value:
+                continue
+            if not getattr(settings.auth, field_name, None):
+                setattr(settings.auth, field_name, platform_value)
 
         return settings
 

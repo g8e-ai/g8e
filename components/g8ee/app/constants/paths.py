@@ -30,7 +30,10 @@ def _load_paths() -> dict:
                 "ca_cert_path": "/g8es/ca.crt",
                 "ssl_dir": "/g8es",
                 "docs_dir": "/docs",
-                "shared_constants_dir": "/app/shared/constants"
+                "shared_dir": "/app/shared",
+                "shared_constants_dir": "/app/shared/constants",
+                "shared_models_dir": "/app/shared/models",
+                "ssh_config_path": "/etc/g8e/ssh_config",
             }
         }
 

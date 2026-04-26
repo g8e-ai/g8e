@@ -60,8 +60,8 @@ def _build_tool_service(web_search_provider: WebSearchProvider | None = None) ->
 #
 # **Do not add to this set without explicit, documented reason.** Removing
 # an entry requires adding a ``ToolSpec`` in ``tool_registry.TOOL_SPECS``
-# and the corresponding ``_build_*`` / ``_handle_*`` methods on
-# ``AIToolService``. See ``docs/architecture/ai_agents.md``.
+# and the corresponding per-tool module under ``app.services.ai.tools``.
+# See ``docs/architecture/ai_agents.md``.
 from app.constants.tool_registry_pending import PENDING_RESTORATION as _PENDING_RESTORATION
 
 
@@ -221,20 +221,23 @@ def test_tool_display_metadata_uses_tool_spec():
     assert detail == "x"
 
 
-def test_every_spec_has_builder_and_handler_method():
-    """Every ``ToolSpec`` must reference real ``_build_*`` / ``_handle_*`` methods on ``AIToolService``.
+def test_every_spec_has_builder_and_handler_callable():
+    """Every ``ToolSpec`` must carry direct ``builder`` / ``handler`` callables.
 
-    Guards against typos in ``builder_attr`` / ``handler_attr`` that would otherwise surface
-    only at service-construction time.
+    The registry references the per-tool modules under
+    ``app.services.ai.tools`` directly — no string-based attribute lookup on
+    ``AIToolService``. This guards against a regression where a spec ships
+    with a non-callable (e.g. ``None``) wired in.
     """
+    import inspect
     from app.services.ai.tool_registry import TOOL_SPECS
 
     for spec in TOOL_SPECS:
-        assert hasattr(AIToolService, spec.builder_attr), (
-            f"ToolSpec for {spec.name.value} references missing builder {spec.builder_attr}"
+        assert callable(spec.builder), (
+            f"ToolSpec for {spec.name.value} has non-callable builder"
         )
-        assert hasattr(AIToolService, spec.handler_attr), (
-            f"ToolSpec for {spec.name.value} references missing handler {spec.handler_attr}"
+        assert inspect.iscoroutinefunction(spec.handler), (
+            f"ToolSpec for {spec.name.value} handler must be async"
         )
 
 

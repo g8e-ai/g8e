@@ -471,6 +471,37 @@ export const USER_SETTINGS = Object.freeze([
         default: false,
     }),
     Object.freeze({
+        key: 'enable_command_auto_approve',
+        section: 'validation',
+        label: 'Skip Human Approval (Auto-Approve)',
+        description: 'Skip the human approval prompt for commands listed in Auto-Approved Commands. The human is rubber-stamping these as benign in advance. Auto-approve does NOT widen the whitelist and does NOT bypass the blacklist or forbidden patterns; the command must still pass all hard gates.',
+        type: 'select',
+        options: Object.freeze([
+            Object.freeze({ value: false, label: 'Disabled (default)' }),
+            Object.freeze({ value: true, label: 'Enabled' }),
+        ]),
+        secret: false,
+        placeholder: '',
+        default: false,
+    }),
+    Object.freeze({
+        key: 'auto_approved_commands_csv',
+        section: 'validation',
+        label: 'Auto-Approved Commands',
+        description: 'Comma-separated list of base commands that skip human approval (e.g., uptime,df,free). Only used when Skip Human Approval is enabled. Enter base commands only - shell metacharacters and spaces are rejected.',
+        type: 'text',
+        secret: false,
+        placeholder: 'uptime,df,free,ps',
+        default: '',
+        validate: v => {
+            if (typeof v !== 'string') return false;
+            if (v === '') return true;
+            const parts = v.split(',').map(p => p.trim()).filter(Boolean);
+            const unsafeChars = /[;|`$<>&\n\r\t ]/;
+            return parts.every(part => !unsafeChars.test(part));
+        },
+    }),
+    Object.freeze({
         key: 'g8e_api_key',
         section: 'security',
         label: 'g8e API Key',
@@ -745,6 +776,8 @@ const COMMAND_VALIDATION_KEY_MAP = Object.freeze({
     enable_command_whitelisting: 'enable_whitelisting',
     whitelisted_commands_csv: 'whitelisted_commands',
     enable_command_blacklisting: 'enable_blacklisting',
+    enable_command_auto_approve: 'enable_auto_approve',
+    auto_approved_commands_csv: 'auto_approved_commands',
 });
 
 const SECURITY_KEY_MAP = Object.freeze({

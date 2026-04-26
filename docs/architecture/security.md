@@ -676,17 +676,15 @@ Final command presented to human for approval
 
 **Fallback guarantee:** If the tribunal fails for any reason, the original Large LLM command is used and `FALLBACK` is recorded. The human approval prompt always fires regardless.
 
-### Command Allowlist and Denylist
+### Command Allowlist, Denylist, and Auto-Approve
 
-Two optional operator-level controls are available as additional constraints — **disabled by default**, configured via user settings.
+Three independent operator-level controls are available as additional constraints — all **disabled by default** and configured via user settings. They have distinct semantics and **must not be conflated**:
 
-- **Allowlist (whitelist)** — restricts the AI to pre-approved commands with validated parameters. 
+- **Allowlist (whitelist) — HARD ALLOW-LIST.** Restricts the AI to pre-approved commands with validated parameters. When enabled, any command not on the list is rejected at L1 safety validation regardless of human approval.
   - **JSON Mode (default)**: Uses a rich JSON whitelist (`config/whitelist.json`) where each command defines permitted options, regex-validated parameters, and a `max_execution_time`.
   - **CSV Mode (override)**: If a user specifies a comma-separated list of commands (e.g., `uptime,df,free`) in their settings, this entirely replaces the JSON whitelist. Only the base commands in the CSV are permitted, and arguments are validated using basic shell safety checks.
-  - **Auto-Approval Bypass**: When whitelisting is enabled and a command passes the validation, it is considered inherently safe and is **auto-approved**, bypassing the human-in-the-loop approval prompt.
-- **Denylist (blacklist)** — blocks specific commands, binaries, substrings, and regex patterns across four enforcement layers: forbidden commands, forbidden binaries, forbidden substrings, forbidden regex patterns.
-
-When the blacklist is enabled, a command matching any layer is rejected before the approval prompt — it never reaches the user for consideration.
+- **Denylist (blacklist) — HARD BLOCK-LIST.** Blocks specific commands, binaries, substrings, and regex patterns across four enforcement layers: forbidden commands, forbidden binaries, forbidden substrings, forbidden regex patterns. When enabled, a command matching any layer is rejected before the approval prompt — it never reaches the user for consideration.
+- **Auto-Approve — SKIP-APPROVAL LIST.** When enabled, commands whose base verb appears in `auto_approved_commands` bypass the human approval prompt (the human has rubber-stamped them in advance as benign). Auto-approve is **independent** of whitelisting: it does not widen the whitelist and does not bypass the blacklist or hard-coded forbidden patterns. A command must still pass every L1 hard gate before auto-approve can apply.
 
 #### Configuration
 
@@ -699,7 +697,9 @@ Command validation is configured per-user via the `command_validation` field in 
     "command_validation": {
       "enable_whitelisting": false,
       "enable_blacklisting": false,
-      "whitelisted_commands": ""
+      "whitelisted_commands": "",
+      "enable_auto_approve": false,
+      "auto_approved_commands": ""
     },
     "llm": { ... },
     "search": { ... },
@@ -708,19 +708,23 @@ Command validation is configured per-user via the `command_validation` field in 
 }
 ```
 
-- `enable_whitelisting` (bool, default: `false`) — When enabled, only commands in the whitelist are permitted.
-- `enable_blacklisting` (bool, default: `false`) — When enabled, commands matching blacklist patterns are blocked.
+- `enable_whitelisting` (bool, default: `false`) — When enabled, only commands in the whitelist are permitted (hard allow-list).
+- `enable_blacklisting` (bool, default: `false`) — When enabled, commands matching blacklist patterns are blocked (hard block-list).
 - `whitelisted_commands` (string, default: `""`) — Optional comma-separated list of allowed base commands (e.g. `uptime,df,free`).
+- `enable_auto_approve` (bool, default: `false`) — When enabled, commands whose base verb is in `auto_approved_commands` skip the human approval prompt. Independent of whitelisting; does **not** widen the whitelist and does **not** bypass the blacklist or hard-coded forbidden patterns.
+- `auto_approved_commands` (string, default: `""`) — Comma-separated list of base commands the human has rubber-stamped as benign (e.g. `uptime,df,free`). Only consulted when `enable_auto_approve` is `true`.
 
 **Whitelist Mode Semantics:**
 - **JSON mode (default):** When `whitelisted_commands` is empty, the system uses a rich JSON whitelist (`config/whitelist.json`) with per-command `safe_options` and `validation` patterns.
 - **CSV mode (override):** When `whitelisted_commands` contains a comma-separated list, this list **entirely replaces** the JSON whitelist. Every argument must pass basic shell safety checks (`_is_safe_value`). Rich per-command patterns from the JSON whitelist are NOT used in this mode.
 
+**Independence guarantee:** Whitelisting, blacklisting, and auto-approve are three orthogonal policies. Enabling auto-approve never relaxes a hard gate; disabling whitelisting never grants auto-approval. Each policy must be enabled (and configured) explicitly.
+
 Users can configure these settings through:
-1. **Settings UI** — Navigate to Settings → Command Validation to enable/disable whitelist and blacklist
+1. **Settings UI** — Navigate to Settings → Command Validation to enable/disable whitelist, blacklist, and auto-approve
 2. **API** — Update user settings via the `/api/settings/user` endpoint
 
-The AI is informed of active command constraints via the `get_command_constraints` tool, which returns the current whitelist and blacklist state for Tribunal awareness during command generation.
+The AI is informed of active command constraints via the `get_command_constraints` tool, which returns the current whitelist, blacklist, and auto-approve state for Tribunal awareness during command generation. The Tribunal must continue to obey hard gates regardless of auto-approve.
 
 ---
 

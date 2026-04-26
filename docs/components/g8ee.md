@@ -528,13 +528,27 @@ g8ee implements an **MCP Client Adapter** that translates outbound tool calls in
 
 **Initialization:** `MCPGatewayService` is created on `app.state.mcp_gateway_service` during startup, after `AIToolService` and `OperatorDataService`.
 
+### Command Validation Policies
+
+`OperatorCommandService` enforces three **independent** policies on every command, configured via `settings.command_validation`:
+
+| Policy | Setting | Semantics | Where enforced |
+|--------|---------|-----------|----------------|
+| Whitelist (hard allow-list) | `enable_whitelisting` + `whitelisted_commands` | Only listed commands may run at all. Non-listed commands are rejected at L1 safety validation. | `app/utils/safety.py::validate_command_safety` |
+| Blacklist (hard block-list) | `enable_blacklisting` | Listed commands/patterns are rejected at L1 safety validation. | `app/utils/safety.py::validate_command_safety` |
+| Auto-approve (skip-approval list) | `enable_auto_approve` + `auto_approved_commands` | Listed base verbs bypass the human approval prompt. Does NOT widen the whitelist and does NOT bypass the blacklist or hard-coded forbidden patterns. | `OperatorCommandService.execute_command_internal` |
+
+The three policies are orthogonal. Auto-approve runs **after** L1 safety validation, so a command must pass every hard gate before its base verb is checked against `auto_approved_commands`. The Tribunal is informed of all three via `get_command_constraints` (`auto_approve_enabled`, `auto_approved_commands`) but must still obey hard gates regardless of auto-approve.
+
+When auto-approve applies, `OPERATOR_COMMAND_APPROVAL_PREPARING` is suppressed and `request_command_approval` is skipped entirely — the command proceeds directly to risk analysis and dispatch.
+
 ### Multi-Operator Binding
 
 When multiple operators are bound, the AI must specify a `target_operator`. Resolution tries hostname match first, then exact operator ID, then list index. For batch operations, `target_operators` accepts a list (or `["all"]`) and g8ee requests a single unified approval covering all N target systems, then fans out the command to every resolved operator in parallel (bounded by `command_validation.max_batch_concurrency`, default 10). Each per-operator execution gets its own `execution_id` and emits its own `OPERATOR_COMMAND_STARTED` / `COMPLETED` / `FAILED` events, all tagged with a shared `batch_id` for UI grouping and audit correlation. Partial failures are reported via `CommandExecutionResult.successful_count` / `failed_count` / `execution_results`; set `command_validation.batch_fail_fast=true` to cancel remaining siblings after the first failure.
 
 ### Cloud Operator Self-Discovery
 
-A small set of read-only AWS IAM introspection commands are auto-approved without user interaction (e.g., `aws sts get-caller-identity`, role/policy listing). All other AWS operations require explicit approval or an intent grant.
+Read-only AWS IAM introspection commands (e.g., `aws sts get-caller-identity`, role/policy listing) are not auto-approved by g8ee itself — they go through the same approval gate as every other command. Operators may rubber-stamp them via the `auto_approved_commands` setting (see [Command Validation Policies](#command-validation-policies)). The intent system handles privileged AWS operations: see [Cloud Operator & AWS Intents](#cloud-operator--aws-intents).
 
 ### Operator Execution History & Activity
 
