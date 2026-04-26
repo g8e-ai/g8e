@@ -279,7 +279,7 @@ class TestSshInventoryToolResult:
         assert result.success is True
         assert result.source_path == "/etc/ssh/config"
         assert len(result.hosts) == 1
-        assert result.hosts[0]["host"] == "web-1"
+        assert result.hosts[0].host == "web-1"
         assert result.total_count == 1
 
     def test_is_pydantic_model(self):

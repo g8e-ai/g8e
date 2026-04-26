@@ -286,6 +286,10 @@ class StreamOperatorArgs(G8eBaseModel):
         ...,
         description="Clear explanation of what you intend to do across these hosts."
     )
+    arch: str = Field(
+        default="amd64",
+        description="CPU architecture of the target hosts (e.g., amd64, arm64). Default: amd64."
+    )
     concurrency: int = Field(
         default=5,
         description="Maximum number of hosts to process in parallel. Default: 5."

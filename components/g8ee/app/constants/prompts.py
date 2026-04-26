@@ -94,6 +94,11 @@ class PromptFile(str, Enum):
     # Tribunal
     TRIBUNAL_GENERATOR = "tribunal/generator.txt"
     TRIBUNAL_GENERATOR_ROUND_2 = "tribunal/generator_round_2.txt"
+    TRIBUNAL_ROUND_2_AXIOM = "tribunal/round_2/axiom.txt"
+    TRIBUNAL_ROUND_2_CONCORD = "tribunal/round_2/concord.txt"
+    TRIBUNAL_ROUND_2_VARIANCE = "tribunal/round_2/variance.txt"
+    TRIBUNAL_ROUND_2_PRAGMA = "tribunal/round_2/pragma.txt"
+    TRIBUNAL_ROUND_2_NEMESIS = "tribunal/round_2/nemesis.txt"
     TRIBUNAL_AUDITOR = "tribunal/auditor.txt"
 
     @property

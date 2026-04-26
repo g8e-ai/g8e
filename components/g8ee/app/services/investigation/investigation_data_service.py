@@ -157,15 +157,10 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
     async def get_case_investigations(
         self,
         case_id: str,
-        user_id: str | None,
+        user_id: str,
     ) -> list[InvestigationModel]:
         """Convenience query for all investigations associated with a case."""
-        if not user_id:
-            # Allow case-based queries without user_id for backward compatibility
-            # but this should be logged as a security concern at the service layer
-            request = InvestigationQueryRequest(case_id=case_id, user_id=None, limit=100)
-        else:
-            request = InvestigationQueryRequest(case_id=case_id, user_id=user_id, limit=100)
+        request = InvestigationQueryRequest(case_id=case_id, user_id=user_id, limit=100)
         return await self.query_investigations(request)
 
     async def delete_investigation(self, investigation_id: str) -> None:

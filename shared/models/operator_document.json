@@ -285,28 +285,6 @@
           "expires_at": { "type": "string", "format": "iso8601", "required": true }
         }
       }
-    },
-
-    "history_trail": {
-      "type": "array",
-      "required": true,
-      "default": [],
-      "description": "Chronological log of operator lifecycle events managed by g8ed.",
-      "items": {
-        "timestamp": { "type": "string", "format": "iso8601", "required": true },
-        "event_type": {
-          "type": "string",
-          "required": true,
-          "description": "Event type. Values: created, slot.created, bound, unbound, heartbeat.received, status.changed, api.key.refreshed, created.from.refresh, reset, terminated"
-        },
-        "summary": { "type": "string", "required": true },
-        "actor": {
-          "type": "string",
-          "required": true,
-          "description": "Component or entity that caused this event. Values: g8ed, user, g8eo, system"
-        },
-        "details": { "type": "object", "required": false, "default": {} }
-      }
     }
   },
 

@@ -223,34 +223,6 @@ class OperatorDocument(G8eIdentifiableModel):
     current_hostname: str | None = Field(default=None, description="Denormalized hostname from system_info for quick access")
     session_token: str | None = Field(default=None, description="Active session token for session-based auth validation")
     session_expires_at: UTCDatetime | None = Field(default=None, description="Session expiration timestamp")
-    history_trail: list[OperatorHistoryEntry] = Field(default_factory=list, description="Operator lifecycle history trail")
-
-    def add_history_entry(
-        self,
-        event_type: OperatorHistoryEventType | str,
-        summary: str,
-        actor: ComponentName = ComponentName.G8EE,
-        details: dict[str, object] | None = None
-    ) -> None:
-        """Record an event in the operator history trail with hash chaining."""
-        from app.utils.ledger_hash import genesis_hash
-
-        prev_hash = self.history_trail[-1].entry_hash if self.history_trail else None
-        if not prev_hash:
-            # For operators, use ID + created_at as genesis seed
-            prev_hash = genesis_hash(self.id, self.created_at.isoformat())
-
-        entry = OperatorHistoryEntry(
-            event_type=event_type,
-            summary=summary,
-            actor=actor,
-            details=details or {},
-            timestamp=now(),
-            prev_hash=prev_hash,
-        )
-
-        self.history_trail.append(entry)
-        self.update_timestamp()
 
     @property
     def hostname(self) -> str | None:

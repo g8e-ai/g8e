@@ -68,7 +68,7 @@ class SessionAuthListener:
         if auth_channel in self._active_listeners:
             return
 
-        async def message_handler(channel: str, data: Any):
+        async def message_handler(channel: str, data: object):
             if channel != auth_channel:
                 return
 

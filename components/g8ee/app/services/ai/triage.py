@@ -42,7 +42,12 @@ logger = logging.getLogger(__name__)
 
 
 class TriageAgent:
-    """Agent responsible for classifying user intent and message complexity."""
+    """Agent responsible for classifying user intent and message complexity.
+    
+    Naming Note: This agent implements the 'Dash' interrogator role from GDD §2. 
+    The g8e codebase already has a 'dash' agent (fast-path responder), so this 
+    role remains named 'triage' in the code to avoid collision.
+    """
 
     def __init__(self):
         """Initialize the triage agent."""

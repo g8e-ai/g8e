@@ -335,16 +335,14 @@ class InvestigationModel(G8eIdentifiableModel):
     @classmethod
     def validate_user_id(cls, v):
         if v is None or (isinstance(v, str) and len(v.strip()) == 0):
-            # Backward compatibility for old records missing user_id
-            return "unknown"
+            raise ValueError("user_id is required and cannot be empty")
         return v
 
     @field_validator("sentinel_mode", mode="before")
     @classmethod
     def validate_sentinel_mode(cls, v):
         if v is None:
-            # Backward compatibility for old records - default to enabled for data protection
-            return True
+            raise ValueError("sentinel_mode is required")
         return bool(v)
 
     @field_validator("case_id", mode="before")

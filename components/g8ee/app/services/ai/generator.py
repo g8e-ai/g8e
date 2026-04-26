@@ -250,6 +250,7 @@ async def _run_generation_pass(
         operator_context_str=fields["operator_context"],
         round_num=round_num,
         cluster_context=cluster_context,
+        member=member.value if round_num == 2 else None,
     )
 
     logger.info(
@@ -583,7 +584,7 @@ async def _run_audit_stage(
             )
         except Exception as exc:
             logger.error(
-                "[TRIBUNAL-AUDITOR] reputation commitment failed (non-fatal): %s",
+                "[TRIBUNAL-AUDITOR] reputation commitment failed (fatal): %s",
                 exc,
                 exc_info=True,
             )
@@ -597,6 +598,11 @@ async def _run_audit_stage(
                 ),
                 correlation_id=correlation_id or None,
             )
+            # Commitment failure is fatal - verdict cannot proceed without cryptographic binding
+            raise RuntimeError(
+                f"Reputation commitment failed for tribunal_command_id={correlation_id}: {exc}. "
+                "Verdict cannot proceed without cryptographic binding to reputation scoreboard."
+            ) from exc
 
     return final_command, outcome, auditor_passed, auditor_revision, auditor_reason, commitment_id
 
@@ -833,7 +839,6 @@ async def generate_command(
         )
 
         # Run Round 2 generation with anonymized cluster context
-        # TODO: Add persona-specific R2 prompt blocks to prompts_data/ and pass cluster context
         round_2_candidates = await _run_generation_stage(
             provider=generation_provider, model=generation_model, request=request, guidelines=guidelines,
             operator_context=operator_context, num_passes=num_passes, emitter=emitter,

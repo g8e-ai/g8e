@@ -117,18 +117,6 @@ class OperatorManager:
                 f"    Public IP:       {system_info.get('public_ip') or 'N/A'}",
             ]
 
-        history = op.get('history_trail') or []
-        if history:
-            lines += ["", f"  History Trail ({len(history)} events):"]
-            for entry in history[-5:]:
-                ts = (entry.get('timestamp') or '')[:19]
-                event = entry.get('event_type', 'N/A')
-                summary = entry.get('summary', '')
-                actor = entry.get('actor', 'N/A')
-                lines.append(f"    [{ts}] {event} ({actor}): {summary}")
-            if len(history) > 5:
-                lines.append(f"    ... and {len(history) - 5} earlier events")
-
         lines += ["=" * 80, ""]
         return '\n'.join(lines)
 

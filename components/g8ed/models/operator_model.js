@@ -30,7 +30,6 @@ import {
     OperatorStatus,
     OperatorType,
     CloudOperatorSubtype,
-    HistoryEventType,
 } from '../constants/operator.js';
 import { SourceComponent } from '../constants/ai.js';
 import { INTENT_TTL_SECONDS } from '../constants/auth.js';
@@ -275,7 +274,6 @@ export class OperatorDocument extends G8eIdentifiableModel {
         termination_reason:           { type: F.string,  default: null },
         stop_reason:                  { type: F.string,  default: null },
         shutdown_reason:              { type: F.string,  default: null },
-        history_trail:                { type: F.array,   items: HistoryEntry,      default: () => [] },
     };
 
     static parse(raw = {}) {
@@ -350,16 +348,6 @@ export class OperatorDocument extends G8eIdentifiableModel {
             cloud_subtype:             data.cloud_subtype ?? null,
             is_g8ep:               data.is_g8ep ?? false,
             slot_cost:                 1,
-            history_trail:             [new HistoryEntry({
-                timestamp:  _now,
-                event_type: HistoryEventType.CREATED,
-                summary:    'Operator created by g8ed',
-                actor:      SourceComponent.G8ED,
-                details:    {
-                    operator_session_id: data.operator_session_id ? data.operator_session_id.substring(0, 12) + '...' : null,
-                    bound_web_session_id: data.bound_web_session_id ? data.bound_web_session_id.substring(0, 12) + '...' : null,
-                },
-            })],
         });
     }
 
@@ -391,16 +379,6 @@ export class OperatorDocument extends G8eIdentifiableModel {
             slot_cost:                 1,
             system_info:               systemInfo,
             runtime_config:            {},
-            history_trail:             [new HistoryEntry({
-                timestamp:  _now,
-                event_type: HistoryEventType.SLOT_CREATED,
-                summary:    `${isCloud ? 'Cloud operator' : 'Operator'} slot ${data.slotNumber} created`,
-                actor:      SourceComponent.G8ED,
-                details:    {
-                    slot_number:   data.slotNumber,
-                    operator_type: data.operatorType || OperatorType.SYSTEM,
-                },
-            })],
         });
     }
 
@@ -429,20 +407,6 @@ export class OperatorDocument extends G8eIdentifiableModel {
             operator_cert_created_at:  data.certInfo?.serial ? _now : null,
             system_info:               new SystemInfo({}),
             runtime_config:            {},
-            history_trail:             [new HistoryEntry({
-                timestamp:  _now,
-                event_type: HistoryEventType.CREATED_FROM_REFRESH,
-                summary:    'New Operator created from API key refresh',
-                actor:      SourceComponent.USER,
-                details:    {
-                    predecessor_operator_id: data.oldId,
-                    slot_number:             data.slotNumber,
-                    operator_type:           data.operatorType || OperatorType.SYSTEM,
-                    slot_cost:               data.slotCost ?? 1,
-                    old_cert_serial:         data.oldCertSerial ? data.oldCertSerial.substring(0, 16) + '...' : null,
-                    new_cert_serial:         data.certInfo?.serial ? data.certInfo.serial.substring(0, 16) + '...' : null,
-                },
-            })],
         });
     }
 
@@ -462,13 +426,6 @@ export class OperatorDocument extends G8eIdentifiableModel {
             updated_at:                _now,
             system_info:               new SystemInfo({}),
             runtime_config:            {},
-            history_trail:             [new HistoryEntry({
-                timestamp:  _now,
-                event_type: HistoryEventType.RESET,
-                summary:    'Operator reset to fresh state',
-                actor:      SourceComponent.G8ED,
-                details:    { reset_type: 'demo_reset' },
-            })],
         });
     }
 }
@@ -619,13 +576,15 @@ export class OperatorSlotCreationResponse extends G8eBaseModel {
     static fields = {
         success:     { type: F.boolean, required: true },
         operator_id: { type: F.string,  default: null },
+        api_key:     { type: F.string,  default: null },
         message:     { type: F.string,  default: null },
     };
 
-    static forSuccess(operatorId) {
+    static forSuccess(operatorId, apiKey = null) {
         return new OperatorSlotCreationResponse({
             success:     true,
             operator_id: operatorId,
+            api_key:     apiKey,
         });
     }
 
@@ -649,11 +608,21 @@ export class OperatorRefreshKeyResponse extends G8eBaseModel {
         message:         { type: F.string,  default: null },
     };
 
-    static forSuccess(newApiKey, newOperatorId) {
+    _validate() {
+        if (this.new_api_key) {
+            const apiKeyPattern = /^g8e_[a-f0-9]{8}_[a-f0-9]{64}$|^g8e_[a-f0-9]{64}$/;
+            if (!apiKeyPattern.test(this.new_api_key)) {
+                throw new Error('new_api_key must match g8e API key format (g8e_ prefix followed by hex characters)');
+            }
+        }
+    }
+
+    static forSuccess(newApiKey, newOperatorId, message = null) {
         return new OperatorRefreshKeyResponse({
             success:         true,
             new_api_key:     newApiKey,
             new_operator_id: newOperatorId,
+            message:         message,
         });
     }
 

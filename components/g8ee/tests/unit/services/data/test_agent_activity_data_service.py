@@ -13,7 +13,7 @@
 
 """Unit tests for AgentActivityDataService."""
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -72,7 +72,7 @@ class TestAgentActivityDataService:
 
     async def test_get_activity_success(self, service, mock_cache):
         activity_id = "activity-123"
-        mock_cache.get_document.return_value = {
+        mock_cache.get_document_with_cache.return_value = {
             "id": activity_id,
             "user_id": "user-123",
             "investigation_id": "inv-123",
@@ -86,10 +86,10 @@ class TestAgentActivityDataService:
         assert isinstance(result, AgentActivityMetadata)
         assert result.id == activity_id
         assert result.user_id == "user-123"
-        mock_cache.get_document.assert_called_once_with(collection=service.collection, document_id=activity_id)
+        mock_cache.get_document_with_cache.assert_called_once_with(collection=service.collection, document_id=activity_id)
 
     async def test_get_activity_not_found(self, service, mock_cache):
-        mock_cache.get_document.return_value = None
+        mock_cache.get_document_with_cache.return_value = None
         result = await service.get_activity("nonexistent")
         assert result is None
 
@@ -135,7 +135,9 @@ class TestAgentActivityDataService:
 
     async def test_delete_activity_success(self, service, mock_cache):
         activity_id = "activity-123"
-        mock_cache.delete_document.return_value = None
+        mock_result = MagicMock()
+        mock_result.success = True
+        mock_cache.delete_document.return_value = mock_result
 
         await service.delete_activity(activity_id)
 

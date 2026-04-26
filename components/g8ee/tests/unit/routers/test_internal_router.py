@@ -297,7 +297,9 @@ async def test_delete_case_success(g8e_context):
     mock_case_service.get_case = AsyncMock()
     mock_case_service.delete_case = AsyncMock()
     mock_inv_service = MagicMock()
-    mock_inv_service.get_case_investigations = AsyncMock(return_value=[])
+    mock_inv_data_service = MagicMock()
+    mock_inv_data_service.get_case_investigations = AsyncMock(return_value=[])
+    mock_inv_service.investigation_data_service = mock_inv_data_service
     mock_inv_service.delete_investigation = AsyncMock()
     mock_cache = MagicMock()
     mock_cache.query_documents = AsyncMock(return_value=[])
@@ -372,23 +374,17 @@ async def test_claim_operator_slot_success(g8e_context):
         operator_type="CLOUD",
     )
     
-    mock_operator_data_service = MagicMock()
-    mock_operator = MagicMock()
-    mock_operator.first_deployed = None
-    mock_operator_data_service.get_operator = AsyncMock(return_value=mock_operator)
-    mock_operator_data_service.cache = MagicMock()
-    mock_result = MagicMock()
-    mock_result.success = True
-    mock_operator_data_service.cache.update_document = AsyncMock(return_value=mock_result)
+    mock_operator_lifecycle_service = MagicMock()
+    mock_operator_lifecycle_service.claim_operator_slot = AsyncMock(return_value=True)
     
     response = await claim_operator_slot(
         request=request,
-        operator_data_service=mock_operator_data_service,
+        operator_lifecycle_service=mock_operator_lifecycle_service,
         g8e_context=g8e_context
     )
     
     assert response.success is True
-    mock_operator_data_service.cache.update_document.assert_called_once()
+    mock_operator_lifecycle_service.claim_operator_slot.assert_called_once()
 
 @pytest.mark.asyncio
 async def test_bind_operators_success(g8e_context):

@@ -163,41 +163,6 @@ describe('SystemInfo [UNIT - PURE LOGIC]', () => {
     });
 });
 
-describe('HistoryEntry [UNIT - PURE LOGIC]', () => {
-    it('accepts valid required fields with defaults', () => {
-        const entry = new HistoryEntry({
-            event_type: HistoryEventType.CREATED,
-            summary: 'Operator created',
-        });
-        expect(entry.event_type).toBe(HistoryEventType.CREATED);
-        expect(entry.summary).toBe('Operator created');
-        expect(entry.actor).toBe(SourceComponent.G8ED);
-        expect(entry.details).toEqual({});
-        expect(entry.timestamp).toBeInstanceOf(Date);
-    });
-
-    it('accepts custom actor and details', () => {
-        const entry = HistoryEntry.parse({
-            event_type: HistoryEventType.BOUND,
-            summary: 'Operator bound',
-            actor: SourceComponent.G8EO,
-            details: { web_session_id: 'ws-123' },
-        });
-        expect(entry.actor).toBe(SourceComponent.G8EO);
-        expect(entry.details).toEqual({ web_session_id: 'ws-123' });
-    });
-
-    it('throws when event_type is missing', () => {
-        expect(() => HistoryEntry.parse({ summary: 'test' }))
-            .toThrow('event_type is required');
-    });
-
-    it('throws when summary is missing', () => {
-        expect(() => HistoryEntry.parse({ event_type: HistoryEventType.CREATED }))
-            .toThrow('summary is required');
-    });
-});
-
 describe('CertInfo [UNIT - PURE LOGIC]', () => {
     it('empty() returns CertInfo with all nulls', () => {
         const cert = CertInfo.empty();
@@ -455,8 +420,6 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
         expect(doc.cloud_subtype).toBe(CloudOperatorSubtype.AWS);
         expect(doc.is_g8ep).toBe(true);
         expect(doc.slot_cost).toBe(1);
-        expect(doc.history_trail).toHaveLength(1);
-        expect(doc.history_trail[0].event_type).toBe(HistoryEventType.CREATED);
     });
 
     it('forCreate() handles plain object system_info', () => {
@@ -468,26 +431,6 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
         expect(doc.system_info).toBeInstanceOf(SystemInfo);
         expect(doc.system_info.hostname).toBe('test-host');
         expect(doc.system_fingerprint).toBe('fp-123');
-    });
-
-    it('forCreate() creates history entry with truncated session IDs', () => {
-        const doc = OperatorDocument.forCreate({
-            id: 'op-123',
-            user_id: 'user-456',
-            operator_session_id: 'very-long-operator-session-id-12345',
-            bound_web_session_id: 'very-long-web-session-id-67890',
-        });
-        expect(doc.history_trail[0].details.operator_session_id).toBe('very-long-op...');
-        expect(doc.history_trail[0].details.bound_web_session_id).toBe('very-long-we...');
-    });
-
-    it('forCreate() handles null session IDs in history', () => {
-        const doc = OperatorDocument.forCreate({
-            id: 'op-123',
-            user_id: 'user-456',
-        });
-        expect(doc.history_trail[0].details.operator_session_id).toBeNull();
-        expect(doc.history_trail[0].details.bound_web_session_id).toBeNull();
     });
 
     it('forSlot() creates slot with is_slot=true', () => {
@@ -506,7 +449,6 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
         expect(doc.claimed).toBe(false);
         expect(doc.slot_number).toBe(1);
         expect(doc.status).toBe(OperatorStatus.AVAILABLE);
-        expect(doc.history_trail[0].event_type).toBe(HistoryEventType.SLOT_CREATED);
     });
 
     it('forSlot() creates cloud operator with SystemInfo.forCloudOperator()', () => {
@@ -571,8 +513,6 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
         expect(doc.api_key).toBe('new-key');
         expect(doc.operator_cert).toBe('cert-data');
         expect(doc.operator_cert_serial).toBe('serial-123');
-        expect(doc.history_trail[0].event_type).toBe(HistoryEventType.CREATED_FROM_REFRESH);
-        expect(doc.history_trail[0].details.predecessor_operator_id).toBe('op-old');
     });
 
     it('forRefresh() sets operator_cert_created_at when serial present', () => {
@@ -603,8 +543,6 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
         });
         expect(doc.id).toBe('op-123');
         expect(doc.status).toBe(OperatorStatus.AVAILABLE);
-        expect(doc.history_trail[0].event_type).toBe(HistoryEventType.RESET);
-        expect(doc.history_trail[0].details.reset_type).toBe('demo_reset');
     });
 });
 
@@ -749,10 +687,11 @@ describe('OperatorSlotCreationResponse [UNIT - PURE LOGIC]', () => {
         expect(response.message).toBeNull();
     });
 
-    it('forSuccess() creates success response with operator_id', () => {
-        const response = OperatorSlotCreationResponse.forSuccess('op-123');
+    it('forSuccess() creates success response with operator_id and optional api_key', () => {
+        const response = OperatorSlotCreationResponse.forSuccess('op-123', 'g8e_key_123');
         expect(response.success).toBe(true);
         expect(response.operator_id).toBe('op-123');
+        expect(response.api_key).toBe('g8e_key_123');
         expect(response.message).toBeNull();
     });
 
@@ -775,11 +714,66 @@ describe('OperatorRefreshKeyResponse [UNIT - PURE LOGIC]', () => {
         expect(response.message).toBeNull();
     });
 
-    it('forSuccess() creates success response with new key and operator ID', () => {
-        const response = OperatorRefreshKeyResponse.forSuccess('new-key-abc', 'op-new-456');
+    it('accepts valid operator API key format (g8e_ + 8 hex + _ + 64 hex)', () => {
+        const validKey = 'g8e_1a2b3c4d_' + '0'.repeat(64);
+        const response = OperatorRefreshKeyResponse.parse({
+            success: true,
+            new_api_key: validKey,
+            new_operator_id: 'op-new-456',
+        });
+        expect(response.new_api_key).toBe(validKey);
+    });
+
+    it('accepts valid regular API key format (g8e_ + 64 hex)', () => {
+        const validKey = 'g8e_' + '0'.repeat(64);
+        const response = OperatorRefreshKeyResponse.parse({
+            success: true,
+            new_api_key: validKey,
+            new_operator_id: 'op-new-456',
+        });
+        expect(response.new_api_key).toBe(validKey);
+    });
+
+    it('rejects invalid API key format - missing prefix', () => {
+        expect(() => OperatorRefreshKeyResponse.parse({
+            success: true,
+            new_api_key: 'invalid_key_format',
+        })).toThrow('new_api_key must match g8e API key format');
+    });
+
+    it('rejects status string as API key (regression test)', () => {
+        expect(() => OperatorRefreshKeyResponse.parse({
+            success: true,
+            new_api_key: 'AVAILABLE',
+        })).toThrow('new_api_key must match g8e API key format');
+    });
+
+    it('rejects API key with incorrect hex length', () => {
+        expect(() => OperatorRefreshKeyResponse.parse({
+            success: true,
+            new_api_key: 'g8e_' + '0'.repeat(32),
+        })).toThrow('new_api_key must match g8e API key format');
+    });
+
+    it('rejects API key with non-hex characters', () => {
+        expect(() => OperatorRefreshKeyResponse.parse({
+            success: true,
+            new_api_key: 'g8e_' + 'g'.repeat(64),
+        })).toThrow('new_api_key must match g8e API key format');
+    });
+
+    it('forSuccess() creates success response with valid key, operator ID, and optional message', () => {
+        const validKey = 'g8e_' + '0'.repeat(64);
+        const response = OperatorRefreshKeyResponse.forSuccess(validKey, 'op-new-456', 'All good');
         expect(response.success).toBe(true);
-        expect(response.new_api_key).toBe('new-key-abc');
+        expect(response.new_api_key).toBe(validKey);
         expect(response.new_operator_id).toBe('op-new-456');
+        expect(response.message).toBe('All good');
+    });
+
+    it('forSuccess() throws with invalid API key format', () => {
+        expect(() => OperatorRefreshKeyResponse.forSuccess('invalid-key', 'op-new-456'))
+            .toThrow('new_api_key must match g8e API key format');
     });
 
     it('forFailure() creates failure response with message', () => {

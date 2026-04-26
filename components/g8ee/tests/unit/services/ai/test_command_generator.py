@@ -1296,6 +1296,7 @@ class TestRunVerificationStage:
         mock_response.text = '{"status": "ok"}'
         mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
         emitter = TribunalEmitter(None, _make_mock_g8e_context())
+        emitter.correlation_id = "tribunal_test_command"
 
         final_cmd, outcome, passed, revision, auditor_reason, commitment_id = await _run_audit_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",
@@ -1365,6 +1366,7 @@ class TestRunVerificationStage:
         mock_response.text = '{"status": "swap", "swap_to_cluster": "cluster_b"}'
         mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
         emitter = TribunalEmitter(None, _make_mock_g8e_context())
+        emitter.correlation_id = "tribunal_test_command"
 
         final_cmd, outcome, passed, revision, auditor_reason, commitment_id = await _run_audit_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",
@@ -1441,6 +1443,7 @@ class TestRunVerificationStage:
         mock_response.text = '{"status": "swap", "swap_to_cluster": "cluster_a"}'
         mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
         emitter = TribunalEmitter(None, _make_mock_g8e_context())
+        emitter.correlation_id = "tribunal_test_command"
 
         final_cmd, outcome, passed, revision, auditor_reason, commitment_id = await _run_audit_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",
@@ -1484,6 +1487,7 @@ class TestRunVerificationStage:
 
         mock_provider = _make_mock_provider(generate_content_lite_side_effect=_side_effect)
         emitter = TribunalEmitter(None, _make_mock_g8e_context())
+        emitter.correlation_id = "tribunal_test_command"
 
         final_cmd, outcome, passed, revision, auditor_reason, commitment_id = await _run_audit_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",

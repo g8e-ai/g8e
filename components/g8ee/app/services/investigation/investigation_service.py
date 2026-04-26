@@ -64,6 +64,30 @@ class InvestigationService:
         """Access the underlying investigation data service."""
         return self._investigation_data_service
 
+    @property
+    def operator_data_service(self) -> OperatorDataServiceProtocol:
+        """Access the underlying operator data service."""
+        return self._operator_data_service
+
+    @property
+    def memory_data_service(self) -> MemoryDataServiceProtocol:
+        """Access the underlying memory data service."""
+        return self._memory_data_service
+
+    async def get_investigation(self, investigation_id: str) -> InvestigationModel | None:
+        """Domain pass-through for retrieving an investigation."""
+        return await self._investigation_data_service.get_investigation(investigation_id)
+
+    async def get_chat_messages(self, investigation_id: str) -> list[ConversationHistoryMessage]:
+        """Domain pass-through for retrieving chat history."""
+        return await self._investigation_data_service.get_chat_messages(investigation_id)
+
+    async def get_operator_actions_for_ai_context(self, investigation_id: str) -> str:
+        """Domain pass-through for formatted operator action history."""
+        return await self._investigation_data_service.get_operator_actions_for_ai_context(
+            investigation_id
+        )
+
     async def create_investigation(
         self,
         request: InvestigationCreateRequest,
@@ -508,11 +532,11 @@ def extract_operator_context_by_target(
     """
     if not investigation or not investigation.operator_documents:
         return None
-    
-    # If no target specified, use first operator (backward compatibility)
+
+    # No target supplied: use the first (primary) bound operator.
     if not target_operator:
         return extract_single_operator_context(investigation.operator_documents[0])
-    
+
     # Try to find operator by operator_id
     for operator_doc in investigation.operator_documents:
         if operator_doc.id == target_operator:

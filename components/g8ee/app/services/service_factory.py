@@ -49,6 +49,7 @@ from app.services.protocols import (
     InvestigationServiceProtocol,
     InvestigationDataServiceProtocol,
     OperatorDataServiceProtocol,
+    OperatorLifecycleServiceProtocol,
     MemoryDataServiceProtocol,
     OperatorHeartbeatServiceProtocol,
     OperatorHeartbeatStaleMonitorServiceProtocol,
@@ -59,6 +60,7 @@ from app.services.protocols import (
 )
 from app.services.operator.command_service import OperatorCommandService
 from app.services.operator.operator_data_service import OperatorDataService
+from app.services.operator.operator_lifecycle_service import OperatorLifecycleService
 from app.services.data.case_data_service import CaseDataService
 from app.services.operator.heartbeat_service import OperatorHeartbeatService
 from app.models.settings import G8eePlatformSettings
@@ -83,6 +85,7 @@ class CoreServices(TypedDict):
 class DataServices(TypedDict):
     investigation_data_service: InvestigationDataService | InvestigationDataServiceProtocol
     operator_data_service: OperatorDataService | OperatorDataServiceProtocol
+    operator_lifecycle_service: OperatorLifecycleService | OperatorLifecycleServiceProtocol
     memory_data_service: MemoryDataService | MemoryDataServiceProtocol
     case_data_service: CaseDataService
     agent_activity_data_service: AgentActivityDataService
@@ -118,7 +121,6 @@ class AllServices(CoreServices, DataServices, DomainServices, OperatorServices):
     stream_executor: OperatorStreamExecutor
     operator_command_service: OperatorCommandService
     tool_service: ToolExecutorProtocol
-    tool_executor: ToolExecutorProtocol
     request_builder: AIRequestBuilder
     g8e_agent: g8eEngine
     chat_task_manager: BackgroundTaskManager
@@ -194,9 +196,15 @@ class ServiceFactory:
             cache=cache_aside_service
         )
 
+        # Create lifecycle service after data service is available
+        operator_lifecycle_service = OperatorLifecycleService(
+            operator_data_service=operator_data_service,
+        )
+
         return DataServices(
             investigation_data_service=investigation_data_service,
             operator_data_service=operator_data_service,
+            operator_lifecycle_service=operator_lifecycle_service,
             memory_data_service=memory_data_service,
             case_data_service=case_data_service,
             agent_activity_data_service=agent_activity_data_service,
@@ -349,7 +357,7 @@ class ServiceFactory:
 
         chat_task_manager = BackgroundTaskManager()
 
-        tool_executor = AIToolService(
+        tool_service = AIToolService(
             operator_command_service=operator_command_service,
             investigation_service=cast(InvestigationService, domain_services['investigation_service']),
             reputation_data_service=data_services['reputation_data_service'],
@@ -362,11 +370,11 @@ class ServiceFactory:
         )
 
         request_builder = AIRequestBuilder(
-            tool_executor=tool_executor,
+            tool_executor=tool_service,
         )
 
         g8e_agent = g8eEngine(
-            tool_executor=tool_executor,
+            tool_executor=tool_service,
             grounding_service=grounding_service,
             approval_service=approval_service,
         )
@@ -391,8 +399,7 @@ class ServiceFactory:
             approval_service=approval_service,
             stream_executor=stream_executor,
             operator_command_service=operator_command_service,
-            tool_service=tool_executor,
-            tool_executor=tool_executor,
+            tool_service=tool_service,
             request_builder=request_builder,
             g8e_agent=g8e_agent,
             chat_task_manager=chat_task_manager,
@@ -407,7 +414,7 @@ class ServiceFactory:
         return all_services
 
     @staticmethod
-    def bind_to_app_state(app: Any, services: AllServices) -> None:
+    def bind_to_app_state(app: object, services: AllServices) -> None:
         """Assign every service in *services* to ``app.state``.
 
         Also creates the legacy alias ``memory_service`` that some dependency

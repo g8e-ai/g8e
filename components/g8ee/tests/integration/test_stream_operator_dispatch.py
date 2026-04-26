@@ -63,7 +63,7 @@ async def test_stream_operator_dispatch_integration(
         "hosts": ["web-1", "web-2"],
         "justification": "Deploying operators to web fleet for log analysis",
         "concurrency": 5,
-        "timeout": 300
+        "timeout_seconds": 300
     }
     
     # 2. Execute tool through AIToolService.execute_tool_call
@@ -115,7 +115,9 @@ async def test_stream_executor_internal_flow(
         
         args = StreamOperatorArgs(
             hosts=["host1"],
-            justification="Testing executor flow"
+            justification="Testing executor flow",
+            arch="amd64",
+            timeout_seconds=300
         )
         
         result = await executor.execute_stream(

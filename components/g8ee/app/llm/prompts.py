@@ -346,10 +346,28 @@ def build_tribunal_generator_prompt(
     operator_context_str: str,
     round_num: int = 1,
     cluster_context: str | None = None,
+    member: str | None = None,
 ) -> str:
-    """Build the prompt for a Tribunal generation pass."""
+    """Build the prompt for a Tribunal generation pass.
+    
+    Args:
+        member: Tribunal member id (e.g., "axiom", "concord", etc.) for persona-specific R2 prompts.
+    """
     if round_num == 2 and cluster_context:
-        template = load_prompt(PromptFile.TRIBUNAL_GENERATOR_ROUND_2)
+        # Load persona-specific R2 prompt if member is provided, otherwise use generic
+        if member:
+            prompt_file_map = {
+                "axiom": PromptFile.TRIBUNAL_ROUND_2_AXIOM,
+                "concord": PromptFile.TRIBUNAL_ROUND_2_CONCORD,
+                "variance": PromptFile.TRIBUNAL_ROUND_2_VARIANCE,
+                "pragma": PromptFile.TRIBUNAL_ROUND_2_PRAGMA,
+                "nemesis": PromptFile.TRIBUNAL_ROUND_2_NEMESIS,
+            }
+            prompt_file = prompt_file_map.get(member.lower(), PromptFile.TRIBUNAL_GENERATOR_ROUND_2)
+        else:
+            prompt_file = PromptFile.TRIBUNAL_GENERATOR_ROUND_2
+        
+        template = load_prompt(prompt_file)
         return template.format(
             request=request,
             guidelines=guidelines,

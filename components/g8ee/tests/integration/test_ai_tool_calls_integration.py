@@ -145,7 +145,17 @@ def sample_investigation():
         status=InvestigationStatus.OPEN,
         sentinel_mode=True,
         conversation_history=[],
-        operator_documents=[],
+        operator_documents=[{
+            "id": "op-123",
+            "user_id": "user-303",
+            "operator_session_id": "session-456",
+            "system_info": {
+                "os": "linux",
+                "hostname": "bobuntu",
+                "current_user": "bob",
+                "architecture": "amd64"
+            }
+        }],
     )
 
 
@@ -188,6 +198,7 @@ class TestCommandExecutionTools:
             "working_directory": "/home/user",
             "timeout_seconds": 30,
             "guidelines": "List files in directory",
+            "justification": "Need to list files",
         }
 
         # Execute tool call
@@ -298,6 +309,7 @@ class TestFileOperationTools:
             "content": "Hello, World!",
             "mode": "0644",
             "create_directories": True,
+            "justification": "Need to create test file",
         }
 
         # Execute tool call
@@ -343,6 +355,7 @@ class TestFileOperationTools:
             "content": "Updated content",
             "mode": "0644",
             "backup": True,
+            "justification": "Need to update test file",
         }
 
         # Execute tool call
@@ -881,7 +894,7 @@ class TestPermissionSessionTools:
 
         # Test payload for granting intent
         tool_args = {
-            "intent_name": "file_access",
+            "intent_name": "s3_read",
             "justification": "Need to access user files for troubleshooting",
             "operation_context": "File system troubleshooting",
         }
@@ -924,7 +937,7 @@ class TestPermissionSessionTools:
 
         # Test payload for revoking intent
         tool_args = {
-            "intent_name": "file_access",
+            "intent_name": "s3_read",
             "justification": "No longer need file access",
         }
 

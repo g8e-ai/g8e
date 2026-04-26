@@ -33,7 +33,7 @@ class TestSettingsService:
     async def test_get_user_settings_success(self):
         """Test retrieving user settings when the document exists."""
         cache_mock = MagicMock()
-        cache_mock.get_document = AsyncMock()
+        cache_mock.get_document_with_cache = AsyncMock()
         
         user_id = "user_123"
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
@@ -50,7 +50,7 @@ class TestSettingsService:
             user_id=user_id,
             settings=user_settings
         )
-        cache_mock.get_document.side_effect = lambda collection, document_id: (
+        cache_mock.get_document_with_cache.side_effect = lambda collection, document_id: (
             user_doc.model_dump() if document_id == user_doc_id else None
         )
         
@@ -62,7 +62,7 @@ class TestSettingsService:
         assert settings.llm.openai_api_key == "sk-user-key"
         
         # Verify cache calls
-        cache_mock.get_document.assert_any_call(
+        cache_mock.get_document_with_cache.assert_any_call(
             collection=DB_COLLECTION_SETTINGS,
             document_id=user_doc_id
         )
@@ -70,7 +70,7 @@ class TestSettingsService:
     async def test_get_user_settings_missing_returns_empty_llm(self):
         """Test that missing user settings returns empty LLMSettings (no platform fallback for LLM keys)."""
         cache_mock = MagicMock()
-        cache_mock.get_document = AsyncMock()
+        cache_mock.get_document_with_cache = AsyncMock()
         
         user_id = "user_456"
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
@@ -91,7 +91,7 @@ class TestSettingsService:
                 return platform_doc.model_dump()
             return None
             
-        cache_mock.get_document.side_effect = get_doc_mock
+        cache_mock.get_document_with_cache.side_effect = get_doc_mock
         
         service = SettingsService(cache_aside_service=cache_mock)
         settings = await service.get_user_settings(user_id)
@@ -104,11 +104,11 @@ class TestSettingsService:
         assert settings.llm.ollama_api_key is None
         
         # Verify both lookups happened
-        cache_mock.get_document.assert_any_call(
+        cache_mock.get_document_with_cache.assert_any_call(
             collection=DB_COLLECTION_SETTINGS,
             document_id=user_doc_id
         )
-        cache_mock.get_document.assert_any_call(
+        cache_mock.get_document_with_cache.assert_any_call(
             collection=DB_COLLECTION_SETTINGS,
             document_id=PLATFORM_SETTINGS_DOC
         )
@@ -116,7 +116,7 @@ class TestSettingsService:
     async def test_llm_settings_no_overrides(self):
         """Test that llm_max_tokens is None if not provided in user settings."""
         cache_mock = MagicMock()
-        cache_mock.get_document = AsyncMock()
+        cache_mock.get_document_with_cache = AsyncMock()
 
         user_id = "user_temp"
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
@@ -132,7 +132,7 @@ class TestSettingsService:
             settings=user_settings
         )
 
-        cache_mock.get_document.side_effect = lambda collection, document_id: (
+        cache_mock.get_document_with_cache.side_effect = lambda collection, document_id: (
             user_doc.model_dump() if document_id == user_doc_id else None
         )
 
@@ -144,7 +144,7 @@ class TestSettingsService:
     async def test_llm_settings_with_overrides(self):
         """Test that llm_max_tokens ARE set if provided in user settings."""
         cache_mock = MagicMock()
-        cache_mock.get_document = AsyncMock()
+        cache_mock.get_document_with_cache = AsyncMock()
 
         user_id = "user_override"
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
@@ -161,7 +161,7 @@ class TestSettingsService:
             settings=user_settings
         )
 
-        cache_mock.get_document.side_effect = lambda collection, document_id: (
+        cache_mock.get_document_with_cache.side_effect = lambda collection, document_id: (
             user_doc.model_dump() if document_id == user_doc_id else None
         )
 
@@ -176,7 +176,7 @@ class TestSettingsService:
         When the DB has no command_gen settings, LLMSettings defaults must survive.
         """
         cache_mock = MagicMock()
-        cache_mock.get_document = AsyncMock()
+        cache_mock.get_document_with_cache = AsyncMock()
 
         user_id = "user_cmdgen"
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
@@ -192,7 +192,7 @@ class TestSettingsService:
             settings=user_settings
         )
 
-        cache_mock.get_document.side_effect = lambda collection, document_id: (
+        cache_mock.get_document_with_cache.side_effect = lambda collection, document_id: (
             user_doc.model_dump() if document_id == user_doc_id else None
         )
 
@@ -206,7 +206,7 @@ class TestSettingsService:
     async def test_command_gen_overrides_applied_when_db_has_values(self):
         """Explicit DB values for command_gen fields override the defaults."""
         cache_mock = MagicMock()
-        cache_mock.get_document = AsyncMock()
+        cache_mock.get_document_with_cache = AsyncMock()
 
         user_id = "user_cmdgen_override"
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
@@ -225,7 +225,7 @@ class TestSettingsService:
             settings=user_settings
         )
 
-        cache_mock.get_document.side_effect = lambda collection, document_id: (
+        cache_mock.get_document_with_cache.side_effect = lambda collection, document_id: (
             user_doc.model_dump() if document_id == user_doc_id else None
         )
 
@@ -239,7 +239,7 @@ class TestSettingsService:
     async def test_user_settings_command_gen_defaults_preserved(self):
         """Regression: user settings with no command_gen values must preserve defaults."""
         cache_mock = MagicMock()
-        cache_mock.get_document = AsyncMock()
+        cache_mock.get_document_with_cache = AsyncMock()
 
         user_id = "user_789"
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
@@ -255,7 +255,7 @@ class TestSettingsService:
             user_id=user_id,
             settings=user_settings
         )
-        cache_mock.get_document.side_effect = lambda collection, document_id: (
+        cache_mock.get_document_with_cache.side_effect = lambda collection, document_id: (
             user_doc.model_dump() if document_id == user_doc_id else None
         )
 
@@ -269,7 +269,7 @@ class TestSettingsService:
     async def test_llm_settings_provider_preserved(self):
         """Test that valid provider is preserved in user settings (explicitly set, not a default)."""
         cache_mock = MagicMock()
-        cache_mock.get_document = AsyncMock()
+        cache_mock.get_document_with_cache = AsyncMock()
 
         user_id = "user_provider"
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
@@ -285,7 +285,7 @@ class TestSettingsService:
             settings=user_settings
         )
 
-        cache_mock.get_document.side_effect = lambda collection, document_id: (
+        cache_mock.get_document_with_cache.side_effect = lambda collection, document_id: (
             user_doc.model_dump() if document_id == user_doc_id else None
         )
 

@@ -57,6 +57,7 @@ from .services.operator.approval_service import OperatorApprovalService
 from .services.operator.command_service import OperatorCommandService
 from .services.operator.heartbeat_service import OperatorHeartbeatService
 from .services.operator.operator_data_service import OperatorDataService
+from .services.operator.operator_lifecycle_service import OperatorLifecycleService
 from .services.operator.operator_session_service import OperatorSessionService
 from .services.operator.operator_auth_service import OperatorAuthService
 from .services.operator.session_auth_listener import SessionAuthListener
@@ -244,6 +245,14 @@ async def get_g8ee_operator_data_service(request: Request) -> OperatorDataServic
     return service
 
 
+async def get_g8ee_operator_lifecycle_service(request: Request) -> OperatorLifecycleService:
+    service = getattr(request.app.state, "operator_lifecycle_service", None)
+    if not service:
+        logger.error("Operator Lifecycle Service not found in app state - g8ee initialization may have failed")
+        raise ServiceUnavailableError("Operator Lifecycle Service not available")
+    return service
+
+
 async def get_g8ee_operator_session_service(request: Request) -> OperatorSessionService:
     service = getattr(request.app.state, "operator_session_service", None)
     if not service:
@@ -378,6 +387,7 @@ __all__ = [
     "get_g8ee_approval_service",
     "get_g8ee_operator_command_service",
     "get_g8ee_operator_data_service",
+    "get_g8ee_operator_lifecycle_service",
     "get_g8ee_operator_session_service",
     "get_g8ee_operator_auth_service",
     "get_g8ee_session_auth_listener",

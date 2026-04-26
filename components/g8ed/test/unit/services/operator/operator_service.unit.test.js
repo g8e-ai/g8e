@@ -27,6 +27,11 @@ describe('OperatorService', () => {
                 getOperator: vi.fn(),
                 getOperatorFresh: vi.fn(),
                 queryOperators: vi.fn(),
+                queryListedOperators: vi.fn().mockImplementation((filters) => {
+                    // Filter out TERMINATED operators
+                    const allOperators = mocks.operatorDataService.queryOperators(filters);
+                    return allOperators.then(ops => ops.filter(op => op.status !== OperatorStatus.TERMINATED));
+                }),
                 updateOperator: vi.fn(),
                 createOperator: vi.fn(),
                 deleteOperator: vi.fn(),
@@ -37,7 +42,7 @@ describe('OperatorService', () => {
             },
             apiKeyService: {
                 issueKey: vi.fn(),
-                revokeKey: vi.fn(),
+                revokeKey: vi.fn().mockResolvedValue({ success: true }),
             },
             certificateService: {
                 generateOperatorCertificate: vi.fn(),
@@ -157,7 +162,6 @@ describe('OperatorService', () => {
             expect(slot.bound_web_session_id).toBe('ws-1');
 
             expect(slot).not.toHaveProperty('api_key');
-            expect(slot).not.toHaveProperty('history_trail');
             expect(slot).not.toHaveProperty('granted_intents');
             expect(slot).not.toHaveProperty('runtime_config');
         });

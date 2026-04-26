@@ -164,6 +164,16 @@ def mock_request_settings():
     settings = MagicMock(spec=G8eeUserSettings)
     settings.operator_context = MagicMock(spec=OperatorContext)
     settings.operator_context.os = "linux"
+    
+    # Needs a mock command_validation object
+    from app.models.settings import CommandValidationSettings
+    cv_settings = MagicMock(spec=CommandValidationSettings)
+    cv_settings.enable_whitelisting = False
+    cv_settings.enable_blacklisting = False
+    cv_settings.enable_auto_approve = False
+    cv_settings.whitelisted_commands = ""
+    settings.command_validation = cv_settings
+    
     return settings
 
 
@@ -204,8 +214,12 @@ async def test_handle_get_command_constraints_both_disabled(
     mock_blacklist_validator,
     mock_g8e_context,
     mock_investigation,
+    mock_request_settings,
 ):
     """Test handler returns empty constraint data when both validations disabled."""
+    mock_request_settings.command_validation.enable_whitelisting = False
+    mock_request_settings.command_validation.enable_blacklisting = False
+
     tool_service = tool_service_builder(
         whitelist_validator=mock_whitelist_validator,
         blacklist_validator=mock_blacklist_validator
@@ -238,8 +252,12 @@ async def test_handle_get_command_constraints_whitelist_only(
     mock_blacklist_validator,
     mock_g8e_context,
     mock_investigation,
+    mock_request_settings,
 ):
     """Test handler returns whitelist data when whitelisting enabled."""
+    mock_request_settings.command_validation.enable_whitelisting = True
+    mock_request_settings.command_validation.enable_blacklisting = False
+
     tool_service = tool_service_builder(
         whitelist_validator=mock_whitelist_validator,
         blacklist_validator=mock_blacklist_validator
@@ -272,8 +290,12 @@ async def test_handle_get_command_constraints_blacklist_only(
     mock_blacklist_validator,
     mock_g8e_context,
     mock_investigation,
+    mock_request_settings,
 ):
     """Test handler returns blacklist data when blacklisting enabled."""
+    mock_request_settings.command_validation.enable_whitelisting = False
+    mock_request_settings.command_validation.enable_blacklisting = True
+
     tool_service = tool_service_builder(
         whitelist_validator=mock_whitelist_validator,
         blacklist_validator=mock_blacklist_validator
@@ -310,8 +332,12 @@ async def test_handle_get_command_constraints_both_enabled(
     mock_blacklist_validator,
     mock_g8e_context,
     mock_investigation,
+    mock_request_settings,
 ):
     """Test handler returns both whitelist and blacklist data when both enabled."""
+    mock_request_settings.command_validation.enable_whitelisting = True
+    mock_request_settings.command_validation.enable_blacklisting = True
+
     tool_service = tool_service_builder(
         whitelist_validator=mock_whitelist_validator,
         blacklist_validator=mock_blacklist_validator
@@ -343,8 +369,13 @@ async def test_handle_get_command_constraints_csv_override(
     mock_blacklist_validator,
     mock_g8e_context,
     mock_investigation,
+    mock_request_settings,
 ):
     """Test handler returns CSV override commands when whitelisted_commands CSV is set."""
+    mock_request_settings.command_validation.enable_whitelisting = True
+    mock_request_settings.command_validation.enable_blacklisting = False
+    mock_request_settings.command_validation.whitelisted_commands = "ps,whoami,date"
+
     tool_service = tool_service_builder(
         whitelist_validator=mock_whitelist_validator,
         blacklist_validator=mock_blacklist_validator
@@ -355,7 +386,7 @@ async def test_handle_get_command_constraints_csv_override(
         tool_args={},
         investigation=mock_investigation,
         g8e_context=mock_g8e_context,
-        request_settings=settings,
+        request_settings=mock_request_settings,
         execution_id=None,
     )
 
@@ -366,9 +397,9 @@ async def test_handle_get_command_constraints_csv_override(
     # Should return CSV commands, not JSON validator commands
     assert len(result.whitelisted_commands) == 3
     assert result.whitelisted_commands == [
-        WhitelistedCommand(command="uptime"),
-        WhitelistedCommand(command="df"),
-        WhitelistedCommand(command="free"),
+        WhitelistedCommand(command="ps"),
+        WhitelistedCommand(command="whoami"),
+        WhitelistedCommand(command="date"),
     ]
     assert result.blacklisted_commands == []
     assert "Whitelisting ENABLED" in result.message

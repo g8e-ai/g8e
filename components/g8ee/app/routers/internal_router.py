@@ -116,6 +116,7 @@ from ..dependencies import (
     get_g8ee_investigation_service,
     get_g8ee_operator_command_service,
     get_g8ee_operator_data_service,
+    get_g8ee_operator_lifecycle_service,
     get_g8ee_operator_session_service,
     get_g8ee_operator_auth_service,
     get_g8ee_session_auth_listener,
@@ -605,7 +606,7 @@ async def delete_case(
 @router.post(API_PATHS["g8ee"]["operators_terminate"], response_model=OperatorTerminateResponse)
 async def terminate_operator(
     request: OperatorTerminateRequest,
-    operator_data_service: "OperatorDataService" = Depends(get_g8ee_operator_data_service),
+    operator_lifecycle_service: "OperatorLifecycleService" = Depends(get_g8ee_operator_lifecycle_service),
     g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
 ):
     """
@@ -618,11 +619,11 @@ async def terminate_operator(
     Called by g8ed during API key refresh and manual termination.
     SECURITY: Internal only - g8ed component.
     """
-    operator = await operator_data_service.get_operator(request.operator_id)
+    operator = await operator_lifecycle_service.operator_data_service.get_operator(request.operator_id)
     if not operator:
         return OperatorTerminateResponse(success=False, error="Operator not found")
 
-    await operator_data_service.terminate_operator(
+    await operator_lifecycle_service.terminate_operator(
         operator_id=request.operator_id,
         actor=ComponentName.G8ED,
         summary="Operator terminated via g8ed relay",
@@ -671,15 +672,14 @@ async def create_operator_slot(
     architectural boundary: after auth, g8ed has no business writing to operators.
     SECURITY: Internal only - g8ed component.
     """
-    from app.models.operators import OperatorDocument, OperatorType
-    from app.constants import CloudSubtype
+    from app.models.operators import OperatorDocument
     from app.utils.timestamp import now
     import uuid
     import secrets
 
     try:
         operator_id = str(uuid.uuid4())
-        
+
         # Generate API key (authority: g8ee for operator bootstrap)
         operator_suffix = operator_id.split('-')[-1][:8]
         random_token = secrets.token_hex(32)
@@ -695,7 +695,7 @@ async def create_operator_slot(
             operator_type=request.operator_type,
             cloud_subtype=request.cloud_subtype,
             is_g8ep=request.is_g8e_node,
-            status="AVAILABLE",
+            status=OperatorStatus.AVAILABLE,
             api_key=api_key,
             created_at=now(),
             updated_at=now(),
@@ -779,7 +779,7 @@ async def revoke_operator_certificate(
 @router.post(API_PATHS["g8ee"]["operators_claim_slot"], response_model=OperatorSlotClaimResponse)
 async def claim_operator_slot(
     request: OperatorSlotClaimRequest,
-    operator_data_service: "OperatorDataService" = Depends(get_g8ee_operator_data_service),
+    operator_lifecycle_service: "OperatorLifecycleService" = Depends(get_g8ee_operator_lifecycle_service),
     g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
 ):
     """
@@ -794,7 +794,7 @@ async def claim_operator_slot(
     from app.utils.timestamp import now
 
     try:
-        success = await operator_data_service.claim_operator_slot(
+        success = await operator_lifecycle_service.claim_operator_slot(
             operator_id=request.operator_id,
             operator_session_id=request.operator_session_id,
             bound_web_session_id=request.bound_web_session_id,

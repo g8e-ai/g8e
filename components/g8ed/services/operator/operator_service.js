@@ -235,10 +235,13 @@ class OperatorService {
     }
 
     async getUserVisibleOperatorStats(userId, allStatuses = false) {
-        const allOperators = await this.operatorDataService.queryOperators([{ field: 'user_id', operator: '==', value: userId }]);
-        let operators = allOperators;
+        let operators;
         if (!allStatuses) {
-            operators = allOperators.filter(op => op.status !== OperatorStatus.UNAVAILABLE && op.status !== OperatorStatus.TERMINATED);
+            operators = await this.operatorDataService.queryListedOperators([{ field: 'user_id', operator: '==', value: userId }]);
+            // Also filter out UNAVAILABLE for user-visible stats
+            operators = operators.filter(op => op.status !== OperatorStatus.UNAVAILABLE);
+        } else {
+            operators = await this.operatorDataService.queryOperators([{ field: 'user_id', operator: '==', value: userId }]);
         }
         const activeCount = operators.filter(op => op.status === OperatorStatus.ACTIVE || op.status === OperatorStatus.BOUND).length;
         return { operators, totalCount: operators.length, activeCount };
@@ -266,11 +269,11 @@ class OperatorService {
      */
     async getAllOperators(allStatuses = false) {
         const filters = [];
-        const allOperators = await this.operatorDataService.queryOperators(filters);
-        
-        let filtered = allOperators;
+        let filtered;
         if (!allStatuses) {
-            filtered = allOperators.filter(op => op.status !== OperatorStatus.TERMINATED);
+            filtered = await this.operatorDataService.queryListedOperators(filters);
+        } else {
+            filtered = await this.operatorDataService.queryOperators(filters);
         }
 
         const activeCount = filtered.filter(op => op.status === OperatorStatus.ACTIVE || op.status === OperatorStatus.BOUND).length;
@@ -374,6 +377,19 @@ class OperatorService {
                 error: err.message,
             });
             return { success: false, id: operatorId, error: err.message };
+        }
+
+        // Best-effort resource cleanup in g8ed
+        if (existing.api_key && this.apiKeyService) {
+            await this.apiKeyService.revokeKey(existing.api_key).catch(err => {
+                logger.warn('[OPERATOR-SERVICE] Failed to revoke API key during termination', { operatorId, error: err.message });
+            });
+        }
+
+        if (existing.operator_cert_serial && this.certificateService) {
+            await this.certificateService.revokeCertificate(existing.operator_cert_serial).catch(err => {
+                logger.warn('[OPERATOR-SERVICE] Failed to revoke certificate during termination', { operatorId, error: err.message });
+            });
         }
 
         try {

@@ -59,10 +59,10 @@ class SearchClientProtocol(Protocol):
         self,
         request: discoveryengine.SearchRequest,
         *,
-        retry: Any = None,
+        retry: object | None = None,
         timeout: float | None = None,
-        metadata: Any = None,
-    ) -> Any:
+        metadata: object | None = None,
+    ) -> object:
         """Execute a search_lite request."""
         ...
 

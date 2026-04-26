@@ -414,7 +414,6 @@ Stored in the `operators` collection. Canonical shape is defined in `shared/mode
 | Telemetry | `latest_heartbeat_snapshot` | g8ee | Most recent metrics snapshot: CPU, memory, disk, network latency, uptime |
 | Termination | `error_message`, `termination_reason`, `stop_reason`, `shutdown_reason` | g8ed | Captured on termination events |
 | Cloud | `granted_intents` | g8ed | Granted cloud intent objects with `name`, `granted_at`, `expires_at` |
-| History | `history_trail` | g8ed | Chronological array of lifecycle events (`created`, `bound`, `heartbeat.received`, `status.changed`, `reset`, `terminated`, …) |
 
 ---
 

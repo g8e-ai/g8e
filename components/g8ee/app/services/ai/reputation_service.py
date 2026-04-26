@@ -63,8 +63,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_EMA_HALF_LIFE: int = 50
 """Default EMA half-life (number of resolutions for the smoothing weight to
-halve). GDD §14.10 suggests this as the start point; ops can override via the
-env var ``REPUTATION_EMA_HALF_LIFE`` at the call site."""
+halve). GDD §14.10 suggests this as the start point."""
 
 BOOTSTRAP_SCALAR: float = 0.5
 """Neutral starting scalar for any agent that has no prior `reputation_state`

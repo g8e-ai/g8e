@@ -189,7 +189,7 @@ class AgentActivityDataService:
         logger.info(f"Deleting agent activity metadata: {activity_id}")
 
         try:
-            result = await self.cache.db.delete_document(
+            result = await self.cache.delete_document(
                 collection=self.collection,
                 document_id=activity_id,
             )
@@ -200,9 +200,6 @@ class AgentActivityDataService:
                     details={"activity_id": activity_id},
                     component=ComponentName.G8EE
                 )
-            key = self.cache._make_key(self.collection, activity_id)
-            await self.cache.kv.delete(key)
-            await self.cache.invalidate_query_cache(self.collection)
             logger.info(f"Agent activity metadata deleted: {activity_id}")
 
         except Exception as e:

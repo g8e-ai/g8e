@@ -445,7 +445,6 @@
   },
 
   "audit.event.source": {
-    "history.trail": "history_trail",
     "conversation": "conversation"
   },
 

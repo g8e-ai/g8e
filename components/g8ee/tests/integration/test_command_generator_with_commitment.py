@@ -173,8 +173,8 @@ class TestCommandGeneratorWithCommitment:
         commitment_events = [e for e in published if e.event_type == EventType.REPUTATION_COMMITMENT_CREATED]
         assert len(commitment_events) == 0
 
-    async def test_commitment_failure_is_non_fatal_to_command_generation(self, fake_cache_aside_service):
-        """A failure in the commitment step should emit an error event but not crash the generator."""
+    async def test_commitment_failure_is_fatal_to_command_generation(self, fake_cache_aside_service):
+        """A failure in the commitment step should crash the generator (prevents ghost verdicts)."""
         inputs, _ = make_agent_run_args()
         event_svc = make_g8ed_event_service()
         reputation_svc = ReputationDataService(fake_cache_aside_service)
@@ -185,34 +185,30 @@ class TestCommandGeneratorWithCommitment:
         with patch("app.services.ai.generator._run_generation_stage", new_callable=AsyncMock) as mock_gen, \
              patch("app.services.ai.generator._run_voting_stage", new_callable=AsyncMock) as mock_vote, \
              patch("app.services.ai.generator.run_auditor", new_callable=AsyncMock) as mock_run_auditor:
-            
+
             mock_gen.return_value = [CandidateCommand(command="ls", pass_index=0, member=TribunalMember.AXIOM)]
-            
+
             vote_breakdown = MagicMock(spec=VoteBreakdown)
             vote_breakdown.consensus_strength = 1.0
             vote_breakdown.tie_break_reason = None
             mock_vote.return_value = ("ls", 1.0, vote_breakdown, None)
-            
+
             mock_run_auditor.return_value = (True, "ls", None, AuditorReason.OK, None, None)
 
-            gen_result = await generate_command(
-                request="list",
-                guidelines="",
-                operator_context=None,
-                g8ed_event_service=event_svc,
-                web_session_id=inputs.web_session_id,
-                user_id=inputs.user_id,
-                case_id=inputs.case_id,
-                investigation_id=inputs.investigation_id,
-                settings=inputs.request_settings,
-                reputation_data_service=reputation_svc,
-                auditor_hmac_key=_TEST_HMAC_KEY,
-            )
-
-        # Command generation should still succeed
-        assert gen_result.outcome == CommandGenerationOutcome.VERIFIED
-        assert gen_result.final_command == "ls"
-        assert gen_result.reputation_commitment_id is None
+            with pytest.raises(RuntimeError, match="Reputation commitment failed"):
+                await generate_command(
+                    request="list",
+                    guidelines="",
+                    operator_context=None,
+                    g8ed_event_service=event_svc,
+                    web_session_id=inputs.web_session_id,
+                    user_id=inputs.user_id,
+                    case_id=inputs.case_id,
+                    investigation_id=inputs.investigation_id,
+                    settings=inputs.request_settings,
+                    reputation_data_service=reputation_svc,
+                    auditor_hmac_key=_TEST_HMAC_KEY,
+                )
 
         # Should emit a failure event
         published = event_svc._published_events

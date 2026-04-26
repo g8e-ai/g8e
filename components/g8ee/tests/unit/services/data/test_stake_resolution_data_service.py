@@ -87,7 +87,7 @@ class TestCreate:
         return mock_cache_aside_service
 
     async def test_create_writes_with_composite_id(self, service, mock_cache):
-        mock_cache.get_document.return_value = None
+        mock_cache.get_document_with_cache.return_value = None
         r = _make_resolution()
         await service.create(r)
         mock_cache.create_document.assert_called_once()
@@ -98,7 +98,7 @@ class TestCreate:
         assert "slash_tier" not in kwargs["data"]
 
     async def test_create_with_slash_tier_persists_int(self, service, mock_cache):
-        mock_cache.get_document.return_value = None
+        mock_cache.get_document_with_cache.return_value = None
         r = _make_resolution(slash_tier=SlashTier.TIER_2)
         await service.create(r)
         kwargs = mock_cache.create_document.call_args.kwargs
@@ -108,7 +108,7 @@ class TestCreate:
         self, service, mock_cache
     ):
         existing = _make_resolution(slash_tier=SlashTier.TIER_3)
-        mock_cache.get_document.return_value = existing.model_dump(mode="json")
+        mock_cache.get_document_with_cache.return_value = existing.model_dump(mode="json")
 
         result = await service.create(_make_resolution())
 
@@ -121,7 +121,7 @@ class TestCreate:
     async def test_create_wraps_unexpected_failure_as_database_error(
         self, service, mock_cache
     ):
-        mock_cache.get_document.return_value = None
+        mock_cache.get_document_with_cache.return_value = None
         mock_cache.create_document.side_effect = RuntimeError("boom")
         with pytest.raises(DatabaseError):
             await service.create(_make_resolution())
@@ -140,7 +140,7 @@ class TestGet:
 
     async def test_get_round_trip_preserves_slash_tier(self, service, mock_cache):
         r = _make_resolution(slash_tier=SlashTier.TIER_1)
-        mock_cache.get_document.return_value = r.model_dump(mode="json")
+        mock_cache.get_document_with_cache.return_value = r.model_dump(mode="json")
 
         result = await service.get(tribunal_command_id="tc-1", agent_id="axiom")
 
@@ -148,17 +148,17 @@ class TestGet:
         assert result.slash_tier == SlashTier.TIER_1
         assert result.outcome_score == 1.0
         assert result.scalar_after == 0.51
-        mock_cache.get_document.assert_called_once_with(
+        mock_cache.get_document_with_cache.assert_called_once_with(
             collection=DB_COLLECTION_STAKE_RESOLUTIONS,
             document_id="tc-1:axiom",
         )
 
     async def test_get_missing_returns_none(self, service, mock_cache):
-        mock_cache.get_document.return_value = None
+        mock_cache.get_document_with_cache.return_value = None
         assert await service.get(tribunal_command_id="tc-1", agent_id="axiom") is None
 
     async def test_get_db_error_wraps(self, service, mock_cache):
-        mock_cache.get_document.side_effect = RuntimeError("boom")
+        mock_cache.get_document_with_cache.side_effect = RuntimeError("boom")
         with pytest.raises(DatabaseError):
             await service.get(tribunal_command_id="tc-1", agent_id="axiom")
 

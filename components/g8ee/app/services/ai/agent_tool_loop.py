@@ -78,10 +78,11 @@ class TribunalInvoker:
 
     @staticmethod
     def _fetch_command_constraints(
-        tool_executor: AIToolService,
+        request_settings: G8eeUserSettings,
         investigation: EnrichedInvestigationContext,
+        tool_executor: AIToolService,
     ) -> tuple[bool, bool, list[WhitelistedCommand], list[dict[str, str]]]:
-        """Fetch command validation constraints from tool executor settings.
+        """Fetch command validation constraints from request settings.
         
         Returns metadata-rich command list with safe_options and validation patterns.
         """
@@ -90,7 +91,7 @@ class TribunalInvoker:
         whitelisted_commands: list[WhitelistedCommand] = []
         blacklisted_commands: list[dict[str, str]] = []
 
-        cv = tool_executor.user_settings
+        cv = request_settings
         if cv:
             whitelisting_enabled = cv.command_validation.enable_whitelisting
             blacklisting_enabled = cv.command_validation.enable_blacklisting
@@ -147,7 +148,7 @@ class TribunalInvoker:
         )
 
         whitelisting_enabled, blacklisting_enabled, whitelisted_commands, blacklisted_commands = (
-            TribunalInvoker._fetch_command_constraints(tool_executor, investigation)
+            TribunalInvoker._fetch_command_constraints(request_settings, investigation, tool_executor)
         )
 
         logger.info(

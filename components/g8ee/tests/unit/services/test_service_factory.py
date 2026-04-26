@@ -76,10 +76,8 @@ class TestServiceFactorySmoke:
 
             assert services is not None
             assert "tool_service" in services
-            assert "tool_executor" in services
             assert "investigation_service" in services
             assert "ssh_inventory_service" in services
-            assert services["tool_service"] is services["tool_executor"]
 
         finally:
             os.unlink(ssh_config_path)

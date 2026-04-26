@@ -30,11 +30,9 @@ export class OperatorSlotService {
     }
 
     async initializeOperatorSlots(userId, organizationId) {
-        const existingOperators = await this.operatorDataService.queryOperatorsFresh([
+        const liveOperators = await this.operatorDataService.queryListedOperators([
             { field: 'user_id', operator: '==', value: userId }
-        ]);
-
-        const liveOperators = existingOperators.filter(op => op.status !== OperatorStatus.TERMINATED);
+        ], { fresh: true });
         const existingCount = liveOperators.length;
         const createdSlotIds = [];
 
@@ -80,15 +78,13 @@ export class OperatorSlotService {
             await this.operatorService.relayEndOperatorSessionToG8ee(oldOperator.operator_session_id, g8eContext).catch(() => {});
         }
 
-        if (oldOperator.api_key && this.apiKeyService) {
-            await this.apiKeyService.revokeKey(oldOperator.api_key);
-        }
-
-        // Delegate termination to g8ee
+        // Delegate termination and resource cleanup to OperatorService
         if (this.operatorService) {
-            await this.operatorService.relayTerminateOperatorToG8ee(id, g8eContext).catch(err => {
-                logger.error('[OPERATOR-SLOT] Failed to terminate operator via g8ee during refresh', { id, error: err.message });
-            });
+            const termResult = await this.operatorService.terminateOperator(id);
+            if (!termResult.success) {
+                logger.error('[OPERATOR-SLOT] Failed to terminate operator during refresh', { id, error: termResult.error });
+                // We continue anyway to try and restore the slot, but log the failure
+            }
         }
 
         // Create new slot via g8ee (this will also issue the new API key returned by g8ee)
@@ -110,7 +106,7 @@ export class OperatorSlotService {
             await broadcastFn(userId);
         }
 
-        return OperatorRefreshKeyResponse.forSuccess('API key refreshed', creationResponse.operator_id);
+        return OperatorRefreshKeyResponse.forSuccess(creationResponse.api_key, creationResponse.operator_id, 'API key refreshed');
     }
 
     async createOperatorSlot(params) {
@@ -156,7 +152,7 @@ export class OperatorSlotService {
                 });
             }
             
-            return OperatorSlotCreationResponse.forSuccess(response.operator_id);
+            return OperatorSlotCreationResponse.forSuccess(response.operator_id, response.api_key);
         } else {
             logger.error('[OPERATOR-SLOT] g8ee failed to create operator slot', { error: response.error });
             return OperatorSlotCreationResponse.forFailure(response.error || 'Failed to create operator slot via g8ee');

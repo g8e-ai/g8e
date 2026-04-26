@@ -271,7 +271,10 @@ class DocumentServiceProtocol(Protocol):
 
 @runtime_checkable
 class OperatorDataServiceProtocol(Protocol):
-    """Protocol for operator-specific data operations."""
+    """Protocol for operator-specific data operations (pure CRUD)."""
+
+    collection: str
+    cache: "CacheAsideService"
 
     async def get_operator(self, operator_id: str) -> OperatorDocument | None:
         """Retrieve operator metadata."""
@@ -286,8 +289,18 @@ class OperatorDataServiceProtocol(Protocol):
         """Query operator documents. ``bypass_cache=True`` skips the query cache."""
         ...
 
-    async def update_operator_status(self, operator_id: str, status: OperatorStatus) -> bool:
-        """Update operator status."""
+    async def create_operator(self, operator: OperatorDocument) -> bool:
+        """Create a new operator document."""
+        ...
+
+    async def update_document(
+        self,
+        collection: str,
+        document_id: str,
+        data: dict[str, object],
+        merge: bool = True,
+    ) -> CacheOperationResult:
+        """Update a document."""
         ...
 
     async def update_operator_heartbeat(
@@ -327,13 +340,38 @@ class OperatorDataServiceProtocol(Protocol):
         """Log an approval lifecycle event in the operator activity log."""
         ...
 
-    async def bind_operators(
+
+@runtime_checkable
+class OperatorLifecycleServiceProtocol(Protocol):
+    """Protocol for operator lifecycle orchestration (domain layer)."""
+
+    async def claim_operator_slot(
         self,
-        operator_ids: list[str],
-        web_session_id: str,
-        context: G8eHttpContext,
+        operator_id: str,
+        operator_session_id: str,
+        bound_web_session_id: str | None,
+        system_info: dict,
+        operator_type: OperatorType | str | None = None,
     ) -> bool:
-        """Bind operators to a web session."""
+        """Claim an operator slot for an active session."""
+        ...
+
+    async def terminate_operator(
+        self,
+        operator_id: str,
+        actor: ComponentName = ComponentName.G8EE,
+        summary: str = "Operator terminated",
+        details: dict[str, object] | None = None,
+    ) -> OperatorDocument:
+        """Mark an operator TERMINATED."""
+        ...
+
+    async def update_operator_status(
+        self,
+        operator_id: str,
+        status: OperatorStatus,
+    ) -> bool:
+        """Update operator status."""
         ...
 
 
@@ -409,6 +447,8 @@ class InvestigationServiceProtocol(Protocol):
 
     @property
     def investigation_data_service(self) -> InvestigationDataServiceProtocol: ...
+    async def get_investigation(self, investigation_id: str) -> InvestigationModel | None: ...
+    async def get_chat_messages(self, investigation_id: str) -> list[ConversationHistoryMessage]: ...
     async def get_investigation_context(self, case_id: str | None = None, investigation_id: str | None = None, user_id: str | None = None) -> EnrichedInvestigationContext: ...
     async def get_enriched_investigation_context(self, investigation: EnrichedInvestigationContext, user_id: str, g8e_context: G8eHttpContext) -> EnrichedInvestigationContext: ...
     async def update_investigation(self, investigation_id: str, request: InvestigationUpdateRequest, actor: ComponentName = ComponentName.G8EE) -> InvestigationModel: ...

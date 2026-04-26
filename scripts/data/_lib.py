@@ -93,6 +93,22 @@ def get_internal_auth_token() -> str:
     return os.environ.get('G8E_INTERNAL_AUTH_TOKEN', '')
 
 
+def get_auditor_hmac_key() -> str:
+    """Return the Tribunal auditor HMAC-SHA256 signing key.
+
+    Inside g8ep the key is mounted at /g8es/auditor_hmac_key (ro).
+    """
+    p = Path('/g8es/auditor_hmac_key')
+    try:
+        if p.exists():
+            key = p.read_text().strip()
+            if key:
+                return key
+    except OSError:
+        pass
+    return os.environ.get('AUDITOR_HMAC_KEY', '')
+
+
 # =============================================================================
 # g8ed HTTP client — direct DB/KV access (same as g8ee's DBClient)
 # =============================================================================

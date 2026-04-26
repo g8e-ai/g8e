@@ -14,7 +14,7 @@
 import hashlib
 import hmac
 import logging
-from typing import Any, List, NoReturn, Optional
+from typing import TYPE_CHECKING, Any, List, NoReturn, Optional
 
 from app.errors import OllamaEmptyResponseError
 from app.models.base import G8eBaseModel
@@ -48,6 +48,9 @@ from app.models.agents.tribunal import (
     VoteBreakdown,
 )
 from app.models.model_configs import get_model_config
+
+if TYPE_CHECKING:
+    from app.services.ai.generator import TribunalEmitter
 from app.utils.json_utils import extract_json_from_text
 from app.utils.safety import validate_command_safety
 
@@ -79,7 +82,7 @@ class AuditorInput(G8eBaseModel):
 # Removed validate_command_safety - moved to app.utils.safety
 
 async def fail_auditor(
-    emitter: Any,  # TribunalEmitter
+    emitter: "TribunalEmitter",
     request: str,
     reason: AuditorReason,
     error_msg: str,
@@ -155,7 +158,7 @@ async def run_auditor(
     vote_breakdown: VoteBreakdown,
     tied_candidates: list[CandidateCommand] | None,
     operator_context: OperatorContext | None,
-    emitter: Any,  # TribunalEmitter
+    emitter: "TribunalEmitter",
     command_constraints_message: str,
     auditor_persona: TribunalMember,
 ) -> tuple[bool, str | None, str | None, AuditorReason, str | None, str | None]:

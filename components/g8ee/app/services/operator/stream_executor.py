@@ -93,10 +93,10 @@ class OperatorStreamExecutor:
             operator_id="",         # Not bound to a specific operator
             hosts=args.hosts,
             arch=args.arch,
-            endpoint=self._settings.g8ed.internal_url,
+            endpoint=self._settings.component_urls.g8ed_url,
             device_token=device_token,
             concurrency=args.concurrency,
-            timeout=args.timeout,
+            timeout=args.timeout_seconds,
         )
 
         approval_result = await self._approval_service.request_stream_approval(approval_request)
@@ -118,7 +118,7 @@ class OperatorStreamExecutor:
             "--arch", args.arch,
             "--token", device_token,
             "--concurrency", str(args.concurrency),
-            "--timeout", str(args.timeout)
+            "--timeout", str(args.timeout_seconds)
         ]
 
         logger.info("[STREAM_EXECUTOR] Executing: %s", " ".join(cmd))

@@ -162,8 +162,7 @@ class DeviceLinkService {
             return { success: false, error: DeviceLinkError.TTL_INVALID };
         }
 
-        const allOperators = await this._operatorService.queryOperators([{ field: 'user_id', operator: '==', value: user_id }]);
-        const currentSlotCount = allOperators.filter(op => op.status !== OperatorStatus.TERMINATED).length;
+        const currentSlotCount = (await this._operatorService.queryListedOperators([{ field: 'user_id', operator: '==', value: user_id }])).length;
 
         if (max_uses > currentSlotCount) {
             const slotsToCreate = max_uses - currentSlotCount;
@@ -399,12 +398,11 @@ class DeviceLinkService {
 
             if (!targetOperatorId) {
                 // Re-query operators to ensure we have latest state after lock
-                const freshOperators = await this._operatorService.queryOperators([{ field: 'user_id', operator: '==', value: linkData.user_id }]);
+                const freshOperators = await this._operatorService.queryListedOperators([{ field: 'user_id', operator: '==', value: linkData.user_id }], { fresh: true });
 
                 // Double check fingerprint match after lock
                 const opAfterLock = freshOperators.find(op => 
-                    op.system_fingerprint === sanitizedFingerprint && 
-                    op.status !== OperatorStatus.TERMINATED
+                    op.system_fingerprint === sanitizedFingerprint
                 );
 
                 if (opAfterLock) {
@@ -419,7 +417,7 @@ class DeviceLinkService {
                         const creationResponse = await this._operatorService.createOperatorSlot({
                             userId: linkData.user_id,
                             organizationId: linkData.organization_id,
-                            slotNumber: freshOperators.filter(op => op.status !== OperatorStatus.TERMINATED).length + 1,
+                            slotNumber: freshOperators.length + 1,
                             operatorType: OperatorType.SYSTEM,
                             cloudSubtype: null,
                             namePrefix: 'operator',

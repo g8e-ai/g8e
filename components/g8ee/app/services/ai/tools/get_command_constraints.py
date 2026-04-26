@@ -59,7 +59,7 @@ async def handle(
 ) -> ToolResult:
     logger.info("[GET_COMMAND_CONSTRAINTS] Retrieving command constraints")
 
-    user_settings = svc.user_settings
+    user_settings = request_settings
     cv = user_settings.command_validation if user_settings else None
     whitelisting_enabled = cv.enable_whitelisting if cv else False
     blacklisting_enabled = cv.enable_blacklisting if cv else False

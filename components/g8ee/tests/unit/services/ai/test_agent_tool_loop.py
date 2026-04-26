@@ -97,6 +97,10 @@ def mock_request_settings():
     settings = MagicMock(spec=G8eeUserSettings)
     settings.operator_context = MagicMock(spec=OperatorContext)
     settings.operator_context.os = "linux"
+    settings.command_validation = MagicMock(spec=CommandValidationSettings)
+    settings.command_validation.enable_whitelisting = False
+    settings.command_validation.enable_blacklisting = False
+    settings.command_validation.whitelisted_commands = ""
     return settings
 
 
@@ -119,7 +123,7 @@ class TestTribunalInvokerFetchCommandConstraints:
         mock_tool_executor.whitelist_validator.get_available_commands_with_metadata = MagicMock(return_value=[])
         mock_tool_executor.blacklist_validator.get_forbidden_commands.return_value = []
 
-        result = TribunalInvoker._fetch_command_constraints(mock_tool_executor, mock_investigation)
+        result = TribunalInvoker._fetch_command_constraints(mock_tool_executor.user_settings, mock_investigation, mock_tool_executor)
 
         assert result == (False, False, [], [])
 
@@ -137,7 +141,7 @@ class TestTribunalInvokerFetchCommandConstraints:
         ])
         mock_tool_executor.blacklist_validator.get_forbidden_commands.return_value = []
 
-        result = TribunalInvoker._fetch_command_constraints(mock_tool_executor, mock_investigation)
+        result = TribunalInvoker._fetch_command_constraints(mock_tool_executor.user_settings, mock_investigation, mock_tool_executor)
 
         whitelisting_enabled, blacklisting_enabled, whitelisted, blacklisted = result
         assert whitelisting_enabled is True
@@ -158,7 +162,7 @@ class TestTribunalInvokerFetchCommandConstraints:
             {"command": "dd", "reason": "Disk destruction"},
         ]
 
-        result = TribunalInvoker._fetch_command_constraints(mock_tool_executor, mock_investigation)
+        result = TribunalInvoker._fetch_command_constraints(mock_tool_executor.user_settings, mock_investigation, mock_tool_executor)
 
         whitelisting_enabled, blacklisting_enabled, whitelisted, blacklisted = result
         assert whitelisting_enabled is False
@@ -178,7 +182,7 @@ class TestTribunalInvokerFetchCommandConstraints:
         mock_tool_executor.whitelist_validator.get_available_commands_with_metadata = MagicMock(return_value=[])
         mock_tool_executor.blacklist_validator.get_forbidden_commands.return_value = []
 
-        result = TribunalInvoker._fetch_command_constraints(mock_tool_executor, mock_investigation)
+        result = TribunalInvoker._fetch_command_constraints(mock_tool_executor.user_settings, mock_investigation, mock_tool_executor)
 
         whitelisting_enabled, blacklisting_enabled, whitelisted, blacklisted = result
         assert whitelisting_enabled is True

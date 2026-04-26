@@ -33,6 +33,8 @@ import { CLIENT_CERT_VALIDITY_DAYS, DEFAULT_SSL_DIR, CERT_SUBJECT_ORG, CERT_SUBJ
 import { G8eHttpContext } from '../../models/request_models.js';
 import * as x509 from '@peculiar/x509';
 import crypto from 'crypto';
+import { join } from 'path';
+import { readFileSync, existsSync } from 'fs';
 
 x509.cryptoProvider.set(crypto.webcrypto);
 

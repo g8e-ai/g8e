@@ -102,6 +102,15 @@ export class OperatorRefreshKeyResponse extends G8eBaseModel {
         slot_number:     { type: F.number,  required: true },
         new_api_key:     { type: F.string,  required: true },
     };
+
+    _validate() {
+        if (this.new_api_key) {
+            const apiKeyPattern = /^g8e_[a-f0-9]{8}_[a-f0-9]{64}$|^g8e_[a-f0-9]{64}$/;
+            if (!apiKeyPattern.test(this.new_api_key)) {
+                throw new Error('new_api_key must match g8e API key format (g8e_ prefix followed by hex characters)');
+            }
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

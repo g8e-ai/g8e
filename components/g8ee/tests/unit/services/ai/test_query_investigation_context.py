@@ -28,7 +28,11 @@ pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 
 @pytest.fixture
 def mock_investigation_service():
-    return AsyncMock(spec=InvestigationService)
+    mock = MagicMock(spec=InvestigationService)
+    mock.get_chat_messages = AsyncMock()
+    mock.get_investigation = AsyncMock()
+    mock.get_operator_actions_for_ai_context = AsyncMock()
+    return mock
 
 @pytest.fixture
 def tool_service(mock_investigation_service):
@@ -85,7 +89,7 @@ class TestHandleQueryInvestigationContext:
     async def test_conversation_history_with_limit(self, tool_service, mock_investigation_service, investigation_context, g8e_context, user_settings):
         mock_msg = MagicMock()
         mock_msg.model_dump.return_value = {"text": "hello"}
-        mock_investigation_service.investigation_data_service.get_chat_messages = AsyncMock(return_value=[mock_msg] * 5)
+        mock_investigation_service.get_chat_messages = AsyncMock(return_value=[mock_msg] * 5)
         
         tool_args = {"data_type": "conversation_history", "limit": 2}
         result = await qic_tool.handle(tool_service,
@@ -96,12 +100,12 @@ class TestHandleQueryInvestigationContext:
         assert result.data_type == "conversation_history"
         assert len(result.data) == 2
         assert result.item_count == 2
-        mock_investigation_service.investigation_data_service.get_chat_messages.assert_called_once_with("inv-123")
+        mock_investigation_service.get_chat_messages.assert_called_once_with("inv-123")
 
     async def test_investigation_status_success(self, tool_service, mock_investigation_service, investigation_context, g8e_context, user_settings):
         mock_inv = MagicMock(spec=InvestigationModel)
         mock_inv.model_dump.return_value = {"id": "inv-123", "status": "Open"}
-        mock_investigation_service.investigation_data_service.get_investigation = AsyncMock(return_value=mock_inv)
+        mock_investigation_service.get_investigation = AsyncMock(return_value=mock_inv)
         
         tool_args = {"data_type": "investigation_status"}
         result = await qic_tool.handle(tool_service,
@@ -114,7 +118,7 @@ class TestHandleQueryInvestigationContext:
         assert result.item_count == 1
 
     async def test_investigation_status_not_found(self, tool_service, mock_investigation_service, investigation_context, g8e_context, user_settings):
-        mock_investigation_service.investigation_data_service.get_investigation = AsyncMock(return_value=None)
+        mock_investigation_service.get_investigation = AsyncMock(return_value=None)
         
         tool_args = {"data_type": "investigation_status"}
         result = await qic_tool.handle(tool_service,
@@ -126,7 +130,9 @@ class TestHandleQueryInvestigationContext:
         assert result.error_type == CommandErrorType.VALIDATION_ERROR
 
     async def test_operator_actions_success(self, tool_service, mock_investigation_service, investigation_context, g8e_context, user_settings):
-        mock_investigation_service.investigation_data_service.get_operator_actions_for_ai_context = AsyncMock(return_value="action1\naction2")
+        mock_investigation_service.get_operator_actions_for_ai_context = AsyncMock(return_value="action1\naction2")
+        mock_inv = MagicMock(spec=InvestigationModel)
+        mock_investigation_service.get_investigation = AsyncMock(return_value=mock_inv)
         
         tool_args = {"data_type": "operator_actions"}
         result = await qic_tool.handle(tool_service,
@@ -138,7 +144,7 @@ class TestHandleQueryInvestigationContext:
         assert result.item_count == 1
 
     async def test_service_exception_handling(self, tool_service, mock_investigation_service, investigation_context, g8e_context, user_settings):
-        mock_investigation_service.investigation_data_service.get_chat_messages = AsyncMock(side_effect=Exception("Service failure"))
+        mock_investigation_service.get_chat_messages = AsyncMock(side_effect=Exception("Service failure"))
         
         tool_args = {"data_type": "conversation_history"}
         result = await qic_tool.handle(tool_service,
