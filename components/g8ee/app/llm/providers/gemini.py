@@ -327,14 +327,9 @@ class GeminiProvider(LLMProvider):
         logger.info("Gemini provider initialized")
 
     async def _close_resources(self):
-        """Clean up SDK-internal httpx clients."""
+        """Clean up SDK client using public API."""
         try:
-            if hasattr(self._client, '_api_client'):
-                api = self._client._api_client
-                if hasattr(api, '_httpx_client') and api._httpx_client:
-                    api._httpx_client.close()
-                if hasattr(api, '_async_httpx_client') and api._async_httpx_client:
-                    await api._async_httpx_client.aclose()
+            await asyncio.to_thread(self._client.close)
         except Exception as exc:
             logger.info("Gemini cleanup error (non-fatal): %s", exc)
         logger.info("Gemini provider closed")

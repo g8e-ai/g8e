@@ -185,11 +185,6 @@ async def all_services(cache_aside_service, test_settings):
 
     yield services
 
-    # Await all background tasks before stopping services to prevent race conditions
-    chat_task_manager = services.get('chat_task_manager')
-    if chat_task_manager is not None:
-        await chat_task_manager.wait_all(timeout=5.0)
-
     await ServiceFactory.stop_services(services)
 
 
@@ -222,11 +217,6 @@ async def cleanup(cache_aside_service, all_services):
     """
     tracker = IntegrationCleanupTracker(cache_aside_service)
     yield tracker
-    
-    # Await all background tasks before document deletion
-    chat_task_manager = all_services.get('chat_task_manager')
-    if chat_task_manager is not None:
-        await chat_task_manager.wait_all(timeout=5.0)
     
     await tracker.cleanup()
 

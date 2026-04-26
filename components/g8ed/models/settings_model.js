@@ -724,6 +724,15 @@ const EVAL_JUDGE_KEY_MAP = Object.freeze({
     eval_judge_max_tokens:  'eval_judge_max_tokens',
 });
 
+const COMMAND_VALIDATION_KEY_MAP = Object.freeze({
+    enable_command_whitelisting: 'enable_whitelisting',
+    enable_command_blacklisting: 'enable_blacklisting',
+});
+
+const SECURITY_KEY_MAP = Object.freeze({
+    g8e_api_key: 'g8e_api_key',
+});
+
 /**
  * Convert flat UI settings into the nested document shape
  * expected by g8ee's UserSettingsDocument.
@@ -732,12 +741,14 @@ const EVAL_JUDGE_KEY_MAP = Object.freeze({
  * Output: { llm: { primary_provider: 'gemini', primary_model: '...' }, search: { enabled: true }, eval_judge: {} }
  *
  * @param {Object} flat - Flat key/value pairs from UI
- * @returns {{ llm: Object, search: Object, eval_judge: Object }}
+ * @returns {{ llm: Object, search: Object, eval_judge: Object, command_validation: Object, security: Object }}
  */
 export function structureUserSettings(flat) {
     const llm = {};
     const search = {};
     const evalJudge = {};
+    const commandValidation = {};
+    const security = {};
 
     for (const [key, value] of Object.entries(flat)) {
         if (key in LLM_KEY_MAP) {
@@ -746,10 +757,14 @@ export function structureUserSettings(flat) {
             search[SEARCH_KEY_MAP[key]] = value;
         } else if (key in EVAL_JUDGE_KEY_MAP) {
             evalJudge[EVAL_JUDGE_KEY_MAP[key]] = value;
+        } else if (key in COMMAND_VALIDATION_KEY_MAP) {
+            commandValidation[COMMAND_VALIDATION_KEY_MAP[key]] = value;
+        } else if (key in SECURITY_KEY_MAP) {
+            security[SECURITY_KEY_MAP[key]] = value;
         }
     }
 
-    return { llm, search, eval_judge: evalJudge };
+    return { llm, search, eval_judge: evalJudge, command_validation: commandValidation, security };
 }
 
 const REVERSE_LLM_MAP    = Object.freeze({
@@ -773,6 +788,8 @@ const REVERSE_LLM_MAP    = Object.freeze({
 });
 const REVERSE_SEARCH_MAP = Object.freeze(Object.fromEntries(Object.entries(SEARCH_KEY_MAP).map(([k, v]) => [v, k])));
 const REVERSE_EVAL_MAP   = Object.freeze(Object.fromEntries(Object.entries(EVAL_JUDGE_KEY_MAP).map(([k, v]) => [v, k])));
+const REVERSE_COMMAND_VALIDATION_MAP = Object.freeze(Object.fromEntries(Object.entries(COMMAND_VALIDATION_KEY_MAP).map(([k, v]) => [v, k])));
+const REVERSE_SECURITY_MAP = Object.freeze(Object.fromEntries(Object.entries(SECURITY_KEY_MAP).map(([k, v]) => [v, k])));
 
 /**
  * Flatten nested user settings back to flat UI keys.
@@ -780,7 +797,7 @@ const REVERSE_EVAL_MAP   = Object.freeze(Object.fromEntries(Object.entries(EVAL_
  * Input:  { llm: { primary_provider: 'gemini', ... }, search: { enabled: true }, eval_judge: {} }
  * Output: { llm_primary_provider: 'gemini', ..., vertex_search_enabled: true, ... }
  *
- * @param {{ llm?: Object, search?: Object, eval_judge?: Object }} nested
+ * @param {{ llm?: Object, search?: Object, eval_judge?: Object, command_validation?: Object, security?: Object }} nested
  * @returns {Object}
  */
 export function flattenUserSettings(nested) {
@@ -801,6 +818,18 @@ export function flattenUserSettings(nested) {
     if (nested.eval_judge) {
         for (const [nestedKey, value] of Object.entries(nested.eval_judge)) {
             const flatKey = REVERSE_EVAL_MAP[nestedKey];
+            if (flatKey) flat[flatKey] = value;
+        }
+    }
+    if (nested.command_validation) {
+        for (const [nestedKey, value] of Object.entries(nested.command_validation)) {
+            const flatKey = REVERSE_COMMAND_VALIDATION_MAP[nestedKey];
+            if (flatKey) flat[flatKey] = value;
+        }
+    }
+    if (nested.security) {
+        for (const [nestedKey, value] of Object.entries(nested.security)) {
+            const flatKey = REVERSE_SECURITY_MAP[nestedKey];
             if (flatKey) flat[flatKey] = value;
         }
     }

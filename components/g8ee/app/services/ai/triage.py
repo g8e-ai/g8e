@@ -85,12 +85,12 @@ class TriageAgent:
 
         try:
             provider = get_llm_provider(request.settings.llm, is_lite=True)
-            model = request.model_override or request.settings.llm.lite_model
+            model = request.model_override or request.settings.llm.resolved_lite_model
 
             if not model:
                 logger.warning("[TRIAGE] No model available, defaulting to complex")
                 return self._escalation_result(
-                    "Triage unavailable: no lite model configured. Configure a lite model in settings or provide model_override to enable triage.",
+                    "Triage unavailable: no lite model or assistant model configured. Configure a lite model or assistant model in settings, or provide model_override to enable triage.",
                     error_code="MODEL_UNAVAILABLE",
                 )
 

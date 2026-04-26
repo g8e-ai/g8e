@@ -199,7 +199,7 @@ class ChatPipelineService:
             lite_override=None,
             settings_primary_model=request_settings.llm.primary_model,
             settings_assistant_model=request_settings.llm.resolved_assistant_model,
-            settings_lite_model=request_settings.llm.lite_model,
+            settings_lite_model=request_settings.llm.resolved_lite_model,
         )
         
         if not model_to_use:

@@ -89,10 +89,6 @@ async def all_services(cache_aside_service, test_settings):
 
     yield services
 
-    chat_task_manager = services.get('chat_task_manager')
-    if chat_task_manager is not None:
-        await chat_task_manager.wait_all(timeout=5.0)
-
     await ServiceFactory.stop_services(services)
 
 
@@ -115,10 +111,6 @@ async def cleanup(cache_aside_service, all_services):
 
     tracker = IntegrationCleanupTracker(cache_aside_service)
     yield tracker
-
-    chat_task_manager = all_services.get('chat_task_manager')
-    if chat_task_manager is not None:
-        await chat_task_manager.wait_all(timeout=5.0)
 
     await tracker.cleanup()
 
@@ -276,3 +268,5 @@ def benchmark_results_collector(unified_metrics_collector):
             self.unified.add_row(row)
 
     return BenchmarkResultsCollectorShim(unified_metrics_collector)
+
+import sys

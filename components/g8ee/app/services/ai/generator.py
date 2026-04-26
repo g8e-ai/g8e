@@ -174,8 +174,10 @@ def _member_for_pass(pass_index: int) -> TribunalMember:
 
 def _resolve_model(llm_settings: LLMSettings, tier: str = "assistant", request: str = "") -> str:
     """Resolve the concrete model string from settings based on tier."""
-    if tier == "lite" and llm_settings.lite_model:
-        return llm_settings.lite_model
+    if tier == "lite":
+        resolved = llm_settings.resolved_lite_model
+        if resolved:
+            return resolved
     
     if tier == "assistant" and llm_settings.assistant_model:
         return llm_settings.assistant_model
@@ -184,8 +186,9 @@ def _resolve_model(llm_settings: LLMSettings, tier: str = "assistant", request: 
         return llm_settings.primary_model
 
     # Fallback chain: lite -> assistant -> primary
-    if llm_settings.lite_model:
-        return llm_settings.lite_model
+    resolved = llm_settings.resolved_lite_model
+    if resolved:
+        return resolved
     if llm_settings.assistant_model:
         return llm_settings.assistant_model
     if llm_settings.primary_model:

@@ -221,7 +221,9 @@ class SettingsService:
                     llm_command_gen_auditor=True,
                     llm_command_gen_passes=3,
                 ),
-                search=self._build_search_settings(platform_doc.settings)
+                search=self._build_search_settings(platform_doc.settings),
+                eval_judge=platform_doc.settings.eval_judge,
+                command_validation=platform_doc.settings.command_validation,
             )
 
         user_doc = UserSettingsDocument.model_validate(user_doc_dict)
@@ -229,7 +231,9 @@ class SettingsService:
 
         return G8eeUserSettings(
             llm=self._build_llm_settings(data),
-            search=self._build_search_settings(data)
+            search=self._build_search_settings(data),
+            eval_judge=data.eval_judge,
+            command_validation=data.command_validation,
         )
 
     def _build_search_settings(self, settings: G8eePlatformSettings | G8eeUserSettings) -> SearchSettings:

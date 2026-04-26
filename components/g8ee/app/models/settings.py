@@ -200,6 +200,11 @@ class LLMSettings(G8eBaseModel):
         return self.assistant_model or None
 
     @property
+    def resolved_lite_model(self) -> str | None:
+        """Return the configured lite model, or assistant_model as fallback if lite is not set."""
+        return self.lite_model or self.assistant_model or None
+
+    @property
     def primary_endpoint(self) -> str | None:
         """Return the active primary provider endpoint."""
         endpoints = {

@@ -218,7 +218,7 @@ class AIResponseAnalyzer:
         )
         prompt = f"{command_risk_persona.get_system_prompt()}\n\n{template}"
 
-        lite_model = resolved_settings.llm.lite_model
+        lite_model = resolved_settings.llm.resolved_lite_model
 
         def log_result(analysis: CommandRiskAnalysis) -> None:
             logger.info("Command risk analysis completed: command=%s risk_level=%s", command[:60], analysis.risk_level)
@@ -274,7 +274,7 @@ class AIResponseAnalyzer:
         )
         prompt = f"{error_persona.get_system_prompt()}\n\n{template}"
 
-        lite_model = resolved_settings.llm.lite_model
+        lite_model = resolved_settings.llm.resolved_lite_model
 
         def post_process(analysis: ErrorAnalysisResult) -> None:
             if retry_count >= 2:
@@ -344,7 +344,7 @@ class AIResponseAnalyzer:
         )
         prompt = f"{file_risk_persona.get_system_prompt()}\n\n{template}"
 
-        lite_model = resolved_settings.llm.lite_model
+        lite_model = resolved_settings.llm.resolved_lite_model
 
         def post_process(analysis: FileOperationRiskAnalysis) -> None:
             system_prefixes = ("/etc/", "/usr/", "/sys/", "/proc/", "/bin/", "/sbin/", "/boot/", "/lib/")

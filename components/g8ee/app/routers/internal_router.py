@@ -269,7 +269,7 @@ async def internal_chat(
             llm_lite_provider=request.llm_lite_provider,
             llm_primary_model=request.llm_primary_model,
             llm_assistant_model=request.llm_assistant_model,
-            llm_lite_model=request.llm_lite_model,
+            llm_lite_model=request.llm_lite_model or user_settings.llm.resolved_lite_model,
             _task_manager=chat_task_manager,
             user_settings=user_settings,
         )

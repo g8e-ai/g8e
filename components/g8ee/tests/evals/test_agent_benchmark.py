@@ -292,7 +292,7 @@ async def test_agent_benchmark(
         approval_service = all_services['approval_service']
         logger.info("[BENCH-SETTINGS] user_settings.llm.llm_command_gen_enabled=%s", user_settings.llm.llm_command_gen_enabled)
         logger.info("[BENCH-SETTINGS] user_settings.eval_judge.model=%s", user_settings.eval_judge.model)
-        task_manager = ChatTaskManager()
+        task_manager = all_services['chat_task_manager']
 
         logger.info("[BENCH] Running scenario %s", scenario.id)
 

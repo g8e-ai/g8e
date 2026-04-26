@@ -144,7 +144,7 @@ async def test_agent_privacy(
 
             search_settings = SearchSettings(enabled=False)
             user_settings = G8eeUserSettings(llm=user_settings.llm, search=search_settings)
-            task_manager = ChatTaskManager()
+            task_manager = all_services['chat_task_manager']
 
             logger.info(f"[PRIVACY] Running scenario {scenario['id']} with sentinel_mode=True")
 
