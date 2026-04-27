@@ -51,8 +51,12 @@ services:
       - G8E_DB_PATH=/data/g8e.db
       - G8E_DOCS_DIR=/docs
       - G8E_INTERNAL_AUTH_TOKEN
+    profiles:
+      - development
     volumes:
       - ./shared:/app/shared:ro
+      - ./components/g8ee/app:/app/components/g8ee/app:ro
+      - ./components/g8ee/config:/app/components/g8ee/config:ro
       - g8ee-data:/data:noexec,nosuid,nodev
       - g8es-ssl:/g8es:ro
       # SSH inventory source for the AI ssh_inventory tool. Read-only.
@@ -155,23 +159,16 @@ services:
     ports:
       - "443:443"
       - "80:80"
+    profiles:
+      - development
     volumes:
       - g8ed-data:/data:noexec,nosuid,nodev
       - g8es-ssl:/g8es:ro
       - ./shared:/shared:ro
       - ./docs:/docs:ro
       - ./README.md:/readme/README.md:ro
-      - ./components/g8ed/server.js:/app/server.js:ro
-      - ./components/g8ed/app_factory.js:/app/app_factory.js:ro
-      - ./components/g8ed/vitest.config.js:/app/vitest.config.js:ro
-      - ./components/g8ed/constants:/app/constants:ro
-      - ./components/g8ed/middleware:/app/middleware:ro
-      - ./components/g8ed/models:/app/models:ro
-      - ./components/g8ed/routes:/app/routes:ro
-      - ./components/g8ed/services:/app/services:ro
-      - ./components/g8ed/utils:/app/utils:ro
-      - ./components/g8ed/views:/app/views:ro
-      - ./components/g8ed/public:/app/public:ro
+      - ./components/g8ed:/app:ro
+      - g8ed-node-modules:/app/node_modules
     read_only: true
     tmpfs:
       - /tmp
