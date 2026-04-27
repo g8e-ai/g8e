@@ -76,23 +76,35 @@ flowchart TD
 ```
 
 **Phase 1: Triage & Classification**  
-Every message is read by **Triage**, which determines complexity and user posture. Simple requests route to **Dash** for direct resolution. Complex requests pass through a context-enrichment layer (utilizing memory from the **Codex** and case titling from the **Scribe**) and route to **Sage**.
+Every message is read by **Triage**, which routes simple requests to **Dash** and complex requests to **Sage** (enriched with **Codex** and **Scribe** context).
 
 **Phase 2 & 3: Reasoning and The Tribunal**  
-**Sage** plans and investigates but cannot write shell commands. Instead, it articulates intent. This intent flows to **The Tribunal**, an ensemble of five distinct agent personas (Axiom, Concord, Variance, Pragma, Nemesis) that independently generate commands. A uniform consensus vote, potentially including a second anonymized review round, selects the optimal command.
+**Sage** articulates intent, which **The Tribunal** (Axiom, Concord, Variance, Pragma, Nemesis) translates into candidate commands. A consensus vote selects the optimal command.
 
 **Phase 4 & 5: Judgment and Execution**  
-The **Auditor** verifies the Tribunal's winner against Sage's original intent. Before reaching the user, **Warden** orchestrates a defensive analysis of command, error, and file risks. Only then does the command appear for FIDO2 human approval. Upon approval, the **Operator** executes the command via the Local-First Audit Architecture (LFAA).
+The **Auditor** verifies the winner, **Warden** assesses risks, and the **Operator** executes upon FIDO2 human approval.
+
+---
+
+## The Operator
+
+The **Operator (g8eo)** is a ~4MB statically compiled Go binary that serves as the platform's terminal execution and persistence layer. It is the final link in the consensus chain.
+
+### Consensus-to-Execution Bridge
+When the consensus mechanism selects a winning command and you provide FIDO2 approval, the following happens:
+
+1.  **Outbound Command Fetch**: Receives the command via an outbound-only mTLS WebSocket.
+2.  **Sentinel Pre-Execution Analysis**: Blocks commands matching MITRE ATT&CK patterns.
+3.  **Atomic Execution**: Runs in an isolated process group with closed stdin.
+4.  **Local-First Audit**: Captures output into the **Raw Vault** (unfiltered) and **Scrubbed Vault** (AI-accessible).
+5.  **Cryptographic Ledgering**: Automatically creates snapshots in a local **Git Ledger**.
 
 ---
 
 ## Core Subsystems
 
 ### The Tribunal
-
-The reasoning agent never writes commands. It articulates intent — natural language, optional guardrails — and the Tribunal translates.
-
-Five personas run in parallel. Each produces one candidate command from the same intent.
+The Tribunal translates natural language intent into executable commands using five parallel personas. Each casts a vote, and a two-vote consensus threshold gates the winner.
 
 | Persona | Archetype |
 |---|---|
@@ -102,35 +114,20 @@ Five personas run in parallel. Each produces one candidate command from the same
 | **Pragma** | The Conventional — idiomatic, least-surprise correctness |
 | **Nemesis** | The Adversary — always present, always pushing against the other four |
 
-Each member casts one vote. Identical candidates accumulate. A two-vote consensus threshold gates the winner. Ties resolve deterministically: shortest command, then longest, fewest operations, excluded Nemesis, alphabetical, or auditor disambiguation.
-
-The Auditor receives anonymized cluster IDs and evaluates the winner against the stated intent. Three modes by consensus strength:
-
-- **Unanimous** — accept or revise
-- **Majority** — accept, revise, or swap to a dissenting cluster
-- **Tied** — must swap or revise; passive accept is forbidden
-
-The Auditor knows one of the five is adversarial. It does not know which.
-
-The verified command reaches you. You see it, in full, with target host and justification. You approve. You deny. That is the only path forward.
-
 ### Context & Post-Hoc Analysis
+- **Codex & Scribe**: Title cases and build persistent, scrubbed user preference models.
+- **Judge**: Evaluates AI performance against gold-standard rubrics for reputation signals.
 
-- **Codex & Scribe**: Run asynchronously to title cases and build persistent, scrubbed user preference models and investigation summaries.
-- **Judge**: Runs post-hoc to evaluate AI agent performance against a gold-standard rubric, providing data for reputation signals.
+### Architecture & Persistence
+g8e uses a **Local-First Audit Architecture (LFAA)** where the system of record lives on your hardware, not in the cloud.
 
-### Architecture
-
-Four containers and a binary. The binary wears three hats depending on how you invoke it.
-
-| Component | Language | Responsibility |
-|---|---|---|
-| **g8es** | Go | The binary in `--listen` mode. SQLite document store, KV store, pub/sub broker, blob store, platform CA. Zero external dependencies. |
-| **g8ee** | Python | AI engine. ReAct loop, multi-provider abstraction (Anthropic, OpenAI, Gemini, Ollama), Tribunal pipeline, Sentinel integration. |
-| **g8ed** | Node.js | Dashboard and single external entry point. FIDO2 auth, SSE streaming, mTLS gateway, human approval UI. |
-| **g8el** | Shell/C++ | Local LLM server (llama-server) providing isolated intelligence without external network requirements. |
-| **g8ep** | Multi | Test runner, build environment, cross-arch Operator compiler, fleet deployment. |
-| **Operator (g8eo)** | Go | The ~4MB static binary. Executes locally, maintains the encrypted audit vault, speaks outbound-only mTLS WebSocket. Streams itself over SSH to hundreds of hosts in parallel. |
+| Component | Responsibility |
+|---|---|
+| **g8es** | Go. SQLite document store, KV store, pub/sub broker, blob store. |
+| **g8ee** | Python. AI engine, Multi-provider abstraction, Tribunal pipeline. |
+| **g8ed** | Node.js. Dashboard, FIDO2 auth, mTLS gateway, human approval UI. |
+| **g8el** | isolated intelligence via local LLM server (llama-server). |
+| **g8eo** | Go. The Operator. Executes commands and maintains the encrypted audit vault. |
 
 ```mermaid
 flowchart LR
@@ -183,12 +180,6 @@ flowchart LR
     
     g8ee -. "Sentinel-Scrubbed Metadata<br>(No Raw Data)" .-> LLM
 ```
-
-### Local-First Audit Architecture (LFAA)
-
-Operating entirely on the host side without relying on central telemetry:
-- **Local SQLite Vaults**: Encrypted data vaults (`local_state.db`, `raw_vault.db`, `g8e.db`) store scrubbed findings and audit data locally.
-- **Git Ledger**: An immutable file ledger provides a cryptographic commit chain directly on the endpoint.
 
 ---
 
