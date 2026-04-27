@@ -101,6 +101,21 @@ The verified command reaches you. You see it, in full, with target host and just
 
 ---
 
+## Cryptoeconomic Mechanism Design
+
+g8e aligns multi-agent behavior through a Proof of Stake reputation economy. Agents do not just propose actions—they stake their reputation on them.
+
+- **The Genesis Block** — A user's initial prompt generates the genesis block, anchored by a Merkle root.
+- **Proof of Stake Economy** — Dash, Sage, the Tribunal, and the Auditor all operate within a unified reputation market.
+- **Skin in the Game** — When an agent proposes a solution, they stake reputation proportional to their confidence. 
+- **Verifiable Resolution** — When you approve a command execution, the Auditor awards reputation to the agents whose proposals succeeded.
+- **Immutable Ledger** — The Auditor cryptographically signs each turn, appending it as a new block in the conversation's immutable ledger.
+- **Cross-Chain Reputation** — The Auditor maintains visibility across all conversations ("cross-chain"), ensuring an agent's reputation persists and compounds across different investigations.
+
+By forcing agents to stake reputation with real consequences, their personas are economically incentivized to propose the safest, most effective solutions for an environment that voters are sworn to protect.
+
+---
+
 ## Eight Directives
 
 Principles engineered to hold when the models are a thousand times more capable than they are today.

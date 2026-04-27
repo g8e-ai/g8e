@@ -26,13 +26,9 @@
  *   OperatorDocument.forCreate(data) / forSlot(data) / forRefresh(data) / forReset(data)
  */
 
-import {
-    OperatorStatus,
-    OperatorType,
-    CloudOperatorSubtype,
-} from '../constants/operator.js';
+import { OperatorStatus, OperatorType } from '../constants/operator.js';
 import { SourceComponent } from '../constants/ai.js';
-import { INTENT_TTL_SECONDS, API_KEY_COMBINED_REGEX } from '../constants/auth.js';
+import { INTENT_TTL_SECONDS} from '../constants/auth.js';
 import { G8eBaseModel, G8eIdentifiableModel, F, now, addSeconds } from './base.js';
 
 // ---------------------------------------------------------------------------

@@ -99,10 +99,10 @@ g8el is included in the default service set alongside g8es, g8ee, g8ed, and g8ep
 
 ### Configuring g8ee to use g8el
 
-In the g8ee settings, configure the llama.cpp provider:
+In the g8ee settings, configure the g8el provider:
 
-1. Set the LLM provider to `llamacpp`
-2. Set the endpoint to `http://g8el:11444` (this is the default in `LLAMACPP_DEFAULT_ENDPOINT`)
+1. Set the LLM provider to `g8el`
+2. Set the endpoint to `http://g8el:11444` (this is the default in `G8EL_DEFAULT_ENDPOINT`)
 3. Select the model (e.g., `google_gemma-4-E2B-it-Q4_K_M.gguf`)
 4. Optionally set an API key if authentication is enabled
 
@@ -131,18 +131,18 @@ Models are stored in the Docker volume mounted at `/models` in the container, wh
 
 ## Provider Integration
 
-g8el is integrated with g8ee as the `LLAMACPP` LLM provider. The implementation:
+g8el is integrated with g8ee as a first-class `G8EL` LLM provider. The implementation:
 
-- **Provider class**: `LlamaCppProvider` in `components/g8ee/app/llm/providers/llama_cpp.py`
-- **API compatibility**: Extends `OpenAIProvider` since llama.cpp provides an OpenAI-compatible API
+- **Provider class**: `G8elProvider` in `components/g8ee/app/llm/providers/g8el.py`
+- **API compatibility**: Extends `LlamaCppProvider` (which extends `OpenAIProvider`) since g8el provides an OpenAI-compatible API
 - **Constants**: Defined in `components/g8ee/app/constants/settings.py`:
-  - `LLAMACPP_DEFAULT_ENDPOINT = "http://g8el:11444"`
-  - `LLAMACPP_DEFAULT_MODEL = "google_gemma-4-E2B-it-Q4_K_M.gguf"`
-- **Factory**: `get_llm_provider()` in `components/g8ee/app/llm/factory.py` instantiates `LlamaCppProvider` when `LLMProvider.LLAMACPP` is selected
+  - `G8EL_DEFAULT_ENDPOINT = "http://g8el:11444"`
+  - `G8EL_DEFAULT_MODEL = "google_gemma-4-E2B-it-Q4_K_M.gguf"`
+- **Factory**: `get_llm_provider()` in `components/g8ee/app/llm/factory.py` instantiates `G8elProvider` when `LLMProvider.G8EL` is selected
 
 ### Streaming Support
 
-The `LlamaCppProvider` supports streaming via the OpenAI-compatible `/v1/chat/completions` endpoint. Streaming chunks are translated to `StreamChunkFromModel` objects for consistency with other providers.
+The `G8elProvider` (via its inheritance from `LlamaCppProvider` and `OpenAIProvider`) supports streaming via the OpenAI-compatible `/v1/chat/completions` endpoint. Streaming chunks are translated to `StreamChunkFromModel` objects for consistency with other providers.
 
 ### Performance Optimizations
 

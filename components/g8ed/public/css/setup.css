@@ -20,7 +20,7 @@ body {
 }
 
 .setup-container {
-    max-width: 720px;
+    width: 720px;
     margin: 1rem ;
     position: relative;
 }

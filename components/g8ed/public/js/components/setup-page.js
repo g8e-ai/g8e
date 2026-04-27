@@ -409,190 +409,137 @@ export class SetupPage {
         const active = this._getActiveProviders();
         const roles = ['primary', 'assistant', 'lite'];
 
-_toggleDropdown(role) {
-    const dropdown = document.getElementById(`${role}_model`);
-    if (!dropdown || dropdown.classList.contains('disabled')) return;
-    
-    const isOpen = dropdown.classList.contains('open');
-    this._closeAllDropdowns();
-    
-    if (!isOpen) {
-        dropdown.classList.add('open');
-        dropdown.setAttribute('aria-expanded', 'true');
-    }
-}
-
-_closeAllDropdowns() {
-    const roles = ['primary', 'assistant', 'lite'];
-    roles.forEach(role => {
-        const dropdown = document.getElementById(`${role}_model`);
-        if (dropdown) {
-            dropdown.classList.remove('open');
-            dropdown.setAttribute('aria-expanded', 'false');
+        if (active.length === 0) {
+            roles.forEach(role => {
+                const dropdown = document.getElementById(`${role}_model`);
+                const menu = document.getElementById(`${role}_model-menu`);
+                const text = dropdown?.querySelector('.llm-model-dropdown__text');
+                const badge = dropdown?.querySelector('.llm-model-dropdown__recommended-badge');
+                
+                if (dropdown) dropdown.classList.add('disabled');
+                if (menu) menu.innerHTML = '';
+                if (text) text.textContent = 'Enter at least one API key';
+                if (badge) badge.style.display = 'none';
+                this._selectedModels[role] = '';
+            });
+            return;
         }
-    });
-}
 
-_updateModelDropdowns() {
-    const active = this._getActiveProviders();
-    const roles = ['primary', 'assistant', 'lite'];
-
-    if (active.length === 0) {
         roles.forEach(role => {
             const dropdown = document.getElementById(`${role}_model`);
-            const menu = document.getElementById(`${role}_model-menu`);
             const text = dropdown?.querySelector('.llm-model-dropdown__text');
             const badge = dropdown?.querySelector('.llm-model-dropdown__recommended-badge');
             
-            if (dropdown) dropdown.classList.add('disabled');
-            if (menu) menu.innerHTML = '';
-            if (text) text.textContent = 'Enter at least one API key';
-            if (badge) badge.style.display = 'none';
-            this._selectedModels[role] = '';
-        });
-        return;
-    }
+            if (!dropdown) return;
+            
+            dropdown.classList.remove('disabled');
 
-    roles.forEach(role => {
-        const dropdown = document.getElementById(`${role}_model`);
-        const text = dropdown?.querySelector('.llm-model-dropdown__text');
-        const badge = dropdown?.querySelector('.llm-model-dropdown__recommended-badge');
-        
-        if (!dropdown) return;
-        
-        dropdown.classList.remove('disabled');
-
-        let prevValue = this._selectedModels[role];
-        if (prevValue && prevValue !== 'custom') {
-            const stillAvailable = active.some(p => {
-                const cfg = PROVIDER_MODELS[p];
-                return cfg && (cfg.all || []).some(m => m.id === prevValue);
-            });
-            if (!stillAvailable) {
-                prevValue = '';
-                this._selectedModels[role] = '';
+            let prevValue = this._selectedModels[role];
+            if (prevValue && prevValue !== 'custom') {
+                const stillAvailable = active.some(p => {
+                    const cfg = PROVIDER_MODELS[p];
+                    return cfg && (cfg.all || []).some(m => m.id === prevValue);
+                });
+                if (!stillAvailable) {
+                    prevValue = '';
+                    this._selectedModels[role] = '';
+                }
             }
-        }
-        if (!prevValue) {
-            // If a provider key was just entered and it has sensible defaults, use those
-            if (this._lastProviderEdited && active.includes(this._lastProviderEdited)) {
-                const defaults = PROVIDER_DEFAULT_MODELS[this._lastProviderEdited];
-                if (defaults && defaults[role]) {
-                    const defaultModel = PROVIDER_MODELS[this._lastProviderEdited]?.all?.find(m => m.id === defaults[role]);
-                    if (defaultModel) {
-                        prevValue = defaultModel.id;
-                        this._selectedModels[role] = prevValue;
-                        if (text) text.textContent = defaultModel.label;
+            if (!prevValue) {
+                // If a provider key was just entered and it has sensible defaults, use those
+                if (this._lastProviderEdited && active.includes(this._lastProviderEdited)) {
+                    const defaults = PROVIDER_DEFAULT_MODELS[this._lastProviderEdited];
+                    if (defaults && defaults[role]) {
+                        const defaultModel = PROVIDER_MODELS[this._lastProviderEdited]?.all?.find(m => m.id === defaults[role]);
+                        if (defaultModel) {
+                            prevValue = defaultModel.id;
+                            this._selectedModels[role] = prevValue;
+                            if (text) text.textContent = defaultModel.label;
+                        }
                     }
                 }
             }
-        }
 
-        if (badge) badge.style.display = 'none';
-        // Show recommended badge if the selected model matches the default for its provider
-        const provider = _modelToProvider(prevValue);
-        if (provider && PROVIDER_DEFAULT_MODELS[provider]?.[role] === prevValue) {
-            if (badge) badge.style.display = '';
-        }
-
-        if (text && !prevValue) text.textContent = EMPTY_MODEL_PLACEHOLDER;
-        
-        this._renderModelDropdownMenu(role, active, prevValue);
-    });
-}
-
-_renderModelDropdownMenu(role, activeProviders, selectedValue) {
-    const menu = document.getElementById(`${role}_model-menu`);
-    if (!menu) return;
-    
-    menu.innerHTML = '';
-
-    for (const provider of activeProviders) {
-        const config = PROVIDER_MODELS[provider];
-        if (!config) continue;
-
-        const providerLabel = PROVIDER_LABELS[provider] || provider;
-        const models = config.all || [];
-        
-        if (models.length === 0) continue;
-
-        const category = document.createElement('div');
-        category.className = 'llm-model-dropdown__category';
-        category.textContent = providerLabel;
-        menu.appendChild(category);
-
-        for (const model of models) {
-            const option = document.createElement('div');
-            option.className = 'llm-model-dropdown__option';
-            option.textContent = model.label;
-            option.dataset.value = model.id;
-            option.dataset.provider = provider;
-
-            if (model.id === selectedValue) {
-                option.classList.add('selected');
+            if (badge) badge.style.display = 'none';
+            // Show recommended badge if the selected model matches the default for its provider
+            const provider = _modelToProvider(prevValue);
+            if (provider && PROVIDER_DEFAULT_MODELS[provider]?.[role] === prevValue) {
+                if (badge) badge.style.display = '';
             }
 
-            option.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this._selectModel(role, model.id, model.label);
-            });
+            if (text && !prevValue) text.textContent = EMPTY_MODEL_PLACEHOLDER;
+            
+            this._renderModelDropdownMenu(role, active, prevValue);
+        });
+    }
 
-            menu.appendChild(option);
+    _renderModelDropdownMenu(role, activeProviders, selectedValue) {
+        const menu = document.getElementById(`${role}_model-menu`);
+        if (!menu) return;
+        
+        menu.innerHTML = '';
+
+        for (const provider of activeProviders) {
+            const config = PROVIDER_MODELS[provider];
+            if (!config) continue;
+
+            const providerLabel = PROVIDER_LABELS[provider] || provider;
+            const models = config.all || [];
+            
+            if (models.length === 0) continue;
+
+            const category = document.createElement('div');
+            category.className = 'llm-model-dropdown__category';
+            category.textContent = providerLabel;
+            menu.appendChild(category);
+
+            for (const model of models) {
+                const option = document.createElement('div');
+                option.className = 'llm-model-dropdown__option';
+                option.textContent = model.label;
+                option.dataset.value = model.id;
+                option.dataset.provider = provider;
+
+                if (model.id === selectedValue) {
+                    option.classList.add('selected');
+                }
+
+                option.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this._selectModel(role, model.id, model.label);
+                });
+
+                menu.appendChild(option);
+            }
+        }
+
+        const customOption = document.createElement('div');
+        customOption.className = 'llm-model-dropdown__option';
+        customOption.textContent = 'Custom...';
+        customOption.dataset.value = 'custom';
+        customOption.dataset.custom = 'true';
+
+        if (selectedValue === 'custom') {
+            customOption.classList.add('selected');
+        }
+
+        customOption.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._showCustomModelInput(role);
+        });
+
+        menu.appendChild(customOption);
+
+        if (menu.children.length === 0) {
+            const dropdown = document.getElementById(`${role}_model`);
+            const text = dropdown?.querySelector('.llm-model-dropdown__text');
+            if (text) text.textContent = 'No models available';
+            this._selectedModels[role] = '';
         }
     }
 
-    const customOption = document.createElement('div');
-    customOption.className = 'llm-model-dropdown__option';
-    customOption.textContent = 'Custom...';
-    customOption.dataset.value = 'custom';
-    customOption.dataset.custom = 'true';
-
-    if (selectedValue === 'custom') {
-        customOption.classList.add('selected');
-    }
-
-    customOption.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this._showCustomModelInput(role);
-    });
-
-    menu.appendChild(customOption);
-
-    if (menu.children.length === 0) {
-        const dropdown = document.getElementById(`${role}_model`);
-        const text = dropdown?.querySelector('.llm-model-dropdown__text');
-        if (text) text.textContent = 'No models available';
-        this._selectedModels[role] = '';
-    }
-}
-
-_selectModel(role, modelId, label) {
-    this._selectedModels[role] = modelId;
-
-    const dropdown = document.getElementById(`${role}_model`);
-    const menu = document.getElementById(`${role}_model-menu`);
-    const text = dropdown?.querySelector('.llm-model-dropdown__text');
-
-    if (text) text.textContent = label;
-
-    const options = menu?.querySelectorAll('.llm-model-dropdown__option') || [];
-    options.forEach(option => {
-        if (option.dataset.value === modelId) {
-            option.classList.add('selected');
-        } else {
-            option.classList.remove('selected');
-        }
-    });
-
-    this._closeAllDropdowns();
-    this._updateNav();
-}
-
-_showCustomModelInput(role) {
-    const customLabel = prompt('Enter custom model name:');
-    if (customLabel && customLabel.trim()) {
-        this._selectedModels[role] = 'custom';
-        this._selectedModels[`${role}CustomLabel`] = customLabel.trim();
+    _selectModel(role, modelId, label) {
+        this._selectedModels[role] = modelId;
 
         const dropdown = document.getElementById(`${role}_model`);
         const menu = document.getElementById(`${role}_model-menu`);
@@ -658,7 +605,9 @@ _showCustomModelInput(role) {
         select.addEventListener('change', () => {
             this._searchProvider = select.value;
             const googleConfig = document.getElementById('search-config-google');
-            if (googleConfig) googleConfig.classList.toggle('setup-field-hidden', select.value !== 'google');
+            if (googleConfig) {
+                googleConfig.classList.toggle('setup-field-hidden', select.value !== 'google');
+            }
             this._updateUseGeminiKeyVisibility();
         });
     }

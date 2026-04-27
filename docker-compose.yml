@@ -51,8 +51,6 @@ services:
       - G8E_DB_PATH=/data/g8e.db
       - G8E_DOCS_DIR=/docs
       - G8E_INTERNAL_AUTH_TOKEN
-    profiles:
-      - development
     volumes:
       - ./shared:/app/shared:ro
       - ./components/g8ee/app:/app/components/g8ee/app:ro
@@ -159,8 +157,6 @@ services:
     ports:
       - "443:443"
       - "80:80"
-    profiles:
-      - development
     volumes:
       - g8ed-data:/data:noexec,nosuid,nodev
       - g8es-ssl:/g8es:ro

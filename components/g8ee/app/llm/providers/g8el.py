@@ -11,30 +11,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""llama.cpp LLM provider implementation.
+"""g8el LLM provider implementation.
 
-llama.cpp server provides an OpenAI-compatible HTTP API, so this implementation
-inherits from the OpenAI provider.
+g8el is the platform's llama.cpp inference server component for g8e.
+It inherits from LlamaCppProvider to reuse the OpenAI-compatible logic.
 """
 
 import logging
 
-from app.llm.providers.open_ai import OpenAIProvider
+from .llama_cpp import LlamaCppProvider
 
 logger = logging.getLogger(__name__)
 
 
-class LlamaCppProvider(OpenAIProvider):
-    """llama.cpp provider using OpenAI-compatible API.
+class G8elProvider(LlamaCppProvider):
+    """g8el provider (platform's llama.cpp instance).
 
-    llama.cpp server provides an OpenAI-compatible HTTP API, so we inherit from
-    OpenAIProvider to reuse its implementation.
+    g8el is the llama.cpp inference server component for g8e, providing an
+    OpenAI-compatible HTTP API. This implementation inherits from LlamaCppProvider.
     """
 
     @property
     def service_name(self) -> str:
-        return "llamacpp"
+        return "g8el"
 
     def __init__(self, endpoint: str, api_key: str):
         super().__init__(endpoint=endpoint, api_key=api_key)
-        logger.info("llama.cpp provider initialized: %s", endpoint)
+        logger.info("g8el provider initialized: %s", endpoint)

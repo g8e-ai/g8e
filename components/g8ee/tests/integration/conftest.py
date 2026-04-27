@@ -180,8 +180,33 @@ async def all_services(cache_aside_service, test_settings):
 
     This is the recommended way to get services for integration tests.
     Use auto_approve_pending helper to approve pending approvals during tests.
+
+    Injects a real WebSearchProvider if search settings are configured,
+    ensuring the g8e_web_search tool is registered for eval scenarios that expect it.
     """
-    services = ServiceFactory.create_all_services(test_settings, cache_aside_service)
+    from app.llm.factory import get_search_settings
+    from app.services.ai.grounding.web_search_provider import WebSearchProvider
+
+    # Check if web search settings are configured
+    web_search_provider = None
+    search_settings = get_search_settings()
+    if search_settings and search_settings.enabled:
+        web_search_provider = WebSearchProvider(
+            project_id=search_settings.project_id,
+            engine_id=search_settings.engine_id,
+            api_key=search_settings.api_key,
+            location=search_settings.location,
+        )
+        logger.info(
+            "[INTEGRATION-FIXTURE] Injecting real WebSearchProvider from search settings: project_id=%s engine_id=%s",
+            search_settings.project_id, search_settings.engine_id
+        )
+
+    services = ServiceFactory.create_all_services(
+        test_settings,
+        cache_aside_service,
+        web_search_provider=web_search_provider,
+    )
 
     yield services
 
@@ -228,13 +253,14 @@ async def user_settings(cache_aside_service, test_settings):
     Uses TEST_LLM settings when available (set via ./g8e test flags),
     otherwise loads user settings from g8es.
     """
-    from app.llm.factory import get_llm_settings
+    from app.llm.factory import get_llm_settings, get_search_settings
     from app.services.infra.settings_service import SettingsService
     
     # Use TEST_LLM settings if available
     llm = get_llm_settings()
+    search = get_search_settings()
     if llm:
-        return G8eeUserSettings(llm=llm, search=test_settings.search)
+        return G8eeUserSettings(llm=llm, search=search or test_settings.search)
     
     # Otherwise load from g8es
     settings_service = SettingsService(cache_aside_service=cache_aside_service)

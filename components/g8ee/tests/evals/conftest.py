@@ -61,12 +61,6 @@ async def all_services(cache_aside_service, test_settings):
     # Check if web search settings are configured
     web_search_provider = None
     search_settings = get_search_settings()
-    logger.info("[EVAL-FIXTURE] search_settings=%s", search_settings)
-    if search_settings:
-        logger.info("[EVAL-FIXTURE] search_settings.enabled=%s", search_settings.enabled)
-        logger.info("[EVAL-FIXTURE] search_settings.project_id=%s", search_settings.project_id)
-        logger.info("[EVAL-FIXTURE] search_settings.engine_id=%s", search_settings.engine_id)
-        logger.info("[EVAL-FIXTURE] search_settings.api_key_set=%s", bool(search_settings.api_key))
     if search_settings and search_settings.enabled:
         web_search_provider = WebSearchProvider(
             project_id=search_settings.project_id,
@@ -78,8 +72,6 @@ async def all_services(cache_aside_service, test_settings):
             "[EVAL-FIXTURE] Injecting real WebSearchProvider from search settings: project_id=%s engine_id=%s",
             search_settings.project_id, search_settings.engine_id
         )
-    else:
-        logger.warning("[EVAL-FIXTURE] WebSearchProvider NOT injected - search settings not configured or not enabled")
 
     services = ServiceFactory.create_all_services(
         test_settings,

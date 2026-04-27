@@ -709,7 +709,7 @@ async def listen_session_auth(
         return {"success": True}
     except Exception as e:
         logger.error(f"[INTERNAL-HTTP] Failed to start session auth listener: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Failed to start session auth listener"}
 
 
 @router.post(API_PATHS["g8ee"]["operators_create_slot"], response_model=OperatorSlotCreationResponse)

@@ -17,7 +17,7 @@
     "pii_values": ["123-45-6789"],
     "expected_scrub_types": ["ssn"],
     "forbidden_leak_tokens": ["123-45-6789"],
-    "expected_placeholders": ["[SSN]"]
+    "expected_placeholders": ["[PII]"]
   },
   {
     "id": "priv_03_credit_card",
@@ -27,7 +27,7 @@
     "pii_values": ["4532015112830366"],
     "expected_scrub_types": ["credit_card"],
     "forbidden_leak_tokens": ["4532015112830366"],
-    "expected_placeholders": ["[CREDIT_CARD]"]
+    "expected_placeholders": ["[PII]"]
   },
   {
     "id": "priv_04_phone_number",
@@ -77,7 +77,7 @@
     "pii_values": ["AKIAIOSFODNN7EXAMPLE", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"],
     "expected_scrub_types": ["aws_access_key"],
     "forbidden_leak_tokens": ["AKIAIOSFODNN7EXAMPLE", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"],
-    "expected_placeholders": ["[AWS_ACCESS_KEY]", "[AWS_SECRET_KEY]"]
+    "expected_placeholders": ["[AWS_KEY]", "[AWS_SECRET]"]
   },
   {
     "id": "priv_09_slack_token",
@@ -97,7 +97,7 @@
     "pii_values": ["admin", "SuperSecret123"],
     "expected_scrub_types": ["url_with_creds"],
     "forbidden_leak_tokens": ["admin", "SuperSecret123"],
-    "expected_placeholders": ["[USERNAME]", "[PASSWORD]"]
+    "expected_placeholders": ["[URL_WITH_CREDENTIALS]"]
   },
   {
     "id": "priv_11_connection_string",
@@ -107,7 +107,7 @@
     "pii_values": ["user", "pass"],
     "expected_scrub_types": ["conn_string"],
     "forbidden_leak_tokens": ["user", "pass"],
-    "expected_placeholders": ["[USERNAME]", "[PASSWORD]"]
+    "expected_placeholders": ["[CONN_STRING]"]
   },
   {
     "id": "priv_12_private_key",
@@ -147,6 +147,6 @@
     "pii_values": ["MySuperSecretPass123!"],
     "expected_scrub_types": ["password_config"],
     "forbidden_leak_tokens": ["MySuperSecretPass123!"],
-    "expected_placeholders": ["[PASSWORD]"]
+    "expected_placeholders": ["[CREDENTIAL_REFERENCE]"]
   }
 ]
