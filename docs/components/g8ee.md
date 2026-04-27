@@ -1121,7 +1121,7 @@ The runner under `evals/runner/` is invoked separately and writes artifacts (`re
 
 ### Internal-side Reporting Library
 
-A small typed reporting library lives at `tests/evals/{metrics,reporter}.py` (`EvalRow`, `DimensionSummary`, `FullReport`, `compute_summaries`, `persist_report`, `render_text_table`). It is reused by `tests/integration/conftest.py::unified_metrics_collector` to aggregate any internally-generated eval rows produced by safety integration tests (e.g. `tests/integration/test_tool_execution_security_integration.py`). It is intentionally decoupled from the host-driven runner.
+A small typed reporting library lives at `evals/runner/{metrics,reporter}.py` (`EvalRow`, `DimensionSummary`, `FullReport`, `compute_summaries`, `persist_report`, `render_text_table`). It is reused by `tests/integration/conftest.py::unified_metrics_collector` to aggregate any internally-generated eval rows produced by safety integration tests (e.g. `tests/integration/test_tool_execution_security_integration.py`). It is intentionally decoupled from the host-driven runner.
 
 ### Privacy Evaluation Details
 
