@@ -69,6 +69,7 @@ class TestOperatorLifecycleService:
             "first_deployed": None,
         }
         mock_cache.update_document.return_value = CacheOperationResult(success=True)
+        mock_cache.append_to_array.return_value = CacheOperationResult(success=True)
 
         success = await lifecycle_service.claim_operator_slot(
             operator_id=operator_id,
@@ -80,6 +81,14 @@ class TestOperatorLifecycleService:
 
         assert success is True
         assert mock_cache.update_document.call_count == 1
+        
+        # Verify history append
+        assert mock_cache.append_to_array.call_count == 1
+        call_args = mock_cache.append_to_array.call_args
+        assert call_args.kwargs["array_field"] == "history_trail"
+        history_entry = call_args.kwargs["items"][0]
+        assert history_entry["event_type"] == "slot.consumed"
+        assert history_entry["prev_hash"] == "0" * 64
 
     async def test_claim_operator_slot_not_found_returns_false(self, lifecycle_service, mock_cache):
         mock_cache.get_document_with_cache.return_value = None
@@ -102,6 +111,7 @@ class TestOperatorLifecycleService:
             "created_at": now().isoformat(),
         }
         mock_cache.update_document.return_value = CacheOperationResult(success=True)
+        mock_cache.append_to_array.return_value = CacheOperationResult(success=True)
 
         result = await lifecycle_service.terminate_operator(
             operator_id=operator_id,
@@ -126,6 +136,14 @@ class TestOperatorLifecycleService:
         assert update_data["operator_session_id"] is None
         assert "bound_web_session_id" in update_data
         assert update_data["bound_web_session_id"] is None
+
+        # Verify history append
+        assert mock_cache.append_to_array.call_count == 1
+        history_call_args = mock_cache.append_to_array.call_args
+        assert history_call_args.kwargs["array_field"] == "history_trail"
+        history_entry = history_call_args.kwargs["items"][0]
+        assert history_entry["event_type"] == "terminated"
+        assert history_entry["actor"] == "g8ed"
 
     async def test_terminate_operator_not_found_raises_validation_error(self, lifecycle_service, mock_cache):
         mock_cache.get_document_with_cache.return_value = None

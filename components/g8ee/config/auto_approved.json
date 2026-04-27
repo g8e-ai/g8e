@@ -1,0 +1,15 @@
+{
+    "enabled": false,
+    "version": "1.0.0",
+    "description": "Base commands that bypass the human approval prompt when CommandValidationSettings.enable_auto_approve is true. Auto-approved commands MUST still pass all hard safety gates (forbidden patterns, blacklist, whitelist if enabled). This file lists the platform-default 'rubber-stamped as benign' base commands. The CSV CommandValidationSettings.auto_approved_commands field augments this list per-user.",
+    "auto_approved_commands": [
+        {"value": "uptime", "reason": "Reports system uptime; no side effects"},
+        {"value": "df", "reason": "Reports disk free space; no side effects"},
+        {"value": "free", "reason": "Reports memory usage; no side effects"},
+        {"value": "hostname", "reason": "Reports hostname; no side effects"},
+        {"value": "whoami", "reason": "Reports current user; no side effects"},
+        {"value": "id", "reason": "Reports user/group ids; no side effects"},
+        {"value": "date", "reason": "Reports current date/time; no side effects"},
+        {"value": "uname", "reason": "Reports kernel info; no side effects"}
+    ]
+}

@@ -83,15 +83,31 @@ class FleetManager:
         import ssl
         from datetime import datetime, UTC
 
-        if not device_token:
-            print("[fleet] Warning: wait_bound called without device_token, falling back to 5s sleep")
-            await asyncio.sleep(5)
-            return
-
         ssl_context = ssl.create_default_context()
         ssl_context.check_hostname = False
         ssl_context.verify_mode = ssl.CERT_NONE
         connector = aiohttp.TCPConnector(ssl=ssl_context)
+
+        if not device_token:
+            print("[fleet] Warning: wait_bound called without device_token, polling /health endpoint")
+            health_url = "https://g8e.local/health"
+            start_time = time.time()
+            
+            async with aiohttp.ClientSession(connector=connector) as session:
+                while time.time() - start_time < timeout:
+                    try:
+                        async with session.get(health_url) as resp:
+                            if resp.status == 200:
+                                data = await resp.json()
+                                if data.get("status") == "ok":
+                                    print("[fleet] Fleet is ready (health check passed)")
+                                    return
+                    except Exception as e:
+                        pass
+                    
+                    await asyncio.sleep(2)
+            
+            raise TimeoutError(f"Fleet failed to become ready within {timeout} seconds")
 
         url = "https://g8e.local/api/auth/operator/validate"
         headers = {"X-Request-Timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"}
@@ -106,14 +122,27 @@ class FleetManager:
         async with aiohttp.ClientSession(connector=connector) as session:
             while time.time() - start_time < timeout:
                 try:
-                    # In reality we want to check if the specific operators are ready, but for now 
-                    # let's just make sure we can at least authenticate properly and wait a fixed minimum duration
-                    # to ensure the fleet has time to spin up.
                     async with session.post(url, json=payload, headers=headers) as resp:
                         if resp.status == 200:
-                            # Add a small buffer for the containers to fully initialize their services
-                            await asyncio.sleep(5)
-                            return
+                            print("[fleet] Operator validation successful, checking fleet health...")
+                            health_url = "https://g8e.local/api/internal/health"
+                            health_start_time = time.time()
+                            health_timeout = 30
+                            
+                            while time.time() - health_start_time < health_timeout:
+                                try:
+                                    async with session.get(health_url) as health_resp:
+                                        if health_resp.status == 200:
+                                            health_data = await health_resp.json()
+                                            if health_data.get("status") == "healthy":
+                                                print("[fleet] Fleet is ready (internal health check passed)")
+                                                return
+                                except Exception as e:
+                                    pass
+                                
+                                await asyncio.sleep(1)
+                            
+                            raise TimeoutError(f"Fleet health check failed within {health_timeout} seconds after operator validation")
                 except Exception as e:
                     pass
                 

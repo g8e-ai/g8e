@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from app.constants import OperatorStatus
 from app.llm.llm_types import ToolCall
 from app.models.settings import G8eeUserSettings, LLMSettings
-from evals.runner.metrics import EvalRow
+from app.evals.runner.metrics import EvalRow
 from tests.fakes.factories import (
     build_g8e_http_context,
     build_enriched_investigation,

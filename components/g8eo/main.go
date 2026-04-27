@@ -112,7 +112,7 @@ func main() {
 	flag.StringVar(&operatorSessionID, "operator_session", "", "Pre-authorized operator session ID (from device link auth)")
 	flag.StringVar(&deviceToken, "device-token", "", "Device link token for operator deployment")
 	flag.StringVar(&endpointURL, "endpoint", "", "Endpoint (hostname or IP)")
-	flag.StringVar(&caURL, "ca-url", "", "Override URL for hub CA certificate fetch (default: https://<endpoint>/ssl/ca.crt)")
+	flag.StringVar(&caURL, "ca-url", "", "Override URL for hub CA certificate fetch (default: http://<endpoint>/ca.crt)")
 	flag.StringVar(&workingDir, "working-dir", "", "Working directory (default: directory operator was launched from)")
 	flag.BoolVar(&cloudMode, constants.Status.OperatorType.Cloud, true, "Cloud mode")
 	flag.StringVar(&cloudProvider, "provider", "", "Cloud provider")
@@ -149,7 +149,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  -S, --session <id>      Pre-authorized operator session ID (from device link auth)\n")
 		fmt.Fprintf(os.Stderr, "  -D, --device-token <tok> Device link token for operator deployment\n")
 		fmt.Fprintf(os.Stderr, "  -e, --endpoint <host>     Operator endpoint: IP address of the Docker host running g8es\n")
-		fmt.Fprintf(os.Stderr, "      --ca-url <url>        Override URL for hub CA certificate fetch (default: https://<endpoint>/ssl/ca.crt)\n")
+		fmt.Fprintf(os.Stderr, "      --ca-url <url>        Override URL for hub CA certificate fetch (default: http://<endpoint>/ca.crt)\n")
 		fmt.Fprintf(os.Stderr, "      --working-dir <dir>   Working directory (default: directory operator was launched from)\n")
 		fmt.Fprintf(os.Stderr, "                            All commands and data storage are anchored to this directory\n")
 		fmt.Fprintf(os.Stderr, "      --wss-port <port>     WSS port to dial on g8es for pub/sub (default: 443)\n")
@@ -230,12 +230,12 @@ func main() {
 	logger.Info("Using Operator endpoint", "endpoint", operatorEndpoint)
 
 	// When no explicit --ca-url was provided, try common local SSL volume
-	// mount points first. Fall back to an HTTPS fetch from the operator
+	// mount points first. Fall back to an HTTP fetch from the operator
 	// endpoint (or from the explicit --ca-url).
 	caLoaded := caURL == "" && loadCAFromLocalVolume(logger)
 	if !caLoaded {
 		if caURL == "" {
-			caURL = fmt.Sprintf("https://%s/ssl/ca.crt", operatorEndpoint)
+			caURL = fmt.Sprintf("http://%s/ca.crt", operatorEndpoint)
 		}
 		logger.Info("Fetching hub CA certificate", "url", caURL)
 		if err := certs.FetchAndSetCA(context.Background(), caURL); err != nil {

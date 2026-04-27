@@ -84,10 +84,15 @@ from .port_service import OperatorPortService
 from .pubsub_service import OperatorPubSubService
 from app.utils.safety import validate_command_safety
 from app.utils.whitelist_validator import parse_whitelisted_commands_csv
-from app.utils.validators import get_blacklist_validator, get_whitelist_validator
+from app.utils.validators import (
+    get_auto_approved_validator,
+    get_blacklist_validator,
+    get_whitelist_validator,
+)
 from app.utils.ids import generate_command_execution_id, generate_batch_id
 from app.utils.whitelist_validator import CommandWhitelistValidator
 from app.utils.blacklist_validator import CommandBlacklistValidator
+from app.utils.auto_approved_validator import CommandAutoApprovedValidator
 from app.errors import ValidationError, BusinessLogicError
 from app.models.operators import CommandResultBroadcastEvent, CommandExecutingBroadcastEvent
 import asyncio
@@ -114,6 +119,7 @@ class OperatorCommandService:
         settings: G8eePlatformSettings,
         whitelist_validator: CommandWhitelistValidator | None = None,
         blacklist_validator: CommandBlacklistValidator | None = None,
+        auto_approved_validator: CommandAutoApprovedValidator | None = None,
     ) -> None:
         self._pubsub_service = pubsub_service
         self._approval_service = approval_service
@@ -131,6 +137,11 @@ class OperatorCommandService:
 
         self._whitelist_validator = whitelist_validator if whitelist_validator is not None else get_whitelist_validator()
         self._blacklist_validator = blacklist_validator if blacklist_validator is not None else get_blacklist_validator()
+        self._auto_approved_validator = (
+            auto_approved_validator
+            if auto_approved_validator is not None
+            else get_auto_approved_validator()
+        )
 
         self._CommandResultBroadcastEvent = CommandResultBroadcastEvent
         self._CommandExecutingBroadcastEvent = CommandExecutingBroadcastEvent
@@ -333,17 +344,23 @@ class OperatorCommandService:
         # of whitelisting: a command must still pass ALL L1 hard gates above
         # (forbidden patterns, blacklist, and whitelist if enabled) before
         # auto-approve can apply.
-        auto_approve_list = parse_whitelisted_commands_csv(cv.auto_approved_commands)
+        csv_auto_approve_override = parse_whitelisted_commands_csv(cv.auto_approved_commands)
         base_command = command.split()[0] if command else ""
+        auto_approve_result = self._auto_approved_validator.is_auto_approved(
+            command, extra_commands=csv_auto_approve_override
+        )
         is_auto_approved = (
             cv.enable_auto_approve
             and base_command != ""
-            and base_command in auto_approve_list
+            and auto_approve_result.is_auto_approved
         )
         if is_auto_approved:
             logger.info(
-                "[COMMAND] Base command %r is in auto-approve list - bypassing human approval: %s",
-                base_command, command,
+                "[COMMAND] Base command %r is auto-approved (rule=%s, reason=%s) - bypassing human approval: %s",
+                base_command,
+                auto_approve_result.rule,
+                auto_approve_result.reason,
+                command,
             )
 
         # 3. Notify preparing (one event for the approval card).

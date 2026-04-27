@@ -18,6 +18,7 @@ import {
     StopOperatorRequest,
     OperatorSessionRegistrationRequest,
     DirectCommandRequest,
+    G8eHttpContext,
 } from '../../models/request_models.js';
 
 export class OperatorRelayService {
@@ -340,6 +341,9 @@ export class OperatorRelayService {
     _validateContext(g8eContext) {
         if (!g8eContext) {
             throw new Error('ENFORCEMENT VIOLATION: g8eContext is REQUIRED for g8ee calls');
+        }
+        if (!(g8eContext instanceof G8eHttpContext)) {
+            throw new Error('ENFORCEMENT VIOLATION: g8eContext must be a G8eHttpContext instance (got plain object). Construct via G8eHttpContext.parse() at the call site.');
         }
     }
 }

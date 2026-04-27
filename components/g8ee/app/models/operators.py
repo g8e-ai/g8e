@@ -224,6 +224,10 @@ class OperatorDocument(G8eIdentifiableModel):
     current_hostname: str | None = Field(default=None, description="Denormalized hostname from system_info for quick access")
     session_token: str | None = Field(default=None, description="Active session token for session-based auth validation")
     session_expires_at: UTCDatetime | None = Field(default=None, description="Session expiration timestamp")
+    history_trail: list[OperatorHistoryEntry] = Field(
+        default_factory=list,
+        description="Operator lifecycle audit trail (append-only). Authority: g8ee."
+    )
 
     @property
     def hostname(self) -> str | None:

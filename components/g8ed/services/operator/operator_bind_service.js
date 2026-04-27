@@ -84,11 +84,12 @@ export class BindOperatorsService {
 
                 // 1. Use g8ee for operator binding to enforce architectural boundary
                 // g8ed should not write to operators after auth
-                const g8eContext = {
+                const g8eContext = G8eHttpContext.parse({
+                    web_session_id: webSessionId,
                     user_id: userId,
                     organization_id: operator.organization_id,
                     source_component: SourceComponent.G8ED,
-                };
+                });
 
                 const relayParams = {
                     operator_ids: [operatorId],
@@ -206,11 +207,12 @@ export class BindOperatorsService {
 
                 // 1. Use g8ee for operator unbinding to enforce architectural boundary
                 // g8ed should not write to operators after auth
-                const g8eContext = {
+                const g8eContext = G8eHttpContext.parse({
+                    web_session_id: webSessionId,
                     user_id: userId,
                     organization_id: operator.organization_id,
                     source_component: SourceComponent.G8ED,
-                };
+                });
 
                 const relayParams = {
                     operator_ids: [operatorId],

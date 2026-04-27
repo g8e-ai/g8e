@@ -22,6 +22,7 @@
     "operators_refresh_session": "/operators/refresh-session",
     "operators_g8ep_activate": "/operators/g8ep/activate",
     "operators_g8ep_relaunch": "/operators/g8ep/relaunch",
+    "operators_device_link_register": "/operators/device-link/register",
     "operator_direct_command": "/operator/direct-command",
     "operator_approval_respond": "/operator/approval/respond",
     "operator_approval_pending": "/operator/approval/pending",

@@ -24,7 +24,7 @@ Evals are NOT pytest-driven and do NOT run inside the test-runner container. The
 
 ### Deterministic Benchmarks
 
-The agent's tool-call payloads are graded against strict boolean criteria. No LLM is involved in grading. The runner at `evals/runner/scorer.py::score_benchmark_scenario` performs regex matching on the actual command arguments for a reproducible pass/fail metric, driven by `evals/gold_sets/benchmark.json`.
+The agent's tool-call payloads are graded against strict boolean criteria. No LLM is involved in grading. The runner at `app/evals/runner/scorer.py::score_benchmark_scenario` performs regex matching on the actual command arguments for a reproducible pass/fail metric, driven by `evals/gold_sets/benchmark.json`.
 
 - **Binary pass/fail**: No partial credit. All payload matchers must pass.
 - **Payload grading**: Grades the actual tool-call arguments (e.g., the `command` field), not the text reasoning.
@@ -46,7 +46,7 @@ For reasoning and concept application, the `EvalJudge` (`app/services/ai/eval_ju
 
 ```bash
 ./g8e platform start
-./g8e evals up --device-token dlk_xxx
+./g8e evals up -d dlk_xxx
 ./g8e evals status
 ./g8e evals down
 ```

@@ -307,6 +307,7 @@ class ServiceFactory:
             api_key_service=api_key_service,
             session_service=operator_session_service,
             operator_data_service=data_services.operator_data_service, # type: ignore[arg-type]
+            lifecycle_service=data_services.operator_lifecycle_service, # type: ignore[arg-type]
             certificate_service=certificate_service,
             cache_aside=cache_aside_service
         )

@@ -14,7 +14,7 @@ import json
 from pathlib import Path
 
 # Load public API paths
-_SHARED_DIR = Path(__file__).resolve().parent.parent.parent.parent.parent / "shared"
+_SHARED_DIR = Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "shared"
 with open(_SHARED_DIR / "constants" / "public_api_paths.json") as f:
     PUBLIC_API_PATHS = json.load(f)
 

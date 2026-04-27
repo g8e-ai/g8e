@@ -64,11 +64,19 @@ async def handle(
     whitelisting_enabled = cv.enable_whitelisting if cv else False
     blacklisting_enabled = cv.enable_blacklisting if cv else False
     auto_approve_enabled = cv.enable_auto_approve if cv else False
-    auto_approved_commands = (
-        parse_whitelisted_commands_csv(cv.auto_approved_commands)
-        if (cv and auto_approve_enabled)
-        else []
-    )
+    auto_approved_commands: list[str] = []
+    if cv and auto_approve_enabled:
+        # Union of JSON-configured platform defaults and per-user CSV override.
+        # Order: JSON entries first (platform-blessed), then any extras from CSV.
+        seen: set[str] = set()
+        for name in svc.auto_approved_validator.get_auto_approved_command_names():
+            if name not in seen:
+                seen.add(name)
+                auto_approved_commands.append(name)
+        for name in parse_whitelisted_commands_csv(cv.auto_approved_commands):
+            if name not in seen:
+                seen.add(name)
+                auto_approved_commands.append(name)
 
     whitelisted_commands: list[WhitelistedCommand] = []
     global_forbidden_patterns: list[str] = []

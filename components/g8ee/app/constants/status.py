@@ -49,6 +49,7 @@ class OperatorHistoryEventType(str, Enum):
     SHUTDOWN_REQUESTED = _STATUS["history.event.type"]["shutdown.requested"]
     CLAIMED = _STATUS["history.event.type"]["claimed"]
     RECONNECTED = _STATUS["history.event.type"]["reconnected"]
+    REGISTERED = _STATUS["history.event.type"]["registered"]
 
 class OperatorStatus(str, Enum):
     AVAILABLE = _STATUS["g8e.status"]["available"]

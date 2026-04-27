@@ -123,7 +123,7 @@ export class DeviceRegistrationService {
 
         const result = await this._operatorService.relayAuthenticateOperatorToG8ee({
             auth_mode: 'operator_session',
-            operator_session_id: web_session_id, // Use web_session_id as the seed if available, or it will be generated
+            operator_session_id: null, // Generate new operator session (web_session is for SSE, not g8ee auth)
             operator_id: id,
             system_info,
             operator_type,

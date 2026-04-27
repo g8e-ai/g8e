@@ -426,7 +426,8 @@
     "stopped": "stopped",
     "shutdown.requested": "shutdown.requested",
     "claimed": "claimed",
-    "reconnected": "reconnected"
+    "reconnected": "reconnected",
+    "registered": "registered"
   },
 
   "history.actor": {

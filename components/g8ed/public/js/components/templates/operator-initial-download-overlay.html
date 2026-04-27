@@ -6,17 +6,6 @@
         <a class="operator-download-link" data-os="linux" data-arch="386" href="#">Linux x86</a>
     </div>
     <div class="operator-download-separator"></div>
-    <div class="operator-auth-info-section">
-        <div class="operator-auth-info-item">
-            <span class="material-symbols-outlined operator-auth-info-icon">key</span>
-            <span class="operator-auth-info-text"><strong>API Keys:</strong> Persistent keys.</span>
-        </div>
-        <div class="operator-auth-info-item">
-            <span class="material-symbols-outlined operator-auth-info-icon">link</span>
-            <span class="operator-auth-info-text"><strong>Device Links:</strong> Temporary links.</span>
-        </div>
-    </div>
-    <div class="operator-download-separator"></div>
     <div class="operator-deploy-section">
         <div class="operator-deploy-row">
             <span class="operator-deploy-label">API Key</span>
@@ -58,16 +47,6 @@
                 </button>
             </div>
             <div class="operator-device-link-result initially-hidden" id="device-link-result">
-                <span class="operator-deploy-sublabel">Curl Command</span>
-                <div class="operator-deploy-cmd-row">
-                    <div class="operator-deploy-cmd obfuscated" id="device-link-curl-cmd"></div>
-                    <button class="operator-deploy-icon-btn" id="device-link-curl-toggle" type="button" title="Show/Hide">
-                        <span class="material-symbols-outlined">visibility</span>
-                    </button>
-                    <button class="operator-deploy-icon-btn" id="device-link-copy-curl" type="button" title="Copy">
-                        <span class="material-symbols-outlined">content_copy</span>
-                    </button>
-                </div>
                 <span class="operator-deploy-sublabel">Device Link Token</span>
                 <div class="operator-deploy-cmd-row">
                     <div class="operator-deploy-cmd obfuscated" id="device-link-token"></div>
@@ -75,6 +54,16 @@
                         <span class="material-symbols-outlined">visibility</span>
                     </button>
                     <button class="operator-deploy-icon-btn" id="device-link-copy-token" type="button" title="Copy">
+                        <span class="material-symbols-outlined">content_copy</span>
+                    </button>
+                </div>
+                <span class="operator-deploy-sublabel">Curl Command</span>
+                <div class="operator-deploy-cmd-row">
+                    <div class="operator-deploy-cmd obfuscated" id="device-link-curl-cmd"></div>
+                    <button class="operator-deploy-icon-btn" id="device-link-curl-toggle" type="button" title="Show/Hide">
+                        <span class="material-symbols-outlined">visibility</span>
+                    </button>
+                    <button class="operator-deploy-icon-btn" id="device-link-copy-curl" type="button" title="Copy">
                         <span class="material-symbols-outlined">content_copy</span>
                     </button>
                 </div>

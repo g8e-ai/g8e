@@ -550,7 +550,7 @@ g8ee implements an **MCP Client Adapter** that translates outbound tool calls in
 |--------|---------|-----------|----------------|
 | Whitelist (hard allow-list) | `enable_whitelisting` + `whitelisted_commands` | Only listed commands may run at all. Non-listed commands are rejected at L1 safety validation. | `app/utils/safety.py::validate_command_safety` |
 | Blacklist (hard block-list) | `enable_blacklisting` | Listed commands/patterns are rejected at L1 safety validation. | `app/utils/safety.py::validate_command_safety` |
-| Auto-approve (skip-approval list) | `enable_auto_approve` + `auto_approved_commands` | Listed base verbs bypass the human approval prompt. Does NOT widen the whitelist and does NOT bypass the blacklist or hard-coded forbidden patterns. | `OperatorCommandService.execute_command_internal` |
+| Auto-approve (skip-approval list) | `enable_auto_approve` + `config/auto_approved.json` (platform default) + `auto_approved_commands` (CSV override) | Listed base verbs bypass the human approval prompt. The JSON file ships platform-default benign verbs (`uptime`, `df`, `free`, …) loaded by `CommandAutoApprovedValidator`; the CSV setting unions per-user extras. Does NOT widen the whitelist and does NOT bypass the blacklist or hard-coded forbidden patterns. | `OperatorCommandService.execute_command_internal` |
 
 The three policies are orthogonal. Auto-approve runs **after** L1 safety validation, so a command must pass every hard gate before its base verb is checked against `auto_approved_commands`. The Tribunal is informed of all three via `get_command_constraints` (`auto_approve_enabled`, `auto_approved_commands`) but must still obey hard gates regardless of auto-approve.
 
@@ -1108,7 +1108,7 @@ AI agent evaluation runs through the **host-driven evals framework** at `compone
 
 ```bash
 # Bring up real-operator fleet
-./g8e evals up --device-token dlk_xxx
+./g8e evals up -d dlk_xxx
 
 # Inspect fleet status
 ./g8e evals status
@@ -1117,11 +1117,11 @@ AI agent evaluation runs through the **host-driven evals framework** at `compone
 ./g8e evals down
 ```
 
-The runner under `evals/runner/` is invoked separately and writes artifacts (`report.txt`, `results.csv`, `summary.json`) to `components/g8ee/reports/evals/<timestamp>/`, with a `latest` symlink to the most recent run.
+The runner under `app/evals/runner/` (invoked as `python -m app.evals.runner.cli` from the g8ee component root) is invoked separately and writes artifacts (`report.txt`, `results.csv`, `summary.json`) to `components/g8ee/reports/evals/<timestamp>/`, with a `latest` symlink to the most recent run.
 
 ### Internal-side Reporting Library
 
-A small typed reporting library lives at `evals/runner/{metrics,reporter}.py` (`EvalRow`, `DimensionSummary`, `FullReport`, `compute_summaries`, `persist_report`, `render_text_table`). It is reused by `tests/integration/conftest.py::unified_metrics_collector` to aggregate any internally-generated eval rows produced by safety integration tests (e.g. `tests/integration/test_tool_execution_security_integration.py`). It is intentionally decoupled from the host-driven runner.
+A small typed reporting library lives at `app/evals/runner/{metrics,reporter}.py` (`EvalRow`, `DimensionSummary`, `FullReport`, `compute_summaries`, `persist_report`, `render_text_table`). It is reused by `tests/integration/conftest.py::unified_metrics_collector` to aggregate any internally-generated eval rows produced by safety integration tests (e.g. `tests/integration/test_tool_execution_security_integration.py`). It is intentionally decoupled from the host-driven runner.
 
 ### Privacy Evaluation Details
 

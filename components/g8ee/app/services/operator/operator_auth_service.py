@@ -16,17 +16,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from app.constants import (
-    DB_COLLECTION_USERS,
-    ComponentName,
-    OperatorHistoryEventType,
-    OperatorStatus,
-)
-from app.models.sessions import OperatorSessionDocument
+from app.constants import DB_COLLECTION_USERS, OperatorStatus
 from app.services.auth.api_key_service import ApiKeyService
 from app.services.auth.certificate_service import CertificateService
 from app.services.operator.operator_session_service import OperatorSessionService
 from app.services.operator.operator_data_service import OperatorDataService
+from app.services.protocols import OperatorLifecycleServiceProtocol
 from app.services.cache.cache_aside import CacheAsideService
 
 logger = logging.getLogger(__name__)
@@ -42,12 +37,14 @@ class OperatorAuthService:
         api_key_service: ApiKeyService,
         session_service: OperatorSessionService,
         operator_data_service: OperatorDataService,
+        lifecycle_service: OperatorLifecycleServiceProtocol,
         certificate_service: CertificateService,
         cache_aside: CacheAsideService,
     ):
         self._api_key_service = api_key_service
         self._session_service = session_service
         self._operator_data_service = operator_data_service
+        self._lifecycle_service = lifecycle_service
         self._certificate_service = certificate_service
         self._cache = cache_aside
 
@@ -64,6 +61,10 @@ class OperatorAuthService:
         return self._operator_data_service
 
     @property
+    def lifecycle_service(self) -> OperatorLifecycleServiceProtocol:
+        return self._lifecycle_service
+
+    @property
     def certificate_service(self) -> CertificateService:
         return self._certificate_service
 
@@ -75,56 +76,129 @@ class OperatorAuthService:
         self,
         authorization_header: str | None,
         body: dict[str, Any],
-        request_context: dict[str, Any] | None
+        request_context: dict[str, Any] | None,
     ) -> dict[str, Any]:
-        """Authenticate an operator process."""
-        auth_mode = body.get("auth_mode")
-        device_link_session_id = body.get("operator_session_id")
-
-        if auth_mode == "operator_session" and device_link_session_id:
-            return await self._authenticate_via_device_link(device_link_session_id, body.get("system_info"), authorization_header, request_context)
-
+        """Authenticate operator process via api key (Bearer)."""
         return await self._authenticate_via_api_key(authorization_header, body, request_context)
+
+    async def register_device_link_operator(
+        self,
+        operator_id: str,
+        user_id: str,
+        organization_id: str | None,
+        operator_type: str,
+        system_info: dict,
+        request_context: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """Bootstrap an operator after device-link consumption.
+
+        Trust model: caller is g8ed via internal mTLS. No authorization header.
+        Inputs are taken at face value (operator_id, user_id come from a verified
+        device-link token on g8ed's side).
+        """
+        # 1. Get operator
+        operator = await self._operator_data_service.get_operator(operator_id)
+        if not operator:
+            return {"success": False, "error": "Operator not found"}
+
+        # 2. Ownership check
+        if operator.user_id != user_id:
+            return {"success": False, "error": "Operator ownership mismatch"}
+
+        # 3. Resolve api_key from operator document (device-link path)
+        api_key = operator.api_key
+        if not api_key:
+            logger.error(f"[OPERATOR-AUTH] Operator {operator_id} has no api_key on slot - slot creation bug")
+            return {"success": False, "error": "Operator slot missing api_key - configuration error"}
+
+        # 4. Create session
+        user_data = await self._cache.get_document_with_cache(DB_COLLECTION_USERS, user_id)
+        session_data = {
+            "user_id": user_id,
+            "organization_id": organization_id,
+            "user_data": user_data,
+            "api_key": api_key,
+            "operator_id": operator_id,
+            "operator_status": operator.status,
+        }
+        session = await self._session_service.create_operator_session(session_data, request_context)
+
+        # 5. Claim slot
+        claim_success = await self._lifecycle_service.claim_operator_slot(
+            operator_id=operator_id,
+            operator_session_id=session.id,
+            bound_web_session_id=operator.bound_web_session_id,
+            system_info=system_info,
+            operator_type=operator_type,
+        )
+        if not claim_success:
+            return {"success": False, "error": "Failed to claim operator slot"}
+
+        # 6. Generate certificate
+        certs = await self._certificate_service.generate_operator_certificate(
+            operator_id=operator_id,
+            user_id=user_id,
+            organization_id=organization_id or user_id,
+        )
+
+        # 7. Return response
+        return {
+            "success": True,
+            "operator_session_id": session.id,
+            "operator_id": operator_id,
+            "user_id": user_id,
+            "api_key": api_key,
+            "operator_cert": certs["cert"],
+            "operator_cert_key": certs["key"],
+            "session": {
+                "id": session.id,
+                "expires_at": session.absolute_expires_at,
+                "created_at": session.created_at,
+            },
+        }
 
     async def _authenticate_via_api_key(
         self,
         authorization_header: str | None,
         body: dict[str, Any],
-        request_context: dict[str, Any]
+        request_context: dict[str, Any] | None,
     ) -> dict[str, Any]:
-        """Authenticate using an API key."""
+        """Authenticate using an API key (Bearer)."""
+        # Extract api_key from Bearer header
         api_key = None
         if authorization_header and authorization_header.startswith("Bearer "):
             api_key = authorization_header[len("Bearer "):]
 
         if not api_key:
-            return {"success": False, "status_code": 401, "error": "Missing API key"}
+            return {"success": False, "error": "Missing API key"}
 
-        success, key_doc, error = await self.api_key_service.validate_key(api_key)
+        # Validate api_key
+        success, key_doc, error = await self._api_key_service.validate_key(api_key)
         if not success:
-            return {"success": False, "status_code": 401, "error": error or "Invalid API key"}
+            return {"success": False, "error": error or "Invalid API key"}
 
-        await self.api_key_service.record_usage(api_key)
+        await self._api_key_service.record_usage(api_key)
 
         user_id = key_doc.user_id
         operator_id = key_doc.operator_id
 
         if not operator_id:
-            # Handle CLI auth or other cases if needed
-            return {"success": False, "status_code": 401, "error": "API key not tied to an operator"}
+            return {"success": False, "error": "API key not tied to an operator"}
 
-        # Get operator doc
-        operator = await self.operator_data_service.get_operator(operator_id)
+        # 1. Get operator
+        operator = await self._operator_data_service.get_operator(operator_id)
         if not operator:
-            return {"success": False, "status_code": 404, "error": "Operator not found"}
+            return {"success": False, "error": "Operator not found"}
 
+        # 2. Ownership check
         if operator.user_id != user_id:
-            return {"success": False, "status_code": 403, "error": "Unauthorized"}
+            return {"success": False, "error": "Unauthorized"}
 
-        # Get user doc for user_data
-        user_data = await self.cache.get_document_with_cache(DB_COLLECTION_USERS, user_id)
+        # 3. Resolve api_key (already validated from bearer token)
+        # api_key is the validated bearer token itself
 
-        # Create session
+        # 4. Create session
+        user_data = await self._cache.get_document_with_cache(DB_COLLECTION_USERS, user_id)
         session_data = {
             "user_id": user_id,
             "organization_id": key_doc.organization_id,
@@ -133,41 +207,27 @@ class OperatorAuthService:
             "operator_id": operator_id,
             "operator_status": operator.status,
         }
-        
-        session = await self.session_service.create_operator_session(session_data, request_context)
+        session = await self._session_service.create_operator_session(session_data, request_context)
 
-        # Claim slot
-        await self.operator_data_service.claim_operator_slot(
+        # 5. Claim slot
+        claim_success = await self._lifecycle_service.claim_operator_slot(
             operator_id=operator_id,
             operator_session_id=session.id,
             bound_web_session_id=operator.bound_web_session_id,
             system_info=body.get("system_info", {}),
             operator_type=operator.operator_type,
         )
+        if not claim_success:
+            return {"success": False, "error": "Failed to claim operator slot"}
 
-        # Generate per-operator certificate (Authority: g8ee)
-        certs = await self.certificate_service.generate_operator_certificate(
+        # 6. Generate certificate
+        certs = await self._certificate_service.generate_operator_certificate(
             operator_id=operator_id,
             user_id=user_id,
-            organization_id=key_doc.organization_id or user_id
+            organization_id=key_doc.organization_id or user_id,
         )
 
-        # Add history entry (Authority: g8ee)
-        try:
-            await self.operator_data_service.add_history_entry(
-                operator_id=operator_id,
-                event_type=OperatorHistoryEventType.AUTHENTICATED,
-                summary="Operator authenticated via API key",
-                actor=ComponentName.G8EE,
-                details={
-                    "operator_session_id": session.id,
-                    "user_id": user_id,
-                    "hostname": body.get("system_info", {}).get("hostname"),
-                }
-            )
-        except Exception as e:
-            logger.warning(f"[OPERATOR-AUTH] Failed to add history entry: {e}")
-
+        # 7. Return response
         return {
             "success": True,
             "operator_session_id": session.id,
@@ -180,67 +240,5 @@ class OperatorAuthService:
                 "id": session.id,
                 "expires_at": session.absolute_expires_at,
                 "created_at": session.created_at,
-            }
-        }
-
-    async def _authenticate_via_device_link(
-        self,
-        device_link_session_id: str,
-        system_info: dict | None,
-        authorization_header: str | None,
-        request_context: dict[str, Any]
-    ) -> dict[str, Any]:
-        """Authenticate using a device link session ID."""
-        session = await self.session_service.validate_session(device_link_session_id)
-        if not session:
-            return {"success": False, "status_code": 401, "error": "Invalid or expired session"}
-
-        user_id = session.user_id
-        operator_id = session.operator_id
-
-        # Similar to _authenticate_via_api_key but reusing existing session ID
-        # (This usually happens during bootstrap after device registration)
-        
-        # Get user data if not in session
-        user_data = session.user_data or await self.cache.get_document_with_cache(DB_COLLECTION_USERS, user_id)
-
-        # In device link flow, the session is already created by g8ed.
-        # g8ee might just need to update it or return it.
-        
-        # Generate per-operator certificate (Authority: g8ee)
-        certs = await self.certificate_service.generate_operator_certificate(
-            operator_id=operator_id,
-            user_id=user_id,
-            organization_id=session.organization_id or user_id
-        )
-
-        # Add history entry (Authority: g8ee)
-        try:
-            await self.operator_data_service.add_history_entry(
-                operator_id=operator_id,
-                event_type=OperatorHistoryEventType.RECONNECTED,
-                summary="Operator re-authenticated via device link",
-                actor=ComponentName.G8EE,
-                details={
-                    "operator_session_id": session.id,
-                    "user_id": user_id,
-                    "hostname": system_info.get("hostname") if system_info else None,
-                }
-            )
-        except Exception as e:
-            logger.warning(f"[OPERATOR-AUTH] Failed to add history entry for device link: {e}")
-
-        return {
-            "success": True,
-            "operator_session_id": session.id,
-            "operator_id": operator_id,
-            "user_id": user_id,
-            "api_key": session.api_key, # Decrypted in a real impl
-            "operator_cert": certs["cert"],
-            "operator_cert_key": certs["key"],
-            "session": {
-                "id": session.id,
-                "expires_at": session.absolute_expires_at,
-                "created_at": session.created_at,
-            }
+            },
         }

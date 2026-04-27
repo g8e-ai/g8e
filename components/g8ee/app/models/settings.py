@@ -116,6 +116,14 @@ class CommandValidationSettings(G8eBaseModel):
       approval gate (rubber-stamped). This does NOT permit blacklisted or
       forbidden commands, and does NOT widen the whitelist when whitelisting
       is enabled — the command must still pass all hard gates first.
+
+      Two auto-approve sources are unioned at request time:
+
+      1. JSON file (config/auto_approved.json): Platform-default base
+         commands rubber-stamped as benign (e.g., uptime, df, free). Loaded
+         by ``CommandAutoApprovedValidator``.
+      2. CSV ``auto_approved_commands`` field: Per-user / per-request
+         override that augments the JSON list with additional base commands.
     """
     enable_whitelisting: bool = Field(False)
     whitelisted_commands: str = Field(

@@ -37,6 +37,7 @@ import { DeviceLinkStatus } from '../../constants/auth.js';
 import { KVKey } from '../../constants/kv_keys.js';
 import { TokenFormat, DeviceLinkError, DEFAULT_DEVICE_LINK_MAX_USES, DEVICE_LINK_MAX_USES_MIN, DEVICE_LINK_MAX_USES_MAX } from '../../constants/auth.js';
 import { DEVICE_LINK_TTL_SECONDS, DEVICE_LINK_TTL_MIN_SECONDS, DEVICE_LINK_TTL_MAX_SECONDS, LOCK_TTL_MS, LOCK_RETRY_DELAY_MS, LOCK_MAX_RETRIES } from '../../constants/auth.js';
+import { G8eHttpContext } from '../../models/request_models.js';
 
 export function isValidTokenFormat(token) {
     if (!token || typeof token !== 'string') return false;
@@ -255,11 +256,11 @@ class DeviceLinkService {
     }
 
     async _registerSingleOperatorLink(token, linkData, deviceInfo, sanitizedFingerprint) {
-        const g8eContext = {
+        const g8eContext = G8eHttpContext.parse({
             web_session_id: linkData.web_session_id,
             user_id: linkData.user_id,
             organization_id: linkData.organization_id,
-        };
+        });
 
         const result = await this._deviceRegistration.registerDevice({
             operator_id: linkData.operator_id,
@@ -351,11 +352,11 @@ class DeviceLinkService {
             const result = await this._deviceRegistration.registerDevice({
                 operator_id: existingClaim.operator_id,
                 deviceInfo,
-                g8eContext: {
+                g8eContext: G8eHttpContext.parse({
                     web_session_id: webSessionId,
                     user_id: linkData.user_id,
                     organization_id: linkData.organization_id,
-                },
+                }),
             });
             return result;
         }
@@ -457,11 +458,11 @@ class DeviceLinkService {
                 const result = await this._deviceRegistration.registerDevice({
                     operator_id: existingClaim.operator_id,
                     deviceInfo,
-                    g8eContext: {
+                    g8eContext: G8eHttpContext.parse({
                         web_session_id: webSessionId,
                         user_id: linkData.user_id,
                         organization_id: linkData.organization_id,
-                    },
+                    }),
                 });
                 return result;
             }
@@ -492,11 +493,11 @@ class DeviceLinkService {
 
             const webSessionId = await this._webSessionService.getUserActiveSession(linkData.user_id);
 
-            const g8eContext = {
+            const g8eContext = G8eHttpContext.parse({
                 web_session_id: webSessionId,
                 user_id: linkData.user_id,
                 organization_id: linkData.organization_id,
-            };
+            });
 
             const result = await this._deviceRegistration.registerDevice({
                 operator_id: targetOperatorId,

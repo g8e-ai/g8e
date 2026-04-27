@@ -1,21 +1,35 @@
 # Copyright (c) 2026 Lateralus Labs, LLC.
 # Licensed under the Apache License, Version 2.0
 
-"""CLI entrypoint for evals runner."""
+"""CLI entrypoint for evals runner.
+
+Invoked as ``python -m app.evals.runner.cli`` from the g8ee component
+root (``components/g8ee``) so that ``app.*`` resolves through the standard
+package hierarchy without any runtime ``sys.path`` mutation.
+"""
 
 import argparse
 import asyncio
 import json
 import sys
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .fleet import FleetManager
+from app.llm.factory import get_llm_provider
+from app.models.settings import LLMSettings
+from app.services.ai.eval_judge import EvalJudge
+
 from .client import G8edClient
+from .fleet import FleetManager
 from .metrics import EvalRow, FullReport
-from .reporter import compute_summaries, persist_report
+from .reporter import compute_summaries, persist_report, render_text_table
 from .scorer import score_benchmark_scenario
+
+# components/g8ee/ — anchors for sibling resources (evals fleet, reports/).
+_G8EE_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+_COMPOSE_FILE = _G8EE_ROOT / "evals" / "docker-compose.evals.yml"
+_REPORTS_DIR = _G8EE_ROOT / "reports" / "evals"
 
 
 async def run_dry_run(device_token: str, g8ed_url: str = "https://g8e.local") -> None:
@@ -25,8 +39,7 @@ async def run_dry_run(device_token: str, g8ed_url: str = "https://g8e.local") ->
         device_token: Device link token for operator authentication
         g8ed_url: g8ed API base URL
     """
-    compose_file = Path(__file__).parent.parent / "docker-compose.evals.yml"
-    fleet = FleetManager(compose_file)
+    fleet = FleetManager(_COMPOSE_FILE)
 
     try:
         print("[evals] Bringing up fleet...")
@@ -123,17 +136,16 @@ async def run_scenario(
                 error="; ".join(failures) if failures else None,
                 details={"tool_calls": tool_calls, "failures": failures},
             )
-        else:
-            return EvalRow(
-                dimension=scenario.get("dimension", "accuracy"),
-                suite="evals_runner",
-                scenario_id=scenario_id,
-                category=scenario.get("category", ""),
-                passed=True,
-                score=None,
-                latency_ms=latency_ms,
-                details={"response_text": response_text[:500]},
-            )
+        return EvalRow(
+            dimension=scenario.get("dimension", "accuracy"),
+            suite="evals_runner",
+            scenario_id=scenario_id,
+            category=scenario.get("category", ""),
+            passed=True,
+            score=None,
+            latency_ms=latency_ms,
+            details={"response_text": response_text[:500]},
+        )
 
     except Exception as e:
         latency_ms = (datetime.now(UTC) - start_time).total_seconds() * 1000
@@ -168,9 +180,7 @@ async def run_full_eval(
         parallel: Number of scenarios to run in parallel
         model: Eval judge model name
     """
-    compose_file = Path(__file__).parent.parent / "docker-compose.evals.yml"
-    fleet = FleetManager(compose_file)
-    reports_dir = Path(__file__).parent.parent.parent / "reports" / "evals"
+    fleet = FleetManager(_COMPOSE_FILE)
 
     with open(gold_set_path) as f:
         scenarios = json.load(f)
@@ -178,14 +188,6 @@ async def run_full_eval(
     operator_bound_scenarios = [s for s in scenarios if s.get("agent_mode") == "OPERATOR_BOUND"]
     print(f"[evals] Found {len(operator_bound_scenarios)} OPERATOR_BOUND scenarios")
 
-    import os
-    import sys
-    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-    from app.services.ai.eval_judge import EvalJudge
-    from app.llm.factory import get_llm_provider
-    from app.models.settings import LLMSettings
-
-    # Initialize judge
     settings = LLMSettings()
     provider = get_llm_provider(settings)
     judge = EvalJudge(provider=provider, model=model)
@@ -223,10 +225,9 @@ async def run_full_eval(
         print("\n" + "=" * 60)
         print("EVALS REPORT")
         print("=" * 60)
-        from .reporter import render_text_table
         print(render_text_table(report))
 
-        artifacts = persist_report(report, reports_dir)
+        artifacts = persist_report(report, _REPORTS_DIR)
         print(f"\nArtifacts persisted to: {artifacts['run_dir']}")
 
     finally:

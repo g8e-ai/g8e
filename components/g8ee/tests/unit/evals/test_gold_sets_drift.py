@@ -52,12 +52,15 @@ def test_benchmark_gold_set_tools_exist(valid_tool_names: set[str]):
 def test_gold_sets_match_json_schema():
     # If jsonschema isn't installed in the test container, we can skip explicit validation
     # or just assert the fields exist manually
-    schema = json.load(open("/home/bob/g8e/shared/test-fixtures/gold-set-schema.json"))
+    schema_path = _GOLD_SETS_DIR.parents[2] / "shared" / "test-fixtures" / "gold-set-schema.json"
+    with open(schema_path) as f:
+        schema = json.load(f)
     for filename in ["accuracy.json", "benchmark.json", "privacy.json"]:
         path = _GOLD_SETS_DIR / filename
         if not path.exists():
             continue
-        data = json.load(open(path))
+        with open(path) as f:
+            data = json.load(f)
         for item in data:
             assert "id" in item
             assert "description" in item

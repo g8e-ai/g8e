@@ -1126,7 +1126,7 @@ case "$TOP" in
                 echo "g8e evals - Real-operator evaluation fleet"
                 echo ""
                 echo "Usage:"
-                echo "  ./g8e evals up --device-token <token> [--nodes N]"
+                echo "  ./g8e evals up -d|--device-token <token> [--nodes N]"
                 echo "  ./g8e evals down"
                 echo "  ./g8e evals status"
                 echo "  ./g8e evals logs <node-name>"
@@ -1145,7 +1145,7 @@ case "$TOP" in
                 ;;
             run)
         if [[ "$#" -eq 0 ]]; then
-            echo "Usage: ./g8e evals run --gold-set <path> [--device-token <token>]" >&2
+            echo "Usage: ./g8e evals run --gold-set <path> [-d|--device-token <token>]" >&2
             exit 1
         fi
         
@@ -1154,7 +1154,7 @@ case "$TOP" in
         local gold_set=""
         while [[ "$#" -gt 0 ]]; do
             case "$1" in
-                --device-token) _device_token="$2"; shift 2 ;;
+                -d|--device-token) _device_token="$2"; shift 2 ;;
                 --gold-set) gold_set="$2"; run_args+=("--gold-set" "$2"); shift 2 ;;
                 --dry-run) run_args+=("--dry-run"); shift 1 ;;
                 *) run_args+=("$1"); shift 1 ;;
@@ -1170,7 +1170,7 @@ case "$TOP" in
             exit 1
         fi
         
-        docker exec -i g8ep /bin/bash -c "PYTHONPATH=/home/bob/g8e/components/g8ee python -m components.g8ee.evals.runner.cli --device-token $_device_token ${run_args[*]}"
+        docker exec -i g8ep /bin/bash -c "cd /home/bob/g8e/components/g8ee && python -m app.evals.runner.cli --device-token $_device_token ${run_args[*]}"
         ;;
     up)
                 _banner "evals up"
@@ -1180,7 +1180,7 @@ case "$TOP" in
                 while [[ $# -gt 2 ]]; do
                     case "${3:-}" in
                         --nodes) _nodes="${4:-3}"; shift 2 ;;
-                        --device-token) _device_token="${4:-}"; shift 2 ;;
+                        -d|--device-token) _device_token="${4:-}"; shift 2 ;;
                         *) echo "[g8e] unknown option: '${3}'"; exit 1 ;;
                     esac
                 done

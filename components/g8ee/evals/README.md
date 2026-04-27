@@ -21,6 +21,8 @@ This directory contains the new host-driven evals framework for testing g8e with
 
 1. **Bring up the eval fleet**
    ```bash
+   ./g8e evals up -d dlk_xxx
+   # or
    ./g8e evals up --device-token dlk_xxx
    ```
 
@@ -50,20 +52,22 @@ The evals framework uses real Linux containers running real g8e operators:
 ## File Layout
 
 ```
-components/g8ee/evals/
+components/g8ee/evals/                    # Fleet assets + gold sets (data only)
 ├── README.md
 ├── docker-compose.evals.yml              # Eval fleet (N operator containers)
 ├── containers/
 │   └── eval-node/
 │       ├── Dockerfile
 │       └── entrypoint.sh                 # Downloads + supervises operator
-└── runner/
-    ├── cli.py                            # ./g8e evals run entrypoint
-    ├── fleet.py                          # compose up/down, health, discover
-    ├── client.py                         # g8ed chat/approval/SSE client
-    ├── scorer.py                         # judge + deterministic matchers
-    ├── reporter.py                       # report rendering (text/CSV/JSON)
-    └── metrics.py                        # EvalRow / DimensionSummary / FullReport
+└── gold_sets/                            # Scenario JSON inputs
+
+components/g8ee/app/evals/runner/         # Python runner package (app.evals.runner)
+├── cli.py                                # ./g8e evals run entrypoint
+├── fleet.py                              # compose up/down, health, discover
+├── client.py                             # g8ed chat/approval/SSE client
+├── scorer.py                             # judge + deterministic matchers
+├── reporter.py                           # report rendering (text/CSV/JSON)
+└── metrics.py                            # EvalRow / DimensionSummary / FullReport
 ```
 
 ## Migration Status
@@ -73,8 +77,8 @@ This framework superseded the previous `tests/evals/` pytest-based fixture, whic
 **Completed:**
 - Eval-node container (`containers/eval-node/`)
 - Compose fleet wrapper (`docker-compose.evals.yml`, `./g8e evals up|down|status|logs`)
-- Host-driven runner (`runner/cli.py`, `runner/fleet.py`, `runner/client.py`)
-- Scorer + reporter (`runner/scorer.py`, `runner/reporter.py`, `runner/metrics.py`)
+- Host-driven runner (`app/evals/runner/cli.py`, `app/evals/runner/fleet.py`, `app/evals/runner/client.py`)
+- Scorer + reporter (`app/evals/runner/scorer.py`, `app/evals/runner/reporter.py`, `app/evals/runner/metrics.py`)
 - Full `./g8e evals run --gold-set <path>` entrypoint
 - Privacy gold set / Sentinel scrubber drift coverage in `tests/unit/security/test_privacy_gold_set_placeholders.py`
 

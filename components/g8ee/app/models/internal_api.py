@@ -189,11 +189,9 @@ class OperatorUnbindResponse(G8eBaseModel):
 
 
 class OperatorAuthenticateRequest(G8eBaseModel):
-    """Request model for operator authentication."""
+    """Request model for operator authentication via API key (Bearer)."""
     system_info: dict = Field(default_factory=dict)
     runtime_config: dict | None = Field(default=None)
-    auth_mode: str | None = Field(default=None)
-    operator_session_id: str | None = Field(default=None)
 
 
 class OperatorAuthenticateResponse(G8eBaseModel):
@@ -207,6 +205,32 @@ class OperatorAuthenticateResponse(G8eBaseModel):
     session: dict | None = None
     operator_cert: str | None = None
     operator_cert_key: str | None = None
+    error: str | None = None
+
+
+class OperatorDeviceLinkRegisterRequest(G8eBaseModel):
+    """Request model for device-link operator registration.
+
+    Called by g8ed after device-link token consumption.
+    Trust model: caller is g8ed via internal mTLS. No authorization header.
+    """
+    operator_id: str = Field(..., description="Operator ID")
+    user_id: str = Field(..., description="User ID")
+    organization_id: str | None = Field(default=None, description="Organization ID")
+    operator_type: str = Field(default="SYSTEM", description="Operator type")
+    system_info: dict = Field(default_factory=dict, description="System information")
+
+
+class OperatorDeviceLinkRegisterResponse(G8eBaseModel):
+    """Response model for device-link operator registration."""
+    success: bool
+    operator_id: str | None = None
+    operator_session_id: str | None = None
+    user_id: str | None = None
+    api_key: str | None = None
+    operator_cert: str | None = None
+    operator_cert_key: str | None = None
+    session: dict | None = None
     error: str | None = None
 
 

@@ -275,8 +275,8 @@ def unified_metrics_collector(request):
     prints a text summary to stdout and persists artifacts (report.txt, results.csv,
     summary.json) to components/g8ee/reports/evals/<timestamp>/ at session end.
     """
-    from evals.runner.metrics import EvalRow, FullReport
-    from evals.runner.reporter import compute_summaries, persist_report, render_text_table
+    from app.evals.runner.metrics import EvalRow, FullReport
+    from app.evals.runner.reporter import compute_summaries, persist_report, render_text_table
     from app.constants.paths import PATHS
     from app.llm.factory import get_llm_settings
     from datetime import datetime, UTC

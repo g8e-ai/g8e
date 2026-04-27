@@ -172,6 +172,20 @@ demo - Fleet demo (host)
     ./g8e demo vanish                                 # Clean up operators
     ./g8e demo clean                                  # Remove everything
 
+evals - Real-operator evaluation fleet (host)
+  up [-d <token>] [--nodes N]    Bring up eval fleet with N nodes (default: 3)
+  down                           Tear down the eval fleet
+  status                         Show status of eval nodes
+  logs <node-name>               Show logs for a specific node
+  run --gold-set <path> [-d <token>]  Run full eval suite against gold set
+
+  Examples:
+    ./g8e evals up -d dlk_xxx                          # Bring up 3 eval nodes
+    ./g8e evals up -d dlk_xxx --nodes 5                # Bring up 5 eval nodes
+    ./g8e evals status                                # Check fleet status
+    ./g8e evals logs eval-node-01                      # View node logs
+    ./g8e evals down                                   # Tear down fleet
+
 DETAILED HELP
   ./g8e operator --help
   ./g8e test --help

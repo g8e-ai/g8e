@@ -55,6 +55,8 @@ from app.models.internal_api import (
     OperatorApprovalResponse,
     OperatorAuthenticateRequest,
     OperatorAuthenticateResponse,
+    OperatorDeviceLinkRegisterRequest,
+    OperatorDeviceLinkRegisterResponse,
     OperatorBindRequest,
     OperatorBindResponse,
     OperatorCertificateRevokeRequest,
@@ -1053,31 +1055,50 @@ async def authenticate_operator(
     http_request: Request = None,
 ):
     """
-    Authenticate an operator.
+    Authenticate an operator via API key (Bearer).
     Called by g8ed (as proxy) or directly via internal API.
     """
-    try:
-        request_context = {
-            "ip": http_request.client.host if http_request else None,
-            "user_agent": http_request.headers.get("user-agent") if http_request else None,
-        }
-        
-        result = await operator_auth_service.authenticate_operator(
-            authorization_header=http_request.headers.get("authorization") if http_request else None,
-            body=request.model_dump(),
-            request_context=request_context
+    request_context = {
+        "ip": http_request.client.host if http_request else None,
+        "user_agent": http_request.headers.get("user-agent") if http_request else None,
+    }
+
+    result = await operator_auth_service.authenticate_operator(
+        authorization_header=http_request.headers.get("authorization") if http_request else None,
+        body=request.model_dump(),
+        request_context=request_context
+    )
+
+    if result.get("success"):
+        return OperatorAuthenticateResponse(**result)
+    else:
+        return OperatorAuthenticateResponse(
+            success=False,
+            error=result.get("error")
         )
-        
-        if result.get("success"):
-            return OperatorAuthenticateResponse(**result)
-        else:
-            return OperatorAuthenticateResponse(
-                success=False,
-                error=result.get("error")
-            )
-    except Exception as e:
-        logger.error(f"[INTERNAL-HTTP] Operator authentication failed: {e}")
-        return OperatorAuthenticateResponse(success=False, error=str(e))
+
+
+@router.post(API_PATHS["g8ee"]["operators_device_link_register"], response_model=OperatorDeviceLinkRegisterResponse)
+async def register_device_link_operator(
+    request: OperatorDeviceLinkRegisterRequest,
+    operator_auth_service: OperatorAuthService = Depends(get_g8ee_operator_auth_service),
+    http_request: Request = None,
+) -> OperatorDeviceLinkRegisterResponse:
+    """Bootstrap an operator after device-link consumption (g8ed-internal)."""
+    result = await operator_auth_service.register_device_link_operator(
+        operator_id=request.operator_id,
+        user_id=request.user_id,
+        organization_id=request.organization_id,
+        operator_type=request.operator_type,
+        system_info=request.system_info,
+        request_context={
+            "ip": http_request.client.host if http_request.client else None,
+            "user_agent": http_request.headers.get("user-agent"),
+        },
+    )
+    if result.get("success"):
+        return OperatorDeviceLinkRegisterResponse(**result)
+    return OperatorDeviceLinkRegisterResponse(success=False, error=result.get("error"))
 
 
 @router.post("/operators/validate-session", response_model=OperatorSessionValidateResponse)

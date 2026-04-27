@@ -19,11 +19,12 @@ from typing import TYPE_CHECKING, Any, List, Dict
 from app.constants.collections import DB_COLLECTION_OPERATORS
 from app.constants.status import (
     ComponentName,
+    OperatorHistoryEventType,
     OperatorStatus,
     OperatorType,
 )
 from app.errors import ValidationError
-from app.models.operators import OperatorDocument
+from app.models.operators import OperatorDocument, OperatorHistoryEntry
 from app.services.protocols import OperatorDataServiceProtocol, SupervisorServiceProtocol
 from app.utils.timestamp import now
 
@@ -105,6 +106,31 @@ class OperatorLifecycleService:
             logger.error(f"[OPERATOR-LIFECYCLE] Failed to update operator {operator_id} during claim: {result.error}")
             return False
 
+        # Append history entry (best-effort, minimal inline append without keyed-lock atomicity)
+        try:
+            history_entry = OperatorHistoryEntry(
+                event_type=OperatorHistoryEventType.SLOT_CONSUMED,
+                actor=ComponentName.G8EE,
+                summary=f"Operator slot claimed by session {operator_session_id}",
+                prev_hash="0" * 64,
+                details={
+                    "operator_session_id": operator_session_id,
+                    "bound_web_session_id": bound_web_session_id,
+                    "operator_type": operator_type,
+                }
+            )
+            append_result = await self._cache.append_to_array(
+                collection=self.operator_data_service.collection,
+                document_id=operator_id,
+                array_field="history_trail",
+                items=[history_entry.model_dump(mode="json")],
+                additional_updates={"updated_at": now()}
+            )
+            if not append_result.success:
+                logger.warning(f"[OPERATOR-LIFECYCLE] Failed to append history entry for operator {operator_id}: {append_result.error}")
+        except Exception as e:
+            logger.warning(f"[OPERATOR-LIFECYCLE] Failed to append history entry for operator {operator_id}: {e}")
+
         logger.info(f"[OPERATOR-LIFECYCLE] Operator slot claimed {operator_id}", extra={
             "operator_id": operator_id,
             "operator_session_id": operator_session_id,
@@ -150,6 +176,27 @@ class OperatorLifecycleService:
 
         if not result.success:
             raise ValidationError(f"Failed to terminate operator {operator_id}: {result.error}")
+
+        # Append history entry (best-effort, minimal inline append without keyed-lock atomicity)
+        try:
+            history_entry = OperatorHistoryEntry(
+                event_type=OperatorHistoryEventType.TERMINATED,
+                actor=actor,
+                summary=summary,
+                prev_hash="0" * 64,
+                details=details or {}
+            )
+            append_result = await self._cache.append_to_array(
+                collection=self.operator_data_service.collection,
+                document_id=operator_id,
+                array_field="history_trail",
+                items=[history_entry.model_dump(mode="json")],
+                additional_updates={"updated_at": terminated_at}
+            )
+            if not append_result.success:
+                logger.warning(f"[OPERATOR-LIFECYCLE] Failed to append history entry for operator {operator_id}: {append_result.error}")
+        except Exception as e:
+            logger.warning(f"[OPERATOR-LIFECYCLE] Failed to append history entry for operator {operator_id}: {e}")
 
         # Update in-memory object to reflect the changes
         operator.status = OperatorStatus.TERMINATED

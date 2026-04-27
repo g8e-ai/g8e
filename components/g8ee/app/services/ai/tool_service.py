@@ -52,6 +52,7 @@ from app.services.ai.tool_registry import (
 )
 from app.services.investigation.investigation_service import InvestigationService
 from app.services.operator.command_service import OperatorCommandService
+from app.utils.auto_approved_validator import CommandAutoApprovedValidator
 from app.utils.blacklist_validator import CommandBlacklistValidator
 from app.utils.whitelist_validator import CommandWhitelistValidator
 
@@ -83,6 +84,7 @@ class AIToolService:
         user_settings: G8eeUserSettings | None = None,
         whitelist_validator: CommandWhitelistValidator | None = None,
         blacklist_validator: CommandBlacklistValidator | None = None,
+        auto_approved_validator: CommandAutoApprovedValidator | None = None,
     ):
         self.operator_command_service = operator_command_service
         self.investigation_service = investigation_service
@@ -95,12 +97,21 @@ class AIToolService:
         self._ssh_inventory_service = ssh_inventory_service
         self._stream_executor = stream_executor
 
-        from app.utils.validators import get_blacklist_validator, get_whitelist_validator
+        from app.utils.validators import (
+            get_auto_approved_validator,
+            get_blacklist_validator,
+            get_whitelist_validator,
+        )
         self._whitelist_validator = (
             whitelist_validator if whitelist_validator is not None else get_whitelist_validator()
         )
         self._blacklist_validator = (
             blacklist_validator if blacklist_validator is not None else get_blacklist_validator()
+        )
+        self._auto_approved_validator = (
+            auto_approved_validator
+            if auto_approved_validator is not None
+            else get_auto_approved_validator()
         )
 
         logger.info("AIToolService initialized")
@@ -224,6 +235,11 @@ class AIToolService:
     def blacklist_validator(self) -> CommandBlacklistValidator:
         """The configured blacklist validator."""
         return self._blacklist_validator
+
+    @property
+    def auto_approved_validator(self) -> CommandAutoApprovedValidator:
+        """The configured auto-approved-list validator."""
+        return self._auto_approved_validator
 
     def get_tools(
         self,

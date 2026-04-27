@@ -20,7 +20,7 @@ from app.services.protocols import MemoryDataServiceProtocol
 
 
 
-def create_tool_service_fake(investigation_service=None, web_search_provider=None, with_run_commands_result=None, auto_approve=True, event_service=None, whitelist_validator=None, blacklist_validator=None):
+def create_tool_service_fake(investigation_service=None, web_search_provider=None, with_run_commands_result=None, auto_approve=True, event_service=None, whitelist_validator=None, blacklist_validator=None, auto_approved_validator=None):
     """Return an AIToolService with all external dependencies wired.
     
     Uses build_command_service to ensure we have a real OperatorCommandService
@@ -76,6 +76,7 @@ def create_tool_service_fake(investigation_service=None, web_search_provider=Non
         web_search_provider=web_search_provider,
         whitelist_validator=whitelist_validator,
         blacklist_validator=blacklist_validator,
+        auto_approved_validator=auto_approved_validator,
     )
 
 
