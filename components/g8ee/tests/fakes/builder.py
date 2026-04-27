@@ -25,6 +25,7 @@ from app.services.operator.operator_data_service import OperatorDataService
 from app.services.protocols import ExecutionServiceProtocol
 from app.utils.whitelist_validator import CommandWhitelistValidator
 from app.utils.blacklist_validator import CommandBlacklistValidator
+from app.utils.auto_approved_validator import CommandAutoApprovedValidator
 
 from app.models.cache import CacheOperationResult
 from .fake_ai_response_analyzer import FakeAIResponseAnalyzer
@@ -126,6 +127,7 @@ def build_command_service(
     skip_pubsub_client: bool = False,
     whitelist_validator: CommandWhitelistValidator | None = None,
     blacklist_validator: CommandBlacklistValidator | None = None,
+    auto_approved_validator: CommandAutoApprovedValidator | None = None,
     execution_service: ExecutionServiceProtocol | None = None,
 ) -> OperatorCommandService:
     """Build an OperatorCommandService with typed fakes for all dependencies.
@@ -215,6 +217,7 @@ def build_command_service(
         settings=settings,
         whitelist_validator=whitelist_validator,
         blacklist_validator=blacklist_validator,
+        auto_approved_validator=auto_approved_validator,
     )
     if not skip_pubsub_client:
         svc.set_pubsub_client(pubsub_client or FakePubSubClient())

@@ -17,6 +17,7 @@ import { OperatorStatus, OperatorType } from '@g8ed/constants/operator.js';
 import { OperatorSessionRole, DeviceLinkError } from '@g8ed/constants/auth.js';
 import { EventType } from '@g8ed/constants/events.js';
 import { SystemInfo } from '@g8ed/models/operator_model.js';
+import { G8eHttpContext } from '@g8ed/models/request_models.js';
 import { getTestServices } from '@test/helpers/test-services.js';
 import { TestCleanupHelper } from '@test/helpers/test-cleanup.js';
 
@@ -29,11 +30,12 @@ describe('DeviceRegistrationService', () => {
     let webSessionService;
     let userService;
 
-    const mockG8eContext = {
+    const mockG8eContextRaw = {
         user_id: 'user-123',
         web_session_id: 'web-session-456',
         organization_id: 'org-789'
     };
+    let mockG8eContext;
 
     const mockDeviceInfo = {
         system_fingerprint: 'abc123def456',
@@ -47,6 +49,7 @@ describe('DeviceRegistrationService', () => {
     beforeEach(async () => {
         vi.clearAllMocks();
         services = await getTestServices();
+        mockG8eContext = G8eHttpContext.parse(mockG8eContextRaw);
         
         // Setup real services with spies for verification
         sseService = services.sseService;
@@ -64,7 +67,7 @@ describe('DeviceRegistrationService', () => {
         vi.spyOn(userService, 'getUser');
         vi.spyOn(userService, 'updateUserOperator').mockResolvedValue(true);
         
-        vi.spyOn(operatorService, 'relayAuthenticateOperatorToG8ee').mockResolvedValue({
+        vi.spyOn(operatorService, 'relayRegisterDeviceLinkToG8ee').mockResolvedValue({
             success: true,
             operator_session_id: 'test-session-id'
         });
@@ -140,7 +143,7 @@ describe('DeviceRegistrationService', () => {
                 status: OperatorStatus.AVAILABLE
             });
             userService.getUser.mockResolvedValue(mockUser);
-            operatorService.relayAuthenticateOperatorToG8ee.mockResolvedValue({
+            operatorService.relayRegisterDeviceLinkToG8ee.mockResolvedValue({
                 success: true,
                 operator_session_id: operatorSessionId
             });
@@ -155,9 +158,8 @@ describe('DeviceRegistrationService', () => {
             expect(result.operator_session_id).toBe(operatorSessionId);
             expect(result.system_info).toBeInstanceOf(SystemInfo);
             
-            expect(operatorService.relayAuthenticateOperatorToG8ee).toHaveBeenCalledWith(
+            expect(operatorService.relayRegisterDeviceLinkToG8ee).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    auth_mode: 'operator_session',
                     operator_id: operatorId,
                     operator_type: OperatorType.SYSTEM
                 }),
@@ -197,7 +199,7 @@ describe('DeviceRegistrationService', () => {
                 status: OperatorStatus.AVAILABLE,
             });
             userService.getUser.mockResolvedValue(mockUser);
-            operatorService.relayAuthenticateOperatorToG8ee.mockResolvedValue({
+            operatorService.relayRegisterDeviceLinkToG8ee.mockResolvedValue({
                 success: true,
                 operator_session_id: operatorSessionId
             });
@@ -208,9 +210,8 @@ describe('DeviceRegistrationService', () => {
                 g8eContext: mockG8eContext,
             });
 
-            expect(operatorService.relayAuthenticateOperatorToG8ee).toHaveBeenCalledWith(
+            expect(operatorService.relayRegisterDeviceLinkToG8ee).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    auth_mode: 'operator_session',
                     operator_id: operatorId,
                     operator_type: OperatorType.SYSTEM
                 }),
@@ -231,7 +232,7 @@ describe('DeviceRegistrationService', () => {
             const operatorId = 'op-1';
             operatorService.getOperator.mockResolvedValue({ status: OperatorStatus.AVAILABLE });
             userService.getUser.mockResolvedValue({ id: 'u1' });
-            operatorService.relayAuthenticateOperatorToG8ee.mockResolvedValue({
+            operatorService.relayRegisterDeviceLinkToG8ee.mockResolvedValue({
                 success: false,
                 error: 'Authentication failed'
             });

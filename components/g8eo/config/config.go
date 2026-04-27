@@ -232,14 +232,8 @@ func Load(opts LoadOptions) (*Config, error) {
 		opts.AuthMode = constants.Status.AuthMode.APIKey
 	}
 
-	if opts.AuthMode == constants.Status.AuthMode.OperatorSession {
-		if opts.OperatorSessionID == "" {
-			return nil, fmt.Errorf("OperatorSessionID is required for session-based auth")
-		}
-	} else {
-		if opts.APIKey == "" {
-			return nil, fmt.Errorf("APIKey is required")
-		}
+	if opts.APIKey == "" {
+		return nil, fmt.Errorf("APIKey is required")
 	}
 
 	if opts.OperatorEndpoint == "" {

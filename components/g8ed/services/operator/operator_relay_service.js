@@ -258,6 +258,23 @@ export class OperatorRelayService {
         });
     }
 
+    async relayRegisterDeviceLinkToG8ee(params, g8eContext) {
+        this._validateContext(g8eContext);
+        const httpClient = this._getHttpClient();
+        if (!httpClient) throw new Error('InternalHttpClient not initialized');
+
+        logger.info('[OPERATOR-RELAY] Registering device-link operator via g8ee', {
+            operator_id: params.operator_id,
+            user_id: params.user_id,
+        });
+
+        return httpClient.request('g8ee', ApiPaths.g8ee.operatorsDeviceLinkRegister(), {
+            method: 'POST',
+            body: params,
+            g8eContext
+        });
+    }
+
     async relayValidateOperatorSessionToG8ee(operatorSessionId, g8eContext) {
         this._validateContext(g8eContext);
         const httpClient = this._getHttpClient();

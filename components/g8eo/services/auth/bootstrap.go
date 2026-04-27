@@ -195,9 +195,6 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context, systemInfo *mod
 		RuntimeConfig: runtimeConfig,
 		AuthMode:      authMode,
 	}
-	if authMode == constants.Status.AuthMode.OperatorSession {
-		reqBody.OperatorSessionID = bs.config.OperatorSessionId
-	}
 
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
@@ -227,9 +224,7 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context, systemInfo *mod
 			return nil, fmt.Errorf("failed to build auth request: %w", err)
 		}
 		req.Header.Set(constants.HeaderContentType, "application/json")
-		if authMode != constants.Status.AuthMode.OperatorSession {
-			req.Header.Set(constants.HeaderAuthorization, "Bearer "+bs.config.APIKey)
-		}
+		req.Header.Set(constants.HeaderAuthorization, "Bearer "+bs.config.APIKey)
 		req.Header.Set(constants.HeaderXRequestTimestamp, sqliteutil.NowTimestamp())
 
 		bs.logger.Info("Authentication request transmitted", "attempt", attempt)

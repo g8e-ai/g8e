@@ -216,7 +216,7 @@ class OperatorDocument(G8eIdentifiableModel):
     latest_heartbeat_snapshot: OperatorHeartbeat | None = Field(default=None, description="Latest heartbeat metrics")
     investigation_id: str | None = Field(default=None, description="Current investigation ID")
     case_id: str | None = Field(default=None, description="Current case ID")
-    api_key: str | None = Field(default=None, description="Operator API key (g8ep only)")
+    api_key: str | None = Field(default=None, description="Operator API key (authority: g8ee)")
     is_active: bool = Field(default=False, description="Whether Operator is in active status")
     operator_type: OperatorType = Field(default=OperatorType.SYSTEM, description="Operator deployment type")
     granted_intents: list[str] | None = Field(default=None, description="Granted intent permissions (cloud operators)")
