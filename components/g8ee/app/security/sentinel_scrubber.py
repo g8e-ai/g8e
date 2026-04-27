@@ -172,14 +172,14 @@ class SentinelScrubber:
 
         scrubbers.append(RegexScrubber(
             "aws_secret_key",
-            r'aws.{0,20}secret.{0,20}[\'"][0-9a-zA-Z/+=]{40}[\'"]',
+            r'aws[^\[\]]{0,20}secret[^\[\]]{0,20}[\'"][0-9a-zA-Z/+=]{40}[\'"]',
             "[AWS_SECRET]",
             re.IGNORECASE
         ))
 
         scrubbers.append(RegexScrubber(
             "azure_secret",
-            r'azure.{0,20}(secret|password|key).{0,20}[\'"][A-Za-z0-9_\-\.~]{32,}[\'"]',
+            r'azure[^\[\]]{0,20}(secret|password|key)[^\[\]]{0,20}[\'"][A-Za-z0-9_\-\.~]{32,}[\'"]',
             "[AZURE_SECRET]",
             re.IGNORECASE
         ))
@@ -193,7 +193,7 @@ class SentinelScrubber:
 
         scrubbers.append(RegexScrubber(
             "heroku_key",
-            r'heroku.{0,20}(api.?key|token).{0,20}[\'"]?[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}[\'"]?',
+            r'heroku[^\[\]]{0,20}(api.?key|token)[^\[\]]{0,20}[\'"]?[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}[\'"]?',
             "[HEROKU_KEY]",
             re.IGNORECASE
         ))
@@ -207,7 +207,7 @@ class SentinelScrubber:
 
         scrubbers.append(RegexScrubber(
             "conn_string",
-            r"(?:mysql|postgres|mongodb|redis|amqp|jdbc)://[^\s]+",
+            r"(?:mysql|postgres(?:ql)?|mongodb|redis|amqp|jdbc)://[^\s]+",
             "[CONN_STRING]",
             re.IGNORECASE
         ))

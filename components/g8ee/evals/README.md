@@ -57,30 +57,26 @@ components/g8ee/evals/
 │   └── eval-node/
 │       ├── Dockerfile
 │       └── entrypoint.sh                 # Downloads + supervises operator
-└── runner/                               # TODO: Step 3+
+└── runner/
     ├── cli.py                            # ./g8e evals run entrypoint
     ├── fleet.py                          # compose up/down, health, discover
     ├── client.py                         # g8ed chat/approval/SSE client
     ├── scorer.py                         # judge + deterministic matchers
-    ├── reporter.py                       # (move from tests/evals/reporter.py)
-    └── metrics.py                        # (move from tests/evals/metrics.py)
+    ├── reporter.py                       # report rendering (text/CSV/JSON)
+    └── metrics.py                        # EvalRow / DimensionSummary / FullReport
 ```
 
 ## Migration Status
 
-This framework supersedes the broken `tests/evals/real_operator_fixture.py` implementation. See `docs/benchmarking/evals.md` for the complete design document and implementation plan.
+This framework superseded the previous `tests/evals/` pytest-based fixture, which has been removed. See `docs/testing.md` for the architectural rationale.
 
-**Completed Steps:**
-- Step 0: Deleted broken real_operator_fixture.py
-- Step 1: Created eval-node container
-- Step 2: Created docker-compose.evals.yml and CLI wrappers
-- Step 3: Runner skeleton + g8ed client
-- Step 4: Scorer + reporter port
-- Step 5: Full runner loop
-- Step 6: Regression coverage (smoke test added)
-
-**Remaining Steps:**
-- Step 7: Docs + deprecation notes
+**Completed:**
+- Eval-node container (`containers/eval-node/`)
+- Compose fleet wrapper (`docker-compose.evals.yml`, `./g8e evals up|down|status|logs`)
+- Host-driven runner (`runner/cli.py`, `runner/fleet.py`, `runner/client.py`)
+- Scorer + reporter (`runner/scorer.py`, `runner/reporter.py`, `runner/metrics.py`)
+- Full `./g8e evals run --gold-set <path>` entrypoint
+- Privacy gold set / Sentinel scrubber drift coverage in `tests/unit/security/test_privacy_gold_set_placeholders.py`
 
 ## Resource Footprint
 

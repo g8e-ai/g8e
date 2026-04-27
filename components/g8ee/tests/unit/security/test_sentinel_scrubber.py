@@ -240,6 +240,15 @@ class TestPhase3PII:
         assert "user:pass" not in result.scrubbed_text
         assert ScrubType.CONN_STRING in result.scrub_types
 
+    def test_postgresql_connection_string_scrubbed(self):
+        # Regression: the canonical libpq URI scheme is `postgresql://`,
+        # not just `postgres://`. Both must be scrubbed.
+        text = "Connection string: postgresql://dbuser:Hunter2Pass@localhost:5432/mydb"
+        result = _scrubber.scrub(text)
+        assert "[CONN_STRING]" in result.scrubbed_text
+        assert "dbuser:Hunter2Pass" not in result.scrubbed_text
+        assert ScrubType.CONN_STRING in result.scrub_types
+
     def test_mongodb_connection_string_scrubbed(self):
         text = "mongodb://root:password@mongo.internal:27017/admin"
         result = _scrubber.scrub(text)
