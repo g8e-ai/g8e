@@ -30,7 +30,7 @@ AI backend. Python/FastAPI.
 - **Capabilities:** none (`cap_drop: ALL`)
 - **Writable volumes:** `g8ee-data:/data` only
 - **Config/shared mounts:** `./shared:/app/shared:ro`, `g8es-ssl:/g8es:ro`
-- **Internal Auth:** Receives `G8E_INTERNAL_AUTH_TOKEN` via environment during bootstrap; discovers authoritative token from g8es/SSL volume at runtime.
+- **Internal Auth:** Reads `internal_auth_token` from the read-only `g8es-ssl` volume (`/g8es/internal_auth_token`) at entrypoint startup and exports it as `G8E_INTERNAL_AUTH_TOKEN` for the application process.
 - **Security:** `cap_drop: ALL`, `no-new-privileges:true`, hardened sysctls (`accept_redirects=0`, `send_redirects=0`)
 - **Healthcheck:** `curl -f --cacert /g8es/ca.crt https://localhost/health` (internal port 443)
 - **Dependencies:** g8es (healthy), g8el (healthy)
@@ -72,7 +72,7 @@ Platform persistence and pub/sub broker. Runs the `g8e.operator` binary in `--li
 - **Read-only filesystem:** yes — tmpfs at `/tmp`, `/var/tmp`
 - **Capabilities:** `cap_add: NET_BIND_SERVICE`, `cap_drop: ALL`
 - **Writable volumes:** `g8es-data:/data`, `g8es-ssl:/ssl`
-- **Internal Auth:** Authoritative generator and enforcer of `X-Internal-Auth` token. Receives `G8E_INTERNAL_AUTH_TOKEN` via environment. Persists secrets exclusively to the `g8es-ssl` volume.
+- **Internal Auth:** Authoritative generator and enforcer of `X-Internal-Auth` token. The `g8e.operator --listen` binary reads tokens directly from `--ssl-dir /ssl`; no environment injection is required. Persists secrets exclusively to the `g8es-ssl` volume.
 - **Security:** read-only root filesystem, `cap_add: NET_BIND_SERVICE`, `cap_drop: ALL`
 - **Ports:** Exposes 9000 (HTTPS) and 9001 (WSS) for internal communication (no external ports)
 - **Healthcheck:** `curl -f --cacert /ssl/ca.crt https://localhost:9000/health`

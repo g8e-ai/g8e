@@ -359,7 +359,9 @@ describe('DeviceLinkService', () => {
             const linkData = new DeviceLinkData({
                 token,
                 user_id: mockG8eContext.user_id,
+                organization_id: mockG8eContext.organization_id,
                 operator_id: mockG8eContext.operator_id,
+                web_session_id: mockG8eContext.web_session_id,
                 status: DeviceLinkStatus.PENDING,
                 expires_at: addSeconds(now(), 3600)
             });

@@ -1,14 +1,7 @@
 #!/bin/sh
 set -e
 
-# Load security tokens into environment if files exist
-if [ -f /ssl/internal_auth_token ]; then
-    export G8E_INTERNAL_AUTH_TOKEN=$(cat /ssl/internal_auth_token | tr -d ' \n\r')
-fi
-
-if [ -f /ssl/session_encryption_key ]; then
-    export G8E_SESSION_ENCRYPTION_KEY=$(cat /ssl/session_encryption_key | tr -d ' \n\r')
-fi
+# Note: g8e.operator --listen reads tokens from --ssl-dir directly; no env exports needed.
 
 # ---------------------------------------------------------------------------
 # Publish baked operator binaries to the blob store.

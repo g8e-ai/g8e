@@ -50,7 +50,6 @@ services:
       - NODE_EXTRA_CA_CERTS=/g8es/ca.crt
       - G8E_DB_PATH=/data/g8e.db
       - G8E_DOCS_DIR=/docs
-      - G8E_INTERNAL_AUTH_TOKEN
     volumes:
       - ./shared:/app/shared:ro
       - ./components/g8ee/app:/app/components/g8ee/app:ro
@@ -95,8 +94,6 @@ services:
 
   # g8el (g8el) - llama.cpp inference server
   g8el:
-    profiles:
-      - inference
     build:
       context: .
       dockerfile: ./components/g8el/Dockerfile
@@ -113,7 +110,7 @@ services:
     environment:
       - G8EL_MODEL_NAME=google_gemma-4-E2B-it-Q4_K_M.gguf
       - G8EL_MODEL_URL=https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf
-      - G8EL_CONTEXT_SIZE=8192
+      - G8EL_CONTEXT_SIZE=49152
       - G8EL_THREADS=8
       - G8EL_HOST=0.0.0.0
       - G8EL_PORT=11444
@@ -152,8 +149,6 @@ services:
       - "io.g8e.managed=true"
     environment:
       - NODE_EXTRA_CA_CERTS=/g8es/ca.crt
-      - G8E_INTERNAL_AUTH_TOKEN
-      - G8E_SESSION_ENCRYPTION_KEY
     ports:
       - "443:443"
       - "80:80"
@@ -222,7 +217,6 @@ services:
     environment:
       - G8E_CA_CERT_PATH=/g8es/ca.crt
       - NODE_EXTRA_CA_CERTS=/g8es/ca.crt
-      - G8E_INTERNAL_AUTH_TOKEN
     volumes:
       - g8es-data:/data:noexec,nosuid,nodev
       - g8es-ssl:/ssl:noexec,nosuid,nodev
@@ -277,8 +271,6 @@ services:
       - G8E_SSL_DIR=/g8es
       - G8E_SSL_CERT_FILE=/g8es/ca.crt
       - RUNNING_IN_DOCKER=1
-      - G8E_INTERNAL_AUTH_TOKEN
-      - G8E_SESSION_ENCRYPTION_KEY
     volumes:
       - ./components/g8ee:/app/components/g8ee
       - ./shared:/app/shared
@@ -317,8 +309,6 @@ services:
       - NODE_EXTRA_CA_CERTS=/g8es/ca.crt
       - G8E_SSL_DIR=/g8es
       - RUNNING_IN_DOCKER=1
-      - G8E_INTERNAL_AUTH_TOKEN
-      - G8E_SESSION_ENCRYPTION_KEY
     volumes:
       - ./components/g8ed:/app/components/g8ed
       - g8ed-test-node-modules:/app/components/g8ed/node_modules
@@ -356,7 +346,6 @@ services:
       - G8E_SSL_DIR=/g8es
       - G8E_SSL_CERT_FILE=/g8es/ca.crt
       - RUNNING_IN_DOCKER=1
-      - G8E_INTERNAL_AUTH_TOKEN
     volumes:
       - ./components/g8eo:/app/components/g8eo
       - ./shared:/app/shared:ro
@@ -406,8 +395,6 @@ services:
       - G8E_OPERATOR_PUBSUB_URL=wss://g8es:9001
       - G8E_SSL_CERT_FILE=/g8es/ca.crt
       - RUNNING_IN_DOCKER=1
-      - G8E_INTERNAL_AUTH_TOKEN
-      - G8E_SESSION_ENCRYPTION_KEY
       # SSH streaming: only set SSH_AUTH_SOCK in-container when the host has
       # an agent. Empty value disables agent auth in g8eo.
       - SSH_AUTH_SOCK=${SSH_AUTH_SOCK:+/run/host-ssh-agent.sock}

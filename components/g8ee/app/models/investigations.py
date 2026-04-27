@@ -96,6 +96,11 @@ class ConversationMessageMetadata(G8eBaseModel):
     token_usage: TokenUsage | None = Field(default=None, description="Token usage stats from AI response")
     sentinel_mode: bool | None = Field(default=None, description="Sentinel mode active when message was created")
     attachment_filenames: list[str] = Field(default_factory=list, description="Filenames of attachments sent with this message")
+    clarifying_questions: list[str] | None = Field(default=None, description="Triage clarifying questions")
+    triage_complexity: str | None = Field(default=None, description="Triage complexity classification")
+    triage_intent_summary: str | None = Field(default=None, description="Triage intent summary")
+    question_index: int | None = Field(default=None, description="Index of the clarifying question being answered")
+    answer: bool | None = Field(default=None, description="User's yes/no answer to a clarifying question")
 
 
 class UserChatMetadata(ConversationMessageMetadata):

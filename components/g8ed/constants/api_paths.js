@@ -508,6 +508,7 @@ export const apiPaths = {
         operatorsG8epActivate:     () => InternalApiPaths.g8ee.operators_g8ep_activate,
         operatorsG8epRelaunch:     () => InternalApiPaths.g8ee.operators_g8ep_relaunch,
         operatorsDeviceLinkRegister: () => InternalApiPaths.g8ee.operators_device_link_register,
+        operatorsUpdateApiKey:     () => InternalApiPaths.g8ee.operators_update_api_key,
         operatorDirectCommand:     () => InternalApiPaths.g8ee.operator_direct_command,
         operatorApprovalRespond:   () => InternalApiPaths.g8ee.operator_approval_respond,
         operatorApprovalPending:   () => InternalApiPaths.g8ee.operator_approval_pending,

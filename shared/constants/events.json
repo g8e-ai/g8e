@@ -300,6 +300,14 @@
         }
       }
     },
+    "triage": {
+      "clarification": {
+        "questions": "g8e.v1.ai.triage.clarification.questions",
+        "answered": "g8e.v1.ai.triage.clarification.answered",
+        "skipped": "g8e.v1.ai.triage.clarification.skipped",
+        "timeout": "g8e.v1.ai.triage.clarification.timeout"
+      }
+    },
     "tribunal": {
       "session": {
         "started": "g8e.v1.ai.tribunal.session.started",

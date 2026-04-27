@@ -194,6 +194,22 @@ export class OperatorRelayService {
         });
     }
 
+    async relayUpdateOperatorApiKeyToG8ee(operatorId, apiKey, g8eContext) {
+        this._validateContext(g8eContext);
+        const httpClient = this._getHttpClient();
+        if (!httpClient) throw new Error('InternalHttpClient not initialized');
+
+        logger.info('[OPERATOR-RELAY] Updating operator API key via g8ee', {
+            operator_id: operatorId,
+        });
+
+        return httpClient.request('g8ee', ApiPaths.g8ee.operatorsUpdateApiKey(), {
+            method: 'POST',
+            body: { operator_id: operatorId, api_key: apiKey },
+            g8eContext
+        });
+    }
+
     async relayClaimOperatorSlotToG8ee(params, g8eContext) {
         this._validateContext(g8eContext);
         const httpClient = this._getHttpClient();

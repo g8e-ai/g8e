@@ -72,6 +72,7 @@ from app.models.g8ed_client import (
     ChatProcessingStartedPayload,
     ChatResponseChunkPayload,
     ChatResponseCompletePayload,
+    TriageClarificationQuestionsPayload,
 )
 
 logger = logging.getLogger(__name__)
@@ -640,6 +641,7 @@ class ChatPipelineService:
             inputs.model_to_use, inputs.agent_mode, len(inputs.contents), inputs.max_tokens
         )
 
+        follow_up = None
         if inputs.triage_result and inputs.triage_result.follow_up_question and (
             inputs.triage_result.complexity_confidence == TriageConfidence.LOW or
             inputs.triage_result.intent_confidence == TriageConfidence.LOW
@@ -677,7 +679,45 @@ class ChatPipelineService:
                 user_id=g8e_context.user_id,
             )
             state.response_text = follow_up
-        elif inputs.model_to_use and inputs.generation_config:
+        
+        if inputs.triage_result and inputs.triage_result.clarifying_questions:
+            logger.info("[SSE-CHAT] Triage: emitting clarifying questions to user")
+
+            # Persist clarifying questions to conversation history per GDD §14.2
+            questions_text = "\n".join([f"- {q}" for q in inputs.triage_result.clarifying_questions])
+            content = f"I need a few clarifications to help you better:\n{questions_text}"
+            
+            await self.investigation_service.investigation_data_service.add_chat_message(
+                investigation_id=g8e_context.investigation_id,
+                sender=MessageSender.AI_TRIAGE,
+                content=content,
+                metadata=ConversationMessageMetadata(
+                    event_type=EventType.AI_TRIAGE_CLARIFICATION_QUESTIONS,
+                    clarifying_questions=inputs.triage_result.clarifying_questions,
+                    triage_complexity=inputs.triage_result.complexity,
+                    triage_intent_summary=inputs.triage_result.intent_summary
+                )
+            )
+
+            await self.g8ed_event_service.publish_investigation_event(
+                investigation_id=g8e_context.investigation_id,
+                event_type=EventType.AI_TRIAGE_CLARIFICATION_QUESTIONS,
+                payload=TriageClarificationQuestionsPayload(
+                    questions=inputs.triage_result.clarifying_questions,
+                    complexity=inputs.triage_result.complexity,
+                    complexity_confidence=inputs.triage_result.complexity_confidence,
+                    intent=inputs.triage_result.intent,
+                    intent_confidence=inputs.triage_result.intent_confidence,
+                    intent_summary=inputs.triage_result.intent_summary,
+                    request_posture=inputs.triage_result.request_posture,
+                    posture_confidence=inputs.triage_result.posture_confidence,
+                ),
+                web_session_id=g8e_context.web_session_id,
+                case_id=g8e_context.case_id,
+                user_id=g8e_context.user_id,
+            )
+        
+        if not follow_up and not (inputs.triage_result and inputs.triage_result.clarifying_questions) and inputs.model_to_use and inputs.generation_config:
             logger.info("[SSE-CHAT] Running full agent execution")
 
             async def _persist_iteration_text(text: str) -> None:

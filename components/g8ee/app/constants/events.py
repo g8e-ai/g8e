@@ -260,6 +260,12 @@ class EventType(str, Enum):
     AI_AGENT_CONTINUE_APPROVAL_GRANTED = "g8e.v1.ai.agent.continue.approval.granted"
     AI_AGENT_CONTINUE_APPROVAL_REJECTED = "g8e.v1.ai.agent.continue.approval.rejected"
 
+    # ai.triage (Dash interrogator - GDD §2)
+    AI_TRIAGE_CLARIFICATION_QUESTIONS = "g8e.v1.ai.triage.clarification.questions"
+    AI_TRIAGE_CLARIFICATION_ANSWERED = "g8e.v1.ai.triage.clarification.answered"
+    AI_TRIAGE_CLARIFICATION_SKIPPED = "g8e.v1.ai.triage.clarification.skipped"
+    AI_TRIAGE_CLARIFICATION_TIMEOUT = "g8e.v1.ai.triage.clarification.timeout"
+
     # ai.tribunal
     # Terminal states are expressed as distinct event types, one per scenario.
     # The event type itself is the discriminator; there is no shared "failure"

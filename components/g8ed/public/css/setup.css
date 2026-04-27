@@ -758,7 +758,7 @@ body[data-theme="light"] .wizard-provider-key-row.has-value {
     color: var(--accent-green);
     visibility: hidden;
     transition: visibility 0.2s;
-    width: 70px;
+    width: 80px;
     text-align: right;
 }
 

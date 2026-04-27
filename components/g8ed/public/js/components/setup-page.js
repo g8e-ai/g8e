@@ -40,6 +40,7 @@ const {
 // Wire-protocol provider identifiers are stable canonical strings
 // (see shared/constants/status.json and components/g8ed/constants/ai.js).
 const PROVIDER_KEY_FIELDS = {
+    g8el:      'g8el_endpoint',
     gemini:    'gemini_api_key',
     anthropic: 'anthropic_api_key',
     openai:    'openai_api_key',
@@ -47,6 +48,7 @@ const PROVIDER_KEY_FIELDS = {
 };
 
 const PROVIDER_LABELS = {
+    g8el:      'g8el',
     gemini:    'Gemini',
     anthropic: 'Anthropic',
     openai:    'OpenAI',
@@ -121,6 +123,14 @@ export class SetupPage {
         this._initSearchProvider();
         this._initUseGeminiKeyCheckbox();
         this._initModelDropdowns();
+
+        // If g8el is present, it's our first-class default provider.
+        // Triggering a change event on its endpoint will populate the defaults.
+        const g8elEl = document.getElementById('g8el_endpoint');
+        if (g8elEl && g8elEl.value) {
+            this._onProviderKeyChange('g8el');
+        }
+
         this._updateProviderStates();
         this._updateNav();
     }
@@ -758,6 +768,11 @@ export class SetupPage {
         const ollamaHost = document.getElementById('ollama_url')?.value.trim();
         if (ollamaHost) {
             userSettings.ollama_endpoint = ollamaHost;
+        }
+
+        const g8elEndpoint = document.getElementById('g8el_endpoint')?.value.trim();
+        if (g8elEndpoint) {
+            userSettings.g8el_endpoint = g8elEndpoint;
         }
 
         if (this._searchProvider === 'google') {

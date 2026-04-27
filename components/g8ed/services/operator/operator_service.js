@@ -176,6 +176,10 @@ class OperatorService {
         return this.relay.relayCreateOperatorSlotToG8ee(params, g8eContext);
     }
 
+    async relayUpdateOperatorApiKeyToG8ee(operatorId, apiKey, g8eContext) {
+        return this.relay.relayUpdateOperatorApiKeyToG8ee(operatorId, apiKey, g8eContext);
+    }
+
     async relayClaimOperatorSlotToG8ee(params, g8eContext) {
         return this.relay.relayClaimOperatorSlotToG8ee(params, g8eContext);
     }

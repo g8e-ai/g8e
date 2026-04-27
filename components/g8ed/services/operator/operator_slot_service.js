@@ -63,6 +63,41 @@ export class OperatorSlotService {
         }
 
         const allOperatorIds = liveOperators.map(op => op.id).concat(createdSlotIds);
+
+        for (const operator of liveOperators) {
+            if (!operator.api_key) {
+                logger.info('[OPERATOR-SLOT] Issuing API key for existing slot without key', { operator_id: operator.id });
+                const apiKey = this.generateOperatorApiKey(operator.id);
+                
+                const g8eContext = G8eHttpContext.parse({
+                    web_session_id: webSessionId || `init-${userId}-${Date.now()}`,
+                    user_id: userId,
+                    organization_id: organizationId,
+                    source_component: SourceComponent.G8ED,
+                });
+
+                const updateResponse = await this.operatorService.relayUpdateOperatorApiKeyToG8ee(operator.id, apiKey, g8eContext);
+                
+                if (updateResponse && updateResponse.success) {
+                    if (this.apiKeyService) {
+                        const issueResult = await this.apiKeyService.issueKey(apiKey, {
+                            user_id: userId,
+                            organization_id: organizationId,
+                            operator_id: operator.id,
+                            client_name: ApiKeyClientName.OPERATOR,
+                            permissions: [ApiKeyPermission.OPERATOR_BOOTSTRAP, ApiKeyPermission.OPERATOR_HEARTBEAT, ApiKeyPermission.OPERATOR_DOWNLOAD],
+                            status: ApiKeyStatus.ACTIVE
+                        });
+                        if (!issueResult || !issueResult.success) {
+                            logger.error('[OPERATOR-SLOT] Failed to issue API key for existing slot', { id: operator.id, error: issueResult?.error || 'Unknown error' });
+                        }
+                    }
+                } else {
+                    logger.error('[OPERATOR-SLOT] Failed to update API key in g8ee for existing slot', { id: operator.id, error: updateResponse?.error || 'Unknown error' });
+                }
+            }
+        }
+
         return allOperatorIds;
     }
 

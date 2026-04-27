@@ -72,6 +72,9 @@ from app.constants.errors import (
 from app.constants.events import (
     EventType,
 )
+from app.constants.message_sender import (
+    MessageSender,
+)
 from app.constants.headers import (
     HTTP_ACCEL_BUFFERING_HEADER,
     HTTP_ACCEPT_HEADER,
@@ -392,6 +395,7 @@ __all__ = [
     "ErrorCode",
     "ErrorSeverity",
     "EventType",
+    "MessageSender",
     "HTTP_ACCEL_BUFFERING_HEADER",
     "HTTP_ACCEPT_HEADER",
     "HTTP_ACCEPT_LANGUAGE_HEADER",

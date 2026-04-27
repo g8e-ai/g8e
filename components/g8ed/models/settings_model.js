@@ -824,7 +824,7 @@ const LLM_KEY_MAP = Object.freeze({
     llamacpp_api_key:       'llamacpp_api_key',
     g8el_endpoint:          'g8el_endpoint',
     g8el_api_key:           'g8el_api_key',
-    llm_max_tokens:         'llm_max_tokens',
+    llm_max_tokens:         'max_tokens',
     llm_command_gen_enabled:  'llm_command_gen_enabled',
     llm_command_gen_verifier: 'llm_command_gen_verifier',
     llm_command_gen_passes:   'llm_command_gen_passes',

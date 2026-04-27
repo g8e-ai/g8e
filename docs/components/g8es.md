@@ -76,9 +76,8 @@ g8es is the `g8e.operator` binary running in `--listen` mode. It serves as the p
 
 The g8es container performs the following sequence on startup:
 
-1. **Load security tokens** from `/ssl/internal_auth_token` and `/ssl/session_encryption_key` into environment variables
-2. **Start the listen server** on configured HTTP and WSS ports
-3. **Upload operator binaries** to the blob store in the background after the health check passes
+1. **Start the listen server** on configured HTTP and WSS ports. The `g8e.operator` binary reads `internal_auth_token` and `session_encryption_key` directly from `--ssl-dir /ssl`; no environment injection is performed.
+2. **Upload operator binaries** to the blob store in the background after the health check passes
 
 **Why background upload?** This keeps container startup fast — the health check returns before the uploads complete, allowing other services (g8ed, g8ee) to begin connecting immediately. The upload runs as a fire-and-forget background job.
 

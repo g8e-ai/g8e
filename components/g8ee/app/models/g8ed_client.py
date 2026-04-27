@@ -149,6 +149,23 @@ class ChatErrorPayload(G8eBaseModel):
     error: str = Field(description="Error message")
 
 
+class TriageClarificationQuestionsPayload(G8eBaseModel):
+    """Payload for EventType.AI_TRIAGE_CLARIFICATION_QUESTIONS.
+
+    Emitted when the triage agent (Dash) returns clarifying questions for the user.
+    The frontend displays these as non-intrusive yes/no popups per GDD §2.
+    """
+
+    questions: list[str] = Field(description="Batch of 3 yes/no clarifying questions")
+    complexity: str = Field(description="Triage complexity classification")
+    complexity_confidence: str = Field(description="Confidence in complexity classification")
+    intent: str = Field(description="Triage intent classification")
+    intent_confidence: str = Field(description="Confidence in intent classification")
+    intent_summary: str = Field(description="Concise summary of user's goal")
+    request_posture: str = Field(description="Triage's read of user's state")
+    posture_confidence: str = Field(description="Confidence in request_posture classification")
+
+
 class ChatRetryPayload(G8eBaseModel):
     """Payload for EventType.LLM_CHAT_ITERATION_RETRY."""
 

@@ -288,6 +288,17 @@ export class InvestigationFactory {
 
     static parseConversationHistory(conversationHistory) {
         if (!Array.isArray(conversationHistory)) return [];
-        return conversationHistory.map(msg => InvestigationHistoryEntry.parse(msg));
+        return conversationHistory.map((msg, index) => {
+            try {
+                return InvestigationHistoryEntry.parse(msg);
+            } catch (error) {
+                console.error(`[InvestigationHistoryEntry] Failed to parse entry at index ${index}:`, error);
+                console.error(`[InvestigationHistoryEntry] Entry data:`, JSON.stringify(msg, null, 2));
+                if (error.validationErrors) {
+                    console.error(`[InvestigationHistoryEntry] Validation errors:`, error.validationErrors);
+                }
+                throw error;
+            }
+        });
     }
 }

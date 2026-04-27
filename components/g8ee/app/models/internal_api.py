@@ -144,6 +144,22 @@ class OperatorSlotClaimResponse(G8eBaseModel):
     error: str | None = None
 
 
+class OperatorUpdateApiKeyRequest(G8eBaseModel):
+    """Request model for updating an operator's API key.
+
+    Called by g8ed to issue API keys for existing slots that were created without keys.
+    g8ee handles the actual write to the operator document.
+    """
+    operator_id: str = Field(..., description="Operator ID")
+    api_key: str = Field(..., description="New API key")
+
+
+class OperatorUpdateApiKeyResponse(G8eBaseModel):
+    """Response for updating an operator's API key."""
+    success: bool
+    error: str | None = None
+
+
 class OperatorBindRequest(G8eBaseModel):
     """Request model for operator binding.
 

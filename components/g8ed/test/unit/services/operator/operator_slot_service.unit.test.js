@@ -59,6 +59,7 @@ describe('OperatorSlotService', () => {
                 relayClaimOperatorSlotToG8ee: vi.fn().mockResolvedValue({ success: true }),
                 relayTerminateOperatorToG8ee: vi.fn().mockResolvedValue({ success: true }),
                 relayEndOperatorSessionToG8ee: vi.fn().mockResolvedValue({ success: true }),
+                relayUpdateOperatorApiKeyToG8ee: vi.fn().mockResolvedValue({ success: true }),
                 terminateOperator: vi.fn().mockResolvedValue({ success: true }),
             },
         };
@@ -228,6 +229,58 @@ describe('OperatorSlotService', () => {
             const g8eNodeCalls = calls.filter(c => c.isG8eNode === true);
             expect(g8eNodeCalls).toHaveLength(1);
             expect(g8eNodeCalls[0].cloudSubtype).toBe(CloudOperatorSubtype.G8E_POD);
+        });
+
+        it('should issue API keys for existing slots without keys', async () => {
+            const userId = 'u-123';
+            const organizationId = 'org-123';
+            const existingOpWithoutKey = {
+                id: 'existing-op-1',
+                user_id: userId,
+                status: OperatorStatus.AVAILABLE,
+                api_key: null
+            };
+
+            mocks.operatorDataService.queryOperatorsFresh.mockResolvedValueOnce([existingOpWithoutKey]);
+            mocks.operatorService.relayUpdateOperatorApiKeyToG8ee.mockResolvedValue({ success: true });
+
+            await service.initializeOperatorSlots(userId, organizationId);
+
+            expect(mocks.operatorService.relayUpdateOperatorApiKeyToG8ee).toHaveBeenCalledWith(
+                existingOpWithoutKey.id,
+                expect.any(String),
+                expect.objectContaining({
+                    user_id: userId,
+                    organization_id: organizationId,
+                    source_component: SourceComponent.G8ED
+                })
+            );
+            expect(mocks.apiKeyService.issueKey).toHaveBeenCalledWith(
+                expect.any(String),
+                expect.objectContaining({
+                    user_id: userId,
+                    operator_id: existingOpWithoutKey.id,
+                    client_name: ApiKeyClientName.OPERATOR
+                })
+            );
+        });
+
+        it('should not issue API keys for existing slots that already have keys', async () => {
+            const userId = 'u-123';
+            const organizationId = 'org-123';
+            const existingOpWithKey = {
+                id: 'existing-op-1',
+                user_id: userId,
+                status: OperatorStatus.AVAILABLE,
+                api_key: 'existing-key'
+            };
+
+            mocks.operatorDataService.queryOperatorsFresh.mockResolvedValueOnce([existingOpWithKey]);
+
+            await service.initializeOperatorSlots(userId, organizationId);
+
+            expect(mocks.operatorService.relayUpdateOperatorApiKeyToG8ee).not.toHaveBeenCalled();
+            expect(mocks.apiKeyService.issueKey).not.toHaveBeenCalled();
         });
     });
 

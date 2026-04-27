@@ -77,6 +77,8 @@ from app.models.internal_api import (
     OperatorTerminateResponse,
     OperatorUnbindRequest,
     OperatorUnbindResponse,
+    OperatorUpdateApiKeyRequest,
+    OperatorUpdateApiKeyResponse,
     PendingApprovalsResponse,
     StopAIRequest,
     StopAIResponse,
@@ -795,6 +797,65 @@ async def create_operator_slot(
             operator_id=None,
             error=str(e),
         )
+
+
+@router.post(API_PATHS["g8ee"]["operators_update_api_key"], response_model=OperatorUpdateApiKeyResponse)
+async def update_operator_api_key(
+    request: OperatorUpdateApiKeyRequest,
+    operator_data_service: "OperatorDataService" = Depends(get_g8ee_operator_data_service),
+    settings_service: SettingsService = Depends(get_g8ee_settings_service_write),
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
+):
+    """
+    Update an operator's API key.
+
+    Called by g8ed during initialization to issue API keys for existing slots
+    that were created without keys during setup.
+    g8ee handles the actual write to the operator document to enforce the
+    architectural boundary: after auth, g8ed has no business writing to operators.
+    SECURITY: Internal only - g8ed component.
+    """
+    from app.models.operators import OperatorDocument
+    from app.utils.timestamp import now
+
+    try:
+        operator = await operator_data_service.get_operator(request.operator_id)
+        if not operator:
+            logger.error(
+                "[INTERNAL-HTTP] Operator not found for API key update",
+                extra={"operator_id": request.operator_id}
+            )
+            return OperatorUpdateApiKeyResponse(success=False, error="Operator not found")
+
+        # Update operator document with new API key
+        updated_operator = operator.model_copy(update={
+            "api_key": request.api_key,
+            "updated_at": now(),
+        })
+
+        await operator_data_service.update_operator(updated_operator)
+
+        # If this is a g8ep operator, persist the API key to platform_settings
+        if operator.is_g8ep:
+            await settings_service.update_g8ep_operator_api_key(request.api_key)
+            logger.info(
+                "[INTERNAL-HTTP] g8ep operator API key updated in platform_settings",
+                extra={"operator_id": request.operator_id}
+            )
+
+        logger.info(
+            "[INTERNAL-HTTP] Operator API key updated",
+            extra={"operator_id": request.operator_id}
+        )
+
+        return OperatorUpdateApiKeyResponse(success=True)
+
+    except Exception as e:
+        logger.error(
+            "[INTERNAL-HTTP] Failed to update operator API key",
+            extra={"error": str(e), "operator_id": request.operator_id}
+        )
+        return OperatorUpdateApiKeyResponse(success=False, error=str(e))
 
 
 @router.post(API_PATHS["g8ee"]["auth_generate_key"], response_model=ApiKeyGenerationResponse)

@@ -16,7 +16,7 @@
     "sender": {
       "type": "string",
       "required": true,
-      "values": ["user.chat", "user.terminal", "ai.primary", "ai.assistant", "system"],
+      "values": ["user.chat", "user.terminal", "ai.primary", "ai.assistant", "ai.triage", "system"],
       "description": "Message sender path. See senders.json message.sender. g8ed derives event_type from this field via _senderToEventType mapping."
     },
     "content": {
@@ -75,6 +75,16 @@
           "response_source": { "type": "string", "description": "Source of the AI response" },
           "grounding_metadata": { "type": "object", "description": "Grounding/citation metadata from AI response" },
           "token_usage": { "type": "object", "description": "Token usage stats from AI response" }
+        },
+        "ai.triage": {
+          "clarifying_questions": { "type": "array", "items": "string", "description": "Batch of 3 yes/no clarifying questions from the Interrogator when intent confidence is low" },
+          "complexity": { "type": "string", "description": "Triage complexity classification" },
+          "complexity_confidence": { "type": "string", "description": "Confidence in complexity classification" },
+          "intent": { "type": "string", "description": "Triage intent classification" },
+          "intent_confidence": { "type": "string", "description": "Confidence in intent classification" },
+          "intent_summary": { "type": "string", "description": "Concise summary of user's goal" },
+          "request_posture": { "type": "string", "description": "Triage's read of user's state" },
+          "posture_confidence": { "type": "string", "description": "Confidence in request_posture classification" }
         },
         "user.terminal": {
           "execution_id": { "type": "string", "description": "Operator execution ID. Groups related messages (approval + result) for the same command." },
