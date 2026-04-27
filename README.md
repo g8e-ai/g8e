@@ -16,6 +16,22 @@ Self-hosted · Air-gap capable · Zero cloud dependencies
 
 ## Introduction
 
+Agentic AI in infrastructure faces two architectural failures. **Fully autonomous agents** act without human verification of contextual intent — they produce outcomes that are technically correct and contextually wrong, doing exactly what they understood the request to mean while missing what the user actually meant. **Human-in-the-loop systems** retrofit oversight through approval prompts, producing alert fatigue: when verification is costly and approval is cheap, humans rubber-stamp, and the nominal oversight becomes substantively absent.
+
+Both failures share the same root: they treat human and machine as substitutable validators on the same questions. They are not.
+
+g8e takes a third path: **co-validation**. The machine handles what is machine-checkable — internal consistency, procedural correctness, pattern-match safety, falsifiability of evidence, cross-conversation grounding. The human handles what is only human-checkable — intent fidelity in their actual environment, contextual stakes, acceptance of real-world consequences, and implicit values the agent layer cannot access. Both signatures are required for every state change.
+
+The architecture has two coupled components. The **Engine** is a stateless reasoning system running a Byzantine consensus protocol over heterogeneous AI personas; it produces verdicts with cryptographic attestations. The **Operator** is a single-binary sovereign execution layer on each managed host — it receives verdicts, performs local risk assessment, requires human approval at the execution boundary, executes approved commands, and maintains a tamper-evident local audit ledger. The Engine is replaceable; the Operator is the system of record.
+
+The economic commitment is precise: the user's time is not a free resource the system can spend, but a stake contributed for the judgment only they can provide. Every component upstream of human approval exists to minimize what reaches the user, so that what does reach them is exclusively the human-domain question they alone are qualified to answer.
+
+Full treatment: [docs/architecture/position_paper.md](docs/architecture/position_paper.md)
+
+---
+
+## Governance
+
 g8e is a governance architecture designed to solve the **consensus problem** in agentic AI. Rather than relying on fragile model alignment or manual control, g8e frames safety as an economic and information-theoretic challenge.
 
 The system aligns multi-agent behavior through a **Proof of Stake reputation economy** and the **Vortex Principle** (tiered information quarantine). Agents — including a planner, an ensemble tribunal, and a calibrated adversary (Nemesis) — do not just propose actions; they stake their reputation on them.
@@ -26,6 +42,8 @@ Key structural safeguards include:
 - **FIDO2-Gated Execution**: Every state-changing action requires explicit human approval, enforced at the binary and network layer where prompt injection cannot reach.
 
 By forcing agents to stake reputation with real consequences, g8e incentivizes the safest, most effective solutions while minimizing the user's non-fungible stake: their time.
+
+Full mechanism design: [docs/architecture/governance.md](docs/architecture/governance.md)
 
 ---
 
