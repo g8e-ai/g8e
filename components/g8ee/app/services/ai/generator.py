@@ -516,6 +516,8 @@ async def _run_audit_stage(
     auditor_hmac_key: str,
     investigation_id: str,
     tied_candidates: list[CandidateCommand] | None = None,
+    whitelisting_enabled: bool = False,
+    blacklisting_enabled: bool = False,
 ) -> tuple[str | None, CommandGenerationOutcome, bool, str | None, AuditorReason, str | None]:
     """Stage 3: optionally audit the vote winner and determine outcome.
 
@@ -551,6 +553,8 @@ async def _run_audit_stage(
         emitter=emitter,
         command_constraints_message=command_constraints_message,
         auditor_persona=get_agent_persona("auditor"),
+        whitelisting_enabled=whitelisting_enabled,
+        blacklisting_enabled=blacklisting_enabled,
     )
 
     outcome = CommandGenerationOutcome.VERIFIED if auditor_passed else CommandGenerationOutcome.VERIFICATION_FAILED
@@ -933,6 +937,8 @@ async def generate_command(
         reputation_data_service=reputation_data_service,
         auditor_hmac_key=auditor_hmac_key,
         investigation_id=investigation_id,
+        whitelisting_enabled=whitelisting_enabled,
+        blacklisting_enabled=blacklisting_enabled,
     )
 
     return await _build_and_emit_result(

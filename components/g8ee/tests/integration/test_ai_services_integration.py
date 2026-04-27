@@ -625,13 +625,13 @@ class TestCommandGenerationIntegration:
         whitelisted_metadata = [
             WhitelistedCommand(
                 command="ping",
-                category="network",
+                category="network_diagnostics",
                 safe_options=["-c <count>", "-W <timeout>"],
                 validation={"count": r"^\d+$", "timeout": r"^\d+$"}
             ),
             WhitelistedCommand(
                 command="ls",
-                category="filesystem",
+                category="system_diagnostics",
                 safe_options=["-la", "-lh"],
                 validation={}
             )

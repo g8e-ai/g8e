@@ -163,6 +163,8 @@ async def run_auditor(
     emitter: "TribunalEmitter",
     command_constraints_message: str,
     auditor_persona: TribunalMember,
+    whitelisting_enabled: bool = False,
+    blacklisting_enabled: bool = False,
 ) -> tuple[bool, str | None, str | None, AuditorReason, str | None, str | None]:
     """Run the dissent-aware Auditor."""
     # Prepare cluster info and mapping
@@ -301,7 +303,7 @@ async def run_auditor(
                 swap_to_member = cluster_to_members[swap_to_cluster][0] # Pick first member for telemetry
                 
                 # RE-VALIDATE SWAP TARGET SAFETY (L1 Technical Bedrock)
-                safety_result = validate_command_safety(final_cmd, True, True, operator_context)
+                safety_result = validate_command_safety(final_cmd, whitelisting_enabled, blacklisting_enabled, operator_context)
                 if not safety_result.is_safe:
                     reason = AuditorReason.WHITELIST_VIOLATION if safety_result.error_type == CommandErrorType.WHITELIST_VIOLATION else AuditorReason.NO_VALID_REVISION
                     await fail_auditor(emitter, request, reason, f"Swap target technical safety failure: {safety_result.error_message}", target_cmd)
@@ -324,7 +326,7 @@ async def run_auditor(
                 await fail_auditor(emitter, request, AuditorReason.NO_VALID_REVISION, "Empty revision", target_cmd)
 
             # RE-VALIDATE REVISION SAFETY (L1 Technical Bedrock)
-            safety_result = validate_command_safety(revised, True, True, operator_context)
+            safety_result = validate_command_safety(revised, whitelisting_enabled, blacklisting_enabled, operator_context)
             if not safety_result.is_safe:
                 reason = AuditorReason.WHITELIST_VIOLATION if safety_result.error_type == CommandErrorType.WHITELIST_VIOLATION else AuditorReason.NO_VALID_REVISION
                 await fail_auditor(emitter, request, reason, f"Revision technical safety failure: {safety_result.error_message}", target_cmd)
