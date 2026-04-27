@@ -205,3 +205,11 @@ class CertificateService:
             "issuer": CRL_ISSUER,
             "revoked_certificates": [{"serial": s} for s in self._revoked_serials],
         }
+
+    async def cleanup(self) -> None:
+        """Clear sensitive key material from memory."""
+        self.ca_cert = None
+        self.ca_key = None
+        self._revoked_serials.clear()
+        self.initialized = False
+        logger.info("[CERT-SERVICE] Cleared sensitive key material from memory")

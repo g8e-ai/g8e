@@ -14,13 +14,51 @@
 // @vitest-environment jsdom
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+const mockCatalog = {
+    providers: {
+        GEMINI: 'gemini',
+        ANTHROPIC: 'anthropic'
+    },
+    providerModels: {
+        gemini: {
+            all: [
+                { id: 'gemini-pro', label: 'Gemini Pro' },
+                { id: 'gemini-flash', label: 'Gemini Flash' }
+            ]
+        },
+        anthropic: {
+            all: [
+                { id: 'claude-opus', label: 'Claude Opus' },
+                { id: 'claude-sonnet', label: 'Claude Sonnet' }
+            ]
+        }
+    },
+    providerDefaultModels: {
+        gemini: {
+            primary: 'gemini-flash',
+            assistant: 'gemini-flash',
+            lite: 'gemini-flash'
+        },
+        anthropic: {
+            primary: 'claude-sonnet',
+            assistant: 'claude-sonnet',
+            lite: 'claude-sonnet'
+        }
+    }
+};
+
 import { SettingsPage } from '@g8ed/public/js/components/settings-page.js';
 
 describe('SettingsPage [UNIT - jsdom]', () => {
     let page;
 
     beforeEach(() => {
-        page = new SettingsPage();
+        page = new SettingsPage({
+            providers: mockCatalog.providers,
+            providerModels: mockCatalog.providerModels,
+            providerDefaultModels: mockCatalog.providerDefaultModels
+        });
         document.body.innerHTML = `
             <div id="settings-loading"></div>
             <div id="settings-body"></div>
@@ -304,6 +342,95 @@ describe('SettingsPage [UNIT - jsdom]', () => {
             expect(input?.type).toBe('password');
             expect(input?.value).toBe('');
             expect(input?.getAttribute('data-real-value')).toBeNull();
+        });
+    });
+
+    describe('llm-catalog and defaults', () => {
+        beforeEach(() => {
+        });
+
+        afterEach(() => {
+        });
+
+        it('auto-selects mid-tier defaults when a provider key is entered', () => {
+            // Setup DOM for dropdowns
+            document.body.innerHTML += `
+                <div id="primary_model" class="llm-model-dropdown">
+                    <span class="llm-model-dropdown__text"></span>
+                </div>
+                <div id="assistant_model" class="llm-model-dropdown">
+                    <span class="llm-model-dropdown__text"></span>
+                </div>
+                <div id="lite_model" class="llm-model-dropdown">
+                    <span class="llm-model-dropdown__text"></span>
+                </div>
+                <div id="primary_model-menu"></div>
+                <div id="assistant_model-menu"></div>
+                <div id="lite_model-menu"></div>
+                <div id="save-btn"></div>
+            `;
+
+            const setting = {
+                key: 'gemini_api_key',
+                label: 'Gemini API Key',
+                provider: 'gemini',
+                value: ''
+            };
+
+            const field = page._buildField(setting);
+            const input = field.querySelector('input');
+
+            // Simulate entering an API key
+            input.value = 'new-key';
+            input.dispatchEvent(new Event('input'));
+
+            // Verify defaults were applied (gemini-flash is the mocked mid-tier default)
+            expect(page.selectedModels.primary).toBe('gemini-flash');
+            expect(page.selectedModels.assistant).toBe('gemini-flash');
+            expect(page.selectedModels.lite).toBe('gemini-flash');
+
+            // Verify dirty tracking updated the model keys
+            expect(page.dirty.get('llm_model')).toBe('gemini-flash');
+            expect(page.dirty.get('llm_assistant_model')).toBe('gemini-flash');
+            expect(page.dirty.get('llm_lite_model')).toBe('gemini-flash');
+
+            // Verify UI updated
+            const primaryText = document.querySelector('#primary_model .llm-model-dropdown__text');
+            expect(primaryText.textContent).toBe('Gemini Flash');
+        });
+
+        it('does not overwrite existing selection when a different provider key is entered', () => {
+            // Setup DOM
+            document.body.innerHTML += `
+                <div id="primary_model"><span class="llm-model-dropdown__text"></span></div>
+                <div id="assistant_model"><span class="llm-model-dropdown__text"></span></div>
+                <div id="lite_model"><span class="llm-model-dropdown__text"></span></div>
+                <div id="primary_model-menu"></div>
+                <div id="assistant_model-menu"></div>
+                <div id="lite_model-menu"></div>
+                <div id="save-btn"></div>
+            `;
+
+            // Pre-set a selection
+            page.selectedModels.primary = 'claude-opus';
+            
+            const setting = {
+                key: 'gemini_api_key',
+                label: 'Gemini API Key',
+                provider: 'gemini',
+                value: ''
+            };
+
+            const field = page._buildField(setting);
+            const input = field.querySelector('input');
+
+            input.value = 'new-key';
+            input.dispatchEvent(new Event('input'));
+
+            // primary should STILL be claude-opus, others should be gemini-flash
+            expect(page.selectedModels.primary).toBe('claude-opus');
+            expect(page.selectedModels.assistant).toBe('gemini-flash');
+            expect(page.selectedModels.lite).toBe('gemini-flash');
         });
     });
 });

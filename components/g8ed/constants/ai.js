@@ -224,6 +224,43 @@ export const PROVIDER_MODELS = Object.freeze({
 });
 
 /**
+ * Setup-wizard default model assignments per provider.
+ *
+ * Defaults are intentionally mid-tier:
+ *   - paid providers: avoid surprise billing on first chat (no flagship by default)
+ *   - Ollama: pick a model that runs on commodity hardware (Qwen 122B requires
+ *     ~70GB VRAM and is unrunnable on a typical self-hosted box)
+ *
+ * Stored as canonical model ids (not display labels) so renaming a label in
+ * PROVIDER_MODELS cannot silently flip the wizard to a different default.
+ *
+ * Shipped to the browser via the llm-catalog script tag in setup.ejs; consumed
+ * by components/g8ed/public/js/components/setup-page.js.
+ */
+export const PROVIDER_DEFAULT_MODELS = Object.freeze({
+    [LLMProvider.GEMINI]: {
+        primary:   GeminiModel.FLASH,
+        assistant: GeminiModel.FLASH,
+        lite:      GeminiModel.FLASH_LITE,
+    },
+    [LLMProvider.ANTHROPIC]: {
+        primary:   AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6,
+        assistant: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6,
+        lite:      AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5,
+    },
+    [LLMProvider.OPENAI]: {
+        primary:   OpenAIModel.GPT_5_4,
+        assistant: OpenAIModel.GPT_5_4,
+        lite:      OpenAIModel.GPT_5_4_MINI,
+    },
+    [LLMProvider.OLLAMA]: {
+        primary:   OllamaModel.GEMMA4_26B,
+        assistant: OllamaModel.GEMMA4_E4B,
+        lite:      OllamaModel.LLAMA_3_2_3B,
+    },
+});
+
+/**
  * Source Component identifiers
  * Identifies which component originated a message or record.
  * Canonical values from shared/constants/status.json component.name.

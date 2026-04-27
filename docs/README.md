@@ -32,7 +32,6 @@ Cross-component internals — data flows, protocols, and system-wide design deci
 | [architecture/builds.md](architecture/builds.md) | Build system — component builds, operator binary distribution, and CI workflows |
 | [architecture/dashboard.md](architecture/dashboard.md) | Dashboard architecture — SSE fan-out, operator panel, and frontend integration |
 | [architecture/docker.md](architecture/docker.md) | Docker architecture — service configuration, non-root users, security hardening, capability model, read-only filesystems, docker socket threat model, and dev/prod compose split |
-| [architecture/mcp.md](architecture/mcp.md) | MCP (Model Context Protocol) gateway architecture |
 | [architecture/operator.md](architecture/operator.md) | Operator architecture — g8eo lifecycle, session management, command dispatch, binding protocol, and Sentinel integration |
 | [architecture/prompts.md](architecture/prompts.md) | Prompt system — file layout, loader, assembly pipeline, mode selection, tool-description handling, and authoring conventions (positive framing, `<never>` blocks) |
 | [architecture/storage.md](architecture/storage.md) | Data storage architecture — all storage layers, component roles, topology, encryption, and retention |
@@ -71,5 +70,3 @@ External resources and reference materials (do not modify).
 | Document | Description |
 |----------|-------------|
 | [reference/events.md](reference/events.md) | g8e event type specification -- complete wire-protocol event registry (238 events across 5 domains) |
-| [reference/core_principles.md](reference/core_principles.md) | Core platform principles and design philosophy |
-| [reference/mcp.yaml](reference/mcp.yaml) | MCP (Model Context Protocol) schema and tool definitions |

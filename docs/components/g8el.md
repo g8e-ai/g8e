@@ -11,12 +11,13 @@ g8el is the llama.cpp inference server component for g8e. It provides local LLM 
 
 ## Architecture
 
-g8el is built on the official llama.cpp server image from `ghcr.io/ggml-org/llama.cpp:server`. The component extends this base image with:
+g8el extends the official llama.cpp server image (`ghcr.io/ggml-org/llama.cpp:server`) with:
 
-- **Custom entrypoint script** (`entrypoint.sh`) that handles model download and server startup with memory locking
+- **Custom entrypoint script** (`entrypoint.sh`) that handles model download and server startup with KV cache optimization flags
 - **Configurable environment variables** for model selection, context size, threads, and network settings
 - **Docker network integration** with the g8e internal network for service-to-service communication
-- **Memory optimization** with `--mlock` flag to keep model weights pinned in RAM
+- **Memory locking** with `--mlock` flag to keep model weights pinned in RAM
+- **KV cache optimization** with `--cache-reuse`, `--keep`, and `--parallel` flags for Tribunal pipeline performance
 
 ### Component Relationships
 
@@ -57,21 +58,24 @@ flowchart LR
 | `G8EL_MODEL_NAME` | `google_gemma-4-E2B-it-Q4_K_M.gguf` | Model filename to use |
 | `G8EL_MODEL_URL` | Hugging Face URL | URL to download model from if not present |
 | `G8EL_CONTEXT_SIZE` | `8192` | Context window size in tokens |
-| `G8EL_THREADS` | `8` | Number of CPU threads for inference (set to physical core count) |
+| `G8EL_THREADS` | `8` | Number of CPU threads for inference |
 | `G8EL_HOST` | `0.0.0.0` | Host address to bind to |
 | `G8EL_PORT` | `11444` | Port to listen on |
 
-### Docker Resource Limits
+### Docker Configuration
 
-| Resource | Limit | Reservation |
-|----------|-------|-------------|
-| CPUs | 8.0 | 2.0 |
-| Memory | 16GB | 4GB |
-| PIDs | 100 | - |
+g8el uses the following Docker configuration in `docker-compose.yml`:
+
+- **CPU affinity**: `cpuset: "0-7"` binds the container to CPU cores 0-7
+- **Memory locking**: `ulimit memlock: -1` allows unlimited memory locking for `--mlock`
+- **Security**: All capabilities dropped, no-new-privileges enabled
+- **Network**: Internal `g8e-network` with alias `g8el` for service discovery
+
+No explicit CPU or memory limits are set in docker-compose.yml; resource constraints are managed through CPU affinity and the host's available resources.
 
 ### Default Model
 
-The default model is **Gemma 4 E2B** (quantized to Q4_K_M), downloaded from Hugging Face on first startup. The model is stored in the mounted volume at `/models`.
+The default model is **Gemma 4 E2B** (quantized to Q4_K_M), downloaded from Hugging Face on first startup. The model is stored in the mounted volume at `/models` (host path: `./components/g8ee/models`).
 
 ### Docker Networking
 
@@ -83,30 +87,28 @@ g8el runs on the `g8e-network` Docker network with the alias `g8el`. This allows
 
 ### Starting g8el
 
-g8el is an optional service. Start it with:
+g8el starts as part of the default platform services. Use the standard platform commands:
 
 ```bash
-./g8e platform up g8el
+./g8e platform setup    # First-time setup: builds and starts all services
+./g8e platform start    # Start all services (including g8el)
+./g8e platform stop     # Stop all services
 ```
 
-Or include it in a full platform start:
-
-```bash
-./g8e platform setup
-```
+g8el is included in the default service set alongside g8es, g8ee, g8ed, and g8ep.
 
 ### Configuring g8ee to use g8el
 
 In the g8ee settings, configure the llama.cpp provider:
 
 1. Set the LLM provider to `llamacpp`
-2. Set the endpoint to `http://g8el:11444`
+2. Set the endpoint to `http://g8el:11444` (this is the default in `LLAMACPP_DEFAULT_ENDPOINT`)
 3. Select the model (e.g., `google_gemma-4-E2B-it-Q4_K_M.gguf`)
 4. Optionally set an API key if authentication is enabled
 
 ### Health Check
 
-g8el exposes a health endpoint at `http://localhost:11444/health`. The Docker healthcheck verifies this endpoint is accessible.
+g8el exposes a health endpoint at `http://localhost:11444/health`. The Docker healthcheck verifies this endpoint is accessible with a 300-second start period to account for model download on first startup.
 
 ---
 
@@ -116,14 +118,14 @@ g8el exposes a health endpoint at `http://localhost:11444/health`. The Docker he
 
 To use a different model:
 
-1. Download the GGUF model file to the models volume
-2. Update `G8EL_MODEL_NAME` to match the new filename
+1. Download the GGUF model file to the models volume (`./components/g8ee/models/` on the host)
+2. Update `G8EL_MODEL_NAME` in docker-compose.yml to match the new filename
 3. Optionally update `G8EL_MODEL_URL` if you want automatic download
-4. Restart the g8el service
+4. Restart the g8el service: `./g8e platform restart`
 
 ### Model Storage
 
-Models are stored in the Docker volume mounted at `/models`. By default, this maps to `./components/g8ee/models` on the host.
+Models are stored in the Docker volume mounted at `/models` in the container, which maps to `./components/g8ee/models/` on the host. This volume is shared with g8ee for model file access.
 
 ---
 
@@ -133,32 +135,37 @@ g8el is integrated with g8ee as the `LLAMACPP` LLM provider. The implementation:
 
 - **Provider class**: `LlamaCppProvider` in `components/g8ee/app/llm/providers/llama_cpp.py`
 - **API compatibility**: Extends `OpenAIProvider` since llama.cpp provides an OpenAI-compatible API
-- **Constants**: Defined in `components/g8ee/app/constants/settings.py` (LLAMACPP_DEFAULT_ENDPOINT, LLAMACPP_DEFAULT_MODEL, etc.)
+- **Constants**: Defined in `components/g8ee/app/constants/settings.py`:
+  - `LLAMACPP_DEFAULT_ENDPOINT = "http://g8el:11444"`
+  - `LLAMACPP_DEFAULT_MODEL = "google_gemma-4-E2B-it-Q4_K_M.gguf"`
+- **Factory**: `get_llm_provider()` in `components/g8ee/app/llm/factory.py` instantiates `LlamaCppProvider` when `LLMProvider.LLAMACPP` is selected
 
 ### Streaming Support
 
 The `LlamaCppProvider` supports streaming via the OpenAI-compatible `/v1/chat/completions` endpoint. Streaming chunks are translated to `StreamChunkFromModel` objects for consistency with other providers.
 
-### Model Configuration
+### Performance Optimizations
 
-g8el supports any GGUF-format model compatible with llama.cpp. The container uses several performance optimizations:
+The entrypoint.sh script includes the following llama.cpp server flags for optimal performance:
 
 - `--mlock`: Locks model in RAM, preventing OS swapping and ensuring consistent inference performance
-- `--no-mmap`: Loads entire model into RAM before starting for faster inference
-- `-b 2048`: Logical batch size for prompt processing
-- `-ub 512`: Physical micro-batch size
-- `--flash-attn on`: Enables Flash Attention for faster computation
+- `--cache-reuse 256`: Enables KV cache reuse up to 256 tokens for Tribunal pipeline efficiency
+- `--keep -1`: Keeps the KV cache between requests (default is to clear after each request)
+- `--parallel 6`: Configures 6 parallel processing slots for Tribunal (5 members + 1 auditor)
 
 ### Prefix Cache Optimization
 
-For optimal Tribunal pipeline performance, g8el should be configured with KV cache reuse flags. The Tribunal generator emits 5 parallel members plus 1 auditor per round; without sufficient parallel slots and cache reuse, the static-prefix-first template ordering is defeated.
+The KV cache reuse flags are critical for Tribunal pipeline performance. The Tribunal generator emits 5 parallel members plus 1 auditor per round; without sufficient parallel slots and cache reuse, the static-prefix-first template ordering is defeated.
 
-**Recommended flags** (add to `entrypoint.sh` llama.cpp server command):
-- `--cache-reuse 256` — enables KV cache reuse up to 256 tokens, allowing llama.cpp to reuse the static prefix (constraints, system context, operator context) across Tribunal rounds
-- `--keep -1` — keeps the KV cache between requests (default is to clear after each request)
-- `--parallel <n_slots ≥ 6>` — configures parallel processing slots; Tribunal requires at least 6 (5 members + 1 auditor) to avoid sequential processing that defeats cache reuse
+These flags work in conjunction with the static-prefix-first template ordering documented in `docs/architecture/agent_personas.md`. The entrypoint.sh is pre-configured with these optimizations.
 
-These flags work in conjunction with the static-prefix-first template ordering documented in `docs/architecture/agent_personas.md`. Without them, the prefix cache optimization buys nothing measurable.
+To verify the flags are active, use the prefix cache measurement script:
+
+```bash
+./scripts/testing/measure_prefix_cache.sh
+```
+
+### Model Selection Guidelines
 
 For different use cases:
 
@@ -172,10 +179,10 @@ For detailed provider documentation, see [docs/components/g8ee.md](g8ee.md#llm-p
 
 ## Security Considerations
 
-- **Network exposure**: g8el binds to `0.0.0.0` by default but should only be accessed via the internal Docker network
-- **No authentication**: By default, g8el does not require authentication. Consider adding API key authentication for production deployments
-- **Resource limits**: Docker resource limits are configured (4 CPUs, 8GB memory) to prevent resource exhaustion
-- **Read-only filesystem**: The container runs with a read-only filesystem except for the models volume
+- **Network exposure**: g8el binds to `0.0.0.0` by default but should only be accessed via the internal Docker network (`g8e-network`). The port 11444 is also exposed to the host for debugging purposes.
+- **No authentication**: By default, g8el does not require authentication. Consider adding API key authentication for production deployments by configuring `llamacpp_api_key` in g8ee settings.
+- **Security hardening**: The container drops all capabilities, enables `no-new-privileges`, and runs with a non-root user.
+- **Resource constraints**: CPU affinity (`cpuset: "0-7"`) limits g8el to specific CPU cores. No explicit memory limits are set in docker-compose.yml.
 
 ---
 
@@ -185,22 +192,35 @@ For detailed provider documentation, see [docs/components/g8ee.md](g8ee.md#llm-p
 
 If the model download fails on startup:
 
-1. Check network connectivity from the container
-2. Verify the `G8EL_MODEL_URL` is accessible
-3. Manually download the model and place it in the models volume
+1. Check network connectivity from the container: `docker exec g8el curl -I https://huggingface.co`
+2. Verify the `G8EL_MODEL_URL` is accessible from the host
+3. Manually download the model and place it in `./components/g8ee/models/` on the host
+4. Restart the service: `./g8e platform restart g8el`
 
 ### Connection Refused
 
 If g8ee cannot connect to g8el:
 
 1. Verify g8el is running: `docker ps | grep g8el`
-2. Check the Docker network: `docker network inspect g8e-network`
-3. Verify the endpoint configuration in g8ee settings matches the g8el port
+2. Check g8el logs: `docker logs g8el`
+3. Check the Docker network: `docker network inspect g8e-network`
+4. Verify the endpoint configuration in g8ee settings matches `http://g8el:11444`
+5. Verify g8el is healthy: `docker inspect g8el --format='{{.State.Health.Status}}'`
 
 ### Out of Memory
 
 If g8el runs out of memory:
 
-1. Reduce `G8EL_CONTEXT_SIZE` to use less memory
+1. Reduce `G8EL_CONTEXT_SIZE` in docker-compose.yml to use less memory
 2. Reduce `G8EL_THREADS` to limit CPU usage
 3. Use a smaller quantized model (e.g., Q3_K instead of Q4_K)
+4. Check host memory availability: `free -h`
+
+### Slow Inference
+
+If inference is slow:
+
+1. Verify the optimization flags are active: `docker inspect g8el --format='{{.Config.Cmd}}'` should show `--cache-reuse`, `--keep`, and `--parallel`
+2. Check CPU affinity is working: `docker inspect g8el --format='{{.HostConfig.CpusetCpus}}'` should show `0-7`
+3. Verify memory locking is enabled: `docker exec g8el ulimit -l` should show `unlimited`
+4. Consider using a smaller model or quantization level

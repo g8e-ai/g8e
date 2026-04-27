@@ -40,7 +40,7 @@ _upload_operator_binaries() {
         SIZE=$(ls -lh "$BIN" | awk '{print $5}')
         HTTP_CODE=$(curl -sf -o /dev/null -w '%{http_code}' \
             -X PUT \
-            --cacert /ssl/ca/ca.crt \
+            --cacert /ssl/ca.crt \
             -H 'Content-Type: application/octet-stream' \
             -H "X-Internal-Auth: ${AUTH_TOKEN}" \
             --data-binary "@${BIN}" \

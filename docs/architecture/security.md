@@ -76,8 +76,8 @@ Host Filesystem / AWS / Target System
 | **g8ee → LLM (AI)** | Sentinel ingress scrubbing — a redundant layer of protection for all Operator data before it is transmitted to any model provider; raw output, credentials, and PII are replaced with safe placeholders |
 | **g8ed → g8eo** | WebSocket over mTLS (TLS 1.3), per-operator client certificate issued at claim time, platform CA fetched from hub at operator startup |
 | **Operator → Host** | Sentinel pre-execution threat blocking (46 MITRE-mapped detectors), egress data scrubbing, command allowlist/denylist, Human-in-the-Loop approval required for every state change |
-| **Data at Rest (g8es)** | SQLite at `0600` filesystem permissions (4 tables: documents, kv_store, sse_events, blobs); session fields encrypted at application layer by g8ed before persistence; **bootstrap secrets (`internal_auth_token`, `session_encryption_key`) persisted on the `g8es-ssl` volume and mirrored into the `platform_settings` document for consistency** |
-| **Data at Rest (LFAA Vaults)** | AES-256-GCM field-level encryption (content, stdout, stderr); DEK envelope encryption; key derived on-demand from operator API key via HKDF-SHA256 |
+| **Data at Rest (g8es)** | SQLite at `0600` filesystem permissions (4 tables: documents, kv_store, sse_events, blobs); session fields encrypted at application layer by g8ed before persistence; **bootstrap secrets (`internal_auth_token`, `session_encryption_key`, `auditor_hmac_key`) persisted on the `g8es-ssl` volume and mirrored into the `platform_settings` document for consistency** |
+| **Data at Rest (LFAA Vaults)** | AES-256-GCM field-level encryption (content, stdout, stderr); DEK envelope encryption; KEK derived on-demand from operator API key via HKDF-SHA256 |
 
 ### Network Isolation
 
@@ -99,14 +99,15 @@ All components resolve configuration values in the following order (highest prio
 4.  **Schema Defaults**: Hardcoded safe defaults defined in the component's configuration service.
 
 **Exception: Bootstrap Secrets**
-For critical bootstrap secrets (`internal_auth_token`, `session_encryption_key`), the **Shared SSL Volume** is the source of truth consumed by g8ed and g8ee at startup. g8es additionally mirrors the same values into the `platform_settings` document on startup so that the on-disk files and the cached DB document stay in sync (see `SecretManager.InitPlatformSettings` in `components/g8eo/services/listen/secret_manager.go`).
+For critical bootstrap secrets (`internal_auth_token`, `session_encryption_key`, `auditor_hmac_key`), the **Shared SSL Volume** is the source of truth consumed by g8ed and g8ee at startup. g8es additionally mirrors the same values into the `platform_settings` document on startup so that the on-disk files and the cached DB document stay in sync (see `SecretManager.InitPlatformSettings` in `components/g8eo/services/listen/secret_manager.go`).
 
 #### Bootstrap Secrets Handling
 
-The platform handles two critical secrets that are required for component-to-component authentication and data protection:
+The platform handles three critical secrets that are required for component-to-component authentication, data protection, and reputation integrity:
 
 - **`internal_auth_token`**: Shared secret for `X-Internal-Auth` header authentication.
 - **`session_encryption_key`**: AES-256 key used to encrypt sensitive fields in web and operator sessions.
+- **`auditor_hmac_key`**: HMAC-SHA256 key used by the g8ee Auditor to sign reputation commitments.
 
 The `./g8e platform settings` command displays truncated versions of these active secrets (e.g., `f5037487...6c5f`) to confirm they are set and synchronized without exposing the full values.
 
@@ -114,6 +115,7 @@ The `./g8e platform settings` command displays truncated versions of these activ
 The `g8es-ssl` volume is the authoritative source used by runtime consumers. It is mounted at `/g8es` on g8ed, g8ee, and g8ep (read-only), and at `/ssl` inside g8es itself. The secrets are stored as `0600` plain-text files on this volume.
 - `internal_auth_token` is stored at `/g8es/internal_auth_token`.
 - `session_encryption_key` is stored at `/g8es/session_encryption_key`.
+- `auditor_hmac_key` is stored at `/g8es/auditor_hmac_key`.
 
 **2. Generation and Synchronization**
 On every g8es startup, `SecretManager.InitPlatformSettings` reconciles the volume files with the `platform_settings` document in g8es:
@@ -308,13 +310,29 @@ Role escalation is not possible through any public-facing API. Roles are validat
 
 ### Rate Limiting
 
-| Scope | Limit |
-|---|---|
-| Auth endpoints | 20 requests / 5 min |
-| Chat endpoints | 30 messages / min |
-| SSE connections | 30 attempts / 5 min (failed only) |
-| General API | 60 requests / min |
-| Global public API | 100 requests / min |
+Rate limiting is implemented via `express-rate-limit` in `middleware/rate-limit.js`. Multiple endpoint-specific limiters protect against brute force and DoS attacks.
+
+| Scope | Limit | Key |
+|---|---|---|
+| Global public API | 100 requests / min | IP |
+| Auth endpoints (user registration) | 20 requests / 5 min | IP |
+| Passkey auth endpoints | 10 requests / 5 min | IP |
+| Operator auth (per API key) | 20 requests / 5 min | API key prefix (16 chars) |
+| Operator auth (IP backstop) | 20 requests / 5 min | IP |
+| Chat endpoints | 30 messages / min | Web session ID |
+| SSE connections | 30 attempts / 5 min (failed only) | Web session ID |
+| General API | 60 requests / min | IP |
+| Operator refresh | 10 requests / min | IP |
+| Audit log endpoints | 60 requests / min | User ID (fallback to IP) |
+| Console endpoints | 60 requests / min | User ID (fallback to IP) |
+| Operator API | 100 requests / min | API key (fallback to IP) |
+| Device link register (public) | 10 requests / 5 min | IP |
+| Device link generate | 10 requests / 5 min | User ID (fallback to IP) |
+| Device link list | 30 requests / min | User ID (fallback to IP) |
+| Device link revoke | 20 requests / 5 min | User ID (fallback to IP) |
+| Settings API | 30 requests / min | User ID (fallback to IP) |
+
+**Auth-sensitive limiters** (passkey, user auth, operator auth, device link register) are exported at module scope for static analysis tools (e.g., CodeQL's `js/missing-rate-limiting`) to trace enforcement to the `express-rate-limit` call site.
 
 ---
 
@@ -624,20 +642,49 @@ All commands dispatched to an Operator pass through Sentinel before execution. S
 
 Before any command executes on the host, Sentinel scans it against MITRE ATT&CK-mapped threat patterns. Dangerous commands are **blocked outright** before reaching the execution layer.
 
-| Category | Examples |
-|---|---|
-| **Data destruction** | Recursive root deletion (`rm -rf /`), raw disk overwrites (`dd if=/dev/zero`) |
-| **System tampering** | Modifications to `/etc/passwd`, `/etc/shadow`, SSH authorized keys, sudoers |
-| **Reverse shells / tunnels** | `bash -i >& /dev/tcp/...`, `nc -e`, `socat` backdoors |
-| **Privilege escalation** | `chmod +s`, capability manipulation, `sudoedit` abuse |
-| **Credential access** | Dumping secrets from memory, `/proc/*/mem` access |
-| **Persistence mechanisms** | Cron injection, systemd unit file manipulation outside project dirs |
-| **Defense evasion** | Command encoding (`base64 -d | bash`), obfuscation patterns |
-| **Reconnaissance** | Mass port scanning, ARP sweeps with unusual flags |
-| **Lateral movement** | SSH key injection on unauthorized paths |
-| **Cryptominers** | Known miner binary signatures and connection patterns |
-| **Data exfiltration** | Bulk outbound transfers of sensitive system files |
-| **Resource hijacking** | Fork bombs, ulimit bypass patterns |
+#### Input Threat Detectors (46+ patterns)
+
+Sentinel maintains an extensive set of input threat detectors in `components/g8eo/services/sentinel/sentinel_input.go`. Each detector is mapped to MITRE ATT&CK techniques and tactics.
+
+| Category | Examples | MITRE Technique |
+|---|---|---|
+| **Data destruction** | `rm -rf /`, `dd of=/dev/sd*`, `mkfs /dev/`, `shred /dev/`, `wipefs`, `fdisk/gdisk/parted` | T1485, T1561.001 |
+| **System tampering** | Writing to `/etc/passwd`, `/etc/shadow`, `/etc/sudoers`, `/etc/pam.d/`, `/etc/ssh/sshd_config`, `/etc/hosts`, `/etc/resolv.conf`, `/etc/ld.so.*` | T1136.001, T1548.003, T1556.003, T1098.004, T1565.001, T1574.006 |
+| **Security bypass** | `setenforce 0`, `aa-disable`, disabling firewalls (`ufw`, `firewalld`, `iptables`), disabling auditd | T1562.001, T1562.004 |
+| **Malware deployment** | `curl ... | bash`, `wget ... | bash`, `eval $(base64 -d)`, Python remote code execution | T1059.004, T1027, T1059.006 |
+| **Reverse shells** | `bash -i >& /dev/tcp/`, `nc -e /bin/sh`, `ncat --exec`, Python/Perl/Ruby/PHP/Socat/Telnet reverse shell patterns | T1059.004, T1059.006 |
+| **Privilege escalation** | Setting SUID/SGID bits, `setcap` with dangerous capabilities | T1548.001 |
+| **Credential access** | Reading `/etc/shadow`, AWS/GCP/Azure/Kubernetes credential files, SSH private keys, copying shadow file | T1003.008, T1552.001, T1552.004 |
+| **Persistence** | Cron jobs from remote sources, suspicious `at` jobs | T1053.003, T1053.002 |
+| **Exfiltration** | DNS tunneling (`dig ... $()`), ICMP tunneling with hex payloads | T1048.001, T1048.003 |
+| **Defense evasion** | Clearing `/var/log/`, clearing shell history, disabling logging services | T1070.002, T1070.003, T1562.001 |
+| **Network manipulation** | ARP spoofing, DNS spoofing tools | T1557.002, T1557.001 |
+| **Cryptomining** | Downloading miners, stratum+tcp connections, known mining pool domains | T1496 |
+| **Container escape** | Privileged containers, mounting host root, mounting Docker socket | T1611 |
+| **System tampering** | Loading kernel modules (`insmod`, `modprobe`) | T1547.006 |
+
+#### Critical System Paths
+
+Sentinel maintains a list of critical system paths (`CriticalSystemPaths` and `CriticalSystemDirs` in `sentinel_input.go`) that trigger elevated scrutiny:
+
+- `/etc/passwd`, `/etc/shadow`, `/etc/group`, `/etc/gshadow`, `/etc/sudoers`, `/etc/sudoers.d/`
+- `/etc/ssh/sshd_config`, `/etc/ssh/ssh_config`, `/etc/pam.d/`, `/etc/security/`
+- `/etc/ld.so.conf`, `/etc/ld.so.preload`, `/etc/hosts`, `/etc/resolv.conf`, `/etc/fstab`
+- `/etc/crontab`, `/etc/cron.d/`, `/etc/cron.daily/`, `/etc/cron.hourly/`, `/etc/init.d/`
+- `/etc/systemd/system/`, `/etc/rc.local`, `/etc/profile`, `/etc/profile.d/`, `/etc/bash.bashrc`
+- `/etc/environment`, `/etc/selinux/`, `/etc/apparmor/`, `/etc/apparmor.d/`, `/boot/`
+- `/root/.ssh/`, `/root/.bashrc`, `/root/.bash_profile`, `/root/.profile`
+- `/bin`, `/sbin`, `/usr/bin`, `/usr/sbin`, `/usr/local/bin`, `/usr/local/sbin`
+- `/lib`, `/lib64`, `/usr/lib`, `/boot`, `/proc`, `/sys`, `/dev`
+
+#### File Edit Analysis
+
+Sentinel also analyzes file operations before they execute via `AnalyzeFileEdit`:
+
+- Checks if the file path is a critical system file
+- Analyzes file content for malicious patterns
+- Analyzes file path patterns for suspicious operations
+- Sets `RequiresApproval` flag for critical system files even if not explicitly blocked
 
 **Blocked threats** are rejected before the approval prompt is shown. **Flagged threats** (elevated risk, potentially legitimate) surface in the approval flow with the specific threat category and MITRE ATT&CK classification shown to the user. Every blocked or flagged attempt is recorded in the LFAA audit vault with tamper-evident logging.
 
@@ -651,7 +698,7 @@ Before dispatching any command to the Operator, g8ee runs its own AI-powered saf
 
 ### Tribunal Command Refinement
 
-Before a command is presented for human approval, it passes through an additional syntactic refinement pipeline in g8ee (`components/g8ee/app/services/ai/command_generator.py`). The Large LLM is not involved after its initial proposal.
+Before a command is presented for human approval, it passes through an additional syntactic refinement pipeline in g8ee (`components/g8ee/app/services/ai/generator.py`). The Large LLM is not involved after its initial proposal.
 
 ```
 Large LLM proposes command via ReAct loop
@@ -660,21 +707,28 @@ Large LLM proposes command via ReAct loop
 Tribunal — N concurrent generation passes (default: 3, `llm_command_gen_passes`)
   Each pass: same intent + operator OS/shell/working_directory context
   Temperature: model default (via get_model_config)
-  Model: resolved via `assistant_model -> primary_model` (Ollama default: qwen3-5-122b)
-  Members cycle through Axiom / Concord / Variance
+  Model: resolved via `assistant_model -> primary_model`
+  Members: Axiom, Concord, Variance, Pragma, Nemesis
   │
   ▼
-Uniform per-member voting — each member contributes exactly 1 vote per candidate
+Round 1: Initial generation and weighted majority voting
   │
   ▼
-SLM Verifier (same model, temperature: model default; disabled via `llm_command_gen_verifier=false`)
-  Returns exactly "ok" — or a corrected command string
+Round 2 (Optional): Peer review if consensus is low
+  Members review anonymized candidate clusters from Round 1
+  │
+  ▼
+Auditor verification (optional, enabled via `llm_command_gen_verifier=true`)
+  Auditor makes a reputation commitment via Merkle tree signed with `auditor_hmac_key`
+  Returns approval, revision, or cluster swap based on reputation analysis
   │
   ▼
 Final command presented to human for approval
 ```
 
 **Fallback guarantee:** If the tribunal fails for any reason, the original Large LLM command is used and `FALLBACK` is recorded. The human approval prompt always fires regardless.
+
+**Auditor system:** When enabled (`llm_command_gen_verifier=true`), the auditor uses the primary model as a reputation-based verifier. It binds every verdict to a snapshot of the reputation scoreboard by writing a signed Merkle commitment. The auditor can approve the winning candidate, provide a corrected command, or swap the winner to a dissenting cluster if it detects a more reliable alternative.
 
 ### Command Allowlist, Denylist, and Auto-Approve
 
@@ -915,6 +969,38 @@ The tool declarations that the AI can actually invoke are built in `AIToolServic
 ---
 
 ## Cloud Operator Security (AWS Zero Standing Privileges)
+
+### Cloud Command Validator
+
+Cloud Operators require pattern-based command routing to ensure cloud-specific commands are only executed by appropriately configured operators. The `CloudCommandValidator` in `components/g8ee/app/services/operator/cloud_command_validator.py` maintains a list of cloud-only command patterns.
+
+Commands matching these patterns require an Operator with `operator_type: cloud`:
+
+| Pattern | Tool |
+|---|---|
+| `^aws\s` | AWS CLI |
+| `^gcloud\s` | Google Cloud CLI |
+| `^gsutil\s` | Google Cloud Storage |
+| `^bq\s` | BigQuery |
+| `^az\s` | Azure CLI |
+| `^kubectl\s` | Kubernetes |
+| `^helm\s` | Helm package manager |
+| `^k9s\b` | Kubernetes terminal UI |
+| `^kubectx\b` | Kubernetes context switcher |
+| `^kubens\b` | Kubernetes namespace switcher |
+| `^terraform\s` | Terraform |
+| `^tofu\s` | OpenTofu |
+| `^pulumi\s` | Pulumi |
+| `^ansible\b` | Ansible |
+| `^ansible-playbook\s` | Ansible Playbook |
+| `^eksctl\s` | EKS CLI |
+| `^sam\s` | AWS SAM |
+| `^cdk\s` | AWS CDK |
+| `^serverless\s` | Serverless Framework |
+
+The `is_cloud_only_command()` function checks if a command requires a Cloud Operator before dispatch. System operators cannot execute cloud-specific commands.
+
+### Zero Standing Privileges Model
 
 Cloud Operators for AWS implement a Zero Standing Privileges model — the hardest form of least privilege for cloud environments.
 

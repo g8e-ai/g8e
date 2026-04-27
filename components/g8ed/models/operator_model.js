@@ -71,7 +71,7 @@ export class GrantedIntent extends G8eBaseModel {
 
 export class HeartbeatNotification extends G8eBaseModel {
     static fields = {
-        heartbeat_data:   { type: F.any, default: null },
+        heartbeat_data:   { type: F.object, default: null },
         investigation_id: { type: F.string, default: null },
         case_id:          { type: F.string, default: null },
     };
@@ -109,8 +109,8 @@ export class SystemInfo extends G8eBaseModel {
         hostname:               { type: F.string,  default: null },
         os:                     { type: F.string,  default: null },
         architecture:           { type: F.string,  default: null },
-        cpu_count:              { type: F.any,     default: null },
-        memory_mb:              { type: F.any,     default: null },
+        cpu_count:              { type: F.number,  default: null },
+        memory_mb:              { type: F.number,  default: null },
         public_ip:              { type: F.string,  default: null },
         internal_ip:            { type: F.string,  default: null },
         interfaces:             { type: F.array,   default: () => [] },
@@ -118,12 +118,12 @@ export class SystemInfo extends G8eBaseModel {
         cloud_provider:         { type: F.string,  default: null },
         is_cloud_operator:      { type: F.boolean, default: false },
         system_fingerprint:     { type: F.string,  default: null },
-        fingerprint_details:    { type: F.any,     default: null },
-        os_details:             { type: F.any,     default: null },
-        user_details:           { type: F.any,     default: null },
-        disk_details:           { type: F.any,     default: null },
-        memory_details:         { type: F.any,     default: null },
-        environment:            { type: F.any,     default: null },
+        fingerprint_details:    { type: F.object, default: null },
+        os_details:             { type: F.object, default: null },
+        user_details:           { type: F.object, default: null },
+        disk_details:           { type: F.object, default: null },
+        memory_details:         { type: F.object, default: null },
+        environment:            { type: F.object, default: null },
         local_storage_enabled:  { type: F.boolean, default: true },
     };
 
@@ -161,8 +161,8 @@ export class CertInfo extends G8eBaseModel {
         cert:       { type: F.string, default: null },
         key:        { type: F.string, default: null },
         serial:     { type: F.string, default: null },
-        not_before: { type: F.any,    default: null },
-        not_after:  { type: F.any,    default: null },
+        not_before: { type: F.date,   default: null },
+        not_after:  { type: F.date,   default: null },
     };
 
     static empty() {
@@ -256,9 +256,9 @@ export class OperatorDocument extends G8eIdentifiableModel {
         last_heartbeat:               { type: F.date,    default: null },
         runtime_config:               { type: F.object,  default: () => ({}) },
         system_fingerprint:           { type: F.string,  default: null },
-        fingerprint_details:          { type: F.any,     default: null },
+        fingerprint_details:          { type: F.object, default: null },
         system_info:                  { type: F.object,  model: SystemInfo,        default: () => new SystemInfo({}) },
-        slot_number:                  { type: F.any,     default: null },
+        slot_number:                  { type: F.number, default: null },
         is_slot:                      { type: F.boolean, default: false },
         claimed:                      { type: F.boolean, default: false },
         operator_type:                { type: F.string,  default: OperatorType.SYSTEM },
@@ -564,7 +564,7 @@ export class CRLDocument extends G8eBaseModel {
         last_updated:          { type: F.date,   default: () => now() },
         next_update:           { type: F.date,   required: true },
         revoked_certificates:  { type: F.array,  default: () => [] },
-        signature:             { type: F.any,    default: null },
+        signature:             { type: F.string, default: null },
     };
 }
 
@@ -590,43 +590,6 @@ export class OperatorSlotCreationResponse extends G8eBaseModel {
 
     static forFailure(message) {
         return new OperatorSlotCreationResponse({
-            success: false,
-            message: message,
-        });
-    }
-}
-
-// ---------------------------------------------------------------------------
-// OperatorRefreshKeyResponse
-// ---------------------------------------------------------------------------
-
-export class OperatorRefreshKeyResponse extends G8eBaseModel {
-    static fields = {
-        success:         { type: F.boolean, required: true },
-        new_api_key:     { type: F.string,  default: null },
-        new_operator_id: { type: F.string,  default: null },
-        message:         { type: F.string,  default: null },
-    };
-
-    _validate() {
-        if (this.new_api_key) {
-            if (!API_KEY_COMBINED_REGEX.test(this.new_api_key)) {
-                throw new Error('new_api_key must match g8e API key format (g8e_ prefix followed by hex characters)');
-            }
-        }
-    }
-
-    static forSuccess(newApiKey, newOperatorId, message = null) {
-        return new OperatorRefreshKeyResponse({
-            success:         true,
-            new_api_key:     newApiKey,
-            new_operator_id: newOperatorId,
-            message:         message,
-        });
-    }
-
-    static forFailure(message) {
-        return new OperatorRefreshKeyResponse({
             success: false,
             message: message,
         });

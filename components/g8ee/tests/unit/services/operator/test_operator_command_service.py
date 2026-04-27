@@ -301,9 +301,16 @@ class TestExecuteCommandTargetSystems:
         from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
         from tests.fakes.fake_execution_service import FakeExecutionService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
 
         approval_service = FakeApprovalService()
-        execution_service = FakeExecutionService()
+        event_service = FakeEventService()
+        ai_analyzer = FakeAIResponseAnalyzer()
+        execution_service = FakeExecutionService(
+            g8ed_event_service=event_service,
+            ai_response_analyzer=ai_analyzer
+        )
         service = build_command_service(
             approval_service=approval_service,
             execution_service=execution_service
@@ -330,9 +337,16 @@ class TestExecuteCommandTargetSystems:
         from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
         from tests.fakes.fake_execution_service import FakeExecutionService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
 
         approval_service = FakeApprovalService()
-        execution_service = FakeExecutionService()
+        event_service = FakeEventService()
+        ai_analyzer = FakeAIResponseAnalyzer()
+        execution_service = FakeExecutionService(
+            g8ed_event_service=event_service,
+            ai_response_analyzer=ai_analyzer
+        )
         service = build_command_service(
             approval_service=approval_service,
             execution_service=execution_service
@@ -365,9 +379,16 @@ class TestExecuteCommandTargetSystems:
         from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
         from tests.fakes.fake_execution_service import FakeExecutionService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
 
         approval_service = FakeApprovalService()
-        execution_service = FakeExecutionService()
+        event_service = FakeEventService()
+        ai_analyzer = FakeAIResponseAnalyzer()
+        execution_service = FakeExecutionService(
+            g8ed_event_service=event_service,
+            ai_response_analyzer=ai_analyzer
+        )
         service = build_command_service(
             approval_service=approval_service,
             execution_service=execution_service
@@ -411,9 +432,16 @@ class TestExecuteCommandTargetSystems:
         from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
         from tests.fakes.fake_execution_service import FakeExecutionService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
 
         approval_service = FakeApprovalService()
-        execution_service = FakeExecutionService()
+        event_service = FakeEventService()
+        ai_analyzer = FakeAIResponseAnalyzer()
+        execution_service = FakeExecutionService(
+            g8ed_event_service=event_service,
+            ai_response_analyzer=ai_analyzer
+        )
         service = build_command_service(
             approval_service=approval_service,
             execution_service=execution_service
@@ -455,9 +483,16 @@ class TestExecuteCommandTargetSystems:
         from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
         from tests.fakes.fake_execution_service import FakeExecutionService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
 
         approval_service = FakeApprovalService()
-        execution_service = FakeExecutionService()
+        event_service = FakeEventService()
+        ai_analyzer = FakeAIResponseAnalyzer()
+        execution_service = FakeExecutionService(
+            g8ed_event_service=event_service,
+            ai_response_analyzer=ai_analyzer
+        )
         service = build_command_service(
             approval_service=approval_service,
             execution_service=execution_service
@@ -492,9 +527,16 @@ class TestExecuteCommandTargetSystems:
         from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
         from tests.fakes.fake_execution_service import FakeExecutionService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
 
         approval_service = FakeApprovalService()
-        execution_service = FakeExecutionService()
+        event_service = FakeEventService()
+        ai_analyzer = FakeAIResponseAnalyzer()
+        execution_service = FakeExecutionService(
+            g8ed_event_service=event_service,
+            ai_response_analyzer=ai_analyzer
+        )
         service = build_command_service(
             approval_service=approval_service,
             execution_service=execution_service
@@ -528,9 +570,16 @@ class TestExecuteCommandTargetSystems:
         from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
         from tests.fakes.fake_execution_service import FakeExecutionService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
 
         approval_service = FakeApprovalService()
-        execution_service = FakeExecutionService()
+        event_service = FakeEventService()
+        ai_analyzer = FakeAIResponseAnalyzer()
+        execution_service = FakeExecutionService(
+            g8ed_event_service=event_service,
+            ai_response_analyzer=ai_analyzer
+        )
         service = build_command_service(
             approval_service=approval_service,
             execution_service=execution_service
@@ -564,9 +613,16 @@ class TestExecuteCommandTargetSystems:
         from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
         from tests.fakes.fake_execution_service import FakeExecutionService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
 
         approval_service = FakeApprovalService()
-        execution_service = FakeExecutionService()
+        event_service = FakeEventService()
+        ai_analyzer = FakeAIResponseAnalyzer()
+        execution_service = FakeExecutionService(
+            g8ed_event_service=event_service,
+            ai_response_analyzer=ai_analyzer
+        )
         service = build_command_service(
             approval_service=approval_service,
             execution_service=execution_service
@@ -602,9 +658,16 @@ class TestExecuteCommandTargetSystems:
         from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
         from tests.fakes.fake_execution_service import FakeExecutionService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
 
         approval_service = FakeApprovalService()
-        execution_service = FakeExecutionService()
+        event_service = FakeEventService()
+        ai_analyzer = FakeAIResponseAnalyzer()
+        execution_service = FakeExecutionService(
+            g8ed_event_service=event_service,
+            ai_response_analyzer=ai_analyzer
+        )
         service = build_command_service(
             approval_service=approval_service,
             execution_service=execution_service
@@ -644,9 +707,16 @@ class TestExecuteCommandTargetSystems:
         from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
         from tests.fakes.fake_execution_service import FakeExecutionService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
 
         approval_service = FakeApprovalService()
-        execution_service = FakeExecutionService()
+        event_service = FakeEventService()
+        ai_analyzer = FakeAIResponseAnalyzer()
+        execution_service = FakeExecutionService(
+            g8ed_event_service=event_service,
+            ai_response_analyzer=ai_analyzer
+        )
         service = build_command_service(
             approval_service=approval_service,
             execution_service=execution_service
@@ -677,9 +747,16 @@ class TestExecuteCommandTargetSystems:
         from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
         from tests.fakes.fake_execution_service import FakeExecutionService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
 
         approval_service = FakeApprovalService()
-        execution_service = FakeExecutionService()
+        event_service = FakeEventService()
+        ai_analyzer = FakeAIResponseAnalyzer()
+        execution_service = FakeExecutionService(
+            g8ed_event_service=event_service,
+            ai_response_analyzer=ai_analyzer
+        )
         service = build_command_service(
             approval_service=approval_service,
             execution_service=execution_service

@@ -42,7 +42,7 @@ import { createAuditRouter } from './routes/platform/audit_routes.js';
 import { createConsoleRouter } from './routes/platform/console_routes.js';
 import { createSettingsRouter } from './routes/platform/settings_routes.js';
 import { createSystemRouter } from './routes/platform/system_routes.js';
-import { LLMProvider, PROVIDER_MODELS } from './constants/ai.js';
+import { LLMProvider, PROVIDER_MODELS, PROVIDER_DEFAULT_MODELS } from './constants/ai.js';
 import { createOperatorRouter } from './routes/operator/operator_routes.js';
 import { createOperatorApprovalRouter } from './routes/operator/operator_approval_routes.js';
 import { createOperatorAuthRouter } from './routes/operator/operator_auth_routes.js';
@@ -439,6 +439,7 @@ function mountRoutes(app, {
                 llmCatalog: {
                     providers: LLMProvider,
                     providerModels: PROVIDER_MODELS,
+                    providerDefaultModels: PROVIDER_DEFAULT_MODELS,
                 },
             });
         });

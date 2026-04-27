@@ -79,7 +79,7 @@ export function createInternalOperatorRouter({ services, authorizationMiddleware
                 user_id
             });
 
-            const result = await operatorService.refreshOperatorApiKey(operatorId, user_id);
+            const result = await operatorService.refreshOperatorApiKey(operatorId, user_id, null, null);
 
             if (!result.success) {
                 logger.warn('[INTERNAL-HTTP] Operator API key refresh failed', {

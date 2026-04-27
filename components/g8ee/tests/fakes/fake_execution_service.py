@@ -109,14 +109,28 @@ class FakeExecutionService:
         })
         if self._resolve_error:
             raise self._resolve_error
-        return self._resolved_operator
+        if target_operator and operator_documents:
+            for op in operator_documents:
+                if op.id == target_operator:
+                    return op
+        return operator_documents[0] if operator_documents else self._resolved_operator
 
     def resolve_multiple_operators(
         self,
         operator_documents: list[OperatorDocument],
         target_operators: list[str],
     ) -> list[OperatorDocument]:
-        return [self._resolved_operator]
+        if not operator_documents:
+            return [self._resolved_operator]
+        if "all" in target_operators:
+            return operator_documents
+        resolved = []
+        for target_id in target_operators:
+            for op in operator_documents:
+                if op.id == target_id:
+                    resolved.append(op)
+                    break
+        return resolved if resolved else operator_documents
 
     def build_target_systems_list(self, operator_documents: list[OperatorDocument]) -> list[TargetSystem]:
         return [TargetSystem(

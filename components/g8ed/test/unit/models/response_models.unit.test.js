@@ -961,47 +961,100 @@ describe('OperatorRefreshKeyResponse [UNIT - PURE LOGIC]', () => {
     });
 
     it('rejects invalid API key format - missing prefix', () => {
-        expect(() => OperatorRefreshKeyResponse.parse({
-            success: true,
-            old_operator_id: 'op-old-123',
-            new_operator_id: 'op-new-456',
-            slot_number: 1,
-            new_api_key: 'invalid_key_format',
-        })).toThrow('new_api_key must match g8e API key format');
+        try {
+            OperatorRefreshKeyResponse.parse({
+                success: true,
+                old_operator_id: 'op-old-123',
+                new_operator_id: 'op-new-456',
+                slot_number: 1,
+                new_api_key: 'invalid_key_format',
+            });
+            throw new Error('Should have thrown');
+        } catch (err) {
+            expect(err.message).toBe('OperatorRefreshKeyResponse validation failed: new_api_key must match g8e API key format (g8e_ prefix followed by hex characters)');
+            expect(err.validationErrors).toEqual(['new_api_key must match g8e API key format (g8e_ prefix followed by hex characters)']);
+        }
     });
 
     it('rejects status string as API key (regression test)', () => {
-        expect(() => OperatorRefreshKeyResponse.parse({
-            success: true,
-            old_operator_id: 'op-old-123',
-            new_operator_id: 'op-new-456',
-            slot_number: 1,
-            new_api_key: 'AVAILABLE',
-        })).toThrow('new_api_key must match g8e API key format');
+        try {
+            OperatorRefreshKeyResponse.parse({
+                success: true,
+                old_operator_id: 'op-old-123',
+                new_operator_id: 'op-new-456',
+                slot_number: 1,
+                new_api_key: 'AVAILABLE',
+            });
+            throw new Error('Should have thrown');
+        } catch (err) {
+            expect(err.message).toBe('OperatorRefreshKeyResponse validation failed: new_api_key must match g8e API key format (g8e_ prefix followed by hex characters)');
+            expect(err.validationErrors).toEqual(['new_api_key must match g8e API key format (g8e_ prefix followed by hex characters)']);
+        }
     });
 
     it('rejects API key with incorrect hex length', () => {
-        expect(() => OperatorRefreshKeyResponse.parse({
-            success: true,
-            old_operator_id: 'op-old-123',
-            new_operator_id: 'op-new-456',
-            slot_number: 1,
-            new_api_key: 'g8e_' + '0'.repeat(32),
-        })).toThrow('new_api_key must match g8e API key format');
+        try {
+            OperatorRefreshKeyResponse.parse({
+                success: true,
+                old_operator_id: 'op-old-123',
+                new_operator_id: 'op-new-456',
+                slot_number: 1,
+                new_api_key: 'g8e_' + '0'.repeat(32),
+            });
+            throw new Error('Should have thrown');
+        } catch (err) {
+            expect(err.message).toBe('OperatorRefreshKeyResponse validation failed: new_api_key must match g8e API key format (g8e_ prefix followed by hex characters)');
+            expect(err.validationErrors).toEqual(['new_api_key must match g8e API key format (g8e_ prefix followed by hex characters)']);
+        }
     });
 
     it('rejects API key with non-hex characters', () => {
-        expect(() => OperatorRefreshKeyResponse.parse({
-            success: true,
-            old_operator_id: 'op-old-123',
-            new_operator_id: 'op-new-456',
-            slot_number: 1,
-            new_api_key: 'g8e_' + 'g'.repeat(64),
-        })).toThrow('new_api_key must match g8e API key format');
+        try {
+            OperatorRefreshKeyResponse.parse({
+                success: true,
+                old_operator_id: 'op-old-123',
+                new_operator_id: 'op-new-456',
+                slot_number: 1,
+                new_api_key: 'g8e_' + 'g'.repeat(64),
+            });
+            throw new Error('Should have thrown');
+        } catch (err) {
+            expect(err.message).toBe('OperatorRefreshKeyResponse validation failed: new_api_key must match g8e API key format (g8e_ prefix followed by hex characters)');
+            expect(err.validationErrors).toEqual(['new_api_key must match g8e API key format (g8e_ prefix followed by hex characters)']);
+        }
     });
 
     it('throws when required fields are missing', () => {
         expect(() => OperatorRefreshKeyResponse.parse({}))
             .toThrow('success is required');
+    });
+
+    it('forSuccess() creates success response with valid key, operator IDs, and slot number', () => {
+        const validKey = 'g8e_' + '0'.repeat(64);
+        const response = OperatorRefreshKeyResponse.forSuccess(
+            validKey,
+            'op-new-456',
+            'op-old-123',
+            1,
+            'Key refreshed'
+        );
+        expect(response.success).toBe(true);
+        expect(response.new_api_key).toBe(validKey);
+        expect(response.new_operator_id).toBe('op-new-456');
+        expect(response.old_operator_id).toBe('op-old-123');
+        expect(response.slot_number).toBe(1);
+        expect(response.message).toBe('Key refreshed');
+    });
+
+    it('forSuccess() throws with invalid API key format', () => {
+        expect(() => OperatorRefreshKeyResponse.forSuccess('invalid-key', 'op-new-456', 'op-old-123', 1))
+            .toThrow('new_api_key must match g8e API key format');
+    });
+
+    it('forFailure() creates failure response with message', () => {
+        const response = OperatorRefreshKeyResponse.forFailure('Refresh failed');
+        expect(response.success).toBe(false);
+        expect(response.message).toBe('Refresh failed');
+        expect(response.new_api_key).toBeNull();
     });
 });

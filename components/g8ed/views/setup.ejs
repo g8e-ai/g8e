@@ -51,9 +51,6 @@
                  Step 1: Configure (AI Providers, Web Search)
                  ================================================================ -->
             <div class="wizard-panel active" data-panel="1">
-                <input type="hidden" id="account_name" name="account_name" value="Super Admin">
-                <input type="hidden" id="account_email" name="account_email" value="superadmin@g8e.local">
-
                 <!-- AI Providers Section -->
                 <div class="wizard-panel-header">
                     <span class="material-symbols-outlined wizard-panel-icon">key</span>
@@ -73,7 +70,8 @@
                                 <div id="primary_model" class="llm-model-dropdown custom-dropdown setup-model-dropdown" tabindex="0" role="combobox" aria-expanded="false">
                                     <div class="llm-model-dropdown__selected">
                                         <span class="llm-model-icon material-symbols-outlined">model_training</span>
-                                        <span class="llm-model-dropdown__text">Configure Provider</span>
+                                        <span class="llm-model-dropdown__text">Select a Model</span>
+                                        <span class="llm-model-dropdown__recommended-badge" style="display: none; background: var(--accent-blue); color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px; margin-left: 8px; font-weight: 600; text-transform: uppercase;">Recommended</span>
                                         <span class="llm-model-dropdown__arrow material-symbols-outlined">expand_more</span>
                                     </div>
                                     <div class="llm-model-dropdown__menu" id="primary_model-menu"></div>
@@ -84,7 +82,8 @@
                                 <div id="assistant_model" class="llm-model-dropdown custom-dropdown setup-model-dropdown" tabindex="0" role="combobox" aria-expanded="false">
                                     <div class="llm-model-dropdown__selected">
                                         <span class="llm-model-icon material-symbols-outlined">psychology</span>
-                                        <span class="llm-model-dropdown__text">Configure Provider</span>
+                                        <span class="llm-model-dropdown__text">Select a Model</span>
+                                        <span class="llm-model-dropdown__recommended-badge" style="display: none; background: var(--accent-blue); color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px; margin-left: 8px; font-weight: 600; text-transform: uppercase;">Recommended</span>
                                         <span class="llm-model-dropdown__arrow material-symbols-outlined">expand_more</span>
                                     </div>
                                     <div class="llm-model-dropdown__menu" id="assistant_model-menu"></div>
@@ -95,7 +94,8 @@
                                 <div id="lite_model" class="llm-model-dropdown custom-dropdown setup-model-dropdown" tabindex="0" role="combobox" aria-expanded="false">
                                     <div class="llm-model-dropdown__selected">
                                         <span class="llm-model-icon material-symbols-outlined">bolt</span>
-                                        <span class="llm-model-dropdown__text">Configure Provider</span>
+                                        <span class="llm-model-dropdown__text">Select a Model</span>
+                                        <span class="llm-model-dropdown__recommended-badge" style="display: none; background: var(--accent-blue); color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px; margin-left: 8px; font-weight: 600; text-transform: uppercase;">Recommended</span>
                                         <span class="llm-model-dropdown__arrow material-symbols-outlined">expand_more</span>
                                     </div>
                                     <div class="llm-model-dropdown__menu" id="lite_model-menu"></div>

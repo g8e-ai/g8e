@@ -24,7 +24,6 @@ import {
     GeneratedCertificate,
     CRLDocument,
     OperatorSlotCreationResponse,
-    OperatorRefreshKeyResponse,
     BindOperatorsResponse,
     UnbindOperatorsResponse,
     OperatorWithSessionContext,
@@ -112,6 +111,14 @@ describe('HeartbeatNotification [UNIT - PURE LOGIC]', () => {
         expect(notification.case_id).toBe('case-456');
     });
 
+    it('accepts object heartbeat_data', () => {
+        const notification = HeartbeatNotification.parse({
+            heartbeat_data: { status: 'active' },
+            investigation_id: 'inv-123',
+        });
+        expect(notification.heartbeat_data).toEqual({ status: 'active' });
+    });
+
     it('extracts investigation_id from heartbeat_data when not provided', () => {
         const hbData = { investigation_id: 'inv-789', case_id: 'case-101' };
         const notification = new HeartbeatNotification(hbData);
@@ -145,6 +152,57 @@ describe('SystemInfo [UNIT - PURE LOGIC]', () => {
         expect(info.local_storage_enabled).toBe(true);
     });
 
+    it('accepts valid cpu_count and memory_mb as numbers', () => {
+        const info = SystemInfo.parse({
+            cpu_count: 8,
+            memory_mb: 16384,
+        });
+        expect(info.cpu_count).toBe(8);
+        expect(info.memory_mb).toBe(16384);
+    });
+
+    it('rejects invalid cpu_count (non-number) by throwing validation error', () => {
+        expect(() => SystemInfo.parse({ cpu_count: '8' })).toThrow('cpu_count must be a number');
+    });
+
+    it('rejects invalid memory_mb (non-number) by throwing validation error', () => {
+        expect(() => SystemInfo.parse({ memory_mb: '16384' })).toThrow('memory_mb must be a number');
+    });
+
+    it('accepts valid detail fields as objects', () => {
+        const info = SystemInfo.parse({
+            fingerprint_details: { cpu: 'x86_64' },
+            os_details: { kernel: 'linux' },
+            user_details: { uid: 1000 },
+            disk_details: { total_gb: 100 },
+            memory_details: { total_mb: 16384 },
+            environment: { pwd: '/home' },
+        });
+        expect(info.fingerprint_details).toEqual({ cpu: 'x86_64' });
+        expect(info.os_details).toEqual({ kernel: 'linux' });
+        expect(info.user_details).toEqual({ uid: 1000 });
+        expect(info.disk_details).toEqual({ total_gb: 100 });
+        expect(info.memory_details).toEqual({ total_mb: 16384 });
+        expect(info.environment).toEqual({ pwd: '/home' });
+    });
+
+    it('rejects invalid detail fields (non-objects) by coercing to empty object', () => {
+        const info = SystemInfo.parse({
+            fingerprint_details: 'invalid',
+            os_details: 'invalid',
+            user_details: 'invalid',
+            disk_details: 'invalid',
+            memory_details: 'invalid',
+            environment: 'invalid',
+        });
+        expect(info.fingerprint_details).toEqual({});
+        expect(info.os_details).toEqual({});
+        expect(info.user_details).toEqual({});
+        expect(info.disk_details).toEqual({});
+        expect(info.memory_details).toEqual({});
+        expect(info.environment).toEqual({});
+    });
+
     it('forCloudOperator() sets cloud fields with explicit subtype', () => {
         const info = SystemInfo.forCloudOperator(CloudOperatorSubtype.AWS);
         expect(info.cloud_provider).toBe(CloudOperatorSubtype.AWS);
@@ -169,6 +227,32 @@ describe('CertInfo [UNIT - PURE LOGIC]', () => {
         expect(cert.cert).toBeNull();
         expect(cert.key).toBeNull();
         expect(cert.serial).toBeNull();
+    });
+
+    it('accepts valid not_before and not_after as Date objects', () => {
+        const cert = CertInfo.parse({
+            cert: '-----BEGIN CERT-----',
+            key: '-----BEGIN KEY-----',
+            serial: 'ABC123',
+            not_before: new Date('2026-01-01T00:00:00.000Z'),
+            not_after: new Date('2027-01-01T00:00:00.000Z'),
+        });
+        expect(cert.not_before).toBeInstanceOf(Date);
+        expect(cert.not_after).toBeInstanceOf(Date);
+    });
+
+    it('rejects invalid not_before (non-date) by throwing validation error', () => {
+        expect(() => CertInfo.parse({
+            cert: '-----BEGIN CERT-----',
+            not_before: 'invalid',
+        })).toThrow('not_before must be a valid date');
+    });
+
+    it('rejects invalid not_after (non-date) by throwing validation error', () => {
+        expect(() => CertInfo.parse({
+            cert: '-----BEGIN CERT-----',
+            not_after: 'invalid',
+        })).toThrow('not_after must be a valid date');
     });
 
     it('fromCertData() maps notBefore/notAfter to snake_case', () => {
@@ -544,6 +628,45 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
         expect(doc.id).toBe('op-123');
         expect(doc.status).toBe(OperatorStatus.AVAILABLE);
     });
+
+    it('accepts valid slot_number as number', () => {
+        const doc = OperatorDocument.parse({
+            id: 'op-123',
+            user_id: 'user-456',
+            status: OperatorStatus.AVAILABLE,
+            slot_number: 1,
+        });
+        expect(doc.slot_number).toBe(1);
+    });
+
+    it('rejects invalid slot_number (non-number) by throwing validation error', () => {
+        expect(() => OperatorDocument.parse({
+            id: 'op-123',
+            user_id: 'user-456',
+            status: OperatorStatus.AVAILABLE,
+            slot_number: '1',
+        })).toThrow('slot_number must be a number');
+    });
+
+    it('accepts valid fingerprint_details as object', () => {
+        const doc = OperatorDocument.parse({
+            id: 'op-123',
+            user_id: 'user-456',
+            status: OperatorStatus.AVAILABLE,
+            fingerprint_details: { cpu: 'x86_64' },
+        });
+        expect(doc.fingerprint_details).toEqual({ cpu: 'x86_64' });
+    });
+
+    it('rejects invalid fingerprint_details (non-object) by coercing to empty object', () => {
+        const doc = OperatorDocument.parse({
+            id: 'op-123',
+            user_id: 'user-456',
+            status: OperatorStatus.AVAILABLE,
+            fingerprint_details: 'invalid',
+        });
+        expect(doc.fingerprint_details).toEqual({});
+    });
 });
 
 describe('OperatorListUpdatedEvent [UNIT - PURE LOGIC]', () => {
@@ -652,6 +775,23 @@ describe('CRLDocument [UNIT - PURE LOGIC]', () => {
         expect(crl.signature).toBeNull();
     });
 
+    it('accepts valid signature as string', () => {
+        const crl = CRLDocument.parse({
+            issuer: 'CN=Test CA',
+            next_update: new Date('2027-01-01T00:00:00.000Z'),
+            signature: 'base64-signature-data',
+        });
+        expect(crl.signature).toBe('base64-signature-data');
+    });
+
+    it('rejects invalid signature (non-string) by throwing validation error', () => {
+        expect(() => CRLDocument.parse({
+            issuer: 'CN=Test CA',
+            next_update: new Date('2027-01-01T00:00:00.000Z'),
+            signature: 12345,
+        })).toThrow('signature must be a string');
+    });
+
     it('accepts all fields with values', () => {
         const crl = CRLDocument.parse({
             version: 2,
@@ -700,93 +840,6 @@ describe('OperatorSlotCreationResponse [UNIT - PURE LOGIC]', () => {
         expect(response.success).toBe(false);
         expect(response.message).toBe('Slot limit reached');
         expect(response.operator_id).toBeNull();
-    });
-});
-
-describe('OperatorRefreshKeyResponse [UNIT - PURE LOGIC]', () => {
-    it('accepts valid required fields with defaults', () => {
-        const response = OperatorRefreshKeyResponse.parse({
-            success: true,
-        });
-        expect(response.success).toBe(true);
-        expect(response.new_api_key).toBeNull();
-        expect(response.new_operator_id).toBeNull();
-        expect(response.message).toBeNull();
-    });
-
-    it('accepts valid operator API key format (g8e_ + 8 hex + _ + 64 hex)', () => {
-        const validKey = 'g8e_1a2b3c4d_' + '0'.repeat(64);
-        const response = OperatorRefreshKeyResponse.parse({
-            success: true,
-            new_api_key: validKey,
-            new_operator_id: 'op-new-456',
-        });
-        expect(response.new_api_key).toBe(validKey);
-    });
-
-    it('accepts valid regular API key format (g8e_ + 64 hex)', () => {
-        const validKey = 'g8e_' + '0'.repeat(64);
-        const response = OperatorRefreshKeyResponse.parse({
-            success: true,
-            new_api_key: validKey,
-            new_operator_id: 'op-new-456',
-        });
-        expect(response.new_api_key).toBe(validKey);
-    });
-
-    it('rejects invalid API key format - missing prefix', () => {
-        expect(() => OperatorRefreshKeyResponse.parse({
-            success: true,
-            new_api_key: 'invalid_key_format',
-        })).toThrow('new_api_key must match g8e API key format');
-    });
-
-    it('rejects status string as API key (regression test)', () => {
-        expect(() => OperatorRefreshKeyResponse.parse({
-            success: true,
-            new_api_key: 'AVAILABLE',
-        })).toThrow('new_api_key must match g8e API key format');
-    });
-
-    it('rejects API key with incorrect hex length', () => {
-        expect(() => OperatorRefreshKeyResponse.parse({
-            success: true,
-            new_api_key: 'g8e_' + '0'.repeat(32),
-        })).toThrow('new_api_key must match g8e API key format');
-    });
-
-    it('rejects API key with non-hex characters', () => {
-        expect(() => OperatorRefreshKeyResponse.parse({
-            success: true,
-            new_api_key: 'g8e_' + 'g'.repeat(64),
-        })).toThrow('new_api_key must match g8e API key format');
-    });
-
-    it('rejects API key with "operator" in prefix (regression test for g8ee format mismatch)', () => {
-        expect(() => OperatorRefreshKeyResponse.parse({
-            success: true,
-            new_api_key: 'g8e_operator_1a2b3c4d_' + '0'.repeat(64),
-        })).toThrow('new_api_key must match g8e API key format');
-    });
-
-    it('forSuccess() creates success response with valid key, operator ID, and optional message', () => {
-        const validKey = 'g8e_' + '0'.repeat(64);
-        const response = OperatorRefreshKeyResponse.forSuccess(validKey, 'op-new-456', 'All good');
-        expect(response.success).toBe(true);
-        expect(response.new_api_key).toBe(validKey);
-        expect(response.new_operator_id).toBe('op-new-456');
-        expect(response.message).toBe('All good');
-    });
-
-    it('forSuccess() throws with invalid API key format', () => {
-        expect(() => OperatorRefreshKeyResponse.forSuccess('invalid-key', 'op-new-456'))
-            .toThrow('new_api_key must match g8e API key format');
-    });
-
-    it('forFailure() creates failure response with message', () => {
-        const response = OperatorRefreshKeyResponse.forFailure('Refresh failed');
-        expect(response.success).toBe(false);
-        expect(response.message).toBe('Refresh failed');
     });
 });
 

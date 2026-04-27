@@ -15,8 +15,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
-from typing import TYPE_CHECKING, cast, Any
+import logging
+from dataclasses import dataclass, fields
+from typing import TYPE_CHECKING, cast
 
 from app.services.ai.agent import g8eEngine
 from app.services.ai.chat_pipeline import ChatPipelineService
@@ -72,6 +73,7 @@ from app.services.operator.heartbeat_service import OperatorHeartbeatService
 from app.models.settings import G8eePlatformSettings
 
 if TYPE_CHECKING:
+    from app.clients.blob_client import BlobClient
     from app.clients.pubsub_client import PubSubClient
     from app.services.investigation.investigation_service import InvestigationService
     from app.services.investigation.investigation_data_service import InvestigationDataService
@@ -125,7 +127,6 @@ class OperatorServices:
 @dataclass(frozen=True)
 class AllServices:
     cache_aside_service: CacheAsideService
-    operator_cache_aside_service: CacheAsideService
     attachment_service: AttachmentService
     response_analyzer: AIResponseAnalyzer | AIResponseAnalyzerProtocol
     grounding_service: GroundingService
@@ -293,6 +294,7 @@ class ServiceFactory:
         core_services: CoreServices,
         data_services: DataServices,
         cache_aside_service: CacheAsideService,
+        pubsub_client: "PubSubClient | None" = None,
     ) -> OperatorServices:
         """Create operator-specific services."""
         api_key_service = ApiKeyService(cache_aside=cache_aside_service)
@@ -310,7 +312,7 @@ class ServiceFactory:
         )
 
         session_auth_listener = SessionAuthListener(
-            pubsub_client=None, # Will be set in create_all_services
+            pubsub_client=pubsub_client,
             session_service=operator_session_service,
             operator_data_service=data_services.operator_data_service, # type: ignore[arg-type]
         )
@@ -339,8 +341,8 @@ class ServiceFactory:
     def create_all_services(
         settings: G8eePlatformSettings,
         cache_aside_service: CacheAsideService,
-        pubsub_client: object | None = None,
-        blob_service: object | None = None,
+        pubsub_client: "PubSubClient | None" = None,
+        blob_service: "BlobClient | None" = None,
         web_search_provider: WebSearchProvider | None = None,
     ) -> AllServices:
         """Create all g8ee services in proper dependency order.
@@ -355,7 +357,7 @@ class ServiceFactory:
         core_services = ServiceFactory.create_core_services(settings, cache_aside_service)
         data_services = ServiceFactory.create_data_services(settings, cache_aside_service, core_services)
         domain_services = ServiceFactory.create_domain_services(settings, data_services)
-        operator_services = ServiceFactory.create_operator_services(core_services, data_services, cache_aside_service)
+        operator_services = ServiceFactory.create_operator_services(core_services, data_services, cache_aside_service, pubsub_client)
 
         attachment_service = AttachmentService(
             blob_service=blob_service,  # type: ignore[arg-type]
@@ -399,7 +401,6 @@ class ServiceFactory:
         if pubsub_client is not None:
             operator_command_service.set_pubsub_client(cast("PubSubClient", pubsub_client))
             operator_services.heartbeat_service.set_pubsub_client(cast("PubSubClient", pubsub_client))
-            operator_services.session_auth_listener.pubsub_client = cast("PubSubClient", pubsub_client)
 
         chat_task_manager = BackgroundTaskManager()
 
@@ -437,7 +438,6 @@ class ServiceFactory:
 
         all_services = AllServices(
             cache_aside_service=cache_aside_service,
-            operator_cache_aside_service=cache_aside_service,
             attachment_service=attachment_service,
             response_analyzer=response_analyzer,
             grounding_service=grounding_service,
@@ -486,7 +486,9 @@ class ServiceFactory:
         Also creates the legacy alias ``memory_service`` that some dependency
         getters expect.
         """
-        for name, svc in asdict(services).items():
+        for field in fields(services):
+            name = field.name
+            svc = getattr(services, name)
             setattr(app.state, name, svc)
 
         app.state.memory_service = services.memory_data_service
@@ -503,8 +505,7 @@ class ServiceFactory:
     @staticmethod
     async def stop_services(services: AllServices) -> None:
         """Run lifecycle stop hooks (reverse order of start)."""
-        import logging as _logging
-        _logger = _logging.getLogger(__name__)
+        _logger = logging.getLogger(__name__)
 
         # First, await all background tasks to ensure they complete before cleanup
         try:
@@ -534,4 +535,9 @@ class ServiceFactory:
             await services.operator_command_service.stop_pubsub_listeners()
         except Exception as exc:
             _logger.error("Error stopping pubsub listeners: %s", exc)
+
+        try:
+            await services.certificate_service.cleanup()
+        except Exception as exc:
+            _logger.error("Error cleaning up certificate service: %s", exc)
 

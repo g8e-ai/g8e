@@ -18,17 +18,21 @@ import { ApiPaths } from '../constants/api-paths.js';
  * (sourced from components/g8ed/constants/ai.js — the single source of truth).
  * Reading it from the DOM avoids duplicating the catalog in a browser-side module.
  */
-function _readCatalog() {
+export function _readCatalog() {
     const el = typeof document !== 'undefined' ? document.getElementById('llm-catalog') : null;
-    if (!el || !el.textContent) return { providers: {}, providerModels: {} };
+    if (!el || !el.textContent) return { providers: {}, providerModels: {}, providerDefaultModels: {} };
     try {
         return JSON.parse(el.textContent);
     } catch {
-        return { providers: {}, providerModels: {} };
+        return { providers: {}, providerModels: {}, providerDefaultModels: {} };
     }
 }
 
-const { providers: LLMProvider, providerModels: PROVIDER_MODELS } = _readCatalog();
+const {
+    providers: LLMProvider,
+    providerModels: PROVIDER_MODELS,
+    providerDefaultModels: PROVIDER_DEFAULT_MODELS,
+} = _readCatalog();
 
 const PROVIDER_LABELS = {
     gemini:    'Gemini',
@@ -37,33 +41,9 @@ const PROVIDER_LABELS = {
     ollama:    'Ollama',
 };
 
-const PROVIDER_DEFAULT_MODELS = {
-    gemini: {
-        primary: PROVIDER_MODELS.gemini?.all?.find(m => m.label === 'Gemini 3.1 Pro')?.id,
-        assistant: PROVIDER_MODELS.gemini?.all?.find(m => m.label === 'Gemini 3 Flash')?.id,
-        lite: PROVIDER_MODELS.gemini?.all?.find(m => m.label === 'Gemini 3.1 Flash Lite')?.id,
-    },
-    anthropic: {
-        primary: PROVIDER_MODELS.anthropic?.all?.find(m => m.label === 'Claude Opus 4.6')?.id,
-        assistant: PROVIDER_MODELS.anthropic?.all?.find(m => m.label === 'Claude Sonnet 4.6')?.id,
-        lite: PROVIDER_MODELS.anthropic?.all?.find(m => m.label === 'Claude Haiku 4.5')?.id,
-    },
-    openai: {
-        primary: PROVIDER_MODELS.openai?.all?.find(m => m.label === 'GPT-5.4 Pro')?.id,
-        assistant: PROVIDER_MODELS.openai?.all?.find(m => m.label === 'GPT-5.4')?.id,
-        lite: PROVIDER_MODELS.openai?.all?.find(m => m.label === 'GPT-5.4 Mini')?.id,
-    },
-    ollama: {
-        primary: PROVIDER_MODELS.ollama?.all?.find(m => m.label === 'Qwen 3.5 122B')?.id,
-        assistant: PROVIDER_MODELS.ollama?.all?.find(m => m.label === 'GLM 5.1')?.id,
-        lite: PROVIDER_MODELS.ollama?.all?.find(m => m.label === 'Llama 3.2 3B')?.id,
-    },
-};
-
-function _modelToProvider(modelValue) {
-    for (const [provider, config] of Object.entries(PROVIDER_MODELS)) {
-        const allModels = [...config.primary, ...config.assistant];
-        if (allModels.some(m => m.id === modelValue)) return provider;
+function _modelToProvider(modelValue, providerModels = PROVIDER_MODELS) {
+    for (const [provider, config] of Object.entries(providerModels)) {
+        if ((config.all || []).some(m => m.id === modelValue)) return provider;
     }
     return null;
 }
@@ -88,14 +68,21 @@ function escAttr(str) {
     return escHtml(str);
 }
 
+export const EMPTY_MODEL_PLACEHOLDER = 'Select a Model';
+
 export class SettingsPage {
-    constructor() {
+    constructor(options = {}) {
         this.allSettings = [];
         this.sections = [];
         this.dirty = new Map();
         this.activeSection = null;
         this.selectedModels = { primary: '', assistant: '', lite: '' };
-        this.lastProviderKeyChange = null;
+        this.lastProviderEdited = null;
+
+        // Allow injecting catalog for tests
+        this.PROVIDER_MODELS = options.providerModels || PROVIDER_MODELS;
+        this.PROVIDER_DEFAULT_MODELS = options.providerDefaultModels || PROVIDER_DEFAULT_MODELS;
+        this.LLMProvider = options.providers || LLMProvider;
     }
 
     init() {
@@ -175,37 +162,45 @@ export class SettingsPage {
             const dropdown = document.getElementById(`${role}_model`);
             const menu = document.getElementById(`${role}_model-menu`);
             const text = dropdown?.querySelector('.llm-model-dropdown__text');
+            const badge = dropdown?.querySelector('.llm-model-dropdown__recommended-badge');
 
             if (!dropdown || !menu) return;
 
             menu.innerHTML = '';
+            if (badge) badge.style.display = 'none';
 
-            const prevValue = this.selectedModels[role] || '';
-            if (text && !prevValue) text.textContent = 'Select a Model';
+            let prevValue = this.selectedModels[role] || '';
+            if (text && !prevValue) text.textContent = EMPTY_MODEL_PLACEHOLDER;
 
             // Show all providers regardless of API key configuration
-            const activeProviders = Object.keys(PROVIDER_MODELS);
+            const activeProviders = Object.keys(this.PROVIDER_MODELS);
 
             dropdown.classList.remove('disabled');
 
             // Auto-select sensible defaults if a provider key was just entered and no model is selected
-            if (!prevValue && this.lastProviderKeyChange && activeProviders.includes(this.lastProviderKeyChange)) {
-                const defaults = PROVIDER_DEFAULT_MODELS[this.lastProviderKeyChange];
+            if (!prevValue && this.lastProviderEdited && activeProviders.includes(this.lastProviderEdited)) {
+                const defaults = this.PROVIDER_DEFAULT_MODELS[this.lastProviderEdited];
                 if (defaults && defaults[role]) {
-                    const defaultModel = PROVIDER_MODELS[this.lastProviderKeyChange]?.all?.find(m => m.id === defaults[role]);
+                    const defaultModel = this.PROVIDER_MODELS[this.lastProviderEdited]?.all?.find(m => m.id === defaults[role]);
                     if (defaultModel) {
                         prevValue = defaultModel.id;
                         this.selectedModels[role] = prevValue;
                         if (text) text.textContent = defaultModel.label;
-                        this._markDirty(this._getModelKey(role), prevValue);
+                        this._markDirty(_getModelKey(role), prevValue);
                     }
                 }
             }
 
+            // Show recommended badge if the selected model matches the default for its provider
+            const provider = _modelToProvider(prevValue, this.PROVIDER_MODELS);
+            if (provider && this.PROVIDER_DEFAULT_MODELS[provider]?.[role] === prevValue) {
+                if (badge) badge.style.display = '';
+            }
+
             // Try to find the selected model in ALL providers (not just active) to get its label
             let foundLabel = null;
-            for (const provider of Object.keys(PROVIDER_MODELS)) {
-                const config = PROVIDER_MODELS[provider];
+            for (const provider of Object.keys(this.PROVIDER_MODELS)) {
+                const config = this.PROVIDER_MODELS[provider];
                 if (!config) continue;
                 const allModels = config.all || [];
                 const match = allModels.find(m => m.id === prevValue);
@@ -217,7 +212,7 @@ export class SettingsPage {
 
             // If found in catalog but not in active providers, still set the text
             if (foundLabel && !activeProviders.some(p => {
-                const config = PROVIDER_MODELS[p];
+                const config = this.PROVIDER_MODELS[p];
                 return config?.all?.some(m => m.id === prevValue);
             })) {
                 if (text) text.textContent = foundLabel;
@@ -229,7 +224,7 @@ export class SettingsPage {
             }
 
             for (const provider of activeProviders) {
-                const config = PROVIDER_MODELS[provider];
+                const config = this.PROVIDER_MODELS[provider];
                 if (!config) continue;
 
                 const providerLabel = PROVIDER_LABELS[provider] || provider;
@@ -360,6 +355,39 @@ export class SettingsPage {
         this.dirty.set(key, value);
         document.getElementById('save-btn').disabled = false;
         this._hideStatus();
+    }
+
+    _validateApiKey(provider, input) {
+        if (!input) return;
+        const val = input.value.trim();
+        const row = input.closest('.settings-field');
+        if (!row) return;
+
+        let hint = '';
+        if (val && !val.includes('*')) { // Only validate if user typed something new
+            if (provider === 'gemini' && !val.startsWith('AIza')) {
+                hint = 'Key usually starts with "AIza"';
+            } else if (provider === 'openai' && !val.startsWith('sk-')) {
+                hint = 'Key usually starts with "sk-"';
+            } else if (provider === 'anthropic' && !val.startsWith('sk-ant-')) {
+                hint = 'Key usually starts with "sk-ant-"';
+            }
+        }
+
+        let hintEl = row.querySelector('.settings-field-hint');
+        if (!hintEl && hint) {
+            hintEl = document.createElement('div');
+            hintEl.className = 'settings-field-hint';
+            hintEl.style.fontSize = '12px';
+            hintEl.style.color = 'var(--accent-blue)';
+            hintEl.style.marginTop = '4px';
+            row.appendChild(hintEl);
+        }
+        
+        if (hintEl) {
+            hintEl.textContent = hint;
+            hintEl.style.display = hint ? 'block' : 'none';
+        }
     }
 
     _buildNav() {
@@ -499,7 +527,7 @@ export class SettingsPage {
                 if (value) {
                     this.selectedModels[role] = value;
                     // If it's a custom model (not in any provider catalog), store as custom label
-                    if (!_modelToProvider(value)) {
+                    if (!_modelToProvider(value, this.PROVIDER_MODELS)) {
                         this.selectedModels[`${role}CustomLabel`] = value;
                     }
                 }
@@ -544,7 +572,20 @@ export class SettingsPage {
 
         const text = document.createElement('span');
         text.className = 'llm-model-dropdown__text';
-        text.textContent = 'Select a Model';
+        text.textContent = EMPTY_MODEL_PLACEHOLDER;
+
+        const badge = document.createElement('span');
+        badge.className = 'llm-model-dropdown__recommended-badge';
+        badge.textContent = 'Recommended';
+        badge.style.display = 'none';
+        badge.style.background = 'var(--accent-blue)';
+        badge.style.color = 'white';
+        badge.style.fontSize = '10px';
+        badge.style.padding = '2px 6px';
+        badge.style.borderRadius = '10px';
+        badge.style.marginLeft = '8px';
+        badge.style.fontWeight = '600';
+        badge.style.textTransform = 'uppercase';
 
         const arrow = document.createElement('span');
         arrow.className = 'llm-model-dropdown__arrow material-symbols-outlined';
@@ -552,6 +593,7 @@ export class SettingsPage {
 
         selected.appendChild(icon);
         selected.appendChild(text);
+        selected.appendChild(badge);
         selected.appendChild(arrow);
 
         const menu = document.createElement('div');
@@ -666,7 +708,8 @@ export class SettingsPage {
                     
                     // Check if this is a provider API key field
                     if (setting.provider && (setting.key.includes('api_key') || setting.key.includes('endpoint'))) {
-                        this.lastProviderKeyChange = setting.provider;
+                        this.lastProviderEdited = setting.provider;
+                        this._validateApiKey(setting.provider, input);
                         this._updateModelDropdowns();
                     }
                 };
@@ -763,7 +806,7 @@ export class SettingsPage {
 
         for (const [modelKey, providerKey] of Object.entries(roleModelMap)) {
             if (updates[modelKey]) {
-                const provider = _modelToProvider(updates[modelKey]);
+                const provider = _modelToProvider(updates[modelKey], this.PROVIDER_MODELS);
                 if (provider) {
                     updates[providerKey] = provider;
                 }

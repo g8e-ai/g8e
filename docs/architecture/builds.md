@@ -80,7 +80,7 @@ All component images have no build-time dependencies on each other and build in 
 
 **g8es image build:** Uses a multi-stage Dockerfile. The builder stage (`golang:1.26-alpine3.23`) installs UPX, then cross-compiles the `g8e.operator` binary for all 3 target architectures (`linux/amd64`, `linux/arm64`, `linux/386`) with `-trimpath`, `-buildvcs=false`, and UPX `--best --lzma` compression. The platform version is injected via `-ldflags "-X main.version=${VERSION}"` — the `VERSION` build arg defaults to `${G8E_VERSION:-dev}` in compose (`build.sh` exports `G8E_VERSION` from the `VERSION` file). The final stage is a minimal `alpine:3.23` image that copies the amd64 binary to `/usr/local/bin/g8e.operator` (to run g8es itself in `--listen` mode) and all 3 compressed binaries to `/opt/operator-binaries/` (for blob store upload at startup). The Go toolchain is not present in the runtime image.
 
-**g8ee image build:** Multi-stage Dockerfile based on `python:3.13-slim`. The builder stage installs Python dependencies into a prefix which is copied into the final runtime stage.
+**g8ee image build:** Multi-stage Dockerfile based on `python:3.12-slim`. The builder stage installs Python dependencies into a prefix which is copied into the final runtime stage.
 
 **g8ed image build:** Multi-stage Dockerfile based on `node:22-alpine3.23`. The builder stage runs `npm ci` (falling back to `npm install` if no lockfile) and `npm prune --omit=dev`. The final stage installs only curl (for healthchecks) — npm is not present in the runtime image.
 

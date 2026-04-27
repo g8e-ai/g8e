@@ -5,42 +5,54 @@ parent: Components
 
 # g8ee
 
-g8ee is the AI engine for g8e. It provides an agentic, LLM-powered interface for infrastructure operations and troubleshooting, with full human-in-the-loop safety controls, data sovereignty, and multi-provider LLM abstraction.
+g8ee is the AI engine for the g8e platform. It provides an agentic, LLM-powered interface for infrastructure operations and troubleshooting, featuring human-in-the-loop safety controls, data sovereignty, and a multi-provider LLM abstraction layer.
 
-> For cross-component AI architecture — transport map, conversation data models, and command execution pipeline — see [architecture/ai_agents.md](../architecture/ai_agents.md).
->
-> For deep-reference security documentation — internal auth token, Sentinel scrubbing patterns, LFAA vault encryption, operator binding, web/operator session security, and the full threat model — see [architecture/security.md](../architecture/security.md).
+---
+
+## The AI Lifecycle
+
+g8ee follows a strict "Traceable Pipeline" model for every message. A single user request moves through six distinct phases:
+
+### 1. Ingress & Context Assembly
+The `internal_router` receives the request from `g8ed`. The `ChatPipelineService` immediately triggers `_prepare_chat_context`:
+- **Context Enrichment**: Fetches the investigation state and binds available `g8eo` operators from the `G8eHttpContext` headers.
+- **History Retrieval**: Loads prior conversation turns from the `DBService`.
+- **Memory Attachment**: Injects user-level and case-level memories from the `MemoryDataService`.
+
+### 2. Triage (The Gatekeeper)
+Before invoking the primary LLM, the `TriageAgent` classifies the message:
+- **Simple**: Handled by the **Lite** model (e.g., greetings, simple status checks).
+- **Complex**: Escalated to the **Primary** model (e.g., troubleshooting, command execution).
+- **Short-circuit**: If the intent is unclear, the agent delivers a follow-up question immediately, bypassing further processing to save tokens and time.
+
+### 3. Orchestration (The ReAct Loop)
+The `g8eEngine` runs the core agentic loop:
+- **Provider Turn**: Communicates with the configured `LLMProvider` (Gemini, Anthropic, etc.).
+- **Tool Dispatch**: If the LLM requests a tool, `AIToolService` routes it. Universal tools (like `web_search`) run locally; gated tools (like `run_commands`) route through the **Tribunal** for operator execution.
+- **Iteration**: The loop continues until the LLM provides a final text response or hits the `AGENT_MAX_TOOL_TURNS` limit.
+
+### 4. Governance & Safety
+Every gated operation is verified:
+- **Sentinel**: Scrubs sensitive data (PII, secrets) from both inputs and outputs.
+- **Approval Pipeline**: State-changing operations (file edits, commands) trigger an `OPERATOR_COMMAND_APPROVAL_REQUESTED` event, halting execution until a human approves via the UI.
+- **Tribunal**: Refines natural language requests into hardened shell commands using specialized validator models.
+
+### 5. Streaming & Delivery
+Responses are delivered via **Server-Sent Events (SSE)**:
+- **Real-time**: `deliver_via_sse` publishes chunks to `g8ed` as they arrive from the provider.
+- **Per-Iteration Persistence**: Intermediate AI commentary is persisted to the database *during* the loop, ensuring history is preserved even if the connection drops.
+
+### 6. Post-Flight & Telemetry
+After the stream completes:
+- **Final Persistence**: The complete response, token usage, and grounding metadata are saved.
+- **Background Memory**: A detached task updates the investigation's memory context based on the new turn.
+- **Activity Metadata**: Comprehensive telemetry (duration, models, tools, costs) is recorded by `AgentActivityDataService`.
 
 ---
 
 ## Architecture
 
 g8ee is a Python/FastAPI service. The `ChatPipelineService` is the central coordinator — it assembles context, drives the LLM control plane, and handles post-response persistence.
-
-```
-ChatPipelineService
-  ├── g8eEngine            — Streaming orchestrator with tool calling loop
-  │     ├── agent_tool_loop — Sequential function execution and Tribunal routing
-  │     │     └── TribunalInvoker — Natural-language command refinement pipeline
-  │     ├── AIToolService    — Tool registration (TOOL_SPECS) and execution dispatch
-  │     │     └── WebSearchProvider — Vertex AI Search (Discovery Engine) executor
-  │     └── GroundingService — Provider-native grounding extraction, inline citation insertion
-  ├── AIResponseAnalyzer      — Risk analysis (command, file op, error)
-  ├── AIRequestBuilder        — Generation config, thinking config, attachments
-  ├── InvestigationService    — (Domain Layer) Workflow determination, context enrichment, history management
-  │     ├── InvestigationDataService — (Data Layer) Pure CRUD for investigations
-  │     ├── OperatorDataService      — (Data Layer) Authoritative writer for operator documents; handles termination and history
-  │     └── MemoryDataService        — (Data Layer) Pure CRUD for memories
-  ├── BackgroundTaskManager     — Task lifecycle and cancellation
-  ├── CaseDataService         — Case management and SSE updates
-  ├── AgentActivityDataService — AI agent activity metadata recording for data science
-  ├── MemoryGenerationService — Background memory updates from conversation
-  ├── AttachmentService       — Attachment storage and retrieval
-  └── EventService           — Internal SSE event delivery to g8ed
-```
-
-> [!NOTE]
-> `ChatTaskManager` is a backward compatibility alias for `BackgroundTaskManager`.
 
 
 ### Component Relationships
@@ -66,12 +78,42 @@ flowchart LR
 ```
 
 - **g8ed** -- Web gateway; relays browser requests to g8ee and SSE events back to the browser.
-- **g8es** -- Multi-purpose persistence layer:
-    - **Document Store** (SQLite `documents`) -- Investigation state, operator documents, settings, agent activity metadata.
-    - **KV Store** (SQLite `kv_store`) -- High-frequency state, session data, query cache.
-    - **Pub/Sub Broker** (WebSocket/WSS) -- Command dispatch and event bus.
-    - **Blob Store** (SQLite `blobs`) -- Binary attachments and large payloads.
-- **g8eo** -- Operator binary running on target systems; executes commands and manages local audit storage.
+- **g8es** -- Multi-purpose persistence layer (Document, KV, Pub/Sub, and Blob stores).
+- **g8eo** -- Operator binary running on target systems; the source of truth for execution and audit.
+
+---
+
+## Core Subsystems
+
+### Orchestration Layer
+- **`ChatPipelineService`**: The top-level coordinator for chat sessions. It manages the lifecycle from the HTTP entry point to final persistence.
+- **`g8eEngine`**: The core ReAct engine. It owns the retry logic, turn management, and the high-level tool execution loop.
+- **`BackgroundTaskManager`**: Tracks and manages the lifecycle of long-running AI tasks, providing the ability to stop processing on demand.
+
+### LLM Interface (`LLMProvider`)
+g8ee abstracts LLM providers through a unified interface (`app/llm/provider.py`). This allows the platform to switch between Gemini, Anthropic, OpenAI, and Ollama with zero changes to the orchestration logic.
+
+| Tier | Usage | Configuration |
+|------|-------|---------------|
+| **Primary** | Complex reasoning, troubleshooting, and final responses. | `primary_provider` + `primary_model` |
+| **Lite** | Triage, routing, and simple conversational turns. | `lite_provider` + `lite_model` |
+| **Assistant** | (Legacy) Phasing out in favor of Lite tier. | `assistant_provider` + `assistant_model` |
+
+### Triage & Routing
+The Gatekeeper (`triage.py`) ensures cost-efficiency and speed. It uses the `Lite` model to determine if a message requires the `Primary` model's reasoning capabilities. If the triage confidence is low, it can short-circuit the pipeline to ask for clarification, preventing hallucinations on ambiguous requests.
+
+### Investigation Context
+`InvestigationService` assembles the "Mental Model" for the AI on every turn. It orchestrates the retrieval and enrichment of data from:
+- **`InvestigationDataService`**: Resolves the `InvestigationModel` and maintains conversation history.
+- **`MemoryDataService`**: Fetches `InvestigationMemory` documents to provide long-term context.
+- **`OperatorDataService`**: Loads `OperatorDocument` records for all `BOUND` operators, extracting hardware, OS, and shell metadata.
+
+This enrichment ensures that every AI turn is grounded in the current reality of the infrastructure, rather than relying solely on the user's initial prompt.
+
+### Governance & Safety
+- **Sentinel**: A dual-layer scrubbing engine. `g8ee` performs ingress scrubbing to protect the LLM, while `g8eo` performs egress scrubbing to protect the host.
+- **Tribunal**: A specialized validator subsystem that refines AI-generated commands into safe, deterministic shell scripts.
+- **Approval Service**: The authority for human-in-the-loop gating. No state-changing tool can execute without an explicit approval ID from the user.
 
 ---
 
@@ -296,34 +338,6 @@ vertex_search_enabled not set / missing  →  search_web not registered  →  se
 ```
 
 ---
-## Investigation Context
-
-### Pull and Enrichment
-
-`InvestigationService` (`components/g8ee/app/services/investigation/investigation_service.py`) is the single entry point for building the context object that Triage (The Gatekeeper) and Sage (The Architect) receive on every turn. It orchestrates `InvestigationDataService`, `OperatorDataService`, and `MemoryDataService` to assemble a complete picture of the current state.
-
-**Step 1 — fetch:** `get_investigation_context` resolves the `InvestigationModel` via `InvestigationDataService` by `investigation_id` (preferred) or by `case_id` (falls back to the most-recently-created investigation). Lookup retries up to `INVESTIGATION_LOOKUP_MAX_RETRIES` times with configurable per-attempt delays to handle propagation lag.
-
-**Step 2 — memory attach:** `_attach_memory_context` fetches the `InvestigationMemory` document for the investigation via `MemoryDataService` and attaches it to the `EnrichedInvestigationContext`. No memory is a valid state; Triage (The Gatekeeper) and Sage (The Architect) proceed without it.
-
-**Step 3 — operator enrichment:** `get_enriched_investigation_context` iterates `g8e_context.bound_operators`, loads each `OperatorDocument` via `OperatorDataService` (only `BOUND` status operators), and populates `operator_documents`. 
-
-**Step 4 — operator context extraction:** `_extract_single_operator_context` maps an `OperatorDocument` (system info + latest heartbeat snapshot) to a typed `OperatorContext` — OS, hostname, architecture, CPU, memory, disk, username, shell, working directory, timezone, container environment, init system, and cloud-specific fields.
-
-**Step 5 — conversation history:** The `InvestigationModel` (and thus `EnrichedInvestigationContext`) includes a `conversation_history` field containing all user and AI messages for the investigation. During chat pipeline preparation (`ChatPipelineService._prepare_chat_context`), conversation history is fetched separately via `get_chat_messages` and converted to LLM contents via `build_contents_from_history`. This ensures Triage (The Gatekeeper) and Sage (The Architect) receive the full conversation context on every turn. Conversation history can also be retrieved on-demand by Sage, Dash, or other agents via the `query_investigation_context` tool with `data_type="conversation_history"`.
-
-The resulting `EnrichedInvestigationContext` carries:
-- `operator_documents` — list of live `OperatorDocument` records
-- `memory` — the attached `InvestigationMemory` (or `None`)
-- `conversation_history` — list of `ConversationHistoryMessage` containing all user, AI, and system messages. Every ReAct iteration's pre-tool AI text is persisted as its own `AI_PRIMARY` row via `add_chat_message` (driven by the `on_iteration_text` callback in `deliver_via_sse`), and the closing segment is persisted by `_persist_ai_response` after the stream completes. See [SSE Delivery Pipeline → Per-Iteration AI Text Persistence](#per-iteration-ai-text-persistence).
-
-For more details on how these documents are persisted, see [architecture/storage.md](../architecture/storage.md).
-
-### Security
-
-`get_investigation_context` logs a security warning if `user_id` is not provided — all user-facing queries must be scoped by `user_id` for tenant isolation.
-
-
 ## LLM Configuration
 
 > **Recommended LLM: Google Gemini 3.1.** The platform was designed around Gemini best practices. The Gemini provider is the most robust and extensively tested integration. Other providers are supported but are not part of the standard test pipeline.

@@ -12,6 +12,7 @@
 // limitations under the License.
 
 import { G8eBaseModel, F, now } from './base.js';
+import { API_KEY_COMBINED_REGEX } from '../constants/auth.js';
 
 // ---------------------------------------------------------------------------
 // Response models
@@ -97,19 +98,38 @@ export class OperatorRefreshKeyResponse extends G8eBaseModel {
     static fields = {
         success:         { type: F.boolean, required: true },
         message:         { type: F.string,  default: null },
-        old_operator_id: { type: F.string,  required: true },
-        new_operator_id: { type: F.string,  required: true },
-        slot_number:     { type: F.number,  required: true },
-        new_api_key:     { type: F.string,  required: true },
+        old_operator_id: { type: F.string,  default: null },
+        new_operator_id: { type: F.string,  default: null },
+        slot_number:     { type: F.number,  default: null },
+        new_api_key:     { type: F.string,  default: null },
     };
 
     _validate() {
         if (this.new_api_key) {
-            const apiKeyPattern = /^g8e_[a-f0-9]{8}_[a-f0-9]{64}$|^g8e_[a-f0-9]{64}$/;
-            if (!apiKeyPattern.test(this.new_api_key)) {
-                throw new Error('new_api_key must match g8e API key format (g8e_ prefix followed by hex characters)');
+            if (!API_KEY_COMBINED_REGEX.test(this.new_api_key)) {
+                const err = new Error('OperatorRefreshKeyResponse validation failed: new_api_key must match g8e API key format (g8e_ prefix followed by hex characters)');
+                err.validationErrors = ['new_api_key must match g8e API key format (g8e_ prefix followed by hex characters)'];
+                throw err;
             }
         }
+    }
+
+    static forSuccess(newApiKey, newOperatorId, oldOperatorId, slotNumber, message = 'API key refreshed') {
+        return new OperatorRefreshKeyResponse({
+            success:         true,
+            new_api_key:     newApiKey,
+            new_operator_id: newOperatorId,
+            old_operator_id: oldOperatorId,
+            slot_number:     slotNumber,
+            message:         message,
+        });
+    }
+
+    static forFailure(message) {
+        return new OperatorRefreshKeyResponse({
+            success: false,
+            message: message,
+        });
     }
 }
 

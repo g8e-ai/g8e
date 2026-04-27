@@ -214,7 +214,7 @@ async def get_g8ee_chat_task_manager(request: Request) -> BackgroundTaskManager:
 
 
 async def get_g8ee_operator_cache(request: Request) -> CacheAsideService:
-    service = getattr(request.app.state, "operator_cache_aside_service", None)
+    service = getattr(request.app.state, "cache_aside_service", None)
     if not service:
         logger.error("Operator cache service not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("Operator cache service not available")

@@ -476,7 +476,7 @@ GET /setup  →  renders views/setup.ejs
     (Gemini / Anthropic / OpenAI / Ollama — Ollama host:port is required; API key is optional).
     Three custom dropdowns (Primary / Assistant / Lite model) populate from the
     union of configured providers; each model id is server-driven from the
-    injected catalog. The user may also type a custom model id via "Custom…".
+    injected catalog. Defaults are **mid-tier by design** (e.g. Sonnet/Flash instead of Opus/Pro) to prevent surprise billing and ensure compatibility with commodity hardware for local providers. The canonical source for these defaults is `PROVIDER_DEFAULT_MODELS` in `components/g8ed/constants/ai.js`. The user may also type a custom model id via "Custom…".
     llm_primary_provider / llm_assistant_provider / llm_lite_provider are
     derived from the selected model ids.
 
