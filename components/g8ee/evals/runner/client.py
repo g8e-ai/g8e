@@ -3,9 +3,11 @@
 
 """g8ed HTTP/SSE client for eval runner."""
 
+from __future__ import annotations
+
 import asyncio
 import ssl
-from typing import AsyncIterator, Optional
+from typing import AsyncIterator
 
 import aiohttp
 
@@ -13,10 +15,10 @@ import aiohttp
 class G8edClient:
     """Async client for g8ed chat API and SSE streams."""
 
-    def __init__(self, base_url: str, ca_cert_path: Optional[str] = None):
+    def __init__(self, base_url: str, ca_cert_path: str | None = None):
         self.base_url = base_url
         self.ca_cert_path = ca_cert_path
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: aiohttp.ClientSession | None = None
 
     async def __aenter__(self):
         ssl_context = None

@@ -97,7 +97,7 @@ async def test_orchestrate_tool_execution_security_violation(
     )
 
     # Approve any pending approvals from fake operators
-    approval_service = all_services['approval_service']
+    approval_service = all_services.approval_service
     await auto_approve_pending(approval_service)
 
     passed = result.success is False and "SECURITY VIOLATION" in result.error and result.error_type == "security.violation"

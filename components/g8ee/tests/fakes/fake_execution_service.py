@@ -29,6 +29,7 @@ from app.constants.status import ExecutionStatus
 _default_operator = OperatorDocument(
     id="fake-operator",
     user_id="fake-user",
+    operator_session_id="fake-session",
     name="Fake Operator",
 )
 

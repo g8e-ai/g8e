@@ -12,65 +12,64 @@ The Tribunal Governance Model (TGM) replaces trust with **Heterogeneous Consensu
 Trust is minimized through:
 *   **Diverse Personas**: Different ideological lenses (minimalism, safety, edge-cases, convention, adversarial) surface distinct candidate commands.
 *   **Uniform Voting**: Consensus is reached through uniform per-member voting (each member contributes exactly 1 vote per candidate) with deterministic tie-breaking.
-*   **Independent Verification**: A separate, fast validator (The Verifier) performs the final check against the user's intent and safety constraints.
+*   **Multi-Round Peer Review**: If initial consensus is weak, the Tribunal enters an anonymized peer review round to resolve ambiguity.
+*   **Independent Audit**: A primary-tier Auditor performs the final check against intent and safety constraints, cryptographically committing its verdict to a reputation scoreboard.
 *   **Human-in-the-Loop**: No state-changing command is executed without explicit user approval.
 
-## **2. The Cast of Entities**
+## **2. The Governance Pipeline**
 
-### **A. Triage (The Gatekeeper)**
+### **Phase 1: Triage (The Gatekeeper)**
+Every user message is first processed by **Triage** (Lite-tier model). Triage classifies the message by:
+*   **Complexity**: `Simple` vs. `Complex`. This determines if the request goes to **Dash** (Fast-path) or **Sage** (Senior Reasoner).
+*   **Intent**: `Information` vs. `Action`.
+*   **User Posture**: `Normal`, `Escalated`, `Adversarial`, or `Confused`.
 
-*   **Role**: The first line of observation. Evaluates incoming user messages.
-*   **Action**: Classifies message complexity (Simple vs. Complex), intent, and **User Posture** (Normal, Escalated, Adversarial, Confused).
-*   **Impact**: Complexity determines the model tier (Primary vs. Assistant); Posture calibrates the caution and tone of downstream agents.
+### **Phase 2: Reasoning (Dash/Sage)**
+*   **Dash (Assistant tier)**: Resolves simple, single-step requests with minimal latency.
+*   **Sage (Primary tier)**: Handles complex, multi-step investigations. Sage articulates **Intent** in natural language to the Tribunal, never generating shell syntax directly.
 
-### **B. Sage (The Architect)**
+### **Phase 3: The Tribunal (Consensus Engine)**
+When a command is required, the Tribunal (5 Lite-tier models) generates candidates in parallel:
+1.  **Generation**: Each member (Axiom, Concord, Variance, Pragma, Nemesis) produces one candidate command based on its specific lens.
+2.  **Uniform Voting**: Commands are grouped. Each member contributes 1 vote to their candidate's cluster.
+3.  **Consensus Check**: If a majority (3+ votes) is reached, the winner proceeds.
+4.  **Round 2 (Peer Review)**: If consensus is low (strength < 0.4), members receive an anonymized list of all Round 1 candidates and are asked to review and re-generate.
+5.  **Tie-Breaking**: If ties persist, the system applies deterministic rules: Shortest Command → Non-Nemesis Cluster → Alphabetical.
 
-*   **Role**: The primary reasoning agent (Primary Model) responsible for diagnosis and planning.
-*   **Action**: Orchestrates the ReAct loop. When a command is needed, Sage sends a natural-language `request` and `guidelines` to the Tribunal.
-*   **Constraint**: Sage **never** generates shell commands directly. It only describes the desired outcome.
+### **Phase 4: The Auditor (Final Judgment)**
+The winner is sent to the **Auditor** (Primary-tier model) along with Sage's original intent. The Auditor can:
+*   **Approve (`ok`)**: The command proceeds to the user.
+*   **Swap (`swap`)**: If a dissenting cluster's command is superior, the Auditor can swap to it.
+*   **Revise (`revised`)**: The Auditor can fix minor syntactic or safety flaws without changing intent.
 
-### **C. The Tribunal (The Consensus Engine)**
+Upon reaching a verdict, the Auditor creates a **Reputation Commitment**—a Merkle-root entry in the reputation scoreboard that cryptographically binds the Auditor's choice to the command's outcome.
 
-A panel of five specialized assistant-tier models that independently generate the command Sage requested:
+## **3. The Cast of Entities**
 
-1.  **Axiom (The Minimalist)**: Pass 0. Produces the smallest viable command. Simplicity is safety.
-2.  **Concord (The Guardian)**: Pass 1. Focuses on defensive flags and non-destructive operations.
-3.  **Variance (The Exhaustive)**: Pass 2. Handles edge cases, spaces in paths, and robustness.
-4.  **Pragma (The Conventional)**: Pass 3. Uses idiomatic patterns for the specific OS and shell.
-5.  **Nemesis (The Adversary)**: Pass 4. Acts as a red-team member, surfacing potential attack surfaces.
-
-### **D. The Verifier (The Final Judgment)**
-
-*   **Role**: A dedicated validator (sometimes referred to as the Auditor in persona registry).
-*   **Action**: Receives the voting winner and Sage's original request.
-*   **Output**: Either the literal string `ok` (approval) or a minimal syntactic revision. It cannot rewrite intent, only fix flaws.
-
-## **3. The Command Generation Pipeline**
-
-When a `run_commands_with_operator` tool is invoked, the following pipeline fires:
-
-1.  **Parallel Generation**: All 5 Tribunal members receive the request + operator context (OS, Shell, User, PWD) and generate independent candidates.
-2.  **Normalization**: Commands are stripped of markdown fences and surrounding whitespace.
-3.  **Uniform Voting**: Unique commands are grouped. Each member contributes exactly 1 vote per candidate. The command with the highest vote count wins, with deterministic tie-breaking (shortest command → non-Nemesis cluster → alphabetical).
-4.  **Verification**: The winner is sent to the Verifier. If the Verifier rejects it, the revision is used (if provided).
-5.  **Guardrails**: The result is checked against deterministic `FORBIDDEN_COMMAND_PATTERNS` (e.g., `rm -rf /`).
-6.  **Approval**: The final command is presented to the user for explicit approval.
+| Persona | Role | Lens / Responsibility |
+| :--- | :--- | :--- |
+| **Triage** | Classifier | Message routing and posture detection. |
+| **Dash** | Responder | Fast-path resolution for simple tasks. |
+| **Sage** | Reasoner | Planning and natural-language intent articulation. |
+| **Axiom** | Tribunal | **Composition**: Focuses on clean, multi-stage pipelines. |
+| **Concord** | Tribunal | **Safety**: Focuses on read-only flags and defensive syntax. |
+| **Variance** | Tribunal | **Edge Cases**: Handles spaces in paths, null input, and locales. |
+| **Pragma** | Tribunal | **Convention**: Uses idiomatic OS-specific tools (e.g., `ss` vs `netstat`). |
+| **Nemesis** | Tribunal | **Adversary**: Proposes subtly flawed but plausible commands to test the Auditor. |
+| **Auditor** | Auditor | Final verification, dissent handling, and reputation commitment. |
 
 ## **4. Auditability & The LFAA**
 
-Every action in the governance model is recorded via the **Local-First Audit Architecture (LFAA)**:
+Every decision in the TGM is recorded via the **Local-First Audit Architecture (LFAA)**. Audit events are published via pub/sub from the `g8ee` engine to the `g8eo` operator:
+*   **User Intent Audit**: Sage's articulated request is recorded before command generation.
+*   **Tribunal Audit**: Individual candidates, vote counts, and Round 2 details are preserved.
+*   **Execution Audit**: The final command, human approval state, and execution output are captured immutably on the operator machine.
 
-*   **User Message Audit**: Recorded on the operator before LLM processing starts.
-*   **AI Response Audit**: The full reasoning and tool calls are recorded.
-*   **Command Execution Audit**: The exact command, its approval state, and its output are captured by the `g8eo` agent on the operator machine.
+## **5. Safety Thresholds & Invariants**
 
-This ensures a persistent, immutable trail of how a decision was reached and who approved it.
+*   **Sage-Tribunal Separation**: Sage (the "planner") never sees shell syntax; the Tribunal (the "translators") never sees the high-level plan. This prevents "hallucination spirals."
+*   **Human-in-the-Loop**: The `run_commands_with_operator` tool always requires explicit user confirmation before the command hits the shell.
+*   **Forbidden Patterns**: Deterministic regex filters block commands like `rm -rf /` or credential-leaking patterns regardless of AI consensus.
+*   **Max Tool Turns**: The ReAct loop is capped at 25 turns to prevent infinite loops.
 
-## **5. Safety Thresholds**
-
-To prevent infinite loops or "hallucination spirals," the system enforces structural limits:
-
-*   **Max Tool Turns**: The ReAct loop is capped (default: 25 turns). Exceeding this requires explicit "Agent Continue" approval from the user.
-*   **Forbidden Patterns**: Deterministic regex blacklists that no Tribunal output can bypass.
-*   **Identity & Loyalty**: Core system prompts (Identity, Safety, Loyalty, Dissent) are injected on every turn, ensuring the agent remains aligned with its mission and safety constraints.
 

@@ -787,6 +787,12 @@ export class AuthManager {
             const name = nameInput.value.trim();
             const email = emailInput.value.trim();
 
+            if (!name || !email) {
+                errorEl.textContent = !name ? 'Name is required.' : 'Email is required.';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+
             submitBtn.disabled = true;
             submitBtn.textContent = 'Creating account...';
 

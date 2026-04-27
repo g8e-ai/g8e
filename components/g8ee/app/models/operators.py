@@ -21,7 +21,7 @@ Defines data structures for tracking g8eo operators and their runtime configurat
 
 import asyncio
 import logging
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import ConfigDict, Field, PrivateAttr, ValidationInfo, field_validator, model_validator
 
@@ -213,7 +213,7 @@ class OperatorDocument(G8eIdentifiableModel):
     last_heartbeat: UTCDatetime | None = Field(default=None, description="Last heartbeat timestamp")
     terminated_at: UTCDatetime | None = Field(default=None, description="When the operator was terminated")
     system_info: OperatorSystemInfo | None = Field(default=None, description="System information")
-    latest_heartbeat_snapshot: Optional["OperatorHeartbeat"] = Field(default=None, description="Latest heartbeat metrics")
+    latest_heartbeat_snapshot: OperatorHeartbeat | None = Field(default=None, description="Latest heartbeat metrics")
     investigation_id: str | None = Field(default=None, description="Current investigation ID")
     case_id: str | None = Field(default=None, description="Current case ID")
     api_key: str | None = Field(default=None, description="Operator API key (g8ep only)")

@@ -95,7 +95,7 @@ async def all_services(cache_aside_service, test_settings):
 @pytest.fixture(scope="function")
 def tool_service(all_services):
     """Returns the AIToolService from all_services."""
-    return all_services['tool_service']
+    return all_services.tool_service
 
 
 

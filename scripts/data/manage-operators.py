@@ -28,9 +28,11 @@ Usage:
     python manage-g8es.py operators reset --id OPERATOR_ID
 """
 
+from __future__ import annotations
+
 import argparse
 import sys
-from typing import Optional, Dict, Any, List
+from typing import Dict, Any, List
 
 from _lib import (
     G8ED_BASE_URL,
@@ -124,7 +126,7 @@ class OperatorManager:
     # Commands
     # =========================================================================
 
-    def list_operators(self, user_id: Optional[str], email: Optional[str], all_statuses: bool = False) -> List[Dict]:
+    def list_operators(self, user_id: str | None, email: str | None, all_statuses: bool = False) -> List[Dict]:
         if user_id or email:
             uid = resolve_user_id(user_id, email)
             if not uid:
@@ -170,7 +172,7 @@ class OperatorManager:
         print()
         return operators
 
-    def get_operator(self, operator_id: str) -> Optional[Dict]:
+    def get_operator(self, operator_id: str) -> Dict | None:
         result = g8ed_request('GET', f'{INTERNAL_OPERATORS_BASE}/{operator_id}')
         if not result.get('success'):
             if result.get('_status_code') == 404:
@@ -183,7 +185,7 @@ class OperatorManager:
         print(self._format_operator_detail(op))
         return op
 
-    def init_slots(self, user_id: Optional[str], email: Optional[str]) -> Optional[List[str]]:
+    def init_slots(self, user_id: str | None, email: str | None) -> list[str] | None:
         uid = resolve_user_id(user_id, email)
         if not uid:
             return None
@@ -211,7 +213,7 @@ class OperatorManager:
         print()
         return operator_ids
 
-    def refresh_key(self, operator_id: str, force: bool = False) -> Optional[Dict]:
+    def refresh_key(self, operator_id: str, force: bool = False) -> Dict | None:
         existing = g8ed_request('GET', f'{INTERNAL_OPERATORS_BASE}/{operator_id}')
         if not existing.get('success'):
             if existing.get('_status_code') == 404:
@@ -258,7 +260,7 @@ class OperatorManager:
         print()
         return result
 
-    def get_key(self, operator_id: str) -> Optional[str]:
+    def get_key(self, operator_id: str) -> str | None:
         result = g8ed_request('GET', f'{INTERNAL_OPERATORS_BASE}/{operator_id}')
         if not result.get('success'):
             if result.get('_status_code') == 404:
@@ -283,7 +285,7 @@ class OperatorManager:
         print()
         return api_key
 
-    def reset(self, operator_id: str, force: bool = False) -> Optional[Dict]:
+    def reset(self, operator_id: str, force: bool = False) -> Dict | None:
         existing = g8ed_request('GET', f'{INTERNAL_OPERATORS_BASE}/{operator_id}')
         if not existing.get('success'):
             if existing.get('_status_code') == 404:

@@ -26,7 +26,7 @@ import time
 import uuid
 from collections.abc import AsyncIterator, Mapping
 from datetime import datetime
-from typing import Any, Optional, Union
+from typing import Any, Union
 from urllib.parse import urljoin, urlparse
 
 import aiohttp
@@ -75,11 +75,11 @@ class RequestTrace(G8eBaseModel):
     """
     execution_id: str
     component_id: str
-    case_id: Optional[str] = None
-    task_id: Optional[str] = None
-    investigation_id: Optional[str] = None
+    case_id: str | None = None
+    task_id: str | None = None
+    investigation_id: str | None = None
     start_time: datetime
-    end_time: Optional[datetime] = None
+    end_time: datetime | None = None
 
     duration_ms: float = 0.0
 
@@ -307,7 +307,7 @@ class HTTPClient:
         method: str,
         url: str,
         headers: dict[str, str] | None,
-        context: Optional["G8eHttpContext"],
+        context: G8eHttpContext | None,
     ) -> tuple[str, dict[str, str], RequestTrace]:
         """
         Prepare the request URL and headers.
@@ -359,7 +359,7 @@ class HTTPClient:
         method: str,
         status_code: int,
         retry_count: int,
-        exception: Optional[Exception] = None
+        exception: Exception | None = None
     ) -> bool:
         if retry_count >= self.retry_config.max_retries:
             return False
@@ -391,7 +391,7 @@ class HTTPClient:
         url: str,
         headers: dict[str, str] | None = None,
         json_data: JSONPayload | None = None,
-        context: Optional["G8eHttpContext"] = None,
+        context: G8eHttpContext | None = None,
         params: QueryParams | None = None,
     ) -> "AiohttpResponse":
         """
@@ -666,7 +666,7 @@ class HTTPClient:
         url: str,
         json_data: JSONPayload | None = None,
         headers: dict[str, str] | None = None,
-        context: Optional["G8eHttpContext"] = None,
+        context: G8eHttpContext | None = None,
     ) -> "AiohttpResponse":
         return await self.request(
             "POST", url, headers=headers, json_data=json_data, context=context
@@ -677,7 +677,7 @@ class HTTPClient:
         url: str,
         params: QueryParams | None = None,
         headers: dict[str, str] | None = None,
-        context: Optional["G8eHttpContext"] = None,
+        context: G8eHttpContext | None = None,
     ) -> "AiohttpResponse":
         return await self.request(
             "GET", url, headers=headers, context=context, params=params
@@ -689,7 +689,7 @@ class HTTPClient:
         url: str,
         headers: dict[str, str] | None = None,
         json_data: JSONPayload | None = None,
-        context: Optional["G8eHttpContext"] = None,
+        context: G8eHttpContext | None = None,
         chunk_size: int = 8192,
     ) -> AsyncIterator[bytes]:
         """Stream response content chunk-by-chunk without buffering the full body.

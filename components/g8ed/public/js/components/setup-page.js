@@ -214,69 +214,65 @@ export class SetupPage {
     }
 
     _validateStep(step) {
-        if (step === 1) {
-            const email = document.getElementById('account_email')?.value.trim();
-            if (!email) {
-                this._showStatus('error', 'Email address is required');
+        if (step !== 1) return true;
+
+        const email = document.getElementById('account_email')?.value.trim();
+        if (!email) {
+            this._showStatus('error', 'Email address is required');
+            return false;
+        }
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            this._showStatus('error', 'Enter a valid email address');
+            return false;
+        }
+
+        const active = this._getActiveProviders();
+        if (active.length === 0) {
+            this._showStatus('error', 'Configure at least one provider (API key or Ollama endpoint)');
+            return false;
+        }
+        if (!this._selectedModels.primary) {
+            this._showStatus('error', 'Select a primary model');
+            return false;
+        }
+        if (!this._selectedModels.assistant) {
+            this._showStatus('error', 'Select an assistant model');
+            return false;
+        }
+        if (!this._selectedModels.lite) {
+            this._showStatus('error', 'Select a lite model');
+            return false;
+        }
+
+        const ollamaUrl = document.getElementById('ollama_url')?.value.trim();
+        if (ollamaUrl) {
+            const focusField = () => document.getElementById('ollama_url').focus();
+            if (ollamaUrl.startsWith('https://')) {
+                this._showStatus('error', 'Ollama only supports HTTP, not HTTPS');
+                focusField();
                 return false;
             }
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(email)) {
-                this._showStatus('error', 'Enter a valid email address');
+            const stripped = ollamaUrl.replace(/^http:\/\//i, '');
+            if (stripped.includes('/')) {
+                this._showStatus('error', 'Enter Ollama host as "host:port" (no path, no /v1)');
+                focusField();
+                return false;
+            }
+            if (!/^[A-Za-z0-9._-]+:\d{1,5}$/.test(stripped)) {
+                this._showStatus('error', 'Ollama host must be "host:port" (e.g. 192.168.1.100:11434)');
+                focusField();
                 return false;
             }
         }
 
-        if (step === 2) {
-            const active = this._getActiveProviders();
-            if (active.length === 0) {
-                this._showStatus('error', 'Configure at least one provider (API key or Ollama endpoint)');
+        if (this._searchProvider === 'google') {
+            const searchKey = document.getElementById('search_api_key')?.value.trim();
+            const projectId = document.getElementById('google_project_id')?.value.trim();
+            const appId = document.getElementById('vertex_ai_search_app_id')?.value.trim();
+            if (!searchKey || !projectId || !appId) {
+                this._showStatus('error', 'Complete Google search configuration or select "None"');
                 return false;
-            }
-            const primary = this._selectedModels.primary;
-            if (!primary) {
-                this._showStatus('error', 'Select a primary model');
-                return false;
-            }
-            const assistant = this._selectedModels.assistant;
-            if (!assistant) {
-                this._showStatus('error', 'Select an assistant model');
-                return false;
-            }
-            const lite = this._selectedModels.lite;
-            if (!lite) {
-                this._showStatus('error', 'Select a lite model');
-                return false;
-            }
-            const ollamaUrl = document.getElementById('ollama_url')?.value.trim();
-            if (ollamaUrl) {
-                const focusField = () => document.getElementById('ollama_url').focus();
-                if (ollamaUrl.startsWith('https://')) {
-                    this._showStatus('error', 'Ollama only supports HTTP, not HTTPS');
-                    focusField();
-                    return false;
-                }
-                const stripped = ollamaUrl.replace(/^http:\/\//i, '');
-                if (stripped.includes('/')) {
-                    this._showStatus('error', 'Enter Ollama host as "host:port" (no path, no /v1)');
-                    focusField();
-                    return false;
-                }
-                if (!/^[A-Za-z0-9._-]+:\d{1,5}$/.test(stripped)) {
-                    this._showStatus('error', 'Ollama host must be "host:port" (e.g. 192.168.1.100:11434)');
-                    focusField();
-                    return false;
-                }
-            }
-
-            if (this._searchProvider === 'google') {
-                const searchKey = document.getElementById('search_api_key')?.value.trim();
-                const projectId = document.getElementById('google_project_id')?.value.trim();
-                const appId = document.getElementById('vertex_ai_search_app_id')?.value.trim();
-                if (!searchKey || !projectId || !appId) {
-                    this._showStatus('error', 'Complete Google search configuration or select "None"');
-                    return false;
-                }
             }
         }
 

@@ -11,9 +11,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import shlex
 import logging
-from typing import Optional
 
 from app.constants import (
     TribunalMember,

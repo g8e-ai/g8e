@@ -191,19 +191,19 @@ async def all_services(cache_aside_service, test_settings):
 @pytest.fixture(scope="function")
 def investigation_service(all_services):
     """Returns the InvestigationService from all_services."""
-    return all_services['investigation_service']
+    return all_services.investigation_service
 
 
 @pytest.fixture(scope="function")
 def tool_service(all_services):
     """Returns the AIToolService from all_services."""
-    return all_services['tool_service']
+    return all_services.tool_service
 
 
 @pytest.fixture(scope="function")
 def chat_pipeline(all_services):
     """Returns the ChatPipelineService from all_services."""
-    return all_services['chat_pipeline']
+    return all_services.chat_pipeline
 
 
 @pytest_asyncio.fixture(scope="function", loop_scope="session")

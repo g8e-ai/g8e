@@ -85,20 +85,21 @@ describe('OperatorApiKeyRoutes Unit Tests', () => {
 
     describe(`POST ${OperatorPaths.REFRESH_API_KEY}`, () => {
         it('successfully refreshes API key', async () => {
+            const validApiKey = 'g8e_aabbccdd_' + 'a'.repeat(64);
             mockOperatorService.refreshOperatorApiKey.mockResolvedValue({
                 success: true,
                 message: 'Refreshed',
                 new_operator_id: 'new-op-id',
                 slot_number: 1,
-                new_api_key: 'new-api-key'
+                new_api_key: validApiKey
             });
 
             const res = await request(app).post('/api/operator/test-op-id/refresh-api-key');
-            
+
             expect(res.status).toBe(200);
             expect(res.body.success).toBe(true);
-            expect(res.body.new_api_key).toBe('new-api-key');
-            expect(mockOperatorService.refreshOperatorApiKey).toHaveBeenCalledWith('test-op-id', 'test-user-id', 'test-web-session-id');
+            expect(res.body.new_api_key).toBe(validApiKey);
+            expect(mockOperatorService.refreshOperatorApiKey).toHaveBeenCalledWith('test-op-id', 'test-user-id', 'test-web-session-id', null);
         });
 
         it('returns 403 if refresh is unauthorized', async () => {

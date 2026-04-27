@@ -75,9 +75,9 @@ class TestServiceFactorySmoke:
             )
 
             assert services is not None
-            assert "tool_service" in services
-            assert "investigation_service" in services
-            assert "ssh_inventory_service" in services
+            assert hasattr(services, "tool_service")
+            assert hasattr(services, "investigation_service")
+            assert hasattr(services, "ssh_inventory_service")
 
         finally:
             os.unlink(ssh_config_path)
@@ -104,7 +104,7 @@ class TestServiceFactorySmoke:
             )
 
             assert services is not None
-            assert services["web_search_provider"] is web_search_provider
+            assert services.web_search_provider is web_search_provider
 
         finally:
             os.unlink(ssh_config_path)

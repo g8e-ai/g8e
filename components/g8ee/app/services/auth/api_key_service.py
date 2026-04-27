@@ -11,9 +11,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import hashlib
 import logging
-from typing import Optional
 
 from app.constants import DB_COLLECTION_API_KEYS
 from app.models.api_keys import ApiKeyDocument
@@ -50,7 +51,7 @@ class ApiKeyService:
         import secrets
         return f"{prefix}{secrets.token_hex(32)}"
 
-    async def validate_key(self, api_key: str) -> tuple[bool, Optional[ApiKeyDocument], Optional[str]]:
+    async def validate_key(self, api_key: str) -> tuple[bool, ApiKeyDocument | None, str | None]:
         """Validate a raw API key."""
         if not api_key:
             return False, None, "API key is required"

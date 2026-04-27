@@ -13,7 +13,7 @@
 
 import base64
 import logging
-from typing import Any, List, Optional
+from typing import Any, List
 
 import httpx
 

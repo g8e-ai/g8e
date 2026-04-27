@@ -18,10 +18,12 @@ Provider-agnostic type system for all LLM interactions. Every service in g8ee
 uses these types instead of any provider-specific SDK types.
 """
 
+from __future__ import annotations
+
 import base64
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 from app.constants import (
     LLM_DEFAULT_MAX_OUTPUT_TOKENS,
@@ -137,7 +139,7 @@ class Schema:
     description: str | None = None
     properties: dict[str, "Schema"] | None = None
     required: list[str] | None = None
-    items: Optional["Schema"] = None
+    items: Schema | None = None
     enum: list[str] | None = None
 
 

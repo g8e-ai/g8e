@@ -219,7 +219,7 @@ describe('LlmModelManager [UNIT]', () => {
         it('updates drawer text after config is received', () => {
             emitConfig(eventBus);
 
-            expect(drawerText.textContent).toBe('Gemini 3.1 Pro');
+            expect(drawerText.textContent).toBe('Gemini 3.1 Pro (gemini-3.1-pro-preview)');
         });
     });
 

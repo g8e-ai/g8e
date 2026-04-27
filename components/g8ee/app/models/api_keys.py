@@ -12,7 +12,6 @@
 # limitations under the License.
 
 from pydantic import Field
-from typing import Optional
 from app.utils.timestamp import now
 from .base import G8eBaseModel, UTCDatetime
 

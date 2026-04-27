@@ -11,10 +11,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import hashlib
 import hmac
 import logging
-from typing import TYPE_CHECKING, Any, List, NoReturn, Optional
+from typing import TYPE_CHECKING, Any, List, NoReturn
 
 from app.errors import OllamaEmptyResponseError
 from app.models.base import G8eBaseModel
@@ -64,8 +66,8 @@ _MAX_TOKENS_AUDITOR = 1024
 class TribunalAuditorResponse(G8eBaseModel):
     """Structured response for Tribunal audit."""
     status: str  # "ok", "revised", or "swap"
-    revised_command: Optional[str] = None
-    swap_to_cluster: Optional[str] = None
+    revised_command: str | None = None
+    swap_to_cluster: str | None = None
 
 class AuditorClusterInfo(G8eBaseModel):
     """Internal model for passing cluster info to the auditor prompt."""

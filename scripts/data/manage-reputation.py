@@ -26,7 +26,7 @@ import hmac
 import json
 from datetime import datetime, UTC
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict
 
 # Add current directory to path to import _lib
 SCRIPT_DIR = Path(__file__).parent.absolute()

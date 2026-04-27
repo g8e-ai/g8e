@@ -70,12 +70,8 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             </div>
             <div data-panel="1" class="active"></div>
             <div data-panel="2"></div>
-            <div data-panel="3"></div>
-            <div data-panel="4"></div>
             <div data-step="1" class="active"></div>
             <div data-step="2"></div>
-            <div data-step="3"></div>
-            <div data-step="4"></div>
             <input id="account_email" type="email" />
             <input id="account_name" type="text" />
             <div class="wizard-provider-key-row" data-provider="gemini">
@@ -288,6 +284,8 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
 
         it('moves to step 2 from step 1', () => {
             document.getElementById('account_email').value = 'test@example.com';
+            document.getElementById('gemini_api_key').value = 'test-key';
+            setupPage._onProviderKeyChange();
             setupPage._goToStep(2);
             expect(setupPage._step).toBe(2);
             expect(document.querySelector('[data-panel="1"]').classList.contains('active')).toBe(false);
@@ -303,14 +301,16 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
         });
 
         it('moves backward without validation', () => {
-            setupPage._step = 3;
-            setupPage._goToStep(2);
-            expect(setupPage._step).toBe(2);
+            setupPage._step = 2;
+            setupPage._goToStep(1);
+            expect(setupPage._step).toBe(1);
         });
 
         it('calls _updateNav', () => {
             const updateNavSpy = vi.spyOn(setupPage, '_updateNav');
             document.getElementById('account_email').value = 'test@example.com';
+            document.getElementById('gemini_api_key').value = 'test-key';
+            setupPage._onProviderKeyChange();
             setupPage._goToStep(2);
             expect(updateNavSpy).toHaveBeenCalled();
         });
@@ -318,19 +318,26 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
         it('calls _clearStatus', () => {
             const clearStatusSpy = vi.spyOn(setupPage, '_clearStatus');
             document.getElementById('account_email').value = 'test@example.com';
+            document.getElementById('gemini_api_key').value = 'test-key';
+            setupPage._onProviderKeyChange();
             setupPage._goToStep(2);
             expect(clearStatusSpy).toHaveBeenCalled();
         });
 
         it('calls _renderSummary on last step', () => {
             const renderSummarySpy = vi.spyOn(setupPage, '_renderSummary');
-            setupPage._step = 3;
-            setupPage._goToStep(4);
+            document.getElementById('account_email').value = 'test@example.com';
+            document.getElementById('gemini_api_key').value = 'test-key';
+            setupPage._onProviderKeyChange();
+            setupPage._step = 1;
+            setupPage._goToStep(2);
             expect(renderSummarySpy).toHaveBeenCalled();
         });
 
         it('scrolls to top', () => {
             document.getElementById('account_email').value = 'test@example.com';
+            document.getElementById('gemini_api_key').value = 'test-key';
+            setupPage._onProviderKeyChange();
             setupPage._goToStep(2);
             expect(window.scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
         });
@@ -349,15 +356,8 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             expect(nav.style.display).toBe('');
         });
 
-        it('shows nav on step 2', () => {
+        it('hides nav on step 2 (last step)', () => {
             setupPage._step = 2;
-            setupPage._updateNav();
-            const nav = document.getElementById('wizard-nav');
-            expect(nav.style.display).toBe('');
-        });
-
-        it('hides nav on step 4 (last step)', () => {
-            setupPage._step = 4;
             setupPage._updateNav();
             const nav = document.getElementById('wizard-nav');
             expect(nav.style.display).toBe('none');
@@ -377,25 +377,18 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             expect(backBtn.style.display).toBe('');
         });
 
-        it('hides next button on step 2 when no providers configured', () => {
-            setupPage._step = 2;
+        it('hides next button on step 1 when no providers configured', () => {
+            setupPage._step = 1;
             setupPage._updateNav();
             const nextBtn = document.getElementById('wizard-next-btn');
             expect(nextBtn.style.display).toBe('none');
         });
 
-        it('shows next button on step 2 when provider key entered and models selected', () => {
-            setupPage._step = 2;
+        it('shows next button on step 1 when provider key entered and models selected', () => {
+            setupPage._step = 1;
             document.getElementById('gemini_api_key').value = 'test-key';
             setupPage._onProviderKeyChange();
             // Models are auto-selected by _updateModelDropdowns
-            setupPage._updateNav();
-            const nextBtn = document.getElementById('wizard-next-btn');
-            expect(nextBtn.style.display).toBe('');
-        });
-
-        it('shows next button on step 3', () => {
-            setupPage._step = 3;
             setupPage._updateNav();
             const nextBtn = document.getElementById('wizard-next-btn');
             expect(nextBtn.style.display).toBe('');
@@ -431,83 +424,84 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
             expect(text.textContent).toBe('Enter a valid email address');
         });
 
-        it('returns true for step 1 with valid email', () => {
+        it('returns false for step 1 with no provider keys entered', () => {
             document.getElementById('account_email').value = 'test@example.com';
-            expect(setupPage._validateStep(1)).toBe(true);
-        });
-
-        it('returns false for step 2 with no provider keys entered', () => {
-            expect(setupPage._validateStep(2)).toBe(false);
+            expect(setupPage._validateStep(1)).toBe(false);
         });
 
         it('shows error for no provider keys entered', () => {
-            setupPage._validateStep(2);
+            document.getElementById('account_email').value = 'test@example.com';
+            setupPage._validateStep(1);
             const text = document.getElementById('setup-status-msg');
             expect(text.textContent).toBe('Configure at least one provider (API key or Ollama endpoint)');
         });
 
-        it('returns true for step 2 with Gemini key and models selected', () => {
+        it('returns true for step 1 with Gemini key and models selected', () => {
+            document.getElementById('account_email').value = 'test@example.com';
             document.getElementById('gemini_api_key').value = 'test-key';
             setupPage._onProviderKeyChange();
             // Models are auto-selected by _updateModelDropdowns
-            expect(setupPage._validateStep(2)).toBe(true);
+            expect(setupPage._validateStep(1)).toBe(true);
         });
 
-        it('returns true for step 2 with OpenAI key and models selected', () => {
+        it('returns true for step 1 with OpenAI key and models selected', () => {
+            document.getElementById('account_email').value = 'test@example.com';
             document.getElementById('openai_api_key').value = 'test-key';
             setupPage._onProviderKeyChange();
             // Models are auto-selected by _updateModelDropdowns
-            expect(setupPage._validateStep(2)).toBe(true);
+            expect(setupPage._validateStep(1)).toBe(true);
         });
 
-        it('returns true for step 2 with Anthropic key and models selected', () => {
+        it('returns true for step 1 with Anthropic key and models selected', () => {
+            document.getElementById('account_email').value = 'test@example.com';
             document.getElementById('anthropic_api_key').value = 'test-key';
             setupPage._onProviderKeyChange();
             // Models are auto-selected by _updateModelDropdowns
-            expect(setupPage._validateStep(2)).toBe(true);
+            expect(setupPage._validateStep(1)).toBe(true);
         });
 
-        it('returns true for step 2 with Ollama URL and models selected', () => {
+        it('returns true for step 1 with Ollama URL and models selected', () => {
+            document.getElementById('account_email').value = 'test@example.com';
             document.getElementById('ollama_url').value = 'http://localhost:11434';
             setupPage._onProviderKeyChange();
             // Models are auto-selected by _updateModelDropdowns
-            expect(setupPage._validateStep(2)).toBe(true);
+            expect(setupPage._validateStep(1)).toBe(true);
         });
 
-        it('returns true for step 2 with bare Ollama host:port', () => {
+        it('returns true for step 1 with bare Ollama host:port', () => {
+            document.getElementById('account_email').value = 'test@example.com';
             document.getElementById('ollama_url').value = '192.168.1.100:11434';
             setupPage._onProviderKeyChange();
-            expect(setupPage._validateStep(2)).toBe(true);
+            expect(setupPage._validateStep(1)).toBe(true);
         });
 
         it('rejects Ollama host with /v1 path', () => {
+            document.getElementById('account_email').value = 'test@example.com';
             document.getElementById('ollama_url').value = 'http://localhost:11434/v1';
             setupPage._onProviderKeyChange();
-            expect(setupPage._validateStep(2)).toBe(false);
+            expect(setupPage._validateStep(1)).toBe(false);
             const text = document.getElementById('setup-status-msg');
             expect(text.textContent).toContain('host:port');
         });
 
         it('rejects Ollama host missing port', () => {
+            document.getElementById('account_email').value = 'test@example.com';
             document.getElementById('ollama_url').value = 'localhost';
             setupPage._onProviderKeyChange();
-            expect(setupPage._validateStep(2)).toBe(false);
+            expect(setupPage._validateStep(1)).toBe(false);
         });
 
         it('rejects https Ollama URL', () => {
+            document.getElementById('account_email').value = 'test@example.com';
             document.getElementById('ollama_url').value = 'https://localhost:11434';
             setupPage._onProviderKeyChange();
-            expect(setupPage._validateStep(2)).toBe(false);
+            expect(setupPage._validateStep(1)).toBe(false);
             const text = document.getElementById('setup-status-msg');
             expect(text.textContent).toBe('Ollama only supports HTTP, not HTTPS');
         });
 
-        it('returns true for step 3', () => {
-            expect(setupPage._validateStep(3)).toBe(true);
-        });
-
-        it('returns true for step 4', () => {
-            expect(setupPage._validateStep(4)).toBe(true);
+        it('returns true for step 2 (last step has no validation)', () => {
+            expect(setupPage._validateStep(2)).toBe(true);
         });
     });
 
@@ -1432,43 +1426,45 @@ describe('SetupPage [FRONTEND - jsdom]', () => {
         });
 
         it('advances step on Enter in input field', () => {
-            setupPage._step = 2;
+            setupPage._step = 1;
+            document.getElementById('account_email').value = 'test@example.com';
             document.getElementById('gemini_api_key').value = 'test-key';
             setupPage._onProviderKeyChange();
             // Ensure all models are selected (auto-selected by _updateModelDropdowns)
             expect(setupPage._isProviderStepReady()).toBe(true);
             document.getElementById('gemini_api_key').focus();
-            
-            const event = new KeyboardEvent('keydown', { key: 'Enter', cancelable: true });
-            document.dispatchEvent(event);
-            
-            expect(setupPage._step).toBe(3);
-        });
 
-        it('does not advance on Enter when not in input field', () => {
-            setupPage._step = 2;
             const event = new KeyboardEvent('keydown', { key: 'Enter', cancelable: true });
             document.dispatchEvent(event);
+
             expect(setupPage._step).toBe(2);
         });
 
-        it('does not advance on Enter outside step range', () => {
+        it('does not advance on Enter when not in input field', () => {
             setupPage._step = 1;
-            document.getElementById('account_email').focus();
             const event = new KeyboardEvent('keydown', { key: 'Enter', cancelable: true });
             document.dispatchEvent(event);
             expect(setupPage._step).toBe(1);
         });
 
-        it('prevents default on Enter in input field', () => {
+        it('does not advance on Enter from last step', () => {
             setupPage._step = 2;
-            setupPage._provider = LLMProvider.GEMINI;
-            document.getElementById('gemini_api_key').value = 'test-key';
-            document.getElementById('gemini_api_key').focus();
-            
+            document.getElementById('account_email').focus();
             const event = new KeyboardEvent('keydown', { key: 'Enter', cancelable: true });
             document.dispatchEvent(event);
-            
+            expect(setupPage._step).toBe(2);
+        });
+
+        it('prevents default on Enter in input field', () => {
+            setupPage._step = 1;
+            setupPage._provider = LLMProvider.GEMINI;
+            document.getElementById('gemini_api_key').value = 'test-key';
+            setupPage._onProviderKeyChange();
+            document.getElementById('gemini_api_key').focus();
+
+            const event = new KeyboardEvent('keydown', { key: 'Enter', cancelable: true });
+            document.dispatchEvent(event);
+
             expect(event.defaultPrevented).toBe(true);
         });
     });

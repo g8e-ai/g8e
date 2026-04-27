@@ -3,10 +3,11 @@
 
 """Fleet management for eval nodes via docker compose."""
 
+from __future__ import annotations
+
 import subprocess
 import asyncio
 from pathlib import Path
-from typing import Optional
 
 
 class FleetManager:

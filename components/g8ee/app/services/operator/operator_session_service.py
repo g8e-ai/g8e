@@ -11,8 +11,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import logging
-from typing import Any, Optional
+from typing import Any
 import uuid
 
 from app.constants import (
@@ -51,7 +53,7 @@ class OperatorSessionService:
         self,
         session_data: dict[str, Any],
         request_context: dict[str, Any] = None,
-        ttl_seconds: Optional[int] = None
+        ttl_seconds: int | None = None
     ) -> OperatorSessionDocument:
         """Create a new operator session."""
         session_id = self._generate_session_id()
@@ -98,7 +100,7 @@ class OperatorSessionService:
         logger.info(f"[OPERATOR-SESSION-SERVICE] Operator session created: {session_id}")
         return session
 
-    async def validate_session(self, session_id: str) -> Optional[OperatorSessionDocument]:
+    async def validate_session(self, session_id: str) -> OperatorSessionDocument | None:
         """Validate an operator session and check for expiry."""
         if not session_id:
             return None
@@ -126,7 +128,7 @@ class OperatorSessionService:
 
         return session
 
-    async def refresh_session(self, session_id: str, session: Optional[OperatorSessionDocument] = None) -> bool:
+    async def refresh_session(self, session_id: str, session: OperatorSessionDocument | None = None) -> bool:
         """Refresh session idle timeout."""
         if not session:
             session = await self.validate_session(session_id)

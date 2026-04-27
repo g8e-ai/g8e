@@ -70,9 +70,9 @@ class TestMemoryGenerationServiceIntegration:
             pytest.skip("LLM assistant_model is not configured")
 
         # Get real services from all_services fixture
-        memory_data_service = all_services['memory_data_service']
-        investigation_data_service = all_services['investigation_data_service']
-        memory_service = all_services['memory_generation_service']
+        memory_data_service = all_services.memory_data_service
+        investigation_data_service = all_services.investigation_data_service
+        memory_service = all_services.memory_generation_service
 
         # Create investigation
         investigation = create_investigation_data()
@@ -162,9 +162,9 @@ class TestMemoryGenerationServiceIntegration:
             pytest.skip("LLM assistant_model is not configured")
 
         # Get real services from all_services fixture
-        memory_data_service = all_services['memory_data_service']
-        investigation_data_service = all_services['investigation_data_service']
-        memory_service = all_services['memory_generation_service']
+        memory_data_service = all_services.memory_data_service
+        investigation_data_service = all_services.investigation_data_service
+        memory_service = all_services.memory_generation_service
 
         # Create investigation
         investigation = create_investigation_data()
@@ -305,9 +305,9 @@ class TestMemoryGenerationServiceIntegration:
             pytest.skip("LLM assistant_model is not configured")
 
         # Get real services from all_services fixture
-        memory_data_service = all_services['memory_data_service']
-        investigation_data_service = all_services['investigation_data_service']
-        memory_service = all_services['memory_generation_service']
+        memory_data_service = all_services.memory_data_service
+        investigation_data_service = all_services.investigation_data_service
+        memory_service = all_services.memory_generation_service
 
         # Create investigation
         investigation = create_investigation_data()

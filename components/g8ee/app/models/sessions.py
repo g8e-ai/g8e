@@ -15,7 +15,9 @@
 Session models for g8e system.
 """
 
-from typing import Any, Optional
+from __future__ import annotations
+
+from typing import Any
 from pydantic import Field
 
 from app.constants import SessionType

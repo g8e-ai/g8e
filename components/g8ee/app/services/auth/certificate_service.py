@@ -11,10 +11,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import logging
 import os
 import datetime
-from typing import Optional, Dict, Any, TYPE_CHECKING
+from typing import Dict, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.services.auth.certificate_data_service import CertificateDataService
@@ -41,11 +43,11 @@ class CertificateService:
     Signs operator client certificates using the platform CA.
     """
 
-    def __init__(self, ssl_dir: str = DEFAULT_SSL_DIR, data_service: Optional["CertificateDataService"] = None):
+    def __init__(self, ssl_dir: str = DEFAULT_SSL_DIR, data_service: CertificateDataService | None = None):
         self.ssl_dir = ssl_dir
         self.data_service = data_service
-        self.ca_cert: Optional[x509.Certificate] = None
-        self.ca_key: Optional[ec.EllipticCurvePrivateKey] = None
+        self.ca_cert: x509.Certificate | None = None
+        self.ca_key: ec.EllipticCurvePrivateKey | None = None
         self.initialized = False
         self._revoked_serials: set[str] = set()
 

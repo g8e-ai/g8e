@@ -35,10 +35,12 @@ Collections:
     tasks, users, web_sessions
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import sys
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from _lib import (
     COLLECTIONS,
@@ -173,7 +175,7 @@ def exec_stats() -> None:
 
 
 def exec_list_collection(collection: str, limit: int = 50,
-                        fields: Optional[List[str]] = None,
+                        fields: List[str] | None = None,
                         as_json: bool = False) -> None:
     docs = query_collection(collection, limit=limit)
     out = []
@@ -258,7 +260,7 @@ def exec_find(collection: str, field: str, value: str,
     print()
 
 
-def exec_kv(pattern: Optional[str], limit: int = 50, as_json: bool = False) -> None:
+def exec_kv(pattern: str | None, limit: int = 50, as_json: bool = False) -> None:
     keys = kv_keys(pattern or '*')
     if limit:
         keys = keys[:limit]

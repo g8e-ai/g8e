@@ -22,6 +22,7 @@ from app.models.settings import G8eePlatformSettings
 from app.services.operator.command_service import OperatorCommandService
 from app.services.operator.intent_service import OperatorIntentService
 from app.services.operator.operator_data_service import OperatorDataService
+from app.services.protocols import ExecutionServiceProtocol
 from app.utils.whitelist_validator import CommandWhitelistValidator
 from app.utils.blacklist_validator import CommandBlacklistValidator
 
@@ -125,6 +126,7 @@ def build_command_service(
     skip_pubsub_client: bool = False,
     whitelist_validator: CommandWhitelistValidator | None = None,
     blacklist_validator: CommandBlacklistValidator | None = None,
+    execution_service: ExecutionServiceProtocol | None = None,
 ) -> OperatorCommandService:
     """Build an OperatorCommandService with typed fakes for all dependencies.
 
@@ -154,21 +156,21 @@ def build_command_service(
     from app.services.operator.intent_service import OperatorIntentService
 
     pubsub_service = OperatorPubSubService()
-    pubsub_service._pubsub_ready = True
 
     lfaa_service = OperatorLFAAService(
         pubsub_service=pubsub_service,
     )
 
-    execution_service = OperatorExecutionService(
-        pubsub_service=pubsub_service,
-        approval_service=approval_service,
-        g8ed_event_service=event_service,
-        settings=settings,
-        ai_response_analyzer=ai_response_analyzer,
-        operator_data_service=operator_data_service,
-        investigation_service=investigation_service,
-    )
+    if execution_service is None:
+        execution_service = OperatorExecutionService(
+            pubsub_service=pubsub_service,
+            approval_service=approval_service,
+            g8ed_event_service=event_service,
+            settings=settings,
+            ai_response_analyzer=ai_response_analyzer,
+            operator_data_service=operator_data_service,
+            investigation_service=investigation_service,
+        )
 
     filesystem_service = OperatorFilesystemService(
         pubsub_service=pubsub_service,

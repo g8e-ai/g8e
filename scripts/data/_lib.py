@@ -18,6 +18,8 @@ Provides authentication, HTTP clients (g8es direct + g8ed internal API),
 and terminal display helpers used across all resource scripts.
 """
 
+from __future__ import annotations
+
 import json
 import os
 import shutil
@@ -26,7 +28,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent.absolute()
 _SHARED_CONSTANTS = PROJECT_ROOT / 'shared' / 'constants'
@@ -47,7 +49,7 @@ INTERNAL_AUTH_TOKEN_PATHS = (
 )
 
 
-def _create_ssl_context() -> Optional[ssl.SSLContext]:
+def _create_ssl_context() -> ssl.SSLContext | None:
     """Create SSL context that trusts the platform CA."""
     ctx = ssl.create_default_context()
     if CA_CERT_PATH.exists():
@@ -113,7 +115,7 @@ def get_auditor_hmac_key() -> str:
 # g8ed HTTP client — direct DB/KV access (same as g8ee's DBClient)
 # =============================================================================
 
-def g8es_request(method: str, path: str, body: Optional[Dict] = None) -> Any:
+def g8es_request(method: str, path: str, body: Dict | None = None) -> Any:
     url = f'{G8ES_BASE_URL}{path}'
     data = json.dumps(body).encode() if body is not None else None
     headers = {'Content-Type': 'application/json'} if data is not None else {}
@@ -159,7 +161,7 @@ def query_collection(collection: str, limit: int = 0) -> List[Dict]:
     return result if isinstance(result, list) else []
 
 
-def get_document(collection: str, doc_id: str) -> Optional[Dict]:
+def get_document(collection: str, doc_id: str) -> Dict | None:
     return g8es_request('GET', f'/db/{urllib.parse.quote(collection, safe="")}/{urllib.parse.quote(doc_id, safe="")}')
 
 
@@ -172,7 +174,7 @@ def kv_keys(pattern: str = '*') -> List[str]:
     return result.get('keys', []) if isinstance(result, dict) else []
 
 
-def kv_get(key: str) -> Optional[str]:
+def kv_get(key: str) -> str | None:
     result = g8es_request('GET', f'/kv/{urllib.parse.quote(key, safe="")}')
     return result.get('value') if isinstance(result, dict) else None
 
@@ -186,7 +188,7 @@ def kv_delete_pattern(pattern: str) -> int:
 # g8ed internal API client — for resource management (users, operators, etc.)
 # =============================================================================
 
-def g8ed_request(method: str, url: str, body: Optional[Dict] = None) -> Dict:
+def g8ed_request(method: str, url: str, body: Dict | None = None) -> Dict:
     data = json.dumps(body).encode() if body is not None else None
     headers = {
         'X-Operator-Session-Id': get_auth_token() or '',
@@ -220,7 +222,7 @@ def g8ed_request(method: str, url: str, body: Optional[Dict] = None) -> Dict:
         )
 
 
-def resolve_user_id(user_id: Optional[str], email: Optional[str]) -> Optional[str]:
+def resolve_user_id(user_id: str | None, email: str | None) -> str | None:
     if user_id:
         return user_id
     if not email:

@@ -219,7 +219,7 @@ describe('DeviceLinkService', () => {
         });
 
         it('should generate operator slots when max_uses exceeds current slot count', async () => {
-            mockOperatorService.queryOperators.mockResolvedValue([
+            mockOperatorService.queryListedOperators.mockResolvedValue([
                 { id: 'op-1', status: OperatorStatus.AVAILABLE },
                 { id: 'op-2', status: OperatorStatus.ACTIVE }
             ]);
@@ -245,7 +245,7 @@ describe('DeviceLinkService', () => {
         });
 
         it('should not generate slots when current slot count is sufficient', async () => {
-            mockOperatorService.queryOperators.mockResolvedValue([
+            mockOperatorService.queryListedOperators.mockResolvedValue([
                 { id: 'op-1', status: OperatorStatus.AVAILABLE },
                 { id: 'op-2', status: OperatorStatus.AVAILABLE },
                 { id: 'op-3', status: OperatorStatus.AVAILABLE }
@@ -263,10 +263,8 @@ describe('DeviceLinkService', () => {
         });
 
         it('should ignore terminated operators when counting current slots', async () => {
-            mockOperatorService.queryOperators.mockResolvedValue([
-                { id: 'op-1', status: OperatorStatus.AVAILABLE },
-                { id: 'op-2', status: OperatorStatus.TERMINATED },
-                { id: 'op-3', status: OperatorStatus.TERMINATED }
+            mockOperatorService.queryListedOperators.mockResolvedValue([
+                { id: 'op-1', status: OperatorStatus.AVAILABLE }
             ]);
             mockOperatorService.createOperatorSlot.mockResolvedValue({ success: true, operator_id: 'new-op-1' });
 
@@ -281,7 +279,7 @@ describe('DeviceLinkService', () => {
         });
 
         it('should rollback created slots if slot creation fails', async () => {
-            mockOperatorService.queryOperators.mockResolvedValue([
+            mockOperatorService.queryListedOperators.mockResolvedValue([
                 { id: 'op-1', status: OperatorStatus.AVAILABLE }
             ]);
             mockOperatorService.createOperatorSlot
@@ -403,7 +401,7 @@ describe('DeviceLinkService', () => {
             mockCache.kvTtl.mockResolvedValue(3600);
             mockCache.kvExpire.mockResolvedValue(1);
             
-            mockOperatorService.queryOperators.mockResolvedValue([]);
+            mockOperatorService.queryListedOperators.mockResolvedValue([]);
             mockOperatorService.createOperatorSlot.mockResolvedValue({ success: true, operator_id: 'op-new' });
             mockWebSessionService.getUserActiveSession.mockResolvedValue('web-sess-1');
             mockDeviceRegistration.registerDevice.mockResolvedValue({
@@ -539,7 +537,7 @@ describe('DeviceLinkService', () => {
             mockCache.kvSet.mockResolvedValue('OK');
             mockCache.kvGet.mockResolvedValue(null);
             mockCache.kvTtl.mockResolvedValue(3600);
-            mockOperatorService.queryOperators.mockResolvedValue([]);
+            mockOperatorService.queryListedOperators.mockResolvedValue([]);
             mockOperatorService.createOperatorSlot.mockResolvedValue({ success: true, operator_id: 'op-new' });
             mockWebSessionService.getUserActiveSession.mockResolvedValue('web-sess-1');
 
@@ -580,7 +578,7 @@ describe('DeviceLinkService', () => {
 
             mockCache._seedKV(KVKey.deviceLink(validToken), linkData.forKV());
             mockCache.kvSet.mockResolvedValue(null);
-            mockOperatorService.queryOperators.mockResolvedValue([]);
+            mockOperatorService.queryListedOperators.mockResolvedValue([]);
 
             const result = await service.registerDevice(validToken, mockDeviceInfo);
 
@@ -607,7 +605,7 @@ describe('DeviceLinkService', () => {
             mockCache.kvTtl.mockResolvedValue(3600);
             mockCache.kvExpire.mockResolvedValue(1);
             
-            mockOperatorService.queryOperators.mockResolvedValue([
+            mockOperatorService.queryListedOperators.mockResolvedValue([
                 { id: 'op-1', status: OperatorStatus.ACTIVE }
             ]);
             mockOperatorService.createOperatorSlot.mockResolvedValue({ success: true, operator_id: 'new-op-id' });
@@ -646,7 +644,7 @@ describe('DeviceLinkService', () => {
             mockCache.kvGet.mockResolvedValue(null);
             mockCache.kvTtl.mockResolvedValue(3600);
 
-            mockOperatorService.queryOperators.mockResolvedValue([]);
+            mockOperatorService.queryListedOperators.mockResolvedValue([]);
             mockOperatorService.createOperatorSlot.mockResolvedValue({ success: false });
 
             const result = await service.registerDevice(validToken, mockDeviceInfo);
@@ -673,7 +671,7 @@ describe('DeviceLinkService', () => {
             mockCache.kvTtl.mockResolvedValue(3600);
             mockCache.kvExpire.mockResolvedValue(1);
             
-            mockOperatorService.queryOperators.mockResolvedValue([]);
+            mockOperatorService.queryListedOperators.mockResolvedValue([]);
             mockOperatorService.createOperatorSlot.mockResolvedValue({ success: true, operator_id: 'op-new' });
             mockWebSessionService.getUserActiveSession.mockResolvedValue('web-sess-1');
             mockDeviceRegistration.registerDevice.mockResolvedValue({
@@ -712,7 +710,7 @@ describe('DeviceLinkService', () => {
             mockCache.kvTtl.mockResolvedValue(3600);
             mockCache.kvExpire.mockResolvedValue(1);
             
-            mockOperatorService.queryOperators.mockResolvedValue([
+            mockOperatorService.queryListedOperators.mockResolvedValue([
                 { id: 'op-1', status: OperatorStatus.ACTIVE }
             ]);
             mockOperatorService.createOperatorSlot.mockResolvedValue({ success: true, operator_id: 'op-new' });
@@ -750,7 +748,7 @@ describe('DeviceLinkService', () => {
             mockCache.kvTtl.mockResolvedValue(3600);
             mockCache.kvExpire.mockResolvedValue(1);
             
-            mockOperatorService.queryOperators.mockResolvedValue([
+            mockOperatorService.queryListedOperators.mockResolvedValue([
                 { id: 'op-available', status: OperatorStatus.AVAILABLE }
             ]);
             
@@ -761,7 +759,7 @@ describe('DeviceLinkService', () => {
                 operator_session_id: 'op-sess-1'
             });
 
-            const result = await service.registerDevice(validToken, mockDeviceInfo);
+            const result = await service.registerDevice(token, mockDeviceInfo);
 
             expect(result.success).toBe(true);
             expect(result.operator_id).toBe('op-available');
@@ -791,7 +789,7 @@ describe('DeviceLinkService', () => {
             mockCache.kvTtl.mockResolvedValue(3600);
             mockCache.kvExpire.mockResolvedValue(1);
             
-            mockOperatorService.queryOperators.mockResolvedValue([
+            mockOperatorService.queryListedOperators.mockResolvedValue([
                 { id: 'op-matching', status: OperatorStatus.ACTIVE, system_fingerprint: mockDeviceInfo.system_fingerprint }
             ]);
             

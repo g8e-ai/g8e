@@ -80,6 +80,7 @@ async def test_agent_privacy(
     unique_user_id,
     caplog,
     unified_metrics_collector,
+    llm_provider,
 ):
     """
     Test Sentinel PII redaction across three egress layers.
@@ -90,11 +91,10 @@ async def test_agent_privacy(
     """
     start_time = datetime.now(timezone.utc)
 
-    investigation_service = all_services['investigation_service']
-    investigation_data_service = all_services['investigation_data_service']
-    chat_pipeline = all_services['chat_pipeline']
-    request_builder = all_services['request_builder']
-    llm_provider = all_services['llm_provider']
+    investigation_service = all_services.investigation_service
+    investigation_data_service = all_services.investigation_data_service
+    chat_pipeline = all_services.chat_pipeline
+    request_builder = all_services.request_builder
 
     captured_request_builder_contents: list[list[Any]] = []
     captured_provider_contents: list[list[Any]] = []
@@ -144,7 +144,7 @@ async def test_agent_privacy(
 
             search_settings = SearchSettings(enabled=False)
             user_settings = G8eeUserSettings(llm=user_settings.llm, search=search_settings)
-            task_manager = all_services['chat_task_manager']
+            task_manager = all_services.chat_task_manager
 
             logger.info(f"[PRIVACY] Running scenario {scenario['id']} with sentinel_mode=True")
 

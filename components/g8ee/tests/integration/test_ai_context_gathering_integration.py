@@ -105,8 +105,8 @@ class TestInvestigationContextResolution:
     ):
         """Happy path: resolve investigation by investigation_id."""
         # Setup services properly using real infrastructure
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
 
         # Create investigation data first to get the IDs
         investigation = create_investigation_data()
@@ -141,8 +141,8 @@ class TestInvestigationContextResolution:
     ):
         """When resolving by case_id, return the most recently created investigation."""
         # Setup
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
 
         user_id = f"user-case-test-{uuid.uuid4().hex[:8]}"
         case_id = f"case-multi-test-{uuid.uuid4().hex[:8]}"  # Unique case_id for each run
@@ -199,8 +199,8 @@ class TestInvestigationContextResolution:
     ):
         """Missing investigation_id raises ResourceNotFoundError after retries."""
         # Setup
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
 
         # Test & Verify
         with pytest.raises(ResourceNotFoundError) as exc_info:
@@ -218,7 +218,7 @@ class TestInvestigationContextResolution:
     ):
         """Case ID with no investigations raises ResourceNotFoundError."""
         # Setup
-        service = all_services['investigation_service']
+        service = all_services.investigation_service
 
 
         # Test & Verify
@@ -236,8 +236,8 @@ class TestInvestigationContextResolution:
     ):
         """Calling without user_id logs a security warning but still works."""
         # Setup
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
 
         # Create investigation data first to get the IDs
         investigation = create_investigation_data()
@@ -288,9 +288,9 @@ class TestMemoryContextAttachment:
     ):
         """Memory is successfully attached when it exists."""
         # Setup services properly using real infrastructure
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
-        memory_data_service = all_services['memory_data_service']
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
+        memory_data_service = all_services.memory_data_service
 
         # Create investigation data first to get the IDs
         investigation = create_investigation_data()
@@ -332,8 +332,8 @@ class TestMemoryContextAttachment:
     ):
         """Investigation context works normally when no memory exists."""
         # Setup services properly using real infrastructure
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
 
         # Create investigation data first to get the IDs
         investigation = create_investigation_data()
@@ -369,8 +369,8 @@ class TestMemoryContextAttachment:
     ):
         """When no memory exists for investigation, memory is None without error."""
         # Setup services properly using real infrastructure
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
 
         # Create investigation data first to get the IDs
         investigation = create_investigation_data()
@@ -403,9 +403,9 @@ class TestMemoryContextAttachment:
     ):
         """All memory fields are preserved correctly during attachment."""
         # Setup services properly using real infrastructure
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
-        memory_data_service = all_services['memory_data_service']
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
+        memory_data_service = all_services.memory_data_service
 
         # Create investigation data first to get the IDs
         investigation = create_investigation_data()
@@ -471,10 +471,10 @@ class TestOperatorEnrichment:
     ):
         """Single bound operator is enriched and context extracted."""
         # Setup services properly using real infrastructure
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
-        operator_data_service = all_services['operator_data_service']
-        memory_data_service = all_services['memory_data_service']
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
+        operator_data_service = all_services.operator_data_service
+        memory_data_service = all_services.memory_data_service
         
         # Create investigation and operator
         investigation = create_investigation_data()
@@ -529,10 +529,10 @@ class TestOperatorEnrichment:
     ):
         """Multiple bound operators are all enriched."""
         # Setup services properly using real infrastructure
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
-        operator_data_service = all_services['operator_data_service']
-        memory_data_service = all_services['memory_data_service']
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
+        operator_data_service = all_services.operator_data_service
+        memory_data_service = all_services.memory_data_service
         
         # Create investigation and multiple operators
         investigation = create_investigation_data()
@@ -595,10 +595,10 @@ class TestOperatorEnrichment:
     ):
         """Only BOUND status operators are enriched."""
         # Setup services properly using real infrastructure
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
-        operator_data_service = all_services['operator_data_service']
-        memory_data_service = all_services['memory_data_service']
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
+        operator_data_service = all_services.operator_data_service
+        memory_data_service = all_services.memory_data_service
         
         # Create investigation and operators with different statuses
         investigation = create_investigation_data()
@@ -662,8 +662,8 @@ class TestOperatorEnrichment:
     ):
         """Bound operator not found in cache is handled gracefully."""
         # Setup services properly using real infrastructure
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
 
         # Create investigation but don't create operator
         investigation = create_investigation_data()
@@ -708,9 +708,9 @@ class TestOperatorEnrichment:
     ):
         """Cloud operator context includes cloud-specific fields."""
         # Setup services properly using real infrastructure
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
-        operator_data_service = all_services['operator_data_service']
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
+        operator_data_service = all_services.operator_data_service
 
         # Create cloud operator with intents
         cloud_operator = build_production_operator_document(
@@ -777,10 +777,10 @@ class TestCompleteContextAssembly:
     ):
         """Complete pipeline: investigation + memory + operators + enrichment."""
         # Setup services properly using real infrastructure
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
-        operator_data_service = all_services['operator_data_service']
-        memory_data_service = all_services['memory_data_service']
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
+        operator_data_service = all_services.operator_data_service
+        memory_data_service = all_services.memory_data_service
 
         # Create complete test data
         investigation = create_investigation_data()
@@ -872,8 +872,8 @@ class TestCompleteContextAssembly:
     ):
         """Context assembly works with minimal data (no operators, no memory)."""
         # Setup services properly using real infrastructure
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
 
         # Create only investigation
         investigation = create_investigation_data()
@@ -929,7 +929,7 @@ class TestContextGatheringErrorHandling:
         self, cache_aside_service, test_settings, all_services
     ):
         """Context with null investigation_id handles gracefully."""
-        service = all_services['investigation_service']
+        service = all_services.investigation_service
         
         # Create context with minimal investigation_id (using default generated id)
         context = EnrichedInvestigationContext(
@@ -956,7 +956,7 @@ class TestContextGatheringErrorHandling:
         self, cache_aside_service, test_settings, all_services
     ):
         """get_investigation_context without required params raises error."""
-        service = all_services['investigation_service']
+        service = all_services.investigation_service
         
         # Test with no parameters
         with pytest.raises(ResourceNotFoundError) as exc_info:

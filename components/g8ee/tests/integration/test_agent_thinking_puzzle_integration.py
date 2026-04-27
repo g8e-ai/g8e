@@ -57,10 +57,10 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
     # This will provide better error information than skipping
 
     # Get real services from all_services fixture
-    event_service = all_services['g8ed_event_service']
-    operator_command_service = all_services['operator_command_service']
-    tool_service = all_services['tool_service']
-    agent = all_services['g8e_agent']
+    event_service = all_services.g8ed_event_service
+    operator_command_service = all_services.operator_command_service
+    tool_service = all_services.tool_service
+    agent = all_services.g8e_agent
     
     puzzle_text = (
         "Solve this logic puzzle: You have two ropes. Each rope takes exactly 1 hour to burn, "

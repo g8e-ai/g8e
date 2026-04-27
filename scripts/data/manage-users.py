@@ -28,11 +28,13 @@ Usage:
     python manage-g8es.py users stats
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import sys
 import urllib.parse
-from typing import Optional, List, Dict, Any
+from typing import List, Dict, Any
 
 from _lib import (
     PROJECT_ROOT,
@@ -50,7 +52,7 @@ VALID_ROLES: List[str] = list(_STATUS['user.role'].values())
 INTERNAL_API_BASE = f'{G8ED_BASE_URL}/api/internal/users'
 
 
-def _api_request(method: str, path: str, body: Optional[Dict] = None) -> Dict:
+def _api_request(method: str, path: str, body: Dict | None = None) -> Dict:
     return g8ed_request(method, f'{INTERNAL_API_BASE}{path}', body)
 
 
@@ -129,8 +131,8 @@ class UserManager:
         print()
         return users
 
-    def get_user(self, user_id: Optional[str],
-                 email: Optional[str]) -> Optional[Dict[str, Any]]:
+    def get_user(self, user_id: str | None,
+                 email: str | None) -> Dict[str, Any] | None:
         if not user_id and not email:
             print("Provide --id or --email")
             return None
@@ -174,7 +176,7 @@ class UserManager:
         return users
 
     def create_user(self, email: str, name: str,
-                    roles: Optional[List[str]]) -> Optional[Dict[str, Any]]:
+                    roles: list[str] | None) -> Dict[str, Any] | None:
         if roles:
             for role in roles:
                 if role not in VALID_ROLES:
@@ -227,7 +229,7 @@ class UserManager:
         return True
 
     def update_role(self, user_id: str, role: str,
-                    action: str = 'set') -> Optional[Dict[str, Any]]:
+                    action: str = 'set') -> Dict[str, Any] | None:
         if role not in VALID_ROLES:
             print(f"Invalid role: {role}. Valid roles: {VALID_ROLES}")
             return None

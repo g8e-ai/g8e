@@ -273,7 +273,7 @@ class TestBroadcastEventTypedFields:
         field = hints["error_type"]
         annotation = str(field.annotation)
         assert "CommandErrorType" in annotation, (
-            f"CommandFailedBroadcastEvent.error_type should be Optional[CommandErrorType], got: {annotation}"
+            f"CommandFailedBroadcastEvent.error_type should be CommandErrorType | None, got: {annotation}"
         )
 
     def test_command_failed_error_type_accepts_enum_value(self):

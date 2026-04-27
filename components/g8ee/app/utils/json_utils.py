@@ -23,12 +23,12 @@ import re
 from datetime import date, datetime
 from decimal import Decimal
 from functools import partial
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-def extract_json_from_text(text: str) -> Optional[dict]:
+def extract_json_from_text(text: str) -> dict | None:
     """Extract and parse a JSON object from a potentially messy text string.
     
     Handles:

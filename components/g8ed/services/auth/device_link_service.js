@@ -361,12 +361,9 @@ class DeviceLinkService {
         }
 
         // 2. New registration for THIS LINK.
-        // Check if device already has a slot from a previous link or manual registration.
-        const allOperators = await this._operatorService.queryOperators([{ field: 'user_id', operator: '==', value: linkData.user_id }]);
-        const existingOp = allOperators.find(op => 
-            op.system_fingerprint === sanitizedFingerprint && 
-            op.status !== OperatorStatus.TERMINATED
-        );
+        // Check if device already has a non-terminated slot from a previous link or manual registration.
+        const liveOperators = await this._operatorService.queryListedOperators([{ field: 'user_id', operator: '==', value: linkData.user_id }]);
+        const existingOp = liveOperators.find(op => op.system_fingerprint === sanitizedFingerprint);
 
         // 3. Acquire distributed lock to prevent race condition where multiple
         // concurrent claims select the same available operator slot

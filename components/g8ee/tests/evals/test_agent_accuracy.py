@@ -92,9 +92,9 @@ async def test_agent_accuracy(
     start_time = datetime.now(timezone.utc)
     result_data = AccuracyTestResult(scenario_id=scenario["id"], dimension=scenario.get("dimension", "accuracy"))
 
-    investigation_service = all_services['investigation_service']
-    investigation_data_service = all_services['investigation_data_service']
-    chat_pipeline = all_services['chat_pipeline']
+    investigation_service = all_services.investigation_service
+    investigation_data_service = all_services.investigation_data_service
+    chat_pipeline = all_services.chat_pipeline
 
     try:
         llm_settings = user_settings.llm
@@ -107,7 +107,7 @@ async def test_agent_accuracy(
         agent_mode = AgentMode.OPERATOR_BOUND if agent_mode_str == "operator_bound" else AgentMode.OPERATOR_NOT_BOUND
 
         # Build G8E context with bound operators for operator_bound scenarios
-        operator_data_service = all_services['operator_data_service']
+        operator_data_service = all_services.operator_data_service
         bound_operators = await seed_operator_if_bound(
             agent_mode=agent_mode,
             operator_id=unique_operator_id,
@@ -162,14 +162,14 @@ async def test_agent_accuracy(
         else:
             search_settings = SearchSettings(enabled=False)
         user_settings = G8eeUserSettings(llm=user_settings.llm, search=search_settings)
-        task_manager = all_services['chat_task_manager']
+        task_manager = all_services.chat_task_manager
 
         logger.info(f"[EVAL] Running scenario {scenario['id']} with model {model_name}")
         logger.info(f"[EVAL] Agent mode: {agent_mode}")
         logger.info(f"[EVAL] Investigation ID: {created_investigation.id}")
         logger.info(f"[EVAL] Search settings: enabled={user_settings.search.enabled}, project_id={user_settings.search.project_id}, engine_id={user_settings.search.engine_id}")
 
-        tool_service = all_services['tool_service']
+        tool_service = all_services.tool_service
         logger.info(f"[EVAL] g8e_web_search available: {tool_service.g8e_web_search_available}")
 
         user_query = scenario["user_query"]
@@ -192,7 +192,7 @@ async def test_agent_accuracy(
         )
 
         # Approve any pending approvals from fake operators
-        approval_service = all_services['approval_service']
+        approval_service = all_services.approval_service
         await auto_approve_pending(approval_service)
 
         # Step 4: Read conversation history from g8es to extract AI response

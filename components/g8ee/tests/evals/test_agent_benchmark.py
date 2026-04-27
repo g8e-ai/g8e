@@ -234,10 +234,10 @@ async def test_agent_benchmark(
 
     logger.info("[BENCH] ===== Starting test for scenario %s =====", scenario.id)
 
-    investigation_service = all_services['investigation_service']
-    investigation_data_service = all_services['investigation_data_service']
-    operator_data_service = all_services['operator_data_service']
-    chat_pipeline = all_services['chat_pipeline']
+    investigation_service = all_services.investigation_service
+    investigation_data_service = all_services.investigation_data_service
+    operator_data_service = all_services.operator_data_service
+    chat_pipeline = all_services.chat_pipeline
 
     response_text = ""
 
@@ -289,10 +289,10 @@ async def test_agent_benchmark(
         real_event_service = chat_pipeline.g8ed_event_service
         chat_pipeline.g8ed_event_service = fake_event_service
 
-        approval_service = all_services['approval_service']
+        approval_service = all_services.approval_service
         logger.info("[BENCH-SETTINGS] user_settings.llm.llm_command_gen_enabled=%s", user_settings.llm.llm_command_gen_enabled)
         logger.info("[BENCH-SETTINGS] user_settings.eval_judge.model=%s", user_settings.eval_judge.model)
-        task_manager = all_services['chat_task_manager']
+        task_manager = all_services.chat_task_manager
 
         logger.info("[BENCH] Running scenario %s", scenario.id)
 

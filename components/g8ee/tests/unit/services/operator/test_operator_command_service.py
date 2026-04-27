@@ -300,9 +300,14 @@ class TestExecuteCommandTargetSystems:
         from app.models.agent import ExecutorCommandArgs
         from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
+        from tests.fakes.fake_execution_service import FakeExecutionService
 
         approval_service = FakeApprovalService()
-        service = build_command_service(approval_service=approval_service)
+        execution_service = FakeExecutionService()
+        service = build_command_service(
+            approval_service=approval_service,
+            execution_service=execution_service
+        )
 
         op = self._make_operator("op-1", "sess-1", "host-1")
         investigation = self._make_investigation([op])
@@ -324,9 +329,14 @@ class TestExecuteCommandTargetSystems:
         from app.models.agent import ExecutorCommandArgs
         from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
+        from tests.fakes.fake_execution_service import FakeExecutionService
 
         approval_service = FakeApprovalService()
-        service = build_command_service(approval_service=approval_service)
+        execution_service = FakeExecutionService()
+        service = build_command_service(
+            approval_service=approval_service,
+            execution_service=execution_service
+        )
 
         op1 = self._make_operator("op-1", "sess-1", "web-1")
         op2 = self._make_operator("op-2", "sess-2", "web-2")
@@ -354,9 +364,14 @@ class TestExecuteCommandTargetSystems:
         from app.models.agent import ExecutorCommandArgs
         from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
+        from tests.fakes.fake_execution_service import FakeExecutionService
 
         approval_service = FakeApprovalService()
-        service = build_command_service(approval_service=approval_service)
+        execution_service = FakeExecutionService()
+        service = build_command_service(
+            approval_service=approval_service,
+            execution_service=execution_service
+        )
 
         op1 = self._make_operator("op-1", "sess-1", "host-1")
         op2 = self._make_operator("op-2", "sess-2", "host-2")
@@ -386,7 +401,7 @@ class TestExecuteCommandTargetSystems:
         # batch_id must be surfaced on the result and match the approval's batch_id
         # so agents can correlate follow-up actions back to the original batch.
         assert result.batch_id == req.batch_id
-        # Aggregated output contains a section per host.
+        # Aggregated output section check - since FakeExecutionService returns "fake output" for all
         for hostname in ("host-1", "host-2", "host-3"):
             assert hostname in (result.output or "")
 
@@ -395,9 +410,14 @@ class TestExecuteCommandTargetSystems:
         from app.models.agent import ExecutorCommandArgs
         from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
+        from tests.fakes.fake_execution_service import FakeExecutionService
 
         approval_service = FakeApprovalService()
-        service = build_command_service(approval_service=approval_service)
+        execution_service = FakeExecutionService()
+        service = build_command_service(
+            approval_service=approval_service,
+            execution_service=execution_service
+        )
 
         op1 = self._make_operator("op-1", "sess-1", "host-1")
         op2 = self._make_operator("op-2", "sess-2", "host-2")
@@ -434,9 +454,14 @@ class TestExecuteCommandTargetSystems:
         )
         from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
+        from tests.fakes.fake_execution_service import FakeExecutionService
 
         approval_service = FakeApprovalService()
-        service = build_command_service(approval_service=approval_service)
+        execution_service = FakeExecutionService()
+        service = build_command_service(
+            approval_service=approval_service,
+            execution_service=execution_service
+        )
 
         op = self._make_operator("op-1", "sess-1", "host-1")
         investigation = self._make_investigation([op])
@@ -466,9 +491,14 @@ class TestExecuteCommandTargetSystems:
         )
         from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
+        from tests.fakes.fake_execution_service import FakeExecutionService
 
         approval_service = FakeApprovalService()
-        service = build_command_service(approval_service=approval_service)
+        execution_service = FakeExecutionService()
+        service = build_command_service(
+            approval_service=approval_service,
+            execution_service=execution_service
+        )
 
         op = self._make_operator("op-1", "sess-1", "host-1")
         investigation = self._make_investigation([op])
@@ -497,9 +527,14 @@ class TestExecuteCommandTargetSystems:
         )
         from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
+        from tests.fakes.fake_execution_service import FakeExecutionService
 
         approval_service = FakeApprovalService()
-        service = build_command_service(approval_service=approval_service)
+        execution_service = FakeExecutionService()
+        service = build_command_service(
+            approval_service=approval_service,
+            execution_service=execution_service
+        )
 
         op = self._make_operator("op-1", "sess-1", "host-1")
         investigation = self._make_investigation([op])
@@ -528,9 +563,14 @@ class TestExecuteCommandTargetSystems:
         )
         from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
+        from tests.fakes.fake_execution_service import FakeExecutionService
 
         approval_service = FakeApprovalService()
-        service = build_command_service(approval_service=approval_service)
+        execution_service = FakeExecutionService()
+        service = build_command_service(
+            approval_service=approval_service,
+            execution_service=execution_service
+        )
 
         op = self._make_operator("op-1", "sess-1", "host-1")
         investigation = self._make_investigation([op])
@@ -561,9 +601,14 @@ class TestExecuteCommandTargetSystems:
         )
         from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
+        from tests.fakes.fake_execution_service import FakeExecutionService
 
         approval_service = FakeApprovalService()
-        service = build_command_service(approval_service=approval_service)
+        execution_service = FakeExecutionService()
+        service = build_command_service(
+            approval_service=approval_service,
+            execution_service=execution_service
+        )
 
         op = self._make_operator("op-1", "sess-1", "host-1")
         investigation = self._make_investigation([op])
@@ -598,9 +643,14 @@ class TestExecuteCommandTargetSystems:
         )
         from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
+        from tests.fakes.fake_execution_service import FakeExecutionService
 
         approval_service = FakeApprovalService()
-        service = build_command_service(approval_service=approval_service)
+        execution_service = FakeExecutionService()
+        service = build_command_service(
+            approval_service=approval_service,
+            execution_service=execution_service
+        )
 
         op = self._make_operator("op-1", "sess-1", "host-1")
         investigation = self._make_investigation([op])
@@ -626,9 +676,14 @@ class TestExecuteCommandTargetSystems:
         from app.models.agent import ExecutorCommandArgs
         from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
+        from tests.fakes.fake_execution_service import FakeExecutionService
 
         approval_service = FakeApprovalService()
-        service = build_command_service(approval_service=approval_service)
+        execution_service = FakeExecutionService()
+        service = build_command_service(
+            approval_service=approval_service,
+            execution_service=execution_service
+        )
 
         op = self._make_operator("op-abc", "sess-abc", "db-server")
         investigation = self._make_investigation([op])

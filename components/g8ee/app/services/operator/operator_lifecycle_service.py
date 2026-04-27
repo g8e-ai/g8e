@@ -11,8 +11,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import logging
-from typing import TYPE_CHECKING, Any, List, Optional, Dict
+from typing import TYPE_CHECKING, Any, List, Dict
 
 from app.constants.collections import DB_COLLECTION_OPERATORS
 from app.constants.status import (
@@ -44,7 +46,7 @@ class OperatorLifecycleService:
         self,
         operator_data_service: OperatorDataServiceProtocol,
         supervisor_service: SupervisorServiceProtocol,
-        settings_service: Optional["SettingsService"] = None,
+        settings_service: "SettingsService",
     ):
         self.operator_data_service = operator_data_service
         self.supervisor_service = supervisor_service
@@ -241,18 +243,7 @@ class OperatorLifecycleService:
         logger.info("[OPERATOR-LIFECYCLE] Starting g8ep operator via XML-RPC")
 
         # 1. Persist API key to platform_settings (authority: g8ee)
-        if self.settings_service:
-            await self.settings_service.update_g8ep_operator_api_key(api_key)
-        else:
-            from app.constants.collections import DB_COLLECTION_SETTINGS, PLATFORM_SETTINGS_DOC
-            result = await self._cache.update_document(
-                collection=DB_COLLECTION_SETTINGS,
-                document_id=PLATFORM_SETTINGS_DOC,
-                data={"settings": {"g8ep_operator_api_key": api_key}},
-                merge=True
-            )
-            if not result.success:
-                raise Exception(f"Failed to persist operator API key: {result.error}")
+        await self.settings_service.update_g8ep_operator_api_key(api_key)
 
         # 2. Start supervised process
         await self.supervisor_service.start_process("operator", wait=False)

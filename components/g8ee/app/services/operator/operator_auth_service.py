@@ -11,8 +11,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from app.constants import (
     DB_COLLECTION_USERS,
@@ -71,9 +73,9 @@ class OperatorAuthService:
 
     async def authenticate_operator(
         self,
-        authorization_header: Optional[str],
+        authorization_header: str | None,
         body: dict[str, Any],
-        request_context: dict[str, Any] = None
+        request_context: dict[str, Any] | None
     ) -> dict[str, Any]:
         """Authenticate an operator process."""
         auth_mode = body.get("auth_mode")
@@ -86,7 +88,7 @@ class OperatorAuthService:
 
     async def _authenticate_via_api_key(
         self,
-        authorization_header: Optional[str],
+        authorization_header: str | None,
         body: dict[str, Any],
         request_context: dict[str, Any]
     ) -> dict[str, Any]:
@@ -184,8 +186,8 @@ class OperatorAuthService:
     async def _authenticate_via_device_link(
         self,
         device_link_session_id: str,
-        system_info: Optional[dict],
-        authorization_header: Optional[str],
+        system_info: dict | None,
+        authorization_header: str | None,
         request_context: dict[str, Any]
     ) -> dict[str, Any]:
         """Authenticate using a device link session ID."""

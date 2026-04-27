@@ -11,8 +11,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import logging
-from typing import Optional
 
 from app.constants import FORBIDDEN_COMMAND_PATTERNS, DEFAULT_OS_NAME
 from app.constants.status import Platform, CommandErrorType

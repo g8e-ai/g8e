@@ -21,7 +21,7 @@ file.operation, network.protocol, risk.level).
 When adding or renaming a field, update shared/models/tool_results.json first.
 """
 
-from typing import Any, Optional, Union
+from typing import Any, Union
 
 from pydantic import Field
 
@@ -317,7 +317,7 @@ class FetchFileDiffToolResult(G8eBaseModel):
 class IamIntentResult(G8eBaseModel):
     """Result of a single IAM policy attach/detach operation for one intent."""
     intent: str
-    result: Optional["CommandInternalResult"] = None
+    result: CommandInternalResult | None = None
 
 
 class FailedIntentResult(G8eBaseModel):
@@ -347,7 +347,7 @@ class IntentPermissionResult(G8eBaseModel):
     output: str | None = None
     exit_code: int | None = None
     pending_command: str | None = None
-    pending_command_result: Optional["CommandInternalResult"] = None
+    pending_command_result: CommandInternalResult | None = None
     timestamp: UTCDatetime | None = None
     revoked_intents: list[str] | None = None
 

@@ -264,7 +264,14 @@ def pytest_collection_modifyitems(config, items):
     # because tests now load user settings from g8es which may have API keys configured
     # Only skip if TEST_LLM_* env vars are explicitly set but invalid
     env_llm_provider = os.environ.get("TEST_LLM_PROVIDER", "").strip()
-    has_llm_credentials = has_test_llm_creds if env_llm_provider else True  # Allow tests to run if no TEST_LLM_PROVIDER set
+    
+    # If env var is set, use the credentials check.
+    # If env var is NOT set, we check if the platform settings from g8es have
+    # any LLM info, but since LLM info is in UserSettings, we can't easily check
+    # here during collection. 
+    # For now, let's at least check if we have a primary_model in the platform 
+    # settings which some older tests might use, or if we should just skip.
+    has_llm_credentials = has_test_llm_creds if env_llm_provider else (llm is not None and llm.primary_provider is not None)
     
     has_vertex_search = search_settings.enabled if search_settings else False
     has_web_search = (

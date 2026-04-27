@@ -11,11 +11,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import asyncio
 import hashlib
 import json
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from app.clients.pubsub_client import PubSubClient
 from app.constants import PubSubChannel
@@ -45,7 +47,7 @@ class SessionAuthListener:
         self.operator_data_service = operator_data_service
         self._active_listeners = {}
 
-    async def listen(self, operator_session_id: str, operator_id: str, user_id: str, organization_id: Optional[str]):
+    async def listen(self, operator_session_id: str, operator_id: str, user_id: str, organization_id: str | None):
         """
         Subscribe to the session auth channel for this operator_session_id and
         respond with bootstrap config once.

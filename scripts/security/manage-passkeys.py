@@ -27,11 +27,13 @@ Usage:
     ./g8e security passkeys reset --id USER_ID --force
 """
 
+from __future__ import annotations
+
 import argparse
 import sys
 import urllib.parse
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import List, Dict, Any
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent.absolute()
 sys.path.insert(0, str(PROJECT_ROOT / 'scripts' / 'data'))
@@ -45,7 +47,7 @@ from _lib import (
 INTERNAL_USER_BASE = f'{G8ED_BASE_URL}/api/internal/users'
 
 
-def _api_request(method: str, path: str, body: Optional[Dict] = None) -> Dict:
+def _api_request(method: str, path: str, body: Dict | None = None) -> Dict:
     return g8ed_request(method, f'{INTERNAL_USER_BASE}{path}', body)
 
 
@@ -66,8 +68,8 @@ class PasskeyManager:
             f"last_used={last_used}"
         )
 
-    def list_credentials(self, user_id: Optional[str],
-                         email: Optional[str]) -> Optional[List[Dict]]:
+    def list_credentials(self, user_id: str | None,
+                         email: str | None) -> list[Dict] | None:
         uid = resolve_user_id(user_id, email)
         if not uid:
             return None
@@ -95,8 +97,8 @@ class PasskeyManager:
         print()
         return credentials
 
-    def revoke_credential(self, credential_id: str, user_id: Optional[str],
-                          email: Optional[str], force: bool = False) -> bool:
+    def revoke_credential(self, credential_id: str, user_id: str | None,
+                          email: str | None, force: bool = False) -> bool:
         uid = resolve_user_id(user_id, email)
         if not uid:
             return False
@@ -131,8 +133,8 @@ class PasskeyManager:
         print()
         return True
 
-    def reset(self, user_id: Optional[str],
-              email: Optional[str], force: bool = False) -> bool:
+    def reset(self, user_id: str | None,
+              email: str | None, force: bool = False) -> bool:
         uid = resolve_user_id(user_id, email)
         if not uid:
             return False
@@ -164,8 +166,8 @@ class PasskeyManager:
         print()
         return True
 
-    def revoke_all(self, user_id: Optional[str],
-                   email: Optional[str], force: bool = False) -> bool:
+    def revoke_all(self, user_id: str | None,
+                   email: str | None, force: bool = False) -> bool:
         uid = resolve_user_id(user_id, email)
         if not uid:
             return False
