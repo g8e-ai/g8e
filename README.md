@@ -200,24 +200,17 @@ By forcing agents to stake reputation with real consequences, their personas are
 
 ### Eight Directives
 
-Principles engineered to hold when the models are a thousand times more capable than they are today.
+The architectural bedrock of g8e. [Detailed definitions & philosophy](docs/architecture/about.md#core-principles).
 
 ```
-  I.  Human Authority is Absolute       Every write gated by FIDO2. No exceptions.
- II.  Trust is Earned, Never Inherited  Zero standing credentials. Per-action scope,
-                                        automatic expiration.
-III.  Safety is Structural              Enforced at the binary and network layer.
-                                        Prompt injection cannot reach the boundary.
- IV.  Data Stays Where It Belongs       28 scrub patterns on egress and ingress.
-                                        Raw output never crosses the host.
-  V.  Presence is Ephemeral             4MB static binary. Outbound-only mTLS.
-                                        Kill the process and it is gone.
- VI.  Accountability is Local           Encrypted SQLite vaults plus a git-backed
-                                        file ledger. Cryptographic commit chain.
-VII.  Infrastructure is Yours           docker compose on your hardware. No SaaS,
-                                        no telemetry, no phone-home. Air-gap capable.
-VIII. Intelligence is Replaceable       Anthropic, OpenAI, Gemini, Ollama. Swap at
-                                        will. Governance persists.
+  I.  AUTHORITY     Every write gated by FIDO2. No exceptions.
+ II.  TRUST         Zero standing credentials. Per-action scope.
+III.  STRUCTURE     Enforced at binary and network layer.
+ IV.  SOVEREIGNTY   Data stays on your hardware. Host as system of record.
+  V.  PRESENCE      4MB static binary. Outbound-only. No inbound ports.
+ VI.  AUDIT         Encrypted SQLite vaults + git-backed file ledger.
+VII.  ISOLATION     Self-hosted. No SaaS, no telemetry, no phone-home.
+VIII. AGNOSTIC      Swap models or providers at will. Governance persists.
 ```
 
 ### Security at a Glance

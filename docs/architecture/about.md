@@ -27,14 +27,14 @@ g8e is designed to bridge that gap by providing a fully self-hosted, air-gap cap
 
 Every architectural decision in g8e is an expression of these eight core principles:
 
-1.  **Absolute Human Authority** — AI proposes, you decide. Execution and authorization are strictly separated. Human judgment is the final, non-bypassable security layer.
-2.  **Zero Standing Trust** — No long-lived execution credentials. Trust is mathematically bound to mTLS sessions, earned per action, and impossible for an agent to self-escalate.
-3.  **Structural Constraints** — Safety is enforced at the binary and network layers, never via LLM system prompts. Prompt injection cannot bypass cryptographic execution constraints.
-4.  **Data Sovereignty** — The remote host is the system of record. Raw operational data never leaves the host; the AI only receives heavily scrubbed, sanitized context.
-5.  **Ephemeral Footprint** — Outbound-only mTLS. No inbound ports. No root required. A ~4MB dependency-free binary that vanishes the moment the process is killed.
-6.  **Local-First Audit** — Accountability lives at the site of execution. Encrypted, append-only local ledgers ensure you don't need the platform to see exactly what the AI changed.
-7.  **Self-Hosted Isolation** — The platform has no SaaS backend and no mandatory telemetry. It is fully air-gap capable and runs entirely on your infrastructure. You hold the keys.
-8.  **Universal Runtime** — Any model, any provider, any OS. Governance is the constant; the choice of intelligence and target infrastructure is yours.
+1.  **AUTHORITY** — Every action is gated by FIDO2. Human judgment is the final, non-bypassable security layer. AI proposes, but humans always decide.
+2.  **TRUST** — Zero standing credentials. Privileges are earned per-action, mathematically bound to sessions, and expire automatically.
+3.  **STRUCTURE** — Safety is enforced at the binary and network layers, not via fragile LLM prompts. Prompt injection cannot bypass cryptographic execution constraints.
+4.  **SOVEREIGNTY** — You own your data. The remote host is the system of record; raw operational data never leaves the host, and AI only receives scrubbed context.
+5.  **PRESENCE** — A tiny, outbound-only binary with no inbound ports and no dependencies. It leaves no footprint and vanishes the moment the process is killed.
+6.  **AUDIT** — Accountability lives where execution happens. Encrypted, local, git-backed ledgers provide an immutable record of every change without needing a cloud backend.
+7.  **ISOLATION** — Fully self-hosted and air-gap capable. No SaaS dependencies, no mandatory telemetry, and no "phone-home" behavior. You hold the keys.
+8.  **AGNOSTIC** — Swap models, providers, or infrastructure at will. Governance is the constant; the choice of intelligence is yours.
 
 ## Human Agency is the Point
 
