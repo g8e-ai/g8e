@@ -240,6 +240,21 @@ class TestPhase3PII:
         assert "user:pass" not in result.scrubbed_text
         assert ScrubType.CONN_STRING in result.scrub_types
 
+    def test_placeholder_not_cannibalized_by_later_contextual_scrubber(self):
+        # Regression: with the original `.{0,20}` gap, the aws_secret_key
+        # pattern would match across an already-inserted [AWS_KEY] placeholder
+        # (because [AWS_KEY] starts with literal "AWS"), eating the placeholder
+        # and producing garbled output like "Connect with [[AWS_SECRET]".
+        text = (
+            'Connect with AKIAIOSFODNN7EXAMPLE and '
+            'aws_secret_access_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"'
+        )
+        result = _scrubber.scrub(text)
+        assert "[AWS_KEY]" in result.scrubbed_text
+        assert "[AWS_SECRET]" in result.scrubbed_text
+        assert "AKIAIOSFODNN7EXAMPLE" not in result.scrubbed_text
+        assert "wJalrXUtnFEMI" not in result.scrubbed_text
+
     def test_postgresql_connection_string_scrubbed(self):
         # Regression: the canonical libpq URI scheme is `postgresql://`,
         # not just `postgres://`. Both must be scrubbed.
