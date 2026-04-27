@@ -10,7 +10,13 @@ import ssl
 from typing import AsyncIterator
 
 import aiohttp
+import json
+from pathlib import Path
 
+# Load public API paths
+_SHARED_DIR = Path(__file__).resolve().parent.parent.parent.parent.parent / "shared"
+with open(_SHARED_DIR / "constants" / "public_api_paths.json") as f:
+    PUBLIC_API_PATHS = json.load(f)
 
 class G8edClient:
     """Async client for g8ed chat API and SSE streams."""
@@ -28,7 +34,7 @@ class G8edClient:
 
         if self.device_token:
             from datetime import datetime, UTC
-            url = f"{self.base_url}/api/auth/operator"
+            url = f"{self.base_url}{PUBLIC_API_PATHS['auth_operator']}"
             headers = {"X-Request-Timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"}
             payload = {
                 "auth_mode": "operator_session",
@@ -79,7 +85,7 @@ class G8edClient:
             SSE event dictionaries
         """
         from datetime import datetime, UTC
-        url = f"{self.base_url}/api/chat/send"
+        url = f"{self.base_url}{PUBLIC_API_PATHS['chat_send']}"
         headers = {"X-Request-Timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"}
         payload = {
             "investigation_id": investigation_id,
@@ -93,7 +99,7 @@ class G8edClient:
             resp.raise_for_status()
 
         # Connect to SSE for the response
-        sse_url = f"{self.base_url}/api/sse/events"
+        sse_url = f"{self.base_url}{PUBLIC_API_PATHS['sse_events']}"
         async with self._session.get(sse_url, headers=headers) as resp:
             resp.raise_for_status()
 
@@ -120,7 +126,7 @@ class G8edClient:
             Approval response data
         """
         from datetime import datetime, UTC
-        url = f"{self.base_url}/api/operator/approval/respond"
+        url = f"{self.base_url}{PUBLIC_API_PATHS['operator_approval_respond']}"
         headers = {"X-Request-Timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"}
         payload = {
             "approval_id": approval_id,

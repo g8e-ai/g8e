@@ -45,6 +45,12 @@ INTERNAL_OPERATORS_BASE = f'{G8ED_BASE_URL}/api/internal/operators'
 INTERNAL_USERS_BASE = f'{G8ED_BASE_URL}/api/internal/users'
 
 
+def _obfuscate_sensitive(value: str | None) -> str:
+    if not value or len(value) < 10:
+        return '***'
+    return f"{value[:5]}...{value[-5:]}"
+
+
 class OperatorManager:
     """
     Manage operator documents via the g8ed internal HTTP API.
@@ -256,7 +262,7 @@ class OperatorManager:
         print(f"  Old Operator ID:  {result.get('old_operator_id', operator_id)}")
         print(f"  New Operator ID:  {result.get('new_operator_id', 'N/A')}")
         print(f"  Slot Number:      {result.get('slot_number', 'N/A')}")
-        print(f"  New API Key:      {result.get('new_api_key', 'N/A')}")
+        print(f"  New API Key:      {_obfuscate_sensitive(result.get('new_api_key'))}")
         print()
         return result
 
@@ -281,7 +287,7 @@ class OperatorManager:
         print(f"  Name:         {op.get('name', 'N/A')}")
         print(f"  Slot:         {op.get('slot_number', 'N/A')}")
         print(f"  Status:       {op.get('status', 'N/A')}")
-        print(f"  API Key:      {api_key}")
+        print(f"  API Key:      {_obfuscate_sensitive(api_key)}")
         print()
         return api_key
 

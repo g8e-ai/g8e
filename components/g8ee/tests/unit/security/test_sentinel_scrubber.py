@@ -240,6 +240,34 @@ class TestPhase3PII:
         assert "user:pass" not in result.scrubbed_text
         assert ScrubType.CONN_STRING in result.scrub_types
 
+    def test_ast_contract_no_placeholder_cannibalization(self):
+        r"""
+        [Security] AST Contract Test
+        Enforce that no RegexScrubber pattern uses vulnerable gap-matching (like `.{0,20}`)
+        which could cannibalize already-inserted placeholders like `[AWS_KEY]`.
+        They must use `[^\[\]]{0,20}` instead.
+        """
+        import ast
+        from pathlib import Path
+        import app.security.sentinel_scrubber as ss_module
+        
+        filepath = Path(ss_module.__file__)
+        with open(filepath, "r") as f:
+            tree = ast.parse(f.read())
+            
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "RegexScrubber":
+                if len(node.args) >= 2 and isinstance(node.args[1], ast.Constant) and isinstance(node.args[1].value, str):
+                    pattern_str = node.args[1].value
+                    if "{0," in pattern_str:
+                        assert r"[^\[\]]" in pattern_str, (
+                            f"Scrubber pattern {pattern_str!r} uses gap matching but lacks "
+                            rf"placeholder protection ([^\[\]]). This causes cannibalization."
+                        )
+                        assert r".{0," not in pattern_str, (
+                            f"Scrubber pattern {pattern_str!r} uses dangerous `.` gap matching."
+                        )
+
     def test_placeholder_not_cannibalized_by_later_contextual_scrubber(self):
         # Regression: with the original `.{0,20}` gap, the aws_secret_key
         # pattern would match across an already-inserted [AWS_KEY] placeholder
