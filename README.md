@@ -14,7 +14,7 @@ Self-hosted · Air-gap capable · Zero cloud dependencies
 
 ---
 
-## The Shape of the Problem
+## Introduction
 
 Give an AI an API key with write access to your infrastructure and control shifts to the prompt. System instructions get overridden. Context windows get poisoned. A confident model executes a destructive command and the only thing between you and a bad afternoon is hope.
 
@@ -24,56 +24,66 @@ The reasoning agent investigates your systems and proposes a plan. Execution hal
 
 ---
 
-## The Core Loop
+## The Lifecycle/Pipeline
 
+The progression of a request through the g8e system involves strict classification, reasoning, and pre-execution verification before reaching a human approver.
+
+```mermaid
+flowchart TD
+    User([User Message]) --> Triage
+
+    subgraph Phase_1 [Phase 1: Triage]
+        Triage[Triage Agent<br>Classifies Complexity, Intent, and Posture]
+    end
+
+    Triage -- "Simple" --> Dash[Dash<br>Fast-path Responder]
+    Dash --> Output([Direct Resolution])
+
+    Triage -- "Complex" --> Context[Context Enrichment<br>History, Metadata, Memories]
+    Context --> Sage[Sage<br>Senior Reasoner]
+
+    subgraph Phase_2 [Phase 2: Reasoning]
+        Sage -- "Articulates Investigative Intent" --> Tribunal
+    end
+
+    subgraph Phase_3 [Phase 3: The Tribunal]
+        Tribunal[Parallel Blind Generation<br>Axiom, Concord, Variance, Pragma, Nemesis]
+        Tribunal --> Consensus[Uniform Voting & Consensus Check]
+        Consensus -- "Low Consensus" --> R2[Round 2: Anonymized Peer Review]
+        R2 --> Consensus
+    end
+
+    Consensus -- "Winner Selected" --> Auditor
+
+    subgraph Phase_4 [Phase 4: Judgment]
+        Auditor[Auditor<br>Approves, Swaps, or Revises]
+        Auditor --> Challenge[Challenge Window]
+    end
+
+    subgraph Phase_5 [Phase 5: Execution]
+        Challenge --> Warden[Warden<br>Pre-Execution Risk Assessment]
+        Warden --> Human{Human Approval}
+        Human -- "Approved" --> Operator[Operator<br>Executes Command via LFAA]
+        Operator -- "Results" --> Sage
+    end
+    
+    Human -- "Rejected" --> Sage
 ```
-  You ────── "Fix the disk pressure on the prod nodes"
-   │
-   ▼
-  Triage ─── classifies complexity · intent · posture · confidence
-   │
-   ├── complex turn ──►  Sage    (deep reasoning, full tool loop)
-   └── simple turn  ──►  Dash    (fast path, narrow tool loop)
-                          │
-                          ▼
-                 investigates · reasons · articulates intent
-                          │
-                          ▼
-  The Tribunal ── heterogeneous personas, parallel generation
-   │
-   ├── Pass 0 · Axiom     (Composer)       ──┐
-   ├── Pass 1 · Concord   (Guardian)       ──┤
-   ├── Pass 2 · Variance  (Exhaustive)     ──┼──► Uniform Per-Member Vote
-   ├── Pass 3 · Pragma    (Conventional)   ──┤   (deterministic tie-break)
-   └── Pass 4 · Nemesis   (Adversary)      ──┘          │
-                                                        ▼
-                                              Auditor ── anonymized clusters
-                                                         ok / revised / swap
-                                                        │
-                                                        ▼
-                                           ┌──── Your Approval ────┐
-                                           │   "df -h /var/log"    │
-                                           │   on: prod-node-3     │
-                                           │   [Approve]  [Deny]   │
-                                           └───────────┬───────────┘
-                                                       │
-                                                       ▼
-                                              Operator executes locally
-                                                       │
-                                 ┌─────────────────────┴─────────────────────┐
-                                 ▼                                           ▼
-                         Encrypted Vault                              Sentinel scrub
-                         raw · local-only                             28 patterns, MITRE-mapped
-                                                                             │
-                                                                             ▼
-                                                                Sage / Dash reasons about
-                                                                the sanitized result
-                                                                ──► next step
-```
+
+**Phase 1: Triage & Classification**  
+Every message is read by **Triage**, which determines complexity and user posture. Simple requests route to **Dash** for direct resolution. Complex requests pass through a context-enrichment layer (utilizing memory from the **Codex** and case titling from the **Scribe**) and route to **Sage**.
+
+**Phase 2 & 3: Reasoning and The Tribunal**  
+**Sage** plans and investigates but cannot write shell commands. Instead, it articulates intent. This intent flows to **The Tribunal**, an ensemble of five distinct agent personas (Axiom, Concord, Variance, Pragma, Nemesis) that independently generate commands. A uniform consensus vote, potentially including a second anonymized review round, selects the optimal command.
+
+**Phase 4 & 5: Judgment and Execution**  
+The **Auditor** verifies the Tribunal's winner against Sage's original intent. Before reaching the user, **Warden** orchestrates a defensive analysis of command, error, and file risks. Only then does the command appear for FIDO2 human approval. Upon approval, the **Operator** executes the command via the Local-First Audit Architecture (LFAA).
 
 ---
 
-## The Tribunal
+## Core Subsystems
+
+### The Tribunal
 
 The reasoning agent never writes commands. It articulates intent — natural language, optional guardrails — and the Tribunal translates.
 
@@ -87,7 +97,7 @@ Five personas run in parallel. Each produces one candidate command from the same
 | **Pragma** | The Conventional — idiomatic, least-surprise correctness |
 | **Nemesis** | The Adversary — always present, always pushing against the other four |
 
-Each member casts one vote. Identical candidates accumulate. A two-vote consensus threshold gates the winner. Ties resolve deterministically: shortest command, then non-Nemesis cluster, then alphabetical.
+Each member casts one vote. Identical candidates accumulate. A two-vote consensus threshold gates the winner. Ties resolve deterministically: shortest command, then longest, fewest operations, excluded Nemesis, alphabetical, or auditor disambiguation.
 
 The Auditor receives anonymized cluster IDs and evaluates the winner against the stated intent. Three modes by consensus strength:
 
@@ -99,9 +109,87 @@ The Auditor knows one of the five is adversarial. It does not know which.
 
 The verified command reaches you. You see it, in full, with target host and justification. You approve. You deny. That is the only path forward.
 
+### Context & Post-Hoc Analysis
+
+- **Codex & Scribe**: Run asynchronously to title cases and build persistent, scrubbed user preference models and investigation summaries.
+- **Judge**: Runs post-hoc to evaluate AI agent performance against a gold-standard rubric, providing data for reputation signals.
+
+### Architecture
+
+Four containers and a binary. The binary wears three hats depending on how you invoke it.
+
+| Component | Language | Responsibility |
+|---|---|---|
+| **g8es** | Go | The binary in `--listen` mode. SQLite document store, KV store, pub/sub broker, blob store, platform CA. Zero external dependencies. |
+| **g8ee** | Python | AI engine. ReAct loop, multi-provider abstraction (Anthropic, OpenAI, Gemini, Ollama), Tribunal pipeline, Sentinel integration. |
+| **g8ed** | Node.js | Dashboard and single external entry point. FIDO2 auth, SSE streaming, mTLS gateway, human approval UI. |
+| **g8el** | Shell/C++ | Local LLM server (llama-server) providing isolated intelligence without external network requirements. |
+| **g8ep** | Multi | Test runner, build environment, cross-arch Operator compiler, fleet deployment. |
+| **Operator (g8eo)** | Go | The ~4MB static binary. Executes locally, maintains the encrypted audit vault, speaks outbound-only mTLS WebSocket. Streams itself over SSH to hundreds of hosts in parallel. |
+
+```mermaid
+flowchart LR
+    Browser([User Web Browser<br>Passkeys])
+
+    subgraph Exec_Plane [Execution Plane / Managed Host]
+        direction TB
+        g8eo[g8eo<br>Standard Mode Operator<br>Go Binary]
+        
+        HostOS[Target System / Shell]
+        g8eo -- "Sentinel Pre-Execution<br>Threat Analysis" --> HostOS
+
+        subgraph LFAA [Local-First Audit Architecture]
+            direction LR
+            Scrubbed[(Scrubbed Vault<br>.g8e/local_state.db)]
+            Raw[(Raw Vault<br>.g8e/raw_vault.db)]
+            Audit[(Audit Vault<br>.g8e/data/g8e.db)]
+            Ledger[(Git Ledger<br>.g8e/data/ledger)]
+        end
+        
+        g8eo --- Scrubbed & Raw & Audit & Ledger
+    end
+
+    subgraph Hub [Control & Persistence Plane / Self-Hosted Hub]
+        direction TB
+        g8ed[g8ed<br>Dashboard & Gateway<br>Node.js]
+        g8ee[g8ee<br>AI Engine & Scrubber<br>Python / FastAPI]
+        
+        subgraph Data_Layer [g8es Persistence Layer]
+            direction LR
+            g8es[(g8es<br>Listen Mode Operator)]
+            DS[(Document Store<br>SQLite)]
+            KS[(KV Store & TTL)]
+            PS((PubSub Broker))
+            
+            g8es --- DS & KS & PS
+        end
+
+        g8ed -- "Internal HTTP<br>(X-Internal-Auth)" --> g8ee
+        g8ed -- "Internal HTTP / WS" --> g8es
+        g8ee -- "Internal HTTP / WS" --> g8es
+    end
+
+    LLM((External LLM<br>Model Providers))
+
+    %% Explicit Connections
+    Browser -- "HTTPS / TLS 1.3<br>Encrypted Cookie" --> g8ed
+    
+    g8eo -- "Outbound WebSocket<br>mTLS" --> g8ed
+    
+    g8ee -. "Sentinel-Scrubbed Metadata<br>(No Raw Data)" .-> LLM
+```
+
+### Local-First Audit Architecture (LFAA)
+
+Operating entirely on the host side without relying on central telemetry:
+- **Local SQLite Vaults**: Encrypted data vaults (`local_state.db`, `raw_vault.db`, `g8e.db`) store scrubbed findings and audit data locally.
+- **Git Ledger**: An immutable file ledger provides a cryptographic commit chain directly on the endpoint.
+
 ---
 
-## Cryptoeconomic Mechanism Design
+## Governance & Safety
+
+### Cryptoeconomic Mechanism Design
 
 g8e aligns multi-agent behavior through a Proof of Stake reputation economy. Agents do not just propose actions—they stake their reputation on them.
 
@@ -114,9 +202,7 @@ g8e aligns multi-agent behavior through a Proof of Stake reputation economy. Age
 
 By forcing agents to stake reputation with real consequences, their personas are economically incentivized to propose the safest, most effective solutions for an environment that voters are sworn to protect.
 
----
-
-## Eight Directives
+### Eight Directives
 
 Principles engineered to hold when the models are a thousand times more capable than they are today.
 
@@ -138,53 +224,11 @@ VIII. Intelligence is Replaceable       Anthropic, OpenAI, Gemini, Ollama. Swap 
                                         will. Governance persists.
 ```
 
----
-
-## Architecture
-
-Four containers and a binary. The binary wears three hats depending on how you invoke it.
-
-| Component | Language | Responsibility |
-|---|---|---|
-| **g8es** | Go | The binary in `--listen` mode. SQLite document store, KV store, pub/sub broker, blob store, platform CA. Zero external dependencies. |
-| **g8ee** | Python | AI engine. ReAct loop, multi-provider abstraction (Anthropic, OpenAI, Gemini, Ollama), Tribunal pipeline, Sentinel integration. |
-| **g8ed** | Node.js | Dashboard and single external entry point. FIDO2 auth, SSE streaming, mTLS gateway, human approval UI. |
-| **g8ep** | Multi | Test runner, build environment, cross-arch Operator compiler, fleet deployment. |
-| **Operator** | Go | The ~4MB static binary. Executes locally, maintains the encrypted audit vault, speaks outbound-only mTLS WebSocket. Streams itself over SSH to hundreds of hosts in parallel. |
-
-```
-                          ┌───────────────────────────────────────┐
-                          │         Control Plane (Your Host)     │
-                          │                                       │
-    ┌─────────┐           │  ┌───────┐  ┌───────┐  ┌───────┐      │
-    │ Browser │◄── HTTPS ─┼─►│ g8ed  │◄─┤ g8ee  │◄─┤ g8es  │      │
-    │ (FIDO2) │   + SSE   │  │  :443 │  │  AI   │  │SQLite │      │
-    └─────────┘           │  └───┬───┘  └───────┘  │KV/Pub │      │
-                          │      │                 │  Sub  │      │
-                          │      │ mTLS WebSocket  └───────┘      │
-                          └──────┼────────────────────────────────┘
-                                 │
-                    ┌────────────┼────────────┐
-                    │            │            │
-               ┌────▼────┐  ┌────▼────┐  ┌────▼────┐
-               │Operator │  │Operator │  │Operator │
-               │ 4MB Go  │  │ 4MB Go  │  │ 4MB Go  │
-               │ binary  │  │ binary  │  │ binary  │
-               ├─────────┤  ├─────────┤  ├─────────┤
-               │Encrypted│  │Encrypted│  │Encrypted│
-               │  Audit  │  │  Audit  │  │  Audit  │
-               │ Ledger  │  │ Ledger  │  │ Ledger  │
-               └─────────┘  └─────────┘  └─────────┘
-                 Host A      Host B      Host C
-```
-
----
-
-## Security at a Glance
+### Security at a Glance
 
 - **Authentication** — FIDO2 / WebAuthn passkeys only. Passwords are unsupported by design.
 - **Transport** — TLS 1.3 throughout. Platform-generated ECDSA P-384 CA. Per-operator mTLS client certs issued at claim time.
-- **Sentinel** — 46 MITRE ATT&CK-mapped threat detectors pre-execution on the Operator. 28 scrubbing patterns applied twice (egress on the host, ingress on the engine) before any data reaches a model provider.
+- **Sentinel & Warden** — Pre-execution defensive analysis. Warden classifies command/error/file risks. 46 MITRE ATT&CK-mapped threat detectors. 28 scrubbing patterns applied twice (egress on the host, ingress on the engine) before any data reaches a model provider.
 - **Sessions** — Encrypted cookies, idle and absolute timeouts, IP tracking, timestamp + nonce replay protection.
 - **Operator Binding** — System fingerprint locked at first auth. A stolen API key is useless from a different machine.
 - **Compliance Alignment** — NSA Zero Trust Guidelines (exceeds requirements in 6 of 7 pillars), HIPAA-ready architecture, FedRAMP-aligned controls.

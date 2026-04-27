@@ -59,11 +59,11 @@ class FakeExecutionService:
         self._output = output
         self._resolved_operator = resolved_operator
         self._resolve_error = resolve_error
-        self.g8ed_event_service = g8ed_event_service
-        self.ai_response_analyzer = ai_response_analyzer
+        self._g8ed_event_service = g8ed_event_service
+        self._ai_response_analyzer = ai_response_analyzer
         self.whitelist_validator = whitelist_validator
         self.blacklist_validator = blacklist_validator
-        self.pubsub_service = pubsub_service
+        self._pubsub_service = pubsub_service
         self._envelope = envelope
         self.execute_calls: list[dict] = []
         self.resolve_calls: list[dict] = []
@@ -95,6 +95,30 @@ class FakeExecutionService:
     async def execute_command_internal(self, **kwargs) -> CommandInternalResult:
         self.execute_calls.append(kwargs)
         return CommandInternalResult(exit_code=self._exit_code, output=self._output, status=ExecutionStatus.COMPLETED)
+
+    @property
+    def g8ed_event_service(self):
+        return self._g8ed_event_service
+
+    @property
+    def ai_response_analyzer(self):
+        return self._ai_response_analyzer
+
+    @property
+    def operator_data_service(self):
+        return None
+
+    @property
+    def investigation_service(self):
+        return None
+
+    @property
+    def pubsub_service(self):
+        return self._pubsub_service
+
+    @property
+    def approval_service(self):
+        return None
 
     def resolve_target_operator(
         self,

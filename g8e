@@ -1143,7 +1143,36 @@ case "$TOP" in
                 echo ""
                 [[ -z "$SUB" ]] && exit 1 || exit 0
                 ;;
-            up)
+            run)
+        if [[ "$#" -eq 0 ]]; then
+            echo "Usage: ./g8e evals run --gold-set <path> [--device-token <token>]" >&2
+            exit 1
+        fi
+        
+        # Extract device token if provided via global arg or command arg
+        local run_args=()
+        local gold_set=""
+        while [[ "$#" -gt 0 ]]; do
+            case "$1" in
+                --device-token) _device_token="$2"; shift 2 ;;
+                --gold-set) gold_set="$2"; run_args+=("--gold-set" "$2"); shift 2 ;;
+                --dry-run) run_args+=("--dry-run"); shift 1 ;;
+                *) run_args+=("$1"); shift 1 ;;
+            esac
+        done
+        
+        if [[ -z "$_device_token" ]]; then
+            _device_token="$DEVICE_TOKEN"
+        fi
+        
+        if [[ -z "$_device_token" ]]; then
+            echo "Error: Must provide --device-token" >&2
+            exit 1
+        fi
+        
+        docker exec -i g8ep /bin/bash -c "PYTHONPATH=/home/bob/g8e/components/g8ee python -m components.g8ee.evals.runner.cli --device-token $_device_token ${run_args[*]}"
+        ;;
+    up)
                 _banner "evals up"
                 _nodes=3
                 _device_token=""

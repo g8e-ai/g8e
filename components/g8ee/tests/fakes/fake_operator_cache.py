@@ -30,11 +30,20 @@ class FakeOperatorCache:
         self.status_updates.append({"operator_id": operator_id, "status": status})
         return True
 
+    collection: str = "operators"
+    cache: "CacheAsideService" = None
+
     async def get_operator(self, operator_id: str):
         return None
 
     async def query_operators(self, field_filters=None, limit=1000, bypass_cache=False):
         return []
+
+    async def create_operator(self, operator) -> bool:
+        return True
+
+    async def update_document(self, collection: str, document_id: str, data: dict, merge: bool = True):
+        return True
 
     async def update_operator_heartbeat(self, operator_id, heartbeat, investigation_id, case_id):
         return True

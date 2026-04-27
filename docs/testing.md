@@ -18,34 +18,37 @@ This document outlines the testing architecture, core principles, and how to wri
 
 ## AI Benchmarks & Evaluations
 
-Evaluating non-deterministic AI models requires a multi-layered approach. g8ee includes both deterministic benchmarks and subjective evaluation suites.
+Evaluating non-deterministic AI models requires a multi-layered approach. g8ee uses a host-driven eval framework at `components/g8ee/evals/` that exercises the product through real operator containers and the public g8ed surface — see the [Evals — Public Device-Token Path](#evals--public-device-token-path) section below for the architectural rules.
+
+Evals are NOT pytest-driven and do NOT run inside the test-runner container. They are launched from the Docker host via `./g8e evals` after a device-link token has been issued from the dashboard.
 
 ### Deterministic Benchmarks
 
-We grade the agent's tool call payloads against strict boolean criteria. No LLM is involved in grading. The `BenchmarkJudge` uses regex matching on the actual command arguments for a reproducible pass/fail metric.
+The agent's tool-call payloads are graded against strict boolean criteria. No LLM is involved in grading. The runner at `evals/runner/scorer.py::score_benchmark_scenario` performs regex matching on the actual command arguments for a reproducible pass/fail metric, driven by `evals/gold_sets/benchmark.json`.
 
-- **Binary pass/fail**: No partial credit. All payload matchers must pass for a scenario to pass.
-- **Payload grading**: Grades the actual `TOOL_CALL` arguments (e.g., the `command` field), not the text reasoning.
-- **Tribunal analytics**: Records the final command and outcome from the "Tribunal" pipeline for each scenario.
-- **Aggregate percentage**: The true industry metric (`passed_scenarios / total_scenarios`).
-
-```bash
-# Run all AI benchmarks
-./g8e login --api-key <key>
-./g8e test g8ee -p <provider> -k <key> -m <primary-model> -a <assistant-model> -- -m agent_benchmark
-```
+- **Binary pass/fail**: No partial credit. All payload matchers must pass.
+- **Payload grading**: Grades the actual tool-call arguments (e.g., the `command` field), not the text reasoning.
+- **Aggregate percentage**: `passed_scenarios / total_scenarios`.
 
 ### Subjective Evaluations (LLM-as-a-Judge)
 
-For reasoning and concept application, we use an "LLM-as-a-Judge" pattern. The `EvalJudge` uses the platform's Primary Model to score the Assistant Model (Sage).
+For reasoning and concept application, the `EvalJudge` (`app/services/ai/eval_judge.py`) uses the platform's Primary Model to score the Assistant Model (Sage) against `evals/gold_sets/accuracy.json`.
 
-- **Deterministic thresholds**: `passed` is computed strictly from `score >= 3`. The LLM provides the score, the system determines the pass/fail.
-- **Error separation**: System failures (invalid JSON, missing fields) raise an `EvalJudgeError`. A low score is a valid evaluation; a system error is a test failure.
-- **Unified Reporting**: All results are collected by `unified_metrics_collector` and persisted to `reports/evals/<timestamp>/`.
+- **Deterministic thresholds**: `passed` is computed strictly from `score >= 3`.
+- **Error separation**: System failures (invalid JSON, missing fields) raise `EvalJudgeError`. A low score is a valid evaluation; a system error is a runner failure.
+- **Unified reporting**: Runner persists `report.txt`, `results.csv`, `summary.json` to `components/g8ee/reports/evals/<timestamp>/`.
+
+### Privacy Evaluation
+
+`evals/gold_sets/privacy.json` covers every Sentinel scrubber pattern. Expected placeholders match `app/security/sentinel_scrubber.py` exactly (`[PII]` for SSN/credit-card, `[AWS_KEY]`, `[AWS_SECRET]`, `[URL_WITH_CREDENTIALS]`, `[CONN_STRING]`, `[CREDENTIAL_REFERENCE]`, etc.). Drift is caught when the runner asserts placeholder presence in the egress payload.
+
+### Running Evals
 
 ```bash
-./g8e login --api-key <key>
-./g8e test g8ee -p <provider> -k <key> -m <primary-model> -a <assistant-model> -- -m agent_eval
+./g8e platform start
+./g8e evals up --device-token dlk_xxx
+./g8e evals status
+./g8e evals down
 ```
 
 ## Running Tests
@@ -218,7 +221,7 @@ The platform maintains two distinct "real operator" test harnesses with **strict
 
 ### Evals — Public Device-Token Path
 
-**Location:** `components/g8ee/tests/evals/` (and host-driven runners)
+**Location:** `components/g8ee/evals/` (host-driven runner, not pytest)
 
 **Purpose:** Evaluate AI agent (Sage) behavior against the product surface that real users experience.
 

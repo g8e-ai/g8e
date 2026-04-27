@@ -43,8 +43,19 @@ class FakeApprovalService:
         self._pending_approvals: dict[str, PendingApproval] = {}
         self._on_approval_requested = None
 
+    @property
+    def operator_data_service(self):
+        return None
+
+    @property
+    def investigation_data_service(self):
+        return None
+
     def set_on_approval_requested(self, callback) -> None:
         self._on_approval_requested = callback
+
+    async def request_stream_approval(self, request) -> ApprovalResult:
+        return ApprovalResult(approved=self._approved, approval_id=self._approval_id)
 
     async def request_command_approval(self, request: CommandApprovalRequest) -> ApprovalResult:
         self.command_approval_calls.append(request)

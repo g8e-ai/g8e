@@ -16,6 +16,7 @@
 from app.constants import EventType
 from app.models.operators import CommandResultRecord
 from app.services.protocols import DocumentServiceProtocol
+from app.models.cache import CacheOperationResult
 
 
 class FakeDBService:
@@ -29,6 +30,46 @@ class FakeDBService:
         self.chat_messages: list[dict] = []
         self.command_results: list[dict] = []
         self.heartbeat_updates: list[dict] = []
+
+    @property
+    def kv(self):
+        return None
+
+    @property
+    def db(self):
+        return self
+
+    async def create_document(self, collection: str, document_id: str, data, ttl: int | None = None) -> CacheOperationResult:
+        return CacheOperationResult(success=True)
+
+    async def update_document(
+        self, collection: str, document_id: str, data, merge: bool = True, ttl: int | None = None
+    ) -> CacheOperationResult:
+        return CacheOperationResult(success=True)
+
+    async def get_document(self, collection: str, document_id: str):
+        from app.models.internal_api import DocumentResult
+        return DocumentResult(success=True)
+
+    async def delete_document(self, collection: str, document_id: str) -> CacheOperationResult:
+        return CacheOperationResult(success=True)
+
+    async def query_collection(
+        self, collection: str, field_filters, order_by, limit: int, select_fields=None, ttl: int | None = 300
+    ):
+        from app.models.internal_api import QueryResult
+        return QueryResult(success=True, documents=[])
+
+    async def update_with_array_union(
+        self, collection: str, document_id: str, array_field: str, items_to_add: list[object], additional_updates: dict[str, object]
+    ) -> CacheOperationResult:
+        return CacheOperationResult(success=True)
+
+    async def batch_write(self, operations) -> CacheOperationResult:
+        return CacheOperationResult(success=True)
+
+    async def close(self) -> None:
+        pass
 
     async def add_operator_activity(
         self,

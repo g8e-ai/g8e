@@ -26,24 +26,19 @@ class FakeLFAAService:
         self._return_value = return_value
         self.audit_events: list[dict] = []
 
+    async def send_audit_event(self, g8e_message) -> bool:
+        return self._return_value
+
     async def send_direct_exec_audit_event(
         self,
         command: str,
         execution_id: str,
-        operator_id: str,
-        operator_session_id: str,
-        web_session_id: str,
-        case_id: str,
-        investigation_id: str,
+        g8e_context,
     ) -> bool:
         self.audit_events.append({
             "command": command,
             "execution_id": execution_id,
-            "operator_id": operator_id,
-            "operator_session_id": operator_session_id,
-            "web_session_id": web_session_id,
-            "case_id": case_id,
-            "investigation_id": investigation_id,
+            "g8e_context": g8e_context,
         })
         return self._return_value
 

@@ -33,7 +33,7 @@ async def run_dry_run(device_token: str, g8ed_url: str = "https://g8e.local") ->
         fleet.up(nodes=3, device_token=device_token)
 
         print("[evals] Waiting for operators to bind...")
-        await fleet.wait_bound(timeout=60)
+        await fleet.wait_bound(timeout=60, device_token=device_token)
 
         print("[evals] Fleet is up. Running canned chat: 'uname -a'")
 
@@ -156,6 +156,7 @@ async def run_full_eval(
     g8ed_url: str = "https://g8e.local",
     nodes: int = 3,
     parallel: int = 1,
+    model: str = "gemini-2.5-pro",
 ) -> None:
     """Run full eval suite against gold set.
 
@@ -165,6 +166,7 @@ async def run_full_eval(
         g8ed_url: g8ed API base URL
         nodes: Number of eval nodes to use
         parallel: Number of scenarios to run in parallel
+        model: Eval judge model name
     """
     compose_file = Path(__file__).parent.parent / "docker-compose.evals.yml"
     fleet = FleetManager(compose_file)
@@ -176,12 +178,24 @@ async def run_full_eval(
     operator_bound_scenarios = [s for s in scenarios if s.get("agent_mode") == "OPERATOR_BOUND"]
     print(f"[evals] Found {len(operator_bound_scenarios)} OPERATOR_BOUND scenarios")
 
+    import os
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+    from app.services.ai.eval_judge import EvalJudge
+    from app.llm.factory import get_llm_provider
+    from app.models.settings import LLMSettings
+
+    # Initialize judge
+    settings = LLMSettings()
+    provider = get_llm_provider(settings)
+    judge = EvalJudge(provider=provider, model=model)
+
     try:
         print("[evals] Bringing up fleet...")
         fleet.up(nodes=nodes, device_token=device_token)
 
         print("[evals] Waiting for operators to bind...")
-        await fleet.wait_bound(timeout=60)
+        await fleet.wait_bound(timeout=60, device_token=device_token)
 
         print(f"[evals] Running {len(operator_bound_scenarios)} scenarios...")
         rows = []
@@ -190,7 +204,7 @@ async def run_full_eval(
             node_id = f"eval-node-{(i % nodes) + 1:02d}"
             print(f"[evals] [{i+1}/{len(operator_bound_scenarios)}] Running {scenario['id']} on {node_id}")
 
-            row = await run_scenario(scenario, device_token, g8ed_url, fleet, node_id)
+            row = await run_scenario(scenario, device_token, g8ed_url, fleet, node_id, judge)
             rows.append(row)
 
             if row.passed:

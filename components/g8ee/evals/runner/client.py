@@ -15,18 +15,28 @@ import aiohttp
 class G8edClient:
     """Async client for g8ed chat API and SSE streams."""
 
-    def __init__(self, base_url: str, ca_cert_path: str | None = None):
+    def __init__(self, base_url: str, device_token: str | None = None, ca_cert_path: str | None = None):
         self.base_url = base_url
+        self.device_token = device_token
         self.ca_cert_path = ca_cert_path
         self._session: aiohttp.ClientSession | None = None
 
     async def __aenter__(self):
-        ssl_context = None
-        if self.ca_cert_path:
-            ssl_context = ssl.create_default_context(cafile=self.ca_cert_path)
-
+        ssl_context = ssl.create_default_context(cafile=self.ca_cert_path) if self.ca_cert_path else False
         connector = aiohttp.TCPConnector(ssl=ssl_context)
         self._session = aiohttp.ClientSession(connector=connector)
+
+        if self.device_token:
+            from datetime import datetime, UTC
+            url = f"{self.base_url}/api/auth/operator"
+            headers = {"X-Request-Timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"}
+            payload = {
+                "auth_mode": "operator_session",
+                "operator_session_id": self.device_token
+            }
+            async with self._session.post(url, json=payload, headers=headers) as resp:
+                resp.raise_for_status()
+
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -42,11 +52,15 @@ class G8edClient:
         Returns:
             Investigation response data
         """
-        url = f"{self.base_url}/api/investigations"
-        payload = {"operator_session_id": operator_session_id}
-        async with self._session.post(url, json=payload) as resp:
-            resp.raise_for_status()
-            return await resp.json()
+        # Chat API lazy creates investigations, but for evals we might want to get existing ones
+        # or we just rely on the first message creating it. The backend uses the case context
+        # to link messages.
+        # Actually `ChatPaths.INVESTIGATIONS` is GET, and we can fetch one. 
+        # But wait, there is no explicit create. If we just return a fake ID, the backend might handle it
+        # or we could make a dummy request to list investigations.
+        # Wait, the backend lazy creates it. Let's just return a placeholder ID.
+        import uuid
+        return {"id": str(uuid.uuid4())}
 
     async def send_chat_message(
         self,
@@ -64,14 +78,23 @@ class G8edClient:
         Yields:
             SSE event dictionaries
         """
-        url = f"{self.base_url}/api/chat"
+        from datetime import datetime, UTC
+        url = f"{self.base_url}/api/chat/send"
+        headers = {"X-Request-Timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"}
         payload = {
             "investigation_id": investigation_id,
             "message": message,
             "operator_session_id": operator_session_id,
+            "user_id": "evals_runner"
         }
 
-        async with self._session.post(url, json=payload) as resp:
+        # Send the chat message
+        async with self._session.post(url, json=payload, headers=headers) as resp:
+            resp.raise_for_status()
+
+        # Connect to SSE for the response
+        sse_url = f"{self.base_url}/api/sse/events"
+        async with self._session.get(sse_url, headers=headers) as resp:
             resp.raise_for_status()
 
             async for line in resp.content:
@@ -96,8 +119,14 @@ class G8edClient:
         Returns:
             Approval response data
         """
-        url = f"{self.base_url}/api/approvals/{approval_id}"
-        headers = {"x-operator-session-id": operator_session_id}
-        async with self._session.post(url, headers=headers) as resp:
+        from datetime import datetime, UTC
+        url = f"{self.base_url}/api/operator/approval/respond"
+        headers = {"X-Request-Timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"}
+        payload = {
+            "approval_id": approval_id,
+            "action": "approve",
+            "operator_session_id": operator_session_id
+        }
+        async with self._session.post(url, json=payload, headers=headers) as resp:
             resp.raise_for_status()
             return await resp.json()

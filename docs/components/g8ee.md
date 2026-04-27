@@ -1094,65 +1094,38 @@ When `enable_whitelisting` is true and a command successfully passes the whiteli
 
 ## AI Evaluation Reporting
 
-g8ee implements a unified metrics collection framework for AI evaluation tests across three dimensions: accuracy, safety, and privacy.
+AI agent evaluation runs through the **host-driven evals framework** at `components/g8ee/evals/`. Per the architectural mandate in [`docs/testing.md`](../testing.md#evals--public-device-token-path), evals exercise the product surface as real users experience it: device-link tokens, public g8ed HTTPS endpoints, real operator containers via docker compose. They are NOT pytest-driven and do NOT call internal services directly.
 
 ### Dimensions
 
-| Dimension | Purpose | Test Suites |
-|-----------|---------|-------------|
-| **Accuracy** | Measures the AI's ability to correctly answer questions and execute tasks | `agent_accuracy`, `gemini_accuracy`, `ollama_accuracy` |
-| **Safety** | Evaluates refusal behavior for harmful or inappropriate requests | `agent_benchmark` (security_refusal category) |
-| **Privacy** | Verifies Sentinel PII redaction across three egress layers | `agent_privacy` |
+| Dimension | Purpose | Gold Set |
+|-----------|---------|----------|
+| **Accuracy** | LLM-as-a-judge grading of agent responses against gold-standard expected behavior and required concepts | `evals/gold_sets/accuracy.json` |
+| **Safety / Benchmark** | Deterministic regex matching on tool-call payloads, including security-refusal scenarios | `evals/gold_sets/benchmark.json` |
+| **Privacy** | Sentinel PII redaction across egress layers | `evals/gold_sets/privacy.json` |
 
-### Metrics Framework
+### Running Evals
 
-The unified metrics collector (`tests/evals/conftest.py::unified_metrics_collector`) aggregates all eval results into a single report with:
+```bash
+# Bring up real-operator fleet
+./g8e evals up --device-token dlk_xxx
 
-- **EvalRow** - Single evaluation result with dimension, suite, scenario_id, category, passed, score, latency_ms, error, and details
-- **DimensionSummary** - Per-dimension statistics (total, passed, failed, pass_pct, avg_score, per_category breakdown)
-- **FullReport** - Complete report with all rows, summaries, metadata (started_at, finished_at, llm_config)
+# Inspect fleet status
+./g8e evals status
 
-### Artifact Persistence
+# Tear down
+./g8e evals down
+```
 
-At test session end, the collector persists three artifacts to `components/g8ee/reports/evals/<timestamp>_<run_id>/`:
+The runner under `evals/runner/` is invoked separately and writes artifacts (`report.txt`, `results.csv`, `summary.json`) to `components/g8ee/reports/evals/<timestamp>/`, with a `latest` symlink to the most recent run.
 
-- **report.txt** - Human-readable ASCII table with per-dimension sections and aggregate footer
-- **results.csv** - Machine-readable CSV with one row per scenario
-- **summary.json** - Structured JSON with metrics and scenario rows
+### Internal-side Reporting Library
 
-A symlink at `components/g8ee/reports/evals/latest/` always points to the most recent run.
+A small typed reporting library lives at `tests/evals/{metrics,reporter}.py` (`EvalRow`, `DimensionSummary`, `FullReport`, `compute_summaries`, `persist_report`, `render_text_table`). It is reused by `tests/integration/conftest.py::unified_metrics_collector` to aggregate any internally-generated eval rows produced by safety integration tests (e.g. `tests/integration/test_tool_execution_security_integration.py`). It is intentionally decoupled from the host-driven runner.
 
 ### Privacy Evaluation Details
 
-The privacy dimension performs three-layer Sentinel verification:
-
-- **L1 (g8es persistence)** - Checks if user messages are scrubbed before storage in g8es (report-only, expected FAIL due to upstream bug)
-- **L2 (LLM egress)** - Verifies PII is scrubbed before sending to the LLM provider (strict assert)
-- **L3 (AI response)** - Ensures the AI response does not echo leaked PII (strict assert)
-
-Privacy scenarios cover all Sentinel patterns: email, SSN, credit card, phone, JWT, GitHub token, GCP API key, AWS access key, Slack token, URL with credentials, connection string, private key, IBAN, bearer token, and password config.
-
-### Running Eval Suites
-
-Run specific eval suites using pytest markers:
-
-```bash
-# Accuracy evals
-/home/bob/g8e/g8e test g8ee -m agent_eval tests/evals/
-
-# Benchmark evals
-/home/bob/g8e/g8e test g8ee -m agent_benchmark tests/evals/
-
-# Privacy evals
-/home/bob/g8e/g8e test g8ee -m agent_privacy tests/evals/
-
-# All evals
-/home/bob/g8e/g8e test g8ee -m "agent_eval or agent_benchmark or agent_privacy" tests/evals/
-```
-
-### Known Issues
-
-- **L1 privacy failure** - g8es persistence is not scrubbed before storage. This is a known upstream bug requiring Sentinel scrubbing in the g8es-write path (`chat_pipeline._run_chat_impl`). Once fixed, flip the privacy eval L1 check to strict assert.
+The privacy dimension verifies that the Sentinel scrubber redacts PII across the chat pipeline before egress. Scenarios cover all Sentinel patterns: email, SSN, credit card, phone, JWT, GitHub token, GCP API key, AWS access key, Slack token, URL with credentials, connection string, private key, IBAN, bearer token, and password config. Expected placeholders match `app/security/sentinel_scrubber.py` (`[PII]` for SSN/credit-card, `[AWS_KEY]`, `[AWS_SECRET]`, `[URL_WITH_CREDENTIALS]`, `[CONN_STRING]`, `[CREDENTIAL_REFERENCE]`, etc.).
 
 ---
 
