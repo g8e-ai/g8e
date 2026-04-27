@@ -16,11 +16,16 @@ Self-hosted · Air-gap capable · Zero cloud dependencies
 
 ## Introduction
 
-Give an AI an API key with write access to your infrastructure and control shifts to the prompt. System instructions get overridden. Context windows get poisoned. A confident model executes a destructive command and the only thing between you and a bad afternoon is hope.
+g8e is a governance architecture designed to solve the **consensus problem** in agentic AI. Rather than relying on fragile model alignment or manual control, g8e frames safety as an economic and information-theoretic challenge.
 
-g8e removes hope from the loop.
+The system aligns multi-agent behavior through a **Proof of Stake reputation economy** and the **Vortex Principle** (tiered information quarantine). Agents — including a planner, an ensemble tribunal, and a calibrated adversary (Nemesis) — do not just propose actions; they stake their reputation on them.
 
-The reasoning agent investigates your systems and proposes a plan. Execution halts at a cryptographic boundary. Every state-changing action requires a FIDO2 approval, enforced at the binary and network layer — where prompt injection cannot reach.
+Key structural safeguards include:
+- **The Vortex**: A strict information-theoretic boundary that eliminates collusion by ensuring agents cannot see each other's reasoning or downstream plans.
+- **Co-validation Partition**: A non-hierarchical division of labor where the **Auditor** handles machine-domain validation (consistency, grounding) and the **User** handles human-domain validation (intent fidelity, contextual stakes).
+- **FIDO2-Gated Execution**: Every state-changing action requires explicit human approval, enforced at the binary and network layer where prompt injection cannot reach.
+
+By forcing agents to stake reputation with real consequences, g8e incentivizes the safest, most effective solutions while minimizing the user's non-fungible stake: their time.
 
 ---
 
