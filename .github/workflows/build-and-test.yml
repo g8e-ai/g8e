@@ -80,3 +80,17 @@ jobs:
 
       - name: Test g8eo
         run: ./g8e test g8eo
+
+  check-model-parity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Check model parity
+        run: python3 scripts/testing/check_model_parity.py

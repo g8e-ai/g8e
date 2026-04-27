@@ -93,12 +93,15 @@ class InternalHttpClient{
             throw new Error('ENFORCEMENT VIOLATION: buildG8eContextHeaders requires G8eHttpContext instance');
         }
 
-        const isNewCase = !context.case_id;
+        const isNewCase = context.new_case;
 
         const headers = {};
 
-        // Required context
-        headers[G8eHeaders.WEB_SESSION_ID]      = context.web_session_id;
+        // Required context. Identity headers are omitted when null, which only
+        // happens for operator-auth relays originated by g8ed (Bearer-token auth).
+        // The G8eHttpContext model enforces that null identity is only legal when
+        // source_component === G8ED, so it is safe to skip these headers here.
+        if (context.web_session_id)   headers[G8eHeaders.WEB_SESSION_ID]  = context.web_session_id;
         if (context.user_id)          headers[G8eHeaders.USER_ID]         = context.user_id;
         if (context.organization_id)  headers[G8eHeaders.ORGANIZATION_ID] = context.organization_id;
 
@@ -383,6 +386,71 @@ class InternalHttpClient{
     }
 
     /**
+     * Record answer to a triage clarifying question via g8ee internal API
+     * 
+     * @param {Object} data - Triage answer data (investigation_id, question_index, answer)
+     * @param {Object} g8eContext - REQUIRED G8eHttpContext with session/user info
+     */
+    async recordTriageAnswer(data, g8eContext) {
+        if (!g8eContext) {
+            throw new Error('ENFORCEMENT VIOLATION: g8eContext is REQUIRED for g8ee calls');
+        }
+        logger.info('[HTTP-INTERNAL] Recording triage answer', {
+            investigationId: data.investigation_id,
+            questionIndex: data.question_index,
+            answer: data.answer
+        });
+
+        return this.request('g8ee', InternalApiPaths.g8ee.chat_triage_answer, {
+            method: 'POST',
+            body: data,
+            g8eContext
+        });
+    }
+
+    /**
+     * Skip triage clarifying questions via g8ee internal API
+     * 
+     * @param {Object} data - Triage skip data (investigation_id)
+     * @param {Object} g8eContext - REQUIRED G8eHttpContext with session/user info
+     */
+    async skipTriageQuestions(data, g8eContext) {
+        if (!g8eContext) {
+            throw new Error('ENFORCEMENT VIOLATION: g8eContext is REQUIRED for g8ee calls');
+        }
+        logger.info('[HTTP-INTERNAL] Skipping triage questions', {
+            investigationId: data.investigation_id
+        });
+
+        return this.request('g8ee', InternalApiPaths.g8ee.chat_triage_skip, {
+            method: 'POST',
+            body: data,
+            g8eContext
+        });
+    }
+
+    /**
+     * Record triage clarifying questions timeout via g8ee internal API
+     * 
+     * @param {Object} data - Triage timeout data (investigation_id)
+     * @param {Object} g8eContext - REQUIRED G8eHttpContext with session/user info
+     */
+    async timeoutTriageQuestions(data, g8eContext) {
+        if (!g8eContext) {
+            throw new Error('ENFORCEMENT VIOLATION: g8eContext is REQUIRED for g8ee calls');
+        }
+        logger.info('[HTTP-INTERNAL] Recording triage timeout', {
+            investigationId: data.investigation_id
+        });
+
+        return this.request('g8ee', InternalApiPaths.g8ee.chat_triage_timeout, {
+            method: 'POST',
+            body: data,
+            g8eContext
+        });
+    }
+
+    /**
      * Generate a new API key via g8ee authority.
      * @param {string} prefix - Key prefix (default: 'g8e_')
      * @returns {Promise<{success: boolean, api_key?: string, error?: string}>}
@@ -431,7 +499,7 @@ class InternalHttpClient{
     async activateG8EPOperator(user_id) {
         logger.info('[HTTP-INTERNAL] Requesting g8ep operator activation', { user_id });
         
-        return this.request('g8ee', ApiPaths.g8ee.operators_g8ep_activate(), {
+        return this.request('g8ee', ApiPaths.g8ee.operatorsG8epActivate(), {
             method: 'POST',
             body: { user_id },
         });
@@ -445,7 +513,7 @@ class InternalHttpClient{
     async relaunchG8EPOperator(user_id) {
         logger.info('[HTTP-INTERNAL] Requesting g8ep operator relaunch', { user_id });
         
-        return this.request('g8ee', ApiPaths.g8ee.operators_g8ep_relaunch(), {
+        return this.request('g8ee', ApiPaths.g8ee.operatorsG8epRelaunch(), {
             method: 'POST',
             body: { user_id },
         });

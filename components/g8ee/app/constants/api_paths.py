@@ -58,6 +58,9 @@ class InternalApiPaths:
     G8EE_OPERATOR_APPROVAL_PENDING: str = PREFIX + API_PATHS["g8ee"]["operator_approval_pending"]
     G8EE_AUTH_GENERATE_KEY: str = PREFIX + API_PATHS["g8ee"]["auth_generate_key"]
     G8EE_AUTH_REVOKE_CERT: str = PREFIX + API_PATHS["g8ee"]["auth_revoke_cert"]
+    G8EE_CHAT_TRIAGE_ANSWER: str = PREFIX + API_PATHS["g8ee"]["chat_triage_answer"]
+    G8EE_CHAT_TRIAGE_SKIP: str = PREFIX + API_PATHS["g8ee"]["chat_triage_skip"]
+    G8EE_CHAT_TRIAGE_TIMEOUT: str = PREFIX + API_PATHS["g8ee"]["chat_triage_timeout"]
     G8EE_SETTINGS_USER: str = PREFIX + API_PATHS["g8ee"]["settings_user"]
     
     # g8ed Endpoints (relative to PREFIX)

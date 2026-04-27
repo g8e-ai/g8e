@@ -255,14 +255,8 @@ describe('OperatorSlotService', () => {
                     source_component: SourceComponent.G8ED
                 })
             );
-            expect(mocks.apiKeyService.issueKey).toHaveBeenCalledWith(
-                expect.any(String),
-                expect.objectContaining({
-                    user_id: userId,
-                    operator_id: existingOpWithoutKey.id,
-                    client_name: ApiKeyClientName.OPERATOR
-                })
-            );
+            // g8ed no longer issues API keys - g8ee handles this in create_operator_slot
+            expect(mocks.apiKeyService.issueKey).not.toHaveBeenCalled();
         });
 
         it('should not issue API keys for existing slots that already have keys', async () => {
@@ -320,7 +314,8 @@ describe('OperatorSlotService', () => {
             expect(result.new_api_key).toBe('g8e_1a2b3c4d_' + '0'.repeat(64));
             expect(mocks.operatorService.terminateOperator).toHaveBeenCalledWith(operatorId);
             expect(mocks.operatorService.relayCreateOperatorSlotToG8ee).toHaveBeenCalled();
-            expect(mocks.apiKeyService.issueKey).toHaveBeenCalled();
+            // g8ed no longer issues API keys - g8ee handles this in create_operator_slot
+            expect(mocks.apiKeyService.issueKey).not.toHaveBeenCalled();
             expect(broadcastFn).toHaveBeenCalledWith(userId);
         });
 
@@ -375,7 +370,7 @@ describe('OperatorSlotService', () => {
     });
 
     describe('createOperatorSlot', () => {
-        it('should relay to operatorService and issue API key on success', async () => {
+        it('should relay to operatorService and not issue API key (g8ee handles it)', async () => {
             const params = {
                 userId: 'u-1',
                 organizationId: 'org-1',
@@ -394,7 +389,6 @@ describe('OperatorSlotService', () => {
                 operator_id: operatorId,
                 api_key: apiKey
             });
-            mocks.apiKeyService.issueKey.mockResolvedValue({ success: true });
 
             const result = await service.createOperatorSlot(params);
 
@@ -403,7 +397,8 @@ describe('OperatorSlotService', () => {
             expect(result.operator_id).toBe(operatorId);
             expect(result.api_key).toBe(apiKey);
             expect(mocks.operatorService.relayCreateOperatorSlotToG8ee).toHaveBeenCalled();
-            expect(mocks.apiKeyService.issueKey).toHaveBeenCalled();
+            // g8ed no longer issues API keys - g8ee handles this in create_operator_slot
+            expect(mocks.apiKeyService.issueKey).not.toHaveBeenCalled();
         });
 
         it('should return failure if relay fails', async () => {

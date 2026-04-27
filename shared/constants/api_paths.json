@@ -29,6 +29,9 @@
     "operator_approval_pending": "/operator/approval/pending",
     "auth_generate_key": "/auth/generate-key",
     "auth_revoke_cert": "/auth/revoke-cert",
+    "chat_triage_answer": "/chat/triage/answer",
+    "chat_triage_skip": "/chat/triage/skip",
+    "chat_triage_timeout": "/chat/triage/timeout",
     "health": "/health",
     "settings_user": "/settings/user"
   },

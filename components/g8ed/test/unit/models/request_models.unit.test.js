@@ -63,6 +63,8 @@ describe('G8eHttpContext [UNIT - PURE LOGIC]', () => {
         expect(ctx.task_id).toBeNull();
         expect(ctx.bound_operators).toEqual([]);
         expect(ctx.execution_id).toBeNull();
+        expect(ctx.timestamp).toBeInstanceOf(Date);
+        expect(ctx.new_case).toBe(true);
         expect(ctx.source_component).toBe('g8ed');
     });
 
@@ -71,6 +73,7 @@ describe('G8eHttpContext [UNIT - PURE LOGIC]', () => {
             operator_id: 'op-1',
             operator_session_id: 'ops-1',
         };
+        const timestamp = new Date();
         const ctx = G8eHttpContext.parse({
             web_session_id: 'ws-123',
             user_id: 'user-456',
@@ -80,6 +83,8 @@ describe('G8eHttpContext [UNIT - PURE LOGIC]', () => {
             task_id: 'task-ghi',
             bound_operators: [boundOp],
             execution_id: 'exec-jkl',
+            timestamp: timestamp,
+            new_case: false,
             source_component: 'g8ee',
         });
         expect(ctx.organization_id).toBe('org-789');
@@ -88,6 +93,8 @@ describe('G8eHttpContext [UNIT - PURE LOGIC]', () => {
         expect(ctx.task_id).toBe('task-ghi');
         expect(ctx.bound_operators).toEqual([boundOp]);
         expect(ctx.execution_id).toBe('exec-jkl');
+        expect(ctx.timestamp).toEqual(timestamp);
+        expect(ctx.new_case).toBe(false);
         expect(ctx.source_component).toBe('g8ee');
     });
 
@@ -100,14 +107,25 @@ describe('G8eHttpContext [UNIT - PURE LOGIC]', () => {
         expect(ctx.case_id).toBeNull();
     });
 
-    it('throws when web_session_id is missing', () => {
-        expect(() => G8eHttpContext.parse({ user_id: 'user-456' }))
-            .toThrow('web_session_id is required');
+    it('throws when web_session_id is missing for non-operator-auth source', () => {
+        expect(() => G8eHttpContext.parse({ user_id: 'user-456', source_component: 'g8ee' }))
+            .toThrow('web_session_id and user_id are required unless source_component is g8ed');
     });
 
-    it('throws when user_id is missing', () => {
-        expect(() => G8eHttpContext.parse({ web_session_id: 'ws-123' }))
-            .toThrow('user_id is required');
+    it('throws when user_id is missing for non-operator-auth source', () => {
+        expect(() => G8eHttpContext.parse({ web_session_id: 'ws-123', source_component: 'g8ee' }))
+            .toThrow('web_session_id and user_id are required unless source_component is g8ed');
+    });
+
+    it('allows null web_session_id and user_id for operator-auth relay (source=g8ed)', () => {
+        const ctx = G8eHttpContext.parse({
+            web_session_id: null,
+            user_id: null,
+            source_component: 'g8ed',
+        });
+        expect(ctx.web_session_id).toBeNull();
+        expect(ctx.user_id).toBeNull();
+        expect(ctx.source_component).toBe('g8ed');
     });
 
     it('forWire() serializes correctly', () => {

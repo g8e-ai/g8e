@@ -115,7 +115,7 @@ services:
       - G8EL_HOST=0.0.0.0
       - G8EL_PORT=11444
       - OMP_NUM_THREADS=8
-    cpuset: "0-7"
+    cpuset: "0-3"
     ulimits:
       memlock: -1
     cap_drop:

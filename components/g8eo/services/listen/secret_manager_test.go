@@ -265,3 +265,25 @@ func TestSecretManager_verifyDBMatchesFile_ReturnsErrorOnMismatch(t *testing.T) 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "differs between volume file and platform_settings DB")
 }
+
+func TestSecretManager_InitPlatformSettings_ReturnsErrorOnMalformedPlatformSettings(t *testing.T) {
+	db := newSecretManagerTestDB(t)
+	sslDir := t.TempDir()
+	logger := testutil.NewTestLogger()
+
+	// First run: create a valid platform_settings document.
+	require.NoError(t, NewSecretManager(db, sslDir, logger).InitPlatformSettings())
+
+	// Corrupt the platform_settings document with malformed JSON.
+	_, err := db.Exec(
+		"UPDATE documents SET data = ? WHERE collection = 'settings' AND id = 'platform_settings'",
+		"{invalid json",
+	)
+	require.NoError(t, err)
+
+	// Second run: should fail with a clear error instead of silently skipping the upgrade path.
+	sm := NewSecretManager(db, sslDir, logger)
+	err = sm.InitPlatformSettings()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to unmarshal platform_settings document for upgrade")
+}

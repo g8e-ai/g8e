@@ -17,7 +17,7 @@ import request from 'supertest';
 import { createOperatorApprovalRouter } from '@g8ed/routes/operator/operator_approval_routes.js';
 import { OperatorApprovalPaths } from '@g8ed/constants/api_paths.js';
 import { OperatorRelayService } from '@g8ed/services/operator/operator_relay_service.js';
-import { globalContextMiddleware } from '@g8ed/middleware/context.js';
+import { contextMiddleware } from '@g8ed/middleware/context.js';
 
 vi.mock('@g8ed/services/operator/operator_relay_service.js', () => ({
     OperatorRelayService: vi.fn(function () {
@@ -87,7 +87,7 @@ describe('OperatorApprovalRoutes Unit Tests', () => {
 
         app = express();
         app.use(express.json());
-        app.use(globalContextMiddleware);
+        app.use(contextMiddleware);
         app.use('/api/operator/approval', router);
     });
 

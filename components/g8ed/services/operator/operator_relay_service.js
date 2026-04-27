@@ -265,12 +265,22 @@ export class OperatorRelayService {
 
         logger.info('[OPERATOR-RELAY] Authenticating operator via g8ee', {
             auth_mode: params.auth_mode,
+            has_authorization_header: !!params.authorization_header,
         });
+
+        // Aligned with shared/models/wire/operator_auth_call.json (InternalOperatorAuthCall).
+        // The InternalOperatorAuthCall contract requires the operator's Bearer token
+        // in the 'authorization' field of the body for internal cluster calls.
+        const { authorization_header, ...bodyParams } = params;
+        const body = {
+            ...bodyParams,
+            authorization: authorization_header
+        };
 
         return httpClient.request('g8ee', ApiPaths.g8ee.operatorsAuthenticate(), {
             method: 'POST',
-            body: params,
-            g8eContext
+            body,
+            g8eContext,
         });
     }
 

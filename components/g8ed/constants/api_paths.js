@@ -192,6 +192,9 @@ const Chat = {
     STOP:            'stop',
     CASES:           'cases',
     HEALTH:          'health',
+    TRIAGE_ANSWER:   'triage/answer',
+    TRIAGE_SKIP:     'triage/skip',
+    TRIAGE_TIMEOUT:  'triage/timeout',
     PARAM:           ':investigationId',
     CASE_PARAM:      ':caseId',
 };
@@ -369,6 +372,9 @@ export const ChatPaths = Object.freeze({
     STOP:           `/${Chat.STOP}`,
     CASES:          `/${Chat.CASES}/${Chat.CASE_PARAM}`,
     HEALTH:         `/${Chat.HEALTH}`,
+    TRIAGE_ANSWER:  `/${Chat.TRIAGE_ANSWER}`,
+    TRIAGE_SKIP:    `/${Chat.TRIAGE_SKIP}`,
+    TRIAGE_TIMEOUT: `/${Chat.TRIAGE_TIMEOUT}`,
 });
 
 export const OperatorApprovalPaths = Object.freeze({

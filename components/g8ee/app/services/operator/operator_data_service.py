@@ -43,6 +43,7 @@ from app.models.investigations import ConversationHistoryMessage, ConversationMe
 from app.models.operators import (
     CommandResultRecord,
     OperatorDocument,
+    OperatorHistoryEntry,
     OperatorHeartbeat,
     OperatorSystemInfo,
 )
@@ -50,6 +51,7 @@ from app.models import BindOperatorsRequest, BindOperatorsResponse
 from app.models.cache import ArrayUnion
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.protocols import OperatorDataServiceProtocol
+from app.utils.keyed_lock import KeyedAsyncLock
 from app.utils.timestamp import now
 
 from app.clients.http_client import HTTPClient
@@ -63,6 +65,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
         self.cache = cache
         self.internal_http_client = internal_http_client
         self.collection = DB_COLLECTION_OPERATORS
+        self._history_lock = KeyedAsyncLock()
 
     async def get_operator(self, operator_id: str) -> OperatorDocument | None:
         """Get Operator document using cache-aside pattern."""
@@ -113,6 +116,88 @@ class OperatorDataService(OperatorDataServiceProtocol):
             raise ExternalServiceError(f"Failed to create Operator {operator.id}: {result.error}", service_name="operator_service")
         
         return True
+
+    async def update_operator(self, operator: OperatorDocument) -> bool:
+        """Update an existing Operator document in the database."""
+        if not operator.id:
+            raise ValidationError("id is required")
+        
+        # Convert to dict for storage
+        operator_data = operator.model_dump(mode="json")
+        
+        result = await self.cache.update_document(
+            collection=self.collection,
+            document_id=operator.id,
+            data=operator_data,
+            merge=True
+        )
+        
+        if not result.success:
+            raise ExternalServiceError(f"Failed to update Operator {operator.id}: {result.error}", service_name="operator_service")
+        
+        return True
+
+    async def add_history_entry(
+        self,
+        operator_id: str,
+        event_type: OperatorHistoryEventType,
+        actor: ComponentName,
+        summary: str,
+        details: dict[str, object] | None = None,
+        additional_updates: dict[str, object] | None = None,
+    ) -> OperatorDocument:
+        """Atomic status + history update under a keyed lock.
+        
+        This is the single authoritative path for state transitions that require
+        an audit trail entry.
+        """
+        async with self._history_lock.acquire(operator_id):
+            operator = await self.get_operator(operator_id)
+            if not operator:
+                raise ValidationError(f"Operator {operator_id} not found")
+
+            # Determine prev_hash
+            prev_hash = "0" * 64
+            if operator.history_trail:
+                last_entry = operator.history_trail[-1]
+                if last_entry.entry_hash:
+                    prev_hash = last_entry.entry_hash
+
+            # Create entry
+            entry = OperatorHistoryEntry(
+                event_type=event_type,
+                actor=actor,
+                summary=summary,
+                prev_hash=prev_hash,
+                details=details or {},
+            )
+
+            # Build full update payload
+            updates: dict[str, object] = {
+                "history_trail": ArrayUnion([entry.model_dump(mode="json")]),
+                "updated_at": now(),
+            }
+            if additional_updates:
+                updates.update(additional_updates)
+
+            result = await self.cache.update_document(
+                collection=self.collection,
+                document_id=operator_id,
+                data=updates,
+                merge=True,
+            )
+
+            if not result.success:
+                raise ExternalServiceError(
+                    f"Failed to append history to operator {operator_id}: {result.error}",
+                    service_name="operator_service"
+                )
+
+            # Return refreshed doc
+            refreshed = await self.get_operator(operator_id)
+            if not refreshed:
+                raise ExternalServiceError(f"Operator {operator_id} vanished after update")
+            return refreshed
 
     async def update_operator_heartbeat(
         self,

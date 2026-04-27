@@ -17,7 +17,7 @@ import request from 'supertest';
 import { createOperatorStatusRouter } from '@g8ed/routes/operator/operator_status_routes.js';
 import { OperatorPaths } from '@g8ed/constants/api_paths.js';
 import { OperatorStatus } from '@g8ed/constants/operator.js';
-import { globalContextMiddleware } from '@g8ed/middleware/context.js';
+import { contextMiddleware } from '@g8ed/middleware/context.js';
 
 describe('OperatorStatusRoutes Unit Tests', () => {
     let app;
@@ -64,7 +64,7 @@ describe('OperatorStatusRoutes Unit Tests', () => {
 
         app = express();
         app.use(express.json());
-        app.use(globalContextMiddleware);
+        app.use(contextMiddleware);
         app.use('/api/operator', router);
     });
 

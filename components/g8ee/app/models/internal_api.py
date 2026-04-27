@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from pydantic import Field
+from pydantic import Field, ConfigDict
 
 from app.models.attachments import AttachmentMetadata
 from app.models.base import G8eBaseModel
@@ -204,8 +204,14 @@ class OperatorUnbindResponse(G8eBaseModel):
     operator_id: str = Field(default="", description="Operator ID (set by router from bound operator)")
 
 
-class OperatorAuthenticateRequest(G8eBaseModel):
-    """Request model for operator authentication via API key (Bearer)."""
+class InternalOperatorAuthCall(G8eBaseModel):
+    """Request model for operator authentication via API key (Bearer) relayed through g8ed.
+
+    Aligned with shared/models/wire/operator_auth_call.json (InternalOperatorAuthCall)
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    authorization: str = Field(..., description="The Bearer token (API key) for the operator")
     system_info: dict = Field(default_factory=dict)
     runtime_config: dict | None = Field(default=None)
 

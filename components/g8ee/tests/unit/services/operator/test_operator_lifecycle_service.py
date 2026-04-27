@@ -62,14 +62,31 @@ class TestOperatorLifecycleService:
         operator_session_id = "session-abc"
         system_info = {"hostname": "test-host", "system_fingerprint": "fp-123"}
         
-        mock_cache.get_document_with_cache.return_value = {
-            "id": operator_id,
-            "user_id": "user-test",
-            "status": OperatorStatus.AVAILABLE,
-            "first_deployed": None,
-        }
+        mock_cache.get_document_with_cache.side_effect = [
+            {
+                "id": operator_id,
+                "user_id": "user-test",
+                "status": OperatorStatus.AVAILABLE,
+                "first_deployed": None,
+                "history_trail": [],
+            },
+            {
+                "id": operator_id,
+                "user_id": "user-test",
+                "status": OperatorStatus.ACTIVE,
+                "first_deployed": now().isoformat(),
+                "history_trail": [],
+            },
+            {
+                "id": operator_id,
+                "user_id": "user-test",
+                "status": OperatorStatus.ACTIVE,
+                "first_deployed": now().isoformat(),
+                "history_trail": [],
+            },
+            None
+        ]
         mock_cache.update_document.return_value = CacheOperationResult(success=True)
-        mock_cache.append_to_array.return_value = CacheOperationResult(success=True)
 
         success = await lifecycle_service.claim_operator_slot(
             operator_id=operator_id,
@@ -80,13 +97,14 @@ class TestOperatorLifecycleService:
         )
 
         assert success is True
+        # add_history_entry calls update_document once
         assert mock_cache.update_document.call_count == 1
         
-        # Verify history append
-        assert mock_cache.append_to_array.call_count == 1
-        call_args = mock_cache.append_to_array.call_args
-        assert call_args.kwargs["array_field"] == "history_trail"
-        history_entry = call_args.kwargs["items"][0]
+        # Verify history append via update_document in add_history_entry
+        call_args = mock_cache.update_document.call_args
+        update_data = call_args.kwargs["data"]
+        assert "history_trail" in update_data
+        history_entry = update_data["history_trail"].values[0]
         assert history_entry["event_type"] == "slot.consumed"
         assert history_entry["prev_hash"] == "0" * 64
 
@@ -104,14 +122,33 @@ class TestOperatorLifecycleService:
 
     async def test_terminate_operator_success(self, lifecycle_service, operator_data_service, mock_cache):
         operator_id = "op-terminate-test"
-        mock_cache.get_document_with_cache.return_value = {
-            "id": operator_id,
-            "user_id": "user-test",
-            "status": OperatorStatus.ACTIVE,
-            "created_at": now().isoformat(),
-        }
+        mock_cache.get_document_with_cache.side_effect = [
+            {
+                "id": operator_id,
+                "user_id": "user-test",
+                "status": OperatorStatus.ACTIVE,
+                "created_at": now().isoformat(),
+                "history_trail": [],
+            },
+            {
+                "id": operator_id,
+                "user_id": "user-test",
+                "status": OperatorStatus.TERMINATED,
+                "created_at": now().isoformat(),
+                "history_trail": [],
+                "terminated_at": now().isoformat(),
+            },
+            {
+                "id": operator_id,
+                "user_id": "user-test",
+                "status": OperatorStatus.TERMINATED,
+                "created_at": now().isoformat(),
+                "history_trail": [],
+                "terminated_at": now().isoformat(),
+            },
+            None
+        ]
         mock_cache.update_document.return_value = CacheOperationResult(success=True)
-        mock_cache.append_to_array.return_value = CacheOperationResult(success=True)
 
         result = await lifecycle_service.terminate_operator(
             operator_id=operator_id,
@@ -137,11 +174,8 @@ class TestOperatorLifecycleService:
         assert "bound_web_session_id" in update_data
         assert update_data["bound_web_session_id"] is None
 
-        # Verify history append
-        assert mock_cache.append_to_array.call_count == 1
-        history_call_args = mock_cache.append_to_array.call_args
-        assert history_call_args.kwargs["array_field"] == "history_trail"
-        history_entry = history_call_args.kwargs["items"][0]
+        # Verify history append via update_document in add_history_entry
+        history_entry = update_data["history_trail"].values[0]
         assert history_entry["event_type"] == "terminated"
         assert history_entry["actor"] == "g8ed"
 

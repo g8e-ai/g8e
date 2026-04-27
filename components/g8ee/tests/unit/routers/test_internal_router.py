@@ -360,11 +360,14 @@ async def test_create_operator_slot_success(g8e_context):
     mock_operator_data_service.create_operator = AsyncMock(return_value=True)
     mock_settings_service = MagicMock()
     mock_settings_service.update_g8ep_operator_api_key = AsyncMock(return_value=None)
+    mock_api_key_service = MagicMock()
+    mock_api_key_service.issue_key = AsyncMock(return_value=True)
     
     response = await create_operator_slot(
         request=request,
         operator_data_service=mock_operator_data_service,
         settings_service=mock_settings_service,
+        api_key_service=mock_api_key_service,
         g8e_context=g8e_context
     )
     
@@ -393,11 +396,14 @@ async def test_create_operator_slot_g8ep_persists_api_key(g8e_context):
     mock_operator_data_service.create_operator = AsyncMock(return_value=True)
     mock_settings_service = MagicMock()
     mock_settings_service.update_g8ep_operator_api_key = AsyncMock(return_value=None)
+    mock_api_key_service = MagicMock()
+    mock_api_key_service.issue_key = AsyncMock(return_value=True)
     
     response = await create_operator_slot(
         request=request,
         operator_data_service=mock_operator_data_service,
         settings_service=mock_settings_service,
+        api_key_service=mock_api_key_service,
         g8e_context=g8e_context
     )
     
@@ -405,6 +411,14 @@ async def test_create_operator_slot_g8ep_persists_api_key(g8e_context):
     assert response.operator_id is not None
     mock_operator_data_service.create_operator.assert_called_once()
     mock_settings_service.update_g8ep_operator_api_key.assert_called_once()
+    
+    # Regression test: verify api_keys doc was issued BEFORE platform_settings write
+    mock_api_key_service.issue_key.assert_called_once()
+    call_args = mock_api_key_service.issue_key.call_args
+    assert call_args[1]["api_key"] == response.api_key
+    assert call_args[1]["user_id"] == "user-123"
+    assert call_args[1]["operator_id"] == response.operator_id
+    assert call_args[1]["client_name"] == "operator"
     
     # Verify the API key was passed to the settings service
     call_args = mock_settings_service.update_g8ep_operator_api_key.call_args

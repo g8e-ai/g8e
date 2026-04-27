@@ -223,7 +223,7 @@ export class TriageQuestionsPopup {
             return false;
         }
         try {
-            await client.post(ComponentName.G8EE, path, body);
+            await client.post(ComponentName.G8ED, path, body);
             return true;
         } catch (error) {
             const detail = error instanceof Error ? error.message : String(error);

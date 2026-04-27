@@ -72,6 +72,51 @@ class ApiKeyService:
 
         return True, doc, None
 
+    async def issue_key(
+        self,
+        api_key: str,
+        user_id: str,
+        organization_id: str | None = None,
+        operator_id: str | None = None,
+        client_name: str = "operator",
+        permissions: list[str] | None = None,
+        status: str = "ACTIVE",
+    ) -> bool:
+        """Issue (create and store) a new API key."""
+        try:
+            doc_id = self.make_doc_id(api_key)
+            doc_data = {
+                "user_id": user_id,
+                "organization_id": organization_id,
+                "operator_id": operator_id,
+                "client_name": client_name,
+                "permissions": permissions or [],
+                "status": status,
+                "created_at": now(),
+                "last_used_at": None,
+                "expires_at": None,
+            }
+
+            result = await self.cache.create_document(
+                collection=self.collection,
+                document_id=doc_id,
+                data=doc_data,
+            )
+
+            if result.success:
+                logger.info(
+                    f"[API-KEY-SERVICE] API key issued",
+                    extra={"doc_id": doc_id[:8] + "...", "user_id": user_id}
+                )
+                return True
+            else:
+                logger.error(f"[API-KEY-SERVICE] Failed to issue API key: {result.error}")
+                return False
+
+        except Exception as e:
+            logger.error(f"[API-KEY-SERVICE] Failed to issue API key: {e}")
+            return False
+
     async def record_usage(self, api_key: str) -> None:
         """Update the last used timestamp of a key."""
         try:

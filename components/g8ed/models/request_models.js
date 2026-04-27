@@ -26,6 +26,7 @@
 
 import { G8eBaseModel, F } from './base.js';
 import { SystemInfo } from './operator_model.js';
+import { SourceComponent } from '../constants/ai.js';
 
 // ---------------------------------------------------------------------------
 // G8eHttpContext
@@ -36,15 +37,17 @@ import { SystemInfo } from './operator_model.js';
 
 export class G8eHttpContext extends G8eBaseModel {
     static fields = {
-        web_session_id:    { type: F.string,  required: true },
-        user_id:           { type: F.string,  required: true },
+        web_session_id:    { type: F.string,  default: null },
+        user_id:           { type: F.string,  default: null },
         organization_id:   { type: F.string,  default: null },
         case_id:           { type: F.string,  default: null },
         investigation_id:  { type: F.string,  default: null },
         task_id:           { type: F.string,  default: null },
         bound_operators:   { type: F.array,   default: () => [] }, // Array of BoundOperatorContext
-        execution_id:        { type: F.string,  default: null },
-        source_component:  { type: F.string,  default: 'g8ed' },
+        execution_id:      { type: F.string,  default: null },
+        timestamp:         { type: F.date,    default: () => new Date() },
+        new_case:          { type: F.boolean, default: false },
+        source_component:  { type: F.string,  default: SourceComponent.G8ED },
     };
 
     static parse(raw = {}) {
@@ -52,8 +55,24 @@ export class G8eHttpContext extends G8eBaseModel {
         const data = { ...raw };
         if (!data.case_id || data.case_id === '') {
             data.case_id = null; // Let the client/headers logic handle NEW_CASE_ID
+            if (data.new_case === undefined) {
+                data.new_case = true;
+            }
         }
         return super.parse(data);
+    }
+
+    // Mirror of g8ee G8eHttpContext.validate_web_session_or_operator_auth.
+    // Null web_session_id / user_id is only allowed for operator-auth relays
+    // originated by g8ed (Bearer-token operator authentication).
+    _validate() {
+        if (this.web_session_id === null || this.user_id === null) {
+            if (this.source_component !== SourceComponent.G8ED) {
+                throw new Error(
+                    'G8eHttpContext validation failed: web_session_id and user_id are required unless source_component is g8ed (operator auth relay)'
+                );
+            }
+        }
     }
 }
 

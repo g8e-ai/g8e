@@ -104,9 +104,10 @@ describe('OperatorAuthRoutes Unit Tests', () => {
                     authorization_header: 'Bearer test-token'
                 }),
                 expect.objectContaining({
-                    web_session_id: 'test-web-session',
-                    user_id: 'test-user-id',
-                    organization_id: 'test-org-id'
+                    web_session_id: null,
+                    user_id: null,
+                    organization_id: null,
+                    source_component: 'g8ed'
                 })
             );
         });
@@ -150,9 +151,10 @@ describe('OperatorAuthRoutes Unit Tests', () => {
             expect(res.status).toBe(200);
             expect(res.body.operator_id).toBe('test-op-id');
             expect(mockOperatorService.relayRefreshOperatorSessionToG8ee).toHaveBeenCalledWith('test-session-id', expect.objectContaining({
-                web_session_id: 'test-web-session',
-                user_id: 'test-user-id',
-                organization_id: 'test-org-id'
+                web_session_id: null,
+                user_id: null,
+                organization_id: null,
+                source_component: 'g8ed'
             }));
         });
 

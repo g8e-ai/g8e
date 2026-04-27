@@ -640,6 +640,9 @@ case "$TOP" in
     # test — routes to per-component test-runner containers
     # ------------------------------------------------------------------
     test)
+        _banner "model parity check"
+        python3 "$SCRIPT_DIR/scripts/testing/check_model_parity.py" || exit 1
+
         _TEST_COMPONENT="${2:-}"
         if [[ -z "$_TEST_COMPONENT" || "$_TEST_COMPONENT" == "-h" || "$_TEST_COMPONENT" == "--help" ]]; then
             help_file="$SCRIPT_DIR/docs/g8e-help.md"

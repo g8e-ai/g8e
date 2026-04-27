@@ -53,7 +53,7 @@ from app.models.internal_api import (
     G8epOperatorRelaunchRequest,
     G8epOperatorRelaunchResponse,
     OperatorApprovalResponse,
-    OperatorAuthenticateRequest,
+    InternalOperatorAuthCall,
     OperatorAuthenticateResponse,
     OperatorDeviceLinkRegisterRequest,
     OperatorDeviceLinkRegisterResponse,
@@ -83,6 +83,11 @@ from app.models.internal_api import (
     StopAIRequest,
     StopAIResponse,
     StopOperatorRequest,
+)
+from app.models.triage_api import (
+    TriageAnswerRequest,
+    TriageSkipRequest,
+    TriageTimeoutRequest,
 )
 from app.models.investigations import (
     InvestigationCreateRequest,
@@ -330,6 +335,104 @@ async def internal_chat(
         case_id=g8e_context.case_id,
         investigation_id=g8e_context.investigation_id,
     )
+
+
+@router.post(InternalApiPaths.G8EE_CHAT_TRIAGE_ANSWER)
+async def internal_triage_answer(
+    request: TriageAnswerRequest,
+    investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
+):
+    """
+    Receive user answer to a triage clarifying question - internal cluster use only.
+    """
+    from app.models.investigations import ConversationMessageMetadata
+    from app.models.investigation_status import MessageSender
+
+    logger.info(
+        "[INTERNAL-HTTP] Triage answer received",
+        extra={
+            "investigation_id": request.investigation_id,
+            "question_index": request.question_index,
+            "answer": request.answer,
+            "user_id": g8e_context.user_id,
+        }
+    )
+
+    # Store answer as user.chat message with structured metadata
+    await investigation_service.investigation_data_service.add_chat_message(
+        investigation_id=request.investigation_id,
+        sender=MessageSender.USER_CHAT,
+        content=f"Answered clarifying question {request.question_index}: {'Yes' if request.answer else 'No'}",
+        metadata=ConversationMessageMetadata(
+            event_type=EventType.AI_TRIAGE_CLARIFICATION_ANSWERED,
+            question_index=request.question_index,
+            answer=request.answer
+        )
+    )
+    return {"success": True}
+
+
+@router.post(InternalApiPaths.G8EE_CHAT_TRIAGE_SKIP)
+async def internal_triage_skip(
+    request: TriageSkipRequest,
+    investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
+):
+    """
+    Skip triage clarifying questions - internal cluster use only.
+    """
+    from app.models.investigations import ConversationMessageMetadata
+    from app.models.investigation_status import MessageSender
+
+    logger.info(
+        "[INTERNAL-HTTP] Triage skip received",
+        extra={
+            "investigation_id": request.investigation_id,
+            "user_id": g8e_context.user_id,
+        }
+    )
+
+    await investigation_service.investigation_data_service.add_chat_message(
+        investigation_id=request.investigation_id,
+        sender=MessageSender.USER_CHAT,
+        content="Skipped clarifying questions",
+        metadata=ConversationMessageMetadata(
+            event_type=EventType.AI_TRIAGE_CLARIFICATION_SKIPPED
+        )
+    )
+    return {"success": True}
+
+
+@router.post(InternalApiPaths.G8EE_CHAT_TRIAGE_TIMEOUT)
+async def internal_triage_timeout(
+    request: TriageTimeoutRequest,
+    investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
+):
+    """
+    Record triage clarifying questions timeout - internal cluster use only.
+    """
+    from app.models.investigations import ConversationMessageMetadata
+    from app.models.investigation_status import MessageSender
+
+    logger.info(
+        "[INTERNAL-HTTP] Triage timeout received",
+        extra={
+            "investigation_id": request.investigation_id,
+            "user_id": g8e_context.user_id,
+        }
+    )
+
+    await investigation_service.investigation_data_service.add_chat_message(
+        investigation_id=request.investigation_id,
+        sender=MessageSender.USER_CHAT,
+        content="Clarifying questions timed out",
+        metadata=ConversationMessageMetadata(
+            event_type=EventType.AI_TRIAGE_CLARIFICATION_TIMEOUT
+        )
+    )
+    return {"success": True}
 
 
 @router.post(API_PATHS["g8ee"]["chat_stop"], response_model=StopAIResponse)
@@ -721,6 +824,7 @@ async def create_operator_slot(
     request: OperatorSlotCreationRequest,
     operator_data_service: "OperatorDataService" = Depends(get_g8ee_operator_data_service),
     settings_service: SettingsService = Depends(get_g8ee_settings_service_write),
+    api_key_service: ApiKeyService = Depends(get_g8ee_api_key_service),
     g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
 ):
     """
@@ -761,6 +865,29 @@ async def create_operator_slot(
         )
 
         await operator_data_service.create_operator(operator_doc)
+
+        # Issue API key to api_keys collection (authority: g8ee)
+        # This must happen BEFORE persisting to platform_settings to eliminate write-order race
+        key_issued = await api_key_service.issue_key(
+            api_key=api_key,
+            user_id=request.user_id,
+            organization_id=request.organization_id,
+            operator_id=operator_id,
+            client_name="operator",
+            permissions=["OPERATOR_BOOTSTRAP", "OPERATOR_HEARTBEAT", "OPERATOR_DOWNLOAD"],
+            status="ACTIVE",
+        )
+
+        if not key_issued:
+            logger.error(
+                "[INTERNAL-HTTP] Failed to issue API key to api_keys collection",
+                extra={"operator_id": operator_id, "user_id": request.user_id}
+            )
+            return OperatorSlotCreationResponse(
+                success=False,
+                operator_id=None,
+                error="Failed to issue API key",
+            )
 
         # If this is a g8ep operator, persist the API key to platform_settings
         # so g8ep's fetch-key-and-run.sh can retrieve it
@@ -1111,7 +1238,7 @@ async def unbind_operators(
 
 @router.post("/operators/authenticate", response_model=OperatorAuthenticateResponse)
 async def authenticate_operator(
-    request: OperatorAuthenticateRequest,
+    request: InternalOperatorAuthCall,
     operator_auth_service: OperatorAuthService = Depends(get_g8ee_operator_auth_service),
     http_request: Request = None,
 ):
@@ -1125,7 +1252,7 @@ async def authenticate_operator(
     }
 
     result = await operator_auth_service.authenticate_operator(
-        authorization_header=http_request.headers.get("authorization") if http_request else None,
+        authorization_header=request.authorization,
         body=request.model_dump(),
         request_context=request_context
     )

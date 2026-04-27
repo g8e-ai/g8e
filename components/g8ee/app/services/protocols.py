@@ -293,6 +293,22 @@ class OperatorDataServiceProtocol(Protocol):
         """Create a new operator document."""
         ...
 
+    async def update_operator(self, operator: OperatorDocument) -> bool:
+        """Update an existing operator document."""
+        ...
+
+    async def add_history_entry(
+        self,
+        operator_id: str,
+        event_type: OperatorHistoryEventType,
+        actor: ComponentName,
+        summary: str,
+        details: dict[str, object] | None = None,
+        additional_updates: dict[str, object] | None = None,
+    ) -> OperatorDocument:
+        """Atomic status + history update under a keyed lock."""
+        ...
+
     async def update_document(
         self,
         collection: str,

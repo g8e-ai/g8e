@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"flag"
 	"io"
 	"os"
 	"path/filepath"
@@ -82,6 +83,75 @@ func TestShellQuote_Plain(t *testing.T) {
 
 func TestShellQuote_ContainsSingleQuote(t *testing.T) {
 	assert.Equal(t, "'it'\\''s'", shellQuote("it's"))
+}
+
+// ---------------------------------------------------------------------------
+// parseInterleavedArgs — flags must be parseable BEFORE, AFTER, and BETWEEN
+// positional host arguments. Regression test for the bug where
+// `stream host1 --key XXX` treated `--key` and `XXX` as additional hosts.
+// ---------------------------------------------------------------------------
+
+func newStreamFlagSet(apiKey, deviceToken *string, noGit *bool) *flag.FlagSet {
+	fs := flag.NewFlagSet("stream", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	fs.StringVar(apiKey, "key", "", "")
+	fs.StringVar(deviceToken, "device-token", "", "")
+	fs.BoolVar(noGit, "no-git", false, "")
+	return fs
+}
+
+func TestParseInterleavedArgs_FlagsAfterPositional(t *testing.T) {
+	var apiKey, deviceToken string
+	var noGit bool
+	fs := newStreamFlagSet(&apiKey, &deviceToken, &noGit)
+
+	hosts, err := parseInterleavedArgs(fs, []string{"bobuntu2", "--key", "g8e_abc"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"bobuntu2"}, hosts)
+	assert.Equal(t, "g8e_abc", apiKey)
+}
+
+func TestParseInterleavedArgs_FlagsBetweenPositionals(t *testing.T) {
+	var apiKey, deviceToken string
+	var noGit bool
+	fs := newStreamFlagSet(&apiKey, &deviceToken, &noGit)
+
+	hosts, err := parseInterleavedArgs(fs,
+		[]string{"host1", "--device-token", "dlk_xyz", "host2", "--no-git", "host3"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"host1", "host2", "host3"}, hosts)
+	assert.Equal(t, "dlk_xyz", deviceToken)
+	assert.True(t, noGit)
+}
+
+func TestParseInterleavedArgs_FlagsBeforePositional(t *testing.T) {
+	var apiKey, deviceToken string
+	var noGit bool
+	fs := newStreamFlagSet(&apiKey, &deviceToken, &noGit)
+
+	hosts, err := parseInterleavedArgs(fs, []string{"--key", "k", "host1", "host2"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"host1", "host2"}, hosts)
+	assert.Equal(t, "k", apiKey)
+}
+
+func TestParseInterleavedArgs_NoArgs(t *testing.T) {
+	var apiKey, deviceToken string
+	var noGit bool
+	fs := newStreamFlagSet(&apiKey, &deviceToken, &noGit)
+
+	hosts, err := parseInterleavedArgs(fs, nil)
+	require.NoError(t, err)
+	assert.Empty(t, hosts)
+}
+
+func TestParseInterleavedArgs_UnknownFlagReturnsError(t *testing.T) {
+	var apiKey, deviceToken string
+	var noGit bool
+	fs := newStreamFlagSet(&apiKey, &deviceToken, &noGit)
+
+	_, err := parseInterleavedArgs(fs, []string{"host1", "--unknownxyz"})
+	require.Error(t, err)
 }
 
 // ---------------------------------------------------------------------------

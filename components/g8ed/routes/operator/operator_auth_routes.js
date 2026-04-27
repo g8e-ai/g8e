@@ -19,6 +19,9 @@ import { ErrorResponse, OperatorAuthResponse, OperatorSessionRefreshResponse } f
 import { AuthPaths } from '../../constants/api_paths.js';
 import { ApiKeyError } from '../../constants/auth.js';
 import { operatorAuthRateLimiter, operatorAuthIpBackstopLimiter } from '../../middleware/rate-limit.js';
+import { G8eHttpContext } from '../../models/request_models.js';
+import { now } from '../../models/base.js';
+import { SourceComponent } from '../../constants/ai.js';
 
 /**
  * @param {Object} options
@@ -31,6 +34,23 @@ export function createOperatorAuthRouter({ services, rateLimiters, requestTimest
     const { requireRequestTimestamp } = requestTimestampMiddleware;
     const { operatorRefreshRateLimiter } = rateLimiters;
     const router = express.Router();
+
+    // Operator auth uses Bearer token, not web session - create minimal context
+    router.use((req, res, next) => {
+        const rawPath = req.originalUrl ? req.originalUrl.split('?')[0] : req.path;
+        req.g8eContext = G8eHttpContext.parse({
+            web_session_id: null,
+            user_id: null,
+            organization_id: null,
+            case_id: req.body?.case_id || req.query?.case_id || req.params?.caseId || null,
+            investigation_id: req.body?.investigation_id || req.query?.investigation_id || req.params?.investigationId || null,
+            task_id: req.body?.task_id || req.query?.task_id || req.params?.taskId || null,
+            bound_operators: [],
+            execution_id: `req_${rawPath.replace(/\//g, '_').replace(/^_/, '')}_${now().getTime()}`,
+            source_component: SourceComponent.G8ED
+        });
+        next();
+    });
 
     router.post(AuthPaths.OPERATOR_AUTH, operatorAuthIpBackstopLimiter, operatorAuthRateLimiter, requireRequestTimestamp(), async (req, res) => {
         logger.info('[OPERATOR-AUTH] g8eo Operator authentication request received', {

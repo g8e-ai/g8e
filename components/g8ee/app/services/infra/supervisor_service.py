@@ -124,6 +124,10 @@ class SupervisorService:
                 await self.stop_process(name, wait=True)
                 await self.xmlrpc_call("supervisor.startProcess", [name, wait])
                 return True
+            if "NOT_RUNNING" in str(e):
+                logger.info(f"[SUPERVISOR] Process {name} not running (may be FATAL), attempting start")
+                await self.xmlrpc_call("supervisor.startProcess", [name, wait])
+                return True
             logger.error(f"[SUPERVISOR] Failed to start process {name}: {str(e)}")
             raise
 

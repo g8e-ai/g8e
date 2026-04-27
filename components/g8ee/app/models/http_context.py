@@ -45,11 +45,13 @@ class BoundOperator(G8eBaseModel):
 class G8eHttpContext(G8eBaseModel):
     """Standard context object for all internal HTTP requests."""
 
-    web_session_id: str = Field(
-        description="Web user session ID - used for routing SSE events to browser"
+    web_session_id: str | None = Field(
+        default=None,
+        description="Web user session ID - used for routing SSE events to browser (null for operator auth)"
     )
-    user_id: str = Field(
-        description="User identifier - owner of the session and data"
+    user_id: str | None = Field(
+        default=None,
+        description="User identifier - owner of the session and data (null for operator auth)"
     )
     organization_id: str | None = Field(
         default=None,
@@ -96,7 +98,24 @@ class G8eHttpContext(G8eBaseModel):
                 raise ValueError(
                     f"bound_operators header contains malformed JSON: {exc}"
                 ) from exc
-        return v if v is not None else []
+        return v
+
+    @field_validator("web_session_id", "user_id")
+    @classmethod
+    def validate_web_session_or_operator_auth(cls, v, info):
+        """Ensure either web session context (web_session_id + user_id) or operator auth (null values with G8ED source)."""
+        if info.field_name == "user_id":
+            web_session_id = info.data.get("web_session_id")
+            user_id = v
+            source_component = info.data.get("source_component")
+
+            # If either web_session_id or user_id is null, this must be operator auth relay from g8ed
+            if web_session_id is None or user_id is None:
+                if source_component != ComponentName.G8ED:
+                    raise ValueError(
+                        "web_session_id and user_id are required unless source_component is G8ED (operator auth relay)"
+                    )
+        return v
 
     def has_bound_operator(self) -> bool:
         """Returns True if at least one operator has status bound."""
