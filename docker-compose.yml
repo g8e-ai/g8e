@@ -92,11 +92,11 @@ services:
     depends_on:
       g8es:
         condition: service_healthy
-      g8el:
-        condition: service_healthy
 
   # g8el (g8el) - llama.cpp inference server
   g8el:
+    profiles:
+      - inference
     build:
       context: .
       dockerfile: ./components/g8el/Dockerfile

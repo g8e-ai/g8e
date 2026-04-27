@@ -31,18 +31,6 @@ class G8edClient:
         ssl_context = ssl.create_default_context(cafile=self.ca_cert_path) if self.ca_cert_path else False
         connector = aiohttp.TCPConnector(ssl=ssl_context)
         self._session = aiohttp.ClientSession(connector=connector)
-
-        if self.device_token:
-            from datetime import datetime, UTC
-            url = f"{self.base_url}{PUBLIC_API_PATHS['auth_operator']}"
-            headers = {"X-Request-Timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"}
-            payload = {
-                "auth_mode": "operator_session",
-                "operator_session_id": self.device_token
-            }
-            async with self._session.post(url, json=payload, headers=headers) as resp:
-                resp.raise_for_status()
-
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -72,17 +60,12 @@ class G8edClient:
         self,
         investigation_id: str,
         message: str,
-        operator_session_id: str,
     ) -> AsyncIterator[dict]:
         """Send a chat message and stream SSE events.
 
         Args:
             investigation_id: Investigation ID
             message: User message
-            operator_session_id: Session ID for authentication
-
-        Yields:
-            SSE event dictionaries
         """
         from datetime import datetime, UTC
         url = f"{self.base_url}{PUBLIC_API_PATHS['chat_send']}"
@@ -90,7 +73,6 @@ class G8edClient:
         payload = {
             "investigation_id": investigation_id,
             "message": message,
-            "operator_session_id": operator_session_id,
             "user_id": "evals_runner"
         }
 
@@ -115,12 +97,11 @@ class G8edClient:
                     except json.JSONDecodeError:
                         continue
 
-    async def approve_request(self, approval_id: str, operator_session_id: str) -> dict:
+    async def approve_request(self, approval_id: str) -> dict:
         """Approve a pending approval request.
 
         Args:
             approval_id: Approval request ID
-            operator_session_id: Session ID for authentication
 
         Returns:
             Approval response data
@@ -130,8 +111,7 @@ class G8edClient:
         headers = {"X-Request-Timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"}
         payload = {
             "approval_id": approval_id,
-            "action": "approve",
-            "operator_session_id": operator_session_id
+            "action": "approve"
         }
         async with self._session.post(url, json=payload, headers=headers) as resp:
             resp.raise_for_status()

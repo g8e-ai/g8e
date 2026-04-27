@@ -152,3 +152,45 @@ class TestDefaultJsonFileLoads:
         validator = get_auto_approved_validator()
         # Default config ships with sensible benign defaults.
         assert "uptime" in validator.get_auto_approved_command_names()
+
+
+class TestEnabledField:
+    """Test the enabled field as a file-level kill switch."""
+
+    def test_enabled_false_loads_empty_index(self):
+        path = _write_json(
+            _minimal_auto_approved(
+                enabled=False,
+                auto_approved_commands=[
+                    {"value": "uptime", "reason": "should be ignored"},
+                ],
+            )
+        )
+        validator = CommandAutoApprovedValidator(auto_approved_path=path)
+        assert validator.get_auto_approved_command_names() == []
+        assert validator.is_auto_approved("uptime").is_auto_approved is False
+
+    def test_enabled_true_loads_commands(self):
+        path = _write_json(
+            _minimal_auto_approved(
+                enabled=True,
+                auto_approved_commands=[
+                    {"value": "uptime", "reason": "should be loaded"},
+                ],
+            )
+        )
+        validator = CommandAutoApprovedValidator(auto_approved_path=path)
+        assert validator.get_auto_approved_command_names() == ["uptime"]
+        assert validator.is_auto_approved("uptime").is_auto_approved is True
+
+    def test_enabled_defaults_to_true(self):
+        path = _write_json(
+            _minimal_auto_approved(
+                auto_approved_commands=[
+                    {"value": "uptime", "reason": "should be loaded"},
+                ],
+            )
+        )
+        validator = CommandAutoApprovedValidator(auto_approved_path=path)
+        assert validator.get_auto_approved_command_names() == ["uptime"]
+        assert validator.is_auto_approved("uptime").is_auto_approved is True

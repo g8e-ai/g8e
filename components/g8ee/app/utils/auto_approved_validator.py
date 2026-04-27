@@ -24,12 +24,12 @@ can apply.
 
 from __future__ import annotations
 
-import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
 
 from app.errors import ConfigurationError
+from app.utils.config_loader import load_json_config
 
 logger = logging.getLogger(__name__)
 
@@ -53,11 +53,6 @@ class CommandAutoApprovedValidator:
         resolved_path = (
             Path(auto_approved_path) if auto_approved_path else self._default_path()
         )
-        if not resolved_path.is_file():
-            raise ConfigurationError(
-                f"Command auto-approved list not found at {resolved_path}"
-            )
-
         self._load(resolved_path)
 
     def _default_path(self) -> Path:
@@ -65,13 +60,18 @@ class CommandAutoApprovedValidator:
 
     def _load(self, path: Path) -> None:
         logger.info("Loading command auto-approved list from %s", path)
-        try:
-            with path.open("r", encoding="utf-8") as handle:
-                data = json.load(handle)
-        except json.JSONDecodeError as exc:
-            raise ConfigurationError(
-                f"Invalid JSON in auto-approved list {path}: {exc}", cause=exc
-            ) from exc
+        data = load_json_config(path, config_name="auto-approved list")
+
+        enabled = data.get("enabled", True)
+        if not enabled:
+            logger.warning(
+                "Command auto-approved list is disabled via 'enabled: false' in %s; "
+                "loading empty index (no commands will be auto-approved at the JSON level)",
+                path,
+            )
+            self._entries = []
+            self._index = {}
+            return
 
         if "auto_approved_commands" not in data:
             raise ConfigurationError(
@@ -181,12 +181,27 @@ class CommandAutoApprovedValidator:
 _validator: CommandAutoApprovedValidator | None = None
 
 
+def register_auto_approved_validator(validator: CommandAutoApprovedValidator) -> None:
+    """Explicitly register the global auto-approved validator instance."""
+    global _validator
+    _validator = validator
+
+
 def get_auto_approved_validator(
     auto_approved_path: str | None = None,
 ) -> CommandAutoApprovedValidator:
-    """Return the process-wide ``CommandAutoApprovedValidator`` singleton."""
+    """Return the process-wide ``CommandAutoApprovedValidator`` singleton.
+
+    If no validator has been explicitly registered, one will be created from
+    the default path (or the provided path). This backward-compatibility mode
+    is deprecated; new code should use register_auto_approved_validator().
+    """
     global _validator
     if _validator is None:
+        logger.warning(
+            "get_auto_approved_validator() called without explicit registration; "
+            "creating validator implicitly. Use register_auto_approved_validator() for explicit DI."
+        )
         _validator = CommandAutoApprovedValidator(
             auto_approved_path=auto_approved_path or ""
         )

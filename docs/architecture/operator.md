@@ -84,8 +84,8 @@ The default execution mode. The Operator initiates an outbound connection to the
 1. Load configuration from CLI flags and environment variables
 2. Resolve working directory (launch directory or `--working-dir`)
 3. Load platform CA certificate (local-first: checks volume mounts before HTTPS fetch)
-4. Authenticate with platform via POST to `/api/auth/operator`
-5. Receive bootstrap config and per-operator mTLS certificate
+4. Authenticate with platform via POST to `/api/auth/operator` using API key
+5. Receive bootstrap config, operator ID, and per-operator mTLS certificate
 6. Upgrade HTTP transport to use per-operator mTLS for all subsequent connections
 7. Initialize local storage (audit vault, scrubbed vault, raw vault, git ledger)
 8. Connect to g8es over WebSocket using mTLS
@@ -166,20 +166,18 @@ Authentication occurs once at startup via HTTP to the platform, producing sessio
 
 **API key**: Pass `--key` / `-k` or set `G8E_OPERATOR_API_KEY`. If unset, prompts interactively with echo disabled. Sent as `Authorization: Bearer` on the bootstrap POST.
 
-**Device link token**: Pass `--device-token` / `-D` or set `G8E_DEVICE_TOKEN`. The Operator registers at `https://{endpoint}/auth/link/{token}/register` with system fingerprint, hostname, OS, arch, and username. On success, receives a pre-authorized `operator_session_id` for the bootstrap POST. Device tokens support `max_uses` for fleet-scale deployment — g8ed pre-provisions operator slots, each registration claims one atomically.
-
-**Pre-authorized session**: Pass `--operator_session` / `-S` or set `G8E_OPERATOR_SESSION_ID`. Session ID passed directly in bootstrap POST body with no `Authorization` header. This is the automatic path after successful device link registration.
+**Device link token**: Pass `--device-token` / `-D` or set `G8E_DEVICE_TOKEN`. The Operator registers at `https://{endpoint}/auth/link/{token}/register` with system fingerprint, hostname, OS, arch, and username. On success, receives an API key and per-operator certificate directly. This key is then used for the standard bootstrap POST. Device tokens support `max_uses` for fleet-scale deployment — g8ed pre-provisions operator slots, each registration claims one atomically.
 
 ### Bootstrap Exchange
 
-All auth methods converge on POST `/api/auth/operator`. The platform responds with:
+All auth methods converge on POST `/api/auth/operator` using API key authentication. The platform responds with:
 
-- `operator_session_id`: Used in all pub/sub channel names
+- `operator_session_id`: Unique identifier for the current process session; used in all pub/sub channel names
 - `operator_id`: Stable identifier for this operator slot
 - Bootstrap config: `max_concurrent_tasks`, `max_memory_mb`, `heartbeat_interval_seconds`, feature flags
 - `operator_cert` and `operator_cert_key`: Per-operator mTLS client certificate and private key (PEM) issued by platform CA
 
-The Operator rebuilds its HTTP transport with TLS 1.3 presenting the per-operator certificate. If parsing fails, it logs a warning and continues with the embedded CA-trusted transport. The API key is held only in process memory and never written to disk.
+The Operator rebuilds its HTTP transport with TLS 1.3 presenting the per-operator certificate. The API key is held only in process memory and never written to disk.
 
 ### System Fingerprint Binding
 
@@ -357,10 +355,9 @@ The Operator's security model is built around two principles: defense in depth, 
 | Flag | Short | Default | Description |
 |---|---|---|---|
 | `--key` | `-k` | `$G8E_OPERATOR_API_KEY` | API key for authentication. Prompts interactively if unset. |
-| `--operator_session` | `-S` | `$G8E_OPERATOR_SESSION_ID` | Pre-authorized operator session ID (from device link auth) |
 | `--device-token` | `-D` | `$G8E_DEVICE_TOKEN` | Device link token for automated and fleet deployments |
 | `--endpoint` | `-e` | `$G8E_OPERATOR_ENDPOINT` | Platform endpoint — hostname or IP of host running g8es |
-| `--ca-url` | | | Override URL for hub CA certificate fetch (default: `https://{endpoint}/ssl/ca.crt`) |
+| `--ca-url` | | | Override URL for hub CA certificate fetch (default: `http://{endpoint}/ca.crt`) |
 | `--working-dir` | | process cwd | Working directory — all commands and storage anchored here |
 | `--wss-port` | | `443` | WSS port for pub/sub connection to g8es |
 | `--http-port` | | `443` | HTTPS port for bootstrap auth via g8ed |
@@ -425,7 +422,6 @@ All environment variables read once at startup.
 | Variable | Description |
 |---|---|
 | `G8E_OPERATOR_API_KEY` | API key |
-| `G8E_OPERATOR_SESSION_ID` | Pre-authorized operator session ID |
 | `G8E_OPERATOR_ENDPOINT` | Platform endpoint |
 | `G8E_DEVICE_TOKEN` | Device link token |
 | `G8E_LOG_LEVEL` | Log level override (overrides default but not explicit `--log` flag) |

@@ -66,7 +66,7 @@ from app.services.ai.tool_service import AIToolService
 from app.services.infra.g8ed_event_service import EventService
 from app.utils.ids import generate_command_execution_id
 from app.utils.safety import map_os_string_to_platform
-from app.utils.whitelist_validator import parse_whitelisted_commands_csv
+from app.utils.csv_commands import parse_command_csv
 from app.models.whitelist import WhitelistedCommand
 
 class TribunalInvoker:
@@ -104,7 +104,7 @@ class TribunalInvoker:
 
                 # Check if CSV override is active
                 csv_override = cv.command_validation.whitelisted_commands
-                csv_commands = parse_whitelisted_commands_csv(csv_override) if csv_override else []
+                csv_commands = parse_command_csv(csv_override) if csv_override else []
                 if csv_commands:
                     # CSV mode: construct simple metadata from CSV commands (no rich safe_options/validation)
                     whitelisted_commands = [WhitelistedCommand(command=cmd) for cmd in csv_commands]

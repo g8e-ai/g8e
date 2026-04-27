@@ -28,15 +28,15 @@ import json
 
 import pytest
 
-from app.constants import Platform
+from app.constants import Platform, CommandCategory
 from app.utils.whitelist_validator import (
     CommandWhitelistValidator,
     _COMMON_SAFE_PATTERNS,
     get_whitelist_validator,
-    parse_whitelisted_commands_csv,
     validate_command_against_whitelist,
     get_whitelisted_commands,
 )
+from app.utils.csv_commands import parse_command_csv
 
 pytestmark = pytest.mark.unit
 
@@ -296,7 +296,7 @@ class TestValidateCommandSuccess:
         result = validator.validate_command("ping -c 4 google.com", platform=Platform.LINUX)
         assert result.is_valid is True
         assert result.command == "ping"
-        assert result.category == "network_diagnostics"
+        assert result.category == CommandCategory.NETWORK_DIAGNOSTICS
         assert result.platform == Platform.LINUX
         assert result.max_execution_time == 60
 
@@ -439,35 +439,35 @@ class TestConvenienceFunctions:
 
 
 # ---------------------------------------------------------------------------
-# parse_whitelisted_commands_csv
+# parse_command_csv
 # ---------------------------------------------------------------------------
 
-class TestParseWhitelistedCommandsCsv:
+class TestParseCommandCsv:
     """CSV parser must trim, dedupe, drop empties, preserve order."""
 
     def test_none_returns_empty_list(self):
-        assert parse_whitelisted_commands_csv(None) == []
+        assert parse_command_csv(None) == []
 
     def test_empty_string_returns_empty_list(self):
-        assert parse_whitelisted_commands_csv("") == []
+        assert parse_command_csv("") == []
 
     def test_whitespace_only_returns_empty_list(self):
-        assert parse_whitelisted_commands_csv("   ,  ,  ") == []
+        assert parse_command_csv("   ,  ,  ") == []
 
     def test_basic_csv(self):
-        assert parse_whitelisted_commands_csv("uptime,df,free") == ["uptime", "df", "free"]
+        assert parse_command_csv("uptime,df,free") == ["uptime", "df", "free"]
 
     def test_strips_whitespace(self):
-        assert parse_whitelisted_commands_csv(" uptime , df , free ") == ["uptime", "df", "free"]
+        assert parse_command_csv(" uptime , df , free ") == ["uptime", "df", "free"]
 
     def test_drops_empty_fragments(self):
-        assert parse_whitelisted_commands_csv("uptime,,df,") == ["uptime", "df"]
+        assert parse_command_csv("uptime,,df,") == ["uptime", "df"]
 
     def test_dedupes_preserving_first_occurrence(self):
-        assert parse_whitelisted_commands_csv("uptime,df,uptime,free,df") == ["uptime", "df", "free"]
+        assert parse_command_csv("uptime,df,uptime,free,df") == ["uptime", "df", "free"]
 
     def test_single_command(self):
-        assert parse_whitelisted_commands_csv("uptime") == ["uptime"]
+        assert parse_command_csv("uptime") == ["uptime"]
 
 
 # ---------------------------------------------------------------------------
@@ -485,7 +485,7 @@ class TestValidateCommandWithOverride:
         )
         assert result.is_valid is True
         assert result.command == "uptime"
-        assert result.category == "csv_whitelist"
+        assert result.category == CommandCategory.CSV_WHITELIST
 
     def test_override_rejects_command_not_in_override(self, validator):
         # `ping` IS in the JSON fixture, but should be rejected when overridden
@@ -542,4 +542,99 @@ class TestValidateCommandWithOverride:
             "ping google.com", platform=Platform.LINUX,
             allowed_commands_override=None,
         )
+        assert result.is_valid is True
+
+
+# ---------------------------------------------------------------------------
+# enabled field tests
+# ---------------------------------------------------------------------------
+
+class TestEnabledField:
+    """Test the enabled field as a file-level kill switch."""
+
+    def test_enabled_false_loads_empty_index(self, tmp_path):
+        whitelist_path = tmp_path / "whitelist.json"
+        import json
+        data = {
+            "enabled": False,
+            "enforcement_policy": {
+                "description": "test policy",
+                "restrictions": [],
+            },
+            "commands": {
+                "network_diagnostics": {
+                    "ping": {
+                        "command": "ping",
+                        "description": "Test connectivity",
+                        "platforms": ["linux"],
+                        "safe_options": {"linux": ["-c <count>"]},
+                        "validation": {},
+                        "examples": ["ping -c 4 google.com"],
+                        "max_execution_time": 60,
+                    }
+                },
+            },
+        }
+        whitelist_path.write_text(json.dumps(data))
+        validator = CommandWhitelistValidator(whitelist_path=str(whitelist_path))
+        assert validator.get_available_commands() == []
+        result = validator.validate_command("ping google.com", platform=Platform.LINUX)
+        assert result.is_valid is False
+        assert "not in whitelist" in result.reason
+
+    def test_enabled_true_loads_commands(self, tmp_path):
+        whitelist_path = tmp_path / "whitelist.json"
+        import json
+        data = {
+            "enabled": True,
+            "enforcement_policy": {
+                "description": "test policy",
+                "restrictions": [],
+            },
+            "commands": {
+                "network_diagnostics": {
+                    "ping": {
+                        "command": "ping",
+                        "description": "Test connectivity",
+                        "platforms": ["linux"],
+                        "safe_options": {"linux": ["-c <count>"]},
+                        "validation": {},
+                        "examples": ["ping -c 4 google.com"],
+                        "max_execution_time": 60,
+                    }
+                },
+            },
+        }
+        whitelist_path.write_text(json.dumps(data))
+        validator = CommandWhitelistValidator(whitelist_path=str(whitelist_path))
+        assert "ping" in validator.get_available_commands()
+        result = validator.validate_command("ping google.com", platform=Platform.LINUX)
+        assert result.is_valid is True
+
+    def test_enabled_defaults_to_true(self, tmp_path):
+        whitelist_path = tmp_path / "whitelist.json"
+        import json
+        data = {
+            "enforcement_policy": {
+                "description": "test policy",
+                "restrictions": [],
+            },
+            "commands": {
+                "network_diagnostics": {
+                    "ping": {
+                        "command": "ping",
+                        "description": "Test connectivity",
+                        "platforms": ["linux"],
+                        "safe_options": {"linux": ["-c <count>"]},
+                        "validation": {},
+                        "examples": ["ping -c 4 google.com"],
+                        "max_execution_time": 60,
+                    }
+                },
+            },
+        }
+        whitelist_path.write_text(json.dumps(data))
+        validator = CommandWhitelistValidator(whitelist_path=str(whitelist_path))
+        assert "ping" in validator.get_available_commands()
+        result = validator.validate_command("ping google.com", platform=Platform.LINUX)
         assert result.is_valid is True

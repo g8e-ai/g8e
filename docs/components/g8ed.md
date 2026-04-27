@@ -758,9 +758,9 @@ Device Link is the **recommended** way to deploy operators. The user generates a
 4. g8ed returns an operator command with the device link token
 5. User runs the command on the target system
 6. Binary collects system fingerprint and registers with g8ed (operator does not need to know its `operator_id` beforehand)
-7. g8ed assigns an available operator slot and provides the `operator_id` to the binary during the bootstrap response
-8. Operator activates immediately — no browser approval needed
-7. Operator appears in the panel as active
+7. g8ed assigns an available operator slot, generates credentials, and returns `{ api_key, operator_cert, operator_cert_key, operator_id }` to the binary
+8. Operator uses the returned API key for the bootstrap process and activates immediately
+9. Operator appears in the panel as active
 
 **Token format:** `dlk_[A-Za-z0-9_-]{32}` — 24 cryptographically random bytes, validated by regex before any g8es operations.
 

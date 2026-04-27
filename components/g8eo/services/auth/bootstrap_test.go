@@ -302,7 +302,6 @@ func TestRequestHTTPAuth_APIKeyOnly(t *testing.T) {
 	_, err = svc.RequestBootstrapConfig(context.Background())
 	require.NoError(t, err)
 
-	assert.Equal(t, constants.Status.AuthMode.APIKey, capturedBody.AuthMode)
 	assert.Equal(t, "Bearer g8e_test_apikey", capturedAuthHeader)
 }
 

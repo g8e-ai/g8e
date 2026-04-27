@@ -168,6 +168,11 @@ class CommandErrorType(str, Enum):
     PERMISSION_ERROR = "permission.error"
     CONFIGURATION_ERROR = "configuration.error"
 
+class CommandCategory(str, Enum):
+    CSV_WHITELIST = _STATUS["command.category"]["csv.whitelist"]
+    NETWORK_DIAGNOSTICS = _STATUS["command.category"]["network.diagnostics"]
+    SYSTEM_DIAGNOSTICS = _STATUS["command.category"]["system.diagnostics"]
+
 class ConversationStatus(str, Enum):
     ACTIVE = "active"
     INACTIVE = "inactive"

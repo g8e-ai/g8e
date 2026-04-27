@@ -14,7 +14,7 @@
 
 from pydantic import Field
 
-from app.constants import Platform
+from app.constants import Platform, CommandCategory
 
 from .base import G8eBaseModel
 
@@ -25,7 +25,7 @@ class WhitelistedCommand(G8eBaseModel):
     Canonical shape: shared/models/wire/result_payloads.json get_command_constraints_result.
     """
     command: str
-    category: str | None = None
+    category: CommandCategory | None = None
     description: str | None = None
     safe_options: list[str] = Field(default_factory=list)
     validation: dict[str, str] = Field(default_factory=dict)
@@ -37,7 +37,7 @@ class CommandValidationResult(G8eBaseModel):
     """Result of command validation against whitelist."""
     is_valid: bool
     command: str
-    category: str | None = None
+    category: CommandCategory | None = None
     platform: Platform | None = None
     reason: str | None = None
     max_execution_time: int | None = None

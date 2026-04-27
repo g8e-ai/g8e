@@ -194,7 +194,7 @@ For full details on every g8eo security layer — CA trust bootstrap, mTLS, fing
 | Method | Use Case | How It Works |
 |--------|----------|--------------|
 | **API Key** | Traditional | Pass `--key` or set `G8E_OPERATOR_API_KEY` |
-| **Device Link** | Deployment | Auth via `--device-token` or `G8E_DEVICE_TOKEN`; returns session ID |
+| **Device Link** | Deployment | Auth via `--device-token` or `G8E_DEVICE_TOKEN`; returns API key + certificate |
 
 ### Session Naming
 
@@ -228,7 +228,6 @@ g8e components (g8ed, g8ee, and g8eo in `--listen` mode) communicate over an int
 | Flag | Env Var | Default | Description |
 |------|---------|---------|-------------|
 | `-k` / `--key` | `G8E_OPERATOR_API_KEY` | — | API key for auth |
-| `-S` / `--operator_session` | `G8E_OPERATOR_SESSION_ID` | — | Pre-authorized session ID |
 | `-D` / `--device-token` | `G8E_DEVICE_TOKEN` | — | Device link token |
 | `-e` / `--endpoint` | `G8E_OPERATOR_ENDPOINT` | g8e.local | Operator endpoint |
 | `--ca-url` | — | — | Override URL for hub CA certificate fetch |

@@ -17,9 +17,10 @@ import re
 from pathlib import Path
 from typing import Any
 
-from app.constants import Platform
+from app.constants import Platform, CommandCategory
 from app.errors import ConfigurationError
 from app.models.whitelist import CommandValidationResult, WhitelistedCommand
+from app.utils.config_loader import load_json_config
 
 logger = logging.getLogger(__name__)
 
@@ -58,15 +59,21 @@ class CommandWhitelistValidator:
 
     def load_whitelist(self, whitelist_path: str) -> None:
         """Load whitelist configuration from JSON file."""
-        try:
-            with open(whitelist_path) as f:
-                self.whitelist_data = json.load(f)
-        except FileNotFoundError as e:
-            logger.error("CRITICAL: Failed to load command whitelist from %s: %s", whitelist_path, e)
-            raise ConfigurationError(f"Required whitelist configuration not found at {whitelist_path}", cause=e) from e
-        except json.JSONDecodeError as e:
-            logger.error("CRITICAL: Failed to load command whitelist from %s: %s", whitelist_path, e)
-            raise ConfigurationError(f"Invalid JSON in whitelist file {whitelist_path}: {e}", cause=e) from e
+        logger.info("Loading command whitelist from %s", whitelist_path)
+        self.whitelist_data = load_json_config(Path(whitelist_path), config_name="whitelist configuration")
+
+        enabled = self.whitelist_data.get("enabled", True)
+        if not enabled:
+            logger.warning(
+                "Command whitelist is disabled via 'enabled: false' in %s; "
+                "loading empty index (no commands will be allowed at the JSON level)",
+                whitelist_path,
+            )
+            self.commands_by_category = {}
+            self.all_commands = set()
+            self.forbidden_patterns = []
+            self.forbidden_directories = []
+            return
 
         self._parse_whitelist_data()
 
@@ -183,7 +190,7 @@ class CommandWhitelistValidator:
             return CommandValidationResult(
                 is_valid=True,
                 command=base_command,
-                category="csv_whitelist",
+                category=CommandCategory.CSV_WHITELIST,
                 platform=platform,
             )
 
@@ -199,13 +206,15 @@ class CommandWhitelistValidator:
         category_name, config = command_config
         logger.info("Found command '%s' in category '%s'", base_command, category_name)
 
+        category_enum = self._parse_category(category_name)
+
         supported_platforms = config.get("platforms", [])
         if platform not in supported_platforms:
             logger.info("Command '%s' not supported on %s platform", base_command, platform)
             return CommandValidationResult(
                 is_valid=False,
                 command=base_command,
-                category=category_name,
+                category=category_enum,
                 platform=platform,
                 reason=f"Command not supported on {platform} platform"
             )
@@ -222,7 +231,7 @@ class CommandWhitelistValidator:
         return CommandValidationResult(
             is_valid=True,
             command=base_command,
-            category=category_name,
+            category=category_enum,
             platform=platform,
             max_execution_time=config.get("max_execution_time"),
             safe_options_used=validation_result.safe_options_used
@@ -235,6 +244,15 @@ class CommandWhitelistValidator:
                 if config.get("command", exec_name) == command:
                     return category_name, config
         return None
+
+    def _parse_category(self, category_name: str) -> CommandCategory | None:
+        """Parse category string to CommandCategory enum."""
+        category_map = {
+            "csv_whitelist": CommandCategory.CSV_WHITELIST,
+            "network_diagnostics": CommandCategory.NETWORK_DIAGNOSTICS,
+            "system_diagnostics": CommandCategory.SYSTEM_DIAGNOSTICS,
+        }
+        return category_map.get(category_name)
 
     def _validate_command_arguments(
         self,
@@ -361,7 +379,8 @@ class CommandWhitelistValidator:
         if not command_config:
             return None
         
-        category, config = command_config
+        category_name, config = command_config
+        category_enum = self._parse_category(category_name)
         
         safe_options = config.get("safe_options", {})
         if isinstance(safe_options, dict):
@@ -371,7 +390,7 @@ class CommandWhitelistValidator:
             
         return WhitelistedCommand(
             command=config.get("command", command),
-            category=category,
+            category=category_enum,
             description=config.get("description"),
             safe_options=platform_options,
             validation=config.get("validation", {}),
@@ -419,10 +438,25 @@ class CommandWhitelistValidator:
 _validator_instance: CommandWhitelistValidator | None = None
 
 
+def register_whitelist_validator(validator: CommandWhitelistValidator) -> None:
+    """Explicitly register the global whitelist validator instance."""
+    global _validator_instance
+    _validator_instance = validator
+
+
 def get_whitelist_validator(whitelist_path: str | None = None) -> CommandWhitelistValidator:
-    """Get global whitelist validator instance."""
+    """Get global whitelist validator instance.
+
+    If no validator has been explicitly registered, one will be created from
+    the default path (or the provided path). This backward-compatibility mode
+    is deprecated; new code should use register_whitelist_validator().
+    """
     global _validator_instance
     if _validator_instance is None:
+        logger.warning(
+            "get_whitelist_validator() called without explicit registration; "
+            "creating validator implicitly. Use register_whitelist_validator() for explicit DI."
+        )
         _validator_instance = CommandWhitelistValidator(whitelist_path=whitelist_path or "")
     return _validator_instance
 
@@ -444,27 +478,18 @@ def validate_command_against_whitelist(
 def parse_whitelisted_commands_csv(csv: str | None) -> list[str]:
     """Parse a comma-separated whitelist string into an ordered, deduplicated list.
 
-    Whitespace around entries is stripped. Empty fragments (e.g. trailing commas
-    or back-to-back commas) are dropped. Order of first occurrence is preserved.
-    A ``None`` or empty input yields an empty list.
-
-    Examples:
-        "uptime,df,free"        -> ["uptime", "df", "free"]
-        " uptime , df ,, free " -> ["uptime", "df", "free"]
-        "uptime,uptime,df"      -> ["uptime", "df"]
-        ""                      -> []
+    **Deprecated:** Use `app.utils.csv_commands.parse_command_csv` instead.
+    This function is kept for backward compatibility and will be removed in a future release.
     """
-    if not csv:
-        return []
-    seen: set[str] = set()
-    out: list[str] = []
-    for raw in csv.split(","):
-        token = raw.strip()
-        if not token or token in seen:
-            continue
-        seen.add(token)
-        out.append(token)
-    return out
+    import warnings
+    from app.utils.csv_commands import parse_command_csv
+
+    warnings.warn(
+        "parse_whitelisted_commands_csv is deprecated; use app.utils.csv_commands.parse_command_csv instead",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return parse_command_csv(csv)
 
 
 def get_whitelisted_commands(platform: Platform = Platform.LINUX) -> list[str]:

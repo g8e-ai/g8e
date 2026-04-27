@@ -61,7 +61,6 @@ func main() {
 	}
 
 	var apiKey string
-	var operatorSessionID string
 	var deviceToken string
 	var endpointURL string
 	var caURL string
@@ -97,7 +96,6 @@ func main() {
 	var verifyVault bool
 	var resetVault bool
 	flag.StringVar(&apiKey, "k", "", "API key")
-	flag.StringVar(&operatorSessionID, "S", "", "Pre-authorized operator session ID (from device link auth)")
 	flag.StringVar(&deviceToken, "D", "", "Device link token for operator deployment")
 	flag.StringVar(&endpointURL, "e", "", "Endpoint (hostname or IP)")
 	flag.BoolVar(&cloudMode, "c", true, "Cloud mode")
@@ -109,7 +107,6 @@ func main() {
 	flag.IntVar(&wssPort, "wss-port", 443, "WSS port to dial on g8es (default: 443)")
 	flag.IntVar(&httpPort, "http-port", 443, "HTTPS port for auth/bootstrap via g8es proxy (default: 443)")
 	flag.StringVar(&apiKey, "key", "", "API key")
-	flag.StringVar(&operatorSessionID, "operator_session", "", "Pre-authorized operator session ID (from device link auth)")
 	flag.StringVar(&deviceToken, "device-token", "", "Device link token for operator deployment")
 	flag.StringVar(&endpointURL, "endpoint", "", "Endpoint (hostname or IP)")
 	flag.StringVar(&caURL, "ca-url", "", "Override URL for hub CA certificate fetch (default: http://<endpoint>/ca.crt)")
@@ -146,7 +143,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Usage: g8e.operator [options]\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		fmt.Fprintf(os.Stderr, "  -k, --key <key>         API key (or set G8E_OPERATOR_API_KEY)\n")
-		fmt.Fprintf(os.Stderr, "  -S, --session <id>      Pre-authorized operator session ID (from device link auth)\n")
 		fmt.Fprintf(os.Stderr, "  -D, --device-token <tok> Device link token for operator deployment\n")
 		fmt.Fprintf(os.Stderr, "  -e, --endpoint <host>     Operator endpoint: IP address of the Docker host running g8es\n")
 		fmt.Fprintf(os.Stderr, "      --ca-url <url>        Override URL for hub CA certificate fetch (default: http://<endpoint>/ca.crt)\n")
@@ -247,25 +243,18 @@ func main() {
 	}
 	logger.Info("Hub CA certificate loaded")
 
-	if operatorSessionID == "" {
-		if deviceToken == "" {
-			deviceToken = settings.DeviceToken
-		}
-		if deviceToken != "" {
-			logger.Info("Device link token provided, authenticating...")
-			deviceResult, err := auth.AuthenticateWithDeviceToken(deviceToken, operatorEndpoint, logger, settings.User)
-			if err != nil {
-				logger.Error("Device link authentication failed", "error", err)
-				fmt.Fprintf(os.Stderr, "Device authentication failed: %v\n", err)
-				os.Exit(constants.ExitAuthFailure)
-			}
-			operatorSessionID = deviceResult.OperatorSessionID
-			logger.Info("Device authentication successful", "operator_id", deviceResult.OperatorID)
-		}
+	if deviceToken == "" {
+		deviceToken = settings.DeviceToken
 	}
-
-	if operatorSessionID == "" {
-		operatorSessionID = settings.OperatorSessionID
+	if deviceToken != "" {
+		logger.Info("Device link token provided, authenticating...")
+		deviceResult, err := auth.AuthenticateWithDeviceToken(deviceToken, operatorEndpoint, logger, settings.User)
+		if err != nil {
+			logger.Error("Device link authentication failed", "error", err)
+			fmt.Fprintf(os.Stderr, "Device authentication failed: %v\n", err)
+			os.Exit(constants.ExitAuthFailure)
+		}
+		logger.Info("Device authentication successful", "operator_id", deviceResult.OperatorID)
 	}
 
 	if logLevel == "info" {
@@ -274,25 +263,19 @@ func main() {
 		}
 	}
 
-	var authMode string
-	if operatorSessionID != "" {
-		authMode = constants.Status.AuthMode.OperatorSession
-	} else {
-		authMode = constants.Status.AuthMode.APIKey
-		if apiKey == "" {
-			apiKey = settings.OperatorAPIKey
+	if apiKey == "" {
+		apiKey = settings.OperatorAPIKey
+	}
+	if apiKey == "" {
+		var err error
+		apiKey, err = promptForAPIKey()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error reading API key: %v\n", err)
+			os.Exit(constants.ExitConfigError)
 		}
 		if apiKey == "" {
-			var err error
-			apiKey, err = promptForAPIKey()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error reading API key: %v\n", err)
-				os.Exit(constants.ExitConfigError)
-			}
-			if apiKey == "" {
-				fmt.Fprintf(os.Stderr, "API key is required\n")
-				os.Exit(constants.ExitConfigError)
-			}
+			fmt.Fprintf(os.Stderr, "API key is required\n")
+			os.Exit(constants.ExitConfigError)
 		}
 	}
 
@@ -307,8 +290,6 @@ func main() {
 		OperatorEndpoint:    operatorEndpoint,
 		WSSPort:             wssPort,
 		HTTPPort:            httpPort,
-		AuthMode:            authMode,
-		OperatorSessionID:   operatorSessionID,
 		CloudMode:           cloudMode,
 		CloudProvider:       cloudProvider,
 		LocalStorageEnabled: localStorage,

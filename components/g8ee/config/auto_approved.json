@@ -1,5 +1,5 @@
 {
-    "enabled": false,
+    "enabled": true,
     "version": "1.0.0",
     "description": "Base commands that bypass the human approval prompt when CommandValidationSettings.enable_auto_approve is true. Auto-approved commands MUST still pass all hard safety gates (forbidden patterns, blacklist, whitelist if enabled). This file lists the platform-default 'rubber-stamped as benign' base commands. The CSV CommandValidationSettings.auto_approved_commands field augments this list per-user.",
     "auto_approved_commands": [

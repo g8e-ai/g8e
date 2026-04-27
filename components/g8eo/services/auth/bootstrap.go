@@ -106,11 +106,9 @@ type AuthServicesResponse struct {
 }
 
 // RequestBootstrapConfig authenticates with g8ed and receives bootstrap configuration.
-// Supports two authentication modes:
-// - API key auth: POST /api/auth/operator with Bearer token
-// - OperatorSession auth: Device link flow using pre-authorized operator session IDs
+// Supports API key auth: POST /api/auth/operator with Bearer token
 func (bs *BootstrapService) RequestBootstrapConfig(ctx context.Context) (*BootstrapConfig, error) {
-	bs.logger.Info("Authenticating with endpoint...", "auth_mode", bs.config.AuthMode, "endpoint", bs.config.Endpoint)
+	bs.logger.Info("Authenticating with endpoint...", "endpoint", bs.config.Endpoint)
 
 	fingerprint, err := GenerateSystemFingerprint(bs.logger)
 	if err != nil {
@@ -161,10 +159,8 @@ func (bs *BootstrapService) RequestBootstrapConfig(ctx context.Context) (*Bootst
 
 // operatorAuthRequest is the request body for POST /api/auth/operator.
 type operatorAuthRequest struct {
-	SystemInfo        *models.SystemInfo    `json:"system_info"`
-	RuntimeConfig     *models.RuntimeConfig `json:"runtime_config"`
-	OperatorSessionID string                `json:"operator_session_id,omitempty"`
-	AuthMode          string                `json:"auth_mode"`
+	SystemInfo    *models.SystemInfo    `json:"system_info"`
+	RuntimeConfig *models.RuntimeConfig `json:"runtime_config"`
 }
 
 // requestHTTPAuth authenticates via POST /api/auth/operator with exponential backoff.
@@ -174,11 +170,6 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context, systemInfo *mod
 		baseDelay   = 1 * time.Second
 		maxDelay    = 30 * time.Second
 	)
-
-	authMode := bs.config.AuthMode
-	if authMode == "" {
-		authMode = constants.Status.AuthMode.APIKey
-	}
 
 	runtimeConfig := &models.RuntimeConfig{
 		CloudMode:           bs.config.CloudMode,
@@ -193,7 +184,6 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context, systemInfo *mod
 	reqBody := operatorAuthRequest{
 		SystemInfo:    systemInfo,
 		RuntimeConfig: runtimeConfig,
-		AuthMode:      authMode,
 	}
 
 	bodyBytes, err := json.Marshal(reqBody)

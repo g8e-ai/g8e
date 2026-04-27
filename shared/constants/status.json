@@ -250,6 +250,12 @@
     "general":   "general"
   },
 
+  "command.category": {
+    "csv.whitelist":        "csv_whitelist",
+    "network.diagnostics": "network_diagnostics",
+    "system.diagnostics":  "system_diagnostics"
+  },
+
   "tool.call.defaults": {
     "label":    "Processing",
     "icon":     "sync",

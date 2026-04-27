@@ -390,6 +390,12 @@ class CommandConstraintsResult(G8eBaseModel):
         description="Base commands that bypass human approval when auto_approve_enabled is true. "
                     "These commands still must pass all hard safety gates.",
     )
+    auto_approved_sources: list[dict[str, str]] = Field(
+        default_factory=list,
+        description="Source attribution for each auto-approved command. "
+                    "Each entry has 'command' (str) and 'source' ('platform' or 'user'). "
+                    "Platform sources come from JSON config; user sources come from CSV override.",
+    )
     global_forbidden_patterns: list[str] = Field(default_factory=list)
     global_forbidden_directories: list[str] = Field(default_factory=list)
     message: str | None = None

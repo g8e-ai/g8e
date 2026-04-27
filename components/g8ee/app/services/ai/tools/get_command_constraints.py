@@ -32,7 +32,7 @@ from app.services.investigation.investigation_service import (
     extract_single_operator_context,
 )
 from app.utils.safety import map_os_string_to_platform
-from app.utils.whitelist_validator import parse_whitelisted_commands_csv
+from app.utils.csv_commands import parse_command_csv
 
 if TYPE_CHECKING:
     from app.services.ai.tool_service import AIToolService
@@ -65,6 +65,7 @@ async def handle(
     blacklisting_enabled = cv.enable_blacklisting if cv else False
     auto_approve_enabled = cv.enable_auto_approve if cv else False
     auto_approved_commands: list[str] = []
+    auto_approved_sources: list[dict[str, str]] = []
     if cv and auto_approve_enabled:
         # Union of JSON-configured platform defaults and per-user CSV override.
         # Order: JSON entries first (platform-blessed), then any extras from CSV.
@@ -73,10 +74,18 @@ async def handle(
             if name not in seen:
                 seen.add(name)
                 auto_approved_commands.append(name)
-        for name in parse_whitelisted_commands_csv(cv.auto_approved_commands):
+                auto_approved_sources.append({"command": name, "source": "platform"})
+        for name in parse_command_csv(cv.auto_approved_commands):
             if name not in seen:
                 seen.add(name)
                 auto_approved_commands.append(name)
+                auto_approved_sources.append({"command": name, "source": "user"})
+            else:
+                # Command exists in both JSON and CSV; CSV override takes precedence for source attribution
+                for source_entry in auto_approved_sources:
+                    if source_entry["command"] == name and source_entry["source"] == "platform":
+                        source_entry["source"] = "user"
+                        break
 
     whitelisted_commands: list[WhitelistedCommand] = []
     global_forbidden_patterns: list[str] = []
@@ -97,7 +106,7 @@ async def handle(
 
         csv_override = cv.whitelisted_commands if cv else None
         csv_commands = (
-            parse_whitelisted_commands_csv(csv_override) if csv_override else []
+            parse_command_csv(csv_override) if csv_override else []
         )
         if csv_commands:
             whitelisted_commands = [WhitelistedCommand(command=cmd) for cmd in csv_commands]
@@ -136,9 +145,18 @@ async def handle(
             )
         if auto_approve_enabled:
             if auto_approved_commands:
+                platform_count = sum(1 for s in auto_approved_sources if s["source"] == "platform")
+                user_count = sum(1 for s in auto_approved_sources if s["source"] == "user")
+                source_breakdown = ""
+                if platform_count > 0 and user_count > 0:
+                    source_breakdown = f" ({platform_count} platform defaults + {user_count} user-configured)"
+                elif platform_count > 0:
+                    source_breakdown = f" ({platform_count} platform defaults)"
+                elif user_count > 0:
+                    source_breakdown = f" ({user_count} user-configured)"
                 parts.append(
                     f"Auto-approve ENABLED: the {len(auto_approved_commands)} listed base commands "
-                    f"({', '.join(auto_approved_commands)}) skip the human approval prompt — the user has "
+                    f"{source_breakdown} ({', '.join(auto_approved_commands)}) skip the human approval prompt — the user has "
                     "rubber-stamped them as benign. All other commands still require human approval. "
                     "Auto-approve does NOT widen the whitelist or bypass the blacklist."
                 )
@@ -157,6 +175,7 @@ async def handle(
         blacklisted_substrings=blacklisted_substrings,
         blacklisted_patterns=blacklisted_patterns,
         auto_approved_commands=auto_approved_commands,
+        auto_approved_sources=auto_approved_sources,
         global_forbidden_patterns=global_forbidden_patterns,
         global_forbidden_directories=global_forbidden_directories,
         message=" ".join(parts),

@@ -145,6 +145,14 @@ def mock_blacklist_validator():
 
 
 @pytest.fixture
+def mock_auto_approved_validator():
+    """Mock auto-approved validator with sample platform defaults."""
+    validator = MagicMock()
+    validator.get_auto_approved_command_names = MagicMock(return_value=["uptime", "date", "whoami"])
+    return validator
+
+
+@pytest.fixture
 def mock_g8e_context():
     """Mock G8eHttpContext."""
     return MagicMock(spec=G8eHttpContext)
@@ -193,12 +201,13 @@ def mock_investigation_service():
 def tool_service_builder():
     """Factory to create AIToolService using builder pattern."""
     from tests.fakes.tool_helpers import create_tool_service_fake
-    
-    def _build(user_settings=None, whitelist_validator=None, blacklist_validator=None):
+
+    def _build(user_settings=None, whitelist_validator=None, blacklist_validator=None, auto_approved_validator=None):
         return create_tool_service_fake(
             auto_approve=True,
             whitelist_validator=whitelist_validator,
-            blacklist_validator=blacklist_validator
+            blacklist_validator=blacklist_validator,
+            auto_approved_validator=auto_approved_validator,
         )
     return _build
 
@@ -403,6 +412,148 @@ async def test_handle_get_command_constraints_csv_override(
     ]
     assert result.blacklisted_commands == []
     assert "Whitelisting ENABLED" in result.message
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_handle_get_command_constraints_auto_approve_platform_only(
+    tool_service_builder,
+    mock_auto_approved_validator,
+    mock_g8e_context,
+    mock_investigation,
+    mock_request_settings,
+):
+    """Test auto_approved_sources when only platform JSON sources are present."""
+    mock_request_settings.command_validation.enable_whitelisting = False
+    mock_request_settings.command_validation.enable_blacklisting = False
+    mock_request_settings.command_validation.enable_auto_approve = True
+    mock_request_settings.command_validation.auto_approved_commands = ""
+
+    tool_service = tool_service_builder(auto_approved_validator=mock_auto_approved_validator)
+
+    result = await gcc_tool.handle(
+        tool_service,
+        tool_args={},
+        investigation=mock_investigation,
+        g8e_context=mock_g8e_context,
+        request_settings=mock_request_settings,
+        execution_id=None,
+    )
+
+    assert isinstance(result, CommandConstraintsResult)
+    assert result.auto_approve_enabled is True
+    assert result.auto_approved_commands == ["uptime", "date", "whoami"]
+    assert len(result.auto_approved_sources) == 3
+    for source in result.auto_approved_sources:
+        assert source["source"] == "platform"
+    assert "3 platform defaults" in result.message
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_handle_get_command_constraints_auto_approve_user_only(
+    tool_service_builder,
+    mock_auto_approved_validator,
+    mock_g8e_context,
+    mock_investigation,
+    mock_request_settings,
+):
+    """Test auto_approved_sources when only user CSV sources are present."""
+    mock_request_settings.command_validation.enable_whitelisting = False
+    mock_request_settings.command_validation.enable_blacklisting = False
+    mock_request_settings.command_validation.enable_auto_approve = True
+    mock_request_settings.command_validation.auto_approved_commands = "ps,df,free"
+
+    tool_service = tool_service_builder(auto_approved_validator=mock_auto_approved_validator)
+
+    result = await gcc_tool.handle(
+        tool_service,
+        tool_args={},
+        investigation=mock_investigation,
+        g8e_context=mock_g8e_context,
+        request_settings=mock_request_settings,
+        execution_id=None,
+    )
+
+    assert isinstance(result, CommandConstraintsResult)
+    assert result.auto_approve_enabled is True
+    assert result.auto_approved_commands == ["uptime", "date", "whoami", "ps", "df", "free"]
+    assert len(result.auto_approved_sources) == 6
+    platform_sources = [s for s in result.auto_approved_sources if s["source"] == "platform"]
+    user_sources = [s for s in result.auto_approved_sources if s["source"] == "user"]
+    assert len(platform_sources) == 3
+    assert len(user_sources) == 3
+    assert "3 platform defaults + 3 user-configured" in result.message
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_handle_get_command_constraints_auto_approve_csv_override(
+    tool_service_builder,
+    mock_auto_approved_validator,
+    mock_g8e_context,
+    mock_investigation,
+    mock_request_settings,
+):
+    """Test CSV override takes precedence when command exists in both JSON and CSV."""
+    mock_request_settings.command_validation.enable_whitelisting = False
+    mock_request_settings.command_validation.enable_blacklisting = False
+    mock_request_settings.command_validation.enable_auto_approve = True
+    mock_request_settings.command_validation.auto_approved_commands = "uptime,top"
+
+    tool_service = tool_service_builder(auto_approved_validator=mock_auto_approved_validator)
+
+    result = await gcc_tool.handle(
+        tool_service,
+        tool_args={},
+        investigation=mock_investigation,
+        g8e_context=mock_g8e_context,
+        request_settings=mock_request_settings,
+        execution_id=None,
+    )
+
+    assert isinstance(result, CommandConstraintsResult)
+    assert result.auto_approve_enabled is True
+    assert result.auto_approved_commands == ["uptime", "date", "whoami", "top"]
+    assert len(result.auto_approved_sources) == 4
+
+    uptime_source = next(s for s in result.auto_approved_sources if s["command"] == "uptime")
+    assert uptime_source["source"] == "user"
+
+    date_source = next(s for s in result.auto_approved_sources if s["command"] == "date")
+    assert date_source["source"] == "platform"
+
+    top_source = next(s for s in result.auto_approved_sources if s["command"] == "top")
+    assert top_source["source"] == "user"
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_handle_get_command_constraints_auto_approve_disabled(
+    tool_service_builder,
+    mock_auto_approved_validator,
+    mock_g8e_context,
+    mock_investigation,
+    mock_request_settings,
+):
+    """Test auto_approved_sources is empty when auto_approve is disabled."""
+    mock_request_settings.command_validation.enable_whitelisting = False
+    mock_request_settings.command_validation.enable_blacklisting = False
+    mock_request_settings.command_validation.enable_auto_approve = False
+    mock_request_settings.command_validation.auto_approved_commands = "ps,df"
+
+    tool_service = tool_service_builder(auto_approved_validator=mock_auto_approved_validator)
+
+    result = await gcc_tool.handle(
+        tool_service,
+        tool_args={},
+        investigation=mock_investigation,
+        g8e_context=mock_g8e_context,
+        request_settings=mock_request_settings,
+        execution_id=None,
+    )
+
+    assert isinstance(result, CommandConstraintsResult)
+    assert result.auto_approve_enabled is False
+    assert result.auto_approved_commands == []
+    assert result.auto_approved_sources == []
+
 
 # =============================================================================
 # TESTS: CommandBlacklistValidator Public Methods

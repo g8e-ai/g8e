@@ -388,6 +388,18 @@ class ServiceFactory:
             settings=settings,
         )
 
+        from app.utils.whitelist_validator import CommandWhitelistValidator, get_whitelist_validator, register_whitelist_validator
+        from app.utils.blacklist_validator import CommandBlacklistValidator, get_blacklist_validator, register_blacklist_validator
+        from app.utils.auto_approved_validator import CommandAutoApprovedValidator, get_auto_approved_validator, register_auto_approved_validator
+
+        whitelist_validator = get_whitelist_validator()
+        blacklist_validator = get_blacklist_validator()
+        auto_approved_validator = get_auto_approved_validator()
+
+        register_whitelist_validator(whitelist_validator)
+        register_blacklist_validator(blacklist_validator)
+        register_auto_approved_validator(auto_approved_validator)
+
         operator_command_service = OperatorCommandService.build(
             cache_aside_service=cache_aside_service,
             operator_data_service=data_services.operator_data_service,  # type: ignore[arg-type]
@@ -397,6 +409,9 @@ class ServiceFactory:
             ai_response_analyzer=response_analyzer,  # type: ignore[arg-type]
             internal_http_client=core_services.internal_http_client,
             approval_service=approval_service,  # type: ignore[arg-type]
+            whitelist_validator=whitelist_validator,
+            blacklist_validator=blacklist_validator,
+            auto_approved_validator=auto_approved_validator,
         )
 
         if pubsub_client is not None:

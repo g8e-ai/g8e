@@ -546,11 +546,13 @@ g8ee implements an **MCP Client Adapter** that translates outbound tool calls in
 
 `OperatorCommandService` enforces three **independent** policies on every command, configured via `settings.command_validation`:
 
-| Policy | Setting | Semantics | Where enforced |
-|--------|---------|-----------|----------------|
-| Whitelist (hard allow-list) | `enable_whitelisting` + `whitelisted_commands` | Only listed commands may run at all. Non-listed commands are rejected at L1 safety validation. | `app/utils/safety.py::validate_command_safety` |
-| Blacklist (hard block-list) | `enable_blacklisting` | Listed commands/patterns are rejected at L1 safety validation. | `app/utils/safety.py::validate_command_safety` |
-| Auto-approve (skip-approval list) | `enable_auto_approve` + `config/auto_approved.json` (platform default) + `auto_approved_commands` (CSV override) | Listed base verbs bypass the human approval prompt. The JSON file ships platform-default benign verbs (`uptime`, `df`, `free`, …) loaded by `CommandAutoApprovedValidator`; the CSV setting unions per-user extras. Does NOT widen the whitelist and does NOT bypass the blacklist or hard-coded forbidden patterns. | `OperatorCommandService.execute_command_internal` |
+| Policy | Setting | JSON Config | Semantics | Where enforced |
+|--------|---------|-------------|-----------|----------------|
+| Whitelist (hard allow-list) | `enable_whitelisting` + `whitelisted_commands` | `config/whitelist.json` (`enabled` field) | Only listed commands may run at all. Non-listed commands are rejected at L1 safety validation. | `app/utils/safety.py::validate_command_safety` |
+| Blacklist (hard block-list) | `enable_blacklisting` | `config/blacklist.json` (`enabled` field) | Listed commands/patterns are rejected at L1 safety validation. | `app/utils/safety.py::validate_command_safety` |
+| Auto-approve (skip-approval list) | `enable_auto_approve` + `config/auto_approved.json` (platform default) + `auto_approved_commands` (CSV override) | `config/auto_approved.json` (`enabled` field) | Listed base verbs bypass the human approval prompt. The JSON file ships platform-default benign verbs (`uptime`, `df`, `free`, …) loaded by `CommandAutoApprovedValidator`; the CSV setting unions per-user extras. Does NOT widen the whitelist and does NOT bypass the blacklist or hard-coded forbidden patterns. | `OperatorCommandService.execute_command_internal` |
+
+**JSON `enabled` field semantics:** Each JSON config file has an `enabled` boolean field (defaults to `true`). When `enabled: false`, the validator loads an empty index regardless of the entries in the file — this is a file-level kill switch that allows platform operators to neutralize the entire JSON file without touching per-request settings. Enforcement requires **both** the JSON `enabled` field and the corresponding per-request setting to be `true`.
 
 The three policies are orthogonal. Auto-approve runs **after** L1 safety validation, so a command must pass every hard gate before its base verb is checked against `auto_approved_commands`. The Tribunal is informed of all three via `get_command_constraints` (`auto_approve_enabled`, `auto_approved_commands`) but must still obey hard gates regardless of auto-approve.
 

@@ -83,7 +83,7 @@ from .lfaa_service import OperatorLFAAService
 from .port_service import OperatorPortService
 from .pubsub_service import OperatorPubSubService
 from app.utils.safety import validate_command_safety
-from app.utils.whitelist_validator import parse_whitelisted_commands_csv
+from app.utils.csv_commands import parse_command_csv
 from app.utils.validators import (
     get_auto_approved_validator,
     get_blacklist_validator,
@@ -181,6 +181,9 @@ class OperatorCommandService:
         ai_response_analyzer: AIResponseAnalyzerProtocol,
         internal_http_client: G8edClientProtocol,
         approval_service: ApprovalServiceProtocol,
+        whitelist_validator: CommandWhitelistValidator | None = None,
+        blacklist_validator: CommandBlacklistValidator | None = None,
+        auto_approved_validator: CommandAutoApprovedValidator | None = None,
     ) -> OperatorCommandService:
         """Construct, wire, and return a fully-initialised OperatorCommandService."""
         pubsub_service = OperatorPubSubService()
@@ -240,6 +243,9 @@ class OperatorCommandService:
             operator_data_service=operator_data_service,
             investigation_service=investigation_service,
             settings=settings,
+            whitelist_validator=whitelist_validator,
+            blacklist_validator=blacklist_validator,
+            auto_approved_validator=auto_approved_validator,
         )
 
     def set_pubsub_client(self, client: PubSubClient) -> None:
@@ -307,7 +313,7 @@ class OperatorCommandService:
         # Prefer the per-request (user) command_validation settings — get_user_settings
         # already falls back to platform defaults when no user document exists.
         cv = request_settings.command_validation if request_settings else self._cv
-        whitelist_override = parse_whitelisted_commands_csv(cv.whitelisted_commands)
+        whitelist_override = parse_command_csv(cv.whitelisted_commands)
         operator_context = extract_single_operator_context(primary) if primary else None
         safety_result = validate_command_safety(
             command,
@@ -344,7 +350,7 @@ class OperatorCommandService:
         # of whitelisting: a command must still pass ALL L1 hard gates above
         # (forbidden patterns, blacklist, and whitelist if enabled) before
         # auto-approve can apply.
-        csv_auto_approve_override = parse_whitelisted_commands_csv(cv.auto_approved_commands)
+        csv_auto_approve_override = parse_command_csv(cv.auto_approved_commands)
         base_command = command.split()[0] if command else ""
         auto_approve_result = self._auto_approved_validator.is_auto_approved(
             command, extra_commands=csv_auto_approve_override
