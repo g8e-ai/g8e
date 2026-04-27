@@ -320,57 +320,64 @@ async def orchestrate_tool_execution(
     sage_request: SageOperatorRequest | None = None
     gen_result: CommandGenerationResult | None = None
 
-    if tool_name == OperatorToolName.RUN_COMMANDS:
-        sage_request = SageOperatorRequest.model_validate(raw_args)
-        request = (sage_request.request or "").strip()
+    try:
+        if tool_name == OperatorToolName.RUN_COMMANDS:
+            sage_request = SageOperatorRequest.model_validate(raw_args)
+            request = (sage_request.request or "").strip()
 
-        if request:
-            logger.info(
-                "[TRIBUNAL-INVOKE] run_commands_with_operator detected: request_len=%d guidelines_len=%d target_operator=%s",
-                len(request), len(sage_request.guidelines or ""), sage_request.target_operator,
-            )
-            logger.info(
-                "[TRIBUNAL-INVOKE] Request settings: llm_command_gen_enabled=%s llm_command_gen_auditor=%s llm_command_gen_passes=%d assistant_model=%s eval_judge_model=%s",
-                request_settings.llm.llm_command_gen_enabled,
-                request_settings.llm.llm_command_gen_auditor,
-                request_settings.llm.llm_command_gen_passes,
-                request_settings.llm.assistant_model,
-                request_settings.eval_judge.model,
-            )
-
-            try:
-                executor_args, gen_result = await TribunalInvoker.run(
-                    sage_request=sage_request,
-                    investigation=investigation,
-                    g8e_context=g8e_context,
-                    g8ed_event_service=g8ed_event_service,
-                    request_settings=request_settings,
-                    tool_executor=tool_executor,
+            if request:
+                logger.info(
+                    "[TRIBUNAL-INVOKE] run_commands_with_operator detected: request_len=%d guidelines_len=%d target_operator=%s",
+                    len(request), len(sage_request.guidelines or ""), sage_request.target_operator,
                 )
-            except (TribunalError, ValidationError) as exc:
-                error_msg = exc.user_message if isinstance(exc, TribunalError) else str(exc)
-                logger.error(
-                    "[TRIBUNAL-ERROR] %s (%s): %s",
-                    type(exc).__name__, tool_name, error_msg,
-                )
-                return _tribunal_error_result(
-                    tool_name=tool_name,
-                    request=request,
-                    error_msg=error_msg,
+                logger.info(
+                    "[TRIBUNAL-INVOKE] Request settings: llm_command_gen_enabled=%s llm_command_gen_auditor=%s llm_command_gen_passes=%d assistant_model=%s eval_judge_model=%s",
+                    request_settings.llm.llm_command_gen_enabled,
+                    request_settings.llm.llm_command_gen_auditor,
+                    request_settings.llm.llm_command_gen_passes,
+                    request_settings.llm.assistant_model,
+                    request_settings.eval_judge.model,
                 )
 
-            raw_args = executor_args.model_dump(by_alias=True)
+                try:
+                    executor_args, gen_result = await TribunalInvoker.run(
+                        sage_request=sage_request,
+                        investigation=investigation,
+                        g8e_context=g8e_context,
+                        g8ed_event_service=g8ed_event_service,
+                        request_settings=request_settings,
+                        tool_executor=tool_executor,
+                    )
+                except (TribunalError, ValidationError) as exc:
+                    error_msg = exc.user_message if isinstance(exc, TribunalError) else str(exc)
+                    logger.error(
+                        "[TRIBUNAL-ERROR] %s (%s): %s",
+                        type(exc).__name__, tool_name, error_msg,
+                    )
+                    return _tribunal_error_result(
+                        tool_name=tool_name,
+                        request=request,
+                        error_msg=error_msg,
+                    )
 
-    execution_id = generate_command_execution_id()
+                raw_args = executor_args.model_dump(by_alias=True)
 
-    result = await tool_executor.execute_tool_call(
-        tool_name,
-        raw_args,
-        investigation,
-        g8e_context,
-        request_settings=request_settings,
-        execution_id=execution_id,
-    )
+        execution_id = generate_command_execution_id()
+
+        result = await tool_executor.execute_tool_call(
+            tool_name,
+            raw_args,
+            investigation,
+            g8e_context,
+            request_settings=request_settings,
+            execution_id=execution_id,
+        )
+    except asyncio.CancelledError:
+        logger.info(
+            "[ORCHESTRATE-TOOL] Tool execution cancelled for %s",
+            tool_name
+        )
+        raise
 
     if (
         gen_result is not None
@@ -476,6 +483,12 @@ async def execute_turn_tool_calls(
                 g8ed_event_service=g8ed_event_service,
                 request_settings=request_settings,
             )
+        except asyncio.CancelledError:
+            logger.info(
+                "[SEQ_EXEC] Tool execution cancelled at call %d of %d",
+                i, num_calls
+            )
+            raise
         except Exception as exc:
             logger.error("[SEQ_EXEC] Function call %d (%s) failed: %s", i, fc.name, exc)
             _exc_result = CommandExecutionResult(

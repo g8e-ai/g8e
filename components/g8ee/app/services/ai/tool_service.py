@@ -275,73 +275,79 @@ class AIToolService:
         and the native per-tool lifecycle event emitted by agent_sse (for universal
         tools, an ``LLM_TOOL_G8E_<TOOL>_REQUESTED`` chunk carrying the same id).
         """
-        if tool_name == OperatorToolName.RUN_COMMANDS:
-            raw_command = tool_args.get("command", "")
-            command_lower = raw_command.lower() if isinstance(raw_command, str) else ""
-            for pattern in FORBIDDEN_COMMAND_PATTERNS:
-                if pattern in command_lower:
+        try:
+            if tool_name == OperatorToolName.RUN_COMMANDS:
+                raw_command = tool_args.get("command", "")
+                command_lower = raw_command.lower() if isinstance(raw_command, str) else ""
+                for pattern in FORBIDDEN_COMMAND_PATTERNS:
+                    if pattern in command_lower:
+                        error_msg = (
+                            f"SECURITY VIOLATION: Command contains forbidden pattern '{pattern}'. "
+                            f"Privilege escalation commands (sudo, su, pkexec, doas, etc.) are strictly prohibited. "
+                            f"Find an alternative approach that does not require elevated privileges."
+                        )
+                        logger.error(
+                            "[SECURITY] Blocked forbidden command pattern '%s' in: %s",
+                            pattern, raw_command,
+                        )
+                        return CommandExecutionResult(
+                            success=False,
+                            error=error_msg,
+                            error_type=CommandErrorType.SECURITY_VIOLATION,
+                            blocked_pattern=pattern,
+                        )
+
+            if tool_name in OPERATOR_TOOLS:
+                if not g8e_context or not g8e_context.has_bound_operator():
                     error_msg = (
-                        f"SECURITY VIOLATION: Command contains forbidden pattern '{pattern}'. "
-                        f"Privilege escalation commands (sudo, su, pkexec, doas, etc.) are strictly prohibited. "
-                        f"Find an alternative approach that does not require elevated privileges."
+                        "No operators are currently BOUND to this session. "
+                        "Operator commands can only be executed when an operator is explicitly bound in the g8e UI."
                     )
-                    logger.error(
-                        "[SECURITY] Blocked forbidden command pattern '%s' in: %s",
-                        pattern, raw_command,
-                    )
+                    logger.error("[TOOL_CALL] Execution blocked: No bound operators in G8eHttpContext")
                     return CommandExecutionResult(
                         success=False,
                         error=error_msg,
-                        error_type=CommandErrorType.SECURITY_VIOLATION,
-                        blocked_pattern=pattern,
+                        error_type=CommandErrorType.NO_OPERATORS_AVAILABLE,
                     )
 
-        if tool_name in OPERATOR_TOOLS:
-            if not g8e_context or not g8e_context.has_bound_operator():
-                error_msg = (
-                    "No operators are currently BOUND to this session. "
-                    "Operator commands can only be executed when an operator is explicitly bound in the g8e UI."
+            if tool_name == OperatorToolName.G8E_SEARCH_WEB and self.web_search_provider is None:
+                raise ExternalServiceError(
+                    "g8e_web_search called but WebSearchProvider is not configured"
                 )
-                logger.error("[TOOL_CALL] Execution blocked: No bound operators in G8eHttpContext")
+
+            logger.info("[TOOL_CALL] Starting execution: %s", tool_name)
+            logger.info("[TOOL_CALL] Args: %s", tool_args)
+            logger.info(
+                "[TOOL_CALL] Context - case_id: %s, user_id: %s",
+                g8e_context.case_id if g8e_context else None,
+                g8e_context.user_id if g8e_context else None,
+            )
+            logger.info(
+                "[TOOL_CALL] Investigation ID: %s",
+                investigation.id if investigation else "None",
+            )
+
+            handler = self._tool_handlers.get(tool_name)
+            if not handler:
+                error_msg = (
+                    f"Unknown function: {tool_name}. "
+                    f"Registered functions: {', '.join(self._tool_handlers.keys())}"
+                )
+                logger.error("[TOOL_CALL] Unregistered function called: %s", tool_name)
+                logger.error("[TOOL_CALL] Available functions: %s", list(self._tool_handlers.keys()))
                 return CommandExecutionResult(
                     success=False,
                     error=error_msg,
-                    error_type=CommandErrorType.NO_OPERATORS_AVAILABLE,
+                    error_type=CommandErrorType.UNKNOWN_TOOL,
                 )
 
-        if tool_name == OperatorToolName.G8E_SEARCH_WEB and self.web_search_provider is None:
-            raise ExternalServiceError(
-                "g8e_web_search called but WebSearchProvider is not configured"
-            )
-
-        logger.info("[TOOL_CALL] Starting execution: %s", tool_name)
-        logger.info("[TOOL_CALL] Args: %s", tool_args)
-        logger.info(
-            "[TOOL_CALL] Context - case_id: %s, user_id: %s",
-            g8e_context.case_id if g8e_context else None,
-            g8e_context.user_id if g8e_context else None,
-        )
-        logger.info(
-            "[TOOL_CALL] Investigation ID: %s",
-            investigation.id if investigation else "None",
-        )
-
-        handler = self._tool_handlers.get(tool_name)
-        if not handler:
-            error_msg = (
-                f"Unknown function: {tool_name}. "
-                f"Registered functions: {', '.join(self._tool_handlers.keys())}"
-            )
-            logger.error("[TOOL_CALL] Unregistered function called: %s", tool_name)
-            logger.error("[TOOL_CALL] Available functions: %s", list(self._tool_handlers.keys()))
-            return CommandExecutionResult(
-                success=False,
-                error=error_msg,
-                error_type=CommandErrorType.UNKNOWN_TOOL,
-            )
-
-        try:
             return await handler(self, tool_args, investigation, g8e_context, request_settings, execution_id)
+        except asyncio.CancelledError:
+            logger.info(
+                "[TOOL_CALL] Tool execution cancelled for %s (execution_id=%s)",
+                tool_name, execution_id
+            )
+            raise
         except (ValidationError, ExternalServiceError):
             raise
         except Exception as e:
