@@ -12,7 +12,7 @@
 # limitations under the License.
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, List, Optional, Dict
 
 from app.constants.collections import DB_COLLECTION_OPERATORS
 from app.constants.status import (
@@ -22,11 +22,12 @@ from app.constants.status import (
 )
 from app.errors import ValidationError
 from app.models.operators import OperatorDocument
-from app.services.protocols import OperatorDataServiceProtocol
+from app.services.protocols import OperatorDataServiceProtocol, SupervisorServiceProtocol
 from app.utils.timestamp import now
 
 if TYPE_CHECKING:
     from app.services.cache.cache_aside import CacheAsideService
+    from app.services.infra.settings_service import SettingsService
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +43,12 @@ class OperatorLifecycleService:
     def __init__(
         self,
         operator_data_service: OperatorDataServiceProtocol,
+        supervisor_service: SupervisorServiceProtocol,
+        settings_service: Optional["SettingsService"] = None,
     ):
         self.operator_data_service = operator_data_service
+        self.supervisor_service = supervisor_service
+        self.settings_service = settings_service
         # Access the underlying cache for direct document updates
         self._cache: "CacheAsideService" = operator_data_service.cache  # type: ignore
 
@@ -189,3 +194,125 @@ class OperatorLifecycleService:
         )
 
         return result.success
+
+    async def activate_g8ep_operator(self, user_id: str) -> None:
+        """Orchestrates g8ep operator activation after login.
+        
+        Authority: g8ee (process owner for g8ep operator).
+        """
+        try:
+            # Find the specific slot designated as the g8ep for this user
+            operators = await self.operator_data_service.query_operators([
+                {"field": "user_id", "operator": "==", "value": user_id},
+                {"field": "is_g8ep", "operator": "==", "value": True}
+            ])
+
+            if not operators:
+                logger.info(f"[OPERATOR-LIFECYCLE] No g8ep operator slot found for user {user_id}")
+                return
+
+            operator = operators[0]
+            
+            # If already active/bound — nothing to do
+            if operator.status in [OperatorStatus.ACTIVE, OperatorStatus.BOUND]:
+                logger.info(f"[OPERATOR-LIFECYCLE] g8ep operator already active for user {user_id}", extra={
+                    "operator_id": operator.id
+                })
+                return
+
+            if not operator.api_key:
+                logger.warning(f"[OPERATOR-LIFECYCLE] g8ep operator slot has no API key for user {user_id}", extra={
+                    "operator_id": operator.id
+                })
+                return
+
+            await self.launch_g8ep_operator(operator.api_key)
+
+        except Exception as e:
+            logger.warning(f"[OPERATOR-LIFECYCLE] g8ep operator activation failed (non-fatal): {str(e)}", extra={
+                "user_id": user_id
+            })
+
+    async def launch_g8ep_operator(self, api_key: str) -> None:
+        """Starts the g8ep operator process via XML-RPC.
+
+        Authority: g8ee (process owner for g8ep operator).
+        """
+        logger.info("[OPERATOR-LIFECYCLE] Starting g8ep operator via XML-RPC")
+
+        # 1. Persist API key to platform_settings (authority: g8ee)
+        if self.settings_service:
+            await self.settings_service.update_g8ep_operator_api_key(api_key)
+        else:
+            from app.constants.collections import DB_COLLECTION_SETTINGS, PLATFORM_SETTINGS_DOC
+            result = await self._cache.update_document(
+                collection=DB_COLLECTION_SETTINGS,
+                document_id=PLATFORM_SETTINGS_DOC,
+                data={"settings": {"g8ep_operator_api_key": api_key}},
+                merge=True
+            )
+            if not result.success:
+                raise Exception(f"Failed to persist operator API key: {result.error}")
+
+        # 2. Start supervised process
+        await self.supervisor_service.start_process("operator", wait=False)
+
+        logger.info("[OPERATOR-LIFECYCLE] g8ep operator service signaled")
+
+    async def relaunch_g8ep_operator(self, user_id: str) -> dict[str, object]:
+        """Kills running operator, resets slot, and relaunches.
+        
+        Authority: g8ee (process owner for g8ep operator).
+        """
+        # Find the specific slot designated as the g8ep for this user
+        operators = await self.operator_data_service.query_operators([
+            {"field": "user_id", "operator": "==", "value": user_id},
+            {"field": "is_g8ep", "operator": "==", "value": True}
+        ])
+
+        if not operators:
+            logger.warning(f"[OPERATOR-LIFECYCLE] Relaunch requested but no g8ep operator slot found for user {user_id}")
+            return {"success": False, "error": "No g8ep operator slot found for user"}
+
+        operator = operators[0]
+        operator_id = operator.id
+
+        logger.info(f"[OPERATOR-LIFECYCLE] Relaunching g8ep operator for user {user_id}", extra={
+            "operator_id": operator_id
+        })
+
+        # 1. Stop process
+        await self.supervisor_service.stop_process("operator", wait=True)
+
+        # 2. Reset operator slot (generates new API key)
+        import secrets
+        operator_suffix = operator_id.split('-')[-1][:8]
+        random_token = secrets.token_hex(32)
+        new_api_key = f"g8e_{operator_suffix}_{random_token}"
+
+        update_data = {
+            "api_key": new_api_key,
+            "status": OperatorStatus.AVAILABLE,
+            "updated_at": now(),
+            "operator_session_id": None,
+            "bound_web_session_id": None,
+            "system_info": None,
+            "system_fingerprint": None,
+            "claimed": False,
+        }
+
+        reset_result = await self._cache.update_document(
+            collection=self.operator_data_service.collection,
+            document_id=operator_id,
+            data=update_data,
+            merge=True,
+        )
+
+        if not reset_result.success:
+            logger.error(f"[OPERATOR-LIFECYCLE] Failed to reset operator {operator_id}: {reset_result.error}")
+            return {"success": False, "error": reset_result.error}
+
+        # 3. Launch with new key
+        await self.launch_g8ep_operator(new_api_key)
+
+        return {"success": True, "operator_id": operator_id}

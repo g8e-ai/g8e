@@ -71,8 +71,9 @@ export function createOperatorApiKeyRouter({
             }
 
             const userId = req.userId;
+            const webSessionId = req.webSessionId;
 
-            const result = await operatorService.refreshOperatorApiKey(operatorId, userId);
+            const result = await operatorService.refreshOperatorApiKey(operatorId, userId, webSessionId, null);
 
             if (!result.success) {
                 return res.status(result.message.includes('Unauthorized') ? 403 : 400).json(new ErrorResponse({

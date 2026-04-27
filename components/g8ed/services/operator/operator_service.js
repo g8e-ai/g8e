@@ -218,8 +218,8 @@ class OperatorService {
         return this.slots.initializeOperatorSlots(userId, organizationId, webSessionId);
     }
 
-    async refreshOperatorApiKey(operatorId, userId) {
-        return this.slots.refreshOperatorApiKey(operatorId, userId);
+    async refreshOperatorApiKey(operatorId, userId, webSessionId, broadcastFn) {
+        return this.slots.refreshOperatorApiKey(operatorId, userId, webSessionId, broadcastFn);
     }
 
     async createOperatorSlot(params) {

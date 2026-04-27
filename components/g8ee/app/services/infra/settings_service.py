@@ -64,6 +64,10 @@ class SettingsServiceProtocol(Protocol):
         """Get the bootstrap service dependency."""
         ...
 
+    async def update_g8ep_operator_api_key(self, api_key: str) -> None:
+        """Update the g8ep operator API key in platform settings."""
+        ...
+
 
 class SettingsService:
     """Service for managing g8ee settings with bootstrap loading and cache-aside logic."""
@@ -239,3 +243,23 @@ class SettingsService:
     def get_bootstrap_service(self) -> BootstrapServiceProtocol:
         """Get the bootstrap service dependency."""
         return self._bootstrap
+
+    async def update_g8ep_operator_api_key(self, api_key: str) -> None:
+        """Update the g8ep operator API key in platform settings.
+
+        This persists the API key to the platform_settings document so g8ep's
+        fetch-key-and-run.sh can retrieve it. Authority: g8ee.
+        """
+        if not self._cache_aside:
+            raise ConfigurationError("CacheAsideService required for updating platform settings")
+
+        await self._cache_aside.update_document(
+            collection=DB_COLLECTION_SETTINGS,
+            document_id=PLATFORM_SETTINGS_DOC,
+            update_data={"settings": {"g8ep_operator_api_key": api_key}}
+        )
+
+        self._logger.info(
+            "g8ep operator API key updated in platform settings",
+            extra={"api_key_prefix": api_key[:8] + "..."}
+        )

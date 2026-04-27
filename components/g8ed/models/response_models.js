@@ -356,6 +356,33 @@ export class SSEPushResponse extends G8eBaseModel {
 }
 
 // ---------------------------------------------------------------------------
+// G8EPOperatorActivationResponse
+//
+// Aligned with shared/models/wire/operator_management_responses.json (g8ep_operator_activation_response)
+// ---------------------------------------------------------------------------
+
+export class G8EPOperatorActivationResponse extends G8eBaseModel {
+    static fields = {
+        success: { type: F.boolean, required: true },
+        error:   { type: F.string,  default: null },
+    };
+}
+
+// ---------------------------------------------------------------------------
+// G8EPOperatorRelaunchResponse
+//
+// Aligned with shared/models/wire/operator_management_responses.json (g8ep_operator_relaunch_response)
+// ---------------------------------------------------------------------------
+
+export class G8EPOperatorRelaunchResponse extends G8eBaseModel {
+    static fields = {
+        success:     { type: F.boolean, required: true },
+        operator_id: { type: F.string,  default: null },
+        error:       { type: F.string,  default: null },
+    };
+}
+
+// ---------------------------------------------------------------------------
 // ErrorResponse
 // ---------------------------------------------------------------------------
 

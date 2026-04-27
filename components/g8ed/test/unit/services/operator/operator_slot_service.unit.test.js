@@ -234,6 +234,7 @@ describe('OperatorSlotService', () => {
         it('should terminate old operator and create new one', async () => {
             const operatorId = 'op-old';
             const userId = 'u-123';
+            const webSessionId = 'web-sess-123';
             const oldOperator = new OperatorDocument({
                 id: operatorId,
                 user_id: userId,
@@ -251,18 +252,18 @@ describe('OperatorSlotService', () => {
             mocks.operatorService.relayCreateOperatorSlotToG8ee.mockResolvedValue({
                 success: true,
                 operator_id: 'op-new',
-                api_key: 'key-new'
+                api_key: 'g8e_1a2b3c4d_' + '0'.repeat(64)
             });
             mocks.operatorSessionService.endSession.mockResolvedValue();
             mocks.apiKeyService.issueKey.mockResolvedValue({ success: true });
             mocks.apiKeyService.revokeKey.mockResolvedValue();
             mocks.certificateService.revokeCertificate.mockResolvedValue();
 
-            const result = await service.refreshOperatorApiKey(operatorId, userId, broadcastFn);
+            const result = await service.refreshOperatorApiKey(operatorId, userId, webSessionId, broadcastFn);
 
             expect(result).toBeInstanceOf(OperatorRefreshKeyResponse);
             expect(result.success).toBe(true);
-            expect(result.new_api_key).toBe('key-new');
+            expect(result.new_api_key).toBe('g8e_1a2b3c4d_' + '0'.repeat(64));
             expect(mocks.operatorService.terminateOperator).toHaveBeenCalledWith(operatorId);
             expect(mocks.operatorService.relayCreateOperatorSlotToG8ee).toHaveBeenCalled();
             expect(mocks.apiKeyService.issueKey).toHaveBeenCalled();
@@ -272,7 +273,8 @@ describe('OperatorSlotService', () => {
         it('should return the real API key from the creation relay, not a status string', async () => {
             const operatorId = 'op-old';
             const userId = 'u-123';
-            const newApiKey = 'g8e_new_xyz_123';
+            const webSessionId = 'web-sess-123';
+            const newApiKey = 'g8e_1a2b3c4d_' + '0'.repeat(64);
             const newOperatorId = 'op-new';
 
             const oldOperator = new OperatorDocument({
@@ -293,7 +295,7 @@ describe('OperatorSlotService', () => {
                 api_key: newApiKey
             });
 
-            const result = await service.refreshOperatorApiKey(operatorId, userId);
+            const result = await service.refreshOperatorApiKey(operatorId, userId, webSessionId);
 
             expect(result.success).toBe(true);
             expect(result.new_api_key).toBe(newApiKey);
@@ -304,14 +306,14 @@ describe('OperatorSlotService', () => {
 
         it('should fail if operator not found', async () => {
             mocks.operatorDataService.getOperator.mockResolvedValue(null);
-            const result = await service.refreshOperatorApiKey('op-1', 'u-1', vi.fn());
+            const result = await service.refreshOperatorApiKey('op-1', 'u-1', 'web-sess-123', vi.fn());
             expect(result).toBeInstanceOf(OperatorRefreshKeyResponse);
             expect(result.success).toBe(false);
         });
 
         it('should fail if unauthorized', async () => {
             mocks.operatorDataService.getOperator.mockResolvedValue(new OperatorDocument({ user_id: 'u-other', id: 'op-1' }));
-            const result = await service.refreshOperatorApiKey('op-1', 'u-me', vi.fn());
+            const result = await service.refreshOperatorApiKey('op-1', 'u-me', 'web-sess-123', vi.fn());
             expect(result).toBeInstanceOf(OperatorRefreshKeyResponse);
             expect(result.success).toBe(false);
             expect(result.message).toBe('Unauthorized');
@@ -327,7 +329,8 @@ describe('OperatorSlotService', () => {
                 operatorType: OperatorType.CLOUD,
                 cloudSubtype: CloudOperatorSubtype.G8E_POD,
                 namePrefix: 'op',
-                isG8eNode: true
+                isG8eNode: true,
+                webSessionId: 'web-sess-123'
             };
 
             const operatorId = 'new-op-id';
@@ -355,7 +358,7 @@ describe('OperatorSlotService', () => {
                 error: 'g8ee error'
             });
 
-            const result = await service.createOperatorSlot({ userId: 'u-1' });
+            const result = await service.createOperatorSlot({ userId: 'u-1', webSessionId: 'web-sess-123' });
 
             expect(result.success).toBe(false);
             expect(result.message).toBe('g8ee error');
@@ -364,7 +367,7 @@ describe('OperatorSlotService', () => {
 
         it('should throw error if operatorService is missing', async () => {
             const serviceNoRelay = new OperatorSlotService({ ...mocks, operatorService: null });
-            await expect(serviceNoRelay.createOperatorSlot({ userId: 'u-1' })).rejects.toThrow('operatorService is required');
+            await expect(serviceNoRelay.createOperatorSlot({ userId: 'u-1', webSessionId: 'web-sess-123' })).rejects.toThrow('operatorService is required');
         });
     });
 

@@ -296,6 +296,43 @@ class ApiKeyGenerationResponse(G8eBaseModel):
     error: str | None = None
 
 
+class G8epOperatorActivationRequest(G8eBaseModel):
+    """Request model for g8ep operator activation.
+    
+    Authority: g8ee.
+    Aligned with shared/models/wire/internal_requests.json (g8ep_operator_activation)
+    """
+    user_id: str = Field(..., description="ID of the user whose g8ep operator should be activated")
+
+
+class G8epOperatorActivationResponse(G8eBaseModel):
+    """Response model for g8ep operator activation.
+    
+    Aligned with shared/models/wire/operator_management_responses.json (g8ep_operator_activation_response)
+    """
+    success: bool
+    error: str | None = Field(default=None, description="Error message when unsuccessful")
+
+
+class G8epOperatorRelaunchRequest(G8eBaseModel):
+    """Request model for g8ep operator relaunch.
+    
+    Authority: g8ee.
+    Aligned with shared/models/wire/internal_requests.json (g8ep_operator_relaunch)
+    """
+    user_id: str = Field(..., description="ID of the user whose g8ep operator should be relaunched")
+
+
+class G8epOperatorRelaunchResponse(G8eBaseModel):
+    """Response model for g8ep operator relaunch.
+    
+    Aligned with shared/models/wire/operator_management_responses.json (g8ep_operator_relaunch_response)
+    """
+    success: bool
+    operator_id: str | None = Field(default=None, description="The ID of the relaunched operator slot")
+    error: str | None = Field(default=None, description="Error message when unsuccessful")
+
+
 class OperatorListenSessionAuthRequest(G8eBaseModel):
     """Request model for starting a session auth listener.
     

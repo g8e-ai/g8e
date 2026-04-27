@@ -350,6 +350,10 @@ class G8eePlatformSettings(G8eBaseModel):
     search: SearchSettings = Field(default_factory=SearchSettings)
     eval_judge: EvalJudgeSettings = Field(default_factory=EvalJudgeSettings)
     reputation: ReputationSettings = Field(default_factory=ReputationSettings)
+    g8ep_operator_api_key: str | None = Field(
+        None,
+        description="API key for the g8ep operator, persisted for fetch-key-and-run.sh retrieval",
+    )
 
     @property
     def ca_cert_path(self) -> str | None:

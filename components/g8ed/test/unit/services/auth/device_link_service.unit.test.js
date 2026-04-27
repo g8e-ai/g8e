@@ -54,6 +54,7 @@ describe('DeviceLinkService', () => {
             createOperatorSlot: vi.fn(),
             terminateOperator: vi.fn(),
             queryOperators: vi.fn(),
+            queryListedOperators: vi.fn().mockResolvedValue([]),
             collectionName: Collections.OPERATORS
         };
         mockWebSessionService = {

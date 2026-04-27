@@ -215,7 +215,19 @@ export class SetupPage {
 
     _validateStep(step) {
         if (step === 1) {
-            // Validate AI providers
+            const email = document.getElementById('account_email')?.value.trim();
+            if (!email) {
+                this._showStatus('error', 'Email address is required');
+                return false;
+            }
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                this._showStatus('error', 'Enter a valid email address');
+                return false;
+            }
+        }
+
+        if (step === 2) {
             const active = this._getActiveProviders();
             if (active.length === 0) {
                 this._showStatus('error', 'Configure at least one provider (API key or Ollama endpoint)');
@@ -244,14 +256,12 @@ export class SetupPage {
                     focusField();
                     return false;
                 }
-                // host:port form preferred; tolerate legacy "http://" scheme, reject any path (e.g. /v1)
                 const stripped = ollamaUrl.replace(/^http:\/\//i, '');
                 if (stripped.includes('/')) {
                     this._showStatus('error', 'Enter Ollama host as "host:port" (no path, no /v1)');
                     focusField();
                     return false;
                 }
-                // must look like host:port -- non-empty host, then :port (digits), optional nothing else
                 if (!/^[A-Za-z0-9._-]+:\d{1,5}$/.test(stripped)) {
                     this._showStatus('error', 'Ollama host must be "host:port" (e.g. 192.168.1.100:11434)');
                     focusField();
@@ -259,7 +269,6 @@ export class SetupPage {
                 }
             }
 
-            // Validate web search if Google is selected
             if (this._searchProvider === 'google') {
                 const searchKey = document.getElementById('search_api_key')?.value.trim();
                 const projectId = document.getElementById('google_project_id')?.value.trim();
@@ -446,7 +455,7 @@ export class SetupPage {
                         if (defaultModel) {
                             prevValue = defaultModel.id;
                             this._selectedModels[role] = prevValue;
-                            if (text) text.textContent = `${defaultModel.label} (${defaultModel.id})`;
+                            if (text) text.textContent = defaultModel.label;
                         }
                     }
                 }
@@ -459,7 +468,7 @@ export class SetupPage {
                         if (roleModels.length > 0) {
                             prevValue = roleModels[0].id;
                             this._selectedModels[role] = prevValue;
-                            if (text) text.textContent = `${roleModels[0].label} (${roleModels[0].id})`;
+                            if (text) text.textContent = roleModels[0].label;
                             break;
                         }
                     }
@@ -484,18 +493,18 @@ export class SetupPage {
                 for (const model of models) {
                     const option = document.createElement('div');
                     option.className = 'llm-model-dropdown__option';
-                    option.textContent = `${model.label} (${model.id})`;
+                    option.textContent = model.label;
                     option.dataset.value = model.id;
                     option.dataset.provider = provider;
 
                     if (model.id === prevValue) {
                         option.classList.add('selected');
-                        if (text) text.textContent = `${model.label} (${model.id})`;
+                        if (text) text.textContent = model.label;
                     }
 
                     option.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        this._selectModel(role, model.id, `${model.label} (${model.id})`);
+                        this._selectModel(role, model.id, model.label);
                     });
 
                     menu.appendChild(option);
@@ -534,7 +543,7 @@ export class SetupPage {
             if (!config) continue;
             const models = config.all || [];
             const model = models.find(m => m.id === modelId);
-            if (model) return `${model.label} (${model.id})`;
+            if (model) return model.label;
         }
         return modelId;
     }
@@ -608,7 +617,7 @@ export class SetupPage {
                 const text = dropdown?.querySelector('.llm-model-dropdown__text');
                 if (text) {
                     const model = PROVIDER_MODELS.llamacpp?.all?.find(m => m.id === defaults[role]);
-                    if (model) text.textContent = `${model.label} (${model.id})`;
+                    if (model) text.textContent = model.label;
                 }
             }
         });

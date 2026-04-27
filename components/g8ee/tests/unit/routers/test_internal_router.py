@@ -358,20 +358,57 @@ async def test_create_operator_slot_success(g8e_context):
     
     mock_operator_data_service = MagicMock()
     mock_operator_data_service.create_operator = AsyncMock(return_value=True)
+    mock_settings_service = MagicMock()
+    mock_settings_service.update_g8ep_operator_api_key = AsyncMock(return_value=None)
     
     response = await create_operator_slot(
         request=request,
         operator_data_service=mock_operator_data_service,
+        settings_service=mock_settings_service,
         g8e_context=g8e_context
     )
     
     assert response.success is True
     assert response.operator_id is not None
     mock_operator_data_service.create_operator.assert_called_once()
+    mock_settings_service.update_g8ep_operator_api_key.assert_not_called()
     
     # Verify API key format in response matches canonical pattern
     assert API_KEY_OPERATOR_REGEX.match(response.api_key), \
         f"API key {response.api_key} does not match canonical format g8e_[8hex]_[64hex]"
+
+@pytest.mark.asyncio
+async def test_create_operator_slot_g8ep_persists_api_key(g8e_context):
+    request = OperatorSlotCreationRequest(
+        user_id="user-123",
+        organization_id="org-123",
+        slot_number=1,
+        operator_type="cloud",
+        cloud_subtype="g8ep",
+        name_prefix="operator",
+        is_g8e_node=True,
+    )
+    
+    mock_operator_data_service = MagicMock()
+    mock_operator_data_service.create_operator = AsyncMock(return_value=True)
+    mock_settings_service = MagicMock()
+    mock_settings_service.update_g8ep_operator_api_key = AsyncMock(return_value=None)
+    
+    response = await create_operator_slot(
+        request=request,
+        operator_data_service=mock_operator_data_service,
+        settings_service=mock_settings_service,
+        g8e_context=g8e_context
+    )
+    
+    assert response.success is True
+    assert response.operator_id is not None
+    mock_operator_data_service.create_operator.assert_called_once()
+    mock_settings_service.update_g8ep_operator_api_key.assert_called_once()
+    
+    # Verify the API key was passed to the settings service
+    call_args = mock_settings_service.update_g8ep_operator_api_key.call_args
+    assert call_args[0][0] == response.api_key
 
 @pytest.mark.asyncio
 async def test_claim_operator_slot_success(g8e_context):

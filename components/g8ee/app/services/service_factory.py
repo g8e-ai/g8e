@@ -38,6 +38,8 @@ from app.services.data.stake_resolution_data_service import StakeResolutionDataS
 from app.services.infra.http_service import HTTPService
 from app.services.infra.internal_http_client import InternalHttpClient
 from app.services.infra.g8ed_event_service import EventService
+from app.services.infra.supervisor_service import SupervisorService
+from app.services.infra.settings_service import SettingsService
 from app.services.auth.api_key_service import ApiKeyService
 from app.services.auth.certificate_service import CertificateService
 from app.services.operator.operator_session_service import OperatorSessionService
@@ -57,6 +59,7 @@ from app.services.protocols import (
     AIResponseAnalyzerProtocol,
     ToolExecutorProtocol,
     ApprovalServiceProtocol,
+    SupervisorServiceProtocol,
 )
 from app.services.operator.command_service import OperatorCommandService
 from app.services.operator.operator_data_service import OperatorDataService
@@ -80,6 +83,8 @@ class CoreServices(TypedDict):
     http_service: HTTPService | HTTPServiceProtocol
     internal_http_client: InternalHttpClient
     g8ed_event_service: EventService | EventServiceProtocol
+    supervisor_service: SupervisorService | SupervisorServiceProtocol
+    settings_service: SettingsService
 
 
 class DataServices(TypedDict):
@@ -139,6 +144,8 @@ class ServiceFactory:
         from app.services.infra.internal_http_client import InternalHttpClient
         from app.services.infra.http_service import HTTPService
         from app.services.infra.g8ed_event_service import EventService
+        from app.services.infra.settings_service import SettingsService
+        from app.services.infra.supervisor_service import SupervisorService
 
         # Create HTTP service first to manage all HTTP clients
         http_service: HTTPService = HTTPService()
@@ -152,10 +159,15 @@ class ServiceFactory:
             internal_http_client=internal_http_client
         )
 
+        settings_service = SettingsService(cache_aside_service)
+        supervisor_service = SupervisorService(settings_service)
+
         return CoreServices(
             http_service=http_service,
             internal_http_client=internal_http_client,
             g8ed_event_service=g8ed_event_service,
+            supervisor_service=supervisor_service,
+            settings_service=settings_service,
         )
     
     @staticmethod
@@ -199,6 +211,8 @@ class ServiceFactory:
         # Create lifecycle service after data service is available
         operator_lifecycle_service = OperatorLifecycleService(
             operator_data_service=operator_data_service,
+            supervisor_service=core_services['supervisor_service'], # type: ignore[arg-type]
+            settings_service=core_services['settings_service'], # type: ignore[arg-type]
         )
 
         return DataServices(

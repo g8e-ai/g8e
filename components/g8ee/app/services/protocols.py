@@ -342,6 +342,19 @@ class OperatorDataServiceProtocol(Protocol):
 
 
 @runtime_checkable
+class SupervisorServiceProtocol(Protocol):
+    """Protocol for SupervisorService."""
+
+    async def start_process(self, name: str, wait: bool = False) -> bool:
+        """Starts a supervised process."""
+        ...
+
+    async def stop_process(self, name: str, wait: bool = True) -> bool:
+        """Stops a supervised process."""
+        ...
+
+
+@runtime_checkable
 class OperatorLifecycleServiceProtocol(Protocol):
     """Protocol for operator lifecycle orchestration (domain layer)."""
 
@@ -372,6 +385,18 @@ class OperatorLifecycleServiceProtocol(Protocol):
         status: OperatorStatus,
     ) -> bool:
         """Update operator status."""
+        ...
+
+    async def activate_g8ep_operator(self, user_id: str) -> None:
+        """Orchestrates g8ep operator activation after login."""
+        ...
+
+    async def launch_g8ep_operator(self, api_key: str) -> None:
+        """Starts the g8ep operator process via XML-RPC."""
+        ...
+
+    async def relaunch_g8ep_operator(self, user_id: str) -> dict[str, object]:
+        """Kills running operator, resets slot, and relaunches."""
         ...
 
 

@@ -40,37 +40,41 @@ from app.models import CaseCreateRequest, CaseEventPayload, CaseUpdateRequest
 from app.models.cases import CaseCreatedPayload
 from app.models.cache import FieldFilter
 from app.models.internal_api import (
-    ApprovalRespondedResponse,
     ApiKeyGenerationRequest,
     ApiKeyGenerationResponse,
+    ApprovalRespondedResponse,
     CaseResponse,
     ChatMessageRequest,
     ChatStartedResponse,
     DirectCommandRequest,
     DirectCommandSentResponse,
+    G8epOperatorActivationRequest,
+    G8epOperatorActivationResponse,
+    G8epOperatorRelaunchRequest,
+    G8epOperatorRelaunchResponse,
     OperatorApprovalResponse,
+    OperatorAuthenticateRequest,
+    OperatorAuthenticateResponse,
     OperatorBindRequest,
     OperatorBindResponse,
+    OperatorCertificateRevokeRequest,
+    OperatorCertificateRevokeResponse,
+    OperatorListenSessionAuthRequest,
+    OperatorSessionRegisteredResponse,
+    OperatorSessionRegistrationRequest,
+    OperatorSessionRefreshRequest,
+    OperatorSessionRefreshResponse,
+    OperatorSessionValidateRequest,
+    OperatorSessionValidateResponse,
     OperatorSlotClaimRequest,
     OperatorSlotClaimResponse,
     OperatorSlotCreationRequest,
     OperatorSlotCreationResponse,
-    OperatorSessionRegisteredResponse,
-    OperatorSessionRegistrationRequest,
     OperatorStoppedResponse,
     OperatorTerminateRequest,
     OperatorTerminateResponse,
     OperatorUnbindRequest,
     OperatorUnbindResponse,
-    OperatorAuthenticateRequest,
-    OperatorAuthenticateResponse,
-    OperatorSessionValidateRequest,
-    OperatorSessionValidateResponse,
-    OperatorSessionRefreshRequest,
-    OperatorSessionRefreshResponse,
-    OperatorListenSessionAuthRequest,
-    OperatorCertificateRevokeRequest,
-    OperatorCertificateRevokeResponse,
     PendingApprovalsResponse,
     StopAIRequest,
     StopAIResponse,
@@ -101,6 +105,7 @@ from app.services.infra.g8ed_event_service import EventService
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.auth.api_key_service import ApiKeyService
 from app.services.auth.certificate_service import CertificateService
+from app.services.infra.settings_service import SettingsService
 from app.utils.timestamp import now_iso
 
 from ..dependencies import (
@@ -122,6 +127,7 @@ from ..dependencies import (
     get_g8ee_session_auth_listener,
     get_g8ee_api_key_service,
     get_g8ee_certificate_service,
+    get_g8ee_settings_service_write,
     get_g8e_http_context,
     get_g8ee_user_settings,
 )
@@ -441,6 +447,54 @@ async def get_pending_approvals(
     return PendingApprovalsResponse(pending_approvals=pending_approvals)
 
 
+@router.post(API_PATHS["g8ee"]["operators_g8ep_activate"], response_model=G8epOperatorActivationResponse)
+async def activate_g8ep_operator(
+    request: G8epOperatorActivationRequest,
+    operator_lifecycle_service: "OperatorLifecycleService" = Depends(get_g8ee_operator_lifecycle_service),
+):
+    """
+    Activate the g8ep operator for a user.
+    
+    Called by g8ed after login/registration.
+    Authority: g8ee (process owner for g8ep operator).
+    """
+    try:
+        await operator_lifecycle_service.activate_g8ep_operator(request.user_id)
+        return G8epOperatorActivationResponse(success=True)
+    except Exception as e:
+        logger.error(
+            "[INTERNAL-HTTP] Failed to activate g8ep operator",
+            extra={"error": str(e), "user_id": request.user_id}
+        )
+        return G8epOperatorActivationResponse(success=False, error=str(e))
+
+
+@router.post(API_PATHS["g8ee"]["operators_g8ep_relaunch"], response_model=G8epOperatorRelaunchResponse)
+async def relaunch_g8ep_operator(
+    request: G8epOperatorRelaunchRequest,
+    operator_lifecycle_service: "OperatorLifecycleService" = Depends(get_g8ee_operator_lifecycle_service),
+):
+    """
+    Relaunch the g8ep operator for a user.
+    
+    Called by g8ed during reauth/relaunch.
+    Authority: g8ee (process owner for g8ep operator).
+    """
+    try:
+        result = await operator_lifecycle_service.relaunch_g8ep_operator(request.user_id)
+        return G8epOperatorRelaunchResponse(
+            success=result.get("success", False),
+            operator_id=result.get("operator_id"),
+            error=result.get("error"),
+        )
+    except Exception as e:
+        logger.error(
+            "[INTERNAL-HTTP] Failed to relaunch g8ep operator",
+            extra={"error": str(e), "user_id": request.user_id}
+        )
+        return G8epOperatorRelaunchResponse(success=False, error=str(e))
+
+
 @router.post(API_PATHS["g8ee"]["operator_direct_command"], response_model=DirectCommandSentResponse)
 async def execute_direct_command(
     request: DirectCommandRequest,
@@ -662,6 +716,7 @@ async def listen_session_auth(
 async def create_operator_slot(
     request: OperatorSlotCreationRequest,
     operator_data_service: "OperatorDataService" = Depends(get_g8ee_operator_data_service),
+    settings_service: SettingsService = Depends(get_g8ee_settings_service_write),
     g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
 ):
     """
@@ -703,12 +758,22 @@ async def create_operator_slot(
 
         await operator_data_service.create_operator(operator_doc)
 
+        # If this is a g8ep operator, persist the API key to platform_settings
+        # so g8ep's fetch-key-and-run.sh can retrieve it
+        if request.is_g8e_node:
+            await settings_service.update_g8ep_operator_api_key(api_key)
+            logger.info(
+                "[INTERNAL-HTTP] g8ep operator API key persisted to platform_settings",
+                extra={"operator_id": operator_id, "user_id": request.user_id}
+            )
+
         logger.info(
             "[INTERNAL-HTTP] Operator slot created",
             extra={
                 "operator_id": operator_id,
                 "user_id": request.user_id,
                 "slot_number": request.slot_number,
+                "is_g8ep": request.is_g8e_node,
             }
         )
 

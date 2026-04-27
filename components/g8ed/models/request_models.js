@@ -346,6 +346,30 @@ export class PasskeyAuthVerifyRequest extends G8eBaseModel {
 }
 
 // ---------------------------------------------------------------------------
+// G8EPOperatorActivationRequest
+//
+// Aligned with shared/models/wire/internal_requests.json (g8ep_operator_activation)
+// ---------------------------------------------------------------------------
+
+export class G8EPOperatorActivationRequest extends G8eBaseModel {
+    static fields = {
+        user_id: { type: F.string, required: true },
+    };
+}
+
+// ---------------------------------------------------------------------------
+// G8EPOperatorRelaunchRequest
+//
+// Aligned with shared/models/wire/internal_requests.json (g8ep_operator_relaunch)
+// ---------------------------------------------------------------------------
+
+export class G8EPOperatorRelaunchRequest extends G8eBaseModel {
+    static fields = {
+        user_id: { type: F.string, required: true },
+    };
+}
+
+// ---------------------------------------------------------------------------
 // CreateDeviceLinkRequest
 // ---------------------------------------------------------------------------
 
@@ -607,4 +631,6 @@ export class RequestModelFactory {
     static createPasskeyRegisterVerifyRequest(data)      { return PasskeyRegisterVerifyRequest.parse(data); }
     static createPasskeyAuthChallengeRequest(data)       { return PasskeyAuthChallengeRequest.parse(data); }
     static createPasskeyAuthVerifyRequest(data)          { return PasskeyAuthVerifyRequest.parse(data); }
+    static createG8EPOperatorActivationRequest(data)    { return G8EPOperatorActivationRequest.parse(data); }
+    static createG8EPOperatorRelaunchRequest(data)      { return G8EPOperatorRelaunchRequest.parse(data); }
 }

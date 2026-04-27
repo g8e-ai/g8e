@@ -55,15 +55,15 @@ describe('UserService [UNIT]', () => {
     });
 
     describe('_generateApiKey', () => {
-        it('delegates to apiKeyService.generateRawKey', () => {
-            const key = service._generateApiKey();
+        it('delegates to apiKeyService.generateRawKey', async () => {
+            const key = await service._generateApiKey();
             expect(key).toBe('g8e_generated');
             expect(apiKeyService.generateRawKey).toHaveBeenCalled();
         });
 
-        it('falls back to local generation if apiKeyService is missing', () => {
+        it('falls back to local generation if apiKeyService is missing', async () => {
             const serviceNoKeySvc = new UserService({ cacheAsideService: cacheAside, organizationService });
-            const key = serviceNoKeySvc._generateApiKey();
+            const key = await serviceNoKeySvc._generateApiKey();
             expect(key.startsWith(API_KEY_PREFIX)).toBe(true);
         });
     });

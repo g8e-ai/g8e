@@ -323,7 +323,8 @@ async function _doInitialize() {
         
         g8eNodeOperatorService = new G8ENodeOperatorService({ 
             settingsService: settingsSvc, 
-            operatorService: operatorServiceInstance 
+            operatorService: operatorServiceInstance,
+            internalHttpClient: internalHttpClientInstance
         });
 
         postLoginService = new PostLoginService({

@@ -153,7 +153,7 @@ class DeviceLinkService {
         return { success: true };
     }
 
-    async createLink({ user_id, organization_id, name, max_uses = DEFAULT_DEVICE_LINK_MAX_USES, ttl_seconds = DEVICE_LINK_TTL_SECONDS }) {
+    async createLink({ user_id, organization_id, name, max_uses = DEFAULT_DEVICE_LINK_MAX_USES, ttl_seconds = DEVICE_LINK_TTL_SECONDS, webSessionId = null }) {
         if (max_uses < DEVICE_LINK_MAX_USES_MIN || max_uses > DEVICE_LINK_MAX_USES_MAX) {
             return { success: false, error: DeviceLinkError.MAX_USES_INVALID };
         }
@@ -178,6 +178,7 @@ class DeviceLinkService {
                     cloudSubtype: null,
                     namePrefix: 'operator',
                     isG8eNode: false,
+                    webSessionId,
                 });
 
                 if (!creationResponse.success || !creationResponse.operator_id) {
@@ -422,6 +423,7 @@ class DeviceLinkService {
                             cloudSubtype: null,
                             namePrefix: 'operator',
                             isG8eNode: false,
+                            webSessionId: null,
                         });
 
                         if (!creationResponse.success || !creationResponse.operator_id) {

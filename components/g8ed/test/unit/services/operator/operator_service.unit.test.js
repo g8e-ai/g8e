@@ -59,6 +59,10 @@ describe('OperatorService', () => {
             sseService: {
                 publishEvent: vi.fn().mockResolvedValue(true),
             },
+            internalHttpClient: {
+                post: vi.fn(),
+                get: vi.fn(),
+            },
         };
 
         service = new OperatorService(mocks);
@@ -434,14 +438,14 @@ describe('OperatorService', () => {
     describe('Slots & Key Management', () => {
         it('should delegate initializeOperatorSlots to slots subservice', async () => {
             vi.spyOn(service.slots, 'initializeOperatorSlots').mockResolvedValue(true);
-            await service.initializeOperatorSlots('u-1', 'org-1');
-            expect(service.slots.initializeOperatorSlots).toHaveBeenCalledWith('u-1', 'org-1');
+            await service.initializeOperatorSlots('u-1', 'org-1', 'web-sess-1');
+            expect(service.slots.initializeOperatorSlots).toHaveBeenCalledWith('u-1', 'org-1', 'web-sess-1');
         });
 
         it('should delegate refreshOperatorApiKey to slots subservice', async () => {
             vi.spyOn(service.slots, 'refreshOperatorApiKey').mockResolvedValue(true);
-            await service.refreshOperatorApiKey('op-1', 'u-1');
-            expect(service.slots.refreshOperatorApiKey).toHaveBeenCalledWith('op-1', 'u-1');
+            await service.refreshOperatorApiKey('op-1', 'u-1', 'web-sess-1', null);
+            expect(service.slots.refreshOperatorApiKey).toHaveBeenCalledWith('op-1', 'u-1', 'web-sess-1', null);
         });
 
         it('should delegate createOperatorSlot to slots subservice', async () => {

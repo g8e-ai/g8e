@@ -24,7 +24,8 @@ vi.mock('@g8ed/services/operator/operator_relay_service.js', () => ({
         Object.assign(this, {
             relayApprovalResponseToG8ee: vi.fn(),
             relayDirectCommandToG8ee: vi.fn(),
-            relayPendingApprovalsFromG8ee: vi.fn()
+            relayPendingApprovalsFromG8ee: vi.fn(),
+            relayValidateOperatorSessionToG8ee: vi.fn()
         });
     })
 }));
@@ -196,6 +197,7 @@ describe('OperatorApprovalRoutes Unit Tests', () => {
             mockBindingService.getBoundOperatorSessionIds.mockResolvedValue(['test-op-session-id']);
             mockOperatorSessionService.validateSession.mockResolvedValue({ operator_id: 'test-op-id' });
             mockBindingService.resolveBoundOperators.mockResolvedValue([{ operator_id: 'test-op-id' }]);
+            mockRelay.relayValidateOperatorSessionToG8ee.mockResolvedValue({ success: true, valid: true, operator_id: 'test-op-id' });
             mockRelay.relayDirectCommandToG8ee.mockResolvedValue({ success: true });
 
             const res = await request(app)

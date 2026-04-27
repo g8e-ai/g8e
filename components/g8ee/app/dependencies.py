@@ -63,6 +63,7 @@ from .services.operator.operator_auth_service import OperatorAuthService
 from .services.operator.session_auth_listener import SessionAuthListener
 from .services.auth.api_key_service import ApiKeyService
 from .services.auth.certificate_service import CertificateService
+from .services.infra.settings_service import SettingsService
 logger = logging.getLogger(__name__)
 
 
@@ -76,6 +77,15 @@ async def require_internal_origin(request: Request) -> bool:
 
 
 async def get_g8ee_settings_service(request: Request) -> SettingsServiceProtocol:
+    service = getattr(request.app.state, "settings_service", None)
+    if not service:
+        logger.error("Settings service not found in app state")
+        raise ServiceUnavailableError("Settings service not available")
+    return service
+
+
+async def get_g8ee_settings_service_write(request: Request) -> SettingsService:
+    """Get SettingsService for write operations (e.g., updating platform settings)."""
     service = getattr(request.app.state, "settings_service", None)
     if not service:
         logger.error("Settings service not found in app state")

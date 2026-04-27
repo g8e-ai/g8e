@@ -31,6 +31,7 @@ describe('OperatorApiKeyRoutes Unit Tests', () => {
         mockAuthMiddleware = {
             requireAuth: vi.fn((req, res, next) => {
                 req.userId = 'test-user-id';
+                req.webSessionId = 'test-web-session-id';
                 next();
             })
         };
@@ -97,7 +98,7 @@ describe('OperatorApiKeyRoutes Unit Tests', () => {
             expect(res.status).toBe(200);
             expect(res.body.success).toBe(true);
             expect(res.body.new_api_key).toBe('new-api-key');
-            expect(mockOperatorService.refreshOperatorApiKey).toHaveBeenCalledWith('test-op-id', 'test-user-id');
+            expect(mockOperatorService.refreshOperatorApiKey).toHaveBeenCalledWith('test-op-id', 'test-user-id', 'test-web-session-id');
         });
 
         it('returns 403 if refresh is unauthorized', async () => {

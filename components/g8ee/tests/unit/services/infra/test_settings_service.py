@@ -293,3 +293,30 @@ class TestSettingsService:
         settings = await service.get_user_settings(user_id)
 
         assert settings.llm.primary_provider == LLMProvider.OLLAMA
+
+    async def test_update_g8ep_operator_api_key_success(self):
+        """Test updating the g8ep operator API key in platform settings."""
+        cache_mock = MagicMock()
+        cache_mock.update_document = AsyncMock()
+
+        api_key = "g8e_test_key_12345678_abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+
+        service = SettingsService(cache_aside_service=cache_mock)
+        await service.update_g8ep_operator_api_key(api_key)
+
+        # Verify cache_aside.update_document was called with correct parameters
+        cache_mock.update_document.assert_called_once_with(
+            collection=DB_COLLECTION_SETTINGS,
+            document_id=PLATFORM_SETTINGS_DOC,
+            update_data={"settings": {"g8ep_operator_api_key": api_key}}
+        )
+
+    async def test_update_g8ep_operator_api_key_without_cache_raises_error(self):
+        """Test that updating without CacheAsideService raises ConfigurationError."""
+        from app.errors import ConfigurationError
+
+        service = SettingsService(cache_aside_service=None)
+        api_key = "g8e_test_key_12345678_abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+
+        with pytest.raises(ConfigurationError, match="CacheAsideService required"):
+            await service.update_g8ep_operator_api_key(api_key)

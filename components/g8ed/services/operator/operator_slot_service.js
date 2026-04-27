@@ -65,7 +65,7 @@ export class OperatorSlotService {
         return allOperatorIds;
     }
 
-    async refreshOperatorApiKey(id, userId, broadcastFn) {
+    async refreshOperatorApiKey(id, userId, webSessionId, broadcastFn) {
         const oldOperator = await this.operatorDataService.getOperator(id);
         if (!oldOperator) return OperatorRefreshKeyResponse.forFailure(DeviceLinkError.OPERATOR_NOT_FOUND);
         if (oldOperator.user_id !== userId) return OperatorRefreshKeyResponse.forFailure('Unauthorized');
@@ -74,6 +74,7 @@ export class OperatorSlotService {
             user_id: userId,
             organization_id: oldOperator.organization_id,
             source_component: SourceComponent.G8ED,
+            web_session_id: webSessionId,
         };
 
         if (oldOperator.operator_session_id && this.operatorService) {
@@ -98,6 +99,7 @@ export class OperatorSlotService {
             cloudSubtype: oldOperator.cloud_subtype || null,
             namePrefix: oldOperator.name ? oldOperator.name.split('-')[0] : 'operator',
             isG8eNode: oldOperator.is_g8ep ?? false,
+            webSessionId,
         });
 
         if (!creationResponse.success) {
@@ -113,19 +115,18 @@ export class OperatorSlotService {
 
     async createOperatorSlot(params) {
         const { userId, organizationId, slotNumber, operatorType, cloudSubtype, namePrefix, isG8eNode, webSessionId } = params;
-        
+
         // Use g8ee for operator slot creation to enforce architectural boundary
         // g8ed should not write to operators after auth
         if (!this.operatorService) {
             throw new Error('operatorService is required for operator slot creation');
         }
 
-        if (!webSessionId) {
-            throw new Error('webSessionId is required for operator slot creation (G8eHttpContext requires web_session_id)');
-        }
+        // For device link scenarios, webSessionId may be null - use a placeholder
+        const sessionContext = webSessionId || `device-link-${userId}-${Date.now()}`;
 
         const g8eContext = G8eHttpContext.parse({
-            web_session_id: webSessionId,
+            web_session_id: sessionContext,
             user_id: userId,
             organization_id: organizationId,
             source_component: SourceComponent.G8ED,
