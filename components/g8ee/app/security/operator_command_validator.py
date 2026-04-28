@@ -67,7 +67,7 @@ class OperatorCommandValidator:
         Args:
             system_info: Request-scoped client attestation dict (NOT the operator doc field).
                 This is a per-command attestation bag from the operator, threaded to
-                session_service.validate_session. It is unrelated to the deprecated
+                session_service.validate_session. It is unrelated to the deleted
                 OperatorDocument.system_info field.
 
         Returns:

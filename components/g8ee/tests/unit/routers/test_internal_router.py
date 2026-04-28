@@ -426,7 +426,6 @@ async def test_claim_operator_slot_success(g8e_context):
         operator_id="op-123",
         operator_session_id="session-123",
         bound_web_session_id="web-session-123",
-        system_info={"hostname": "test-host", "system_fingerprint": "fp-123"},
         operator_type="CLOUD",
     )
     

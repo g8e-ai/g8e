@@ -102,7 +102,7 @@ class TestOperatorAuthService:
         # Execute
         result = await auth_service.authenticate_operator(
             authorization_header=f"Bearer {api_key}",
-            body={"system_info": {"hostname": "test"}},
+            body={},
             request_context={}
         )
         
@@ -186,7 +186,6 @@ class TestOperatorAuthService:
             user_id=user_id,
             organization_id="org-1",
             operator_type="system",
-            system_info={"hostname": "dev"},
             request_context={}
         )
         
@@ -207,7 +206,6 @@ class TestOperatorAuthService:
             user_id="user-1",
             organization_id=None,
             operator_type="system",
-            system_info={},
             request_context={}
         )
         assert result["success"] is False

@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical SystemInfo wire shape sent from g8eo during operator authentication and embedded in heartbeats. Consumers: g8ee (Python OperatorSystemInfo), g8eo (Go SystemInfo / wire.go), g8ed (JS SystemInfo in operator_model.js).",
+  "_comment": "Reusable sub-shape definitions referenced by wire/heartbeat.json (os_details, user_details, disk_details, memory_details, environment, fingerprint_details). These are NOT the deleted OperatorDocument.system_info field.",
 
   "system_info": {
     "_description": "Static host identity information sent by g8eo at authentication time and updated on each heartbeat.",

@@ -14,7 +14,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../../utils/logger.js';
 import { OperatorStatus, OperatorType, CloudOperatorSubtype, DEFAULT_OPERATOR_SLOTS } from '../../constants/operator.js';
-import { OperatorDocument, SystemInfo, OperatorSlotCreationResponse } from '../../models/operator_model.js';
+import { OperatorDocument, OperatorSlotCreationResponse } from '../../models/operator_model.js';
 import { OperatorRefreshKeyResponse } from '../../models/response_models.js';
 import { G8eHttpContext } from '../../models/request_models.js';
 import { now } from '../../models/base.js';
@@ -191,11 +191,8 @@ export class OperatorSlotService {
      * Claim an operator slot for an active session.
      * Authority for transitioning an AVAILABLE slot to ACTIVE.
      */
-    async claimSlot(id, { operator_session_id, bound_web_session_id, system_info, operator_type, status }) {
+    async claimSlot(id, { operator_session_id, bound_web_session_id, operator_type, status }) {
         const ts = now();
-        const info = system_info instanceof SystemInfo
-            ? system_info
-            : SystemInfo.parse(system_info || {});
 
         // Use g8ee for operator slot claiming to enforce architectural boundary
         // g8ed should not write to operators after auth
@@ -219,12 +216,11 @@ export class OperatorSlotService {
             operator_id: id,
             operator_session_id,
             bound_web_session_id,
-            system_info: info.forDB ? info.forDB() : system_info,
             operator_type: operator_type || operator.operator_type,
         };
 
         const response = await this.operatorService.relayClaimOperatorSlotToG8ee(relayParams, g8eContext);
-        
+
         if (response.success) {
             return { success: true };
         } else {

@@ -867,7 +867,9 @@ class TestTribunalRefinement:
             operator_session_id=unique_session_id,
             operator_type=OperatorType.SYSTEM,
             status=OperatorStatus.BOUND,
-            system_info=OperatorSystemInfo(os="ubuntu", hostname="srv-01"),
+            latest_heartbeat_snapshot=HeartbeatSnapshot(
+                system_identity=HeartbeatSystemIdentity(os="ubuntu", hostname="srv-01")
+            ),
         )
         investigation = build_enriched_context(
             investigation_id=unique_investigation_id,
@@ -1000,12 +1002,12 @@ class TestTargetOperatorResolution:
                     operator_session_id="session-linux",
                     status=OperatorStatus.AVAILABLE,
                     operator_type=OperatorType.SYSTEM,
-                    system_info=OperatorSystemInfo(
-                        hostname="linux-host",
-                        os="linux",
-                        architecture="amd64",
-                        shell="bash",
-                        working_directory="/home/g8e",
+                    latest_heartbeat_snapshot=HeartbeatSnapshot(
+                        system_identity=HeartbeatSystemIdentity(
+                            hostname="linux-host",
+                            os="linux",
+                            architecture="amd64",
+                        )
                     ),
                     user_id="user-multi-test",
                     bound_web_session_id="web-001",
@@ -1015,12 +1017,13 @@ class TestTargetOperatorResolution:
                     operator_session_id="session-ubuntu", 
                     status=OperatorStatus.AVAILABLE,
                     operator_type=OperatorType.SYSTEM,
-                    current_hostname="ubuntu-host",  # Use current_hostname for resolution
-                    system_info=OperatorSystemInfo(
-                        hostname="ubuntu-host",
-                        os="ubuntu",
-                        architecture="amd64",
-                        shell="bash",
+                    current_hostname="ubuntu-host",
+                    latest_heartbeat_snapshot=HeartbeatSnapshot(
+                        system_identity=HeartbeatSystemIdentity(
+                            hostname="ubuntu-host",
+                            os="ubuntu",
+                            architecture="amd64",
+                        )
                     ),
                     user_id="user-multi-test",
                     bound_web_session_id="web-001",

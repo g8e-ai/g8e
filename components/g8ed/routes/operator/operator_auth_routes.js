@@ -56,7 +56,6 @@ export function createOperatorAuthRouter({ services, rateLimiters, requestTimest
         logger.info('[OPERATOR-AUTH] g8eo Operator authentication request received', {
             hasBody: !!req.body,
             hasBearerToken: !!(req.headers.authorization && req.headers.authorization.startsWith(BEARER_PREFIX)),
-            hasSystemInfo: !!(req.body && req.body.system_info),
         });
 
         try {

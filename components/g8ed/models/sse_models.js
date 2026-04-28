@@ -149,7 +149,6 @@ export class OperatorStatusUpdatedData extends G8eBaseModel {
         status:              { type: F.string, required: true },
         hostname:            { type: F.string, default: null },
         system_fingerprint:  { type: F.string, default: null },
-        system_info:         { type: F.object, default: null },
         reason:              { type: F.string, default: null },
         total_count:         { type: F.number, default: null },
         active_count:        { type: F.number, default: null },

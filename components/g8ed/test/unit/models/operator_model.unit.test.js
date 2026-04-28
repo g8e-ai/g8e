@@ -15,7 +15,6 @@ import { describe, it, expect } from 'vitest';
 import {
     GrantedIntent,
     HeartbeatNotification,
-    SystemInfo,
     HistoryEntry,
     CertInfo,
     OperatorStatusInfo,
@@ -143,83 +142,6 @@ describe('HeartbeatNotification [UNIT - PURE LOGIC]', () => {
     });
 });
 
-describe('SystemInfo [UNIT - PURE LOGIC]', () => {
-    it('accepts all fields with defaults', () => {
-        const info = new SystemInfo({});
-        expect(info.hostname).toBeNull();
-        expect(info.os).toBeNull();
-        expect(info.is_cloud_operator).toBe(false);
-        expect(info.local_storage_enabled).toBe(true);
-    });
-
-    it('accepts valid cpu_count and memory_mb as numbers', () => {
-        const info = SystemInfo.parse({
-            cpu_count: 8,
-            memory_mb: 16384,
-        });
-        expect(info.cpu_count).toBe(8);
-        expect(info.memory_mb).toBe(16384);
-    });
-
-    it('rejects invalid cpu_count (non-number) by throwing validation error', () => {
-        expect(() => SystemInfo.parse({ cpu_count: '8' })).toThrow('cpu_count must be a number');
-    });
-
-    it('rejects invalid memory_mb (non-number) by throwing validation error', () => {
-        expect(() => SystemInfo.parse({ memory_mb: '16384' })).toThrow('memory_mb must be a number');
-    });
-
-    it('accepts valid detail fields as objects', () => {
-        const info = SystemInfo.parse({
-            fingerprint_details: { cpu: 'x86_64' },
-            os_details: { kernel: 'linux' },
-            user_details: { uid: 1000 },
-            disk_details: { total_gb: 100 },
-            memory_details: { total_mb: 16384 },
-            environment: { pwd: '/home' },
-        });
-        expect(info.fingerprint_details).toEqual({ cpu: 'x86_64' });
-        expect(info.os_details).toEqual({ kernel: 'linux' });
-        expect(info.user_details).toEqual({ uid: 1000 });
-        expect(info.disk_details).toEqual({ total_gb: 100 });
-        expect(info.memory_details).toEqual({ total_mb: 16384 });
-        expect(info.environment).toEqual({ pwd: '/home' });
-    });
-
-    it('rejects invalid detail fields (non-objects) by coercing to empty object', () => {
-        const info = SystemInfo.parse({
-            fingerprint_details: 'invalid',
-            os_details: 'invalid',
-            user_details: 'invalid',
-            disk_details: 'invalid',
-            memory_details: 'invalid',
-            environment: 'invalid',
-        });
-        expect(info.fingerprint_details).toEqual({});
-        expect(info.os_details).toEqual({});
-        expect(info.user_details).toEqual({});
-        expect(info.disk_details).toEqual({});
-        expect(info.memory_details).toEqual({});
-        expect(info.environment).toEqual({});
-    });
-
-    it('forCloudOperator() sets cloud fields with explicit subtype', () => {
-        const info = SystemInfo.forCloudOperator(CloudOperatorSubtype.AWS);
-        expect(info.cloud_provider).toBe(CloudOperatorSubtype.AWS);
-        expect(info.is_cloud_operator).toBe(true);
-    });
-
-    it('forCloudOperator() sets G8E_POD subtype', () => {
-        const info = SystemInfo.forCloudOperator(CloudOperatorSubtype.G8E_POD);
-        expect(info.cloud_provider).toBe(CloudOperatorSubtype.G8E_POD);
-        expect(info.is_cloud_operator).toBe(true);
-    });
-
-    it('forCloudOperator() throws when subtype is missing', () => {
-        expect(() => SystemInfo.forCloudOperator()).toThrow('requires an explicit cloud subtype');
-        expect(() => SystemInfo.forCloudOperator(null)).toThrow('requires an explicit cloud subtype');
-    });
-});
 
 describe('CertInfo [UNIT - PURE LOGIC]', () => {
     it('empty() returns CertInfo with all nulls', () => {
@@ -312,7 +234,9 @@ describe('OperatorStatusInfo [UNIT - PURE LOGIC]', () => {
             bound_web_session_id: 'ws-789',
             operator_session_id: 'os-101',
             last_heartbeat: new Date('2026-01-01T00:00:00.000Z'),
-            system_info: new SystemInfo({ hostname: 'test-host' }),
+            latest_heartbeat_snapshot: {
+                system_identity: { hostname: 'test-host' },
+            },
             investigation_id: 'inv-111',
             case_id: 'case-222',
             operator_type: OperatorType.SYSTEM,
@@ -333,28 +257,16 @@ describe('OperatorStatusInfo [UNIT - PURE LOGIC]', () => {
         expect(info.cloud_subtype).toBe(CloudOperatorSubtype.AWS);
         expect(info.granted_intents).toHaveLength(1);
     });
-
-    it('fromOperator() handles plain object system_info', () => {
-        const operator = new OperatorDocument({
-            id: 'op-123',
-            user_id: 'user-456',
-            status: OperatorStatus.ACTIVE,
-            system_info: { hostname: 'plain-host' },
-        });
-        const info = OperatorStatusInfo.fromOperator(operator);
-        expect(info.system_info).toBeInstanceOf(SystemInfo);
-        expect(info.system_info.hostname).toBe('plain-host');
-    });
 });
 
 describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
-    it('parse() migrates system_fingerprint from system_info', () => {
+    it('parse() migrates system_fingerprint from latest_heartbeat_snapshot', () => {
         const raw = {
             id: 'op-123',
             user_id: 'user-456',
             status: OperatorStatus.AVAILABLE,
             system_fingerprint: null,
-            system_info: {
+            latest_heartbeat_snapshot: {
                 system_fingerprint: 'fp-abc123',
                 fingerprint_details: { cpu: 'x86_64' },
             },
@@ -362,28 +274,6 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
         const doc = OperatorDocument.parse(raw);
         expect(doc.system_fingerprint).toBe('fp-abc123');
         expect(doc.fingerprint_details).toEqual({ cpu: 'x86_64' });
-    });
-
-    it('fromOperator() syncs current_hostname from system_info.hostname', () => {
-        const operator = new OperatorDocument({
-            id: 'op-123',
-            user_id: 'user-456',
-            status: OperatorStatus.ACTIVE,
-            system_info: new SystemInfo({ hostname: 'test-hostname' }),
-        });
-        const info = OperatorStatusInfo.fromOperator(operator);
-        expect(info.current_hostname).toBe('test-hostname');
-    });
-
-    it('fromOperator() sets current_hostname to null when system_info.hostname is null', () => {
-        const operator = new OperatorDocument({
-            id: 'op-123',
-            user_id: 'user-456',
-            status: OperatorStatus.ACTIVE,
-            system_info: new SystemInfo({ hostname: null }),
-        });
-        const info = OperatorStatusInfo.fromOperator(operator);
-        expect(info.current_hostname).toBeNull();
     });
 
     it('forWire() removes operator_cert, api_key, and operator_api_key fields', () => {
@@ -478,11 +368,9 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
     });
 
     it('forCreate() creates operator with AVAILABLE status', () => {
-        const systemInfo = new SystemInfo({ hostname: 'test-host' });
         const doc = OperatorDocument.forCreate({
             id: 'op-123',
             user_id: 'user-456',
-            system_info: systemInfo,
             name: 'Test Operator',
             operator_session_id: 'os-789',
             bound_web_session_id: 'ws-101',
@@ -498,23 +386,10 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
         expect(doc.status).toBe(OperatorStatus.AVAILABLE);
         expect(doc.component).toBe(SourceComponent.G8EO);
         expect(doc.name).toBe('Test Operator');
-        expect(doc.system_info).toBe(systemInfo);
-        expect(doc.system_fingerprint).toBe(systemInfo.system_fingerprint);
         expect(doc.operator_type).toBe(OperatorType.CLOUD);
         expect(doc.cloud_subtype).toBe(CloudOperatorSubtype.AWS);
         expect(doc.is_g8ep).toBe(true);
         expect(doc.slot_cost).toBe(1);
-    });
-
-    it('forCreate() handles plain object system_info', () => {
-        const doc = OperatorDocument.forCreate({
-            id: 'op-123',
-            user_id: 'user-456',
-            system_info: { hostname: 'test-host', system_fingerprint: 'fp-123' },
-        });
-        expect(doc.system_info).toBeInstanceOf(SystemInfo);
-        expect(doc.system_info.hostname).toBe('test-host');
-        expect(doc.system_fingerprint).toBe('fp-123');
     });
 
     it('forSlot() creates slot with is_slot=true', () => {
@@ -535,30 +410,6 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
         expect(doc.status).toBe(OperatorStatus.AVAILABLE);
     });
 
-    it('forSlot() creates cloud operator with SystemInfo.forCloudOperator()', () => {
-        const doc = OperatorDocument.forSlot({
-            id: 'op-123',
-            userId: 'user-456',
-            namePrefix: 'cloud-operator',
-            slotNumber: 1,
-            operatorType: OperatorType.CLOUD,
-            cloudSubtype: CloudOperatorSubtype.AWS,
-        });
-        expect(doc.system_info.cloud_provider).toBe(CloudOperatorSubtype.AWS);
-        expect(doc.system_info.is_cloud_operator).toBe(true);
-    });
-
-    it('forSlot() uses regular SystemInfo for non-cloud operators', () => {
-        const doc = OperatorDocument.forSlot({
-            id: 'op-123',
-            userId: 'user-456',
-            namePrefix: 'operator',
-            slotNumber: 1,
-            operatorType: OperatorType.SYSTEM,
-        });
-        expect(doc.system_info.cloud_provider).toBeNull();
-        expect(doc.system_info.is_cloud_operator).toBe(false);
-    });
 
     it('forSlot() forces name to "g8ep" for g8ep operators', () => {
         const doc = OperatorDocument.forSlot({
@@ -949,22 +800,11 @@ describe('OperatorWithSessionContext [UNIT - PURE LOGIC]', () => {
         expect(context.status).toBe(OperatorStatus.ACTIVE);
         expect(context.operator_session_id).toBeNull();
         expect(context.bound_web_session_id).toBeNull();
-        expect(context.system_info).toBeInstanceOf(SystemInfo);
         expect(context.organization_id).toBeNull();
         expect(context.case_id).toBeNull();
         expect(context.investigation_id).toBeNull();
         expect(context.task_id).toBeNull();
         expect(context.operator_type).toBeNull();
-    });
-
-    it('system_info defaults to empty SystemInfo', () => {
-        const context = new OperatorWithSessionContext({
-            id: 'op-123',
-            user_id: 'user-456',
-            status: OperatorStatus.ACTIVE,
-        });
-        expect(context.system_info).toBeInstanceOf(SystemInfo);
-        expect(context.system_info.hostname).toBeNull();
     });
 
     it('create() builds context from operator and sessions', () => {
@@ -974,7 +814,6 @@ describe('OperatorWithSessionContext [UNIT - PURE LOGIC]', () => {
             status: OperatorStatus.ACTIVE,
             operator_session_id: 'os-789',
             bound_web_session_id: 'ws-101',
-            system_info: new SystemInfo({ hostname: 'test-host' }),
             organization_id: 'org-111',
             case_id: 'case-222',
             investigation_id: 'inv-333',
@@ -989,7 +828,6 @@ describe('OperatorWithSessionContext [UNIT - PURE LOGIC]', () => {
         expect(context.operator_session_id).toBe('os-new-789');
         expect(context.bound_web_session_id).toBe('ws-new-101');
         expect(context.status).toBe(OperatorStatus.ACTIVE);
-        expect(context.system_info.hostname).toBe('test-host');
         expect(context.user_id).toBe('user-456');
         expect(context.organization_id).toBe('org-111');
         expect(context.case_id).toBe('case-222');

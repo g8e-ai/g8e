@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.constants import EventType, OperatorStatus
-from app.models.operators import OperatorDocument
+from app.models.operators import OperatorDocument, HeartbeatSnapshot, HeartbeatSystemIdentity
 from app.services.operator.heartbeat_stale_monitor import (
     HeartbeatStaleMonitorService,
     resolve_heartbeat_transition,
@@ -33,7 +33,9 @@ def make_operator(**kwargs):
         "user_id": "user-1",
         "status": OperatorStatus.BOUND,
         "last_heartbeat": datetime.now(timezone.utc) - timedelta(seconds=10),
-        "system_info": {"hostname": "node-02"},
+        "latest_heartbeat_snapshot": HeartbeatSnapshot(
+            system_identity=HeartbeatSystemIdentity(hostname="node-02")
+        ),
         "system_fingerprint": "fp-1",
     }
     defaults.update(kwargs)

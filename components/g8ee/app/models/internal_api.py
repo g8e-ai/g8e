@@ -134,7 +134,6 @@ class OperatorSlotClaimRequest(G8eBaseModel):
     operator_id: str = Field(..., description="Operator ID")
     operator_session_id: str = Field(..., description="Operator session ID")
     bound_web_session_id: str | None = Field(default=None, description="Bound web session ID")
-    system_info: dict = Field(..., description="System information")
     operator_type: str = Field(..., description="Operator type")
 
 
@@ -212,7 +211,6 @@ class InternalOperatorAuthCall(G8eBaseModel):
     model_config = ConfigDict(extra="forbid")
 
     authorization: str = Field(..., description="The Bearer token (API key) for the operator")
-    system_info: dict = Field(default_factory=dict)
     runtime_config: dict | None = Field(default=None)
 
 
@@ -240,7 +238,7 @@ class OperatorDeviceLinkRegisterRequest(G8eBaseModel):
     user_id: str = Field(..., description="User ID")
     organization_id: str | None = Field(default=None, description="Organization ID")
     operator_type: str = Field(default="SYSTEM", description="Operator type")
-    system_info: dict = Field(default_factory=dict, description="System information")
+    system_fingerprint: str | None = Field(default=None, description="System fingerprint")
 
 
 class OperatorDeviceLinkRegisterResponse(G8eBaseModel):

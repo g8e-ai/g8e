@@ -60,11 +60,15 @@ function createMockOperator(overrides = {}) {
     return {
         operator_id: TEST_OPERATOR_ID,
         status: OperatorStatus.ACTIVE,
-        system_info: {
-            hostname: 'test-host',
-            os: 'Ubuntu 22.04',
-            internal_ip: '192.168.1.100',
-            public_ip: '203.0.113.1',
+        latest_heartbeat_snapshot: {
+            system_identity: {
+                hostname: 'test-host',
+                os: 'Ubuntu 22.04',
+            },
+            network: {
+                internal_ip: '192.168.1.100',
+                public_ip: '203.0.113.1',
+            },
         },
         bound_web_session_id: TEST_WEB_SESSION_ID,
         ...overrides,

@@ -87,7 +87,6 @@ class OperatorAuthService:
         user_id: str,
         organization_id: str | None,
         operator_type: str,
-        system_info: dict,
         request_context: dict[str, Any] | None,
     ) -> dict[str, Any]:
         """Bootstrap an operator after device-link consumption.
@@ -128,7 +127,6 @@ class OperatorAuthService:
             operator_id=operator_id,
             operator_session_id=session.id,
             bound_web_session_id=operator.bound_web_session_id,
-            system_info=system_info,
             operator_type=operator_type,
         )
         if not claim_success:
@@ -215,7 +213,6 @@ class OperatorAuthService:
             operator_id=operator_id,
             operator_session_id=session.id,
             bound_web_session_id=operator.bound_web_session_id,
-            system_info=body.get("system_info", {}),
             operator_type=operator.operator_type,
         )
         if not claim_success:

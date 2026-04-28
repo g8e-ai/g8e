@@ -143,6 +143,7 @@ def sample_g8e_context():
 @pytest.fixture
 def sample_investigation():
     """Sample investigation for testing."""
+    from app.models.operators import HeartbeatSnapshot, HeartbeatSystemIdentity
     return EnrichedInvestigationContext(
         id="inv-101",
         case_id="case-789",
@@ -158,12 +159,14 @@ def sample_investigation():
             "operator_session_id": "session-456",
             "operator_type": OperatorType.CLOUD,
             "cloud_subtype": CloudSubtype.AWS,
-            "system_info": {
-                "os": "linux",
-                "hostname": "bobuntu",
-                "current_user": "bob",
-                "architecture": "amd64"
-            }
+            "latest_heartbeat_snapshot": HeartbeatSnapshot(
+                system_identity=HeartbeatSystemIdentity(
+                    os="linux",
+                    hostname="bobuntu",
+                    current_user="bob",
+                    architecture="amd64"
+                )
+            )
         }],
     )
 

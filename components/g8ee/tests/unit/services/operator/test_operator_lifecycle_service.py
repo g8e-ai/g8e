@@ -66,7 +66,6 @@ class TestOperatorLifecycleService:
     async def test_claim_operator_slot_success(self, lifecycle_service, operator_data_service, mock_cache):
         operator_id = "op-123"
         operator_session_id = "session-abc"
-        system_info = {"hostname": "test-host", "system_fingerprint": "fp-123"}
         
         mock_cache.get_document_with_cache.side_effect = [
             {
@@ -98,7 +97,6 @@ class TestOperatorLifecycleService:
             operator_id=operator_id,
             operator_session_id=operator_session_id,
             bound_web_session_id="web-123",
-            system_info=system_info,
             operator_type=OperatorType.SYSTEM,
         )
 
@@ -121,7 +119,6 @@ class TestOperatorLifecycleService:
             operator_id="missing",
             operator_session_id="session-abc",
             bound_web_session_id="web-123",
-            system_info={"hostname": "test"},
         )
 
         assert success is False

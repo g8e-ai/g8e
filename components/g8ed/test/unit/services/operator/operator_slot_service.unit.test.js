@@ -14,7 +14,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OperatorSlotService } from '@g8ed/services/operator/operator_slot_service.js';
 import { OperatorStatus, OperatorType, CloudOperatorSubtype, DEFAULT_OPERATOR_SLOTS } from '@g8ed/constants/operator.js';
-import { OperatorDocument, SystemInfo, CertInfo, OperatorSlotCreationResponse } from '@g8ed/models/operator_model.js';
+import { OperatorDocument, CertInfo, OperatorSlotCreationResponse } from '@g8ed/models/operator_model.js';
 import { OperatorRefreshKeyResponse } from '@g8ed/models/response_models.js';
 import { SourceComponent } from '@g8ed/constants/ai.js';
 import { ApiKeyStatus, ApiKeyClientName, ApiKeyPermission } from '@g8ed/constants/auth.js';
@@ -426,7 +426,6 @@ describe('OperatorSlotService', () => {
             const params = {
                 operator_session_id: 'os-1',
                 bound_web_session_id: 'ws-1',
-                system_info: { hostname: 'test' },
                 operator_type: 'system',
             };
 

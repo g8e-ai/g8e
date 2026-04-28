@@ -97,44 +97,6 @@ export class HeartbeatNotification extends G8eBaseModel {
 }
 
 // ---------------------------------------------------------------------------
-// SystemInfo
-// ---------------------------------------------------------------------------
-
-export class SystemInfo extends G8eBaseModel {
-    static fields = {
-        hostname:               { type: F.string,  default: null },
-        os:                     { type: F.string,  default: null },
-        architecture:           { type: F.string,  default: null },
-        cpu_count:              { type: F.number,  default: null },
-        memory_mb:              { type: F.number,  default: null },
-        public_ip:              { type: F.string,  default: null },
-        internal_ip:            { type: F.string,  default: null },
-        interfaces:             { type: F.array,   default: () => [] },
-        current_user:           { type: F.string,  default: null },
-        cloud_provider:         { type: F.string,  default: null },
-        is_cloud_operator:      { type: F.boolean, default: false },
-        system_fingerprint:     { type: F.string,  default: null },
-        fingerprint_details:    { type: F.object, default: null },
-        os_details:             { type: F.object, default: null },
-        user_details:           { type: F.object, default: null },
-        disk_details:           { type: F.object, default: null },
-        memory_details:         { type: F.object, default: null },
-        environment:            { type: F.object, default: null },
-        local_storage_enabled:  { type: F.boolean, default: true },
-    };
-
-    static forCloudOperator(subtype) {
-        if (!subtype) {
-            throw new Error('SystemInfo.forCloudOperator() requires an explicit cloud subtype');
-        }
-        return SystemInfo.parse({
-            cloud_provider:    subtype,
-            is_cloud_operator: true,
-        });
-    }
-}
-
-// ---------------------------------------------------------------------------
 // HistoryEntry
 // ---------------------------------------------------------------------------
 
@@ -188,7 +150,6 @@ export class OperatorStatusInfo extends G8eBaseModel {
         bound_web_session_id:      { type: F.string, default: null },
         operator_session_id:       { type: F.string, default: null },
         last_heartbeat:            { type: F.date,   default: null },
-        system_info:               { type: F.object, model: SystemInfo,        default: () => new SystemInfo({}) },
         investigation_id:          { type: F.string, default: null },
         case_id:                   { type: F.string, default: null },
         is_active:                 { type: F.boolean, default: false },
@@ -210,16 +171,13 @@ export class OperatorStatusInfo extends G8eBaseModel {
             bound_web_session_id:      operator.bound_web_session_id ?? null,
             operator_session_id:       operator.operator_session_id ?? null,
             last_heartbeat:            operator.last_heartbeat ?? null,
-            system_info:               operator.system_info instanceof SystemInfo
-                                           ? operator.system_info
-                                           : new SystemInfo(operator.system_info || {}),
             investigation_id:          operator.investigation_id ?? null,
             case_id:                   operator.case_id ?? null,
             is_active:                 operator.status === OperatorStatus.ACTIVE,
             operator_type:             operator.operator_type ?? null,
             granted_intents:           Array.isArray(operator.granted_intents) ? operator.granted_intents : [],
             cloud_subtype:             operator.cloud_subtype ?? null,
-            current_hostname:          systemIdentity.hostname ?? operator.system_info?.hostname ?? null,
+            current_hostname:          systemIdentity.hostname ?? null,
             session_token:             operator.session_token ?? null,
             session_expires_at:        operator.session_expires_at ?? null,
         });
@@ -255,7 +213,6 @@ export class OperatorDocument extends G8eIdentifiableModel {
         runtime_config:               { type: F.object,  default: () => ({}) },
         system_fingerprint:           { type: F.string,  default: null },
         fingerprint_details:          { type: F.object, default: null },
-        system_info:                  { type: F.object,  model: SystemInfo,        default: () => new SystemInfo({}) },
         slot_number:                  { type: F.number, default: null },
         is_slot:                      { type: F.boolean, default: false },
         claimed:                      { type: F.boolean, default: false },
@@ -276,12 +233,6 @@ export class OperatorDocument extends G8eIdentifiableModel {
 
     static parse(raw = {}) {
         const parsed = super.parse(raw);
-        if (parsed.system_fingerprint === null && parsed.system_info?.system_fingerprint) {
-            parsed.system_fingerprint = parsed.system_info.system_fingerprint;
-        }
-        if (parsed.fingerprint_details === null && parsed.system_info?.fingerprint_details) {
-            parsed.fingerprint_details = parsed.system_info.fingerprint_details;
-        }
         if (parsed.system_fingerprint === null && parsed.latest_heartbeat_snapshot?.system_fingerprint) {
             parsed.system_fingerprint = parsed.latest_heartbeat_snapshot.system_fingerprint;
         }
@@ -327,9 +278,6 @@ export class OperatorDocument extends G8eIdentifiableModel {
 
     static forCreate(data) {
         const _now = now();
-        const systemInfo = data.system_info instanceof SystemInfo
-            ? data.system_info
-            : new SystemInfo(data.system_info || {});
 
         return new OperatorDocument({
             id:                       data.id,
@@ -344,9 +292,8 @@ export class OperatorDocument extends G8eIdentifiableModel {
             created_at:                _now,
             updated_at:                _now,
             runtime_config:            data.runtime_config || {},
-            system_fingerprint:        systemInfo.system_fingerprint,
-            fingerprint_details:       systemInfo.fingerprint_details,
-            system_info:               systemInfo,
+            system_fingerprint:        data.system_fingerprint ?? null,
+            fingerprint_details:       data.fingerprint_details ?? null,
             slot_number:               data.slot_number ?? null,
             operator_type:             data.operator_type || OperatorType.SYSTEM,
             cloud_subtype:             data.cloud_subtype ?? null,
@@ -357,12 +304,6 @@ export class OperatorDocument extends G8eIdentifiableModel {
 
     static forSlot(data) {
         const _now = now();
-        const isCloud = data.operatorType === OperatorType.CLOUD;
-        const systemInfo = isCloud && data.cloudSubtype
-            ? SystemInfo.forCloudOperator(data.cloudSubtype)
-            : isCloud
-                ? new SystemInfo({ is_cloud_operator: true })
-                : new SystemInfo({});
 
         return new OperatorDocument({
             id:                       data.id,
@@ -381,7 +322,6 @@ export class OperatorDocument extends G8eIdentifiableModel {
             cloud_subtype:             data.cloudSubtype ?? null,
             is_g8ep:               data.isG8eNode ?? false,
             slot_cost:                 1,
-            system_info:               systemInfo,
             runtime_config:            {},
         });
     }
@@ -409,7 +349,6 @@ export class OperatorDocument extends G8eIdentifiableModel {
             operator_cert_not_before:  data.certInfo?.not_before ?? null,
             operator_cert_not_after:   data.certInfo?.not_after ?? null,
             operator_cert_created_at:  data.certInfo?.serial ? _now : null,
-            system_info:               new SystemInfo({}),
             runtime_config:            {},
         });
     }
@@ -428,70 +367,7 @@ export class OperatorDocument extends G8eIdentifiableModel {
             status:                    OperatorStatus.AVAILABLE,
             created_at:                _now,
             updated_at:                _now,
-            system_info:               new SystemInfo({}),
             runtime_config:            {},
-        });
-    }
-}
-
-// ---------------------------------------------------------------------------
-// OperatorSlotSystemInfo  (minimal system_info for operator panel list)
-// ---------------------------------------------------------------------------
-
-export class OperatorSlotSystemInfo extends G8eBaseModel {
-    static fields = {
-        hostname:       { type: F.string,  default: null },
-        os:             { type: F.string,  default: null },
-        architecture:   { type: F.string,  default: null },
-        cpu_count:      { type: F.number,  default: null },
-        memory_mb:      { type: F.number,  default: null },
-        current_user:   { type: F.string,  default: null },
-        internal_ip:    { type: F.string,  default: null },
-        public_ip:      { type: F.string,  default: null },
-        os_details:     { type: F.object,  default: null },
-        user_details:   { type: F.object,  default: null },
-        disk_details:   { type: F.object,  default: null },
-        memory_details: { type: F.object,  default: null },
-        environment:    { type: F.object,  default: null },
-    };
-
-    static fromSystemInfo(systemInfo) {
-        if (!systemInfo) return new OperatorSlotSystemInfo({});
-        return new OperatorSlotSystemInfo({
-            hostname:       systemInfo.hostname ?? null,
-            os:             systemInfo.os ?? null,
-            architecture:   systemInfo.architecture ?? null,
-            cpu_count:      systemInfo.cpu_count ?? null,
-            memory_mb:      systemInfo.memory_mb ?? null,
-            current_user:   systemInfo.current_user ?? null,
-            internal_ip:    systemInfo.internal_ip ?? null,
-            public_ip:      systemInfo.public_ip ?? null,
-            os_details:     systemInfo.os_details ?? null,
-            user_details:   systemInfo.user_details ?? null,
-            disk_details:   systemInfo.disk_details ?? null,
-            memory_details: systemInfo.memory_details ?? null,
-            environment:    systemInfo.environment ?? null,
-        });
-    }
-
-    static fromHeartbeatSnapshot(heartbeatSnapshot) {
-        if (!heartbeatSnapshot) return new OperatorSlotSystemInfo({});
-        const systemIdentity = heartbeatSnapshot.system_identity || {};
-        const network = heartbeatSnapshot.network || {};
-        return new OperatorSlotSystemInfo({
-            hostname:       systemIdentity.hostname ?? null,
-            os:             systemIdentity.os ?? null,
-            architecture:   systemIdentity.architecture ?? null,
-            cpu_count:      systemIdentity.cpu_count ?? null,
-            memory_mb:      systemIdentity.memory_mb ?? null,
-            current_user:   systemIdentity.current_user ?? null,
-            internal_ip:    network.internal_ip ?? null,
-            public_ip:      network.public_ip ?? null,
-            os_details:     heartbeatSnapshot.os_details ?? null,
-            user_details:   heartbeatSnapshot.user_details ?? null,
-            disk_details:   heartbeatSnapshot.disk_details ?? null,
-            memory_details: heartbeatSnapshot.memory_details ?? null,
-            environment:    heartbeatSnapshot.environment ?? null,
         });
     }
 }
@@ -511,7 +387,6 @@ export class OperatorSlot extends G8eBaseModel {
         is_g8ep:        { type: F.boolean, default: false },
         first_deployed: { type: F.date,    default: null },
         last_heartbeat: { type: F.date,    default: null },
-        system_info:    { type: F.object,  model: OperatorSlotSystemInfo, default: () => new OperatorSlotSystemInfo({}) },
         latest_heartbeat_snapshot: { type: F.object, default: null },
     };
 
@@ -527,9 +402,6 @@ export class OperatorSlot extends G8eBaseModel {
             is_g8ep:        operator.is_g8ep ?? false,
             first_deployed: operator.first_deployed ?? null,
             last_heartbeat: operator.last_heartbeat ?? null,
-            system_info:    operator.latest_heartbeat_snapshot
-                ? OperatorSlotSystemInfo.fromHeartbeatSnapshot(operator.latest_heartbeat_snapshot)
-                : OperatorSlotSystemInfo.fromSystemInfo(operator.system_info),
             latest_heartbeat_snapshot: operator.latest_heartbeat_snapshot ?? null,
         });
     }
@@ -703,7 +575,6 @@ export class OperatorWithSessionContext extends G8eBaseModel {
         operator_session_id: { type: F.string,  default: null },
         bound_web_session_id: { type: F.string,  default: null },
         status:              { type: F.string,  required: true },
-        system_info:         { type: F.object,  model: SystemInfo, default: () => new SystemInfo({}) },
         user_id:             { type: F.string,  required: true },
         organization_id:     { type: F.string,  default: null },
         case_id:             { type: F.string,  default: null },
@@ -718,7 +589,6 @@ export class OperatorWithSessionContext extends G8eBaseModel {
             operator_session_id: operatorSession?.id || operator.operator_session_id,
             bound_web_session_id: webSession?.id || operator.bound_web_session_id,
             status:              operator.status,
-            system_info:         operator.system_info,
             user_id:             operator.user_id,
             organization_id:     operator.organization_id,
             case_id:             operator.case_id,

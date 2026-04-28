@@ -94,13 +94,12 @@ describe('OperatorAuthRoutes Unit Tests', () => {
             const res = await request(app)
                 .post('/api/auth/operator')
                 .set('Authorization', 'Bearer test-token')
-                .send({ system_info: { os: 'linux' } });
+                .send({});
 
             expect(res.status).toBe(200);
             expect(res.body.success).toBe(true);
             expect(mockOperatorService.relayAuthenticateOperatorToG8ee).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    system_info: { os: 'linux' },
                     authorization_header: 'Bearer test-token'
                 }),
                 expect.objectContaining({

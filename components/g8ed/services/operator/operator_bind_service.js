@@ -126,7 +126,6 @@ export class BindOperatorsService {
                                 bound_web_session_id: contextWrapper.bound_web_session_id,
                                 status:              contextWrapper.status,
                                 operator_type:       contextWrapper.operator_type,
-                                system_info:         contextWrapper.system_info,
                             })
                         ]
                     });
@@ -251,7 +250,6 @@ export class BindOperatorsService {
                                 bound_web_session_id: contextWrapper.bound_web_session_id,
                                 status:              contextWrapper.status,
                                 operator_type:       contextWrapper.operator_type,
-                                system_info:         contextWrapper.system_info,
                             })
                         ]
                     });

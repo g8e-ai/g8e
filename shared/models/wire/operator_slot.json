@@ -53,63 +53,10 @@
         "required": false,
         "description": "ISO timestamp of last heartbeat"
       },
-      "system_info": {
-        "type": "object",
-        "required": false,
-        "description": "Minimal system info for operator list display (hostname, IPs, OS). See system_info.json for full SystemInfo schema.",
-        "fields": {
-          "hostname": {
-            "type": "string",
-            "required": false,
-            "description": "System hostname"
-          },
-          "os": {
-            "type": "string",
-            "required": false,
-            "description": "Operating system name (e.g., linux, windows, darwin)"
-          },
-          "internal_ip": {
-            "type": "string",
-            "required": false,
-            "description": "Primary internal/private IP address"
-          },
-          "public_ip": {
-            "type": "string",
-            "required": false,
-            "description": "Public IPv4 address of the operator host"
-          }
-        }
-      },
       "latest_heartbeat_snapshot": {
         "type": "object",
         "required": false,
         "description": "Latest heartbeat metrics snapshot for operator panel display. Contains performance, system identity, and network info from the most recent heartbeat."
-      }
-    }
-  },
-
-  "operator_slot_system_info": {
-    "_description": "Minimal system info projection embedded in OperatorSlot. Contains only the fields needed for operator list display.",
-    "fields": {
-      "hostname": {
-        "type": "string",
-        "required": false,
-        "description": "System hostname"
-      },
-      "os": {
-        "type": "string",
-        "required": false,
-        "description": "Operating system name (e.g., linux, windows, darwin)"
-      },
-      "internal_ip": {
-        "type": "string",
-        "required": false,
-        "description": "Primary internal/private IP address"
-      },
-      "public_ip": {
-        "type": "string",
-        "required": false,
-        "description": "Public IPv4 address of the operator host"
       }
     }
   }

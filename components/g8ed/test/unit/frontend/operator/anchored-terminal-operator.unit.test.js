@@ -482,12 +482,14 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
             expect(ctx.boundOperator).toEqual(testOperator);
         });
 
-        it('updates hostnameElement with hostname from system_info', () => {
+        it('updates hostnameElement with hostname from latest_heartbeat_snapshot', () => {
             const ctx = createMixinContext();
             const testOperator = {
                 operator_id: 'op_123',
                 name: 'test-op',
-                system_info: { hostname: 'test-host' },
+                latest_heartbeat_snapshot: {
+                    system_identity: { hostname: 'test-host' },
+                },
             };
             
             ctx.setOperatorBound(testOperator);
@@ -495,12 +497,12 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
             expect(ctx.hostnameElement.textContent).toBe('test-host');
         });
 
-        it('updates hostnameElement with operator name when system_info.hostname is missing', () => {
+        it('updates hostnameElement with operator name when latest_heartbeat_snapshot.system_identity.hostname is missing', () => {
             const ctx = createMixinContext();
             const testOperator = {
                 operator_id: 'op_123',
                 name: 'test-op',
-                system_info: {},
+                latest_heartbeat_snapshot: {},
             };
             
             ctx.setOperatorBound(testOperator);
@@ -512,7 +514,7 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
             const ctx = createMixinContext();
             const testOperator = {
                 operator_id: 'op_123',
-                system_info: {},
+                latest_heartbeat_snapshot: {},
             };
             
             ctx.setOperatorBound(testOperator);
@@ -526,17 +528,21 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
             const testOperator = {
                 operator_id: 'op_123',
                 name: 'test-op',
-                system_info: { hostname: 'test-host' },
+                latest_heartbeat_snapshot: {
+                    system_identity: { hostname: 'test-host' },
+                },
             };
             
             expect(() => ctx.setOperatorBound(testOperator)).not.toThrow();
         });
 
-        it('updates promptElement with current_user from system_info', () => {
+        it('updates promptElement with current_user from latest_heartbeat_snapshot', () => {
             const ctx = createMixinContext();
             const testOperator = {
                 operator_id: 'op_123',
-                system_info: { current_user: 'ubuntu' },
+                latest_heartbeat_snapshot: {
+                    system_identity: { current_user: 'ubuntu' },
+                },
             };
             
             ctx.setOperatorBound(testOperator);
@@ -548,7 +554,9 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
             const ctx = createMixinContext();
             const testOperator = {
                 operator_id: 'op_123',
-                system_info: { current_user: '$' },
+                latest_heartbeat_snapshot: {
+                    system_identity: { current_user: '$' },
+                },
             };
             
             ctx.setOperatorBound(testOperator);
@@ -560,7 +568,7 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
             const ctx = createMixinContext();
             const testOperator = {
                 operator_id: 'op_123',
-                system_info: {},
+                latest_heartbeat_snapshot: {},
             };
             
             ctx.setOperatorBound(testOperator);
@@ -573,7 +581,9 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
             ctx.promptElement = null;
             const testOperator = {
                 operator_id: 'op_123',
-                system_info: { current_user: 'ubuntu' },
+                latest_heartbeat_snapshot: {
+                    system_identity: { current_user: 'ubuntu' },
+                },
             };
             
             expect(() => ctx.setOperatorBound(testOperator)).not.toThrow();

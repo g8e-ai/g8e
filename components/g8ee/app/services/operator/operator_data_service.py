@@ -45,7 +45,6 @@ from app.models.operators import (
     OperatorDocument,
     OperatorHistoryEntry,
     HeartbeatSnapshot,
-    OperatorSystemInfo,
 )
 from app.models import BindOperatorsRequest, BindOperatorsResponse
 from app.models.cache import ArrayUnion
@@ -206,41 +205,18 @@ class OperatorDataService(OperatorDataServiceProtocol):
         investigation_id: str | None,
         case_id: str | None,
     ) -> bool:
-        """Update Operator heartbeat and system info.
+        """Update Operator heartbeat and session status.
 
-        investigation_id and case_id are only written when present; absent values
-        are not coerced to sentinel strings so existing values on the document
-        are preserved via merge=True.
+        investigation_id/case_id are None when the heartbeat arrives outside an
+        investigation context; callers MUST NOT coerce absence to sentinel strings.
         """
         now_timestamp = now()
         heartbeat_record = heartbeat.model_dump(mode="json")
 
-        system_info = OperatorSystemInfo(
-            hostname=heartbeat.system_identity.hostname,
-            os=heartbeat.system_identity.os,
-            architecture=heartbeat.system_identity.architecture,
-            cpu_count=heartbeat.system_identity.cpu_count,
-            memory_mb=heartbeat.system_identity.memory_mb,
-            public_ip=heartbeat.network.public_ip,
-            internal_ip=heartbeat.network.internal_ip,
-            interfaces=heartbeat.network.interfaces or [],
-            current_user=heartbeat.system_identity.current_user,
-            system_fingerprint=heartbeat.system_fingerprint,
-            fingerprint_details=heartbeat.fingerprint_details,
-            os_details=heartbeat.os_details,
-            user_details=heartbeat.user_details,
-            disk_details=heartbeat.disk_details,
-            memory_details=heartbeat.memory_details,
-            environment=heartbeat.environment,
-            is_cloud_operator=heartbeat.is_cloud_operator,
-            cloud_provider=heartbeat.cloud_provider,
-            local_storage_enabled=heartbeat.local_storage_enabled,
-        )
-
         update_data: dict[str, object] = {
             "last_heartbeat": now_timestamp,
             "updated_at": now_timestamp,
-            "system_info": system_info.model_dump(mode="json"),
+            "current_hostname": heartbeat.system_identity.hostname,
             "latest_heartbeat_snapshot": heartbeat_record,
             "heartbeat_history": ArrayUnion([heartbeat_record], max_length=MAX_HEARTBEAT_HISTORY),
         }

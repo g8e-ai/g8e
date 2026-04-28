@@ -453,7 +453,6 @@ describe('CreateOperatorRequest [UNIT - PURE LOGIC]', () => {
         expect(req.operator_session_id).toBe('ops-789');
         expect(req.web_session_id).toBeNull();
         expect(req.organization_id).toBeNull();
-        expect(req.system_info).toEqual({});
         expect(req.runtime_config).toEqual({});
         expect(req.api_key).toBeNull();
         expect(req.operator_type).toBeNull();
@@ -461,7 +460,6 @@ describe('CreateOperatorRequest [UNIT - PURE LOGIC]', () => {
     });
 
     it('accepts all fields with values', () => {
-        const systemInfo = { hostname: 'server-1' };
         const runtimeConfig = { timeout: 300 };
         const req = CreateOperatorRequest.parse({
             operator_id: 'op-123',
@@ -469,13 +467,11 @@ describe('CreateOperatorRequest [UNIT - PURE LOGIC]', () => {
             operator_session_id: 'ops-789',
             web_session_id: 'ws-abc',
             organization_id: 'org-def',
-            system_info: systemInfo,
             runtime_config: runtimeConfig,
             api_key: 'key-ghi',
             operator_type: 'local',
             cloud_subtype: 'aws',
         });
-        expect(req.system_info).toEqual(systemInfo);
         expect(req.runtime_config).toEqual(runtimeConfig);
         expect(req.api_key).toBe('key-ghi');
         expect(req.operator_type).toBe('local');
@@ -886,7 +882,6 @@ describe('RegisterDeviceRequest [UNIT - PURE LOGIC]', () => {
         expect(req.arch).toBe('amd64');
         expect(req.system_fingerprint).toBe('fp-abc123');
         expect(req.version).toBe('unknown');
-        expect(req.system_info).toEqual({});
     });
 
     it('accepts all fields with values', () => {
@@ -896,10 +891,8 @@ describe('RegisterDeviceRequest [UNIT - PURE LOGIC]', () => {
             arch: 'amd64',
             system_fingerprint: 'fp-abc123',
             version: '1.0.0',
-            system_info: { cpu: 'x86_64' },
         });
         expect(req.version).toBe('1.0.0');
-        expect(req.system_info).toEqual({ cpu: 'x86_64' });
     });
 
     it('throws when hostname is missing', () => {

@@ -71,7 +71,6 @@ class OperatorLifecycleService:
         operator_id: str,
         operator_session_id: str,
         bound_web_session_id: str | None,
-        system_info: dict,
         operator_type: OperatorType | str | None = None,
     ) -> bool:
         """Claim an operator slot for an active session.
@@ -91,8 +90,6 @@ class OperatorLifecycleService:
             "status": OperatorStatus.ACTIVE,
             "operator_session_id": operator_session_id,
             "bound_web_session_id": bound_web_session_id,
-            "system_info": system_info,
-            "system_fingerprint": system_info.get("system_fingerprint"),
             "claimed": True,
             "updated_at": now_timestamp,
             "last_heartbeat": now_timestamp,
@@ -326,8 +323,6 @@ class OperatorLifecycleService:
             "updated_at": now(),
             "operator_session_id": None,
             "bound_web_session_id": None,
-            "system_info": None,
-            "system_fingerprint": None,
             "claimed": False,
         }
 

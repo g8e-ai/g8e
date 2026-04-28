@@ -849,7 +849,7 @@ When a user sends their first message in a new conversation, no `case_id` or `in
 
 `X-G8E-Bound-Operators` is the **exclusive source of truth** for which operators are available to the AI on any given request. g8ee performs no independent lookup against the operator document store to determine binding state.
 
-To prevent header bloat, this header carries only minimal identity and status (`operator_id`, `operator_session_id`, `status`). Full metadata such as `operator_type` and `system_info` is fetched by g8ee from the shared KV cache when needed.
+To prevent header bloat, this header carries only minimal identity and status (`operator_id`, `operator_session_id`, `status`). Full metadata such as `operator_type` and `latest_heartbeat_snapshot` is fetched by g8ee from the shared KV cache when needed.
 
 **How g8ee consumes it:**
 

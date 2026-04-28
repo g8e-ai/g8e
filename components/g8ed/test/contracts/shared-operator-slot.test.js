@@ -22,7 +22,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { OperatorSlot, OperatorSlotSystemInfo } from '@g8ed/models/operator_model.js';
+import { OperatorSlot } from '@g8ed/models/operator_model.js';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -99,11 +99,15 @@ describe('g8ed OperatorSlot matches shared/models/wire/operator_slot.json', () =
         expect(modelFields.last_heartbeat.required).toBeUndefined();
     });
 
-    it('system_info field exists and is optional', () => {
-        expect(wireFields.system_info).toBeDefined();
-        expect(wireFields.system_info.required).toBe(false);
-        expect(modelFields.system_info).toBeDefined();
-        expect(modelFields.system_info.required).toBeUndefined();
+    it('latest_heartbeat_snapshot field exists and is optional', () => {
+        expect(wireFields.latest_heartbeat_snapshot).toBeDefined();
+        expect(wireFields.latest_heartbeat_snapshot.required).toBe(false);
+        expect(modelFields.latest_heartbeat_snapshot).toBeDefined();
+        expect(modelFields.latest_heartbeat_snapshot.required).toBeUndefined();
+    });
+
+    it('system_info field does not exist in wire schema', () => {
+        expect(wireFields.system_info).toBeUndefined();
     });
 
     it('all JSON fields exist in g8ed model', () => {
@@ -128,17 +132,5 @@ describe('g8ed OperatorSlot matches shared/models/wire/operator_slot.json', () =
             `g8ed OperatorSlot has fields not in shared JSON: ${extraFields.join(', ')}. ` +
             'Add them to shared/models/wire/operator_slot.json first.'
         );
-    });
-
-    it('system_info nested model matches operator_slot_system_info schema', () => {
-        const wireSystemInfoFields = wire.operator_slot_system_info.fields;
-        const modelSystemInfoFields = OperatorSlotSystemInfo.fields;
-
-        const jsonKeys = Object.keys(wireSystemInfoFields);
-        for (const field of jsonKeys) {
-            expect(modelSystemInfoFields[field]).toBeDefined(
-                `shared JSON defines system_info field '${field}' but g8ed OperatorSlotSystemInfo does not have it`
-            );
-        }
     });
 });

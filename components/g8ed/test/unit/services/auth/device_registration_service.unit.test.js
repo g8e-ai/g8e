@@ -16,7 +16,6 @@ import { DeviceRegistrationService } from '@g8ed/services/auth/device_registrati
 import { OperatorStatus, OperatorType } from '@g8ed/constants/operator.js';
 import { OperatorSessionRole, DeviceLinkError } from '@g8ed/constants/auth.js';
 import { EventType } from '@g8ed/constants/events.js';
-import { SystemInfo } from '@g8ed/models/operator_model.js';
 import { G8eHttpContext } from '@g8ed/models/request_models.js';
 import { getTestServices } from '@test/helpers/test-services.js';
 import { TestCleanupHelper } from '@test/helpers/test-cleanup.js';
@@ -156,7 +155,6 @@ describe('DeviceRegistrationService', () => {
 
             expect(result.success).toBe(true);
             expect(result.operator_session_id).toBe(operatorSessionId);
-            expect(result.system_info).toBeInstanceOf(SystemInfo);
             
             expect(operatorService.relayRegisterDeviceLinkToG8ee).toHaveBeenCalledWith(
                 expect.objectContaining({

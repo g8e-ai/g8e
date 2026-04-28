@@ -12,7 +12,6 @@
 // limitations under the License.
 
 import { now } from '../../models/base.js';
-import { SystemInfo } from '../../models/operator_model.js';
 import { OperatorStatusUpdatedEvent, OperatorStatusUpdatedData } from '../../models/sse_models.js';
 import { logger } from '../../utils/logger.js';
 import { sessionIdTag } from '../../utils/session_log.js';
@@ -113,20 +112,11 @@ export class DeviceRegistrationService {
             operator_id: id,
         };
 
-        const system_info = SystemInfo.parse({
-            system_fingerprint: sanitized.system_fingerprint,
-            hostname:           sanitized.hostname,
-            os:                 sanitized.os,
-            architecture:       sanitized.arch,
-            current_user:       sanitized.username,
-        });
-
         const result = await this._operatorService.relayRegisterDeviceLinkToG8ee({
             operator_id: id,
             user_id: user.id,
             organization_id: user.organization_id,
             operator_type,
-            system_info,
         }, g8eContext);
 
         if (!result.success) {
@@ -141,7 +131,6 @@ export class DeviceRegistrationService {
                 data: OperatorStatusUpdatedData.parse({
                     operator_id: id,
                     status: OperatorStatus.ACTIVE,
-                    system_info,
                 }),
                 timestamp: now(),
             });
@@ -162,11 +151,10 @@ export class DeviceRegistrationService {
             organization_id: g8eContext.organization_id || null,
         }, g8eContext);
 
-        return { 
-            success: true, 
-            operator_session_id, 
-            operator_id: id, 
-            system_info,
+        return {
+            success: true,
+            operator_session_id,
+            operator_id: id,
             api_key: result.api_key,
             operator_cert: result.operator_cert,
             operator_cert_key: result.operator_cert_key,

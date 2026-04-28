@@ -465,9 +465,6 @@ export const InternalPaths = Object.freeze({
 // Fully-qualified path builders — used by client code to construct URLs
 // ---------------------------------------------------------------------------
 
-// Helper to convert snake_case to camelCase
-const snakeToCamel = (str) => str.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
-
 // Dynamic g8ee path generator using Proxy to eliminate manual duplication
 const createG8eePathsProxy = () => {
     return new Proxy({}, {

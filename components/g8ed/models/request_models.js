@@ -25,7 +25,6 @@
  */
 
 import { G8eBaseModel, F } from './base.js';
-import { SystemInfo } from './operator_model.js';
 import { SourceComponent } from '../constants/ai.js';
 
 // ---------------------------------------------------------------------------
@@ -234,7 +233,6 @@ export class CreateOperatorRequest extends G8eBaseModel {
         operator_session_id: { type: F.string, required: true },
         web_session_id:      { type: F.string, default: null },
         organization_id:     { type: F.string, default: null },
-        system_info:         { type: F.any,    default: () => ({}) },
         runtime_config:      { type: F.any,    default: () => ({}) },
         api_key:             { type: F.string, default: null },
         operator_type:       { type: F.string, default: null },
@@ -417,7 +415,6 @@ export class RegisterDeviceRequest extends G8eBaseModel {
         arch:               { type: F.string, required: true },
         system_fingerprint: { type: F.string, required: true },
         version:            { type: F.string, default: 'unknown' },
-        system_info:        { type: F.object, default: () => ({}) },
     };
 }
 

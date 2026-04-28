@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical Heartbeat wire payload published by g8eo to the heartbeat:{operator_id}:{operator_session_id} pub/sub channel. This is the full message shape — it IS the envelope (g8eo does not wrap heartbeats in a G8eMessage). Consumers: g8ee (Python G8eoHeartbeatPayload in pubsub_messages.py → OperatorHeartbeat.from_wire), g8ed (JS HeartbeatSnapshot.fromHeartbeat).",
+  "_comment": "Canonical Heartbeat wire payload published by g8eo to the heartbeat:{operator_id}:{operator_session_id} pub/sub channel. This is the full message shape — it IS the envelope (g8eo does not wrap heartbeats in a G8eMessage). Heartbeat is THE source of truth for operator host identity. Consumers: g8ee (Python G8eoHeartbeatPayload in pubsub_messages.py → OperatorHeartbeat.from_wire), g8ed (JS HeartbeatSnapshot.fromHeartbeat).",
 
   "_comment.field_naming": "FIELD NAMING: Wire format models use 'operator_id' instead of 'id' for clarity in cross-component contexts where the entity type may not be immediately obvious. This maps directly to OperatorDocument.core_identity.id (see operator_document.json _comment.field_naming for the full convention).",
 

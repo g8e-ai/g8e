@@ -1071,7 +1071,6 @@ async def claim_operator_slot(
             operator_id=request.operator_id,
             operator_session_id=request.operator_session_id,
             bound_web_session_id=request.bound_web_session_id,
-            system_info=request.system_info,
             operator_type=request.operator_type,
         )
 
@@ -1296,7 +1295,6 @@ async def register_device_link_operator(
         user_id=request.user_id,
         organization_id=request.organization_id,
         operator_type=request.operator_type,
-        system_info=request.system_info,
         request_context={
             "ip": http_request.client.host if http_request.client else None,
             "user_agent": http_request.headers.get("user-agent"),

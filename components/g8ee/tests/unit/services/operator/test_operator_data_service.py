@@ -49,7 +49,6 @@ class TestOperatorDataService:
             "id": operator_id,
             "user_id": "user-test",
             "status": OperatorStatus.ACTIVE,
-            "system_info": {"hostname": "test-host"},
             "bound_web_session_id": None,
         }
 
@@ -83,7 +82,7 @@ class TestOperatorDataService:
         mock_cache.update_document.assert_called_once()
         _, kwargs = mock_cache.update_document.call_args
         assert kwargs["document_id"] == operator_id
-        assert "system_info" in kwargs["data"]
+        assert "current_hostname" in kwargs["data"]
         assert "heartbeat_history" in kwargs["data"]
 
     async def test_update_operator_heartbeat_failure_raises_external_service_error(self, service, mock_cache):

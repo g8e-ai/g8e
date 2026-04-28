@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical OperatorDocument shape. g8ed is the authority — it creates, owns, and stores this document in SQLite. g8ee reads it via g8ed HTTP API and g8es KV cache. g8eo is the source of runtime data (heartbeats, system_info) that g8ed merges into this document. A field mismatch between g8ed and g8ee breaks operator binding, context building, and AI execution.",
+  "_comment": "Canonical OperatorDocument shape. g8ed is the authority — it creates, owns, and stores this document in SQLite. g8ee reads it via g8ed HTTP API and g8es KV cache. g8eo is the source of runtime data (heartbeats) that g8ed merges into this document. A field mismatch between g8ed and g8ee breaks operator binding, context building, and AI execution.",
 
   "_comment.field_naming": "FIELD NAMING CONVENTION: The canonical OperatorDocument uses 'id' as the primary key field name (core_identity.id). Wire format models and projections (e.g., operator_status_info, bound_operator_context, operator_slot, heartbeat) use 'operator_id' for clarity in cross-component contexts where the entity type may not be immediately obvious from context. When mapping between OperatorDocument and wire formats: OperatorDocument.core_identity.id ↔ wire_format.operator_id. This naming pattern is intentional and consistent across all operator-related wire formats.",
 
@@ -211,11 +211,6 @@
       }
     },
 
-    "system_info": {
-      "_description": "Operator host system information. Shape defined in wire/system_info.json. Populated from g8eo auth payload and updated on each heartbeat.",
-      "$ref": "wire/system_info.json#system_info"
-    },
-
     "fingerprint": {
       "_description": "Top-level fingerprint columns denormalized from system_info for efficient SQLite queries.",
       "system_fingerprint": {
@@ -298,7 +293,6 @@
       "web_session_id": { "type": "string", "required": false },
       "operator_session_id": { "type": "string", "required": false },
       "last_heartbeat": { "type": "string", "format": "iso8601", "required": false },
-      "system_info": { "type": "object", "required": false, "ref": "wire/system_info.json#system_info" },
       "latest_heartbeat_snapshot": {
         "type": "object",
         "required": false,
@@ -318,7 +312,7 @@
       "current_hostname": {
         "type": "string",
         "required": false,
-        "description": "Denormalized hostname from system_info for quick access without traversing nested objects"
+        "description": "Denormalized hostname from latest_heartbeat_snapshot.system_identity.hostname for quick access without traversing nested objects"
       },
       "session_token": {
         "type": "string",

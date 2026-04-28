@@ -56,87 +56,6 @@ from .base import G8eBaseModel, G8eIdentifiableModel, UTCDatetime
 logger = logging.getLogger(__name__)
 
 
-class SystemInfoFingerprintDetails(G8eBaseModel):
-    """Structured fingerprint sub-fields from wire/system_info.json."""
-    os: str | None = Field(default=None)
-    architecture: str | None = Field(default=None)
-    cpu_count: int | None = Field(default=None)
-    machine_id: str | None = Field(default=None)
-
-
-class SystemInfoOSDetails(G8eBaseModel):
-    """OS detail sub-fields from wire/system_info.json."""
-    kernel: str | None = Field(default=None)
-    distro: str | None = Field(default=None)
-    version: str | None = Field(default=None)
-
-
-class SystemInfoUserDetails(G8eBaseModel):
-    """User detail sub-fields from wire/system_info.json."""
-    username: str | None = Field(default=None)
-    uid: int | None = Field(default=None)
-    gid: int | None = Field(default=None)
-    home: str | None = Field(default=None)
-    name: str | None = Field(default=None)
-    shell: str | None = Field(default=None)
-
-
-class SystemInfoDiskDetails(G8eBaseModel):
-    """Root filesystem disk usage sub-fields from wire/system_info.json."""
-    total_gb: float | None = Field(default=None)
-    used_gb: float | None = Field(default=None)
-    free_gb: float | None = Field(default=None)
-    percent: float | None = Field(default=None)
-
-
-class SystemInfoMemoryDetails(G8eBaseModel):
-    """Memory usage sub-fields from wire/system_info.json."""
-    total_mb: int | None = Field(default=None)
-    available_mb: int | None = Field(default=None)
-    used_mb: int | None = Field(default=None)
-    percent: float | None = Field(default=None)
-
-
-class SystemInfoEnvironment(G8eBaseModel):
-    """Environment and container context sub-fields from wire/system_info.json."""
-    pwd: str | None = Field(default=None)
-    lang: str | None = Field(default=None)
-    timezone: str | None = Field(default=None)
-    term: str | None = Field(default=None)
-    is_container: bool | None = Field(default=None)
-    container_runtime: str | None = Field(default=None)
-    container_signals: list[str] | None = Field(default=None)
-    init_system: str | None = Field(default=None)
-
-
-class OperatorSystemInfo(G8eBaseModel):
-    """System information sent by g8eo.
-
-    Canonical shape defined in shared/models/wire/system_info.json.
-    Populated from g8eo auth payload and updated on each heartbeat.
-    """
-
-    hostname: str | None = Field(default=None, description="System hostname")
-    os: str | None = Field(default=None, description="Operating system name (e.g. linux)")
-    architecture: str | None = Field(default=None, description="CPU architecture (e.g. amd64, arm64)")
-    cpu_count: int | None = Field(default=None, description="Number of logical CPU cores")
-    memory_mb: int | None = Field(default=None, description="Total system memory in MB")
-    public_ip: str | None = Field(default=None, description="Public IPv4 address")
-    internal_ip: str | None = Field(default=None, description="Primary internal/private IP address")
-    interfaces: list[str] = Field(default_factory=list, description="Network interface names")
-    current_user: str | None = Field(default=None, description="OS user running the operator")
-    system_fingerprint: str | None = Field(default=None, description="SHA256 fingerprint of stable host attributes")
-    fingerprint_details: SystemInfoFingerprintDetails | None = Field(default=None, description="Sub-fields used to compute system_fingerprint")
-    os_details: SystemInfoOSDetails | None = Field(default=None, description="Detailed OS information")
-    user_details: SystemInfoUserDetails | None = Field(default=None, description="Current OS user details")
-    disk_details: SystemInfoDiskDetails | None = Field(default=None, description="Root filesystem disk usage")
-    memory_details: SystemInfoMemoryDetails | None = Field(default=None, description="Detailed memory usage")
-    environment: SystemInfoEnvironment | None = Field(default=None, description="Environment and container context")
-    is_cloud_operator: bool | None = Field(default=False, description="True when this is a cloud-hosted operator")
-    cloud_provider: str | None = Field(default=None, description="Cloud provider identifier")
-    local_storage_enabled: bool | None = Field(default=True, description="True when local vault storage is active")
-
-
 class AttachmentRecord(G8eIdentifiableModel):
     """Stored attachment metadata record (no binary data)."""
     filename: str | None = Field(default=None, description="Original filename")
@@ -212,7 +131,6 @@ class OperatorDocument(G8eIdentifiableModel):
     operator_session_id: str | None = Field(default=None, description="Current Operator session ID")
     last_heartbeat: UTCDatetime | None = Field(default=None, description="Last heartbeat timestamp")
     terminated_at: UTCDatetime | None = Field(default=None, description="When the operator was terminated")
-    system_info: OperatorSystemInfo | None = Field(default=None, description="System information")
     latest_heartbeat_snapshot: HeartbeatSnapshot | None = Field(default=None, description="Latest heartbeat metrics")
     investigation_id: str | None = Field(default=None, description="Current investigation ID")
     case_id: str | None = Field(default=None, description="Current case ID")
@@ -221,7 +139,7 @@ class OperatorDocument(G8eIdentifiableModel):
     operator_type: OperatorType = Field(default=OperatorType.SYSTEM, description="Operator deployment type")
     granted_intents: list[str] | None = Field(default=None, description="Granted intent permissions (cloud operators)")
     cloud_subtype: CloudSubtype | None = Field(default=None, description="Cloud provider subtype")
-    current_hostname: str | None = Field(default=None, description="Denormalized hostname from system_info for quick access")
+    current_hostname: str | None = Field(default=None, description="Denormalized hostname from latest_heartbeat_snapshot for quick access")
     session_token: str | None = Field(default=None, description="Active session token for session-based auth validation")
     session_expires_at: UTCDatetime | None = Field(default=None, description="Session expiration timestamp")
     history_trail: list[OperatorHistoryEntry] = Field(
@@ -237,11 +155,11 @@ class OperatorDocument(G8eIdentifiableModel):
     @field_validator("current_hostname", mode="before")
     @classmethod
     def sync_current_hostname(cls, v: object, info: ValidationInfo) -> str | None:
-        """Ensure current_hostname stays in sync with system_info.hostname."""
+        """Ensure current_hostname stays in sync with latest_heartbeat_snapshot.system_identity.hostname."""
         if v is not None:
             return v
-        if info.data.get("system_info") and isinstance(info.data["system_info"], OperatorSystemInfo):
-            return info.data["system_info"].hostname
+        if info.data.get("latest_heartbeat_snapshot") and isinstance(info.data["latest_heartbeat_snapshot"], HeartbeatSnapshot):
+            return info.data["latest_heartbeat_snapshot"].system_identity.hostname
         return None
 
     @field_validator("latest_heartbeat_snapshot", mode="before")
@@ -318,11 +236,57 @@ class HeartbeatUptimeInfo(G8eBaseModel):
     uptime_seconds: int | None = Field(default=None, description="Uptime in seconds")
 
 
-HeartbeatOSDetails = SystemInfoOSDetails
-HeartbeatUserDetails = SystemInfoUserDetails
-HeartbeatDiskDetails = SystemInfoDiskDetails
-HeartbeatMemoryDetails = SystemInfoMemoryDetails
-HeartbeatEnvironment = SystemInfoEnvironment
+class HeartbeatOSDetails(G8eBaseModel):
+    """Detailed operating system information."""
+    kernel: str | None = Field(default=None, description="Kernel version")
+    distro: str | None = Field(default=None, description="Distribution name")
+    version: str | None = Field(default=None, description="OS version")
+
+
+class HeartbeatUserDetails(G8eBaseModel):
+    """Details about the current OS user."""
+    username: str | None = Field(default=None, description="Username")
+    uid: int | None = Field(default=None, description="User ID")
+    gid: int | None = Field(default=None, description="Group ID")
+    home: str | None = Field(default=None, description="Home directory")
+    name: str | None = Field(default=None, description="Full name")
+    shell: str | None = Field(default=None, description="Default shell")
+
+
+class HeartbeatDiskDetails(G8eBaseModel):
+    """Root filesystem disk usage."""
+    total_gb: float | None = Field(default=None, description="Total disk space in GB")
+    used_gb: float | None = Field(default=None, description="Used disk space in GB")
+    free_gb: float | None = Field(default=None, description="Free disk space in GB")
+    percent: float | None = Field(default=None, description="Disk usage percentage")
+
+
+class HeartbeatMemoryDetails(G8eBaseModel):
+    """Detailed memory usage breakdown."""
+    total_mb: int | None = Field(default=None, description="Total memory in MB")
+    available_mb: int | None = Field(default=None, description="Available memory in MB")
+    used_mb: int | None = Field(default=None, description="Used memory in MB")
+    percent: float | None = Field(default=None, description="Memory usage percentage")
+
+
+class HeartbeatEnvironment(G8eBaseModel):
+    """Environment and container context."""
+    pwd: str | None = Field(default=None, description="Current working directory")
+    lang: str | None = Field(default=None, description="Language setting")
+    timezone: str | None = Field(default=None, description="Timezone")
+    term: str | None = Field(default=None, description="Terminal type")
+    is_container: bool | None = Field(default=None, description="Running in container")
+    container_runtime: str | None = Field(default=None, description="Container runtime")
+    container_signals: list[str] | None = Field(default=None, description="Container signals")
+    init_system: str | None = Field(default=None, description="Init system")
+
+
+class HeartbeatFingerprintDetails(G8eBaseModel):
+    """Sub-fields used to compute system_fingerprint."""
+    os: str | None = Field(default=None, description="Operating system")
+    architecture: str | None = Field(default=None, description="CPU architecture")
+    cpu_count: int | None = Field(default=None, description="CPU core count")
+    machine_id: str | None = Field(default=None, description="Machine ID")
 
 
 def _coerce_heartbeat_type(value: object) -> HeartbeatType:
@@ -423,7 +387,7 @@ class HeartbeatSnapshot(G8eBaseModel):
 
     # Network identity fields (top-level in g8eo payload, not nested under network_info)
     system_fingerprint: str | None = Field(default=None, description="SHA256 fingerprint of stable host attributes")
-    fingerprint_details: SystemInfoFingerprintDetails | None = Field(default=None, description="Sub-fields used to compute system_fingerprint")
+    fingerprint_details: HeartbeatFingerprintDetails | None = Field(default=None, description="Sub-fields used to compute system_fingerprint")
 
     # Cloud operator flags
     is_cloud_operator: bool = Field(default=False, description="True when this is a cloud-hosted operator")
@@ -518,9 +482,7 @@ class HeartbeatSnapshot(G8eBaseModel):
                 percent=payload.memory_details.percent,
             ),
             system_fingerprint=payload.system_fingerprint,
-            fingerprint_details=SystemInfoFingerprintDetails.model_validate(
-                payload.fingerprint_details
-            ) if payload.fingerprint_details else None,
+            fingerprint_details=payload.fingerprint_details,
             is_cloud_operator=False,
             cloud_provider=None,
             local_storage_enabled=cap.local_storage_enabled,
