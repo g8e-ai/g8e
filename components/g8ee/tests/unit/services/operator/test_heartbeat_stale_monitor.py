@@ -96,6 +96,7 @@ async def test_tick_transitions_stale_bound_to_stale():
     assert event.event_type == EventType.OPERATOR_STATUS_UPDATED_STALE
     assert event.payload.operator_id == "op-1"
     assert event.payload.status == OperatorStatus.STALE
+    assert event.payload.metrics is not None
 
 @pytest.mark.asyncio
 async def test_tick_transitions_stale_active_to_offline():

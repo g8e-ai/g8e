@@ -202,7 +202,8 @@ export function createDeviceLinkRouter({
                 api_key: result.api_key,
                 operator_cert: result.operator_cert,
                 operator_cert_key: result.operator_cert_key,
-                session: result.session
+                session: result.session,
+                config: result.config
             }).forClient());
 
         } catch (error) {

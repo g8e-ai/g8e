@@ -93,6 +93,7 @@ export class InvestigationHistoryEntry extends FrontendIdentifiableModel {
         [EventType.EVENT_SOURCE_USER_CHAT]:     EventType.INVESTIGATION_CHAT_MESSAGE_USER,
         [EventType.EVENT_SOURCE_AI_PRIMARY]:    EventType.INVESTIGATION_CHAT_MESSAGE_AI,
         [EventType.EVENT_SOURCE_AI_ASSISTANT]:  EventType.INVESTIGATION_CHAT_MESSAGE_AI,
+        [EventType.EVENT_SOURCE_AI_TRIAGE]:     EventType.INVESTIGATION_CHAT_MESSAGE_AI,
         [EventType.EVENT_SOURCE_USER_TERMINAL]: EventType.INVESTIGATION_CHAT_MESSAGE_USER,
         [EventType.EVENT_SOURCE_SYSTEM]:        EventType.INVESTIGATION_CHAT_MESSAGE_SYSTEM,
     });
@@ -107,6 +108,7 @@ export class InvestigationHistoryEntry extends FrontendIdentifiableModel {
 
         const eventType = raw.event_type
             || raw.context?.event_type
+            || raw.metadata?.event_type
             || InvestigationHistoryEntry._senderToEventType[raw.sender];
         if (eventType) coerced.event_type = eventType;
 
@@ -146,7 +148,8 @@ export class InvestigationHistoryEntry extends FrontendIdentifiableModel {
     isAIResponse() {
         return this.event_type === EventType.INVESTIGATION_CHAT_MESSAGE_AI ||
                this.actor === EventType.EVENT_SOURCE_AI_PRIMARY ||
-               this.actor === EventType.EVENT_SOURCE_AI_ASSISTANT;
+               this.actor === EventType.EVENT_SOURCE_AI_ASSISTANT ||
+               this.actor === EventType.EVENT_SOURCE_AI_TRIAGE;
     }
 
     isSystemMessage() {
