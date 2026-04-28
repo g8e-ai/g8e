@@ -35,10 +35,12 @@ Collections:
     tasks, users, web_sessions
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import sys
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from _lib import (
     COLLECTIONS,
@@ -61,10 +63,10 @@ from _lib import (
 
 def _summary_fields(collection: str, d: Dict) -> Dict:
     if collection == 'operators':
-        si = d.get('system_info') or {}
         lhs = d.get('latest_heartbeat_snapshot') or {}
         sys_id = lhs.get('system_identity') or {}
-        cs = (lhs.get('network') or {}).get('connectivity_status') or []
+        net = lhs.get('network') or {}
+        cs = net.get('connectivity_status') or []
         skip = ('172.', '127.')
         private_ip = next(
             (i.get('ip') for i in cs if i.get('ip') and not any(i['ip'].startswith(p) for p in skip)),
@@ -74,9 +76,9 @@ def _summary_fields(collection: str, d: Dict) -> Dict:
             'id': d.get('id'),
             'status': d.get('status'),
             'name': d.get('name'),
-            'hostname': si.get('hostname') or sys_id.get('hostname'),
-            'os': si.get('os') or sys_id.get('os'),
-            'public_ip': si.get('public_ip'),
+            'hostname': sys_id.get('hostname'),
+            'os': sys_id.get('os'),
+            'public_ip': net.get('public_ip'),
             'private_ip': private_ip,
             'updated_at': d.get('updated_at'),
         }
@@ -173,7 +175,7 @@ def exec_stats() -> None:
 
 
 def exec_list_collection(collection: str, limit: int = 50,
-                        fields: Optional[List[str]] = None,
+                        fields: List[str] | None = None,
                         as_json: bool = False) -> None:
     docs = query_collection(collection, limit=limit)
     out = []
@@ -209,7 +211,6 @@ def exec_network(limit: int = 50) -> None:
     docs = query_collection('operators', limit=limit)
     out = []
     for d in docs:
-        si = d.get('system_info') or {}
         lhs = d.get('latest_heartbeat_snapshot') or {}
         net = lhs.get('network') or {}
         cs = net.get('connectivity_status') or []
@@ -225,12 +226,12 @@ def exec_network(limit: int = 50) -> None:
         out.append({
             'name': d.get('name'),
             'status': d.get('status'),
-            'hostname': si.get('hostname') or sys_id.get('hostname'),
-            'public_ip': si.get('public_ip') or net.get('public_ip'),
+            'hostname': sys_id.get('hostname'),
+            'public_ip': net.get('public_ip'),
             'private_ip': private_ip,
             'interfaces': iface_summary,
-            'os': si.get('os') or sys_id.get('os'),
-            'arch': si.get('architecture') or sys_id.get('architecture'),
+            'os': sys_id.get('os'),
+            'arch': sys_id.get('architecture'),
             'updated_at': d.get('updated_at'),
         })
 
@@ -258,7 +259,7 @@ def exec_find(collection: str, field: str, value: str,
     print()
 
 
-def exec_kv(pattern: Optional[str], limit: int = 50, as_json: bool = False) -> None:
+def exec_kv(pattern: str | None, limit: int = 50, as_json: bool = False) -> None:
     keys = kv_keys(pattern or '*')
     if limit:
         keys = keys[:limit]

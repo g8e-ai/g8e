@@ -19,6 +19,7 @@ Provides a single source of truth for agent identities, purposes, and prompt tem
 
 import json
 import logging
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
@@ -70,48 +71,37 @@ class AgentPersona(BaseModel):
 
         Canonical layout per docs/architecture/agent_personas.md:
         1. <role>
-        2. <output_contract> (if present as explicit field or in identity)
-        3. <identity> / <principles>
+        2. <output_contract> (only if present as explicit field; the
+           ``output_contract`` tag MUST NOT be embedded in ``identity`` —
+           that contract is enforced by
+           ``test_prompt_alignment::test_no_persona_embeds_output_contract_in_identity``).
+        3. <identity>
         4. <purpose>
         5. <autonomy>
         """
-        parts = []
+        parts = [self.format_xml_tag("role", self.role)]
 
-        # 1. Role
-        parts.append(self.format_xml_tag("role", self.role))
-
-        # 2. Output Contract & 3. Identity/Principles
-        # Prefer explicit output_contract field if present
         if self.output_contract:
             parts.append(self.format_xml_tag("output_contract", self.output_contract))
-            parts.append(self.format_xml_tag("identity", self.identity))
-        else:
-            # Fallback: check if output_contract is embedded in identity
-            import re
-            contract_match = re.search(r"(<output_contract>.*?</output_contract>)", self.identity, re.DOTALL)
-            if contract_match:
-                contract = contract_match.group(1)
-                parts.append(contract)
-                # Remove contract from identity to avoid duplication
-                identity_clean = self.identity.replace(contract, "").strip()
-                if identity_clean:
-                    parts.append(self.format_xml_tag("identity", identity_clean))
-            else:
-                parts.append(self.format_xml_tag("identity", self.identity))
 
-        # 4. Purpose
+        parts.append(self.format_xml_tag("identity", self.identity))
+
         if self.purpose:
             parts.append(self.format_xml_tag("purpose", self.purpose))
 
-        # 5. Autonomy
         if self.autonomy:
             parts.append(self.format_xml_tag("autonomy", self.autonomy))
 
         return "\n\n".join(parts)
 
 
+@lru_cache(maxsize=1)
 def _load_agents_json() -> dict[str, Any]:
-    """Load the agents.json file from shared constants."""
+    """Load the agents.json file from shared constants.
+
+    Cached: agents.json is immutable at runtime. Prompt builds happen on
+    every chat turn and previously re-read + re-parsed the file each time.
+    """
     try:
         with open(_AGENTS_JSON_PATH, "r") as f:
             return json.load(f)
@@ -121,6 +111,11 @@ def _load_agents_json() -> dict[str, Any]:
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse agents.json: {e}")
         raise
+
+
+def clear_agents_json_cache() -> None:
+    """Clear the agents.json read cache. Test-only."""
+    _load_agents_json.cache_clear()
 
 
 def get_agent_persona(agent_id: str) -> AgentPersona:

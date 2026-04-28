@@ -26,31 +26,67 @@ from fastapi import APIRouter, Depends, Request, status
 
 from app.models.settings import G8eePlatformSettings, G8eeUserSettings
 from app.constants import (
+    ComponentName,
     DB_COLLECTION_MEMORIES,
     EventType,
+    OperatorHistoryEventType,
+    OperatorStatus,
     Priority,
     InternalApiPaths,
-    API_PATHS,
 )
 from app.errors import ResourceNotFoundError, ServiceUnavailableError
 from app.models import CaseCreateRequest, CaseEventPayload, CaseUpdateRequest
 from app.models.cases import CaseCreatedPayload
 from app.models.cache import FieldFilter
 from app.models.internal_api import (
+    ApiKeyGenerationRequest,
+    ApiKeyGenerationResponse,
     ApprovalRespondedResponse,
     CaseResponse,
     ChatMessageRequest,
     ChatStartedResponse,
     DirectCommandRequest,
     DirectCommandSentResponse,
+    G8epOperatorActivationRequest,
+    G8epOperatorActivationResponse,
+    G8epOperatorRelaunchRequest,
+    G8epOperatorRelaunchResponse,
     OperatorApprovalResponse,
+    InternalOperatorAuthCall,
+    OperatorAuthenticateResponse,
+    OperatorDeviceLinkRegisterRequest,
+    OperatorDeviceLinkRegisterResponse,
+    OperatorBindRequest,
+    OperatorBindResponse,
+    OperatorCertificateRevokeRequest,
+    OperatorCertificateRevokeResponse,
+    OperatorListenSessionAuthRequest,
     OperatorSessionRegisteredResponse,
     OperatorSessionRegistrationRequest,
+    OperatorSessionRefreshRequest,
+    OperatorSessionRefreshResponse,
+    OperatorSessionValidateRequest,
+    OperatorSessionValidateResponse,
+    OperatorSlotClaimRequest,
+    OperatorSlotClaimResponse,
+    OperatorSlotCreationRequest,
+    OperatorSlotCreationResponse,
     OperatorStoppedResponse,
+    OperatorTerminateRequest,
+    OperatorTerminateResponse,
+    OperatorUnbindRequest,
+    OperatorUnbindResponse,
+    OperatorUpdateApiKeyRequest,
+    OperatorUpdateApiKeyResponse,
     PendingApprovalsResponse,
     StopAIRequest,
     StopAIResponse,
     StopOperatorRequest,
+)
+from app.models.triage_api import (
+    TriageAnswerRequest,
+    TriageSkipRequest,
+    TriageTimeoutRequest,
 )
 from app.models.investigations import (
     InvestigationCreateRequest,
@@ -59,6 +95,25 @@ from app.models.investigations import (
     InvestigationUpdateRequest,
 )
 from app.models.events import SessionEvent
+from app.models.http_context import G8eHttpContext
+from app.services.operator.session_auth_listener import SessionAuthListener
+from app.services.operator.operator_data_service import OperatorDataService
+from app.services.operator.heartbeat_service import HeartbeatSnapshotService
+from app.services.operator.approval_service import OperatorApprovalService
+from app.services.operator.command_service import OperatorCommandService
+from app.services.operator.operator_session_service import OperatorSessionService
+from app.services.operator.operator_auth_service import OperatorAuthService
+from app.services.data.case_data_service import CaseDataService
+from app.services.data.attachment_store_service import AttachmentService
+from app.services.investigation.investigation_service import InvestigationService
+from app.services.ai.chat_pipeline import ChatPipelineService
+from app.services.ai.chat_task_manager import BackgroundTaskManager
+from app.services.ai.title_generator import generate_case_title
+from app.services.infra.g8ed_event_service import EventService
+from app.services.cache.cache_aside import CacheAsideService
+from app.services.auth.api_key_service import ApiKeyService
+from app.services.auth.certificate_service import CertificateService
+from app.services.infra.settings_service import SettingsService
 from app.utils.timestamp import now_iso
 
 from ..dependencies import (
@@ -73,25 +128,21 @@ from ..dependencies import (
     get_g8ee_heartbeat_service,
     get_g8ee_investigation_service,
     get_g8ee_operator_command_service,
+    get_g8ee_operator_data_service,
+    get_g8ee_operator_lifecycle_service,
+    get_g8ee_operator_session_service,
+    get_g8ee_operator_auth_service,
+    get_g8ee_session_auth_listener,
+    get_g8ee_api_key_service,
+    get_g8ee_certificate_service,
+    get_g8ee_settings_service_write,
     get_g8e_http_context,
     get_g8ee_user_settings,
 )
-from ..services.ai.chat_pipeline import ChatPipelineService
-from ..services.ai.chat_task_manager import BackgroundTaskManager
-from ..services.cache.cache_aside import CacheAsideService
-from ..services.data.attachment_store_service import AttachmentService
-from ..services.data.case_data_service import CaseDataService
-from ..services.investigation.investigation_service import InvestigationService
-from ..services.infra.g8ed_event_service import EventService
-from ..models.http_context import G8eHttpContext
-from ..services.operator.approval_service import OperatorApprovalService
-from ..services.operator.command_service import OperatorCommandService
-from ..services.operator.heartbeat_service import OperatorHeartbeatService
-from ..services.ai.title_generator import generate_case_title
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix=InternalApiPaths.PREFIX, tags=["internal"])
+router = APIRouter(tags=["internal"])
 
 
 
@@ -131,7 +182,7 @@ async def _generate_and_update_title(
         )
 
 
-@router.post(API_PATHS["g8ee"]["chat"], response_model=ChatStartedResponse)
+@router.post(InternalApiPaths.G8EE_CHAT, response_model=ChatStartedResponse)
 async def internal_chat(
     request: ChatMessageRequest,
     platform_settings: G8eePlatformSettings = Depends(get_g8ee_platform_settings),
@@ -266,8 +317,10 @@ async def internal_chat(
             sentinel_mode=request.sentinel_mode,
             llm_primary_provider=request.llm_primary_provider,
             llm_assistant_provider=request.llm_assistant_provider,
+            llm_lite_provider=request.llm_lite_provider,
             llm_primary_model=request.llm_primary_model,
             llm_assistant_model=request.llm_assistant_model,
+            llm_lite_model=request.llm_lite_model or user_settings.llm.resolved_lite_model,
             _task_manager=chat_task_manager,
             user_settings=user_settings,
         )
@@ -283,7 +336,105 @@ async def internal_chat(
     )
 
 
-@router.post(API_PATHS["g8ee"]["chat_stop"], response_model=StopAIResponse)
+@router.post(InternalApiPaths.G8EE_CHAT_TRIAGE_ANSWER)
+async def internal_triage_answer(
+    request: TriageAnswerRequest,
+    investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
+):
+    """
+    Receive user answer to a triage clarifying question - internal cluster use only.
+    """
+    from app.models.investigations import ConversationMessageMetadata
+    from app.models.investigation_status import MessageSender
+
+    logger.info(
+        "[INTERNAL-HTTP] Triage answer received",
+        extra={
+            "investigation_id": request.investigation_id,
+            "question_index": request.question_index,
+            "answer": request.answer,
+            "user_id": g8e_context.user_id,
+        }
+    )
+
+    # Store answer as user.chat message with structured metadata
+    await investigation_service.investigation_data_service.add_chat_message(
+        investigation_id=request.investigation_id,
+        sender=MessageSender.USER_CHAT,
+        content=f"Answered clarifying question {request.question_index}: {'Yes' if request.answer else 'No'}",
+        metadata=ConversationMessageMetadata(
+            event_type=EventType.AI_TRIAGE_CLARIFICATION_ANSWERED,
+            question_index=request.question_index,
+            answer=request.answer
+        )
+    )
+    return {"success": True}
+
+
+@router.post(InternalApiPaths.G8EE_CHAT_TRIAGE_SKIP)
+async def internal_triage_skip(
+    request: TriageSkipRequest,
+    investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
+):
+    """
+    Skip triage clarifying questions - internal cluster use only.
+    """
+    from app.models.investigations import ConversationMessageMetadata
+    from app.models.investigation_status import MessageSender
+
+    logger.info(
+        "[INTERNAL-HTTP] Triage skip received",
+        extra={
+            "investigation_id": request.investigation_id,
+            "user_id": g8e_context.user_id,
+        }
+    )
+
+    await investigation_service.investigation_data_service.add_chat_message(
+        investigation_id=request.investigation_id,
+        sender=MessageSender.USER_CHAT,
+        content="Skipped clarifying questions",
+        metadata=ConversationMessageMetadata(
+            event_type=EventType.AI_TRIAGE_CLARIFICATION_SKIPPED
+        )
+    )
+    return {"success": True}
+
+
+@router.post(InternalApiPaths.G8EE_CHAT_TRIAGE_TIMEOUT)
+async def internal_triage_timeout(
+    request: TriageTimeoutRequest,
+    investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
+):
+    """
+    Record triage clarifying questions timeout - internal cluster use only.
+    """
+    from app.models.investigations import ConversationMessageMetadata
+    from app.models.investigation_status import MessageSender
+
+    logger.info(
+        "[INTERNAL-HTTP] Triage timeout received",
+        extra={
+            "investigation_id": request.investigation_id,
+            "user_id": g8e_context.user_id,
+        }
+    )
+
+    await investigation_service.investigation_data_service.add_chat_message(
+        investigation_id=request.investigation_id,
+        sender=MessageSender.USER_CHAT,
+        content="Clarifying questions timed out",
+        metadata=ConversationMessageMetadata(
+            event_type=EventType.AI_TRIAGE_CLARIFICATION_TIMEOUT
+        )
+    )
+    return {"success": True}
+
+
+@router.post(InternalApiPaths.G8EE_CHAT_STOP, response_model=StopAIResponse)
 async def stop_ai_processing(
     request: StopAIRequest,
     g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
@@ -339,7 +490,7 @@ async def stop_ai_processing(
     )
 
 
-@router.post(API_PATHS["g8ee"]["operator_approval_respond"], response_model=ApprovalRespondedResponse)
+@router.post(InternalApiPaths.G8EE_OPERATOR_APPROVAL_RESPOND, response_model=ApprovalRespondedResponse)
 async def operator_approval_respond(
     request: OperatorApprovalResponse,
     g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
@@ -384,7 +535,7 @@ async def operator_approval_respond(
     )
 
 
-@router.get(API_PATHS["g8ee"]["operator_approval_pending"], response_model=PendingApprovalsResponse)
+@router.get(InternalApiPaths.G8EE_OPERATOR_APPROVAL_PENDING, response_model=PendingApprovalsResponse)
 async def get_pending_approvals(
     approval_service: OperatorApprovalService = Depends(get_g8ee_approval_service),
 ):
@@ -402,7 +553,55 @@ async def get_pending_approvals(
     return PendingApprovalsResponse(pending_approvals=pending_approvals)
 
 
-@router.post(API_PATHS["g8ee"]["operator_direct_command"], response_model=DirectCommandSentResponse)
+@router.post(InternalApiPaths.G8EE_OPERATORS_G8EP_ACTIVATE, response_model=G8epOperatorActivationResponse)
+async def activate_g8ep_operator(
+    request: G8epOperatorActivationRequest,
+    operator_lifecycle_service: "OperatorLifecycleService" = Depends(get_g8ee_operator_lifecycle_service),
+):
+    """
+    Activate the g8ep operator for a user.
+    
+    Called by g8ed after login/registration.
+    Authority: g8ee (process owner for g8ep operator).
+    """
+    try:
+        await operator_lifecycle_service.activate_g8ep_operator(request.user_id)
+        return G8epOperatorActivationResponse(success=True)
+    except Exception as e:
+        logger.error(
+            "[INTERNAL-HTTP] Failed to activate g8ep operator",
+            extra={"error": str(e), "user_id": request.user_id}
+        )
+        return G8epOperatorActivationResponse(success=False, error=str(e))
+
+
+@router.post(InternalApiPaths.G8EE_OPERATORS_G8EP_RELAUNCH, response_model=G8epOperatorRelaunchResponse)
+async def relaunch_g8ep_operator(
+    request: G8epOperatorRelaunchRequest,
+    operator_lifecycle_service: "OperatorLifecycleService" = Depends(get_g8ee_operator_lifecycle_service),
+):
+    """
+    Relaunch the g8ep operator for a user.
+    
+    Called by g8ed during reauth/relaunch.
+    Authority: g8ee (process owner for g8ep operator).
+    """
+    try:
+        result = await operator_lifecycle_service.relaunch_g8ep_operator(request.user_id)
+        return G8epOperatorRelaunchResponse(
+            success=result.get("success", False),
+            operator_id=result.get("operator_id"),
+            error=result.get("error"),
+        )
+    except Exception as e:
+        logger.error(
+            "[INTERNAL-HTTP] Failed to relaunch g8ep operator",
+            extra={"error": str(e), "user_id": request.user_id}
+        )
+        return G8epOperatorRelaunchResponse(success=False, error=str(e))
+
+
+@router.post(InternalApiPaths.G8EE_OPERATOR_DIRECT_COMMAND, response_model=DirectCommandSentResponse)
 async def execute_direct_command(
     request: DirectCommandRequest,
     g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
@@ -442,7 +641,7 @@ async def execute_direct_command(
     )
 
 
-@router.get(API_PATHS["g8ee"]["case"], response_model=CaseResponse)
+@router.get(InternalApiPaths.G8EE_CASE, response_model=CaseResponse)
 async def get_case(
     case_id: str,
     case_service: CaseDataService = Depends(get_g8ee_case_data_service),
@@ -453,7 +652,7 @@ async def get_case(
     return CaseResponse(success=True, case=case)
 
 
-@router.patch(API_PATHS["g8ee"]["case"], response_model=CaseResponse)
+@router.patch(InternalApiPaths.G8EE_CASE, response_model=CaseResponse)
 async def update_case(
     case_id: str,
     updates: CaseUpdateRequest,
@@ -478,7 +677,7 @@ async def update_case(
     return CaseResponse(success=True, case=case)
 
 
-@router.delete(API_PATHS["g8ee"]["case"], status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(InternalApiPaths.G8EE_CASE, status_code=status.HTTP_204_NO_CONTENT)
 async def delete_case(
     case_id: str,
     case_service: CaseDataService = Depends(get_g8ee_case_data_service),
@@ -510,7 +709,7 @@ async def delete_case(
         return
 
     # Delete all investigations for this case - SCOPED BY USER for security
-    investigations = await investigation_service.get_case_investigations(
+    investigations = await investigation_service.investigation_data_service.get_case_investigations(
         case_id=case_id,
         user_id=user_id
     )
@@ -519,7 +718,7 @@ async def delete_case(
             "[INTERNAL-HTTP] Deleting investigation",
             extra={"investigation_id": investigation.id, "case_id": case_id}
         )
-        await investigation_service.delete_investigation(investigation.id)
+        await investigation_service.investigation_data_service.delete_investigation(investigation.id)
 
     logger.info(
         "[INTERNAL-HTTP] Deleted investigations",
@@ -564,10 +763,604 @@ async def delete_case(
 
 
 
-@router.post(API_PATHS["g8ee"]["operators_register_session"], response_model=OperatorSessionRegisteredResponse)
+@router.post(InternalApiPaths.G8EE_OPERATORS_TERMINATE, response_model=OperatorTerminateResponse)
+async def terminate_operator(
+    request: OperatorTerminateRequest,
+    operator_lifecycle_service: "OperatorLifecycleService" = Depends(get_g8ee_operator_lifecycle_service),
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
+):
+    """
+    Terminate an operator slot.
+    
+    Atomically marks operator status TERMINATED and appends a TERMINATED audit
+    history entry under a single per-operator lock so concurrent writes cannot
+    interleave a partial termination.
+
+    Called by g8ed during API key refresh and manual termination.
+    SECURITY: Internal only - g8ed component.
+    """
+    operator = await operator_lifecycle_service.operator_data_service.get_operator(request.operator_id)
+    if not operator:
+        return OperatorTerminateResponse(success=False, error="Operator not found")
+
+    await operator_lifecycle_service.terminate_operator(
+        operator_id=request.operator_id,
+        actor=ComponentName.G8ED,
+        summary="Operator terminated via g8ed relay",
+    )
+
+    logger.info(
+        "[INTERNAL-HTTP] Operator terminated",
+        extra={"operator_id": request.operator_id, "user_id": operator.user_id}
+    )
+
+    return OperatorTerminateResponse(success=True)
+
+
+@router.post(InternalApiPaths.G8EE_OPERATORS_LISTEN_SESSION_AUTH)
+async def listen_session_auth(
+    request: OperatorListenSessionAuthRequest,
+    session_auth_listener: SessionAuthListener = Depends(get_g8ee_session_auth_listener),
+):
+    """
+    Start a session auth listener on PubSub.
+    """
+    try:
+        await session_auth_listener.listen(
+            operator_session_id=request.operator_session_id,
+            operator_id=request.operator_id,
+            user_id=request.user_id,
+            organization_id=request.organization_id
+        )
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"[INTERNAL-HTTP] Failed to start session auth listener: {e}")
+        return {"success": False, "error": "Failed to start session auth listener"}
+
+
+@router.post(InternalApiPaths.G8EE_OPERATORS_CREATE_SLOT, response_model=OperatorSlotCreationResponse)
+async def create_operator_slot(
+    request: OperatorSlotCreationRequest,
+    operator_data_service: "OperatorDataService" = Depends(get_g8ee_operator_data_service),
+    settings_service: SettingsService = Depends(get_g8ee_settings_service_write),
+    api_key_service: ApiKeyService = Depends(get_g8ee_api_key_service),
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
+):
+    """
+    Create an operator slot.
+
+    Called by g8ed during user initialization and device link creation.
+    g8ee handles the actual write to the operator document to enforce the
+    architectural boundary: after auth, g8ed has no business writing to operators.
+    SECURITY: Internal only - g8ed component.
+    """
+    from app.models.operators import OperatorDocument
+    from app.utils.timestamp import now
+    import uuid
+    import secrets
+
+    try:
+        operator_id = str(uuid.uuid4())
+
+        # Generate API key (authority: g8ee for operator bootstrap)
+        operator_suffix = operator_id.split('-')[-1][:8]
+        random_token = secrets.token_hex(32)
+        api_key = f"g8e_{operator_suffix}_{random_token}"
+
+        # Create operator document
+        operator_doc = OperatorDocument(
+            id=operator_id,
+            user_id=request.user_id,
+            organization_id=request.organization_id,
+            name=f"{request.name_prefix}-{request.slot_number}",
+            slot_number=request.slot_number,
+            operator_type=request.operator_type,
+            cloud_subtype=request.cloud_subtype,
+            is_g8ep=request.is_g8e_node,
+            status=OperatorStatus.AVAILABLE,
+            api_key=api_key,
+            created_at=now(),
+            updated_at=now(),
+        )
+
+        await operator_data_service.create_operator(operator_doc)
+
+        # Issue API key to api_keys collection (canonical) and, if this is a
+        # g8ep operator, mirror to platform_settings in a single coordinated
+        # call. The coordinator rolls back the api_keys entry if the mirror
+        # write fails so we never leave authoritative-without-mirror state.
+        key_issued = await api_key_service.issue_operator_key(
+            api_key=api_key,
+            user_id=request.user_id,
+            organization_id=request.organization_id,
+            operator_id=operator_id,
+            is_g8ep=request.is_g8e_node,
+            settings_service=settings_service,
+            client_name="operator",
+            permissions=["OPERATOR_BOOTSTRAP", "OPERATOR_HEARTBEAT", "OPERATOR_DOWNLOAD"],
+        )
+
+        if not key_issued:
+            logger.error(
+                "[INTERNAL-HTTP] Failed to issue API key to api_keys collection",
+                extra={"operator_id": operator_id, "user_id": request.user_id}
+            )
+            return OperatorSlotCreationResponse(
+                success=False,
+                operator_id=None,
+                error="Failed to issue API key",
+            )
+
+        if request.is_g8e_node:
+            logger.info(
+                "[INTERNAL-HTTP] g8ep operator API key persisted to platform_settings",
+                extra={"operator_id": operator_id, "user_id": request.user_id}
+            )
+
+        logger.info(
+            "[INTERNAL-HTTP] Operator slot created",
+            extra={
+                "operator_id": operator_id,
+                "user_id": request.user_id,
+                "slot_number": request.slot_number,
+                "is_g8ep": request.is_g8e_node,
+            }
+        )
+
+        return OperatorSlotCreationResponse(
+            success=True,
+            operator_id=operator_id,
+            api_key=api_key,
+        )
+
+    except Exception as e:
+        logger.error(
+            "[INTERNAL-HTTP] Failed to create operator slot",
+            extra={"error": str(e), "user_id": request.user_id}
+        )
+        return OperatorSlotCreationResponse(
+            success=False,
+            operator_id=None,
+            error=str(e),
+        )
+
+
+@router.post(InternalApiPaths.G8EE_OPERATORS_UPDATE_API_KEY, response_model=OperatorUpdateApiKeyResponse)
+async def update_operator_api_key(
+    request: OperatorUpdateApiKeyRequest,
+    operator_data_service: "OperatorDataService" = Depends(get_g8ee_operator_data_service),
+    settings_service: SettingsService = Depends(get_g8ee_settings_service_write),
+    api_key_service: ApiKeyService = Depends(get_g8ee_api_key_service),
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
+):
+    """
+    Update an operator's API key.
+
+    Called by g8ed during initialization to issue API keys for existing slots
+    that were created without keys during setup.
+    g8ee handles the actual write to the operator document to enforce the
+    architectural boundary: after auth, g8ed has no business writing to operators.
+    SECURITY: Internal only - g8ed component.
+    """
+    from app.models.operators import OperatorDocument
+    from app.utils.timestamp import now
+
+    try:
+        operator = await operator_data_service.get_operator(request.operator_id)
+        if not operator:
+            logger.error(
+                "[INTERNAL-HTTP] Operator not found for API key update",
+                extra={"operator_id": request.operator_id}
+            )
+            return OperatorUpdateApiKeyResponse(success=False, error="Operator not found")
+
+        # Rotate the API key in the canonical store (and the platform_settings
+        # mirror if g8ep) BEFORE updating the operator doc. Failure here means
+        # the operator doc is left untouched and the old key remains
+        # authoritative — no phantom keys, no split-brain.
+        rotated = await api_key_service.rotate_operator_key(
+            old_api_key=operator.api_key,
+            new_api_key=request.api_key,
+            user_id=operator.user_id,
+            organization_id=operator.organization_id,
+            operator_id=operator.id,
+            is_g8ep=operator.is_g8ep,
+            settings_service=settings_service,
+            permissions=["OPERATOR_BOOTSTRAP", "OPERATOR_HEARTBEAT", "OPERATOR_DOWNLOAD"],
+        )
+        if not rotated:
+            logger.error(
+                "[INTERNAL-HTTP] Failed to rotate operator API key",
+                extra={"operator_id": request.operator_id}
+            )
+            return OperatorUpdateApiKeyResponse(success=False, error="Failed to rotate API key")
+
+        updated_operator = operator.model_copy(update={
+            "api_key": request.api_key,
+            "updated_at": now(),
+        })
+
+        await operator_data_service.update_operator(updated_operator)
+
+        if operator.is_g8ep:
+            logger.info(
+                "[INTERNAL-HTTP] g8ep operator API key updated in platform_settings",
+                extra={"operator_id": request.operator_id}
+            )
+
+        logger.info(
+            "[INTERNAL-HTTP] Operator API key updated",
+            extra={"operator_id": request.operator_id}
+        )
+
+        return OperatorUpdateApiKeyResponse(success=True)
+
+    except Exception as e:
+        logger.error(
+            "[INTERNAL-HTTP] Failed to update operator API key",
+            extra={"error": str(e), "operator_id": request.operator_id}
+        )
+        return OperatorUpdateApiKeyResponse(success=False, error=str(e))
+
+
+@router.post(InternalApiPaths.G8EE_AUTH_GENERATE_KEY, response_model=ApiKeyGenerationResponse)
+async def generate_api_key(
+    request: ApiKeyGenerationRequest,
+    api_key_service: ApiKeyService = Depends(get_g8ee_api_key_service),
+):
+    """Generate a new API key.
+    
+    Authority: g8ee.
+    SECURITY: Internal only - g8ed component.
+    """
+    try:
+        api_key = api_key_service.generate_raw_key(prefix=request.prefix)
+        return ApiKeyGenerationResponse(
+            success=True,
+            api_key=api_key
+        )
+    except Exception as e:
+        logger.error(f"[INTERNAL-HTTP] Failed to generate API key: {str(e)}")
+        return ApiKeyGenerationResponse(
+            success=False,
+            error=str(e)
+        )
+
+
+@router.post(InternalApiPaths.G8EE_AUTH_REVOKE_CERT, response_model=OperatorCertificateRevokeResponse)
+async def revoke_operator_certificate(
+    request: OperatorCertificateRevokeRequest,
+    certificate_service: CertificateService = Depends(get_g8ee_certificate_service),
+):
+    """Revoke an operator certificate.
+    
+    Authority: g8ee.
+    SECURITY: Internal only - g8ed component.
+    """
+    try:
+        success = await certificate_service.revoke_certificate(
+            serial=request.serial,
+            reason=request.reason,
+            operator_id=request.operator_id
+        )
+        return OperatorCertificateRevokeResponse(success=success)
+    except Exception as e:
+        logger.error(f"[INTERNAL-HTTP] Failed to revoke certificate: {str(e)}")
+        return OperatorCertificateRevokeResponse(success=False, error=str(e))
+
+
+@router.post(InternalApiPaths.G8EE_OPERATORS_CLAIM_SLOT, response_model=OperatorSlotClaimResponse)
+async def claim_operator_slot(
+    request: OperatorSlotClaimRequest,
+    operator_lifecycle_service: "OperatorLifecycleService" = Depends(get_g8ee_operator_lifecycle_service),
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
+):
+    """
+    Claim an operator slot for device registration.
+
+    Called by g8ed during device registration.
+    g8ee handles the actual write to the operator document to enforce the
+    architectural boundary: after auth, g8ed has no business writing to operators.
+    SECURITY: Internal only - g8ed component.
+    """
+    from app.models.operators import OperatorDocument
+    from app.utils.timestamp import now
+
+    try:
+        success = await operator_lifecycle_service.claim_operator_slot(
+            operator_id=request.operator_id,
+            operator_session_id=request.operator_session_id,
+            bound_web_session_id=request.bound_web_session_id,
+            operator_type=request.operator_type,
+        )
+
+        if not success:
+            return OperatorSlotClaimResponse(
+                success=False,
+                error="Failed to claim operator slot",
+            )
+
+        logger.info(
+            "[INTERNAL-HTTP] Operator slot claimed",
+            extra={
+                "operator_id": request.operator_id,
+                "operator_session_id": request.operator_session_id[:12] + "...",
+            }
+        )
+
+        return OperatorSlotClaimResponse(success=True)
+
+    except Exception as e:
+        logger.error(
+            "[INTERNAL-HTTP] Failed to claim operator slot",
+            extra={"error": str(e), "operator_id": request.operator_id}
+        )
+        return OperatorSlotClaimResponse(
+            success=False,
+            error=str(e),
+        )
+
+
+@router.post(InternalApiPaths.G8EE_OPERATORS_BIND, response_model=OperatorBindResponse)
+async def bind_operators(
+    request: OperatorBindRequest,
+    operator_data_service: "OperatorDataService" = Depends(get_g8ee_operator_data_service),
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
+):
+    """
+    Bind operators to a web session.
+
+    Called by g8ed during operator bind operations.
+    g8ee handles the actual write to the operator document to enforce the
+    architectural boundary: after auth, g8ed has no business writing to operators.
+    SECURITY: Internal only - g8ed component.
+    """
+    from app.utils.timestamp import now
+
+    bound = []
+    failed = []
+    errors = []
+
+    for operator_id in request.operator_ids:
+        try:
+            operator = await operator_data_service.get_operator(operator_id)
+            if not operator:
+                failed.append(operator_id)
+                errors.append({"operator_id": operator_id, "error": "Operator not found"})
+                continue
+
+            if operator.user_id != request.user_id:
+                failed.append(operator_id)
+                errors.append({"operator_id": operator_id, "error": "Unauthorized"})
+                continue
+
+            # Update operator status to BOUND
+            update_data = {
+                "status": OperatorStatus.BOUND,
+                "bound_web_session_id": request.web_session_id,
+                "updated_at": now(),
+            }
+
+            result = await operator_data_service.cache.update_document(
+                collection=operator_data_service.collection,
+                document_id=operator_id,
+                data=update_data,
+                merge=True,
+            )
+
+            if result.success:
+                bound.append(operator_id)
+            else:
+                failed.append(operator_id)
+                errors.append({"operator_id": operator_id, "error": result.error or "Failed to update operator"})
+
+        except Exception as e:
+            failed.append(operator_id)
+            errors.append({"operator_id": operator_id, "error": str(e)})
+
+    logger.info(
+        "[INTERNAL-HTTP] Operators bound",
+        extra={
+            "bound_count": len(bound),
+            "failed_count": len(failed),
+            "user_id": request.user_id,
+        }
+    )
+
+    return OperatorBindResponse(
+        success=len(bound) > 0,
+        bound_count=len(bound),
+        failed_count=len(failed),
+        bound_operator_ids=bound,
+        failed_operator_ids=failed,
+        errors=errors,
+    )
+
+
+@router.post(InternalApiPaths.G8EE_OPERATORS_UNBIND, response_model=OperatorUnbindResponse)
+async def unbind_operators(
+    request: OperatorUnbindRequest,
+    operator_data_service: "OperatorDataService" = Depends(get_g8ee_operator_data_service),
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
+):
+    """
+    Unbind operators from a web session.
+
+    Called by g8ed during operator unbind operations.
+    g8ee handles the actual write to the operator document to enforce the
+    architectural boundary: after auth, g8ed has no business writing to operators.
+    SECURITY: Internal only - g8ed component.
+    """
+    from app.utils.timestamp import now
+
+    unbound = []
+    failed = []
+    errors = []
+
+    for operator_id in request.operator_ids:
+        try:
+            operator = await operator_data_service.get_operator(operator_id)
+            if not operator:
+                failed.append(operator_id)
+                errors.append({"operator_id": operator_id, "error": "Operator not found"})
+                continue
+
+            if operator.user_id != request.user_id:
+                failed.append(operator_id)
+                errors.append({"operator_id": operator_id, "error": "Unauthorized"})
+                continue
+
+            # Update operator status to ACTIVE
+            update_data = {
+                "status": OperatorStatus.ACTIVE,
+                "bound_web_session_id": None,
+                "updated_at": now(),
+            }
+
+            result = await operator_data_service.cache.update_document(
+                collection=operator_data_service.collection,
+                document_id=operator_id,
+                data=update_data,
+                merge=True,
+            )
+
+            if result.success:
+                unbound.append(operator_id)
+            else:
+                failed.append(operator_id)
+                errors.append({"operator_id": operator_id, "error": result.error or "Failed to update operator"})
+
+        except Exception as e:
+            failed.append(operator_id)
+            errors.append({"operator_id": operator_id, "error": str(e)})
+
+    logger.info(
+        "[INTERNAL-HTTP] Operators unbound",
+        extra={
+            "unbound_count": len(unbound),
+            "failed_count": len(failed),
+            "user_id": request.user_id,
+        }
+    )
+
+    return OperatorUnbindResponse(
+        success=len(unbound) > 0,
+        unbound_count=len(unbound),
+        failed_count=len(failed),
+        unbound_operator_ids=unbound,
+        failed_operator_ids=failed,
+        errors=errors,
+    )
+
+
+@router.post(InternalApiPaths.G8EE_OPERATORS_AUTHENTICATE, response_model=OperatorAuthenticateResponse)
+async def authenticate_operator(
+    request: InternalOperatorAuthCall,
+    operator_auth_service: OperatorAuthService = Depends(get_g8ee_operator_auth_service),
+    http_request: Request = None,
+):
+    """
+    Authenticate an operator via API key (Bearer).
+    Called by g8ed (as proxy) or directly via internal API.
+    """
+    request_context = {
+        "ip": http_request.client.host if http_request else None,
+        "user_agent": http_request.headers.get("user-agent") if http_request else None,
+    }
+
+    result = await operator_auth_service.authenticate_operator(
+        authorization_header=request.authorization,
+        body=request.model_dump(),
+        request_context=request_context
+    )
+
+    if result.get("success"):
+        return OperatorAuthenticateResponse(**result)
+    else:
+        return OperatorAuthenticateResponse(
+            success=False,
+            error=result.get("error")
+        )
+
+
+@router.post(InternalApiPaths.G8EE_OPERATORS_DEVICE_LINK_REGISTER, response_model=OperatorDeviceLinkRegisterResponse)
+async def register_device_link_operator(
+    request: OperatorDeviceLinkRegisterRequest,
+    operator_auth_service: OperatorAuthService = Depends(get_g8ee_operator_auth_service),
+    http_request: Request = None,
+) -> OperatorDeviceLinkRegisterResponse:
+    """Bootstrap an operator after device-link consumption (g8ed-internal)."""
+    result = await operator_auth_service.register_device_link_operator(
+        operator_id=request.operator_id,
+        user_id=request.user_id,
+        organization_id=request.organization_id,
+        operator_type=request.operator_type,
+        request_context={
+            "ip": http_request.client.host if http_request.client else None,
+            "user_agent": http_request.headers.get("user-agent"),
+        },
+    )
+    if result.get("success"):
+        return OperatorDeviceLinkRegisterResponse(**result)
+    return OperatorDeviceLinkRegisterResponse(success=False, error=result.get("error"))
+
+
+@router.post(InternalApiPaths.G8EE_OPERATORS_VALIDATE_SESSION, response_model=OperatorSessionValidateResponse)
+async def validate_operator_session(
+    request: OperatorSessionValidateRequest,
+    session_service: OperatorSessionService = Depends(get_g8ee_operator_session_service),
+):
+    """
+    Validate an operator session.
+    """
+    try:
+        session = await session_service.validate_session(request.operator_session_id)
+        if session:
+            return OperatorSessionValidateResponse(
+                success=True,
+                valid=True,
+                user_id=session.user_id,
+                operator_id=session.operator_id,
+                session_type=session.session_type.value
+            )
+        else:
+            return OperatorSessionValidateResponse(success=True, valid=False)
+    except Exception as e:
+        logger.error(f"[INTERNAL-HTTP] Session validation failed: {e}")
+        return OperatorSessionValidateResponse(success=False, valid=False, error=str(e))
+
+
+@router.post(InternalApiPaths.G8EE_OPERATORS_REFRESH_SESSION, response_model=OperatorSessionRefreshResponse)
+async def refresh_operator_session(
+    request: OperatorSessionRefreshRequest,
+    session_service: OperatorSessionService = Depends(get_g8ee_operator_session_service),
+):
+    """
+    Refresh an operator session.
+    """
+    try:
+        success = await session_service.refresh_session(request.operator_session_id)
+        if success:
+            session = await session_service.validate_session(request.operator_session_id)
+            return OperatorSessionRefreshResponse(
+                success=True,
+                operator_id=session.operator_id if session else None,
+                session={
+                    "id": request.operator_session_id,
+                    "expires_at": session.absolute_expires_at if session else None,
+                }
+            )
+        else:
+            return OperatorSessionRefreshResponse(success=False, error="Session not found or expired")
+    except Exception as e:
+        logger.error(f"[INTERNAL-HTTP] Session refresh failed: {e}")
+        return OperatorSessionRefreshResponse(success=False, error=str(e))
+
+
+@router.post(InternalApiPaths.G8EE_OPERATORS_REGISTER_SESSION, response_model=OperatorSessionRegisteredResponse)
 async def register_operator_session(
     request: OperatorSessionRegistrationRequest,
-    heartbeat_service: OperatorHeartbeatService = Depends(get_g8ee_heartbeat_service),
+    heartbeat_service: HeartbeatSnapshotService = Depends(get_g8ee_heartbeat_service),
     g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
 ):
     """
@@ -597,10 +1390,10 @@ async def register_operator_session(
     )
 
 
-@router.post(API_PATHS["g8ee"]["operators_deregister_session"], response_model=OperatorSessionRegisteredResponse)
+@router.post(InternalApiPaths.G8EE_OPERATORS_DEREGISTER_SESSION, response_model=OperatorSessionRegisteredResponse)
 async def deregister_operator_session(
     request: OperatorSessionRegistrationRequest,
-    heartbeat_service: OperatorHeartbeatService = Depends(get_g8ee_heartbeat_service),
+    heartbeat_service: HeartbeatSnapshotService = Depends(get_g8ee_heartbeat_service),
     g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
 ):
     """
@@ -629,7 +1422,7 @@ async def deregister_operator_session(
     )
 
 
-@router.post(API_PATHS["g8ee"]["operators_stop"], response_model=OperatorStoppedResponse)
+@router.post(InternalApiPaths.G8EE_OPERATORS_STOP, response_model=OperatorStoppedResponse)
 async def stop_operator(
     request: StopOperatorRequest,
     g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
@@ -685,7 +1478,7 @@ async def stop_operator(
     )
 
 
-@router.get(API_PATHS["g8ee"]["investigations"])
+@router.get(InternalApiPaths.G8EE_INVESTIGATIONS)
 async def query_investigations(
     request: Request,
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
@@ -708,11 +1501,11 @@ async def query_investigations(
         order_direction=request.query_params.get("order_direction", "desc"),
     )
 
-    investigations = await investigation_service.query_investigations(query_request)
+    investigations = await investigation_service.investigation_data_service.query_investigations(query_request)
     return investigations
 
 
-@router.get(API_PATHS["g8ee"]["investigation"], response_model=InvestigationModel)
+@router.get(InternalApiPaths.G8EE_INVESTIGATION, response_model=InvestigationModel)
 async def get_investigation(
     investigation_id: str,
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
@@ -727,7 +1520,7 @@ async def get_investigation(
         extra={"user_id": g8e_context.user_id, "investigation_id": investigation_id}
     )
 
-    investigation = await investigation_service.get_investigation(investigation_id)
+    investigation = await investigation_service.investigation_data_service.get_investigation(investigation_id)
     if not investigation:
         raise ResourceNotFoundError(
             f"Investigation {investigation_id} not found",
@@ -755,7 +1548,7 @@ async def get_investigation(
     return investigation
 
 
-@router.get(API_PATHS["g8ee"]["health"])
+@router.get(InternalApiPaths.G8EE_HEALTH)
 async def health_check():
     """Health check for internal API"""
     return {
@@ -770,5 +1563,8 @@ async def health_check():
             InternalApiPaths.G8EE_CASE,
             InternalApiPaths.G8EE_INVESTIGATIONS,
             InternalApiPaths.G8EE_INVESTIGATION,
+            InternalApiPaths.G8EE_CHAT_TRIAGE_ANSWER,
+            InternalApiPaths.G8EE_CHAT_TRIAGE_SKIP,
+            InternalApiPaths.G8EE_CHAT_TRIAGE_TIMEOUT,
         ]
     }

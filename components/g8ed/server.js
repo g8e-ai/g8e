@@ -14,7 +14,7 @@
 /**
  * g8ed Node.js Server - Main Entry Point
  * 
- * g8e Dashboard (g8ed) - localhost platform with local authentication,
+ * g8e Terminal (g8ed) - localhost platform with local authentication,
  * Zero-Trust AI for Real Production, and interactive terminal UI.
  */
 
@@ -57,7 +57,6 @@ import {
     getPubSubClient,
     getCacheAsideService,
     getWebSessionService,
-    getOperatorSessionService,
     getCliSessionService,
     getBindingService,
     getApiKeyService,
@@ -72,7 +71,6 @@ import {
     getCertificateService,
     getConsoleMetricsService,
     getBindOperatorsService,
-    getOperatorAuthService,
     getG8ENodeOperatorService,
     getPostLoginService,
     getAuditService,
@@ -124,7 +122,6 @@ class G8edServer {
                 pubSubClient: getPubSubClient(),
                 cacheAsideService: getCacheAsideService(),
                 webSessionService: getWebSessionService(),
-                operatorSessionService: getOperatorSessionService(),
                 cliSessionService: getCliSessionService(),
                 bindingService: getBindingService(),
                 apiKeyService: getApiKeyService(),
@@ -141,7 +138,6 @@ class G8edServer {
                 settingsService: getSettingsService(),
                 consoleMetricsService: getConsoleMetricsService(),
                 bindOperatorsService: getBindOperatorsService(),
-                operatorAuthService: getOperatorAuthService(),
                 g8eNodeOperatorService: getG8ENodeOperatorService(),
                 postLoginService: getPostLoginService(),
                 auditService: getAuditService(),

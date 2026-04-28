@@ -180,15 +180,35 @@ async def all_services(cache_aside_service, test_settings):
 
     This is the recommended way to get services for integration tests.
     Use auto_approve_pending helper to approve pending approvals during tests.
+
+    Injects a real WebSearchProvider if search settings are configured,
+    ensuring the g8e_web_search tool is registered for eval scenarios that expect it.
     """
-    services = ServiceFactory.create_all_services(test_settings, cache_aside_service)
+    from app.llm.factory import get_search_settings
+    from app.services.ai.grounding.web_search_provider import WebSearchProvider
+
+    # Check if web search settings are configured
+    web_search_provider = None
+    search_settings = get_search_settings()
+    if search_settings and search_settings.enabled:
+        web_search_provider = WebSearchProvider(
+            project_id=search_settings.project_id,
+            engine_id=search_settings.engine_id,
+            api_key=search_settings.api_key,
+            location=search_settings.location,
+        )
+        logger.info(
+            "[INTEGRATION-FIXTURE] Injecting real WebSearchProvider from search settings: project_id=%s engine_id=%s",
+            search_settings.project_id, search_settings.engine_id
+        )
+
+    services = ServiceFactory.create_all_services(
+        test_settings,
+        cache_aside_service,
+        web_search_provider=web_search_provider,
+    )
 
     yield services
-
-    # Await all background tasks before stopping services to prevent race conditions
-    chat_task_manager = services.get('chat_task_manager')
-    if chat_task_manager is not None:
-        await chat_task_manager.wait_all(timeout=5.0)
 
     await ServiceFactory.stop_services(services)
 
@@ -196,19 +216,19 @@ async def all_services(cache_aside_service, test_settings):
 @pytest.fixture(scope="function")
 def investigation_service(all_services):
     """Returns the InvestigationService from all_services."""
-    return all_services['investigation_service']
+    return all_services.investigation_service
 
 
 @pytest.fixture(scope="function")
 def tool_service(all_services):
     """Returns the AIToolService from all_services."""
-    return all_services['tool_service']
+    return all_services.tool_service
 
 
 @pytest.fixture(scope="function")
 def chat_pipeline(all_services):
     """Returns the ChatPipelineService from all_services."""
-    return all_services['chat_pipeline']
+    return all_services.chat_pipeline
 
 
 @pytest_asyncio.fixture(scope="function", loop_scope="session")
@@ -223,11 +243,6 @@ async def cleanup(cache_aside_service, all_services):
     tracker = IntegrationCleanupTracker(cache_aside_service)
     yield tracker
     
-    # Await all background tasks before document deletion
-    chat_task_manager = all_services.get('chat_task_manager')
-    if chat_task_manager is not None:
-        await chat_task_manager.wait_all(timeout=5.0)
-    
     await tracker.cleanup()
 
 
@@ -238,13 +253,14 @@ async def user_settings(cache_aside_service, test_settings):
     Uses TEST_LLM settings when available (set via ./g8e test flags),
     otherwise loads user settings from g8es.
     """
-    from app.llm.factory import get_llm_settings
+    from app.llm.factory import get_llm_settings, get_search_settings
     from app.services.infra.settings_service import SettingsService
     
     # Use TEST_LLM settings if available
     llm = get_llm_settings()
+    search = get_search_settings()
     if llm:
-        return G8eeUserSettings(llm=llm, search=test_settings.search)
+        return G8eeUserSettings(llm=llm, search=search or test_settings.search)
     
     # Otherwise load from g8es
     settings_service = SettingsService(cache_aside_service=cache_aside_service)
@@ -259,8 +275,8 @@ def unified_metrics_collector(request):
     prints a text summary to stdout and persists artifacts (report.txt, results.csv,
     summary.json) to components/g8ee/reports/evals/<timestamp>/ at session end.
     """
-    from tests.evals.metrics import EvalRow, FullReport
-    from tests.evals.reporter import compute_summaries, persist_report, render_text_table
+    from app.evals.runner.metrics import EvalRow, FullReport
+    from app.evals.runner.reporter import compute_summaries, persist_report, render_text_table
     from app.constants.paths import PATHS
     from app.llm.factory import get_llm_settings
     from datetime import datetime, UTC

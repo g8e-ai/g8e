@@ -15,6 +15,8 @@ import logging
 
 from pydantic import TypeAdapter
 
+from app.utils.ledger_hash import compute_entry_hash, genesis_hash
+
 from app.constants import (
     DB_COLLECTION_INVESTIGATIONS,
     ComponentName,
@@ -41,6 +43,7 @@ from app.models.operators import CommandInternalResult
 from app.models.tool_results import FileEditResult
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.protocols import InvestigationDataServiceProtocol
+from app.utils.keyed_lock import KeyedAsyncLock
 from app.utils.timestamp import now
 
 
@@ -54,6 +57,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
     def __init__(self, cache: CacheAsideService):
         self.cache = cache
         self.collection = DB_COLLECTION_INVESTIGATIONS
+        self._history_lock = KeyedAsyncLock()
 
     async def create_investigation(self, request: InvestigationCreateRequest) -> InvestigationModel:
         """Low-level persistence for a new investigation document."""
@@ -93,9 +97,9 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
 
     async def get_investigation(self, investigation_id: str) -> InvestigationModel | None:
         """Fetch a single investigation document by ID."""
-        doc_data = await self.cache.get_document(
+        doc_data = await self.cache.get_document_with_cache(
             collection=self.collection,
-            document_id=investigation_id,
+                document_id=investigation_id,
         )
         if doc_data is None:
             return None
@@ -153,23 +157,28 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
     async def get_case_investigations(
         self,
         case_id: str,
-        user_id: str | None,
+        user_id: str,
     ) -> list[InvestigationModel]:
         """Convenience query for all investigations associated with a case."""
-        if not user_id:
-            # Allow case-based queries without user_id for backward compatibility
-            # but this should be logged as a security concern at the service layer
-            request = InvestigationQueryRequest(case_id=case_id, user_id=None, limit=100)
-        else:
-            request = InvestigationQueryRequest(case_id=case_id, user_id=user_id, limit=100)
+        request = InvestigationQueryRequest(case_id=case_id, user_id=user_id, limit=100)
         return await self.query_investigations(request)
 
     async def delete_investigation(self, investigation_id: str) -> None:
         """Hard-delete an investigation document."""
-        await self.cache.delete_document(
+        result = await self.cache.db.delete_document(
             collection=self.collection,
             document_id=investigation_id,
         )
+        if not result.success:
+            raise DatabaseError(
+                message=f"Failed to delete investigation: {result.error}",
+                code=ErrorCode.DB_WRITE_ERROR,
+                details={"investigation_id": investigation_id},
+                component=ComponentName.G8EE
+            )
+        key = self.cache._make_key(self.collection, investigation_id)
+        await self.cache.kv.delete(key)
+        await self.cache.invalidate_query_cache(self.collection)
         logger.info(f"Deleted investigation {investigation_id}")
 
     async def add_chat_message(
@@ -183,19 +192,41 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         if not investigation_id:
             return True
 
-        message = ConversationHistoryMessage(
-            sender=sender,
-            content=content,
-            metadata=metadata or ConversationMessageMetadata(),
-        )
+        async with self._history_lock.acquire(investigation_id):
+            # Get previous hash from last entry in conversation history.
+            # All entries must have entry_hash - no legacy data support.
+            investigation = await self.get_investigation(investigation_id)
+            if not investigation:
+                raise ValueError(f"Investigation {investigation_id} not found")
+            
+            if not investigation.conversation_history:
+                # First entry - use genesis hash
+                prev_hash = genesis_hash(investigation.id, investigation.created_at.isoformat())
+            else:
+                last_entry = investigation.conversation_history[-1]
+                if not last_entry.entry_hash:
+                    raise ValueError(f"Previous entry in conversation history lacks entry_hash - chain integrity violation for investigation {investigation_id}")
+                prev_hash = last_entry.entry_hash
 
-        await self.cache.append_to_array(
-            collection=self.collection,
-            document_id=investigation_id,
-            array_field="conversation_history",
-            items_to_add=[message.model_dump(mode="json")],
-            additional_updates={"created_at": now()},
-        )
+            message = ConversationHistoryMessage(
+                sender=sender,
+                content=content,
+                metadata=metadata or ConversationMessageMetadata(),
+                prev_hash=prev_hash,
+            )
+
+            # Compute entry hash
+            entry_dict = message.model_dump(mode="json", exclude={"entry_hash"})
+            computed_hash = compute_entry_hash(entry_dict, prev_hash)
+            message = message.model_copy(update={"entry_hash": computed_hash})
+
+            await self.cache.append_to_array(
+                collection=self.collection,
+                document_id=investigation_id,
+                array_field="conversation_history",
+                items_to_add=[message.model_dump(mode="json")],
+                additional_updates={"created_at": now()},
+            )
 
         return True
 
@@ -208,27 +239,29 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         details: ConversationMessageMetadata,
     ) -> InvestigationModel:
         """Record an event in the investigation history trail."""
-        investigation = await self.get_investigation(investigation_id)
-        if not investigation:
-            raise ResourceNotFoundError(
-                f"Investigation {investigation_id} not found",
-                resource_type="investigation",
-                resource_id=investigation_id,
+        async with self._history_lock.acquire(investigation_id):
+            investigation = await self.get_investigation(investigation_id)
+            if not investigation:
+                raise ResourceNotFoundError(
+                    f"Investigation {investigation_id} not found",
+                    resource_type="investigation",
+                    resource_id=investigation_id,
+                )
+
+            # Single chokepoint: delegate to model method which handles hash chaining.
+            investigation.add_history_entry(
+                event_type=event_type,
+                actor=actor,
+                summary=summary,
+                details=details or ConversationMessageMetadata(),
             )
 
-        investigation.add_history_entry(
-            event_type=event_type,
-            actor=actor,
-            summary=summary,
-            details=details or ConversationMessageMetadata(),
-        )
+            await self.update_investigation_raw(
+                investigation_id=investigation_id,
+                updates={"history_trail": [e.model_dump(mode="json") for e in investigation.history_trail]},
+            )
 
-        await self.update_investigation_raw(
-            investigation_id=investigation_id,
-            updates={"history_trail": [entry.model_dump(mode="json") for entry in investigation.history_trail]},
-        )
-
-        return investigation
+            return investigation
 
     async def add_approval_record(
         self,
@@ -358,7 +391,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
 
     async def get_chat_messages(self, investigation_id: str) -> list[ConversationHistoryMessage]:
         """Retrieve full conversation history for an investigation."""
-        data = await self.cache.get_document(
+        data = await self.cache.get_document_with_cache(
             collection=self.collection,
             document_id=investigation_id,
         )

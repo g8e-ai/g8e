@@ -11,9 +11,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import shlex
 import logging
-from typing import Optional
 
 from app.constants import (
     TribunalMember,
@@ -35,7 +36,7 @@ def weighted_vote(candidates: list[CandidateCommand], total_members: int) -> tup
 
     Each member contributes exactly 1 vote per candidate (no position decay).
     Tie-breaker ladder:
-      1. Longest command wins (compositional pressure)
+      1. Shortest command wins (compositional pressure)
       2. Non-Nemesis cluster wins over Nemesis-including cluster
       3. Alphabetical (deterministic fallback)
 
@@ -100,7 +101,7 @@ def weighted_vote(candidates: list[CandidateCommand], total_members: int) -> tup
         ), None
 
     # Tie detected - apply tie-breaker ladder
-    # 1. Shortest command wins (maximizes signal density for approval fatigue reduction)
+    # 1. Shortest command wins (compositional pressure)
     shortest_cmd = min(top_candidates, key=len)
     if len(set(len(c) for c in top_candidates)) > 1:
         # Multiple lengths, pick shortest

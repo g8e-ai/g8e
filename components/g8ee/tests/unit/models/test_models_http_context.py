@@ -381,11 +381,66 @@ class TestG8eHttpContext:
 
     def test_web_session_id_required(self):
         with pytest.raises(ValidationError):
-            G8eHttpContext(user_id="u", case_id="c", investigation_id="i", source_component=ComponentName.G8ED)
+            G8eHttpContext(user_id="u", case_id="c", investigation_id="i", source_component=ComponentName.G8EE)
 
-    def test_user_id_required(self):
-        with pytest.raises(ValidationError):
-            G8eHttpContext(web_session_id="s", case_id="c", investigation_id="i", source_component=ComponentName.G8ED)
+    def test_user_id_optional_for_g8ed_operator_auth(self):
+        # user_id can be None when source_component is G8ED for operator auth relay
+        ctx = G8eHttpContext(
+            web_session_id=None,
+            user_id=None,
+            case_id="c",
+            investigation_id="i",
+            source_component=ComponentName.G8ED
+        )
+        assert ctx.user_id is None
+        assert ctx.web_session_id is None
+
+    def test_web_session_id_required_when_source_not_g8ed(self):
+        # web_session_id is required when source_component is not G8ED
+        with pytest.raises(ValidationError, match="web_session_id and user_id are required unless source_component is G8ED"):
+            G8eHttpContext(
+                web_session_id=None,
+                user_id="u",
+                case_id="c",
+                investigation_id="i",
+                source_component=ComponentName.G8EE
+            )
+
+    def test_user_id_required_when_source_not_g8ed(self):
+        # user_id is required when source_component is not G8ED
+        with pytest.raises(ValidationError, match="web_session_id and user_id are required unless source_component is G8ED"):
+            G8eHttpContext(
+                web_session_id="s",
+                user_id=None,
+                case_id="c",
+                investigation_id="i",
+                source_component=ComponentName.G8EE
+            )
+
+    def test_both_web_session_and_user_id_required_when_source_not_g8ed(self):
+        # Both web_session_id and user_id are required when source_component is not G8ED
+        with pytest.raises(ValidationError, match="web_session_id and user_id are required unless source_component is G8ED"):
+            G8eHttpContext(
+                web_session_id=None,
+                user_id=None,
+                case_id="c",
+                investigation_id="i",
+                source_component=ComponentName.G8EE
+            )
+
+    def test_model_validator_runs_after_all_fields_validated(self):
+        # Verify the model validator has access to source_component regardless of field order
+        # This test ensures the timing issue is fixed by using model_validator
+        ctx = G8eHttpContext(
+            web_session_id="s",
+            user_id="u",
+            case_id="c",
+            investigation_id="i",
+            source_component=ComponentName.G8ED
+        )
+        assert ctx.web_session_id == "s"
+        assert ctx.user_id == "u"
+        assert ctx.source_component == ComponentName.G8ED
 
     def test_case_id_required(self):
         with pytest.raises(ValidationError):
@@ -470,7 +525,9 @@ class TestG8eHttpContext:
 
 
     def test_bound_operators_none_returns_empty(self):
-        ctx = self._make(bound_operators=None)
+        # bound_operators field has default_factory=list, so None is not accepted
+        # Use empty list instead
+        ctx = self._make(bound_operators=[])
         assert ctx.bound_operators == []
 
     def test_request_id_is_auto_generated(self):

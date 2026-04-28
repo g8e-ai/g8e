@@ -13,12 +13,11 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 
 
-from pydantic import ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from app.constants import (
     ComponentName,
@@ -80,6 +79,9 @@ class ConversationMessageMetadata(G8eBaseModel):
     operation: FileOperation | None = Field(default=None, description="File operation type")
     intent_name: str | None = Field(default=None, description="AWS intent name for intent approvals")
     intent_question: str | None = Field(default=None, description="User-facing question for intent approval")
+    hosts: list[str] | None = Field(default=None, description="Hosts for stream approval")
+    arch: str | None = Field(default=None, description="Architecture for stream approval")
+    preview_command: str | None = Field(default=None, description="Preview command for stream approval")
     requested_at: UTCDatetime | None = Field(default=None, description="When the approval was requested")
     responded_at: UTCDatetime | None = Field(default=None, description="When the approval response was received")
     completed_at: UTCDatetime | None = Field(default=None, description="When the operation completed")
@@ -94,6 +96,11 @@ class ConversationMessageMetadata(G8eBaseModel):
     token_usage: TokenUsage | None = Field(default=None, description="Token usage stats from AI response")
     sentinel_mode: bool | None = Field(default=None, description="Sentinel mode active when message was created")
     attachment_filenames: list[str] = Field(default_factory=list, description="Filenames of attachments sent with this message")
+    clarifying_questions: list[str] | None = Field(default=None, description="Triage clarifying questions")
+    triage_complexity: str | None = Field(default=None, description="Triage complexity classification")
+    triage_intent_summary: str | None = Field(default=None, description="Triage intent summary")
+    question_index: int | None = Field(default=None, description="Index of the clarifying question being answered")
+    answer: bool | None = Field(default=None, description="User's yes/no answer to a clarifying question")
 
 
 class UserChatMetadata(ConversationMessageMetadata):
@@ -162,6 +169,9 @@ class ApprovalMetadata(ConversationMessageMetadata):
     responded_at: UTCDatetime | None = Field(default=None, description="When the approval response was received")
     intent_name: str | None = Field(default=None, description="AWS intent name for intent approvals")
     intent_question: str | None = Field(default=None, description="User-facing question for intent approval")
+    hosts: list[str] | None = Field(default=None, description="Hosts for stream approval")
+    arch: str | None = Field(default=None, description="Architecture for stream approval")
+    preview_command: str | None = Field(default=None, description="Preview command for stream approval")
 
 
 class FileEditMetadata(ConversationMessageMetadata):
@@ -185,32 +195,27 @@ class ConversationHistoryMessage(G8eIdentifiableModel):
     content: str = Field(default="", description="Message content")
     timestamp: UTCDatetime = Field(default_factory=now, description="When the message was sent")
     metadata: ConversationMessageMetadata = Field(default_factory=ConversationMessageMetadata, description="Message metadata")
-    hash: str | None = Field(default=None, description="Cryptographic hash of the message (The Blockchain)")
+    prev_hash: str = Field(..., description="Hash of previous entry in the chain (hex SHA256, 64 chars)")
+    entry_hash: str | None = Field(default=None, description="Hash of this entry (hex SHA256, 64 chars)")
 
-    def calculate_hash(self, previous_hash: str | None = None) -> str:
-        """Calculate the cryptographic hash for this block (message).
-        
-        The hash is derived from:
-        - Content
-        - Sender
-        - Timestamp
-        - Metadata (serialized)
-        - Previous block hash (forming the chain)
-        """
-        hasher = hashlib.sha256()
-        
-        # Consistent ordering for metadata serialization
-        metadata_json = self.metadata.model_dump_json()
-        
-        hasher.update(str(self.content).encode('utf-8'))
-        hasher.update(str(self.sender).encode('utf-8'))
-        hasher.update(str(self.timestamp.isoformat()).encode('utf-8'))
-        hasher.update(metadata_json.encode('utf-8'))
-        
-        if previous_hash:
-            hasher.update(previous_hash.encode('utf-8'))
-            
-        return hasher.hexdigest()
+    @model_validator(mode="after")
+    def _seal_entry_hash(self) -> "ConversationHistoryMessage":
+        """Auto-compute entry_hash if not provided."""
+        if self.entry_hash is None:
+            from app.utils.ledger_hash import compute_entry_hash
+            payload = self.model_dump(mode="json", exclude={"entry_hash"})
+            object.__setattr__(self, "entry_hash", compute_entry_hash(payload, self.prev_hash))
+        return self
+
+    @field_validator("entry_hash", mode="after")
+    @classmethod
+    def validate_entry_hash(cls, v):
+        if v is None:
+            raise ValueError("entry_hash must be computed and set before use")
+        if len(v) != 64:
+            raise ValueError("entry_hash must be 64 characters (hex SHA256)")
+        return v
+
 
 
 class ThinkingMessage(G8eBaseModel):
@@ -282,6 +287,26 @@ class InvestigationHistoryEntry(G8eBaseModel):
     summary: str = Field(..., description="Brief summary of what happened")
     investigation_attempt: G8eBaseModel | None = Field(default=None, description="Investigation attempt data")
     details: ConversationMessageMetadata = Field(default_factory=ConversationMessageMetadata, description="Detailed event information")
+    prev_hash: str = Field(..., description="Hash of previous entry in the chain (hex SHA256, 64 chars)")
+    entry_hash: str | None = Field(default=None, description="Hash of this entry (hex SHA256, 64 chars)")
+
+    @model_validator(mode="after")
+    def _seal_entry_hash(self) -> "InvestigationHistoryEntry":
+        """Auto-compute entry_hash if not provided."""
+        if self.entry_hash is None:
+            from app.utils.ledger_hash import compute_entry_hash
+            payload = self.model_dump(mode="json", exclude={"entry_hash"})
+            object.__setattr__(self, "entry_hash", compute_entry_hash(payload, self.prev_hash))
+        return self
+
+    @field_validator("entry_hash", mode="after")
+    @classmethod
+    def validate_entry_hash(cls, v):
+        if v is None:
+            raise ValueError("entry_hash must be computed and set before use")
+        if len(v) != 64:
+            raise ValueError("entry_hash must be 64 characters (hex SHA256)")
+        return v
 
 
 class InvestigationModel(G8eIdentifiableModel):
@@ -315,16 +340,14 @@ class InvestigationModel(G8eIdentifiableModel):
     @classmethod
     def validate_user_id(cls, v):
         if v is None or (isinstance(v, str) and len(v.strip()) == 0):
-            # Backward compatibility for old records missing user_id
-            return "unknown"
+            raise ValueError("user_id is required and cannot be empty")
         return v
 
     @field_validator("sentinel_mode", mode="before")
     @classmethod
     def validate_sentinel_mode(cls, v):
         if v is None:
-            # Backward compatibility for old records - default to enabled for data protection
-            return True
+            raise ValueError("sentinel_mode is required")
         return bool(v)
 
     @field_validator("case_id", mode="before")
@@ -394,8 +417,14 @@ class InvestigationModel(G8eIdentifiableModel):
         investigation_attempt: G8eBaseModel | None = None,
         details: ConversationMessageMetadata | None = None
     ) -> None:
+        from app.utils.ledger_hash import genesis_hash
+
         if attempt_number is None:
             attempt_number = (self.current_state.active_attempt if self.current_state else 1)
+
+        prev_hash = self.history_trail[-1].entry_hash if self.history_trail else None
+        if not prev_hash:
+            prev_hash = genesis_hash(self.id, self.created_at.isoformat())
 
         entry = InvestigationHistoryEntry(
             attempt_number=attempt_number,
@@ -404,7 +433,8 @@ class InvestigationModel(G8eIdentifiableModel):
             summary=summary,
             investigation_attempt=investigation_attempt,
             details=details or ConversationMessageMetadata(),
-            timestamp=now()
+            timestamp=now(),
+            prev_hash=prev_hash,
         )
 
         self.history_trail.append(entry)

@@ -123,7 +123,7 @@ class OperatorPortService:
             )
 
         _hn = resolved_operator.current_hostname or (
-            resolved_operator.system_info.hostname if resolved_operator.system_info else None
+            resolved_operator.latest_heartbeat_snapshot.system_identity.hostname if resolved_operator.latest_heartbeat_snapshot else None
         ) or "unknown"
         logger.info("[PORT_CHECK] Resolved operator: %s (hostname: %s)", operator_id, _hn)
 

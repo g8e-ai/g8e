@@ -41,4 +41,5 @@ ALWAYS use list_files_and_directories_with_detailed_metadata BEFORE this tool to
 <example>User: "Overwrite the entire config with this new content" → file_write_on_operator(file_path="/etc/app/config.yaml", content="key: value...", justification="Full config replacement")</example>
 <example>User: "Reset the credentials file" → file_write_on_operator(file_path="/app/.env", content="DB_USER=root\nDB_PASS=secret", justification="Reset environment variables")</example>
 <example>User: "Regenerate the nginx config from scratch" → file_write_on_operator(file_path="/etc/nginx/nginx.conf", content="events { ... }", justification="Complete nginx config regeneration")</example>
+<example>User: "Overwrite config on g8ep" → file_write_on_operator(file_path="/etc/app/config.yaml", content="key: value", justification="Full config replacement", target_operator="g8ep")</example>
 </examples>

@@ -14,7 +14,6 @@
 import { describe, it, expect } from 'vitest';
 import {
     HeartbeatSnapshot,
-    OperatorSlotSystemInfo,
     OperatorSlot,
     OperatorListUpdatedEvent,
     OperatorStatusUpdatedEvent,
@@ -107,37 +106,6 @@ describe('HeartbeatSnapshot [FRONTEND UNIT]', () => {
     });
 });
 
-describe('OperatorSlotSystemInfo [FRONTEND UNIT]', () => {
-    it('parse() handles missing fields with null defaults', () => {
-        const info = OperatorSlotSystemInfo.parse({});
-        expect(info.hostname).toBeNull();
-        expect(info.os).toBeNull();
-        expect(info.architecture).toBeNull();
-        expect(info.cpu_count).toBeNull();
-        expect(info.memory_mb).toBeNull();
-    });
-
-    it('parse() extracts system info fields', () => {
-        const info = OperatorSlotSystemInfo.parse({
-            hostname: 'test-host',
-            os: 'linux',
-            architecture: 'amd64',
-            cpu_count: 4,
-            memory_mb: 8192,
-            current_user: 'testuser',
-            internal_ip: '192.168.1.1',
-            public_ip: '1.2.3.4',
-        });
-        expect(info.hostname).toBe('test-host');
-        expect(info.os).toBe('linux');
-        expect(info.architecture).toBe('amd64');
-        expect(info.cpu_count).toBe(4);
-        expect(info.memory_mb).toBe(8192);
-        expect(info.current_user).toBe('testuser');
-        expect(info.internal_ip).toBe('192.168.1.1');
-        expect(info.public_ip).toBe('1.2.3.4');
-    });
-});
 
 describe('OperatorSlot [FRONTEND UNIT]', () => {
     it('parse() requires operator_id', () => {
@@ -162,10 +130,13 @@ describe('OperatorSlot [FRONTEND UNIT]', () => {
             bound_web_session_id: 'ws-456',
             is_g8ep: false,
             first_deployed: '2026-01-01T00:00:00.000Z',
+            claimed_at: '2026-01-01T12:00:00.000Z',
             last_heartbeat: '2026-01-02T00:00:00.000Z',
-            system_info: {
-                hostname: 'test-host',
-                os: 'linux',
+            latest_heartbeat_snapshot: {
+                system_identity: {
+                    hostname: 'test-host',
+                    os: 'linux',
+                },
             },
         });
         expect(slot.operator_id).toBe('op-123');
@@ -176,22 +147,10 @@ describe('OperatorSlot [FRONTEND UNIT]', () => {
         expect(slot.bound_web_session_id).toBe('ws-456');
         expect(slot.is_g8ep).toBe(false);
         expect(slot.first_deployed).toEqual(new Date('2026-01-01T00:00:00.000Z'));
+        expect(slot.claimed_at).toEqual(new Date('2026-01-01T12:00:00.000Z'));
         expect(slot.last_heartbeat).toEqual(new Date('2026-01-02T00:00:00.000Z'));
-        expect(slot.system_info.hostname).toBe('test-host');
-        expect(slot.system_info.os).toBe('linux');
-    });
-
-    it('parse() parses nested system_info through OperatorSlotSystemInfo', () => {
-        const slot = OperatorSlot.parse({
-            operator_id: 'op-123',
-            system_info: {
-                hostname: 'test-host',
-                os: 'linux',
-            },
-        });
-        expect(slot.system_info).toBeInstanceOf(OperatorSlotSystemInfo);
-        expect(slot.system_info.hostname).toBe('test-host');
-        expect(slot.system_info.os).toBe('linux');
+        expect(slot.latest_heartbeat_snapshot.system_identity.hostname).toBe('test-host');
+        expect(slot.latest_heartbeat_snapshot.system_identity.os).toBe('linux');
     });
 });
 

@@ -32,6 +32,9 @@ import (
 type DeviceAuthResult struct {
 	OperatorSessionID string
 	OperatorID        string
+	APIKey            string
+	OperatorCert      string
+	OperatorCertKey   string
 }
 
 // DeviceInfo contains device information sent during device link registration
@@ -51,6 +54,9 @@ type deviceRegisterResponse struct {
 	Success           bool            `json:"success"`
 	OperatorSessionID string          `json:"operator_session_id"`
 	OperatorID        string          `json:"operator_id"`
+	APIKey            string          `json:"api_key,omitempty"`
+	OperatorCert      string          `json:"operator_cert,omitempty"`
+	OperatorCertKey   string          `json:"operator_cert_key,omitempty"`
 	Error             json.RawMessage `json:"error,omitempty"`
 }
 
@@ -179,5 +185,8 @@ func authenticateWithDeviceTokenUsingClient(token string, endpoint string, logge
 	return &DeviceAuthResult{
 		OperatorSessionID: result.OperatorSessionID,
 		OperatorID:        result.OperatorID,
+		APIKey:            result.APIKey,
+		OperatorCert:      result.OperatorCert,
+		OperatorCertKey:   result.OperatorCertKey,
 	}, nil
 }

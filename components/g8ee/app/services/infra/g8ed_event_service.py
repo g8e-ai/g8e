@@ -133,3 +133,34 @@ class EventService:
             )
         except Exception as e:
             logger.warning("Failed to publish investigation event %s for %s: %s", event_type, investigation_id, e)
+
+    async def publish_reputation_event(
+        self,
+        event_type: EventType,
+        data: G8eBaseModel,
+        g8e_context: G8eHttpContext,
+    ) -> None:
+        """Publish a reputation update or slashing event."""
+        logger.info(
+            "[HTTP-G8ED] Publishing reputation event '%s'",
+            event_type,
+            extra={
+                "case_id": g8e_context.case_id,
+                "investigation_id": g8e_context.investigation_id,
+                "web_session_id": g8e_context.web_session_id,
+            },
+        )
+        
+        try:
+            await self.publish(
+                SessionEvent(
+                    event_type=event_type,
+                    payload=data,
+                    web_session_id=g8e_context.web_session_id,
+                    user_id=g8e_context.user_id,
+                    case_id=g8e_context.case_id,
+                    investigation_id=g8e_context.investigation_id,
+                )
+            )
+        except Exception as e:
+            logger.warning("Failed to broadcast reputation event %s: %s", event_type, e)

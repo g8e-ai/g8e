@@ -50,11 +50,12 @@ from app.models.operators import (
     HeartbeatPerformanceMetrics,
     HeartbeatSystemIdentity,
     HeartbeatUptimeInfo,
+    HeartbeatNetworkInfo,
     OperatorDocument,
-    OperatorHeartbeat,
-    OperatorSystemInfo,
-    SystemInfoEnvironment,
-    SystemInfoUserDetails,
+    HeartbeatSnapshot,
+    HeartbeatEnvironment,
+    HeartbeatUserDetails,
+    HeartbeatOSDetails,
 )
 from app.utils.timestamp import now
 
@@ -179,6 +180,8 @@ def create_conversation_message(
     message_id: str | None = None,
     timestamp: datetime | None = None,
     metadata: ConversationMessageMetadata | None = None,
+    prev_hash: str = "0" * 64,
+    entry_hash: str = "0" * 64,
 ) -> ConversationHistoryMessage:
     """Create a ConversationHistoryMessage for testing."""
     return ConversationHistoryMessage(
@@ -187,6 +190,8 @@ def create_conversation_message(
         content=content,
         timestamp=timestamp or now(),
         metadata=metadata or ConversationMessageMetadata(),
+        prev_hash=prev_hash,
+        entry_hash=entry_hash,
     )
 
 
@@ -260,13 +265,17 @@ def build_minimal_operator_document(
         status=status,
         current_hostname=hostname,
         operator_type=operator_type,
-        system_info=OperatorSystemInfo(
-            hostname=hostname,
-            os="linux",
-            architecture="x86_64",
-            current_user="test-user",
-            environment=SystemInfoEnvironment(pwd="/home/test-user"),
-            interfaces=[],
+        latest_heartbeat_snapshot=HeartbeatSnapshot(
+            system_identity=HeartbeatSystemIdentity(
+                hostname=hostname,
+                os="linux",
+                architecture="x86_64",
+                current_user="test-user",
+                cpu_count=2,
+                memory_mb=4096,
+            ),
+            network=HeartbeatNetworkInfo(),
+            environment=HeartbeatEnvironment(pwd="/home/test-user"),
         ),
     )
 
@@ -295,24 +304,33 @@ def build_production_operator_document(
         status=OperatorStatus.BOUND,
         current_hostname=hostname,
         operator_type=operator_type,
-        system_info=OperatorSystemInfo(
-            hostname=hostname,
-            os="linux",
-            architecture="amd64",
-            current_user="root",
-            user_details=SystemInfoUserDetails(
+        latest_heartbeat_snapshot=HeartbeatSnapshot(
+            system_identity=HeartbeatSystemIdentity(
+                hostname=hostname,
+                os="linux",
+                architecture="amd64",
+                current_user="root",
+                cpu_count=8,
+                memory_mb=16384,
+            ),
+            network=HeartbeatNetworkInfo(),
+            user_details=HeartbeatUserDetails(
                 username="root",
                 uid="0",
                 gid="0",
                 home="/root",
                 shell="/bin/bash",
             ),
-            environment=SystemInfoEnvironment(
+            environment=HeartbeatEnvironment(
                 pwd="/root",
                 is_container=False,
                 init_system="systemd",
             ),
-            interfaces=[],
+            os_details=HeartbeatOSDetails(
+                distro="ubuntu",
+                kernel="5.15.0",
+                version="22.04",
+            ),
         ),
     )
 
@@ -348,9 +366,9 @@ def build_case_model(
 def build_operator_heartbeat(
     operator_id: str = "test-operator-id",
     timestamp: datetime | None = None,
-) -> OperatorHeartbeat:
-    """Build a valid OperatorHeartbeat for testing."""
-    return OperatorHeartbeat(
+) -> HeartbeatSnapshot:
+    """Build a valid HeartbeatSnapshot for testing."""
+    return HeartbeatSnapshot(
         timestamp=timestamp or now(),
         heartbeat_type=HeartbeatType.AUTOMATIC,
         system_identity=HeartbeatSystemIdentity(

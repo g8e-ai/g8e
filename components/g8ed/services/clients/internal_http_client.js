@@ -46,7 +46,6 @@ import {
     NEW_CASE_ID
 } from '../../constants/http_client.js';
 import { ApiPaths, InternalApiPaths } from '../../constants/api_paths.js';
-import { getInternalHttpClient } from '../../services/initialization.js';
 
 class InternalHttpClient{
     /**
@@ -98,8 +97,11 @@ class InternalHttpClient{
 
         const headers = {};
 
-        // Required context
-        headers[G8eHeaders.WEB_SESSION_ID]      = context.web_session_id;
+        // Required context. Identity headers are omitted when null, which only
+        // happens for operator-auth relays originated by g8ed (Bearer-token auth).
+        // The G8eHttpContext model enforces that null identity is only legal when
+        // source_component === G8ED, so it is safe to skip these headers here.
+        if (context.web_session_id)   headers[G8eHeaders.WEB_SESSION_ID]  = context.web_session_id;
         if (context.user_id)          headers[G8eHeaders.USER_ID]         = context.user_id;
         if (context.organization_id)  headers[G8eHeaders.ORGANIZATION_ID] = context.organization_id;
 
@@ -384,6 +386,85 @@ class InternalHttpClient{
     }
 
     /**
+     * Record answer to a triage clarifying question via g8ee internal API
+     * 
+     * @param {Object} data - Triage answer data (investigation_id, question_index, answer)
+     * @param {Object} g8eContext - REQUIRED G8eHttpContext with session/user info
+     */
+    async recordTriageAnswer(data, g8eContext) {
+        if (!g8eContext) {
+            throw new Error('ENFORCEMENT VIOLATION: g8eContext is REQUIRED for g8ee calls');
+        }
+        logger.info('[HTTP-INTERNAL] Recording triage answer', {
+            investigationId: data.investigation_id,
+            questionIndex: data.question_index,
+            answer: data.answer
+        });
+
+        return this.request('g8ee', ApiPaths.g8ee.chatTriageAnswer(), {
+            method: 'POST',
+            body: data,
+            g8eContext
+        });
+    }
+
+    /**
+     * Skip triage clarifying questions via g8ee internal API
+     * 
+     * @param {Object} data - Triage skip data (investigation_id)
+     * @param {Object} g8eContext - REQUIRED G8eHttpContext with session/user info
+     */
+    async skipTriageQuestions(data, g8eContext) {
+        if (!g8eContext) {
+            throw new Error('ENFORCEMENT VIOLATION: g8eContext is REQUIRED for g8ee calls');
+        }
+        logger.info('[HTTP-INTERNAL] Skipping triage questions', {
+            investigationId: data.investigation_id
+        });
+
+        return this.request('g8ee', ApiPaths.g8ee.chatTriageSkip(), {
+            method: 'POST',
+            body: data,
+            g8eContext
+        });
+    }
+
+    /**
+     * Record triage clarifying questions timeout via g8ee internal API
+     * 
+     * @param {Object} data - Triage timeout data (investigation_id)
+     * @param {Object} g8eContext - REQUIRED G8eHttpContext with session/user info
+     */
+    async timeoutTriageQuestions(data, g8eContext) {
+        if (!g8eContext) {
+            throw new Error('ENFORCEMENT VIOLATION: g8eContext is REQUIRED for g8ee calls');
+        }
+        logger.info('[HTTP-INTERNAL] Recording triage timeout', {
+            investigationId: data.investigation_id
+        });
+
+        return this.request('g8ee', ApiPaths.g8ee.chatTriageTimeout(), {
+            method: 'POST',
+            body: data,
+            g8eContext
+        });
+    }
+
+    /**
+     * Generate a new API key via g8ee authority.
+     * @param {string} prefix - Key prefix (default: 'g8e_')
+     * @returns {Promise<{success: boolean, api_key?: string, error?: string}>}
+     */
+    async generateApiKey(prefix = 'g8e_') {
+        logger.info('[HTTP-INTERNAL] Requesting API key generation', { prefix });
+        
+        return this.request('g8ee', ApiPaths.g8ee.auth_generate_key(), {
+            method: 'POST',
+            body: { prefix },
+        });
+    }
+
+    /**
      * Check health of all internal services
      */
     async healthCheck() {
@@ -409,7 +490,35 @@ class InternalHttpClient{
 
         return results;
     }
+
+    /**
+     * Activate the g8ep operator for a user via g8ee authority.
+     * @param {string} user_id - User ID to activate operator for
+     * @returns {Promise<{success: boolean, error?: string}>}
+     */
+    async activateG8EPOperator(user_id) {
+        logger.info('[HTTP-INTERNAL] Requesting g8ep operator activation', { user_id });
+        
+        return this.request('g8ee', ApiPaths.g8ee.operatorsG8epActivate(), {
+            method: 'POST',
+            body: { user_id },
+        });
+    }
+
+    /**
+     * Relaunch the g8ep operator for a user via g8ee authority.
+     * @param {string} user_id - User ID to relaunch operator for
+     * @returns {Promise<{success: boolean, operator_id?: string, error?: string}>}
+     */
+    async relaunchG8EPOperator(user_id) {
+        logger.info('[HTTP-INTERNAL] Requesting g8ep operator relaunch', { user_id });
+        
+        return this.request('g8ee', ApiPaths.g8ee.operatorsG8epRelaunch(), {
+            method: 'POST',
+            body: { user_id },
+        });
+    }
 }
 
 // Singleton instance is now managed via initialization.js factory
-export { getInternalHttpClient, InternalHttpClient };
+export { InternalHttpClient };

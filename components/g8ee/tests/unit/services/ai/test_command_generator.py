@@ -73,6 +73,42 @@ from app.llm.prompts import (
 )
 from app.utils.agent_persona_loader import get_agent_persona
 from app.models.http_context import G8eHttpContext
+from app.models.reputation import ReputationCommitment
+
+
+_TEST_HMAC_KEY = "a" * 64
+
+
+def _make_mock_reputation_service() -> MagicMock:
+    """Stub ReputationDataService sufficient for ``commit_reputation``.
+
+    These tests assert Tribunal verdict-path behavior; commitment
+    semantics are covered in ``test_auditor_commitment.py``. The stub
+    returns an empty scoreboard and no prior commitment, so the commit
+    step produces a deterministic genesis commitment without hitting any
+    real cache/DB client.
+    """
+    svc = MagicMock()
+    svc.list_states = AsyncMock(return_value=[])
+    svc.get_latest_commitment = AsyncMock(return_value=None)
+
+    async def _create_commitment(commitment: ReputationCommitment) -> ReputationCommitment:
+        return commitment
+
+    svc.create_commitment = AsyncMock(side_effect=_create_commitment)
+    return svc
+
+
+_REPUTATION_KWARGS = {
+    "reputation_data_service": _make_mock_reputation_service(),
+    "auditor_hmac_key": _TEST_HMAC_KEY,
+}
+
+
+_AUDIT_STAGE_REPUTATION_KWARGS = {
+    **_REPUTATION_KWARGS,
+    "investigation_id": "inv-test",
+}
 
 
 def _make_mock_provider(generate_content_lite_side_effect=None, generate_content_lite_return=None):
@@ -123,44 +159,44 @@ def _make_mock_g8e_context() -> G8eHttpContext:
 class TestResolveModel:
     """_resolve_model returns a concrete model string with proper fallback chain."""
 
-    def test_returns_assistant_model_when_set(self):
-        llm = LLMSettings(assistant_model="custom-assistant")
-        assert _resolve_model(llm) == "custom-assistant"
+    def test_returns_lite_model_when_set(self):
+        llm = LLMSettings(lite_model="custom-lite")
+        assert _resolve_model(llm, tier="lite") == "custom-lite"
 
-    def test_falls_back_to_primary_model_when_assistant_is_none(self):
+    def test_falls_back_to_primary_model_when_lite_is_none(self):
         llm = LLMSettings(primary_model="custom-primary")
-        assert llm.assistant_model is None
-        assert _resolve_model(llm) == "custom-primary"
+        assert llm.lite_model is None
+        assert _resolve_model(llm, tier="lite") == "custom-primary"
 
     def test_raises_when_both_models_none(self):
         llm = LLMSettings(primary_provider=LLMProvider.OLLAMA)
-        assert llm.assistant_model is None
+        assert llm.lite_model is None
         assert llm.primary_model is None
         with pytest.raises(TribunalModelNotConfiguredError) as exc_info:
-            _resolve_model(llm)
+            _resolve_model(llm, tier="lite")
         assert exc_info.value.provider == "ollama"
 
     def test_raises_for_openai_when_no_model_configured(self):
         llm = LLMSettings(primary_provider=LLMProvider.OPENAI)
         with pytest.raises(TribunalModelNotConfiguredError) as exc_info:
-            _resolve_model(llm)
+            _resolve_model(llm, tier="lite")
         assert exc_info.value.provider == "openai"
 
     def test_raises_for_anthropic_when_no_model_configured(self):
         llm = LLMSettings(primary_provider=LLMProvider.ANTHROPIC)
         with pytest.raises(TribunalModelNotConfiguredError) as exc_info:
-            _resolve_model(llm)
+            _resolve_model(llm, tier="lite")
         assert exc_info.value.provider == "anthropic"
 
     def test_raises_for_gemini_when_no_model_configured(self):
         llm = LLMSettings(primary_provider=LLMProvider.GEMINI)
         with pytest.raises(TribunalModelNotConfiguredError) as exc_info:
-            _resolve_model(llm)
+            _resolve_model(llm, tier="lite")
         assert exc_info.value.provider == "gemini"
 
-    def test_assistant_takes_priority_over_primary(self):
-        llm = LLMSettings(primary_model="primary", assistant_model="assistant")
-        assert _resolve_model(llm) == "assistant"
+    def test_lite_takes_priority_over_primary(self):
+        llm = LLMSettings(primary_model="primary", lite_model="lite")
+        assert _resolve_model(llm, tier="lite") == "lite"
 
 
 class TestTribunalSessionStartedPayloadRegression:
@@ -177,8 +213,8 @@ class TestTribunalSessionStartedPayloadRegression:
                 )
 
     def test_payload_accepts_resolved_model(self):
-        llm = LLMSettings(primary_provider=LLMProvider.OLLAMA, assistant_model="gemma3:1b")
-        model = _resolve_model(llm)
+        llm = LLMSettings(primary_provider=LLMProvider.OLLAMA, lite_model="gemma3:1b")
+        model = _resolve_model(llm, tier="lite")
         payload = TribunalSessionStartedPayload(
             request="list files",
             model=model,
@@ -447,6 +483,7 @@ class TestGenerateCommandOutcomes:
                 case_id="case-1",
                 investigation_id="inv-1",
                 settings=settings,
+                **_REPUTATION_KWARGS,
             )
 
         assert exc_info.value.request == "list files"
@@ -459,7 +496,8 @@ class TestGenerateCommandSystemError:
     async def test_raises_on_all_system_errors(self):
         llm = LLMSettings(
             primary_provider=LLMProvider.OLLAMA,
-            assistant_model="gemma3:1b",
+            lite_provider=LLMProvider.OLLAMA,
+            lite_model="gemma3:1b",
         )
         settings = G8eeUserSettings(llm=llm)
 
@@ -485,6 +523,7 @@ class TestGenerateCommandSystemError:
                     case_id="case-1",
                     investigation_id="inv-1",
                     settings=settings,
+                    **_REPUTATION_KWARGS,
                 )
 
             assert len(exc_info.value.pass_errors) > 0
@@ -495,7 +534,8 @@ class TestGenerateCommandSystemError:
         """Non-system errors now raise TribunalGenerationFailedError instead of silent fallback."""
         llm = LLMSettings(
             primary_provider=LLMProvider.OLLAMA,
-            assistant_model="gemma3:1b",
+            lite_provider=LLMProvider.OLLAMA,
+            lite_model="gemma3:1b",
         )
         settings = G8eeUserSettings(llm=llm)
 
@@ -521,6 +561,7 @@ class TestGenerateCommandSystemError:
                     case_id="case-1",
                     investigation_id="inv-1",
                     settings=settings,
+                    **_REPUTATION_KWARGS,
                 )
 
             assert exc_info.value.request == "list files"
@@ -530,8 +571,8 @@ class TestGenerateCommandSystemError:
     async def test_provider_routing_uses_settings_provider(self):
         llm = LLMSettings(
             primary_provider=LLMProvider.GEMINI,
-            assistant_provider=LLMProvider.OLLAMA,
-            assistant_model="gemma3:1b",
+            lite_provider=LLMProvider.OLLAMA,
+            lite_model="gemma3:1b",
         )
         settings = G8eeUserSettings(llm=llm)
 
@@ -565,9 +606,15 @@ class TestGenerateCommandSystemError:
                 case_id="case-1",
                 investigation_id="inv-1",
                 settings=settings,
+                **_REPUTATION_KWARGS,
             )
 
-            mock_factory.assert_called_once_with(settings.llm, is_assistant=True)
+            # Tribunal generation uses lite tier, auditor uses primary tier
+            assert mock_factory.call_count == 2
+            # First call is for tribunal generation (lite)
+            assert mock_factory.call_args_list[0] == ((settings.llm,), {"is_lite": True})
+            # Second call is for auditor (primary)
+            assert mock_factory.call_args_list[1] == ((settings.llm,), {"is_assistant": False, "is_lite": False})
             assert result.final_command == "ls -la"
 
 
@@ -579,7 +626,8 @@ class TestMixedErrorFallback:
         """1 system error + 2 non-system errors must raise TribunalGenerationFailedError."""
         llm = LLMSettings(
             primary_provider=LLMProvider.OLLAMA,
-            assistant_model="gemma3:1b",
+            lite_provider=LLMProvider.OLLAMA,
+            lite_model="gemma3:1b",
             llm_command_gen_passes=3,
         )
         settings = G8eeUserSettings(llm=llm)
@@ -613,6 +661,7 @@ class TestMixedErrorFallback:
                     case_id="case-1",
                     investigation_id="inv-1",
                     settings=settings,
+                    **_REPUTATION_KWARGS,
                 )
 
             assert exc_info.value.request == "list files"
@@ -636,8 +685,8 @@ class TestTribunalProviderUnavailableError:
     async def test_raises_on_provider_init_failure(self):
         """Provider init failure raises TribunalProviderUnavailableError instead of silent fallback."""
         llm = LLMSettings(
-            assistant_provider=LLMProvider.OLLAMA,
-            assistant_model="gemma3:1b",
+            lite_provider=LLMProvider.OLLAMA,
+            lite_model="gemma3:1b",
         )
         settings = G8eeUserSettings(llm=llm)
 
@@ -659,6 +708,7 @@ class TestTribunalProviderUnavailableError:
                     case_id="case-1",
                     investigation_id="inv-1",
                     settings=settings,
+                    **_REPUTATION_KWARGS,
                 )
 
             assert exc_info.value.provider == "ollama"
@@ -694,6 +744,7 @@ class TestTribunalModelNotConfiguredError:
                     case_id="case-1",
                     investigation_id="inv-1",
                     settings=settings,
+                    **_REPUTATION_KWARGS,
                 )
 
             assert exc_info.value.provider == "ollama"
@@ -1079,7 +1130,7 @@ class TestRunVotingStage:
 
     @pytest.mark.asyncio
     async def test_two_two_one_tied_top_breaks_by_shortest_command(self):
-        """2/2/1 tie broken by shortest command rule (maximizes signal density for approval fatigue reduction)."""
+        """2/2/1 tie broken by shortest command rule (compositional pressure)."""
         from app.models.agents.tribunal import CandidateCommand
 
         candidates = [
@@ -1212,12 +1263,16 @@ class TestRunVerificationStage:
             dissenters_by_command={},
             consensus_strength=1.0,
         )
-        final_cmd, outcome, passed, revision, auditor_reason = await _run_audit_stage(
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
+
+        final_cmd, outcome, passed, revision, auditor_reason, commitment_id = await _run_audit_stage(
             provider=MagicMock(), model="test-model", request="list files", guidelines="",
             vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=None,
             operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-            auditor_enabled=False, emitter=TribunalEmitter(None, None),
+            auditor_enabled=False,
+            emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+            **_AUDIT_STAGE_REPUTATION_KWARGS,
         )
 
         assert final_cmd == "ls -la"
@@ -1240,13 +1295,17 @@ class TestRunVerificationStage:
         mock_response = MagicMock()
         mock_response.text = '{"status": "ok"}'
         mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
+        emitter.correlation_id = "tribunal_test_command"
 
-        final_cmd, outcome, passed, revision, auditor_reason = await _run_audit_stage(
+        final_cmd, outcome, passed, revision, auditor_reason, commitment_id = await _run_audit_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",
             vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=None,
             operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-            auditor_enabled=True, emitter=TribunalEmitter(None, None),
+            auditor_enabled=True,
+            emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+            **_AUDIT_STAGE_REPUTATION_KWARGS,
         )
 
         assert final_cmd == "ls -la"
@@ -1269,13 +1328,16 @@ class TestRunVerificationStage:
         mock_response = MagicMock()
         mock_response.text = '{"status": "revised", "revised_command": "ls -la --color=auto"}'
         mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
-        final_cmd, outcome, passed, revision, auditor_reason = await _run_audit_stage(
+        final_cmd, outcome, passed, revision, auditor_reason, commitment_id = await _run_audit_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",
             vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=None,
             operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-            auditor_enabled=True, emitter=TribunalEmitter(None, None),
+            auditor_enabled=True,
+            emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+            **_AUDIT_STAGE_REPUTATION_KWARGS,
         )
 
         assert final_cmd == "ls -la --color=auto"
@@ -1303,13 +1365,17 @@ class TestRunVerificationStage:
         mock_response = MagicMock()
         mock_response.text = '{"status": "swap", "swap_to_cluster": "cluster_b"}'
         mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
+        emitter.correlation_id = "tribunal_test_command"
 
-        final_cmd, outcome, passed, revision, auditor_reason = await _run_audit_stage(
+        final_cmd, outcome, passed, revision, auditor_reason, commitment_id = await _run_audit_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",
             vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=tied_candidates,
             operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-            auditor_enabled=True, emitter=TribunalEmitter(None, None),
+            auditor_enabled=True,
+            emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+            **_AUDIT_STAGE_REPUTATION_KWARGS,
         )
 
         assert final_cmd == "ls -l"
@@ -1337,13 +1403,16 @@ class TestRunVerificationStage:
         mock_response = MagicMock()
         mock_response.text = '{"status": "revised", "revised_command": "ls -la --color=auto"}'
         mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
-        final_cmd, outcome, passed, revision, auditor_reason = await _run_audit_stage(
+        final_cmd, outcome, passed, revision, auditor_reason, commitment_id = await _run_audit_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",
             vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=tied_candidates,
             operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-            auditor_enabled=True, emitter=TribunalEmitter(None, None),
+            auditor_enabled=True,
+            emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+            **_AUDIT_STAGE_REPUTATION_KWARGS,
         )
 
         assert final_cmd == "ls -la --color=auto"
@@ -1373,13 +1442,17 @@ class TestRunVerificationStage:
         mock_response = MagicMock()
         mock_response.text = '{"status": "swap", "swap_to_cluster": "cluster_a"}'
         mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
+        emitter.correlation_id = "tribunal_test_command"
 
-        final_cmd, outcome, passed, revision, auditor_reason = await _run_audit_stage(
+        final_cmd, outcome, passed, revision, auditor_reason, commitment_id = await _run_audit_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",
             vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=tied_candidates,
             operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-            auditor_enabled=True, emitter=TribunalEmitter(None, None),
+            auditor_enabled=True,
+            emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+            **_AUDIT_STAGE_REPUTATION_KWARGS,
         )
 
         assert final_cmd == "ls -la"
@@ -1413,13 +1486,17 @@ class TestRunVerificationStage:
             return mock_response
 
         mock_provider = _make_mock_provider(generate_content_lite_side_effect=_side_effect)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
+        emitter.correlation_id = "tribunal_test_command"
 
-        final_cmd, outcome, passed, revision, auditor_reason = await _run_audit_stage(
+        final_cmd, outcome, passed, revision, auditor_reason, commitment_id = await _run_audit_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",
             vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=None,
             operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-            auditor_enabled=True, emitter=TribunalEmitter(None, None),
+            auditor_enabled=True,
+            emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+            **_AUDIT_STAGE_REPUTATION_KWARGS,
         )
 
         assert call_count == 2  # Initial call + one retry
@@ -1443,15 +1520,22 @@ class TestRunVerificationStage:
         mock_provider = _make_mock_provider(
             generate_content_lite_side_effect=RuntimeError("timeout")
         )
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
-        with pytest.raises(TribunalAuditorFailedError):
+        with pytest.raises(TribunalAuditorFailedError) as exc_info:
             await _run_audit_stage(
                 provider=mock_provider, model="test-model", request="list files", guidelines="",
                 vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=None,
                 operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-                auditor_enabled=True, emitter=TribunalEmitter(None, None),
+                auditor_enabled=True,
+                emitter=emitter,
                 command_constraints_message="No whitelist or blacklist constraints are active.",
+                **_AUDIT_STAGE_REPUTATION_KWARGS,
             )
+
+        assert exc_info.value.reason == AuditorReason.AUDITOR_ERROR
+        assert "timeout" in exc_info.value.error
+        assert exc_info.value.request == "list files"
 
 
 class TestBuildAndEmitResult:
@@ -1480,6 +1564,7 @@ class TestBuildAndEmitResult:
             vote_winner="ls -la", vote_score=1.0, vote_breakdown=vote_breakdown,
             auditor_passed=True, auditor_revision=None, auditor_reason=AuditorReason.OK,
             emitter=emitter,
+            reputation_commitment_id="comm-1",
         )
 
         assert result.request == "list files"
@@ -1504,13 +1589,15 @@ class TestGenerateCommandHappyPath:
     @staticmethod
     def _settings(
         primary_provider=LLMProvider.OLLAMA,
-        assistant_model="gemma3:1b",
+        lite_provider=LLMProvider.OLLAMA,
+        lite_model="gemma3:1b",
         auditor=True,
         passes=3,
     ):
         llm = LLMSettings(
             primary_provider=primary_provider,
-            assistant_model=assistant_model,
+            lite_provider=lite_provider,
+            lite_model=lite_model,
             llm_command_gen_passes=passes,
             llm_command_gen_auditor=auditor,
         )
@@ -1572,6 +1659,7 @@ class TestGenerateCommandHappyPath:
                 case_id="case-happy-1",
                 investigation_id="inv-happy-1",
                 settings=settings,
+                **_REPUTATION_KWARGS,
             )
 
         assert result.outcome == CommandGenerationOutcome.CONSENSUS
@@ -1617,6 +1705,7 @@ class TestGenerateCommandHappyPath:
                 case_id="case-happy-2",
                 investigation_id="inv-happy-2",
                 settings=settings,
+                **_REPUTATION_KWARGS,
             )
 
         assert result.outcome == CommandGenerationOutcome.VERIFIED
@@ -1661,6 +1750,7 @@ class TestGenerateCommandHappyPath:
                 case_id="case-happy-3",
                 investigation_id="inv-happy-3",
                 settings=settings,
+                **_REPUTATION_KWARGS,
             )
 
         assert result.outcome == CommandGenerationOutcome.VERIFICATION_FAILED
@@ -1714,6 +1804,7 @@ class TestGenerateCommandHappyPath:
                 case_id="case-happy-4",
                 investigation_id="inv-happy-4",
                 settings=settings,
+                **_REPUTATION_KWARGS,
             )
 
         assert result.outcome == CommandGenerationOutcome.VERIFIED
@@ -1745,6 +1836,7 @@ class TestGenerateCommandHappyPath:
                 case_id="case-happy-5",
                 investigation_id="inv-happy-5",
                 settings=settings,
+                **_REPUTATION_KWARGS,
             )
 
         assert result.outcome == CommandGenerationOutcome.VERIFIED
@@ -1776,6 +1868,7 @@ class TestGenerateCommandHappyPath:
                 case_id="case-happy-6",
                 investigation_id="inv-happy-6",
                 settings=settings,
+                **_REPUTATION_KWARGS,
             )
 
         from app.constants import EventType
@@ -1820,6 +1913,7 @@ class TestGenerateCommandHappyPath:
                 case_id="case-happy-7",
                 investigation_id="inv-happy-7",
                 settings=settings,
+                **_REPUTATION_KWARGS,
             )
 
         assert result.request == "list files in /tmp with details"
@@ -1859,6 +1953,7 @@ class TestGenerateCommandHappyPath:
                 case_id="case-happy-8",
                 investigation_id="inv-happy-8",
                 settings=settings,
+                **_REPUTATION_KWARGS,
             )
 
         assert result.final_command != result.request
@@ -1897,6 +1992,7 @@ class TestGenerateCommandHappyPath:
                 case_id="case-happy-9",
                 investigation_id="inv-happy-9",
                 settings=settings,
+                **_REPUTATION_KWARGS,
             )
 
         assert result.final_command == result.request
@@ -1924,12 +2020,14 @@ class TestGenerateCommandAuditorFailure:
     @staticmethod
     def _settings(
         primary_provider=LLMProvider.OLLAMA,
-        assistant_model="gemma3:1b",
+        lite_provider=LLMProvider.OLLAMA,
+        lite_model="gemma3:1b",
         passes=3,
     ):
         llm = LLMSettings(
             primary_provider=primary_provider,
-            assistant_model=assistant_model,
+            lite_provider=lite_provider,
+            lite_model=lite_model,
             llm_command_gen_passes=passes,
             llm_command_gen_auditor=True,
         )
@@ -2004,6 +2102,7 @@ class TestGenerateCommandAuditorFailure:
                     case_id="case-vf-1",
                     investigation_id="inv-vf-1",
                     settings=settings,
+                    **_REPUTATION_KWARGS,
                 )
 
             assert exc_info.value.reason == AuditorReason.EMPTY_RESPONSE
@@ -2052,6 +2151,7 @@ class TestGenerateCommandAuditorFailure:
                     case_id="case-vf-2",
                     investigation_id="inv-vf-2",
                     settings=settings,
+                    **_REPUTATION_KWARGS,
                 )
 
             assert exc_info.value.reason == AuditorReason.NO_VALID_REVISION
@@ -2096,6 +2196,7 @@ class TestGenerateCommandAuditorFailure:
                     case_id="case-vf-3",
                     investigation_id="inv-vf-3",
                     settings=settings,
+                    **_REPUTATION_KWARGS,
                 )
 
             assert exc_info.value.reason == AuditorReason.AUDITOR_ERROR
@@ -2143,6 +2244,7 @@ class TestGenerateCommandAuditorFailure:
                     case_id="case-vf-4",
                     investigation_id="inv-vf-4",
                     settings=settings,
+                    **_REPUTATION_KWARGS,
                 )
 
             assert exc_info.value.request == "show system hostname"
@@ -2176,6 +2278,7 @@ class TestGenerateCommandAuditorFailure:
                     case_id="case-vf-5",
                     investigation_id="inv-vf-5",
                     settings=settings,
+                    **_REPUTATION_KWARGS,
                 )
 
             assert exc_info.value.reason == AuditorReason.AUDITOR_ERROR
@@ -2210,7 +2313,6 @@ class TestMaxTokensConstants:
             emitter=emitter,
             pass_errors=[],
             command_constraints_message="No whitelist or blacklist constraints are active.",
-
         )
 
         call_kwargs = mock_provider.generate_content_lite.call_args
@@ -2244,7 +2346,6 @@ class TestMaxTokensConstants:
                 winner="ls -la",
                 winner_supporters=["axiom"],
                 dissenters_by_command={},
-                consensus_strength=1.0,
             )
 
             await run_auditor(
@@ -2258,7 +2359,7 @@ class TestMaxTokensConstants:
                 tied_candidates=None,
                 operator_context=_make_mock_operator_context(os="linux"),
                 emitter=emitter,
-                command_constraints_message="No whitelist or blacklist constraints are active.",
+                command_constraints_message="No whitelist or blacklist constraints are active",
                 auditor_persona=get_agent_persona("auditor"),
             )
 
@@ -2503,6 +2604,65 @@ class TestTribunalEmitter:
         )
 
         mock_event_service.publish.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_round_2_peer_review_flow(self):
+        """Test the full Round 2 peer review flow when consensus is low."""
+        llm = LLMSettings(
+            primary_provider=LLMProvider.OLLAMA,
+            lite_provider=LLMProvider.OLLAMA,
+            lite_model="gemma3:1b",
+            llm_command_gen_passes=3,
+            llm_command_gen_rounds=2,
+            llm_command_gen_auditor=False,
+        )
+        settings = G8eeUserSettings(llm=llm)
+
+        call_count = 0
+
+        async def round_based_side_effect(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            mock_response = MagicMock()
+            if call_count <= 3:
+                # Round 1: No consensus
+                if call_count == 1: mock_response.text = "cmd1"
+                elif call_count == 2: mock_response.text = "cmd2"
+                elif call_count == 3: mock_response.text = "cmd3"
+            else:
+                # Round 2: Consensus reached
+                mock_response.text = "cmd_consensus"
+            return mock_response
+
+        mock_provider = _make_mock_provider(generate_content_lite_side_effect=round_based_side_effect)
+
+        with patch("app.services.ai.generator.get_llm_provider", return_value=mock_provider):
+            mock_event_service = MagicMock()
+            mock_event_service.publish = AsyncMock()
+            
+            result = await generate_command(
+                request="test round 2",
+                guidelines="",
+                operator_context=_make_mock_operator_context(),
+                g8ed_event_service=mock_event_service,
+                web_session_id="ws-1",
+                user_id="user-1",
+                case_id="case-1",
+                investigation_id="inv-1",
+                settings=settings,
+                **_REPUTATION_KWARGS,
+            )
+
+            assert result.final_command == "cmd_consensus"
+            assert result.round_2_candidates is not None
+            assert len(result.round_2_candidates) == 3
+            assert result.round_2_vote_breakdown is not None
+            assert result.round_2_vote_breakdown.winner == "cmd_consensus"
+            
+            # Verify event emissions for Round 2
+            emitted_types = [args[0][0].event_type for args in mock_event_service.publish.call_args_list]
+            assert EventType.TRIBUNAL_VOTING_ROUND_2_STARTED in emitted_types
+            assert EventType.TRIBUNAL_VOTING_ROUND_2_CONSENSUS_REACHED in emitted_types
 
     @pytest.mark.asyncio
     async def test_all_terminal_events_raise_on_publish_failure(self):

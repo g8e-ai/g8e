@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from app.constants import OperatorStatus
 from app.llm.llm_types import ToolCall
 from app.models.settings import G8eeUserSettings, LLMSettings
-from tests.evals.metrics import EvalRow
+from app.evals.runner.metrics import EvalRow
 from tests.fakes.factories import (
     build_g8e_http_context,
     build_enriched_investigation,
@@ -97,7 +97,7 @@ async def test_orchestrate_tool_execution_security_violation(
     )
 
     # Approve any pending approvals from fake operators
-    approval_service = all_services['approval_service']
+    approval_service = all_services.approval_service
     await auto_approve_pending(approval_service)
 
     passed = result.success is False and "SECURITY VIOLATION" in result.error and result.error_type == "security.violation"

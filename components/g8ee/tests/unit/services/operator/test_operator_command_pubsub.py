@@ -20,7 +20,7 @@ import pytest
 
 from app.constants import EventType, ExecutionStatus, PubSubChannel
 from app.services.operator.command_service import OperatorCommandService
-from app.services.operator.heartbeat_service import OperatorHeartbeatService
+from app.services.operator.heartbeat_service import HeartbeatSnapshotService
 from tests.fakes.builder import build_command_service
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
@@ -33,6 +33,8 @@ def _make_pubsub_client():
     client.off_channel_message = MagicMock()
     client.subscribe = AsyncMock()
     client.unsubscribe = AsyncMock()
+    client.on_disconnect = MagicMock()
+    client.off_disconnect = MagicMock()
     return client
 
 
@@ -61,8 +63,8 @@ def _make_mock_hb_pubsub_client() -> MagicMock:
 
 
 @pytest.fixture
-def heartbeat_service() -> OperatorHeartbeatService:
-    svc = OperatorHeartbeatService(
+def heartbeat_service() -> HeartbeatSnapshotService:
+    svc = HeartbeatSnapshotService(
         operator_data_service=MagicMock(),
         event_service=MagicMock(),
     )

@@ -27,19 +27,36 @@ class ApiKeyService {
     /**
      * @param {Object} options
      * @param {Object} options.apiKeyDataService - ApiKeyDataService instance (Data Layer)
+     * @param {Object} options.internalHttpClient - InternalHttpClient instance (Relay)
      */
-    constructor({ apiKeyDataService }) {
+    constructor({ apiKeyDataService, internalHttpClient }) {
         if (!apiKeyDataService) throw new Error('ApiKeyService requires apiKeyDataService');
         this._data = apiKeyDataService;
+        this._internalHttp = internalHttpClient;
         logger.info('[API-KEY-SERVICE] Domain service initialized');
     }
 
     /**
-     * Generate a new raw API key.
-     * @returns {string}
+     * Generate a new raw API key via g8ee authority.
+     * @param {string} prefix - Key prefix
+     * @returns {Promise<string>}
      */
-    generateRawKey() {
-        return `${API_KEY_PREFIX}${crypto.randomBytes(32).toString('hex')}`;
+    async generateRawKey(prefix = API_KEY_PREFIX) {
+        if (!this._internalHttp) {
+            logger.warn('[API-KEY-SERVICE] InternalHttpClient not available, falling back to local generation');
+            return `${prefix}${crypto.randomBytes(32).toString('hex')}`;
+        }
+
+        try {
+            const response = await this._internalHttp.generateApiKey(prefix);
+            if (response.success && response.api_key) {
+                return response.api_key;
+            }
+            throw new Error(response.error || 'Failed to generate API key via g8ee');
+        } catch (error) {
+            logger.error('[API-KEY-SERVICE] g8ee key generation failed, falling back to local', { error: error.message });
+            return `${prefix}${crypto.randomBytes(32).toString('hex')}`;
+        }
     }
 
     /**

@@ -17,9 +17,27 @@
  * Sourced from shared/constants/agents.json agent metadata.
  */
 export const TribunalMemberIcons = Object.freeze({
-    0: 'minimize',
-    1: 'shield',
-    2: 'layers',
-    3: 'code',
-    4: 'warning',
+    0: 'git-merge',
+    1: 'shield-check',
+    2: 'git-branch',
+    3: 'book-open',
+    4: 'shield-alert',
+});
+
+/**
+ * Auditor Icon
+ * Icon for the Tribunal auditor.
+ * Sourced from shared/constants/agents.json agent metadata.
+ */
+export const AuditorIcon = 'search-check';
+
+/**
+ * Tribunal Outcome
+ * Terminal outcomes the Tribunal pipeline can produce.
+ */
+export const TribunalOutcome = Object.freeze({
+    CONSENSUS: 'consensus',
+    VERIFIED: 'verified',
+    VERIFICATION_FAILED: 'verification_failed',
+    CONSENSUS_FAILED: 'consensus_failed',
 });

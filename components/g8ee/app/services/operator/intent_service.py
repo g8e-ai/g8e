@@ -70,12 +70,32 @@ class OperatorIntentService:
         investigation_service: InvestigationServiceProtocol,
         g8ed_client: G8edClientProtocol,
     ) -> None:
-        self.approval_service = approval_service
-        self.execution_service = execution_service
-        self.g8ed_event_service = g8ed_event_service
-        self.investigation_service = investigation_service
-        self.g8ed_client = g8ed_client
+        self._approval_service = approval_service
+        self._execution_service = execution_service
+        self._g8ed_event_service = g8ed_event_service
+        self._investigation_service = investigation_service
+        self._g8ed_client = g8ed_client
         self._iam_builder = IamCommandBuilder()
+
+    @property
+    def approval_service(self) -> ApprovalServiceProtocol:
+        return self._approval_service
+
+    @property
+    def execution_service(self) -> ExecutionServiceProtocol:
+        return self._execution_service
+
+    @property
+    def g8ed_event_service(self) -> EventServiceProtocol:
+        return self._g8ed_event_service
+
+    @property
+    def investigation_service(self) -> InvestigationServiceProtocol:
+        return self._investigation_service
+
+    @property
+    def g8ed_client(self) -> G8edClientProtocol:
+        return self._g8ed_client
 
     def _resolve_intent_dependencies(self, requested_intents: list[str]) -> list[str]:
         all_intents = set(requested_intents)

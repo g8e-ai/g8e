@@ -20,7 +20,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { _AGENTS } from '@g8ed/constants/shared.js';
-import { TriageComplexity, TriageConfidence, TriageIntent, TriageRequestPosture, TribunalMember, AuditorReason, TribunalMemberIcons } from '@g8ed/constants/agents.js';
+import { TriageComplexity, TriageConfidence, TriageIntent, TriageRequestPosture, TribunalMember, AuditorReason, TribunalMemberIcons, AuditorIcon } from '@g8ed/constants/agents.js';
 
 describe('g8ed Agent Constants match shared/constants/agents.json', () => {
     describe('TriageComplexity constants', () => {
@@ -119,6 +119,12 @@ describe('g8ed Agent Constants match shared/constants/agents.json', () => {
         });
         it('Pass 4 (Nemesis) icon matches JSON metadata', () => {
             expect(TribunalMemberIcons[4]).toBe(_AGENTS['agent.metadata'].nemesis.icon);
+        });
+    });
+
+    describe('AuditorIcon constant', () => {
+        it('Auditor icon matches JSON metadata', () => {
+            expect(AuditorIcon).toBe(_AGENTS['agent.metadata'].auditor.icon);
         });
     });
 

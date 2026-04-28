@@ -28,36 +28,19 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const _SHARED_DIR = path.resolve(__dirname, '../../../shared/constants');
-let _sharedApiPaths = {};
+const apiPathsFile = path.join(_SHARED_DIR, 'api_paths.json');
+
+let _sharedApiPaths;
 try {
-    const apiPathsFile = path.join(_SHARED_DIR, 'api_paths.json');
     _sharedApiPaths = JSON.parse(fs.readFileSync(apiPathsFile, 'utf8'));
 } catch (err) {
-    // Fallback for tests or environments where shared file isn't available
-    _sharedApiPaths = {
-        internal_prefix: '/api/internal',
-        g8ee: {
-            chat: '/chat',
-            chat_stop: '/chat/stop',
-            investigations: '/investigations',
-            investigation: '/investigations/{investigation_id}',
-            cases: '/cases',
-            case: '/cases/{case_id}',
-            operators_stop: '/operators/stop',
-            operators_register_session: '/operators/register-operator-session',
-            operators_deregister_session: '/operators/deregister-operator-session',
-            operator_direct_command: '/operator/direct-command',
-            operator_approval_respond: '/operator/approval/respond',
-            health: '/health',
-            settings_user: '/settings/user'
-        },
-        g8ed: {
-            sse_push: '/sse/push',
-            grant_intent: '/operators/{operator_id}/grant-intent',
-            revoke_intent: '/operators/{operator_id}/revoke-intent',
-            health: '/health'
-        }
-    };
+    if (err.code === 'ENOENT') {
+        throw new Error(`Shared constants file not found: ${apiPathsFile}`);
+    }
+    if (err instanceof SyntaxError) {
+        throw new Error(`Invalid JSON in shared constants file ${apiPathsFile}: ${err.message}`);
+    }
+    throw err;
 }
 
 export const InternalApiPaths = Object.freeze({
@@ -183,6 +166,9 @@ const Chat = {
     STOP:            'stop',
     CASES:           'cases',
     HEALTH:          'health',
+    TRIAGE_ANSWER:   'triage/answer',
+    TRIAGE_SKIP:     'triage/skip',
+    TRIAGE_TIMEOUT:  'triage/timeout',
     PARAM:           ':investigationId',
     CASE_PARAM:      ':caseId',
 };
@@ -268,6 +254,7 @@ const InternalDeviceLink = {
     PARAM_USER: ':userId',
     PARAM_TOKEN: ':token',
     DELETE:     'delete',
+    OPERATOR_LINK: 'operator-link',
 };
 
 // --- INTERNAL domain ---
@@ -359,6 +346,9 @@ export const ChatPaths = Object.freeze({
     STOP:           `/${Chat.STOP}`,
     CASES:          `/${Chat.CASES}/${Chat.CASE_PARAM}`,
     HEALTH:         `/${Chat.HEALTH}`,
+    TRIAGE_ANSWER:  `/${Chat.TRIAGE_ANSWER}`,
+    TRIAGE_SKIP:    `/${Chat.TRIAGE_SKIP}`,
+    TRIAGE_TIMEOUT: `/${Chat.TRIAGE_TIMEOUT}`,
 });
 
 export const OperatorApprovalPaths = Object.freeze({
@@ -441,6 +431,7 @@ export const InternalDeviceLinkPaths = Object.freeze({
     LIST_FOR_USER:   `/${InternalDeviceLink.USER}/${InternalDeviceLink.PARAM_USER}`,
     CREATE_FOR_USER: `/${InternalDeviceLink.USER}/${InternalDeviceLink.PARAM_USER}`,
     REVOKE:          `/${InternalDeviceLink.PARAM_TOKEN}`,
+    CREATE_OPERATOR_LINK: `/${InternalDeviceLink.OPERATOR_LINK}`,
 });
 
 export const InternalPaths = Object.freeze({
@@ -474,23 +465,38 @@ export const InternalPaths = Object.freeze({
 // Fully-qualified path builders — used by client code to construct URLs
 // ---------------------------------------------------------------------------
 
+// Dynamic g8ee path generator using Proxy to eliminate manual duplication
+const createG8eePathsProxy = () => {
+    return new Proxy({}, {
+        get(target, prop) {
+            const snakeKey = prop.replace(/([A-Z])/g, '_$1').toLowerCase();
+            
+            if (!(snakeKey in InternalApiPaths.g8ee)) {
+                throw new Error(`Unknown g8ee path: ${prop} (mapped to ${snakeKey})`);
+            }
+            
+            const path = InternalApiPaths.g8ee[snakeKey];
+            
+            // Check if path has parameters
+            if (path.includes('{')) {
+                return (...args) => {
+                    let result = path;
+                    const params = path.match(/\{([^}]+)\}/g) || [];
+                    params.forEach((param, i) => {
+                        const paramName = param.slice(1, -1);
+                        result = result.replace(param, args[i] || '');
+                    });
+                    return result;
+                };
+            }
+            
+            return () => path;
+        }
+    });
+};
+
 export const apiPaths = {
-    g8ee: {
-        chat:                      () => InternalApiPaths.g8ee.chat,
-        chatStop:                  () => InternalApiPaths.g8ee.chat_stop,
-        investigations:            () => InternalApiPaths.g8ee.investigations,
-        investigation:             (id) => InternalApiPaths.g8ee.investigation.replace('{investigation_id}', id),
-        cases:                     () => InternalApiPaths.g8ee.cases,
-        case:                      (id) => InternalApiPaths.g8ee.case.replace('{case_id}', id),
-        operatorsStop:             () => InternalApiPaths.g8ee.operators_stop,
-        operatorsRegisterSession:   () => InternalApiPaths.g8ee.operators_register_session,
-        operatorsDeregisterSession: () => InternalApiPaths.g8ee.operators_deregister_session,
-        operatorDirectCommand:     () => InternalApiPaths.g8ee.operator_direct_command,
-        operatorApprovalRespond:   () => InternalApiPaths.g8ee.operator_approval_respond,
-        operatorApprovalPending:   () => InternalApiPaths.g8ee.operator_approval_pending,
-        health:                    () => InternalApiPaths.g8ee.health,
-        settingsUser:              () => InternalApiPaths.g8ee.settings_user,
-    },
+    g8ee: createG8eePathsProxy(),
     operator: {
         bind:           () => `${Operator.BASE}/${Operator.BIND}`,
         unbind:         () => `${Operator.BASE}/${Operator.UNBIND}`,
@@ -629,8 +635,43 @@ export const apiPaths = {
         createForUser: (userId) => `${InternalDeviceLink.BASE}/${InternalDeviceLink.USER}/${userId}`,
         revoke:        (token)  => `${InternalDeviceLink.BASE}/${token}`,
         delete:        (token)  => `${InternalDeviceLink.BASE}/${token}?action=${InternalDeviceLink.DELETE}`,
+        createOperatorLink: () => `${InternalDeviceLink.BASE}/${InternalDeviceLink.OPERATOR_LINK}`,
     },
 };
 
 // Aliased as ApiPaths for legacy/mirror contract support
 export const ApiPaths = apiPaths;
+
+/**
+ * Validates that all keys in api_paths.json are accessible via the g8ee path proxy.
+ * This catches typos and drift between the JSON source of truth and the JavaScript
+ * implementation at build/test time, rather than at runtime.
+ *
+ * @throws {Error} If any key in api_paths.json is not accessible via the proxy
+ */
+export function validateApiPathsSync() {
+    const errors = [];
+
+    // Validate g8ee paths
+    for (const key of Object.keys(_sharedApiPaths.g8ee)) {
+        const camelKey = key.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+        try {
+            apiPaths.g8ee[camelKey];
+        } catch (err) {
+            errors.push(`g8ee key '${key}' not accessible as '${camelKey}': ${err.message}`);
+        }
+    }
+
+    // Validate g8ed paths (used in InternalPaths)
+    for (const key of Object.keys(_sharedApiPaths.g8ed)) {
+        if (!(key in InternalApiPaths.g8ed)) {
+            errors.push(`g8ed key '${key}' not accessible via InternalApiPaths.g8ed`);
+        }
+    }
+
+    if (errors.length > 0) {
+        throw new Error(
+            `api_paths.json and JavaScript implementation are out of sync:\n${errors.join('\n')}`
+        );
+    }
+}

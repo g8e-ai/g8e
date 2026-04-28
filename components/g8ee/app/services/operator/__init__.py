@@ -22,7 +22,7 @@ from .command_service import OperatorCommandService
 from .execution_service import OperatorExecutionService
 from .file_service import OperatorFileService
 from .filesystem_service import OperatorFilesystemService
-from .heartbeat_service import OperatorHeartbeatService
+from .heartbeat_service import HeartbeatSnapshotService
 from .intent_service import OperatorIntentService
 from .lfaa_service import OperatorLFAAService
 from .operator_data_service import OperatorDataService
@@ -35,7 +35,7 @@ __all__ = [
     "OperatorExecutionService",
     "OperatorFileService",
     "OperatorFilesystemService",
-    "OperatorHeartbeatService",
+    "HeartbeatSnapshotService",
     "OperatorIntentService",
     "OperatorLFAAService",
     "OperatorDataService",

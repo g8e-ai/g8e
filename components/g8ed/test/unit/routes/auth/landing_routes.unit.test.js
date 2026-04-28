@@ -87,7 +87,7 @@ describe('LandingRoutes Unit Tests', () => {
         const res = await request(app).get('/');
 
         expect(res.status).toBe(200);
-        expect(res.text).toBe('rendered-view');
+        expect(res.text).toContain('Login');
     });
 
     it('renders login page if session is invalid and not first run', async () => {
@@ -99,7 +99,7 @@ describe('LandingRoutes Unit Tests', () => {
             .set('Cookie', [`${SESSION_COOKIE_NAME}=invalid-session`]);
 
         expect(res.status).toBe(200);
-        expect(res.text).toBe('rendered-view');
+        expect(res.text).toContain('Login');
     });
 
     it('handles session validation error and proceeds to first run check', async () => {
@@ -111,6 +111,6 @@ describe('LandingRoutes Unit Tests', () => {
             .set('Cookie', [`${SESSION_COOKIE_NAME}=some-session`]);
 
         expect(res.status).toBe(200);
-        expect(res.text).toBe('rendered-view');
+        expect(res.text).toContain('Login');
     });
 });

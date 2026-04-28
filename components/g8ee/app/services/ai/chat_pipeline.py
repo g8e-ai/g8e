@@ -72,6 +72,7 @@ from app.models.g8ed_client import (
     ChatProcessingStartedPayload,
     ChatResponseChunkPayload,
     ChatResponseCompletePayload,
+    TriageClarificationQuestionsPayload,
 )
 
 logger = logging.getLogger(__name__)
@@ -167,7 +168,7 @@ class ChatPipelineService:
 
         current_sentinel_mode = investigation.sentinel_mode
         if current_sentinel_mode != sentinel_mode:
-            await self.investigation_service.update_investigation_raw(
+            await self.investigation_service.investigation_data_service.update_investigation_raw(
                 investigation_id=investigation_id,
                 updates={"sentinel_mode": sentinel_mode},
             )
@@ -176,7 +177,7 @@ class ChatPipelineService:
         operator_bound = any(op.status == OperatorStatus.BOUND for op in g8e_context.bound_operators)
         agent_mode = AgentMode.OPERATOR_BOUND if operator_bound else AgentMode.OPERATOR_NOT_BOUND
 
-        prior_history = await self.investigation_service.get_chat_messages(
+        prior_history = await self.investigation_service.investigation_data_service.get_chat_messages(
             investigation_id=investigation_id
         )
 
@@ -196,8 +197,10 @@ class ChatPipelineService:
             tier="primary" if needs_main_model else "assistant",
             primary_override=model_overrides.for_main_generation(needs_primary=True),
             assistant_override=model_overrides.for_main_generation(needs_primary=False),
+            lite_override=None,
             settings_primary_model=request_settings.llm.primary_model,
             settings_assistant_model=request_settings.llm.resolved_assistant_model,
+            settings_lite_model=request_settings.llm.resolved_lite_model,
         )
         
         if not model_to_use:
@@ -221,14 +224,14 @@ class ChatPipelineService:
         attachment_filenames = [att.filename for att in attachments] if attachments else []
 
         if investigation_id:
-            await self.investigation_service.add_chat_message(
+            await self.investigation_service.investigation_data_service.add_chat_message(
                 investigation_id=investigation_id,
                 sender=MessageSender.USER_CHAT,
                 content=message,
                 metadata=ConversationMessageMetadata(attachment_filenames=attachment_filenames),
             )
 
-        conversation_history = await self.investigation_service.get_chat_messages(
+        conversation_history = await self.investigation_service.investigation_data_service.get_chat_messages(
             investigation_id=investigation_id
         )
 
@@ -249,7 +252,7 @@ class ChatPipelineService:
 
         all_operator_contexts = extract_all_operators_context(investigation)
         active_agent = AgentName.SAGE if needs_main_model else AgentName.DASH
-        system_instructions = build_modular_system_prompt(
+        system_instructions, context_sizes = build_modular_system_prompt(
             operator_bound=operator_bound,
             system_context=all_operator_contexts,
             user_memories=user_memories,
@@ -306,6 +309,7 @@ class ChatPipelineService:
             user_memories=user_memories,
             case_memories=case_memories,
             triage_result=triage_result,
+            context_sizes=context_sizes,
         )
 
     async def _persist_ai_response(
@@ -355,6 +359,7 @@ class ChatPipelineService:
         state: AgentStreamState,
         start_time: float,
         attachments: list[AttachmentMetadata],
+        context_sizes: dict[str, int] | None = None,
         error: str | None = None,
     ) -> None:
         """Record agent activity metadata for data science analysis.
@@ -365,7 +370,17 @@ class ChatPipelineService:
         """
         try:
             duration_seconds = time.time() - start_time
-            
+
+            attachment_total_bytes = sum(att.file_size or 0 for att in attachments) if attachments else 0
+
+            contents_total = 0
+            for content in inputs.contents:
+                content_str = str(content)
+                contents_total += len(content_str)
+
+            if context_sizes:
+                context_sizes["contents_total"] = contents_total
+
             metadata = AgentActivityMetadata(
                 user_id=inputs.user_id,
                 user_email=inputs.investigation.user_email if inputs.investigation else None,
@@ -389,10 +404,13 @@ class ChatPipelineService:
                 has_attachments=len(attachments) > 0,
                 attachment_count=len(attachments),
                 grounding_used=state.grounding_metadata is not None,
-                citation_count=len(state.grounding_metadata.citations) if state.grounding_metadata and state.grounding_metadata.citations else 0,
+                citation_count=state.grounding_metadata.citations_count if state.grounding_metadata else 0,
                 operator_bound=inputs.operator_bound,
                 bound_operator_count=len(inputs.g8e_context.bound_operators) if inputs.g8e_context.bound_operators else 0,
                 response_length=len(state.response_text),
+                context_sizes=context_sizes,
+                attachment_total_bytes=attachment_total_bytes if attachment_total_bytes > 0 else None,
+                tool_response_sizes=state.tool_response_sizes if state.tool_response_sizes else None,
                 error=error,
             )
 
@@ -478,8 +496,10 @@ class ChatPipelineService:
         sentinel_mode: bool,
         llm_primary_provider: str | None,
         llm_assistant_provider: str | None,
+        llm_lite_provider: str | None,
         llm_primary_model: str,
         llm_assistant_model: str,
+        llm_lite_model: str,
         _task_manager: BackgroundTaskManager,
         user_settings: G8eeUserSettings,
         _track_task: bool = True,
@@ -508,8 +528,8 @@ class ChatPipelineService:
 
         try:
             logger.info(
-                "[SSE-CHAT] About to call _run_chat_impl: message_len=%d sentinel_mode=%s primary_provider=%s assistant_provider=%s primary=%s assistant=%s",
-                len(message), sentinel_mode, llm_primary_provider, llm_assistant_provider, llm_primary_model, llm_assistant_model
+                "[SSE-CHAT] About to call _run_chat_impl: message_len=%d sentinel_mode=%s primary_provider=%s assistant_provider=%s lite_provider=%s primary=%s assistant=%s lite=%s",
+                len(message), sentinel_mode, llm_primary_provider, llm_assistant_provider, llm_lite_provider, llm_primary_model, llm_assistant_model, llm_lite_model
             )
             await self._run_chat_impl(
                 message=message,
@@ -518,8 +538,10 @@ class ChatPipelineService:
                 sentinel_mode=sentinel_mode,
                 llm_primary_provider=llm_primary_provider,
                 llm_assistant_provider=llm_assistant_provider,
+                llm_lite_provider=llm_lite_provider,
                 llm_primary_model=llm_primary_model,
                 llm_assistant_model=llm_assistant_model,
+                llm_lite_model=llm_lite_model,
                 user_settings=user_settings,
                 task_manager=_task_manager,
             )
@@ -559,8 +581,10 @@ class ChatPipelineService:
         sentinel_mode: bool,
         llm_primary_provider: str | None,
         llm_assistant_provider: str | None,
+        llm_lite_provider: str | None,
         llm_primary_model: str,
         llm_assistant_model: str,
+        llm_lite_model: str,
         user_settings: G8eeUserSettings,
         task_manager: BackgroundTaskManager | None = None,
     ) -> None:
@@ -582,11 +606,15 @@ class ChatPipelineService:
         if llm_assistant_provider:
             logger.info("[SSE-CHAT] Applying assistant_provider override: %s", llm_assistant_provider)
             resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"assistant_provider": LLMProvider(llm_assistant_provider)})})
+        if llm_lite_provider:
+            logger.info("[SSE-CHAT] Applying lite_provider override: %s", llm_lite_provider)
+            resolved_settings = resolved_settings.model_copy(update={"llm": resolved_settings.llm.model_copy(update={"lite_provider": LLMProvider(llm_lite_provider)})})
 
         logger.info("[SSE-CHAT] About to call _prepare_chat_context")
         model_overrides = ModelOverrideResolver(
             primary_model=llm_primary_model,
             assistant_model=llm_assistant_model,
+            lite_model=llm_lite_model,
         )
         inputs = await self._prepare_chat_context(
             message=message,
@@ -600,19 +628,20 @@ class ChatPipelineService:
 
         state = AgentStreamState()
 
-        is_assistant_provider = (
-            inputs.triage_result.complexity != TriageComplexityClassification.COMPLEX
+        is_lite = (
+            inputs.triage_result.complexity == TriageComplexityClassification.SIMPLE
             if inputs.triage_result
             else False
         )
-        llm_provider = get_llm_provider(resolved_settings.llm, is_assistant=is_assistant_provider)
-        logger.info("[SSE-CHAT] LLM provider resolved: %s (is_assistant=%s)", type(llm_provider).__name__, is_assistant_provider)
+        llm_provider = get_llm_provider(resolved_settings.llm, is_lite=is_lite)
+        logger.info("[SSE-CHAT] LLM provider resolved: %s (is_lite=%s)", type(llm_provider).__name__, is_lite)
 
         logger.info(
             "[SSE-CHAT] Starting LLM call: model=%s workflow=%s contents=%d max_tokens=%s",
             inputs.model_to_use, inputs.agent_mode, len(inputs.contents), inputs.max_tokens
         )
 
+        follow_up = None
         if inputs.triage_result and inputs.triage_result.follow_up_question and (
             inputs.triage_result.complexity_confidence == TriageConfidence.LOW or
             inputs.triage_result.intent_confidence == TriageConfidence.LOW
@@ -650,7 +679,45 @@ class ChatPipelineService:
                 user_id=g8e_context.user_id,
             )
             state.response_text = follow_up
-        elif inputs.model_to_use and inputs.generation_config:
+        
+        if inputs.triage_result and inputs.triage_result.clarifying_questions:
+            logger.info("[SSE-CHAT] Triage: emitting clarifying questions to user")
+
+            # Persist clarifying questions to conversation history per GDD §14.2
+            questions_text = "\n".join([f"- {q}" for q in inputs.triage_result.clarifying_questions])
+            content = f"I need a few clarifications to help you better:\n{questions_text}"
+            
+            await self.investigation_service.investigation_data_service.add_chat_message(
+                investigation_id=g8e_context.investigation_id,
+                sender=MessageSender.AI_TRIAGE,
+                content=content,
+                metadata=ConversationMessageMetadata(
+                    event_type=EventType.AI_TRIAGE_CLARIFICATION_QUESTIONS,
+                    clarifying_questions=inputs.triage_result.clarifying_questions,
+                    triage_complexity=inputs.triage_result.complexity,
+                    triage_intent_summary=inputs.triage_result.intent_summary
+                )
+            )
+
+            await self.g8ed_event_service.publish_investigation_event(
+                investigation_id=g8e_context.investigation_id,
+                event_type=EventType.AI_TRIAGE_CLARIFICATION_QUESTIONS,
+                payload=TriageClarificationQuestionsPayload(
+                    questions=inputs.triage_result.clarifying_questions,
+                    complexity=inputs.triage_result.complexity,
+                    complexity_confidence=inputs.triage_result.complexity_confidence,
+                    intent=inputs.triage_result.intent,
+                    intent_confidence=inputs.triage_result.intent_confidence,
+                    intent_summary=inputs.triage_result.intent_summary,
+                    request_posture=inputs.triage_result.request_posture,
+                    posture_confidence=inputs.triage_result.posture_confidence,
+                ),
+                web_session_id=g8e_context.web_session_id,
+                case_id=g8e_context.case_id,
+                user_id=g8e_context.user_id,
+            )
+        
+        if not follow_up and not (inputs.triage_result and inputs.triage_result.clarifying_questions) and inputs.model_to_use and inputs.generation_config:
             logger.info("[SSE-CHAT] Running full agent execution")
 
             async def _persist_iteration_text(text: str) -> None:
@@ -686,6 +753,7 @@ class ChatPipelineService:
             state=state,
             start_time=start_time,
             attachments=attachments,
+            context_sizes=inputs.context_sizes,
         )
 
         logger.info(

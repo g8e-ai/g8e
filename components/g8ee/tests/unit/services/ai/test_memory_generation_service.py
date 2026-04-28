@@ -60,7 +60,7 @@ class TestUpdateMemoryFromConversation:
             sentinel_mode=False,
         )
         settings = G8eeUserSettings(
-            llm=LLMSettings(provider="gemini", assistant_model="gemini-3.1-flash")
+            llm=LLMSettings(provider="gemini", lite_provider="gemini", lite_model="gemini-3.1-flash")
         )
 
         result = await service.update_memory_from_conversation(
@@ -99,7 +99,7 @@ class TestUpdateMemoryFromConversation:
             sentinel_mode=False,
         )
         settings = G8eeUserSettings(
-            llm=LLMSettings(provider="gemini", assistant_model="gemini-3.1-flash")
+            llm=LLMSettings(provider="gemini", lite_provider="gemini", lite_model="gemini-3.1-flash")
         )
 
         result = await service.update_memory_from_conversation(
@@ -133,12 +133,14 @@ class TestUpdateMemoryFromConversation:
                 content=f"Message {i}",
                 timestamp=datetime.now(UTC),
                 metadata=ConversationMessageMetadata(sentinel_mode=False),
+                prev_hash="0" * 64,
+                entry_hash="0" * 64,
             )
             for i in range(CONVERSATION_HISTORY_LIMIT + 10)
         ]
 
         settings = G8eeUserSettings(
-            llm=LLMSettings(provider="gemini", assistant_model="gemini-3.1-flash")
+            llm=LLMSettings(provider="gemini", lite_provider="gemini", lite_model="gemini-3.1-flash")
         )
 
         # Mock _ai_update_memory to prevent actual LLM call
@@ -208,6 +210,8 @@ class TestConversationToContents:
                 content="Normal message",
                 timestamp=datetime.now(UTC),
                 metadata=ConversationMessageMetadata(sentinel_mode=False),
+                prev_hash="0" * 64,
+                entry_hash="0" * 64,
             ),
             ConversationHistoryMessage(
                 id="msg-2",
@@ -215,6 +219,8 @@ class TestConversationToContents:
                 content="Thinking message",
                 timestamp=datetime.now(UTC),
                 metadata=AIResponseMetadata(sentinel_mode=False, is_thinking=True),
+                prev_hash="0" * 64,
+                entry_hash="0" * 64,
             ),
         ]
 
@@ -243,6 +249,8 @@ class TestConversationToContents:
                 content="User message",
                 timestamp=datetime.now(UTC),
                 metadata=ConversationMessageMetadata(sentinel_mode=False),
+                prev_hash="0" * 64,
+                entry_hash="0" * 64,
             ),
         ]
 
@@ -268,6 +276,8 @@ class TestConversationToContents:
                 content="AI message",
                 timestamp=datetime.now(UTC),
                 metadata=ConversationMessageMetadata(sentinel_mode=False),
+                prev_hash="0" * 64,
+                entry_hash="0" * 64,
             ),
         ]
 
@@ -293,6 +303,8 @@ class TestConversationToContents:
                 content="Assistant message",
                 timestamp=datetime.now(UTC),
                 metadata=ConversationMessageMetadata(sentinel_mode=False),
+                prev_hash="0" * 64,
+                entry_hash="0" * 64,
             ),
         ]
 
@@ -318,6 +330,8 @@ class TestConversationToContents:
                 content="System message",
                 timestamp=datetime.now(UTC),
                 metadata=ConversationMessageMetadata(sentinel_mode=False),
+                prev_hash="0" * 64,
+                entry_hash="0" * 64,
             ),
         ]
 
@@ -540,6 +554,8 @@ class TestConversationToContentsPayload:
                 id="msg-1", sender=MessageSender.USER_CHAT,
                 content="Midnight-Blue fan controller in Reykjavik",
                 timestamp=datetime.now(UTC),
+                prev_hash="0" * 64,
+                entry_hash="0" * 64,
             ),
         ]
         contents = MemoryGenerationService._conversation_to_contents(conversation, memory)
@@ -554,15 +570,17 @@ class TestConversationToContentsPayload:
         )
         conversation = [
             ConversationHistoryMessage(
-                id="msg-1", sender=MessageSender.AI_ASSISTANT,
-                content="RPM logs for Midnight-Blue controller retrieved",
+                id="msg-1", sender=MessageSender.AI_PRIMARY,
+                content="Azure-Blue cooling system in Oslo",
                 timestamp=datetime.now(UTC),
+                prev_hash="0" * 64,
+                entry_hash="0" * 64,
             ),
         ]
         contents = MemoryGenerationService._conversation_to_contents(conversation, memory)
         text = self._all_payload_text(contents)
-        assert "RPM logs" in text
-        assert "Midnight-Blue" in text
+        assert "Azure-Blue" in text
+        assert "Oslo" in text
 
     def test_existing_memory_context_preserved_in_payload(self):
         memory = InvestigationMemory(
@@ -586,16 +604,22 @@ class TestConversationToContentsPayload:
                 id="msg-1", sender=MessageSender.USER_CHAT,
                 content="Check the Alpine-Delta cooling unit",
                 timestamp=datetime.now(UTC),
+                prev_hash="0" * 64,
+                entry_hash="0" * 64,
             ),
             ConversationHistoryMessage(
                 id="msg-2", sender=MessageSender.AI_ASSISTANT,
                 content="Pulling thermal sensor data for Alpine-Delta",
                 timestamp=datetime.now(UTC),
+                prev_hash="0" * 64,
+                entry_hash="0" * 64,
             ),
             ConversationHistoryMessage(
                 id="msg-3", sender=MessageSender.USER_CHAT,
                 content="Now check the Crimson relay board",
                 timestamp=datetime.now(UTC),
+                prev_hash="0" * 64,
+                entry_hash="0" * 64,
             ),
         ]
         contents = MemoryGenerationService._conversation_to_contents(conversation, memory)
@@ -605,6 +629,19 @@ class TestConversationToContentsPayload:
         assert "Crimson relay" in text
 
     def test_empty_content_messages_excluded_from_payload(self):
+        investigation = InvestigationModel(
+            id="inv-1", case_id="case-1", user_id="user-1",
+            status=InvestigationStatus.OPEN, case_title="Test",
+            sentinel_mode=False,
+        )
+
+        conversation_history=[ConversationHistoryMessage(
+            id="msg-1", sender=MessageSender.USER_CHAT,
+            content="User question",
+            timestamp=datetime.now(UTC),
+            prev_hash="0" * 64,
+            entry_hash="0" * 64,
+        )],
         memory = InvestigationMemory(
             investigation_id="inv-1", case_id="case-1", user_id="user-1",
             status=InvestigationStatus.OPEN, case_title="Test",
@@ -614,11 +651,15 @@ class TestConversationToContentsPayload:
                 id="msg-1", sender=MessageSender.USER_CHAT,
                 content="",
                 timestamp=datetime.now(UTC),
+                prev_hash="0" * 64,
+                entry_hash="0" * 64,
             ),
             ConversationHistoryMessage(
                 id="msg-2", sender=MessageSender.USER_CHAT,
                 content="Real message",
                 timestamp=datetime.now(UTC),
+                prev_hash="0" * 64,
+                entry_hash="0" * 64,
             ),
         ]
         contents = MemoryGenerationService._conversation_to_contents(conversation, memory)
@@ -672,12 +713,14 @@ class TestMemoryMergeLogic:
             id="inv-1", case_id="case-1", user_id="user-1",
             status=InvestigationStatus.OPEN, case_title="Test", sentinel_mode=False,
         )
-        settings = G8eeUserSettings(llm=LLMSettings(provider="ollama", assistant_model="test"))
+        settings = G8eeUserSettings(llm=LLMSettings(provider="ollama", lite_provider="ollama", lite_model="test"))
 
         result = await service.update_memory_from_conversation(
             conversation_history=[ConversationHistoryMessage(
                 id="msg-1", sender=MessageSender.USER_CHAT,
                 content="test", timestamp=datetime.now(UTC),
+                prev_hash="0" * 64,
+                entry_hash="0" * 64,
             )],
             investigation=investigation,
             settings=settings,
@@ -720,12 +763,14 @@ class TestMemoryMergeLogic:
             id="inv-1", case_id="case-1", user_id="user-1",
             status=InvestigationStatus.OPEN, case_title="Test", sentinel_mode=False,
         )
-        settings = G8eeUserSettings(llm=LLMSettings(provider="ollama", assistant_model="test"))
+        settings = G8eeUserSettings(llm=LLMSettings(provider="ollama", lite_provider="ollama", lite_model="test"))
 
         result = await service.update_memory_from_conversation(
             conversation_history=[ConversationHistoryMessage(
                 id="msg-1", sender=MessageSender.USER_CHAT,
                 content="test", timestamp=datetime.now(UTC),
+                prev_hash="0" * 64,
+                entry_hash="0" * 64,
             )],
             investigation=investigation,
             settings=settings,
@@ -757,12 +802,14 @@ class TestMemoryMergeLogic:
             id="inv-1", case_id="case-1", user_id="user-1",
             status=InvestigationStatus.OPEN, case_title="Test", sentinel_mode=False,
         )
-        settings = G8eeUserSettings(llm=LLMSettings(provider="ollama", assistant_model="test"))
+        settings = G8eeUserSettings(llm=LLMSettings(provider="ollama", lite_provider="ollama", lite_model="test"))
 
         result = await service.update_memory_from_conversation(
             conversation_history=[ConversationHistoryMessage(
                 id="msg-1", sender=MessageSender.USER_CHAT,
                 content="test", timestamp=datetime.now(UTC),
+                prev_hash="0" * 64,
+                entry_hash="0" * 64,
             )],
             investigation=investigation,
             settings=settings,

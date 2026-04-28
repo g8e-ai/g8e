@@ -38,6 +38,7 @@ The platform is a stateless relay. Raw command output and file contents stay on 
 3.  **g8ee (Python/FastAPI):** The AI Engine. Manages chat pipelines, AI reasoning, tool orchestration, and coordinates with g8es for persistence.
 4.  **g8eo (Go):** The Operator reference implementation. Executes commands on target systems, enforces LFAA, and reports results via pub/sub. Any client following the g8e events protocol can act as an Operator.
 5.  **g8es (Go/SQLite):** A standalone Go service providing persistence (SQLite document store), KV cache, and pub/sub messaging. The g8eo binary can run in multiple modes: standard operator mode (executes commands on target systems), listen mode (acts as the platform's central persistence and pub/sub broker), or OpenClaw node host mode (connects to an OpenClaw Gateway).
+6.  **g8el (llama.cpp):** Optional local LLM inference server. Provides OpenAI-compatible API for running quantized models (e.g., Gemma 4 E2B) using the llama.cpp library. Integrates with g8ee as the LLAMACPP provider.
 
 ### Communication Flow
 - **g8ed ↔ g8ee:** Synchronous HTTP for orchestration and state management.
@@ -60,46 +61,43 @@ g8es Transport Layer
 └── G8esBlobClient
 
 Cache Layer
-└── CacheAsideService ──> G8esDocumentClient, KVCacheClient
+└── CacheAsideService ──────────> G8esDocumentClient, KVCacheClient
 
 Auth Domain
 ├── WebSessionService ──────────> CacheAsideService, BootstrapService
-├── OperatorSessionService ─────> CacheAsideService, BootstrapService
+├── CliSessionService ──────────> CacheAsideService, BootstrapService, AuditService
 ├── ApiKeyDataService ──────────> CacheAsideService
 ├── ApiKeyService ──────────────> ApiKeyDataService
-├── UserService ────────────────> CacheAsideService, ApiKeyService
+├── UserService ────────────────> CacheAsideService, OrganizationModel, ApiKeyService
 ├── PasskeyAuthService ─────────> UserService, CacheAsideService, SettingsService
 ├── LoginSecurityService ───────> CacheAsideService
 ├── DownloadAuthService ────────> CacheAsideService, UserService, ApiKeyService
 ├── PostLoginService ───────────> WebSessionService, ApiKeyService, UserService,
-│                                 OperatorService, G8ENodeOperatorService
-├── DeviceRegistrationService ──> OperatorService, OperatorSessionService, UserService,
-│                                 SSEService, InternalHttpClient, SessionAuthListener
+│                                 OperatorService, G8ENodeOperatorService,
+│                                 SSEService, ConsoleMetricsService
+├── DeviceRegistrationService ──> OperatorService, UserService, SSEService,
+│                                 InternalHttpClient
 ├── DeviceLinkService ──────────> CacheAsideService, OperatorService,
 │                                 WebSessionService, DeviceRegistrationService
-└── SessionAuthListener ────────> G8esPubSubClient, OperatorSessionService, OperatorService
+└── BindOperatorsService ───────> OperatorService, BoundSessionsService,
+                                  WebSessionService, SSEService
 
 Operator Domain
 ├── OperatorDataService ────────> CacheAsideService
 ├── OperatorService ────────────> OperatorDataService, UserService, ApiKeyService,
-│                                 OperatorSessionService, WebSessionService,
-│                                 CertificateService, SSEService
+│                                 WebSessionService, CertificateService,
+│                                 SSEService, InternalHttpClient
 ├── OperatorDownloadService
-├── OperatorAuthService ────────> ApiKeyService, UserService, OperatorService,
-│                                 OperatorSessionService, BoundSessionsService,
-│                                 WebSessionService
-├── OperatorBindService ───────> OperatorService, BoundSessionsService,
-│                                 OperatorSessionService, WebSessionService
-├── BoundSessionsService ──────> CacheAsideService, OperatorService
-├── OperatorSlotService ────────> CacheAsideService, OperatorService
+├── BoundSessionsService ───────> CacheAsideService, OperatorService
 ├── OperatorRelayService ───────> G8esPubSubClient, OperatorService
 └── OperatorNotificationService ─> SSEService, OperatorService
 
 Platform Domain
 ├── SettingsService ────────────> CacheAsideService, BootstrapService
-├── SSEService ─────────────────> SettingsService, InternalHttpClient, BoundSessionsService
+├── SSEService ─────────────────> SettingsService, InternalHttpClient,
+│                                 BoundSessionsService, InvestigationService
 ├── AttachmentService ──────────> CacheAsideService, G8esBlobClient
-├── CertificateService ─────────> BootstrapService
+├── CertificateService ─────────> BootstrapService, InternalHttpClient
 ├── ConsoleMetricsService ──────> CacheAsideService, InternalHttpClient
 ├── G8ENodeOperatorService ─────> SettingsService, OperatorService
 ├── HealthCheckService ─────────> CacheAsideService, WebSessionService
@@ -115,20 +113,17 @@ All services are constructed by `ServiceFactory.create_all_services()` in `servi
 
 ```
 g8es Transport Layer
-├── DBService ──────────────────> G8esDocumentClient
-├── KVService ──────────────────> KVCacheClient
-├── BlobService ────────────────> BlobClient
-└── PubSubClient
+├── DBService (g8es) ────────────> G8esDocumentClient
+├── KVService (g8es) ────────────> KVCacheClient
+├── BlobService (g8es) ──────────> BlobClient
+└── PubSubClient (g8es)
 
 Cache Layer
 └── CacheAsideService ──────────> KVService, DBService
 
 Infra Services
-├── BootstrapService
-├── SettingsService ────────────> CacheAsideService, BootstrapService
-├── HTTPService
+├── HTTPService (Aiohttp)
 ├── InternalHttpClient ─────────> G8eePlatformSettings
-├── HealthService
 └── EventService (g8ed) ────────> InternalHttpClient
 
 Data Layer (CRUD)
@@ -136,56 +131,47 @@ Data Layer (CRUD)
 ├── InvestigationDataService ───> CacheAsideService
 ├── OperatorDataService ────────> CacheAsideService, InternalHttpClient
 ├── MemoryDataService ──────────> CacheAsideService
+├── AgentActivityDataService ───> CacheAsideService
+├── ReputationDataService ──────> CacheAsideService
+├── StakeResolutionDataService ─> CacheAsideService
 └── AttachmentStoreService ─────> BlobService
 
 Domain Layer (Orchestration)
 ├── InvestigationService ───────> InvestigationDataService, OperatorDataService,
 │                                 MemoryDataService
-└── MemoryGenerationService ────> MemoryDataService
+├── MemoryGenerationService ────> MemoryDataService
+├── ReputationService ──────────> ReputationDataService, StakeResolutionDataService
+└── SshInventoryService
 
 Operator Services
-├── HeartbeatService ───────────> OperatorDataService, EventService, PubSubClient
-├── PubSubService ──────────────> PubSubClient
-│                                 (owns asyncio.Future registry for result correlation;
-│                                  Futures are keyed on payload.execution_id)
-├── ExecutionService ───────────> PubSubService, ApprovalService, EventService,
-│                                 AIResponseAnalyzer, OperatorDataService,
-│                                 InvestigationService
-├── ApprovalService ────────────> EventService, OperatorDataService,
+├── OperatorHeartbeatService ───> OperatorDataService, EventService, PubSubClient
+├── HeartbeatStaleMonitorService > OperatorDataService, EventService
+├── OperatorCommandService ─────> PubSubService, ApprovalService, ExecutionService,
+│                                 FilesystemService, PortService, FileService,
+│                                 IntentService, LFAAService, OperatorDataService
+├── OperatorApprovalService ────> EventService, OperatorDataService,
 │                                 InvestigationDataService
-├── CommandService ─────────────> CacheAsideService, OperatorDataService,
-│                                 InvestigationService, EventService,
-│                                 ApprovalService, ExecutionService,
-│                                 InternalHttpClient, PubSubService
-├── FileService ────────────────> PubSubService, ApprovalService, EventService,
-│                                 ExecutionService, AIResponseAnalyzer,
-│                                 InvestigationService
-├── FilesystemService ──────────> PubSubService, ExecutionService,
-│                                 InvestigationService
-├── PortService ────────────────> PubSubService, ExecutionService
-├── LFAAService ────────────────> PubSubService
-└── IntentService ──────────────> ApprovalService, ExecutionService, EventService,
-                                  InvestigationService, G8edClient
+├── OperatorExecutionService ───> PubSubService, OperatorApprovalService,
+│                                 EventService, AIResponseAnalyzer
+├── OperatorStreamExecutor ─────> OperatorApprovalService, InternalHttpClient
+└── OperatorAuthService ────────> ApiKeyService, OperatorSessionService,
+                                  OperatorDataService, CertificateService
 
 AI Pipeline
-├── AIToolService ──────────────> CommandService, InvestigationService,
-│                                 WebSearchProvider
+├── AIToolService ──────────────> OperatorCommandService, InvestigationService,
+│                                 ReputationService, SshInventoryService,
+│                                 OperatorStreamExecutor, WebSearchProvider
 ├── GroundingService
 │   ├── AttachmentProvider
 │   └── WebSearchProvider
-├── RequestBuilder ─────────────> AIToolService
-├── ResponseAnalyzer
-├── g8eEngine ──────────────────> AIToolService, GroundingService
-├── ChatPipelineService ────────> EventService, InvestigationService,
-│                                 RequestBuilder, g8eEngine,
-│                                 MemoryDataService, MemoryGenerationService
-├── ChatTaskManager
-├── TriageAgent (instantiated directly by ChatPipelineService)
-├── BenchmarkJudge (instantiated directly by benchmark tests)
-├── TitleGenerator
-├── CommandGenerator
-├── GenerationConfigBuilder
-└── EvalJudge
+├── AIRequestBuilder ───────────> AIToolService
+├── AIResponseAnalyzer
+├── g8eEngine ──────────────────> AIToolService, GroundingService, OperatorApprovalService
+├── ChatPipelineService ────────> EventService, InvestigationService, AIRequestBuilder,
+│                                 g8eEngine, MemoryDataService, TriageAgent,
+│                                 AgentActivityDataService
+├── BackgroundTaskManager
+└── TriageAgent (instantiated by ChatPipelineService)
 
 ```
 
@@ -208,44 +194,42 @@ The AI pipeline in g8ee consists of several specialized services that orchestrat
 
 ### TriageAgent
 - **Location:** `app/services/ai/triage.py`
-- **Purpose:** Classifies incoming user messages as 'simple' or 'complex' using a lightweight assistant model before committing to the full main LLM.
-- **Integration:** Instantiated directly by `ChatPipelineService` (not wired via `ServiceFactory`).
+- **Purpose:** Classifies incoming user messages as 'simple' or 'complex' using the `triage` persona. This determines the model tier (Assistant/Dash vs Primary/Sage) used for the response.
+- **Integration:** Instantiated directly by `ChatPipelineService`.
 - **Key Behaviors:**
-  - Short-circuits to COMPLEX if attachments are present (multimodal analysis required)
-  - Returns COMPLEX for empty messages with a follow-up question
-  - Uses the assistant model for classification when available
-  - Falls back to COMPLEX on any error (safe default)
-  - Provides intent classification (INFORMATION, ACTION, UNKNOWN) and confidence levels
+  - **Short-circuits:** COMPLEX if attachments are present; COMPLEX for empty messages.
+  - **Metadata:** Provides complexity, intent (INFORMATION, ACTION, UNKNOWN), and request posture (NORMAL, ESCALATED, ADVERSARIAL, CONFUSED).
+  - **Safe Default:** Falls back to COMPLEX on any error.
 
-### BenchmarkJudge
-- **Location:** `app/services/ai/benchmark_judge.py`
-- **Purpose:** Deterministic judge that grades agent tool call payloads against expected patterns using strict boolean pass/fail criteria. No LLM is involved — grading is purely regex matching on actual tool call arguments.
-- **Integration:** Instantiated directly by benchmark tests (not wired via `ServiceFactory`).
+### g8eEngine
+- **Location:** `app/services/ai/agent.py`
+- **Purpose:** The core ReAct loop orchestrator. Manages the lifecycle of an AI turn, including tool execution and streaming delivery.
 - **Key Features:**
-  - Binary pass/fail per scenario (no partial credit)
-  - Regex matching against expected command flags and arguments
-  - Tribunal delta tracking: measures whether the Tribunal improved the Primary Agent's initial command
-  - Supports multi-step execution scenarios (evaluates matchers across union of all captured calls)
-  - Computes aggregate pass rate and Tribunal improvement statistics
+  - **Retry Loop:** Implements AGENT_MAX_RETRIES with backoff.
+  - **ReAct Loop:** Coordinates provider turn -> tool calls -> next turn.
+  - **Streaming:** Handles SSE delivery through `agent_sse.py`.
 
-### Agent Turn Processing (agent_turn.py)
-- **Location:** `app/services/ai/agent_turn.py`
-- **Purpose:** Provider turn processing — thinking state machine, stream chunk parsing, model parts accumulation, token counting, parts consolidation, finish reason normalization, and retry error classification.
-- **Key Functions:**
-  - `handle_usage_chunk()` — Tracks token usage from stream chunks
-  - `handle_finish_reason_chunk()` — Normalizes finish reasons across providers
-  - `handle_thought_chunk()` — Processes thinking/reasoning blocks from Claude-style models
-  - State machine for tracking thinking state, pending tool calls, and response parts
-  - All functions are stateless and accept typed inputs for testability
-
-### Tool Execution (tool_service.py)
-- **Location:** `app/services/ai/tool_service.py`
-- **Purpose:** Orchestrates the execution of AI tool calls, including dispatching to specific handlers and managing Tribunal oversight.
+### Tribunal Generator
+- **Location:** `app/services/ai/generator.py`
+- **Purpose:** Orchestrates the five-member heterogeneous AI panel (The Tribunal) to convert Sage's intent into executable shell commands.
 - **Key Features:**
-  - Uses a dispatch table `_tool_handlers` for efficient tool lookup.
-  - Uniform handler signature: `(tool_args, investigation, g8e_context, request_settings)`.
-  - Integrated Tribunal oversight via `orchestrate_tool_execution`.
-  - Support for multiple tool types: Operator commands and internal utility tools.
+  - **Multi-Round Consensus:** Supports parallel generation passes (Axiom, Concord, Variance, Pragma, Nemesis) and weighted voting.
+  - **Auditor Integration:** The `auditor` persona verifies the winner against the original intent.
+  - **Reputation Binding:** Cryptographically binds Tribunal outcomes to the reputation scoreboard.
+
+### Tool Execution
+- **Location:** `app/services/ai/tool_service.py` and `app/services/operator/command_service.py`.
+- **Purpose:** Dispatches tool calls to specific handlers and manages operator interactions.
+- **Key Features:**
+  - **Orchestration:** `OperatorCommandService` coordinates PubSub, Approval, Execution, and LFAA.
+  - **Sequential Loop:** `agent_tool_loop.py` executes multiple tool calls from a single turn.
+  - **LFAA Integration:** Every command is audited via Local Function Access & Audit.
+
+### Utility AI Services
+- **TitleGenerator (`scribe`):** Generates concise case titles from initial user messages.
+- **MemoryGenerationService (`codex`):** Extracts user preferences and investigation summaries into durable memories.
+- **ReputationService:** Tracks the performance and reliability of Tribunal members and primary agents.
+- **BenchmarkJudge:** Deterministic judge for grading agent tool call payloads.
 
 ---
 

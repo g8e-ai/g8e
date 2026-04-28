@@ -14,7 +14,7 @@
 import { ApiPaths } from '../constants/api-paths.js';
 import { ComponentName } from '../constants/service-client-constants.js';
 
-const LAST_STEP = 4;
+const LAST_STEP = 2;
 
 /**
  * LLM provider catalog is server-injected as a JSON script tag in setup.ejs
@@ -23,19 +23,24 @@ const LAST_STEP = 4;
  */
 function _readCatalog() {
     const el = typeof document !== 'undefined' ? document.getElementById('llm-catalog') : null;
-    if (!el || !el.textContent) return { providers: {}, providerModels: {} };
+    if (!el || !el.textContent) return { providers: {}, providerModels: {}, providerDefaultModels: {} };
     try {
         return JSON.parse(el.textContent);
     } catch {
-        return { providers: {}, providerModels: {} };
+        return { providers: {}, providerModels: {}, providerDefaultModels: {} };
     }
 }
 
-const { providers: LLMProvider, providerModels: PROVIDER_MODELS } = _readCatalog();
+const {
+    providers: LLMProvider,
+    providerModels: PROVIDER_MODELS,
+    providerDefaultModels: PROVIDER_DEFAULT_MODELS,
+} = _readCatalog();
 
 // Wire-protocol provider identifiers are stable canonical strings
 // (see shared/constants/status.json and components/g8ed/constants/ai.js).
 const PROVIDER_KEY_FIELDS = {
+    g8el:      'g8el_endpoint',
     gemini:    'gemini_api_key',
     anthropic: 'anthropic_api_key',
     openai:    'openai_api_key',
@@ -43,39 +48,16 @@ const PROVIDER_KEY_FIELDS = {
 };
 
 const PROVIDER_LABELS = {
+    g8el:      'g8el',
     gemini:    'Gemini',
     anthropic: 'Anthropic',
     openai:    'OpenAI',
     ollama:    'Ollama',
 };
 
-const PROVIDER_DEFAULT_MODELS = {
-    gemini: {
-        primary: PROVIDER_MODELS.gemini?.all?.find(m => m.label === 'Gemini 3.1 Pro')?.id,
-        assistant: PROVIDER_MODELS.gemini?.all?.find(m => m.label === 'Gemini 3 Flash')?.id,
-        lite: PROVIDER_MODELS.gemini?.all?.find(m => m.label === 'Gemini 3.1 Flash Lite')?.id,
-    },
-    anthropic: {
-        primary: PROVIDER_MODELS.anthropic?.all?.find(m => m.label === 'Claude Opus 4.6')?.id,
-        assistant: PROVIDER_MODELS.anthropic?.all?.find(m => m.label === 'Claude Sonnet 4.6')?.id,
-        lite: PROVIDER_MODELS.anthropic?.all?.find(m => m.label === 'Claude Haiku 4.5')?.id,
-    },
-    openai: {
-        primary: PROVIDER_MODELS.openai?.all?.find(m => m.label === 'GPT-5.4 Pro')?.id,
-        assistant: PROVIDER_MODELS.openai?.all?.find(m => m.label === 'GPT-5.4')?.id,
-        lite: PROVIDER_MODELS.openai?.all?.find(m => m.label === 'GPT-5.4 Mini')?.id,
-    },
-    ollama: {
-        primary: PROVIDER_MODELS.ollama?.all?.find(m => m.label === 'Qwen 3.5 122B')?.id,
-        assistant: PROVIDER_MODELS.ollama?.all?.find(m => m.label === 'GLM 5.1')?.id,
-        lite: PROVIDER_MODELS.ollama?.all?.find(m => m.label === 'Llama 3.2 3B')?.id,
-    },
-};
-
 function _modelToProvider(modelValue) {
     for (const [provider, config] of Object.entries(PROVIDER_MODELS)) {
-        const allModels = [...config.primary, ...config.assistant];
-        if (allModels.some(m => m.id === modelValue)) return provider;
+        if ((config.all || []).some(m => m.id === modelValue)) return provider;
     }
     return null;
 }
@@ -94,6 +76,8 @@ function _bufferToBase64url(buf) {
     for (const b of bytes) str += String.fromCharCode(b);
     return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
+
+export const EMPTY_MODEL_PLACEHOLDER = 'Select a Model';
 
 function _prepareCreationOptions(options) {
     return {
@@ -128,7 +112,7 @@ export class SetupPage {
         this._step           = 1;
         this._searchProvider = '';
         this._selectedModels = { primary: '', assistant: '', lite: '' };
-        this._lastProviderKeyChange = null;
+        this._lastProviderEdited = null;
     }
 
     init() {
@@ -139,6 +123,14 @@ export class SetupPage {
         this._initSearchProvider();
         this._initUseGeminiKeyCheckbox();
         this._initModelDropdowns();
+
+        // If g8el is present, it's our first-class default provider.
+        // Triggering a change event on its endpoint will populate the defaults.
+        const g8elEl = document.getElementById('g8el_endpoint');
+        if (g8elEl && g8elEl.value) {
+            this._onProviderKeyChange('g8el');
+        }
+
         this._updateProviderStates();
         this._updateNav();
     }
@@ -183,10 +175,6 @@ export class SetupPage {
         this._updateNav();
         this._clearStatus();
 
-        if (step === 3) {
-            this._updateUseGeminiKeyVisibility();
-        }
-
         if (step === LAST_STEP) {
             this._renderSummary();
         }
@@ -204,69 +192,60 @@ export class SetupPage {
 
         if (backBtn) backBtn.style.display = this._step > 1 ? '' : 'none';
         if (nextBtn) {
-            const show = this._step < 2 || (this._step === 2 && this._isProviderStepReady()) || this._step === 3;
+            const show = this._step === 1 && this._isProviderStepReady();
             nextBtn.style.display = show ? '' : 'none';
         }
     }
 
     _validateStep(step) {
-        if (step === 1) {
-            const email = document.getElementById('account_email').value.trim();
-            if (!email) {
-                this._showStatus('error', 'Email address is required');
-                document.getElementById('account_email').focus();
+        if (step !== 1) return true;
+
+        const active = this._getActiveProviders();
+        if (active.length === 0) {
+            this._showStatus('error', 'Configure at least one provider (API key or Ollama endpoint)');
+            return false;
+        }
+        if (!this._selectedModels.primary) {
+            this._showStatus('error', 'Select a primary model');
+            return false;
+        }
+        if (!this._selectedModels.assistant) {
+            this._showStatus('error', 'Select an assistant model');
+            return false;
+        }
+        if (!this._selectedModels.lite) {
+            this._showStatus('error', 'Select a lite model');
+            return false;
+        }
+
+        const ollamaUrl = document.getElementById('ollama_url')?.value.trim();
+        if (ollamaUrl) {
+            const focusField = () => document.getElementById('ollama_url').focus();
+            if (ollamaUrl.startsWith('https://')) {
+                this._showStatus('error', 'Ollama only supports HTTP, not HTTPS');
+                focusField();
                 return false;
             }
-            const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRe.test(email)) {
-                this._showStatus('error', 'Enter a valid email address');
-                document.getElementById('account_email').focus();
+            const stripped = ollamaUrl.replace(/^http:\/\//i, '');
+            if (stripped.includes('/')) {
+                this._showStatus('error', 'Enter Ollama host as "host:port" (no path, no /v1)');
+                focusField();
+                return false;
+            }
+            if (!/^[A-Za-z0-9._-]+:\d{1,5}$/.test(stripped)) {
+                this._showStatus('error', 'Ollama host must be "host:port" (e.g. 192.168.1.100:11434)');
+                focusField();
                 return false;
             }
         }
 
-        if (step === 2) {
-            const active = this._getActiveProviders();
-            if (active.length === 0) {
-                this._showStatus('error', 'Configure at least one provider (API key or Ollama endpoint)');
+        if (this._searchProvider === 'google') {
+            const searchKey = document.getElementById('search_api_key')?.value.trim();
+            const projectId = document.getElementById('google_project_id')?.value.trim();
+            const appId = document.getElementById('vertex_ai_search_app_id')?.value.trim();
+            if (!searchKey || !projectId || !appId) {
+                this._showStatus('error', 'Complete Google search configuration or select "None"');
                 return false;
-            }
-            const primary = this._selectedModels.primary;
-            if (!primary) {
-                this._showStatus('error', 'Select a primary model');
-                return false;
-            }
-            const assistant = this._selectedModels.assistant;
-            if (!assistant) {
-                this._showStatus('error', 'Select an assistant model');
-                return false;
-            }
-            const lite = this._selectedModels.lite;
-            if (!lite) {
-                this._showStatus('error', 'Select a lite model');
-                return false;
-            }
-            const ollamaUrl = document.getElementById('ollama_url')?.value.trim();
-            if (ollamaUrl) {
-                const focusField = () => document.getElementById('ollama_url').focus();
-                if (ollamaUrl.startsWith('https://')) {
-                    this._showStatus('error', 'Ollama only supports HTTP, not HTTPS');
-                    focusField();
-                    return false;
-                }
-                // host:port form preferred; tolerate legacy "http://" scheme, reject any path (e.g. /v1)
-                const stripped = ollamaUrl.replace(/^http:\/\//i, '');
-                if (stripped.includes('/')) {
-                    this._showStatus('error', 'Enter Ollama host as "host:port" (no path, no /v1)');
-                    focusField();
-                    return false;
-                }
-                // must look like host:port -- non-empty host, then :port (digits), optional nothing else
-                if (!/^[A-Za-z0-9._-]+:\d{1,5}$/.test(stripped)) {
-                    this._showStatus('error', 'Ollama host must be "host:port" (e.g. 192.168.1.100:11434)');
-                    focusField();
-                    return false;
-                }
             }
         }
 
@@ -286,7 +265,7 @@ export class SetupPage {
         });
 
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && this._step >= 2 && this._step <= LAST_STEP - 1) {
+            if (e.key === 'Enter' && this._step === 1 && this._isProviderStepReady()) {
                 const activeEl = document.activeElement;
                 if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'SELECT')) {
                     e.preventDefault();
@@ -316,15 +295,55 @@ export class SetupPage {
     }
 
     _onProviderKeyChange(provider) {
-        this._lastProviderKeyChange = provider;
+        this._lastProviderEdited = provider;
+        this._validateApiKey(provider);
         this._updateProviderStates();
         this._updateModelDropdowns();
         this._updateNav();
     }
 
+    _validateApiKey(provider) {
+        const fieldId = PROVIDER_KEY_FIELDS[provider];
+        if (!fieldId) return;
+        
+        const el = document.getElementById(fieldId);
+        if (!el) return;
+        
+        const val = el.value.trim();
+        const row = el.closest('.wizard-provider-key-row');
+        if (!row) return;
+
+        let hint = '';
+        if (val) {
+            if (provider === 'gemini' && !val.startsWith('AIza')) {
+                hint = 'Key usually starts with "AIza"';
+            } else if (provider === 'openai' && !val.startsWith('sk-')) {
+                hint = 'Key usually starts with "sk-"';
+            } else if (provider === 'anthropic' && !val.startsWith('sk-ant-')) {
+                hint = 'Key usually starts with "sk-ant-"';
+            }
+        }
+
+        let hintEl = row.querySelector('.wizard-provider-key-hint');
+        if (!hintEl && hint) {
+            hintEl = document.createElement('div');
+            hintEl.className = 'wizard-provider-key-hint';
+            hintEl.style.fontSize = '12px';
+            hintEl.style.color = 'var(--accent-blue)';
+            hintEl.style.marginTop = '4px';
+            el.parentNode.parentNode.appendChild(hintEl);
+        }
+        
+        if (hintEl) {
+            hintEl.textContent = hint;
+            hintEl.style.display = hint ? 'block' : 'none';
+        }
+    }
+
     _getActiveProviders() {
         const active = [];
         for (const [provider, fieldId] of Object.entries(PROVIDER_KEY_FIELDS)) {
+            if (!fieldId) continue;
             const el = document.getElementById(fieldId);
             if (el && el.value.trim()) active.push(provider);
         }
@@ -405,10 +424,12 @@ export class SetupPage {
                 const dropdown = document.getElementById(`${role}_model`);
                 const menu = document.getElementById(`${role}_model-menu`);
                 const text = dropdown?.querySelector('.llm-model-dropdown__text');
+                const badge = dropdown?.querySelector('.llm-model-dropdown__recommended-badge');
                 
                 if (dropdown) dropdown.classList.add('disabled');
                 if (menu) menu.innerHTML = '';
                 if (text) text.textContent = 'Enter at least one API key';
+                if (badge) badge.style.display = 'none';
                 this._selectedModels[role] = '';
             });
             return;
@@ -416,13 +437,12 @@ export class SetupPage {
 
         roles.forEach(role => {
             const dropdown = document.getElementById(`${role}_model`);
-            const menu = document.getElementById(`${role}_model-menu`);
             const text = dropdown?.querySelector('.llm-model-dropdown__text');
+            const badge = dropdown?.querySelector('.llm-model-dropdown__recommended-badge');
             
-            if (!dropdown || !menu) return;
+            if (!dropdown) return;
             
             dropdown.classList.remove('disabled');
-            menu.innerHTML = '';
 
             let prevValue = this._selectedModels[role];
             if (prevValue && prevValue !== 'custom') {
@@ -437,10 +457,10 @@ export class SetupPage {
             }
             if (!prevValue) {
                 // If a provider key was just entered and it has sensible defaults, use those
-                if (this._lastProviderKeyChange && active.includes(this._lastProviderKeyChange)) {
-                    const defaults = PROVIDER_DEFAULT_MODELS[this._lastProviderKeyChange];
+                if (this._lastProviderEdited && active.includes(this._lastProviderEdited)) {
+                    const defaults = PROVIDER_DEFAULT_MODELS[this._lastProviderEdited];
                     if (defaults && defaults[role]) {
-                        const defaultModel = PROVIDER_MODELS[this._lastProviderKeyChange]?.all?.find(m => m.id === defaults[role]);
+                        const defaultModel = PROVIDER_MODELS[this._lastProviderEdited]?.all?.find(m => m.id === defaults[role]);
                         if (defaultModel) {
                             prevValue = defaultModel.id;
                             this._selectedModels[role] = prevValue;
@@ -448,93 +468,84 @@ export class SetupPage {
                         }
                     }
                 }
-                
-                // Fall back to first available model if no sensible default was used
-                if (!prevValue) {
-                    for (const provider of active) {
-                        const cfg = PROVIDER_MODELS[provider];
-                        const roleModels = cfg?.[role] || cfg?.all || [];
-                        if (roleModels.length > 0) {
-                            prevValue = roleModels[0].id;
-                            this._selectedModels[role] = prevValue;
-                            if (text) text.textContent = roleModels[0].label;
-                            break;
-                        }
-                    }
-                }
             }
-            if (text && !prevValue) text.textContent = 'Select a Model';
+
+            if (badge) badge.style.display = 'none';
+            // Show recommended badge if the selected model matches the default for its provider
+            const provider = _modelToProvider(prevValue);
+            if (provider && PROVIDER_DEFAULT_MODELS[provider]?.[role] === prevValue) {
+                if (badge) badge.style.display = '';
+            }
+
+            if (text && !prevValue) text.textContent = EMPTY_MODEL_PLACEHOLDER;
             
-            for (const provider of active) {
-                const config = PROVIDER_MODELS[provider];
-                if (!config) continue;
-
-                const providerLabel = PROVIDER_LABELS[provider] || provider;
-                const models = config.all || [];
-                
-                if (models.length === 0) continue;
-
-                const category = document.createElement('div');
-                category.className = 'llm-model-dropdown__category';
-                category.textContent = providerLabel;
-                menu.appendChild(category);
-
-                for (const model of models) {
-                    const option = document.createElement('div');
-                    option.className = 'llm-model-dropdown__option';
-                    option.textContent = model.label;
-                    option.dataset.value = model.id;
-                    option.dataset.provider = provider;
-
-                    if (model.id === prevValue) {
-                        option.classList.add('selected');
-                        if (text) text.textContent = model.label;
-                    }
-
-                    option.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        this._selectModel(role, model.id, model.label);
-                    });
-
-                    menu.appendChild(option);
-                }
-            }
-
-            const customOption = document.createElement('div');
-            customOption.className = 'llm-model-dropdown__option';
-            customOption.textContent = 'Custom...';
-            customOption.dataset.value = 'custom';
-            customOption.dataset.custom = 'true';
-
-            if (prevValue === 'custom') {
-                customOption.classList.add('selected');
-                if (text) text.textContent = this._selectedModels[`${role}CustomLabel`] || 'Custom';
-            }
-
-            customOption.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this._showCustomModelInput(role);
-            });
-
-            menu.appendChild(customOption);
-
-            if (menu.children.length === 0) {
-                if (text) text.textContent = 'No models available';
-                this._selectedModels[role] = '';
-            }
+            this._renderModelDropdownMenu(role, active, prevValue);
         });
     }
 
-    _findModelLabel(role, modelId) {
-        const active = this._getActiveProviders();
-        for (const provider of active) {
+    _renderModelDropdownMenu(role, activeProviders, selectedValue) {
+        const menu = document.getElementById(`${role}_model-menu`);
+        if (!menu) return;
+        
+        menu.innerHTML = '';
+
+        for (const provider of activeProviders) {
             const config = PROVIDER_MODELS[provider];
             if (!config) continue;
+
+            const providerLabel = PROVIDER_LABELS[provider] || provider;
             const models = config.all || [];
-            const model = models.find(m => m.id === modelId);
-            if (model) return model.label;
+            
+            if (models.length === 0) continue;
+
+            const category = document.createElement('div');
+            category.className = 'llm-model-dropdown__category';
+            category.textContent = providerLabel;
+            menu.appendChild(category);
+
+            for (const model of models) {
+                const option = document.createElement('div');
+                option.className = 'llm-model-dropdown__option';
+                option.textContent = model.label;
+                option.dataset.value = model.id;
+                option.dataset.provider = provider;
+
+                if (model.id === selectedValue) {
+                    option.classList.add('selected');
+                }
+
+                option.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this._selectModel(role, model.id, model.label);
+                });
+
+                menu.appendChild(option);
+            }
         }
-        return modelId;
+
+        const customOption = document.createElement('div');
+        customOption.className = 'llm-model-dropdown__option';
+        customOption.textContent = 'Custom...';
+        customOption.dataset.value = 'custom';
+        customOption.dataset.custom = 'true';
+
+        if (selectedValue === 'custom') {
+            customOption.classList.add('selected');
+        }
+
+        customOption.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._showCustomModelInput(role);
+        });
+
+        menu.appendChild(customOption);
+
+        if (menu.children.length === 0) {
+            const dropdown = document.getElementById(`${role}_model`);
+            const text = dropdown?.querySelector('.llm-model-dropdown__text');
+            if (text) text.textContent = 'No models available';
+            this._selectedModels[role] = '';
+        }
     }
 
     _selectModel(role, modelId, label) {
@@ -604,7 +615,9 @@ export class SetupPage {
         select.addEventListener('change', () => {
             this._searchProvider = select.value;
             const googleConfig = document.getElementById('search-config-google');
-            if (googleConfig) googleConfig.classList.toggle('setup-field-hidden', select.value !== 'google');
+            if (googleConfig) {
+                googleConfig.classList.toggle('setup-field-hidden', select.value !== 'google');
+            }
             this._updateUseGeminiKeyVisibility();
         });
     }
@@ -672,9 +685,6 @@ export class SetupPage {
         const assistantModelDisplay = assistantModel === 'custom' ? (this._selectedModels.assistantCustomLabel || 'Custom') : assistantModel;
         const liteModelDisplay = liteModel === 'custom' ? (this._selectedModels.liteCustomLabel || 'Custom') : liteModel;
 
-        const email = document.getElementById('account_email').value.trim();
-        const name = document.getElementById('account_name').value.trim();
-
         const activeProviders = this._getActiveProviders();
         const providerLabels = activeProviders.map(p => PROVIDER_LABELS[p] || p).join(', ') || 'None';
 
@@ -683,7 +693,6 @@ export class SetupPage {
         }[this._searchProvider] || 'None';
 
         const rows = [
-            { icon: 'person',         label: 'Account',         value: name ? `${name} (${email})` : email },
             { icon: 'psychology',     label: 'Providers',       value: providerLabels },
             { icon: 'model_training', label: 'Primary Model',   value: primaryModelDisplay },
             { icon: 'assistant',      label: 'Assistant Model', value: assistantModelDisplay },
@@ -761,6 +770,11 @@ export class SetupPage {
             userSettings.ollama_endpoint = ollamaHost;
         }
 
+        const g8elEndpoint = document.getElementById('g8el_endpoint')?.value.trim();
+        if (g8elEndpoint) {
+            userSettings.g8el_endpoint = g8elEndpoint;
+        }
+
         if (this._searchProvider === 'google') {
             const searchKey = document.getElementById('search_api_key')?.value.trim();
             if (searchKey) userSettings.vertex_search_api_key = searchKey;
@@ -795,16 +809,11 @@ export class SetupPage {
             const btn   = document.getElementById('finish-btn');
             btn.disabled = true;
 
-            const email = document.getElementById('account_email').value.trim();
-            const name  = document.getElementById('account_name').value.trim();
-
             try {
                 this._showStatus('loading', 'Creating account and saving configuration...');
                 const userSettings = this._collectUserSettings();
 
                 const userJson = await this._registerUser({
-                    email,
-                    name,
                     settings: userSettings
                 });
 

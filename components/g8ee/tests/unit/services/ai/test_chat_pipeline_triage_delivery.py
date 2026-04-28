@@ -74,12 +74,13 @@ def _make_pipeline() -> ChatPipelineService:
     svc.g8e_agent = MagicMock()
     svc.g8e_agent.run_with_sse = AsyncMock()
     svc.investigation_service = MagicMock()
-    svc.investigation_service.add_chat_message = AsyncMock()
+    svc.investigation_service.investigation_data_service.add_chat_message = AsyncMock()
     svc.investigation_service.persist_ai_message = AsyncMock(return_value=True)
     svc.memory_generation_service = MagicMock()
     svc.memory_generation_service.update_memory_from_conversation = AsyncMock()
     svc.agent_activity_data_service = MagicMock()
     svc.agent_activity_data_service.record_activity = AsyncMock()
+    svc.triage_agent = MagicMock()
     return svc
 
 def _make_chat_context(triage_result: TriageResult) -> tuple[AgentInputs, AgentStreamState]:
@@ -143,8 +144,10 @@ async def test_run_chat_impl_short_circuits_correctly():
             sentinel_mode=True,
             llm_primary_provider="openai",
             llm_assistant_provider="openai",
+            llm_lite_provider="openai",
             llm_primary_model="main-model",
             llm_assistant_model="assistant-model",
+            llm_lite_model="lite-model",
             user_settings=MagicMock(),
         )
     
@@ -220,8 +223,10 @@ async def test_run_chat_exception_handler_publishes_iteration_failed():
         sentinel_mode=True,
         llm_primary_provider="openai",
         llm_assistant_provider="openai",
+        llm_lite_provider="openai",
         llm_primary_model="main-model",
         llm_assistant_model="assistant-model",
+        llm_lite_model="lite-model",
         _task_manager=mock_task_manager,
         user_settings=user_settings,
         _track_task=True,
@@ -259,9 +264,10 @@ async def test_run_chat_impl_coerces_provider_override_to_enum():
 
     captured: dict = {}
 
-    def _capture(llm_settings, is_assistant=False):
+    def _capture(llm_settings, is_assistant=False, is_lite=False):
         captured["llm"] = llm_settings
         captured["is_assistant"] = is_assistant
+        captured["is_lite"] = is_lite
         return MagicMock()
 
     user_settings = G8eeUserSettings(llm=LLMSettings())
@@ -273,8 +279,10 @@ async def test_run_chat_impl_coerces_provider_override_to_enum():
             sentinel_mode=True,
             llm_primary_provider="openai",
             llm_assistant_provider="anthropic",
+            llm_lite_provider="ollama",
             llm_primary_model="main-model",
             llm_assistant_model="assistant-model",
+            llm_lite_model="lite-model",
             user_settings=user_settings,
         )
 
@@ -285,13 +293,14 @@ async def test_run_chat_impl_coerces_provider_override_to_enum():
     assert resolved_llm.assistant_provider is LLMProvider.ANTHROPIC
 
 
-async def test_prepare_chat_context_passes_assistant_model_to_triage():
-    """Regression: triage runs on the assistant provider, so model_override
-    must be the assistant model — not the primary model.
+async def test_prepare_chat_context_passes_lite_model_to_triage():
+    """Regression: triage runs on the lite provider, so model_override
+    must be the lite model — not the primary model.
 
     Previously chat_pipeline passed llm_primary_model as the triage override,
     causing cross-provider mismatches (e.g. a Claude model name sent to the
     Gemini API endpoint, producing a 404 NOT_FOUND on generateContent).
+    With the lite tier wiring, triage now uses the lite model.
     """
     from app.models.agents.triage import TriageRequest, TriageResult
     from app.models.settings import G8eeUserSettings, LLMSettings
@@ -303,8 +312,8 @@ async def test_prepare_chat_context_passes_assistant_model_to_triage():
     svc.investigation_service.get_enriched_investigation_context = AsyncMock(
         return_value=build_enriched_context(investigation_id="inv-1")
     )
-    svc.investigation_service.update_investigation_raw = AsyncMock()
-    svc.investigation_service.get_chat_messages = AsyncMock(return_value=[])
+    svc.investigation_service.investigation_data_service.update_investigation_raw = AsyncMock()
+    svc.investigation_service.investigation_data_service.get_chat_messages = AsyncMock(return_value=[])
     svc.memory_service = MagicMock()
     svc.memory_service.get_user_memories = AsyncMock(return_value=[])
     svc.memory_service.get_case_memories = AsyncMock(return_value=[])
@@ -312,6 +321,8 @@ async def test_prepare_chat_context_passes_assistant_model_to_triage():
     svc.request_builder.build_system_prompt = MagicMock(return_value="")
     svc.request_builder.format_attachment_parts = MagicMock(return_value=[])
     svc.request_builder.build_contents_from_history = MagicMock(return_value=[])
+    from app.llm.llm_types import PrimaryLLMSettings
+    svc.request_builder.get_generation_config = MagicMock(return_value=PrimaryLLMSettings())
 
     captured: dict = {}
 
@@ -325,7 +336,6 @@ async def test_prepare_chat_context_passes_assistant_model_to_triage():
             intent_summary="ok",
         )
 
-    svc.triage_agent = MagicMock()
     svc.triage_agent.triage = AsyncMock(side_effect=_capture_triage)
 
     g8e_ctx = build_g8e_http_context(
@@ -334,25 +344,21 @@ async def test_prepare_chat_context_passes_assistant_model_to_triage():
     request_settings = G8eeUserSettings(llm=LLMSettings())
 
     with patch("app.services.ai.chat_pipeline.resolve_model", return_value="main-model"):
-        try:
-            model_overrides = ModelOverrideResolver(
-                primary_model="claude-opus-4-6",
-                assistant_model="gemini-3-flash-preview",
-            )
-            await svc._prepare_chat_context(
-                message="hello",
-                g8e_context=g8e_ctx,
-                request_settings=request_settings,
-                attachments=[],
-                sentinel_mode=True,
-                model_overrides=model_overrides,
-            )
-        except Exception:
-            # downstream steps may depend on additional mocked services; the
-            # triage call happens early, which is all this test needs.
-            pass
+        model_overrides = ModelOverrideResolver(
+            primary_model="claude-opus-4-6",
+            assistant_model="gemini-3-flash-preview",
+            lite_model="gemma3:1b",
+        )
+        await svc._prepare_chat_context(
+            message="hello",
+            g8e_context=g8e_ctx,
+            request_settings=request_settings,
+            attachments=[],
+            sentinel_mode=True,
+            model_overrides=model_overrides,
+        )
 
-    assert captured["model_override"] == "gemini-3-flash-preview"
+    assert captured["model_override"] == "gemma3:1b"
 
 
 async def test_run_chat_impl_rejects_unknown_provider_override():
@@ -375,27 +381,30 @@ async def test_run_chat_impl_rejects_unknown_provider_override():
                 sentinel_mode=True,
                 llm_primary_provider="not-a-real-provider",
                 llm_assistant_provider=None,
+                llm_lite_provider=None,
                 llm_primary_model="main-model",
                 llm_assistant_model="assistant-model",
+                llm_lite_model="lite-model",
                 user_settings=user_settings,
             )
 
 
-async def test_run_chat_impl_selects_assistant_provider_for_simple_complexity():
-    """Regression: when triage returns SIMPLE complexity, the assistant provider
+async def test_run_chat_impl_selects_lite_provider_for_simple_complexity():
+    """Regression: when triage returns SIMPLE complexity, the lite provider
     should be used — not the primary provider.
 
     Previously, get_llm_provider was called before triage, so is_assistant always
     defaulted to False, causing cross-provider mismatches (e.g. Gemini model sent
-    to Anthropic endpoint).
+    to Anthropic endpoint). With the lite tier wiring, SIMPLE complexity now uses
+    the lite provider.
     """
     from app.constants import LLMProvider
     from app.models.settings import G8eeUserSettings, LLMSettings
 
     svc = _make_pipeline()
     g8e_ctx = build_g8e_http_context(investigation_id="inv-1", web_session_id="web-1")
-    
-    # Create triage result with SIMPLE complexity (should use assistant provider)
+
+    # Create triage result with SIMPLE complexity (should use lite provider)
     simple_triage_result = TriageResult(
         complexity=TriageComplexityClassification.SIMPLE,
         complexity_confidence=TriageConfidence.HIGH,
@@ -408,9 +417,10 @@ async def test_run_chat_impl_selects_assistant_provider_for_simple_complexity():
 
     captured: dict = {}
 
-    def _capture(llm_settings, is_assistant=False):
+    def _capture(llm_settings, is_assistant=False, is_lite=False):
         captured["llm"] = llm_settings
         captured["is_assistant"] = is_assistant
+        captured["is_lite"] = is_lite
         return MagicMock()
 
     user_settings = G8eeUserSettings(llm=LLMSettings())
@@ -422,10 +432,12 @@ async def test_run_chat_impl_selects_assistant_provider_for_simple_complexity():
             sentinel_mode=True,
             llm_primary_provider="anthropic",
             llm_assistant_provider="gemini",
+            llm_lite_provider="ollama",
             llm_primary_model="claude-opus-4-6",
             llm_assistant_model="gemini-3-flash-preview",
+            llm_lite_model="gemma3:1b",
             user_settings=user_settings,
         )
 
-    # Verify is_assistant=True was passed (assistant provider should be used)
-    assert captured["is_assistant"] is True
+    # Verify is_lite=True was passed (lite provider should be used for SIMPLE complexity)
+    assert captured["is_lite"] is True

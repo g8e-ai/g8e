@@ -25,6 +25,7 @@ from app.constants import (
     InvestigationStatus,
 )
 from app.llm import prompts
+from app.utils.agent_persona_loader import get_agent_persona
 from app.models.agent import OperatorContext
 from app.models.investigations import EnrichedInvestigationContext, ConversationHistoryMessage, ConversationMessageMetadata
 from app.models.memory import InvestigationMemory
@@ -60,7 +61,9 @@ def enriched_investigation():
     msg = ConversationHistoryMessage(
         sender=EventType.EVENT_SOURCE_USER_CHAT,
         content="Help me with my server",
-        metadata=ConversationMessageMetadata()
+        metadata=ConversationMessageMetadata(),
+        prev_hash="0" * 64,
+        entry_hash="0" * 64,
     )
     return EnrichedInvestigationContext(
         case_id="case_123",
@@ -104,7 +107,7 @@ def test_build_learned_context_section_full():
     assert "- Previous investigation: Fixed CPU spike" in section
 
 def test_build_modular_system_prompt_basic(mock_loader, operator_context, enriched_investigation):
-    prompt = prompts.build_modular_system_prompt(
+    prompt, context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
         system_context=operator_context,
         user_memories=[],
@@ -129,7 +132,7 @@ def test_build_modular_system_prompt_loyalty_and_dissent_order(mock_loader, oper
     """The doctrine sections must appear after safety and before mode prompts
     so the agent reads them before any capability/tool guidance.
     """
-    prompt = prompts.build_modular_system_prompt(
+    prompt, context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
         system_context=operator_context,
         user_memories=[],
@@ -228,7 +231,7 @@ def test_build_modular_system_prompt_injects_triage_context(mock_loader, operato
         request_posture=TriageRequestPosture.ESCALATED,
         posture_confidence=TriageConfidence.HIGH,
     )
-    prompt = prompts.build_modular_system_prompt(
+    prompt, context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
         system_context=operator_context,
         user_memories=[],
@@ -248,7 +251,7 @@ def test_build_modular_system_prompt_cloud_operator(mock_loader):
         is_cloud_operator=True
     )
     
-    prompt = prompts.build_modular_system_prompt(
+    prompt, context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
         system_context=cloud_context,
         user_memories=[],
@@ -267,7 +270,7 @@ def test_build_modular_system_prompt_g8ep_cloud_operator(mock_loader):
         is_cloud_operator=True
     )
 
-    prompt = prompts.build_modular_system_prompt(
+    prompt, context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
         system_context=g8ep_context,
         user_memories=[],
@@ -286,7 +289,7 @@ def test_build_modular_system_prompt_cloud_operator_missing_subtype(mock_loader)
         is_cloud_operator=True
     )
 
-    prompt = prompts.build_modular_system_prompt(
+    prompt, context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
         system_context=no_subtype_context,
         user_memories=[],
@@ -306,7 +309,7 @@ def test_build_modular_system_prompt_no_systemd(mock_loader):
         init_system="openrc"
     )
     
-    prompt = prompts.build_modular_system_prompt(
+    prompt, context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
         system_context=no_systemd_context,
         user_memories=[],
@@ -318,7 +321,7 @@ def test_build_modular_system_prompt_no_systemd(mock_loader):
 
 def test_build_modular_system_prompt_sentinel_mode(mock_loader, enriched_investigation):
     enriched_investigation.sentinel_mode = True
-    prompt = prompts.build_modular_system_prompt(
+    prompt, context_sizes = prompts.build_modular_system_prompt(
         operator_bound=False,
         system_context=None,
         user_memories=[],
@@ -361,7 +364,7 @@ def test_build_modular_system_prompt_multi_operator(mock_loader):
         is_cloud_operator=True
     )
     
-    prompt = prompts.build_modular_system_prompt(
+    prompt, context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
         system_context=[operator1, operator2, operator3],
         user_memories=[],
@@ -394,7 +397,7 @@ def test_build_modular_system_prompt_multi_operator(mock_loader):
 
 def test_build_modular_system_prompt_backward_compatibility(mock_loader, operator_context):
     """Test that single OperatorContext still works (backward compatibility)."""
-    prompt = prompts.build_modular_system_prompt(
+    prompt, context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
         system_context=operator_context,  # Single context, not list
         user_memories=[],
@@ -423,7 +426,7 @@ def test_build_modular_system_prompt_mixed_cloud_operator_detection(mock_loader)
     )
     
     # Single system operator - should not be cloud mode
-    prompt = prompts.build_modular_system_prompt(
+    prompt, context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
         system_context=system_operator,
         user_memories=[],
@@ -433,7 +436,7 @@ def test_build_modular_system_prompt_mixed_cloud_operator_detection(mock_loader)
     # This test mainly ensures the function doesn't crash with mixed operators
     
     # Mixed operators - should detect cloud operator
-    prompt = prompts.build_modular_system_prompt(
+    prompt, context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
         system_context=[system_operator, cloud_operator],
         user_memories=[],
@@ -460,7 +463,7 @@ def test_build_modular_system_prompt_mixed_cloud_operator_detection(mock_loader)
 
 @pytest.mark.parametrize("g8e_web_search_available", [True, False])
 def test_operator_not_bound_prompt_requires_acknowledgement(g8e_web_search_available):
-    prompt = prompts.build_modular_system_prompt(
+    prompt, context_sizes = prompts.build_modular_system_prompt(
         operator_bound=False,
         system_context=None,
         user_memories=[],
@@ -484,7 +487,7 @@ def test_operator_not_bound_prompt_requires_acknowledgement(g8e_web_search_avail
 def test_operator_not_bound_prompt_does_not_contradict_capabilities():
     """Capabilities says no tools; execution must not contradict that by
     instructing the agent to just run a command."""
-    prompt = prompts.build_modular_system_prompt(
+    prompt, context_sizes = prompts.build_modular_system_prompt(
         operator_bound=False,
         system_context=None,
         user_memories=[],
@@ -514,7 +517,7 @@ def test_build_modular_system_prompt_with_agent_name_uses_persona_not_core_ident
     instead of CORE_IDENTITY to avoid duplicate role tags."""
     from app.constants import AgentName
     
-    prompt = prompts.build_modular_system_prompt(
+    prompt, context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
         system_context=operator_context,
         user_memories=[],
@@ -538,7 +541,7 @@ def test_build_modular_system_prompt_with_agent_name_uses_persona_not_core_ident
 
 def test_build_modular_system_prompt_without_agent_name_uses_core_identity(mock_loader, operator_context):
     """When agent_name is NOT provided, CORE_IDENTITY should be used as fallback."""
-    prompt = prompts.build_modular_system_prompt(
+    prompt, context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
         system_context=operator_context,
         user_memories=[],
@@ -562,7 +565,7 @@ def test_build_modular_system_prompt_no_duplicate_role_tags_with_agent_name(mock
     CORE_IDENTITY and persona system prompt from both adding role tags."""
     from app.constants import AgentName
     
-    prompt = prompts.build_modular_system_prompt(
+    prompt, context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
         system_context=operator_context,
         user_memories=[],
@@ -583,7 +586,7 @@ def test_build_modular_system_prompt_dash_uses_persona_not_core_identity(mock_lo
     """Dash agent should use its persona system prompt, not CORE_IDENTITY."""
     from app.constants import AgentName
     
-    prompt = prompts.build_modular_system_prompt(
+    prompt, context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
         system_context=operator_context,
         user_memories=[],
@@ -597,3 +600,79 @@ def test_build_modular_system_prompt_dash_uses_persona_not_core_identity(mock_lo
     
     # Should contain Dash-specific content from its persona
     assert "responder" in prompt.lower() or "dash" in prompt.lower()
+
+
+def test_build_modular_system_prompt_dash_includes_full_governance_stack(mock_loader, operator_context):
+    """Dash plays the same game as Sage and must load the full shared stack.
+
+    Per the Tribunal GDD (`.local.dev/dev/tribunal-game.md` §14.1) the
+    GDD's interrogator role ("Dash" in the doc) maps to the **triage**
+    agent. The code's `dash` agent is the fast-path responder that
+    plays the same game as Sage — same safety / loyalty / dissent /
+    mode / tools / response-constraints stack — only the persona block
+    differs. A prior implementation routed Dash through a slim path
+    that stripped this governance bundle; this test pins the unified
+    behaviour so that regression cannot return without being seen.
+    """
+    from app.constants import AgentName
+
+    prompt, _ = prompts.build_modular_system_prompt(
+        operator_bound=True,
+        system_context=operator_context,
+        user_memories=[],
+        case_memories=[],
+        investigation=None,
+        agent_name=AgentName.DASH,
+    )
+
+    # The shared governance stack must be present for Dash, exactly as
+    # it is for Sage.
+    for required in (
+        PromptFile.CORE_SAFETY,
+        PromptFile.CORE_LOYALTY,
+        PromptFile.CORE_DISSENT,
+        PromptFile.SYSTEM_RESPONSE_CONSTRAINTS,
+    ):
+        assert f"Content of {required}" in prompt, (
+            f"Dash must include {required} (same stack as Sage)"
+        )
+    # Mode prompts (capabilities/execution/tools) must be present too —
+    # Dash carries the operator + g8e_web_search tool surface and
+    # therefore needs the same mode-driven scaffolding as Sage.
+    assert "Capabilities prompt" in prompt
+    assert "Execution prompt" in prompt
+    assert "Tools prompt" in prompt
+
+    # Dash uses its persona, not CORE_IDENTITY (that fallback is only
+    # for callers that pass agent_name=None).
+    assert f"Content of {PromptFile.CORE_IDENTITY}" not in prompt
+
+
+def test_build_modular_system_prompt_shared_prefix_precedes_persona(mock_loader, operator_context):
+    """The shared static block (safety/loyalty/dissent + mode prompts +
+    response constraints) must appear before the agent persona so
+    llama-server / vLLM prefix caches can reuse that prefix across
+    every agent that shares the mode (Dash and Sage included).
+    """
+    from app.constants import AgentName
+
+    prompt, _ = prompts.build_modular_system_prompt(
+        operator_bound=True,
+        system_context=operator_context,
+        user_memories=[],
+        case_memories=[],
+        investigation=None,
+        agent_name=AgentName.SAGE,
+    )
+
+    safety_pos = prompt.index(f"Content of {PromptFile.CORE_SAFETY}")
+    dissent_pos = prompt.index(f"Content of {PromptFile.CORE_DISSENT}")
+    capabilities_pos = prompt.index("Capabilities prompt")
+    # Sage persona contains the literal role "reasoner" per agents.json.
+    sage = get_agent_persona("sage")
+    persona_marker = sage.role
+    persona_pos = prompt.index(persona_marker)
+
+    assert safety_pos < dissent_pos < capabilities_pos < persona_pos, (
+        "Shared static block must precede agent persona for prefix-cache reuse"
+    )

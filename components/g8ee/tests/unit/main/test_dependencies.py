@@ -194,17 +194,17 @@ class TestGetG8eeChatTaskManager:
 class TestGetOperatorCache:
     async def test_returns_service_from_app_state(self, mock_request):
         mock_service = MagicMock()
-        mock_request.app.state.operator_cache_aside_service = mock_service
+        mock_request.app.state.cache_aside_service = mock_service
         result = await get_g8ee_operator_cache(mock_request)
         assert result == mock_service
 
     async def test_missing_raises_service_unavailable(self, mock_request):
-        mock_request.app.state.operator_cache_aside_service = None
+        mock_request.app.state.cache_aside_service = None
         with pytest.raises(ServiceUnavailableError, match="Operator cache service not available"):
             await get_g8ee_operator_cache(mock_request)
 
     async def test_none_raises_service_unavailable(self, mock_request):
-        mock_request.app.state.operator_cache_aside_service = None
+        mock_request.app.state.cache_aside_service = None
         with pytest.raises(ServiceUnavailableError, match="Operator cache service not available"):
             await get_g8ee_operator_cache(mock_request)
 

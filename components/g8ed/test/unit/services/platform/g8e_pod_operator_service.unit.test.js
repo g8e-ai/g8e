@@ -41,6 +41,7 @@ function mockFetchOk() {
 describe('G8ENodeOperatorService [UNIT]', () => {
     let operatorService;
     let settingsService;
+    let internalHttpClient;
     let service;
 
     beforeEach(() => {
@@ -52,7 +53,11 @@ describe('G8ENodeOperatorService [UNIT]', () => {
             getOperator: vi.fn(),
         };
         settingsService = makeSettingsService();
-        service = new G8ENodeOperatorService({ settingsService, operatorService });
+        internalHttpClient = {
+            activateG8EPOperator: vi.fn(),
+            relaunchG8EPOperator: vi.fn(),
+        };
+        service = new G8ENodeOperatorService({ settingsService, operatorService, internalHttpClient });
     });
 
     describe('constructor', () => {
@@ -86,151 +91,29 @@ describe('G8ENodeOperatorService [UNIT]', () => {
         });
     });
 
-    describe('launchG8ENodeOperator', () => {
-        it('persists API key to platform_settings then starts supervisor program via XML-RPC', async () => {
-            mockFetchOk();
-
-            await service.launchG8ENodeOperator('sk-test-key');
-
-            expect(settingsService.savePlatformSettings).toHaveBeenCalledWith({
-                g8ep_operator_api_key: 'sk-test-key',
-            });
-            expect(fetch).toHaveBeenCalledWith(
-                expect.stringContaining(':443/RPC2'),
-                expect.objectContaining({
-                    method: 'POST',
-                    body: expect.stringContaining('supervisor.startProcess'),
-                })
-            );
-        });
-
-        it('uses supervisor_port from platform settings', async () => {
-            settingsService.getPlatformSettings.mockResolvedValue({
-                supervisor_port: '9999',
-                internal_auth_token: 'tok',
-            });
-            mockFetchOk();
-
-            await service.launchG8ENodeOperator('sk-test-key');
-
-            expect(fetch).toHaveBeenCalledWith(
-                'http://g8ep:9999/RPC2',
-                expect.any(Object)
-            );
-        });
-
-        it('restarts if start fails (already running)', async () => {
-            fetch
-                .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(XML_ALREADY_STARTED) })
-                .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(XML_OK) })
-                .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(XML_OK) });
-
-            await service.launchG8ENodeOperator('sk-test-key');
-
-            expect(settingsService.savePlatformSettings).toHaveBeenCalledOnce();
-            expect(fetch).toHaveBeenCalledWith(
-                expect.any(String),
-                expect.objectContaining({ body: expect.stringContaining('supervisor.stopProcess') })
-            );
-            expect(fetch).toHaveBeenCalledWith(
-                expect.any(String),
-                expect.objectContaining({ body: expect.stringContaining('supervisor.startProcess') })
-            );
-        });
-
-        it('throws a specific error when savePlatformSettings fails', async () => {
-            settingsService.savePlatformSettings.mockRejectedValue(new Error('g8es write timeout'));
-
-            await expect(service.launchG8ENodeOperator('sk-test-key'))
-                .rejects.toThrow('Failed to persist operator API key to platform_settings: g8es write timeout');
-
-            expect(fetch).not.toHaveBeenCalled();
-        });
-
-        it('reads platform settings once per launch even on restart path', async () => {
-            fetch
-                .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(XML_ALREADY_STARTED) })
-                .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(XML_OK) })
-                .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve(XML_OK) });
-
-            await service.launchG8ENodeOperator('sk-test-key');
-
-            expect(settingsService.getPlatformSettings).toHaveBeenCalledTimes(1);
-        });
-    });
-
     describe('relaunchG8ENodeOperatorForUser', () => {
-        it('stops, resets, persists new key, and launches', async () => {
-            const mockOp = { id: 'op_123', user_id: 'user_123', status: OperatorStatus.ACTIVE };
-            operatorService.queryOperators.mockResolvedValue([mockOp]);
-            operatorService.resetOperator.mockResolvedValue({ success: true, operator: { api_key: 'new-key' } });
-            mockFetchOk();
+        it('delegates to internalHttpClient.relaunchG8EPOperator', async () => {
+            const mockResult = { success: true, operator_id: 'op_123' };
+            internalHttpClient.relaunchG8EPOperator.mockResolvedValue(mockResult);
 
             const result = await service.relaunchG8ENodeOperatorForUser('user_123');
 
-            expect(result.success).toBe(true);
-            expect(fetch).toHaveBeenCalledWith(
-                expect.any(String),
-                expect.objectContaining({ body: expect.stringContaining('supervisor.stopProcess') })
-            );
-            expect(operatorService.resetOperator).toHaveBeenCalledWith('op_123');
-            expect(settingsService.savePlatformSettings).toHaveBeenCalledWith({
-                g8ep_operator_api_key: 'new-key',
-            });
-            expect(fetch).toHaveBeenCalledWith(
-                expect.any(String),
-                expect.objectContaining({ body: expect.stringContaining('supervisor.startProcess') })
-            );
-        });
-
-        it('returns failure when no g8ep slot found', async () => {
-            operatorService.queryOperators.mockResolvedValue([]);
-
-            const result = await service.relaunchG8ENodeOperatorForUser('user_123');
-
-            expect(result.success).toBe(false);
-            expect(result.error).toMatch(/no g8ep operator slot/i);
-        });
-
-        it('returns failure when reset has no API key', async () => {
-            const mockOp = { id: 'op_123', user_id: 'user_123', status: OperatorStatus.ACTIVE };
-            operatorService.queryOperators.mockResolvedValue([mockOp]);
-            operatorService.resetOperator.mockResolvedValue({ success: true, operator: {} });
-            mockFetchOk();
-
-            const result = await service.relaunchG8ENodeOperatorForUser('user_123');
-
-            expect(result.success).toBe(false);
-            expect(result.error).toMatch(/no api key/i);
+            expect(result).toEqual(mockResult);
+            expect(internalHttpClient.relaunchG8EPOperator).toHaveBeenCalledWith('user_123');
         });
     });
 
     describe('activateG8ENodeOperatorForUser', () => {
-        it('skips launch when operator is already active', async () => {
-            const mockOp = { id: 'op_123', user_id: 'user_123', status: OperatorStatus.ACTIVE };
-            operatorService.queryOperators.mockResolvedValue([mockOp]);
+        it('delegates to internalHttpClient.activateG8EPOperator', async () => {
+            internalHttpClient.activateG8EPOperator.mockResolvedValue({ success: true });
 
             await service.activateG8ENodeOperatorForUser('user_123', null, 'sess_1');
 
-            expect(settingsService.savePlatformSettings).not.toHaveBeenCalled();
-            expect(fetch).not.toHaveBeenCalled();
-        });
-
-        it('launches when operator slot is available with API key', async () => {
-            const mockOp = { id: 'op_123', user_id: 'user_123', status: 'AVAILABLE', api_key: 'sk-key' };
-            operatorService.queryOperators.mockResolvedValue([mockOp]);
-            mockFetchOk();
-
-            await service.activateG8ENodeOperatorForUser('user_123', null, 'sess_1');
-
-            expect(settingsService.savePlatformSettings).toHaveBeenCalledWith({
-                g8ep_operator_api_key: 'sk-key',
-            });
-            expect(fetch).toHaveBeenCalled();
+            expect(internalHttpClient.activateG8EPOperator).toHaveBeenCalledWith('user_123');
         });
 
         it('does not throw when activation fails', async () => {
-            operatorService.queryOperators.mockRejectedValue(new Error('DB down'));
+            internalHttpClient.activateG8EPOperator.mockRejectedValue(new Error('Internal Server Error'));
 
             await expect(
                 service.activateG8ENodeOperatorForUser('user_123', null, 'sess_1')

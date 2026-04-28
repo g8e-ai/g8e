@@ -29,6 +29,7 @@ from app.constants.status import ExecutionStatus
 _default_operator = OperatorDocument(
     id="fake-operator",
     user_id="fake-user",
+    operator_session_id="fake-session",
     name="Fake Operator",
 )
 
@@ -58,11 +59,11 @@ class FakeExecutionService:
         self._output = output
         self._resolved_operator = resolved_operator
         self._resolve_error = resolve_error
-        self.g8ed_event_service = g8ed_event_service
-        self.ai_response_analyzer = ai_response_analyzer
+        self._g8ed_event_service = g8ed_event_service
+        self._ai_response_analyzer = ai_response_analyzer
         self.whitelist_validator = whitelist_validator
         self.blacklist_validator = blacklist_validator
-        self.pubsub_service = pubsub_service
+        self._pubsub_service = pubsub_service
         self._envelope = envelope
         self.execute_calls: list[dict] = []
         self.resolve_calls: list[dict] = []
@@ -95,6 +96,30 @@ class FakeExecutionService:
         self.execute_calls.append(kwargs)
         return CommandInternalResult(exit_code=self._exit_code, output=self._output, status=ExecutionStatus.COMPLETED)
 
+    @property
+    def g8ed_event_service(self):
+        return self._g8ed_event_service
+
+    @property
+    def ai_response_analyzer(self):
+        return self._ai_response_analyzer
+
+    @property
+    def operator_data_service(self):
+        return None
+
+    @property
+    def investigation_service(self):
+        return None
+
+    @property
+    def pubsub_service(self):
+        return self._pubsub_service
+
+    @property
+    def approval_service(self):
+        return None
+
     def resolve_target_operator(
         self,
         operator_documents: list[OperatorDocument],
@@ -108,14 +133,28 @@ class FakeExecutionService:
         })
         if self._resolve_error:
             raise self._resolve_error
-        return self._resolved_operator
+        if target_operator and operator_documents:
+            for op in operator_documents:
+                if op.id == target_operator:
+                    return op
+        return operator_documents[0] if operator_documents else self._resolved_operator
 
     def resolve_multiple_operators(
         self,
         operator_documents: list[OperatorDocument],
         target_operators: list[str],
     ) -> list[OperatorDocument]:
-        return [self._resolved_operator]
+        if not operator_documents:
+            return [self._resolved_operator]
+        if "all" in target_operators:
+            return operator_documents
+        resolved = []
+        for target_id in target_operators:
+            for op in operator_documents:
+                if op.id == target_id:
+                    resolved.append(op)
+                    break
+        return resolved if resolved else operator_documents
 
     def build_target_systems_list(self, operator_documents: list[OperatorDocument]) -> list[TargetSystem]:
         return [TargetSystem(

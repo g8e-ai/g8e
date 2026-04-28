@@ -80,7 +80,7 @@ All component images have no build-time dependencies on each other and build in 
 
 **g8es image build:** Uses a multi-stage Dockerfile. The builder stage (`golang:1.26-alpine3.23`) installs UPX, then cross-compiles the `g8e.operator` binary for all 3 target architectures (`linux/amd64`, `linux/arm64`, `linux/386`) with `-trimpath`, `-buildvcs=false`, and UPX `--best --lzma` compression. The platform version is injected via `-ldflags "-X main.version=${VERSION}"` — the `VERSION` build arg defaults to `${G8E_VERSION:-dev}` in compose (`build.sh` exports `G8E_VERSION` from the `VERSION` file). The final stage is a minimal `alpine:3.23` image that copies the amd64 binary to `/usr/local/bin/g8e.operator` (to run g8es itself in `--listen` mode) and all 3 compressed binaries to `/opt/operator-binaries/` (for blob store upload at startup). The Go toolchain is not present in the runtime image.
 
-**g8ee image build:** Multi-stage Dockerfile based on `python:3.13-slim`. The builder stage installs Python dependencies into a prefix which is copied into the final runtime stage.
+**g8ee image build:** Multi-stage Dockerfile based on `python:3.12-slim`. The builder stage installs Python dependencies into a prefix which is copied into the final runtime stage.
 
 **g8ed image build:** Multi-stage Dockerfile based on `node:22-alpine3.23`. The builder stage runs `npm ci` (falling back to `npm install` if no lockfile) and `npm prune --omit=dev`. The final stage installs only curl (for healthchecks) — npm is not present in the runtime image.
 
@@ -160,7 +160,7 @@ g8ee is an internal-only service. g8ed proxies all traffic to it; g8ee is never 
 CMD ["node", "server.js"]
 ```
 
-g8ed is the only service with external ports (`443:443`, `80:80`). It terminates TLS, handles passkey authentication, manages operator WebSocket connections (Gateway Protocol — bridging remote g8eo operators to g8es pub/sub), and serves the browser dashboard. It runs as non-root user `g8e` (UID 1001) with `read_only: true`, `cap_drop: ALL`, and `no-new-privileges: true`. g8ed's `G8ENodeOperatorService` manages the g8ep operator process via Supervisor XML-RPC over the internal network (port 443), not via `docker exec`.
+g8ed is the only service with external ports (`443:443`, `80:80`). It terminates TLS, handles passkey authentication, manages operator WebSocket connections (Gateway Protocol — bridging remote g8eo operators to g8es pub/sub), and serves the browser terminal. It runs as non-root user `g8e` (UID 1001) with `read_only: true`, `cap_drop: ALL`, and `no-new-privileges: true`. g8ed's `G8ENodeOperatorService` manages the g8ep operator process via Supervisor XML-RPC over the internal network (port 443), not via `docker exec`.
 
 **Health check:** `curl -f --cacert /g8es/ca.crt https://localhost/health`.
 
@@ -256,7 +256,7 @@ Works identically with Docker Desktop — no `./g8e` CLI required for first-time
 
 The g8ep container runs `supervisord` as PID 1 with a config written at startup to `/tmp/g8e.operator.conf`. The `[program:operator]` entry has `autostart=true`, so the operator process starts automatically when supervisord launches. Supervisor also exposes `[inet_http_server]` on port 443 (inside the container) with HTTP Basic auth using the internal auth token as the password.
 
-When a user launches a local operator session from the dashboard, g8ed:
+When a user launches a local operator session from the terminal, g8ed:
 1. Persists the operator API key to the `platform_settings` document in g8es.
 2. Calls Supervisor XML-RPC (via the network, not `docker exec`) to start or restart the operator process in g8ep.
 

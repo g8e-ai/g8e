@@ -1,0 +1,11 @@
+Stream the operator binary to one or more SSH hosts and execute it.
+
+This tool allows you to "shotgun" the operator across a fleet of servers in parallel. For each host, the operator will handshake back to g8ed, allowing you to then target those hosts with standard operator tools (run_commands, file_read, etc.).
+
+Args:
+- hosts: A list of hostnames or aliases from the SSH inventory.
+- justification: Why this fleet-wide operation is necessary.
+- concurrency: How many hosts to process at once (default 5).
+- timeout_seconds: How long to allow for the stream and handshake per host (default 300).
+
+Note: This tool requires a follow-up approval from the user. Once approved, you will receive real-time status updates as hosts join the session.

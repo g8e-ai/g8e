@@ -11,16 +11,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from app.errors import ValidationError
-
 """
 g8e Agent — orchestrates the ReAct streaming loop.
 
 Concerns handled here:
-  - Invocation context lifecycle (start / reset via AIToolExecutor) — owned by
-    run_with_sse, NOT by stream_response, because stream_response is an async
-    generator and Python runs its finally block in a different asyncio Context
-    during async-generator cleanup, which makes ContextVar.reset() raise ValueError.
   - Retry loop with backoff around _stream_with_tool_loop
   - ReAct loop: provider turn -> tool calls -> next turn contents -> repeat
   - SSE delivery via run_with_sse (delegates to agent_sse)
@@ -39,6 +33,7 @@ import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable
 
 import app.llm.llm_types as types
+from app.errors import ValidationError
 from app.constants import (
     AGENT_CONTINUE_APPROVAL_TIMEOUT_SECONDS,
     AGENT_MAX_RETRIES,
@@ -121,13 +116,6 @@ class g8eEngine:
 
         Yields StreamChunkFromModel objects. Callers deliver them via HTTP SSE
         (through run_with_sse) or consume them directly for pub/sub delivery.
-
-        IMPORTANT: The invocation context (ContextVar on AIToolService) must be
-        set by the caller before iterating this generator and reset after. This
-        generator must NOT own the ContextVar lifecycle: it is an async generator,
-        so Python runs its finally block in a different asyncio Context during
-        async-generator cleanup, which makes ContextVar.reset() raise ValueError.
-        run_with_sse owns this lifecycle via a normal try/finally.
         """
         case_id = inputs.case_id
         investigation_id = inputs.investigation_id
@@ -235,23 +223,17 @@ class g8eEngine:
             inputs.model_to_use, inputs.agent_mode,
             inputs.sentinel_mode, len(inputs.contents),
         )
-        context_token = self._tool_executor.start_invocation_context(
-            g8e_context=inputs.g8e_context,
-        )
-        try:
-            await deliver_via_sse(
-                stream=self.stream_response(
-                    inputs=inputs,
-                    llm_provider=llm_provider,
-                    g8ed_event_service=g8ed_event_service,
-                ),
+        await deliver_via_sse(
+            stream=self.stream_response(
                 inputs=inputs,
-                state=state,
+                llm_provider=llm_provider,
                 g8ed_event_service=g8ed_event_service,
-                on_iteration_text=on_iteration_text,
-            )
-        finally:
-            self._tool_executor.reset_invocation_context(context_token)
+            ),
+            inputs=inputs,
+            state=state,
+            g8ed_event_service=g8ed_event_service,
+            on_iteration_text=on_iteration_text,
+        )
 
     async def _stream_with_tool_loop(
         self,
@@ -289,114 +271,125 @@ class g8eEngine:
         total_tokens = 0
         grounding_metadata: GroundingMetadata | None = None
         final_finish_reason: str = DEFAULT_FINISH_REASON
+        tool_response_sizes: list[int] = []
 
         loop_turn = 0
-        while True:
-            loop_turn += 1
-            if loop_turn > AGENT_MAX_TOOL_TURNS:
-                if self._approval_service is None:
-                    logger.error(
-                        "[AGENT] Tool loop exceeded max turns (%d) with no approval service available; aborting",
+        try:
+            while True:
+                loop_turn += 1
+                if loop_turn > AGENT_MAX_TOOL_TURNS:
+                    if self._approval_service is None:
+                        logger.error(
+                            "[AGENT] Tool loop exceeded max turns (%d) with no approval service available; aborting",
+                            AGENT_MAX_TOOL_TURNS,
+                        )
+                        break
+
+                    logger.warning(
+                        "[AGENT] Tool loop reached max turns (%d); requesting operator approval to continue",
                         AGENT_MAX_TOOL_TURNS,
                     )
-                    break
-
-                logger.warning(
-                    "[AGENT] Tool loop reached max turns (%d); requesting operator approval to continue",
-                    AGENT_MAX_TOOL_TURNS,
-                )
-                justification = (
-                    f"The AI agent has executed {AGENT_MAX_TOOL_TURNS} tool-use turns "
-                    f"without completing its response. Approve to reset the turn counter "
-                    f"and allow the agent to continue; deny to stop the agent now."
-                )
-                approval_result = await self._approval_service.request_agent_continue_approval(
-                    AgentContinueApprovalRequest(
-                        g8e_context=inputs.g8e_context,
-                        timeout_seconds=AGENT_CONTINUE_APPROVAL_TIMEOUT_SECONDS,
-                        justification=justification,
-                        execution_id=generate_command_execution_id(),
-                        turn_limit=AGENT_MAX_TOOL_TURNS,
-                        turns_completed=loop_turn - 1,
-                        task_id=AITaskId.AGENT_CONTINUE.value,
+                    justification = (
+                        f"The AI agent has executed {AGENT_MAX_TOOL_TURNS} tool-use turns "
+                        f"without completing its response. Approve to reset the turn counter "
+                        f"and allow the agent to continue; deny to stop the agent now."
                     )
-                )
-                if not approval_result.approved:
-                    logger.info(
-                        "[AGENT] Continuation denied (reason=%s); stopping tool loop",
-                        approval_result.reason,
+                    approval_result = await self._approval_service.request_agent_continue_approval(
+                        AgentContinueApprovalRequest(
+                            g8e_context=inputs.g8e_context,
+                            timeout_seconds=AGENT_CONTINUE_APPROVAL_TIMEOUT_SECONDS,
+                            justification=justification,
+                            execution_id=generate_command_execution_id(),
+                            turn_limit=AGENT_MAX_TOOL_TURNS,
+                            turns_completed=loop_turn - 1,
+                            task_id=AITaskId.AGENT_CONTINUE.value,
+                        )
                     )
-                    final_finish_reason = "stopped_by_operator"
-                    break
-                logger.info("[AGENT] Continuation approved; resetting turn counter")
-                loop_turn = 1
-            logger.info(
-                "[AGENT] Tool loop turn %d: contents=%d case_id=%s investigation_id=%s",
-                loop_turn, len(contents), case_id, investigation_id,
-            )
-
-            stream_response = llm_provider.generate_content_stream_primary(
-                model=model_name,
-                contents=contents,
-                primary_llm_settings=generation_config,
-            )
-
-            turn_result_out: list[TurnResult] = []
-            async for chunk in process_provider_turn(stream_response, model_name, turn_result_out):
-                yield chunk
-
-            turn_result = turn_result_out[0]
-
-            total_input_tokens += turn_result.input_tokens
-            total_output_tokens += turn_result.output_tokens
-            total_tokens += turn_result.total_tokens
-            if turn_result.finish_reason:
-                final_finish_reason = turn_result.finish_reason
-
-            if not turn_result.pending_tool_calls:
+                    if not approval_result.approved:
+                        logger.info(
+                            "[AGENT] Continuation denied (reason=%s); stopping tool loop",
+                            approval_result.reason,
+                        )
+                        final_finish_reason = "stopped_by_operator"
+                        break
+                    logger.info("[AGENT] Continuation approved; resetting turn counter")
+                    loop_turn = 1
                 logger.info(
-                    "[AGENT] Tool loop breaking: turn=%d finish_reason=%s "
-                    "input_tokens=%d output_tokens=%d total_tokens=%d",
-                    loop_turn, turn_result.finish_reason,
-                    total_input_tokens, total_output_tokens, total_tokens,
+                    "[AGENT] Tool loop turn %d: contents=%d case_id=%s investigation_id=%s",
+                    loop_turn, len(contents), case_id, investigation_id,
                 )
-                break
 
-            fc_responses_out: list[list[ToolCallResponse]] = []
-            async for chunk in execute_turn_tool_calls(
-                pending_tool_calls=turn_result.pending_tool_calls,
-                tool_executor=self._tool_executor,
-                investigation=inputs.investigation,
-                g8e_context=inputs.g8e_context,
-                result_out=fc_responses_out,
-                request_settings=inputs.request_settings,
-                g8ed_event_service=g8ed_event_service,
-            ):
-                yield chunk
-
-            fc_responses: list[ToolCallResponse] = fc_responses_out[0]
-
-            for resp in fc_responses:
-                if resp.grounding is not None:
-                    grounding_metadata = merge_grounding(grounding_metadata, resp.grounding)
-
-            if turn_result.model_response_parts:
-                consolidated = consolidate_model_parts(
-                    turn_result.model_response_parts, model_name=model_name
+                stream_response = llm_provider.generate_content_stream_primary(
+                    model=model_name,
+                    contents=contents,
+                    primary_llm_settings=generation_config,
                 )
-                contents.append(types.Content(role=types.Role.MODEL, parts=consolidated))
-                logger.info("[AGENT] Added model response: %d parts", len(consolidated))
 
-            tool_response_parts = [
-                types.Part.from_tool_response(
-                    name=r.tool_name,
-                    response=r.flattened_response,
-                    id=r.tool_call_id,
-                )
-                for r in fc_responses
-            ]
-            contents.append(types.Content(role=types.Role.USER, parts=tool_response_parts))
-            logger.info("[AGENT] Added %d tool responses, looping...", len(tool_response_parts))
+                turn_result_out: list[TurnResult] = []
+                async for chunk in process_provider_turn(stream_response, model_name, turn_result_out):
+                    yield chunk
+
+                turn_result = turn_result_out[0]
+
+                total_input_tokens += turn_result.input_tokens
+                total_output_tokens += turn_result.output_tokens
+                total_tokens += turn_result.total_tokens
+                if turn_result.finish_reason:
+                    final_finish_reason = turn_result.finish_reason
+
+                if not turn_result.pending_tool_calls:
+                    logger.info(
+                        "[AGENT] Tool loop breaking: turn=%d finish_reason=%s "
+                        "input_tokens=%d output_tokens=%d total_tokens=%d",
+                        loop_turn, turn_result.finish_reason,
+                        total_input_tokens, total_output_tokens, total_tokens,
+                    )
+                    break
+
+                fc_responses_out: list[list[ToolCallResponse]] = []
+                async for chunk in execute_turn_tool_calls(
+                    pending_tool_calls=turn_result.pending_tool_calls,
+                    tool_executor=self._tool_executor,
+                    investigation=inputs.investigation,
+                    g8e_context=inputs.g8e_context,
+                    result_out=fc_responses_out,
+                    request_settings=inputs.request_settings,
+                    g8ed_event_service=g8ed_event_service,
+                ):
+                    yield chunk
+
+                fc_responses: list[ToolCallResponse] = fc_responses_out[0]
+
+                for resp in fc_responses:
+                    if resp.grounding is not None:
+                        grounding_metadata = merge_grounding(grounding_metadata, resp.grounding)
+
+                if turn_result.model_response_parts:
+                    consolidated = consolidate_model_parts(
+                        turn_result.model_response_parts, model_name=model_name
+                    )
+                    contents.append(types.Content(role=types.Role.MODEL, parts=consolidated))
+                    logger.info("[AGENT] Added model response: %d parts", len(consolidated))
+
+                tool_response_parts = [
+                    types.Part.from_tool_response(
+                        name=r.tool_name,
+                        response=r.flattened_response,
+                        id=r.tool_call_id,
+                    )
+                    for r in fc_responses
+                ]
+                for r in fc_responses:
+                    response_str = str(r.flattened_response)
+                    tool_response_sizes.append(len(response_str))
+                contents.append(types.Content(role=types.Role.USER, parts=tool_response_parts))
+                logger.info("[AGENT] Added %d tool responses, looping...", len(tool_response_parts))
+        except asyncio.CancelledError:
+            logger.info(
+                "[AGENT] Tool loop cancelled at turn %d for investigation %s",
+                loop_turn, investigation_id
+            )
+            raise
 
         if grounding_metadata and grounding_metadata.grounding_used:
             yield StreamChunkFromModel(
@@ -421,5 +414,6 @@ class g8eEngine:
             data=StreamChunkData(
                 finish_reason=final_finish_reason or DEFAULT_FINISH_REASON,
                 token_usage=token_usage,
+                tool_response_sizes=tool_response_sizes if tool_response_sizes else None,
             ),
         )

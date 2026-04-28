@@ -21,7 +21,7 @@ Internal authoring standards for g8e documentation. All contributors must follow
 
 | Change type | Required doc update |
 |-------------|-------------------|
-| New component or service | New component doc under `docs/components/`, entry in `docs/index.md` |
+| New component or service | New component doc under `docs/components/`, entry in `docs/README.md` |
 | New API endpoint or route | Update the relevant component doc |
 | New wire-protocol constant, event, or status | Update `docs/components/` and `shared/` references |
 | New shared model field | Update `shared/models/` description in component docs |
@@ -40,13 +40,13 @@ Internal authoring standards for g8e documentation. All contributors must follow
 
 ```
 docs/
+├── README.md             # Master documentation index — every doc file must have an entry here
 ├── developer.md          # Quick start, infrastructure, code quality rules, project structure
 ├── testing.md            # Testing principles and component test guides
-├── index.md              # Master index — every doc file must have an entry here
 ├── glossary.md           # All platform terminology, alphabetical
 ├── docs-guidelines.md    # This file
 ├── architecture/         # Cross-component internals: storage, security, AI control plane
-├── components/           # Per-component reference: g8eo, g8ee, g8ed, g8es, g8ep
+├── components/           # Per-component reference: g8eo, g8ee, g8ed, g8es, g8el, g8ep
 └── reference/            # External reference material (e.g. MCP protocol spec) and core platform principles
 ```
 
@@ -54,7 +54,7 @@ docs/
 - Component-specific behavior belongs in `docs/components/`.
 - Cross-component data flows, protocols, and architectural decisions belong in `docs/architecture/`.
 - External reference material belongs in `docs/reference/` — never modify files under `docs/reference/`.
-- Every new doc file must be added to `docs/index.md`.
+- Every new doc file must be added to `docs/README.md`.
 - `developer.md` component `#### Tests` subsections contain only code-quality rules (assertion discipline, model/constant usage, prohibited patterns). All test infrastructure — fixtures, mocks, helpers, cleanup, how to run, CI, test-runner containers — belongs exclusively in `testing.md`. Never duplicate these across the two files.
 
 **Authoritative ownership — facts with a single home:**
@@ -138,7 +138,7 @@ One or two sentence summary of what this document covers and who it is for.
 - Link to related docs rather than repeating content.
 - Use relative paths for all internal links — never absolute URLs.
 - When referencing a constant, model, or field defined in `shared/`, link to the relevant JSON file.
-- `docs/index.md` is the entry point — every doc must be reachable from it.
+- `docs/README.md` is the entry point — every doc must be reachable from it.
 - **Single source of truth enforcement:** when updating any doc, scan for content that properly belongs in a different doc and move it — do not leave duplicated content in both places. Add a cross-link from the source to the authoritative location after moving.
 
 ---

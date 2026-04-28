@@ -265,3 +265,6 @@ Thumbs.db
 
 # project / local-only docs
 docs/.projects
+
+# models
+components/g8ee/models

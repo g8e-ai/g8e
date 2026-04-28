@@ -42,7 +42,8 @@ def create_real_llm_response(text: str | None) -> GenerateContentResponse:
 def mock_settings():
     from app.models.settings import G8eeUserSettings, LLMSettings
     llm = LLMSettings()
-    llm.assistant_model = "lite-model"
+    llm.lite_provider = "ollama"
+    llm.lite_model = "lite-model"
     return G8eeUserSettings(llm=llm)
 
 

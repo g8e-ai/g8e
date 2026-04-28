@@ -40,8 +40,10 @@ from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.settings import CommandValidationSettings, G8eeUserSettings
 from app.models.tool_results import CommandConstraintsResult
+from app.models.whitelist import CommandValidationResult, WhitelistedCommand
 from app.services.ai.tool_service import AIToolService
-from app.utils.whitelist_validator import CommandWhitelistValidator, CommandValidationResult
+from app.services.ai.tools import get_command_constraints as gcc_tool
+from app.utils.whitelist_validator import CommandWhitelistValidator
 from app.utils.blacklist_validator import CommandBlacklistValidator, CommandBlacklistResult
 
 pytestmark = [pytest.mark.unit]
@@ -115,9 +117,9 @@ def mock_whitelist_validator():
         command="ping",
     ))
     validator.get_available_commands_with_metadata = MagicMock(return_value=[
-        "cat",
-        "ls",
-        "ping",
+        WhitelistedCommand(command="cat"),
+        WhitelistedCommand(command="ls"),
+        WhitelistedCommand(command="ping"),
     ])
     return validator
 
@@ -143,6 +145,14 @@ def mock_blacklist_validator():
 
 
 @pytest.fixture
+def mock_auto_approved_validator():
+    """Mock auto-approved validator with sample platform defaults."""
+    validator = MagicMock()
+    validator.get_auto_approved_command_names = MagicMock(return_value=["uptime", "date", "whoami"])
+    return validator
+
+
+@pytest.fixture
 def mock_g8e_context():
     """Mock G8eHttpContext."""
     return MagicMock(spec=G8eHttpContext)
@@ -151,7 +161,9 @@ def mock_g8e_context():
 @pytest.fixture
 def mock_investigation():
     """Mock EnrichedInvestigationContext."""
-    return MagicMock(spec=EnrichedInvestigationContext)
+    investigation = MagicMock(spec=EnrichedInvestigationContext)
+    investigation.operator_documents = []
+    return investigation
 
 
 @pytest.fixture
@@ -160,6 +172,16 @@ def mock_request_settings():
     settings = MagicMock(spec=G8eeUserSettings)
     settings.operator_context = MagicMock(spec=OperatorContext)
     settings.operator_context.os = "linux"
+    
+    # Needs a mock command_validation object
+    from app.models.settings import CommandValidationSettings
+    cv_settings = MagicMock(spec=CommandValidationSettings)
+    cv_settings.enable_whitelisting = False
+    cv_settings.enable_blacklisting = False
+    cv_settings.enable_auto_approve = False
+    cv_settings.whitelisted_commands = ""
+    settings.command_validation = cv_settings
+    
     return settings
 
 
@@ -175,33 +197,45 @@ def mock_investigation_service():
     return AsyncMock()
 
 
+@pytest.fixture
+def tool_service_builder():
+    """Factory to create AIToolService using builder pattern."""
+    from tests.fakes.tool_helpers import create_tool_service_fake
+
+    def _build(user_settings=None, whitelist_validator=None, blacklist_validator=None, auto_approved_validator=None):
+        return create_tool_service_fake(
+            auto_approve=True,
+            whitelist_validator=whitelist_validator,
+            blacklist_validator=blacklist_validator,
+            auto_approved_validator=auto_approved_validator,
+        )
+    return _build
+
+
 # =============================================================================
 # TESTS: _handle_get_command_constraints
 # =============================================================================
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_handle_get_command_constraints_both_disabled(
-    mock_user_settings_disabled,
-    mock_operator_command_service,
-    mock_investigation_service,
+    tool_service_builder,
+    mock_whitelist_validator,
+    mock_blacklist_validator,
     mock_g8e_context,
     mock_investigation,
     mock_request_settings,
-    mock_whitelist_validator,
-    mock_blacklist_validator,
 ):
     """Test handler returns empty constraint data when both validations disabled."""
-    tool_service = AIToolService(
-        operator_command_service=mock_operator_command_service,
-        investigation_service=mock_investigation_service,
-        web_search_provider=None,
-        platform_settings=None,
-        user_settings=mock_user_settings_disabled,
+    mock_request_settings.command_validation.enable_whitelisting = False
+    mock_request_settings.command_validation.enable_blacklisting = False
+
+    tool_service = tool_service_builder(
         whitelist_validator=mock_whitelist_validator,
-        blacklist_validator=mock_blacklist_validator,
+        blacklist_validator=mock_blacklist_validator
     )
 
-    result = await tool_service._handle_get_command_constraints(
+    result = await gcc_tool.handle(
+        tool_service,
         tool_args={},
         investigation=mock_investigation,
         g8e_context=mock_g8e_context,
@@ -222,27 +256,24 @@ async def test_handle_get_command_constraints_both_disabled(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_handle_get_command_constraints_whitelist_only(
-    mock_user_settings_whitelist_only,
-    mock_operator_command_service,
-    mock_investigation_service,
+    tool_service_builder,
+    mock_whitelist_validator,
+    mock_blacklist_validator,
     mock_g8e_context,
     mock_investigation,
     mock_request_settings,
-    mock_whitelist_validator,
-    mock_blacklist_validator,
 ):
     """Test handler returns whitelist data when whitelisting enabled."""
-    tool_service = AIToolService(
-        operator_command_service=mock_operator_command_service,
-        investigation_service=mock_investigation_service,
-        web_search_provider=None,
-        platform_settings=None,
-        user_settings=mock_user_settings_whitelist_only,
+    mock_request_settings.command_validation.enable_whitelisting = True
+    mock_request_settings.command_validation.enable_blacklisting = False
+
+    tool_service = tool_service_builder(
         whitelist_validator=mock_whitelist_validator,
-        blacklist_validator=mock_blacklist_validator,
+        blacklist_validator=mock_blacklist_validator
     )
 
-    result = await tool_service._handle_get_command_constraints(
+    result = await gcc_tool.handle(
+        tool_service,
         tool_args={},
         investigation=mock_investigation,
         g8e_context=mock_g8e_context,
@@ -254,7 +285,7 @@ async def test_handle_get_command_constraints_whitelist_only(
     assert result.success is True
     assert result.whitelisting_enabled is True
     assert result.blacklisting_enabled is False
-    assert sorted(result.whitelisted_commands) == ["cat", "ls", "ping"]
+    assert sorted([cmd.command for cmd in result.whitelisted_commands]) == ["cat", "ls", "ping"]
     assert result.global_forbidden_patterns == [r"rm -rf", r"format"]
     assert result.global_forbidden_directories == ["/etc", "/boot"]
     assert result.blacklisted_commands == []
@@ -263,27 +294,24 @@ async def test_handle_get_command_constraints_whitelist_only(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_handle_get_command_constraints_blacklist_only(
-    mock_user_settings_blacklist_only,
-    mock_operator_command_service,
-    mock_investigation_service,
+    tool_service_builder,
+    mock_whitelist_validator,
+    mock_blacklist_validator,
     mock_g8e_context,
     mock_investigation,
     mock_request_settings,
-    mock_whitelist_validator,
-    mock_blacklist_validator,
 ):
     """Test handler returns blacklist data when blacklisting enabled."""
-    tool_service = AIToolService(
-        operator_command_service=mock_operator_command_service,
-        investigation_service=mock_investigation_service,
-        web_search_provider=None,
-        platform_settings=None,
-        user_settings=mock_user_settings_blacklist_only,
+    mock_request_settings.command_validation.enable_whitelisting = False
+    mock_request_settings.command_validation.enable_blacklisting = True
+
+    tool_service = tool_service_builder(
         whitelist_validator=mock_whitelist_validator,
-        blacklist_validator=mock_blacklist_validator,
+        blacklist_validator=mock_blacklist_validator
     )
 
-    result = await tool_service._handle_get_command_constraints(
+    result = await gcc_tool.handle(
+        tool_service,
         tool_args={},
         investigation=mock_investigation,
         g8e_context=mock_g8e_context,
@@ -308,27 +336,24 @@ async def test_handle_get_command_constraints_blacklist_only(
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_handle_get_command_constraints_both_enabled(
-    mock_user_settings_both,
-    mock_operator_command_service,
-    mock_investigation_service,
+    tool_service_builder,
+    mock_whitelist_validator,
+    mock_blacklist_validator,
     mock_g8e_context,
     mock_investigation,
     mock_request_settings,
-    mock_whitelist_validator,
-    mock_blacklist_validator,
 ):
     """Test handler returns both whitelist and blacklist data when both enabled."""
-    tool_service = AIToolService(
-        operator_command_service=mock_operator_command_service,
-        investigation_service=mock_investigation_service,
-        web_search_provider=None,
-        platform_settings=None,
-        user_settings=mock_user_settings_both,
+    mock_request_settings.command_validation.enable_whitelisting = True
+    mock_request_settings.command_validation.enable_blacklisting = True
+
+    tool_service = tool_service_builder(
         whitelist_validator=mock_whitelist_validator,
-        blacklist_validator=mock_blacklist_validator,
+        blacklist_validator=mock_blacklist_validator
     )
 
-    result = await tool_service._handle_get_command_constraints(
+    result = await gcc_tool.handle(
+        tool_service,
         tool_args={},
         investigation=mock_investigation,
         g8e_context=mock_g8e_context,
@@ -340,10 +365,195 @@ async def test_handle_get_command_constraints_both_enabled(
     assert result.success is True
     assert result.whitelisting_enabled is True
     assert result.blacklisting_enabled is True
-    assert sorted(result.whitelisted_commands) == ["cat", "ls", "ping"]
+    assert sorted([cmd.command for cmd in result.whitelisted_commands]) == ["cat", "ls", "ping"]
     assert len(result.blacklisted_commands) == 2
     assert "Whitelisting ENABLED" in result.message
     assert "Blacklisting ENABLED" in result.message
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_handle_get_command_constraints_csv_override(
+    tool_service_builder,
+    mock_whitelist_validator,
+    mock_blacklist_validator,
+    mock_g8e_context,
+    mock_investigation,
+    mock_request_settings,
+):
+    """Test handler returns CSV override commands when whitelisted_commands CSV is set."""
+    mock_request_settings.command_validation.enable_whitelisting = True
+    mock_request_settings.command_validation.enable_blacklisting = False
+    mock_request_settings.command_validation.whitelisted_commands = "ps,whoami,date"
+
+    tool_service = tool_service_builder(
+        whitelist_validator=mock_whitelist_validator,
+        blacklist_validator=mock_blacklist_validator
+    )
+
+    result = await gcc_tool.handle(
+        tool_service,
+        tool_args={},
+        investigation=mock_investigation,
+        g8e_context=mock_g8e_context,
+        request_settings=mock_request_settings,
+        execution_id=None,
+    )
+
+    assert isinstance(result, CommandConstraintsResult)
+    assert result.success is True
+    assert result.whitelisting_enabled is True
+    assert result.blacklisting_enabled is False
+    # Should return CSV commands, not JSON validator commands
+    assert len(result.whitelisted_commands) == 3
+    assert result.whitelisted_commands == [
+        WhitelistedCommand(command="ps"),
+        WhitelistedCommand(command="whoami"),
+        WhitelistedCommand(command="date"),
+    ]
+    assert result.blacklisted_commands == []
+    assert "Whitelisting ENABLED" in result.message
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_handle_get_command_constraints_auto_approve_platform_only(
+    tool_service_builder,
+    mock_auto_approved_validator,
+    mock_g8e_context,
+    mock_investigation,
+    mock_request_settings,
+):
+    """Test auto_approved_sources when only platform JSON sources are present."""
+    mock_request_settings.command_validation.enable_whitelisting = False
+    mock_request_settings.command_validation.enable_blacklisting = False
+    mock_request_settings.command_validation.enable_auto_approve = True
+    mock_request_settings.command_validation.auto_approved_commands = ""
+
+    tool_service = tool_service_builder(auto_approved_validator=mock_auto_approved_validator)
+
+    result = await gcc_tool.handle(
+        tool_service,
+        tool_args={},
+        investigation=mock_investigation,
+        g8e_context=mock_g8e_context,
+        request_settings=mock_request_settings,
+        execution_id=None,
+    )
+
+    assert isinstance(result, CommandConstraintsResult)
+    assert result.auto_approve_enabled is True
+    assert result.auto_approved_commands == ["uptime", "date", "whoami"]
+    assert len(result.auto_approved_sources) == 3
+    for source in result.auto_approved_sources:
+        assert source["source"] == "platform"
+    assert "3 platform defaults" in result.message
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_handle_get_command_constraints_auto_approve_user_only(
+    tool_service_builder,
+    mock_auto_approved_validator,
+    mock_g8e_context,
+    mock_investigation,
+    mock_request_settings,
+):
+    """Test auto_approved_sources when only user CSV sources are present."""
+    mock_request_settings.command_validation.enable_whitelisting = False
+    mock_request_settings.command_validation.enable_blacklisting = False
+    mock_request_settings.command_validation.enable_auto_approve = True
+    mock_request_settings.command_validation.auto_approved_commands = "ps,df,free"
+
+    tool_service = tool_service_builder(auto_approved_validator=mock_auto_approved_validator)
+
+    result = await gcc_tool.handle(
+        tool_service,
+        tool_args={},
+        investigation=mock_investigation,
+        g8e_context=mock_g8e_context,
+        request_settings=mock_request_settings,
+        execution_id=None,
+    )
+
+    assert isinstance(result, CommandConstraintsResult)
+    assert result.auto_approve_enabled is True
+    assert result.auto_approved_commands == ["uptime", "date", "whoami", "ps", "df", "free"]
+    assert len(result.auto_approved_sources) == 6
+    platform_sources = [s for s in result.auto_approved_sources if s["source"] == "platform"]
+    user_sources = [s for s in result.auto_approved_sources if s["source"] == "user"]
+    assert len(platform_sources) == 3
+    assert len(user_sources) == 3
+    assert "3 platform defaults + 3 user-configured" in result.message
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_handle_get_command_constraints_auto_approve_csv_override(
+    tool_service_builder,
+    mock_auto_approved_validator,
+    mock_g8e_context,
+    mock_investigation,
+    mock_request_settings,
+):
+    """Test CSV override takes precedence when command exists in both JSON and CSV."""
+    mock_request_settings.command_validation.enable_whitelisting = False
+    mock_request_settings.command_validation.enable_blacklisting = False
+    mock_request_settings.command_validation.enable_auto_approve = True
+    mock_request_settings.command_validation.auto_approved_commands = "uptime,top"
+
+    tool_service = tool_service_builder(auto_approved_validator=mock_auto_approved_validator)
+
+    result = await gcc_tool.handle(
+        tool_service,
+        tool_args={},
+        investigation=mock_investigation,
+        g8e_context=mock_g8e_context,
+        request_settings=mock_request_settings,
+        execution_id=None,
+    )
+
+    assert isinstance(result, CommandConstraintsResult)
+    assert result.auto_approve_enabled is True
+    assert result.auto_approved_commands == ["uptime", "date", "whoami", "top"]
+    assert len(result.auto_approved_sources) == 4
+
+    uptime_source = next(s for s in result.auto_approved_sources if s["command"] == "uptime")
+    assert uptime_source["source"] == "user"
+
+    date_source = next(s for s in result.auto_approved_sources if s["command"] == "date")
+    assert date_source["source"] == "platform"
+
+    top_source = next(s for s in result.auto_approved_sources if s["command"] == "top")
+    assert top_source["source"] == "user"
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_handle_get_command_constraints_auto_approve_disabled(
+    tool_service_builder,
+    mock_auto_approved_validator,
+    mock_g8e_context,
+    mock_investigation,
+    mock_request_settings,
+):
+    """Test auto_approved_sources is empty when auto_approve is disabled."""
+    mock_request_settings.command_validation.enable_whitelisting = False
+    mock_request_settings.command_validation.enable_blacklisting = False
+    mock_request_settings.command_validation.enable_auto_approve = False
+    mock_request_settings.command_validation.auto_approved_commands = "ps,df"
+
+    tool_service = tool_service_builder(auto_approved_validator=mock_auto_approved_validator)
+
+    result = await gcc_tool.handle(
+        tool_service,
+        tool_args={},
+        investigation=mock_investigation,
+        g8e_context=mock_g8e_context,
+        request_settings=mock_request_settings,
+        execution_id=None,
+    )
+
+    assert isinstance(result, CommandConstraintsResult)
+    assert result.auto_approve_enabled is False
+    assert result.auto_approved_commands == []
+    assert result.auto_approved_sources == []
+
 
 # =============================================================================
 # TESTS: CommandBlacklistValidator Public Methods
@@ -419,7 +629,10 @@ def test_command_constraints_result_serialization():
         success=True,
         whitelisting_enabled=True,
         blacklisting_enabled=False,
-        whitelisted_commands=["ping", "ls"],
+        whitelisted_commands=[
+            WhitelistedCommand(command="ping"),
+            WhitelistedCommand(command="ls"),
+        ],
         blacklisted_commands=[],
         blacklisted_substrings=[],
         blacklisted_patterns=[],
@@ -433,7 +646,8 @@ def test_command_constraints_result_serialization():
     assert data["success"] is True
     assert data["whitelisting_enabled"] is True
     assert data["blacklisting_enabled"] is False
-    assert data["whitelisted_commands"] == ["ping", "ls"]
+    assert data["whitelisted_commands"][0]["command"] == "ping"
+    assert data["whitelisted_commands"][1]["command"] == "ls"
     assert data["message"] == "Whitelisting ENABLED"
 
 
@@ -444,7 +658,10 @@ def test_command_constraints_result_deserialization():
         "success": True,
         "whitelisting_enabled": True,
         "blacklisting_enabled": False,
-        "whitelisted_commands": ["ping", "ls"],
+        "whitelisted_commands": [
+            {"command": "ping"},
+            {"command": "ls"},
+        ],
         "blacklisted_commands": [],
         "blacklisted_substrings": [],
         "blacklisted_patterns": [],
@@ -458,7 +675,8 @@ def test_command_constraints_result_deserialization():
     assert result.success is True
     assert result.whitelisting_enabled is True
     assert result.blacklisting_enabled is False
-    assert result.whitelisted_commands == ["ping", "ls"]
+    assert result.whitelisted_commands[0].command == "ping"
+    assert result.whitelisted_commands[1].command == "ls"
     assert result.message == "Whitelisting ENABLED"
 
 
@@ -467,19 +685,14 @@ def test_command_constraints_result_deserialization():
 # =============================================================================
 
 async def test_get_tools_includes_get_command_constraints(
-    mock_user_settings_both,
+    tool_service_builder,
     mock_whitelist_validator,
     mock_blacklist_validator,
 ):
     """Test get_tools includes GET_COMMAND_CONSTRAINTS declaration in all modes."""
-    tool_service = AIToolService(
-        operator_command_service=MagicMock(),
-        investigation_service=MagicMock(),
-        web_search_provider=None,
-        platform_settings=None,
-        user_settings=mock_user_settings_both,
+    tool_service = tool_service_builder(
         whitelist_validator=mock_whitelist_validator,
-        blacklist_validator=mock_blacklist_validator,
+        blacklist_validator=mock_blacklist_validator
     )
     
     # Test in operator_bound mode

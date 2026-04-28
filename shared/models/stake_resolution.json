@@ -1,0 +1,89 @@
+{
+  "_comment": "Canonical StakeResolution document shape. One row per (tribunal_command_id, agent_id) pair, written by the reputation_service post-verdict. Records the outcome scalar fed into the agent's EMA scalar update and any slash tier applied (GDD §5-§6, §14.5). The document id is the composite `{tribunal_command_id}:{agent_id}` which gives write-once idempotency: replaying the same verdict cannot double-resolve.",
+  "_authority": "g8ee (Python — StakeResolution in app/models/reputation.py)",
+  "_consumers": [
+    "g8ee (reputation_service — writes one row per affected agent after each verdict)",
+    "g8ee (peer-auditor replay — recomputes EMA trajectory from the resolution log)",
+    "g8ee (ops/debug — grounding source for 'why did agent X's scalar change')"
+  ],
+
+  "stake_resolution": {
+    "_description": "Per-agent stake resolution record tied to a specific tribunal verdict. Append-only; never revised. Document id is the composite key `{tribunal_command_id}:{agent_id}` so that replaying the same verdict is a no-op.",
+
+    "core_identity": {
+      "id": {
+        "type": "string",
+        "required": true,
+        "description": "Composite document id: `{tribunal_command_id}:{agent_id}`. Write-once idempotency guard."
+      }
+    },
+
+    "binding": {
+      "investigation_id": {
+        "type": "string",
+        "required": true,
+        "description": "Investigation that produced the verdict this resolution is attributed to."
+      },
+      "tribunal_command_id": {
+        "type": "string",
+        "required": true,
+        "description": "TribunalCommand whose outcome drove this stake resolution."
+      },
+      "agent_id": {
+        "type": "string",
+        "required": true,
+        "description": "Stable persona id whose scalar was updated (axiom, concord, variance, pragma, nemesis, sage, triage, auditor)."
+      }
+    },
+
+    "outcome": {
+      "outcome_score": {
+        "type": "number",
+        "required": true,
+        "minimum": 0.0,
+        "maximum": 1.0,
+        "description": "Scalar in [0.0, 1.0] fed into the agent's EMA update. 1.0 = best outcome for this persona given the verdict; 0.0 = worst."
+      },
+      "rationale": {
+        "type": "string",
+        "required": true,
+        "description": "Short machine-readable reason code (e.g. `auditor_passed`, `verification_failed_revised`, `nemesis_abstain_clean`). Grounds the scalar so peer auditors can replay."
+      },
+      "slash_tier": {
+        "type": "integer",
+        "required": false,
+        "enum": [1, 2, 3],
+        "description": "Slash tier applied (1 = correlated/catastrophic, 2 = provable fault, 3 = liveness). Null when no slash was applied."
+      },
+      "scalar_before": {
+        "type": "number",
+        "required": true,
+        "minimum": 0.0,
+        "maximum": 1.0,
+        "description": "Agent's EMA scalar prior to this resolution."
+      },
+      "scalar_after": {
+        "type": "number",
+        "required": true,
+        "minimum": 0.0,
+        "maximum": 1.0,
+        "description": "Agent's EMA scalar after applying ema_update(outcome_score) and any slash-tier adjustment."
+      },
+      "half_life": {
+        "type": "integer",
+        "required": true,
+        "minimum": 1,
+        "description": "EMA half-life used for this resolution (number of resolutions for the smoothing weight to halve). Captured for replayability when the env default rotates."
+      }
+    },
+
+    "timestamps": {
+      "created_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true,
+        "description": "When the resolution was written (UTC, ISO 8601 with Z suffix)."
+      }
+    }
+  }
+}

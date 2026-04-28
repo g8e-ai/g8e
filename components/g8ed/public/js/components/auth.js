@@ -625,20 +625,20 @@ export class AuthManager {
         form.className = 'auth-modal-form';
         form.addEventListener('submit', (e) => e.preventDefault());
 
-        const emailGroup = document.createElement('div');
-        emailGroup.className = 'auth-input-group';
-        const emailLabel = document.createElement('label');
-        emailLabel.setAttribute('for', 'passkey-login-email');
-        emailLabel.textContent = 'Email';
-        emailGroup.appendChild(emailLabel);
         const emailInput = document.createElement('input');
-        emailInput.type = 'email';
+        emailInput.type = 'hidden';
         emailInput.id = 'passkey-login-email';
         emailInput.name = 'passkey-login-email';
-        emailInput.placeholder = 'you@example.com';
-        emailInput.required = true;
-        emailGroup.appendChild(emailInput);
-        form.appendChild(emailGroup);
+        emailInput.value = 'superadmin@g8e.local';
+        form.appendChild(emailInput);
+
+        const infoText = document.createElement('p');
+        infoText.className = 'auth-modal-info';
+        infoText.style.marginBottom = '20px';
+        infoText.style.textAlign = 'center';
+        infoText.style.color = 'var(--text-secondary)';
+        infoText.textContent = 'Sign in as superadmin@g8e.local using your passkey.';
+        form.appendChild(infoText);
 
         const errorEl = document.createElement('div');
         errorEl.className = 'auth-modal-error hidden';
@@ -650,11 +650,6 @@ export class AuthManager {
         submitBtn.textContent = 'Sign In with Passkey';
         submitBtn.addEventListener('click', async () => {
             const email = emailInput.value.trim();
-            if (!email) {
-                errorEl.textContent = 'Email is required.';
-                errorEl.classList.remove('hidden');
-                return;
-            }
 
             submitBtn.disabled = true;
             submitBtn.textContent = 'Signing in...';
@@ -734,35 +729,27 @@ export class AuthManager {
         form.className = 'auth-modal-form';
         form.addEventListener('submit', (e) => e.preventDefault());
 
-        const nameGroup = document.createElement('div');
-        nameGroup.className = 'auth-input-group';
-        const nameLabel = document.createElement('label');
-        nameLabel.setAttribute('for', 'passkey-register-name');
-        nameLabel.textContent = 'Name';
-        nameGroup.appendChild(nameLabel);
         const nameInput = document.createElement('input');
-        nameInput.type = 'text';
+        nameInput.type = 'hidden';
         nameInput.id = 'passkey-register-name';
         nameInput.name = 'passkey-register-name';
-        nameInput.placeholder = 'Your name';
-        nameInput.required = true;
-        nameGroup.appendChild(nameInput);
-        form.appendChild(nameGroup);
+        nameInput.value = 'Super Admin';
+        form.appendChild(nameInput);
 
-        const emailGroup = document.createElement('div');
-        emailGroup.className = 'auth-input-group';
-        const emailLabel = document.createElement('label');
-        emailLabel.setAttribute('for', 'passkey-register-email');
-        emailLabel.textContent = 'Email';
-        emailGroup.appendChild(emailLabel);
         const emailInput = document.createElement('input');
-        emailInput.type = 'email';
+        emailInput.type = 'hidden';
         emailInput.id = 'passkey-register-email';
         emailInput.name = 'passkey-register-email';
-        emailInput.placeholder = 'you@example.com';
-        emailInput.required = true;
-        emailGroup.appendChild(emailInput);
-        form.appendChild(emailGroup);
+        emailInput.value = 'superadmin@g8e.local';
+        form.appendChild(emailInput);
+
+        const infoText = document.createElement('p');
+        infoText.className = 'auth-modal-info';
+        infoText.style.marginBottom = '20px';
+        infoText.style.textAlign = 'center';
+        infoText.style.color = 'var(--text-secondary)';
+        infoText.textContent = 'An administrative account superadmin@g8e.local will be created.';
+        form.appendChild(infoText);
 
         const errorEl = document.createElement('div');
         errorEl.className = 'auth-modal-error hidden';
@@ -771,7 +758,7 @@ export class AuthManager {
         const submitBtn = document.createElement('button');
         submitBtn.type = 'submit';
         submitBtn.className = 'auth-modal-submit';
-        submitBtn.textContent = 'Create Account';
+        submitBtn.textContent = 'Create Account & Register Passkey';
 
         let createdUserId = null;
 
@@ -800,13 +787,8 @@ export class AuthManager {
             const name = nameInput.value.trim();
             const email = emailInput.value.trim();
 
-            if (!name) {
-                errorEl.textContent = 'Name is required.';
-                errorEl.classList.remove('hidden');
-                return;
-            }
-            if (!email) {
-                errorEl.textContent = 'Email is required.';
+            if (!name || !email) {
+                errorEl.textContent = !name ? 'Name is required.' : 'Email is required.';
                 errorEl.classList.remove('hidden');
                 return;
             }

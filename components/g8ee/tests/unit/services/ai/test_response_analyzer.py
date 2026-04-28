@@ -48,7 +48,8 @@ def create_real_llm_response(text: str | None) -> GenerateContentResponse:
 @pytest.fixture
 def mock_settings():
     llm = LLMSettings()
-    llm.assistant_model = "lite-model"
+    llm.lite_provider = "ollama"
+    llm.lite_model = "lite-model"
     return G8eeUserSettings(llm=llm)
 
 

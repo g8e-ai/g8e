@@ -23,10 +23,10 @@ from app.models.events import BackgroundEvent, SessionEvent
 from app.models.operators import (
     HeartbeatSSEEnvelope,
     OperatorDocument,
-    OperatorHeartbeat,
+    HeartbeatSnapshot,
 )
 from app.models.pubsub_messages import G8eoHeartbeatPayload
-from app.services.operator.heartbeat_service import OperatorHeartbeatService
+from app.services.operator.heartbeat_service import HeartbeatSnapshotService
 from app.utils.timestamp import now
 
 pytestmark = [pytest.mark.unit]
@@ -48,15 +48,18 @@ def _make_mock_pubsub_client() -> MagicMock:
     client.ensure_connected = AsyncMock()
     client.subscribe = AsyncMock()
     client.unsubscribe = AsyncMock()
+    client.psubscribe = AsyncMock()
+    client.punsubscribe = AsyncMock()
     client.on_channel_message = MagicMock()
     client.off_channel_message = MagicMock()
+    client.on_pmessage = MagicMock()
     client.on_disconnect = MagicMock()
     client.off_disconnect = MagicMock()
     return client
 
 
 def _make_service(operator_data_service=None, event_service=None):
-    return OperatorHeartbeatService(
+    return HeartbeatSnapshotService(
         operator_data_service=operator_data_service or MagicMock(),
         event_service=event_service or MagicMock(),
     )
@@ -113,7 +116,7 @@ class TestHeartbeatServiceLifecycle:
 
         client.ensure_connected.assert_not_called()
 
-    async def test_stop_unsubscribes_all_active_sessions_and_clears_ready(self, service):
+    async def test_stop_punsubscribes_pattern_and_clears_ready(self, service):
         client = _make_mock_pubsub_client()
         service.set_pubsub_client(client)
         service._active_sessions = {("op-1", "sess-1"), ("op-2", "sess-2")}
@@ -122,7 +125,10 @@ class TestHeartbeatServiceLifecycle:
         await service.stop()
 
         assert service._ready is False
-        assert client.unsubscribe.call_count == 2
+        client.punsubscribe.assert_called_once()
+        # The pattern subscription is shared across all operators; sessions
+        # are tracked in-memory only and are cleared on stop.
+        assert service._active_sessions == set()
 
     async def test_stop_with_no_active_sessions_clears_ready(self, service):
         service._ready = True
@@ -131,38 +137,53 @@ class TestHeartbeatServiceLifecycle:
 
         assert service._ready is False
 
+    async def test_start_pattern_subscribes_to_heartbeats(self, service):
+        client = _make_mock_pubsub_client()
+        service.set_pubsub_client(client)
+
+        await service.start()
+
+        client.psubscribe.assert_called_once()
+        pattern = client.psubscribe.call_args.args[0]
+        assert pattern.startswith("heartbeat:")
+        assert pattern.endswith("*")
+        client.on_pmessage.assert_called_once()
+
 
 class TestRegisterDeregisterSession:
-    """register_operator_session / deregister_operator_session — pub/sub channel management."""
+    """register_operator_session / deregister_operator_session — bookkeeping only.
+
+    Heartbeat subscription is set up once via a shared ``heartbeat:*`` pattern
+    in ``start()``. These methods only track which (operator, session) pairs
+    are considered active and never open or close per-channel pubsub state.
+    """
 
     @pytest.fixture
     def service(self):
         return _make_service()
 
-    async def test_register_raises_configuration_error_without_client(self, service):
-        with pytest.raises(ConfigurationError, match="pubsub_client is not set"):
-            await service.register_operator_session("op-1", "sess-1")
+    async def test_register_does_not_require_client(self, service):
+        # No pubsub client is needed; register is pure in-memory bookkeeping.
+        await service.register_operator_session("op-1", "sess-1")
+        assert ("op-1", "sess-1") in service._active_sessions
 
-    async def test_register_subscribes_to_channel(self, service):
+    async def test_register_does_not_open_per_session_subscription(self, service):
         client = _make_mock_pubsub_client()
         service.set_pubsub_client(client)
 
         await service.register_operator_session("op-1", "sess-1")
 
-        client.on_channel_message.assert_called_once()
-        client.subscribe.assert_called_once()
+        client.on_channel_message.assert_not_called()
+        client.subscribe.assert_not_called()
         assert ("op-1", "sess-1") in service._active_sessions
 
     async def test_register_is_idempotent_for_same_session(self, service):
-        client = _make_mock_pubsub_client()
-        service.set_pubsub_client(client)
-
         await service.register_operator_session("op-1", "sess-1")
         await service.register_operator_session("op-1", "sess-1")
 
-        assert client.subscribe.call_count == 1
+        assert service._active_sessions == {("op-1", "sess-1")}
 
-    async def test_deregister_removes_session_and_calls_unsubscribe(self, service):
+    async def test_deregister_removes_session_without_pubsub_calls(self, service):
         client = _make_mock_pubsub_client()
         service.set_pubsub_client(client)
         await service.register_operator_session("op-1", "sess-1")
@@ -170,8 +191,8 @@ class TestRegisterDeregisterSession:
         await service.deregister_operator_session("op-1", "sess-1")
 
         assert ("op-1", "sess-1") not in service._active_sessions
-        client.unsubscribe.assert_called_once()
-        client.off_channel_message.assert_called_once()
+        client.unsubscribe.assert_not_called()
+        client.off_channel_message.assert_not_called()
 
     async def test_deregister_without_client_does_not_raise(self, service):
         service._active_sessions = {("op-1", "sess-1")}
@@ -180,13 +201,9 @@ class TestRegisterDeregisterSession:
 
         assert ("op-1", "sess-1") not in service._active_sessions
 
-    async def test_deregister_nonexistent_session_does_not_raise(self, service):
-        client = _make_mock_pubsub_client()
-        service.set_pubsub_client(client)
-
+    async def test_deregister_nonexistent_session_is_noop(self, service):
         await service.deregister_operator_session("op-999", "sess-999")
-
-        client.unsubscribe.assert_called_once()
+        assert service._active_sessions == set()
 
 
 class TestOnHeartbeatMessage:
@@ -218,22 +235,36 @@ class TestOnHeartbeatMessage:
 
         mock_proc.assert_called_once()
 
-    async def test_on_heartbeat_message_auto_registers_unknown_session(self, service):
+    async def test_on_heartbeat_message_tracks_unknown_session(self, service):
+        """Pattern subscription delivers heartbeats for sessions never seen before.
+        The handler must record the (operator, session) pair so subsequent
+        bookkeeping (e.g. liveness queries) sees it as active.
+        """
         service._active_sessions = set()
         data = _make_payload().model_dump()
 
-        with patch.object(service, "register_operator_session", new=AsyncMock()) as mock_reg:
-            with patch.object(service, "process_heartbeat_message", new=AsyncMock(return_value=True)):
-                await service._on_heartbeat_message(PubSubChannel.heartbeat("op-222", "op-session-111"), data)
+        with patch.object(service, "process_heartbeat_message", new=AsyncMock(return_value=True)):
+            await service._on_heartbeat_message(PubSubChannel.heartbeat("op-222", "op-session-111"), data)
 
-        mock_reg.assert_called_once_with("op-222", "op-session-111")
+        assert ("op-222", "op-session-111") in service._active_sessions
+
+    async def test_on_pattern_heartbeat_message_dispatches_by_channel(self, service):
+        service._active_sessions = set()
+        channel = PubSubChannel.heartbeat("op-333", "op-session-444")
+        data = _make_payload(operator_id="op-333", operator_session_id="op-session-444").model_dump()
+
+        with patch.object(service, "process_heartbeat_message", new=AsyncMock(return_value=True)) as mock_proc:
+            await service._on_pattern_heartbeat_message("heartbeat:*", channel, data)
+
+        mock_proc.assert_called_once()
+        assert ("op-333", "op-session-444") in service._active_sessions
 
     async def test_on_heartbeat_message_swallows_exceptions_silently(self, service):
         with patch.object(service, "process_heartbeat_message", new=AsyncMock(side_effect=RuntimeError("boom"))):
             await service._on_heartbeat_message(PubSubChannel.heartbeat("op-222", "op-session-111"), _make_payload().model_dump())
 
 
-class TestOperatorHeartbeatServiceIdentity:
+class TestHeartbeatSnapshotServiceIdentity:
     """_validate_operator_identity — channel vs wire claim cross-check."""
 
     @pytest.fixture
@@ -253,7 +284,7 @@ class TestOperatorHeartbeatServiceIdentity:
         assert service._validate_operator_identity("op-222", payload, "sess-111") is True
 
 
-class TestOperatorHeartbeatServiceOperatorValidation:
+class TestHeartbeatSnapshotServiceOperatorValidation:
     """_get_and_validate_operator — data service lookup and status gating."""
 
     @pytest.fixture
@@ -299,7 +330,7 @@ class TestOperatorHeartbeatServiceOperatorValidation:
 
 
 
-class TestOperatorHeartbeatServiceProcessMessage:
+class TestHeartbeatSnapshotServiceProcessMessage:
     """process_heartbeat_message — full pipeline using G8eoHeartbeatPayload directly."""
 
     @pytest.fixture
@@ -352,7 +383,7 @@ class TestOperatorHeartbeatServiceProcessMessage:
         )
 
         _, kwargs = mock_operator_data_service.update_operator_heartbeat.call_args
-        assert isinstance(kwargs["heartbeat"], OperatorHeartbeat)
+        assert isinstance(kwargs["heartbeat"], HeartbeatSnapshot)
         assert kwargs["investigation_id"] == "inv-789"
         assert kwargs["case_id"] == "case-456"
 
@@ -465,7 +496,7 @@ class TestPushHeartbeatSSE:
         envelope = HeartbeatSSEEnvelope(
             operator_id="op-222",
             status=OperatorStatus.ACTIVE,
-            metrics=OperatorHeartbeat(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
+            metrics=HeartbeatSnapshot(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
         )
         payload = _make_payload()
 
@@ -490,7 +521,7 @@ class TestPushHeartbeatSSE:
         envelope = HeartbeatSSEEnvelope(
             operator_id="op-222",
             status=OperatorStatus.ACTIVE,
-            metrics=OperatorHeartbeat(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
+            metrics=HeartbeatSnapshot(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
         )
 
         await service._push_heartbeat_sse(envelope, _make_payload(), operator)
@@ -513,7 +544,7 @@ class TestPushHeartbeatSSE:
         envelope = HeartbeatSSEEnvelope(
             operator_id="op-222",
             status=OperatorStatus.ACTIVE,
-            metrics=OperatorHeartbeat(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
+            metrics=HeartbeatSnapshot(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
         )
 
         await service._push_heartbeat_sse(
@@ -533,7 +564,7 @@ class TestPushHeartbeatSSE:
         envelope = HeartbeatSSEEnvelope(
             operator_id="op-222",
             status=OperatorStatus.ACTIVE,
-            metrics=OperatorHeartbeat(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
+            metrics=HeartbeatSnapshot(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
         )
         mock_event_service.publish.side_effect = Exception("network down")
 
@@ -554,7 +585,7 @@ class TestPushHeartbeatSSE:
         envelope = HeartbeatSSEEnvelope(
             operator_id="op-333",
             status=OperatorStatus.ACTIVE,
-            metrics=OperatorHeartbeat(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
+            metrics=HeartbeatSnapshot(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
         )
         mock_event_service.publish.side_effect = AttributeError(
             "'InternalHttpClient' object has no attribute '_context'"
@@ -611,13 +642,17 @@ class TestWsDisconnectHandler:
 
         assert service._ready is False
 
-    async def test_disconnect_clears_active_sessions(self, service):
+    async def test_disconnect_preserves_active_sessions(self, service):
+        """Disconnect should preserve active sessions for observability across
+        reconnect — the shared heartbeat:* pattern subscription is restored
+        independently by the pubsub client's reconnect logic."""
         service._ready = True
         service._active_sessions = {("op-1", "sess-1"), ("op-2", "sess-2")}
 
         await service._on_ws_disconnect()
 
-        assert len(service._active_sessions) == 0
+        assert service._ready is False
+        assert service._active_sessions == {("op-1", "sess-1"), ("op-2", "sess-2")}
 
     async def test_disconnect_handler_registered_on_set_pubsub_client(self, service):
         client = _make_mock_pubsub_client()
@@ -637,6 +672,28 @@ class TestWsDisconnectHandler:
         assert service._ready is False
 
         await service.start()
+        assert service._ready is True
+
+    async def test_start_re_psubscribes_pattern_after_disconnect(self, service):
+        """After disconnect, start() must re-issue the heartbeat:* pattern
+        subscription so the service resumes capturing every operator's
+        heartbeats once the websocket reconnects."""
+        client = _make_mock_pubsub_client()
+        service.set_pubsub_client(client)
+
+        await service.register_operator_session("op-1", "sess-1")
+        await service.register_operator_session("op-2", "sess-2")
+
+        await service.start()
+        assert client.psubscribe.call_count == 1
+
+        await service._on_ws_disconnect()
+        assert service._ready is False
+        assert service._active_sessions == {("op-1", "sess-1"), ("op-2", "sess-2")}
+
+        await service.start()
+
+        assert client.psubscribe.call_count == 2
         assert service._ready is True
 
 
@@ -660,7 +717,7 @@ class TestHeartbeatServiceConstruction:
     """Direct construction via __init__ — dependency injection contract."""
 
     async def test_constructs_with_required_dependencies(self):
-        svc = OperatorHeartbeatService(
+        svc = HeartbeatSnapshotService(
             operator_data_service=MagicMock(),
             event_service=MagicMock(),
         )

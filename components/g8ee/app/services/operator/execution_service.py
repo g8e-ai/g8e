@@ -44,6 +44,7 @@ from app.models.internal_api import DirectCommandRequest
 from app.models.operators import (
     CancelCommandResult,
     CommandFailedBroadcastEvent,
+    CommandResultBroadcastEvent,
     DirectCommandResult,
     OperatorDocument,
     TargetSystem,
@@ -69,19 +70,43 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         operator_data_service: OperatorDataServiceProtocol,
         investigation_service: InvestigationServiceProtocol,
     ) -> None:
-        self.pubsub_service = pubsub_service
-        self.approval_service = approval_service
-        self.g8ed_event_service = g8ed_event_service
+        self._pubsub_service = pubsub_service
+        self._approval_service = approval_service
+        self._g8ed_event_service = g8ed_event_service
         self._settings = settings
-        self.operator_data_service = operator_data_service
-        self.ai_response_analyzer = ai_response_analyzer
-        self.investigation_service = investigation_service
+        self._operator_data_service = operator_data_service
+        self._ai_response_analyzer = ai_response_analyzer
+        self._investigation_service = investigation_service
 
         from app.security.operator_command_validator import OperatorCommandValidator
         from app.utils.validators import get_blacklist_validator, get_whitelist_validator
         self.command_validator = OperatorCommandValidator(operator_data_service)
         self.whitelist_validator = get_whitelist_validator()
         self.blacklist_validator = get_blacklist_validator()
+
+    @property
+    def pubsub_service(self) -> PubSubServiceProtocol:
+        return self._pubsub_service
+
+    @property
+    def approval_service(self) -> ApprovalServiceProtocol:
+        return self._approval_service
+
+    @property
+    def g8ed_event_service(self) -> EventServiceProtocol:
+        return self._g8ed_event_service
+
+    @property
+    def operator_data_service(self) -> OperatorDataServiceProtocol:
+        return self._operator_data_service
+
+    @property
+    def ai_response_analyzer(self) -> AIResponseAnalyzerProtocol:
+        return self._ai_response_analyzer
+
+    @property
+    def investigation_service(self) -> InvestigationServiceProtocol:
+        return self._investigation_service
 
     # -------------------------------------------------------------------------
     # Failure helper
@@ -153,7 +178,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
 
         if not target_operator:
             available = [
-                f"  [{i}] {op.current_hostname or (op.system_info.hostname if op.system_info else 'None')} "
+                f"  [{i}] {op.current_hostname or (op.latest_heartbeat_snapshot.system_identity.hostname if op.latest_heartbeat_snapshot else 'None')} "
                 f"({op.id}) - {op.operator_type}"
                 for i, op in enumerate(operator_documents)
             ]
@@ -185,7 +210,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                 return op
 
         for op in operator_documents:
-            hostname = op.current_hostname or (op.system_info.hostname if op.system_info else "")
+            hostname = op.current_hostname or (op.latest_heartbeat_snapshot.system_identity.hostname if op.latest_heartbeat_snapshot else "")
             if hostname and hostname.lower() == target_operator.lower():
                 return op
 
@@ -199,7 +224,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
             )
 
         available = [
-            f"  [{i}] {op.current_hostname or (op.system_info.hostname if op.system_info else 'None')} ({op.id})"
+            f"  [{i}] {op.current_hostname or (op.latest_heartbeat_snapshot.system_identity.hostname if op.latest_heartbeat_snapshot else 'None')} ({op.id})"
             for i, op in enumerate(operator_documents)
         ]
         raise ValidationError(
@@ -251,7 +276,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
     def build_target_systems_list(self, operator_documents: list[OperatorDocument]) -> list[TargetSystem]:
         systems: list[TargetSystem] = []
         for op in operator_documents:
-            hostname: str = op.current_hostname or (op.system_info.hostname if op.system_info else None) or "None"
+            hostname: str = op.current_hostname or (op.latest_heartbeat_snapshot.system_identity.hostname if op.latest_heartbeat_snapshot else None) or "None"
             systems.append(TargetSystem(
                 operator_id=op.id,
                 hostname=hostname,
@@ -424,6 +449,10 @@ class OperatorExecutionService(ExecutionServiceProtocol):
             ),
         )
 
+        # Register future to capture result on the pub/sub bus
+        future = self.pubsub_service.register_future(execution_id)
+        await self.pubsub_service.register_operator_session(operator_id, operator_session_id)
+
         subscribers = await self.pubsub_service.publish_command(
             operator_id=operator_id,
             operator_session_id=operator_session_id,
@@ -433,7 +462,79 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         if subscribers == 0:
             channel = f"cmd:{operator_id}:{operator_session_id}"
             logger.error("[NO-SUBSCRIBERS] No Operator listening on command channel '%s'", channel, extra={"operator_id": operator_id, "operator_session_id": operator_session_id, "channel": channel})
+            self.pubsub_service.release_future(execution_id)
             return DirectCommandResult(execution_id=execution_id, status=ExecutionStatus.FAILED, error="No Operator listening")
 
+        # Launch background task to wait for result and broadcast it to g8ed
+        # This allows the API to return immediately to the frontend terminal
+        asyncio.create_task(
+            self._wait_and_broadcast_direct_command_result(
+                execution_id=execution_id,
+                command=command,
+                future=future,
+                g8e_context=g8e_context,
+                operator_id=operator_id,
+                operator_session_id=operator_session_id,
+                hostname=command_payload.hostname,
+            )
+        )
+
         return DirectCommandResult(execution_id=execution_id, status=ExecutionStatus.EXECUTING)
+
+    async def _wait_and_broadcast_direct_command_result(
+        self,
+        execution_id: str,
+        command: str,
+        future: asyncio.Future[G8eoResultEnvelope],
+        g8e_context: G8eHttpContext,
+        operator_id: str,
+        operator_session_id: str,
+        hostname: str | None = None,
+    ) -> None:
+        """Wait for a direct command result and broadcast it via g8ed_event_service."""
+        timeout_seconds = 300  # Default terminal timeout
+        try:
+            envelope = await asyncio.wait_for(future, timeout=timeout_seconds)
+
+            if not isinstance(envelope.payload, ExecutionResultsPayload):
+                logger.warning("[EXECUTION] Direct command result payload type mismatch for %s", execution_id)
+                return
+
+            payload = envelope.payload
+            status = payload.status if payload.status else ExecutionStatus.COMPLETED
+
+            completion_event_type = (
+                EventType.OPERATOR_COMMAND_COMPLETED
+                if status == ExecutionStatus.COMPLETED
+                else EventType.OPERATOR_COMMAND_FAILED
+            )
+
+            await self.g8ed_event_service.publish_command_event(
+                completion_event_type,
+                CommandResultBroadcastEvent(
+                    execution_id=execution_id,
+                    command=command,
+                    status=status,
+                    output=payload.stdout,
+                    error=payload.error_message,
+                    stderr=payload.stderr,
+                    exit_code=payload.return_code,
+                    execution_time_seconds=payload.duration_seconds or 0,
+                    operator_id=operator_id,
+                    operator_session_id=operator_session_id,
+                    hostname=hostname,
+                    direct_execution=True,
+                ),
+                g8e_context,
+                task_id=AITaskId.DIRECT_COMMAND,
+            )
+
+            logger.info("[EXECUTION] Direct command result broadcasted for %s", execution_id)
+
+        except (asyncio.TimeoutError, TimeoutError):
+            logger.warning("[EXECUTION] Direct command timed out waiting for result for %s", execution_id)
+        except Exception as e:
+            logger.error("[EXECUTION] Failed to broadcast direct command result for %s: %s", execution_id, e, exc_info=True)
+        finally:
+            self.pubsub_service.release_future(execution_id)
 

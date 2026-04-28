@@ -153,6 +153,11 @@ class EventType(str, Enum):
     OPERATOR_COMMAND_APPROVAL_GRANTED = "g8e.v1.operator.command.approval.granted"
     OPERATOR_COMMAND_APPROVAL_REJECTED = "g8e.v1.operator.command.approval.rejected"
 
+    # operator.stream
+    OPERATOR_STREAM_APPROVAL_REQUESTED = "g8e.v1.operator.stream.approval.requested"
+    OPERATOR_STREAM_APPROVAL_GRANTED = "g8e.v1.operator.stream.approval.granted"
+    OPERATOR_STREAM_APPROVAL_REJECTED = "g8e.v1.operator.stream.approval.rejected"
+
     # operator.file
     OPERATOR_FILE_EDIT_REQUESTED = "g8e.v1.operator.file.edit.requested"
     OPERATOR_FILE_EDIT_STARTED = "g8e.v1.operator.file.edit.started"
@@ -255,6 +260,12 @@ class EventType(str, Enum):
     AI_AGENT_CONTINUE_APPROVAL_GRANTED = "g8e.v1.ai.agent.continue.approval.granted"
     AI_AGENT_CONTINUE_APPROVAL_REJECTED = "g8e.v1.ai.agent.continue.approval.rejected"
 
+    # ai.triage (Dash interrogator - GDD §2)
+    AI_TRIAGE_CLARIFICATION_QUESTIONS = "g8e.v1.ai.triage.clarification.questions"
+    AI_TRIAGE_CLARIFICATION_ANSWERED = "g8e.v1.ai.triage.clarification.answered"
+    AI_TRIAGE_CLARIFICATION_SKIPPED = "g8e.v1.ai.triage.clarification.skipped"
+    AI_TRIAGE_CLARIFICATION_TIMEOUT = "g8e.v1.ai.triage.clarification.timeout"
+
     # ai.tribunal
     # Terminal states are expressed as distinct event types, one per scenario.
     # The event type itself is the discriminator; there is no shared "failure"
@@ -278,6 +289,21 @@ class EventType(str, Enum):
     TRIBUNAL_VOTING_DISSENT_RECORDED = "g8e.v1.ai.tribunal.voting.dissent.recorded"
     TRIBUNAL_VOTING_AUDIT_STARTED = "g8e.v1.ai.tribunal.voting.audit.started"
     TRIBUNAL_VOTING_AUDIT_COMPLETED = "g8e.v1.ai.tribunal.voting.audit.completed"
+    TRIBUNAL_VOTING_ROUND_STARTED = "g8e.v1.ai.tribunal.voting.round.started"
+    TRIBUNAL_VOTING_ROUND_COMPLETED = "g8e.v1.ai.tribunal.voting.round.completed"
+    TRIBUNAL_VOTING_ROUND_2_STARTED = "g8e.v1.ai.tribunal.voting.round_2.started"
+    TRIBUNAL_VOTING_ROUND_2_PASS_COMPLETED = "g8e.v1.ai.tribunal.voting.round_2.pass.completed"
+    TRIBUNAL_VOTING_ROUND_2_CONSENSUS_REACHED = "g8e.v1.ai.tribunal.voting.round_2.consensus.reached"
+    TRIBUNAL_VOTING_ROUND_2_CONSENSUS_FAILED = "g8e.v1.ai.tribunal.voting.round_2.consensus.failed"
+
+    # reputation (Phase 2 — auditor-as-oracle scoreboard)
+    REPUTATION_COMMITMENT_CREATED  = "g8e.v1.ai.reputation.commitment.created"
+    REPUTATION_COMMITMENT_VERIFIED = "g8e.v1.ai.reputation.commitment.verified"
+    REPUTATION_COMMITMENT_FAILED   = "g8e.v1.ai.reputation.commitment.failed"
+    REPUTATION_STATE_UPDATED       = "g8e.v1.ai.reputation.state.updated"
+    REPUTATION_SLASH_TIER1         = "g8e.v1.ai.reputation.slash.tier1"
+    REPUTATION_SLASH_TIER2         = "g8e.v1.ai.reputation.slash.tier2"
+    REPUTATION_SLASH_TIER3         = "g8e.v1.ai.reputation.slash.tier3"
 
     # platform
     PLATFORM_USAGE_UPDATED = "g8e.v1.platform.usage.updated"

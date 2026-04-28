@@ -92,19 +92,32 @@ def _llm_settings_from_env() -> LLMSettings | None:
     else:
         assistant_provider = provider
 
+    lite_provider_str = os.environ.get("TEST_LLM_LITE_PROVIDER", "").strip()
+    if lite_provider_str:
+        try:
+            lite_provider = LLMProvider(lite_provider_str)
+        except ValueError:
+            logger.warning("TEST_LLM_LITE_PROVIDER=%s is not a valid provider, falling back to assistant", lite_provider_str)
+            lite_provider = assistant_provider
+    else:
+        lite_provider = assistant_provider
+
     api_key = os.environ.get("TEST_LLM_API_KEY", "").strip() or None
     endpoint = os.environ.get("TEST_LLM_ENDPOINT_URL", "").strip() or None
     assistant_api_key = os.environ.get("TEST_LLM_ASSISTANT_API_KEY", "").strip() or None
     assistant_endpoint = os.environ.get("TEST_LLM_ASSISTANT_ENDPOINT_URL", "").strip() or None
     primary = os.environ.get("TEST_LLM_PRIMARY_MODEL", "").strip() or None
     assistant = os.environ.get("TEST_LLM_ASSISTANT_MODEL", "").strip() or None
+    lite = os.environ.get("TEST_LLM_LITE_MODEL", "").strip() or None
     max_tokens_str = os.environ.get("TEST_LLM_MAX_TOKENS", "").strip() or None
 
-    kwargs: dict = {"primary_provider": provider, "assistant_provider": assistant_provider}
+    kwargs: dict = {"primary_provider": provider, "assistant_provider": assistant_provider, "lite_provider": lite_provider}
     if primary:
         kwargs["primary_model"] = primary
     if assistant:
         kwargs["assistant_model"] = assistant
+    if lite:
+        kwargs["lite_model"] = lite
     if max_tokens_str:
         try:
             kwargs["llm_max_tokens"] = int(max_tokens_str)
@@ -251,7 +264,14 @@ def pytest_collection_modifyitems(config, items):
     # because tests now load user settings from g8es which may have API keys configured
     # Only skip if TEST_LLM_* env vars are explicitly set but invalid
     env_llm_provider = os.environ.get("TEST_LLM_PROVIDER", "").strip()
-    has_llm_credentials = has_test_llm_creds if env_llm_provider else True  # Allow tests to run if no TEST_LLM_PROVIDER set
+    
+    # If env var is set, use the credentials check.
+    # If env var is NOT set, we check if the platform settings from g8es have
+    # any LLM info, but since LLM info is in UserSettings, we can't easily check
+    # here during collection. 
+    # For now, let's at least check if we have a primary_model in the platform 
+    # settings which some older tests might use, or if we should just skip.
+    has_llm_credentials = has_test_llm_creds if env_llm_provider else (llm is not None and llm.primary_provider is not None)
     
     has_vertex_search = search_settings.enabled if search_settings else False
     has_web_search = (
@@ -531,12 +551,13 @@ def enriched_investigation():
 def cloud_operator_doc():
     from app.models.operators import (
         OperatorDocument,
-        OperatorSystemInfo,
-        OperatorHeartbeat,
-        SystemInfoOSDetails,
-        SystemInfoUserDetails,
-        SystemInfoDiskDetails,
-        SystemInfoMemoryDetails,
+        HeartbeatSnapshot,
+        HeartbeatSystemIdentity,
+        HeartbeatNetworkInfo,
+        HeartbeatOSDetails,
+        HeartbeatUserDetails,
+        HeartbeatDiskDetails,
+        HeartbeatMemoryDetails,
         HeartbeatEnvironment,
     )
     return OperatorDocument(
@@ -546,19 +567,21 @@ def cloud_operator_doc():
         operator_type=OperatorType.CLOUD,
         cloud_subtype=CloudSubtype.AWS,
         granted_intents=["ec2_discovery", "s3_read"],
-        system_info=OperatorSystemInfo(
-            hostname="ip-10-0-1-100.ec2.internal",
-            os="Amazon Linux 2023",
-            architecture="x86_64",
-            cpu_count=4,
-            memory_mb=8192,
-            public_ip="54.123.45.67",
-        ),
-        latest_heartbeat_snapshot=OperatorHeartbeat(
-            os_details=SystemInfoOSDetails(distro="Amazon Linux", kernel="6.1.0", version="2023"),
-            user_details=SystemInfoUserDetails(username="ec2-user", home="/home/ec2-user", shell="/bin/bash"),
-            disk_details=SystemInfoDiskDetails(percent=45.2, total_gb=100, free_gb=54.8),
-            memory_details=SystemInfoMemoryDetails(percent=62.1, total_mb=8192, available_mb=3105),
+        latest_heartbeat_snapshot=HeartbeatSnapshot(
+            system_identity=HeartbeatSystemIdentity(
+                hostname="ip-10-0-1-100.ec2.internal",
+                os="Amazon Linux 2023",
+                architecture="x86_64",
+                cpu_count=4,
+                memory_mb=8192,
+            ),
+            network=HeartbeatNetworkInfo(
+                public_ip="54.123.45.67",
+            ),
+            os_details=HeartbeatOSDetails(distro="Amazon Linux", kernel="6.1.0", version="2023"),
+            user_details=HeartbeatUserDetails(username="ec2-user", home="/home/ec2-user", shell="/bin/bash"),
+            disk_details=HeartbeatDiskDetails(percent=45.2, total_gb=100, free_gb=54.8),
+            memory_details=HeartbeatMemoryDetails(percent=62.1, total_mb=8192, available_mb=3105),
             environment=HeartbeatEnvironment(pwd="/home/ec2-user", timezone="UTC"),
         ),
     )
@@ -568,12 +591,13 @@ def cloud_operator_doc():
 def binary_operator_doc():
     from app.models.operators import (
         OperatorDocument,
-        OperatorSystemInfo,
-        OperatorHeartbeat,
-        SystemInfoOSDetails,
-        SystemInfoUserDetails,
-        SystemInfoDiskDetails,
-        SystemInfoMemoryDetails,
+        HeartbeatSnapshot,
+        HeartbeatSystemIdentity,
+        HeartbeatNetworkInfo,
+        HeartbeatOSDetails,
+        HeartbeatUserDetails,
+        HeartbeatDiskDetails,
+        HeartbeatMemoryDetails,
         HeartbeatEnvironment,
     )
     return OperatorDocument(
@@ -582,18 +606,19 @@ def binary_operator_doc():
         operator_session_id="session-binary-op-1",
         operator_type=OperatorType.SYSTEM,
         cloud_subtype=None,
-        system_info=OperatorSystemInfo(
-            hostname="web-server-1",
-            os="Ubuntu 22.04",
-            architecture="x86_64",
-            cpu_count=8,
-            memory_mb=16384,
-        ),
-        latest_heartbeat_snapshot=OperatorHeartbeat(
-            os_details=SystemInfoOSDetails(distro="Ubuntu", kernel="5.15.0", version="22.04"),
-            user_details=SystemInfoUserDetails(username="root", home="/root", shell="/bin/bash"),
-            disk_details=SystemInfoDiskDetails(percent=10.0, total_gb=500, free_gb=450),
-            memory_details=SystemInfoMemoryDetails(percent=20.0, total_mb=16384, available_mb=13107),
+        latest_heartbeat_snapshot=HeartbeatSnapshot(
+            system_identity=HeartbeatSystemIdentity(
+                hostname="web-server-1",
+                os="Ubuntu 22.04",
+                architecture="x86_64",
+                cpu_count=8,
+                memory_mb=16384,
+            ),
+            network=HeartbeatNetworkInfo(),
+            os_details=HeartbeatOSDetails(distro="Ubuntu", kernel="5.15.0", version="22.04"),
+            user_details=HeartbeatUserDetails(username="root", home="/root", shell="/bin/bash"),
+            disk_details=HeartbeatDiskDetails(percent=10.0, total_gb=500, free_gb=450),
+            memory_details=HeartbeatMemoryDetails(percent=20.0, total_mb=16384, available_mb=13107),
             environment=HeartbeatEnvironment(pwd="/root", timezone="UTC"),
         ),
     )

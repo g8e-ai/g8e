@@ -70,9 +70,9 @@ class TestMemoryGenerationServiceIntegration:
             pytest.skip("LLM assistant_model is not configured")
 
         # Get real services from all_services fixture
-        memory_data_service = all_services['memory_data_service']
-        investigation_data_service = all_services['investigation_data_service']
-        memory_service = all_services['memory_generation_service']
+        memory_data_service = all_services.memory_data_service
+        investigation_data_service = all_services.investigation_data_service
+        memory_service = all_services.memory_generation_service
 
         # Create investigation
         investigation = create_investigation_data()
@@ -87,24 +87,32 @@ class TestMemoryGenerationServiceIntegration:
                 sender=EventType.EVENT_SOURCE_USER_CHAT,
                 content="I'm having trouble with my high-performance compute cluster in the Zurich data center. The nodes are named 'Alpine-Alpha' through 'Alpine-Zeta'. One specific node, 'Alpine-Delta', has a bright Magenta status LED blinking.",
                 timestamp=datetime.now(UTC),
+                prev_hash="0" * 64,
+                entry_hash="0" * 64,
             ),
             ConversationHistoryMessage(
                 id=str(uuid.uuid4()),
                 sender=EventType.EVENT_SOURCE_AI_ASSISTANT,
                 content="I see. A Magenta status LED on the Alpine series usually indicates a thermal throttle on the secondary NVMe drive. I'll check the temperature sensors for Alpine-Delta.",
                 timestamp=datetime.now(UTC),
+                prev_hash="0" * 64,
+                entry_hash="0" * 64,
             ),
             ConversationHistoryMessage(
                 id=str(uuid.uuid4()),
                 sender=EventType.EVENT_SOURCE_USER_CHAT,
                 content="The data center technician mentioned that the ambient temperature in Zurich is quite high today. We might need to increase the fan speed to 80% for all Alpine nodes.",
                 timestamp=datetime.now(UTC),
+                prev_hash="0" * 64,
+                entry_hash="0" * 64,
             ),
             ConversationHistoryMessage(
                 id=str(uuid.uuid4()),
                 sender=EventType.EVENT_SOURCE_AI_ASSISTANT,
                 content="Understood. I'll prepare a script to adjust fan speeds across the Zurich cluster. We'll monitor Alpine-Delta specifically for the Magenta LED to clear.",
                 timestamp=datetime.now(UTC),
+                prev_hash="0" * 64,
+                entry_hash="0" * 64,
             ),
         ]
 
@@ -154,9 +162,9 @@ class TestMemoryGenerationServiceIntegration:
             pytest.skip("LLM assistant_model is not configured")
 
         # Get real services from all_services fixture
-        memory_data_service = all_services['memory_data_service']
-        investigation_data_service = all_services['investigation_data_service']
-        memory_service = all_services['memory_generation_service']
+        memory_data_service = all_services.memory_data_service
+        investigation_data_service = all_services.investigation_data_service
+        memory_service = all_services.memory_generation_service
 
         # Create investigation
         investigation = create_investigation_data()
@@ -189,12 +197,16 @@ class TestMemoryGenerationServiceIntegration:
                 sender=EventType.EVENT_SOURCE_USER_CHAT,
                 content="The Turquoise sensor in Tokyo is fixed, but now the 'Midnight-Blue' fan controller in our Reykjavik facility is reporting an 'Amber-Alert' status code. Can you pull the RPM logs for the Midnight-Blue unit?",
                 timestamp=datetime.now(UTC),
+                prev_hash="0" * 64,
+                entry_hash="0" * 64,
             ),
             ConversationHistoryMessage(
                 id=str(uuid.uuid4()),
                 sender=EventType.EVENT_SOURCE_AI_ASSISTANT,
                 content="I'll pull the RPM logs for the Midnight-Blue controller in Reykjavik. We'll check if the Amber-Alert corresponds to a bearing failure or just a sensor glitch.",
                 timestamp=datetime.now(UTC),
+                prev_hash="0" * 64,
+                entry_hash="0" * 64,
             ),
         ]
 
@@ -293,9 +305,9 @@ class TestMemoryGenerationServiceIntegration:
             pytest.skip("LLM assistant_model is not configured")
 
         # Get real services from all_services fixture
-        memory_data_service = all_services['memory_data_service']
-        investigation_data_service = all_services['investigation_data_service']
-        memory_service = all_services['memory_generation_service']
+        memory_data_service = all_services.memory_data_service
+        investigation_data_service = all_services.investigation_data_service
+        memory_service = all_services.memory_generation_service
 
         # Create investigation
         investigation = create_investigation_data()
@@ -567,7 +579,7 @@ class TestCommandGenerationIntegration:
         # Verify function signature (this will be tested more thoroughly in agent tests)
         import inspect
         sig = inspect.signature(generate_command)
-        expected_params = ['request', 'guidelines', 'operator_context', 'g8ed_event_service', 'web_session_id', 'user_id', 'case_id', 'investigation_id', 'settings', 'whitelisting_enabled', 'blacklisting_enabled', 'whitelisted_commands', 'blacklisted_commands']
+        expected_params = ['request', 'guidelines', 'operator_context', 'g8ed_event_service', 'web_session_id', 'user_id', 'case_id', 'investigation_id', 'settings', 'reputation_data_service', 'auditor_hmac_key', 'whitelisting_enabled', 'blacklisting_enabled', 'whitelisted_commands', 'blacklisted_commands']
         actual_params = list(sig.parameters.keys())
         assert actual_params == expected_params
 
@@ -598,6 +610,7 @@ class TestCommandGenerationIntegration:
     async def test_command_constraints_message_formatting(self, test_settings):
         """Test that command constraints (whitelist/blacklist) are properly formatted for Tribunal prompts."""
         from app.llm.prompts import build_command_constraints_message
+        from app.models.whitelist import WhitelistedCommand
         
         # Test with no constraints
         message = build_command_constraints_message(
@@ -608,20 +621,20 @@ class TestCommandGenerationIntegration:
         )
         assert "No whitelist or blacklist constraints are active" in message
         
-        # Test with metadata-rich whitelist
+        # Test with metadata-rich whitelist using WhitelistedCommand objects
         whitelisted_metadata = [
-            {
-                "command": "ping",
-                "category": "network",
-                "safe_options": ["-c <count>", "-W <timeout>"],
-                "validation": {"count": r"^\d+$", "timeout": r"^\d+$"}
-            },
-            {
-                "command": "ls",
-                "category": "filesystem",
-                "safe_options": ["-la", "-lh"],
-                "validation": {}
-            }
+            WhitelistedCommand(
+                command="ping",
+                category="network_diagnostics",
+                safe_options=["-c <count>", "-W <timeout>"],
+                validation={"count": r"^\d+$", "timeout": r"^\d+$"}
+            ),
+            WhitelistedCommand(
+                command="ls",
+                category="system_diagnostics",
+                safe_options=["-la", "-lh"],
+                validation={}
+            )
         ]
         message = build_command_constraints_message(
             whitelisting_enabled=True,
@@ -635,11 +648,15 @@ class TestCommandGenerationIntegration:
         assert "safe_options" in message
         assert "validation_patterns" in message
         
-        # Test with whitelist only
+        # Test with whitelist only using WhitelistedCommand objects
         message = build_command_constraints_message(
             whitelisting_enabled=True,
             blacklisting_enabled=False,
-            whitelisted_commands=[{"command": "ls -la"}, {"command": "pwd"}, {"command": "whoami"}],
+            whitelisted_commands=[
+                WhitelistedCommand(command="ls -la"),
+                WhitelistedCommand(command="pwd"),
+                WhitelistedCommand(command="whoami")
+            ],
             blacklisted_commands=None,
         )
         assert "Whitelisting is ENABLED" in message
@@ -664,7 +681,7 @@ class TestCommandGenerationIntegration:
         message = build_command_constraints_message(
             whitelisting_enabled=True,
             blacklisting_enabled=True,
-            whitelisted_commands=[{"command": "ls"}],
+            whitelisted_commands=[WhitelistedCommand(command="ls")],
             blacklisted_commands=[{"command": "rm -rf"}],
         )
         assert "Whitelisting is ENABLED" in message
@@ -694,23 +711,26 @@ class TestCommandGenerationIntegration:
             architecture="x86_64",
         )
         
-        # Test 1: Valid whitelisted command should pass
-        is_safe, error = validate_command_safety(
+        # Test 1: Valid whitelisted command should pass (whitelisting disabled)
+        result = validate_command_safety(
             command="ping -c 4 google.com",
-            whitelisting_enabled=True,
+            whitelisting_enabled=False,
             blacklisting_enabled=False,
             operator_context=operator_context,
         )
+        assert result.is_safe, "ping command should pass when whitelist is disabled"
+        assert result.error_message is None
+        assert result.error_type is None
         
         # Test 2: Command with forbidden flag should fail
-        is_safe, error = validate_command_safety(
+        result = validate_command_safety(
             command="sudo ls",
             whitelisting_enabled=True,
             blacklisting_enabled=False,
             operator_context=operator_context,
         )
-        assert not is_safe, "sudo command should be blocked by forbidden patterns"
-        assert "forbidden" in error.lower() or "sudo" in error.lower()
+        assert not result.is_safe, "sudo command should be blocked by forbidden patterns"
+        assert "forbidden" in result.error_message.lower() or "sudo" in result.error_message.lower()
         
         # Test 3: Platform mapping works correctly
         assert map_os_string_to_platform("linux") == Platform.LINUX

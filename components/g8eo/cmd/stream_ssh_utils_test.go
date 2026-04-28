@@ -14,6 +14,8 @@
 package cmd
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
 	"fmt"
 	"net"
 	"os"
@@ -29,33 +31,69 @@ func TestBuildHostKeyCallback(t *testing.T) {
 	t.Run("known_hosts exists and is valid", func(t *testing.T) {
 		tempDir := t.TempDir()
 		// Mock home directory by setting HOME env var (os.UserHomeDir respects it on Linux)
-		oldHome := os.Getenv("HOME")
-		os.Setenv("HOME", tempDir)
-		defer os.Setenv("HOME", oldHome)
+		t.Setenv("HOME", tempDir)
+		t.Setenv("G8E_KNOWN_HOSTS", "")
 
 		sshDir := filepath.Join(tempDir, ".ssh")
 		require.NoError(t, os.MkdirAll(sshDir, 0700))
 		khPath := filepath.Join(sshDir, "known_hosts")
 
-		// Use a dummy valid known_hosts content or empty (knownhosts.New handles empty)
+		// Empty known_hosts is valid — knownhosts.New handles it. Any host attempt
+		// against the returned callback will fail with an unknown-host error,
+		// which is exactly the strict semantic we want.
 		require.NoError(t, os.WriteFile(khPath, []byte(""), 0600))
 
-		cb := buildHostKeyCallback("")
+		cb, err := buildHostKeyCallback()
+		require.NoError(t, err)
 		assert.NotNil(t, cb)
 	})
 
-	t.Run("known_hosts does not exist, returns insecure callback", func(t *testing.T) {
+	t.Run("known_hosts missing, strict mode returns an error (no insecure fallback)", func(t *testing.T) {
 		tempDir := t.TempDir()
-		oldHome := os.Getenv("HOME")
-		os.Setenv("HOME", tempDir)
-		defer os.Setenv("HOME", oldHome)
+		t.Setenv("HOME", tempDir)
+		t.Setenv("G8E_KNOWN_HOSTS", "")
 
-		cb := buildHostKeyCallback("")
+		cb, err := buildHostKeyCallback()
+		assert.Nil(t, cb)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "known_hosts not found")
+	})
+
+	t.Run("G8E_KNOWN_HOSTS env var overrides home lookup", func(t *testing.T) {
+		tempDir := t.TempDir()
+		// Point HOME at a directory with NO ~/.ssh/known_hosts to prove the
+		// env override is consulted first.
+		t.Setenv("HOME", tempDir)
+		altPath := filepath.Join(tempDir, "alt_known_hosts")
+		require.NoError(t, os.WriteFile(altPath, []byte(""), 0600))
+		t.Setenv("G8E_KNOWN_HOSTS", altPath)
+
+		cb, err := buildHostKeyCallback()
+		require.NoError(t, err)
 		assert.NotNil(t, cb)
+	})
 
-		// Verify it returns nil (accepts)
-		err := cb("localhost:22", &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 22}, nil)
-		assert.NoError(t, err)
+	t.Run("strict callback rejects unknown host", func(t *testing.T) {
+		tempDir := t.TempDir()
+		t.Setenv("HOME", tempDir)
+		t.Setenv("G8E_KNOWN_HOSTS", "")
+		sshDir := filepath.Join(tempDir, ".ssh")
+		require.NoError(t, os.MkdirAll(sshDir, 0700))
+		khPath := filepath.Join(sshDir, "known_hosts")
+		require.NoError(t, os.WriteFile(khPath, []byte(""), 0600))
+
+		cb, err := buildHostKeyCallback()
+		require.NoError(t, err)
+
+		// Build a real RSA public key so the callback actually invokes its
+		// host-key matching logic instead of bailing on a nil key.
+		priv, err := rsa.GenerateKey(rand.Reader, 2048)
+		require.NoError(t, err)
+		pub, err := ssh.NewPublicKey(&priv.PublicKey)
+		require.NoError(t, err)
+
+		err = cb("localhost:22", &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 22}, pub)
+		require.Error(t, err, "strict callback must reject hosts not in known_hosts")
 	})
 }
 

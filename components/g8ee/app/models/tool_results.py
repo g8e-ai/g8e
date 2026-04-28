@@ -21,7 +21,7 @@ file.operation, network.protocol, risk.level).
 When adding or renaming a field, update shared/models/tool_results.json first.
 """
 
-from typing import Any, Optional, Union
+from typing import Any, Union
 
 from pydantic import Field
 
@@ -34,6 +34,8 @@ from app.constants import (
     RiskLevel,
 )
 from app.models.base import G8eBaseModel, UTCDatetime
+from app.models.ssh_inventory import SshHost
+from app.models.whitelist import CommandValidationResult, WhitelistedCommand
 
 
 class FsListEntry(G8eBaseModel):
@@ -315,7 +317,7 @@ class FetchFileDiffToolResult(G8eBaseModel):
 class IamIntentResult(G8eBaseModel):
     """Result of a single IAM policy attach/detach operation for one intent."""
     intent: str
-    result: Optional["CommandInternalResult"] = None
+    result: CommandInternalResult | None = None
 
 
 class FailedIntentResult(G8eBaseModel):
@@ -345,7 +347,7 @@ class IntentPermissionResult(G8eBaseModel):
     output: str | None = None
     exit_code: int | None = None
     pending_command: str | None = None
-    pending_command_result: Optional["CommandInternalResult"] = None
+    pending_command_result: CommandInternalResult | None = None
     timestamp: UTCDatetime | None = None
     revoked_intents: list[str] | None = None
 
@@ -378,10 +380,22 @@ class CommandConstraintsResult(G8eBaseModel):
     error_type: CommandErrorType | None = None
     whitelisting_enabled: bool = False
     blacklisting_enabled: bool = False
-    whitelisted_commands: list[str] = Field(default_factory=list)
+    auto_approve_enabled: bool = False
+    whitelisted_commands: list[WhitelistedCommand] = Field(default_factory=list)
     blacklisted_commands: list[dict[str, str]] = Field(default_factory=list)
     blacklisted_substrings: list[dict[str, str]] = Field(default_factory=list)
     blacklisted_patterns: list[dict[str, str]] = Field(default_factory=list)
+    auto_approved_commands: list[str] = Field(
+        default_factory=list,
+        description="Base commands that bypass human approval when auto_approve_enabled is true. "
+                    "These commands still must pass all hard safety gates.",
+    )
+    auto_approved_sources: list[dict[str, str]] = Field(
+        default_factory=list,
+        description="Source attribution for each auto-approved command. "
+                    "Each entry has 'command' (str) and 'source' ('platform' or 'user'). "
+                    "Platform sources come from JSON config; user sources come from CSV override.",
+    )
     global_forbidden_patterns: list[str] = Field(default_factory=list)
     global_forbidden_directories: list[str] = Field(default_factory=list)
     message: str | None = None
@@ -396,6 +410,19 @@ class InvestigationContextResult(G8eBaseModel):
     data: dict[str, Any] | list[dict[str, Any]] | str | None = None
     item_count: int | None = None
     investigation_id: str | None = None
+
+
+class SshInventoryToolResult(G8eBaseModel):
+    """Result returned by the list_ssh_inventory tool.
+
+    Canonical shape: shared/models/tool_results.json ssh_inventory_result.
+    """
+    success: bool = True
+    error: str | None = None
+    error_type: CommandErrorType | None = None
+    source_path: str | None = None
+    hosts: list[SshHost] = Field(default_factory=list)
+    total_count: int = 0
 
 
 class CommandExecutionResult(G8eBaseModel):
@@ -435,6 +462,10 @@ class CommandExecutionResult(G8eBaseModel):
         description="Batch correlation ID when this result represents a multi-operator fan-out; matches the batch_id on per-operator events.",
     )
     available_operators: int | None = Field(default=None)
+    warden_risk: RiskLevel | None = Field(
+        default=None,
+        description="Warden-classified risk level from the approval gate, used for Tier 1 reputation resolution."
+    )
     blocked_pattern: str | None = Field(default=None)
     blocked_command: str | None = Field(default=None)
     validation_details: dict[str, Any] | None = Field(default=None)
@@ -467,4 +498,5 @@ ToolResult = Union[
     IntentPermissionResult,
     SearchWebResult,
     InvestigationContextResult,
+    SshInventoryToolResult,
 ]

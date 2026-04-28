@@ -41,10 +41,12 @@ All tests use mocked pubsub and deterministic payloads to verify AI tool handlin
 
 import pytest
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 from app.constants import (
     InvestigationStatus,
+    OperatorType,
+    CloudSubtype,
 )
 from app.constants.status import OperatorToolName
 from app.errors import  ExternalServiceError, ValidationError
@@ -109,15 +111,16 @@ def mock_g8ed_event_service():
 
 
 @pytest.fixture
-def tool_service(
-    mock_operator_command_service,
-    mock_investigation_service,
-    mock_web_search_provider
-):
+def tool_service(mock_web_search_provider, mock_operator_command_service, mock_investigation_service):
     """Create AIToolService with mocked dependencies."""
     return AIToolService(
         operator_command_service=mock_operator_command_service,
         investigation_service=mock_investigation_service,
+        reputation_data_service=AsyncMock(),
+        reputation_service=AsyncMock(),
+        chat_task_manager=MagicMock(),
+        ssh_inventory_service=MagicMock(),
+        stream_executor=MagicMock(),
         web_search_provider=mock_web_search_provider,
     )
 
@@ -140,6 +143,7 @@ def sample_g8e_context():
 @pytest.fixture
 def sample_investigation():
     """Sample investigation for testing."""
+    from app.models.operators import HeartbeatSnapshot, HeartbeatSystemIdentity
     return EnrichedInvestigationContext(
         id="inv-101",
         case_id="case-789",
@@ -149,7 +153,21 @@ def sample_investigation():
         status=InvestigationStatus.OPEN,
         sentinel_mode=True,
         conversation_history=[],
-        operator_documents=[],
+        operator_documents=[{
+            "id": "op-123",
+            "user_id": "user-303",
+            "operator_session_id": "session-456",
+            "operator_type": OperatorType.CLOUD,
+            "cloud_subtype": CloudSubtype.AWS,
+            "latest_heartbeat_snapshot": HeartbeatSnapshot(
+                system_identity=HeartbeatSystemIdentity(
+                    os="linux",
+                    hostname="bobuntu",
+                    current_user="bob",
+                    architecture="amd64"
+                )
+            )
+        }],
     )
 
 
@@ -173,105 +191,69 @@ class TestCommandExecutionTools:
         self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test run_commands_with_operator tool validates and processes payloads correctly."""
-        # Set tool context
-        context_token = tool_service.start_invocation_context(sample_g8e_context)
+        # Mock successful command execution
+        mock_result = CommandExecutionResult(
+            execution_id="exec-123",
+            status="completed",
+            exit_code=0,
+            stdout="File listing successful",
+            stderr="",
+            command="ls -la",
+            execution_time_ms=150,
+            success=True,
+        )
+        mock_operator_command_service.execute_command.return_value = mock_result
 
-        try:
-            # Mock successful command execution
-            mock_result = CommandExecutionResult(
-                execution_id="exec-123",
-                status="completed",
-                exit_code=0,
-                stdout="File listing successful",
-                stderr="",
-                command="ls -la",
-                execution_time_ms=150,
-                success=True,
-            )
-            mock_operator_command_service.execute_command.return_value = mock_result
+        # Test payload with valid command
+        tool_args = {
+            "command": "ls -la",
+            "working_directory": "/home/user",
+            "timeout_seconds": 30,
+            "guidelines": "List files in directory",
+            "justification": "Need to list files",
+        }
 
-            # Test payload with valid command
-            tool_args = {
-                "command": "ls -la",
-                "working_directory": "/home/user",
-                "timeout_seconds": 30,
-                "guidelines": "List files in directory",
-            }
+        # Execute tool call
+        result = await tool_service.execute_tool_call(
+            tool_name=OperatorToolName.RUN_COMMANDS,
+            tool_args=tool_args,
+            investigation=sample_investigation,
+            g8e_context=sample_g8e_context,
+            request_settings=request_settings,
+            execution_id="test-execution-id",
+        )
 
-            # Execute tool call
-            result = await tool_service.execute_tool_call(
-                tool_name=OperatorToolName.RUN_COMMANDS,
-                tool_args=tool_args,
-                investigation=sample_investigation,
-                g8e_context=sample_g8e_context,
-                request_settings=request_settings,
-                execution_id="test-execution-id",
-            )
-
-            # Verify payload was processed correctly
-            assert isinstance(result, ToolResult)
-            assert result.success
-            
-            # Verify command service was called with correct payload
-            mock_operator_command_service.execute_command.assert_called_once()
-            call_args = mock_operator_command_service.execute_command.call_args[1]
-            
-            # Check the ExecutorCommandArgs payload
-            assert "args" in call_args
-            args = call_args["args"]
-            assert "ls -la" in args.command
-            assert args.timeout_seconds == 30
-            assert args.guidelines == "List files in directory"
-        finally:
-            tool_service.reset_invocation_context(context_token)
+        # Verify payload was processed correctly
+        assert isinstance(result, ToolResult)
+        assert result.success
+        
+        # Verify command service was called with correct payload
+        mock_operator_command_service.execute_command.assert_called_once()
+        call_args = mock_operator_command_service.execute_command.call_args[1]
+        
+        # Check the ExecutorCommandArgs payload
+        assert "args" in call_args
+        args = call_args["args"]
+        assert "ls -la" in args.command
+        assert args.timeout_seconds == 30
+        assert args.guidelines == "List files in directory"
 
     async def test_run_commands_tool_payload_error_handling(
         self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test run_commands_with_operator tool handles payload errors correctly."""
-        context_token = tool_service.start_invocation_context(sample_g8e_context)
+        # Mock command execution failure
+        mock_operator_command_service.execute_command.side_effect = ValidationError("Invalid command")
 
-        try:
-            # Mock command execution failure
-            mock_operator_command_service.execute_command.side_effect = ValidationError("Invalid command")
+        # Test payload with invalid command
+        tool_args = {
+            "command": "invalid_command_syntax",
+            "justification": "Test error handling",
+        }
 
-            # Test payload with invalid command
-            tool_args = {
-                "command": "invalid_command_syntax",
-                "justification": "Test error handling",
-            }
-
-            # Execute tool call and verify ValidationError is raised
-            with pytest.raises(ValidationError, match="Invalid command"):
-                await tool_service.execute_tool_call(
-                    tool_name=OperatorToolName.RUN_COMMANDS,
-                    tool_args=tool_args,
-                    investigation=sample_investigation,
-                    g8e_context=sample_g8e_context,
-                    request_settings=request_settings,
-                    execution_id="test-execution-id",
-                )
-
-            # Verify the mock was called
-            mock_operator_command_service.execute_command.assert_called_once()
-        finally:
-            tool_service.reset_invocation_context(context_token)
-
-    async def test_run_commands_tool_security_validation(
-        self, tool_service, sample_g8e_context, sample_investigation, request_settings
-    ):
-        """Test run_commands_with_operator tool validates security constraints."""
-        context_token = tool_service.start_invocation_context(sample_g8e_context)
-
-        try:
-            # Test payload with sudo command (should be blocked)
-            tool_args = {
-                "command": "sudo ls -la",
-                "justification": "Test security validation",
-            }
-
-            # Execute tool call and verify security violation
-            result = await tool_service.execute_tool_call(
+        # Execute tool call and verify ValidationError is raised
+        with pytest.raises(ValidationError, match="Invalid command"):
+            await tool_service.execute_tool_call(
                 tool_name=OperatorToolName.RUN_COMMANDS,
                 tool_args=tool_args,
                 investigation=sample_investigation,
@@ -280,13 +262,34 @@ class TestCommandExecutionTools:
                 execution_id="test-execution-id",
             )
 
-            # Verify security violation was handled
-            assert isinstance(result, ToolResult)
-            assert not result.success
-            assert "SECURITY VIOLATION" in str(result.error)
-            assert "sudo" in str(result.error)
-        finally:
-            tool_service.reset_invocation_context(context_token)
+        # Verify the mock was called
+        mock_operator_command_service.execute_command.assert_called_once()
+
+    async def test_run_commands_tool_security_validation(
+        self, tool_service, sample_g8e_context, sample_investigation, request_settings
+    ):
+        """Test run_commands_with_operator tool validates security constraints."""
+        # Test payload with sudo command (should be blocked)
+        tool_args = {
+            "command": "sudo ls -la",
+            "justification": "Test security validation",
+        }
+
+        # Execute tool call and verify security violation
+        result = await tool_service.execute_tool_call(
+            tool_name=OperatorToolName.RUN_COMMANDS,
+            tool_args=tool_args,
+            investigation=sample_investigation,
+            g8e_context=sample_g8e_context,
+            request_settings=request_settings,
+            execution_id="test-execution-id",
+        )
+
+        # Verify security violation was handled
+        assert isinstance(result, ToolResult)
+        assert not result.success
+        assert "SECURITY VIOLATION" in str(result.error)
+        assert "sudo" in str(result.error)
 
 
 # ---------------------------------------------------------------------------
@@ -302,203 +305,185 @@ class TestFileOperationTools:
         self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test file_create_on_operator tool processes payloads correctly."""
-        context_token = tool_service.start_invocation_context(sample_g8e_context)
+        # Mock successful file creation
+        mock_result = FileEditResult(
+            operation="create",
+            file_path="/tmp/test.txt",
+            success=True,
+            message="File created successfully",
+            size_bytes=100,
+        )
+        mock_operator_command_service.execute_file_edit.return_value = mock_result
 
-        try:
-            # Mock successful file creation
-            mock_result = FileEditResult(
-                operation="create",
-                file_path="/tmp/test.txt",
-                success=True,
-                message="File created successfully",
-                size_bytes=100,
-            )
-            mock_operator_command_service.execute_file_edit.return_value = mock_result
+        # Test payload for file creation
+        tool_args = {
+            "file_path": "/tmp/test.txt",
+            "content": "Hello, World!",
+            "mode": "0644",
+            "create_directories": True,
+            "justification": "Need to create test file",
+        }
 
-            # Test payload for file creation
-            tool_args = {
-                "file_path": "/tmp/test.txt",
-                "content": "Hello, World!",
-                "mode": "0644",
-                "create_directories": True,
-            }
+        # Execute tool call
+        result = await tool_service.execute_tool_call(
+            tool_name=OperatorToolName.FILE_CREATE,
+            tool_args=tool_args,
+            investigation=sample_investigation,
+            g8e_context=sample_g8e_context,
+            request_settings=request_settings,
+            execution_id="test-execution-id",
+        )
 
-            # Execute tool call
-            result = await tool_service.execute_tool_call(
-                tool_name=OperatorToolName.FILE_CREATE,
-                tool_args=tool_args,
-                investigation=sample_investigation,
-                g8e_context=sample_g8e_context,
-                request_settings=request_settings,
-                execution_id="test-execution-id",
-            )
-
-            # Verify payload processing
-            assert isinstance(result, ToolResult)
-            assert result.success
-            
-            # Verify command service was called with correct payload
-            mock_operator_command_service.execute_file_edit.assert_called_once()
-            call_args = mock_operator_command_service.execute_file_edit.call_args[1]
-            
-            assert "args" in call_args
-            args = call_args["args"]
-            assert args.file_path == "/tmp/test.txt"
-            assert args.content == "Hello, World!"
-        finally:
-            tool_service.reset_invocation_context(context_token)
+        # Verify payload processing
+        assert isinstance(result, ToolResult)
+        assert result.success
+        
+        # Verify command service was called with correct payload
+        mock_operator_command_service.execute_file_edit.assert_called_once()
+        call_args = mock_operator_command_service.execute_file_edit.call_args[1]
+        
+        assert "args" in call_args
+        args = call_args["args"]
+        assert args.file_path == "/tmp/test.txt"
+        assert args.content == "Hello, World!"
 
     async def test_file_write_tool_payload_processing(
         self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test file_write_on_operator tool processes payloads correctly."""
-        context_token = tool_service.start_invocation_context(sample_g8e_context)
+        # Mock successful file write
+        mock_result = FileEditResult(
+            operation="write",
+            file_path="/tmp/test.txt",
+            success=True,
+            message="File written successfully",
+            size_bytes=200,
+        )
+        mock_operator_command_service.execute_file_edit.return_value = mock_result
 
-        try:
-            # Mock successful file write
-            mock_result = FileEditResult(
-                operation="write",
-                file_path="/tmp/test.txt",
-                success=True,
-                message="File written successfully",
-                size_bytes=200,
-            )
-            mock_operator_command_service.execute_file_edit.return_value = mock_result
+        # Test payload for file writing
+        tool_args = {
+            "file_path": "/tmp/test.txt",
+            "content": "Updated content",
+            "mode": "0644",
+            "backup": True,
+            "justification": "Need to update test file",
+        }
 
-            # Test payload for file writing
-            tool_args = {
-                "file_path": "/tmp/test.txt",
-                "content": "Updated content",
-                "mode": "0644",
-                "backup": True,
-            }
+        # Execute tool call
+        result = await tool_service.execute_tool_call(
+            tool_name=OperatorToolName.FILE_WRITE,
+            tool_args=tool_args,
+            investigation=sample_investigation,
+            g8e_context=sample_g8e_context,
+            request_settings=request_settings,
+            execution_id="test-execution-id",
+        )
 
-            # Execute tool call
-            result = await tool_service.execute_tool_call(
-                tool_name=OperatorToolName.FILE_WRITE,
-                tool_args=tool_args,
-                investigation=sample_investigation,
-                g8e_context=sample_g8e_context,
-                request_settings=request_settings,
-                execution_id="test-execution-id",
-            )
-
-            # Verify payload processing
-            assert isinstance(result, ToolResult)
-            assert result.success
-            
-            # Verify command service was called with correct payload
-            mock_operator_command_service.execute_file_edit.assert_called_once()
-            call_args = mock_operator_command_service.execute_file_edit.call_args[1]
-            
-            assert "args" in call_args
-            args = call_args["args"]
-            assert args.file_path == "/tmp/test.txt"
-            assert args.content == "Updated content"
-        finally:
-            tool_service.reset_invocation_context(context_token)
+        # Verify payload processing
+        assert isinstance(result, ToolResult)
+        assert result.success
+        
+        # Verify command service was called with correct payload
+        mock_operator_command_service.execute_file_edit.assert_called_once()
+        call_args = mock_operator_command_service.execute_file_edit.call_args[1]
+        
+        assert "args" in call_args
+        args = call_args["args"]
+        assert args.file_path == "/tmp/test.txt"
+        assert args.content == "Updated content"
 
     async def test_file_read_tool_payload_processing(
         self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test file_read_on_operator tool processes payloads correctly."""
-        context_token = tool_service.start_invocation_context(sample_g8e_context)
+        # Mock successful file read
+        mock_result = FsReadToolResult(
+            file_path="/tmp/test.txt",
+            content="File content here",
+            size_bytes=100,
+            encoding="utf-8",
+            success=True,
+        )
+        mock_operator_command_service.execute_file_edit.return_value = mock_result
 
-        try:
-            # Mock successful file read
-            mock_result = FsReadToolResult(
-                file_path="/tmp/test.txt",
-                content="File content here",
-                size_bytes=100,
-                encoding="utf-8",
-                success=True,
-            )
-            mock_operator_command_service.execute_file_edit.return_value = mock_result
+        # Test payload for file reading
+        tool_args = {
+            "file_path": "/tmp/test.txt",
+            "justification": "Test file reading for unit test",
+            "start_line": 1,
+            "end_line": 1000,
+        }
 
-            # Test payload for file reading
-            tool_args = {
-                "file_path": "/tmp/test.txt",
-                "justification": "Test file reading for unit test",
-                "start_line": 1,
-                "end_line": 1000,
-            }
+        # Execute tool call
+        result = await tool_service.execute_tool_call(
+            tool_name=OperatorToolName.FILE_READ,
+            tool_args=tool_args,
+            investigation=sample_investigation,
+            g8e_context=sample_g8e_context,
+            request_settings=request_settings,
+            execution_id="test-execution-id",
+        )
 
-            # Execute tool call
-            result = await tool_service.execute_tool_call(
-                tool_name=OperatorToolName.FILE_READ,
-                tool_args=tool_args,
-                investigation=sample_investigation,
-                g8e_context=sample_g8e_context,
-                request_settings=request_settings,
-                execution_id="test-execution-id",
-            )
-
-            # Verify payload processing
-            assert isinstance(result, ToolResult)
-            assert result.success
-            
-            # Verify command service was called with correct payload
-            mock_operator_command_service.execute_file_edit.assert_called_once()
-            call_args = mock_operator_command_service.execute_file_edit.call_args[1]
-            
-            assert "args" in call_args
-            args = call_args["args"]
-            assert args.file_path == "/tmp/test.txt"
-            assert args.start_line == 1
-        finally:
-            tool_service.reset_invocation_context(context_token)
+        # Verify payload processing
+        assert isinstance(result, ToolResult)
+        assert result.success
+        
+        # Verify command service was called with correct payload
+        mock_operator_command_service.execute_file_edit.assert_called_once()
+        call_args = mock_operator_command_service.execute_file_edit.call_args[1]
+        
+        assert "args" in call_args
+        args = call_args["args"]
+        assert args.file_path == "/tmp/test.txt"
+        assert args.start_line == 1
 
     async def test_file_update_tool_payload_processing(
         self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test file_update_on_operator tool processes payloads correctly."""
-        context_token = tool_service.start_invocation_context(sample_g8e_context)
+        # Mock successful file update
+        mock_result = FileEditResult(
+            operation="update",
+            file_path="/tmp/test.txt",
+            success=True,
+            message="File updated successfully",
+            size_bytes=150,
+        )
+        mock_operator_command_service.execute_file_edit.return_value = mock_result
 
-        try:
-            # Mock successful file update
-            mock_result = FileEditResult(
-                operation="update",
-                file_path="/tmp/test.txt",
-                success=True,
-                message="File updated successfully",
-                size_bytes=150,
-            )
-            mock_operator_command_service.execute_file_edit.return_value = mock_result
+        # Test payload for file updating
+        tool_args = {
+            "file_path": "/tmp/test.txt",
+            "old_content": "old content",
+            "new_content": "new content",
+            "justification": "Test file update for unit test",
+            "backup": True,
+        }
 
-            # Test payload for file updating
-            tool_args = {
-                "file_path": "/tmp/test.txt",
-                "old_content": "old content",
-                "new_content": "new content",
-                "justification": "Test file update for unit test",
-                "backup": True,
-            }
+        # Execute tool call
+        result = await tool_service.execute_tool_call(
+            tool_name=OperatorToolName.FILE_UPDATE,
+            tool_args=tool_args,
+            investigation=sample_investigation,
+            g8e_context=sample_g8e_context,
+            request_settings=request_settings,
+            execution_id="test-execution-id",
+        )
 
-            # Execute tool call
-            result = await tool_service.execute_tool_call(
-                tool_name=OperatorToolName.FILE_UPDATE,
-                tool_args=tool_args,
-                investigation=sample_investigation,
-                g8e_context=sample_g8e_context,
-                request_settings=request_settings,
-                execution_id="test-execution-id",
-            )
-
-            # Verify payload processing
-            assert isinstance(result, ToolResult)
-            assert result.success
-            
-            # Verify command service was called with correct payload
-            mock_operator_command_service.execute_file_edit.assert_called_once()
-            call_args = mock_operator_command_service.execute_file_edit.call_args[1]
-            
-            assert "args" in call_args
-            args = call_args["args"]
-            assert args.file_path == "/tmp/test.txt"
-            assert args.old_content == "old content"
-            assert args.new_content == "new content"
-        finally:
-            tool_service.reset_invocation_context(context_token)
+        # Verify payload processing
+        assert isinstance(result, ToolResult)
+        assert result.success
+        
+        # Verify command service was called with correct payload
+        mock_operator_command_service.execute_file_edit.assert_called_once()
+        call_args = mock_operator_command_service.execute_file_edit.call_args[1]
+        
+        assert "args" in call_args
+        args = call_args["args"]
+        assert args.file_path == "/tmp/test.txt"
+        assert args.old_content == "old content"
+        assert args.new_content == "new content"
 
 
 # ---------------------------------------------------------------------------
@@ -514,277 +499,252 @@ class TestFileSystemTools:
         self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test list_files_and_directories_with_detailed_metadata tool processes payloads correctly."""
-        context_token = tool_service.start_invocation_context(sample_g8e_context)
+        # Mock successful directory listing
+        mock_result = FsListToolResult(
+            path="/home/user",
+            entries=[
+                {
+                    "name": "file1.txt",
+                    "path": "/home/user/file1.txt",
+                    "is_dir": False,
+                    "size": 100,
+                    "mode": "0644",
+                    "mod_time": 1672531200  # 2026-01-01T00:00:00Z as timestamp
+                }
+            ],
+            success=True,
+        )
+        mock_operator_command_service.execute_fs_list.return_value = mock_result
 
-        try:
-            # Mock successful directory listing
-            mock_result = FsListToolResult(
-                path="/home/user",
-                entries=[
-                    {
-                        "name": "file1.txt",
-                        "path": "/home/user/file1.txt",
-                        "is_dir": False,
-                        "size": 100,
-                        "mode": "0644",
-                        "mod_time": 1672531200  # 2026-01-01T00:00:00Z as timestamp
-                    }
-                ],
-                success=True,
-            )
-            mock_operator_command_service.execute_fs_list.return_value = mock_result
+        # Test payload for directory listing
+        tool_args = {
+            "path": "/home/user",
+            "max_depth": 1,
+            "max_entries": 100,
+        }
 
-            # Test payload for directory listing
-            tool_args = {
-                "path": "/home/user",
-                "max_depth": 1,
-                "max_entries": 100,
-            }
+        # Execute tool call
+        result = await tool_service.execute_tool_call(
+            tool_name=OperatorToolName.LIST_FILES,
+            tool_args=tool_args,
+            investigation=sample_investigation,
+            g8e_context=sample_g8e_context,
+            request_settings=request_settings,
+            execution_id="test-execution-id",
+        )
 
-            # Execute tool call
-            result = await tool_service.execute_tool_call(
-                tool_name=OperatorToolName.LIST_FILES,
-                tool_args=tool_args,
-                investigation=sample_investigation,
-                g8e_context=sample_g8e_context,
-                request_settings=request_settings,
-                execution_id="test-execution-id",
-            )
-
-            # Verify payload processing
-            assert isinstance(result, ToolResult)
-            assert result.success
-            
-            # Verify command service was called with correct payload
-            mock_operator_command_service.execute_fs_list.assert_called_once()
-            call_args = mock_operator_command_service.execute_fs_list.call_args[1]
-            
-            assert "args" in call_args
-            args = call_args["args"]
-            assert args.path == "/home/user"
-            assert args.max_depth == 1
-        finally:
-            tool_service.reset_invocation_context(context_token)
+        # Verify payload processing
+        assert isinstance(result, ToolResult)
+        assert result.success
+        
+        # Verify command service was called with correct payload
+        mock_operator_command_service.execute_fs_list.assert_called_once()
+        call_args = mock_operator_command_service.execute_fs_list.call_args[1]
+        
+        assert "args" in call_args
+        args = call_args["args"]
+        assert args.path == "/home/user"
+        assert args.max_depth == 1
 
     async def test_read_file_content_tool_payload_processing(
         self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test read_file_content tool processes payloads correctly."""
-        context_token = tool_service.start_invocation_context(sample_g8e_context)
+        # Mock successful file content read
+        mock_result = FsReadToolResult(
+            file_path="/tmp/test.txt",
+            content="File content here",
+            size_bytes=100,
+            encoding="utf-8",
+            success=True,
+        )
+        mock_operator_command_service.execute_file_edit.return_value = mock_result
 
-        try:
-            # Mock successful file content read
-            mock_result = FsReadToolResult(
-                file_path="/tmp/test.txt",
-                content="File content here",
-                size_bytes=100,
-                encoding="utf-8",
-                success=True,
-            )
-            mock_operator_command_service.execute_file_edit.return_value = mock_result
+        # Test payload for reading file content
+        tool_args = {
+            "file_path": "/tmp/test.txt",
+            "justification": "Test file content reading for unit test",
+            "start_line": 1,
+            "end_line": 500,
+        }
 
-            # Test payload for reading file content
-            tool_args = {
-                "file_path": "/tmp/test.txt",
-                "justification": "Test file content reading for unit test",
-                "start_line": 1,
-                "end_line": 500,
-            }
+        # Execute tool call
+        result = await tool_service.execute_tool_call(
+            tool_name=OperatorToolName.FILE_READ,
+            tool_args=tool_args,
+            investigation=sample_investigation,
+            g8e_context=sample_g8e_context,
+            request_settings=request_settings,
+            execution_id="test-execution-id",
+        )
 
-            # Execute tool call
-            result = await tool_service.execute_tool_call(
-                tool_name=OperatorToolName.FILE_READ,
-                tool_args=tool_args,
-                investigation=sample_investigation,
-                g8e_context=sample_g8e_context,
-                request_settings=request_settings,
-                execution_id="test-execution-id",
-            )
-
-            # Verify payload processing
-            assert isinstance(result, ToolResult)
-            assert result.success
-            
-            # Verify command service was called with correct payload
-            mock_operator_command_service.execute_file_edit.assert_called_once()
-            call_args = mock_operator_command_service.execute_file_edit.call_args[1]
-            
-            assert "args" in call_args
-            args = call_args["args"]
-            assert args.file_path == "/tmp/test.txt"
-            assert args.start_line == 1
-        finally:
-            tool_service.reset_invocation_context(context_token)
+        # Verify payload processing
+        assert isinstance(result, ToolResult)
+        assert result.success
+        
+        # Verify command service was called with correct payload
+        mock_operator_command_service.execute_file_edit.assert_called_once()
+        call_args = mock_operator_command_service.execute_file_edit.call_args[1]
+        
+        assert "args" in call_args
+        args = call_args["args"]
+        assert args.file_path == "/tmp/test.txt"
+        assert args.start_line == 1
 
     async def test_fetch_file_history_tool_payload_processing(
         self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test fetch_file_history tool processes payloads correctly."""
-        context_token = tool_service.start_invocation_context(sample_g8e_context)
+        # Mock successful file history fetch
+        mock_result = FetchFileHistoryToolResult(
+            success=True,
+            file_path="/tmp/test.txt",
+            history=[
+                {
+                    "commit_hash": "abc123",
+                    "timestamp": "2026-01-01T00:00:00Z",
+                    "message": "Initial commit"
+                }
+            ]
+        )
+        mock_operator_command_service.execute_fetch_file_history.return_value = mock_result
 
-        try:
-            # Mock successful file history fetch
-            mock_result = FetchFileHistoryToolResult(
-                success=True,
-                file_path="/tmp/test.txt",
-                history=[
-                    {
-                        "commit_hash": "abc123",
-                        "timestamp": "2026-01-01T00:00:00Z",
-                        "message": "Initial commit"
-                    }
-                ]
-            )
-            mock_operator_command_service.execute_fetch_file_history.return_value = mock_result
+        # Test payload for file history
+        tool_args = {
+            "file_path": "/tmp/test.txt",
+            "limit": 10,
+            "target_operator": "op-123",
+        }
 
-            # Test payload for file history
-            tool_args = {
-                "file_path": "/tmp/test.txt",
-                "limit": 10,
-                "target_operator": "op-123",
-            }
+        # Execute tool call
+        result = await tool_service.execute_tool_call(
+            tool_name=OperatorToolName.FETCH_FILE_HISTORY,
+            tool_args=tool_args,
+            investigation=sample_investigation,
+            g8e_context=sample_g8e_context,
+            request_settings=request_settings,
+            execution_id="test-execution-id",
+        )
 
-            # Execute tool call
-            result = await tool_service.execute_tool_call(
-                tool_name=OperatorToolName.FETCH_FILE_HISTORY,
-                tool_args=tool_args,
-                investigation=sample_investigation,
-                g8e_context=sample_g8e_context,
-                request_settings=request_settings,
-                execution_id="test-execution-id",
-            )
-
-            # Verify payload processing
-            assert isinstance(result, ToolResult)
-            assert result.success
-            
-            # Verify command service was called with correct payload
-            mock_operator_command_service.execute_fetch_file_history.assert_called_once()
-            call_args = mock_operator_command_service.execute_fetch_file_history.call_args[1]
-            
-            assert "args" in call_args
-            assert "execution_id" not in call_args
-            args = call_args["args"]
-            assert args.file_path == "/tmp/test.txt"
-            assert args.limit == 10
-            assert args.execution_id == "test-execution-id"
-        finally:
-            tool_service.reset_invocation_context(context_token)
+        # Verify payload processing
+        assert isinstance(result, ToolResult)
+        assert result.success
+        
+        # Verify command service was called with correct payload
+        mock_operator_command_service.execute_fetch_file_history.assert_called_once()
+        call_args = mock_operator_command_service.execute_fetch_file_history.call_args[1]
+        
+        assert "args" in call_args
+        assert "execution_id" not in call_args
+        args = call_args["args"]
+        assert args.file_path == "/tmp/test.txt"
+        assert args.limit == 10
+        assert args.execution_id == "test-execution-id"
 
     async def test_restore_file_tool_payload_processing(
         self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test restore_file tool processes payloads correctly."""
-        context_token = tool_service.start_invocation_context(sample_g8e_context)
+        # Mock successful file restore
+        mock_result = FileEditResult(
+            operation="update",
+            file_path="/tmp/test.txt",
+            success=True,
+            message="File restored successfully",
+            bytes_written=100,
+        )
+        mock_operator_command_service.execute_file_edit.return_value = mock_result
 
-        try:
-            # Mock successful file restore
-            mock_result = FileEditResult(
-                operation="update",
-                file_path="/tmp/test.txt",
-                success=True,
-                message="File restored successfully",
-                bytes_written=100,
-            )
-            mock_operator_command_service.execute_file_edit.return_value = mock_result
+        # Test payload for file restoration
+        tool_args = {
+            "file_path": "/tmp/test.txt",
+            "old_content": "old content to restore from",
+            "new_content": "restored content",
+            "justification": "Test file restoration for unit test",
+        }
 
-            # Test payload for file restoration
-            tool_args = {
-                "file_path": "/tmp/test.txt",
-                "old_content": "old content to restore from",
-                "new_content": "restored content",
-                "justification": "Test file restoration for unit test",
-            }
+        # Execute tool call
+        result = await tool_service.execute_tool_call(
+            tool_name=OperatorToolName.FILE_UPDATE,
+            tool_args=tool_args,
+            investigation=sample_investigation,
+            g8e_context=sample_g8e_context,
+            request_settings=request_settings,
+            execution_id="test-execution-id",
+        )
 
-            # Execute tool call
-            result = await tool_service.execute_tool_call(
-                tool_name=OperatorToolName.FILE_UPDATE,
-                tool_args=tool_args,
-                investigation=sample_investigation,
-                g8e_context=sample_g8e_context,
-                request_settings=request_settings,
-                execution_id="test-execution-id",
-            )
-
-            # Verify payload processing
-            assert isinstance(result, ToolResult)
-            assert result.success
-            
-            # Verify command service was called with correct payload
-            mock_operator_command_service.execute_file_edit.assert_called_once()
-            call_args = mock_operator_command_service.execute_file_edit.call_args[1]
-            
-            assert "args" in call_args
-            args = call_args["args"]
-            assert args.file_path == "/tmp/test.txt"
-            assert args.old_content == "old content to restore from"
-            assert args.new_content == "restored content"
-        finally:
-            tool_service.reset_invocation_context(context_token)
+        # Verify payload processing
+        assert isinstance(result, ToolResult)
+        assert result.success
+        
+        # Verify command service was called with correct payload
+        mock_operator_command_service.execute_file_edit.assert_called_once()
+        call_args = mock_operator_command_service.execute_file_edit.call_args[1]
+        
+        assert "args" in call_args
+        args = call_args["args"]
+        assert args.file_path == "/tmp/test.txt"
+        assert args.old_content == "old content to restore from"
+        assert args.new_content == "restored content"
 
     async def test_fetch_file_diff_tool_payload_processing(
         self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test fetch_file_diff tool processes payloads correctly."""
-        context_token = tool_service.start_invocation_context(sample_g8e_context)
+        # Mock successful file diff fetch
+        mock_result = FetchFileDiffToolResult(
+            success=True,
+            diffs=[
+                {
+                    "id": "diff123",
+                    "file_path": "/tmp/test.txt",
+                    "timestamp": "2026-01-01T00:00:00Z",
+                    "operation": "modify",
+                    "ledger_hash_before": "hash123",
+                    "ledger_hash_after": "hash456",
+                    "diff_stat": "1 file changed",
+                    "diff_content": "--- a/test.txt\n+++ b/test.txt\n@@ -1 +1 @@\n-old\n+new",
+                    "diff_size": 20,
+                    "operator_session_id": "session-789"
+                }
+            ],
+            total=1
+        )
+        mock_operator_command_service.execute_fetch_file_diff.return_value = mock_result
 
-        try:
-            # Mock successful file diff fetch
-            mock_result = FetchFileDiffToolResult(
-                success=True,
-                diffs=[
-                    {
-                        "id": "diff123",
-                        "file_path": "/tmp/test.txt",
-                        "timestamp": "2026-01-01T00:00:00Z",
-                        "operation": "modify",
-                        "ledger_hash_before": "hash123",
-                        "ledger_hash_after": "hash456",
-                        "diff_stat": "1 file changed",
-                        "diff_content": "--- a/test.txt\n+++ b/test.txt\n@@ -1 +1 @@\n-old\n+new",
-                        "diff_size": 20,
-                        "operator_session_id": "session-789"
-                    }
-                ],
-                total=1
-            )
-            mock_operator_command_service.execute_fetch_file_diff.return_value = mock_result
+        # Test payload for file diff
+        tool_args = {
+            "file_path": "/tmp/test.txt",
+            "timestamp_from": "2026-01-01T00:00:00Z",
+            "timestamp_to": "2026-01-02T00:00:00Z",
+            "context_lines": 3,
+            "target_operator": "op-123",
+        }
 
-            # Test payload for file diff
-            tool_args = {
-                "file_path": "/tmp/test.txt",
-                "timestamp_from": "2026-01-01T00:00:00Z",
-                "timestamp_to": "2026-01-02T00:00:00Z",
-                "context_lines": 3,
-                "target_operator": "op-123",
-            }
+        # Execute tool call
+        result = await tool_service.execute_tool_call(
+            tool_name=OperatorToolName.FETCH_FILE_DIFF,
+            tool_args=tool_args,
+            investigation=sample_investigation,
+            g8e_context=sample_g8e_context,
+            request_settings=request_settings,
+            execution_id="test-execution-id",
+        )
 
-            # Execute tool call
-            result = await tool_service.execute_tool_call(
-                tool_name=OperatorToolName.FETCH_FILE_DIFF,
-                tool_args=tool_args,
-                investigation=sample_investigation,
-                g8e_context=sample_g8e_context,
-                request_settings=request_settings,
-                execution_id="test-execution-id",
-            )
-
-            # Verify payload processing
-            assert isinstance(result, ToolResult)
-            assert result.success
-            
-            # Verify command service was called with correct payload
-            mock_operator_command_service.execute_fetch_file_diff.assert_called_once()
-            call_args = mock_operator_command_service.execute_fetch_file_diff.call_args[1]
-            
-            assert "args" in call_args
-            assert "execution_id" not in call_args
-            args = call_args["args"]
-            assert args.file_path == "/tmp/test.txt"
-            assert args.target_operator == "op-123"
-            assert args.execution_id == "test-execution-id"
-        finally:
-            tool_service.reset_invocation_context(context_token)
+        # Verify payload processing
+        assert isinstance(result, ToolResult)
+        assert result.success
+        
+        # Verify command service was called with correct payload
+        mock_operator_command_service.execute_fetch_file_diff.assert_called_once()
+        call_args = mock_operator_command_service.execute_fetch_file_diff.call_args[1]
+        
+        assert "args" in call_args
+        assert "execution_id" not in call_args
+        args = call_args["args"]
+        assert args.file_path == "/tmp/test.txt"
+        assert args.target_operator == "op-123"
+        assert args.execution_id == "test-execution-id"
 
 
 # ---------------------------------------------------------------------------
@@ -800,106 +760,96 @@ class TestNetworkSearchTools:
         self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test check_port_status tool processes payloads correctly."""
-        context_token = tool_service.start_invocation_context(sample_g8e_context)
+        # Mock successful port check
+        mock_result = PortCheckToolResult(
+            host="example.com",
+            port=443,
+            protocol="tcp",
+            is_open=True,
+            response_time_ms=50,
+            success=True,
+        )
+        mock_operator_command_service.execute_port_check.return_value = mock_result
 
-        try:
-            # Mock successful port check
-            mock_result = PortCheckToolResult(
-                host="example.com",
-                port=443,
-                protocol="tcp",
-                is_open=True,
-                response_time_ms=50,
-                success=True,
-            )
-            mock_operator_command_service.execute_port_check.return_value = mock_result
+        # Test payload for port checking
+        tool_args = {
+            "host": "example.com",
+            "port": 443,
+            "protocol": "tcp",
+            "timeout_seconds": 5,
+        }
 
-            # Test payload for port checking
-            tool_args = {
-                "host": "example.com",
-                "port": 443,
-                "protocol": "tcp",
-                "timeout_seconds": 5,
-            }
+        # Execute tool call
+        result = await tool_service.execute_tool_call(
+            tool_name=OperatorToolName.CHECK_PORT,
+            tool_args=tool_args,
+            investigation=sample_investigation,
+            g8e_context=sample_g8e_context,
+            request_settings=request_settings,
+            execution_id="test-execution-id",
+        )
 
-            # Execute tool call
-            result = await tool_service.execute_tool_call(
-                tool_name=OperatorToolName.CHECK_PORT,
-                tool_args=tool_args,
-                investigation=sample_investigation,
-                g8e_context=sample_g8e_context,
-                request_settings=request_settings,
-                execution_id="test-execution-id",
-            )
-
-            # Verify payload processing
-            assert isinstance(result, ToolResult)
-            assert result.success
-            
-            # Verify command service was called with correct payload
-            mock_operator_command_service.execute_port_check.assert_called_once()
-            call_args = mock_operator_command_service.execute_port_check.call_args[1]
-            
-            assert "args" in call_args
-            args = call_args["args"]
-            assert args.host == "example.com"
-            assert args.port == 443
-        finally:
-            tool_service.reset_invocation_context(context_token)
+        # Verify payload processing
+        assert isinstance(result, ToolResult)
+        assert result.success
+        
+        # Verify command service was called with correct payload
+        mock_operator_command_service.execute_port_check.assert_called_once()
+        call_args = mock_operator_command_service.execute_port_check.call_args[1]
+        
+        assert "args" in call_args
+        args = call_args["args"]
+        assert args.host == "example.com"
+        assert args.port == 443
 
     async def test_search_web_tool_payload_processing(
         self, tool_service, mock_web_search_provider, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test g8e_web_search tool processes payloads correctly."""
-        context_token = tool_service.start_invocation_context(sample_g8e_context)
+        # Mock successful web search
+        mock_result = SearchWebResult(
+            query="Kubernetes troubleshooting",
+            results=[
+                {
+                    "title": "Kubernetes Troubleshooting Guide",
+                    "url": "https://kubernetes.io/docs/tasks/debug-application-cluster/",
+                    "snippet": "Common issues and solutions for Kubernetes clusters",
+                    "relevance_score": 0.95
+                }
+            ],
+            total_results="1",
+            success=True,
+        )
+        mock_web_search_provider.search.return_value = mock_result
 
-        try:
-            # Mock successful web search
-            mock_result = SearchWebResult(
-                query="Kubernetes troubleshooting",
-                results=[
-                    {
-                        "title": "Kubernetes Troubleshooting Guide",
-                        "url": "https://kubernetes.io/docs/tasks/debug-application-cluster/",
-                        "snippet": "Common issues and solutions for Kubernetes clusters",
-                        "relevance_score": 0.95
-                    }
-                ],
-                total_results="1",
-                success=True,
-            )
-            mock_web_search_provider.search.return_value = mock_result
+        # Test payload for web search
+        tool_args = {
+            "query": "Kubernetes troubleshooting",
+            "max_results": 5,
+            "language": "en",
+            "safe_search": "moderate",
+        }
 
-            # Test payload for web search
-            tool_args = {
-                "query": "Kubernetes troubleshooting",
-                "max_results": 5,
-                "language": "en",
-                "safe_search": "moderate",
-            }
+        # Execute tool call
+        result = await tool_service.execute_tool_call(
+            tool_name=OperatorToolName.G8E_SEARCH_WEB,
+            tool_args=tool_args,
+            investigation=sample_investigation,
+            g8e_context=sample_g8e_context,
+            request_settings=request_settings,
+            execution_id="test-execution-id",
+        )
 
-            # Execute tool call
-            result = await tool_service.execute_tool_call(
-                tool_name=OperatorToolName.G8E_SEARCH_WEB,
-                tool_args=tool_args,
-                investigation=sample_investigation,
-                g8e_context=sample_g8e_context,
-                request_settings=request_settings,
-                execution_id="test-execution-id",
-            )
-
-            # Verify payload processing
-            assert isinstance(result, ToolResult)
-            assert result.success
-            
-            # Verify web search provider was called with correct payload
-            mock_web_search_provider.search.assert_called_once()
-            call_args = mock_web_search_provider.search.call_args[1]
-            
-            assert call_args["query"] == "Kubernetes troubleshooting"
-            assert call_args["num"] == 5
-        finally:
-            tool_service.reset_invocation_context(context_token)
+        # Verify payload processing
+        assert isinstance(result, ToolResult)
+        assert result.success
+        
+        # Verify web search provider was called with correct payload
+        mock_web_search_provider.search.assert_called_once()
+        call_args = mock_web_search_provider.search.call_args[1]
+        
+        assert call_args["query"] == "Kubernetes troubleshooting"
+        assert call_args["num"] == 5
 
     @pytest.mark.requires_web_search
     async def test_search_web_tool_unavailable_handling(
@@ -907,33 +857,28 @@ class TestNetworkSearchTools:
     ):
         """Test g8e_web_search tool handles unavailable provider correctly."""
         # Create tool service without web search provider
-        tool_service_no_search = AIToolService(
-            operator_command_service=AsyncMock(spec=OperatorCommandService),
-            investigation_service=AsyncMock(spec=InvestigationService),
-            web_search_provider=None,  # No provider
+        from tests.fakes.tool_helpers import create_tool_service_fake
+        tool_service_no_search = create_tool_service_fake(
+            web_search_provider=None,
+            auto_approve=True
         )
-        
-        context_token = tool_service_no_search.start_invocation_context(sample_g8e_context)
 
-        try:
-            # Test payload for web search when provider is unavailable
-            tool_args = {
-                "query": "Kubernetes troubleshooting",
-                "max_results": 5,
-            }
+        # Test payload for web search when provider is unavailable
+        tool_args = {
+            "query": "Kubernetes troubleshooting",
+            "max_results": 5,
+        }
 
-            # Execute tool call and verify unavailable handling
-            with pytest.raises(ExternalServiceError, match="g8e_web_search called but WebSearchProvider is not configured"):
-                await tool_service_no_search.execute_tool_call(
-                    tool_name=OperatorToolName.G8E_SEARCH_WEB,
-                    tool_args=tool_args,
-                    investigation=sample_investigation,
-                    g8e_context=sample_g8e_context,
-                    request_settings=request_settings,
-                    execution_id="test-execution-id",
-                )
-        finally:
-            tool_service_no_search.reset_invocation_context(context_token)
+        # Execute tool call and verify unavailable handling
+        with pytest.raises(ExternalServiceError, match="g8e_web_search called but WebSearchProvider is not configured"):
+            await tool_service_no_search.execute_tool_call(
+                tool_name=OperatorToolName.G8E_SEARCH_WEB,
+                tool_args=tool_args,
+                investigation=sample_investigation,
+                g8e_context=sample_g8e_context,
+                request_settings=request_settings,
+                execution_id="test-execution-id",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -949,97 +894,87 @@ class TestPermissionSessionTools:
         self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test grant_intent_permission tool processes payloads correctly."""
-        context_token = tool_service.start_invocation_context(sample_g8e_context)
+        # Mock successful intent grant
+        mock_result = IntentPermissionResult(
+            intent="file_access",
+            granted=True,
+            reason="User explicitly granted permission",
+            expires_at=None,
+            success=True,
+        )
+        mock_operator_command_service.execute_intent_permission_request.return_value = mock_result
 
-        try:
-            # Mock successful intent grant
-            mock_result = IntentPermissionResult(
-                intent="file_access",
-                granted=True,
-                reason="User explicitly granted permission",
-                expires_at=None,
-                success=True,
-            )
-            mock_operator_command_service.execute_intent_permission_request.return_value = mock_result
+        # Test payload for granting intent
+        tool_args = {
+            "intent_name": "s3_read",
+            "justification": "Need to access user files for troubleshooting",
+            "operation_context": "File system troubleshooting",
+        }
 
-            # Test payload for granting intent
-            tool_args = {
-                "intent_name": "file_access",
-                "justification": "Need to access user files for troubleshooting",
-                "operation_context": "File system troubleshooting",
-            }
+        # Execute tool call
+        result = await tool_service.execute_tool_call(
+            tool_name=OperatorToolName.GRANT_INTENT,
+            tool_args=tool_args,
+            investigation=sample_investigation,
+            g8e_context=sample_g8e_context,
+            request_settings=request_settings,
+            execution_id="test-execution-id",
+        )
 
-            # Execute tool call
-            result = await tool_service.execute_tool_call(
-                tool_name=OperatorToolName.GRANT_INTENT,
-                tool_args=tool_args,
-                investigation=sample_investigation,
-                g8e_context=sample_g8e_context,
-                request_settings=request_settings,
-                execution_id="test-execution-id",
-            )
-
-            # Verify payload processing
-            assert isinstance(result, ToolResult)
-            assert result.success
-            
-            # Verify command service was called with correct payload
-            mock_operator_command_service.execute_intent_permission_request.assert_called_once()
-            call_args = mock_operator_command_service.execute_intent_permission_request.call_args[1]
-            
-            assert "args" in call_args
-            args = call_args["args"]
-            assert args.intent_name == "file_access"
-            assert args.justification == "Need to access user files for troubleshooting"
-        finally:
-            tool_service.reset_invocation_context(context_token)
+        # Verify payload processing
+        assert isinstance(result, ToolResult)
+        assert result.success
+        
+        # Verify command service was called with correct payload
+        mock_operator_command_service.execute_intent_permission_request.assert_called_once()
+        call_args = mock_operator_command_service.execute_intent_permission_request.call_args[1]
+        
+        assert "args" in call_args
+        args = call_args["args"]
+        assert args.intent_name == "s3_read"
+        assert args.justification == "Need to access user files for troubleshooting"
 
     async def test_revoke_intent_tool_payload_processing(
         self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test revoke_intent_permission tool processes payloads correctly."""
-        context_token = tool_service.start_invocation_context(sample_g8e_context)
+        # Mock successful intent revoke
+        mock_result = IntentPermissionResult(
+            intent="s3_read",
+            granted=False,
+            reason="Permission revoked by user",
+            success=True,
+        )
+        mock_operator_command_service.execute_intent_revocation.return_value = mock_result
 
-        try:
-            # Mock successful intent revoke
-            mock_result = IntentPermissionResult(
-                intent="file_access",
-                granted=False,
-                reason="Permission revoked by user",
-                success=True,
-            )
-            mock_operator_command_service.execute_intent_revocation.return_value = mock_result
+        # Test payload for revoking intent
+        tool_args = {
+            "intent_name": "s3_read",
+            "justification": "No longer need file access",
+        }
 
-            # Test payload for revoking intent
-            tool_args = {
-                "intent_name": "file_access",
-                "justification": "No longer need file access",
-            }
+        # Execute tool call
+        result = await tool_service.execute_tool_call(
+            tool_name=OperatorToolName.REVOKE_INTENT,
+            tool_args=tool_args,
+            investigation=sample_investigation,
+            g8e_context=sample_g8e_context,
+            request_settings=request_settings,
+            execution_id="test-execution-id",
+        )
 
-            # Execute tool call
-            result = await tool_service.execute_tool_call(
-                tool_name=OperatorToolName.REVOKE_INTENT,
-                tool_args=tool_args,
-                investigation=sample_investigation,
-                g8e_context=sample_g8e_context,
-                request_settings=request_settings,
-                execution_id="test-execution-id",
-            )
-
-            # Verify payload processing
-            assert isinstance(result, ToolResult)
-            assert result.success
-            
-            # Verify command service was called with correct payload
-            mock_operator_command_service.execute_intent_revocation.assert_called_once()
-            call_args = mock_operator_command_service.execute_intent_revocation.call_args[1]
-            
-            assert "args" in call_args
-            args = call_args["args"]
-            assert args.intent_name == "file_access"
-            assert args.justification == "No longer need file access"
-        finally:
-            tool_service.reset_invocation_context(context_token)
+        # Verify payload processing
+        assert isinstance(result, ToolResult)
+        assert result.success
+        
+        # Verify command service was called with correct payload
+        mock_operator_command_service.execute_intent_revocation.assert_called_once()
+        call_args = mock_operator_command_service.execute_intent_revocation.call_args[1]
+        
+        assert "args" in call_args
+        args = call_args["args"]
+        assert args.intent_name == "s3_read"
+        assert args.justification == "No longer need file access"
 
     
 
@@ -1052,23 +987,6 @@ class TestPermissionSessionTools:
 @pytest.mark.integration
 class TestToolIntegration:
     """Test cross-tool integration and payload consistency."""
-
-    async def test_tool_context_propagation(
-        self, tool_service, sample_g8e_context
-    ):
-        """Test that tool context is properly propagated to all tool calls."""
-        # Set tool context using proper method
-        context_token = tool_service.start_invocation_context(sample_g8e_context)
-
-        try:
-            # Verify context is set
-            current_context = tool_service._tool_context.get()
-            assert current_context is not None
-            assert len(current_context.bound_operators) > 0
-            assert current_context.bound_operators[0].operator_id == "op-123"
-            assert current_context.case_id == "case-789"
-        finally:
-            tool_service.reset_invocation_context(context_token)
 
     async def test_tool_declaration_consistency(
         self, tool_service
@@ -1089,6 +1007,8 @@ class TestToolIntegration:
             OperatorToolName.REVOKE_INTENT,
             OperatorToolName.QUERY_INVESTIGATION_CONTEXT,
             OperatorToolName.GET_COMMAND_CONSTRAINTS,
+            OperatorToolName.SSH_INVENTORY,
+            OperatorToolName.STREAM_OPERATOR,
         }
         
         # Add G8E_SEARCH_WEB if available
@@ -1102,46 +1022,41 @@ class TestToolIntegration:
         self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
     ):
         """Test that payloads are consistently serialized/deserialized."""
-        context_token = tool_service.start_invocation_context(sample_g8e_context)
+        # Mock successful execution
+        mock_result = CommandExecutionResult(
+            success=True,
+            execution_id="exec-123",
+            status="completed",
+            exit_code=0,
+            stdout="Test output",
+            stderr="",
+            command="echo test",
+            execution_time_ms=100,
+        )
+        mock_operator_command_service.execute_command.return_value = mock_result
 
-        try:
-            # Mock successful execution
-            mock_result = CommandExecutionResult(
-                success=True,
-                execution_id="exec-123",
-                status="completed",
-                exit_code=0,
-                stdout="Test output",
-                stderr="",
-                command="echo test",
-                execution_time_ms=100,
-            )
-            mock_operator_command_service.execute_command.return_value = mock_result
+        # Test with complex payload containing special characters
+        tool_args = {
+            "command": "echo 'Hello, World! 🌍'",
+            "timeout_seconds": 30,
+            "justification": "Test complex payload handling"
+        }
 
-            # Test with complex payload containing special characters
-            tool_args = {
-                "command": "echo 'Hello, World! 🌍'",
-                "timeout_seconds": 30,
-                "justification": "Test complex payload handling"
-            }
+        # Execute tool call through proper interface
+        result = await tool_service.execute_tool_call(
+            tool_name=OperatorToolName.RUN_COMMANDS,
+            tool_args=tool_args,
+            investigation=sample_investigation,
+            g8e_context=sample_g8e_context,
+            request_settings=request_settings,
+            execution_id="test-execution-id",
+        )
 
-            # Execute tool call through proper interface
-            result = await tool_service.execute_tool_call(
-                tool_name=OperatorToolName.RUN_COMMANDS,
-                tool_args=tool_args,
-                investigation=sample_investigation,
-                g8e_context=sample_g8e_context,
-                request_settings=request_settings,
-                execution_id="test-execution-id",
-            )
-
-            # Verify payload was handled correctly
-            assert isinstance(result, ToolResult)
-            assert result.success
-            
-            # Verify the complex payload was preserved
-            call_args = mock_operator_command_service.execute_command.call_args[1]
-            assert "Hello, World! 🌍" in call_args["args"].command
-            assert call_args["args"].timeout_seconds == 30
-        finally:
-            tool_service.reset_invocation_context(context_token)
+        # Verify payload was handled correctly
+        assert isinstance(result, ToolResult)
+        assert result.success
+        
+        # Verify the complex payload was preserved
+        call_args = mock_operator_command_service.execute_command.call_args[1]
+        assert "Hello, World! 🌍" in call_args["args"].command
+        assert call_args["args"].timeout_seconds == 30

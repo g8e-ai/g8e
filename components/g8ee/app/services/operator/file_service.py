@@ -66,12 +66,36 @@ class OperatorFileService:
         ai_response_analyzer: AIResponseAnalyzerProtocol,
         investigation_service: InvestigationServiceProtocol,
     ) -> None:
-        self.pubsub_service = pubsub_service
-        self.approval_service = approval_service
-        self.g8ed_event_service = g8ed_event_service
-        self.execution_service = execution_service
-        self.ai_response_analyzer = ai_response_analyzer
-        self.investigation_service = investigation_service
+        self._pubsub_service = pubsub_service
+        self._approval_service = approval_service
+        self._g8ed_event_service = g8ed_event_service
+        self._execution_service = execution_service
+        self._ai_response_analyzer = ai_response_analyzer
+        self._investigation_service = investigation_service
+
+    @property
+    def pubsub_service(self) -> PubSubServiceProtocol:
+        return self._pubsub_service
+
+    @property
+    def approval_service(self) -> ApprovalServiceProtocol:
+        return self._approval_service
+
+    @property
+    def g8ed_event_service(self) -> EventServiceProtocol:
+        return self._g8ed_event_service
+
+    @property
+    def execution_service(self) -> ExecutionServiceProtocol:
+        return self._execution_service
+
+    @property
+    def ai_response_analyzer(self) -> AIResponseAnalyzerProtocol:
+        return self._ai_response_analyzer
+
+    @property
+    def investigation_service(self) -> InvestigationServiceProtocol:
+        return self._investigation_service
 
     async def execute_file_edit(
         self,
@@ -353,14 +377,14 @@ class OperatorFileService:
 
             from app.models.pubsub_messages import FetchFileHistorySuccessPayload, FetchFileHistoryErrorPayload
 
-            if isinstance(envelope.payload, FetchFileHistorySuccessPayload):
+            if envelope and isinstance(envelope.payload, FetchFileHistorySuccessPayload):
                 return FetchFileHistoryToolResult(
                     success=True,
                     file_path=envelope.payload.file_path,
                     history=envelope.payload.history,
                     error=None,
                 )
-            if isinstance(envelope.payload, FetchFileHistoryErrorPayload):
+            if envelope and isinstance(envelope.payload, FetchFileHistoryErrorPayload):
                 return FetchFileHistoryToolResult(
                     success=False,
                     file_path=file_path,
@@ -469,7 +493,7 @@ class OperatorFileService:
                 FetchFileDiffErrorPayload,
             )
 
-            if isinstance(envelope.payload, FetchFileDiffByIdSuccessPayload):
+            if envelope and isinstance(envelope.payload, FetchFileDiffByIdSuccessPayload):
                 return FetchFileDiffToolResult(
                     success=True,
                     diff=envelope.payload.diff,
@@ -477,7 +501,7 @@ class OperatorFileService:
                     error=None,
                     operator_session_id=operator_session_id,
                 )
-            if isinstance(envelope.payload, FetchFileDiffBySessionSuccessPayload):
+            if envelope and isinstance(envelope.payload, FetchFileDiffBySessionSuccessPayload):
                 return FetchFileDiffToolResult(
                     success=True,
                     diff=envelope.payload.diffs[0] if envelope.payload.diffs else None,
@@ -485,7 +509,7 @@ class OperatorFileService:
                     error=None,
                     operator_session_id=operator_session_id,
                 )
-            if isinstance(envelope.payload, FetchFileDiffErrorPayload):
+            if envelope and isinstance(envelope.payload, FetchFileDiffErrorPayload):
                 return FetchFileDiffToolResult(
                     success=False,
                     diff=None,

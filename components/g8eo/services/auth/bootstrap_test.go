@@ -265,15 +265,17 @@ func TestRequestHTTPAuth_RuntimeConfigSent(t *testing.T) {
 	assert.Equal(t, 443, capturedBody.RuntimeConfig.WSSPort)
 }
 
-func TestRequestHTTPAuth_SessionAuthMode(t *testing.T) {
+func TestRequestHTTPAuth_APIKeyOnly(t *testing.T) {
 	var capturedBody operatorAuthRequest
+	var capturedAuthHeader string
 
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedAuthHeader = r.Header.Get(constants.HeaderAuthorization)
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&capturedBody))
 		resp := AuthServicesResponse{
 			Success:           true,
-			OperatorSessionId: "sess-device",
-			OperatorID:        "op-device",
+			OperatorSessionId: "sess-api",
+			OperatorID:        "op-api",
 			Config:            &BootstrapConfig{},
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -290,8 +292,7 @@ func TestRequestHTTPAuth_SessionAuthMode(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	cfg.Endpoint = host
 	cfg.HTTPPort = port
-	cfg.AuthMode = constants.Status.AuthMode.OperatorSession
-	cfg.OperatorSessionId = "pre-auth-session-id"
+	cfg.APIKey = "g8e_test_apikey"
 	logger := testutil.NewTestLogger()
 
 	svc, err := NewBootstrapService(cfg, logger)
@@ -301,8 +302,7 @@ func TestRequestHTTPAuth_SessionAuthMode(t *testing.T) {
 	_, err = svc.RequestBootstrapConfig(context.Background())
 	require.NoError(t, err)
 
-	assert.Equal(t, constants.Status.AuthMode.OperatorSession, capturedBody.AuthMode)
-	assert.Equal(t, "pre-auth-session-id", capturedBody.OperatorSessionID)
+	assert.Equal(t, "Bearer g8e_test_apikey", capturedAuthHeader)
 }
 
 func TestApplyBootstrapConfig_AppliesAllFields(t *testing.T) {

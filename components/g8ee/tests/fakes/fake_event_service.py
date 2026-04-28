@@ -96,4 +96,3 @@ class FakeEventService:
         await self.publish(event)
 
 
-_: EventServiceProtocol = FakeEventService()

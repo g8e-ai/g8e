@@ -344,6 +344,23 @@ class CommandGenerationResult(G8eBaseModel):
         default=None,
         description="Correlation ID linking this Tribunal session to subsequent approval requests",
     )
+    reputation_commitment_id: str | None = Field(
+        default=None,
+        description=(
+            "ID of the reputation_commitment row written inside the auditor's verdict "
+            "step (GDD §14.4). None when the commitment step was skipped (auditor did "
+            "not pass, disabled, reputation deps missing) or when the commitment write "
+            "failed non-fatally."
+        ),
+    )
+    round_2_candidates: list[CandidateCommand] | None = Field(
+        default=None,
+        description="Round 2 candidates from anonymized peer review (null if single-round)",
+    )
+    round_2_vote_breakdown: VoteBreakdown | None = Field(
+        default=None,
+        description="Round 2 vote breakdown from anonymized peer review (null if single-round)",
+    )
 
 
 class TribunalPassCompletedPayload(G8eBaseModel):

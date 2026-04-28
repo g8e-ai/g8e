@@ -46,7 +46,7 @@ from app.constants import CommandErrorType, OperatorStatus, OperatorToolName, Op
 from app.models.agents.tribunal import TribunalSystemError
 from app.llm.llm_types import ToolCall
 from app.models.agent import StreamChunkData
-from app.models.operators import OperatorDocument, OperatorSystemInfo
+from app.models.operators import OperatorDocument, HeartbeatSnapshot, HeartbeatSystemIdentity, HeartbeatNetworkInfo, HeartbeatEnvironment
 from app.services.ai.agent_tool_loop import ToolCallResult
 from app.models.tool_results import CommandExecutionResult
 from app.models.settings import LLMSettings, G8eeUserSettings
@@ -86,6 +86,9 @@ def mock_tool_executor():
     executor._whitelist_validator = get_whitelist_validator()
     executor._blacklist_validator = get_blacklist_validator()
     
+    executor.reputation_data_service = MagicMock()
+    executor.auditor_hmac_key = "test-hmac-key"
+
     return executor
 
 
@@ -108,12 +111,15 @@ def sample_investigation(unique_investigation_id, unique_case_id, unique_user_id
                 operator_session_id=unique_session_id,
                 status=OperatorStatus.AVAILABLE,
                 operator_type=OperatorType.SYSTEM,
-                system_info=OperatorSystemInfo(
-                    hostname="op-1-host",
-                    os="linux",
-                    architecture="amd64",
-                    cpu_count=2,
-                    memory_mb=4096,
+                latest_heartbeat_snapshot=HeartbeatSnapshot(
+                    system_identity=HeartbeatSystemIdentity(
+                        hostname="op-1-host",
+                        os="linux",
+                        architecture="amd64",
+                        cpu_count=2,
+                        memory_mb=4096,
+                    ),
+                    network=HeartbeatNetworkInfo(),
                 ),
                 user_id=unique_user_id,
                 bound_web_session_id=unique_web_session_id,
@@ -164,6 +170,7 @@ def _noop_generate_command(request: str, **_kwargs):
         request=request,
         final_command=request,
         outcome=CommandGenerationOutcome.CONSENSUS,
+        reputation_commitment_id=None,
     )
 
 
@@ -174,6 +181,7 @@ def _refining_generate_command(request: str, refined: str, **_kwargs):
         request=request,
         final_command=refined,
         outcome=CommandGenerationOutcome.CONSENSUS,
+        reputation_commitment_id=None,
     )
 
 
@@ -859,7 +867,9 @@ class TestTribunalRefinement:
             operator_session_id=unique_session_id,
             operator_type=OperatorType.SYSTEM,
             status=OperatorStatus.BOUND,
-            system_info=OperatorSystemInfo(os="ubuntu", hostname="srv-01"),
+            latest_heartbeat_snapshot=HeartbeatSnapshot(
+                system_identity=HeartbeatSystemIdentity(os="ubuntu", hostname="srv-01")
+            ),
         )
         investigation = build_enriched_context(
             investigation_id=unique_investigation_id,
@@ -992,12 +1002,12 @@ class TestTargetOperatorResolution:
                     operator_session_id="session-linux",
                     status=OperatorStatus.AVAILABLE,
                     operator_type=OperatorType.SYSTEM,
-                    system_info=OperatorSystemInfo(
-                        hostname="linux-host",
-                        os="linux",
-                        architecture="amd64",
-                        shell="bash",
-                        working_directory="/home/g8e",
+                    latest_heartbeat_snapshot=HeartbeatSnapshot(
+                        system_identity=HeartbeatSystemIdentity(
+                            hostname="linux-host",
+                            os="linux",
+                            architecture="amd64",
+                        )
                     ),
                     user_id="user-multi-test",
                     bound_web_session_id="web-001",
@@ -1007,12 +1017,13 @@ class TestTargetOperatorResolution:
                     operator_session_id="session-ubuntu", 
                     status=OperatorStatus.AVAILABLE,
                     operator_type=OperatorType.SYSTEM,
-                    current_hostname="ubuntu-host",  # Use current_hostname for resolution
-                    system_info=OperatorSystemInfo(
-                        hostname="ubuntu-host",
-                        os="ubuntu",
-                        architecture="amd64",
-                        shell="bash",
+                    current_hostname="ubuntu-host",
+                    latest_heartbeat_snapshot=HeartbeatSnapshot(
+                        system_identity=HeartbeatSystemIdentity(
+                            hostname="ubuntu-host",
+                            os="ubuntu",
+                            architecture="amd64",
+                        )
                     ),
                     user_id="user-multi-test",
                     bound_web_session_id="web-001",

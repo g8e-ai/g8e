@@ -184,6 +184,65 @@ describe('SettingsService [UNIT]', () => {
             const doc = await cacheAside.getDocument(Collections.SETTINGS, userDocId);
             expect(doc.user_id).toBe('user-1');
         });
+
+        it('persists command_validation settings', async () => {
+            const userDocId = `${USER_SETTINGS_DOC_PREFIX}user-1`;
+            await service.updateUserSettings('user-1', {
+                enable_command_whitelisting: true,
+                whitelisted_commands_csv: 'uptime,df,free',
+                enable_command_blacklisting: false,
+                blacklisted_commands_csv: 'rm,format',
+                enable_command_auto_approve: true,
+                auto_approved_commands_csv: 'ls,cd,pwd',
+            });
+
+            const doc = await cacheAside.getDocument(Collections.SETTINGS, userDocId);
+            expect(doc.settings.command_validation).toEqual({
+                enable_whitelisting: true,
+                whitelisted_commands: 'uptime,df,free',
+                enable_blacklisting: false,
+                blacklisted_commands: 'rm,format',
+                enable_auto_approve: true,
+                auto_approved_commands: 'ls,cd,pwd',
+            });
+        });
+
+        it('merges command_validation settings with existing settings', async () => {
+            const userDocId = `${USER_SETTINGS_DOC_PREFIX}user-1`;
+            await cacheAside.updateDocument(Collections.SETTINGS, userDocId, {
+                user_id: 'user-1',
+                settings: {
+                    llm: { primary_provider: LLMProvider.OPENAI },
+                    search: {},
+                    eval_judge: {},
+                    command_validation: { enable_whitelisting: true, whitelisted_commands: 'ls,cd' },
+                    security: {},
+                },
+            });
+            await service.updateUserSettings('user-1', {
+                enable_command_whitelisting: false,
+                whitelisted_commands_csv: 'uptime,df,free',
+            });
+
+            const doc = await cacheAside.getDocument(Collections.SETTINGS, userDocId);
+            expect(doc.settings.command_validation).toEqual({
+                enable_whitelisting: false,
+                whitelisted_commands: 'uptime,df,free',
+            });
+            expect(doc.settings.llm.primary_provider).toBe(LLMProvider.OPENAI);
+        });
+
+        it('persists security settings', async () => {
+            const userDocId = `${USER_SETTINGS_DOC_PREFIX}user-1`;
+            await service.updateUserSettings('user-1', {
+                g8e_api_key: 'test-api-key',
+            });
+
+            const doc = await cacheAside.getDocument(Collections.SETTINGS, userDocId);
+            expect(doc.settings.security).toEqual({
+                g8e_api_key: 'test-api-key',
+            });
+        });
     });
 
     describe('Metadata accessors', () => {
@@ -327,6 +386,53 @@ describe('validateUserSettings cross-field validation [UNIT]', () => {
                 vertex_search_api_key: ''
             });
             expect(result.errors.length).toBeGreaterThan(0);
+        });
+    });
+
+    describe('CSV Whitelist validation', () => {
+        it('passes when whitelisted_commands_csv is empty', () => {
+            const result = validateUserSettings({ whitelisted_commands_csv: '' });
+            expect(result.errors).toHaveLength(0);
+        });
+
+        it('passes when whitelisted_commands_csv contains valid commands', () => {
+            const result = validateUserSettings({ whitelisted_commands_csv: 'uptime,df,free,ps' });
+            expect(result.errors).toHaveLength(0);
+        });
+
+        it('fails when whitelisted_commands_csv contains spaces', () => {
+            const result = validateUserSettings({ whitelisted_commands_csv: 'ls -la,df' });
+            expect(result.errors).toContain('Invalid value for whitelisted_commands_csv: ls -la,df');
+        });
+
+        it('fails when whitelisted_commands_csv contains shell metacharacters', () => {
+            const result = validateUserSettings({ whitelisted_commands_csv: 'uptime;rm,df' });
+            expect(result.errors).toContain('Invalid value for whitelisted_commands_csv: uptime;rm,df');
+            
+            const result2 = validateUserSettings({ whitelisted_commands_csv: 'df|rm' });
+            expect(result2.errors).toContain('Invalid value for whitelisted_commands_csv: df|rm');
+        });
+    });
+
+    describe('CSV Auto-Approve validation', () => {
+        it('passes when auto_approved_commands_csv is empty', () => {
+            const result = validateUserSettings({ auto_approved_commands_csv: '' });
+            expect(result.errors).toHaveLength(0);
+        });
+
+        it('passes when auto_approved_commands_csv contains valid commands', () => {
+            const result = validateUserSettings({ auto_approved_commands_csv: 'uptime,df,free' });
+            expect(result.errors).toHaveLength(0);
+        });
+
+        it('fails when auto_approved_commands_csv contains spaces', () => {
+            const result = validateUserSettings({ auto_approved_commands_csv: 'ls -la,df' });
+            expect(result.errors).toContain('Invalid value for auto_approved_commands_csv: ls -la,df');
+        });
+
+        it('fails when auto_approved_commands_csv contains shell metacharacters', () => {
+            const result = validateUserSettings({ auto_approved_commands_csv: 'uptime;rm,df' });
+            expect(result.errors).toContain('Invalid value for auto_approved_commands_csv: uptime;rm,df');
         });
     });
 

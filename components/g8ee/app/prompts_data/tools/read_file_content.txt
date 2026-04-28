@@ -40,4 +40,5 @@ File content is Sentinel-scrubbed. See run_commands_with_operator for full place
 <example>User: "Show me the nginx config" → read_file_content(path="/etc/nginx/nginx.conf")</example>
 <example>User: "Read the application log" → read_file_content(path="/var/log/app.log")</example>
 <example>User: "What's in the .env file?" → read_file_content(path="/app/.env")</example>
+<example>User: "Show me the nginx config on g8ep" → read_file_content(path="/etc/nginx/nginx.conf", target_operator="g8ep")</example>
 </examples>

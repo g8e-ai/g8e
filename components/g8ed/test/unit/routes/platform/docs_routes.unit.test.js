@@ -17,8 +17,6 @@ import { DocsPaths } from '@g8ed/constants/api_paths.js';
 import fs from 'fs';
 import path from 'path';
 
-vi.mock('fs');
-
 describe('Docs Routes [UNIT]', () => {
     let router;
     let mockConfig;

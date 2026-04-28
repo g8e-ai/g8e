@@ -32,6 +32,8 @@ from app.constants import (
     OPENAI_DEFAULT_ENDPOINT,
     OLLAMA_DEFAULT_ENDPOINT,
     ANTHROPIC_DEFAULT_ENDPOINT,
+    LLAMACPP_DEFAULT_ENDPOINT,
+    G8EL_DEFAULT_ENDPOINT,
     LLMProvider,
     LogLevel,
 )
@@ -64,6 +66,15 @@ class AuthSettings(G8eBaseModel):
     internal_auth_token: str | None = Field(None)
     session_encryption_key: str | None = Field(None)
     g8e_api_key: str | None = Field(None)
+    auditor_hmac_key: str | None = Field(
+        None,
+        description=(
+            "HMAC-SHA256 key used by the Tribunal auditor to sign reputation "
+            "commitments (GDD §14.4 Artifact B). Generated and rotated by "
+            "g8eo SecretManager; mirrored into g8ee via the bootstrap volume "
+            "and tamper-verified against bootstrap_digest.json on load."
+        ),
+    )
 
 class ComponentURLsSettings(G8eBaseModel):
     """Internal and external component URL configuration."""
@@ -71,9 +82,63 @@ class ComponentURLsSettings(G8eBaseModel):
     g8ed_url: str = Field("https://g8ed")
 
 class CommandValidationSettings(G8eBaseModel):
-    """Operator command safety and validation configuration."""
+    """Operator command safety and validation configuration.
+
+    Three independent policies are surfaced here. They have distinct semantics
+    and MUST NOT be conflated:
+
+    - ``enable_whitelisting``: HARD ALLOW-LIST. When enabled, only whitelisted
+      commands are permitted to run AT ALL. Any non-listed command is blocked at
+      L1 safety validation, regardless of human approval. This is a *generation*
+      and *execution* constraint.
+
+      Two mutually exclusive whitelist sources exist:
+      
+      1. JSON whitelist (config/whitelist.json): Provides rich per-command
+         validation including safe_options and validation regexes for parameters.
+         This is the default and recommended mode for production use.
+      
+      2. CSV whitelist (whitelisted_commands field): A simple comma-separated
+         list of base commands. When non-empty, this REPLACES the JSON whitelist
+         entirely and uses only basic character-level validation. The JSON
+         whitelist's per-command safe_options and validation regexes are NOT
+         applied in CSV mode. Use CSV mode for simple deployments that don't
+         need fine-grained parameter validation.
+
+      Only one whitelist source should be active at a time: either leave
+      whitelisted_commands empty to use JSON mode, or populate it to use CSV mode.
+
+    - ``enable_blacklisting``: HARD BLOCK-LIST. Commands matching blacklist
+      entries are blocked at L1 safety validation.
+
+    - ``enable_auto_approve`` / ``auto_approved_commands``: SKIP-APPROVAL list.
+      When enabled, commands whose base verb is listed bypass the human
+      approval gate (rubber-stamped). This does NOT permit blacklisted or
+      forbidden commands, and does NOT widen the whitelist when whitelisting
+      is enabled — the command must still pass all hard gates first.
+
+      Two auto-approve sources are unioned at request time:
+
+      1. JSON file (config/auto_approved.json): Platform-default base
+         commands rubber-stamped as benign (e.g., uptime, df, free). Loaded
+         by ``CommandAutoApprovedValidator``.
+      2. CSV ``auto_approved_commands`` field: Per-user / per-request
+         override that augments the JSON list with additional base commands.
+    """
     enable_whitelisting: bool = Field(False)
+    whitelisted_commands: str = Field(
+        "",
+        description="Comma-separated list of whitelisted commands (e.g., uptime,df,free). When non-empty, this REPLACES the JSON whitelist entirely and uses only basic character-level validation. The JSON whitelist's per-command safe_options and validation regexes are NOT applied in CSV mode. Leave empty to use JSON whitelist with rich validation.",
+    )
     enable_blacklisting: bool = Field(False)
+    enable_auto_approve: bool = Field(
+        False,
+        description="If true, commands listed in auto_approved_commands bypass human approval. Independent of whitelisting.",
+    )
+    auto_approved_commands: str = Field(
+        "",
+        description="Comma-separated list of base commands that skip human approval (e.g., uptime,df,free). Only used when enable_auto_approve is true. The human is rubber-stamping these as benign.",
+    )
     max_batch_concurrency: int = Field(
         10,
         ge=1,
@@ -84,6 +149,35 @@ class CommandValidationSettings(G8eBaseModel):
         False,
         description="If true, remaining per-operator executions are cancelled after the first failure in a batch.",
     )
+
+    @staticmethod
+    def _validate_command_csv(v: str, field_label: str) -> str:
+        """Reject whitespace and shell metacharacters in CSV commands."""
+        if not v:
+            return v
+
+        parts = [p.strip() for p in v.split(",") if p.strip()]
+        unsafe_chars = set(";|`$<>&\n\r\t")
+
+        for part in parts:
+            if any(c in unsafe_chars for c in part) or " " in part:
+                raise ValueError(
+                    f"Invalid {field_label} command '{part}'. "
+                    "Commands cannot contain spaces or shell metacharacters (; | ` $ < > &). "
+                    "Enter base commands only (e.g., 'uptime', 'df')."
+                )
+
+        return v
+
+    @field_validator("whitelisted_commands", mode="after")
+    @classmethod
+    def _validate_whitelisted_commands(cls, v: str) -> str:
+        return cls._validate_command_csv(v, "whitelisted")
+
+    @field_validator("auto_approved_commands", mode="after")
+    @classmethod
+    def _validate_auto_approved_commands(cls, v: str) -> str:
+        return cls._validate_command_csv(v, "auto-approved")
 
 class SearchSettings(G8eBaseModel):
     """Unified search configuration (Vertex AI and Google Search)."""
@@ -175,15 +269,29 @@ class LLMSettings(G8eBaseModel):
     anthropic_api_key: str | None = Field(default=None)
     ollama_assistant_model: str | None = Field(default=None)
 
+    llamacpp_endpoint: str | None = Field(default=LLAMACPP_DEFAULT_ENDPOINT)
+    llamacpp_api_key: str | None = Field(default=None)
+    llamacpp_assistant_model: str | None = Field(default=None)
+
+    g8el_endpoint: str | None = Field(default=G8EL_DEFAULT_ENDPOINT)
+    g8el_api_key: str | None = Field(default=None)
+    g8el_assistant_model: str | None = Field(default=None)
+
     llm_max_tokens: int | None = Field(default=None)
     llm_command_gen_enabled: bool = Field(default=True)
     llm_command_gen_auditor: bool = Field(default=True)
     llm_command_gen_passes: int = Field(default=5)
+    llm_command_gen_rounds: int = Field(default=2, ge=1, le=2, description="Number of Tribunal voting rounds (1=single-round, 2=two-round with peer review)")
 
     @property
     def resolved_assistant_model(self) -> str | None:
         """Return the configured assistant model, or None if not set."""
         return self.assistant_model or None
+
+    @property
+    def resolved_lite_model(self) -> str | None:
+        """Return the configured lite model, or assistant_model as fallback if lite is not set."""
+        return self.lite_model or self.assistant_model or None
 
     @property
     def primary_endpoint(self) -> str | None:
@@ -193,6 +301,8 @@ class LLMSettings(G8eBaseModel):
             LLMProvider.ANTHROPIC: self.anthropic_endpoint,
             LLMProvider.OLLAMA: self.ollama_endpoint,
             LLMProvider.GEMINI: None,
+            LLMProvider.LLAMACPP: self.llamacpp_endpoint,
+            LLMProvider.G8EL: self.g8el_endpoint,
         }
         return endpoints.get(self.primary_provider)
 
@@ -204,8 +314,28 @@ class LLMSettings(G8eBaseModel):
             LLMProvider.ANTHROPIC: self.anthropic_endpoint,
             LLMProvider.OLLAMA: self.ollama_endpoint,
             LLMProvider.GEMINI: None,
+            LLMProvider.LLAMACPP: self.llamacpp_endpoint,
+            LLMProvider.G8EL: self.g8el_endpoint,
         }
         return endpoints.get(self.assistant_provider)
+
+class ReputationSettings(G8eBaseModel):
+    """Phase 3 reputation-resolution configuration (GDD §14.5, §15 Phase 3).
+
+    Reputation resolution is always enabled in the ephemeral architecture.
+    The per-tool-call reputation hook runs after every Tribunal-backed
+    `run_commands_with_operator` invocation via `orchestrate_tool_execution`.
+    """
+
+    ema_half_life: int = Field(
+        default=50,
+        ge=1,
+        description=(
+            "EMA half-life in resolutions; alpha = 1 / half_life. GDD §14.10 "
+            "suggests 50 as the start point."
+        ),
+    )
+
 
 class G8eePlatformSettings(G8eBaseModel):
     """Platform-level deployment configuration."""
@@ -234,6 +364,11 @@ class G8eePlatformSettings(G8eBaseModel):
     command_validation: CommandValidationSettings = Field(default_factory=CommandValidationSettings)
     search: SearchSettings = Field(default_factory=SearchSettings)
     eval_judge: EvalJudgeSettings = Field(default_factory=EvalJudgeSettings)
+    reputation: ReputationSettings = Field(default_factory=ReputationSettings)
+    g8ep_operator_api_key: str | None = Field(
+        None,
+        description="API key for the g8ep operator, persisted for fetch-key-and-run.sh retrieval",
+    )
 
     @property
     def ca_cert_path(self) -> str | None:

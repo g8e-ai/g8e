@@ -129,7 +129,7 @@ describe('Internal Operator Routes [UNIT]', () => {
 
             await getRoute()(req, res);
 
-            expect(mockOperatorService.refreshOperatorApiKey).toHaveBeenCalledWith('op_123', 'user_123');
+            expect(mockOperatorService.refreshOperatorApiKey).toHaveBeenCalledWith('op_123', 'user_123', null, null);
             expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
                 success: true,
                 new_operator_id: 'op_456'

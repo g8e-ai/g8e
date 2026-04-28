@@ -32,7 +32,7 @@ class TestGetAgentPersona:
         # "scan-eye" reflects Triage's sharpened role as gatekeeper / posture reader.
         assert persona.icon == "scan-eye"
         assert persona.role == "classifier"
-        assert persona.model_tier == "primary"
+        assert persona.model_tier == "lite"
         assert persona.tools == []
         assert persona.identity
         assert persona.purpose
@@ -124,15 +124,33 @@ class TestGetAgentPersona:
         assert "<autonomy>" in prompt
         assert sage.identity in prompt
 
-    def test_dash_system_prompt_is_fast_path_and_shares_sage_toolset(self):
-        """Dash is the fast-path voice but keeps Sage's full tool set."""
+    def test_dash_system_prompt_is_fast_path_with_surgical_tool_use(self):
+        """Dash is the fast-path responder. It carries the operator tool
+        surface so it can make a single targeted call when a simple request
+        genuinely requires one — but its persona explicitly bounds tool use
+        ("one well-aimed call beats a chain"). Multi-step / dissent-bearing
+        work still escalates to Sage. Both Dash and Sage carry tools; Dash's
+        differentiation is latency and minimal reasoning overhead, not the
+        absence of a tool surface.
+        """
         dash = get_agent_persona("dash")
         sage = get_agent_persona("sage")
         prompt = dash.get_system_prompt()
         assert "<role>" in prompt
         assert "<identity>" in prompt
         assert dash.identity in prompt
-        assert set(dash.tools) == set(sage.tools)
+        assert len(dash.tools) > 0, (
+            "Dash now carries the operator tool surface for fast-path "
+            "single-call resolutions; an empty list breaks that contract."
+        )
+        assert len(sage.tools) > 0, "Sage remains the tool-bearing reasoning agent."
+        # Dash's persona must still bound tool use — surgical, not chained,
+        # with multi-step work routed to Sage. If the role_boundary prose is
+        # ever stripped, Dash silently becomes a second Sage.
+        assert "Sage" in dash.identity, (
+            "Dash identity must reference Sage as the escalation target for "
+            "multi-step / non-surgical requests."
+        )
 
     def test_tools_is_list(self):
         """Test that tools field is always a list."""
@@ -231,6 +249,69 @@ class TestPipelineTemplateContract:
         # The pipeline parses JSON with status "ok" or "revised"
         assert "\"ok\"" in formatted
         assert "\"revised\"" in formatted
+
+
+class TestTribunalTemplatePrefixCacheOrdering:
+    """Tribunal generator and auditor templates must place per-session-static
+    sections (constraints, system_context/os/user, operator_context) before
+    per-turn-dynamic sections (guidelines, request, auditor_context) so that
+    the llama.cpp prefix cache can reuse the prefix across repeat invocations
+    of the same Tribunal member within a session.
+
+    A regression here defeats `--cache-reuse` and silently increases prefill
+    cost across the five parallel members per round.
+    """
+
+    def test_generator_template_static_prefix_precedes_dynamic_suffix(self):
+        from app.prompts_data.loader import load_prompt
+        from app.llm.prompts import PromptFile
+
+        template = load_prompt(PromptFile.TRIBUNAL_GENERATOR)
+        # Each tag should appear at most once; we use the first occurrence.
+        idx = lambda tag: template.index(tag)
+        constraints = idx("<constraints>")
+        system_ctx = idx("<system_context>")
+        operator_ctx = idx("<operator_context>")
+        guidelines = idx("<guidelines>")
+        request = idx("<request>")
+
+        # Static prefix order: constraints -> system_context -> operator_context
+        assert constraints < system_ctx < operator_ctx, (
+            "Static prefix sections must appear in stable order at the top of "
+            "the Tribunal generator template."
+        )
+        # Dynamic suffix must follow the entire static prefix
+        assert operator_ctx < guidelines, (
+            "<guidelines> is per-turn dynamic and must appear after the static "
+            "<operator_context> prefix."
+        )
+        assert guidelines < request, (
+            "<request> is the most dynamic per-turn input and must appear last "
+            "among the placeholder sections."
+        )
+
+    def test_auditor_template_static_prefix_precedes_dynamic_suffix(self):
+        from app.prompts_data.loader import load_prompt
+        from app.llm.prompts import PromptFile
+
+        template = load_prompt(PromptFile.TRIBUNAL_AUDITOR)
+        idx = lambda tag: template.index(tag)
+        constraints = idx("<constraints>")
+        os_block = idx("<os>")
+        user_block = idx("<user>")
+        operator_ctx = idx("<operator_context>")
+        guidelines = idx("<guidelines>")
+        request = idx("<request>")
+        auditor_ctx_marker = template.index("{auditor_context}")
+
+        assert constraints < os_block < user_block < operator_ctx, (
+            "Static prefix sections (constraints/os/user/operator_context) must "
+            "appear in stable order at the top of the auditor template."
+        )
+        assert operator_ctx < guidelines < request < auditor_ctx_marker, (
+            "Per-turn dynamic sections (guidelines, request, auditor_context) "
+            "must follow the entire static prefix."
+        )
 
 
 class TestSharpenedTribunalPersonas:

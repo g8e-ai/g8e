@@ -14,9 +14,10 @@ g8e runs as a multi-service Docker Compose stack. Every service is built from a 
 | File | Purpose |
 |------|---------|
 | `docker-compose.yml` | Production configuration. Image-baked code, non-root users, security hardening. Used by `./g8e platform *` and CI. |
+| `docker-compose.dev.yml` | Development override with source bind mounts for hot reload. Used via `--profile development` or `-f docker-compose.dev.yml`. |
 
 **Development usage:**
-g8e does not use a separate `docker-compose.dev.yml` file. Development workflows are handled via the `./g8e` CLI or by setting environment variables.
+Development workflows use the `development` profile in `docker-compose.dev.yml` for hot-reload support, or via the `./g8e` CLI.
 
 ## Services
 
@@ -29,9 +30,25 @@ AI backend. Python/FastAPI.
 - **Capabilities:** none (`cap_drop: ALL`)
 - **Writable volumes:** `g8ee-data:/data` only
 - **Config/shared mounts:** `./shared:/app/shared:ro`, `g8es-ssl:/g8es:ro`
-- **Internal Auth:** Receives `G8E_INTERNAL_AUTH_TOKEN` via environment during bootstrap; discovers authoritative token from g8es/SSL volume at runtime.
+- **Internal Auth:** Reads `internal_auth_token` from the read-only `g8es-ssl` volume (`/g8es/internal_auth_token`) at entrypoint startup and exports it as `G8E_INTERNAL_AUTH_TOKEN` for the application process.
 - **Security:** `cap_drop: ALL`, `no-new-privileges:true`, hardened sysctls (`accept_redirects=0`, `send_redirects=0`)
 - **Healthcheck:** `curl -f --cacert /g8es/ca.crt https://localhost/health` (internal port 443)
+- **Dependencies:** g8es (healthy), g8el (healthy)
+
+### g8el (`g8el`)
+
+Local LLM inference server using llama.cpp.
+
+- **User:** root (no user directive in compose)
+- **Read-only filesystem:** no
+- **Capabilities:** `cap_drop: ALL`
+- **Writable volumes:** `./components/g8ee/models:/models`
+- **CPU affinity:** `cpuset: "0-7"` (pinned to cores 0-7)
+- **Memory locking:** `ulimits: memlock: -1` (unlimited)
+- **Ports:** Exposes 11444 (HTTP) for inference API
+- **Security:** `cap_drop: ALL`, `no-new-privileges:true`
+- **Healthcheck:** `curl -f http://localhost:11444/health`
+- **Dependencies:** None (independent service)
 
 ### g8ed (`g8ed`)
 
@@ -45,6 +62,7 @@ Web frontend and single external entry point. Node.js.
 - **Internal Auth:** Discovers authoritative token from g8es/SSL volume (`g8es-ssl:/g8es:ro`) at runtime.
 - **Security:** `cap_drop: ALL`, `no-new-privileges:true`, hardened sysctls (`accept_redirects=0`, `send_redirects=0`), read-only root filesystem
 - **Healthcheck:** `curl -f --cacert /g8es/ca.crt https://localhost/health` (internal port 443)
+- **Dependencies:** g8es (healthy)
 
 ### g8es (`g8es`)
 
@@ -54,7 +72,7 @@ Platform persistence and pub/sub broker. Runs the `g8e.operator` binary in `--li
 - **Read-only filesystem:** yes — tmpfs at `/tmp`, `/var/tmp`
 - **Capabilities:** `cap_add: NET_BIND_SERVICE`, `cap_drop: ALL`
 - **Writable volumes:** `g8es-data:/data`, `g8es-ssl:/ssl`
-- **Internal Auth:** Authoritative generator and enforcer of `X-Internal-Auth` token. Receives `G8E_INTERNAL_AUTH_TOKEN` via environment. Persists secrets exclusively to the `g8es-ssl` volume.
+- **Internal Auth:** Authoritative generator and enforcer of `X-Internal-Auth` token. The `g8e.operator --listen` binary reads tokens directly from `--ssl-dir /ssl`; no environment injection is required. Persists secrets exclusively to the `g8es-ssl` volume.
 - **Security:** read-only root filesystem, `cap_add: NET_BIND_SERVICE`, `cap_drop: ALL`
 - **Ports:** Exposes 9000 (HTTPS) and 9001 (WSS) for internal communication (no external ports)
 - **Healthcheck:** `curl -f --cacert /ssl/ca.crt https://localhost:9000/health`
@@ -72,6 +90,7 @@ Unified management sidecar with Python and network tools. Always running alongsi
 - **Docker socket:** see [Docker Socket Threat Model](#docker-socket-threat-model) below
 - **Notable env vars:** `RUNNING_IN_DOCKER=1`, `HOME=/home/g8e` signals to platform scripts that they are executing inside the container
 - **Healthcheck:** `pgrep -x supervisord`
+- **Dependencies:** g8ed (healthy)
 
 ## Test Runners
 
@@ -104,7 +123,7 @@ All production services (g8ee, g8ed, g8es) run as dedicated non-root users creat
 
 Dockerfile patterns:
 
-**Debian (g8ee) — `python:3.13-slim` base:**
+**Debian (g8ee) — `python:3.12-slim` base:**
 ```dockerfile
 RUN groupadd -g 1001 g8e && \
     useradd -u 1001 -g g8e -M -s /sbin/nologin g8e
@@ -152,11 +171,11 @@ The backend network (`g8e-network`) uses a standard bridge driver:
 
 - **Bridge network:** All services communicate over the `g8e-network` bridge. The network is not marked `internal: true` — external routing is not blocked at the Docker network level.
 - **Gateway:** g8ed is the only service with published host ports (443, 80), making it the single external entry point by design.
-- **Sysctls:** Hardened kernel parameters (`accept_redirects=0`, `send_redirects=0`) are applied to g8ee and g8ed. g8es and g8ep do not have `sysctls` directives.
+- **Sysctls:** Hardened kernel parameters (`accept_redirects=0`, `send_redirects=0`) are applied to g8ee and g8ed. g8es, g8el, and g8ep do not have `sysctls` directives.
 
 ### `no-new-privileges`
 
-Applied to g8ee, g8ed, and g8ep:
+Applied to g8ee, g8ed, g8el, and g8ep:
 
 ```yaml
 security_opt:
@@ -170,7 +189,7 @@ Not applied to:
 
 ### Capability Dropping
 
-g8ee and g8ed drop all capabilities:
+g8ee, g8ed, and g8el drop all capabilities:
 
 ```yaml
 cap_drop:
@@ -194,7 +213,7 @@ tmpfs:
 
 Applied to: **g8ee**, **g8ed**, **g8es**
 
-Not applied to: **g8ep** and test runners.
+Not applied to: **g8ep**, **g8el**, and test runners.
 
 ## Docker Socket Threat Model
 
@@ -241,7 +260,12 @@ Volumes are categorized by write requirement:
 | `g8es-ssl:/g8es` | read-only | g8ee, g8ed, g8ep, test-runners |
 | `./docs:/docs` | read-only | g8ed |
 | `./README.md:/readme/README.md` | read-only | g8ed |
+| `./components/g8ee/models:/models` | read-write | g8el |
 | `/var/run/docker.sock` | read-write | g8ep |
+| `${HOME}/.ssh/config:/etc/g8e/ssh_config` | read-only | g8ee |
+| `${HOME}/.ssh/config:/home/g8e/.ssh/config` | read-only | g8ep |
+| `${HOME}/.ssh/known_hosts:/home/g8e/.ssh/known_hosts` | read-only | g8ep |
+| `${SSH_AUTH_SOCK:-/dev/null}:/run/host-ssh-agent.sock` | read-write | g8ep |
 
 **Development additions:**
 Development mode is handled via the `./g8e` CLI and by passing specific environment variables or Docker Compose profiles.
@@ -252,7 +276,8 @@ All Dockerfiles use the repo root as the build context (`context: .` in compose)
 
 - **g8ee** — `components/g8ee/`, `shared/`
 - **g8ed** — `components/g8ed/`, `shared/`
+- **g8el** — `components/g8el/entrypoint.sh`
 - **g8es** — `components/g8eo/`, `components/g8es/` (pre-built operator binaries for linux/amd64, arm64, 386 are generated during build)
-- **g8ep** — `components/g8ee/`, `components/g8ed/`, `components/g8eo/`, `components/g8ep/`
+- **g8ep** — `components/g8ep/scripts/`, `components/g8ep/sudoers-g8e`
 
 No `.dockerignore` file exists at the repo root; the full build context (minus `.gitignore` patterns) is sent to the daemon.

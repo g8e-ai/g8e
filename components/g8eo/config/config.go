@@ -31,10 +31,6 @@ type LoadOptions struct {
 	WSSPort          int // WSS port to dial on g8es (default: 443)
 	HTTPPort         int // HTTP port to dial on g8es for auth proxy (default: 443)
 
-	// Authentication mode
-	AuthMode          string // "api_key" or "operator_session"
-	OperatorSessionID string // Required if AuthMode is "operator_session"
-
 	// Cloud Operator mode
 	CloudMode     bool
 	CloudProvider string
@@ -115,8 +111,7 @@ type Config struct {
 	Version       string
 
 	// Authentication
-	APIKey   string
-	AuthMode string // "api_key" or "operator_session" - determines authentication method
+	APIKey string
 
 	// Operator identification
 	OperatorID        string
@@ -227,19 +222,8 @@ func Load(opts LoadOptions) (*Config, error) {
 		}
 	}
 
-	// Validate required fields
-	if opts.AuthMode == "" {
-		opts.AuthMode = constants.Status.AuthMode.APIKey
-	}
-
-	if opts.AuthMode == constants.Status.AuthMode.OperatorSession {
-		if opts.OperatorSessionID == "" {
-			return nil, fmt.Errorf("OperatorSessionID is required for session-based auth")
-		}
-	} else {
-		if opts.APIKey == "" {
-			return nil, fmt.Errorf("APIKey is required")
-		}
+	if opts.APIKey == "" {
+		return nil, fmt.Errorf("APIKey is required")
 	}
 
 	if opts.OperatorEndpoint == "" {
@@ -250,8 +234,6 @@ func Load(opts LoadOptions) (*Config, error) {
 	cfg := &Config{
 		// From options
 		APIKey:            opts.APIKey,
-		AuthMode:          opts.AuthMode,
-		OperatorSessionId: opts.OperatorSessionID,
 		CloudMode:         opts.CloudMode,
 		CloudProvider:     opts.CloudProvider,
 		LocalStoreEnabled: opts.LocalStorageEnabled,

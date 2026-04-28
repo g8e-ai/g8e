@@ -21,7 +21,8 @@ variables are eliminated: callers pass a mutable result_out list to receive
 the TurnResult alongside streamed chunks.
 """
 
-from typing import Optional
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 import logging
 from collections.abc import AsyncGenerator
@@ -49,7 +50,7 @@ class TurnState:
     pending_tool_calls: list[types.ToolCall] = field(default_factory=list[types.ToolCall])
     thinking_active: bool = False
     thinking_text_parts: list[str] = field(default_factory=list[str])
-    thinking_signature: Optional[types.ThoughtSignature] = None
+    thinking_signature: types.ThoughtSignature | None = None
     finish_reason: str = DEFAULT_FINISH_REASON
     input_tokens: int = 0
     output_tokens: int = 0
@@ -86,7 +87,7 @@ def handle_finish_reason_chunk(chunk: types.StreamChunkFromModel, state: TurnSta
             state.finish_reason = normalized
 
 
-def handle_thought_chunk(chunk: types.StreamChunkFromModel, state: TurnState) -> Optional[StreamChunkFromModel]:
+def handle_thought_chunk(chunk: types.StreamChunkFromModel, state: TurnState) -> StreamChunkFromModel | None:
     if chunk.thought and chunk.text:
         if not state.thinking_active:
             logger.info("[TURN] Thinking started")
@@ -101,7 +102,7 @@ def handle_thought_chunk(chunk: types.StreamChunkFromModel, state: TurnState) ->
     return None
 
 
-def handle_tool_call_chunk(chunk: types.StreamChunkFromModel, state: TurnState) -> Optional[StreamChunkFromModel]:
+def handle_tool_call_chunk(chunk: types.StreamChunkFromModel, state: TurnState) -> StreamChunkFromModel | None:
     if chunk.tool_calls:
         if state.thinking_active:
             thinking_char_count = sum(len(t) for t in state.thinking_text_parts)
@@ -124,7 +125,7 @@ def handle_tool_call_chunk(chunk: types.StreamChunkFromModel, state: TurnState) 
     return None
 
 
-def handle_text_chunk(chunk: types.StreamChunkFromModel, state: TurnState) -> Optional[StreamChunkFromModel]:
+def handle_text_chunk(chunk: types.StreamChunkFromModel, state: TurnState) -> StreamChunkFromModel | None:
     if chunk.text and not chunk.thought:
         if state.thinking_active:
             state.flush_thinking_block()

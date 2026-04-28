@@ -71,6 +71,12 @@ function makeService(overrides = {}) {
         g8eNodeOperatorService: {
             activateG8ENodeOperatorForUser: vi.fn().mockResolvedValue(undefined),
         },
+        sseService: {
+            publishEvent: vi.fn().mockResolvedValue(true),
+        },
+        consoleMetricsService: {
+            metricsCache: new Map(),
+        },
         ...overrides,
     });
 }
@@ -208,12 +214,12 @@ describe('PostLoginService [UNIT]', () => {
             );
         });
 
-        it('calls initializeOperatorSlots with user_id and org_id', async () => {
+        it('calls initializeOperatorSlots with user_id, org_id, and session_id', async () => {
             await service.onSuccessfulLogin(makeUser(), makeSession());
 
             await vi.waitFor(() =>
                 expect(service.operatorService.initializeOperatorSlots)
-                    .toHaveBeenCalledWith(USER_ID, ORG_ID)
+                    .toHaveBeenCalledWith(USER_ID, ORG_ID, SESSION_ID)
             );
         });
 
@@ -226,7 +232,7 @@ describe('PostLoginService [UNIT]', () => {
                 expect(service.g8eNodeOperatorService.activateG8ENodeOperatorForUser)
                     .toHaveBeenCalledWith(USER_ID, null, SESSION_ID);
                 expect(service.operatorService.initializeOperatorSlots)
-                    .toHaveBeenCalledWith(USER_ID, USER_ID);
+                    .toHaveBeenCalledWith(USER_ID, USER_ID, SESSION_ID);
             });
         });
 
@@ -245,6 +251,55 @@ describe('PostLoginService [UNIT]', () => {
             await expect(service.onSuccessfulLogin(makeUser(), makeSession()))
                 .resolves.toBeUndefined();
         });
+
+        it('publishes SSE event when initializeOperatorSlots rejects on login', async () => {
+            service.operatorService.initializeOperatorSlots =
+                vi.fn().mockRejectedValue(new Error('initializeOperatorSlots failed'));
+
+            await service.onSuccessfulLogin(makeUser(), makeSession());
+
+            await vi.waitFor(() => {
+                expect(service.sseService.publishEvent).toHaveBeenCalled();
+            });
+
+            const publishCall = service.sseService.publishEvent.mock.calls[0];
+            expect(publishCall[0]).toBe(SESSION_ID);
+            expect(publishCall[1].type).toBe('g8e.v1.operator.slot.initialization.failed');
+            expect(publishCall[1].data.user_id).toBe(USER_ID);
+            expect(publishCall[1].data.error).toBe('initializeOperatorSlots failed');
+        });
+
+        it('increments metrics when initializeOperatorSlots rejects on login', async () => {
+            service.operatorService.initializeOperatorSlots =
+                vi.fn().mockRejectedValue(new Error('slot initialization failed'));
+
+            await service.onSuccessfulLogin(makeUser(), makeSession());
+
+            await vi.waitFor(() => {
+                const metric = service.consoleMetricsService.metricsCache.get('slot_init_failures');
+                expect(metric).toBeDefined();
+                expect(metric.count).toBe(1);
+                expect(metric.lastError).toBe('slot initialization failed');
+                expect(metric.lastUserId).toBe(USER_ID);
+            });
+        });
+
+        it('publishes G8EP activation failed event when activateG8ENodeOperatorForUser rejects', async () => {
+            service.g8eNodeOperatorService.activateG8ENodeOperatorForUser =
+                vi.fn().mockRejectedValue(new Error('docker exec failed'));
+
+            await service.onSuccessfulLogin(makeUser(), makeSession());
+
+            await vi.waitFor(() => {
+                expect(service.sseService.publishEvent).toHaveBeenCalled();
+            });
+
+            const publishCall = service.sseService.publishEvent.mock.calls[0];
+            expect(publishCall[0]).toBe(SESSION_ID);
+            expect(publishCall[1].type).toBe('g8e.v1.operator.g8ep.activation.failed');
+            expect(publishCall[1].data.user_id).toBe(USER_ID);
+            expect(publishCall[1].data.error).toBe('docker exec failed');
+        });
     });
 
     // -------------------------------------------------------------------------
@@ -261,12 +316,12 @@ describe('PostLoginService [UNIT]', () => {
             );
         });
 
-        it('calls initializeOperatorSlots with user_id and org_id', async () => {
+        it('calls initializeOperatorSlots with user_id, org_id, and session_id', async () => {
             await service.onSuccessfulRegistration(makeUser(), makeSession());
 
             await vi.waitFor(() =>
                 expect(service.operatorService.initializeOperatorSlots)
-                    .toHaveBeenCalledWith(USER_ID, ORG_ID)
+                    .toHaveBeenCalledWith(USER_ID, ORG_ID, SESSION_ID)
             );
         });
 
@@ -295,6 +350,38 @@ describe('PostLoginService [UNIT]', () => {
 
             await expect(service.onSuccessfulRegistration(makeUser(), makeSession()))
                 .resolves.toBeUndefined();
+        });
+
+        it('publishes SSE event when initializeOperatorSlots rejects', async () => {
+            service.operatorService.initializeOperatorSlots =
+                vi.fn().mockRejectedValue(new Error('slot init failed'));
+
+            await service.onSuccessfulRegistration(makeUser(), makeSession());
+
+            await vi.waitFor(() => {
+                expect(service.sseService.publishEvent).toHaveBeenCalled();
+            });
+
+            const publishCall = service.sseService.publishEvent.mock.calls[0];
+            expect(publishCall[0]).toBe(SESSION_ID);
+            expect(publishCall[1].type).toBe('g8e.v1.operator.slot.initialization.failed');
+            expect(publishCall[1].data.user_id).toBe(USER_ID);
+            expect(publishCall[1].data.error).toBe('slot init failed');
+        });
+
+        it('increments metrics when initializeOperatorSlots rejects', async () => {
+            service.operatorService.initializeOperatorSlots =
+                vi.fn().mockRejectedValue(new Error('slot init failed'));
+
+            await service.onSuccessfulRegistration(makeUser(), makeSession());
+
+            await vi.waitFor(() => {
+                const metric = service.consoleMetricsService.metricsCache.get('slot_init_failures');
+                expect(metric).toBeDefined();
+                expect(metric.count).toBe(1);
+                expect(metric.lastError).toBe('slot init failed');
+                expect(metric.lastUserId).toBe(USER_ID);
+            });
         });
     });
 

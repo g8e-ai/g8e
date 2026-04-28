@@ -149,7 +149,6 @@ export class OperatorStatusUpdatedData extends G8eBaseModel {
         status:              { type: F.string, required: true },
         hostname:            { type: F.string, default: null },
         system_fingerprint:  { type: F.string, default: null },
-        system_info:         { type: F.object, default: null },
         reason:              { type: F.string, default: null },
         total_count:         { type: F.number, default: null },
         active_count:        { type: F.number, default: null },
@@ -247,6 +246,48 @@ export class LogStreamConnectedEvent extends G8eBaseModel {
         type:      { type: F.string, required: true },
         timestamp: { type: F.date,   default: () => now() },
         buffered:  { type: F.number, default: 0 },
+    };
+}
+
+// ---------------------------------------------------------------------------
+// OperatorSlotInitializationFailedEvent  (operator.slot.initialization.failed)
+// ---------------------------------------------------------------------------
+
+export class OperatorSlotInitializationFailedData extends G8eBaseModel {
+    static fields = {
+        user_id:    { type: F.string, required: true },
+        error:      { type: F.string, required: true },
+        context:    { type: F.string, default: null },
+        timestamp:  { type: F.date,   default: () => now() },
+    };
+}
+
+export class OperatorSlotInitializationFailedEvent extends G8eBaseModel {
+    static fields = {
+        type:      { type: F.string, required: true },
+        data:      { type: F.object, model: OperatorSlotInitializationFailedData, default: null },
+        timestamp: { type: F.date,   default: () => now() },
+    };
+}
+
+// ---------------------------------------------------------------------------
+// OperatorG8EPActivationFailedEvent  (operator.g8ep.activation.failed)
+// ---------------------------------------------------------------------------
+
+export class OperatorG8EPActivationFailedData extends G8eBaseModel {
+    static fields = {
+        user_id:    { type: F.string, required: true },
+        error:      { type: F.string, required: true },
+        context:    { type: F.string, default: null },
+        timestamp:  { type: F.date,   default: () => now() },
+    };
+}
+
+export class OperatorG8EPActivationFailedEvent extends G8eBaseModel {
+    static fields = {
+        type:      { type: F.string, required: true },
+        data:      { type: F.object, model: OperatorG8EPActivationFailedData, default: null },
+        timestamp: { type: F.date,   default: () => now() },
     };
 }
 

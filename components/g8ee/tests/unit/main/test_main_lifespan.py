@@ -85,8 +85,23 @@ def _configure_settings(mocks):
 
 def _configure_factory(mocks):
     """Set up ServiceFactory.create_all_services / bind / start / stop."""
+    from app.services.service_factory import AllServices
     factory = mocks["ServiceFactory"]
-    factory.create_all_services.return_value = {"some_service": MagicMock()}
+    
+    # Create a mock AllServices object with required attributes
+    mock_services = MagicMock(spec=AllServices)
+    mock_services.api_key_service = MagicMock()
+    mock_services.cache_aside_service = MagicMock()
+    mock_services.operator_lifecycle_service = MagicMock()
+    mock_services.operator_data_service = MagicMock()
+    mock_services.heartbeat_service = MagicMock()
+    mock_services.operator_auth_service = MagicMock()
+    mock_services.session_auth_listener = MagicMock()
+    mock_services.certificate_service = MagicMock()
+    mock_services.investigation_service = MagicMock()
+    mock_services.approval_service = MagicMock()
+    
+    factory.create_all_services.return_value = mock_services
     factory.bind_to_app_state = MagicMock()
     factory.start_services = AsyncMock()
     factory.stop_services = AsyncMock()

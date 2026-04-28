@@ -196,7 +196,7 @@ class ConsoleMetricsService {
                         healthyCount++;
                     }
 
-                    // latest_heartbeat_snapshot is the canonical OperatorHeartbeat shape
+                    // latest_heartbeat_snapshot is the canonical HeartbeatSnapshot shape
                     // (shared/models/wire/heartbeat.json#operator_heartbeat) — persisted
                     // and SSE envelope both carry the same nested shape.
                     const perf = heartbeat.performance || {};

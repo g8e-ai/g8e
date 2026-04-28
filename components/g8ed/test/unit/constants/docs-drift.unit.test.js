@@ -49,51 +49,47 @@ function loadJsBindingCollections() {
 }
 
 /**
- * Extract collection names from the Collections table in storage.md.
+ * Extract collection names from the Key Collections section in storage.md.
  *
- * The table is a standard GitHub-flavored markdown table:
+ * The section lists collections in bullet points with backticks:
  *
- *     ### Collections
- *     | Collection | Primary Writer | Contents |
- *     |---|---|---|
- *     | `users` | ... | ... |
- *     | `web_sessions` | ... | ... |
+ *     ## Key Collections
+ *     **Authentication & Sessions**:
+ *     - `users`: User accounts, credentials, roles
+ *     - `web_sessions`, `operator_sessions`, `cli_sessions`: Session state
  *
- * We locate the `### Collections` heading, find the next table, and extract
- * the first column of each body row, stripping backticks.
+ * We locate the `## Key Collections` heading and extract all collection names
+ * wrapped in backticks.
  */
 function loadDocsCollections() {
     const md = readFileSync(STORAGE_MD_PATH, 'utf-8');
     const lines = md.split('\n');
 
-    const headingIdx = lines.findIndex(l => l.trim() === '### Collections');
+    const headingIdx = lines.findIndex(l => l.trim() === '## Key Collections');
     if (headingIdx === -1) {
-        throw new Error('docs/architecture/storage.md is missing the "### Collections" heading');
+        throw new Error('docs/architecture/storage.md is missing the "## Key Collections" heading');
     }
 
     const collections = new Set();
-    let inTable = false;
+    const nonCollectionTerms = new Set(['session_encryption_key', 'internal_auth_token', 'auditor_hmac_key']);
+    
     for (let i = headingIdx + 1; i < lines.length; i++) {
         const line = lines[i];
 
-        // Next top-level heading terminates the table scan.
-        if (/^#{1,3}\s/.test(line)) break;
+        // Next top-level heading terminates the scan.
+        if (/^#{1,2}\s/.test(line)) break;
 
-        // Table header / separator
-        if (/^\|\s*Collection\s*\|/.test(line)) { inTable = true; continue; }
-        if (/^\|[\s-]+\|/.test(line))           { continue; }
-
-        if (!inTable) continue;
-        // Blank line terminates the table.
-        if (line.trim() === '') break;
-
-        // Row: |  `name`  | ... | ... |
-        const m = line.match(/^\|\s*`([a-z0-9_]+)`\s*\|/i);
-        if (m) collections.add(m[1]);
+        // Extract collection names from backticks
+        const matches = line.matchAll(/`([a-z0-9_]+)`/gi);
+        for (const match of matches) {
+            if (!nonCollectionTerms.has(match[1])) {
+                collections.add(match[1]);
+            }
+        }
     }
 
     if (collections.size === 0) {
-        throw new Error('Could not parse any collection rows from the Collections table in storage.md');
+        throw new Error('Could not parse any collection names from the Key Collections section in storage.md');
     }
     return collections;
 }

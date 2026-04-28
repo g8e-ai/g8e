@@ -33,4 +33,5 @@ class MessageSender(str, Enum):
     USER_TERMINAL = "g8e.v1.source.user.terminal"
     AI_PRIMARY = "g8e.v1.source.ai.primary"
     AI_ASSISTANT = "g8e.v1.source.ai.assistant"
+    AI_TRIAGE = "g8e.v1.source.ai.triage"
     SYSTEM = "g8e.v1.source.system"

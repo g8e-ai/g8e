@@ -14,12 +14,10 @@
 /**
  * OperatorMetrics - Extracts normalized Operator metrics from a raw operator payload.
  *
- * Single source of truth: operator.latest_heartbeat_snapshot (OperatorHeartbeat,
+ * Single source of truth: operator.latest_heartbeat_snapshot (HeartbeatSnapshot,
  * shared/models/wire/heartbeat.json#operator_heartbeat). Same shape whether read
  * from the persisted operator document or the SSE envelope. All identity,
- * performance, network, and detail fields are read from this one nested object —
- * never from operator.system_info, which is a stale, redundant projection that
- * does not update on every heartbeat and causes identity fields to blank out.
+ * performance, network, and detail fields are read from this one nested object.
  */
 export class OperatorMetrics {
     constructor(rawData) {

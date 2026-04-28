@@ -41,7 +41,6 @@ func TestLoad_Defaults(t *testing.T) {
 	require.NotNil(t, cfg)
 
 	assert.Equal(t, constants.Status.ComponentName.G8EO, cfg.ComponentName)
-	assert.Equal(t, constants.Status.AuthMode.APIKey, cfg.AuthMode)
 	assert.Equal(t, "g8e", cfg.ProjectID)
 	assert.Equal(t, 25, cfg.MaxConcurrentTasks)
 	assert.Equal(t, 2048, cfg.MaxMemoryMB)
@@ -179,148 +178,6 @@ func TestLoad_TLSServerName(t *testing.T) {
 	}
 }
 
-func TestLoad_AuthModeDefaults(t *testing.T) {
-	t.Run("empty AuthMode defaults to api_key", func(t *testing.T) {
-		cfg, err := Load(LoadOptions{
-			APIKey:           "k",
-			OperatorEndpoint: constants.DefaultEndpoint,
-		})
-		require.NoError(t, err)
-		assert.Equal(t, constants.Status.AuthMode.APIKey, cfg.AuthMode)
-	})
-
-	t.Run("explicit api_key mode accepted", func(t *testing.T) {
-		cfg, err := Load(LoadOptions{
-			AuthMode:         constants.Status.AuthMode.APIKey,
-			APIKey:           "k",
-			OperatorEndpoint: constants.DefaultEndpoint,
-		})
-		require.NoError(t, err)
-		assert.Equal(t, constants.Status.AuthMode.APIKey, cfg.AuthMode)
-	})
-
-	t.Run("session mode stores operator session ID", func(t *testing.T) {
-		cfg, err := Load(LoadOptions{
-			AuthMode:          constants.Status.AuthMode.OperatorSession,
-			OperatorSessionID: "sess-abc",
-			OperatorEndpoint:  constants.DefaultEndpoint,
-		})
-		require.NoError(t, err)
-		assert.Equal(t, constants.Status.AuthMode.OperatorSession, cfg.AuthMode)
-		assert.Equal(t, "sess-abc", cfg.OperatorSessionId)
-	})
-}
-
-func TestLoad_CloudAndLocalStorage(t *testing.T) {
-	tests := []struct {
-		name     string
-		opts     LoadOptions
-		validate func(t *testing.T, cfg *Config)
-	}{
-		{
-			name: "cloud mode aws",
-			opts: LoadOptions{
-				APIKey:           "k",
-				OperatorEndpoint: constants.DefaultEndpoint,
-				CloudMode:        true,
-				CloudProvider:    constants.Status.CloudSubtype.AWS,
-			},
-			validate: func(t *testing.T, cfg *Config) {
-				assert.True(t, cfg.CloudMode)
-				assert.Equal(t, constants.Status.CloudSubtype.AWS, cfg.CloudProvider)
-			},
-		},
-		{
-			name: "cloud mode gcp",
-			opts: LoadOptions{
-				APIKey:           "k",
-				OperatorEndpoint: constants.DefaultEndpoint,
-				CloudMode:        true,
-				CloudProvider:    constants.Status.CloudSubtype.GCP,
-			},
-			validate: func(t *testing.T, cfg *Config) {
-				assert.True(t, cfg.CloudMode)
-				assert.Equal(t, constants.Status.CloudSubtype.GCP, cfg.CloudProvider)
-			},
-		},
-		{
-			name: "cloud mode azure",
-			opts: LoadOptions{
-				APIKey:           "k",
-				OperatorEndpoint: constants.DefaultEndpoint,
-				CloudMode:        true,
-				CloudProvider:    constants.Status.CloudSubtype.Azure,
-			},
-			validate: func(t *testing.T, cfg *Config) {
-				assert.True(t, cfg.CloudMode)
-				assert.Equal(t, constants.Status.CloudSubtype.Azure, cfg.CloudProvider)
-			},
-		},
-		{
-			name: "cloud mode empty provider by default",
-			opts: LoadOptions{
-				APIKey:           "k",
-				OperatorEndpoint: constants.DefaultEndpoint,
-				CloudMode:        true,
-			},
-			validate: func(t *testing.T, cfg *Config) {
-				assert.True(t, cfg.CloudMode)
-				assert.Empty(t, cfg.CloudProvider)
-			},
-		},
-		{
-			name: "local storage enabled",
-			opts: LoadOptions{
-				APIKey:              "k",
-				OperatorEndpoint:    constants.DefaultEndpoint,
-				LocalStorageEnabled: true,
-			},
-			validate: func(t *testing.T, cfg *Config) {
-				assert.True(t, cfg.LocalStoreEnabled)
-			},
-		},
-		{
-			name: "local storage disabled by default",
-			opts: LoadOptions{
-				APIKey:           "k",
-				OperatorEndpoint: constants.DefaultEndpoint,
-			},
-			validate: func(t *testing.T, cfg *Config) {
-				assert.False(t, cfg.LocalStoreEnabled)
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg, err := Load(tt.opts)
-			require.NoError(t, err)
-			tt.validate(t, cfg)
-		})
-	}
-}
-
-func TestLoad_NoGitPassthrough(t *testing.T) {
-	t.Run("no-git false by default", func(t *testing.T) {
-		cfg, err := Load(LoadOptions{
-			APIKey:           "k",
-			OperatorEndpoint: constants.DefaultEndpoint,
-		})
-		require.NoError(t, err)
-		assert.False(t, cfg.NoGit)
-	})
-
-	t.Run("no-git true when set", func(t *testing.T) {
-		cfg, err := Load(LoadOptions{
-			APIKey:           "k",
-			OperatorEndpoint: constants.DefaultEndpoint,
-			NoGit:            true,
-		})
-		require.NoError(t, err)
-		assert.True(t, cfg.NoGit)
-	})
-}
-
 func TestLoad_ValidationErrors(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -328,27 +185,11 @@ func TestLoad_ValidationErrors(t *testing.T) {
 		errContains string
 	}{
 		{
-			name: "missing api key in api_key mode",
+			name: "missing api key",
 			opts: LoadOptions{
 				OperatorEndpoint: constants.DefaultEndpoint,
 			},
 			errContains: "APIKey is required",
-		},
-		{
-			name: "missing api key when AuthMode explicit api_key",
-			opts: LoadOptions{
-				AuthMode:         constants.Status.AuthMode.APIKey,
-				OperatorEndpoint: constants.DefaultEndpoint,
-			},
-			errContains: "APIKey is required",
-		},
-		{
-			name: "missing operator session ID in session mode",
-			opts: LoadOptions{
-				AuthMode:         constants.Status.AuthMode.OperatorSession,
-				OperatorEndpoint: constants.DefaultEndpoint,
-			},
-			errContains: "OperatorSessionID is required",
 		},
 		{
 			name: "missing operator endpoint",
@@ -356,13 +197,6 @@ func TestLoad_ValidationErrors(t *testing.T) {
 				APIKey: "k",
 			},
 			errContains: "OperatorEndpoint is required",
-		},
-		{
-			name: "session mode missing both operator session ID and endpoint",
-			opts: LoadOptions{
-				AuthMode: constants.Status.AuthMode.OperatorSession,
-			},
-			errContains: "OperatorSessionID is required",
 		},
 	}
 

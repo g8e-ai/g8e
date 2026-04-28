@@ -154,7 +154,7 @@ describe('OperatorPanel._onHeartbeat [UNIT - PURE LOGIC]', () => {
         expect(panel._operators[0].latest_heartbeat_snapshot).toBeNull();
     });
 
-    it('ignores heartbeats when not authenticated', () => {
+    it('processes heartbeats even when not authenticated', () => {
         global.window.authState = { getState: () => ({ isAuthenticated: false }) };
 
         const panel = createPanel([
@@ -167,7 +167,8 @@ describe('OperatorPanel._onHeartbeat [UNIT - PURE LOGIC]', () => {
             metrics: { performance: { cpu_percent: 99 } },
         });
 
-        expect(panel._operators[0].latest_heartbeat_snapshot).toBeNull();
+        expect(panel._operators[0].latest_heartbeat_snapshot).not.toBeNull();
+        expect(panel._operators[0].latest_heartbeat_snapshot.performance.cpu_percent).toBe(99);
     });
 });
 

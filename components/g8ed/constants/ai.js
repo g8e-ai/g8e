@@ -116,6 +116,8 @@ export const LLMProvider = Object.freeze({
     OLLAMA:    'ollama',
     GEMINI:    'gemini',
     ANTHROPIC: 'anthropic',
+    LLAMACPP:  'llamacpp',
+    G8EL:      'g8el',
 });
 
 /**
@@ -171,9 +173,26 @@ export const OllamaModel = Object.freeze({
     GEMMA4_26B:      _STATUS['llm.models']['ollama']['gemma4.26b'],
     GEMMA4_E4B:      _STATUS['llm.models']['ollama']['gemma4.e4b'],
     GEMMA4_E2B:      _STATUS['llm.models']['ollama']['gemma4.e2b'],
+    GEMMA4_E2B_G8EA: _STATUS['llm.models']['ollama']['gemma4.e2b.g8ea'],
     NEMOTRON_3_30B:  _STATUS['llm.models']['ollama']['nemotron.3.30b'],
     LLAMA_3_2_3B:    _STATUS['llm.models']['ollama']['llama.3.2.3b'],
     QWEN3_5_2B:      _STATUS['llm.models']['ollama']['qwen3.5.2b'],
+});
+
+/**
+ * llama.cpp model identifiers.
+ * Must match g8ee's constants/settings.py LLAMACPP_* constants exactly.
+ */
+export const LlamaCppModel = Object.freeze({
+    GEMMA4_E2B: 'google_gemma-4-E2B-it-Q4_K_M.gguf',
+});
+
+/**
+ * g8el model identifiers.
+ * Must match g8ee's constants/settings.py G8EL_* constants exactly.
+ */
+export const G8elModel = Object.freeze({
+    GEMMA4_E2B: 'google_gemma-4-E2B-it-Q4_K_M.gguf',
 });
 
 // Every model is available at every tier for every provider. The user picks
@@ -203,10 +222,59 @@ export const PROVIDER_MODELS = Object.freeze({
         { id: OllamaModel.GEMMA4_26B, label: 'Gemma 4 26B' },
         { id: OllamaModel.GEMMA4_E4B, label: 'Gemma 4 E4B' },
         { id: OllamaModel.GEMMA4_E2B, label: 'Gemma 4 E2B' },
+        { id: OllamaModel.GEMMA4_E2B_G8EA, label: 'Gemma 4 E2B*' },
         { id: OllamaModel.NEMOTRON_3_30B, label: 'Nemotron 3 Nano 30B' },
         { id: OllamaModel.LLAMA_3_2_3B, label: 'Llama 3.2 3B' },
         { id: OllamaModel.QWEN3_5_2B, label: 'Qwen 3.5 2B' },
     ]),
+    [LLMProvider.LLAMACPP]: _tierAll([
+        { id: LlamaCppModel.GEMMA4_E2B, label: 'Gemma 4 E2B (llama.cpp)' },
+    ]),
+    [LLMProvider.G8EL]: _tierAll([
+        { id: G8elModel.GEMMA4_E2B, label: 'Gemma 4 E2B (g8el)' },
+    ]),
+});
+
+/**
+ * Setup-wizard default model assignments per provider.
+ *
+ * Defaults are intentionally mid-tier:
+ *   - paid providers: avoid surprise billing on first chat (no flagship by default)
+ *   - Ollama: pick a model that runs on commodity hardware (Qwen 122B requires
+ *     ~70GB VRAM and is unrunnable on a typical self-hosted box)
+ *
+ * Stored as canonical model ids (not display labels) so renaming a label in
+ * PROVIDER_MODELS cannot silently flip the wizard to a different default.
+ *
+ * Shipped to the browser via the llm-catalog script tag in setup.ejs; consumed
+ * by components/g8ed/public/js/components/setup-page.js.
+ */
+export const PROVIDER_DEFAULT_MODELS = Object.freeze({
+    [LLMProvider.GEMINI]: {
+        primary:   GeminiModel.FLASH,
+        assistant: GeminiModel.FLASH,
+        lite:      GeminiModel.FLASH_LITE,
+    },
+    [LLMProvider.ANTHROPIC]: {
+        primary:   AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6,
+        assistant: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6,
+        lite:      AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5,
+    },
+    [LLMProvider.OPENAI]: {
+        primary:   OpenAIModel.GPT_5_4,
+        assistant: OpenAIModel.GPT_5_4,
+        lite:      OpenAIModel.GPT_5_4_MINI,
+    },
+    [LLMProvider.OLLAMA]: {
+        primary:   OllamaModel.GEMMA4_26B,
+        assistant: OllamaModel.GEMMA4_E4B,
+        lite:      OllamaModel.LLAMA_3_2_3B,
+    },
+    [LLMProvider.G8EL]: {
+        primary:   G8elModel.GEMMA4_E2B,
+        assistant: G8elModel.GEMMA4_E2B,
+        lite:      G8elModel.GEMMA4_E2B,
+    },
 });
 
 /**

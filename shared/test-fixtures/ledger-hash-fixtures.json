@@ -1,0 +1,256 @@
+{
+  "canonical_json": [
+    {
+      "expected_utf8": "{\"a\":1,\"b\":\"two\",\"c\":true}",
+      "input": {
+        "a": 1,
+        "b": "two",
+        "c": true
+      },
+      "name": "simple_flat"
+    },
+    {
+      "expected_utf8": "{\"a\":[3,1,2],\"z\":{\"a\":1,\"b\":2}}",
+      "input": {
+        "a": [
+          3,
+          1,
+          2
+        ],
+        "z": {
+          "a": 1,
+          "b": 2
+        }
+      },
+      "name": "nested_object"
+    },
+    {
+      "expected_utf8": "{\"msg\":\"héllo wörld\",\"sender\":\"user.chat\"}",
+      "input": {
+        "msg": "héllo wörld",
+        "sender": "user.chat"
+      },
+      "name": "unicode_content"
+    },
+    {
+      "expected_utf8": "{\"l1\":{\"l2\":{\"l3\":{\"l4\":{\"a\":1,\"k\":\"v\"}}}},\"top\":0}",
+      "input": {
+        "l1": {
+          "l2": {
+            "l3": {
+              "l4": {
+                "a": 1,
+                "k": "v"
+              }
+            }
+          }
+        },
+        "top": 0
+      },
+      "name": "deep_nesting"
+    },
+    {
+      "expected_utf8": "{\"content\":\"Investigating port 443 on host.\",\"metadata\":{\"event_type\":\"g8e.v1.ai.primary.message.created\",\"tokens\":42},\"sender\":\"ai.primary\",\"timestamp\":\"2024-01-01T12:34:56Z\",\"tool_calls\":[{\"args\":{\"host\":\"a\",\"port\":443},\"tool\":\"port_check\"}]}",
+      "input": {
+        "content": "Investigating port 443 on host.",
+        "metadata": {
+          "event_type": "g8e.v1.ai.primary.message.created",
+          "tokens": 42
+        },
+        "sender": "ai.primary",
+        "timestamp": "2024-01-01T12:34:56Z",
+        "tool_calls": [
+          {
+            "args": {
+              "host": "a",
+              "port": 443
+            },
+            "tool": "port_check"
+          }
+        ]
+      },
+      "name": "realistic_history_entry"
+    },
+    {
+      "expected_utf8": "{\"list\":[1,\"two\",true,null,3.14]}",
+      "input": {
+        "list": [
+          1,
+          "two",
+          true,
+          null,
+          3.14
+        ]
+      },
+      "name": "array_of_primitives"
+    },
+    {
+      "expected_utf8": "{}",
+      "input": {},
+      "name": "empty_object"
+    }
+  ],
+  "chain": {
+    "created_at": "2024-03-15T10:00:00Z",
+    "entries": [
+      {
+        "content": "first",
+        "entry_hash": "69d88ea9b02880d02664d565abd787702212b58ffaedb66c3141b5e5dfe49d4b",
+        "id": "msg-0",
+        "metadata": {
+          "idx": 0,
+          "sub": {
+            "k": 0
+          }
+        },
+        "prev_hash": "cb2829ce07b4fde8cfdbd23e308700cb3696be440c7cd7282b3436315ac2812a",
+        "sender": "user.chat",
+        "timestamp": "2024-03-15T10:00:00Z"
+      },
+      {
+        "content": "second with nested",
+        "entry_hash": "66e503fcd9430ae3eeac3447cf7b426d66224e497227a190e9fd34f4bc13c6be",
+        "id": "msg-1",
+        "metadata": {
+          "idx": 1,
+          "sub": {
+            "k": 2
+          }
+        },
+        "prev_hash": "69d88ea9b02880d02664d565abd787702212b58ffaedb66c3141b5e5dfe49d4b",
+        "sender": "ai.primary",
+        "timestamp": "2024-03-15T10:01:00Z"
+      },
+      {
+        "content": "third héllo",
+        "entry_hash": "44e480d09337723f464aad039d150c85cbcef71ac4544b47e0fc38aec1080ee0",
+        "id": "msg-2",
+        "metadata": {
+          "idx": 2,
+          "sub": {
+            "k": 4
+          }
+        },
+        "prev_hash": "66e503fcd9430ae3eeac3447cf7b426d66224e497227a190e9fd34f4bc13c6be",
+        "sender": "user.chat",
+        "timestamp": "2024-03-15T10:02:00Z"
+      }
+    ],
+    "investigation_id": "chain-test-inv"
+  },
+  "entry_hash": [
+    {
+      "entry": {
+        "a": 1,
+        "b": "two",
+        "c": true
+      },
+      "expected_hash": "15cb571e732b2e999f2811881d3e5292042900c6d33ba439fde85ff6ec38e881",
+      "name": "simple_flat",
+      "prev_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "entry": {
+        "a": [
+          3,
+          1,
+          2
+        ],
+        "z": {
+          "a": 1,
+          "b": 2
+        }
+      },
+      "expected_hash": "ad2385635a25fe40fb425ab666cc76ffe95c73f6a6d1c61e3a2c4cf8486c4d06",
+      "name": "nested_object",
+      "prev_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "entry": {
+        "msg": "héllo wörld",
+        "sender": "user.chat"
+      },
+      "expected_hash": "6afa50b3f6112c4743731b68a6596504db944d9f024da78b1861f2f475529a50",
+      "name": "unicode_content",
+      "prev_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "entry": {
+        "l1": {
+          "l2": {
+            "l3": {
+              "l4": {
+                "a": 1,
+                "k": "v"
+              }
+            }
+          }
+        },
+        "top": 0
+      },
+      "expected_hash": "86498bacf42d0347ae1a8b0607b54257350a36f37f993ffbb37877c7c91dde24",
+      "name": "deep_nesting",
+      "prev_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "entry": {
+        "content": "Investigating port 443 on host.",
+        "metadata": {
+          "event_type": "g8e.v1.ai.primary.message.created",
+          "tokens": 42
+        },
+        "sender": "ai.primary",
+        "timestamp": "2024-01-01T12:34:56Z",
+        "tool_calls": [
+          {
+            "args": {
+              "host": "a",
+              "port": 443
+            },
+            "tool": "port_check"
+          }
+        ]
+      },
+      "expected_hash": "913c39f8991765b44e7946fc6b69e6394a5cc2e1d5786cb5257c40f6be72221f",
+      "name": "realistic_history_entry",
+      "prev_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "entry": {
+        "list": [
+          1,
+          "two",
+          true,
+          null,
+          3.14
+        ]
+      },
+      "expected_hash": "60a3ab6bcdcd5bc5be4de660316fb5059497c38ab2a6528a870fac32987026ed",
+      "name": "array_of_primitives",
+      "prev_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "entry": {},
+      "expected_hash": "211f261d9f17bc8f54d0267261e0d3f533c0fc3c05efb8e0df32709406f24e7d",
+      "name": "empty_object",
+      "prev_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "genesis_hash": [
+    {
+      "created_at": "2024-01-01T00:00:00Z",
+      "expected_hash": "ce0fa8321f669ed7b3bd71474184df3152fcfb5c962fcfa209d9a2d388a793a5",
+      "investigation_id": "inv-001"
+    },
+    {
+      "created_at": "2025-06-15T13:45:30+00:00",
+      "expected_hash": "70915a2285065185e32a866fffa0f1701c9c1a114052882f7c5c6f5dd7891a2f",
+      "investigation_id": "inv-002"
+    },
+    {
+      "created_at": "1970-01-01T00:00:00Z",
+      "expected_hash": "59f8df46d48a7e6810ccc9c8e1a03777f9772dcd457c663f242f5bd9d8f80afb",
+      "investigation_id": "00000000-0000-0000-0000-000000000000"
+    }
+  ]
+}

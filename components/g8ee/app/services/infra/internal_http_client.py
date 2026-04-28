@@ -35,8 +35,9 @@ from app.models.g8ed_client import (
     IntentRequestPayload,
     RevokeIntentResponse,
     SSEPushResponse,
+    OperatorLinkResponse,
+    OperatorLinkRequestPayload,
 )
-from app.services.protocols import OperatorDataServiceProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -47,10 +48,9 @@ def get_g8ed_url(settings: G8eePlatformSettings) -> str:
 
 class InternalHttpClient:
 
-    def __init__(self, settings: G8eePlatformSettings, operator_data_service: OperatorDataServiceProtocol | None = None):
+    def __init__(self, settings: G8eePlatformSettings):
         self.g8ed_url = get_g8ed_url(settings)
         self._settings = settings
-        self._operator_data_service: OperatorDataServiceProtocol | None = operator_data_service
         self._http: HTTPClient = HTTPClient(
             component_id=ComponentName.G8EE,
             base_url=self.g8ed_url,
@@ -79,10 +79,6 @@ class InternalHttpClient:
     def client(self) -> HTTPClient:
         """Access the underlying HTTP client."""
         return self._http
-
-    def set_operator_data_service(self, operator_data_service: OperatorDataServiceProtocol) -> None:
-        """Inject operator_data_service after construction to resolve circular dependency."""
-        self._operator_data_service = operator_data_service
 
     def _auth_headers(self) -> dict[str, str]:
         token = self.settings.auth.internal_auth_token
@@ -131,7 +127,7 @@ class InternalHttpClient:
 
         try:
             response = await self._http.post(
-                InternalApiPaths.PREFIX + InternalApiPaths.G8ED_SSE_PUSH,
+                InternalApiPaths.G8ED_SSE_PUSH,
                 json_data=wire_model,
                 headers=self._auth_headers(),
             )
@@ -188,7 +184,7 @@ class InternalHttpClient:
             request_payload = IntentRequestPayload(intent=intent)
 
             response = await self._http.post(
-                (InternalApiPaths.PREFIX + InternalApiPaths.G8ED_GRANT_INTENT).format(operator_id=operator_id),
+                InternalApiPaths.G8ED_GRANT_INTENT.format(operator_id=operator_id),
                 json_data=request_payload,
                 headers=self._auth_headers(),
                 context=context,
@@ -238,7 +234,7 @@ class InternalHttpClient:
             request_payload = IntentRequestPayload(intent=intent)
 
             response = await self._http.post(
-                (InternalApiPaths.PREFIX + InternalApiPaths.G8ED_REVOKE_INTENT).format(operator_id=operator_id),
+                InternalApiPaths.G8ED_REVOKE_INTENT.format(operator_id=operator_id),
                 json_data=request_payload,
                 headers=self._auth_headers(),
                 context=context,
@@ -261,23 +257,62 @@ class InternalHttpClient:
                 cause=e,
             )
 
-    async def bind_operators(
+    async def generate_operator_link(
         self,
-        operator_ids: list[str],
+        user_id: str,
+        operator_id: str,
         web_session_id: str,
-        context: G8eHttpContext,
-    ) -> bool:
-        """Delegate to OperatorDataService for proper domain separation."""
-        if self._operator_data_service is None:
-            raise ConfigurationError(
-                "operator_data_service not injected into InternalHttpClient",
-                component=ComponentName.G8EE,
-            )
+        organization_id: str | None = None,
+        context: G8eHttpContext | None = None,
+    ) -> OperatorLinkResponse:
+        """Generate a single-operator handshake link (dlk_ token) via g8ed.
         
-        return await self._operator_data_service.bind_operators(
-            operator_ids=operator_ids,
-            web_session_id=web_session_id,
-            context=context,
-        )
+        This is a prerequisite for the 'stream_operator' tool (Phase 4).
+        """
+        try:
+            logger.info(
+                "[HTTP-G8ED] Generating operator device link",
+                extra={"user_id": user_id, "operator_id": operator_id}
+            )
+
+            request_payload = OperatorLinkRequestPayload(
+                user_id=user_id,
+                organization_id=organization_id,
+                operator_id=operator_id,
+                web_session_id=web_session_id,
+            )
+
+            response = await self._http.post(
+                InternalApiPaths.G8ED_CREATE_OPERATOR_LINK,
+                json_data=request_payload,
+                headers=self._auth_headers(),
+                context=context,
+            )
+            
+            result = OperatorLinkResponse.model_validate(response.json())
+            if response.is_success and result.success:
+                logger.info(
+                    "[HTTP-G8ED] Operator device link generated successfully",
+                    extra={"user_id": user_id, "operator_id": operator_id}
+                )
+                return result
+
+            logger.warning(
+                "[HTTP-G8ED] Failed to generate operator device link",
+                extra={
+                    "user_id": user_id,
+                    "operator_id": operator_id,
+                    "status": response.status_code,
+                    "error": result.error,
+                }
+            )
+            return result
+
+        except Exception as e:
+            raise NetworkError(
+                f"[HTTP-G8ED] Failed to generate operator device link: {e}",
+                component=ComponentName.G8EE,
+                cause=e,
+            )
 
     

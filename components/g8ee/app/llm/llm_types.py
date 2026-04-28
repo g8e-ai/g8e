@@ -18,10 +18,12 @@ Provider-agnostic type system for all LLM interactions. Every service in g8ee
 uses these types instead of any provider-specific SDK types.
 """
 
+from __future__ import annotations
+
 import base64
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 from app.constants import (
     LLM_DEFAULT_MAX_OUTPUT_TOKENS,
@@ -32,13 +34,13 @@ from app.models.base import ConfigDict, G8eBaseModel
 
 @dataclass(frozen=True)
 class ThoughtSignature:
-    """Opaque encrypted context blob from the Gemini thinking API.
+    """Opaque encrypted context blob from the provider thinking API.
 
     Canonical form inside the application is always a base64-encoded string.
     The SDK returns raw bytes at the inbound provider boundary; from_sdk()
     normalises any inbound representation to this canonical form.
 
-    Rules per Gemini 3 thought-signatures spec:
+    Rules for thought-signatures:
     - Must be passed back on every toolCall Part (400 if omitted).
     - Must NOT be merged: a Part with a signature cannot be combined with
       a Part that lacks one, and two signed Parts cannot be merged.
@@ -118,7 +120,7 @@ class Role(str, Enum):
     USER = "user"
     ASSISTANT = "assistant"
     SYSTEM = "system"
-    MODEL = "model"  # Gemini specific but mapped to ASSISTANT usually
+    MODEL = "model"  # Provider-specific but often mapped to ASSISTANT
     TOOL = "tool"
 
 
@@ -137,7 +139,7 @@ class Schema:
     description: str | None = None
     properties: dict[str, "Schema"] | None = None
     required: list[str] | None = None
-    items: Optional["Schema"] = None
+    items: Schema | None = None
     enum: list[str] | None = None
 
 
@@ -264,26 +266,6 @@ class ToolGroup(G8eBaseModel):
     tools: list[ToolDeclaration] = []
     google_search: bool = False
 
-    def to_genai_tools(self) -> list:
-        """Convert ToolGroup to google.genai Tool format for LLM boundary."""
-        from app.llm.providers.gemini import genai_types
-
-        genai_tools = []
-        funcs = []
-        for tool in self.tools:
-            funcs.append({
-                "name": tool.name,
-                "description": tool.description,
-                "parameters": tool.parameters,
-            })
-        if funcs:
-            genai_tools.append(genai_types.Tool(function_declarations=funcs))
-
-        if self.google_search:
-            genai_tools.append(genai_types.Tool(google_search=genai_types.GoogleSearch()))
-
-        return genai_tools
-
 
 @dataclass
 class UsageMetadata:
@@ -326,7 +308,7 @@ class SdkSearchEntryPoint:
 class SdkGroundingRawData:
     """Typed representation of raw SDK grounding metadata extracted at the provider boundary.
 
-    Populated by GeminiProvider and attached to GenerateContentResponse.grounding_raw.
+    Populated by the respective provider and attached to GenerateContentResponse.grounding_raw.
     Consumed exclusively by GroundingService — never accessed outside the grounding boundary.
     """
     web_search_queries: list[str] = field(default_factory=list)
@@ -385,9 +367,6 @@ class ResponseJsonSchema(G8eBaseModel):
     def flatten_for_ollama(self) -> dict[str, Any]:
         return self.json_schema_dict
 
-    def flatten_for_gemini(self) -> dict[str, Any]:
-        return self.json_schema_dict
-
     def flatten_for_openai(self) -> dict[str, Any]:
         return {"name": self.name, "schema": self.json_schema_dict, "strict": self.strict}
 
@@ -401,9 +380,6 @@ class ResponseFormat(G8eBaseModel):
 
     def flatten_for_ollama(self) -> dict[str, Any]:
         return self.json_schema.flatten_for_ollama()
-
-    def flatten_for_gemini(self) -> dict[str, Any]:
-        return self.json_schema.flatten_for_gemini()
 
     def flatten_for_openai(self) -> dict[str, Any]:
         return {"type": "json_schema", "json_schema": self.json_schema.flatten_for_openai()}

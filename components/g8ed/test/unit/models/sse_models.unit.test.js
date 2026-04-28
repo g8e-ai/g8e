@@ -411,7 +411,6 @@ describe('OperatorStatusUpdatedData [UNIT - PURE LOGIC]', () => {
         expect(data.status).toBe('ACTIVE');
         expect(data.hostname).toBeNull();
         expect(data.system_fingerprint).toBeNull();
-        expect(data.system_info).toBeNull();
         expect(data.reason).toBeNull();
         expect(data.total_count).toBeNull();
         expect(data.active_count).toBeNull();
@@ -419,13 +418,11 @@ describe('OperatorStatusUpdatedData [UNIT - PURE LOGIC]', () => {
     });
 
     it('accepts all fields with values', () => {
-        const systemInfo = { os: 'linux', arch: 'amd64' };
         const data = OperatorStatusUpdatedData.parse({
             operator_id: 'op-123',
             status: 'ACTIVE',
             hostname: 'host-1',
             system_fingerprint: 'fp-abc123',
-            system_info: systemInfo,
             reason: 'User request',
             total_count: 10,
             active_count: 5,
@@ -433,7 +430,6 @@ describe('OperatorStatusUpdatedData [UNIT - PURE LOGIC]', () => {
         });
         expect(data.hostname).toBe('host-1');
         expect(data.system_fingerprint).toBe('fp-abc123');
-        expect(data.system_info).toEqual(systemInfo);
         expect(data.reason).toBe('User request');
         expect(data.total_count).toBe(10);
         expect(data.active_count).toBe(5);

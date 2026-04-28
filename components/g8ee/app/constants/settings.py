@@ -21,6 +21,8 @@ class LLMProvider(str, Enum):
     OLLAMA            = "ollama"
     GEMINI            = "gemini"
     ANTHROPIC         = "anthropic"
+    LLAMACPP          = "llamacpp"
+    G8EL              = "g8el"
 
 
 class ThinkingLevel(str, Enum):
@@ -316,21 +318,32 @@ OLLAMA_GLM_5_1                 = "glm-5.1:cloud"
 OLLAMA_GEMMA4_26B              = "gemma4:26b"
 OLLAMA_GEMMA4_E4B              = "gemma4:e4b"
 OLLAMA_GEMMA4_E2B              = "gemma4:e2b"
+OLLAMA_GEMMA4_E2B_G8EA         = "gemma4:e2b"
 OLLAMA_NEMOTRON_3_30B          = "nemotron-3-nano:30b"
 OLLAMA_LLAMA_3_2_3B            = "llama3.2:3b"
 OLLAMA_QWEN3_5_2B              = "qwen3.5:2b"
+
+# llama.cpp models
+LLAMACPP_GEMMA4_E2B           = "google_gemma-4-E2B-it-Q4_K_M.gguf"
+
+# g8el models
+G8EL_GEMMA4_E2B               = "google_gemma-4-E2B-it-Q4_K_M.gguf"
 
 # Provider default models
 OPENAI_DEFAULT_MODEL            = OPENAI_GPT_5_4
 OLLAMA_DEFAULT_MODEL            = OLLAMA_GEMMA4_E4B
 ANTHROPIC_DEFAULT_MODEL        = ANTHROPIC_CLAUDE_OPUS_4_6
 GEMINI_DEFAULT_MODEL            = GEMINI_3_FLASH
+LLAMACPP_DEFAULT_MODEL          = LLAMACPP_GEMMA4_E2B
+G8EL_DEFAULT_MODEL              = G8EL_GEMMA4_E2B
 
 # Provider default endpoints
 OPENAI_DEFAULT_ENDPOINT         = "https://api.openai.com/v1"
 OLLAMA_DEFAULT_ENDPOINT         = "http://10.0.0.5:11434"
 ANTHROPIC_DEFAULT_ENDPOINT     = "https://api.anthropic.com"
 GEMINI_DEFAULT_ENDPOINT         = ""  # Gemini uses different discovery mechanism
+LLAMACPP_DEFAULT_ENDPOINT       = "http://g8el:11444"
+G8EL_DEFAULT_ENDPOINT           = "http://g8el:11444"
 
 DEFAULT_FINISH_REASON           = "STOP"
 
@@ -390,6 +403,14 @@ OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS      = 300
 OPERATOR_COMMAND_SHORT_WAIT_TIMEOUT_SECONDS = 30
 FS_READ_MAX_SIZE_BYTES          = 102400
 
+# Default runtime configuration returned to operators on successful authentication
+DEFAULT_OPERATOR_CONFIG = {
+    "command_timeout": "15m",
+    "max_concurrent_tasks": 25,
+    "max_memory_mb": 2048,
+    "heartbeat_interval_seconds": 30
+}
+
 # System-wide LLM generation defaults
 # These are used when user/platform settings do not specify values
 LLM_DEFAULT_MAX_OUTPUT_TOKENS     = 20000
@@ -427,6 +448,13 @@ MAX_HEARTBEAT_HISTORY           = 10
 MAX_COMMAND_RESULTS_HISTORY     = 50
 STALE_WARNING_THRESHOLD_SECONDS = 120
 MAX_OUTPUT_LENGTH               = 100_000
+
+# Certificates
+CLIENT_CERT_VALIDITY_DAYS = 365
+DEFAULT_SSL_DIR           = "/g8es"
+CERT_SUBJECT_ORG          = "g8e Operator"
+CERT_SUBJECT_COUNTRY      = "US"
+CRL_ISSUER                = "g8e Platform CA"
 
 OPERATOR_AVAILABLE_MESSAGE_TEMPLATE = "{count} operator(s) bound and available for command execution"
 OPERATOR_UNAVAILABLE_MESSAGE        = "NO OPERATOR BOUND - Cannot execute commands"
@@ -467,6 +495,7 @@ FORBIDDEN_COMMAND_PATTERNS: tuple[str, ...] = (
     "sudo",
     "su ",
     "su\t",
+    "su -",
     "pkexec",
     "doas",
     "runas",
@@ -475,6 +504,48 @@ FORBIDDEN_COMMAND_PATTERNS: tuple[str, ...] = (
     "chmod g+s",
     "setuid",
     "setgid",
+    "eval ",
+    "exec ",
+    "$(",
+    "`",
+    "> /dev/sd",
+    "> /dev/nvme",
+    "> /dev/vd",
+    "dd if=",
+    "nsenter",
+    "unshare",
+    ":(){ :|:& };:",
+    "| bash",
+    "| sh",
+    "| zsh",
+    "| python",
+    "| perl",
+    "| php",
+    "| ruby",
+    "| node",
+    "base64 -d",
+    "base64 --decode",
+    "rm -rf /",
+    "rm -rf /etc",
+    "rm -rf /var",
+    "rm -rf /usr",
+    "rm -rf /bin",
+    "chmod 777",
+    "chmod -R 777",
+    "chmod a+rwx",
+    "chown -R",
+    "> /etc/passwd",
+    "> /etc/shadow",
+    "> /etc/sudoers",
+    ">> /etc/passwd",
+    ">> /etc/shadow",
+    ">> /etc/sudoers",
+    "iptables -F",
+    "ufw disable",
+    "history -c",
+    "unset HISTFILE",
+    "rm $0",
+    "rm $BASH_SOURCE",
 )
 
 G8EE_APP_TITLE                       = "g8e Engine"

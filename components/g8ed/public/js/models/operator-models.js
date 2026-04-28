@@ -119,24 +119,6 @@ export class HeartbeatSnapshot extends FrontendBaseModel {
     }
 }
 
-export class OperatorSlotSystemInfo extends FrontendBaseModel {
-    static fields = {
-        hostname:       { type: F.string,  default: null },
-        os:             { type: F.string,  default: null },
-        architecture:   { type: F.string,  default: null },
-        cpu_count:      { type: F.number, default: null },
-        memory_mb:      { type: F.number, default: null },
-        current_user:   { type: F.string,  default: null },
-        internal_ip:    { type: F.string,  default: null },
-        public_ip:      { type: F.string,  default: null },
-        os_details:     { type: F.object, default: null },
-        user_details:   { type: F.object, default: null },
-        disk_details:   { type: F.object, default: null },
-        memory_details: { type: F.object, default: null },
-        environment:    { type: F.object, default: null },
-    };
-}
-
 export class OperatorSlot extends FrontendBaseModel {
     static fields = {
         operator_id:    { type: F.string,  required: true },
@@ -147,8 +129,8 @@ export class OperatorSlot extends FrontendBaseModel {
         bound_web_session_id: { type: F.string, default: null },
         is_g8ep:        { type: F.boolean, default: false },
         first_deployed: { type: F.date,    default: null },
+        claimed_at:     { type: F.date,    default: null },
         last_heartbeat: { type: F.date,    default: null },
-        system_info:    { type: F.object,  model: OperatorSlotSystemInfo, default: () => new OperatorSlotSystemInfo({}) },
         latest_heartbeat_snapshot: { type: F.object, default: null },
     };
 }
@@ -181,7 +163,6 @@ export class OperatorStatusUpdatedEvent extends FrontendBaseModel {
         web_session_id:      { type: F.string, default: null },
         hostname:            { type: F.string, default: null },
         system_fingerprint:  { type: F.string, default: null },
-        system_info:         { type: F.object, default: null },
         reason:              { type: F.string, default: null },
         total_count:         { type: F.number, default: null },
         active_count:        { type: F.number, default: null },

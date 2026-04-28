@@ -64,6 +64,22 @@ class SettingsServiceProtocol(Protocol):
         """Get the bootstrap service dependency."""
         ...
 
+    async def update_g8ep_operator_api_key(self, api_key: str) -> None:
+        """Update the g8ep operator API key in platform settings."""
+        ...
+
+    async def clear_g8ep_operator_api_key(self, expected: str | None = None) -> None:
+        """Clear the g8ep operator API key from platform settings.
+
+        If *expected* is provided, only clear when the stored value matches
+        — prevents racing reconcilers from wiping a freshly rotated key.
+        """
+        ...
+
+    async def get_stored_g8ep_operator_api_key(self) -> str | None:
+        """Read the raw mirrored g8ep operator API key from platform_settings."""
+        ...
+
 
 class SettingsService:
     """Service for managing g8ee settings with bootstrap loading and cache-aside logic."""
@@ -121,25 +137,49 @@ class SettingsService:
         else:
             self._logger.info("Session encryption key not available from bootstrap service")
 
+        auditor_hmac_key = self._bootstrap.load_auditor_hmac_key()
+        if auditor_hmac_key:
+            self._bootstrap.verify_against_manifest("auditor_hmac_key", auditor_hmac_key)
+            settings.auth.auditor_hmac_key = auditor_hmac_key
+        else:
+            self._logger.info("Auditor HMAC key not available from bootstrap service")
+
         return settings
 
     def overlay_platform_data(self, settings: G8eePlatformSettings, platform_settings: G8eePlatformSettings) -> G8eePlatformSettings:
-        """Overlay platform DB settings onto local bootstrap settings."""
-        
-        # Command Validation
-        settings.command_validation.enable_whitelisting = platform_settings.command_validation.enable_whitelisting
-        settings.command_validation.enable_blacklisting = platform_settings.command_validation.enable_blacklisting
+        """Overlay platform DB settings onto local bootstrap settings.
 
-        # Search (Merged Vertex/Google)
+        Model-driven by design: each nested settings model is overlaid as a
+        whole object, and the auth merge iterates ``AuthSettings`` fields
+        rather than hand-listing them. Adding a new field on any of these
+        nested models therefore flows through automatically — hand-listing
+        fields here is the bug class that previously dropped new fields
+        (e.g. command_validation auto-approve, auth auditor_hmac_key) on
+        the platform-bootstrap path.
+
+        Auth is the only sub-model that merges instead of being replaced,
+        because bootstrap-loaded secrets (verified against the on-disk
+        SecretManager digest) must take precedence over whatever the
+        platform document carries; the DB only fills gaps when the
+        bootstrap volume hasn't surfaced a value yet.
+        """
+        # Whole-object overlay for nested models where the platform DB
+        # document is authoritative. Any new field added inside these
+        # models flows through with no change here.
+        settings.command_validation = platform_settings.command_validation
         settings.search = platform_settings.search
+        settings.reputation = platform_settings.reputation
 
-        # Auth
-        if platform_settings.auth.internal_auth_token and not settings.auth.internal_auth_token:
-            settings.auth.internal_auth_token = platform_settings.auth.internal_auth_token
-        if platform_settings.auth.session_encryption_key and not settings.auth.session_encryption_key:
-            settings.auth.session_encryption_key = platform_settings.auth.session_encryption_key
-        if platform_settings.auth.g8e_api_key:
-            settings.auth.g8e_api_key = platform_settings.auth.g8e_api_key
+        # Auth: bootstrap value wins when present; platform DB fills gaps.
+        # Iterating AuthSettings.model_fields makes this structural — newly
+        # added auth tokens (e.g. future signing keys) overlay automatically
+        # without revisiting this method.
+        for field_name in type(settings.auth).model_fields:
+            platform_value = getattr(platform_settings.auth, field_name, None)
+            if not platform_value:
+                continue
+            if not getattr(settings.auth, field_name, None):
+                setattr(settings.auth, field_name, platform_value)
 
         return settings
 
@@ -155,7 +195,7 @@ class SettingsService:
         if not self._cache_aside:
             return self.get_local_settings()
 
-        doc_dict = await self._cache_aside.get_document(
+        doc_dict = await self._cache_aside.get_document_with_cache(
             collection=DB_COLLECTION_SETTINGS,
             document_id=PLATFORM_SETTINGS_DOC,
         )
@@ -177,7 +217,7 @@ class SettingsService:
              raise ConfigurationError("CacheAsideService required for user settings")
 
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
-        user_doc_dict = await self._cache_aside.get_document(
+        user_doc_dict = await self._cache_aside.get_document_with_cache(
             collection=DB_COLLECTION_SETTINGS,
             document_id=user_doc_id,
         )
@@ -185,31 +225,17 @@ class SettingsService:
         if not user_doc_dict:
             # LLM settings are user-specific only. Return empty LLMSettings if user doc missing.
             # Search settings can fall back to platform defaults.
-            platform_doc_dict = await self._cache_aside.get_document(
+            platform_doc_dict = await self._cache_aside.get_document_with_cache(
                 collection=DB_COLLECTION_SETTINGS,
                 document_id=PLATFORM_SETTINGS_DOC,
             )
             platform_doc = PlatformSettingsDocument.model_validate(platform_doc_dict)
             
             return G8eeUserSettings(
-                llm=LLMSettings(
-                    llm_model=None,
-                    llm_assistant_model=None,
-                    llm_lite_model=None,
-                    openai_endpoint=OPENAI_DEFAULT_ENDPOINT,
-                    openai_api_key=None,
-                    ollama_endpoint=None,
-                    ollama_api_key=None,
-                    gemini_api_key=None,
-                    anthropic_endpoint=ANTHROPIC_DEFAULT_ENDPOINT,
-                    anthropic_api_key=None,
-                    ollama_assistant_model=None,
-                    llm_max_tokens=4096,
-                    llm_command_gen_enabled=False,
-                    llm_command_gen_auditor=True,
-                    llm_command_gen_passes=3,
-                ),
-                search=self._build_search_settings(platform_doc.settings)
+                llm=LLMSettings(),
+                search=self._build_search_settings(platform_doc.settings),
+                eval_judge=platform_doc.settings.eval_judge,
+                command_validation=platform_doc.settings.command_validation,
             )
 
         user_doc = UserSettingsDocument.model_validate(user_doc_dict)
@@ -217,7 +243,9 @@ class SettingsService:
 
         return G8eeUserSettings(
             llm=self._build_llm_settings(data),
-            search=self._build_search_settings(data)
+            search=self._build_search_settings(data),
+            eval_judge=data.eval_judge,
+            command_validation=data.command_validation,
         )
 
     def _build_search_settings(self, settings: G8eePlatformSettings | G8eeUserSettings) -> SearchSettings:
@@ -227,3 +255,68 @@ class SettingsService:
     def get_bootstrap_service(self) -> BootstrapServiceProtocol:
         """Get the bootstrap service dependency."""
         return self._bootstrap
+
+    async def update_g8ep_operator_api_key(self, api_key: str) -> None:
+        """Update the g8ep operator API key in platform settings.
+
+        This persists the API key to the platform_settings document so g8ep's
+        fetch-key-and-run.sh can retrieve it. Authority: g8ee.
+        """
+        if not self._cache_aside:
+            raise ConfigurationError("CacheAsideService required for updating platform settings")
+
+        await self._cache_aside.update_document(
+            collection=DB_COLLECTION_SETTINGS,
+            document_id=PLATFORM_SETTINGS_DOC,
+            data={"settings": {"g8ep_operator_api_key": api_key}},
+            merge=True
+        )
+
+        self._logger.info(
+            "g8ep operator API key updated in platform settings",
+            extra={"api_key_prefix": api_key[:8] + "..."}
+        )
+
+    async def clear_g8ep_operator_api_key(self, expected: str | None = None) -> None:
+        """Clear the g8ep operator API key field in platform_settings.
+
+        If *expected* is provided and the stored value differs, the clear is
+        skipped — this prevents a delayed revoke from wiping a freshly
+        rotated key. Authority: g8ee.
+        """
+        if not self._cache_aside:
+            raise ConfigurationError("CacheAsideService required for updating platform settings")
+
+        if expected is not None:
+            current = await self.get_stored_g8ep_operator_api_key()
+            if current is None:
+                return
+            if current != expected:
+                self._logger.info(
+                    "Skipping g8ep operator API key clear: stored value no longer matches expected",
+                )
+                return
+
+        await self._cache_aside.update_document(
+            collection=DB_COLLECTION_SETTINGS,
+            document_id=PLATFORM_SETTINGS_DOC,
+            data={"settings": {"g8ep_operator_api_key": None}},
+            merge=True,
+        )
+        self._logger.info("g8ep operator API key cleared from platform settings")
+
+    async def get_stored_g8ep_operator_api_key(self) -> str | None:
+        """Read the raw mirrored g8ep operator API key from platform_settings.
+
+        Bypasses the typed ``get_platform_settings`` overlay so the reconciler
+        can observe the on-disk value without bootstrap merging.
+        """
+        if not self._cache_aside:
+            return None
+        doc = await self._cache_aside.get_document_with_cache(
+            collection=DB_COLLECTION_SETTINGS,
+            document_id=PLATFORM_SETTINGS_DOC,
+        )
+        if not doc:
+            return None
+        return (doc.get("settings") or {}).get("g8ep_operator_api_key")

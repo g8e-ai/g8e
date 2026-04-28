@@ -66,6 +66,8 @@ from app.llm.llm_types import (
     StreamChunkFromModel,
     ThoughtSignature,
     UsageMetadata,
+    ToolGroup,
+    ResponseFormat,
 )
 from app.models.base import G8eBaseModel, Field
 from app.models.model_configs import get_model_config
@@ -186,6 +188,30 @@ def _finish_reason_from_candidate(candidate) -> str | None:
     if not fr:
         return None
     return getattr(fr, "name", None) or str(fr)
+
+
+def _tool_group_to_genai(tool_group: ToolGroup) -> list:
+    """Convert ToolGroup to google.genai Tool format for LLM boundary."""
+    genai_tools = []
+    funcs = []
+    for tool in tool_group.tools:
+        funcs.append({
+            "name": tool.name,
+            "description": tool.description,
+            "parameters": tool.parameters,
+        })
+    if funcs:
+        genai_tools.append(genai_types.Tool(function_declarations=funcs))
+
+    if tool_group.google_search:
+        genai_tools.append(genai_types.Tool(google_search=genai_types.GoogleSearch()))
+
+    return genai_tools
+
+
+def _response_format_to_genai(response_format: ResponseFormat) -> dict[str, object]:
+    """Convert canonical ResponseFormat to Gemini-compatible dict."""
+    return response_format.json_schema.json_schema_dict
 
 
 def _grounding_from_sdk_candidate(candidate) -> SdkGroundingRawData | None:
@@ -327,14 +353,9 @@ class GeminiProvider(LLMProvider):
         logger.info("Gemini provider initialized")
 
     async def _close_resources(self):
-        """Clean up SDK-internal httpx clients."""
+        """Clean up SDK client using public API."""
         try:
-            if hasattr(self._client, '_api_client'):
-                api = self._client._api_client
-                if hasattr(api, '_httpx_client') and api._httpx_client:
-                    api._httpx_client.close()
-                if hasattr(api, '_async_httpx_client') and api._async_httpx_client:
-                    await api._async_httpx_client.aclose()
+            await asyncio.to_thread(self._client.close)
         except Exception as exc:
             logger.info("Gemini cleanup error (non-fatal): %s", exc)
         logger.info("Gemini provider closed")
@@ -442,7 +463,7 @@ class GeminiProvider(LLMProvider):
             config_kwargs = {
                 "max_output_tokens": settings.max_output_tokens,
                 "response_mime_type": "application/json" if settings.response_format else None,
-                "response_json_schema": settings.response_format.flatten_for_gemini() if settings.response_format else None,
+                "response_json_schema": _response_format_to_genai(settings.response_format) if settings.response_format else None,
             }
             if settings.top_p_nucleus_sampling is not None:
                 config_kwargs["top_p"] = settings.top_p_nucleus_sampling
@@ -607,7 +628,7 @@ class GeminiProvider(LLMProvider):
         genai_tools = []
         if primary_llm_settings.tools:
             for tool_group in primary_llm_settings.tools:
-                genai_tools.extend(tool_group.to_genai_tools())
+                genai_tools.extend(_tool_group_to_genai(tool_group))
         genai_tools = genai_tools or None
         gen_config = self._build_genai_config(primary_llm_settings, genai_tools, model)
         try:
@@ -636,7 +657,7 @@ class GeminiProvider(LLMProvider):
         genai_tools = []
         if primary_llm_settings.tools:
             for tool_group in primary_llm_settings.tools:
-                genai_tools.extend(tool_group.to_genai_tools())
+                genai_tools.extend(_tool_group_to_genai(tool_group))
         genai_tools = genai_tools or None
         gen_config = self._build_genai_config(primary_llm_settings, genai_tools, model)
         try:

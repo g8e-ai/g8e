@@ -20,8 +20,9 @@
  */
 
 import { templateLoader } from '../utils/template-loader.js';
+import { escapeHtml } from '../utils/html.js';
 import { TribunalOutcome, EventType } from '../constants/events.js';
-import { TribunalMemberIcons } from '../constants/agents.js';
+import { TribunalMemberIcons, AuditorIcon } from '../constants/agents.js';
 
 export class TerminalOutputMixin {
     _cancelPendingTimers() {
@@ -556,6 +557,12 @@ export class TerminalOutputMixin {
 
         this._removeWelcome();
 
+        // Check for existing widget to avoid duplicates
+        const existingWidget = document.getElementById(id);
+        if (existingWidget) {
+            return id;
+        }
+
         // The Tribunal refining widget visually supersedes the "Preparing"
         // indicator for the same command. Absorb any active preparing
         // indicator by removing it and reusing its execution bubble, so the
@@ -620,9 +627,15 @@ export class TerminalOutputMixin {
         }).join('');
 
         const tribunalHtml =
-            `<span class="tribunal__passes">${dots}</span>` +
-            `<span class="tribunal__status">Generating alternatives...</span>` +
-            `<span class="tribunal__spinner"></span>`;
+            `<div class="tribunal">` +
+                `<span class="tribunal__passes">${dots}</span>` +
+                `<span class="tribunal__gap"></span>` +
+                `<span class="tribunal__dot tribunal__dot--auditor" title="Auditor">
+                    <span class="material-symbols-outlined tribunal__dot-icon">${AuditorIcon}</span>
+                </span>` +
+                `<span class="tribunal__status">Generating...</span>` +
+                `<span class="tribunal__spinner"></span>` +
+            `</div>`;
 
         const parts = [];
         if (request) parts.push(request);
@@ -633,7 +646,7 @@ export class TerminalOutputMixin {
             cardModifier: 'approval-compact--refining',
             icon: 'auto_fix_high',
             iconModifier: 'approval-compact__icon--refining',
-            headerText: 'Refining command',
+            headerText: 'Refining',
             tribunalHtml,
             riskBadgeHtml: '',
             promptHtml: '',
@@ -679,22 +692,42 @@ export class TerminalOutputMixin {
         const spinner = widget.querySelector('.tribunal__spinner');
         if (spinner) spinner.remove();
 
+        const auditorDot = widget.querySelector('.tribunal__dot--auditor');
+        if (auditorDot) {
+            const success = outcome === TribunalOutcome.CONSENSUS || outcome === TribunalOutcome.VERIFIED;
+            auditorDot.classList.add(success ? 'tribunal__dot--ok' : 'tribunal__dot--fail');
+        }
+
         const statusEl = widget.querySelector('.tribunal__status');
-        if (statusEl) {
-            let outcomeLabel;
-            if (outcome === TribunalOutcome.VERIFICATION_FAILED) {
-                outcomeLabel = 'Revised';
-            } else if (outcome === TribunalOutcome.CONSENSUS) {
-                outcomeLabel = 'Consensus';
-            } else if (outcome === TribunalOutcome.CONSENSUS_FAILED) {
-                outcomeLabel = 'Consensus failed';
-                statusEl.classList.add('tribunal__status--failed');
-            } else {
-                outcomeLabel = 'Verified';
-            }
-            const statusText = finalCommand ? `${outcomeLabel} · ${finalCommand}` : outcomeLabel;
+        if (!statusEl) return;
+
+        const success = outcome === TribunalOutcome.CONSENSUS || outcome === TribunalOutcome.VERIFIED;
+        const label = this._tribunalOutcomeLabel(outcome);
+        const statusText = finalCommand ? `${label} · ${finalCommand}` : label;
+
+        if (success) {
+            statusEl.innerHTML = `<span class="material-symbols-outlined">check</span>${escapeHtml(statusText)}`;
+        } else {
             statusEl.textContent = statusText;
-            statusEl.classList.add('tribunal__status--done');
+        }
+        statusEl.classList.add('tribunal__status--done');
+        if (outcome === TribunalOutcome.CONSENSUS_FAILED) {
+            statusEl.classList.add('tribunal__status--failed');
+        }
+    }
+
+    _tribunalOutcomeLabel(outcome) {
+        switch (outcome) {
+            case TribunalOutcome.CONSENSUS:
+                return 'Consensus';
+            case TribunalOutcome.VERIFIED:
+                return 'Verified';
+            case TribunalOutcome.VERIFICATION_FAILED:
+                return 'Revised';
+            case TribunalOutcome.CONSENSUS_FAILED:
+                return 'Consensus failed';
+            default:
+                return 'Complete';
         }
     }
 

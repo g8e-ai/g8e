@@ -97,10 +97,6 @@ class HTTPService:
 
     async def stop(self) -> None:
         """Stop the HTTP service and cleanup all registered clients."""
-        if not self._http_ready:
-            logger.info("[HTTP] HTTP service already stopped")
-            return
-
         for service_name, client in list(self._active_clients.items()):
             try:
                 await client.close()

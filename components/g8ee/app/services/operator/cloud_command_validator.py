@@ -43,30 +43,7 @@ CLOUD_ONLY_COMMAND_PATTERNS: list[re.Pattern[str]] = [
 ]
 
 
-CLOUD_OPERATOR_AUTO_APPROVED_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"^aws\s+sts\s+get-caller-identity(\s|$)"),
-    re.compile(r"^aws\s+iam\s+get-role(\s|$)"),
-    re.compile(r"^aws\s+iam\s+get-role-policy(\s|$)"),
-    re.compile(r"^aws\s+iam\s+list-role-policies(\s|$)"),
-    re.compile(r"^aws\s+iam\s+list-attached-role-policies(\s|$)"),
-    re.compile(r"^aws\s+iam\s+get-instance-profile(\s|$)"),
-    re.compile(r"^aws\s+iam\s+simulate-principal-policy(\s|$)"),
-]
-
-
 def is_cloud_only_command(command: str) -> bool:
     """Return True if the command requires a Cloud Operator (operator_type: cloud)."""
     command = command.strip()
     return any(p.match(command) for p in CLOUD_ONLY_COMMAND_PATTERNS)
-
-
-def is_cloud_operator_self_discovery_command(command: str, cloud_subtype: CloudSubtype | None = None) -> bool:
-    """Return True if the command is a read-only Cloud Operator self-discovery command.
-    
-    g8ep operators are explicitly excluded from auto-approval patterns to avoid
-    accidental privilege escalation on the host system.
-    """
-    if cloud_subtype == CloudSubtype.G8E_POD:
-        return False
-    command = command.strip()
-    return any(p.match(command) for p in CLOUD_OPERATOR_AUTO_APPROVED_PATTERNS)

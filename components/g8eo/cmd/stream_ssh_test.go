@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 // mockSSHServer is a minimal SSH server for testing streamToHost.
@@ -38,6 +39,7 @@ type mockSSHServer struct {
 	listener net.Listener
 	config   *ssh.ServerConfig
 	addr     string
+	hostKey  ssh.PublicKey
 }
 
 func newMockSSHServer(t *testing.T, handler func(ssh.Conn, <-chan ssh.NewChannel, <-chan *ssh.Request)) *mockSSHServer {
@@ -57,6 +59,7 @@ func newMockSSHServer(t *testing.T, handler func(ssh.Conn, <-chan ssh.NewChannel
 		listener: l,
 		config:   config,
 		addr:     l.Addr().String(),
+		hostKey:  key.PublicKey(),
 	}
 
 	go func() {
@@ -153,6 +156,12 @@ func TestStreamToHost_Success(t *testing.T) {
 	err = os.WriteFile(sshConfigPath, []byte(fmt.Sprintf("Host 127.0.0.1\n  Port %s\n", port)), 0600)
 	require.NoError(t, err)
 
+	// Strict host-key checking is mandatory: pre-populate known_hosts with the
+	// mock server's host key for the [127.0.0.1]:port address the client will dial.
+	khPath := filepath.Join(sshDir, "known_hosts")
+	khAddr := knownhosts.Normalize(net.JoinHostPort("127.0.0.1", port))
+	require.NoError(t, os.WriteFile(khPath, []byte(knownhosts.Line([]string{khAddr}, server.hostKey)+"\n"), 0600))
+
 	streamToHost(
 		ctx,
 		target,
@@ -217,6 +226,11 @@ func TestStreamToHost_DialFailure(t *testing.T) {
 
 	sshConfigPath := filepath.Join(sshDir, "config")
 	os.WriteFile(sshConfigPath, []byte(fmt.Sprintf("Host failedhost\n  Port %s\n", port)), 0600)
+
+	// Strict mode requires known_hosts to exist; the dial itself is what we
+	// expect to fail in this test, not host-key validation.
+	khPath := filepath.Join(sshDir, "known_hosts")
+	require.NoError(t, os.WriteFile(khPath, []byte(""), 0600))
 
 	resultCh := make(chan streamResult, 1)
 	streamToHost(

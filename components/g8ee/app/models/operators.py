@@ -21,9 +21,9 @@ Defines data structures for tracking g8eo operators and their runtime configurat
 
 import asyncio
 import logging
-from typing import Optional
+from typing import Any, Literal
 
-from pydantic import ConfigDict, Field, PrivateAttr, field_validator
+from pydantic import ConfigDict, Field, PrivateAttr, ValidationInfo, field_validator, model_validator
 
 from app.models.http_context import G8eHttpContext
 
@@ -34,11 +34,13 @@ from app.constants import (
     CloudIntent,
     CloudSubtype,
     CommandErrorType,
+    ComponentName,
     ExecutionStatus,
     FileOperation,
     HeartbeatType,
     OperatorStatus,
     OperatorType,
+    OperatorHistoryEventType,
     VersionStability,
 )
 from app.models.pubsub_messages import G8eoHeartbeatPayload
@@ -52,87 +54,6 @@ from app.utils.timestamp import now
 from .base import G8eBaseModel, G8eIdentifiableModel, UTCDatetime
 
 logger = logging.getLogger(__name__)
-
-
-class SystemInfoFingerprintDetails(G8eBaseModel):
-    """Structured fingerprint sub-fields from wire/system_info.json."""
-    os: str | None = Field(default=None)
-    architecture: str | None = Field(default=None)
-    cpu_count: int | None = Field(default=None)
-    machine_id: str | None = Field(default=None)
-
-
-class SystemInfoOSDetails(G8eBaseModel):
-    """OS detail sub-fields from wire/system_info.json."""
-    kernel: str | None = Field(default=None)
-    distro: str | None = Field(default=None)
-    version: str | None = Field(default=None)
-
-
-class SystemInfoUserDetails(G8eBaseModel):
-    """User detail sub-fields from wire/system_info.json."""
-    username: str | None = Field(default=None)
-    uid: int | None = Field(default=None)
-    gid: int | None = Field(default=None)
-    home: str | None = Field(default=None)
-    name: str | None = Field(default=None)
-    shell: str | None = Field(default=None)
-
-
-class SystemInfoDiskDetails(G8eBaseModel):
-    """Root filesystem disk usage sub-fields from wire/system_info.json."""
-    total_gb: float | None = Field(default=None)
-    used_gb: float | None = Field(default=None)
-    free_gb: float | None = Field(default=None)
-    percent: float | None = Field(default=None)
-
-
-class SystemInfoMemoryDetails(G8eBaseModel):
-    """Memory usage sub-fields from wire/system_info.json."""
-    total_mb: int | None = Field(default=None)
-    available_mb: int | None = Field(default=None)
-    used_mb: int | None = Field(default=None)
-    percent: float | None = Field(default=None)
-
-
-class SystemInfoEnvironment(G8eBaseModel):
-    """Environment and container context sub-fields from wire/system_info.json."""
-    pwd: str | None = Field(default=None)
-    lang: str | None = Field(default=None)
-    timezone: str | None = Field(default=None)
-    term: str | None = Field(default=None)
-    is_container: bool | None = Field(default=None)
-    container_runtime: str | None = Field(default=None)
-    container_signals: list[str] | None = Field(default=None)
-    init_system: str | None = Field(default=None)
-
-
-class OperatorSystemInfo(G8eBaseModel):
-    """System information sent by g8eo.
-
-    Canonical shape defined in shared/models/wire/system_info.json.
-    Populated from g8eo auth payload and updated on each heartbeat.
-    """
-
-    hostname: str | None = Field(default=None, description="System hostname")
-    os: str | None = Field(default=None, description="Operating system name (e.g. linux)")
-    architecture: str | None = Field(default=None, description="CPU architecture (e.g. amd64, arm64)")
-    cpu_count: int | None = Field(default=None, description="Number of logical CPU cores")
-    memory_mb: int | None = Field(default=None, description="Total system memory in MB")
-    public_ip: str | None = Field(default=None, description="Public IPv4 address")
-    internal_ip: str | None = Field(default=None, description="Primary internal/private IP address")
-    interfaces: list[str] = Field(default_factory=list, description="Network interface names")
-    current_user: str | None = Field(default=None, description="OS user running the operator")
-    system_fingerprint: str | None = Field(default=None, description="SHA256 fingerprint of stable host attributes")
-    fingerprint_details: SystemInfoFingerprintDetails | None = Field(default=None, description="Sub-fields used to compute system_fingerprint")
-    os_details: SystemInfoOSDetails | None = Field(default=None, description="Detailed OS information")
-    user_details: SystemInfoUserDetails | None = Field(default=None, description="Current OS user details")
-    disk_details: SystemInfoDiskDetails | None = Field(default=None, description="Root filesystem disk usage")
-    memory_details: SystemInfoMemoryDetails | None = Field(default=None, description="Detailed memory usage")
-    environment: SystemInfoEnvironment | None = Field(default=None, description="Environment and container context")
-    is_cloud_operator: bool | None = Field(default=False, description="True when this is a cloud-hosted operator")
-    cloud_provider: str | None = Field(default=None, description="Cloud provider identifier")
-    local_storage_enabled: bool | None = Field(default=True, description="True when local vault storage is active")
 
 
 class AttachmentRecord(G8eIdentifiableModel):
@@ -161,7 +82,36 @@ class CommandResultRecord(G8eBaseModel):
     operator_session_id: str | None = Field(default=None, description="Associated operator session ID")
 
 
-class OperatorDocument(G8eBaseModel):
+class OperatorHistoryEntry(G8eBaseModel):
+    """Single entry in operator history trail."""
+    timestamp: UTCDatetime = Field(default_factory=now, description="When this event occurred")
+    event_type: OperatorHistoryEventType = Field(..., description="Type of event (canonical values from status.json)")
+    summary: str = Field(..., description="Brief summary of what happened")
+    actor: ComponentName = Field(default=ComponentName.G8EE, description="Who performed this action")
+    details: dict[str, object] = Field(default_factory=dict, description="Detailed event information")
+    prev_hash: str = Field(..., description="Hash of previous entry in the chain (hex SHA256, 64 chars)")
+    entry_hash: str | None = Field(default=None, description="Hash of this entry (hex SHA256, 64 chars)")
+
+    @model_validator(mode="after")
+    def _seal_entry_hash(self) -> "OperatorHistoryEntry":
+        """Auto-compute entry_hash if not provided."""
+        if self.entry_hash is None:
+            from app.utils.ledger_hash import compute_entry_hash
+            payload = self.model_dump(mode="json", exclude={"entry_hash"})
+            object.__setattr__(self, "entry_hash", compute_entry_hash(payload, self.prev_hash))
+        return self
+
+    @field_validator("entry_hash", mode="after")
+    @classmethod
+    def validate_entry_hash(cls, v):
+        if v is None:
+            raise ValueError("entry_hash must be computed and set before use")
+        if len(v) != 64:
+            raise ValueError("entry_hash must be 64 characters (hex SHA256)")
+        return v
+
+
+class OperatorDocument(G8eIdentifiableModel):
     """g8ee read-side projection of the g8ed OperatorDocument.
 
     Maps to operator_status_info in shared/models/operator_document.json.
@@ -172,46 +122,53 @@ class OperatorDocument(G8eBaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    id: str = Field(description="Unique Operator identifier")
     user_id: str = Field(description="User ID who owns this operator (always set by g8ed)")
+    first_deployed: UTCDatetime | None = Field(default=None, description="When the operator was first deployed")
     name: str | None = Field(default=None, description="Human-readable operator name")
     organization_id: str | None = Field(default=None, description="Organization ID")
     status: OperatorStatus = Field(default=OperatorStatus.AVAILABLE, description="Current Operator status")
     bound_web_session_id: str | None = Field(default=None, description="Bound web session ID")
     operator_session_id: str | None = Field(default=None, description="Current Operator session ID")
-    last_heartbeat: UTCDatetime | None = Field(default=None, description="Last heartbeat timestamp")
-    system_info: OperatorSystemInfo | None = Field(default=None, description="System information")
-    latest_heartbeat_snapshot: Optional["OperatorHeartbeat"] = Field(default=None, description="Latest heartbeat metrics")
+    claimed_at: UTCDatetime | None = Field(default=None, description="When the slot was claimed (set at claim time, not heartbeat time)")
+    last_heartbeat: UTCDatetime | None = Field(default=None, description="Last heartbeat timestamp (set only on actual heartbeat ingestion)")
+    terminated_at: UTCDatetime | None = Field(default=None, description="When the operator was terminated")
+    latest_heartbeat_snapshot: HeartbeatSnapshot | None = Field(default=None, description="Latest heartbeat metrics")
     investigation_id: str | None = Field(default=None, description="Current investigation ID")
     case_id: str | None = Field(default=None, description="Current case ID")
+    api_key: str | None = Field(default=None, description="Operator API key (authority: g8ee)")
     is_active: bool = Field(default=False, description="Whether Operator is in active status")
     operator_type: OperatorType = Field(default=OperatorType.SYSTEM, description="Operator deployment type")
     granted_intents: list[str] | None = Field(default=None, description="Granted intent permissions (cloud operators)")
     cloud_subtype: CloudSubtype | None = Field(default=None, description="Cloud provider subtype")
-    current_hostname: str | None = Field(default=None, description="Denormalized hostname from system_info for quick access")
+    current_hostname: str | None = Field(default=None, description="Denormalized hostname from latest_heartbeat_snapshot for quick access")
     session_token: str | None = Field(default=None, description="Active session token for session-based auth validation")
     session_expires_at: UTCDatetime | None = Field(default=None, description="Session expiration timestamp")
+    history_trail: list[OperatorHistoryEntry] = Field(
+        default_factory=list,
+        description="Operator lifecycle audit trail (append-only). Authority: g8ee."
+    )
 
     @property
     def hostname(self) -> str | None:
         """Get hostname from current_hostname for backward compatibility."""
         return self.current_hostname
 
-    @field_validator("status", mode="before")
+    @field_validator("current_hostname", mode="before")
     @classmethod
-    def coerce_status(cls, v: object) -> OperatorStatus:
-        try:
-            return OperatorStatus(v)
-        except (ValueError, KeyError):
-            logger.warning("Unknown OperatorStatus value %r — defaulting to AVAILABLE", v)
-            return OperatorStatus.AVAILABLE
+    def sync_current_hostname(cls, v: object, info: ValidationInfo) -> str | None:
+        """Ensure current_hostname stays in sync with latest_heartbeat_snapshot.system_identity.hostname."""
+        if v is not None:
+            return v
+        if info.data.get("latest_heartbeat_snapshot") and isinstance(info.data["latest_heartbeat_snapshot"], HeartbeatSnapshot):
+            return info.data["latest_heartbeat_snapshot"].system_identity.hostname
+        return None
 
     @field_validator("latest_heartbeat_snapshot", mode="before")
     @classmethod
     def coerce_heartbeat_snapshot(cls, v: object) -> object:
         if isinstance(v, dict):
             try:
-                return OperatorHeartbeat.model_validate(v)
+                return HeartbeatSnapshot.model_validate(v)
             except Exception:
                 return None
         return v
@@ -280,11 +237,57 @@ class HeartbeatUptimeInfo(G8eBaseModel):
     uptime_seconds: int | None = Field(default=None, description="Uptime in seconds")
 
 
-HeartbeatOSDetails = SystemInfoOSDetails
-HeartbeatUserDetails = SystemInfoUserDetails
-HeartbeatDiskDetails = SystemInfoDiskDetails
-HeartbeatMemoryDetails = SystemInfoMemoryDetails
-HeartbeatEnvironment = SystemInfoEnvironment
+class HeartbeatOSDetails(G8eBaseModel):
+    """Detailed operating system information."""
+    kernel: str | None = Field(default=None, description="Kernel version")
+    distro: str | None = Field(default=None, description="Distribution name")
+    version: str | None = Field(default=None, description="OS version")
+
+
+class HeartbeatUserDetails(G8eBaseModel):
+    """Details about the current OS user."""
+    username: str | None = Field(default=None, description="Username")
+    uid: int | None = Field(default=None, description="User ID")
+    gid: int | None = Field(default=None, description="Group ID")
+    home: str | None = Field(default=None, description="Home directory")
+    name: str | None = Field(default=None, description="Full name")
+    shell: str | None = Field(default=None, description="Default shell")
+
+
+class HeartbeatDiskDetails(G8eBaseModel):
+    """Root filesystem disk usage."""
+    total_gb: float | None = Field(default=None, description="Total disk space in GB")
+    used_gb: float | None = Field(default=None, description="Used disk space in GB")
+    free_gb: float | None = Field(default=None, description="Free disk space in GB")
+    percent: float | None = Field(default=None, description="Disk usage percentage")
+
+
+class HeartbeatMemoryDetails(G8eBaseModel):
+    """Detailed memory usage breakdown."""
+    total_mb: int | None = Field(default=None, description="Total memory in MB")
+    available_mb: int | None = Field(default=None, description="Available memory in MB")
+    used_mb: int | None = Field(default=None, description="Used memory in MB")
+    percent: float | None = Field(default=None, description="Memory usage percentage")
+
+
+class HeartbeatEnvironment(G8eBaseModel):
+    """Environment and container context."""
+    pwd: str | None = Field(default=None, description="Current working directory")
+    lang: str | None = Field(default=None, description="Language setting")
+    timezone: str | None = Field(default=None, description="Timezone")
+    term: str | None = Field(default=None, description="Terminal type")
+    is_container: bool | None = Field(default=None, description="Running in container")
+    container_runtime: str | None = Field(default=None, description="Container runtime")
+    container_signals: list[str] | None = Field(default=None, description="Container signals")
+    init_system: str | None = Field(default=None, description="Init system")
+
+
+class HeartbeatFingerprintDetails(G8eBaseModel):
+    """Sub-fields used to compute system_fingerprint."""
+    os: str | None = Field(default=None, description="Operating system")
+    architecture: str | None = Field(default=None, description="CPU architecture")
+    cpu_count: int | None = Field(default=None, description="CPU core count")
+    machine_id: str | None = Field(default=None, description="Machine ID")
 
 
 def _coerce_heartbeat_type(value: object) -> HeartbeatType:
@@ -302,7 +305,7 @@ class HeartbeatVersionInfo(G8eBaseModel):
 
 
 
-class OperatorHeartbeat(G8eBaseModel):
+class HeartbeatSnapshot(G8eBaseModel):
     """
     Clean, normalized heartbeat data structure.
     
@@ -385,7 +388,7 @@ class OperatorHeartbeat(G8eBaseModel):
 
     # Network identity fields (top-level in g8eo payload, not nested under network_info)
     system_fingerprint: str | None = Field(default=None, description="SHA256 fingerprint of stable host attributes")
-    fingerprint_details: SystemInfoFingerprintDetails | None = Field(default=None, description="Sub-fields used to compute system_fingerprint")
+    fingerprint_details: HeartbeatFingerprintDetails | None = Field(default=None, description="Sub-fields used to compute system_fingerprint")
 
     # Cloud operator flags
     is_cloud_operator: bool = Field(default=False, description="True when this is a cloud-hosted operator")
@@ -397,98 +400,43 @@ class OperatorHeartbeat(G8eBaseModel):
     ledger_enabled: bool = Field(default=False, description="True when LFAA ledger mirroring is active")
 
     @classmethod
-    def from_wire(cls, payload: G8eoHeartbeatPayload) -> "OperatorHeartbeat":
-        """Create OperatorHeartbeat from the typed g8eo wire payload.
+    def from_wire(cls, payload: G8eoHeartbeatPayload) -> "HeartbeatSnapshot":
+        """Create HeartbeatSnapshot from the typed g8eo wire payload.
 
         Canonical wire shape: shared/models/wire/heartbeat.json.
         Validation happens once at the pub/sub boundary in heartbeat_service.py
         before this is called.
         """
+        wire_dict = payload.model_dump(mode="json", exclude={"event_type", "operator_id", "operator_session_id", "case_id", "investigation_id", "user_id", "api_key"})
+        
+        wire_dict["timestamp"] = now()
+        wire_dict["heartbeat_type"] = _coerce_heartbeat_type(payload.heartbeat_type)
+        
+        wire_dict["performance"] = wire_dict.pop("performance_metrics")
+        wire_dict["network"] = wire_dict.pop("network_info")
+        uptime_info = wire_dict.pop("uptime_info")
+        wire_dict["uptime"] = {
+            "uptime_display": uptime_info.get("uptime"),
+            "uptime_seconds": uptime_info.get("uptime_seconds"),
+        }
+        
+        if wire_dict.get("network") and wire_dict["network"].get("connectivity_status"):
+            wire_dict["network"]["connectivity_status"] = [
+                HeartbeatNetworkInterface(name=s["name"], ip=s["ip"], mtu=s["mtu"])
+                for s in wire_dict["network"]["connectivity_status"]
+            ]
+        
+        wire_dict["is_cloud_operator"] = False
+        wire_dict["cloud_provider"] = None
+        
         cap = payload.capability_flags
-        return cls(
-            timestamp=now(),
-            heartbeat_type=_coerce_heartbeat_type(payload.heartbeat_type),
-            system_identity=HeartbeatSystemIdentity(
-                hostname=payload.system_identity.hostname,
-                os=payload.system_identity.os,
-                architecture=payload.system_identity.architecture,
-                pwd=payload.system_identity.pwd,
-                current_user=payload.system_identity.current_user,
-                cpu_count=payload.system_identity.cpu_count,
-                memory_mb=payload.system_identity.memory_mb,
-            ),
-            performance=HeartbeatPerformanceMetrics(
-                cpu_percent=payload.performance_metrics.cpu_percent,
-                memory_percent=payload.performance_metrics.memory_percent,
-                disk_percent=payload.performance_metrics.disk_percent,
-                network_latency=payload.performance_metrics.network_latency,
-                memory_used_mb=payload.performance_metrics.memory_used_mb,
-                memory_total_mb=payload.performance_metrics.memory_total_mb,
-                disk_used_gb=payload.performance_metrics.disk_used_gb,
-                disk_total_gb=payload.performance_metrics.disk_total_gb,
-            ),
-            network=HeartbeatNetworkInfo(
-                public_ip=payload.network_info.public_ip,
-                internal_ip=payload.network_info.internal_ip,
-                interfaces=payload.network_info.interfaces,
-                connectivity_status=[
-                    HeartbeatNetworkInterface(name=s.name, ip=s.ip, mtu=s.mtu)
-                    for s in payload.network_info.connectivity_status
-                ] if payload.network_info.connectivity_status is not None else None,
-            ),
-            uptime=HeartbeatUptimeInfo(
-                uptime_display=payload.uptime_info.uptime,
-                uptime_seconds=payload.uptime_info.uptime_seconds,
-            ),
-            os_details=HeartbeatOSDetails(
-                kernel=payload.os_details.kernel,
-                distro=payload.os_details.distro,
-                version=payload.os_details.version,
-            ),
-            user_details=HeartbeatUserDetails(
-                username=payload.user_details.username,
-                uid=payload.user_details.uid,
-                gid=payload.user_details.gid,
-                home=payload.user_details.home,
-                name=payload.user_details.name,
-                shell=payload.user_details.shell,
-            ),
-            environment=HeartbeatEnvironment(
-                pwd=payload.environment.pwd,
-                lang=payload.environment.lang,
-                timezone=payload.environment.timezone,
-                term=payload.environment.term,
-                is_container=payload.environment.is_container,
-                container_runtime=payload.environment.container_runtime,
-                container_signals=payload.environment.container_signals,
-                init_system=payload.environment.init_system,
-            ),
-            version_info=HeartbeatVersionInfo(
-                operator_version=payload.version_info.operator_version,
-                status=payload.version_info.status,
-            ),
-            disk_details=HeartbeatDiskDetails(
-                total_gb=payload.disk_details.total_gb,
-                used_gb=payload.disk_details.used_gb,
-                free_gb=payload.disk_details.free_gb,
-                percent=payload.disk_details.percent,
-            ),
-            memory_details=HeartbeatMemoryDetails(
-                total_mb=payload.memory_details.total_mb,
-                available_mb=payload.memory_details.available_mb,
-                used_mb=payload.memory_details.used_mb,
-                percent=payload.memory_details.percent,
-            ),
-            system_fingerprint=payload.system_fingerprint,
-            fingerprint_details=SystemInfoFingerprintDetails.model_validate(
-                payload.fingerprint_details
-            ) if payload.fingerprint_details else None,
-            is_cloud_operator=False,
-            cloud_provider=None,
-            local_storage_enabled=cap.local_storage_enabled,
-            git_available=cap.git_available,
-            ledger_enabled=cap.ledger_enabled,
-        )
+        wire_dict["local_storage_enabled"] = cap.local_storage_enabled
+        wire_dict["git_available"] = cap.git_available
+        wire_dict["ledger_enabled"] = cap.ledger_enabled
+        
+        wire_dict.pop("capability_flags", None)
+        
+        return cls.model_validate(wire_dict)
 
 
 
@@ -611,6 +559,22 @@ class CommandApprovalRequest(ApprovalRequestBase):
     task_id: str | None = Field(default=None, description="AI task identifier")
 
 
+class StreamApprovalRequest(ApprovalRequestBase):
+    """Typed request for operator stream approval."""
+    kind: Literal["stream"] = Field(default="stream")
+    hosts: list[str] = Field(description="Hosts to stream the operator to")
+    arch: str = Field(description="Binary architecture")
+    endpoint: str = Field(description="g8ed endpoint for handshake")
+    device_token: str = Field(description="dlk_ token (UI-redacted in event)")
+    concurrency: int = Field(default=5)
+    timeout: int = Field(default=300)
+
+    @property
+    def preview_command(self) -> str:
+        """Derived command for display in the UI."""
+        return f"g8e-operator stream --hosts {','.join(self.hosts)} --concurrency {self.concurrency}"
+
+
 class FileEditApprovalRequest(ApprovalRequestBase):
     """Typed request for file edit approval."""
     file_path: str = Field(description="File path pending approval")
@@ -679,6 +643,15 @@ class CommandApprovalEvent(ApprovalContext):
     def is_batch_execution(self) -> bool:
         """True if targeting multiple systems."""
         return len(self.target_systems) > 1
+
+
+class StreamApprovalEvent(ApprovalContext):
+    """Event payload published to g8ed when operator stream approval is requested."""
+    kind: Literal["stream"] = Field(default="stream")
+    hosts: list[str] = Field(description="Hosts to stream the operator to")
+    concurrency: int = Field(description="Maximum parallel hosts")
+    timeout: int = Field(description="Timeout per host in seconds")
+    preview_command: str = Field(description="The command that will be executed")
 
 
 class AgentContinueApprovalEvent(ApprovalContext):
@@ -779,7 +752,7 @@ class HeartbeatSSEEnvelope(G8eBaseModel):
 
     Canonical shape: shared/models/wire/heartbeat_sse.json#envelope. Authorship
     boundary: g8ee owns `operator_id` and `status` (the authoritative value from
-    OperatorDocument); `metrics` carries the g8eo-authored OperatorHeartbeat
+    OperatorDocument); `metrics` carries the g8eo-authored HeartbeatSnapshot
     snapshot verbatim (shared/models/wire/heartbeat.json#operator_heartbeat) —
     the same instance persisted as `latest_heartbeat_snapshot` on the operator
     document. There is no flat projection: wire, persistence, and browser
@@ -789,22 +762,37 @@ class HeartbeatSSEEnvelope(G8eBaseModel):
 
     operator_id: str = Field(description="Operator ID")
     status: OperatorStatus = Field(description="Authoritative operator status from OperatorDocument")
-    metrics: "OperatorHeartbeat" = Field(description="Full OperatorHeartbeat snapshot (nested)")
+    metrics: "HeartbeatSnapshot" = Field(description="Full HeartbeatSnapshot snapshot (nested)")
 
     @classmethod
     def from_heartbeat(
         cls,
         operator_id: str,
         status: OperatorStatus,
-        heartbeat: "OperatorHeartbeat",
+        heartbeat: "HeartbeatSnapshot",
     ) -> "HeartbeatSSEEnvelope":
         """Build the envelope from an authoritative operator_id+status plus the
-        full OperatorHeartbeat. `metrics` holds the heartbeat instance as-is."""
+        full HeartbeatSnapshot. `metrics` holds the heartbeat instance as-is."""
         return cls(
             operator_id=operator_id,
             status=status,
             metrics=heartbeat,
         )
+
+
+class OperatorStatusUpdatedPayload(G8eBaseModel):
+    """Wire payload for OPERATOR_STATUS_UPDATED_* SSE events.
+
+    Mirrors components/g8ed/models/sse_models.js OperatorStatusUpdatedData.
+    Emitted by HeartbeatStaleMonitorService when an operator transitions
+    between BOUND/STALE or ACTIVE/OFFLINE due to heartbeat freshness.
+    """
+
+    operator_id: str = Field(description="Operator ID")
+    status: OperatorStatus = Field(description="New operator status")
+    hostname: str | None = Field(default=None, description="Hostname from latest_heartbeat_snapshot.system_identity")
+    system_fingerprint: str | None = Field(default=None, description="SHA256 fingerprint of stable host attributes")
+    timestamp: UTCDatetime | None = Field(default=None, description="Transition timestamp")
 
 
 # =============================================================================

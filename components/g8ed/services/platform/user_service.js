@@ -63,9 +63,9 @@ class UserService {
         logger.info('[USER-SERVICE] Initialized with injected dependencies');
     }
 
-    _generateApiKey() {
+    async _generateApiKey() {
         if (this._apiKeyService) {
-            return this._apiKeyService.generateRawKey();
+            return await this._apiKeyService.generateRawKey();
         }
         return `${API_KEY_PREFIX}${crypto.randomBytes(32).toString('hex')}`;
     }
@@ -408,7 +408,7 @@ class UserService {
                 return { success: false, error: 'User already has a download API key' };
             }
 
-            const downloadApiKey = this._generateApiKey();
+            const downloadApiKey = await this._generateApiKey();
             const ts = now();
 
             const storeResult = await this._apiKeyService.issueKey(downloadApiKey, {
@@ -485,7 +485,7 @@ class UserService {
             }
 
             // Generate and issue new key
-            const downloadApiKey = this._generateApiKey();
+            const downloadApiKey = await this._generateApiKey();
 
             const storeResult = await this._apiKeyService.issueKey(downloadApiKey, {
                 user_id: userId,

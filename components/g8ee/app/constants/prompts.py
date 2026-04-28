@@ -33,6 +33,7 @@ class PromptSection(str, Enum):
     INVESTIGATION_CONTEXT = "investigation_context"
     RESPONSE_CONSTRAINTS = "response_constraints"
     LEARNED_CONTEXT = "learned_context"
+    AGENT_PERSONA = "agent_persona"
 
 
 class InvestigationContextLabel(str, Enum):
@@ -48,7 +49,7 @@ class PromptFile(str, Enum):
     CORE_SAFETY = "core/safety.txt"
     CORE_LOYALTY = "core/loyalty.txt"
     CORE_DISSENT = "core/dissent.txt"
-    
+
     # System
     SYSTEM_RESPONSE_CONSTRAINTS = "system/response_constraints.txt"
     SYSTEM_SENTINEL_MODE = "system/sentinel_mode.txt"
@@ -85,11 +86,19 @@ class PromptFile(str, Enum):
     TOOL_FETCH_FILE_DIFF = "tools/fetch_file_diff.txt"
     TOOL_QUERY_INVESTIGATION_CONTEXT = "tools/query_investigation_context.txt"
     TOOL_GET_COMMAND_CONSTRAINTS = "tools/get_command_constraints.txt"
+    TOOL_SSH_INVENTORY = "tools/list_ssh_inventory.txt"
+    TOOL_STREAM_OPERATOR = "tools/stream_operator_to_ssh_fleet.txt"
 
     # Analysis
 
     # Tribunal
     TRIBUNAL_GENERATOR = "tribunal/generator.txt"
+    TRIBUNAL_GENERATOR_ROUND_2 = "tribunal/generator_round_2.txt"
+    TRIBUNAL_ROUND_2_AXIOM = "tribunal/round_2/axiom.txt"
+    TRIBUNAL_ROUND_2_CONCORD = "tribunal/round_2/concord.txt"
+    TRIBUNAL_ROUND_2_VARIANCE = "tribunal/round_2/variance.txt"
+    TRIBUNAL_ROUND_2_PRAGMA = "tribunal/round_2/pragma.txt"
+    TRIBUNAL_ROUND_2_NEMESIS = "tribunal/round_2/nemesis.txt"
     TRIBUNAL_AUDITOR = "tribunal/auditor.txt"
 
     @property

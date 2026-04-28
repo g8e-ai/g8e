@@ -44,6 +44,18 @@ class FakeInvestigationService:
     async def get_investigation_context(self, *args, **kwargs) -> EnrichedInvestigationContext:
         return MagicMock(spec=EnrichedInvestigationContext)
 
+    async def get_investigation(self, investigation_id: str):
+        return None
+        
+    async def get_chat_messages(self, investigation_id: str):
+        return []
+        
+    async def get_enriched_investigation_context(self, investigation, user_id, g8e_context):
+        return investigation
+        
+    async def update_investigation(self, investigation_id, request, actor=None):
+        return None
+
     async def add_history_entry(
         self,
         investigation_id: str,

@@ -160,7 +160,7 @@
         "sender": {
           "type": "string",
           "required": true,
-          "values": ["user.chat", "user.terminal", "ai.primary", "ai.assistant", "system"],
+          "values": ["user.chat", "user.terminal", "ai.primary", "ai.assistant", "system", "ai.triage"],
           "description": "Message sender. See senders.json message.sender."
         },
         "content": {
@@ -172,6 +172,16 @@
           "type": "string",
           "format": "iso8601",
           "required": true
+        },
+        "prev_hash": {
+          "type": "string",
+          "required": true,
+          "description": "Hash of previous entry in the chain (hex SHA256, 64 chars). Forms the hash chain for ledger integrity."
+        },
+        "entry_hash": {
+          "type": "string",
+          "required": true,
+          "description": "Hash of this entry (hex SHA256, 64 chars). Computed from entry content plus prev_hash."
         },
         "metadata": {
           "type": "object",
@@ -220,7 +230,17 @@
         "actor": { "type": "string", "required": true },
         "summary": { "type": "string", "required": true },
         "investigation_attempt": { "type": "object", "required": false },
-        "details": { "type": "object", "required": false, "default": {} }
+        "details": { "type": "object", "required": false, "default": {} },
+        "prev_hash": {
+          "type": "string",
+          "required": true,
+          "description": "Hash of previous entry in the chain (hex SHA256, 64 chars). Forms the hash chain for ledger integrity."
+        },
+        "entry_hash": {
+          "type": "string",
+          "required": true,
+          "description": "Hash of this entry (hex SHA256, 64 chars). Computed from entry content plus prev_hash."
+        }
       }
     },
 

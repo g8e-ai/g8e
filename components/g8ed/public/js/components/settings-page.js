@@ -18,17 +18,21 @@ import { ApiPaths } from '../constants/api-paths.js';
  * (sourced from components/g8ed/constants/ai.js — the single source of truth).
  * Reading it from the DOM avoids duplicating the catalog in a browser-side module.
  */
-function _readCatalog() {
+export function _readCatalog() {
     const el = typeof document !== 'undefined' ? document.getElementById('llm-catalog') : null;
-    if (!el || !el.textContent) return { providers: {}, providerModels: {} };
+    if (!el || !el.textContent) return { providers: {}, providerModels: {}, providerDefaultModels: {} };
     try {
         return JSON.parse(el.textContent);
     } catch {
-        return { providers: {}, providerModels: {} };
+        return { providers: {}, providerModels: {}, providerDefaultModels: {} };
     }
 }
 
-const { providers: LLMProvider, providerModels: PROVIDER_MODELS } = _readCatalog();
+const {
+    providers: LLMProvider,
+    providerModels: PROVIDER_MODELS,
+    providerDefaultModels: PROVIDER_DEFAULT_MODELS,
+} = _readCatalog();
 
 const PROVIDER_LABELS = {
     gemini:    'Gemini',
@@ -37,33 +41,9 @@ const PROVIDER_LABELS = {
     ollama:    'Ollama',
 };
 
-const PROVIDER_DEFAULT_MODELS = {
-    gemini: {
-        primary: PROVIDER_MODELS.gemini?.all?.find(m => m.label === 'Gemini 3.1 Pro')?.id,
-        assistant: PROVIDER_MODELS.gemini?.all?.find(m => m.label === 'Gemini 3 Flash')?.id,
-        lite: PROVIDER_MODELS.gemini?.all?.find(m => m.label === 'Gemini 3.1 Flash Lite')?.id,
-    },
-    anthropic: {
-        primary: PROVIDER_MODELS.anthropic?.all?.find(m => m.label === 'Claude Opus 4.6')?.id,
-        assistant: PROVIDER_MODELS.anthropic?.all?.find(m => m.label === 'Claude Sonnet 4.6')?.id,
-        lite: PROVIDER_MODELS.anthropic?.all?.find(m => m.label === 'Claude Haiku 4.5')?.id,
-    },
-    openai: {
-        primary: PROVIDER_MODELS.openai?.all?.find(m => m.label === 'GPT-5.4 Pro')?.id,
-        assistant: PROVIDER_MODELS.openai?.all?.find(m => m.label === 'GPT-5.4')?.id,
-        lite: PROVIDER_MODELS.openai?.all?.find(m => m.label === 'GPT-5.4 Mini')?.id,
-    },
-    ollama: {
-        primary: PROVIDER_MODELS.ollama?.all?.find(m => m.label === 'Qwen 3.5 122B')?.id,
-        assistant: PROVIDER_MODELS.ollama?.all?.find(m => m.label === 'GLM 5.1')?.id,
-        lite: PROVIDER_MODELS.ollama?.all?.find(m => m.label === 'Llama 3.2 3B')?.id,
-    },
-};
-
-function _modelToProvider(modelValue) {
-    for (const [provider, config] of Object.entries(PROVIDER_MODELS)) {
-        const allModels = [...config.primary, ...config.assistant];
-        if (allModels.some(m => m.id === modelValue)) return provider;
+function _modelToProvider(modelValue, providerModels = PROVIDER_MODELS) {
+    for (const [provider, config] of Object.entries(providerModels)) {
+        if ((config.all || []).some(m => m.id === modelValue)) return provider;
     }
     return null;
 }
@@ -88,14 +68,21 @@ function escAttr(str) {
     return escHtml(str);
 }
 
+export const EMPTY_MODEL_PLACEHOLDER = 'Select a Model';
+
 export class SettingsPage {
-    constructor() {
+    constructor(options = {}) {
         this.allSettings = [];
         this.sections = [];
         this.dirty = new Map();
         this.activeSection = null;
         this.selectedModels = { primary: '', assistant: '', lite: '' };
-        this.lastProviderKeyChange = null;
+        this.lastProviderEdited = null;
+
+        // Allow injecting catalog for tests
+        this.PROVIDER_MODELS = options.providerModels || PROVIDER_MODELS;
+        this.PROVIDER_DEFAULT_MODELS = options.providerDefaultModels || PROVIDER_DEFAULT_MODELS;
+        this.LLMProvider = options.providers || LLMProvider;
     }
 
     init() {
@@ -180,32 +167,32 @@ export class SettingsPage {
 
             menu.innerHTML = '';
 
-            const prevValue = this.selectedModels[role] || '';
-            if (text && !prevValue) text.textContent = 'Select a Model';
+            let prevValue = this.selectedModels[role] || '';
+            if (text && !prevValue) text.textContent = EMPTY_MODEL_PLACEHOLDER;
 
             // Show all providers regardless of API key configuration
-            const activeProviders = Object.keys(PROVIDER_MODELS);
+            const activeProviders = Object.keys(this.PROVIDER_MODELS);
 
             dropdown.classList.remove('disabled');
 
             // Auto-select sensible defaults if a provider key was just entered and no model is selected
-            if (!prevValue && this.lastProviderKeyChange && activeProviders.includes(this.lastProviderKeyChange)) {
-                const defaults = PROVIDER_DEFAULT_MODELS[this.lastProviderKeyChange];
+            if (!prevValue && this.lastProviderEdited && activeProviders.includes(this.lastProviderEdited)) {
+                const defaults = this.PROVIDER_DEFAULT_MODELS[this.lastProviderEdited];
                 if (defaults && defaults[role]) {
-                    const defaultModel = PROVIDER_MODELS[this.lastProviderKeyChange]?.all?.find(m => m.id === defaults[role]);
+                    const defaultModel = this.PROVIDER_MODELS[this.lastProviderEdited]?.all?.find(m => m.id === defaults[role]);
                     if (defaultModel) {
                         prevValue = defaultModel.id;
                         this.selectedModels[role] = prevValue;
                         if (text) text.textContent = defaultModel.label;
-                        this._markDirty(this._getModelKey(role), prevValue);
+                        this._markDirty(_getModelKey(role), prevValue);
                     }
                 }
             }
 
             // Try to find the selected model in ALL providers (not just active) to get its label
             let foundLabel = null;
-            for (const provider of Object.keys(PROVIDER_MODELS)) {
-                const config = PROVIDER_MODELS[provider];
+            for (const provider of Object.keys(this.PROVIDER_MODELS)) {
+                const config = this.PROVIDER_MODELS[provider];
                 if (!config) continue;
                 const allModels = config.all || [];
                 const match = allModels.find(m => m.id === prevValue);
@@ -217,7 +204,7 @@ export class SettingsPage {
 
             // If found in catalog but not in active providers, still set the text
             if (foundLabel && !activeProviders.some(p => {
-                const config = PROVIDER_MODELS[p];
+                const config = this.PROVIDER_MODELS[p];
                 return config?.all?.some(m => m.id === prevValue);
             })) {
                 if (text) text.textContent = foundLabel;
@@ -229,7 +216,7 @@ export class SettingsPage {
             }
 
             for (const provider of activeProviders) {
-                const config = PROVIDER_MODELS[provider];
+                const config = this.PROVIDER_MODELS[provider];
                 if (!config) continue;
 
                 const providerLabel = PROVIDER_LABELS[provider] || provider;
@@ -362,6 +349,39 @@ export class SettingsPage {
         this._hideStatus();
     }
 
+    _validateApiKey(provider, input) {
+        if (!input) return;
+        const val = input.value.trim();
+        const row = input.closest('.settings-field');
+        if (!row) return;
+
+        let hint = '';
+        if (val && !val.includes('*')) { // Only validate if user typed something new
+            if (provider === 'gemini' && !val.startsWith('AIza')) {
+                hint = 'Key usually starts with "AIza"';
+            } else if (provider === 'openai' && !val.startsWith('sk-')) {
+                hint = 'Key usually starts with "sk-"';
+            } else if (provider === 'anthropic' && !val.startsWith('sk-ant-')) {
+                hint = 'Key usually starts with "sk-ant-"';
+            }
+        }
+
+        let hintEl = row.querySelector('.settings-field-hint');
+        if (!hintEl && hint) {
+            hintEl = document.createElement('div');
+            hintEl.className = 'settings-field-hint';
+            hintEl.style.fontSize = '12px';
+            hintEl.style.color = 'var(--accent-blue)';
+            hintEl.style.marginTop = '4px';
+            row.appendChild(hintEl);
+        }
+        
+        if (hintEl) {
+            hintEl.textContent = hint;
+            hintEl.style.display = hint ? 'block' : 'none';
+        }
+    }
+
     _buildNav() {
         const nav = document.getElementById('settings-nav');
         nav.innerHTML = '';
@@ -415,6 +435,8 @@ export class SettingsPage {
 
             if (sec.id === 'llm') {
                 this._buildLlmSection(panel, secSettings);
+            } else if (sec.id === 'search') {
+                this._buildSearchSection(panel, secSettings);
             } else if (sec.id === 'advanced') {
                 this._buildAdvancedSection(panel);
             } else {
@@ -432,19 +454,14 @@ export class SettingsPage {
 
         // Create custom model dropdown section (3 dropdowns in a row, categorized)
         const modelSelectionContainer = document.createElement('div');
-        modelSelectionContainer.className = 'settings-model-selection';
-        modelSelectionContainer.style.background = 'rgba(var(--accent-blue-rgb), 0.04)';
-        modelSelectionContainer.style.border = '1px solid rgba(var(--accent-blue-rgb), 0.15)';
-        modelSelectionContainer.style.borderRadius = '8px';
-        modelSelectionContainer.style.padding = '1rem';
-        modelSelectionContainer.style.marginBottom = '1rem';
+        modelSelectionContainer.className = 'setup-fields-model-selection';
+
+        const wizardModelSelection = document.createElement('div');
+        wizardModelSelection.className = 'wizard-model-selection';
+        wizardModelSelection.id = 'wizard-model-selection';
 
         const modelFields = document.createElement('div');
         modelFields.className = 'wizard-model-fields';
-        modelFields.style.display = 'grid';
-        modelFields.style.gridTemplateColumns = 'repeat(3, minmax(0, 1fr))';
-        modelFields.style.gap = '1rem';
-        modelFields.style.minWidth = '0';
 
         // Primary model dropdown
         const primaryModelField = this._buildModelDropdownField('primary', 'Primary Model', 'model_training');
@@ -458,38 +475,16 @@ export class SettingsPage {
         const liteModelField = this._buildModelDropdownField('lite', 'Lite Model', 'bolt');
         modelFields.appendChild(liteModelField);
 
-        modelSelectionContainer.appendChild(modelFields);
+        wizardModelSelection.appendChild(modelFields);
+        modelSelectionContainer.appendChild(wizardModelSelection);
         panel.appendChild(modelSelectionContainer);
 
-        // Add note about encrypted API keys
-        const encryptionNote = document.createElement('div');
-        encryptionNote.className = 'settings-encryption-note';
-        encryptionNote.style.background = 'rgba(var(--accent-blue-rgb), 0.04)';
-        encryptionNote.style.border = '1px solid rgba(var(--accent-blue-rgb), 0.15)';
-        encryptionNote.style.borderRadius = '8px';
-        encryptionNote.style.padding = '0.75rem 1rem';
-        encryptionNote.style.marginBottom = '1rem';
-        encryptionNote.style.fontSize = '0.875rem';
-        encryptionNote.style.color = 'var(--text-secondary)';
-        encryptionNote.style.display = 'flex';
-        encryptionNote.style.alignItems = 'flex-start';
-        encryptionNote.style.gap = '0.5rem';
+        // API keys section
+        const apiKeysContainer = document.createElement('div');
+        apiKeysContainer.className = 'setup-fields-api-keys';
 
-        const noteIcon = document.createElement('span');
-        noteIcon.className = 'material-symbols-outlined';
-        noteIcon.textContent = 'lock';
-        noteIcon.style.fontSize = '1.25rem';
-        noteIcon.style.color = 'var(--accent-blue)';
-
-        const noteText = document.createElement('span');
-        noteText.textContent = 'API keys are encrypted at rest and not displayable. You can update them here if needed.';
-
-        encryptionNote.appendChild(noteIcon);
-        encryptionNote.appendChild(noteText);
-        panel.appendChild(encryptionNote);
-
-        const specificContainer = document.createElement('div');
-        specificContainer.className = 'settings-llm-specific';
+        // Group settings by provider
+        const providerGroups = {};
         providerSpecificSettings.forEach(s => {
             // Skip model fields since they're now handled by custom dropdowns
             if (s.key === 'llm_model' || s.key === 'llm_assistant_model' || s.key === 'llm_lite_model') {
@@ -499,17 +494,85 @@ export class SettingsPage {
                 if (value) {
                     this.selectedModels[role] = value;
                     // If it's a custom model (not in any provider catalog), store as custom label
-                    if (!_modelToProvider(value)) {
+                    if (!_modelToProvider(value, this.PROVIDER_MODELS)) {
                         this.selectedModels[`${role}CustomLabel`] = value;
                     }
                 }
                 return;
             }
-            const field = this._buildField(s);
-            field.setAttribute('data-provider', s.provider);
-            specificContainer.appendChild(field);
+            if (!providerGroups[s.provider]) {
+                providerGroups[s.provider] = [];
+            }
+            providerGroups[s.provider].push(s);
         });
-        panel.appendChild(specificContainer);
+
+        // Build provider rows matching setup.ejs structure
+        const providerConfig = {
+            gemini: {
+                icon: 'auto_awesome',
+                name: 'Gemini',
+                sub: 'Google'
+            },
+            anthropic: {
+                icon: 'smart_toy',
+                name: 'Claude',
+                sub: 'Anthropic'
+            },
+            openai: {
+                icon: 'hub',
+                name: 'GPT',
+                sub: 'OpenAI'
+            },
+            ollama: {
+                icon: 'lan',
+                name: 'Ollama',
+                sub: 'Self-Hosted'
+            }
+        };
+
+        for (const [provider, config] of Object.entries(providerConfig)) {
+            const providerSettings = providerGroups[provider] || [];
+            if (providerSettings.length === 0) continue;
+
+            const providerRow = document.createElement('div');
+            providerRow.className = 'wizard-provider-key-row';
+            providerRow.setAttribute('data-provider', provider);
+
+            const providerHeader = document.createElement('div');
+            providerHeader.className = 'wizard-provider-key-header';
+
+            const headerIcon = document.createElement('span');
+            headerIcon.className = 'material-symbols-outlined wizard-provider-key-icon';
+            headerIcon.textContent = config.icon;
+
+            const nameStrong = document.createElement('strong');
+            nameStrong.textContent = config.name;
+
+            const subSpan = document.createElement('span');
+            subSpan.className = 'wizard-provider-key-sub';
+            subSpan.textContent = config.sub;
+
+            const statusSpan = document.createElement('span');
+            statusSpan.className = 'wizard-provider-key-status';
+            statusSpan.id = `status-${provider}`;
+
+            providerHeader.appendChild(headerIcon);
+            providerHeader.appendChild(nameStrong);
+            providerHeader.appendChild(subSpan);
+            providerHeader.appendChild(statusSpan);
+
+            providerRow.appendChild(providerHeader);
+
+            // Add the field(s) for this provider
+            providerSettings.forEach(s => {
+                const field = this._buildProviderField(s);
+                providerRow.appendChild(field);
+            });
+
+            apiKeysContainer.appendChild(providerRow);
+        }
+
+        panel.appendChild(apiKeysContainer);
 
         // Use requestAnimationFrame to ensure DOM is fully rendered before initializing dropdowns
         requestAnimationFrame(() => {
@@ -518,13 +581,283 @@ export class SettingsPage {
         });
     }
 
+    _buildSearchSection(panel, settings) {
+        // Create wizard-panel-header matching setup.ejs
+        const panelHeader = document.createElement('div');
+        panelHeader.className = 'wizard-panel-header';
+
+        const headerIcon = document.createElement('span');
+        headerIcon.className = 'material-symbols-outlined wizard-panel-icon';
+        headerIcon.textContent = 'travel_explore';
+
+        const headerDiv = document.createElement('div');
+        const headerTitle = document.createElement('h2');
+        headerTitle.className = 'wizard-panel-title';
+        headerTitle.textContent = 'Vertex Search';
+        headerDiv.appendChild(headerTitle);
+
+        panelHeader.appendChild(headerIcon);
+        panelHeader.appendChild(headerDiv);
+        panel.appendChild(panelHeader);
+
+        // Create setup-fields container
+        const setupFields = document.createElement('div');
+        setupFields.className = 'setup-fields';
+
+        // Create setup-fields-row
+        const fieldsRow = document.createElement('div');
+        fieldsRow.className = 'setup-fields-row';
+
+        // Build each search field
+        settings.forEach(setting => {
+            if (setting.key === 'vertex_search_enabled') {
+                // Add the enabled dropdown at the top before the row
+                const field = this._buildSearchField(setting);
+                fieldsRow.insertBefore(field, fieldsRow.firstChild);
+            } else if (setting.key === 'vertex_search_location') {
+                // Skip location field as it's not in setup.ejs
+            } else {
+                const field = this._buildSearchField(setting);
+                fieldsRow.appendChild(field);
+            }
+        });
+
+        setupFields.appendChild(fieldsRow);
+        panel.appendChild(setupFields);
+    }
+
+    _buildSearchField(setting) {
+        const field = document.createElement('div');
+        field.className = 'setup-field';
+
+        const label = document.createElement('label');
+        label.className = 'setup-label';
+        label.setAttribute('for', setting.key);
+        label.textContent = setting.label;
+        field.appendChild(label);
+
+        if (setting.type === 'password') {
+            const inputWrap = document.createElement('div');
+            inputWrap.className = 'setup-input-wrap';
+
+            const input = document.createElement('input');
+            input.type = 'password';
+            input.id = setting.key;
+            input.name = setting.key;
+            input.className = 'setup-input has-toggle';
+            input.placeholder = setting.placeholder || '';
+            input.autocomplete = 'new-password';
+            input.spellcheck = false;
+            input.setAttribute('data-key', setting.key);
+
+            if (setting.value) {
+                input.setAttribute('data-real-value', setting.value);
+                input.value = '*'.repeat(Math.min(setting.value.length, 32));
+            } else {
+                input.value = '';
+            }
+
+            inputWrap.appendChild(input);
+
+            const revealBtn = document.createElement('button');
+            revealBtn.type = 'button';
+            revealBtn.className = 'setup-reveal-btn';
+            revealBtn.ariaLabel = 'Toggle visibility';
+            revealBtn.setAttribute('data-for', setting.key);
+
+            const revealIcon = document.createElement('span');
+            revealIcon.className = 'material-symbols-outlined';
+            revealIcon.textContent = 'visibility';
+            revealBtn.appendChild(revealIcon);
+
+            inputWrap.appendChild(revealBtn);
+            field.appendChild(inputWrap);
+
+            const handleInputChange = () => {
+                this._markDirty(setting.key, input.value);
+            };
+
+            input.addEventListener('input', handleInputChange);
+            input.addEventListener('change', handleInputChange);
+
+            revealBtn.addEventListener('click', () => {
+                const isHidden = input.type === 'password';
+                input.type = isHidden ? 'text' : 'password';
+
+                if (isHidden) {
+                    const realValue = input.getAttribute('data-real-value');
+                    if (realValue) {
+                        input.setAttribute('data-obfuscated-value', input.value);
+                        input.value = realValue;
+                    }
+                } else {
+                    const obfuscatedValue = input.getAttribute('data-obfuscated-value');
+                    if (obfuscatedValue) {
+                        input.value = obfuscatedValue;
+                    }
+                }
+
+                revealIcon.textContent = isHidden ? 'visibility_off' : 'visibility';
+            });
+        } else if (setting.type === 'select' && setting.options) {
+            const select = document.createElement('select');
+            select.id = setting.key;
+            select.name = setting.key;
+            select.className = 'setup-input';
+            select.setAttribute('data-key', setting.key);
+
+            setting.options.forEach(opt => {
+                const option = document.createElement('option');
+                option.value = String(opt.value);
+                option.textContent = opt.label;
+                if (setting.value === opt.value) {
+                    option.selected = true;
+                }
+                select.appendChild(option);
+            });
+
+            field.appendChild(select);
+
+            const handleInputChange = () => {
+                const selectedOption = select.options[select.selectedIndex];
+                this._markDirty(setting.key, selectedOption.value);
+            };
+
+            select.addEventListener('change', handleInputChange);
+        } else {
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.id = setting.key;
+            input.name = setting.key;
+            input.className = 'setup-input';
+            input.placeholder = setting.placeholder || '';
+            input.spellcheck = false;
+            input.autocomplete = 'off';
+            input.value = setting.value || '';
+            input.setAttribute('data-key', setting.key);
+
+            field.appendChild(input);
+
+            const handleInputChange = () => {
+                this._markDirty(setting.key, input.value);
+            };
+
+            input.addEventListener('input', handleInputChange);
+            input.addEventListener('change', handleInputChange);
+        }
+
+        return field;
+    }
+
+    _buildProviderField(setting) {
+        const field = document.createElement('div');
+        field.className = 'setup-field';
+
+        if (setting.type === 'password') {
+            const inputWrap = document.createElement('div');
+            inputWrap.className = 'setup-input-wrap';
+
+            const input = document.createElement('input');
+            input.type = 'password';
+            input.id = setting.key;
+            input.name = setting.key;
+            input.className = 'setup-input has-toggle';
+            input.placeholder = setting.placeholder || '';
+            input.autocomplete = 'new-password';
+            input.spellcheck = false;
+            input.setAttribute('data-key', setting.key);
+
+            if (setting.value) {
+                input.setAttribute('data-real-value', setting.value);
+                input.value = '*'.repeat(Math.min(setting.value.length, 32));
+            } else {
+                input.value = '';
+            }
+
+            inputWrap.appendChild(input);
+
+            const revealBtn = document.createElement('button');
+            revealBtn.type = 'button';
+            revealBtn.className = 'setup-reveal-btn';
+            revealBtn.ariaLabel = 'Toggle visibility';
+            revealBtn.setAttribute('data-for', setting.key);
+
+            const revealIcon = document.createElement('span');
+            revealIcon.className = 'material-symbols-outlined';
+            revealIcon.textContent = 'visibility';
+            revealBtn.appendChild(revealIcon);
+
+            inputWrap.appendChild(revealBtn);
+            field.appendChild(inputWrap);
+
+            // Event listeners
+            const handleInputChange = () => {
+                this._markDirty(setting.key, input.value);
+                if (setting.provider) {
+                    this.lastProviderEdited = setting.provider;
+                    this._validateApiKey(setting.provider, input);
+                    this._updateModelDropdowns();
+                }
+            };
+
+            input.addEventListener('input', handleInputChange);
+            input.addEventListener('change', handleInputChange);
+
+            revealBtn.addEventListener('click', () => {
+                const isHidden = input.type === 'password';
+                input.type = isHidden ? 'text' : 'password';
+
+                if (isHidden) {
+                    const realValue = input.getAttribute('data-real-value');
+                    if (realValue) {
+                        input.setAttribute('data-obfuscated-value', input.value);
+                        input.value = realValue;
+                    }
+                } else {
+                    const obfuscatedValue = input.getAttribute('data-obfuscated-value');
+                    if (obfuscatedValue) {
+                        input.value = obfuscatedValue;
+                    }
+                }
+
+                revealIcon.textContent = isHidden ? 'visibility_off' : 'visibility';
+            });
+        } else {
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.id = setting.key;
+            input.name = setting.key;
+            input.className = 'setup-input';
+            input.placeholder = setting.placeholder || '';
+            input.spellcheck = false;
+            input.autocomplete = 'off';
+            input.value = setting.value || '';
+            input.setAttribute('data-key', setting.key);
+
+            field.appendChild(input);
+
+            const handleInputChange = () => {
+                this._markDirty(setting.key, input.value);
+                if (setting.provider) {
+                    this.lastProviderEdited = setting.provider;
+                    this._updateModelDropdowns();
+                }
+            };
+
+            input.addEventListener('input', handleInputChange);
+            input.addEventListener('change', handleInputChange);
+        }
+
+        return field;
+    }
+
     _buildModelDropdownField(role, label, iconName) {
         const field = document.createElement('div');
         field.className = 'setup-field';
-        field.style.minWidth = '0';
 
         const labelEl = document.createElement('label');
         labelEl.className = 'setup-label';
+        labelEl.setAttribute('for', `${role}_model`);
         labelEl.textContent = label;
         field.appendChild(labelEl);
 
@@ -544,7 +877,7 @@ export class SettingsPage {
 
         const text = document.createElement('span');
         text.className = 'llm-model-dropdown__text';
-        text.textContent = 'Select a Model';
+        text.textContent = EMPTY_MODEL_PLACEHOLDER;
 
         const arrow = document.createElement('span');
         arrow.className = 'llm-model-dropdown__arrow material-symbols-outlined';
@@ -589,7 +922,35 @@ export class SettingsPage {
 
         let inputEl;
 
-        if (setting.type === 'select' && setting.options) {
+        if (setting.type === 'toggle') {
+            const label = document.createElement('label');
+            label.className = 'settings-toggle';
+
+            inputEl = document.createElement('input');
+            inputEl.type = 'checkbox';
+            inputEl.setAttribute('data-key', setting.key);
+            inputEl.checked = setting.value === true;
+
+            const track = document.createElement('span');
+            track.className = 'settings-toggle-track';
+            const thumb = document.createElement('span');
+            thumb.className = 'settings-toggle-thumb';
+            track.appendChild(thumb);
+
+            const toggleLabel = document.createElement('span');
+            toggleLabel.className = 'settings-toggle-label';
+            toggleLabel.textContent = inputEl.checked ? 'Enabled' : 'Disabled';
+
+            label.appendChild(inputEl);
+            label.appendChild(track);
+            label.appendChild(toggleLabel);
+            wrap.appendChild(label);
+
+            inputEl.addEventListener('change', () => {
+                toggleLabel.textContent = inputEl.checked ? 'Enabled' : 'Disabled';
+                this._markDirty(setting.key, inputEl.checked);
+            });
+        } else if (setting.type === 'select' && setting.options) {
             inputEl = document.createElement('select');
             inputEl.className = 'settings-select';
             inputEl.setAttribute('data-key', setting.key);
@@ -666,7 +1027,8 @@ export class SettingsPage {
                     
                     // Check if this is a provider API key field
                     if (setting.provider && (setting.key.includes('api_key') || setting.key.includes('endpoint'))) {
-                        this.lastProviderKeyChange = setting.provider;
+                        this.lastProviderEdited = setting.provider;
+                        this._validateApiKey(setting.provider, input);
                         this._updateModelDropdowns();
                     }
                 };
@@ -763,7 +1125,7 @@ export class SettingsPage {
 
         for (const [modelKey, providerKey] of Object.entries(roleModelMap)) {
             if (updates[modelKey]) {
-                const provider = _modelToProvider(updates[modelKey]);
+                const provider = _modelToProvider(updates[modelKey], this.PROVIDER_MODELS);
                 if (provider) {
                     updates[providerKey] = provider;
                 }
@@ -790,7 +1152,7 @@ export class SettingsPage {
                 ? ` (${json.skipped.length} env-locked key(s) skipped)`
                 : '';
 
-            this._showStatus('success', `Settings saved successfully.${skippedNote} Restart the platform to apply changes.`);
+            this._showStatus('success', `Settings saved successfully.${skippedNote} Changes are applied immediately.`);
         } catch (err) {
             this._showStatus('error', 'Save failed: ' + err.message);
             btn.disabled = false;

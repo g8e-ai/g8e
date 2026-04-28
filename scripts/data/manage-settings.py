@@ -33,13 +33,15 @@ Usage:
     python manage-g8es.py settings rotate-token
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import secrets
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Dict, Any, List
 
 from _lib import (
     G8ED_BASE_URL,
@@ -56,14 +58,14 @@ PLATFORM_SETTINGS_ID = 'platform_settings'
 USER_SETTINGS_ID_PREFIX = 'user_settings_'
 
 
-def _api_get(user_id: Optional[str] = None) -> Dict[str, Any]:
+def _api_get(user_id: str | None = None) -> Dict[str, Any]:
     url = INTERNAL_API_URL
     if user_id:
         url += f'?user_id={user_id}'
     return g8ed_request('GET', url)
 
 
-def _api_put(settings: Dict[str, str], user_id: Optional[str] = None) -> Dict[str, Any]:
+def _api_put(settings: Dict[str, str], user_id: str | None = None) -> Dict[str, Any]:
     payload: Dict[str, Any] = {'settings': settings}
     if user_id:
         payload['user_id'] = user_id
@@ -121,7 +123,7 @@ _KEY_ORDER = [
 ]
 
 
-def _print_settings(settings: Dict[str, Any], section_filter: Optional[str]) -> None:
+def _print_settings(settings: Dict[str, Any], section_filter: str | None) -> None:
     by_section: Dict[str, list] = {}
     for key, meta in settings.items():
         sec = meta.get('section', 'general')

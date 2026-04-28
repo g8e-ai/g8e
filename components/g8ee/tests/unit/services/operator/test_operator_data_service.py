@@ -17,7 +17,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.constants import OperatorStatus
+from app.constants import OperatorStatus, ComponentName
 from app.errors import ExternalServiceError, ValidationError
 from app.models.operators import (
     CommandResultRecord,
@@ -45,11 +45,10 @@ class TestOperatorDataService:
 
     async def test_get_operator_success(self, service, mock_cache):
         operator_id = "op-123"
-        mock_cache.get_document.return_value = {
+        mock_cache.get_document_with_cache.return_value = {
             "id": operator_id,
             "user_id": "user-test",
             "status": OperatorStatus.ACTIVE,
-            "system_info": {"hostname": "test-host"},
             "bound_web_session_id": None,
         }
 
@@ -59,10 +58,10 @@ class TestOperatorDataService:
         assert isinstance(result, OperatorDocument)
         assert result.id == operator_id
         assert result.status == OperatorStatus.ACTIVE
-        mock_cache.get_document.assert_called_once_with(service.collection, operator_id)
+        mock_cache.get_document_with_cache.assert_called_once_with(service.collection, operator_id)
 
     async def test_get_operator_not_found(self, service, mock_cache):
-        mock_cache.get_document.return_value
+        mock_cache.get_document_with_cache.return_value = None
         result = await service.get_operator("nonexistent")
         assert result is None
 
@@ -70,41 +69,6 @@ class TestOperatorDataService:
         with pytest.raises(ValidationError, match="operator_id is required"):
             await service.get_operator("")
 
-    async def test_update_operator_status(self, service, mock_cache):
-        operator_id = "op-123"
-        mock_cache.update_document.return_value = CacheOperationResult(success=True)
-        mock_cache.get_document.return_value
-
-        success = await service.update_operator_status(operator_id, OperatorStatus.ACTIVE)
-
-        assert success is True
-        mock_cache.update_document.assert_called_once()
-        _, kwargs = mock_cache.update_document.call_args
-        assert kwargs["document_id"] == operator_id
-        assert kwargs["data"]["status"] == OperatorStatus.ACTIVE
-
-    async def test_update_operator_status_active_does_not_overwrite_existing_heartbeat(self, service, mock_cache):
-        operator_id = "op-hb-existing"
-        existing_hb = now()
-        mock_cache.get_document.return_value = {
-            "id": operator_id,
-            "user_id": "user-test",
-            "status": OperatorStatus.BOUND,
-            "last_heartbeat": existing_hb
-        }
-        mock_cache.update_document.return_value = CacheOperationResult(success=True)
-
-        await service.update_operator_status(operator_id, OperatorStatus.ACTIVE)
-
-        _, kwargs = mock_cache.update_document.call_args
-        assert "last_heartbeat"not in kwargs["data"]
-
-    async def test_update_operator_status_not_found_returns_false(self, service, mock_cache):
-        mock_cache.get_document.return_value
-        mock_cache.update_document.return_value = CacheOperationResult(success=False)
-        
-        success = await service.update_operator_status("missing", OperatorStatus.ACTIVE)
-        assert success is False
 
     async def test_update_operator_heartbeat_success(self, service, mock_cache):
         operator_id = "op-123"
@@ -118,7 +82,7 @@ class TestOperatorDataService:
         mock_cache.update_document.assert_called_once()
         _, kwargs = mock_cache.update_document.call_args
         assert kwargs["document_id"] == operator_id
-        assert "system_info" in kwargs["data"]
+        assert "current_hostname" in kwargs["data"]
         assert "heartbeat_history" in kwargs["data"]
 
     async def test_update_operator_heartbeat_failure_raises_external_service_error(self, service, mock_cache):
@@ -164,3 +128,43 @@ class TestOperatorDataService:
         _, kwargs = mock_cache.append_to_array.call_args
         assert kwargs["document_id"] == operator_id
         assert kwargs["array_field"] == "activity_log"
+
+    async def test_update_operator_status_success(self, service, mock_cache):
+        operator_id = "op-123"
+        mock_cache.update_document.return_value = CacheOperationResult(success=True)
+
+        success = await service.update_operator_status(operator_id, OperatorStatus.STALE)
+
+        assert success is True
+        mock_cache.update_document.assert_called_once()
+        _, kwargs = mock_cache.update_document.call_args
+        assert kwargs["document_id"] == operator_id
+        assert kwargs["data"]["status"] == OperatorStatus.STALE
+        assert "updated_at" in kwargs["data"]
+        assert kwargs["merge"] is True
+
+    async def test_update_operator_status_empty_id_raises_validation_error(self, service):
+        with pytest.raises(ValidationError, match="operator_id is required"):
+            await service.update_operator_status("", OperatorStatus.OFFLINE)
+
+    async def test_update_operator_status_failure_raises_external_service_error(self, service, mock_cache):
+        operator_id = "op-123"
+        mock_cache.update_document.return_value = CacheOperationResult(success=False, error="db down")
+
+        with pytest.raises(
+            ExternalServiceError,
+            match="Failed to update Operator op-123 status: db down",
+        ):
+            await service.update_operator_status(operator_id, OperatorStatus.STALE)
+
+    async def test_satisfies_operator_data_service_protocol(self, service):
+        """Regression: ``HeartbeatStaleMonitorService`` is typed against
+        ``OperatorDataServiceProtocol`` and calls ``update_operator_status``.
+        A protocol-conformance check would have caught the gap where the
+        protocol declared a method the implementation lacked (or vice versa).
+        """
+        from app.services.protocols import OperatorDataServiceProtocol
+
+        assert isinstance(service, OperatorDataServiceProtocol)
+        assert hasattr(service, "update_operator_status")
+

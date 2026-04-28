@@ -15,13 +15,13 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
 
 from app.errors import ConfigurationError
+from app.utils.config_loader import load_json_config
 
 logger = logging.getLogger(__name__)
 
@@ -43,9 +43,6 @@ class CommandBlacklistValidator:
         self._compiled_patterns: list[tuple[re.Pattern[str], dict[str, str]]] = []
 
         resolved_path = Path(blacklist_path) if blacklist_path else self._default_path()
-        if not resolved_path.is_file():
-            raise ConfigurationError(f"Command blacklist not found at {resolved_path}")
-
         self._load(resolved_path)
 
     def _default_path(self) -> Path:
@@ -53,8 +50,24 @@ class CommandBlacklistValidator:
 
     def _load(self, path: Path) -> None:
         logger.info("Loading command blacklist from %s", path)
-        with path.open("r", encoding="utf-8") as handle:
-            data = json.load(handle)
+        data = load_json_config(path, config_name="command blacklist")
+
+        enabled = data.get("enabled", True)
+        if not enabled:
+            logger.warning(
+                "Command blacklist is disabled via 'enabled: false' in %s; "
+                "loading empty index (no commands will be blocked at the JSON level)",
+                path,
+            )
+            self._config = {
+                "forbidden_commands": [],
+                "forbidden_binaries": [],
+                "forbidden_substrings": [],
+                "forbidden_arguments": [],
+                "forbidden_patterns": [],
+            }
+            self._compiled_patterns = []
+            return
 
         required_sections = {
             "forbidden_commands",
@@ -163,9 +176,25 @@ class CommandBlacklistValidator:
 _validator: CommandBlacklistValidator | None = None
 
 
+def register_blacklist_validator(validator: CommandBlacklistValidator) -> None:
+    """Explicitly register the global blacklist validator instance."""
+    global _validator
+    _validator = validator
+
+
 def get_blacklist_validator(blacklist_path: str | None = None) -> CommandBlacklistValidator:
+    """Get global blacklist validator instance.
+
+    If no validator has been explicitly registered, one will be created from
+    the default path (or the provided path). This backward-compatibility mode
+    is deprecated; new code should use register_blacklist_validator().
+    """
     global _validator
     if _validator is None:
+        logger.warning(
+            "get_blacklist_validator() called without explicit registration; "
+            "creating validator implicitly. Use register_blacklist_validator() for explicit DI."
+        )
         _validator = CommandBlacklistValidator(blacklist_path=blacklist_path or "")
     return _validator
 

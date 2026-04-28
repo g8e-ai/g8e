@@ -13,14 +13,14 @@
 
 """Consolidated tool executor helpers for g8ee tests."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, AsyncMock
 from .fake_web_search_provider import FakeWebSearchProvider
 from app.services.ai.tool_service import AIToolService
 from app.services.protocols import MemoryDataServiceProtocol
 
 
 
-def create_tool_service_fake(investigation_service=None, web_search_provider=None, with_run_commands_result=None, auto_approve=True, event_service=None, whitelist_validator=None, blacklist_validator=None):
+def create_tool_service_fake(investigation_service=None, web_search_provider=None, with_run_commands_result=None, auto_approve=True, event_service=None, whitelist_validator=None, blacklist_validator=None, auto_approved_validator=None):
     """Return an AIToolService with all external dependencies wired.
     
     Uses build_command_service to ensure we have a real OperatorCommandService
@@ -68,9 +68,15 @@ def create_tool_service_fake(investigation_service=None, web_search_provider=Non
     return AIToolService(
         operator_command_service=operator_command_service,
         investigation_service=investigation_service_domain,
+        reputation_data_service=AsyncMock(),
+        reputation_service=AsyncMock(),
+        chat_task_manager=MagicMock(),
+        ssh_inventory_service=MagicMock(),
+        stream_executor=MagicMock(),
         web_search_provider=web_search_provider,
         whitelist_validator=whitelist_validator,
         blacklist_validator=blacklist_validator,
+        auto_approved_validator=auto_approved_validator,
     )
 
 

@@ -76,6 +76,19 @@ class AgentActivityMetadata(G8eIdentifiableModel):
     bound_operator_count: int = Field(default=0, description="Number of bound operators")
     
     response_length: int = Field(default=0, description="Length of AI response in characters")
-    
+
+    context_sizes: dict[str, int] | None = Field(
+        default=None,
+        description="Character counts for context sections (investigation_context, operator_context, memory_context, contents_total)"
+    )
+    attachment_total_bytes: int | None = Field(
+        default=None,
+        description="Total byte size of all attachments"
+    )
+    tool_response_sizes: list[int] | None = Field(
+        default=None,
+        description="Character sizes of individual tool responses"
+    )
+
     error: str | None = Field(default=None, description="Error message if execution failed")
     error_type: str | None = Field(default=None, description="Type of error if execution failed")

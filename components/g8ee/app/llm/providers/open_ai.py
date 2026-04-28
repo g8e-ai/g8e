@@ -115,6 +115,11 @@ class OpenAIProvider(LLMProvider):
         )
         logger.info(f"OpenAI provider initialized: {endpoint} -> {base_url}")
 
+    @property
+    def service_name(self) -> str:
+        """Return the service name for error reporting."""
+        return "openai"
+
     async def _close_resources(self):
         """Clean up provider resources."""
         if hasattr(self._client, 'close'):
@@ -178,7 +183,7 @@ class OpenAIProvider(LLMProvider):
         except Exception as e:
             translate_capability_error(
                 e,
-                service_name="openai",
+                service_name=self.service_name,
                 model=model,
                 thinking_requested=bool(
                     primary_llm_settings.thinking_config
@@ -187,6 +192,7 @@ class OpenAIProvider(LLMProvider):
                 tools_requested=bool(primary_llm_settings.tools),
             )
             raise
+
 
     async def _generate_content_stream_primary_impl(
         self,
@@ -298,7 +304,7 @@ class OpenAIProvider(LLMProvider):
         except Exception as e:
             translate_capability_error(
                 e,
-                service_name="openai",
+                service_name=self.service_name,
                 model=model,
                 thinking_requested=bool(
                     primary_llm_settings.thinking_config
@@ -350,6 +356,27 @@ class OpenAIProvider(LLMProvider):
         contents: list[Content],
         assistant_llm_settings: AssistantLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
+        try:
+            async for chunk in self._generate_content_stream_assistant_impl(
+                model, contents, assistant_llm_settings
+            ):
+                yield chunk
+        except Exception as e:
+            translate_capability_error(
+                e,
+                service_name=self.service_name,
+                model=model,
+                thinking_requested=False,  # Thinking not supported for assistant yet
+                tools_requested=False,     # Tools not supported for assistant yet
+            )
+            raise
+
+    async def _generate_content_stream_assistant_impl(
+        self,
+        model: str,
+        contents: list[Content],
+        assistant_llm_settings: AssistantLLMSettings,
+    ) -> AsyncGenerator[StreamChunkFromModel]:
         messages = _contents_to_messages(contents, assistant_llm_settings.system_instructions)
 
         effective_max_tokens = assistant_llm_settings.max_output_tokens if assistant_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
@@ -378,6 +405,26 @@ class OpenAIProvider(LLMProvider):
                 yield StreamChunkFromModel(finish_reason=finish_reason)
 
     async def generate_content_assistant(
+        self,
+        model: str,
+        contents: list[Content],
+        assistant_llm_settings: AssistantLLMSettings,
+    ) -> GenerateContentResponse:
+        try:
+            return await self._generate_content_assistant_impl(
+                model, contents, assistant_llm_settings
+            )
+        except Exception as e:
+            translate_capability_error(
+                e,
+                service_name=self.service_name,
+                model=model,
+                thinking_requested=False,
+                tools_requested=False,
+            )
+            raise
+
+    async def _generate_content_assistant_impl(
         self,
         model: str,
         contents: list[Content],
@@ -429,6 +476,27 @@ class OpenAIProvider(LLMProvider):
         contents: list[Content],
         lite_llm_settings: LiteLLMSettings,
     ) -> AsyncGenerator[StreamChunkFromModel]:
+        try:
+            async for chunk in self._generate_content_stream_lite_impl(
+                model, contents, lite_llm_settings
+            ):
+                yield chunk
+        except Exception as e:
+            translate_capability_error(
+                e,
+                service_name=self.service_name,
+                model=model,
+                thinking_requested=False,
+                tools_requested=False,
+            )
+            raise
+
+    async def _generate_content_stream_lite_impl(
+        self,
+        model: str,
+        contents: list[Content],
+        lite_llm_settings: LiteLLMSettings,
+    ) -> AsyncGenerator[StreamChunkFromModel]:
         messages = _contents_to_messages(contents, lite_llm_settings.system_instructions)
 
         effective_max_tokens = lite_llm_settings.max_output_tokens if lite_llm_settings.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS
@@ -457,6 +525,26 @@ class OpenAIProvider(LLMProvider):
                 yield StreamChunkFromModel(finish_reason=finish_reason)
 
     async def generate_content_lite(
+        self,
+        model: str,
+        contents: list[Content],
+        lite_llm_settings: LiteLLMSettings,
+    ) -> GenerateContentResponse:
+        try:
+            return await self._generate_content_lite_impl(
+                model, contents, lite_llm_settings
+            )
+        except Exception as e:
+            translate_capability_error(
+                e,
+                service_name=self.service_name,
+                model=model,
+                thinking_requested=False,
+                tools_requested=False,
+            )
+            raise
+
+    async def _generate_content_lite_impl(
         self,
         model: str,
         contents: list[Content],

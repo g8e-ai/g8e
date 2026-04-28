@@ -14,11 +14,11 @@
 /**
  * Operator test fixtures
  *
- * Uses proper OperatorDocument and SystemInfo models instead of hand-rolled dicts.
+ * Uses proper OperatorDocument model instead of hand-rolled dicts.
  */
 
 import { OperatorStatus } from '../../constants/operator.js';
-import { OperatorDocument, SystemInfo } from '../../models/operator_model.js';
+import { OperatorDocument } from '../../models/operator_model.js';
 import { now, addSeconds } from '@test/fixtures/base.fixture.js';
 
 const PRIMARY_USER_ID = 'a1b2c3d4-e5f6-4789-a0b1-c2d3e4f56789';
@@ -46,10 +46,13 @@ export const mockOperators = {
     claimed: true,
     system_fingerprint: 'fingerprint_abc123',
     operator_session_id: 'session_op_123',
-    system_info: SystemInfo.parse({
+    latest_heartbeat_snapshot: {
       system_fingerprint: 'fingerprint_abc123',
-      hostname: 'workstation-1'
-    }),
+      system_identity: {
+        hostname: 'workstation-1'
+      }
+    },
+    claimed_at: addSeconds(now(), -120),
     last_heartbeat: addSeconds(now(), -120),
     created_at: addSeconds(now(), -3600),
     updated_at: addSeconds(now(), -120)
@@ -65,10 +68,13 @@ export const mockOperators = {
     claimed: true,
     system_fingerprint: 'fingerprint_stale_123',
     operator_session_id: 'session_op_old',
-    system_info: SystemInfo.parse({
+    latest_heartbeat_snapshot: {
       system_fingerprint: 'fingerprint_stale_123',
-      hostname: 'old-workstation'
-    }),
+      system_identity: {
+        hostname: 'old-workstation'
+      }
+    },
+    claimed_at: addSeconds(now(), -7200),
     last_heartbeat: addSeconds(now(), -120),
     created_at: addSeconds(now(), -7200),
     updated_at: addSeconds(now(), -120)
@@ -83,10 +89,12 @@ export const mockOperators = {
     status: OperatorStatus.ACTIVE,
     claimed: true,
     system_fingerprint: 'fingerprint_other_123',
-    system_info: SystemInfo.parse({
+    latest_heartbeat_snapshot: {
       system_fingerprint: 'fingerprint_other_123',
-      hostname: 'other-workstation'
-    })
+      system_identity: {
+        hostname: 'other-workstation'
+      }
+    }
   }),
 
   activeOperator: OperatorDocument.parse({
@@ -98,30 +106,13 @@ export const mockOperators = {
     status: OperatorStatus.ACTIVE,
     claimed: true,
     system_fingerprint: 'fingerprint_active_123',
-    system_info: SystemInfo.parse({
+    latest_heartbeat_snapshot: {
       system_fingerprint: 'fingerprint_active_123',
-      hostname: 'active-workstation'
-    }),
+      system_identity: {
+        hostname: 'active-workstation'
+      }
+    },
+    claimed_at: addSeconds(now(), -300),
     last_heartbeat: now()
-  })
-};
-
-export const mockSystemInfo = {
-  valid: SystemInfo.parse({
-    system_fingerprint: 'fingerprint_abc123',
-    hostname: 'workstation-1',
-    os: 'linux',
-    architecture: 'x64',
-    cpu_count: 8,
-    memory_mb: 16384
-  }),
-
-  differentFingerprint: SystemInfo.parse({
-    system_fingerprint: 'fingerprint_different_xyz',
-    hostname: 'workstation-2',
-    os: 'linux',
-    architecture: 'x64',
-    cpu_count: 4,
-    memory_mb: 8192
   })
 };

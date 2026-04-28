@@ -240,6 +240,58 @@ class TestPhase3PII:
         assert "user:pass" not in result.scrubbed_text
         assert ScrubType.CONN_STRING in result.scrub_types
 
+    def test_ast_contract_no_placeholder_cannibalization(self):
+        r"""
+        [Security] AST Contract Test
+        Enforce that no RegexScrubber pattern uses vulnerable gap-matching (like `.{0,20}`)
+        which could cannibalize already-inserted placeholders like `[AWS_KEY]`.
+        They must use `[^\[\]]{0,20}` instead.
+        """
+        import ast
+        from pathlib import Path
+        import app.security.sentinel_scrubber as ss_module
+        
+        filepath = Path(ss_module.__file__)
+        with open(filepath, "r") as f:
+            tree = ast.parse(f.read())
+            
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "RegexScrubber":
+                if len(node.args) >= 2 and isinstance(node.args[1], ast.Constant) and isinstance(node.args[1].value, str):
+                    pattern_str = node.args[1].value
+                    if "{0," in pattern_str:
+                        assert r"[^\[\]]" in pattern_str, (
+                            f"Scrubber pattern {pattern_str!r} uses gap matching but lacks "
+                            rf"placeholder protection ([^\[\]]). This causes cannibalization."
+                        )
+                        assert r".{0," not in pattern_str, (
+                            f"Scrubber pattern {pattern_str!r} uses dangerous `.` gap matching."
+                        )
+
+    def test_placeholder_not_cannibalized_by_later_contextual_scrubber(self):
+        # Regression: with the original `.{0,20}` gap, the aws_secret_key
+        # pattern would match across an already-inserted [AWS_KEY] placeholder
+        # (because [AWS_KEY] starts with literal "AWS"), eating the placeholder
+        # and producing garbled output like "Connect with [[AWS_SECRET]".
+        text = (
+            'Connect with AKIAIOSFODNN7EXAMPLE and '
+            'aws_secret_access_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"'
+        )
+        result = _scrubber.scrub(text)
+        assert "[AWS_KEY]" in result.scrubbed_text
+        assert "[AWS_SECRET]" in result.scrubbed_text
+        assert "AKIAIOSFODNN7EXAMPLE" not in result.scrubbed_text
+        assert "wJalrXUtnFEMI" not in result.scrubbed_text
+
+    def test_postgresql_connection_string_scrubbed(self):
+        # Regression: the canonical libpq URI scheme is `postgresql://`,
+        # not just `postgres://`. Both must be scrubbed.
+        text = "Connection string: postgresql://dbuser:Hunter2Pass@localhost:5432/mydb"
+        result = _scrubber.scrub(text)
+        assert "[CONN_STRING]" in result.scrubbed_text
+        assert "dbuser:Hunter2Pass" not in result.scrubbed_text
+        assert ScrubType.CONN_STRING in result.scrub_types
+
     def test_mongodb_connection_string_scrubbed(self):
         text = "mongodb://root:password@mongo.internal:27017/admin"
         result = _scrubber.scrub(text)

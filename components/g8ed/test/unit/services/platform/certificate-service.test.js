@@ -99,7 +99,10 @@ describe('CertificateService [UNIT - filesystem isolated]', { timeout: 30000 }, 
         vi.clearAllMocks();
         tmpSslDir = mkdtempSync(join(tmpdir(), 'g8e-ssl-'));
         await seedCA(tmpSslDir);
-        certService = new CertificateService({ bootstrapService: { getSslDir: () => tmpSslDir } });
+        certService = new CertificateService({ 
+            bootstrapService: { getSslDir: () => tmpSslDir },
+            internalHttpClient: { request: vi.fn().mockResolvedValue({ success: true }) }
+        });
     });
 
     afterEach(() => {
@@ -219,7 +222,10 @@ describe('CertificateService [UNIT - filesystem isolated]', { timeout: 30000 }, 
         });
 
         it('should auto-initialize if not already initialized', async () => {
-            const uninitializedService = new CertificateService({ bootstrapService: { getSslDir: () => tmpSslDir } });
+            const uninitializedService = new CertificateService({ 
+                bootstrapService: { getSslDir: () => tmpSslDir },
+                internalHttpClient: { request: vi.fn().mockResolvedValue({ success: true }) }
+            });
 
             const result = await uninitializedService.generateOperatorCertificate(
                 `op_test_${uuidv4()}`,
@@ -235,7 +241,10 @@ describe('CertificateService [UNIT - filesystem isolated]', { timeout: 30000 }, 
             const sec1SslDir = mkdtempSync(join(tmpdir(), 'g8e-ssl-sec1-'));
             try {
                 await seedCAWithLegacyEcKey(sec1SslDir);
-                const service = new CertificateService({ bootstrapService: { getSslDir: () => sec1SslDir } });
+                const service = new CertificateService({ 
+                    bootstrapService: { getSslDir: () => sec1SslDir },
+                    internalHttpClient: { request: vi.fn().mockResolvedValue({ success: true }) }
+                });
                 const result = await service.generateOperatorCertificate(
                     `op_test_${uuidv4()}`,
                     `user_test_${uuidv4()}`,

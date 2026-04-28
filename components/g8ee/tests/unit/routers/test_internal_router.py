@@ -12,8 +12,9 @@
 # limitations under the License.
 
 import pytest
+import re
 from unittest.mock import AsyncMock, MagicMock, patch
-from app.constants import ComponentName
+from app.constants import ComponentName, NEW_CASE_ID
 from app.routers.internal_router import (
     internal_chat,
     stop_ai_processing,
@@ -22,12 +23,20 @@ from app.routers.internal_router import (
     update_case,
     delete_case,
     _generate_and_update_title,
+    create_operator_slot,
+    claim_operator_slot,
+    bind_operators,
+    unbind_operators,
 )
 from app.models.internal_api import (
     ChatMessageRequest,
     StopAIRequest,
     OperatorApprovalResponse,
     DirectCommandRequest,
+    OperatorSlotCreationRequest,
+    OperatorSlotClaimRequest,
+    OperatorBindRequest,
+    OperatorUnbindRequest,
 )
 from app.models.cases import CaseUpdateRequest
 from app.models.agents.title_generator import CaseTitleResult
@@ -35,6 +44,10 @@ from app.models.http_context import BoundOperator, G8eHttpContext
 from app.services.ai.chat_task_manager import BackgroundTaskManager
 from app.errors import ResourceNotFoundError
 from tests.fakes.factories import build_case_model, create_investigation_data
+
+# Canonical API key format from shared/constants/api_key_patterns.json
+API_KEY_OPERATOR_REGEX = re.compile(r'^g8e_[a-f0-9]{8}_[a-f0-9]{64}$')
+API_KEY_REGULAR_REGEX = re.compile(r'^g8e_[a-f0-9]{64}$')
 
 @pytest.fixture
 def g8e_context():
@@ -49,7 +62,7 @@ def g8e_context():
 
 @pytest.mark.asyncio
 async def test_internal_chat_new_case(g8e_context, task_tracker):
-    g8e_context.new_case = True
+    g8e_context.case_id = NEW_CASE_ID
     request = ChatMessageRequest(message="test message", sentinel_mode=True)
     
     # Mock dependencies
@@ -94,7 +107,6 @@ async def test_internal_chat_new_case(g8e_context, task_tracker):
 @pytest.mark.asyncio
 async def test_internal_chat_missing_investigation(g8e_context, task_tracker):
     g8e_context.investigation_id = None
-    g8e_context.new_case = False
     request = ChatMessageRequest(message="test message", sentinel_mode=True)
     
     mock_platform_settings = MagicMock()
@@ -289,7 +301,9 @@ async def test_delete_case_success(g8e_context):
     mock_case_service.get_case = AsyncMock()
     mock_case_service.delete_case = AsyncMock()
     mock_inv_service = MagicMock()
-    mock_inv_service.get_case_investigations = AsyncMock(return_value=[])
+    mock_inv_data_service = MagicMock()
+    mock_inv_data_service.get_case_investigations = AsyncMock(return_value=[])
+    mock_inv_service.investigation_data_service = mock_inv_data_service
     mock_inv_service.delete_investigation = AsyncMock()
     mock_cache = MagicMock()
     mock_cache.query_documents = AsyncMock(return_value=[])
@@ -328,3 +342,206 @@ async def test_delete_case_not_found_idempotent(g8e_context):
     )
     
     mock_case_service.delete_case.assert_not_called()
+
+@pytest.mark.asyncio
+async def test_create_operator_slot_success(g8e_context):
+    request = OperatorSlotCreationRequest(
+        user_id="user-123",
+        organization_id="org-123",
+        slot_number=1,
+        operator_type="cloud",
+        cloud_subtype="aws",
+        name_prefix="operator",
+        is_g8e_node=False,
+    )
+    
+    mock_operator_data_service = MagicMock()
+    mock_operator_data_service.create_operator = AsyncMock(return_value=True)
+    mock_settings_service = MagicMock()
+    mock_settings_service.update_g8ep_operator_api_key = AsyncMock(return_value=None)
+    mock_api_key_service = MagicMock()
+    mock_api_key_service.issue_operator_key = AsyncMock(return_value=True)
+    
+    response = await create_operator_slot(
+        request=request,
+        operator_data_service=mock_operator_data_service,
+        settings_service=mock_settings_service,
+        api_key_service=mock_api_key_service,
+        g8e_context=g8e_context
+    )
+    
+    assert response.success is True
+    assert response.operator_id is not None
+    mock_operator_data_service.create_operator.assert_called_once()
+    mock_settings_service.update_g8ep_operator_api_key.assert_not_called()
+    
+    # Verify API key format in response matches canonical pattern
+    assert API_KEY_OPERATOR_REGEX.match(response.api_key), \
+        f"API key {response.api_key} does not match canonical format g8e_[8hex]_[64hex]"
+
+@pytest.mark.asyncio
+async def test_create_operator_slot_g8ep_persists_api_key(g8e_context):
+    request = OperatorSlotCreationRequest(
+        user_id="user-123",
+        organization_id="org-123",
+        slot_number=1,
+        operator_type="cloud",
+        cloud_subtype="g8ep",
+        name_prefix="operator",
+        is_g8e_node=True,
+    )
+    
+    mock_operator_data_service = MagicMock()
+    mock_operator_data_service.create_operator = AsyncMock(return_value=True)
+    mock_settings_service = MagicMock()
+    mock_settings_service.update_g8ep_operator_api_key = AsyncMock(return_value=None)
+    mock_api_key_service = MagicMock()
+    mock_api_key_service.issue_operator_key = AsyncMock(return_value=True)
+    
+    response = await create_operator_slot(
+        request=request,
+        operator_data_service=mock_operator_data_service,
+        settings_service=mock_settings_service,
+        api_key_service=mock_api_key_service,
+        g8e_context=g8e_context
+    )
+    
+    assert response.success is True
+    assert response.operator_id is not None
+    mock_operator_data_service.create_operator.assert_called_once()
+    
+    # Verify issue_operator_key was called with is_g8ep=True and settings_service
+    mock_api_key_service.issue_operator_key.assert_called_once()
+    call_args = mock_api_key_service.issue_operator_key.call_args
+    assert call_args[1]["api_key"] == response.api_key
+    assert call_args[1]["user_id"] == "user-123"
+    assert call_args[1]["operator_id"] == response.operator_id
+    assert call_args[1]["is_g8ep"] is True
+    assert call_args[1]["settings_service"] is mock_settings_service
+    assert call_args[1]["client_name"] == "operator"
+
+@pytest.mark.asyncio
+async def test_claim_operator_slot_success(g8e_context):
+    request = OperatorSlotClaimRequest(
+        operator_id="op-123",
+        operator_session_id="session-123",
+        bound_web_session_id="web-session-123",
+        operator_type="CLOUD",
+    )
+    
+    mock_operator_lifecycle_service = MagicMock()
+    mock_operator_lifecycle_service.claim_operator_slot = AsyncMock(return_value=True)
+    
+    response = await claim_operator_slot(
+        request=request,
+        operator_lifecycle_service=mock_operator_lifecycle_service,
+        g8e_context=g8e_context
+    )
+    
+    assert response.success is True
+    mock_operator_lifecycle_service.claim_operator_slot.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_bind_operators_success(g8e_context):
+    request = OperatorBindRequest(
+        operator_ids=["op-123", "op-456"],
+        web_session_id="web-session-123",
+        user_id="user-123",
+    )
+    
+    mock_operator_data_service = MagicMock()
+    mock_operator = MagicMock()
+    mock_operator.user_id = "user-123"
+    mock_operator_data_service.get_operator = AsyncMock(return_value=mock_operator)
+    mock_operator_data_service.cache = MagicMock()
+    mock_result = MagicMock()
+    mock_result.success = True
+    mock_operator_data_service.cache.update_document = AsyncMock(return_value=mock_result)
+    
+    response = await bind_operators(
+        request=request,
+        operator_data_service=mock_operator_data_service,
+        g8e_context=g8e_context
+    )
+    
+    assert response.success is True
+    assert response.bound_count == 2
+    assert mock_operator_data_service.cache.update_document.call_count == 2
+
+@pytest.mark.asyncio
+async def test_bind_operators_unauthorized(g8e_context):
+    request = OperatorBindRequest(
+        operator_ids=["op-123"],
+        web_session_id="web-session-123",
+        user_id="user-123",
+    )
+    
+    mock_operator_data_service = MagicMock()
+    mock_operator = MagicMock()
+    mock_operator.user_id = "different-user"
+    mock_operator_data_service.get_operator = AsyncMock(return_value=mock_operator)
+    
+    response = await bind_operators(
+        request=request,
+        operator_data_service=mock_operator_data_service,
+        g8e_context=g8e_context
+    )
+    
+    assert response.success is False
+    assert response.failed_count == 1
+    assert len(response.errors) == 1
+    assert "Unauthorized" in response.errors[0]["error"]
+
+@pytest.mark.asyncio
+async def test_unbind_operators_success(g8e_context):
+    request = OperatorUnbindRequest(
+        operator_ids=["op-123", "op-456"],
+        web_session_id="web-session-123",
+        user_id="user-123",
+    )
+    
+    mock_operator_data_service = MagicMock()
+    mock_operator = MagicMock()
+    mock_operator.user_id = "user-123"
+    mock_operator_data_service.get_operator = AsyncMock(return_value=mock_operator)
+    mock_operator_data_service.cache = MagicMock()
+    mock_result = MagicMock()
+    mock_result.success = True
+    mock_operator_data_service.cache.update_document = AsyncMock(return_value=mock_result)
+    
+    response = await unbind_operators(
+        request=request,
+        operator_data_service=mock_operator_data_service,
+        g8e_context=g8e_context
+    )
+    
+    assert response.success is True
+    assert response.unbound_count == 2
+    assert response.failed_count == 0
+    assert len(response.unbound_operator_ids) == 2
+    assert mock_operator_data_service.cache.update_document.call_count == 2
+
+@pytest.mark.asyncio
+async def test_unbind_operators_unauthorized(g8e_context):
+    request = OperatorUnbindRequest(
+        operator_ids=["op-123"],
+        web_session_id="web-session-123",
+        user_id="user-123",
+    )
+    
+    mock_operator_data_service = MagicMock()
+    mock_operator = MagicMock()
+    mock_operator.user_id = "different-user"
+    mock_operator_data_service.get_operator = AsyncMock(return_value=mock_operator)
+    
+    response = await unbind_operators(
+        request=request,
+        operator_data_service=mock_operator_data_service,
+        g8e_context=g8e_context
+    )
+    
+    assert response.success is False
+    assert response.unbound_count == 0
+    assert response.failed_count == 1
+    assert len(response.errors) == 1
+    assert "Unauthorized" in response.errors[0]["error"]

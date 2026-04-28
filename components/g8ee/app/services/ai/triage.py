@@ -42,7 +42,12 @@ logger = logging.getLogger(__name__)
 
 
 class TriageAgent:
-    """Agent responsible for classifying user intent and message complexity."""
+    """Agent responsible for classifying user intent and message complexity.
+    
+    Naming Note: This agent implements the 'Dash' interrogator role from GDD §2. 
+    The g8e codebase already has a 'dash' agent (fast-path responder), so this 
+    role remains named 'triage' in the code to avoid collision.
+    """
 
     def __init__(self):
         """Initialize the triage agent."""
@@ -84,13 +89,13 @@ class TriageAgent:
             )
 
         try:
-            provider = get_llm_provider(request.settings.llm, is_assistant=True)
-            model = request.model_override or request.settings.llm.assistant_model
+            provider = get_llm_provider(request.settings.llm, is_lite=True)
+            model = request.model_override or request.settings.llm.resolved_lite_model
 
             if not model:
                 logger.warning("[TRIAGE] No model available, defaulting to complex")
                 return self._escalation_result(
-                    "Triage unavailable: no assistant model configured. Configure an assistant model in settings or provide model_override to enable triage.",
+                    "Triage unavailable: no lite model or assistant model configured. Configure a lite model or assistant model in settings, or provide model_override to enable triage.",
                     error_code="MODEL_UNAVAILABLE",
                 )
 
@@ -115,16 +120,16 @@ class TriageAgent:
                     lite_llm_settings=config,
                 )
                 if not response.text:
-                    logger.warning("[TRIAGE] Empty response text from assistant model, defaulting to complex")
+                    logger.warning("[TRIAGE] Empty response text from lite model, defaulting to complex")
                     return self._escalation_result(
-                        "Triage unavailable: assistant model returned empty text. Check model availability and connectivity, then retry.",
+                        "Triage unavailable: lite model returned empty text. Check model availability and connectivity, then retry.",
                         error_code="MODEL_EMPTY_RESPONSE",
                     )
                 result = self._parse_response(response.text)
             except OllamaEmptyResponseError as exc:
-                logger.warning("[TRIAGE] No response from assistant model, defaulting to complex: %s", exc)
+                logger.warning("[TRIAGE] No response from lite model, defaulting to complex: %s", exc)
                 return self._escalation_result(
-                    f"Triage unavailable: assistant model returned empty response ({exc}). Check model availability and connectivity, then retry.",
+                    f"Triage unavailable: lite model returned empty response ({exc}). Check model availability and connectivity, then retry.",
                     error_code="MODEL_EMPTY_RESPONSE",
                     error_class=exc.__class__.__name__,
                     error_message=str(exc),

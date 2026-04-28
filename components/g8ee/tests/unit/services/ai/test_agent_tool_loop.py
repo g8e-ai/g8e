@@ -32,6 +32,7 @@ from app.models.agent import ExecutorCommandArgs, OperatorContext, SageOperatorR
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.settings import CommandValidationSettings, G8eeUserSettings
+from app.models.whitelist import WhitelistedCommand
 from app.services.ai.agent_tool_loop import TribunalInvoker
 from app.services.ai.generator import (
     CommandGenerationResult,
@@ -53,6 +54,8 @@ def mock_tool_executor():
     tool_executor.user_settings.operator_context.os = "linux"
     tool_executor.whitelist_validator = MagicMock(spec=CommandWhitelistValidator)
     tool_executor.blacklist_validator = MagicMock(spec=CommandBlacklistValidator)
+    tool_executor.reputation_data_service = MagicMock()
+    tool_executor.auditor_hmac_key = "test-hmac-key"
     return tool_executor
 
 
@@ -94,6 +97,10 @@ def mock_request_settings():
     settings = MagicMock(spec=G8eeUserSettings)
     settings.operator_context = MagicMock(spec=OperatorContext)
     settings.operator_context.os = "linux"
+    settings.command_validation = MagicMock(spec=CommandValidationSettings)
+    settings.command_validation.enable_whitelisting = False
+    settings.command_validation.enable_blacklisting = False
+    settings.command_validation.whitelisted_commands = ""
     return settings
 
 
@@ -106,8 +113,8 @@ def mock_event_service():
 class TestTribunalInvokerFetchCommandConstraints:
     """Tests for TribunalInvoker._fetch_command_constraints."""
 
-    def test_returns_disabled_when_both_flags_false(self, mock_tool_executor):
-        """Test returns (False, False, [], []) when both whitelisting and blacklisting disabled."""
+    def test_returns_disabled_when_both_flags_false(self, mock_tool_executor, mock_investigation):
+        """Test returns disabled flags when both whitelisting and blacklisting disabled."""
         mock_tool_executor.user_settings.command_validation = CommandValidationSettings(
             enable_whitelisting=False,
             enable_blacklisting=False,
@@ -116,11 +123,11 @@ class TestTribunalInvokerFetchCommandConstraints:
         mock_tool_executor.whitelist_validator.get_available_commands_with_metadata = MagicMock(return_value=[])
         mock_tool_executor.blacklist_validator.get_forbidden_commands.return_value = []
 
-        result = TribunalInvoker._fetch_command_constraints(mock_tool_executor)
+        result = TribunalInvoker._fetch_command_constraints(mock_tool_executor.user_settings, mock_investigation, mock_tool_executor)
 
         assert result == (False, False, [], [])
 
-    def test_returns_sorted_whitelist_when_enabled(self, mock_tool_executor):
+    def test_returns_sorted_whitelist_when_enabled(self, mock_tool_executor, mock_investigation):
         """Test returns sorted whitelist when whitelisting enabled."""
         mock_tool_executor.user_settings.command_validation = CommandValidationSettings(
             enable_whitelisting=True,
@@ -134,7 +141,7 @@ class TestTribunalInvokerFetchCommandConstraints:
         ])
         mock_tool_executor.blacklist_validator.get_forbidden_commands.return_value = []
 
-        result = TribunalInvoker._fetch_command_constraints(mock_tool_executor)
+        result = TribunalInvoker._fetch_command_constraints(mock_tool_executor.user_settings, mock_investigation, mock_tool_executor)
 
         whitelisting_enabled, blacklisting_enabled, whitelisted, blacklisted = result
         assert whitelisting_enabled is True
@@ -142,7 +149,7 @@ class TestTribunalInvokerFetchCommandConstraints:
         assert whitelisted == [{"command": "cat"}, {"command": "ls"}, {"command": "ping"}]
         assert blacklisted == []
 
-    def test_returns_blacklist_when_enabled(self, mock_tool_executor):
+    def test_returns_blacklist_when_enabled(self, mock_tool_executor, mock_investigation):
         """Test returns blacklist when blacklisting enabled."""
         mock_tool_executor.user_settings.command_validation = CommandValidationSettings(
             enable_whitelisting=False,
@@ -155,7 +162,7 @@ class TestTribunalInvokerFetchCommandConstraints:
             {"command": "dd", "reason": "Disk destruction"},
         ]
 
-        result = TribunalInvoker._fetch_command_constraints(mock_tool_executor)
+        result = TribunalInvoker._fetch_command_constraints(mock_tool_executor.user_settings, mock_investigation, mock_tool_executor)
 
         whitelisting_enabled, blacklisting_enabled, whitelisted, blacklisted = result
         assert whitelisting_enabled is False
@@ -163,6 +170,30 @@ class TestTribunalInvokerFetchCommandConstraints:
         assert whitelisted == []
         assert len(blacklisted) == 2
         assert blacklisted[0]["command"] == "rm"
+
+    def test_returns_csv_override_when_present(self, mock_tool_executor, mock_investigation):
+        """Test returns CSV override commands when whitelisted_commands CSV is set."""
+        mock_tool_executor.user_settings.command_validation = CommandValidationSettings(
+            enable_whitelisting=True,
+            enable_blacklisting=False,
+            whitelisted_commands="uptime,df,free",
+        )
+        mock_tool_executor.whitelist_validator.all_commands = []
+        mock_tool_executor.whitelist_validator.get_available_commands_with_metadata = MagicMock(return_value=[])
+        mock_tool_executor.blacklist_validator.get_forbidden_commands.return_value = []
+
+        result = TribunalInvoker._fetch_command_constraints(mock_tool_executor.user_settings, mock_investigation, mock_tool_executor)
+
+        whitelisting_enabled, blacklisting_enabled, whitelisted, blacklisted = result
+        assert whitelisting_enabled is True
+        assert blacklisting_enabled is False
+        assert len(whitelisted) == 3
+        assert whitelisted == [
+            WhitelistedCommand(command="uptime"),
+            WhitelistedCommand(command="df"),
+            WhitelistedCommand(command="free"),
+        ]
+        assert blacklisted == []
 
 
 class TestTribunalInvokerRun:
@@ -235,6 +266,7 @@ class TestTribunalInvokerRun:
             auditor_passed=True,
             auditor_revision=None,
             candidates=[],
+            reputation_commitment_id=None,
         )
 
         with patch(
@@ -287,6 +319,7 @@ class TestTribunalInvokerRun:
             auditor_passed=True,
             auditor_revision=None,
             candidates=[],
+            reputation_commitment_id=None,
         )
 
         with patch(
@@ -336,6 +369,7 @@ class TestTribunalInvokerRun:
             auditor_passed=True,
             auditor_revision=None,
             candidates=[],
+            reputation_commitment_id=None,
         )
 
         with patch(

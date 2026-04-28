@@ -25,6 +25,8 @@ def _make_history_entry(
     status: ExecutionStatus | None = None,
     approved: bool | None = None,
     summary: str = "test action",
+    prev_hash: str = "0" * 64,
+    entry_hash: str = "0" * 64,
 ) -> InvestigationHistoryEntry:
     metadata = ConversationMessageMetadata(status=status, approved=approved)
     return InvestigationHistoryEntry(
@@ -34,6 +36,8 @@ def _make_history_entry(
         actor=ComponentName.G8EE,
         summary=summary,
         details=metadata,
+        prev_hash=prev_hash,
+        entry_hash=entry_hash,
     )
 
 

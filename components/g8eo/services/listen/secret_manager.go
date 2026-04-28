@@ -48,6 +48,7 @@ func NewSecretManager(db *sqliteutil.DB, sslDir string, logger *slog.Logger) *Se
 func (m *SecretManager) InitPlatformSettings() error {
 	tokenPath := filepath.Join(m.sslDir, "internal_auth_token")
 	sessionKeyPath := filepath.Join(m.sslDir, "session_encryption_key")
+	auditorHmacKeyPath := filepath.Join(m.sslDir, "auditor_hmac_key")
 
 	var internalAuthToken string
 	if data, err := os.ReadFile(tokenPath); err == nil {
@@ -57,6 +58,11 @@ func (m *SecretManager) InitPlatformSettings() error {
 	var sessionEncryptionKey string
 	if data, err := os.ReadFile(sessionKeyPath); err == nil {
 		sessionEncryptionKey = strings.TrimSpace(string(data))
+	}
+
+	var auditorHmacKey string
+	if data, err := os.ReadFile(auditorHmacKeyPath); err == nil {
+		auditorHmacKey = strings.TrimSpace(string(data))
 	}
 
 	var exists bool
@@ -76,11 +82,15 @@ func (m *SecretManager) InitPlatformSettings() error {
 		if sessionEncryptionKey == "" {
 			sessionEncryptionKey = m.generateSecureToken(32)
 		}
+		if auditorHmacKey == "" {
+			auditorHmacKey = m.generateSecureToken(32)
+		}
 
 		platformSettings := models.SettingsDocument{}
 		platformSettings.Settings = map[string]interface{}{
 			"internal_auth_token":    internalAuthToken,
 			"session_encryption_key": sessionEncryptionKey,
+			"auditor_hmac_key":       auditorHmacKey,
 		}
 		platformSettings.CreatedAt = now
 		platformSettings.UpdatedAt = now
@@ -119,57 +129,83 @@ func (m *SecretManager) InitPlatformSettings() error {
 			"SELECT data FROM documents WHERE collection = 'settings' AND id = 'platform_settings'",
 		).Scan(&dataJSON)
 
-		if err == nil {
-			var settings models.SettingsDocument
-			if err := json.Unmarshal([]byte(dataJSON), &settings); err == nil {
-				changed := false
-				if internalAuthToken != "" {
-					if val, ok := settings.Settings["internal_auth_token"].(string); !ok || val != internalAuthToken {
-						settings.Settings["internal_auth_token"] = internalAuthToken
-						changed = true
-						m.logger.Info("[SecretManager] Synchronized internal_auth_token from file to DB")
-					}
-				}
-				if sessionEncryptionKey != "" {
-					if val, ok := settings.Settings["session_encryption_key"].(string); !ok || val != sessionEncryptionKey {
-						settings.Settings["session_encryption_key"] = sessionEncryptionKey
-						changed = true
-						m.logger.Info("[SecretManager] Synchronized session_encryption_key from file to DB")
-					}
-				}
+		if err != nil {
+			return fmt.Errorf("failed to query platform_settings document for upgrade: %w", err)
+		}
 
-				if changed {
-					settings.UpdatedAt = now
-					updatedJSON, _ := json.Marshal(settings)
-					nowStr := sqliteutil.FormatTimestamp(now)
-					m.db.Exec("UPDATE documents SET data = ?, updated_at = ? WHERE collection = ? AND id = ?",
-						string(updatedJSON), nowStr, "settings", "platform_settings")
+		var settings models.SettingsDocument
+		if err := json.Unmarshal([]byte(dataJSON), &settings); err != nil {
+			return fmt.Errorf("failed to unmarshal platform_settings document for upgrade: %w", err)
+		}
 
-					cacheKey := "g8e:cache:doc:settings:platform_settings"
-					cacheTTL := 3600
-					_, err = m.db.Exec(
-						`INSERT INTO kv_store (key, value, created_at, expires_at)
-						 VALUES (?, ?, ?, ?)
-						 ON CONFLICT(key) DO UPDATE SET value = excluded.value, expires_at = excluded.expires_at`,
-						cacheKey, string(updatedJSON), nowStr, sqliteutil.FormatTimestamp(now.Add(time.Duration(cacheTTL)*time.Second)),
-					)
-					if err != nil {
-						m.logger.Warn("[SecretManager] Failed to warm cache for platform_settings after update", "error", err)
-					} else {
-						m.logger.Info("[SecretManager] platform_settings cache warmed after update", "key", cacheKey, "ttl", cacheTTL)
-					}
-				}
+		changed := false
+		if internalAuthToken != "" {
+			if val, ok := settings.Settings["internal_auth_token"].(string); !ok || val != internalAuthToken {
+				settings.Settings["internal_auth_token"] = internalAuthToken
+				changed = true
+				m.logger.Info("[SecretManager] Synchronized internal_auth_token from file to DB")
+			}
+		}
+		if sessionEncryptionKey != "" {
+			if val, ok := settings.Settings["session_encryption_key"].(string); !ok || val != sessionEncryptionKey {
+				settings.Settings["session_encryption_key"] = sessionEncryptionKey
+				changed = true
+				m.logger.Info("[SecretManager] Synchronized session_encryption_key from file to DB")
+			}
+		}
+		if auditorHmacKey != "" {
+			if val, ok := settings.Settings["auditor_hmac_key"].(string); !ok || val != auditorHmacKey {
+				settings.Settings["auditor_hmac_key"] = auditorHmacKey
+				changed = true
+				m.logger.Info("[SecretManager] Synchronized auditor_hmac_key from file to DB")
+			}
+		} else {
+			// First-time upgrade path: DB predates auditor_hmac_key. Generate
+			// lazily on the existing platform_settings row so Phase 2 can boot
+			// without requiring a fresh install.
+			if _, ok := settings.Settings["auditor_hmac_key"].(string); !ok {
+				auditorHmacKey = m.generateSecureToken(32)
+				settings.Settings["auditor_hmac_key"] = auditorHmacKey
+				changed = true
+				m.logger.Info("[SecretManager] Generated auditor_hmac_key for existing platform_settings")
+			}
+		}
 
-				if internalAuthToken == "" {
-					if val, ok := settings.Settings["internal_auth_token"].(string); ok {
-						internalAuthToken = val
-					}
-				}
-				if sessionEncryptionKey == "" {
-					if val, ok := settings.Settings["session_encryption_key"].(string); ok {
-						sessionEncryptionKey = val
-					}
-				}
+		if changed {
+			settings.UpdatedAt = now
+			updatedJSON, _ := json.Marshal(settings)
+			nowStr := sqliteutil.FormatTimestamp(now)
+			m.db.Exec("UPDATE documents SET data = ?, updated_at = ? WHERE collection = ? AND id = ?",
+				string(updatedJSON), nowStr, "settings", "platform_settings")
+
+			cacheKey := "g8e:cache:doc:settings:platform_settings"
+			cacheTTL := 3600
+			_, err = m.db.Exec(
+				`INSERT INTO kv_store (key, value, created_at, expires_at)
+				 VALUES (?, ?, ?, ?)
+				 ON CONFLICT(key) DO UPDATE SET value = excluded.value, expires_at = excluded.expires_at`,
+				cacheKey, string(updatedJSON), nowStr, sqliteutil.FormatTimestamp(now.Add(time.Duration(cacheTTL)*time.Second)),
+			)
+			if err != nil {
+				m.logger.Warn("[SecretManager] Failed to warm cache for platform_settings after update", "error", err)
+			} else {
+				m.logger.Info("[SecretManager] platform_settings cache warmed after update", "key", cacheKey, "ttl", cacheTTL)
+			}
+		}
+
+		if internalAuthToken == "" {
+			if val, ok := settings.Settings["internal_auth_token"].(string); ok {
+				internalAuthToken = val
+			}
+		}
+		if sessionEncryptionKey == "" {
+			if val, ok := settings.Settings["session_encryption_key"].(string); ok {
+				sessionEncryptionKey = val
+			}
+		}
+		if auditorHmacKey == "" {
+			if val, ok := settings.Settings["auditor_hmac_key"].(string); ok {
+				auditorHmacKey = val
 			}
 		}
 	}
@@ -184,6 +220,11 @@ func (m *SecretManager) InitPlatformSettings() error {
 			return err
 		}
 	}
+	if auditorHmacKey != "" {
+		if err := m.writeSecretFile(auditorHmacKeyPath, auditorHmacKey, "auditor_hmac_key"); err != nil {
+			return err
+		}
+	}
 
 	if err := m.verifyDBMatchesFile(tokenPath, "internal_auth_token"); err != nil {
 		return err
@@ -191,10 +232,14 @@ func (m *SecretManager) InitPlatformSettings() error {
 	if err := m.verifyDBMatchesFile(sessionKeyPath, "session_encryption_key"); err != nil {
 		return err
 	}
+	if err := m.verifyDBMatchesFile(auditorHmacKeyPath, "auditor_hmac_key"); err != nil {
+		return err
+	}
 
 	if err := m.writeDigestManifest(map[string]string{
 		"internal_auth_token":    internalAuthToken,
 		"session_encryption_key": sessionEncryptionKey,
+		"auditor_hmac_key":       auditorHmacKey,
 	}, now); err != nil {
 		return err
 	}

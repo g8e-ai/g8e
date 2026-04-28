@@ -18,6 +18,7 @@ Function call execution — tool display metadata, grounding merge, single
 tool call dispatch, and sequential turn-level execution loop.
 """
 
+import asyncio
 import logging
 from typing import Any, List, Dict, Tuple
 from collections.abc import AsyncGenerator
@@ -25,8 +26,9 @@ from dataclasses import dataclass, field
 
 from pydantic import ValidationError
 
-from app.constants.status import (
+from app.constants import (
     CommandErrorType,
+    EventType,
     OperatorToolName,
 )
 from app.services.ai.tool_registry import OPERATOR_TOOLS, get_tool_spec
@@ -50,6 +52,7 @@ from app.services.ai.generator import generate_command
 from app.models.grounding import GroundingMetadata
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
+from app.models.reputation import StakeResolutionPayload
 from app.models.tool_results import CommandExecutionResult, ToolResult, SearchWebResult
 from app.models.settings import G8eeUserSettings
 
@@ -58,11 +61,13 @@ from app.models.agents.tribunal import (
     TribunalError,
     TribunalConsensusFailedError,
 )
-from app.services.investigation.investigation_service import extract_operator_context_by_target
+from app.services.investigation.investigation_service import extract_operator_context_by_target, extract_single_operator_context
 from app.services.ai.tool_service import AIToolService
 from app.services.infra.g8ed_event_service import EventService
 from app.utils.ids import generate_command_execution_id
 from app.utils.safety import map_os_string_to_platform
+from app.utils.csv_commands import parse_command_csv
+from app.models.whitelist import WhitelistedCommand
 
 class TribunalInvoker:
     """Encapsulates Tribunal invocation logic for run_commands_with_operator.
@@ -73,27 +78,39 @@ class TribunalInvoker:
 
     @staticmethod
     def _fetch_command_constraints(
+        request_settings: G8eeUserSettings,
+        investigation: EnrichedInvestigationContext,
         tool_executor: AIToolService,
-    ) -> tuple[bool, bool, list[dict[str, Any]], list[dict[str, str]]]:
-        """Fetch command validation constraints from tool executor settings.
+    ) -> tuple[bool, bool, list[WhitelistedCommand], list[dict[str, str]]]:
+        """Fetch command validation constraints from request settings.
         
         Returns metadata-rich command list with safe_options and validation patterns.
         """
         whitelisting_enabled = False
         blacklisting_enabled = False
-        whitelisted_commands: list[dict[str, Any]] = []
+        whitelisted_commands: list[WhitelistedCommand] = []
         blacklisted_commands: list[dict[str, str]] = []
 
-        cv = tool_executor.user_settings
+        cv = request_settings
         if cv:
             whitelisting_enabled = cv.command_validation.enable_whitelisting
             blacklisting_enabled = cv.command_validation.enable_blacklisting
             if whitelisting_enabled:
                 # Map OS string to Platform enum using centralized function
-                os_name = tool_executor.user_settings.operator_context.os if tool_executor.user_settings and tool_executor.user_settings.operator_context else DEFAULT_OS_NAME
+                primary_operator = investigation.operator_documents[0] if investigation.operator_documents else None
+                operator_context = extract_single_operator_context(primary_operator) if primary_operator else None
+                os_name = operator_context.os if operator_context else DEFAULT_OS_NAME
                 platform = map_os_string_to_platform(os_name)
-                
-                whitelisted_commands = tool_executor.whitelist_validator.get_available_commands_with_metadata(platform)
+
+                # Check if CSV override is active
+                csv_override = cv.command_validation.whitelisted_commands
+                csv_commands = parse_command_csv(csv_override) if csv_override else []
+                if csv_commands:
+                    # CSV mode: construct simple metadata from CSV commands (no rich safe_options/validation)
+                    whitelisted_commands = [WhitelistedCommand(command=cmd) for cmd in csv_commands]
+                else:
+                    # JSON mode: use rich metadata from validator
+                    whitelisted_commands = tool_executor.whitelist_validator.get_available_commands_with_metadata(platform)
             if blacklisting_enabled:
                 blacklisted_commands = tool_executor.blacklist_validator.get_forbidden_commands()
 
@@ -131,7 +148,7 @@ class TribunalInvoker:
         )
 
         whitelisting_enabled, blacklisting_enabled, whitelisted_commands, blacklisted_commands = (
-            TribunalInvoker._fetch_command_constraints(tool_executor)
+            TribunalInvoker._fetch_command_constraints(request_settings, investigation, tool_executor)
         )
 
         logger.info(
@@ -150,6 +167,8 @@ class TribunalInvoker:
             case_id=g8e_context.case_id,
             investigation_id=investigation.id,
             settings=request_settings,
+            reputation_data_service=tool_executor.reputation_data_service,
+            auditor_hmac_key=tool_executor.auditor_hmac_key,
             whitelisting_enabled=whitelisting_enabled,
             blacklisting_enabled=blacklisting_enabled,
             whitelisted_commands=whitelisted_commands,
@@ -301,57 +320,102 @@ async def orchestrate_tool_execution(
     sage_request: SageOperatorRequest | None = None
     gen_result: CommandGenerationResult | None = None
 
-    if tool_name == OperatorToolName.RUN_COMMANDS:
-        sage_request = SageOperatorRequest.model_validate(raw_args)
-        request = (sage_request.request or "").strip()
+    try:
+        if tool_name == OperatorToolName.RUN_COMMANDS:
+            sage_request = SageOperatorRequest.model_validate(raw_args)
+            request = (sage_request.request or "").strip()
 
-        if request:
-            logger.info(
-                "[TRIBUNAL-INVOKE] run_commands_with_operator detected: request_len=%d guidelines_len=%d target_operator=%s",
-                len(request), len(sage_request.guidelines or ""), sage_request.target_operator,
-            )
-            logger.info(
-                "[TRIBUNAL-INVOKE] Request settings: llm_command_gen_enabled=%s llm_command_gen_auditor=%s llm_command_gen_passes=%d assistant_model=%s eval_judge_model=%s",
-                request_settings.llm.llm_command_gen_enabled,
-                request_settings.llm.llm_command_gen_auditor,
-                request_settings.llm.llm_command_gen_passes,
-                request_settings.llm.assistant_model,
-                request_settings.eval_judge.model,
-            )
+            if request:
+                logger.info(
+                    "[TRIBUNAL-INVOKE] run_commands_with_operator detected: request_len=%d guidelines_len=%d target_operator=%s",
+                    len(request), len(sage_request.guidelines or ""), sage_request.target_operator,
+                )
+                logger.info(
+                    "[TRIBUNAL-INVOKE] Request settings: llm_command_gen_enabled=%s llm_command_gen_auditor=%s llm_command_gen_passes=%d assistant_model=%s eval_judge_model=%s",
+                    request_settings.llm.llm_command_gen_enabled,
+                    request_settings.llm.llm_command_gen_auditor,
+                    request_settings.llm.llm_command_gen_passes,
+                    request_settings.llm.assistant_model,
+                    request_settings.eval_judge.model,
+                )
 
+                try:
+                    executor_args, gen_result = await TribunalInvoker.run(
+                        sage_request=sage_request,
+                        investigation=investigation,
+                        g8e_context=g8e_context,
+                        g8ed_event_service=g8ed_event_service,
+                        request_settings=request_settings,
+                        tool_executor=tool_executor,
+                    )
+                except (TribunalError, ValidationError) as exc:
+                    error_msg = exc.user_message if isinstance(exc, TribunalError) else str(exc)
+                    logger.error(
+                        "[TRIBUNAL-ERROR] %s (%s): %s",
+                        type(exc).__name__, tool_name, error_msg,
+                    )
+                    return _tribunal_error_result(
+                        tool_name=tool_name,
+                        request=request,
+                        error_msg=error_msg,
+                    )
+
+                raw_args = executor_args.model_dump(by_alias=True)
+
+        execution_id = generate_command_execution_id()
+
+        result = await tool_executor.execute_tool_call(
+            tool_name,
+            raw_args,
+            investigation,
+            g8e_context,
+            request_settings=request_settings,
+            execution_id=execution_id,
+        )
+    except asyncio.CancelledError:
+        logger.info(
+            "[ORCHESTRATE-TOOL] Tool execution cancelled for %s",
+            tool_name
+        )
+        raise
+
+    if (
+        gen_result is not None
+        and tool_name == OperatorToolName.RUN_COMMANDS
+        and isinstance(result, CommandExecutionResult)
+    ):
+        # Schedule fire-and-forget reputation resolution
+        async def _resolve_and_emit():
             try:
-                executor_args, gen_result = await TribunalInvoker.run(
-                    sage_request=sage_request,
-                    investigation=investigation,
-                    g8e_context=g8e_context,
-                    g8ed_event_service=g8ed_event_service,
-                    request_settings=request_settings,
-                    tool_executor=tool_executor,
-                )
-            except (TribunalError, ValidationError) as exc:
-                error_msg = exc.user_message if isinstance(exc, TribunalError) else str(exc)
-                logger.error(
-                    "[TRIBUNAL-ERROR] %s (%s): %s",
-                    type(exc).__name__, tool_name, error_msg,
-                )
-                return _tribunal_error_result(
-                    tool_name=tool_name,
-                    request=request,
-                    error_msg=error_msg,
+                res = await tool_executor.reputation_service.resolve_stakes(
+                    tribunal_command_id=gen_result.correlation_id,
+                    investigation_id=investigation.id,
+                    gen_result=gen_result,
+                    execution_result=result,
+                    warden_risk=result.warden_risk,
                 )
 
-            raw_args = executor_args.model_dump(by_alias=True)
+                for outcome in res.resolutions:
+                    payload = StakeResolutionPayload.model_validate(outcome.model_dump())
+                    await g8ed_event_service.publish_reputation_event(
+                        EventType.REPUTATION_STATE_UPDATED,
+                        payload,
+                        g8e_context
+                    )
 
-    execution_id = generate_command_execution_id()
+                    if outcome.slash_tier:
+                        slash_event = getattr(EventType, f"REPUTATION_SLASH_TIER{outcome.slash_tier.value}")
+                        await g8ed_event_service.publish_reputation_event(
+                            slash_event,
+                            payload,
+                            g8e_context
+                        )
+            except Exception as e:
+                logger.error("[REPUTATION] Failed to resolve stakes: %s", e, exc_info=True)
 
-    result = await tool_executor.execute_tool_call(
-        tool_name,
-        raw_args,
-        investigation,
-        g8e_context,
-        request_settings=request_settings,
-        execution_id=execution_id,
-    )
+        task_id = f"reputation_resolution_{execution_id}"
+        task = asyncio.create_task(_resolve_and_emit(), name=task_id)
+        tool_executor.chat_task_manager.track_detached(task_id, task)
 
     logger.info(
         "[AGENT] Function result: name=%s success=%s execution_id=%s error_type=%s",
@@ -419,6 +483,12 @@ async def execute_turn_tool_calls(
                 g8ed_event_service=g8ed_event_service,
                 request_settings=request_settings,
             )
+        except asyncio.CancelledError:
+            logger.info(
+                "[SEQ_EXEC] Tool execution cancelled at call %d of %d",
+                i, num_calls
+            )
+            raise
         except Exception as exc:
             logger.error("[SEQ_EXEC] Function call %d (%s) failed: %s", i, fc.name, exc)
             _exc_result = CommandExecutionResult(

@@ -2,173 +2,93 @@
 title: g8e Help
 ---
 
-g8e CLI
+# g8e CLI
 
-AUTHENTICATION
-  Authenticate once to save session locally (like AWS/gcloud):
-    ./g8e login --api-key <key>
-    ./g8e login --device-token <token>
+The `g8e` command is the unified entry point for managing the g8e AI governance platform. It abstracts Docker complexity and ensures that all operations—from local development to fleet-wide deployment—are performed within a secure, authenticated, and consistent environment.
 
-  Logout to clear saved session:
-    ./g8e logout
+## CORE PRINCIPLES
 
-  Alternatively, provide credentials per-command:
-    ./g8e <command> --api-key <key>
-    ./g8e <command> --device-token <token>
+- **Docker-Native**: Requires only Docker on the host. All toolchains (Go, Python, Node) are isolated in containers.
+- **Security-First**: mTLS by default. All container-side operations require valid session tokens.
+- **Canonical Truth**: Constants like `agents.json` and `models` are shared across components.
+- **Zero-Footprint**: Fleet operations use SSH streaming to execute without persistent installation.
 
-  Platform commands (setup, start, stop, status, rebuild, reset, wipe, clean, logs, settings, update)
-  do not require authentication as they manage Docker services directly.
+## THE OPERATIONAL LIFECYCLE
 
-QUICK START
-  ./g8e platform setup
-  ./g8e platform rebuild
-  ./g8e login --api-key <key>
-  ./g8e test g8ee tests/unit
-  ./g8e operator deploy user@host
+### identity
 
-COMMON COMMANDS
+Sessions are saved locally in `~/.g8e/credentials` for a seamless experience.
+- `./g8e login --api-key <key>`: Authenticate via API key.
+- `./g8e login --device-token <token>`: Authenticate via terminal link.
+- `./g8e logout`: Clear local credentials.
 
-Platform:
-  ./g8e platform setup
-  ./g8e platform start
-  ./g8e platform stop
-  ./g8e platform status
-  ./g8e platform rebuild
-  ./g8e platform logs [service]
+### platform
 
-Authentication:
-  ./g8e login --api-key <key>
-  ./g8e logout
+Manage the local g8e stack (g8es, g8ee, g8ed, g8ep).
+- `./g8e platform setup`: Initial bootstrap and container build.
+- `./g8e platform start [--dev]`: Bring up the stack. Use `--dev` for hot-reload in `g8ee`.
+- `./g8e platform status`: View service health and component versions.
+- `./g8e platform logs [service]`: Aggregated, time-ordered logs across the fleet.
 
-Operator:
-  ./g8e operator build
-  ./g8e operator deploy <host>
-  ./g8e operator stream <host...>
-  ./g8e operator ssh-config
+### operator
 
-Testing:
-  ./g8e test g8ee <path>
-  ./g8e test g8ed <path>
-  ./g8e test g8eo <path>
+Build and deploy the `g8eo` operator binary.
+- `./g8e operator build`: Compile the operator for the host architecture.
+- `./g8e operator deploy <host>`: Standard SCP/SSH deployment.
+- `./g8e operator stream <host...>`: High-concurrency streaming injection.
 
-Config:
-  ./g8e llm setup
-  ./g8e llm show
-  ./g8e data settings show
-  ./g8e mcp config --client <name>
+### test
 
-Security:
-  ./g8e security validate
-  ./g8e security certs generate
+Run tests in isolated, pre-configured test-runner containers.
+- `./g8e test g8ee [path]`: Python tests with pytest, ruff, and pyright.
+- `./g8e test g8ed [path]`: Node.js tests with Vitest.
+- `./g8e test g8eo [path]`: Go tests with race detection.
 
-ALL COMMANDS
+### security
 
-login - Authenticate and save session
-  --api-key <key>, --device-token <token>
+- `security validate`: Check TLS and volume mount integrity.
+- `security certs generate|rotate`: Manage the platform CA and certificates.
+- `security scan-licenses`: Run license compliance scans.
+- `security rotate-internal-token`: Refresh the shared platform secret.
 
-logout - Clear saved session
+### data
 
-platform - Docker services (host)
-  setup, settings, update
-  start, stop, restart, status
-  rebuild, reset, wipe, clean
-  logs [service]
+- `data users|operators|store`: Direct persistence layer interaction.
+- `data settings|audit|device-links`: Configuration and LFAA vault queries.
 
-operator - Build and deploy
-  init, build, build-all
-  deploy <host>, stream <host>
-  ssh-config, reauth
+### llm
 
-test - Run component tests
-  g8ee, g8ed, g8eo
-  Options: --coverage, --pyright, --ruff, --e2e, -j [N|auto]
+- `llm setup|show|restart`: Configure LLM provider settings (Anthropic, OpenAI, etc.).
+- `llm get|set <key>`: Fine-grained control of LLM configuration variables.
 
-  LLM configuration (g8ee only):
-    -p, --llm-provider <provider>      LLM provider (anthropic, openai, gemini, etc.)
-    -m, --primary-model <model>        Primary model for grading
-    -a, --assistant-model <model>     Assistant model to evaluate
-    -e, --llm-endpoint-url <url>      Custom LLM endpoint URL
-    -k, --llm-api-key <key>           LLM API key
+### mcp
 
-  Web Search configuration (g8ee only):
-    Set via environment variables: TEST_WEB_SEARCH_PROJECT_ID, TEST_WEB_SEARCH_ENGINE_ID, TEST_WEB_SEARCH_API_KEY
+- `mcp config|test|status`: MCP client integration for external AI tools.
 
-  Examples:
-    ./g8e test g8ee tests/unit
-    ./g8e test g8ee --coverage
-    ./g8e test g8ee --pyright --ruff
-    ./g8e test g8ee --e2e
-    ./g8e test g8ee -j auto
-    ./g8e test g8ee -p anthropic -m claude-3-5-sonnet -k <key> tests/unit
-    ./g8e test g8ee -p openai -m gpt-4 -a gpt-3.5-turbo -k <key> --coverage
+### search
 
-security - Security tools (g8ep)
-  validate, mtls-test
-  certs generate/rotate/status/trust
-  scan-licenses, passkeys
-  rotate-internal-token
+- `search setup|disable`: Configure Vertex AI Search for the `search_web` tool.
 
-data - Data management (g8ep)
-  users, operators, store
-  settings, audit, device-links
+### ssh
 
-  store:
-    stats, network, find, wipe, get-setting
-    kv list|get
-    <collection> list|get
+- `ssh setup`: Mount host SSH credentials into g8ep for fleet operations.
 
-llm - LLM tooling (host)
-  setup, restart, show
-  get <key>, set <key=val>
+### aws
 
-mcp - MCP integration
-  config, test, status
+- `aws setup`: Mount AWS credentials into g8ep for AWS-integrated tools.
 
-search - Web search (host)
-  setup, disable
+### demo
 
-ssh - SSH credentials (host)
-  setup
+- `demo up|down|clean`: Manage the 10-node broken-fleet demo.
+- `demo profile list|switch`: Toggle between different demo scenarios.
+- `demo shell N=01`: Debug a specific fleet node.
 
-aws - AWS credentials (host)
-  setup
+### evals
 
-demo - Fleet demo (host)
-  Fleet lifecycle:
-    up              Build and start all 10 demo nodes + dashboard
-    down            Stop all demo nodes
-    status          Show container status for all demo nodes
-    clean           Remove all demo containers and networks
-  Operator deployment:
-    deploy [-d <token>]  Deploy operators via API download (requires device token)
-    stream [-d <token>]  Deploy operators via SSH streaming (requires device token)
-    discover-hosts  List discovered demo fleet hosts
-    operators       Show operator status across the fleet
-    vanish          Remove all operators (zero trace cleanup)
-  Profile management:
-    profile list             List available demo profiles
-    profile create <name>    Create a new profile from current demo/
-    profile switch <name>    Switch current demo/ to a profile
-    profile delete <name>    Delete a profile
-  Inspection:
-    health          Check Flask backend health on all nodes
-    nginx-check     Check nginx status and HTTP response codes
-    logs            Follow all container logs
-    shell N=<nn>    Shell into a specific node (e.g., shell N=01)
-    dashboard       Print fleet dashboard URL (http://localhost:3000)
+- `evals up|run|down`: Real-operator evaluation fleet management.
+- `evals status|logs`: Monitor evaluation nodes.
 
-  Examples:
-    ./g8e platform setup                              # Start the platform
-    ./g8e demo up                                     # Start the fleet
-    ./g8e demo stream -d dlk_xxx                      # Deploy operators with device token (shorthand)
-    ./g8e demo deploy -d dlk_xxx                      # Deploy operators via API download (shorthand)
-    ./g8e demo stream DEVICE_TOKEN=dlk_xxx            # Deploy operators with device token (full syntax)
-    ./g8e demo deploy DEVICE_TOKEN=dlk_xxx            # Deploy operators via API download (full syntax)
-    ./g8e demo operators                              # Check operator status
-    ./g8e demo shell N=06                             # Debug broken node
-    ./g8e demo vanish                                 # Clean up operators
-    ./g8e demo clean                                  # Remove everything
-
-DETAILED HELP
-  ./g8e operator --help
-  ./g8e test --help
+## DETAILED HELP
+- `./g8e operator --help`
+- `./g8e test --help`
+- `./g8e platform --help`

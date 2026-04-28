@@ -55,26 +55,14 @@ describe('SetupService [UNIT]', () => {
     });
 
     describe('completeSetup', () => {
-        it('persists setup_complete as boolean true', async () => {
-            settingsService.getPlatformSettings.mockResolvedValue({});
-            settingsService.savePlatformSettings.mockResolvedValue({ success: true });
-            await service.completeSetup();
-            expect(settingsService.savePlatformSettings).toHaveBeenCalledWith({ setup_complete: true });
-        });
-
-        it('preserves existing platform settings via spread', async () => {
+        it('persists setup_complete as boolean true without spreading all settings', async () => {
             settingsService.getPlatformSettings.mockResolvedValue({
                 passkey_rp_id: 'my.host.com',
                 passkey_origin: 'https://my.host.com'
             });
             settingsService.savePlatformSettings.mockResolvedValue({ success: true });
-
             await service.completeSetup();
-
-            const saved = settingsService.savePlatformSettings.mock.calls[0][0];
-            expect(saved.passkey_rp_id).toBe('my.host.com');
-            expect(saved.passkey_origin).toBe('https://my.host.com');
-            expect(saved.setup_complete).toBe(true);
+            expect(settingsService.savePlatformSettings).toHaveBeenCalledWith({ setup_complete: true });
         });
 
         it('handles null existing settings without crashing', async () => {

@@ -55,9 +55,38 @@ class InvestigationService:
         operator_data_service: OperatorDataServiceProtocol,
         memory_data_service: MemoryDataServiceProtocol,
     ):
-        self.investigation_data_service = investigation_data_service
-        self.operator_data_service = operator_data_service
-        self.memory_data_service = memory_data_service
+        self._investigation_data_service = investigation_data_service
+        self._operator_data_service = operator_data_service
+        self._memory_data_service = memory_data_service
+
+    @property
+    def investigation_data_service(self) -> InvestigationDataServiceProtocol:
+        """Access the underlying investigation data service."""
+        return self._investigation_data_service
+
+    @property
+    def operator_data_service(self) -> OperatorDataServiceProtocol:
+        """Access the underlying operator data service."""
+        return self._operator_data_service
+
+    @property
+    def memory_data_service(self) -> MemoryDataServiceProtocol:
+        """Access the underlying memory data service."""
+        return self._memory_data_service
+
+    async def get_investigation(self, investigation_id: str) -> InvestigationModel | None:
+        """Domain pass-through for retrieving an investigation."""
+        return await self._investigation_data_service.get_investigation(investigation_id)
+
+    async def get_chat_messages(self, investigation_id: str) -> list[ConversationHistoryMessage]:
+        """Domain pass-through for retrieving chat history."""
+        return await self._investigation_data_service.get_chat_messages(investigation_id)
+
+    async def get_operator_actions_for_ai_context(self, investigation_id: str) -> str:
+        """Domain pass-through for formatted operator action history."""
+        return await self._investigation_data_service.get_operator_actions_for_ai_context(
+            investigation_id
+        )
 
     async def create_investigation(
         self,
@@ -268,44 +297,6 @@ class InvestigationService:
 
         return context
 
-    async def query_investigations(
-        self, request: InvestigationQueryRequest
-    ) -> list[InvestigationModel]:
-        """Domain orchestration for querying investigations."""
-        return await self.investigation_data_service.query_investigations(request)
-
-    async def get_investigation(self, investigation_id: str) -> InvestigationModel | None:
-        """Domain orchestration for fetching an investigation by ID."""
-        return await self.investigation_data_service.get_investigation(investigation_id)
-
-    async def get_case_investigations(
-        self,
-        case_id: str,
-        user_id: str | None,
-    ) -> list[InvestigationModel]:
-        """Domain orchestration for fetching investigations by case ID."""
-        return await self.investigation_data_service.get_case_investigations(case_id=case_id, user_id=user_id)
-
-    async def get_chat_messages(self, investigation_id: str) -> list[ConversationHistoryMessage]:
-        """Domain orchestration for fetching full chat history."""
-        return await self.investigation_data_service.get_chat_messages(investigation_id)
-
-    async def update_investigation_raw(
-        self,
-        investigation_id: str,
-        updates: dict[str, object],
-        merge: bool = True,
-    ) -> None:
-        """Domain orchestration for low-level investigation updates."""
-        await self.investigation_data_service.update_investigation_raw(
-            investigation_id=investigation_id,
-            updates=updates,
-            merge=merge
-        )
-
-    async def delete_investigation(self, investigation_id: str) -> None:
-        """Domain orchestration for deleting an investigation."""
-        await self.investigation_data_service.delete_investigation(investigation_id)
 
     async def update_investigation(
         self,
@@ -377,80 +368,6 @@ class InvestigationService:
         logger.info(f"Updated investigation {investigation_id}")
         return investigation
 
-    async def add_history_entry(
-        self,
-        investigation_id: str,
-        event_type: EventType,
-        actor: ComponentName,
-        summary: str,
-        details: ConversationMessageMetadata,
-    ) -> InvestigationModel:
-        """Record an event in the investigation history trail."""
-        return await self.investigation_data_service.add_history_entry(
-            investigation_id=investigation_id,
-            event_type=event_type,
-            actor=actor,
-            summary=summary,
-            details=details,
-        )
-
-    async def add_command_execution_result(
-        self,
-        investigation_id: str,
-        execution_id: str,
-        command: str,
-        result: CommandInternalResult,
-        operator_id: str,
-        operator_session_id: str,
-        actor: ComponentName = ComponentName.G8EO,
-    ) -> InvestigationModel:
-        """Domain orchestration for recording a command execution result."""
-        return await self.investigation_data_service.add_command_execution_result(
-            investigation_id=investigation_id,
-            execution_id=execution_id,
-            command=command,
-            result=result,
-            operator_id=operator_id or "unknown",
-            operator_session_id=operator_session_id,
-        )
-
-    async def add_file_operation_result(
-        self,
-        investigation_id: str,
-        execution_id: str,
-        operator_id: str,
-        event_type: EventType,
-        file_path: str,
-        result: FileEditResult,
-        operation: FileOperation,
-        operator_session_id: str,
-    ) -> InvestigationModel:
-        """Domain orchestration for recording a file operation result."""
-        return await self.investigation_data_service.add_file_operation_result(
-            investigation_id=investigation_id,
-            execution_id=execution_id,
-            operator_id=operator_id,
-            event_type=event_type,
-            file_path=file_path,
-            result=result,
-            operation=operation,
-        )
-
-    async def add_chat_message(
-        self,
-        investigation_id: str | None,
-        sender: str,
-        content: str,
-        metadata: ConversationMessageMetadata,
-    ) -> bool:
-        """Domain-layer wrapper for adding a chat message to history."""
-        return await self.investigation_data_service.add_chat_message(
-            investigation_id=investigation_id,
-            sender=sender,
-            content=content,
-            metadata=metadata,
-        )
-
     async def persist_ai_message(
         self,
         investigation_id: str | None,
@@ -481,60 +398,42 @@ class InvestigationService:
             ),
         )
 
-    async def add_approval_record(
-        self,
-        investigation_id: str,
-        event_type: EventType,
-        metadata: ConversationMessageMetadata,
-        actor: ComponentName = ComponentName.G8EE,
-    ) -> InvestigationModel:
-        """Domain orchestration for recording an approval lifecycle event."""
-        return await self.investigation_data_service.add_approval_record(
-            investigation_id=investigation_id,
-            event_type=event_type,
-            metadata=metadata,
-            actor=actor,
-        )
-
-    async def get_command_execution_history(self, investigation_id: str) -> list[InvestigationHistoryEntry]:
-        """Retrieve all command execution entries from investigation history."""
-        return await self.investigation_data_service.get_command_execution_history(investigation_id)
-
-    async def get_operator_actions_for_ai_context(self, investigation_id: str) -> str:
-        """Domain logic for formatting operator action history for LLM consumption."""
-        return await self.investigation_data_service.get_operator_actions_for_ai_context(investigation_id)
-
 
 
 def extract_single_operator_context(op: OperatorDocument) -> OperatorContext:
-    """Extract typed system context from a single OperatorDocument."""
-    sys_info = op.system_info
+    """Extract typed system context from a single OperatorDocument.
+
+    Reads exclusively from latest_heartbeat_snapshot, which is the canonical
+    source of truth for operator system identity and telemetry.
+    """
     hb = op.latest_heartbeat_snapshot
 
-    # Use system_info for static details, heartbeat for dynamic metrics
-    os_details = sys_info.os_details if sys_info else None
-    user_details = sys_info.user_details if sys_info else None
-    disk_details = sys_info.disk_details if sys_info else None
-    memory_details = sys_info.memory_details if sys_info else None
-    environment = sys_info.environment if sys_info else None
-
-    # Override with latest heartbeat if available
     if hb:
-        if hb.os_details: os_details = hb.os_details
-        if hb.user_details: user_details = hb.user_details
-        if hb.disk_details: disk_details = hb.disk_details
-        if hb.memory_details: memory_details = hb.memory_details
-        if hb.environment: environment = hb.environment
+        system_identity = hb.system_identity
+        network = hb.network
+        os_details = hb.os_details
+        user_details = hb.user_details
+        environment = hb.environment
+        disk_details = hb.disk_details
+        memory_details = hb.memory_details
+    else:
+        system_identity = None
+        network = None
+        os_details = None
+        user_details = None
+        environment = None
+        disk_details = None
+        memory_details = None
 
     return OperatorContext(
         operator_id=op.id,
         operator_session_id=op.operator_session_id,
-        os=sys_info.os if sys_info else None,
-        hostname=sys_info.hostname if sys_info else None,
-        architecture=sys_info.architecture if sys_info else None,
-        cpu_count=sys_info.cpu_count if sys_info else None,
-        memory_mb=sys_info.memory_mb if sys_info else None,
-        public_ip=sys_info.public_ip if sys_info else None,
+        os=system_identity.os if system_identity else None,
+        hostname=system_identity.hostname if system_identity else None,
+        architecture=system_identity.architecture if system_identity else None,
+        cpu_count=system_identity.cpu_count if system_identity else None,
+        memory_mb=system_identity.memory_mb if system_identity else None,
+        public_ip=network.public_ip if network else None,
         operator_type=op.operator_type,
         cloud_subtype=op.cloud_subtype,
         is_cloud_operator=op.operator_type == OperatorType.CLOUD,
@@ -638,11 +537,11 @@ def extract_operator_context_by_target(
     """
     if not investigation or not investigation.operator_documents:
         return None
-    
-    # If no target specified, use first operator (backward compatibility)
+
+    # No target supplied: use the first (primary) bound operator.
     if not target_operator:
         return extract_single_operator_context(investigation.operator_documents[0])
-    
+
     # Try to find operator by operator_id
     for operator_doc in investigation.operator_documents:
         if operator_doc.id == target_operator:

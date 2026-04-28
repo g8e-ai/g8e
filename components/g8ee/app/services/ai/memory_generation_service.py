@@ -142,32 +142,37 @@ class MemoryGenerationService:
         contents = self._conversation_to_contents(conversation_history, memory)
 
         memory_persona = get_agent_persona("codex")
-        system_instructions = f"You are analyzing a technical support conversation for case: {memory.case_title}. {memory_persona.get_system_prompt()}"
+        system_instructions = f"{memory_persona.get_system_prompt()}\n\nYou are analyzing a technical support conversation for case: {memory.case_title}."
 
-        assistant_model = settings.llm.resolved_assistant_model
-        if not assistant_model:
-            logger.warning("[MEMORY-GEN] No assistant_model configured, skipping AI memory update")
+        from app.constants import LLMProvider
+        from app.llm import get_llm_provider
+
+        # Use the lite model for memory generation (Codex), with assistant_model as fallback
+        lite_model = settings.llm.resolved_lite_model
+        
+        if not lite_model:
+            logger.warning("[MEMORY-GEN] No lite_model or assistant_model configured, skipping AI memory update")
             return
 
-        provider = get_llm_provider(settings.llm, is_assistant=True)
+        provider = get_llm_provider(settings.llm, is_lite=True)
 
-        config = AIGenerationConfigBuilder.build_assistant_settings(
-            model=assistant_model,
+        config = AIGenerationConfigBuilder.build_lite_settings(
+            model=lite_model,
             max_tokens=None,
             system_instructions=system_instructions,
             response_format=types.ResponseFormat.from_pydantic_schema(MemoryAnalysis.model_json_schema()),
         )
         try:
-            response = await provider.generate_content_assistant(
-                model=assistant_model,
+            response = await provider.generate_content_lite(
+                model=lite_model,
                 contents=contents,
-                assistant_llm_settings=config,
+                lite_llm_settings=config,
             )
             if response.text is None:
                 raise OllamaEmptyResponseError(
                     "LLM returned empty response",
-                    model=assistant_model,
-                    channel="assistant",
+                    model=lite_model,
+                    channel="lite",
                     done_reason="stop",
                     prompt_eval_count=None,
                     eval_count=None,

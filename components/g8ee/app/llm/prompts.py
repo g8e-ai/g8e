@@ -13,8 +13,10 @@
 
 """g8ee AI Agent Prompts Module"""
 
+from __future__ import annotations
+
 import logging
-from typing import Any, List, Optional
+from typing import Any, List
 
 from ..constants import (
     AgentName,
@@ -29,6 +31,7 @@ from ..models.agent import OperatorContext
 from ..models.agents import TriageResult
 from ..models.investigations import EnrichedInvestigationContext
 from ..models.memory import InvestigationMemory
+from ..models.whitelist import WhitelistedCommand
 from ..prompts_data.loader import load_mode_prompts, load_prompt
 from ..utils.agent_persona_loader import get_agent_persona
 
@@ -37,14 +40,14 @@ logger = logging.getLogger(__name__)
 
 def _format_operator_doc(op_doc, index: int) -> str:
     """Format a single operator document for investigation context."""
-    sys_info = op_doc.system_info
+    snapshot = op_doc.latest_heartbeat_snapshot
     op_id = op_doc.id or f"operator_{index + 1}"
-    hostname = op_doc.current_hostname or (sys_info.hostname if sys_info else None)
+    hostname = op_doc.current_hostname or (snapshot.system_identity.hostname if snapshot else None)
     
     details = [
         f"hostname={hostname}" if hostname else None,
-        f"os={sys_info.os}" if sys_info and sys_info.os else None,
-        f"arch={sys_info.architecture}" if sys_info and sys_info.architecture else None,
+        f"os={snapshot.system_identity.os}" if snapshot and snapshot.system_identity.os else None,
+        f"arch={snapshot.system_identity.architecture}" if snapshot and snapshot.system_identity.architecture else None,
         f"type={op_doc.operator_type}",
         f"session={op_doc.operator_session_id[:12]}..." if op_doc.operator_session_id else None,
     ]
@@ -152,29 +155,29 @@ def build_learned_context_section(
 def build_command_constraints_message(
     whitelisting_enabled: bool,
     blacklisting_enabled: bool,
-    whitelisted_commands: List[dict[str, Any]] | None,
-    blacklisted_commands: List[dict[str, str]] | None,
+    whitelisted_commands: list[WhitelistedCommand] | None,
+    blacklisted_commands: list[dict[str, str]] | None,
 ) -> str:
     """Generate a human-readable message describing active command constraints.
     
     Args:
         whitelisting_enabled: Whether whitelist enforcement is active
         blacklisting_enabled: Whether blacklist enforcement is active
-        whitelisted_commands: List of command metadata dicts with safe_options and validation patterns
+        whitelisted_commands: List of WhitelistedCommand objects
         blacklisted_commands: List of blacklisted command dicts
     """
     parts = []
     if whitelisting_enabled:
         if whitelisted_commands:
-            command_names = [cmd.get("command", "unknown") for cmd in whitelisted_commands]
+            command_names = [cmd.command for cmd in whitelisted_commands]
             parts.append(f"Whitelisting is ENABLED. Only these commands are allowed: {', '.join(command_names)}")
             
             # Add detailed constraint information for each command
             constraint_details = []
             for cmd in whitelisted_commands:
-                cmd_name = cmd.get("command", "unknown")
-                safe_options = cmd.get("safe_options", [])
-                validation = cmd.get("validation", {})
+                cmd_name = cmd.command
+                safe_options = cmd.safe_options
+                validation = cmd.validation
                 
                 if safe_options or validation:
                     details = f"{cmd_name}:"
@@ -343,8 +346,43 @@ def build_tribunal_generator_prompt(
     user_context: str,
     working_directory: str,
     operator_context_str: str,
+    round_num: int = 1,
+    cluster_context: str | None = None,
+    member: str | None = None,
 ) -> str:
-    """Build the prompt for a Tribunal generation pass."""
+    """Build the prompt for a Tribunal generation pass.
+    
+    Args:
+        member: Tribunal member id (e.g., "axiom", "concord", etc.) for persona-specific R2 prompts.
+    """
+    if round_num == 2 and cluster_context:
+        # Load persona-specific R2 prompt if member is provided, otherwise use generic
+        if member:
+            prompt_file_map = {
+                "axiom": PromptFile.TRIBUNAL_ROUND_2_AXIOM,
+                "concord": PromptFile.TRIBUNAL_ROUND_2_CONCORD,
+                "variance": PromptFile.TRIBUNAL_ROUND_2_VARIANCE,
+                "pragma": PromptFile.TRIBUNAL_ROUND_2_PRAGMA,
+                "nemesis": PromptFile.TRIBUNAL_ROUND_2_NEMESIS,
+            }
+            prompt_file = prompt_file_map.get(member.lower(), PromptFile.TRIBUNAL_GENERATOR_ROUND_2)
+        else:
+            prompt_file = PromptFile.TRIBUNAL_GENERATOR_ROUND_2
+        
+        template = load_prompt(prompt_file)
+        return template.format(
+            request=request,
+            guidelines=guidelines,
+            forbidden_patterns_message=forbidden_patterns_message,
+            command_constraints_message=command_constraints_message,
+            os=os,
+            shell=shell,
+            user_context=user_context,
+            working_directory=working_directory,
+            operator_context=operator_context_str,
+            cluster_context=cluster_context,
+        )
+    
     template = load_prompt(PromptFile.TRIBUNAL_GENERATOR)
     return template.format(
         request=request,
@@ -383,6 +421,78 @@ def build_tribunal_auditor_prompt(
     )
 
 
+def _build_system_context_section(
+    system_context: OperatorContext | list[OperatorContext],
+) -> str:
+    """Render the <system_context> block injected into the modular system prompt."""
+    system_parts = ["<system_context>"]
+
+    contexts_to_render = system_context if isinstance(system_context, list) else [system_context]
+
+    for idx, ctx in enumerate(contexts_to_render):
+        if not ctx:
+            continue
+
+        if len(contexts_to_render) > 1:
+            system_parts.append(f"<operator index=\"{idx}\">")
+
+        if ctx.operator_type:
+            if ctx.operator_type == OperatorType.CLOUD:
+                if ctx.cloud_subtype == CloudSubtype.G8E_POD:
+                    system_parts.append("Operator Type: g8ep Cloud Operator - Direct system access via G8E_POD")
+                elif ctx.cloud_subtype:
+                    system_parts.append(f"Operator Type: Cloud Operator for {ctx.cloud_subtype.upper()} - Least-privilege intent-based access")
+                else:
+                    logger.warning("[PROMPT] Cloud operator %s has no cloud_subtype set", ctx.operator_id)
+                    system_parts.append("Operator Type: Cloud Operator - Least-privilege intent-based access")
+                granted_intents = ctx.granted_intents or []
+                if granted_intents:
+                    system_parts.append(f"granted_intents: {granted_intents}")
+                else:
+                    system_parts.append("granted_intents: [] (bootstrap only - ask permission before using cloud APIs)")
+            else:
+                system_parts.append("Operator Type: Operator - Standard system access")
+
+        if ctx.os:
+            system_parts.append(f"OS: {ctx.os}")
+        if ctx.hostname:
+            system_parts.append(f"Hostname: {ctx.hostname}")
+        if ctx.username:
+            uid_suffix = f" (uid={ctx.uid})" if ctx.uid is not None else ""
+            system_parts.append(f"User: {ctx.username}{uid_suffix}")
+        if ctx.working_directory:
+            system_parts.append(f"Working Directory: {ctx.working_directory}")
+
+        if ctx.is_container:
+            container_runtime = ctx.container_runtime or ""
+            init_system = ctx.init_system or ""
+            system_parts.append(f"Container Environment: YES (runtime: {container_runtime})")
+            system_parts.append(f"Init System (PID 1): {init_system}")
+            if init_system != "systemd":
+                system_parts.append("WARNING: systemd is NOT available - do NOT use systemctl, journalctl, or other systemd commands")
+        elif ctx.init_system:
+            system_parts.append(f"Init System: {ctx.init_system}")
+
+        excluded_keys = {
+            "operator_id", "operator_session_id",
+            "os", "hostname", "username", "uid", "working_directory",
+            "operator_type", "cloud_subtype",
+            "is_cloud_operator", "granted_intents",
+            "is_container", "container_runtime", "init_system",
+        }
+        for key in type(ctx).model_fields:
+            if key not in excluded_keys:
+                value = getattr(ctx, key)
+                if value:
+                    system_parts.append(f"{key}: {value}")
+
+        if len(contexts_to_render) > 1:
+            system_parts.append("</operator>")
+
+    system_parts.append("</system_context>")
+    return "\n".join(system_parts) + "\n"
+
+
 def build_modular_system_prompt(
     operator_bound: bool,
     system_context: OperatorContext | list[OperatorContext] | None,
@@ -392,22 +502,36 @@ def build_modular_system_prompt(
     g8e_web_search_available: bool = True,
     triage_result: TriageResult | None = None,
     agent_name: AgentName | None = None,
-) -> str:
+) -> tuple[str, dict[str, int]]:
     """
     Build system prompt using modular architecture.
 
-    Section order (Gemini 3 best practices - context first, instructions last):
-      1. identity   — who the agent is
-      2. system_context (injected from operator(s))
-      3. sentinel_mode (if active)
-      4. triage_context (request_posture from Triage, if available)
-      5. investigation_context
-      6. learned_context (user + case memories)
-      7. safety     — absolute forbidden operations
-      8. loyalty    — mission-over-moment doctrine
-      9. dissent    — warning protocol, denial memory, escalation response
-      10. capabilities / execution / tools (mode-dependent)
-      11. response_constraints
+    Dash and Sage share this builder. Per the Tribunal GDD
+    (`.local.dev/dev/tribunal-game.md` §14.1), the GDD's interrogator
+    role ("Dash" in the doc) maps to the **triage** agent, not to the
+    code's `dash` agent. The code's `dash` is the fast-path responder
+    that plays the same game as Sage — same safety / loyalty / dissent
+    / mode / tools stack — just on the assistant model tier when triage
+    routes simple work to it. Only the persona block differs between
+    Sage and Dash.
+
+    Section order is optimized for llama.cpp prefix-cache reuse: the
+    shared platform-static block (safety/loyalty/dissent + mode files +
+    response constraints) appears first so it caches across every agent
+    that uses the same mode. The agent-specific persona follows, and
+    per-turn dynamic context is appended last.
+
+      1. safety     — absolute forbidden operations (static, shared)
+      2. loyalty    — mission-over-moment doctrine (static, shared)
+      3. dissent    — warning protocol, denial memory, escalation (static, shared)
+      4. capabilities / execution / tools — mode-dependent (static per mode)
+      5. response_constraints (static, shared)
+      6. identity / persona — per-agent (static per agent)
+      7. system_context (dynamic)
+      8. sentinel_mode (dynamic)
+      9. triage_context (dynamic)
+      10. investigation_context (dynamic)
+      11. learned_context (dynamic)
 
     Args:
         operator_bound: Whether Operator is connected for command execution
@@ -421,91 +545,81 @@ def build_modular_system_prompt(
                        the dissent protocol reads at inference time.
 
     Returns:
-        Complete system prompt string
+        Tuple of (complete system prompt string, context_sizes dict with character counts)
     """
-    sections = []
+    sections: list[str] = []
+    section_labels: list[str] = []
 
+    # ---------------------------------------------------------------------
+    # Shared static prefix (identical across every agent using the same
+    # mode, including Dash). Emitted first so llama.cpp / vLLM prefix
+    # caches hit across agent turns.
+    # ---------------------------------------------------------------------
+    sections.append(load_prompt(PromptFile.CORE_SAFETY))
+    section_labels.append(PromptSection.SAFETY)
+    sections.append(load_prompt(PromptFile.CORE_LOYALTY))
+    section_labels.append(PromptSection.LOYALTY)
+    sections.append(load_prompt(PromptFile.CORE_DISSENT))
+    section_labels.append(PromptSection.DISSENT)
+
+    # Determine if any operator is a cloud operator for mode selection
+    is_cloud_operator = False
+    if system_context:
+        if isinstance(system_context, list):
+            is_cloud_operator = any(ctx.is_cloud_operator for ctx in system_context if ctx)
+        else:
+            is_cloud_operator = system_context.is_cloud_operator
+
+    mode_prompts = load_mode_prompts(
+        operator_bound,
+        is_cloud_operator=is_cloud_operator,
+        g8e_web_search_available=g8e_web_search_available,
+    )
+
+    if mode_prompts.get(PromptSection.CAPABILITIES):
+        sections.append(mode_prompts[PromptSection.CAPABILITIES])
+        section_labels.append(PromptSection.CAPABILITIES)
+    if mode_prompts.get(PromptSection.EXECUTION):
+        sections.append(mode_prompts[PromptSection.EXECUTION])
+        section_labels.append(PromptSection.EXECUTION)
+    include_tools_section = bool(mode_prompts.get(PromptSection.TOOLS)) and (
+        operator_bound or g8e_web_search_available
+    )
+    logger.info(
+        "[PROMPT] tools_section: include=%s operator_bound=%s g8e_web_search_available=%s",
+        include_tools_section, operator_bound, g8e_web_search_available
+    )
+    if include_tools_section:
+        sections.append(mode_prompts[PromptSection.TOOLS])
+        section_labels.append(PromptSection.TOOLS)
+
+    response_constraints = build_response_constraints_section()
+    if response_constraints:
+        sections.append(response_constraints)
+        section_labels.append(PromptSection.RESPONSE_CONSTRAINTS)
+
+    # ---------------------------------------------------------------------
+    # Agent-specific identity (varies by agent). Placed after the shared
+    # static prefix so the shared prefix caches cleanly across agents.
+    # ---------------------------------------------------------------------
     if agent_name is not None:
         persona = get_agent_persona(agent_name.value).get_system_prompt()
         if persona:
             sections.append(persona)
+            section_labels.append(PromptSection.AGENT_PERSONA)
     else:
         sections.append(load_prompt(PromptFile.CORE_IDENTITY))
+        section_labels.append(PromptSection.IDENTITY)
 
-    # Context blocks first (Gemini 3 best practices)
+    # ---------------------------------------------------------------------
+    # Dynamic per-turn context (appended last so the static prefix caches).
+    # ---------------------------------------------------------------------
     if system_context:
-        system_parts = ["<system_context>"]
-
-        # Handle both single OperatorContext and list of OperatorContext
-        contexts_to_render = system_context if isinstance(system_context, list) else [system_context]
-        
-        for idx, ctx in enumerate(contexts_to_render):
-            if not ctx:
-                continue
-                
-            # Wrap each operator's context in operator tags for multi-operator scenarios
-            if len(contexts_to_render) > 1:
-                system_parts.append(f"<operator index=\"{idx}\">")
-            
-            if ctx.operator_type:
-                if ctx.operator_type == OperatorType.CLOUD:
-                    if ctx.cloud_subtype == CloudSubtype.G8E_POD:
-                        system_parts.append("Operator Type: g8ep Cloud Operator - Direct system access via G8E_POD")
-                    elif ctx.cloud_subtype:
-                        system_parts.append(f"Operator Type: Cloud Operator for {ctx.cloud_subtype.upper()} - Least-privilege intent-based access")
-                    else:
-                        logger.warning("[PROMPT] Cloud operator %s has no cloud_subtype set", ctx.operator_id)
-                        system_parts.append("Operator Type: Cloud Operator - Least-privilege intent-based access")
-                    granted_intents = ctx.granted_intents or []
-                    if granted_intents:
-                        system_parts.append(f"granted_intents: {granted_intents}")
-                    else:
-                        system_parts.append("granted_intents: [] (bootstrap only - ask permission before using cloud APIs)")
-                else:
-                    system_parts.append("Operator Type: Operator - Standard system access")
-
-            if ctx.os:
-                system_parts.append(f"OS: {ctx.os}")
-            if ctx.hostname:
-                system_parts.append(f"Hostname: {ctx.hostname}")
-            if ctx.username:
-                uid_suffix = f" (uid={ctx.uid})" if ctx.uid is not None else ""
-                system_parts.append(f"User: {ctx.username}{uid_suffix}")
-            if ctx.working_directory:
-                system_parts.append(f"Working Directory: {ctx.working_directory}")
-
-            if ctx.is_container:
-                container_runtime = ctx.container_runtime or ""
-                init_system = ctx.init_system or ""
-                system_parts.append(f"Container Environment: YES (runtime: {container_runtime})")
-                system_parts.append(f"Init System (PID 1): {init_system}")
-                if init_system != "systemd":
-                    system_parts.append("WARNING: systemd is NOT available - do NOT use systemctl, journalctl, or other systemd commands")
-            elif ctx.init_system:
-                system_parts.append(f"Init System: {ctx.init_system}")
-
-            excluded_keys = {
-                "operator_id", "operator_session_id",
-                "os", "hostname", "username", "uid", "working_directory",
-                "operator_type", "cloud_subtype",
-                "is_cloud_operator", "granted_intents",
-                "is_container", "container_runtime", "init_system",
-            }
-            for key in type(ctx).model_fields:
-                if key not in excluded_keys:
-                    value = getattr(ctx, key)
-                    if value:
-                        system_parts.append(f"{key}: {value}")
-            
-            # Close operator tags for multi-operator scenarios
-            if len(contexts_to_render) > 1:
-                system_parts.append("</operator>")
-
-        system_parts.append("</system_context>")
-        system_context_str = "\n".join(system_parts) + "\n"
+        system_context_str = _build_system_context_section(system_context)
         sections.append(system_context_str)
-        
-        # Log the system context being injected
+        section_labels.append(PromptSection.SYSTEM_CONTEXT)
+
+        contexts_to_render = system_context if isinstance(system_context, list) else [system_context]
         logger.info(
             "[PROMPT] system_context injected: operator_count=%d context_len=%d username=%s uid=%s hostname=%s os=%s",
             len(contexts_to_render),
@@ -519,83 +633,26 @@ def build_modular_system_prompt(
 
     if investigation and investigation.sentinel_mode is True:
         sections.append(load_prompt(PromptFile.SYSTEM_SENTINEL_MODE))
+        section_labels.append(PromptSection.SENTINEL_MODE)
 
     triage_section = build_triage_context_section(triage_result)
     if triage_section:
         sections.append(triage_section)
+        section_labels.append(PromptSection.TRIAGE_CONTEXT)
 
     if investigation:
         investigation_section = build_investigation_context_section(investigation)
         if investigation_section:
             sections.append(investigation_section)
+            section_labels.append(PromptSection.INVESTIGATION_CONTEXT)
 
     if user_memories or case_memories:
         learned_section = build_learned_context_section(user_memories, case_memories)
         if learned_section:
             sections.append(learned_section)
-
-    # Safety and execution instructions at the end (Gemini 3 best practices)
-    sections.append(load_prompt(PromptFile.CORE_SAFETY))
-    sections.append(load_prompt(PromptFile.CORE_LOYALTY))
-    sections.append(load_prompt(PromptFile.CORE_DISSENT))
-
-    # Determine if any operator is a cloud operator for mode selection
-    is_cloud_operator = False
-    if system_context:
-        if isinstance(system_context, list):
-            is_cloud_operator = any(ctx.is_cloud_operator for ctx in system_context if ctx)
-        else:
-            is_cloud_operator = system_context.is_cloud_operator
-    
-    mode_prompts = load_mode_prompts(
-        operator_bound,
-        is_cloud_operator=is_cloud_operator,
-        g8e_web_search_available=g8e_web_search_available,
-    )
-
-    if mode_prompts.get(PromptSection.CAPABILITIES):
-        sections.append(mode_prompts[PromptSection.CAPABILITIES])
-    if mode_prompts.get(PromptSection.EXECUTION):
-        sections.append(mode_prompts[PromptSection.EXECUTION])
-    include_tools_section = bool(mode_prompts.get(PromptSection.TOOLS)) and (
-        operator_bound or g8e_web_search_available
-    )
-    logger.info(
-        "[PROMPT] tools_section: include=%s operator_bound=%s g8e_web_search_available=%s",
-        include_tools_section, operator_bound, g8e_web_search_available
-    )
-    if include_tools_section:
-        sections.append(mode_prompts[PromptSection.TOOLS])
-
-    response_constraints = build_response_constraints_section()
-    if response_constraints:
-        sections.append(response_constraints)
+            section_labels.append(PromptSection.LEARNED_CONTEXT)
 
     full_prompt = "\n".join(sections)
-
-    section_labels = [
-        PromptSection.IDENTITY,
-        PromptSection.SAFETY,
-        PromptSection.LOYALTY,
-        PromptSection.DISSENT,
-    ]
-    if mode_prompts.get(PromptSection.CAPABILITIES):
-        section_labels.append(PromptSection.CAPABILITIES)
-    if mode_prompts.get(PromptSection.EXECUTION):
-        section_labels.append(PromptSection.EXECUTION)
-    if include_tools_section:
-        section_labels.append(PromptSection.TOOLS)
-    if system_context:
-        section_labels.append(PromptSection.SYSTEM_CONTEXT)
-    if investigation and investigation.sentinel_mode is True:
-        section_labels.append(PromptSection.SENTINEL_MODE)
-    if triage_section:
-        section_labels.append(PromptSection.TRIAGE_CONTEXT)
-    if investigation:
-        section_labels.append(PromptSection.INVESTIGATION_CONTEXT)
-    section_labels.append(PromptSection.RESPONSE_CONSTRAINTS)
-    if user_memories or case_memories:
-        section_labels.append(PromptSection.LEARNED_CONTEXT)
 
     logger.info(
         "[PROMPT] sections=%d total_chars=%d operator_bound=%s sections=[%s]",
@@ -605,4 +662,9 @@ def build_modular_system_prompt(
         logger.info("[PROMPT] section=%-24s chars=%d", label, len(section))
     logger.info("[PROMPT] full_prompt:\n%s", full_prompt)
 
-    return full_prompt
+    context_sizes = {
+        label: len(section) for label, section in zip(section_labels, sections)
+    }
+    context_sizes["total"] = len(full_prompt)
+
+    return full_prompt, context_sizes

@@ -46,6 +46,8 @@ from .provider import LLMProvider as LLMProviderBase
 from .providers.open_ai import OpenAIProvider
 from .providers.gemini import GeminiProvider
 from .providers.anthropic import AnthropicProvider
+from .providers.llama_cpp import LlamaCppProvider
+from .providers.g8el import G8elProvider
 
 logger = logging.getLogger(__name__)
 
@@ -88,10 +90,16 @@ def get_search_settings() -> SearchSettings | None:
     return _search_settings
 
 
-def _get_provider_cache_key(settings: LLMSettings, is_assistant: bool) -> str:
+def _get_provider_cache_key(settings: LLMSettings, is_assistant: bool = False, is_lite: bool = False) -> str:
     """Generate a cache key for provider instances based on configuration."""
-    provider_type: LLMProvider = settings.assistant_provider if is_assistant else settings.primary_provider
-    provider_value = provider_type.value
+    if is_lite:
+        provider_type = settings.lite_provider
+    elif is_assistant:
+        provider_type = settings.assistant_provider
+    else:
+        provider_type = settings.primary_provider
+    
+    provider_value = provider_type.value if provider_type else "none"
     key_parts = [provider_value]
 
     if provider_value == LLMProvider.GEMINI.value:
@@ -106,6 +114,14 @@ def _get_provider_cache_key(settings: LLMSettings, is_assistant: bool) -> str:
         from .providers.ollama import _normalize_ollama_host
         key_parts.append(_normalize_ollama_host(settings.ollama_endpoint or ""))
         key_parts.append(settings.ollama_api_key or "")
+    elif provider_value == LLMProvider.LLAMACPP.value:
+        from .providers.ollama import _normalize_ollama_host
+        key_parts.append(_normalize_ollama_host(settings.llamacpp_endpoint or ""))
+        key_parts.append(settings.llamacpp_api_key or "")
+    elif provider_value == LLMProvider.G8EL.value:
+        from .providers.ollama import _normalize_ollama_host
+        key_parts.append(_normalize_ollama_host(settings.g8el_endpoint or ""))
+        key_parts.append(settings.g8el_api_key or "")
 
     return "|".join(key_parts)
 
@@ -129,7 +145,7 @@ def reset_settings() -> None:
     _search_settings = None
 
 
-def get_llm_provider(settings: LLMSettings, is_assistant: bool = False) -> LLMProviderBase:
+def get_llm_provider(settings: LLMSettings, is_assistant: bool = False, is_lite: bool = False) -> LLMProviderBase:
     """Return a configured LLMProvider instance based on settings.
 
     SSL strategy:
@@ -144,11 +160,16 @@ def get_llm_provider(settings: LLMSettings, is_assistant: bool = False) -> LLMPr
     """
     from app.errors import ConfigurationError
 
-    cache_key = _get_provider_cache_key(settings, is_assistant)
+    cache_key = _get_provider_cache_key(settings, is_assistant, is_lite)
     if cache_key in _provider_cache:
         return _provider_cache[cache_key]
 
-    provider_type = settings.assistant_provider if is_assistant else settings.primary_provider
+    if is_lite:
+        provider_type = settings.lite_provider
+    elif is_assistant:
+        provider_type = settings.assistant_provider
+    else:
+        provider_type = settings.primary_provider
 
     if provider_type == LLMProvider.OLLAMA:
         from .providers.ollama import OllamaProvider
@@ -167,6 +188,16 @@ def get_llm_provider(settings: LLMSettings, is_assistant: bool = False) -> LLMPr
         provider = AnthropicProvider(
             endpoint=settings.anthropic_endpoint,
             api_key=settings.anthropic_api_key,
+        )
+    elif provider_type == LLMProvider.LLAMACPP:
+        provider = LlamaCppProvider(
+            endpoint=settings.llamacpp_endpoint,
+            api_key=settings.llamacpp_api_key,
+        )
+    elif provider_type == LLMProvider.G8EL:
+        provider = G8elProvider(
+            endpoint=settings.g8el_endpoint,
+            api_key=settings.g8el_api_key,
         )
     else:
         raise ConfigurationError(f"Unsupported LLM provider: {provider_type}")
