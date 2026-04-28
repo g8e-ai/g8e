@@ -71,12 +71,11 @@ describe('Fixture Data Validation', () => {
             }
         });
 
-        it('should have SystemInfo instances where present', () => {
-            const operatorsWithSystemInfo = ['claimed', 'stale', 'differentUser', 'activeOperator'];
-            for (const key of operatorsWithSystemInfo) {
+        it('should have latest_heartbeat_snapshot where present', () => {
+            const operatorsWithHeartbeat = ['claimed', 'stale', 'differentUser', 'activeOperator'];
+            for (const key of operatorsWithHeartbeat) {
                 const operator = mockOperators[key];
-                expect(operator.system_info, `${key} missing system_info`).toBeDefined();
-                expect(operator.system_info.constructor.name).toBe('SystemInfo');
+                expect(operator.latest_heartbeat_snapshot, `${key} missing latest_heartbeat_snapshot`).toBeDefined();
             }
         });
     });

@@ -17,14 +17,15 @@ import request from 'supertest';
 import { createOperatorApprovalRouter } from '@g8ed/routes/operator/operator_approval_routes.js';
 import { OperatorApprovalPaths } from '@g8ed/constants/api_paths.js';
 import { OperatorRelayService } from '@g8ed/services/operator/operator_relay_service.js';
-import { globalContextMiddleware } from '@g8ed/middleware/context.js';
+import { contextMiddleware } from '@g8ed/middleware/context.js';
 
 vi.mock('@g8ed/services/operator/operator_relay_service.js', () => ({
     OperatorRelayService: vi.fn(function () {
         Object.assign(this, {
             relayApprovalResponseToG8ee: vi.fn(),
             relayDirectCommandToG8ee: vi.fn(),
-            relayPendingApprovalsFromG8ee: vi.fn()
+            relayPendingApprovalsFromG8ee: vi.fn(),
+            relayValidateOperatorSessionToG8ee: vi.fn()
         });
     })
 }));
@@ -86,7 +87,7 @@ describe('OperatorApprovalRoutes Unit Tests', () => {
 
         app = express();
         app.use(express.json());
-        app.use(globalContextMiddleware);
+        app.use(contextMiddleware);
         app.use('/api/operator/approval', router);
     });
 
@@ -196,6 +197,7 @@ describe('OperatorApprovalRoutes Unit Tests', () => {
             mockBindingService.getBoundOperatorSessionIds.mockResolvedValue(['test-op-session-id']);
             mockOperatorSessionService.validateSession.mockResolvedValue({ operator_id: 'test-op-id' });
             mockBindingService.resolveBoundOperators.mockResolvedValue([{ operator_id: 'test-op-id' }]);
+            mockRelay.relayValidateOperatorSessionToG8ee.mockResolvedValue({ success: true, valid: true, operator_id: 'test-op-id' });
             mockRelay.relayDirectCommandToG8ee.mockResolvedValue({ success: true });
 
             const res = await request(app)

@@ -42,7 +42,7 @@ import { createAuditRouter } from './routes/platform/audit_routes.js';
 import { createConsoleRouter } from './routes/platform/console_routes.js';
 import { createSettingsRouter } from './routes/platform/settings_routes.js';
 import { createSystemRouter } from './routes/platform/system_routes.js';
-import { LLMProvider, PROVIDER_MODELS } from './constants/ai.js';
+import { LLMProvider, PROVIDER_MODELS, PROVIDER_DEFAULT_MODELS } from './constants/ai.js';
 import { createOperatorRouter } from './routes/operator/operator_routes.js';
 import { createOperatorApprovalRouter } from './routes/operator/operator_approval_routes.js';
 import { createOperatorAuthRouter } from './routes/operator/operator_auth_routes.js';
@@ -51,7 +51,7 @@ import { createBindOperatorsRouter } from './routes/operator/operator_bind_route
 import { createOperatorApiKeyRouter } from './routes/operator/operator_api_key_routes.js';
 
 import { cspNonce } from './middleware/csp_nonce.js';
-import { globalContextMiddleware } from './middleware/context.js';
+import { contextMiddleware } from './middleware/context.js';
 
 import { 
     HTTP_CONTENT_TYPE_HEADER,
@@ -196,8 +196,12 @@ export function createG8edApp({
     app.use(express.urlencoded({ extended: true, limit: bodyLimit }));
     app.use(cookieParser());
 
-    // Global context middleware (lazy evaluated g8eContext)
-    app.use(globalContextMiddleware);
+    // Operator auth router (uses Bearer token auth, not web session)
+    app.use(BasePaths.AUTH, createOperatorAuthRouter({ 
+        services,
+        rateLimiters,
+        requestTimestampMiddleware
+    }));
 
     // Asset version and theme middleware
     app.use((req, res, next) => {
@@ -284,71 +288,71 @@ function mountRoutes(app, {
     const { requirePageAuth, requirePageAdmin, optionalAuth } = authMiddleware;
 
     // Platform Routes
-    app.use(BasePaths.HEALTH, createHealthRouter({ 
+    app.use(BasePaths.HEALTH, contextMiddleware, createHealthRouter({ 
         services,
         authorizationMiddleware 
     }));
     
-    app.use(BasePaths.CHAT, createChatRouter({
+    app.use(BasePaths.CHAT, contextMiddleware, createChatRouter({
         services,
         authMiddleware,
         authorizationMiddleware,
         rateLimiters
     }));
 
-    app.use(BasePaths.USER, createUserRouter({ 
+    app.use(BasePaths.USER, contextMiddleware, createUserRouter({ 
         services,
         authMiddleware 
     }));
 
-    app.use(BasePaths.METRICS, createMetricsRouter({ 
+    app.use(BasePaths.METRICS, contextMiddleware, createMetricsRouter({ 
         services,
         authorizationMiddleware 
     }));
 
-    app.use(BasePaths.AUDIT, createAuditRouter({
+    app.use(BasePaths.AUDIT, contextMiddleware, createAuditRouter({
         services,
         authMiddleware,
         rateLimiters
     }));
 
-    app.use(BasePaths.CONSOLE, createConsoleRouter({
+    app.use(BasePaths.CONSOLE, contextMiddleware, createConsoleRouter({
         services,
         authMiddleware,
         rateLimiters
     }));
 
-    app.use(BasePaths.SETTINGS, createSettingsRouter({
+    app.use(BasePaths.SETTINGS, contextMiddleware, createSettingsRouter({
         services,
         authMiddleware,
         rateLimiters
     }));
 
-    app.use(BasePaths.SYSTEM, createSystemRouter({
+    app.use(BasePaths.SYSTEM, contextMiddleware, createSystemRouter({
         services,
         authMiddleware,
         rateLimiters
     }));
 
-    app.use(BasePaths.SSE, createSSERouter({
+    app.use(BasePaths.SSE, contextMiddleware, createSSERouter({
         services,
         authMiddleware,
         authorizationMiddleware,
         rateLimiters
     }));
 
-    app.use(BasePaths.DOCS, createDocsRouter({ 
+    app.use(BasePaths.DOCS, contextMiddleware, createDocsRouter({ 
         services,
         authMiddleware 
     }));
 
     // Auth Routes
-    app.use(BasePaths.AUTH, createAuthRouter({ 
+    app.use(BasePaths.AUTH, contextMiddleware, createAuthRouter({ 
         services,
         authMiddleware
     }));
 
-    app.use(BasePaths.AUTH_PASSKEY, createPasskeyRouter({ 
+    app.use(BasePaths.AUTH_PASSKEY, contextMiddleware, createPasskeyRouter({ 
         services,
         authMiddleware
     }));
@@ -358,57 +362,51 @@ function mountRoutes(app, {
         authMiddleware,
         rateLimiters
     });
-    app.use(BasePaths.AUTH, deviceLinkRoutes.authRouter);
-    app.use(BasePaths.DEVICE_LINKS, deviceLinkRoutes.deviceLinkRouter);
-    app.use(BasePaths.AUTH_LINK, deviceLinkRoutes.registerRouter);
+    app.use(BasePaths.AUTH, contextMiddleware, deviceLinkRoutes.authRouter);
+    app.use(BasePaths.DEVICE_LINKS, contextMiddleware, deviceLinkRoutes.deviceLinkRouter);
+    app.use(BasePaths.AUTH_LINK, contextMiddleware, deviceLinkRoutes.registerRouter);
 
     const landingRouter = createLandingRouter({
         services
     });
-    app.use('/', landingRouter);
+    app.use('/', contextMiddleware, landingRouter);
 
     const setupRouterInstance = createSetupRouter({
         services
     });
-    app.use('/', setupRouterInstance);
+    app.use('/', contextMiddleware, setupRouterInstance);
 
     // Operator Routes
-    app.use(BasePaths.OPERATOR, createOperatorRouter({ 
+    app.use(BasePaths.OPERATOR, contextMiddleware, createOperatorRouter({ 
         services,
         authorizationMiddleware 
     }));
 
-    app.use(BasePaths.OPERATOR_APPROVAL, createOperatorApprovalRouter({ 
+    app.use(BasePaths.OPERATOR_APPROVAL, contextMiddleware, createOperatorApprovalRouter({ 
         services,
         authMiddleware,
         rateLimiters
     }));
 
-    app.use(BasePaths.AUTH, createOperatorAuthRouter({ 
-        services,
-        rateLimiters,
-        requestTimestampMiddleware
-    }));
-
-    app.use(BasePaths.OPERATOR_API, createOperatorStatusRouter({
+    app.use(BasePaths.OPERATOR_API, contextMiddleware, createOperatorStatusRouter({
         services,
         authMiddleware,
         authorizationMiddleware
     }));
 
-    app.use(BasePaths.OPERATOR_API, createBindOperatorsRouter({
+    app.use(BasePaths.OPERATOR_API, contextMiddleware, createBindOperatorsRouter({
         services,
         authMiddleware
     }));
 
-    app.use(BasePaths.OPERATOR_API, createOperatorApiKeyRouter({
+    app.use(BasePaths.OPERATOR_API, contextMiddleware, createOperatorApiKeyRouter({
         services,
         authMiddleware,
         authorizationMiddleware
     }));
 
     // Internal Routes
-    app.use(BasePaths.INTERNAL, createInternalRouter({
+    app.use(BasePaths.INTERNAL, contextMiddleware, createInternalRouter({
         services,
         authorizationMiddleware
     }));
@@ -425,29 +423,30 @@ function mountRoutes(app, {
             }
         };
 
-        app.get('/chat', requirePageAuth({ onFail: 'redirect', redirectTo: '/' }), async (req, res) => {
+        app.get('/chat', requirePageAuth({ onFail: 'redirect', redirectTo: '/' }), contextMiddleware, async (req, res) => {
             res.render('chat', { devLogsEnabled: await withDevLogs(req) });
         });
 
-        app.get('/docs', optionalAuth, async (req, res) => {
+        app.get('/docs', optionalAuth, contextMiddleware, async (req, res) => {
             res.render('docs', { devLogsEnabled: await withDevLogs(req) });
         });
 
-        app.get('/settings', requirePageAdmin(), async (req, res) => {
+        app.get('/settings', requirePageAdmin(), contextMiddleware, async (req, res) => {
             res.render('settings', {
                 devLogsEnabled: await withDevLogs(req),
                 llmCatalog: {
                     providers: LLMProvider,
                     providerModels: PROVIDER_MODELS,
+                    providerDefaultModels: PROVIDER_DEFAULT_MODELS,
                 },
             });
         });
 
-        app.get('/console', requirePageAdmin(), async (req, res) => {
+        app.get('/console', requirePageAdmin(), contextMiddleware, async (req, res) => {
             res.render('console', { devLogsEnabled: await withDevLogs(req) });
         });
 
-        app.get('/audit', requirePageAuth(), rateLimiters.auditRateLimiter, async (req, res) => {
+        app.get('/audit', requirePageAuth(), rateLimiters.auditRateLimiter, contextMiddleware, async (req, res) => {
             res.render('audit', { devLogsEnabled: await withDevLogs(req) });
         });
     }

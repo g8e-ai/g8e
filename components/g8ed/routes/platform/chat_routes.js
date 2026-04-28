@@ -172,6 +172,53 @@ export function createChatRouter({
         }
     });
 
+    router.post(ChatPaths.TRIAGE_ANSWER, requireAuth, requireOperatorBinding, apiRateLimiter, async (req, res, next) => {
+        try {
+            logger.info('[HTTP] Recording triage answer via g8ee', {
+                investigationId: req.body.investigation_id,
+                questionIndex: req.body.question_index,
+                answer: req.body.answer,
+                webSessionId: redactWebSessionId(req.webSessionId)
+            });
+
+            const response = await internalHttpClient.recordTriageAnswer(req.body, req.g8eContext);
+            res.json(response);
+        } catch (error) {
+            logger.error('[HTTP] Triage answer failed', { error: error.message });
+            res.status(500).json(new ErrorResponse({ error: error.message }).forClient());
+        }
+    });
+
+    router.post(ChatPaths.TRIAGE_SKIP, requireAuth, requireOperatorBinding, apiRateLimiter, async (req, res, next) => {
+        try {
+            logger.info('[HTTP] Skipping triage questions via g8ee', {
+                investigationId: req.body.investigation_id,
+                webSessionId: redactWebSessionId(req.webSessionId)
+            });
+
+            const response = await internalHttpClient.skipTriageQuestions(req.body, req.g8eContext);
+            res.json(response);
+        } catch (error) {
+            logger.error('[HTTP] Triage skip failed', { error: error.message });
+            res.status(500).json(new ErrorResponse({ error: error.message }).forClient());
+        }
+    });
+
+    router.post(ChatPaths.TRIAGE_TIMEOUT, requireAuth, requireOperatorBinding, apiRateLimiter, async (req, res, next) => {
+        try {
+            logger.info('[HTTP] Recording triage timeout via g8ee', {
+                investigationId: req.body.investigation_id,
+                webSessionId: redactWebSessionId(req.webSessionId)
+            });
+
+            const response = await internalHttpClient.timeoutTriageQuestions(req.body, req.g8eContext);
+            res.json(response);
+        } catch (error) {
+            logger.error('[HTTP] Triage timeout failed', { error: error.message });
+            res.status(500).json(new ErrorResponse({ error: error.message }).forClient());
+        }
+    });
+
     router.delete(ChatPaths.CASES, requireAuth, requireOperatorBinding, apiRateLimiter, async (req, res, next) => {
         try {
             logger.info('[HTTP] Deleting case via g8ee', {

@@ -39,6 +39,8 @@ Usage:
     python manage-g8es.py audit --volume g8es-data sessions
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import os
@@ -48,7 +50,7 @@ import subprocess
 import sys
 import tempfile
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from _lib import print_banner
 
@@ -65,14 +67,14 @@ class LFAAManager:
     Supports direct path, Docker container copy, and Docker volume access.
     """
 
-    def __init__(self, db_path: Optional[str], container: Optional[str],
-                 volume: Optional[str]):
+    def __init__(self, db_path: str | None, container: str | None,
+                 volume: str | None):
         self._db_path = db_path
         self._container = container
         self._volume = volume
-        self._conn: Optional[sqlite3.Connection] = None
-        self._temp_dir: Optional[str] = None
-        self._local_db_path: Optional[str] = None
+        self._conn: sqlite3.Connection | None = None
+        self._temp_dir: str | None = None
+        self._local_db_path: str | None = None
 
     @property
     def conn(self) -> sqlite3.Connection:
@@ -191,7 +193,7 @@ class LFAAManager:
         if self._temp_dir:
             shutil.rmtree(self._temp_dir, ignore_errors=True)
 
-    def _fmt_ts(self, ts: Optional[str]) -> str:
+    def _fmt_ts(self, ts: str | None) -> str:
         if not ts:
             return 'N/A'
         return ts[:19].replace('T', ' ')
@@ -253,7 +255,7 @@ class LFAAManager:
         print()
         return [dict(r) for r in rows]
 
-    def get_session(self, web_session_id: str) -> Optional[Dict]:
+    def get_session(self, web_session_id: str) -> Dict | None:
         row = self.conn.execute(
             'SELECT id, title, created_at, user_identity FROM sessions WHERE id = ?',
             (web_session_id,)
@@ -281,7 +283,7 @@ class LFAAManager:
         return dict(row)
 
     def list_events(self, web_session_id: str, limit: int = 50, offset: int = 0,
-                    event_type: Optional[str] = None) -> List[Dict]:
+                    event_type: str | None = None) -> List[Dict]:
         if event_type and event_type not in EVENT_TYPES:
             print(f'Invalid event type: {event_type}. Valid: {EVENT_TYPES}')
             return []
@@ -319,7 +321,7 @@ class LFAAManager:
         print()
         return [dict(r) for r in rows]
 
-    def get_event(self, event_id: int) -> Optional[Dict]:
+    def get_event(self, event_id: int) -> Dict | None:
         row = self.conn.execute(
             'SELECT id, web_session_id, timestamp, type, content_text, command_raw, '
             'command_exit_code, command_stdout, command_stderr, execution_duration_ms, '
@@ -376,8 +378,8 @@ class LFAAManager:
         print(f'{"=" * 80}\n')
         return dict(row)
 
-    def list_file_mutations(self, web_session_id: Optional[str],
-                            filepath: Optional[str], limit: int = 50) -> List[Dict]:
+    def list_file_mutations(self, web_session_id: str | None,
+                            filepath: str | None, limit: int = 50) -> List[Dict]:
         where_clauses = []
         params: List[Any] = []
         if web_session_id:
@@ -476,7 +478,7 @@ class LFAAManager:
             'db_size_bytes': db_size_bytes,
         }
 
-    def export_session(self, web_session_id: str, output_path: Optional[str],
+    def export_session(self, web_session_id: str, output_path: str | None,
                        fmt: str = 'json') -> None:
         session = self.conn.execute(
             'SELECT id, title, created_at, user_identity FROM sessions WHERE id = ?',

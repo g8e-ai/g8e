@@ -60,7 +60,6 @@ describe('Initialization Service', () => {
                 // Verify all key singletons are available
                 expect(initialization.getCacheAsideService()).toBeDefined();
                 expect(initialization.getWebSessionService()).toBeDefined();
-                expect(initialization.getOperatorSessionService()).toBeDefined();
                 expect(initialization.getUserService()).toBeDefined();
                 expect(initialization.getOperatorService()).toBeDefined();
                 expect(initialization.getSettingsService()).toBeDefined();
@@ -86,7 +85,6 @@ describe('Initialization Service', () => {
                     pubSubClient: initialization.getPubSubClient(),
                     cacheAsideService: initialization.getCacheAsideService(),
                     webSessionService: initialization.getWebSessionService(),
-                    operatorSessionService: initialization.getOperatorSessionService(),
                     bindingService: initialization.getBindingService(),
                     apiKeyService: initialization.getApiKeyService(),
                     userService: initialization.getUserService(),
@@ -102,7 +100,6 @@ describe('Initialization Service', () => {
                     settingsService: initialization.getSettingsService(),
                     consoleMetricsService: initialization.getConsoleMetricsService(),
                     bindOperatorsService: initialization.getBindOperatorsService(),
-                    operatorAuthService: initialization.getOperatorAuthService(),
                     g8eNodeOperatorService: initialization.getG8ENodeOperatorService(),
                     postLoginService: initialization.getPostLoginService(),
                     auditService: initialization.getAuditService(),
@@ -132,7 +129,6 @@ describe('Initialization Service', () => {
                 expect(initialization.getApiKeyDataService()).toBeDefined();
                 expect(initialization.getOperatorDataService()).toBeDefined();
                 expect(initialization.getDeviceRegistrationService()).toBeDefined();
-                expect(initialization.getSessionAuthListener()).toBeDefined();
             } catch (error) {
                 // g8es not available in test environment - skip this test
                 console.log('Skipping additional services test - g8es not available');
@@ -141,7 +137,7 @@ describe('Initialization Service', () => {
     });
 
     describe('Accessors throw before initialization', () => {
-        it('should throw for all 28 accessor functions when called before init', () => {
+        it('should throw for all 26 accessor functions when called before init', () => {
             initialization.resetInitialization();
 
             const accessors = [
@@ -151,7 +147,6 @@ describe('Initialization Service', () => {
                 () => initialization.getPubSubClient(),
                 () => initialization.getCacheAsideService(),
                 () => initialization.getWebSessionService(),
-                () => initialization.getOperatorSessionService(),
                 () => initialization.getBindingService(),
                 () => initialization.getApiKeyService(),
                 () => initialization.getUserService(),
@@ -168,11 +163,9 @@ describe('Initialization Service', () => {
                 () => initialization.getSettingsService(),
                 () => initialization.getConsoleMetricsService(),
                 () => initialization.getBindOperatorsService(),
-                () => initialization.getOperatorAuthService(),
                 () => initialization.getG8ENodeOperatorService(),
                 () => initialization.getPostLoginService(),
                 () => initialization.getDeviceRegistrationService(),
-                () => initialization.getSessionAuthListener(),
                 () => initialization.getAuditService(),
                 () => initialization.getSetupService(),
                 () => initialization.getG8esBlobClient(),

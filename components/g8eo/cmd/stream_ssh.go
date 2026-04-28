@@ -265,21 +265,34 @@ func buildAuthMethods(r resolvedHost, sshAuthSock string) []ssh.AuthMethod {
 	return methods
 }
 
-// buildHostKeyCallback returns a host-key callback. Uses known_hosts when
-// available; falls back to InsecureIgnoreHostKey with a warning when not.
-func buildHostKeyCallback(sshConfigPath string) ssh.HostKeyCallback {
-	home, _ := os.UserHomeDir()
-	khPath := filepath.Join(home, ".ssh", "known_hosts")
-	if _, err := os.Stat(khPath); err == nil {
-		cb, err := knownhosts.New(khPath)
-		if err == nil {
-			return cb
+// buildHostKeyCallback returns a strict known_hosts-backed host-key callback.
+//
+// Strict-only by design: there is no accept-new fallback. The caller MUST have
+// pre-populated ~/.ssh/known_hosts (or set G8E_KNOWN_HOSTS) with every target
+// host's key. Any unknown host fails the SSH handshake immediately. Any I/O
+// error reading the file is returned to the caller, which surfaces it as a
+// per-host streamResult failure rather than silently degrading security.
+func buildHostKeyCallback() (ssh.HostKeyCallback, error) {
+	khPath := os.Getenv("G8E_KNOWN_HOSTS")
+	if khPath == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("resolve home directory for known_hosts: %w", err)
 		}
+		khPath = filepath.Join(home, ".ssh", "known_hosts")
 	}
-	// Accept new host keys (same behaviour as StrictHostKeyChecking=accept-new)
-	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
-		return nil
+	if _, err := os.Stat(khPath); err != nil {
+		return nil, fmt.Errorf(
+			"known_hosts not found at %s: strict host-key checking requires every target "+
+				"to be pre-trusted; populate it (e.g. ssh-keyscan) before streaming",
+			khPath,
+		)
 	}
+	cb, err := knownhosts.New(khPath)
+	if err != nil {
+		return nil, fmt.Errorf("parse known_hosts at %s: %w", khPath, err)
+	}
+	return cb, nil
 }
 
 // streamToHost injects the binary into one remote host via SSH and optionally
@@ -323,7 +336,11 @@ func streamToHost(
 		return
 	}
 
-	hostKeyCallback := buildHostKeyCallback(sshConfigPath)
+	hostKeyCallback, cbErr := buildHostKeyCallback()
+	if cbErr != nil {
+		emit(constants.StreamStatusFailed, cbErr.Error())
+		return
+	}
 
 	clientConfig := &ssh.ClientConfig{
 		User:            r.user,

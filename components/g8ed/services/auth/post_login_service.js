@@ -14,6 +14,8 @@
 import { logger } from '../../utils/logger.js';
 import { SESSION_COOKIE_NAME, COOKIE_SAME_SITE, SESSION_TTL_SECONDS } from '../../constants/session.js';
 import { getCookieDomain } from '../../utils/security.js';
+import { EventType } from '../../constants/events.js';
+import { OperatorSlotInitializationFailedEvent, OperatorG8EPActivationFailedEvent } from '../../models/sse_models.js';
 
 export class PostLoginService {
     /**
@@ -23,13 +25,17 @@ export class PostLoginService {
      * @param {Object} options.userService - UserService instance
      * @param {Object} options.operatorService - OperatorDataService instance
      * @param {Object} options.g8eNodeOperatorService - G8ENodeOperatorService instance
+     * @param {Object} options.sseService - SSEService instance
+     * @param {Object} options.consoleMetricsService - ConsoleMetricsService instance
      */
-    constructor({ webSessionService, apiKeyService, userService, operatorService, g8eNodeOperatorService }) {
+    constructor({ webSessionService, apiKeyService, userService, operatorService, g8eNodeOperatorService, sseService, consoleMetricsService }) {
         this.webSessionService = webSessionService;
         this.apiKeyService = apiKeyService;
         this.userService = userService;
         this.operatorService = operatorService;
         this.g8eNodeOperatorService = g8eNodeOperatorService;
+        this.sseService = sseService;
+        this.consoleMetricsService = consoleMetricsService;
     }
 
     async createSessionAndSetCookie(req, res, user) {
@@ -80,23 +86,73 @@ export class PostLoginService {
 
     async onSuccessfulRegistration(user, session) {
         this._initializeSlotsAndActivateG8eNode(user, session, 'registration').catch(err => {
-            logger.error('[POST-LOGIN] post-registration operator setup failed', { userId: user.id, error: err.message });
+            logger.error('[POST-LOGIN] post-registration operator setup failed', { userId: user.id, error: err.message, stack: err.stack });
+            this._handleSlotInitFailure(user, session, err, 'registration');
         });
     }
 
     async onSuccessfulLogin(user, session) {
         this._initializeSlotsAndActivateG8eNode(user, session, 'login').catch(err => {
-            logger.error('[POST-LOGIN] post-login operator setup failed', { userId: user.id, error: err.message });
+            logger.error('[POST-LOGIN] post-login operator setup failed', { userId: user.id, error: err.message, stack: err.stack });
+            this._handleSlotInitFailure(user, session, err, 'login');
         });
     }
 
     async _initializeSlotsAndActivateG8eNode(user, session, context) {
-        await this.operatorService.initializeOperatorSlots(user.id, user.organization_id || user.id);
+        await this.operatorService.initializeOperatorSlots(
+            user.id,
+            user.organization_id || user.id,
+            session.id
+        );
 
         await this.g8eNodeOperatorService.activateG8ENodeOperatorForUser(
             user.id,
             user.organization_id || null,
             session.id
         );
+    }
+
+    async _handleSlotInitFailure(user, session, error, context) {
+        try {
+            const errorContext = error.message;
+            
+            if (errorContext.includes('slot') || errorContext.includes('initializeOperatorSlots')) {
+                const event = OperatorSlotInitializationFailedEvent.parse({
+                    type: EventType.OPERATOR_SLOT_INITIALIZATION_FAILED,
+                    data: {
+                        user_id: user.id,
+                        error: error.message,
+                        context: context
+                    }
+                });
+                await this.sseService.publishEvent(session.id, event);
+            } else {
+                const event = OperatorG8EPActivationFailedEvent.parse({
+                    type: EventType.OPERATOR_G8EP_ACTIVATION_FAILED,
+                    data: {
+                        user_id: user.id,
+                        error: error.message,
+                        context: context
+                    }
+                });
+                await this.sseService.publishEvent(session.id, event);
+            }
+
+            if (this.consoleMetricsService) {
+                this.consoleMetricsService.metricsCache.set('slot_init_failures', {
+                    count: (this.consoleMetricsService.metricsCache.get('slot_init_failures')?.count || 0) + 1,
+                    lastError: error.message,
+                    lastUserId: user.id,
+                    lastContext: context,
+                    timestamp: Date.now()
+                });
+            }
+        } catch (publishError) {
+            logger.error('[POST-LOGIN] Failed to publish slot init failure event', {
+                userId: user.id,
+                originalError: error.message,
+                publishError: publishError.message
+            });
+        }
     }
 }

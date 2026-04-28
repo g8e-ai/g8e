@@ -35,6 +35,9 @@ export const ChatHistoryMixin = {
 
         } catch (error) {
             console.error('[CHAT] Failed to load conversation history:', error);
+            if (error.validationErrors) {
+                console.error('[CHAT] Validation errors:', error.validationErrors);
+            }
             const msg = error instanceof Error ? error.message : 'Unknown error';
             notificationService.error(`Failed to load conversation history: ${msg}`);
         }

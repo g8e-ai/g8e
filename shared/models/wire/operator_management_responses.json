@@ -1,0 +1,43 @@
+{
+  "_comment": "Canonical response shapes for operator management operations between g8ee and g8ed.",
+  
+  "g8ep_operator_activation_response": {
+    "_description": "Response from POST /api/internal/operators/g8ep/activate.",
+    "fields": {
+      "success": {
+        "type": "boolean",
+        "required": true,
+        "description": "Whether the activation was successful"
+      },
+      "error": {
+        "type": ["string", "null"],
+        "required": false,
+        "default": null,
+        "description": "Error message when unsuccessful"
+      }
+    }
+  },
+
+  "g8ep_operator_relaunch_response": {
+    "_description": "Response from POST /api/internal/operators/g8ep/relaunch.",
+    "fields": {
+      "success": {
+        "type": "boolean",
+        "required": true,
+        "description": "Whether the relaunch was successful"
+      },
+      "operator_id": {
+        "type": ["string", "null"],
+        "required": false,
+        "default": null,
+        "description": "The ID of the relaunched operator slot"
+      },
+      "error": {
+        "type": ["string", "null"],
+        "required": false,
+        "default": null,
+        "description": "Error message when unsuccessful"
+      }
+    }
+  }
+}

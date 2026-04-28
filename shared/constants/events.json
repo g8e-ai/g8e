@@ -63,6 +63,16 @@
     }
   },
   "operator": {
+    "slot": {
+      "initialization": {
+        "failed": "g8e.v1.operator.slot.initialization.failed"
+      }
+    },
+    "g8ep": {
+      "activation": {
+        "failed": "g8e.v1.operator.g8ep.activation.failed"
+      }
+    },
     "heartbeat": {
       "sent": "g8e.v1.operator.heartbeat.sent",
       "requested": "g8e.v1.operator.heartbeat.requested",
@@ -128,6 +138,13 @@
         "granted": "g8e.v1.operator.command.approval.granted",
         "rejected": "g8e.v1.operator.command.approval.rejected",
         "preparing": "g8e.v1.operator.command.approval.preparing"
+      }
+    },
+    "stream": {
+      "approval": {
+        "requested": "g8e.v1.operator.stream.approval.requested",
+        "granted": "g8e.v1.operator.stream.approval.granted",
+        "rejected": "g8e.v1.operator.stream.approval.rejected"
       }
     },
     "file": {
@@ -283,6 +300,14 @@
         }
       }
     },
+    "triage": {
+      "clarification": {
+        "questions": "g8e.v1.ai.triage.clarification.questions",
+        "answered": "g8e.v1.ai.triage.clarification.answered",
+        "skipped": "g8e.v1.ai.triage.clarification.skipped",
+        "timeout": "g8e.v1.ai.triage.clarification.timeout"
+      }
+    },
     "tribunal": {
       "session": {
         "started": "g8e.v1.ai.tribunal.session.started",
@@ -313,7 +338,32 @@
         },
         "dissent": {
           "recorded": "g8e.v1.ai.tribunal.voting.dissent.recorded"
+        },
+        "round": {
+          "started": "g8e.v1.ai.tribunal.voting.round.started",
+          "completed": "g8e.v1.ai.tribunal.voting.round.completed"
+        },
+        "round_2": {
+          "started": "g8e.v1.ai.tribunal.voting.round_2.started",
+          "pass_completed": "g8e.v1.ai.tribunal.voting.round_2.pass.completed",
+          "consensus_reached": "g8e.v1.ai.tribunal.voting.round_2.consensus.reached",
+          "consensus_failed": "g8e.v1.ai.tribunal.voting.round_2.consensus.failed"
         }
+      }
+    },
+    "reputation": {
+      "commitment": {
+        "created": "g8e.v1.ai.reputation.commitment.created",
+        "verified": "g8e.v1.ai.reputation.commitment.verified",
+        "failed": "g8e.v1.ai.reputation.commitment.failed"
+      },
+      "state": {
+        "updated": "g8e.v1.ai.reputation.state.updated"
+      },
+      "slash": {
+        "tier1": "g8e.v1.ai.reputation.slash.tier1",
+        "tier2": "g8e.v1.ai.reputation.slash.tier2",
+        "tier3": "g8e.v1.ai.reputation.slash.tier3"
       }
     },
     "llm": {

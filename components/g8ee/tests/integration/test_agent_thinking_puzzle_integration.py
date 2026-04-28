@@ -17,13 +17,13 @@ Integration test to confirm AI agent thinking capabilities with a puzzle.
 
 import pytest
 
-from app.constants import (
-    EventType,
-    AgentMode,
-    PromptFile,
-    InvestigationStatus,
-)
 import app.llm.llm_types as types
+from app.constants import (
+    AgentMode,
+    EventType,
+    InvestigationStatus,
+    PromptFile,
+)
 from app.models.agent import AgentInputs, AgentStreamState
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.model_configs import get_model_config
@@ -57,19 +57,19 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
     # This will provide better error information than skipping
 
     # Get real services from all_services fixture
-    event_service = all_services['g8ed_event_service']
-    operator_command_service = all_services['operator_command_service']
-    tool_executor = all_services['tool_executor']
-    agent = all_services['g8e_agent']
-    
+    event_service = all_services.g8ed_event_service
+    operator_command_service = all_services.operator_command_service
+    tool_service = all_services.tool_service
+    agent = all_services.g8e_agent
+
     puzzle_text = (
         "Solve this logic puzzle: You have two ropes. Each rope takes exactly 1 hour to burn, "
         "but they burn at inconsistent rates. How can you measure exactly 45 minutes using only these two ropes and a lighter? "
         "Please think step by step before answering."
     )
-    
+
     contents = [types.Content(role="user", parts=[types.Part.from_text(text=puzzle_text)])]
-    
+
     # Create investigation context for reference
     investigation_ctx = EnrichedInvestigationContext(
         id="inv-puzzle-1",
@@ -81,7 +81,7 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
         memory=None,
         operator_documents=[],
     )
-    
+
     # Create g8e HTTP context
     g8e_context = build_g8e_http_context(
         case_id="case-puzzle-1",
@@ -89,7 +89,7 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
         web_session_id="ws-puzzle-1",
         bound_operators=[],
     )
-    
+
     # Load system prompt
     from app.llm.prompts import load_prompt
     sys_prompt = load_prompt(PromptFile.CORE_IDENTITY)
@@ -137,51 +137,51 @@ async def test_agent_thinking_puzzle(llm_provider, cache_aside_service, all_serv
         g8ed_event_service=event_service,
         llm_provider=llm_provider,
     )
-    
+
     assert len(published_events) > 0, "Expected SSE events to be published"
-    
+
     events = published_events
-    
+
     # Check for thinking events
     thinking_events = [e for e in events if e.event_type == EventType.LLM_CHAT_ITERATION_THINKING_STARTED]
     assert len(thinking_events) > 0, "Expected at least one thinking event"
-    
+
     # Verify thinking event structure and action types
     thinking_start_events = [e for e in thinking_events if e.payload.action_type == "start"]
     thinking_update_events = [e for e in thinking_events if e.payload.action_type == "update"]
     thinking_end_events = [e for e in thinking_events if e.payload.action_type == "end"]
-    
+
     # Should have at least one START and one END event
     assert len(thinking_start_events) >= 1, "Expected at least one thinking START event"
     assert len(thinking_end_events) >= 1, "Expected at least one thinking END event"
-    
+
     # Verify thinking content is present in UPDATE events
     if thinking_update_events:
         for event in thinking_update_events:
             assert event.payload.thinking is not None, "Thinking UPDATE events should contain thinking content"
             assert len(event.payload.thinking.strip()) > 0, "Thinking content should not be empty"
-    
+
     # Check for text events
     text_events = [e for e in events if e.event_type == EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED]
     assert len(text_events) > 0, "Expected at least one text chunk event"
-    
+
     full_text = "".join(e.payload.content for e in text_events if e.payload.content)
     assert len(full_text) > 0, "Expected non-empty text response"
-    
+
     # We expect the answer to involve lighting both ends of one rope and one end of the other
     answer_keywords = ["both ends", "one end", "30 minutes", "15 minutes"]
     found_keywords = [kw for kw in answer_keywords if kw.lower() in full_text.lower()]
     assert len(found_keywords) >= 2, f"Expected answer to contain puzzle solution concepts, got: {full_text}"
-    
+
     # Verify event ordering: thinking should come before text
     thinking_indices = [i for i, e in enumerate(events) if e.event_type == EventType.LLM_CHAT_ITERATION_THINKING_STARTED]
     text_indices = [i for i, e in enumerate(events) if e.event_type == EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED]
-    
+
     if thinking_indices and text_indices:
         first_text_index = min(text_indices)
-        last_thinking_end_index = max([i for i, e in enumerate(events) 
-                                      if e.event_type == EventType.LLM_CHAT_ITERATION_THINKING_STARTED 
+        last_thinking_end_index = max([i for i, e in enumerate(events)
+                                      if e.event_type == EventType.LLM_CHAT_ITERATION_THINKING_STARTED
                                       and e.payload.action_type == "end"])
-        
+
         # Thinking END should come before first TEXT chunk
         assert last_thinking_end_index < first_text_index, "Thinking END should precede text chunks"

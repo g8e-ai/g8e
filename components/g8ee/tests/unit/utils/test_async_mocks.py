@@ -111,7 +111,7 @@ class TestSafeWaitForMock:
     @pytest.mark.asyncio
     async def test_custom_side_effect_can_raise(self):
         async def custom_side_effect(coro, timeout):
-            raise asyncio.TimeoutError()
+            raise TimeoutError
 
         mock_obj = SafeWaitForMock(side_effect=custom_side_effect)
         side_effect = mock_obj.make_side_effect()

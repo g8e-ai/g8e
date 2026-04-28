@@ -11,7 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { CreateDeviceLinkRequest, GenerateDeviceLinkRequest, RegisterDeviceRequest } from '../../models/request_models.js';
+import { 
+    CreateDeviceLinkRequest, 
+    GenerateDeviceLinkRequest, 
+    RegisterDeviceRequest,
+    OperatorLinkRequest 
+} from '../../models/request_models.js';
 import express from 'express';
 import { ApiKeyError, DeviceLinkError, DEVICE_LINK_TTL_SECONDS, WEB_SESSION_ID_HEADER } from '../../constants/auth.js';
 import { logger } from '../../utils/logger.js';
@@ -193,7 +198,11 @@ export function createDeviceLinkRouter({
             return res.json(new DeviceRegistrationResponse({
                 success: true,
                 operator_session_id: result.operator_session_id,
-                operator_id: result.operator_id
+                operator_id: result.operator_id,
+                api_key: result.api_key,
+                operator_cert: result.operator_cert,
+                operator_cert_key: result.operator_cert_key,
+                session: result.session
             }).forClient());
 
         } catch (error) {

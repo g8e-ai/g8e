@@ -31,4 +31,5 @@ File content is Sentinel-scrubbed. See run_commands_with_operator for full place
 <example>User: "Show me the nginx config" → file_read_on_operator(file_path="/etc/nginx/nginx.conf", justification="Read nginx configuration")</example>
 <example>User: "Read the last 20 lines of the log" → file_read_on_operator(file_path="/var/log/app.log", start_line=-20, justification="Check recent log entries")</example>
 <example>User: "What's in the app config?" → file_read_on_operator(file_path="/app/config.yaml", justification="Read application configuration")</example>
+<example>User: "Show me the nginx config on g8ep" → file_read_on_operator(file_path="/etc/nginx/nginx.conf", justification="Read nginx configuration", target_operator="g8ep")</example>
 </examples>

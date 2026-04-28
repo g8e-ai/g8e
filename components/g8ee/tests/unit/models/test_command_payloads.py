@@ -24,12 +24,13 @@ Covers FsListRequestPayload, FsReadRequestPayload, FetchFileHistoryRequestPayloa
 """
 
 import pytest
-from app.models.base import ValidationError, G8eBaseModel
+
+from app.models.base import G8eBaseModel, ValidationError
 from app.models.command_request_payloads import (
-    FetchLogsRequestPayload,
-    FetchFileHistoryRequestPayload,
-    FetchFileDiffRequestPayload,
     CheckPortRequestPayload,
+    FetchFileDiffRequestPayload,
+    FetchFileHistoryRequestPayload,
+    FetchLogsRequestPayload,
     FsListRequestPayload,
     FsReadRequestPayload,
     TargetedOperatorBase,

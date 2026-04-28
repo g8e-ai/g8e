@@ -67,14 +67,14 @@ check_file_exists g8ee /g8es/internal_auth_token || FAILED=1
 check_file_exists g8ee /g8es/session_encryption_key || FAILED=1
 
 # 3. INTERNAL_AUTH_TOKEN checks
+# g8es is intentionally excluded: g8e.operator --listen reads tokens from
+# --ssl-dir directly and does not require these env vars to be exported.
 echo -e "\n${YELLOW}3. Checking G8E_INTERNAL_AUTH_TOKEN environment variables...${NC}"
-check_env_var g8es G8E_INTERNAL_AUTH_TOKEN /ssl/internal_auth_token || FAILED=1
 check_env_var g8ed G8E_INTERNAL_AUTH_TOKEN /g8es/internal_auth_token || FAILED=1
 check_env_var g8ee G8E_INTERNAL_AUTH_TOKEN /g8es/internal_auth_token || FAILED=1
 
 # 4. SESSION_ENCRYPTION_KEY checks
 echo -e "\n${YELLOW}4. Checking G8E_SESSION_ENCRYPTION_KEY environment variables...${NC}"
-check_env_var g8es G8E_SESSION_ENCRYPTION_KEY /ssl/session_encryption_key || FAILED=1
 check_env_var g8ed G8E_SESSION_ENCRYPTION_KEY /g8es/session_encryption_key || FAILED=1
 check_env_var g8ee G8E_SESSION_ENCRYPTION_KEY /g8es/session_encryption_key || FAILED=1
 

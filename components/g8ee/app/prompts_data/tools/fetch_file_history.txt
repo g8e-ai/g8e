@@ -18,4 +18,5 @@ Retrieve git version history for a file from the Operator's Ledger. Only files m
 <examples>
 <example>User: "What's the history of nginx.conf?" → fetch_file_history(file_path="/etc/nginx/nginx.conf")</example>
 <example>User: "Show me recent changes to app.py" → fetch_file_history(file_path="/app/app.py", limit=10)</example>
+<example>User: "What's the history of nginx.conf on g8ep?" → fetch_file_history(file_path="/etc/nginx/nginx.conf", target_operator="g8ep")</example>
 </examples>

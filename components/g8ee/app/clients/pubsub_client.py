@@ -60,28 +60,28 @@ class PubSubClient:
         # Use direct internal WSS URL by default for service-to-service
         raw_url = pubsub_url or _settings.pubsub_url
         self.pubsub_url = raw_url.rstrip("/")
-        
+
         self.component_name = component_name
         self.client_id = f"{component_name.value}-{uuid.uuid4().hex[:8]}"
         self._timeout = timeout
         self._ca_cert_path = ca_cert_path
         self._internal_auth_token = internal_auth_token
-        
+
         self._ws_session: aiohttp.ClientSession | None = None
         self._ws: aiohttp.ClientWebSocketResponse | None = None
         self._pubsub_task: asyncio.Task | None = None
-        
+
         # Internal state with single lock for all state mutations
         self._lock = asyncio.Lock()
         self._message_handlers: list[Callable] = []
         self._channel_handlers: dict[str, list[Callable]] = {}
         self._pmessage_handlers: dict[str, list[Callable]] = {}
-        
+
         self._subscribed_channels: set[str] = set()
         self._subscribed_patterns: set[str] = set()
         self._channel_refcounts: dict[str, int] = {}
         self._pattern_refcounts: dict[str, int] = {}
-        
+
         # Maps target (channel or pattern) to list of events to set on SUBSCRIBED
         self._pending_acks: dict[str, list[asyncio.Event]] = {}
         self._disconnect_handlers: list[Callable[[], Coroutine[Any, Any, None]]] = []
@@ -117,7 +117,7 @@ class PubSubClient:
         )
 
         ws_session = await self._get_http_ws_session()
-        
+
         headers = {}
         if self._internal_auth_token:
             headers["X-Internal-Auth"] = self._internal_auth_token
@@ -148,7 +148,7 @@ class PubSubClient:
                     try:
                         event = json.loads(msg.data)
                         event_type = event.get(PubSubField.TYPE)
-                        
+
                         if event_type == PubSubWireEventType.MESSAGE:
                             channel = event.get(PubSubField.CHANNEL)
                             data = event.get(PubSubField.DATA)
@@ -160,12 +160,12 @@ class PubSubClient:
                             async with self._lock:
                                 handlers = self._channel_handlers.get(channel, []).copy()
                                 gen_handlers = self._message_handlers.copy()
-                            
+
                             for handler in handlers:
                                 asyncio.create_task(self._safe_dispatch(handler, channel, data))
                             for handler in gen_handlers:
                                 asyncio.create_task(self._safe_dispatch(handler, channel, data))
-                                    
+
                         elif event_type == PubSubWireEventType.PMESSAGE:
                             pattern = event.get(PubSubField.PATTERN, "")
                             channel = event.get(PubSubField.CHANNEL, "")
@@ -176,10 +176,10 @@ class PubSubClient:
 
                             async with self._lock:
                                 p_handlers = self._pmessage_handlers.get(pattern, []).copy()
-                            
+
                             for handler in p_handlers:
                                 asyncio.create_task(self._safe_dispatch(handler, pattern, channel, data))
-                                    
+
                         elif event_type == PubSubWireEventType.SUBSCRIBED:
                             # The broker always uses the 'channel' key even for pattern acks
                             target = event.get(PubSubField.CHANNEL)
@@ -188,21 +188,21 @@ class PubSubClient:
 
                             async with self._lock:
                                 acks = self._pending_acks.pop(target, [])
-                            
+
                             for ack in acks:
                                 ack.set()
-                            
+
                             if not acks:
                                 logger.info("[PUBSUB-CLIENT] Received redundant SUBSCRIBED for target '%s'", target)
-                        
+
                         else:
                             logger.warning("[PUBSUB-CLIENT] Unknown wire event type '%s'", event_type)
-                            
+
                     except json.JSONDecodeError:
                         logger.error("[PUBSUB-CLIENT] Malformed JSON from pub/sub: %r", msg.data[:200])
                     except (KeyError, ValueError, AttributeError) as e:
                         logger.error("[PUBSUB-CLIENT] Malformed event shape from pub/sub: %s", e, exc_info=True)
-                        
+
                 elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
                     logger.info("[PUBSUB-CLIENT] WebSocket closed or error: %s", msg.type)
                     break
@@ -227,9 +227,9 @@ class PubSubClient:
             self._ws = None
             if self._closing:
                 return
-            
+
             logger.warning("[PUBSUB-CLIENT] Pub/sub WebSocket disconnected")
-            
+
             # Clear pending acks as they will never be fulfilled
             for acks in self._pending_acks.values():
                 for ack in acks:
@@ -238,7 +238,7 @@ class PubSubClient:
 
             # Execute disconnect handlers
             handlers = self._disconnect_handlers.copy()
-            
+
         for handler in handlers:
             asyncio.create_task(self._safe_dispatch(handler))
 
@@ -252,7 +252,7 @@ class PubSubClient:
         """Exponential backoff reconnection loop."""
         delay = 1.0
         max_delay = 60.0
-        
+
         while not self._closing:
             async with self._lock:
                 if not self._subscribed_channels and not self._subscribed_patterns:
@@ -284,12 +284,12 @@ class PubSubClient:
                 self._reconnect_task.cancel()
             if self._pubsub_task:
                 self._pubsub_task.cancel()
-            
+
         if self._ws and not self._ws.closed:
             await self._ws.close()
         if self._ws_session and not self._ws_session.closed:
             await self._ws_session.close()
-        
+
         async with self._lock:
             self._ws = None
             self._ws_session = None
@@ -333,23 +333,23 @@ class PubSubClient:
                 logger.info("[PUBSUB-CLIENT] Subscribing to channel '%s'", channel)
                 await self._ensure_ws()
                 assert self._ws is not None
-                
+
                 ack = asyncio.Event()
                 self._pending_acks.setdefault(channel, []).append(ack)
                 self._subscribed_channels.add(channel)
-                
+
                 await self._ws.send_json({
                     PubSubField.ACTION: PubSubAction.SUBSCRIBE,
                     PubSubField.CHANNEL: channel
                 })
-            
+
         try:
             await asyncio.wait_for(ack.wait(), timeout=5.0)
             async with self._lock:
                 if channel not in self._channel_refcounts:
                     self._channel_refcounts[channel] = 1
                 logger.info("[PUBSUB-CLIENT] Successfully subscribed to channel '%s'", channel)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             async with self._lock:
                 self._channel_refcounts[channel] = max(0, self._channel_refcounts.get(channel, 1) - 1)
                 if self._channel_refcounts[channel] == 0:
@@ -383,23 +383,23 @@ class PubSubClient:
                 logger.info("[PUBSUB-CLIENT] Subscribing to pattern '%s'", pattern)
                 await self._ensure_ws()
                 assert self._ws is not None
-                
+
                 ack = asyncio.Event()
                 self._pending_acks.setdefault(pattern, []).append(ack)
                 self._subscribed_patterns.add(pattern)
-                
+
                 await self._ws.send_json({
                     PubSubField.ACTION: PubSubAction.PSUBSCRIBE,
                     PubSubField.CHANNEL: pattern
                 })
-            
+
         try:
             await asyncio.wait_for(ack.wait(), timeout=5.0)
             async with self._lock:
                 if pattern not in self._pattern_refcounts:
                     self._pattern_refcounts[pattern] = 1
                 logger.info("[PUBSUB-CLIENT] Successfully subscribed to pattern '%s'", pattern)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             async with self._lock:
                 self._pattern_refcounts[pattern] = max(0, self._pattern_refcounts.get(pattern, 1) - 1)
                 if self._pattern_refcounts[pattern] == 0:
@@ -423,7 +423,7 @@ class PubSubClient:
 
             new_count = count - 1
             self._channel_refcounts[channel] = new_count
-            
+
             if new_count > 0:
                 logger.info("[PUBSUB-CLIENT] Decremented refcount for channel '%s' to %d", channel, new_count)
                 return
@@ -445,7 +445,7 @@ class PubSubClient:
 
             new_count = count - 1
             self._pattern_refcounts[pattern] = new_count
-            
+
             if new_count > 0:
                 logger.info("[PUBSUB-CLIENT] Decremented refcount for pattern '%s' to %d", pattern, new_count)
                 return
@@ -514,7 +514,7 @@ class PubSubClient:
         command_data: G8eMessage
     ) -> int:
         channel = PubSubChannel.cmd(operator_id, operator_session_id)
-        
+
         logger.info(
             "[PUBSUB-CLIENT] Publishing command for operator %s session %s (event_type: %s)",
             operator_id,
@@ -528,9 +528,9 @@ class PubSubClient:
                 "source_component": command_data.source_component,
             }
         )
-        
+
         result = await self.publish(channel, command_data.model_dump(mode="json"))
-        
+
         if result > 0:
             logger.info(
                 "[PUBSUB-CLIENT] Command published successfully for operator %s session %s",
@@ -553,7 +553,7 @@ class PubSubClient:
                     "event_type": command_data.event_type,
                 }
             )
-        
+
         return result
 
     async def subscribe_execution_results(
@@ -564,7 +564,7 @@ class PubSubClient:
     ) -> None:
         """Subscribe to the exact results channel for one operator session."""
         channel = PubSubChannel.results(operator_id, operator_session_id)
-        
+
         logger.info(
             "[PUBSUB-CLIENT] Subscribing to execution results for operator %s session %s",
             operator_id,
@@ -576,7 +576,7 @@ class PubSubClient:
                 "subscription_type": "execution_results",
             }
         )
-        
+
         self.on_channel_message(channel, callback)
         await self.subscribe(channel)
 
@@ -588,7 +588,7 @@ class PubSubClient:
     ) -> None:
         """Unsubscribe from the exact results channel for one operator session."""
         channel = PubSubChannel.results(operator_id, operator_session_id)
-        
+
         logger.info(
             "[PUBSUB-CLIENT] Unsubscribing from execution results for operator %s session %s",
             operator_id,
@@ -600,7 +600,7 @@ class PubSubClient:
                 "subscription_type": "execution_results",
             }
         )
-        
+
         await self.unsubscribe(channel)
         self.off_channel_message(channel, callback)
 
@@ -612,7 +612,7 @@ class PubSubClient:
     ) -> None:
         """Subscribe to the exact heartbeat channel for one operator session."""
         channel = PubSubChannel.heartbeat(operator_id, operator_session_id)
-        
+
         logger.info(
             "[PUBSUB-CLIENT] Subscribing to heartbeats for operator %s session %s",
             operator_id,
@@ -624,7 +624,7 @@ class PubSubClient:
                 "subscription_type": "heartbeats",
             }
         )
-        
+
         self.on_channel_message(channel, callback)
         await self.subscribe(channel)
 
@@ -636,7 +636,7 @@ class PubSubClient:
     ) -> None:
         """Unsubscribe from the exact heartbeat channel for one operator session."""
         channel = PubSubChannel.heartbeat(operator_id, operator_session_id)
-        
+
         logger.info(
             "[PUBSUB-CLIENT] Unsubscribing from heartbeats for operator %s session %s",
             operator_id,
@@ -648,7 +648,7 @@ class PubSubClient:
                 "subscription_type": "heartbeats",
             }
         )
-        
+
         await self.unsubscribe(channel)
         self.off_channel_message(channel, callback)
 
@@ -658,7 +658,7 @@ class PubSubClient:
         operator_session_id: str
     ) -> bool:
         channel = PubSubChannel.cmd(operator_id, operator_session_id)
-        
+
         logger.info(
             "[PUBSUB-CLIENT] Checking if operator %s session %s is online",
             operator_id,
@@ -669,7 +669,7 @@ class PubSubClient:
                 "channel": channel,
             }
         )
-        
+
         try:
             ping = G8eMessage(
                 source_component=self.component_name,
@@ -678,7 +678,7 @@ class PubSubClient:
                 operator_session_id=operator_session_id,
             )
             receivers = await self.publish(channel, ping.model_dump(mode="json"))
-            
+
             is_online = receivers > 0
             logger.info(
                 "[PUBSUB-CLIENT] Operator %s session %s online check result: %s (receivers: %d)",
@@ -693,7 +693,7 @@ class PubSubClient:
                     "receivers": receivers,
                 }
             )
-            
+
             return is_online
         except Exception as e:
             logger.warning(

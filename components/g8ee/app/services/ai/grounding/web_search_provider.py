@@ -59,10 +59,10 @@ class SearchClientProtocol(Protocol):
         self,
         request: discoveryengine.SearchRequest,
         *,
-        retry: Any = None,
+        retry: object | None = None,
         timeout: float | None = None,
-        metadata: Any = None,
-    ) -> Any:
+        metadata: object | None = None,
+    ) -> object:
         """Execute a search_lite request."""
         ...
 
@@ -409,7 +409,7 @@ class WebSearchProvider:
                     results=results,
                     total_results=str(total_size),
                 )
-            except asyncio.TimeoutError as e:
+            except TimeoutError as e:
                 last_error = e
                 logger.warning(
                     "[WEB_SEARCH] Timeout on attempt %d/%d",

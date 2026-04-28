@@ -34,7 +34,7 @@ class ErrorDetail(G8eBaseModel):
     category: ErrorCategory
     severity: ErrorSeverity = ErrorSeverity.MEDIUM
     timestamp: UTCDatetime = Field(default_factory=now)
-    source: str 
+    source: str
     component: str | None = None
     trace_id: str | None = None
     execution_id: str | None = None

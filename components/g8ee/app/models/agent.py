@@ -153,7 +153,7 @@ class AgentInputs(G8eBaseModel):
     AgentStreamState; splitting the two prevents load-bearing writes to
     request inputs from sneaking in unnoticed.
     """
-    model_config = ConfigDict(arbitrary_types_allowed=True, extra='forbid')
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra="forbid")
 
     case_id: str | None = None
     investigation_id: str | None = None
@@ -176,6 +176,7 @@ class AgentInputs(G8eBaseModel):
     case_memories: list[InvestigationMemory] = Field(default_factory=list)
     triage_result: TriageResult | None = None
     sentinel_mode: bool = True
+    context_sizes: dict[str, int] = Field(default_factory=dict)
 
 
 class AgentStreamState(G8eBaseModel):
@@ -187,7 +188,7 @@ class AgentStreamState(G8eBaseModel):
     AgentInputs makes the authoritative post-run fields obvious at every
     call site and prevents accidental in-place mutation of request inputs.
     """
-    model_config = ConfigDict(arbitrary_types_allowed=True, extra='forbid')
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra="forbid")
 
     response_text: str = ""
     token_usage: TokenUsage | None = None
@@ -195,6 +196,7 @@ class AgentStreamState(G8eBaseModel):
     grounding_metadata: GroundingMetadata | None = None
     tool_call_count: int = 0
     tool_types_used: list[str] = Field(default_factory=list)
+    tool_response_sizes: list[int] = Field(default_factory=list, description="Character sizes of individual tool responses")
 
 
 class StreamChunkData(G8eBaseModel):
@@ -227,6 +229,7 @@ class StreamChunkData(G8eBaseModel):
     result: ToolResult | None = None
     attempt: int | None = None
     max_attempts: int | None = None
+    tool_response_sizes: list[int] | None = None
     investigation_id: str | None = None
     case_id: str | None = None
 

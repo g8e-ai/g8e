@@ -184,5 +184,4 @@ class BackgroundTaskManager:
             raise
 
 
-# Backward compatibility alias
 ChatTaskManager = BackgroundTaskManager

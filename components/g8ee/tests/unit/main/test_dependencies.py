@@ -25,25 +25,23 @@ from app.constants import (
     PROXY_USER_ID_HEADER,
     AuthMethod,
     ComponentName,
-    HealthStatus,
     G8eHeaders,
+    HealthStatus,
 )
-from tests.fakes.headers import TEST_G8E_HEADERS
-from app.models.settings import G8eePlatformSettings
 from app.dependencies import (
-    get_g8ee_platform_settings,
+    get_g8e_http_context,
     get_g8ee_attachment_service,
     get_g8ee_cache_aside_service,
     get_g8ee_case_data_service,
     get_g8ee_chat_pipeline,
     get_g8ee_chat_task_manager,
     get_g8ee_current_active_user,
-    get_g8ee_pubsub_client,
-    get_g8ee_kv_cache_client,
     get_g8ee_investigation_service,
+    get_g8ee_kv_cache_client,
     get_g8ee_operator_cache,
     get_g8ee_operator_command_service,
-    get_g8e_http_context,
+    get_g8ee_platform_settings,
+    get_g8ee_pubsub_client,
     health_check_dependencies,
     require_internal_origin,
     require_proxy_auth,
@@ -54,7 +52,9 @@ from app.errors import (
     ConfigurationError,
     ServiceUnavailableError,
 )
+from app.models.settings import G8eePlatformSettings
 from tests.fakes.factories import build_authenticated_user
+from tests.fakes.headers import TEST_G8E_HEADERS
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 
@@ -87,7 +87,7 @@ class TestGetG8eeAppSettings:
         # In a real app, if the attribute is missing, it's a configuration failure
         if hasattr(mock_request.app.state, "settings"):
             delattr(mock_request.app.state, "settings")
-        
+
         with pytest.raises(ConfigurationError, match="Settings not available"):
             await get_g8ee_platform_settings(mock_request)
 
@@ -194,17 +194,17 @@ class TestGetG8eeChatTaskManager:
 class TestGetOperatorCache:
     async def test_returns_service_from_app_state(self, mock_request):
         mock_service = MagicMock()
-        mock_request.app.state.operator_cache_aside_service = mock_service
+        mock_request.app.state.cache_aside_service = mock_service
         result = await get_g8ee_operator_cache(mock_request)
         assert result == mock_service
 
     async def test_missing_raises_service_unavailable(self, mock_request):
-        mock_request.app.state.operator_cache_aside_service = None
+        mock_request.app.state.cache_aside_service = None
         with pytest.raises(ServiceUnavailableError, match="Operator cache service not available"):
             await get_g8ee_operator_cache(mock_request)
 
     async def test_none_raises_service_unavailable(self, mock_request):
-        mock_request.app.state.operator_cache_aside_service = None
+        mock_request.app.state.cache_aside_service = None
         with pytest.raises(ServiceUnavailableError, match="Operator cache service not available"):
             await get_g8ee_operator_cache(mock_request)
 
@@ -529,7 +529,7 @@ class TestHealthCheckDependencies:
     async def test_all_healthy_returns_healthy_result(self, healthy_request):
         # Set up all needed attributes in the mock request
         healthy_request.app.state.investigation_data_service = MagicMock()
-        
+
         health = await health_check_dependencies(healthy_request)
 
         assert health.component == ComponentName.G8EE

@@ -360,7 +360,7 @@ class ExternalServiceError(G8eError):
             details=full_details,
             component=component
         )
-    
+
     @property
     def message(self) -> str:
         return self.error_detail.message

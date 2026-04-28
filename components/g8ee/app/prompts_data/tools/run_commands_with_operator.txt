@@ -14,6 +14,8 @@ IMPORTANT: You DO NOT propose shell commands directly. The Tribunal — a five-m
 <example>User: "Show disk usage under /home broken down per-user, sorted largest first, top 10." → run_commands_with_operator(request="Show disk usage under /home broken down per-user, sorted largest first, top 10.")</example>
 <example>User: "Find all files modified in the last 24 hours under /var/log" → run_commands_with_operator(request="Find all files modified in the last 24 hours under /var/log", guidelines="Prefer a portable find invocation over locate; exclude compressed archives.")</example>
 <example>User: "Check nginx status" → run_commands_with_operator(request="Locate the nginx binary and list running nginx processes and listening ports.")</example>
+<example>User: "Show uptime on g8ep" → run_commands_with_operator(request="Show system uptime", target_operator="g8ep")</example>
+<example>User: "Check disk space on all operators" → run_commands_with_operator(request="Show disk usage", target_operators=["all"])</example>
 </examples>
 
 <batch_execution>

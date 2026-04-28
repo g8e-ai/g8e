@@ -21,7 +21,7 @@ import {
     G8EE_INTERNAL_URL,
     NEW_CASE_ID
 } from '@g8ed/constants/http_client.js';
-import { apiPaths, InternalApiPaths } from '@g8ed/constants/api_paths.js';
+import { ApiPaths, InternalApiPaths } from '@g8ed/constants/api_paths.js';
 
 function makeBootstrapService(token = null) {
     return {
@@ -187,7 +187,7 @@ describe('InternalHttpClient', () => {
 
         it('sendChatMessage should call g8ee chat endpoint', async () => {
             await client.sendChatMessage({ message: 'hi' }, context);
-            const path = apiPaths.g8ee.chat();
+            const path = ApiPaths.g8ee.chat();
             expect(path).toBe('/api/internal/chat');
             expect(fetch).toHaveBeenCalledWith(expect.stringContaining(path), expect.objectContaining({
                 method: 'POST',
@@ -197,7 +197,7 @@ describe('InternalHttpClient', () => {
 
         it('deleteCase should call DELETE on case endpoint', async () => {
             await client.deleteCase('case-123', context);
-            const path = apiPaths.g8ee.case('case-123');
+            const path = ApiPaths.g8ee.case('case-123');
             expect(path).toBe('/api/internal/cases/case-123');
             expect(fetch).toHaveBeenCalledWith(expect.stringContaining(path), expect.objectContaining({
                 method: 'DELETE'
@@ -206,7 +206,7 @@ describe('InternalHttpClient', () => {
 
         it('stopAIProcessing should call stop endpoint', async () => {
             await client.stopAIProcessing({ investigation_id: 'inv-123', reason: 'cancel', web_session_id: 'ws-123' }, context);
-            const path = apiPaths.g8ee.chatStop();
+            const path = ApiPaths.g8ee.chatStop();
             expect(path).toBe('/api/internal/chat/stop');
             expect(fetch).toHaveBeenCalledWith(expect.stringContaining(path), expect.objectContaining({
                 method: 'POST',
@@ -218,7 +218,7 @@ describe('InternalHttpClient', () => {
             vi.spyOn(client, 'request').mockResolvedValue({ success: true });
             const results = await client.healthCheck();
             expect(results.g8ee.status).toBe('healthy');
-            expect(client.request).toHaveBeenCalledWith('g8ee', apiPaths.g8ee.health(), expect.any(Object));
+            expect(client.request).toHaveBeenCalledWith('g8ee', ApiPaths.g8ee.health(), expect.any(Object));
         });
         
     });

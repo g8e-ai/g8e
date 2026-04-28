@@ -41,7 +41,7 @@ class TestBoundOperatorFieldsMatchSharedJSON:
         wire = _load_bound_operator_context_json()["bound_operator_context"]["fields"]
         assert "operator_id" in wire
         assert wire["operator_id"]["required"] is True
-        
+
         # Verify g8ee model has the field
         assert "operator_id" in BoundOperator.model_fields
         assert BoundOperator.model_fields["operator_id"].is_required()
@@ -51,7 +51,7 @@ class TestBoundOperatorFieldsMatchSharedJSON:
         wire = _load_bound_operator_context_json()["bound_operator_context"]["fields"]
         assert "operator_session_id" in wire
         assert wire["operator_session_id"]["required"] is False
-        
+
         # Verify g8ee model has the field and it's optional
         assert "operator_session_id" in BoundOperator.model_fields
         assert not BoundOperator.model_fields["operator_session_id"].is_required()
@@ -61,7 +61,7 @@ class TestBoundOperatorFieldsMatchSharedJSON:
         wire = _load_bound_operator_context_json()["bound_operator_context"]["fields"]
         assert "status" in wire
         assert wire["status"]["required"] is False
-        
+
         # Verify g8ee model has the field and it's optional
         assert "status" in BoundOperator.model_fields
         assert not BoundOperator.model_fields["status"].is_required()
@@ -80,7 +80,7 @@ class TestBoundOperatorFieldsMatchSharedJSON:
         wire = _load_bound_operator_context_json()["bound_operator_context"]["fields"]
         g8ee_fields = set(BoundOperator.model_fields.keys())
         json_fields = set(wire.keys())
-        
+
         extra_fields = g8ee_fields - json_fields
         assert not extra_fields, (
             f"g8ee BoundOperator has fields not in shared JSON: {extra_fields}. "

@@ -25,7 +25,7 @@
  */
 
 import { G8eBaseModel, F } from './base.js';
-import { SystemInfo } from './operator_model.js';
+import { SourceComponent } from '../constants/ai.js';
 
 // ---------------------------------------------------------------------------
 // G8eHttpContext
@@ -36,24 +36,33 @@ import { SystemInfo } from './operator_model.js';
 
 export class G8eHttpContext extends G8eBaseModel {
     static fields = {
-        web_session_id:    { type: F.string,  required: true },
-        user_id:           { type: F.string,  required: true },
+        web_session_id:    { type: F.string,  default: null },
+        user_id:           { type: F.string,  default: null },
         organization_id:   { type: F.string,  default: null },
         case_id:           { type: F.string,  default: null },
         investigation_id:  { type: F.string,  default: null },
         task_id:           { type: F.string,  default: null },
         bound_operators:   { type: F.array,   default: () => [] }, // Array of BoundOperatorContext
-        execution_id:        { type: F.string,  default: null },
-        source_component:  { type: F.string,  default: 'g8ed' },
+        execution_id:      { type: F.string,  default: null },
+        timestamp:         { type: F.date,    default: () => new Date() },
+        source_component:  { type: F.string,  default: SourceComponent.G8ED },
     };
 
-    static parse(raw = {}) {
-        // Handle new case signal logic here instead of in routes
-        const data = { ...raw };
-        if (!data.case_id || data.case_id === '') {
-            data.case_id = null; // Let the client/headers logic handle NEW_CASE_ID
+    _validate() {
+        // Normalize empty-string case_id so the model invariant below applies uniformly.
+        if (this.case_id === '') {
+            this.case_id = null;
         }
-        return super.parse(data);
+        // Mirror of g8ee G8eHttpContext.validate_web_session_or_operator_auth.
+        // Null web_session_id / user_id is only allowed for operator-auth relays
+        // originated by g8ed (Bearer-token operator authentication).
+        if (this.web_session_id === null || this.user_id === null) {
+            if (this.source_component !== SourceComponent.G8ED) {
+                throw new Error(
+                    'G8eHttpContext validation failed: web_session_id and user_id are required unless source_component is g8ed (operator auth relay)'
+                );
+            }
+        }
     }
 }
 
@@ -224,7 +233,6 @@ export class CreateOperatorRequest extends G8eBaseModel {
         operator_session_id: { type: F.string, required: true },
         web_session_id:      { type: F.string, default: null },
         organization_id:     { type: F.string, default: null },
-        system_info:         { type: F.any,    default: () => ({}) },
         runtime_config:      { type: F.any,    default: () => ({}) },
         api_key:             { type: F.string, default: null },
         operator_type:       { type: F.string, default: null },
@@ -259,20 +267,16 @@ export class AttestationResponseJSON extends G8eBaseModel {
         },
     };
 
-    static parse(raw = {}) {
-        if (!raw || typeof raw !== 'object') {
-            throw new Error('AttestationResponseJSON.parse() requires a plain object');
-        }
-        if (!raw.response || typeof raw.response !== 'object') {
+    _validate() {
+        if (!this.response || typeof this.response !== 'object') {
             throw new Error('AttestationResponseJSON requires response object');
         }
-        if (typeof raw.response.clientDataJSON !== 'string') {
+        if (typeof this.response.clientDataJSON !== 'string') {
             throw new Error('AttestationResponseJSON requires response.clientDataJSON string');
         }
-        if (typeof raw.response.attestationObject !== 'string') {
+        if (typeof this.response.attestationObject !== 'string') {
             throw new Error('AttestationResponseJSON requires response.attestationObject string');
         }
-        return super.parse(raw);
     }
 }
 
@@ -293,23 +297,19 @@ export class AssertionResponseJSON extends G8eBaseModel {
         },
     };
 
-    static parse(raw = {}) {
-        if (!raw || typeof raw !== 'object') {
-            throw new Error('AssertionResponseJSON.parse() requires a plain object');
-        }
-        if (!raw.response || typeof raw.response !== 'object') {
+    _validate() {
+        if (!this.response || typeof this.response !== 'object') {
             throw new Error('AssertionResponseJSON requires response object');
         }
-        if (typeof raw.response.clientDataJSON !== 'string') {
+        if (typeof this.response.clientDataJSON !== 'string') {
             throw new Error('AssertionResponseJSON requires response.clientDataJSON string');
         }
-        if (typeof raw.response.authenticatorData !== 'string') {
+        if (typeof this.response.authenticatorData !== 'string') {
             throw new Error('AssertionResponseJSON requires response.authenticatorData string');
         }
-        if (typeof raw.response.signature !== 'string') {
+        if (typeof this.response.signature !== 'string') {
             throw new Error('AssertionResponseJSON requires response.signature string');
         }
-        return super.parse(raw);
     }
 }
 
@@ -346,6 +346,30 @@ export class PasskeyAuthVerifyRequest extends G8eBaseModel {
 }
 
 // ---------------------------------------------------------------------------
+// G8EPOperatorActivationRequest
+//
+// Aligned with shared/models/wire/internal_requests.json (g8ep_operator_activation)
+// ---------------------------------------------------------------------------
+
+export class G8EPOperatorActivationRequest extends G8eBaseModel {
+    static fields = {
+        user_id: { type: F.string, required: true },
+    };
+}
+
+// ---------------------------------------------------------------------------
+// G8EPOperatorRelaunchRequest
+//
+// Aligned with shared/models/wire/internal_requests.json (g8ep_operator_relaunch)
+// ---------------------------------------------------------------------------
+
+export class G8EPOperatorRelaunchRequest extends G8eBaseModel {
+    static fields = {
+        user_id: { type: F.string, required: true },
+    };
+}
+
+// ---------------------------------------------------------------------------
 // CreateDeviceLinkRequest
 // ---------------------------------------------------------------------------
 
@@ -368,6 +392,19 @@ export class GenerateDeviceLinkRequest extends G8eBaseModel {
 }
 
 // ---------------------------------------------------------------------------
+// OperatorLinkRequest (internal single-operator handshake)
+// ---------------------------------------------------------------------------
+
+export class OperatorLinkRequest extends G8eBaseModel {
+    static fields = {
+        user_id:         { type: F.string, required: true },
+        organization_id: { type: F.string, default: null },
+        operator_id:     { type: F.string, required: true },
+        web_session_id:  { type: F.string, required: true },
+    };
+}
+
+// ---------------------------------------------------------------------------
 // RegisterDeviceRequest
 // ---------------------------------------------------------------------------
 
@@ -378,7 +415,6 @@ export class RegisterDeviceRequest extends G8eBaseModel {
         arch:               { type: F.string, required: true },
         system_fingerprint: { type: F.string, required: true },
         version:            { type: F.string, default: 'unknown' },
-        system_info:        { type: F.object, default: () => ({}) },
     };
 }
 
@@ -589,8 +625,11 @@ export class RequestModelFactory {
     static createCreateDeviceLinkRequest(data)           { return CreateDeviceLinkRequest.parse(data); }
     static createGenerateDeviceLinkRequest(data)         { return GenerateDeviceLinkRequest.parse(data); }
     static createRegisterDeviceRequest(data)             { return RegisterDeviceRequest.parse(data); }
+    static createOperatorLinkRequest(data)               { return OperatorLinkRequest.parse(data); }
     static createPasskeyRegisterChallengeRequest(data)   { return PasskeyRegisterChallengeRequest.parse(data); }
     static createPasskeyRegisterVerifyRequest(data)      { return PasskeyRegisterVerifyRequest.parse(data); }
     static createPasskeyAuthChallengeRequest(data)       { return PasskeyAuthChallengeRequest.parse(data); }
     static createPasskeyAuthVerifyRequest(data)          { return PasskeyAuthVerifyRequest.parse(data); }
+    static createG8EPOperatorActivationRequest(data)    { return G8EPOperatorActivationRequest.parse(data); }
+    static createG8EPOperatorRelaunchRequest(data)      { return G8EPOperatorRelaunchRequest.parse(data); }
 }

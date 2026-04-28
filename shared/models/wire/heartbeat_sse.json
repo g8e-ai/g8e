@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical wire envelope for the OPERATOR_HEARTBEAT_RECEIVED SSE event pushed from g8ee to g8ed (and fanned out to the browser). Authorship split: g8eo authors the telemetry inside `metrics`; g8ee owns the envelope (`operator_id`, `status`). `metrics` is the same nested OperatorHeartbeat shape that is persisted on the operator document — no flat projection, no divergence. Producers: g8ee `HeartbeatSSEEnvelope` (components/g8ee/app/models/operators.py). Consumers: g8ed `EventService` forwards the envelope unchanged to the browser; the browser parses `data.metrics` as a HeartbeatSnapshot (mirror of OperatorHeartbeat).",
+  "_comment": "Canonical wire envelope for the OPERATOR_HEARTBEAT_RECEIVED SSE event pushed from g8ee to g8ed (and fanned out to the browser). Authorship split: g8eo authors the telemetry inside `metrics`; g8ee owns the envelope (`operator_id`, `status`). `metrics` is the same nested HeartbeatSnapshot shape that is persisted on the operator document — no flat projection, no divergence. Producers: g8ee `HeartbeatSSEEnvelope` (components/g8ee/app/models/operators.py). Consumers: g8ed `EventService` forwards the envelope unchanged to the browser; the browser parses `data.metrics` as a HeartbeatSnapshot (mirror of HeartbeatSnapshot).",
 
   "_comment.field_naming": "FIELD NAMING: Wire format models use 'operator_id' instead of 'id' for clarity in cross-component contexts where the entity type may not be immediately obvious. This maps directly to OperatorDocument.core_identity.id (see operator_document.json _comment.field_naming for the full convention).",
 
@@ -19,11 +19,11 @@
       "type": "object",
       "required": true,
       "$ref": "heartbeat.json#operator_heartbeat",
-      "description": "The persisted OperatorHeartbeat instance, serialized as-is. Canonical shape: shared/models/wire/heartbeat.json#operator_heartbeat (nested: system_identity, performance, network, uptime, version_info, os_details, user_details, disk_details, memory_details, environment, plus top-level fingerprint/capability flags)."
+      "description": "The persisted HeartbeatSnapshot instance, serialized as-is. Canonical shape: shared/models/wire/heartbeat.json#operator_heartbeat (nested: system_identity, performance, network, uptime, version_info, os_details, user_details, disk_details, memory_details, environment, plus top-level fingerprint/capability flags)."
     }
   },
 
-  "_comment.ownership": "Authorship boundary: HeartbeatSSEEnvelope is g8ee-owned (`operator_id` + `status`); `metrics` is the g8eo-authored OperatorHeartbeat snapshot, unchanged from its persisted form. Mutating `status` on the envelope after construction is explicitly disallowed — the authoritative value comes from OperatorDocument at the call site in heartbeat_service.py.",
+  "_comment.ownership": "Authorship boundary: HeartbeatSSEEnvelope is g8ee-owned (`operator_id` + `status`); `metrics` is the g8eo-authored HeartbeatSnapshot snapshot, unchanged from its persisted form. Mutating `status` on the envelope after construction is explicitly disallowed — the authoritative value comes from OperatorDocument at the call site in heartbeat_service.py.",
   "_comment.routing": "Routing fields (`web_session_id`, `user_id`, `case_id`, `investigation_id`) are added by the surrounding SessionEvent/BackgroundEvent envelope in app/models/events.py. They are NOT part of this wire schema and must never be placed inside `metrics`.",
-  "_comment.alignment": "Alignment rule: the frontend HeartbeatSnapshot model must mirror OperatorHeartbeat exactly. There is no flat projection and no fallback reads — adding flat-key accessors at the call site is prohibited per docs/developer.md (No Deduplicators, Arbitrary Guards, or Unions)."
+  "_comment.alignment": "Alignment rule: the frontend HeartbeatSnapshot model must mirror HeartbeatSnapshot exactly. There is no flat projection and no fallback reads — adding flat-key accessors at the call site is prohibited per docs/developer.md (No Deduplicators, Arbitrary Guards, or Unions)."
 }

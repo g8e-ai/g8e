@@ -74,10 +74,10 @@ Host Filesystem / AWS / Target System
 | **g8ee → g8es** | Internal Docker network, `X-Internal-Auth` token (strictly enforced by g8es/g8eo in `--listen` mode) |
 | **g8ed → g8es** | Internal Docker network, `X-Internal-Auth` token (strictly enforced by g8es/g8eo in `--listen` mode) |
 | **g8ee → LLM (AI)** | Sentinel ingress scrubbing — a redundant layer of protection for all Operator data before it is transmitted to any model provider; raw output, credentials, and PII are replaced with safe placeholders |
-| **g8ed → g8eo** | WebSocket over mTLS (TLS 1.3), per-operator client certificate issued at claim time, platform CA fetched from hub at operator startup |
+| **g8ed → g8eo** | WebSocket over mTLS (TLS 1.3), per-operator client certificate issued during device registration or bootstrap, platform CA fetched from hub at operator startup |
 | **Operator → Host** | Sentinel pre-execution threat blocking (46 MITRE-mapped detectors), egress data scrubbing, command allowlist/denylist, Human-in-the-Loop approval required for every state change |
-| **Data at Rest (g8es)** | SQLite at `0600` filesystem permissions (4 tables: documents, kv_store, sse_events, blobs); session fields encrypted at application layer by g8ed before persistence; **bootstrap secrets (`internal_auth_token`, `session_encryption_key`) persisted on the `g8es-ssl` volume and mirrored into the `platform_settings` document for consistency** |
-| **Data at Rest (LFAA Vaults)** | AES-256-GCM field-level encryption (content, stdout, stderr); DEK envelope encryption; key derived on-demand from operator API key via HKDF-SHA256 |
+| **Data at Rest (g8es)** | SQLite at `0600` filesystem permissions (4 tables: documents, kv_store, sse_events, blobs); session fields encrypted at application layer by g8ed before persistence; **bootstrap secrets (`internal_auth_token`, `session_encryption_key`, `auditor_hmac_key`) persisted on the `g8es-ssl` volume and mirrored into the `platform_settings` document for consistency** |
+| **Data at Rest (LFAA Vaults)** | AES-256-GCM field-level encryption (content, stdout, stderr); DEK envelope encryption; KEK derived on-demand from operator API key via HKDF-SHA256 |
 
 ### Network Isolation
 
@@ -99,14 +99,15 @@ All components resolve configuration values in the following order (highest prio
 4.  **Schema Defaults**: Hardcoded safe defaults defined in the component's configuration service.
 
 **Exception: Bootstrap Secrets**
-For critical bootstrap secrets (`internal_auth_token`, `session_encryption_key`), the **Shared SSL Volume** is the source of truth consumed by g8ed and g8ee at startup. g8es additionally mirrors the same values into the `platform_settings` document on startup so that the on-disk files and the cached DB document stay in sync (see `SecretManager.InitPlatformSettings` in `components/g8eo/services/listen/secret_manager.go`).
+For critical bootstrap secrets (`internal_auth_token`, `session_encryption_key`, `auditor_hmac_key`), the **Shared SSL Volume** is the source of truth consumed by g8ed and g8ee at startup. g8es additionally mirrors the same values into the `platform_settings` document on startup so that the on-disk files and the cached DB document stay in sync (see `SecretManager.InitPlatformSettings` in `components/g8eo/services/listen/secret_manager.go`).
 
 #### Bootstrap Secrets Handling
 
-The platform handles two critical secrets that are required for component-to-component authentication and data protection:
+The platform handles three critical secrets that are required for component-to-component authentication, data protection, and reputation integrity:
 
 - **`internal_auth_token`**: Shared secret for `X-Internal-Auth` header authentication.
 - **`session_encryption_key`**: AES-256 key used to encrypt sensitive fields in web and operator sessions.
+- **`auditor_hmac_key`**: HMAC-SHA256 key used by the g8ee Auditor to sign reputation commitments.
 
 The `./g8e platform settings` command displays truncated versions of these active secrets (e.g., `f5037487...6c5f`) to confirm they are set and synchronized without exposing the full values.
 
@@ -114,6 +115,7 @@ The `./g8e platform settings` command displays truncated versions of these activ
 The `g8es-ssl` volume is the authoritative source used by runtime consumers. It is mounted at `/g8es` on g8ed, g8ee, and g8ep (read-only), and at `/ssl` inside g8es itself. The secrets are stored as `0600` plain-text files on this volume.
 - `internal_auth_token` is stored at `/g8es/internal_auth_token`.
 - `session_encryption_key` is stored at `/g8es/session_encryption_key`.
+- `auditor_hmac_key` is stored at `/g8es/auditor_hmac_key`.
 
 **2. Generation and Synchronization**
 On every g8es startup, `SecretManager.InitPlatformSettings` reconciles the volume files with the `platform_settings` document in g8es:
@@ -182,8 +184,8 @@ g8e operates its own private CA. There is no dependency on any public CA.
 - **Generation:** CA and server certificates are generated at runtime by the g8es operator binary (`--listen --ssl-dir /ssl` mode) on first start. Stored in the dedicated `g8es-ssl` volume (`/ssl` inside g8es). Never baked into any Docker image.
 - **Distribution to services:** The `g8es-ssl` named Docker volume is mounted read-only at `/g8es` on g8ed, g8ee, and g8ep, and read-write at `/ssl` on g8es itself. Consumers read the CA from `/g8es/ca.crt` (or `/g8es/ca/ca.crt`). g8ed's `CertificateService` reads the CA cert and key from the same location to sign per-operator client certificates; per-operator client certs are written to `/g8es/certs/`.
 - **Volume isolation:** SSL certs live in a dedicated volume (`g8es-ssl`) separate from the SQLite DB volume (`g8es-data`). `platform reset` wipes the DB volume but never touches the SSL volume — SSL certs survive a full rebuild without needing to be re-trusted.
-- **CA trust for field operators:** The non-listen g8eo binary uses a **local-first** discovery strategy. When `--ca-url` is not set, it scans well-known volume mount paths (`/ssl/ca.crt`, `/g8es/ca.crt`, `/g8es/ssl/ca.crt`, `/data/ssl/ca.crt`) before attempting any network request. If no local file is found, it falls back to an HTTPS fetch from `https://<endpoint>/ssl/ca.crt` using the OS system trust store. The CA is never baked into the binary at compile time — there is no `//go:embed` and no `server_ca.crt` source file. This eliminates the circular dependency that caused x509 failures after a clean volume wipe: the operator always discovers the CA that g8es actually generated, not a stale one. Inside the Docker network, the `g8es-ssl` volume provides the CA at `/g8es/ca.crt` — no network fetch occurs.
-- **Per-operator client certificates:** Issued dynamically during Operator slot creation and stored in the operator document. The certificate is not transmitted in the authentication response; the Operator retrieves it from the operator document after slot creation.
+- **CA trust for field operators:** The non-listen g8eo binary uses a **local-first** discovery strategy. When `--ca-url` is not set, it scans well-known volume mount paths (`/ssl/ca.crt`, `/g8es/ca.crt`, `/g8es/ssl/ca.crt`, `/data/ssl/ca.crt`) before attempting any network request. If no local file is found, it falls back to an HTTPS fetch from `http://<endpoint>/ca.crt` using the OS system trust store. The CA is never baked into the binary at compile time — there is no `//go:embed` and no `server_ca.crt` source file. This eliminates the circular dependency that caused x509 failures after a clean volume wipe: the operator always discovers the CA that g8es actually generated, not a stale one. Inside the Docker network, the `g8es-ssl` volume provides the CA at `/g8es/ca.crt` — no network fetch occurs.
+- **Per-operator client certificates:** Issued dynamically during Device registration or bootstrap and returned in the response.
 - **Validity:** CA — 10 years (3650 days); server certificate — 90 days. Both renewed automatically on restart if expired.
 - **CA private key:** Accessible only to the core authentication service; never exposed via any API.
 
@@ -192,7 +194,7 @@ g8e operates its own private CA. There is no dependency on any public CA.
 The g8eo binary (field operator mode) loads the platform CA at startup using a two-stage strategy:
 
 1. **Local discovery** (preferred): When `--ca-url` is not set, the binary scans `/ssl/ca.crt`, `/g8es/ca.crt`, `/g8es/ssl/ca.crt`, and `/data/ssl/ca.crt` in order. The first path that exists and contains valid PEM is accepted immediately via `certs.SetCA` — no network request is made. This is the normal path for containerized operators (e.g., g8ep), where the `g8es-ssl` Docker volume provides the CA locally.
-2. **Remote fetch** (fallback): If no local file is found, the binary fetches from `https://<endpoint>/ssl/ca.crt` (or the URL given by `--ca-url`) via `certs.FetchAndSetCA`. This uses Go's default `http.Client` with the OS system trust store, a 15-second timeout, and a 64 KB body limit. The fetch is equivalent to a certificate pinning operation — not a sensitive data transfer. For remote deployments using the [deployment script](../components/g8ed.md#operator-deployment-script), the CA is pre-fetched over plain HTTP and passed to `curl --cacert` / `wget --ca-certificate` for the binary download — the operator binary then discovers it via local-first discovery or falls back to the standard HTTPS fetch.
+2. **Remote fetch** (fallback): If no local file is found, the binary fetches from `http://<endpoint>/ca.crt` (or the URL given by `--ca-url`) via `certs.FetchAndSetCA`. This uses Go's default `http.Client` with the OS system trust store, a 15-second timeout, and a 64 KB body limit. The fetch is equivalent to a certificate pinning operation — not a sensitive data transfer. For remote deployments using the [deployment script](../components/g8ed.md#operator-deployment-script), the CA is pre-fetched over plain HTTP and passed to `curl --cacert` / `wget --ca-certificate` for the binary download — the operator binary then discovers it via local-first discovery or falls back to the standard HTTPS fetch.
 
 Once stored in the runtime CA store, all subsequent TLS connections are verified against it. Public CAs are not trusted.
 
@@ -308,13 +310,29 @@ Role escalation is not possible through any public-facing API. Roles are validat
 
 ### Rate Limiting
 
-| Scope | Limit |
-|---|---|
-| Auth endpoints | 20 requests / 5 min |
-| Chat endpoints | 30 messages / min |
-| SSE connections | 30 attempts / 5 min (failed only) |
-| General API | 60 requests / min |
-| Global public API | 100 requests / min |
+Rate limiting is implemented via `express-rate-limit` in `middleware/rate-limit.js`. Multiple endpoint-specific limiters protect against brute force and DoS attacks.
+
+| Scope | Limit | Key |
+|---|---|---|
+| Global public API | 100 requests / min | IP |
+| Auth endpoints (user registration) | 20 requests / 5 min | IP |
+| Passkey auth endpoints | 10 requests / 5 min | IP |
+| Operator auth (per API key) | 20 requests / 5 min | API key prefix (16 chars) |
+| Operator auth (IP backstop) | 20 requests / 5 min | IP |
+| Chat endpoints | 30 messages / min | Web session ID |
+| SSE connections | 30 attempts / 5 min (failed only) | Web session ID |
+| General API | 60 requests / min | IP |
+| Operator refresh | 10 requests / min | IP |
+| Audit log endpoints | 60 requests / min | User ID (fallback to IP) |
+| Console endpoints | 60 requests / min | User ID (fallback to IP) |
+| Operator API | 100 requests / min | API key (fallback to IP) |
+| Device link register (public) | 10 requests / 5 min | IP |
+| Device link generate | 10 requests / 5 min | User ID (fallback to IP) |
+| Device link list | 30 requests / min | User ID (fallback to IP) |
+| Device link revoke | 20 requests / 5 min | User ID (fallback to IP) |
+| Settings API | 30 requests / min | User ID (fallback to IP) |
+
+**Auth-sensitive limiters** (passkey, user auth, operator auth, device link register) are exported at module scope for static analysis tools (e.g., CodeQL's `js/missing-rate-limiting`) to trace enforcement to the `express-rate-limit` call site.
 
 ---
 
@@ -355,10 +373,11 @@ Operators (g8eo) authenticate via one of three methods. All result in the same b
 
 ### Bootstrap Sequence (all methods)
 
-1. Operator POSTs to `/api/auth/operator` with API key or device token.
+1. Operator POSTs to `/api/auth/operator` with API key.
 2. g8ed verifies credentials and validates the system fingerprint binding (permanent after first use).
-3. g8ed returns the operator session ID, operator ID, user ID, API key, and configuration. The per-operator mTLS client certificate is generated and stored in the operator document during slot creation (not returned in the auth response).
-4. The Operator connects to g8es pub/sub over WSS using the mTLS client certificate that was provisioned during slot creation.
+3. g8ed returns the operator session ID, operator ID, user ID, API key, configuration, and the per-operator mTLS client certificate + private key.
+4. The Operator rebuilds its HTTP transport to use the mTLS certificate.
+5. The Operator connects to g8es pub/sub over WSS using the same mTLS client certificate.
 
 ### System Fingerprint Binding
 
@@ -386,8 +405,6 @@ Device links are pre-signed, time-bounded authorization tokens that solve the bo
 
 The API key path is the standard long-running operator authentication method, handled by `OperatorAuthService._authenticateViaApiKey` (`services/operator/operator_auth_service.js`).
 
-**Dispatch condition:** g8eo sends `auth_mode=api_key` (or omits `auth_mode`) with `Authorization: Bearer <key>` header. `OperatorAuthService.authenticateOperator` routes to this path when `auth_mode !== AuthMode.OPERATOR_SESSION`.
-
 **Validation sequence:**
 
 1. **Header extraction** — API key extracted from `Authorization: Bearer <key>`. Missing or malformed header → 400.
@@ -395,14 +412,13 @@ The API key path is the standard long-running operator authentication method, ha
 3. **Download-only key rejection** — If the key has no `operator_id` binding (download-only key) → 403 with `DOWNLOAD_KEY_NOT_ALLOWED` code. Download keys (`G8E_DOWNLOAD_KEY`) fetch the binary; they cannot authenticate an operator process.
 4. **`last_used_at` update** — `ApiKeyService.updateLastUsed` called after successful validation (non-blocking; errors are logged and do not fail auth).
 5. **User existence check** — `UserService.getUser(user_id)` from key data → 404 if not found.
-6. **System fingerprint requirement** — `system_info.system_fingerprint` must be present in the request body → 400 if missing.
-7. **Operator ownership check** — `operator.user_id` must match the authenticated `user_id` → 403 if not.
-8. **Operator type immutability** — If the slot has an existing fingerprint + type, the requested type (system vs. cloud) must match → 403 with `OPERATOR_TYPE_MISMATCH` code. Operator type is permanent once set.
-9. **Active operator reconnect check** — If the operator is `ACTIVE` or `BOUND`: reconnection is permitted only if the fingerprint matches (same-system restart) or the operator is stale (no heartbeat for >60s). Otherwise → 409.
-10. **Fingerprint binding check** — If the operator is not active/bound: if a fingerprint is already stored and it does not match the incoming fingerprint → 403 with `FINGERPRINT_MISMATCH` code.
-11. **Slot claim vs. reconnect** — `is_claiming_slot = true` when no fingerprint has been stored yet (first-ever auth). First auth claims the slot via `OperatorDataService.claimOperatorSlot`. The per-operator mTLS client certificate is generated during slot creation (not in the auth response). Subsequent auths call `updateOperatorForReconnection`. If the operator was previously `BOUND`, its KV binding is refreshed to the new operator session ID.
-12. **Session creation and activation** — Operator session created, operator activated, `OPERATOR_STATUS_UPDATED` SSE broadcast to all active user web sessions.
-13. **Bootstrap response** — Returns `operator_session_id`, `operator_id`, `user_id`, `api_key` (echoed back for in-memory use), and `config`. The per-operator mTLS client certificate is generated and stored in the operator document during slot creation (not returned in the auth response).
+6. **Operator ownership check** — `operator.user_id` must match the authenticated `user_id` → 403 if not.
+7. **Operator type immutability** — If the slot has an existing fingerprint + type, the requested type (system vs. cloud) must match → 403 with `OPERATOR_TYPE_MISMATCH` code. Operator type is permanent once set.
+8. **Active operator reconnect check** — If the operator is `ACTIVE` or `BOUND`: reconnection is permitted only if the fingerprint matches (same-system restart) or the operator is stale (no heartbeat for >60s). Otherwise → 409.
+9. **Fingerprint binding check** — If the operator is not active/bound: if a fingerprint is already stored and it does not match the incoming fingerprint → 403 with `FINGERPRINT_MISMATCH` code.
+10. **Slot claim vs. reconnect** — `is_claiming_slot = true` when no fingerprint has been stored yet (first-ever auth). First auth claims the slot via `OperatorDataService.claimOperatorSlot`. The per-operator mTLS client certificate is generated during slot creation and returned in the bootstrap response. Subsequent auths call `updateOperatorForReconnection`. If the operator was previously `BOUND`, its KV binding is refreshed to the new operator session ID.
+11. **Session creation and activation** — Operator session created, operator activated, `OPERATOR_STATUS_UPDATED` SSE broadcast to all active user web sessions.
+12. **Bootstrap response** — Returns `operator_session_id`, `operator_id`, `user_id`, `api_key` (echoed back for in-memory use), `config`, and the per-operator mTLS client certificate + private key.
 
 | Check | Failure code | HTTP |
 |---|---|---|
@@ -419,43 +435,28 @@ The API key path is the standard long-running operator authentication method, ha
 
 ### Device Link Auth Layer
 
-The Device Link path is a two-phase bootstrap: **registration** then **authentication**. It is handled by `DeviceLinkService.registerDevice` (phase 1) and `OperatorAuthService._authenticateViaDeviceLink` (phase 2).
-
-**Dispatch condition:** g8eo sends `auth_mode=operator_session` with `operator_session_id` in the request body. `OperatorAuthService.authenticateOperator` routes to `_authenticateViaDeviceLink` when this condition is met.
+The Device Link path is a two-phase bootstrap: **registration** then **authentication**. It is handled by `DeviceLinkService.registerDevice` (phase 1) and standard API key authentication (phase 2).
 
 #### Phase 1: Device Registration (`DeviceLinkService.registerDevice`)
 
-Called by g8eo when it first presents a `--device-token dlk_...` token. This phase happens before the auth POST.
+Called by g8eo when it first presents a `--device-token dlk_...` token. This phase happens before the bootstrap POST.
 
-**Single-operator link (`PENDING` status):**
+**Registration sequence:**
 1. Token format validated against `dlk_[A-Za-z0-9_-]{32}`.
 2. Token fetched from g8es KV; expiry checked.
 3. `REVOKED` → 403; `USED` → 403.
-4. `DeviceRegistrationService.registerDevice` called with `operator_id` from the link data: creates operator session, claims or reconnects the pre-designated operator slot, activates the operator, fires `OPERATOR_STATUS_UPDATED` SSE to the linked web session.
-5. Token status set to `USED` with device info recorded; token remains in KV until natural TTL expiry.
+4. `DeviceRegistrationService.registerDevice` called:
+   - For multi-use links: atomicity is maintained via distributed lock and use counters.
+   - Claims or reconnects an available operator slot.
+   - Generates an API key and per-operator mTLS certificate for the device.
+5. Token status updated to reflect use/exhaustion.
+6. **Response:** returns `{ api_key, operator_cert, operator_cert_key, operator_id }` directly to the Operator.
 
-**Multi-use link (`ACTIVE` status):**
-1. Same token format/expiry validation.
-2. **Fingerprint dedup** — fingerprint added to `deviceLinkFingerprints(token)` SET via `kvSadd`. Returns 0 if already present → `DEVICE_ALREADY_REGISTERED`.
-3. **Use counter** — atomic `kvIncr` on `deviceLinkUses(token)`. If count exceeds `max_uses`, counter and fingerprint are rolled back → `LINK_EXHAUSTED`.
-4. **Distributed lock** — `kvSet(lockKey, value, PX, 10000, NX)` with retry loop (25 attempts × 200ms) prevents concurrent races on slot selection → `REGISTRATION_BUSY` on lock timeout.
-5. **Slot assignment** — Finds an `AVAILABLE` operator slot from the pre-provisioned slots (created when the device link was generated). Uses `DeviceRegistrationService.registerDevice`.
-6. **Claim tracking** — Claim appended to `linkData.claims`; `status` set to `EXHAUSTED` when `claims.length >= max_uses`.
-7. Lock released in `finally` block (only if the lock value still matches — prevents stale release).
+#### Phase 2: Authentication
 
-Both paths return `{ operator_session_id, operator_id }` on success.
+Called by g8eo on the subsequent `POST /api/auth/operator` using the API key received in Phase 1. This follows the standard [API Key Auth Layer](#api-key-auth-layer) sequence.
 
-#### Phase 2: Authentication (`OperatorAuthService._authenticateViaDeviceLink`)
-
-Called by g8eo on the subsequent `POST /api/auth/operator` with `auth_mode=operator_session`.
-
-1. **Session validation** — `OperatorSessionService.validateSession(deviceLinkSessionId)` checks the session created in Phase 1 is still live. Invalid/expired → 401.
-2. **Identity extraction** — `user_id` and `operator_id` resolved from the pre-provisioned session. Missing fields → 401.
-3. **User existence check** — `UserService.getUser(user_id)` → 404 if not found.
-4. **API key retrieval** — `operator_api_key` fetched from the operator document for inclusion in the bootstrap response (used by g8eo for in-memory LFAA vault key derivation; never stored on disk).
-5. **Bootstrap response** — Returns `operator_session_id` (the pre-provisioned session ID), `operator_id`, `user_id`, `api_key`, and `config`. The per-operator mTLS client certificate is generated and stored in the operator document during slot creation (not returned in the auth response).
-
-**Why the two-phase design:** The device link token is consumed at registration time (Phase 1), which provisions the operator session and issues the mTLS cert. The subsequent auth request (Phase 2) uses the already-provisioned session ID — the token is gone by this point. This means the token never travels over the wire a second time and has zero value after first use.
+**Why the two-phase design:** The device link token is consumed at registration time (Phase 1), which provisions the long-lived credentials (API key + cert). The subsequent bootstrap request (Phase 2) uses the persistent API key — the token is gone by this point. This means the token never travels over the wire a second time and has zero value after first use.
 
 | Check | Failure | HTTP |
 |---|---|---|
@@ -485,8 +486,8 @@ The `g8e` CLI provides a local credential store for command-line operations, all
 
 **Login flow:**
 1. User runs `./g8e login --api-key <key>` or `./g8e login --device-token <token>` (or enters interactively).
-2. The CLI authenticates via `/api/auth/operator` endpoint using the provided credential.
-3. On success, the platform returns `operator_session_id`, `user_id`, `operator_id`, and `api_key`.
+2. The CLI authenticates or registers via the platform.
+3. On success, the platform returns `api_key`, `user_id`, `operator_id`, and `operator_session_id`.
 4. The CLI stores these credentials in `~/.g8e/credentials` with `0600` filesystem permissions.
 5. Subsequent CLI commands automatically load and validate the stored credentials.
 
@@ -573,8 +574,8 @@ g8eo Operators open no inbound ports. All communication is Operator-initiated �
 
 1. Load settings from environment + CLI flags.
 2. Load the platform CA certificate using local-first discovery (scan `/ssl/ca.crt`, `/g8es/ca.crt`, `/g8es/ssl/ca.crt`, `/data/ssl/ca.crt`), falling back to an HTTPS fetch from `https://<endpoint>/ssl/ca.crt` if no local file is found. If all paths fail, the operator exits immediately.
-3. Authenticate (API key, device token, or pre-authorized session).
-4. POST to `/api/auth/operator` — receive bootstrap config (session ID, operator ID, user ID, API key, config). Retrieve the per-operator mTLS client certificate from the operator document.
+3. Authenticate (API key or device token).
+4. POST to `/api/auth/operator` — receive bootstrap config (session ID, operator ID, user ID, API key, config, and mTLS certificate).
 5. Initialize local storage: scrubbed vault, raw vault, audit vault.
 6. Initialize LFAA audit vault and git ledger.
 7. Connect to g8es pub/sub over WSS using the retrieved mTLS client certificate.
@@ -624,20 +625,49 @@ All commands dispatched to an Operator pass through Sentinel before execution. S
 
 Before any command executes on the host, Sentinel scans it against MITRE ATT&CK-mapped threat patterns. Dangerous commands are **blocked outright** before reaching the execution layer.
 
-| Category | Examples |
-|---|---|
-| **Data destruction** | Recursive root deletion (`rm -rf /`), raw disk overwrites (`dd if=/dev/zero`) |
-| **System tampering** | Modifications to `/etc/passwd`, `/etc/shadow`, SSH authorized keys, sudoers |
-| **Reverse shells / tunnels** | `bash -i >& /dev/tcp/...`, `nc -e`, `socat` backdoors |
-| **Privilege escalation** | `chmod +s`, capability manipulation, `sudoedit` abuse |
-| **Credential access** | Dumping secrets from memory, `/proc/*/mem` access |
-| **Persistence mechanisms** | Cron injection, systemd unit file manipulation outside project dirs |
-| **Defense evasion** | Command encoding (`base64 -d | bash`), obfuscation patterns |
-| **Reconnaissance** | Mass port scanning, ARP sweeps with unusual flags |
-| **Lateral movement** | SSH key injection on unauthorized paths |
-| **Cryptominers** | Known miner binary signatures and connection patterns |
-| **Data exfiltration** | Bulk outbound transfers of sensitive system files |
-| **Resource hijacking** | Fork bombs, ulimit bypass patterns |
+#### Input Threat Detectors (46+ patterns)
+
+Sentinel maintains an extensive set of input threat detectors in `components/g8eo/services/sentinel/sentinel_input.go`. Each detector is mapped to MITRE ATT&CK techniques and tactics.
+
+| Category | Examples | MITRE Technique |
+|---|---|---|
+| **Data destruction** | `rm -rf /`, `dd of=/dev/sd*`, `mkfs /dev/`, `shred /dev/`, `wipefs`, `fdisk/gdisk/parted` | T1485, T1561.001 |
+| **System tampering** | Writing to `/etc/passwd`, `/etc/shadow`, `/etc/sudoers`, `/etc/pam.d/`, `/etc/ssh/sshd_config`, `/etc/hosts`, `/etc/resolv.conf`, `/etc/ld.so.*` | T1136.001, T1548.003, T1556.003, T1098.004, T1565.001, T1574.006 |
+| **Security bypass** | `setenforce 0`, `aa-disable`, disabling firewalls (`ufw`, `firewalld`, `iptables`), disabling auditd | T1562.001, T1562.004 |
+| **Malware deployment** | `curl ... | bash`, `wget ... | bash`, `eval $(base64 -d)`, Python remote code execution | T1059.004, T1027, T1059.006 |
+| **Reverse shells** | `bash -i >& /dev/tcp/`, `nc -e /bin/sh`, `ncat --exec`, Python/Perl/Ruby/PHP/Socat/Telnet reverse shell patterns | T1059.004, T1059.006 |
+| **Privilege escalation** | Setting SUID/SGID bits, `setcap` with dangerous capabilities | T1548.001 |
+| **Credential access** | Reading `/etc/shadow`, AWS/GCP/Azure/Kubernetes credential files, SSH private keys, copying shadow file | T1003.008, T1552.001, T1552.004 |
+| **Persistence** | Cron jobs from remote sources, suspicious `at` jobs | T1053.003, T1053.002 |
+| **Exfiltration** | DNS tunneling (`dig ... $()`), ICMP tunneling with hex payloads | T1048.001, T1048.003 |
+| **Defense evasion** | Clearing `/var/log/`, clearing shell history, disabling logging services | T1070.002, T1070.003, T1562.001 |
+| **Network manipulation** | ARP spoofing, DNS spoofing tools | T1557.002, T1557.001 |
+| **Cryptomining** | Downloading miners, stratum+tcp connections, known mining pool domains | T1496 |
+| **Container escape** | Privileged containers, mounting host root, mounting Docker socket | T1611 |
+| **System tampering** | Loading kernel modules (`insmod`, `modprobe`) | T1547.006 |
+
+#### Critical System Paths
+
+Sentinel maintains a list of critical system paths (`CriticalSystemPaths` and `CriticalSystemDirs` in `sentinel_input.go`) that trigger elevated scrutiny:
+
+- `/etc/passwd`, `/etc/shadow`, `/etc/group`, `/etc/gshadow`, `/etc/sudoers`, `/etc/sudoers.d/`
+- `/etc/ssh/sshd_config`, `/etc/ssh/ssh_config`, `/etc/pam.d/`, `/etc/security/`
+- `/etc/ld.so.conf`, `/etc/ld.so.preload`, `/etc/hosts`, `/etc/resolv.conf`, `/etc/fstab`
+- `/etc/crontab`, `/etc/cron.d/`, `/etc/cron.daily/`, `/etc/cron.hourly/`, `/etc/init.d/`
+- `/etc/systemd/system/`, `/etc/rc.local`, `/etc/profile`, `/etc/profile.d/`, `/etc/bash.bashrc`
+- `/etc/environment`, `/etc/selinux/`, `/etc/apparmor/`, `/etc/apparmor.d/`, `/boot/`
+- `/root/.ssh/`, `/root/.bashrc`, `/root/.bash_profile`, `/root/.profile`
+- `/bin`, `/sbin`, `/usr/bin`, `/usr/sbin`, `/usr/local/bin`, `/usr/local/sbin`
+- `/lib`, `/lib64`, `/usr/lib`, `/boot`, `/proc`, `/sys`, `/dev`
+
+#### File Edit Analysis
+
+Sentinel also analyzes file operations before they execute via `AnalyzeFileEdit`:
+
+- Checks if the file path is a critical system file
+- Analyzes file content for malicious patterns
+- Analyzes file path patterns for suspicious operations
+- Sets `RequiresApproval` flag for critical system files even if not explicitly blocked
 
 **Blocked threats** are rejected before the approval prompt is shown. **Flagged threats** (elevated risk, potentially legitimate) surface in the approval flow with the specific threat category and MITRE ATT&CK classification shown to the user. Every blocked or flagged attempt is recorded in the LFAA audit vault with tamper-evident logging.
 
@@ -651,7 +681,7 @@ Before dispatching any command to the Operator, g8ee runs its own AI-powered saf
 
 ### Tribunal Command Refinement
 
-Before a command is presented for human approval, it passes through an additional syntactic refinement pipeline in g8ee (`components/g8ee/app/services/ai/command_generator.py`). The Large LLM is not involved after its initial proposal.
+Before a command is presented for human approval, it passes through an additional syntactic refinement pipeline in g8ee (`components/g8ee/app/services/ai/generator.py`). The Large LLM is not involved after its initial proposal.
 
 ```
 Large LLM proposes command via ReAct loop
@@ -660,15 +690,20 @@ Large LLM proposes command via ReAct loop
 Tribunal — N concurrent generation passes (default: 3, `llm_command_gen_passes`)
   Each pass: same intent + operator OS/shell/working_directory context
   Temperature: model default (via get_model_config)
-  Model: resolved via `assistant_model -> primary_model` (Ollama default: qwen3-5-122b)
-  Members cycle through Axiom / Concord / Variance
+  Model: resolved via `assistant_model -> primary_model`
+  Members: Axiom, Concord, Variance, Pragma, Nemesis
   │
   ▼
-Uniform per-member voting — each member contributes exactly 1 vote per candidate
+Round 1: Initial generation and weighted majority voting
   │
   ▼
-SLM Verifier (same model, temperature: model default; disabled via `llm_command_gen_verifier=false`)
-  Returns exactly "ok" — or a corrected command string
+Round 2 (Optional): Peer review if consensus is low
+  Members review anonymized candidate clusters from Round 1
+  │
+  ▼
+Auditor verification (optional, enabled via `llm_command_gen_verifier=true`)
+  Auditor makes a reputation commitment via Merkle tree signed with `auditor_hmac_key`
+  Returns approval, revision, or cluster swap based on reputation analysis
   │
   ▼
 Final command presented to human for approval
@@ -676,14 +711,17 @@ Final command presented to human for approval
 
 **Fallback guarantee:** If the tribunal fails for any reason, the original Large LLM command is used and `FALLBACK` is recorded. The human approval prompt always fires regardless.
 
-### Command Allowlist and Denylist
+**Auditor system:** When enabled (`llm_command_gen_verifier=true`), the auditor uses the primary model as a reputation-based verifier. It binds every verdict to a snapshot of the reputation scoreboard by writing a signed Merkle commitment. The auditor can approve the winning candidate, provide a corrected command, or swap the winner to a dissenting cluster if it detects a more reliable alternative.
 
-Two optional operator-level controls are available as additional constraints — **disabled by default**, configured via user settings.
+### Command Allowlist, Denylist, and Auto-Approve
 
-- **Allowlist (whitelist)** — restricts the AI to pre-approved commands with validated parameters. Each allowlisted command defines permitted options, regex-validated parameters, and a `max_execution_time`.
-- **Denylist (blacklist)** — blocks specific commands, binaries, substrings, and regex patterns across four enforcement layers: forbidden commands, forbidden binaries, forbidden substrings, forbidden regex patterns.
+Three independent operator-level controls are available as additional constraints — all **disabled by default** and configured via user settings. They have distinct semantics and **must not be conflated**:
 
-When the blacklist is enabled, a command matching any layer is rejected before the approval prompt — it never reaches the user for consideration.
+- **Allowlist (whitelist) — HARD ALLOW-LIST.** Restricts the AI to pre-approved commands with validated parameters. When enabled, any command not on the list is rejected at L1 safety validation regardless of human approval.
+  - **JSON Mode (default)**: Uses a rich JSON whitelist (`config/whitelist.json`) where each command defines permitted options, regex-validated parameters, and a `max_execution_time`.
+  - **CSV Mode (override)**: If a user specifies a comma-separated list of commands (e.g., `uptime,df,free`) in their settings, this entirely replaces the JSON whitelist. Only the base commands in the CSV are permitted, and arguments are validated using basic shell safety checks.
+- **Denylist (blacklist) — HARD BLOCK-LIST.** Blocks specific commands, binaries, substrings, and regex patterns across four enforcement layers: forbidden commands, forbidden binaries, forbidden substrings, forbidden regex patterns. When enabled, a command matching any layer is rejected before the approval prompt — it never reaches the user for consideration.
+- **Auto-Approve — SKIP-APPROVAL LIST.** When enabled, commands whose base verb appears in `auto_approved_commands` bypass the human approval prompt (the human has rubber-stamped them in advance as benign). Auto-approve is **independent** of whitelisting: it does not widen the whitelist and does not bypass the blacklist or hard-coded forbidden patterns. A command must still pass every L1 hard gate before auto-approve can apply.
 
 #### Configuration
 
@@ -695,7 +733,10 @@ Command validation is configured per-user via the `command_validation` field in 
   "settings": {
     "command_validation": {
       "enable_whitelisting": false,
-      "enable_blacklisting": false
+      "enable_blacklisting": false,
+      "whitelisted_commands": "",
+      "enable_auto_approve": false,
+      "auto_approved_commands": ""
     },
     "llm": { ... },
     "search": { ... },
@@ -704,14 +745,23 @@ Command validation is configured per-user via the `command_validation` field in 
 }
 ```
 
-- `enable_whitelisting` (bool, default: `false`) — When enabled, only commands in the whitelist are permitted
-- `enable_blacklisting` (bool, default: `false`) — When enabled, commands matching blacklist patterns are blocked
+- `enable_whitelisting` (bool, default: `false`) — When enabled, only commands in the whitelist are permitted (hard allow-list).
+- `enable_blacklisting` (bool, default: `false`) — When enabled, commands matching blacklist patterns are blocked (hard block-list).
+- `whitelisted_commands` (string, default: `""`) — Optional comma-separated list of allowed base commands (e.g. `uptime,df,free`).
+- `enable_auto_approve` (bool, default: `false`) — When enabled, commands whose base verb is in `auto_approved_commands` skip the human approval prompt. Independent of whitelisting; does **not** widen the whitelist and does **not** bypass the blacklist or hard-coded forbidden patterns.
+- `auto_approved_commands` (string, default: `""`) — Comma-separated list of base commands the human has rubber-stamped as benign (e.g. `uptime,df,free`). Only consulted when `enable_auto_approve` is `true`.
+
+**Whitelist Mode Semantics:**
+- **JSON mode (default):** When `whitelisted_commands` is empty, the system uses a rich JSON whitelist (`config/whitelist.json`) with per-command `safe_options` and `validation` patterns.
+- **CSV mode (override):** When `whitelisted_commands` contains a comma-separated list, this list **entirely replaces** the JSON whitelist. Every argument must pass basic shell safety checks (`_is_safe_value`). Rich per-command patterns from the JSON whitelist are NOT used in this mode.
+
+**Independence guarantee:** Whitelisting, blacklisting, and auto-approve are three orthogonal policies. Enabling auto-approve never relaxes a hard gate; disabling whitelisting never grants auto-approval. Each policy must be enabled (and configured) explicitly.
 
 Users can configure these settings through:
-1. **Settings UI** — Navigate to Settings → Command Validation to enable/disable whitelist and blacklist
+1. **Settings UI** — Navigate to Settings → Command Validation to enable/disable whitelist, blacklist, and auto-approve
 2. **API** — Update user settings via the `/api/settings/user` endpoint
 
-The AI is informed of active command constraints via the `get_command_constraints` tool, which returns the current whitelist and blacklist state for Tribunal awareness during command generation.
+The AI is informed of active command constraints via the `get_command_constraints` tool, which returns the current whitelist, blacklist, and auto-approve state for Tribunal awareness during command generation. The Tribunal must continue to obey hard gates regardless of auto-approve.
 
 ---
 
@@ -744,7 +794,7 @@ The KV keys are the authoritative runtime state; the document store is the durab
 1. `getBindingService().getBoundOperatorSessionIds(webSessionId)` — reads `sessionWebBind` KV key.
 2. For each operator session ID: `getOperatorSessionService().validateSession(operatorSessionId)` — confirms the session is live and retrieves `operator_id`.
 3. Verify the reverse binding: `getBindingService().getWebSessionForOperator(operatorSessionId)` — confirms `sessionBindOperators` resolves back to this web session. Mismatch → skipped.
-4. Fetch the operator document from g8es for current `status`, `system_info`, `operator_type`.
+4. Fetch the operator document from g8es for current `status`, `operator_type`.
 5. Serialize each valid operator as a `BoundOperatorContext` and JSON-encode the array into `X-G8E-Bound-Operators`.
 
 `X-G8E-Bound-Operators` is the **exclusive source of truth** for which operators are available to the AI on any given request. g8ee performs no independent operator lookup to resolve binding state — if `g8e_context.bound_operators` is empty, the session has no bound operators.
@@ -902,6 +952,38 @@ The tool declarations that the AI can actually invoke are built in `AIToolServic
 ---
 
 ## Cloud Operator Security (AWS Zero Standing Privileges)
+
+### Cloud Command Validator
+
+Cloud Operators require pattern-based command routing to ensure cloud-specific commands are only executed by appropriately configured operators. The `CloudCommandValidator` in `components/g8ee/app/services/operator/cloud_command_validator.py` maintains a list of cloud-only command patterns.
+
+Commands matching these patterns require an Operator with `operator_type: cloud`:
+
+| Pattern | Tool |
+|---|---|
+| `^aws\s` | AWS CLI |
+| `^gcloud\s` | Google Cloud CLI |
+| `^gsutil\s` | Google Cloud Storage |
+| `^bq\s` | BigQuery |
+| `^az\s` | Azure CLI |
+| `^kubectl\s` | Kubernetes |
+| `^helm\s` | Helm package manager |
+| `^k9s\b` | Kubernetes terminal UI |
+| `^kubectx\b` | Kubernetes context switcher |
+| `^kubens\b` | Kubernetes namespace switcher |
+| `^terraform\s` | Terraform |
+| `^tofu\s` | OpenTofu |
+| `^pulumi\s` | Pulumi |
+| `^ansible\b` | Ansible |
+| `^ansible-playbook\s` | Ansible Playbook |
+| `^eksctl\s` | EKS CLI |
+| `^sam\s` | AWS SAM |
+| `^cdk\s` | AWS CDK |
+| `^serverless\s` | Serverless Framework |
+
+The `is_cloud_only_command()` function checks if a command requires a Cloud Operator before dispatch. System operators cannot execute cloud-specific commands.
+
+### Zero Standing Privileges Model
 
 Cloud Operators for AWS implement a Zero Standing Privileges model — the hardest form of least privilege for cloud environments.
 

@@ -116,6 +116,18 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	doc, err := h.db.DocGet("settings", "platform_settings")
+	if err != nil {
+		h.logger.Error("Health check failed to query platform_settings", "error", err)
+		jsonError(w, http.StatusServiceUnavailable, "platform_settings not ready")
+		return
+	}
+	if doc == nil {
+		h.logger.Warn("Health check: platform_settings not found")
+		jsonError(w, http.StatusServiceUnavailable, "platform_settings not ready")
+		return
+	}
+
 	jsonResponse(w, http.StatusOK, models.HealthResponse{
 		Status:  constants.Status.ListenMode.StatusOK,
 		Mode:    constants.Status.ListenMode.Mode,

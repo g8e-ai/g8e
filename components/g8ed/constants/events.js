@@ -62,6 +62,8 @@ export const EventType = Object.freeze({
     INVESTIGATION_CHAT_MESSAGE_AI:     _EVENTS['app']['investigation']['chat']['message']['ai'],
     INVESTIGATION_CHAT_MESSAGE_SYSTEM: _EVENTS['app']['investigation']['chat']['message']['system'],
 
+    OPERATOR_SLOT_INITIALIZATION_FAILED: _EVENTS['operator']['slot']['initialization']['failed'],
+    OPERATOR_G8EP_ACTIVATION_FAILED:    _EVENTS['operator']['g8ep']['activation']['failed'],
     OPERATOR_HEARTBEAT_SENT:      _EVENTS['operator']['heartbeat']['sent'],
     OPERATOR_HEARTBEAT_REQUESTED: _EVENTS['operator']['heartbeat']['requested'],
     OPERATOR_HEARTBEAT_RECEIVED:  _EVENTS['operator']['heartbeat']['received'],

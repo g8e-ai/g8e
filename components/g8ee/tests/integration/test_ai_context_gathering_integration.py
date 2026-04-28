@@ -48,18 +48,20 @@ All tests use real g8es and cache services — no mocks allowed per testing guid
 
 import asyncio
 import logging
-import pytest
-from datetime import datetime, UTC
 import uuid
+from datetime import UTC, datetime
+
+import pytest
 
 from app.constants import (
     CloudSubtype,
+    InvestigationStatus,
     OperatorStatus,
     OperatorType,
-    InvestigationStatus,
     Priority,
 )
 from app.errors import ResourceNotFoundError
+from app.models.agent import OperatorContext
 from app.models.http_context import BoundOperator
 from app.models.investigations import (
     EnrichedInvestigationContext,
@@ -67,24 +69,25 @@ from app.models.investigations import (
 )
 from app.models.memory import InvestigationMemory
 from app.models.operators import (
-    OperatorSystemInfo,
-    SystemInfoOSDetails,
-    SystemInfoUserDetails,
-    SystemInfoMemoryDetails,
-    SystemInfoDiskDetails,
-    SystemInfoEnvironment,
+    HeartbeatDiskDetails,
+    HeartbeatEnvironment,
+    HeartbeatMemoryDetails,
+    HeartbeatNetworkInfo,
+    HeartbeatOSDetails,
+    HeartbeatSnapshot,
+    HeartbeatSystemIdentity,
+    HeartbeatUserDetails,
 )
-from app.models.agent import OperatorContext
 from app.services.investigation.investigation_service import (
-    extract_system_context,
     extract_all_operators_context,
+    extract_system_context,
 )
 from tests.fakes.factories import (
+    build_g8e_http_context,
+    build_production_operator_document,
     create_investigation_data,
     create_investigation_memory,
     create_investigation_request,
-    build_production_operator_document,
-    build_g8e_http_context,
 )
 
 pytestmark = [pytest.mark.integration]
@@ -105,12 +108,12 @@ class TestInvestigationContextResolution:
     ):
         """Happy path: resolve investigation by investigation_id."""
         # Setup services properly using real infrastructure
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
 
         # Create investigation data first to get the IDs
         investigation = create_investigation_data()
-        
+
         # Create the actual investigation with the same IDs
         created_investigation = await investigation_data_service.create_investigation(
             InvestigationCreateRequest(
@@ -120,13 +123,13 @@ class TestInvestigationContextResolution:
                 case_description="Test case description",
             )
         )
-        
+
         # Test - use the created investigation's ID
         result = await service.get_investigation_context(
             investigation_id=created_investigation.id,
             user_id=created_investigation.user_id
         )
-        
+
         # Verify
         assert isinstance(result, EnrichedInvestigationContext)
         assert result.id == created_investigation.id
@@ -141,46 +144,46 @@ class TestInvestigationContextResolution:
     ):
         """When resolving by case_id, return the most recently created investigation."""
         # Setup
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
 
         user_id = f"user-case-test-{uuid.uuid4().hex[:8]}"
         case_id = f"case-multi-test-{uuid.uuid4().hex[:8]}"  # Unique case_id for each run
-        
+
         # Create multiple investigations using the factory
         inv1 = await investigation_data_service.create_investigation(
             create_investigation_request(
-                case_id=case_id, 
-                user_id=user_id, 
-                case_title="First", 
+                case_id=case_id,
+                user_id=user_id,
+                case_title="First",
                 case_description="First case"
             )
         )
         await asyncio.sleep(0.01)  # Ensure different timestamps
         inv2 = await investigation_data_service.create_investigation(
             create_investigation_request(
-                case_id=case_id, 
-                user_id=user_id, 
-                case_title="Second", 
+                case_id=case_id,
+                user_id=user_id,
+                case_title="Second",
                 case_description="Second case"
             )
         )
         await asyncio.sleep(0.01)
         inv3 = await investigation_data_service.create_investigation(
             create_investigation_request(
-                case_id=case_id, 
-                user_id=user_id, 
-                case_title="Third", 
+                case_id=case_id,
+                user_id=user_id,
+                case_title="Third",
                 case_description="Third case"
             )
         )
-        
+
         # Test
         result = await service.get_investigation_context(
             case_id=case_id,
             user_id=user_id
         )
-        
+
         # Verify - should return the latest (inv3)
         assert isinstance(result, EnrichedInvestigationContext)
         # First check that we got the right investigation by ID
@@ -199,8 +202,8 @@ class TestInvestigationContextResolution:
     ):
         """Missing investigation_id raises ResourceNotFoundError after retries."""
         # Setup
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
 
         # Test & Verify
         with pytest.raises(ResourceNotFoundError) as exc_info:
@@ -208,7 +211,7 @@ class TestInvestigationContextResolution:
                 investigation_id=unique_investigation_id,
                 user_id=unique_user_id
             )
-        
+
         assert "not found after" in str(exc_info.value)
         assert exc_info.value.resource_type == "investigation"
         assert exc_info.value.resource_id == unique_investigation_id
@@ -218,7 +221,7 @@ class TestInvestigationContextResolution:
     ):
         """Case ID with no investigations raises ResourceNotFoundError."""
         # Setup
-        service = all_services['investigation_service']
+        service = all_services.investigation_service
 
 
         # Test & Verify
@@ -227,7 +230,7 @@ class TestInvestigationContextResolution:
                 case_id=unique_case_id,
                 user_id=unique_user_id
             )
-        
+
         assert "No investigations found" in str(exc_info.value)
         assert exc_info.value.resource_type == "investigation"
 
@@ -236,12 +239,12 @@ class TestInvestigationContextResolution:
     ):
         """Calling without user_id logs a security warning but still works."""
         # Setup
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
 
         # Create investigation data first to get the IDs
         investigation = create_investigation_data()
-        
+
         # Create the actual investigation with the same IDs
         created_investigation = await investigation_data_service.create_investigation(
             InvestigationCreateRequest(
@@ -251,22 +254,22 @@ class TestInvestigationContextResolution:
                 case_description="Test case description",
             )
         )
-        
+
         # Test (call without user_id for case-based lookup)
         with caplog.at_level(logging.WARNING):
             result = await service.get_investigation_context(
                 case_id=created_investigation.case_id
                 # Note: no user_id provided
             )
-        
+
         # Verify
         assert isinstance(result, EnrichedInvestigationContext)
         assert result.case_id == created_investigation.case_id
-        
+
         # Check security warning was logged
         security_warnings = [
             record for record in caplog.records
-            if getattr(record, 'security', None) == "unscoped_query"
+            if getattr(record, "security", None) == "unscoped_query"
         ]
         assert len(security_warnings) > 0
 
@@ -288,13 +291,13 @@ class TestMemoryContextAttachment:
     ):
         """Memory is successfully attached when it exists."""
         # Setup services properly using real infrastructure
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
-        memory_data_service = all_services['memory_data_service']
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
+        memory_data_service = all_services.memory_data_service
 
         # Create investigation data first to get the IDs
         investigation = create_investigation_data()
-        
+
         # Create the actual investigation with the same IDs
         created_investigation = await investigation_data_service.create_investigation(
             InvestigationCreateRequest(
@@ -304,17 +307,17 @@ class TestMemoryContextAttachment:
                 case_description="Test case description",
             )
         )
-        
+
         # Create memory with the actual investigation ID
         memory = create_investigation_memory(investigation_id=created_investigation.id)
         await memory_data_service.save_memory(memory, is_new=True)
-        
+
         # Test
         result = await service.get_investigation_context(
             investigation_id=created_investigation.id,
             user_id=created_investigation.user_id
         )
-        
+
         # Verify
         assert isinstance(result, EnrichedInvestigationContext)
         assert result.memory is not None
@@ -332,12 +335,12 @@ class TestMemoryContextAttachment:
     ):
         """Investigation context works normally when no memory exists."""
         # Setup services properly using real infrastructure
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
 
         # Create investigation data first to get the IDs
         investigation = create_investigation_data()
-        
+
         # Create the actual investigation with the same IDs
         created_investigation = await investigation_data_service.create_investigation(
             InvestigationCreateRequest(
@@ -347,13 +350,13 @@ class TestMemoryContextAttachment:
                 case_description="Test case description",
             )
         )
-        
+
         # Test
         result = await service.get_investigation_context(
             investigation_id=created_investigation.id,
             user_id=created_investigation.user_id
         )
-        
+
         # Verify
         assert isinstance(result, EnrichedInvestigationContext)
         assert result.memory is None  # No memory should be attached
@@ -369,8 +372,8 @@ class TestMemoryContextAttachment:
     ):
         """When no memory exists for investigation, memory is None without error."""
         # Setup services properly using real infrastructure
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
 
         # Create investigation data first to get the IDs
         investigation = create_investigation_data()
@@ -403,13 +406,13 @@ class TestMemoryContextAttachment:
     ):
         """All memory fields are preserved correctly during attachment."""
         # Setup services properly using real infrastructure
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
-        memory_data_service = all_services['memory_data_service']
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
+        memory_data_service = all_services.memory_data_service
 
         # Create investigation data first to get the IDs
         investigation = create_investigation_data()
-        
+
         # Create the actual investigation with the same IDs
         created_investigation = await investigation_data_service.create_investigation(
             InvestigationCreateRequest(
@@ -419,7 +422,7 @@ class TestMemoryContextAttachment:
                 case_description="Test case description",
             )
         )
-        
+
         memory = InvestigationMemory(
             investigation_id=created_investigation.id,
             case_id=created_investigation.case_id,
@@ -436,13 +439,13 @@ class TestMemoryContextAttachment:
             updated_at=datetime.now(UTC),
         )
         await memory_data_service.save_memory(memory, is_new=True)
-        
+
         # Test
         result = await service.get_investigation_context(
             investigation_id=created_investigation.id,
             user_id=created_investigation.user_id
         )
-        
+
         # Verify all fields are preserved
         assert result.memory is not None
         assert result.memory.investigation_summary == memory.investigation_summary
@@ -471,15 +474,15 @@ class TestOperatorEnrichment:
     ):
         """Single bound operator is enriched and context extracted."""
         # Setup services properly using real infrastructure
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
-        operator_data_service = all_services['operator_data_service']
-        memory_data_service = all_services['memory_data_service']
-        
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
+        operator_data_service = all_services.operator_data_service
+        memory_data_service = all_services.memory_data_service
+
         # Create investigation and operator
         investigation = create_investigation_data()
         operator = build_production_operator_document()
-        
+
         # Create the actual investigation with the same IDs
         created_investigation = await investigation_data_service.create_investigation(
             InvestigationCreateRequest(
@@ -490,7 +493,7 @@ class TestOperatorEnrichment:
             )
         )
         await operator_data_service.create_operator(operator)
-        
+
         # Create g8e context with bound operator
         bound_operator = BoundOperator(
             operator_id=operator.id,
@@ -500,20 +503,20 @@ class TestOperatorEnrichment:
         g8e_context = build_g8e_http_context(
             bound_operators=[bound_operator]
         )
-        
+
         # Get base context first
         base_context = await service.get_investigation_context(
             investigation_id=created_investigation.id,
             user_id=created_investigation.user_id
         )
-        
+
         # Test enrichment
         enriched_context = await service.get_enriched_investigation_context(
             investigation=base_context,
             user_id=created_investigation.user_id,
             g8e_context=g8e_context
         )
-        
+
         # Verify
         assert isinstance(enriched_context, EnrichedInvestigationContext)
         assert len(enriched_context.operator_documents) == 1
@@ -529,17 +532,17 @@ class TestOperatorEnrichment:
     ):
         """Multiple bound operators are all enriched."""
         # Setup services properly using real infrastructure
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
-        operator_data_service = all_services['operator_data_service']
-        memory_data_service = all_services['memory_data_service']
-        
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
+        operator_data_service = all_services.operator_data_service
+        memory_data_service = all_services.memory_data_service
+
         # Create investigation and multiple operators
         investigation = create_investigation_data()
         operator1 = build_production_operator_document(hostname="host-1")
         operator2 = build_production_operator_document(hostname="host-2")
         operator3 = build_production_operator_document(hostname="host-3")
-        
+
         # Create the actual investigation with the same IDs
         created_investigation = await investigation_data_service.create_investigation(
             InvestigationCreateRequest(
@@ -552,7 +555,7 @@ class TestOperatorEnrichment:
         await operator_data_service.create_operator(operator1)
         await operator_data_service.create_operator(operator2)
         await operator_data_service.create_operator(operator3)
-        
+
         # Create g8e context with multiple bound operators
         bound_operators = [
             BoundOperator(
@@ -565,7 +568,7 @@ class TestOperatorEnrichment:
         g8e_context = build_g8e_http_context(
             bound_operators=bound_operators
         )
-        
+
         # Get base context and enrich
         base_context = await service.get_investigation_context(
             investigation_id=created_investigation.id,
@@ -576,7 +579,7 @@ class TestOperatorEnrichment:
             user_id=created_investigation.user_id,
             g8e_context=g8e_context
         )
-        
+
         # Verify
         assert len(enriched_context.operator_documents) == 3
         operator_ids = [op.id for op in enriched_context.operator_documents]
@@ -595,21 +598,21 @@ class TestOperatorEnrichment:
     ):
         """Only BOUND status operators are enriched."""
         # Setup services properly using real infrastructure
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
-        operator_data_service = all_services['operator_data_service']
-        memory_data_service = all_services['memory_data_service']
-        
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
+        operator_data_service = all_services.operator_data_service
+        memory_data_service = all_services.memory_data_service
+
         # Create investigation and operators with different statuses
         investigation = create_investigation_data()
         bound_operator = build_production_operator_document()
         claimed_operator = build_production_operator_document()
         offline_operator = build_production_operator_document()
-        
+
         # Manually set different statuses since factory hardcodes BOUND
         claimed_operator.status = OperatorStatus.AVAILABLE
         offline_operator.status = OperatorStatus.OFFLINE
-        
+
         # Create the actual investigation with the same IDs
         created_investigation = await investigation_data_service.create_investigation(
             InvestigationCreateRequest(
@@ -622,7 +625,7 @@ class TestOperatorEnrichment:
         await operator_data_service.create_operator(bound_operator)
         await operator_data_service.create_operator(claimed_operator)
         await operator_data_service.create_operator(offline_operator)
-        
+
         # Create g8e context with mixed status operators
         bound_operators = [
             BoundOperator(
@@ -635,7 +638,7 @@ class TestOperatorEnrichment:
         g8e_context = build_g8e_http_context(
             bound_operators=bound_operators
         )
-        
+
         # Get base context and enrich
         base_context = await service.get_investigation_context(
             investigation_id=created_investigation.id,
@@ -646,7 +649,7 @@ class TestOperatorEnrichment:
             user_id=created_investigation.user_id,
             g8e_context=g8e_context
         )
-        
+
         # Verify - only BOUND operator should be enriched
         assert len(enriched_context.operator_documents) == 1
         assert enriched_context.operator_documents[0].id == bound_operator.id
@@ -662,8 +665,8 @@ class TestOperatorEnrichment:
     ):
         """Bound operator not found in cache is handled gracefully."""
         # Setup services properly using real infrastructure
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
 
         # Create investigation but don't create operator
         investigation = create_investigation_data()
@@ -675,7 +678,7 @@ class TestOperatorEnrichment:
                 case_description="Test case description",
             )
         )
-        
+
         # Create g8e context with non-existent operator
         bound_operator = BoundOperator(
             operator_id=unique_operator_id,
@@ -685,7 +688,7 @@ class TestOperatorEnrichment:
         g8e_context = build_g8e_http_context(
             bound_operators=[bound_operator]
         )
-        
+
         # Get base context and enrich
         base_context = await service.get_investigation_context(
             investigation_id=created_investigation.id,
@@ -696,7 +699,7 @@ class TestOperatorEnrichment:
             user_id=created_investigation.user_id,
             g8e_context=g8e_context
         )
-        
+
         # Verify - no operators should be enriched
         assert len(enriched_context.operator_documents) == 0
 
@@ -708,9 +711,9 @@ class TestOperatorEnrichment:
     ):
         """Cloud operator context includes cloud-specific fields."""
         # Setup services properly using real infrastructure
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
-        operator_data_service = all_services['operator_data_service']
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
+        operator_data_service = all_services.operator_data_service
 
         # Create cloud operator with intents
         cloud_operator = build_production_operator_document(
@@ -718,7 +721,7 @@ class TestOperatorEnrichment:
         )
         cloud_operator.cloud_subtype = CloudSubtype.AWS
         cloud_operator.granted_intents = ["ec2_discovery", "s3_read"]
-        
+
         investigation = create_investigation_data()
         # Create the actual investigation with the same IDs
         created_investigation = await investigation_data_service.create_investigation(
@@ -730,7 +733,7 @@ class TestOperatorEnrichment:
             )
         )
         await operator_data_service.create_operator(cloud_operator)
-        
+
         # Create g8e context and enrich
         bound_operator = BoundOperator(
             operator_id=cloud_operator.id,
@@ -740,7 +743,7 @@ class TestOperatorEnrichment:
         g8e_context = build_g8e_http_context(
             bound_operators=[bound_operator]
         )
-        
+
         base_context = await service.get_investigation_context(
             investigation_id=created_investigation.id,
             user_id=created_investigation.user_id
@@ -750,7 +753,7 @@ class TestOperatorEnrichment:
             user_id=created_investigation.user_id,
             g8e_context=g8e_context
         )
-        
+
         # Verify cloud-specific context
         assert len(enriched_context.operator_documents) == 1
         op_doc = enriched_context.operator_documents[0]
@@ -777,14 +780,14 @@ class TestCompleteContextAssembly:
     ):
         """Complete pipeline: investigation + memory + operators + enrichment."""
         # Setup services properly using real infrastructure
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
-        operator_data_service = all_services['operator_data_service']
-        memory_data_service = all_services['memory_data_service']
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
+        operator_data_service = all_services.operator_data_service
+        memory_data_service = all_services.memory_data_service
 
         # Create complete test data
         investigation = create_investigation_data()
-        
+
         # Create the actual investigation with the same IDs
         created_investigation = await investigation_data_service.create_investigation(
             InvestigationCreateRequest(
@@ -794,7 +797,7 @@ class TestCompleteContextAssembly:
                 case_description="Test case description",
             )
         )
-        
+
         memory = InvestigationMemory(
             investigation_id=created_investigation.id,
             case_id=created_investigation.case_id,
@@ -809,11 +812,11 @@ class TestCompleteContextAssembly:
         )
         operator1 = build_production_operator_document(hostname="prod-server-01")
         operator2 = build_production_operator_document(hostname="prod-server-02")
-        
+
         await memory_data_service.save_memory(memory, is_new=True)
         await operator_data_service.create_operator(operator1)
         await operator_data_service.create_operator(operator2)
-        
+
         # Create g8e context with both operators
         bound_operators = [
             BoundOperator(
@@ -829,7 +832,7 @@ class TestCompleteContextAssembly:
             investigation_id=created_investigation.id,
             bound_operators=bound_operators,
         )
-        
+
         # Execute full pipeline
         base_context = await service.get_investigation_context(
             investigation_id=created_investigation.id,
@@ -840,7 +843,7 @@ class TestCompleteContextAssembly:
             user_id=created_investigation.user_id,
             g8e_context=g8e_context
         )
-        
+
         # Verify complete assembly
         assert isinstance(enriched_context, EnrichedInvestigationContext)
 
@@ -872,8 +875,8 @@ class TestCompleteContextAssembly:
     ):
         """Context assembly works with minimal data (no operators, no memory)."""
         # Setup services properly using real infrastructure
-        service = all_services['investigation_service']
-        investigation_data_service = all_services['investigation_data_service']
+        service = all_services.investigation_service
+        investigation_data_service = all_services.investigation_data_service
 
         # Create only investigation
         investigation = create_investigation_data()
@@ -885,7 +888,7 @@ class TestCompleteContextAssembly:
                 case_description="Test case description",
             )
         )
-        
+
         # Create g8e context with no bound operators
         g8e_context = build_g8e_http_context(
             user_id=created_investigation.user_id,
@@ -893,7 +896,7 @@ class TestCompleteContextAssembly:
             investigation_id=created_investigation.id,
             bound_operators=[],
         )
-        
+
         # Execute pipeline
         base_context = await service.get_investigation_context(
             investigation_id=created_investigation.id,
@@ -904,7 +907,7 @@ class TestCompleteContextAssembly:
             user_id=created_investigation.user_id,
             g8e_context=g8e_context
         )
-        
+
         # Verify minimal context
         assert isinstance(enriched_context, EnrichedInvestigationContext)
         assert enriched_context.id == created_investigation.id
@@ -929,8 +932,8 @@ class TestContextGatheringErrorHandling:
         self, cache_aside_service, test_settings, all_services
     ):
         """Context with null investigation_id handles gracefully."""
-        service = all_services['investigation_service']
-        
+        service = all_services.investigation_service
+
         # Create context with minimal investigation_id (using default generated id)
         context = EnrichedInvestigationContext(
             case_id="case-null-id",
@@ -944,10 +947,10 @@ class TestContextGatheringErrorHandling:
             history_trail=[],
             conversation_history=[],
         )
-        
+
         # Test memory attachment (should skip gracefully)
         result = await service._attach_memory_context(context)
-        
+
         # Verify
         assert result.id is not None  # Should have generated an ID
         assert result.memory is None  # No memory attached
@@ -956,12 +959,12 @@ class TestContextGatheringErrorHandling:
         self, cache_aside_service, test_settings, all_services
     ):
         """get_investigation_context without required params raises error."""
-        service = all_services['investigation_service']
-        
+        service = all_services.investigation_service
+
         # Test with no parameters
         with pytest.raises(ResourceNotFoundError) as exc_info:
             await service.get_investigation_context()
-        
+
         assert "Investigation context could not be resolved" in str(exc_info.value)
 
 
@@ -983,45 +986,48 @@ class TestAIContextExtraction:
             operator_id="op-extract-001",
             hostname="extract-host",
         )
-        
-        # Add comprehensive system info for the test
-        operator.system_info = OperatorSystemInfo(
-            hostname="extract-host",
-            os="linux",
-            architecture="x86_64",
-            cpu_count=4,
-            memory_mb=8192,
-            public_ip="192.168.1.100",
-            os_details=SystemInfoOSDetails(
+
+        # Update latest_heartbeat_snapshot with comprehensive details for the test
+        operator.latest_heartbeat_snapshot = HeartbeatSnapshot(
+            system_identity=HeartbeatSystemIdentity(
+                hostname="extract-host",
+                os="linux",
+                architecture="x86_64",
+                cpu_count=4,
+                memory_mb=8192,
+                current_user="testuser",
+            ),
+            network=HeartbeatNetworkInfo(
+                public_ip="192.168.1.100",
+            ),
+            os_details=HeartbeatOSDetails(
                 distro="Ubuntu",
                 kernel="5.15.0",
                 version="22.04",
             ),
-            user_details=SystemInfoUserDetails(
+            user_details=HeartbeatUserDetails(
                 username="testuser",
                 home="/home/testuser",
                 shell="/bin/bash",
             ),
-            environment=SystemInfoEnvironment(
+            environment=HeartbeatEnvironment(
                 pwd="/home/testuser",
                 timezone="UTC",
                 is_container=False,
                 init_system="systemd",
             ),
-            memory_details=SystemInfoMemoryDetails(
+            memory_details=HeartbeatMemoryDetails(
                 total_mb=8192,
                 available_mb=4485,
                 percent=45.2,
             ),
-            disk_details=SystemInfoDiskDetails(
+            disk_details=HeartbeatDiskDetails(
                 total_gb=100.0,
                 free_gb=74.5,
                 percent=25.5,
             ),
-            is_container=False,
-            init_system="systemd",
         )
-        
+
         investigation = EnrichedInvestigationContext(
             id="inv-extract-001",
             case_id="case-extract-001",
@@ -1036,10 +1042,10 @@ class TestAIContextExtraction:
             conversation_history=[],
             operator_documents=[operator],  # Single operator
         )
-        
+
         # Test extraction
         context = extract_system_context(investigation)
-        
+
         # Verify all fields are extracted correctly
         assert isinstance(context, OperatorContext)
         assert context.operator_id == "op-extract-001"
@@ -1051,7 +1057,7 @@ class TestAIContextExtraction:
         assert context.public_ip == "192.168.1.100"
         assert context.operator_type == OperatorType.SYSTEM
         assert context.is_cloud_operator is False
-        
+
         # Heartbeat-derived fields
         assert context.distro == "Ubuntu"
         assert context.kernel == "5.15.0"
@@ -1088,10 +1094,10 @@ class TestAIContextExtraction:
             conversation_history=[],
             operator_documents=[],  # No operators
         )
-        
+
         # Test extraction
         context = extract_system_context(investigation)
-        
+
         # Verify
         assert context is None
 
@@ -1121,7 +1127,7 @@ class TestAIContextExtraction:
         )
         cloud_operator.cloud_subtype = CloudSubtype.AWS
         cloud_operator.granted_intents = ["ec2_discovery", "s3_read"]
-        
+
         investigation = EnrichedInvestigationContext(
             id="inv-multi-ops",
             case_id="case-multi-ops",
@@ -1136,14 +1142,14 @@ class TestAIContextExtraction:
             conversation_history=[],
             operator_documents=[linux_operator, cloud_operator],
         )
-        
+
         # Test extraction
         contexts = extract_all_operators_context(investigation)
-        
+
         # Verify
         assert contexts is not None
         assert len(contexts) == 2
-        
+
         # Check first operator (Linux)
         linux_ctx = contexts[0]
         assert isinstance(linux_ctx, OperatorContext)
@@ -1152,7 +1158,7 @@ class TestAIContextExtraction:
         assert linux_ctx.operator_type == OperatorType.SYSTEM
         assert linux_ctx.is_cloud_operator is False
         assert linux_ctx.granted_intents == []
-        
+
         # Check second operator (Cloud)
         cloud_ctx = contexts[1]
         assert isinstance(cloud_ctx, OperatorContext)
@@ -1188,7 +1194,7 @@ class TestAIContextExtraction:
             conversation_history=[],
             operator_documents=[],
         )
-        
+
         contexts = extract_all_operators_context(investigation)
         assert contexts is None
 
@@ -1199,7 +1205,7 @@ class TestAIContextExtraction:
         # Create operator with no heartbeat snapshot
         operator = build_production_operator_document(operator_id="op-no-hb")
         operator.latest_heartbeat_snapshot = None  # No heartbeat data
-        
+
         investigation = EnrichedInvestigationContext(
             id="inv-no-hb",
             case_id="case-no-hb",
@@ -1214,21 +1220,19 @@ class TestAIContextExtraction:
             conversation_history=[],
             operator_documents=[operator],
         )
-        
+
         # Test extraction
         context = extract_system_context(investigation)
-        
-        # Verify - system info should be available, even if heartbeat-derived fields are from system_info fallback
+
+        # Verify - without heartbeat snapshot, all identity fields are None
         assert isinstance(context, OperatorContext)
         assert context.operator_id == "op-no-hb"
-        assert context.os == "linux"  # From system_info
-        assert context.hostname == "eval-node-01"  # From system_info
-        
-        # Fields that exist in system_info fallback should NOT be None
-        assert context.working_directory == "/root"  # Fallback from system_info
-        assert context.username == "root"  # Fallback from system_info
-        
-        # Truly heartbeat-only fields (not in default system_info) should be None
+        assert context.os is None  # No system_info fallback anymore
+        assert context.hostname is None  # No system_info fallback anymore
+
+        # All heartbeat-derived fields should be None when snapshot is missing
+        assert context.working_directory is None
+        assert context.username is None
         assert context.distro is None
         assert context.kernel is None
         assert context.disk_percent is None

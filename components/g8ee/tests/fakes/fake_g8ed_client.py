@@ -14,8 +14,8 @@
 """Typed fake for G8edClientProtocol."""
 
 from app.models.events import BackgroundEvent, SessionEvent
-from app.models.http_context import G8eHttpContext
 from app.models.g8ed_client import IntentOperationResult, SSEPushResponse
+from app.models.http_context import G8eHttpContext
 from app.services.protocols import G8edClientProtocol
 
 

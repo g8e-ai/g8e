@@ -22,7 +22,7 @@ from app.models.events import BackgroundEvent, SessionEvent
 from app.models.operators import (
     HeartbeatSSEEnvelope,
     OperatorDocument,
-    OperatorHeartbeat,
+    HeartbeatSnapshot,
 )
 from app.models.pubsub_messages import G8eoHeartbeatPayload
 from app.security.request_timestamp import RequestValidationResult, validate_timestamp
@@ -32,25 +32,33 @@ from ..protocols import OperatorDataServiceProtocol, EventServiceProtocol
 logger = logging.getLogger(__name__)
 
 
-class OperatorHeartbeatService:
+class HeartbeatSnapshotService:
 
     def __init__(
         self,
         operator_data_service: OperatorDataServiceProtocol,
         event_service: EventServiceProtocol,
     ):
-        self.operator_data_service = operator_data_service
-        self.event_service = event_service
+        self._operator_data_service = operator_data_service
+        self._event_service = event_service
         self._pubsub_client: PubSubClient | None = None
         self._active_sessions: set[tuple[str, str]] = set()
         self._ready = False
+
+    @property
+    def operator_data_service(self) -> OperatorDataServiceProtocol:
+        return self._operator_data_service
+
+    @property
+    def event_service(self) -> EventServiceProtocol:
+        return self._event_service
 
     def set_pubsub_client(self, client: PubSubClient) -> None:
         if not client:
             raise ConfigurationError("client is required for heartbeat pub/sub", component="g8ee")
         self._pubsub_client = client
         self._pubsub_client.on_disconnect(self._on_ws_disconnect)
-        logger.info("OperatorHeartbeatService pubsub client configured")
+        logger.info("HeartbeatSnapshotService pubsub client configured")
 
     async def start(self) -> None:
         if self._ready:
@@ -58,50 +66,64 @@ class OperatorHeartbeatService:
         if not self._pubsub_client:
             raise ConfigurationError("pubsub_client must be set before calling start()", component="g8ee")
         await self._pubsub_client.ensure_connected()
+
+        # Pattern-subscribe to every operator heartbeat channel. g8eo publishes
+        # its bootstrap heartbeat the instant authentication completes, so g8ee
+        # MUST be listening before any specific operator session exists. A single
+        # pattern subscription captures every operator's heartbeats from the
+        # first packet onward without per-session register/deregister races.
+        pattern = f"{PubSubChannel.HEARTBEAT_PREFIX.value}:*"
+        self._pubsub_client.on_pmessage(pattern, self._on_pattern_heartbeat_message)
+        await self._pubsub_client.psubscribe(pattern)
+        logger.info("[HEARTBEAT] Pattern-subscribed to %s", pattern)
+
         self._ready = True
         logger.info("[HEARTBEAT] Pub/sub client ready")
 
     async def stop(self) -> None:
-        for operator_id, operator_session_id in list(self._active_sessions):
-            await self._unsubscribe(operator_id, operator_session_id)
+        if self._pubsub_client:
+            pattern = f"{PubSubChannel.HEARTBEAT_PREFIX.value}:*"
+            try:
+                await self._pubsub_client.punsubscribe(pattern)
+            except Exception:
+                logger.warning("[HEARTBEAT] Failed to punsubscribe %s on stop", pattern, exc_info=True)
+        self._active_sessions.clear()
         self._ready = False
-        logger.info("[HEARTBEAT] All heartbeat channel subscriptions stopped")
+        logger.info("[HEARTBEAT] Heartbeat pattern subscription stopped")
 
     async def _on_ws_disconnect(self) -> None:
         self._ready = False
-        self._active_sessions.clear()
-        logger.warning("[HEARTBEAT] WebSocket disconnected — ready state reset, subscriptions cleared")
+        logger.warning("[HEARTBEAT] WebSocket disconnected — ready state reset, preserving active sessions for re-subscription")
 
     async def register_operator_session(self, operator_id: str, operator_session_id: str) -> None:
-        key = (operator_id, operator_session_id)
-        if key in self._active_sessions:
-            return
-        if not self._pubsub_client:
-            raise ConfigurationError("pubsub_client is not set", component="g8ee")
-        channel = PubSubChannel.heartbeat(operator_id, operator_session_id)
-        self._pubsub_client.on_channel_message(channel, self._on_heartbeat_message)
-        await self._pubsub_client.subscribe(channel)
-        self._active_sessions.add(key)
+        """Track an operator session as active.
+
+        Subscription is handled via a single ``heartbeat:*`` pattern set up in
+        ``start()`` — this method only records the (operator, session) pair so
+        callers can observe activity. It is idempotent and never opens a new
+        per-session pubsub subscription.
+        """
+        self._active_sessions.add((operator_id, operator_session_id))
         logger.info(
-            "[HEARTBEAT] Registered operator session",
+            "[HEARTBEAT] Tracked operator session",
             extra={"operator_id": operator_id, "operator_session_id": operator_session_id},
         )
 
     async def deregister_operator_session(self, operator_id: str, operator_session_id: str) -> None:
-        await self._unsubscribe(operator_id, operator_session_id)
-
-    async def _unsubscribe(self, operator_id: str, operator_session_id: str) -> None:
-        key = (operator_id, operator_session_id)
-        self._active_sessions.discard(key)
-        if not self._pubsub_client:
-            return
-        channel = PubSubChannel.heartbeat(operator_id, operator_session_id)
-        self._pubsub_client.off_channel_message(channel, self._on_heartbeat_message)
-        await self._pubsub_client.unsubscribe(channel)
+        """Stop tracking an operator session. No pubsub state to release—
+        the pattern subscription is shared across all operators.
+        """
+        self._active_sessions.discard((operator_id, operator_session_id))
         logger.info(
-            "[HEARTBEAT] Deregistered operator session",
+            "[HEARTBEAT] Untracked operator session",
             extra={"operator_id": operator_id, "operator_session_id": operator_session_id},
         )
+
+    async def _on_pattern_heartbeat_message(
+        self, pattern: str, channel: str, data: str | dict[str, object]
+    ) -> None:
+        """Pattern-message dispatcher for ``heartbeat:*`` channels."""
+        await self._on_heartbeat_message(channel, data)
 
     async def _on_heartbeat_message(self, channel: str, data: str | dict[str, object]) -> None:
         try:
@@ -110,17 +132,16 @@ class OperatorHeartbeatService:
             if len(parts) != 3:
                 logger.warning("[HEARTBEAT] Invalid channel format: %s", channel)
                 return
-            
+
             operator_id = parts[1]
             operator_session_id = parts[2]
-            
+
             if not operator_id or not operator_session_id:
                 logger.warning("[HEARTBEAT] Missing operator_id or operator_session_id in channel: %s", channel)
                 return
             raw = data if isinstance(data, dict) else json.loads(data)
             payload = G8eoHeartbeatPayload.model_validate(raw)
-            if (operator_id, operator_session_id) not in self._active_sessions:
-                await self.register_operator_session(operator_id, operator_session_id)
+            self._active_sessions.add((operator_id, operator_session_id))
             success = await self.process_heartbeat_message(operator_id, operator_session_id, payload)
             if not success:
                 logger.warning("[HEARTBEAT] Heartbeat processing failed for operator %s", operator_id)
@@ -173,7 +194,7 @@ class OperatorHeartbeatService:
         if not operator:
             return False
 
-        heartbeat = OperatorHeartbeat.from_wire(payload)
+        heartbeat = HeartbeatSnapshot.from_wire(payload)
 
         db_success = await self.operator_data_service.update_operator_heartbeat(
             operator_id=operator_id,

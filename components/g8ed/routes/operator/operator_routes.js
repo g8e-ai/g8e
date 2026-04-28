@@ -185,7 +185,7 @@ export function createOperatorRouter({ services, authorizationMiddleware }) {
                 }).forClient());
             }
 
-            const authResult = await downloadAuthService.validate(req, { allowDlt: false });
+            const authResult = await downloadAuthService.validate(req, { allowDlt: true });
 
             if (!authResult.success) {
                 return res.status(authResult.status).json(new ErrorResponse({ error: authResult.error }).forClient());

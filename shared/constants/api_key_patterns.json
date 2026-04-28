@@ -1,0 +1,6 @@
+{
+  "operator_api_key_regex": "^g8e_[a-f0-9]{8}_[a-f0-9]{64}$",
+  "regular_api_key_regex": "^g8e_[a-f0-9]{64}$",
+  "combined_api_key_regex": "^g8e_[a-f0-9]{8}_[a-f0-9]{64}$|^g8e_[a-f0-9]{64}$",
+  "description": "Canonical API key patterns for g8e platform. Operator keys use format: g8e_{8hex}_{64hex}. Regular keys use format: g8e_{64hex}."
+}

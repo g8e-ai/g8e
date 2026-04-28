@@ -278,7 +278,7 @@ function injectScript(dom, fetchMock) {
                     ? ' (' + json.skipped.length + ' write-once key(s) skipped)'
                     : '';
 
-                showStatus('success', 'Settings saved successfully.' + skippedNote + ' Restart the platform to apply changes.');
+                showStatus('success', 'Settings saved successfully.' + skippedNote + ' Changes are applied immediately.');
             } catch (err) {
                 showStatus('error', 'Save failed: ' + err.message);
                 btn.disabled = false;

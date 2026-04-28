@@ -39,8 +39,8 @@ describe('ApiKeyService [UNIT]', () => {
     });
 
     describe('generateRawKey', () => {
-        it('generates a prefixed key with random bytes', () => {
-            const key = service.generateRawKey();
+        it('generates a prefixed key with random bytes', async () => {
+            const key = await service.generateRawKey();
             expect(key.startsWith(API_KEY_PREFIX)).toBe(true);
             expect(key.length).toBeGreaterThan(API_KEY_PREFIX.length + 32);
         });

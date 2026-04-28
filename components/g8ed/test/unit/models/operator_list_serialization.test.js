@@ -12,15 +12,17 @@
 // limitations under the License.
 
 import { describe, it, expect } from 'vitest';
-import { OperatorListUpdatedEvent, OperatorSlot, OperatorSlotSystemInfo } from '@g8ed/models/operator_model.js';
+import { OperatorListUpdatedEvent, OperatorSlot } from '@g8ed/models/operator_model.js';
 
 describe('OperatorListUpdatedEvent nested model serialization [UNIT - PURE LOGIC]', () => {
     it('should serialize OperatorSlot instances to plain objects in forWire()', () => {
-        const systemInfo = new OperatorSlotSystemInfo({
-            hostname: 'node-01',
-            os: 'linux',
-            architecture: 'amd64',
-        });
+        const heartbeatSnapshot = {
+            system_identity: {
+                hostname: 'node-01',
+                os: 'linux',
+                architecture: 'amd64',
+            },
+        };
 
         const operatorSlot = new OperatorSlot({
             operator_id: 'op-1',
@@ -28,7 +30,7 @@ describe('OperatorListUpdatedEvent nested model serialization [UNIT - PURE LOGIC
             status: 'ACTIVE',
             status_display: 'ACTIVE',
             status_class: 'active',
-            system_info: systemInfo,
+            latest_heartbeat_snapshot: heartbeatSnapshot,
         });
 
         const event = new OperatorListUpdatedEvent({
@@ -58,12 +60,11 @@ describe('OperatorListUpdatedEvent nested model serialization [UNIT - PURE LOGIC
         expect(serializedOperator.name).toBe('node-01');
         expect(serializedOperator.status).toBe('ACTIVE');
 
-        // Verify nested system_info is a plain object, not a model instance
-        expect(serializedOperator.system_info instanceof OperatorSlotSystemInfo).toBe(false);
-        expect(typeof serializedOperator.system_info).toBe('object');
-        expect(serializedOperator.system_info.hostname).toBe('node-01');
-        expect(serializedOperator.system_info.os).toBe('linux');
-        expect(serializedOperator.system_info.architecture).toBe('amd64');
+        // Verify nested latest_heartbeat_snapshot is a plain object
+        expect(typeof serializedOperator.latest_heartbeat_snapshot).toBe('object');
+        expect(serializedOperator.latest_heartbeat_snapshot.system_identity.hostname).toBe('node-01');
+        expect(serializedOperator.latest_heartbeat_snapshot.system_identity.os).toBe('linux');
+        expect(serializedOperator.latest_heartbeat_snapshot.system_identity.architecture).toBe('amd64');
     });
 
     it('should serialize multiple OperatorSlot instances correctly', () => {
@@ -89,16 +90,18 @@ describe('OperatorListUpdatedEvent nested model serialization [UNIT - PURE LOGIC
     });
 
     it('should handle JSON.stringify roundtrip correctly', () => {
-        const systemInfo = new OperatorSlotSystemInfo({
-            hostname: 'node-01',
-            os: 'linux',
-        });
+        const heartbeatSnapshot = {
+            system_identity: {
+                hostname: 'node-01',
+                os: 'linux',
+            },
+        };
 
         const operatorSlot = new OperatorSlot({
             operator_id: 'op-1',
             name: 'node-01',
             status: 'ACTIVE',
-            system_info: systemInfo,
+            latest_heartbeat_snapshot: heartbeatSnapshot,
         });
 
         const event = new OperatorListUpdatedEvent({
@@ -115,24 +118,26 @@ describe('OperatorListUpdatedEvent nested model serialization [UNIT - PURE LOGIC
         expect(parsed.type).toBe('g8e.v1.operator.panel.list.updated');
         expect(Array.isArray(parsed.data.operators)).toBe(true);
         expect(parsed.data.operators[0].operator_id).toBe('op-1');
-        expect(typeof parsed.data.operators[0].system_info).toBe('object');
-        expect(parsed.data.operators[0].system_info.hostname).toBe('node-01');
+        expect(typeof parsed.data.operators[0].latest_heartbeat_snapshot).toBe('object');
+        expect(parsed.data.operators[0].latest_heartbeat_snapshot.system_identity.hostname).toBe('node-01');
     });
 
-    it('should not stringify nested system_info model', () => {
-        const systemInfo = new OperatorSlotSystemInfo({
-            hostname: 'node-01',
-            os: 'linux',
-            architecture: 'amd64',
-            cpu_count: 4,
-            memory_mb: 8192,
-        });
+    it('should not stringify nested latest_heartbeat_snapshot model', () => {
+        const heartbeatSnapshot = {
+            system_identity: {
+                hostname: 'node-01',
+                os: 'linux',
+                architecture: 'amd64',
+                cpu_count: 4,
+                memory_mb: 8192,
+            },
+        };
 
         const operatorSlot = new OperatorSlot({
             operator_id: 'op-1',
             name: 'node-01',
             status: 'ACTIVE',
-            system_info: systemInfo,
+            latest_heartbeat_snapshot: heartbeatSnapshot,
         });
 
         const event = new OperatorListUpdatedEvent({
@@ -144,17 +149,16 @@ describe('OperatorListUpdatedEvent nested model serialization [UNIT - PURE LOGIC
         const wire = event.forWire();
         const serializedOperator = wire.data.operators[0];
 
-        // Verify system_info is an object, not a JSON string
-        expect(typeof serializedOperator.system_info).toBe('object');
-        expect(serializedOperator.system_info).not.toBeInstanceOf(OperatorSlotSystemInfo);
-        expect(typeof serializedOperator.system_info.hostname).toBe('string');
-        expect(typeof serializedOperator.system_info.os).toBe('string');
-        expect(typeof serializedOperator.system_info.architecture).toBe('string');
-        expect(typeof serializedOperator.system_info.cpu_count).toBe('number');
-        expect(typeof serializedOperator.system_info.memory_mb).toBe('number');
+        // Verify latest_heartbeat_snapshot is an object, not a JSON string
+        expect(typeof serializedOperator.latest_heartbeat_snapshot).toBe('object');
+        expect(typeof serializedOperator.latest_heartbeat_snapshot.system_identity.hostname).toBe('string');
+        expect(typeof serializedOperator.latest_heartbeat_snapshot.system_identity.os).toBe('string');
+        expect(typeof serializedOperator.latest_heartbeat_snapshot.system_identity.architecture).toBe('string');
+        expect(typeof serializedOperator.latest_heartbeat_snapshot.system_identity.cpu_count).toBe('number');
+        expect(typeof serializedOperator.latest_heartbeat_snapshot.system_identity.memory_mb).toBe('number');
 
         // Verify it's not a stringified JSON
-        expect(serializedOperator.system_info.hostname).not.toContain('{');
-        expect(serializedOperator.system_info.hostname).not.toContain('"');
+        expect(serializedOperator.latest_heartbeat_snapshot.system_identity.hostname).not.toContain('{');
+        expect(serializedOperator.latest_heartbeat_snapshot.system_identity.hostname).not.toContain('"');
     });
 });

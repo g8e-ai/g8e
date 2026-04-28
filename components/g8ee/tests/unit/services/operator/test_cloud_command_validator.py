@@ -17,9 +17,7 @@ import pytest
 
 from app.services.operator.cloud_command_validator import (
     CLOUD_ONLY_COMMAND_PATTERNS,
-    CLOUD_OPERATOR_AUTO_APPROVED_PATTERNS,
     is_cloud_only_command,
-    is_cloud_operator_self_discovery_command,
 )
 
 pytestmark = pytest.mark.unit
@@ -81,50 +79,12 @@ class TestIsCloudOnlyCommand:
         assert is_cloud_only_command("k9s --context prod") is True
 
 
-class TestIsCloudOperatorSelfDiscoveryCommand:
-
-    @pytest.mark.parametrize("command", [
-        "aws sts get-caller-identity",
-        "aws sts get-caller-identity --output json",
-        "aws iam get-role --role-name MyRole",
-        "aws iam get-role-policy --role-name MyRole --policy-name MyPolicy",
-        "aws iam list-role-policies --role-name MyRole",
-        "aws iam list-attached-role-policies --role-name MyRole",
-        "aws iam get-instance-profile --instance-profile-name MyProfile",
-        "aws iam simulate-principal-policy --policy-source-arn arn:aws:iam::123:role/R --action-names s3:ListBucket",
-    ])
-    def test_self_discovery_commands_are_auto_approved(self, command):
-        assert is_cloud_operator_self_discovery_command(command) is True
-
-    @pytest.mark.parametrize("command", [
-        "aws s3 ls",
-        "aws ec2 describe-instances",
-        "aws iam create-role --role-name BadRole",
-        "aws iam delete-role --role-name BadRole",
-        "kubectl get pods",
-        "ls -la",
-        "echo aws sts get-caller-identity",
-    ])
-    def test_non_self_discovery_commands_are_not_auto_approved(self, command):
-        assert is_cloud_operator_self_discovery_command(command) is False
-
-    def test_strips_leading_whitespace(self):
-        assert is_cloud_operator_self_discovery_command("  aws sts get-caller-identity") is True
-
-    def test_empty_command_is_false(self):
-        assert is_cloud_operator_self_discovery_command("") is False
-
 
 class TestPatternListsNotEmpty:
 
     def test_cloud_only_patterns_not_empty(self):
         assert len(CLOUD_ONLY_COMMAND_PATTERNS) > 0
 
-    def test_auto_approved_patterns_not_empty(self):
-        assert len(CLOUD_OPERATOR_AUTO_APPROVED_PATTERNS) > 0
-
     def test_all_patterns_are_compiled(self):
         for pattern in CLOUD_ONLY_COMMAND_PATTERNS:
-            assert isinstance(pattern, re.Pattern)
-        for pattern in CLOUD_OPERATOR_AUTO_APPROVED_PATTERNS:
             assert isinstance(pattern, re.Pattern)

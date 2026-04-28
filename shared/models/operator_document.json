@@ -1,5 +1,5 @@
 {
-  "_comment": "Canonical OperatorDocument shape. g8ed is the authority — it creates, owns, and stores this document in SQLite. g8ee reads it via g8ed HTTP API and g8es KV cache. g8eo is the source of runtime data (heartbeats, system_info) that g8ed merges into this document. A field mismatch between g8ed and g8ee breaks operator binding, context building, and AI execution.",
+  "_comment": "Canonical OperatorDocument shape. g8ed is the authority — it creates, owns, and stores this document in SQLite. g8ee reads it via g8ed HTTP API and g8es KV cache. g8eo is the source of runtime data (heartbeats) that g8ed merges into this document. A field mismatch between g8ed and g8ee breaks operator binding, context building, and AI execution.",
 
   "_comment.field_naming": "FIELD NAMING CONVENTION: The canonical OperatorDocument uses 'id' as the primary key field name (core_identity.id). Wire format models and projections (e.g., operator_status_info, bound_operator_context, operator_slot, heartbeat) use 'operator_id' for clarity in cross-component contexts where the entity type may not be immediately obvious from context. When mapping between OperatorDocument and wire formats: OperatorDocument.core_identity.id ↔ wire_format.operator_id. This naming pattern is intentional and consistent across all operator-related wire formats.",
 
@@ -136,11 +136,17 @@
         "required": false,
         "description": "When this operator slot was first ever activated (persisted across resets)"
       },
+      "claimed_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false,
+        "description": "When the slot was claimed (set at claim time, not heartbeat time)"
+      },
       "last_heartbeat": {
         "type": "string",
         "format": "iso8601",
         "required": false,
-        "description": "Timestamp of the most recently received heartbeat"
+        "description": "Timestamp of the most recently received heartbeat (set only on actual heartbeat ingestion)"
       }
     },
 
@@ -211,22 +217,17 @@
       }
     },
 
-    "system_info": {
-      "_description": "Operator host system information. Shape defined in wire/system_info.json. Populated from g8eo auth payload and updated on each heartbeat.",
-      "$ref": "wire/system_info.json#system_info"
-    },
-
     "fingerprint": {
-      "_description": "Top-level fingerprint columns denormalized from system_info for efficient SQLite queries.",
+      "_description": "Top-level fingerprint columns denormalized from latest_heartbeat_snapshot for efficient SQLite queries.",
       "system_fingerprint": {
         "type": "string",
         "required": false,
-        "description": "SHA256 fingerprint of the operator host. Copied from system_info.system_fingerprint."
+        "description": "SHA256 fingerprint of the operator host. Copied from latest_heartbeat_snapshot.system_fingerprint."
       },
       "fingerprint_details": {
         "type": "object",
         "required": false,
-        "description": "Structured fingerprint sub-fields. Copied from system_info.fingerprint_details."
+        "description": "Structured fingerprint sub-fields. Copied from latest_heartbeat_snapshot.fingerprint_details."
       }
     },
 
@@ -250,7 +251,7 @@
       "latest_heartbeat_snapshot": {
         "type": "object",
         "required": false,
-        "description": "Most recent heartbeat performance snapshot for quick UI reads. Shape: { timestamp, cpu_percent, memory_percent, disk_percent, network_latency, uptime, uptime_seconds }. Full heartbeat data is in wire/heartbeat.json."
+        "description": "Most recent heartbeat metrics snapshot. Shape matches HeartbeatSnapshot (shared/models/wire/heartbeat.json#operator_heartbeat): nested objects for system_identity, performance, network, uptime, etc. Strictly enforced across the wire."
       }
     },
 
@@ -285,28 +286,6 @@
           "expires_at": { "type": "string", "format": "iso8601", "required": true }
         }
       }
-    },
-
-    "history_trail": {
-      "type": "array",
-      "required": true,
-      "default": [],
-      "description": "Chronological log of operator lifecycle events managed by g8ed.",
-      "items": {
-        "timestamp": { "type": "string", "format": "iso8601", "required": true },
-        "event_type": {
-          "type": "string",
-          "required": true,
-          "description": "Event type. Values: created, slot.created, bound, unbound, heartbeat.received, status.changed, api.key.refreshed, created.from.refresh, reset, terminated"
-        },
-        "summary": { "type": "string", "required": true },
-        "actor": {
-          "type": "string",
-          "required": true,
-          "description": "Component or entity that caused this event. Values: g8ed, user, g8eo, system"
-        },
-        "details": { "type": "object", "required": false, "default": {} }
-      }
     }
   },
 
@@ -320,8 +299,11 @@
       "web_session_id": { "type": "string", "required": false },
       "operator_session_id": { "type": "string", "required": false },
       "last_heartbeat": { "type": "string", "format": "iso8601", "required": false },
-      "system_info": { "type": "object", "required": false, "ref": "wire/system_info.json#system_info" },
-      "latest_heartbeat_snapshot": { "type": "object", "required": false },
+      "latest_heartbeat_snapshot": {
+        "type": "object",
+        "required": false,
+        "description": "Most recent heartbeat metrics snapshot (nested HeartbeatSnapshot shape). Strictly enforced across the wire."
+      },
       "investigation_id": { "type": "string", "required": false },
       "case_id": { "type": "string", "required": false },
       "is_active": {
@@ -336,7 +318,7 @@
       "current_hostname": {
         "type": "string",
         "required": false,
-        "description": "Denormalized hostname from system_info for quick access without traversing nested objects"
+        "description": "Denormalized hostname from latest_heartbeat_snapshot.system_identity.hostname for quick access without traversing nested objects"
       },
       "session_token": {
         "type": "string",

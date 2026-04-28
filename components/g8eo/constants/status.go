@@ -53,8 +53,7 @@ const (
 
 // authModeValues defines the supported operator authentication modes.
 type authModeValues struct {
-	APIKey          string
-	OperatorSession string
+	APIKey string
 }
 
 // operatorStatusValues mirrors shared/constants/status.json g8e.status.
@@ -157,8 +156,7 @@ type statusValues struct {
 // Usage: constants.Status.OperatorStatus.Bound
 var Status = statusValues{
 	AuthMode: authModeValues{
-		APIKey:          "api_key",
-		OperatorSession: "operator_session",
+		APIKey: "api_key",
 	},
 	ListenMode: listenModeValues{
 		StatusOK: "ok",

@@ -21,11 +21,10 @@ Unit tests for WebSearchProvider.
 - normalize_citation_numbers: renumbers HTML anchor citation tags sequentially
 """
 
-import asyncio
-import unittest.mock as mock
+from unittest import mock
 
 import pytest
-from google.api_core.exceptions import ServiceUnavailable, InvalidArgument
+from google.api_core.exceptions import InvalidArgument, ServiceUnavailable
 
 from app.errors import NetworkError
 from app.models.grounding import (
@@ -190,7 +189,7 @@ class TestWebSearchProviderRetry:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                raise asyncio.TimeoutError()
+                raise TimeoutError
             return pager
 
         with mock.patch.object(provider, "_execute_search_lite", side_effect=exec_side_effect):
@@ -235,7 +234,7 @@ class TestWebSearchProviderRetry:
     async def test_returns_error_result_after_all_retries_exhausted(self):
         provider = _make_provider()
 
-        with mock.patch.object(provider, "_execute_search_lite", side_effect=asyncio.TimeoutError()):
+        with mock.patch.object(provider, "_execute_search_lite", side_effect=TimeoutError()):
             with mock.patch(_PATCH_SLEEP, new=mock.AsyncMock()):
                 result = await provider.search("query")
 
@@ -252,7 +251,7 @@ class TestWebSearchProviderRetry:
             nonlocal call_count
             call_count += 1
             if call_count < 3:
-                raise asyncio.TimeoutError()
+                raise TimeoutError
             return pager
 
         with mock.patch.object(provider, "_execute_search_lite", side_effect=exec_side_effect):

@@ -123,7 +123,7 @@ class AuthorizationMiddleware(BaseHTTPMiddleware):
                 component=ComponentName.G8EE
             )
 
-        investigation = await investigation_service.get_investigation(investigation_id)
+        investigation = await investigation_service.investigation_data_service.get_investigation(investigation_id)
         if not investigation or investigation.user_id != authenticated_user_id:
             logger.error(
                 "AUTHORIZATION VIOLATION: Investigation ownership check failed",

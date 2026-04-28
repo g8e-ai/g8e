@@ -11,46 +11,42 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from enum import Enum
+from enum import Enum, StrEnum
 from app.constants.shared import _AGENTS
 
 
-class AgentName(str, Enum):
+class ReasoningAgent(StrEnum):
     """Canonical agent identity used to route system-prompt assembly.
 
     Each value matches the top-level id under `agent.metadata` in
     `shared/constants/agents.json`. `SAGE` is the deep-reasoning primary
     agent; `DASH` is the fast-path assistant agent. The chat pipeline
-    resolves an AgentName from the tier it selected (primary -> SAGE,
+    resolves a ReasoningAgent from the tier it selected (primary -> SAGE,
     assistant -> DASH) and threads it into `build_modular_system_prompt`
     so the assembled prompt prepends the agent's persona.
     """
-    __str__ = lambda self: self.value
     SAGE = _AGENTS["agent.names"]["sage"]
     DASH = _AGENTS["agent.names"]["dash"]
 
 
-class TriageComplexityClassification(str, Enum):
-    __str__ = lambda self: self.value
+class TriageComplexityClassification(StrEnum):
     SIMPLE  = _AGENTS["triage.complexity"]["simple"]
     COMPLEX = _AGENTS["triage.complexity"]["complex"]
 
 
-class TriageConfidence(str, Enum):
+class TriageConfidence(StrEnum):
     """Confidence level for triage classifications (both complexity and intent)."""
-    __str__ = lambda self: self.value
     HIGH    = _AGENTS["triage.confidence"]["high"]
     LOW     = _AGENTS["triage.confidence"]["low"]
 
 
-class TriageIntentClassification(str, Enum):
-    __str__ = lambda self: self.value
+class TriageIntentClassification(StrEnum):
     INFORMATION = _AGENTS["triage.intent"]["information"]
     ACTION      = _AGENTS["triage.intent"]["action"]
     UNKNOWN     = _AGENTS["triage.intent"]["unknown"]
 
 
-class TriageRequestPosture(str, Enum):
+class TriageRequestPosture(StrEnum):
     """Triage's read of the user's state for this turn.
 
     Downstream agents (Primary, Assistant) calibrate their dissent and
@@ -64,21 +60,19 @@ class TriageRequestPosture(str, Enum):
     - confused:    User's request contradicts their stated goal. Name the
                    contradiction before acting.
     """
-    __str__ = lambda self: self.value
     NORMAL      = _AGENTS["triage.posture"]["normal"]
     ESCALATED   = _AGENTS["triage.posture"]["escalated"]
     ADVERSARIAL = _AGENTS["triage.posture"]["adversarial"]
     CONFUSED    = _AGENTS["triage.posture"]["confused"]
 
 
-class TribunalMember(str, Enum):
+class TribunalMember(StrEnum):
     """The five permanent members of the Tribunal.
 
     Each member has a fixed name and role that defines its reasoning profile.
     The ordering is canonical: Axiom (pass 0), Concord (pass 1), Variance (pass 2),
     Pragma (pass 3), Nemesis (pass 4). When more than 5 passes are configured the members cycle.
     """
-    __str__ = lambda self: self.value
     AXIOM   = _AGENTS["tribunal.members"]["axiom"]
     CONCORD = _AGENTS["tribunal.members"]["concord"]
     VARIANCE = _AGENTS["tribunal.members"]["variance"]
@@ -86,13 +80,12 @@ class TribunalMember(str, Enum):
     NEMESIS = _AGENTS["tribunal.members"]["nemesis"]
 
 
-class AuditorReason(str, Enum):
+class AuditorReason(StrEnum):
     """The Auditor's stated reason for its verdict.
 
     These values are emitted in Tribunal SSE payloads and must match
     the shared constants in shared/constants/agents.json.
     """
-    __str__ = lambda self: self.value
     OK                   = _AGENTS["tribunal.auditor_reason"]["ok"]
     REVISED              = _AGENTS["tribunal.auditor_reason"]["revised"]
     EMPTY_RESPONSE       = _AGENTS["tribunal.auditor_reason"]["empty_response"]
@@ -103,14 +96,13 @@ class AuditorReason(str, Enum):
     WHITELIST_VIOLATION  = _AGENTS["tribunal.auditor_reason"]["whitelist_violation"]
 
 
-class TieBreakReason(str, Enum):
+class TieBreakReason(StrEnum):
     """How a tie at the top of the uniform vote was resolved.
 
     Populated on VoteBreakdown only when more than one command cluster
     held the highest vote count and one of the deterministic tie-break
     rules resolved it.
     """
-    __str__ = lambda self: self.value
     SHORTEST                = _AGENTS["tribunal.tie_break_reason"]["shortest"]
     LONGEST                 = _AGENTS["tribunal.tie_break_reason"]["longest"]
     FEWEST_OPERATIONS       = _AGENTS["tribunal.tie_break_reason"]["fewest_operations"]

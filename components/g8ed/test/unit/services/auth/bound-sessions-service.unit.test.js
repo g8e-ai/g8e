@@ -15,7 +15,6 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { BoundSessionsService } from '@g8ed/services/auth/bound_sessions_service.js';
 import { KVKey } from '@g8ed/constants/kv_keys.js';
 import { OperatorStatus, OperatorType } from '@g8ed/constants/operator.js';
-import { SystemInfo } from '@g8ed/models/operator_model.js';
 
 vi.mock('@g8ed/utils/logger.js', () => ({
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }
@@ -189,7 +188,6 @@ describe('BoundSessionsService.resolveBoundOperators', () => {
         operatorService.getOperator.mockResolvedValueOnce({
             status: OperatorStatus.BOUND,
             operator_type: OperatorType.SYSTEM,
-            system_info: SystemInfo.parse({ hostname: 'host-1', interfaces: ['eth0'] }),
         });
 
         const result = await svc.resolveBoundOperators(WEB_SESSION_ID);
@@ -201,7 +199,6 @@ describe('BoundSessionsService.resolveBoundOperators', () => {
             status: OperatorStatus.BOUND,
         });
         expect(result[0].operator_type).toBeUndefined();
-        expect(result[0].system_info).toBeUndefined();
     });
 
     it('fetches operators in parallel via Promise.all', async () => {
@@ -214,8 +211,8 @@ describe('BoundSessionsService.resolveBoundOperators', () => {
         }));
 
         operatorService.getOperator
-            .mockResolvedValueOnce({ status: OperatorStatus.BOUND, operator_type: OperatorType.SYSTEM, system_info: null })
-            .mockResolvedValueOnce({ status: OperatorStatus.ACTIVE, operator_type: OperatorType.SYSTEM, system_info: null });
+            .mockResolvedValueOnce({ status: OperatorStatus.BOUND, operator_type: OperatorType.SYSTEM })
+            .mockResolvedValueOnce({ status: OperatorStatus.ACTIVE, operator_type: OperatorType.SYSTEM });
 
         const result = await svc.resolveBoundOperators(WEB_SESSION_ID);
 
@@ -230,7 +227,6 @@ describe('BoundSessionsService.resolveBoundOperators', () => {
         operatorService.getOperator.mockResolvedValueOnce({
             status: OperatorStatus.ACTIVE,
             operator_type: OperatorType.SYSTEM,
-            system_info: null,
         });
 
         await svc.resolveBoundOperators(WEB_SESSION_ID);
@@ -243,7 +239,6 @@ describe('BoundSessionsService.resolveBoundOperators', () => {
         operatorService.getOperator.mockResolvedValueOnce({
             status: OperatorStatus.ACTIVE,
             operator_type: OperatorType.SYSTEM,
-            system_info: null,
         });
 
         await svc.resolveBoundOperators(WEB_SESSION_ID);
@@ -265,7 +260,6 @@ describe('BoundSessionsService.resolveBoundOperators', () => {
             operatorService.getOperator.mockResolvedValue({
                 status: OperatorStatus.ACTIVE,
                 operator_type: OperatorType.SYSTEM,
-                system_info: null,
             });
 
             const result = await svc.resolveBoundOperatorsForUser(USER_ID);
@@ -301,13 +295,11 @@ describe('BoundSessionsService.resolveBoundOperators', () => {
                     id: OPERATOR_ID,
                     status: OperatorStatus.ACTIVE,
                     operator_type: OperatorType.SYSTEM,
-                    system_info: null,
                 })
                 .mockResolvedValueOnce({
                     id: OPERATOR_ID_2,
                     status: OperatorStatus.BOUND,
                     operator_type: OperatorType.SYSTEM,
-                    system_info: null,
                 });
 
             const result = await svc.resolveBoundOperatorsForUser(USER_ID);
@@ -340,7 +332,6 @@ describe('BoundSessionsService.resolveBoundOperators', () => {
                 id: OPERATOR_ID,
                 status: OperatorStatus.ACTIVE,
                 operator_type: OperatorType.SYSTEM,
-                system_info: null,
             });
 
             const result = await svc.resolveBoundOperatorsForUser(USER_ID);
@@ -363,7 +354,6 @@ describe('BoundSessionsService.resolveBoundOperators', () => {
                 id: OPERATOR_ID,
                 status: OperatorStatus.ACTIVE,
                 operator_type: OperatorType.SYSTEM,
-                system_info: null,
             });
 
             const result = await svc.resolveBoundOperatorsForUser(USER_ID);
@@ -386,7 +376,6 @@ describe('BoundSessionsService.resolveBoundOperators', () => {
                     id: OPERATOR_ID,
                     status: OperatorStatus.ACTIVE,
                     operator_type: OperatorType.SYSTEM,
-                    system_info: null,
                 })
                 .mockResolvedValueOnce(null);
 

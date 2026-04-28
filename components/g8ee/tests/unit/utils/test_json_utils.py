@@ -215,7 +215,7 @@ class TestExtractJsonFromText:
         assert result == {"status": "ok"}
 
     def test_returns_none_for_invalid_json(self):
-        text = 'not json'
+        text = "not json"
         result = extract_json_from_text(text)
         assert result is None
 

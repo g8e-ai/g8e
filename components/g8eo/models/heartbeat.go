@@ -115,6 +115,13 @@ type HeartbeatEnvironment struct {
 	InitSystem       string   `json:"init_system"`
 }
 
+type HeartbeatFingerprintDetails struct {
+	OS           string `json:"os"`
+	Architecture string `json:"architecture"`
+	CPUCount     int    `json:"cpu_count"`
+	MachineID    string `json:"machine_id,omitempty"`
+}
+
 type Heartbeat struct {
 	EventType         string        `json:"event_type"`
 	SourceComponent   string        `json:"source_component"`
@@ -139,6 +146,9 @@ type Heartbeat struct {
 	Environment   HeartbeatEnvironment   `json:"environment"`
 
 	CapabilityFlags HeartbeatCapabilityFlags `json:"capability_flags"`
+
+	FingerprintDetails *HeartbeatFingerprintDetails `json:"fingerprint_details,omitempty"`
+	SystemFingerprint  string                       `json:"system_fingerprint,omitempty"`
 
 	APIKey string `json:"api_key,omitempty"`
 }

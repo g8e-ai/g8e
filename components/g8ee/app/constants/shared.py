@@ -28,9 +28,9 @@ def _load_shared_json(filename: str) -> dict[str, Any]:
     if not path.exists():
         # Fallback for containerized environments where the path might differ
         path = Path("/app/shared/constants") / filename
-        
+
     logger.info("Loading shared JSON %s from %s", filename, path)
-    with open(path, "r") as f:
+    with open(path) as f:
         return json.load(f)
 
 _EVENTS = _load_shared_json("events.json")

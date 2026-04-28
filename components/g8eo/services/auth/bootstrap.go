@@ -33,7 +33,6 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/httpclient"
 	"github.com/g8e-ai/g8e/components/g8eo/models"
 	"github.com/g8e-ai/g8e/components/g8eo/services/sqliteutil"
-	"github.com/g8e-ai/g8e/components/g8eo/services/system"
 )
 
 // BootstrapConfig represents the configuration received from Auth Services
@@ -106,11 +105,9 @@ type AuthServicesResponse struct {
 }
 
 // RequestBootstrapConfig authenticates with g8ed and receives bootstrap configuration.
-// Supports two authentication modes:
-// - API key auth: POST /api/auth/operator with Bearer token
-// - OperatorSession auth: Device link flow using pre-authorized operator session IDs
+// Supports API key auth: POST /api/auth/operator with Bearer token
 func (bs *BootstrapService) RequestBootstrapConfig(ctx context.Context) (*BootstrapConfig, error) {
-	bs.logger.Info("Authenticating with endpoint...", "auth_mode", bs.config.AuthMode, "endpoint", bs.config.Endpoint)
+	bs.logger.Info("Authenticating with endpoint...", "endpoint", bs.config.Endpoint)
 
 	fingerprint, err := GenerateSystemFingerprint(bs.logger)
 	if err != nil {
@@ -123,34 +120,7 @@ func (bs *BootstrapService) RequestBootstrapConfig(ctx context.Context) (*Bootst
 		"os", fingerprint.OS,
 		"architecture", fingerprint.Architecture)
 
-	systemInfo := &models.SystemInfo{
-		Hostname:          system.GetHostname(),
-		OS:                system.GetOSName(),
-		Architecture:      system.GetArchitecture(),
-		CPUCount:          system.GetNumCPU(),
-		MemoryMB:          uint64(system.GetMemoryMB()),
-		PublicIP:          system.GetPublicIP(bs.config.IPService),
-		InternalIP:        system.GetLocalIP(bs.config.IPResolver),
-		Interfaces:        system.GetNetworkInterfaces(),
-		CurrentUser:       system.GetCurrentUser(),
-		SystemFingerprint: fingerprint.Fingerprint,
-		FingerprintDetails: models.FingerprintDetails{
-			OS:           fingerprint.OS,
-			Architecture: fingerprint.Architecture,
-			CPUCount:     fingerprint.CPUCount,
-			MachineID:    fingerprint.MachineID,
-		},
-		OSDetails:           system.GetOSDetails(),
-		UserDetails:         system.GetUserDetails(bs.config.Shell),
-		DiskDetails:         system.GetDiskDetails(),
-		MemoryDetails:       system.GetMemoryDetails(),
-		Environment:         system.GetEnvironmentDetails(bs.config.Lang, bs.config.Term, bs.config.TZ),
-		IsCloudOperator:     bs.config.CloudMode,
-		CloudProvider:       bs.config.CloudProvider,
-		LocalStorageEnabled: bs.config.LocalStoreEnabled,
-	}
-
-	bootstrapConfig, err := bs.requestHTTPAuth(ctx, systemInfo)
+	bootstrapConfig, err := bs.requestHTTPAuth(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to authenticate: %w", err)
 	}
@@ -161,24 +131,16 @@ func (bs *BootstrapService) RequestBootstrapConfig(ctx context.Context) (*Bootst
 
 // operatorAuthRequest is the request body for POST /api/auth/operator.
 type operatorAuthRequest struct {
-	SystemInfo        *models.SystemInfo    `json:"system_info"`
-	RuntimeConfig     *models.RuntimeConfig `json:"runtime_config"`
-	OperatorSessionID string                `json:"operator_session_id,omitempty"`
-	AuthMode          string                `json:"auth_mode"`
+	RuntimeConfig *models.RuntimeConfig `json:"runtime_config"`
 }
 
 // requestHTTPAuth authenticates via POST /api/auth/operator with exponential backoff.
-func (bs *BootstrapService) requestHTTPAuth(ctx context.Context, systemInfo *models.SystemInfo) (*BootstrapConfig, error) {
+func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConfig, error) {
 	const (
 		maxAttempts = 5
 		baseDelay   = 1 * time.Second
 		maxDelay    = 30 * time.Second
 	)
-
-	authMode := bs.config.AuthMode
-	if authMode == "" {
-		authMode = constants.Status.AuthMode.APIKey
-	}
 
 	runtimeConfig := &models.RuntimeConfig{
 		CloudMode:           bs.config.CloudMode,
@@ -191,12 +153,7 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context, systemInfo *mod
 	}
 
 	reqBody := operatorAuthRequest{
-		SystemInfo:    systemInfo,
 		RuntimeConfig: runtimeConfig,
-		AuthMode:      authMode,
-	}
-	if authMode == constants.Status.AuthMode.OperatorSession {
-		reqBody.OperatorSessionID = bs.config.OperatorSessionId
 	}
 
 	bodyBytes, err := json.Marshal(reqBody)
@@ -227,9 +184,7 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context, systemInfo *mod
 			return nil, fmt.Errorf("failed to build auth request: %w", err)
 		}
 		req.Header.Set(constants.HeaderContentType, "application/json")
-		if authMode != constants.Status.AuthMode.OperatorSession {
-			req.Header.Set(constants.HeaderAuthorization, "Bearer "+bs.config.APIKey)
-		}
+		req.Header.Set(constants.HeaderAuthorization, "Bearer "+bs.config.APIKey)
 		req.Header.Set(constants.HeaderXRequestTimestamp, sqliteutil.NowTimestamp())
 
 		bs.logger.Info("Authentication request transmitted", "attempt", attempt)

@@ -74,7 +74,7 @@ def normalise_command(raw: str) -> str:
         # Check for heredocs first - they must be preserved as multi-line
         if "<<" in raw:
             return raw.strip()
-        
+
         # Check if the first line has valid shell syntax
         first_line = lines[0].strip()
         try:

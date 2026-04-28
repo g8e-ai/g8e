@@ -23,7 +23,7 @@ Tests:
 import pytest
 from pydantic import ValidationError as PydanticValidationError
 
-from app.constants import ToolCallStatus, ThinkingActionType
+from app.constants import ThinkingActionType, ToolCallStatus
 from app.models.g8ed_client import (
     AISearchWebPayload,
     ChatThinkingPayload,

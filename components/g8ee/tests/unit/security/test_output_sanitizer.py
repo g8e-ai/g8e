@@ -12,9 +12,9 @@
 # limitations under the License.
 
 import pytest
+
 from app.constants import SuspiciousPatternType
 from app.models.base import G8eBaseModel
-
 from app.security.output_sanitizer import (
     MAX_OUTPUT_LENGTH,
     SanitizationResult,

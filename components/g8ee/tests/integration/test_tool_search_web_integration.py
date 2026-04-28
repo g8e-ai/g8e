@@ -60,7 +60,7 @@ import pytest
 from app.constants import EventType, OperatorToolName, StreamChunkFromModelType
 from app.models.agent import StreamChunkData, StreamChunkFromModel
 from app.models.grounding import GroundingMetadata
-from app.models.settings import LLMSettings, G8eeUserSettings
+from app.models.settings import G8eeUserSettings, LLMSettings
 from app.models.tool_results import SearchWebResult, WebSearchResultItem
 from app.services.ai.agent_sse import deliver_via_sse
 from tests.fakes.agent_helpers import make_agent_run_args, make_g8ed_event_service
@@ -125,12 +125,12 @@ async def _collect_sse_events(chunks, inputs=None, state=None):
         if call.kwargs:
             from app.models.events import SessionEvent
             event = SessionEvent(
-                event_type=call.kwargs.get('event_type'),
-                payload=call.kwargs.get('payload'),
-                web_session_id=call.kwargs.get('web_session_id'),
-                user_id=call.kwargs.get('user_id'),
-                case_id=call.kwargs.get('case_id'),
-                investigation_id=call.kwargs.get('investigation_id'),
+                event_type=call.kwargs.get("event_type"),
+                payload=call.kwargs.get("payload"),
+                web_session_id=call.kwargs.get("web_session_id"),
+                user_id=call.kwargs.get("user_id"),
+                case_id=call.kwargs.get("case_id"),
+                investigation_id=call.kwargs.get("investigation_id"),
             )
             events.append(event)
     return events

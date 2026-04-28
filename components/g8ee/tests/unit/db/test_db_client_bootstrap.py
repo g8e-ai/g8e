@@ -12,7 +12,9 @@
 # limitations under the License.
 
 import pytest
+
 from app.db import DBClient
+
 
 @pytest.mark.unit
 @pytest.mark.asyncio
@@ -21,6 +23,6 @@ class TestDBClientBootstrapAuth:
         # Test: Initialize DBClient with explicit token
         explicit_token = "explicit-token-456"
         client = DBClient(ca_cert_path="/mock/ca.crt", internal_auth_token=explicit_token)
-        
+
         # Verify: Explicit token is used
         assert client._internal_auth_token == explicit_token

@@ -48,7 +48,7 @@ def _resolve_ssl_context(ca_cert_paths: tuple[str | None, ...], use_tls: bool = 
                 with open(path):
                     pass
                 return ssl.create_default_context(cafile=path)
-            except (OSError, IOError):
+            except OSError:
                 continue
     return True if use_tls else False
 

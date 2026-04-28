@@ -27,9 +27,7 @@ export class SetupService {
     }
 
     async completeSetup() {
-        const existingSettings = await this.settingsService.getPlatformSettings();
         return this.settingsService.savePlatformSettings({ 
-            ...existingSettings,
             setup_complete: true 
         });
     }

@@ -13,8 +13,9 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OperatorSlotService } from '@g8ed/services/operator/operator_slot_service.js';
-import { OperatorStatus, OperatorType, HistoryEventType, CloudOperatorSubtype, DEFAULT_OPERATOR_SLOTS } from '@g8ed/constants/operator.js';
-import { OperatorDocument, SystemInfo, CertInfo, OperatorRefreshKeyResponse, OperatorSlotCreationResponse } from '@g8ed/models/operator_model.js';
+import { OperatorStatus, OperatorType, CloudOperatorSubtype, DEFAULT_OPERATOR_SLOTS } from '@g8ed/constants/operator.js';
+import { OperatorDocument, CertInfo, OperatorSlotCreationResponse } from '@g8ed/models/operator_model.js';
+import { OperatorRefreshKeyResponse } from '@g8ed/models/response_models.js';
 import { SourceComponent } from '@g8ed/constants/ai.js';
 import { ApiKeyStatus, ApiKeyClientName, ApiKeyPermission } from '@g8ed/constants/auth.js';
 
@@ -27,20 +28,39 @@ describe('OperatorSlotService', () => {
             operatorDataService: {
                 queryOperators: vi.fn(),
                 queryOperatorsFresh: vi.fn(),
+                queryListedOperators: vi.fn().mockImplementation(async (filters, options) => {
+                    // Get the operators and filter out TERMINATED
+                    let operators;
+                    if (options?.fresh) {
+                        operators = await mocks.operatorDataService.queryOperatorsFresh(filters);
+                    } else {
+                        operators = await mocks.operatorDataService.queryOperators(filters);
+                    }
+                    // Filter out TERMINATED operators
+                    return operators.filter(op => op.status !== OperatorStatus.TERMINATED);
+                }),
                 updateOperator: vi.fn(),
                 createOperator: vi.fn(),
                 getOperator: vi.fn(),
             },
             apiKeyService: {
-                issueKey: vi.fn(),
-                revokeKey: vi.fn(),
+                issueKey: vi.fn().mockResolvedValue({ success: true }),
+                revokeKey: vi.fn().mockResolvedValue({ success: true }),
             },
             certificateService: {
-                generateOperatorCertificate: vi.fn(),
-                revokeCertificate: vi.fn(),
+                generateOperatorCertificate: vi.fn().mockResolvedValue({ success: true }),
+                revokeCertificate: vi.fn().mockResolvedValue({ success: true }),
             },
             operatorSessionService: {
-                endSession: vi.fn(),
+                endSession: vi.fn().mockResolvedValue({ success: true }),
+            },
+            operatorService: {
+                relayCreateOperatorSlotToG8ee: vi.fn().mockResolvedValue({ success: true }),
+                relayClaimOperatorSlotToG8ee: vi.fn().mockResolvedValue({ success: true }),
+                relayTerminateOperatorToG8ee: vi.fn().mockResolvedValue({ success: true }),
+                relayEndOperatorSessionToG8ee: vi.fn().mockResolvedValue({ success: true }),
+                relayUpdateOperatorApiKeyToG8ee: vi.fn().mockResolvedValue({ success: true }),
+                terminateOperator: vi.fn().mockResolvedValue({ success: true }),
             },
         };
 
@@ -210,12 +230,59 @@ describe('OperatorSlotService', () => {
             expect(g8eNodeCalls).toHaveLength(1);
             expect(g8eNodeCalls[0].cloudSubtype).toBe(CloudOperatorSubtype.G8E_POD);
         });
+
+        it('should issue API keys for existing slots without keys', async () => {
+            const userId = 'u-123';
+            const organizationId = 'org-123';
+            const existingOpWithoutKey = {
+                id: 'existing-op-1',
+                user_id: userId,
+                status: OperatorStatus.AVAILABLE,
+                api_key: null
+            };
+
+            mocks.operatorDataService.queryOperatorsFresh.mockResolvedValueOnce([existingOpWithoutKey]);
+            mocks.operatorService.relayUpdateOperatorApiKeyToG8ee.mockResolvedValue({ success: true });
+
+            await service.initializeOperatorSlots(userId, organizationId);
+
+            expect(mocks.operatorService.relayUpdateOperatorApiKeyToG8ee).toHaveBeenCalledWith(
+                existingOpWithoutKey.id,
+                expect.any(String),
+                expect.objectContaining({
+                    user_id: userId,
+                    organization_id: organizationId,
+                    source_component: SourceComponent.G8ED
+                })
+            );
+            // g8ed no longer issues API keys - g8ee handles this in create_operator_slot
+            expect(mocks.apiKeyService.issueKey).not.toHaveBeenCalled();
+        });
+
+        it('should not issue API keys for existing slots that already have keys', async () => {
+            const userId = 'u-123';
+            const organizationId = 'org-123';
+            const existingOpWithKey = {
+                id: 'existing-op-1',
+                user_id: userId,
+                status: OperatorStatus.AVAILABLE,
+                api_key: 'existing-key'
+            };
+
+            mocks.operatorDataService.queryOperatorsFresh.mockResolvedValueOnce([existingOpWithKey]);
+
+            await service.initializeOperatorSlots(userId, organizationId);
+
+            expect(mocks.operatorService.relayUpdateOperatorApiKeyToG8ee).not.toHaveBeenCalled();
+            expect(mocks.apiKeyService.issueKey).not.toHaveBeenCalled();
+        });
     });
 
     describe('refreshOperatorApiKey', () => {
         it('should terminate old operator and create new one', async () => {
             const operatorId = 'op-old';
             const userId = 'u-123';
+            const webSessionId = 'web-sess-123';
             const oldOperator = new OperatorDocument({
                 id: operatorId,
                 user_id: userId,
@@ -229,72 +296,169 @@ describe('OperatorSlotService', () => {
             const broadcastFn = vi.fn();
 
             mocks.operatorDataService.getOperator.mockResolvedValue(oldOperator);
-            mocks.operatorDataService.updateOperator.mockResolvedValue({ success: true });
-            mocks.operatorDataService.createOperator.mockResolvedValue({ success: true });
+            mocks.operatorService.terminateOperator.mockResolvedValue({ success: true });
+            mocks.operatorService.relayCreateOperatorSlotToG8ee.mockResolvedValue({
+                success: true,
+                operator_id: 'op-new',
+                api_key: 'g8e_1a2b3c4d_' + '0'.repeat(64)
+            });
             mocks.operatorSessionService.endSession.mockResolvedValue();
+            mocks.apiKeyService.issueKey.mockResolvedValue({ success: true });
             mocks.apiKeyService.revokeKey.mockResolvedValue();
             mocks.certificateService.revokeCertificate.mockResolvedValue();
 
-            const result = await service.refreshOperatorApiKey(operatorId, userId, broadcastFn);
+            const result = await service.refreshOperatorApiKey(operatorId, userId, webSessionId, broadcastFn);
 
             expect(result).toBeInstanceOf(OperatorRefreshKeyResponse);
             expect(result.success).toBe(true);
-            expect(result.new_api_key).toBeDefined();
-            expect(mocks.operatorDataService.updateOperator).toHaveBeenCalledWith(
-                operatorId,
-                expect.objectContaining({ status: OperatorStatus.TERMINATED })
-            );
-            expect(mocks.operatorDataService.createOperator).toHaveBeenCalled();
-            expect(mocks.apiKeyService.issueKey).toHaveBeenCalled();
+            expect(result.new_api_key).toBe('g8e_1a2b3c4d_' + '0'.repeat(64));
+            expect(mocks.operatorService.terminateOperator).toHaveBeenCalledWith(operatorId);
+            expect(mocks.operatorService.relayCreateOperatorSlotToG8ee).toHaveBeenCalled();
+            // g8ed no longer issues API keys - g8ee handles this in create_operator_slot
+            expect(mocks.apiKeyService.issueKey).not.toHaveBeenCalled();
             expect(broadcastFn).toHaveBeenCalledWith(userId);
+        });
+
+        it('should return the real API key from the creation relay, not a status string', async () => {
+            const operatorId = 'op-old';
+            const userId = 'u-123';
+            const webSessionId = 'web-sess-123';
+            const newApiKey = 'g8e_1a2b3c4d_' + '0'.repeat(64);
+            const newOperatorId = 'op-new';
+
+            const oldOperator = new OperatorDocument({
+                id: operatorId,
+                user_id: userId,
+                organization_id: 'org-123',
+                slot_number: 1,
+                api_key: 'key-old',
+            });
+
+            mocks.operatorDataService.getOperator.mockResolvedValue(oldOperator);
+            mocks.operatorService.terminateOperator.mockResolvedValue({ success: true });
+            
+            // Mock relayCreateOperatorSlotToG8ee to return a real key
+            mocks.operatorService.relayCreateOperatorSlotToG8ee.mockResolvedValue({
+                success: true,
+                operator_id: newOperatorId,
+                api_key: newApiKey
+            });
+
+            const result = await service.refreshOperatorApiKey(operatorId, userId, webSessionId);
+
+            expect(result.success).toBe(true);
+            expect(result.new_api_key).toBe(newApiKey);
+            expect(result.new_api_key).not.toBe('API key refreshed');
+            expect(result.new_operator_id).toBe(newOperatorId);
+            expect(mocks.operatorService.terminateOperator).toHaveBeenCalledWith(operatorId);
         });
 
         it('should fail if operator not found', async () => {
             mocks.operatorDataService.getOperator.mockResolvedValue(null);
-            const result = await service.refreshOperatorApiKey('op-1', 'u-1', vi.fn());
+            const result = await service.refreshOperatorApiKey('op-1', 'u-1', 'web-sess-123', vi.fn());
             expect(result).toBeInstanceOf(OperatorRefreshKeyResponse);
             expect(result.success).toBe(false);
         });
 
         it('should fail if unauthorized', async () => {
             mocks.operatorDataService.getOperator.mockResolvedValue(new OperatorDocument({ user_id: 'u-other', id: 'op-1' }));
-            const result = await service.refreshOperatorApiKey('op-1', 'u-me', vi.fn());
+            const result = await service.refreshOperatorApiKey('op-1', 'u-me', 'web-sess-123', vi.fn());
             expect(result).toBeInstanceOf(OperatorRefreshKeyResponse);
             expect(result.success).toBe(false);
             expect(result.message).toBe('Unauthorized');
         });
     });
 
-    describe('claimSlot', () => {
-        it('should use provided status instead of defaulting to ACTIVE', async () => {
-            mocks.operatorDataService.updateOperator.mockResolvedValue(true);
+    describe('createOperatorSlot', () => {
+        it('should relay to operatorService and not issue API key (g8ee handles it)', async () => {
+            const params = {
+                userId: 'u-1',
+                organizationId: 'org-1',
+                slotNumber: 1,
+                operatorType: OperatorType.CLOUD,
+                cloudSubtype: CloudOperatorSubtype.G8E_POD,
+                namePrefix: 'op',
+                isG8eNode: true,
+                webSessionId: 'web-sess-123'
+            };
 
-            await service.claimSlot('op-1', {
-                operator_session_id: 'os-1',
-                bound_web_session_id: 'ws-1',
-                system_info: { hostname: 'test' },
-                operator_type: 'system',
-                status: OperatorStatus.BOUND,
+            const operatorId = 'new-op-id';
+            const apiKey = 'g8e_test_key';
+            mocks.operatorService.relayCreateOperatorSlotToG8ee.mockResolvedValue({
+                success: true,
+                operator_id: operatorId,
+                api_key: apiKey
             });
 
-            const updateCall = mocks.operatorDataService.updateOperator.mock.calls[0];
-            expect(updateCall[0]).toBe('op-1');
-            expect(updateCall[1].status).toBe(OperatorStatus.BOUND);
+            const result = await service.createOperatorSlot(params);
+
+            expect(result).toBeInstanceOf(OperatorSlotCreationResponse);
+            expect(result.success).toBe(true);
+            expect(result.operator_id).toBe(operatorId);
+            expect(result.api_key).toBe(apiKey);
+            expect(mocks.operatorService.relayCreateOperatorSlotToG8ee).toHaveBeenCalled();
+            // g8ed no longer issues API keys - g8ee handles this in create_operator_slot
+            expect(mocks.apiKeyService.issueKey).not.toHaveBeenCalled();
         });
 
-        it('should default to ACTIVE when no status is provided', async () => {
-            mocks.operatorDataService.updateOperator.mockResolvedValue(true);
-
-            await service.claimSlot('op-2', {
-                operator_session_id: 'os-2',
-                bound_web_session_id: 'ws-2',
-                system_info: { hostname: 'test2' },
-                operator_type: null,
+        it('should return failure if relay fails', async () => {
+            mocks.operatorService.relayCreateOperatorSlotToG8ee.mockResolvedValue({
+                success: false,
+                error: 'g8ee error'
             });
 
-            const updateCall = mocks.operatorDataService.updateOperator.mock.calls[0];
-            expect(updateCall[0]).toBe('op-2');
-            expect(updateCall[1].status).toBe(OperatorStatus.ACTIVE);
+            const result = await service.createOperatorSlot({ userId: 'u-1', webSessionId: 'web-sess-123' });
+
+            expect(result.success).toBe(false);
+            expect(result.message).toBe('g8ee error');
+            expect(mocks.apiKeyService.issueKey).not.toHaveBeenCalled();
+        });
+
+        it('should throw error if operatorService is missing', async () => {
+            const serviceNoRelay = new OperatorSlotService({ ...mocks, operatorService: null });
+            await expect(serviceNoRelay.createOperatorSlot({ userId: 'u-1', webSessionId: 'web-sess-123' })).rejects.toThrow('operatorService is required');
+        });
+    });
+
+    describe('claimSlot', () => {
+        it('should relay to operatorService and return success', async () => {
+            const id = 'op-1';
+            const params = {
+                operator_session_id: 'os-1',
+                bound_web_session_id: 'ws-1',
+                operator_type: 'system',
+            };
+
+            mocks.operatorDataService.getOperator.mockResolvedValue({
+                id,
+                user_id: 'u-1',
+                organization_id: 'org-1',
+                operator_type: 'system'
+            });
+            mocks.operatorService.relayClaimOperatorSlotToG8ee.mockResolvedValue({ success: true });
+
+            const result = await service.claimSlot(id, params);
+
+            expect(result.success).toBe(true);
+            expect(mocks.operatorService.relayClaimOperatorSlotToG8ee).toHaveBeenCalled();
+        });
+
+        it('should return failure if operator not found', async () => {
+            mocks.operatorDataService.getOperator.mockResolvedValue(null);
+            const result = await service.claimSlot('op-1', {});
+            expect(result.success).toBe(false);
+            expect(result.error).toBe('Operator not found');
+        });
+
+        it('should return failure if relay fails', async () => {
+            mocks.operatorDataService.getOperator.mockResolvedValue({ id: 'op-1', user_id: 'u-1' });
+            mocks.operatorService.relayClaimOperatorSlotToG8ee.mockResolvedValue({ success: false, error: 'relay error' });
+
+            const result = await service.claimSlot('op-1', {});
+
+            expect(result.success).toBe(false);
+            expect(result.error).toBe('relay error');
+            expect(mocks.operatorDataService.updateOperator).not.toHaveBeenCalled();
         });
     });
 

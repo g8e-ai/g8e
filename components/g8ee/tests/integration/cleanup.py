@@ -20,7 +20,7 @@ test, even on assertion failure or unexpected exceptions.
 Usage via the ``cleanup`` autouse fixture in ``integration/conftest.py``::
 
     async def test_example(self, cache_aside_service, cleanup, all_services):
-        inv_data_svc = all_services['investigation_data_service']
+        inv_data_svc = all_services.investigation_data_service
         created = await inv_data_svc.create_investigation(...)
         cleanup.track_investigation(created.id)
         # ... assertions ...
@@ -28,6 +28,7 @@ Usage via the ``cleanup`` autouse fixture in ``integration/conftest.py``::
 """
 
 import logging
+
 from app.services.cache.cache_aside import CacheAsideService
 
 logger = logging.getLogger(__name__)

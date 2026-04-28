@@ -142,32 +142,35 @@ class MemoryGenerationService:
         contents = self._conversation_to_contents(conversation_history, memory)
 
         memory_persona = get_agent_persona("codex")
-        system_instructions = f"You are analyzing a technical support conversation for case: {memory.case_title}. {memory_persona.get_system_prompt()}"
+        system_instructions = f"{memory_persona.get_system_prompt()}\n\nYou are analyzing a technical support conversation for case: {memory.case_title}."
 
-        assistant_model = settings.llm.resolved_assistant_model
-        if not assistant_model:
-            logger.warning("[MEMORY-GEN] No assistant_model configured, skipping AI memory update")
+
+        # Use the lite model for memory generation (Codex), with assistant_model as fallback
+        lite_model = settings.llm.resolved_lite_model
+
+        if not lite_model:
+            logger.warning("[MEMORY-GEN] No lite_model or assistant_model configured, skipping AI memory update")
             return
 
-        provider = get_llm_provider(settings.llm, is_assistant=True)
+        provider = get_llm_provider(settings.llm, is_lite=True)
 
-        config = AIGenerationConfigBuilder.build_assistant_settings(
-            model=assistant_model,
+        config = AIGenerationConfigBuilder.build_lite_settings(
+            model=lite_model,
             max_tokens=None,
             system_instructions=system_instructions,
             response_format=types.ResponseFormat.from_pydantic_schema(MemoryAnalysis.model_json_schema()),
         )
         try:
-            response = await provider.generate_content_assistant(
-                model=assistant_model,
+            response = await provider.generate_content_lite(
+                model=lite_model,
                 contents=contents,
-                assistant_llm_settings=config,
+                lite_llm_settings=config,
             )
             if response.text is None:
                 raise OllamaEmptyResponseError(
                     "LLM returned empty response",
-                    model=assistant_model,
-                    channel="assistant",
+                    model=lite_model,
+                    channel="lite",
                     done_reason="stop",
                     prompt_eval_count=None,
                     eval_count=None,
@@ -215,7 +218,7 @@ class MemoryGenerationService:
         memory: InvestigationMemory,
     ) -> list[types.Content]:
         contents: list[types.Content] = []
-        
+
         # Add existing memory context first
         memory_context = (
             f"CURRENT MEMORY STATE:\n"
@@ -235,7 +238,7 @@ class MemoryGenerationService:
             role=Role.USER,
             parts=[types.Part.from_text(text=memory_context)],
         ))
-        
+
         # Add conversation history
         for msg in conversation_history[-CONVERSATION_HISTORY_LIMIT:]:
             if not msg.content or msg.metadata.is_thinking:
@@ -250,7 +253,7 @@ class MemoryGenerationService:
                 role=Role.USER if role == "user" else Role.MODEL,
                 parts=[types.Part.from_text(text=msg.content)],
             ))
-        
+
         # Add the analysis request
         contents.append(types.Content(
             role=Role.USER,
@@ -261,11 +264,11 @@ class MemoryGenerationService:
     @staticmethod
     def _extract_json_from_markdown(text: str) -> str | None:
         """Extract JSON from markdown code blocks if present."""
-        json_pattern = r'```(?:json)?\s*\n?(.*?)\n?```'
+        json_pattern = r"```(?:json)?\s*\n?(.*?)\n?```"
         matches = re.findall(json_pattern, text, re.DOTALL | re.IGNORECASE)
         for match in matches:
             stripped = match.strip()
-            if stripped.startswith('{') or stripped.startswith('['):
+            if stripped.startswith("{") or stripped.startswith("["):
                 return stripped
         return None
 
@@ -273,7 +276,7 @@ class MemoryGenerationService:
     def _extract_key_value_pairs(text: str) -> dict[str, str]:
         """Extract key-value pairs from plain text/markdown as last resort."""
         result: dict[str, str] = {}
-        lines = text.split('\n')
+        lines = text.split("\n")
         current_key: str | None = None
         current_value: list[str] = []
 
@@ -281,18 +284,18 @@ class MemoryGenerationService:
             line = line.strip()
             if not line:
                 continue
-            if line.startswith('#') or line.startswith('//') or line.startswith('/*'):
+            if line.startswith("#") or line.startswith("//") or line.startswith("/*"):
                 continue
             # Look for key: value pattern, handling quoted keys like "key": "value"
-            if ':' in line and not line.startswith('-'):
+            if ":" in line and not line.startswith("-"):
                 if current_key and current_value:
-                    result[current_key] = ' '.join(current_value).strip()
-                key_part = line.split(':', 1)[0].strip()
+                    result[current_key] = " ".join(current_value).strip()
+                key_part = line.split(":", 1)[0].strip()
                 # Remove quotes from key if present
-                key_lower = key_part.lower().replace(' ', '_').strip('"\'')
-                value_part = line.split(':', 1)[1].strip()
+                key_lower = key_part.lower().replace(" ", "_").strip('"\'')
+                value_part = line.split(":", 1)[1].strip()
                 # Remove trailing commas
-                if value_part.endswith(','):
+                if value_part.endswith(","):
                     value_part = value_part[:-1].strip()
                 if value_part.startswith('"') and value_part.endswith('"'):
                     value_part = value_part[1:-1]
@@ -302,12 +305,12 @@ class MemoryGenerationService:
                 current_value = [value_part] if value_part else []
             elif current_key:
                 # Remove trailing commas from continuation lines
-                if line.endswith(','):
+                if line.endswith(","):
                     line = line[:-1].strip()
                 current_value.append(line)
 
         if current_key and current_value:
-            result[current_key] = ' '.join(current_value).strip()
+            result[current_key] = " ".join(current_value).strip()
 
         return result
 
@@ -335,12 +338,12 @@ class MemoryGenerationService:
         if kv_pairs:
             mapped = MemoryAnalysis()
             field_map = {
-                'investigation_summary': ['investigation_summary', 'summary', 'investigation', 'context'],
-                'communication_preferences': ['communication_preferences', 'communication', 'preferences', 'how_the_user_prefers_to_communicate'],
-                'technical_background': ['technical_background', 'technical', 'background', 'experience', 'skills'],
-                'response_style': ['response_style', 'response', 'style', 'format', 'how_the_user_wants_information_presented'],
-                'problem_solving_approach': ['problem_solving_approach', 'problem_solving', 'approach', 'debugging', 'how_the_user_approaches_debugging'],
-                'interaction_style': ['interaction_style', 'interaction', 'meta_preferences', 'questions', 'context'],
+                "investigation_summary": ["investigation_summary", "summary", "investigation", "context"],
+                "communication_preferences": ["communication_preferences", "communication", "preferences", "how_the_user_prefers_to_communicate"],
+                "technical_background": ["technical_background", "technical", "background", "experience", "skills"],
+                "response_style": ["response_style", "response", "style", "format", "how_the_user_wants_information_presented"],
+                "problem_solving_approach": ["problem_solving_approach", "problem_solving", "approach", "debugging", "how_the_user_approaches_debugging"],
+                "interaction_style": ["interaction_style", "interaction", "meta_preferences", "questions", "context"],
             }
             for field, aliases in field_map.items():
                 for alias in aliases:
@@ -358,8 +361,8 @@ class MemoryGenerationService:
                 return mapped
 
         # Strategy 4: Fallback - raw text becomes investigation_summary
-        cleaned = re.sub(r'^\s*[{\[]\s*', '', text)
-        cleaned = re.sub(r'\s*[}\]]\s*$', '', cleaned)
+        cleaned = re.sub(r"^\s*[{\[]\s*", "", text)
+        cleaned = re.sub(r"\s*[}\]]\s*$", "", cleaned)
         cleaned = cleaned.strip()
         if cleaned:
             return MemoryAnalysis(investigation_summary=cleaned[:FALLBACK_TEXT_LIMIT])

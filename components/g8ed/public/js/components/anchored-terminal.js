@@ -244,7 +244,7 @@ export class AnchoredOperatorTerminal {
                 execution_id: executionId,
                 operator_id: this.boundOperator?.operator_id,
                 web_session_id: webSessionId,
-                hostname: this.boundOperator?.system_info?.hostname || this.boundOperator?.name || null
+                hostname: this.boundOperator?.latest_heartbeat_snapshot?.system_identity?.hostname || this.boundOperator?.name || null
             });
 
             const result = await response.json();

@@ -21,6 +21,7 @@ import pytest
 from app.constants.events import EventType
 from app.constants.intents import CloudIntent
 from app.constants.status import FileOperation
+from app.models.http_context import G8eHttpContext
 from app.models.internal_api import OperatorApprovalResponse
 from app.models.investigations import ApprovalMetadata
 from app.models.operators import (
@@ -33,7 +34,6 @@ from app.models.operators import (
     IntentApprovalRequest,
     PendingApproval,
 )
-from app.models.http_context import G8eHttpContext
 from app.models.tool_results import RiskLevel
 from app.services.operator.approval_service import OperatorApprovalService
 from app.services.protocols import (

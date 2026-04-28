@@ -316,8 +316,7 @@ type sharedAITaskIDValues struct {
 }
 
 type sharedAuthModeValues struct {
-	APIKey          string `json:"api_key"`
-	OperatorSession string `json:"operator_session"`
+	APIKey string `json:"api_key"`
 }
 
 type sharedHeartbeatTypeValues struct {
@@ -643,7 +642,6 @@ func TestSharedStatusMatchesGoConstants(t *testing.T) {
 
 	t.Run("auth.mode", func(t *testing.T) {
 		assert.Equal(t, st.AuthMode.APIKey, constants.Status.AuthMode.APIKey)
-		assert.Equal(t, st.AuthMode.OperatorSession, constants.Status.AuthMode.OperatorSession)
 	})
 }
 

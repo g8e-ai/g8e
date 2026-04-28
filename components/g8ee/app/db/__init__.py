@@ -23,9 +23,9 @@ from app.models.cache import ArrayUnion, ArrayRemove
 from app.clients.db_client import DBClient
 
 __all__ = [
+    "ArrayRemove",
+    "ArrayUnion",
+    "DBClient",
     "DBService",
     "KVService",
-    "DBClient",
-    "ArrayUnion",
-    "ArrayRemove",
 ]

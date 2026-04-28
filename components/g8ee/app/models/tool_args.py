@@ -18,7 +18,6 @@ These are the argument shapes used by the AI when calling Operator tools.
 They are validated by the tool_service before being converted to pub/sub payloads.
 """
 
-from typing import Literal
 
 from pydantic import Field
 
@@ -26,22 +25,24 @@ from app.models.base import G8eBaseModel
 from app.models.command_request_payloads import TargetedOperatorBase
 
 __all__ = [
+    "CheckPortArgs",
+    "FetchExecutionOutputArgs",
+    "FetchFileDiffArgs",
+    "FetchFileHistoryArgs",
+    "FetchSessionHistoryArgs",
     "FileCreateArgs",
-    "FileWriteArgs",
     "FileReadArgs",
     "FileUpdateArgs",
-    "SearchWebArgs",
-    "CheckPortArgs",
-    "FsReadArgs",
+    "FileWriteArgs",
     "FsListArgs",
-    "FetchExecutionOutputArgs",
-    "FetchSessionHistoryArgs",
-    "FetchFileHistoryArgs",
-    "RestoreFileArgs",
-    "FetchFileDiffArgs",
+    "FsReadArgs",
     "GrantIntentArgs",
-    "RevokeIntentArgs",
     "QueryInvestigationContextArgs",
+    "RestoreFileArgs",
+    "RevokeIntentArgs",
+    "SearchWebArgs",
+    "SshInventoryArgs",
+    "StreamOperatorArgs",
 ]
 
 
@@ -263,4 +264,36 @@ class QueryInvestigationContextArgs(G8eBaseModel):
             "Maximum number of items to return (for conversation_history and history_trail). "
             "Optional. Use to limit output size for large investigations."
         ),
+    )
+
+
+class SshInventoryArgs(G8eBaseModel):
+    """LLM tool call args for OperatorToolName.SSH_INVENTORY."""
+    justification: str = Field(
+        ...,
+        description="Clear explanation of why you need to see the SSH fleet inventory."
+    )
+
+
+class StreamOperatorArgs(G8eBaseModel):
+    """LLM tool call args for OperatorToolName.STREAM_OPERATOR."""
+    hosts: list[str] = Field(
+        ...,
+        description="List of SSH hostnames/aliases from the inventory to stream the operator to."
+    )
+    justification: str = Field(
+        ...,
+        description="Clear explanation of what you intend to do across these hosts."
+    )
+    arch: str = Field(
+        default="amd64",
+        description="CPU architecture of the target hosts (e.g., amd64, arm64). Default: amd64."
+    )
+    concurrency: int = Field(
+        default=5,
+        description="Maximum number of hosts to process in parallel. Default: 5."
+    )
+    timeout_seconds: int = Field(
+        default=300,
+        description="Maximum time in seconds for the operation to complete on each host. Default: 300."
     )

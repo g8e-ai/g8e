@@ -96,10 +96,10 @@ export function createOperatorApprovalRouter({ services, authMiddleware, rateLim
 
             const operator_session_id = operator_session_ids[0];
 
-            const operatorSession = await operatorSessionService.validateSession(operator_session_id);
-            if (!operatorSession) {
+            const validationResponse = await relay.relayValidateOperatorSessionToG8ee(operator_session_id, req.g8eContext);
+            if (!validationResponse.success || !validationResponse.valid) {
                 return res.status(400).json(new ErrorResponse({
-                    error: 'Operator session expired or invalid'
+                    error: validationResponse.error || 'Operator session expired or invalid'
                 }).forClient());
             }
 
@@ -110,16 +110,17 @@ export function createOperatorApprovalRouter({ services, authMiddleware, rateLim
                 execution_id,
                 webSessionId: redactWebSessionId(req.webSessionId),
                 operatorSessionId: redactWebSessionId(operator_session_id),
-                operatorId: operatorSession.operator_id
+                operatorId: validationResponse.operator_id
             });
 
+            req.g8eContext.execution_id = execution_id;
             const response = await relay.relayDirectCommandToG8ee(directCommandRequest.forWire(), req.g8eContext);
 
             logger.info('[OPERATOR-DIRECT] Sent direct command to g8ee', {
                 execution_id,
                 success: response.success,
                 webSessionId: redactWebSessionId(req.webSessionId),
-                operatorId: operatorSession.operator_id
+                operatorId: validationResponse.operator_id
             });
 
             res.json(new DirectCommandResponseEvent({

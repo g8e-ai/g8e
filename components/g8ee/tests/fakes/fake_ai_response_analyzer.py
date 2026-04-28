@@ -14,6 +14,7 @@
 """Typed fake for AIResponseAnalyzerProtocol."""
 
 from __future__ import annotations
+
 from app.constants import FileOperation, RiskLevel
 from app.models.settings import G8eeUserSettings
 from app.models.tool_results import (
@@ -77,11 +78,15 @@ class FakeAIResponseAnalyzer:
         operation: FileOperation,
         file_path: str,
         content: str | None,
+        context: FileOperationRiskContext,
+        settings: G8eeUserSettings | None = None,
     ) -> FileOperationRiskAnalysis:
         self.file_risk_analyses.append({
             "operation": operation,
             "file_path": file_path,
             "content": content,
+            "context": context,
+            "settings": settings,
         })
         return FileOperationRiskAnalysis(
             risk_level=RiskLevel.LOW,

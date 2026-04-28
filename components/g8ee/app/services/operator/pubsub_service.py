@@ -25,12 +25,10 @@ corresponding Pydantic models for type-safe parsing.
 import asyncio
 import json
 import logging
-from collections.abc import Callable, Coroutine
 
 from pydantic import ValidationError as PydanticValidationError
 
 from app.clients.pubsub_client import PubSubClient
-from app.constants.events import EventType
 from app.constants.channels import OperatorChannel, PubSubChannel
 
 from app.errors import ValidationError

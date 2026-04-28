@@ -172,7 +172,7 @@ export function createSSERouter({
         });
 
         // Send keepalive every 20 seconds to detect broken connections
-        // Status transitions (ACTIVE→OFFLINE, BOUND→STALE) are handled by HeartbeatMonitorService
+        // Status transitions (ACTIVE→OFFLINE, BOUND→STALE) are handled by g8ee's HeartbeatStaleMonitorService
         keepaliveInterval = setInterval(async () => {
             if (sseService.hasLocalConnection(connectionId)) {
                 try {

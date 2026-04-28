@@ -13,7 +13,7 @@ set -euo pipefail
 
 SSL_DIR="${G8E_SSL_DIR:-/g8es}"
 
-# Load Internal Auth Token
+# Load Internal Auth Token (required for supervisor inet_http_server password)
 if [ -f "${SSL_DIR}/internal_auth_token" ]; then
     export G8E_INTERNAL_AUTH_TOKEN=$(cat "${SSL_DIR}/internal_auth_token" | tr -d '\n\r')
     echo "[g8ep] Loaded G8E_INTERNAL_AUTH_TOKEN from volume"
@@ -25,57 +25,10 @@ if [ -f "${SSL_DIR}/session_encryption_key" ]; then
     echo "[g8ep] Loaded G8E_SESSION_ENCRYPTION_KEY from volume"
 fi
 
-# Load CA Certificate path
-if [ -f "${SSL_DIR}/ca.crt" ]; then
-    export G8E_PUBSUB_CA_CERT="${SSL_DIR}/ca.crt"
-    export G8E_SSL_CERT_FILE="${SSL_DIR}/ca.crt"
-    echo "[g8ep] Configured CA certificate paths from ${SSL_DIR}/ca.crt"
-fi
+# CA cert paths (G8E_PUBSUB_CA_CERT, G8E_SSL_CERT_FILE) are set by docker-compose.
 
-SUPERVISOR_CONF=/tmp/g8e.operator.conf
-
-_write_supervisor_conf() {
-    local endpoint="${G8E_OPERATOR_ENDPOINT:-${G8E_GATEWAY_OPERATOR_ENDPOINT:-g8e.local}}"
-    local auth_token="${G8E_INTERNAL_AUTH_TOKEN:-}"
-    local supervisor_port="${G8E_SUPERVISOR_PORT:-443}"
-    cat > "${SUPERVISOR_CONF}" <<EOF
-[supervisord]
-nodaemon=true
-logfile=/dev/null
-logfile_maxbytes=0
-pidfile=/tmp/supervisord.pid
-childlogdir=/var/log/supervisor
-
-[unix_http_server]
-file=/tmp/supervisor.sock
-
-[inet_http_server]
-port = *:${supervisor_port}
-username = g8e-internal
-password = ${auth_token}
-
-[supervisorctl]
-serverurl=unix:///tmp/supervisor.sock
-
-[rpcinterface:supervisor]
-supervisor.rpcinterface_factory = supervisor.rpcinterface:make_main_rpcinterface
-
-[program:operator]
-command=/app/components/g8ep/scripts/fetch-key-and-run.sh
-autostart=true
-autorestart=true
-startsecs=10
-startretries=3
-stopwaitsecs=10
-stdout_logfile=/dev/fd/1
-stdout_logfile_maxbytes=0
-stderr_logfile=/dev/fd/1
-stderr_logfile_maxbytes=0
-EOF
-    echo "[g8ep] Supervisor config written (endpoint: ${endpoint})"
-}
-
-_write_supervisor_conf
+# Default the supervisor port for the static config's %(ENV_G8E_SUPERVISOR_PORT)s.
+export G8E_SUPERVISOR_PORT="${G8E_SUPERVISOR_PORT:-443}"
 
 echo "[g8ep] Starting supervisord"
-exec /usr/bin/supervisord -c "${SUPERVISOR_CONF}"
+exec /usr/bin/supervisord -c /app/components/g8ep/scripts/supervisord.conf

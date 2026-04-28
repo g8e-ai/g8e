@@ -58,6 +58,9 @@ class PubSubChannel(str, Enum):
     RESULTS_PREFIX = "results"
     HEARTBEAT_PREFIX = "heartbeat"
 
+    AUTH_PUBLISH_SESSION_PREFIX = "auth.publish:session:"
+    AUTH_RESPONSE_SESSION_PREFIX = "auth.response:session:"
+
     SEPARATOR = ":"
 
     # Backwards-compatible constructors. Delegate to OperatorChannel — a single

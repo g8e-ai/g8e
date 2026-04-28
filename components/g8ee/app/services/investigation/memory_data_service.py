@@ -77,7 +77,7 @@ class MemoryDataService(MemoryDataServiceProtocol):
             )
 
     async def get_memory(self, investigation_id: str) -> InvestigationMemory | None:
-        data = await self._cache_aside.get_document(
+        data = await self._cache_aside.get_document_with_cache(
             collection=self.memories_collection,
             document_id=investigation_id,
         )

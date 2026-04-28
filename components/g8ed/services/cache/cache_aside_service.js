@@ -127,22 +127,17 @@ class CacheAsideService {
                 documentId: documentId.substring(0, 12) + '...'
             });
 
+            // Invalidate cache instead of populating it (matches g8ee behavior)
             await this._invalidateQueryCache(collection);
-
             const key = this._makeKey(collection, documentId);
-            const cacheTTL = ttl !== null ? ttl : this._getTTLForCollection(collection);
-
-            let cacheSuccess = false;
             try {
-                await this.kvClient.set_json(key, flat, cacheTTL);
-                cacheSuccess = true;
-                logger.info(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] Document cached in g8es KV`, {
+                await this.kvClient.del(key);
+                logger.info(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] Cache invalidated for new document`, {
                     collection,
-                    documentId: documentId.substring(0, 12) + '...',
-                    ttl: cacheTTL
+                    documentId: documentId.substring(0, 12) + '...'
                 });
             } catch (cacheError) {
-                logger.warn(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] g8es KV cache update failed (non-critical)`, {
+                logger.warn(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] Cache invalidation after create failed (non-critical)`, {
                     collection,
                     documentId: documentId.substring(0, 12) + '...',
                     error: cacheError.message
@@ -151,8 +146,7 @@ class CacheAsideService {
 
             return {
                 success: true,
-                documentId,
-                cached: cacheSuccess
+                documentId
             };
 
         } catch (error) {
@@ -408,7 +402,7 @@ class CacheAsideService {
             const result = await this.db.queryDocuments(collection, filters, limit);
             const data = result.success ? result.data : [];
 
-            if (!bypassCache) {
+            if (!bypassCache && data.length > 0) {
                 await this.setQueryResult(collection, queryParams, data);
             }
 

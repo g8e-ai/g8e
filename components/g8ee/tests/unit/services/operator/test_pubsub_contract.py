@@ -13,15 +13,17 @@
 
 """Contract tests for PubSub Service payload parsing."""
 
-import pytest
-from app.services.operator.pubsub_service import parse_inbound_g8eo_payload
-from app.models.pubsub_messages import (
-    G8eoResultPayload,
-    ExecutionResultsPayload,
-    PortCheckResultPayload,
-    FsListResultPayload,
-)
 from typing import get_args
+
+import pytest
+
+from app.models.pubsub_messages import (
+    ExecutionResultsPayload,
+    FsListResultPayload,
+    G8eoResultPayload,
+    PortCheckResultPayload,
+)
+from app.services.operator.pubsub_service import parse_inbound_g8eo_payload
 
 pytestmark = [pytest.mark.unit]
 

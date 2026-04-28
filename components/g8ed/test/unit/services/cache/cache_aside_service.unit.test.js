@@ -52,7 +52,7 @@ describe('CacheAsideService', () => {
     });
 
     describe('createDocument', () => {
-        it('should write to DB then warm the cache', async () => {
+        it('should write to DB then invalidate cache', async () => {
             const docId = 'doc-1';
             const data = { id: docId, name: 'Test' };
             mockDbClient.setDocument.mockResolvedValue({ success: true });
@@ -62,16 +62,17 @@ describe('CacheAsideService', () => {
 
             expect(result.success).toBe(true);
             expect(mockDbClient.setDocument).toHaveBeenCalledWith(Collections.USERS, docId, data);
-            expect(mockListenClient.set_json).toHaveBeenCalledWith(expect.any(String), data, expect.any(Number));
+            expect(mockListenClient.del).toHaveBeenCalledWith(expect.any(String));
+            expect(mockListenClient.set_json).not.toHaveBeenCalled();
         });
 
-        it('should handle DB failure and not warm cache', async () => {
+        it('should handle DB failure and not invalidate cache', async () => {
             mockDbClient.setDocument.mockResolvedValue({ success: false, error: 'DB Error' });
-            
+
             const result = await service.createDocument(Collections.USERS, 'id', {});
 
             expect(result.success).toBe(false);
-            expect(mockListenClient.set_json).not.toHaveBeenCalled();
+            expect(mockListenClient.del).not.toHaveBeenCalled();
         });
     });
 

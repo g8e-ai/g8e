@@ -25,9 +25,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.errors import ConfigurationError
 from app.models.settings import G8eePlatformSettings
 from app.utils.service_init import initialize_g8e_service
-from app.errors import ConfigurationError
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 

@@ -25,7 +25,8 @@ describe('Internal Device Link Routes [UNIT]', () => {
             createLink: vi.fn(),
             getLink: vi.fn(),
             deleteLink: vi.fn(),
-            revokeLink: vi.fn()
+            revokeLink: vi.fn(),
+            generateLink: vi.fn()
         };
         mockAuthorizationMiddleware = {
             requireInternalOrigin: vi.fn((req, res, next) => next()),
@@ -209,6 +210,55 @@ describe('Internal Device Link Routes [UNIT]', () => {
             expect(res.status).toHaveBeenCalledWith(404);
             expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
                 error: 'Not found'
+            }));
+        });
+    });
+
+    describe('POST /operator-link', () => {
+        it('should generate an operator device link', async () => {
+            const body = {
+                user_id: 'user_123',
+                organization_id: 'org_456',
+                operator_id: 'op_789',
+                web_session_id: 'sess_abc'
+            };
+            const req = createMockReq({ body });
+            const res = createMockRes();
+            const mockResult = {
+                success: true,
+                token: 'dlk_12345678901234567890123456789012',
+                operator_command: 'g8e link dlk_...',
+                expires_at: '2026-03-31T00:00:00Z'
+            };
+
+            mockDeviceLinkService.generateLink.mockResolvedValue(mockResult);
+
+            await getRouteHandler('/operator-link', 'post')(req, res);
+
+            expect(mockDeviceLinkService.generateLink).toHaveBeenCalledWith(body);
+            expect(res.status).toHaveBeenCalledWith(201);
+            expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+                success: true,
+                token: mockResult.token
+            }));
+        });
+
+        it('should return 400 if generation fails', async () => {
+            const body = {
+                user_id: 'user_123',
+                operator_id: 'op_789',
+                web_session_id: 'sess_abc'
+            };
+            const req = createMockReq({ body });
+            const res = createMockRes();
+
+            mockDeviceLinkService.generateLink.mockResolvedValue({ success: false, error: 'Generation failed' });
+
+            await getRouteHandler('/operator-link', 'post')(req, res);
+
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+                error: 'Generation failed'
             }));
         });
     });

@@ -11,21 +11,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
+import hashlib
+import hmac
 import logging
-from typing import Any, List, NoReturn, Optional
+from typing import TYPE_CHECKING, NoReturn
 
 from app.errors import OllamaEmptyResponseError
 from app.models.base import G8eBaseModel
 from app.models.agent import OperatorContext
+from app.models.reputation import GENESIS_PREV_ROOT, ReputationCommitment
+from app.services.data.reputation_data_service import ReputationDataService
+from app.utils.merkle import leaf_bytes, merkle_root
 from app.constants import (
     DEFAULT_OS_NAME,
     DEFAULT_SHELL,
     DEFAULT_WORKING_DIRECTORY,
-    FORBIDDEN_COMMAND_PATTERNS,
     TribunalMember,
     EventType,
     AuditorReason,
 )
+from app.constants.status import CommandErrorType
 from app.llm.prompts import (
     build_tribunal_auditor_prompt,
     build_tribunal_auditor_context,
@@ -42,6 +49,9 @@ from app.models.agents.tribunal import (
     VoteBreakdown,
 )
 from app.models.model_configs import get_model_config
+
+if TYPE_CHECKING:
+    from app.services.ai.generator import TribunalEmitter
 from app.utils.json_utils import extract_json_from_text
 from app.utils.safety import validate_command_safety
 
@@ -55,8 +65,8 @@ _MAX_TOKENS_AUDITOR = 1024
 class TribunalAuditorResponse(G8eBaseModel):
     """Structured response for Tribunal audit."""
     status: str  # "ok", "revised", or "swap"
-    revised_command: Optional[str] = None
-    swap_to_cluster: Optional[str] = None
+    revised_command: str | None = None
+    swap_to_cluster: str | None = None
 
 class AuditorClusterInfo(G8eBaseModel):
     """Internal model for passing cluster info to the auditor prompt."""
@@ -73,7 +83,7 @@ class AuditorInput(G8eBaseModel):
 # Removed validate_command_safety - moved to app.utils.safety
 
 async def fail_auditor(
-    emitter: Any,  # TribunalEmitter
+    emitter: TribunalEmitter,
     request: str,
     reason: AuditorReason,
     error_msg: str,
@@ -97,8 +107,8 @@ async def fail_auditor(
     )
 
 def parse_auditor_response(
-    raw_text: str, 
-    mode: str, 
+    raw_text: str,
+    mode: str,
     cluster_ids: list[str]
 ) -> tuple[str, str | None, str | None]:
     """Parse and validate auditor JSON response with mode-specific rules."""
@@ -110,7 +120,7 @@ def parse_auditor_response(
         status = data.get("status", "").lower()
         revised_raw = data.get("revised_command")
         swap_to_cluster = data.get("swap_to_cluster")
-        
+
         # Mode-specific validation
         if mode == "unanimous":
             if status not in ("ok", "revised"):
@@ -131,13 +141,13 @@ def parse_auditor_response(
                 raise ValueError("Auditor returned status='swap' but no swap_to_cluster")
             if swap_to_cluster not in cluster_ids:
                 raise ValueError(f"invalid swap_to_cluster {swap_to_cluster!r}")
-        
+
         if status == "revised" and not revised_raw:
             raise ValueError("Auditor returned status='revised' but no revised_command")
-            
+
         return status, revised_raw, swap_to_cluster
     except (AttributeError) as exc:
-        raise ValueError(f"Auditor returned malformed JSON structure: {str(exc)}") from exc
+        raise ValueError(f"Auditor returned malformed JSON structure: {exc!s}") from exc
 
 async def run_auditor(
     provider: LLMProvider,
@@ -149,16 +159,18 @@ async def run_auditor(
     vote_breakdown: VoteBreakdown,
     tied_candidates: list[CandidateCommand] | None,
     operator_context: OperatorContext | None,
-    emitter: Any,  # TribunalEmitter
+    emitter: TribunalEmitter,
     command_constraints_message: str,
     auditor_persona: TribunalMember,
+    whitelisting_enabled: bool = False,
+    blacklisting_enabled: bool = False,
 ) -> tuple[bool, str | None, str | None, AuditorReason, str | None, str | None]:
     """Run the dissent-aware Auditor."""
     # Prepare cluster info and mapping
     clusters: list[AuditorClusterInfo] = []
     cluster_to_cmd: dict[str, str] = {}
     cluster_to_members: dict[str, list[str]] = {}
-    
+
     # 1. Add winner as cluster_a
     if not vote_winner:
         raise ValueError("vote_winner is required - no fallback allowed")
@@ -203,13 +215,13 @@ async def run_auditor(
         default_shell=DEFAULT_SHELL,
         default_working_directory=DEFAULT_WORKING_DIRECTORY,
     )
-    
+
     # Prepare clusters for the prompt context function
     clusters_data = [
         {"cluster_id": c.cluster_id, "command": c.command, "support_count": c.support_count}
         for c in clusters
     ]
-    
+
     auditor_context = build_tribunal_auditor_context(mode, target_cmd, clusters_data)
     prompt = build_tribunal_auditor_prompt(
         request=request,
@@ -224,7 +236,7 @@ async def run_auditor(
 
     logger.info("[TRIBUNAL-AUDITOR] mode=%s winner=%r clusters=%d", mode, target_cmd, len(clusters))
     model_config = get_model_config(model)
-    
+
     response_format = None
     if model_config.supports_structured_output:
         response_format = ResponseFormat.from_pydantic_schema(
@@ -272,7 +284,7 @@ async def run_auditor(
                     tool_calls_count=0,
                     ctx_overflow_suspected=False,
                 )
-            
+
             status, revised_raw, swap_to_cluster = parse_auditor_response(
                 raw_text, mode, list(cluster_to_cmd.keys())
             )
@@ -288,17 +300,17 @@ async def run_auditor(
             if status == "swap":
                 final_cmd = cluster_to_cmd[swap_to_cluster]
                 swap_to_member = cluster_to_members[swap_to_cluster][0] # Pick first member for telemetry
-                
+
                 # RE-VALIDATE SWAP TARGET SAFETY (L1 Technical Bedrock)
-                is_safe, safety_err = validate_command_safety(final_cmd, True, True, operator_context)
-                if not is_safe:
-                    reason = AuditorReason.WHITELIST_VIOLATION if "whitelisted" in (safety_err or "").lower() else AuditorReason.NO_VALID_REVISION
-                    await fail_auditor(emitter, request, reason, f"Swap target technical safety failure: {safety_err}", target_cmd)
+                safety_result = validate_command_safety(final_cmd, whitelisting_enabled, blacklisting_enabled, operator_context)
+                if not safety_result.is_safe:
+                    reason = AuditorReason.WHITELIST_VIOLATION if safety_result.error_type == CommandErrorType.WHITELIST_VIOLATION else AuditorReason.NO_VALID_REVISION
+                    await fail_auditor(emitter, request, reason, f"Swap target technical safety failure: {safety_result.error_message}", target_cmd)
 
                 await emitter.emit(
                     EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED,
                     TribunalAuditorCompletedPayload(
-                        passed=True, 
+                        passed=True,
                         reason=AuditorReason.SWAPPED_TO_DISSENTER,
                         swap_to_cluster=swap_to_cluster,
                         swap_to_member=swap_to_member
@@ -313,10 +325,10 @@ async def run_auditor(
                 await fail_auditor(emitter, request, AuditorReason.NO_VALID_REVISION, "Empty revision", target_cmd)
 
             # RE-VALIDATE REVISION SAFETY (L1 Technical Bedrock)
-            is_safe, safety_err = validate_command_safety(revised, True, True, operator_context)
-            if not is_safe:
-                reason = AuditorReason.WHITELIST_VIOLATION if "whitelisted" in (safety_err or "").lower() else AuditorReason.NO_VALID_REVISION
-                await fail_auditor(emitter, request, reason, f"Revision technical safety failure: {safety_err}", target_cmd)
+            safety_result = validate_command_safety(revised, whitelisting_enabled, blacklisting_enabled, operator_context)
+            if not safety_result.is_safe:
+                reason = AuditorReason.WHITELIST_VIOLATION if safety_result.error_type == CommandErrorType.WHITELIST_VIOLATION else AuditorReason.NO_VALID_REVISION
+                await fail_auditor(emitter, request, reason, f"Revision technical safety failure: {safety_result.error_message}", target_cmd)
 
             reason = AuditorReason.REVISED_FROM_DISSENT if mode in ("majority", "tied") else AuditorReason.REVISED
             await emitter.emit(
@@ -334,7 +346,7 @@ async def run_auditor(
                 if isinstance(exc, OllamaEmptyResponseError):
                     await fail_auditor(emitter, request, AuditorReason.EMPTY_RESPONSE, str(exc), target_cmd)
                 else:
-                    await fail_auditor(emitter, request, AuditorReason.NO_VALID_REVISION, f"Failed to parse auditor response after {max_attempts} attempts: {str(exc)}", target_cmd)
+                    await fail_auditor(emitter, request, AuditorReason.NO_VALID_REVISION, f"Failed to parse auditor response after {max_attempts} attempts: {exc!s}", target_cmd)
             continue
         except TribunalAuditorFailedError:
             raise
@@ -349,3 +361,51 @@ async def run_auditor(
         error=f"Exhausted {max_attempts} attempts without success. Last error: {last_error}",
         candidate_command=target_cmd,
     )
+
+
+async def commit_reputation(
+    reputation_data_service: ReputationDataService,
+    tribunal_command_id: str,
+    investigation_id: str,
+    hmac_key: str,
+) -> ReputationCommitment:
+    """Compute, sign, and persist a Merkle commitment over the reputation scoreboard.
+
+    GDD §14.4 Artifact B: the Auditor, during its verdict step, binds the
+    verdict to a snapshot of `reputation_state` by writing a signed Merkle
+    commitment. The commitment chains across verdicts via ``prev_root``
+    (deployment-scoped) so any party with the hash-chained history can
+    verify the Auditor's claims without re-executing the verdict path.
+
+    This function is single-responsibility by design: it does not emit
+    events or populate downstream models. Callers own side-effects.
+    """
+    if not tribunal_command_id:
+        raise ValueError("tribunal_command_id is required")
+    if not investigation_id:
+        raise ValueError("investigation_id is required")
+    if not hmac_key:
+        raise ValueError("hmac_key is required")
+
+    states = await reputation_data_service.list_states()
+    leaves = [leaf_bytes(s.agent_id, s.scalar) for s in states]
+    root = merkle_root(leaves)
+
+    latest = await reputation_data_service.get_latest_commitment()
+    prev_root = latest.merkle_root if latest is not None else GENESIS_PREV_ROOT
+
+    signature = hmac.new(
+        hmac_key.encode("utf-8"),
+        (root + prev_root + tribunal_command_id).encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+    commitment = ReputationCommitment(
+        investigation_id=investigation_id,
+        tribunal_command_id=tribunal_command_id,
+        merkle_root=root,
+        prev_root=prev_root,
+        leaves_count=len(states),
+        signature=signature,
+    )
+    return await reputation_data_service.create_commitment(commitment)

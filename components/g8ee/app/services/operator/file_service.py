@@ -16,7 +16,6 @@
 Handles file-related operations (edit, read, write, update) on Operators.
 """
 
-import asyncio
 import logging
 
 from app.services.protocols import (
@@ -66,12 +65,36 @@ class OperatorFileService:
         ai_response_analyzer: AIResponseAnalyzerProtocol,
         investigation_service: InvestigationServiceProtocol,
     ) -> None:
-        self.pubsub_service = pubsub_service
-        self.approval_service = approval_service
-        self.g8ed_event_service = g8ed_event_service
-        self.execution_service = execution_service
-        self.ai_response_analyzer = ai_response_analyzer
-        self.investigation_service = investigation_service
+        self._pubsub_service = pubsub_service
+        self._approval_service = approval_service
+        self._g8ed_event_service = g8ed_event_service
+        self._execution_service = execution_service
+        self._ai_response_analyzer = ai_response_analyzer
+        self._investigation_service = investigation_service
+
+    @property
+    def pubsub_service(self) -> PubSubServiceProtocol:
+        return self._pubsub_service
+
+    @property
+    def approval_service(self) -> ApprovalServiceProtocol:
+        return self._approval_service
+
+    @property
+    def g8ed_event_service(self) -> EventServiceProtocol:
+        return self._g8ed_event_service
+
+    @property
+    def execution_service(self) -> ExecutionServiceProtocol:
+        return self._execution_service
+
+    @property
+    def ai_response_analyzer(self) -> AIResponseAnalyzerProtocol:
+        return self._ai_response_analyzer
+
+    @property
+    def investigation_service(self) -> InvestigationServiceProtocol:
+        return self._investigation_service
 
     async def execute_file_edit(
         self,
@@ -85,14 +108,14 @@ class OperatorFileService:
             operation = args.operation
             justification = args.justification.strip() if args.justification else ""
             exec_id = args.execution_id
-            
+
             op_name = getattr(operation, "value", operation)
             logger.info("[FILE] Starting %s on %s", op_name, file_path)
 
             # 1. Validation
             if not file_path or not file_path.strip():
                 return FileEditResult(success=False, error="File path parameter is required", error_type=CommandErrorType.VALIDATION_ERROR)
-            
+
             if not justification:
                 return FileEditResult(success=False, error="Justification parameter is required", error_type=CommandErrorType.VALIDATION_ERROR)
 
@@ -124,7 +147,7 @@ class OperatorFileService:
             except Exception as e:
                 logger.error("[FILE-ERROR] Operator resolution failed: %s", e, exc_info=True)
                 return FileEditResult(
-                    success=False, 
+                    success=False,
                     error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.",
                     error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR if operator_documents else CommandErrorType.NO_OPERATORS_AVAILABLE,
                 )
@@ -191,7 +214,7 @@ class OperatorFileService:
                         task_id=AITaskId.FILE_EDIT,
                     )
                     return FileEditResult(
-                        success=False, 
+                        success=False,
                         approved=False,
                         error=approval_result.reason or "Denied by user",
                         error_type=CommandErrorType.APPROVAL_DENIED if approval_result.error_type != ApprovalErrorType.APPROVAL_TIMEOUT else CommandErrorType.APPROVAL_TIMEOUT
@@ -232,8 +255,8 @@ class OperatorFileService:
 
             # Notify completion/failure
             completion_event_type = (
-                EventType.OPERATOR_FILE_EDIT_COMPLETED 
-                if internal_result and internal_result.status == ExecutionStatus.COMPLETED 
+                EventType.OPERATOR_FILE_EDIT_COMPLETED
+                if internal_result and internal_result.status == ExecutionStatus.COMPLETED
                 else EventType.OPERATOR_FILE_EDIT_FAILED
             )
 
@@ -331,8 +354,8 @@ class OperatorFileService:
 
             # Notify completion/failure
             completion_event_type = (
-                EventType.OPERATOR_FILE_HISTORY_FETCH_COMPLETED 
-                if internal_result and internal_result.status == ExecutionStatus.COMPLETED 
+                EventType.OPERATOR_FILE_HISTORY_FETCH_COMPLETED
+                if internal_result and internal_result.status == ExecutionStatus.COMPLETED
                 else EventType.OPERATOR_FILE_HISTORY_FETCH_FAILED
             )
 
@@ -353,14 +376,14 @@ class OperatorFileService:
 
             from app.models.pubsub_messages import FetchFileHistorySuccessPayload, FetchFileHistoryErrorPayload
 
-            if isinstance(envelope.payload, FetchFileHistorySuccessPayload):
+            if envelope and isinstance(envelope.payload, FetchFileHistorySuccessPayload):
                 return FetchFileHistoryToolResult(
                     success=True,
                     file_path=envelope.payload.file_path,
                     history=envelope.payload.history,
                     error=None,
                 )
-            if isinstance(envelope.payload, FetchFileHistoryErrorPayload):
+            if envelope and isinstance(envelope.payload, FetchFileHistoryErrorPayload):
                 return FetchFileHistoryToolResult(
                     success=False,
                     file_path=file_path,
@@ -443,8 +466,8 @@ class OperatorFileService:
 
             # Notify completion/failure
             completion_event_type = (
-                EventType.OPERATOR_FILE_DIFF_FETCH_COMPLETED 
-                if internal_result and internal_result.status == ExecutionStatus.COMPLETED 
+                EventType.OPERATOR_FILE_DIFF_FETCH_COMPLETED
+                if internal_result and internal_result.status == ExecutionStatus.COMPLETED
                 else EventType.OPERATOR_FILE_DIFF_FETCH_FAILED
             )
 
@@ -469,7 +492,7 @@ class OperatorFileService:
                 FetchFileDiffErrorPayload,
             )
 
-            if isinstance(envelope.payload, FetchFileDiffByIdSuccessPayload):
+            if envelope and isinstance(envelope.payload, FetchFileDiffByIdSuccessPayload):
                 return FetchFileDiffToolResult(
                     success=True,
                     diff=envelope.payload.diff,
@@ -477,7 +500,7 @@ class OperatorFileService:
                     error=None,
                     operator_session_id=operator_session_id,
                 )
-            if isinstance(envelope.payload, FetchFileDiffBySessionSuccessPayload):
+            if envelope and isinstance(envelope.payload, FetchFileDiffBySessionSuccessPayload):
                 return FetchFileDiffToolResult(
                     success=True,
                     diff=envelope.payload.diffs[0] if envelope.payload.diffs else None,
@@ -485,7 +508,7 @@ class OperatorFileService:
                     error=None,
                     operator_session_id=operator_session_id,
                 )
-            if isinstance(envelope.payload, FetchFileDiffErrorPayload):
+            if envelope and isinstance(envelope.payload, FetchFileDiffErrorPayload):
                 return FetchFileDiffToolResult(
                     success=False,
                     diff=None,

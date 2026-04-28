@@ -1,0 +1,102 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Gold Set Evaluation Scenarios",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "id",
+      "description",
+      "user_query"
+    ],
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "description": {
+        "type": "string"
+      },
+      "user_query": {
+        "type": "string"
+      },
+      "agent_mode": {
+        "type": "string"
+      },
+      "expected_behavior": {
+        "type": "string"
+      },
+      "forbidden_tools": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "required_concepts": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "dimension": {
+        "type": "string"
+      },
+      "expected_tools": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "expected_tool": {
+        "type": "string"
+      },
+      "expected_payload": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "field": {
+              "type": "string"
+            },
+            "pattern": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "field",
+            "pattern"
+          ]
+        }
+      },
+      "category": {
+        "type": "string"
+      },
+      "pii_values": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "expected_scrub_types": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "forbidden_leak_tokens": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "expected_placeholders": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

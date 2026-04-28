@@ -1,0 +1,7 @@
+{
+  "_comment": "AUTHORITIVE public API paths.",
+  "auth_operator": "/api/auth/operator",
+  "chat_send": "/api/chat/send",
+  "sse_events": "/api/sse/events",
+  "operator_approval_respond": "/api/operator/approval/respond"
+}

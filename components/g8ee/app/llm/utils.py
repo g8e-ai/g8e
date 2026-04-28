@@ -33,10 +33,11 @@ class ModelOverrideResolver:
 
     primary_model: str | None
     assistant_model: str | None
+    lite_model: str | None
 
     def for_triage(self) -> str | None:
-        """Returns the model override for triage (assistant tier)."""
-        return self.assistant_model
+        """Returns the model override for triage (lite tier)."""
+        return self.lite_model
 
     def for_main_generation(
         self, needs_primary: bool
@@ -145,11 +146,11 @@ def is_ollama_endpoint(url: str | None) -> bool:
         parsed = urlparse(url)
         if parsed.port == 11434:
             return True
-        
+
         hostname = parsed.hostname
         if hostname and "ollama" in hostname.lower():
             return True
-            
+
         if "ollama" in parsed.path.lower():
             return True
 
@@ -162,28 +163,35 @@ def resolve_model(
     tier: str,
     primary_override: str | None,
     assistant_override: str | None,
+    lite_override: str | None,
     settings_primary_model: str | None,
     settings_assistant_model: str | None,
+    settings_lite_model: str | None,
 ) -> str | None:
     """
     Resolve the model to use for a given tier with fallback chain.
 
     Args:
-        tier: Either "primary" or "assistant" indicating which model tier to resolve
+        tier: One of "primary", "assistant", or "lite" indicating which model tier to resolve
         primary_override: Override value for primary model (from request args)
         assistant_override: Override value for assistant model (from request args)
+        lite_override: Override value for lite model (from request args)
         settings_primary_model: Default primary model from settings
         settings_assistant_model: Default assistant model from settings
+        settings_lite_model: Default lite model from settings
 
     Returns:
         The resolved model name, or None if no model is configured for the tier
 
     Raises:
-        ValueError: If tier is not "primary" or "assistant"
+        ValueError: If tier is not "primary", "assistant", or "lite"
     """
     if tier == "primary":
         return primary_override if primary_override else settings_primary_model
-    elif tier == "assistant":
+    if tier == "assistant":
         return assistant_override if assistant_override else settings_assistant_model
-    else:
-        raise ValueError(f"Invalid model tier: {tier}. Must be 'primary' or 'assistant'.")
+    if tier == "lite":
+        return lite_override if lite_override else settings_lite_model
+    raise ValueError(
+        f"Invalid model tier: {tier}. Must be 'primary', 'assistant', or 'lite'."
+    )

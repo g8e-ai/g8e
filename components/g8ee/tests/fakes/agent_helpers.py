@@ -16,7 +16,6 @@
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from app.models.settings import G8eeUserSettings, LLMSettings
 from app.constants import AgentMode
 from app.llm.llm_types import ThoughtSignature
 from app.models.agent import (
@@ -25,6 +24,7 @@ from app.models.agent import (
     StreamChunkFromModel,
     TurnResult,
 )
+from app.models.settings import G8eeUserSettings, LLMSettings
 from app.services.ai.agent import g8eEngine
 from app.services.ai.agent_turn import process_provider_turn
 from app.services.ai.request_builder import AIRequestBuilder
@@ -87,17 +87,22 @@ def make_agent_inputs(
             user_id=user_id,
         )
 
-    request_settings = G8eeUserSettings(
-        llm=LLMSettings(
-            primary_model="test-model",
-            assistant_model="test-model",
-            assistant_provider="ollama",
-            primary_provider="ollama"
-        )
-    )
-
     if request_settings is None:
-        request_settings = G8eeUserSettings(llm=LLMSettings(primary_model="test-model"))
+        from app.llm.factory import get_llm_settings
+        llm_from_env = get_llm_settings()
+        if llm_from_env:
+            request_settings = G8eeUserSettings(llm=llm_from_env)
+        else:
+            request_settings = G8eeUserSettings(
+                llm=LLMSettings(
+                    primary_model="test-model",
+                    assistant_model="test-model",
+                    lite_model="test-model",
+                    assistant_provider="ollama",
+                    lite_provider="ollama",
+                    primary_provider="ollama"
+                )
+            )
 
     if generation_config is None:
         generation_config = make_gen_config(
@@ -168,8 +173,6 @@ def make_g8e_agent(
     if fn_handler is None:
         fn_handler = MagicMock()
         fn_handler._tool_declarations = {}
-        fn_handler.start_invocation_context = MagicMock(return_value=None)
-        fn_handler.reset_invocation_context = MagicMock()
 
     return g8eEngine(
         tool_executor=fn_handler,
@@ -260,15 +263,15 @@ async def collect_stream_from_model_chunks(
 def make_g8ed_event_service():
     """Build a mock EventService for g8ed SSE publishing."""
     from app.models.events import SessionEvent
-    
+
     svc = MagicMock()
     published_events = []
-    
+
     async def capture_publish(event):
         """Capture the published event for test inspection."""
         published_events.append(event)
         return "success"
-    
+
     async def capture_publish_investigation_event(
         investigation_id: str,
         event_type: str,
@@ -287,11 +290,25 @@ def make_g8ed_event_service():
             user_id=user_id,
         )
         return await capture_publish(session_event)
-    
+
     svc.publish = AsyncMock(side_effect=capture_publish)
     svc.publish_command_event = AsyncMock()
     svc.publish_investigation_event = AsyncMock(side_effect=capture_publish_investigation_event)
-    
+
+    async def capture_publish_reputation(event_type, data, g8e_context):
+        """Capture reputation event calls and create proper SessionEvent."""
+        session_event = SessionEvent(
+            event_type=event_type,
+            payload=data,
+            web_session_id=g8e_context.web_session_id,
+            user_id=g8e_context.user_id,
+            case_id=g8e_context.case_id,
+            investigation_id=g8e_context.investigation_id,
+        )
+        return await capture_publish(session_event)
+
+    svc.publish_reputation_event = AsyncMock(side_effect=capture_publish_reputation)
+
     # Store the captured events on the service for test access
     svc._published_events = published_events
     return svc

@@ -330,16 +330,34 @@ func TestAuthMiddlewareDeep(t *testing.T) {
 
 func TestHandleHealth(t *testing.T) {
 	h, _ := setupTestHTTPHandler(t)
-	req := httptest.NewRequest(http.MethodGet, "/health", nil)
-	rr := httptest.NewRecorder()
 
-	h.handleHealth(rr, req)
-	assert.Equal(t, http.StatusOK, rr.Code)
+	t.Run("Returns 503 when platform_settings not found", func(t *testing.T) {
+		h.db.DocDelete("settings", "platform_settings")
+		req := httptest.NewRequest(http.MethodGet, "/health", nil)
+		rr := httptest.NewRecorder()
 
-	var resp models.HealthResponse
-	err := json.Unmarshal(rr.Body.Bytes(), &resp)
-	require.NoError(t, err)
-	assert.Equal(t, constants.Status.ListenMode.StatusOK, resp.Status)
+		h.handleHealth(rr, req)
+		assert.Equal(t, http.StatusServiceUnavailable, rr.Code)
+		assert.Contains(t, rr.Body.String(), "platform_settings not ready")
+	})
+
+	t.Run("Returns 200 when platform_settings exists", func(t *testing.T) {
+		err := h.db.DocSet("settings", "platform_settings", mustDocJSON(t, map[string]interface{}{
+			"internal_auth_token": "test-token",
+		}))
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodGet, "/health", nil)
+		rr := httptest.NewRecorder()
+
+		h.handleHealth(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		var resp models.HealthResponse
+		err = json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Equal(t, constants.Status.ListenMode.StatusOK, resp.Status)
+	})
 }
 
 func TestHandleDB(t *testing.T) {

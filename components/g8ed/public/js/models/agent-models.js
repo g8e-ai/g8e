@@ -25,6 +25,9 @@ export class TriageResult extends FrontendBaseModel {
         intent_confidence:     { type: F.string,  required: true },
         intent_summary:        { type: F.string,  required: true },
         follow_up_question:    { type: F.string,  default: null },
+        clarifying_questions:  { type: F.array,  items: F.string, default: null },
+        request_posture:       { type: F.string,  default: 'normal' },
+        posture_confidence:    { type: F.string,  default: 'low' },
     };
 }
 

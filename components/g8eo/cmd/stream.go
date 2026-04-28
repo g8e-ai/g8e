@@ -71,7 +71,8 @@ func RunStream(args []string) {
 	fs.StringVar(&sshConfigArg, "ssh-config", "", "Path to SSH config file (default: ~/.ssh/config)")
 	fs.StringVar(&binaryDir, "binary-dir", defaultBinaryDir, "Directory containing arch-specific operator builds")
 
-	if err := fs.Parse(args); err != nil {
+	positionalHosts, err := parseInterleavedArgs(fs, args)
+	if err != nil {
 		if err == flag.ErrHelp {
 			printStreamUsage()
 			os.Exit(constants.ExitSuccess)
@@ -79,9 +80,6 @@ func RunStream(args []string) {
 		fmt.Fprintf(os.Stderr, "[stream] flag error: %v\n", err)
 		os.Exit(constants.ExitGeneralError)
 	}
-
-	// Collect positional host arguments
-	positionalHosts := fs.Args()
 
 	// Build host list from all sources
 	hosts, err := collectHosts(positionalHosts, hostsFile)
@@ -240,6 +238,32 @@ func runConcurrentStream(
 	return results
 }
 
+// parseInterleavedArgs parses args against fs while permitting positional
+// arguments and flags to appear in any order. Go's stdlib flag.Parse stops at
+// the first non-flag token, which would cause a command like
+// `stream host1 --key xxx` to mis-parse `--key`/`xxx` as additional hosts.
+//
+// We work around this by repeatedly calling fs.Parse on the unconsumed tail:
+// each pass consumes leading flags up to the next positional arg, which is
+// then peeled off into the returned slice before parsing resumes on the rest.
+//
+// flag.ErrHelp and other parse errors are returned unchanged so callers can
+// distinguish help-requested from genuine errors.
+func parseInterleavedArgs(fs *flag.FlagSet, args []string) ([]string, error) {
+	var positional []string
+	remaining := args
+	for {
+		if err := fs.Parse(remaining); err != nil {
+			return nil, err
+		}
+		if fs.NArg() == 0 {
+			return positional, nil
+		}
+		positional = append(positional, fs.Arg(0))
+		remaining = fs.Args()[1:]
+	}
+}
+
 // collectHosts merges positional CLI args, a --hosts file/stdin, deduplicates,
 // and returns the final list.
 func collectHosts(positional []string, hostsFile string) ([]string, error) {
@@ -287,6 +311,10 @@ func collectHosts(positional []string, hostsFile string) ([]string, error) {
 // buildOperatorArgs constructs the shell-safe argument string for the remote
 // operator invocation. Returns empty string when no endpoint is specified
 // (inject-only mode).
+//
+// NOTE: Host-key policy is not passed here because strict mode is enforced on
+// the outgoing dial from g8ep (stream phase). If remote operators ever make
+// their own SSH connections, a --strict arg should be added here.
 func buildOperatorArgs(endpoint, deviceToken, apiKey string, noGit bool) string {
 	if endpoint == "" {
 		return ""

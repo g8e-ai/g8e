@@ -20,6 +20,7 @@ get_json, set_json, delete_pattern, hget, hset, hgetall, hdel,
 rpush, lpush, lrange, llen, ltrim, incr, decr.
 """
 
+import contextlib
 import json
 import logging
 from typing import Any
@@ -28,6 +29,7 @@ from urllib.parse import quote
 import aiohttp
 
 from app.models.settings import ListenSettings
+from app.services.infra.settings_service import SettingsService
 from app.utils.aiohttp_session import new_kv_http_session
 from app.constants import (
     ComponentName,
@@ -60,10 +62,9 @@ class KVCacheClient:
         listen_settings: ListenSettings | None = None,
     ):
         if listen_settings is None:
-            from app.services.infra.settings_service import SettingsService
             service = SettingsService()
             listen_settings = ListenSettings.from_bootstrap(service)
-        
+
         self.http_url = (http_url or listen_settings.http_url).rstrip("/")
         self.component_name = component_name
         self._timeout = timeout
@@ -126,10 +127,10 @@ class KVCacheClient:
             result = await self._request("GET", "/health")
             self._healthy = result.get("status") == "ok"
             if self._healthy:
-                logger.info(f"[KV-CACHE-CLIENT] Connected to {self.http_url}")
+                logger.info("[KV-CACHE-CLIENT] Connected to %s", self.http_url)
             return self._healthy
         except Exception as e:
-            logger.error(f"[KV-CACHE-CLIENT] Connection failed: {e}")
+            logger.error("[KV-CACHE-CLIENT] Connection failed: %s", e)
             self._healthy = False
             return False
 
@@ -174,7 +175,7 @@ class KVCacheClient:
             })
             return True
         except Exception as e:
-            logger.error(f"[KV-CACHE-CLIENT] set failed: {e}")
+            logger.error("[KV-CACHE-CLIENT] set failed: %s", e)
             return False
 
     async def setex(self, key: str, seconds: int, value: str) -> bool:
@@ -243,10 +244,8 @@ class KVCacheClient:
         existing = await self.get(key)
         h: dict[str, object] = {}
         if existing:
-            try:
+            with contextlib.suppress(json.JSONDecodeError, TypeError):
                 h = json.loads(existing)
-            except (json.JSONDecodeError, TypeError):
-                pass
         h[field] = value
         await self.set(key, json.dumps(h))
         return 1
@@ -291,10 +290,8 @@ class KVCacheClient:
         existing = await self.get(key)
         lst: list[object] = []
         if existing:
-            try:
+            with contextlib.suppress(json.JSONDecodeError, TypeError):
                 lst = json.loads(existing)
-            except (json.JSONDecodeError, TypeError):
-                pass
         lst.extend(values)
         await self.set(key, json.dumps(lst))
         return len(lst)
@@ -303,10 +300,8 @@ class KVCacheClient:
         existing = await self.get(key)
         lst: list[object] = []
         if existing:
-            try:
+            with contextlib.suppress(json.JSONDecodeError, TypeError):
                 lst = json.loads(existing)
-            except (json.JSONDecodeError, TypeError):
-                pass
         for v in reversed(values):
             lst.insert(0, v)
         await self.set(key, json.dumps(lst))

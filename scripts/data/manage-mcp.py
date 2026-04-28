@@ -28,6 +28,8 @@ Usage:
     python manage-g8es.py mcp status
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import ssl
@@ -36,7 +38,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from _lib import (
     G8ED_BASE_URL,
@@ -62,7 +64,7 @@ def _get_platform_url() -> str:
     return url or 'https://localhost'
 
 
-def _get_user_g8e_key(user_id: str) -> Optional[str]:
+def _get_user_g8e_key(user_id: str) -> str | None:
     result = g8ed_request('GET', f'{G8ED_BASE_URL}/api/internal/users/{user_id}')
     if not result.get('success'):
         return None
@@ -130,7 +132,7 @@ def _generate_config(client: str, mcp_url: str, api_key: str) -> str:
 
 
 def _mcp_request(mcp_url: str, api_key: str, method: str, req_id: str = "1",
-                 params: Optional[Dict] = None) -> Dict[str, Any]:
+                 params: Dict | None = None) -> Dict[str, Any]:
     payload = {
         "jsonrpc": "2.0",
         "id": req_id,
