@@ -1152,7 +1152,7 @@ export class SettingsPage {
                 ? ` (${json.skipped.length} env-locked key(s) skipped)`
                 : '';
 
-            this._showStatus('success', `Settings saved successfully.${skippedNote} Restart the platform to apply changes.`);
+            this._showStatus('success', `Settings saved successfully.${skippedNote} Changes are applied immediately.`);
         } catch (err) {
             this._showStatus('error', 'Save failed: ' + err.message);
             btn.disabled = false;
