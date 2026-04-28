@@ -1,6 +1,11 @@
 {
   "_comment": "Canonical Auditor model. A separate, fast Tribunal call that provides final syntactic validation of the voting winner.",
   "name": "Auditor",
+  "metadata": {
+    "id": "auditor",
+    "display_name": "Auditor",
+    "icon": "fact_check"
+  },
   "description": "Syntactic validation and final review of command candidates.",
   "request": {
     "intent": { "type": "string", "description": "The original user intent." },

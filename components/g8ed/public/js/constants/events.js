@@ -256,6 +256,7 @@ export const EventType = Object.freeze({
     EVENT_SOURCE_USER_TERMINAL: 'g8e.v1.source.user.terminal',
     EVENT_SOURCE_AI_PRIMARY:    'g8e.v1.source.ai.primary',
     EVENT_SOURCE_AI_ASSISTANT:  'g8e.v1.source.ai.assistant',
+    EVENT_SOURCE_AI_TRIAGE:     'g8e.v1.source.ai.triage',
     EVENT_SOURCE_SYSTEM:        'g8e.v1.source.system',
 });
 

@@ -14,22 +14,22 @@
 /**
  * Tribunal Member Icons
  * Icon names for each tribunal member, indexed by pass number.
- * Sourced from shared/constants/agents.json agent metadata.
+ * These are Material Symbols names.
  */
 export const TribunalMemberIcons = Object.freeze({
-    0: 'git-merge',
-    1: 'shield-check',
-    2: 'git-branch',
-    3: 'book-open',
-    4: 'shield-alert',
+    0: 'call_merge',
+    1: 'verified_user',
+    2: 'call_split',
+    3: 'menu_book',
+    4: 'gpp_maybe',
 });
 
 /**
  * Auditor Icon
  * Icon for the Tribunal auditor.
- * Sourced from shared/constants/agents.json agent metadata.
+ * These are Material Symbols names.
  */
-export const AuditorIcon = 'search-check';
+export const AuditorIcon = 'fact_check';
 
 /**
  * Tribunal Outcome

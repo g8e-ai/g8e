@@ -223,6 +223,7 @@ class HeartbeatStaleMonitorService:
                 hostname=operator.current_hostname,
                 system_fingerprint=operator.latest_heartbeat_snapshot.system_fingerprint if operator.latest_heartbeat_snapshot else None,
                 timestamp=datetime.now(UTC),
+                metrics=operator.latest_heartbeat_snapshot,
             )
 
             event = BackgroundEvent(

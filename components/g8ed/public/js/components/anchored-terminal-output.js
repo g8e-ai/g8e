@@ -706,7 +706,7 @@ export class TerminalOutputMixin {
         const statusText = finalCommand ? `${label} · ${finalCommand}` : label;
 
         if (success) {
-            statusEl.innerHTML = `<span class="material-symbols-outlined">check</span>${escapeHtml(statusText)}`;
+            statusEl.innerHTML = `<span class="material-symbols-outlined">check</span>`;
         } else {
             statusEl.textContent = statusText;
         }

@@ -19,6 +19,7 @@ import { OperatorStatus, OperatorType } from '../../constants/operator.js';
 import { OperatorSessionRole, DeviceLinkError } from '../../constants/auth.js';
 import { EventType } from '../../constants/events.js';
 import { G8eHttpContext, BoundOperatorContext } from '../../models/request_models.js';
+import { DEFAULT_OPERATOR_CONFIG } from '../../constants/operator_defaults.js';
 
 function sanitizeString(input, maxLength = 255) {
     if (!input || typeof input !== 'string') return '';
@@ -151,7 +152,8 @@ export class DeviceRegistrationService {
             api_key: result.api_key,
             operator_cert: result.operator_cert,
             operator_cert_key: result.operator_cert_key,
-            session: result.session
+            session: result.session,
+            config: DEFAULT_OPERATOR_CONFIG
         };
     }
 }

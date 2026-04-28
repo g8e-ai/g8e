@@ -1,6 +1,11 @@
 {
   "_comment": "Canonical Assistant AI model. Fast-path AI for simple tasks — shares the full tool set with the Primary AI but uses a smaller, lower-latency model.",
   "name": "AssistantAI",
+  "metadata": {
+    "id": "dash",
+    "display_name": "Dash",
+    "icon": "bolt"
+  },
   "description": "Fast-path AI for simple tasks.",
   "request": {
     "message": { "type": "string", "description": "The user message to process." },

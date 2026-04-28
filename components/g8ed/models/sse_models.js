@@ -153,6 +153,7 @@ export class OperatorStatusUpdatedData extends G8eBaseModel {
         total_count:         { type: F.number, default: null },
         active_count:        { type: F.number, default: null },
         timestamp:           { type: F.date,   default: null },
+        metrics:             { type: F.object, default: null },
     };
 }
 
