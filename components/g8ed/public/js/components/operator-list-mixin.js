@@ -21,6 +21,38 @@ import { OperatorDialogs, OperatorAlerts } from '../constants/operator-messages.
 import { notificationService } from '../utils/notification-service.js';
 import { showConfirmationModal } from '../utils/ui-utils.js';
 
+// Heartbeat freshness ladder. Independent of operator.status.
+// Tunables intentionally tighter than the backend's 300s lifecycle threshold —
+// this drives only the *visual* liveness, not lifecycle transitions.
+const HEARTBEAT_LIVE_MAX_SECONDS = 30;
+const HEARTBEAT_DEGRADED_MAX_SECONDS = 90;
+
+const Liveness = Object.freeze({
+    NONE: 'none',
+    LIVE: 'live',
+    DEGRADED: 'degraded',
+    STALE: 'stale',
+});
+
+function computeLiveness(operator, nowMs = Date.now()) {
+    const ts = operator?.latest_heartbeat_snapshot?.timestamp;
+    if (!ts) return { state: Liveness.NONE, ageSeconds: null };
+    const tsMs = ts instanceof Date ? ts.getTime() : Date.parse(ts);
+    if (!Number.isFinite(tsMs)) return { state: Liveness.NONE, ageSeconds: null };
+    const ageSeconds = Math.max(0, (nowMs - tsMs) / 1000);
+    if (ageSeconds <= HEARTBEAT_LIVE_MAX_SECONDS) return { state: Liveness.LIVE, ageSeconds };
+    if (ageSeconds <= HEARTBEAT_DEGRADED_MAX_SECONDS) return { state: Liveness.DEGRADED, ageSeconds };
+    return { state: Liveness.STALE, ageSeconds };
+}
+
+function formatHeartbeatAge(ageSeconds) {
+    if (ageSeconds == null) return ' - ';
+    if (ageSeconds < 1) return '<1s';
+    if (ageSeconds < 60) return `${Math.floor(ageSeconds)}s`;
+    if (ageSeconds < 3600) return `${Math.floor(ageSeconds / 60)}m`;
+    return `${Math.floor(ageSeconds / 3600)}h`;
+}
+
 const formatTimestamp = (timestamp) => {
     if (!timestamp) return ' - ';
     const date = parseISOString(timestamp);
@@ -75,21 +107,15 @@ const sparkY = (pct) => {
 };
 
 const computeHealthClass = (operator, cpuClass, memClass, diskClass, latencyClass) => {
-    const statusLower = (operator.status || '').toLowerCase();
-    const isOperational = statusLower === OperatorStatus.ACTIVE || statusLower === OperatorStatus.BOUND;
-    let healthClass;
-    if (!isOperational && statusLower === OperatorStatus.STALE) {
-        healthClass = 'loaded';
-    } else if (!isOperational) {
-        healthClass = 'muted';
-    } else if ([cpuClass, memClass, diskClass].includes('crit') || latencyClass === 'crit') {
-        healthClass = 'crit';
-    } else if ([cpuClass, memClass, diskClass].includes('warn') || latencyClass === 'warn') {
-        healthClass = 'loaded';
-    } else {
-        healthClass = 'healthy';
-    }
-    return healthClass;
+    const { state } = computeLiveness(operator);
+
+    if (state === Liveness.NONE) return 'muted';
+    if (state === Liveness.STALE) return 'muted';
+    if (state === Liveness.DEGRADED) return 'loaded';
+
+    if ([cpuClass, memClass, diskClass].includes('crit') || latencyClass === 'crit') return 'crit';
+    if ([cpuClass, memClass, diskClass].includes('warn') || latencyClass === 'warn') return 'loaded';
+    return 'healthy';
 };
 
 /**
@@ -115,6 +141,13 @@ export const OperatorListMixin = {
             devLogger.warn('[OPERATOR] displayOperators called but operatorList is null');
             return;
         }
+
+        devLogger.log('[OPERATOR-PANEL] [RENDER] Displaying operators:', {
+            operators_count: operators.length,
+            operator_ids: operators.map(op => op.operator_id),
+            current_page: this.currentPage,
+            operators_per_page: this.operatorsPerPage
+        });
 
         const loadingEl = document.getElementById('operator-drawer-loading');
         const loadingMsgEl = document.getElementById('operator-loading-message');
@@ -146,6 +179,7 @@ export const OperatorListMixin = {
             return acc;
         }, {});
         devLogger.log(`[OPERATOR] Operators to render: ${operators.length}`, statusCounts);
+        devLogger.log('[OPERATOR-PANEL] [RENDER] Status breakdown:', statusCounts);
 
         const statusPriority = (op) => {
             if (op.is_g8ep) return 0;
@@ -203,7 +237,8 @@ export const OperatorListMixin = {
             const hasName = !!operator.name;
 
             const firstDeployedText = operator.first_deployed ? formatTimestamp(operator.first_deployed) : ' - ';
-            const lastHeartbeatText = operator.last_heartbeat ? formatTimestamp(operator.last_heartbeat) : ' - ';
+            const { ageSeconds } = computeLiveness(operator);
+            const lastHeartbeatText = formatHeartbeatAge(ageSeconds);
 
             // latest_heartbeat_snapshot is the canonical HeartbeatSnapshot shape
             // (shared/models/wire/heartbeat.json#operator_heartbeat) — same shape
@@ -579,15 +614,32 @@ export const OperatorListMixin = {
     },
 
     _patchOperatorCard(operatorId) {
-        if (!this.operatorList || !operatorId) return;
+        if (!this.operatorList || !operatorId) {
+            devLogger.warn('[OPERATOR-PANEL] [PATCH] Cannot patch card - missing operatorList or operatorId:', {
+                has_operatorList: !!this.operatorList,
+                operatorId
+            });
+            return;
+        }
 
         const cardElement = this.operatorList.querySelector(`[data-operator-id="${operatorId}"]`);
         if (!cardElement) {
+            devLogger.warn('[OPERATOR-PANEL] [PATCH] Card DOM element not found for operator:', {
+                operatorId,
+                current_operators_count: this.operators.length,
+                current_operator_ids: this.operators.map(op => op.operator_id)
+            });
             return;
         }
 
         const operator = this.operators.find(op => op.operator_id === operatorId);
-        if (!operator) return;
+        if (!operator) {
+            devLogger.warn('[OPERATOR-PANEL] [PATCH] Operator not found in local state:', {
+                operatorId,
+                operators_count: this.operators.length
+            });
+            return;
+        }
 
         const latestSnapshot = operator.latest_heartbeat_snapshot || {};
         const perf = latestSnapshot.performance || {};
@@ -627,7 +679,8 @@ export const OperatorListMixin = {
         const diskPercent = formatPercent(perf.disk_percent);
         const networkLatency = formatLatency(perf.network_latency);
         const uptime = formatUptime(uptimeInfo.uptime_display ?? uptimeInfo.uptime_seconds);
-        const lastHeartbeatText = operator.last_heartbeat ? formatTimestamp(operator.last_heartbeat) : ' - ';
+        const { ageSeconds } = computeLiveness(operator);
+        const lastHeartbeatText = formatHeartbeatAge(ageSeconds);
 
         const statusDisplay = operator.status_display || operator.status || OperatorStatus.OFFLINE;
         const statusPillText = (statusDisplay || '').toString().toUpperCase();
@@ -713,7 +766,16 @@ export const OperatorListMixin = {
             diskPercentEl.className = `op-metric-value ${diskClass}`;
         }
 
-        devLogger.log(`[OPERATOR-PANEL] Patched card ${operatorId}`);
+        devLogger.log(`[OPERATOR-PANEL] [PATCH] Patched card ${operatorId}:`, {
+            operator_id: operatorId,
+            cpu_percent: cpuPercent,
+            memory_percent: memoryPercent,
+            disk_percent: diskPercent,
+            network_latency: networkLatency,
+            uptime,
+            health_class: healthClass,
+            status: operator.status
+        });
     },
 
     _selectMetricsOperator(operatorId) {
@@ -1029,4 +1091,6 @@ export const OperatorListMixin = {
     },
 
 };
+
+export { computeLiveness, computeHealthClass, formatHeartbeatAge, Liveness };
 

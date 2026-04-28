@@ -26,8 +26,8 @@ help:
 	@echo "  OPERATOR DEPLOYMENT"
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 	@echo ""
-	@echo "  deploy [-d dlk_xxx]         - Deploy operators via API download (device link)"
-	@echo "  stream [-d dlk_xxx]         - Deploy operators via SSH streaming (auto-configures SSH)"
+	@echo "  deploy -d dlk_xxx           - Deploy operators via remote pubsub start"
+	@echo "  stream -d dlk_xxx           - Deploy operators via SSH streaming (runs in g8ep)"
 	@echo "                            - Also supports: DEVICE_TOKEN=dlk_xxx"
 	@echo "  discover-hosts            - List discovered demo fleet hosts"
 	@echo "  vanish                    - Remove all operators (zero trace)"
@@ -64,19 +64,8 @@ build:
 	$(COMPOSE) build
 
 up: build
-	@set -e; \
-	TOKEN="$(DEVICE_TOKEN)"; \
-	if [ -z "$$TOKEN" ] && echo "$(filter-out $@,$(MAKECMDGOALS))" | grep -q '\-d'; then \
-		TOKEN=$$(echo "$(filter-out $@,$(MAKECMDGOALS))" | sed 's/.*-d \([^ ]*\).*/\1/'); \
-	fi; \
-	if [ -n "$$TOKEN" ]; then \
-		echo "Starting 10 web nodes (operators auto-attach via DEVICE_TOKEN)..."; \
-		DEVICE_TOKEN="$$TOKEN" $(COMPOSE) up -d; \
-	else \
-		echo "Starting 10 web nodes (no DEVICE_TOKEN; operators will NOT auto-attach)..."; \
-		echo "  Provide DEVICE_TOKEN to auto-attach operators: make up -d dlk_xxx"; \
-		$(COMPOSE) up -d; \
-	fi
+	@echo "Starting 10 web nodes..."
+	$(COMPOSE) up -d
 	@echo ""
 	@echo "========================================"
 	@echo "  Broken Web App Fleet - 10 Nodes"
@@ -101,13 +90,12 @@ up: build
 
 setup-ssh:
 	@docker cp $(CONTAINER_PREFIX)-01:/opt/demo-key ./.demo-key 2>/dev/null && chmod 600 ./.demo-key
-	@# Reset .ssh as root to clear any stale files from prior runs that may have been
-	@# created with different ownership, then chown back to g8e.
-	@docker exec -u root g8ep sh -c 'rm -rf /home/g8e/.ssh && mkdir -p /home/g8e/.ssh && chown -R g8e:g8e /home/g8e/.ssh && chmod 700 /home/g8e/.ssh'
-	@cat ./.demo-key | docker exec -i -u g8e g8ep sh -c 'cat > /home/g8e/.ssh/id_ed25519'
-	@printf 'Host web-node-* node-*\n    User $(SSH_USER)\n    IdentityFile /home/g8e/.ssh/id_ed25519\n    StrictHostKeyChecking accept-new\n' \
-		| docker exec -i -u g8e g8ep sh -c 'cat > /home/g8e/.ssh/config'
-	@docker exec -u g8e g8ep chmod 600 /home/g8e/.ssh/id_ed25519 /home/g8e/.ssh/config
+	@# SECURITY NOTE: StrictHostKeyChecking accept-new is used for demo convenience only.
+	@# In production, use proper host key verification to prevent MITM attacks.
+	@# Write SSH key to temp location to avoid modifying user's SSH config
+	@cat ./.demo-key | docker exec -i -u g8e g8ep sh -c 'cat > /tmp/demo-ssh-key'
+	@docker exec -u g8e g8ep chmod 600 /tmp/demo-ssh-key
+	@rm -f ./.demo-key
 
 down:
 	@echo "Stopping fleet..."
@@ -167,18 +155,19 @@ deploy:
 		echo "       make deploy DEVICE_TOKEN=dlk_xxx"; \
 		exit 1; \
 	fi; \
-	echo "Deploying operators to all 10 nodes..."; \
+	echo "Deploying operators to all 10 nodes (remote start via pubsub)..."; \
 	for i in $$(seq -f "%02g" 1 10); do \
 		echo "  Deploying to node-$$i..."; \
-		docker exec -e DEVICE_TOKEN="$$TOKEN" $(CONTAINER_PREFIX)-$$i sh -c '\
-			curl -fsSL --cacert /g8es/ca.crt -H "Authorization: Bearer $$DEVICE_TOKEN" \
-				-o g8e.operator "https://g8e.local/operator/download/linux/amd64" && \
-			curl -fsSL --cacert /g8es/ca.crt -H "Authorization: Bearer $$DEVICE_TOKEN" \
-				-o g8e.operator.sha256 "https://g8e.local/operator/download/linux/amd64/sha256" && \
+		docker exec $(CONTAINER_PREFIX)-$$i sh -c "\
+			curl -fsSL --cacert /g8es/ca.crt -H \"Authorization: Bearer $$TOKEN\" \
+				-o g8e.operator \"https://g8e.local/operator/download/linux/amd64\" && \
+			curl -fsSL --cacert /g8es/ca.crt -H \"Authorization: Bearer $$TOKEN\" \
+				-o g8e.operator.sha256 \"https://g8e.local/operator/download/linux/amd64/sha256\" && \
 			sha256sum -c g8e.operator.sha256 && \
 			chmod +x g8e.operator && \
-			nohup sudo ./g8e.operator --endpoint g8e.local --working-dir /home/appuser --log info --cloud false -D "$$DEVICE_TOKEN" > g8e.operator.log 2>&1 & \
-			echo "    operator started (pid: $$!)"' || true; \
+			nohup sudo ./g8e.operator --endpoint g8e.local --working-dir /home/appuser --log info -D \"$$TOKEN\" > g8e.operator.log 2>&1 & \
+			PID=\$$!; \
+			echo \"    operator started (pid: \$$PID)\"" || true; \
 	done; \
 	echo "Done."
 
@@ -196,22 +185,23 @@ stream:
 		echo "       make stream DEVICE_TOKEN=dlk_xxx"; \
 		exit 1; \
 	fi; \
+	echo "Streaming operators via SSH (runs inside g8ep container)..."; \
 	echo "Configuring SSH in g8ep..."; \
 	$(MAKE) -s setup-ssh; \
 	echo "Discovering demo fleet hosts..."; \
-	HOSTS=$$(docker ps --filter "label=demo.service=web-node" --format '$(SSH_USER)@{{.Names}}' | sort | tr '\n' ' '); \
+	HOSTS=$$(docker ps --filter "label=demo.service=web-node" --format '{{.Names}}' | sort | tr '\n' ' '); \
 	if [ -z "$$HOSTS" ]; then \
 		echo "No demo nodes found. Starting fleet..."; \
 		$(MAKE) -s up; \
-		HOSTS=$$(docker ps --filter "label=demo.service=web-node" --format '$(SSH_USER)@{{.Names}}' | sort | tr '\n' ' '); \
+		HOSTS=$$(docker ps --filter "label=demo.service=web-node" --format '{{.Names}}' | sort | tr '\n' ' '); \
 	fi; \
 	echo "  Streaming to: $$HOSTS"; \
-	docker exec g8ep sudo /home/g8e/g8e.operator stream \
+	docker exec g8ep /home/g8e/g8e.operator stream \
 		--endpoint g8e.local \
-		--working-dir /home/g8e \
-		--log info \
-		--cloud false \
+		--binary-dir /home/g8e \
 		--device-token "$$TOKEN" \
+		--ssh-identity-file /tmp/demo-ssh-key \
+		--ssh-user $(SSH_USER) \
 		$$HOSTS
 
 operators:
@@ -235,10 +225,13 @@ vanish:
 	@echo "Removing operators from all nodes..."
 	@echo ""
 	@for i in $$(seq -f "%02g" 1 10); do \
-		docker exec $(CONTAINER_PREFIX)-$$i pkill -f g8e.operator 2>/dev/null || true; \
+		PID=$$(docker exec $(CONTAINER_PREFIX)-$$i pgrep -f 'g8e\.operator' 2>/dev/null); \
+		if [ -n "$$PID" ]; then \
+			docker exec $(CONTAINER_PREFIX)-$$i kill $$PID 2>/dev/null || true; \
+		fi; \
 		docker exec $(CONTAINER_PREFIX)-$$i rm -f /tmp/g8e.operator /home/appuser/g8e.operator /root/g8e.operator ./g8e.operator 2>/dev/null || true; \
 		echo "  node-$$i: cleaned"; \
 	done
 	@echo ""
-	@echo "All operators removed. Zero trace."
+	@echo "All operators removed."
 	@echo ""

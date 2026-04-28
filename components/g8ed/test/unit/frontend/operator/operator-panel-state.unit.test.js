@@ -25,6 +25,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 let OperatorPanel;
 let HeartbeatSnapshot;
 let OperatorStatus;
+let computeLiveness;
+let computeHealthClass;
+let Liveness;
 
 beforeEach(async () => {
     vi.resetModules();
@@ -50,6 +53,7 @@ beforeEach(async () => {
     ({ OperatorPanel } = await import('@g8ed/public/js/components/operator-panel.js'));
     ({ HeartbeatSnapshot } = await import('@g8ed/public/js/models/operator-models.js'));
     ({ OperatorStatus }    = await import('@g8ed/public/js/constants/operator-constants.js'));
+    ({ computeLiveness, computeHealthClass, Liveness } = await import('@g8ed/public/js/components/operator-list-mixin.js'));
 });
 
 function createPanel(initialOperators) {
@@ -96,7 +100,6 @@ describe('OperatorPanel._onHeartbeat [UNIT - PURE LOGIC]', () => {
         expect(updated.status).toBe(OperatorStatus.ACTIVE);
         expect(updated.status_display).toBe(String(OperatorStatus.ACTIVE).toUpperCase());
         expect(updated.status_class).toBe(String(OperatorStatus.ACTIVE).toLowerCase());
-        expect(updated.last_heartbeat).toEqual(new Date('2026-04-21T21:30:10.683Z'));
 
         // Unrelated slot untouched
         expect(panel._operators[1].latest_heartbeat_snapshot).toBeNull();
@@ -295,5 +298,102 @@ describe('OperatorPanel.heartbeat buffering [UNIT - PURE LOGIC]', () => {
 
         expect(panel.displayOperators).toHaveBeenCalled();
         expect(panel._heartbeatDirty).toBe(false);
+    });
+});
+
+describe('computeLiveness [UNIT - PURE LOGIC]', () => {
+    it('returns NONE when latest_heartbeat_snapshot is missing', () => {
+        const operator = { operator_id: 'op-1', status: OperatorStatus.ACTIVE, latest_heartbeat_snapshot: null };
+        const result = computeLiveness(operator);
+        expect(result.state).toBe(Liveness.NONE);
+        expect(result.ageSeconds).toBeNull();
+    });
+
+    it('returns LIVE for age ≤ 30s', () => {
+        const nowMs = Date.now();
+        const operator = {
+            operator_id: 'op-1',
+            status: OperatorStatus.ACTIVE,
+            latest_heartbeat_snapshot: { timestamp: new Date(nowMs - 15000).toISOString() },
+        };
+        const result = computeLiveness(operator, nowMs);
+        expect(result.state).toBe(Liveness.LIVE);
+        expect(result.ageSeconds).toBe(15);
+    });
+
+    it('returns DEGRADED for age 30–90s', () => {
+        const nowMs = Date.now();
+        const operator = {
+            operator_id: 'op-1',
+            status: OperatorStatus.ACTIVE,
+            latest_heartbeat_snapshot: { timestamp: new Date(nowMs - 60000).toISOString() },
+        };
+        const result = computeLiveness(operator, nowMs);
+        expect(result.state).toBe(Liveness.DEGRADED);
+        expect(result.ageSeconds).toBe(60);
+    });
+
+    it('returns STALE for age > 90s', () => {
+        const nowMs = Date.now();
+        const operator = {
+            operator_id: 'op-1',
+            status: OperatorStatus.ACTIVE,
+            latest_heartbeat_snapshot: { timestamp: new Date(nowMs - 120000).toISOString() },
+        };
+        const result = computeLiveness(operator, nowMs);
+        expect(result.state).toBe(Liveness.STALE);
+        expect(result.ageSeconds).toBe(120);
+    });
+});
+
+describe('computeHealthClass [UNIT - PURE LOGIC]', () => {
+    it('returns muted when liveness is NONE, regardless of operator.status === active', () => {
+        const operator = { operator_id: 'op-1', status: OperatorStatus.ACTIVE, latest_heartbeat_snapshot: null };
+        const result = computeHealthClass(operator, 'good', 'good', 'good', 'good');
+        expect(result).toBe('muted');
+    });
+
+    it('returns muted when liveness is STALE', () => {
+        const nowMs = Date.now();
+        const operator = {
+            operator_id: 'op-1',
+            status: OperatorStatus.ACTIVE,
+            latest_heartbeat_snapshot: { timestamp: new Date(nowMs - 120000).toISOString() },
+        };
+        const result = computeHealthClass(operator, 'good', 'good', 'good', 'good');
+        expect(result).toBe('muted');
+    });
+
+    it('returns loaded when liveness is DEGRADED and metrics are good', () => {
+        const nowMs = Date.now();
+        const operator = {
+            operator_id: 'op-1',
+            status: OperatorStatus.ACTIVE,
+            latest_heartbeat_snapshot: { timestamp: new Date(nowMs - 60000).toISOString() },
+        };
+        const result = computeHealthClass(operator, 'good', 'good', 'good', 'good');
+        expect(result).toBe('loaded');
+    });
+
+    it('returns healthy only when liveness is LIVE and metrics are good', () => {
+        const nowMs = Date.now();
+        const operator = {
+            operator_id: 'op-1',
+            status: OperatorStatus.ACTIVE,
+            latest_heartbeat_snapshot: { timestamp: new Date(nowMs - 15000).toISOString() },
+        };
+        const result = computeHealthClass(operator, 'good', 'good', 'good', 'good');
+        expect(result).toBe('healthy');
+    });
+
+    it('returns crit when liveness is LIVE but metrics include crit', () => {
+        const nowMs = Date.now();
+        const operator = {
+            operator_id: 'op-1',
+            status: OperatorStatus.ACTIVE,
+            latest_heartbeat_snapshot: { timestamp: new Date(nowMs - 15000).toISOString() },
+        };
+        const result = computeHealthClass(operator, 'crit', 'good', 'good', 'good');
+        expect(result).toBe('crit');
     });
 });

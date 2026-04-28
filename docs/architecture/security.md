@@ -546,7 +546,7 @@ g8eo (every 10s)
     │ WebSocket (mTLS)
     ▼
 g8es pub/sub → g8ee (OperatorHeartbeatService)
-                    │ write last_heartbeat, latest_heartbeat_snapshot to g8es
+                    │ write latest_heartbeat_snapshot to g8es
                     │ detect staleness, manage operator status transitions
                     │ publish OPERATOR_HEARTBEAT_RECEIVED internal event
                     ▼

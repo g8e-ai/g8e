@@ -154,9 +154,9 @@ class TestCacheAsideService:
         query_str = json.dumps(query_params, sort_keys=True)
         filter_hash = hashlib.md5(query_str.encode()).hexdigest()
         query_key = KVKey.query(DB_COLLECTION_USERS, filter_hash)
-        mock_kv_cache_client.seed_json(query_key, [{"id": "user-5", "last_heartbeat": "stale"}])
+        mock_kv_cache_client.seed_json(query_key, [{"id": "user-5", "latest_heartbeat_snapshot": {"timestamp": "stale"}}])
 
-        await service.update_document(DB_COLLECTION_USERS, "user-5", {"last_heartbeat": "fresh"})
+        await service.update_document(DB_COLLECTION_USERS, "user-5", {"latest_heartbeat_snapshot": {"timestamp": "fresh"}})
 
         assert await mock_kv_cache_client.get_json(query_key) is None
 

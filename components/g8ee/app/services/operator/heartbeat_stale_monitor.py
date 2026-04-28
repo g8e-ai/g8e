@@ -70,7 +70,7 @@ def resolve_heartbeat_transition(current_status: OperatorStatus, is_stale: bool)
 
 class HeartbeatStaleMonitorService:
     """Periodically scans operator documents and reconciles their `status` field
-    against how recently g8eo has been phoning home (`last_heartbeat`).
+    against how recently g8eo has been phoning home (`latest_heartbeat_snapshot.timestamp`).
 
     Ported from g8ed's HeartbeatMonitorService to consolidate operator ownership in g8ee.
     """
@@ -130,7 +130,7 @@ class HeartbeatStaleMonitorService:
             return
         self._ticking = True
         try:
-            # Bypass the query cache: monitor correctness depends on real-time last_heartbeat values.
+            # Bypass the query cache: monitor correctness depends on real-time heartbeat timestamp values.
             operators = await self._operator_data_service.query_operators(
                 field_filters=[],
                 bypass_cache=True
@@ -142,13 +142,15 @@ class HeartbeatStaleMonitorService:
                 if op.status not in MONITORED_STATUSES:
                     continue
 
-                last_hb = op.last_heartbeat
+                last_hb = op.latest_heartbeat_snapshot.timestamp if op.latest_heartbeat_snapshot else None
                 if not last_hb:
-                    # Fallback to claimed_at if last_heartbeat is missing.
-                    # This handles operators that authenticated but never sent a heartbeat.
-                    last_hb = op.claimed_at
-
-                if not last_hb:
+                    # No heartbeat ever received — treat as immediately stale so the
+                    # ACTIVE→OFFLINE / BOUND→STALE transition fires on the next tick.
+                    target = resolve_heartbeat_transition(op.status, is_stale=True)
+                    if target:
+                        applied = await self._apply_transition(op, target, age_seconds=float('inf'))
+                        if applied:
+                            transitions += 1
                     continue
 
                 if isinstance(last_hb, str):

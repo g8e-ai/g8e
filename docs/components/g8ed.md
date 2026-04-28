@@ -629,7 +629,6 @@ Operator list events use `OperatorSlot` projections instead of full `OperatorDoc
 - `is_g8ep` — g8e node operator flag
 - `first_deployed` — first deployment timestamp
 - `claimed_at` — when the slot was claimed (set at claim time, not heartbeat time)
-- `last_heartbeat` — last heartbeat timestamp (set only on actual heartbeat ingestion)
 - `latest_heartbeat_snapshot` — most recent performance metrics snapshot and system identity
 
 **Projection path:** `OperatorDocument` → `OperatorSlot.fromOperator()` → `forClient()` → SSE payload
@@ -658,11 +657,11 @@ Additionally, `OperatorService.syncSessionOnConnect(userId, webSessionId)` handl
 
 ### Heartbeat Architecture
 
-g8eo sends heartbeats every 30 seconds directly to g8es pub/sub. g8ee subscribes, validates, and persists `last_heartbeat` / `latest_heartbeat_snapshot` to the g8es document store, then notifies g8ed via HTTP POST so g8ed can broadcast the metrics envelope over SSE.
+g8eo sends heartbeats every 30 seconds directly to g8es pub/sub. g8ee subscribes, validates, and persists `latest_heartbeat_snapshot` to the g8es document store, then notifies g8ed via HTTP POST so g8ed can broadcast the metrics envelope over SSE.
 
-Staleness reconciliation is owned by g8ee: `HeartbeatStaleMonitorService` (`app/services/operator/heartbeat_stale_monitor.py`) runs on a timer inside g8ee and reconciles operator `status` against the age of `last_heartbeat`. Transitions are bidirectional:
+Staleness reconciliation is owned by g8ee: `HeartbeatStaleMonitorService` (`app/services/operator/heartbeat_stale_monitor.py`) runs on a timer inside g8ee and reconciles operator `status` against the age of `latest_heartbeat_snapshot.timestamp`. Transitions are bidirectional:
 
-- `BOUND → STALE` and `ACTIVE → OFFLINE` when `(now - last_heartbeat) > 60s`
+- `BOUND → STALE` and `ACTIVE → OFFLINE` when `(now - latest_heartbeat_snapshot.timestamp) > 60s`
 - `STALE → BOUND` and `OFFLINE → ACTIVE` when a fresh heartbeat resumes
 
 On each transition the updated status is persisted via g8ee's `CacheAsideService` and an `OPERATOR_STATUS_UPDATED_*` SSE event is published to g8ed for fanning out to the owning user's active sessions.
@@ -672,13 +671,13 @@ g8eo (every 30s)
     │ WebSocket
     ▼
 g8es pub/sub  →  g8ee (OperatorHeartbeatService)
-                      │ write last_heartbeat, latest_heartbeat_snapshot to g8es
+                      │ write latest_heartbeat_snapshot to g8es
                       │ HTTP POST /api/internal/sse/push
                       ▼
                     g8ed
                       │ broadcast SSE operator.heartbeat
                       │ HeartbeatMonitorService (timer) reconciles status:
-                      │   BOUND↔STALE, ACTIVE↔OFFLINE based on last_heartbeat age
+                      │   BOUND↔STALE, ACTIVE↔OFFLINE based on latest_heartbeat_snapshot.timestamp age
                       │ broadcast SSE operator.status.updated.{stale|bound|offline|active}
                       ▼
                     Browser (operator-panel.js)
@@ -686,7 +685,6 @@ g8es pub/sub  →  g8ee (OperatorHeartbeatService)
 ```
 
 **g8es document store fields (managed by g8e):**
-- `last_heartbeat` — timestamp of most recent heartbeat (set only on actual heartbeat ingestion)
 - `heartbeat_history` — rolling buffer of last 10 heartbeats
 - `latest_heartbeat_snapshot` — most recent metrics and system identity for UI
 

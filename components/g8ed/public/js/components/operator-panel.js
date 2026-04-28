@@ -132,12 +132,28 @@ export class OperatorPanel {
         this._maxSlots = parsed.max_slots;
         this._isPlatformSetupPending = parsed.is_platform_setup_pending;
         operatorSessionService.setBoundOperators(this._operators);
-        devLogger.log('[OPERATOR-PANEL] List updated:', this._totalOperatorCount, 'total,', this._activeOperatorCount, 'active, pending setup:', this._isPlatformSetupPending);
+        devLogger.log('[OPERATOR-PANEL] [SSE] LIST_UPDATED received:', {
+            total_count: this._totalOperatorCount,
+            active_count: this._activeOperatorCount,
+            used_slots: this._usedSlots,
+            max_slots: this._maxSlots,
+            is_platform_setup_pending: this._isPlatformSetupPending,
+            operators_count: this._operators.length,
+            operator_ids: this._operators.map(op => op.operator_id)
+        });
         this._applyOperatorState({ cause: 'list_updated' });
     }
 
     _onStatusUpdated(data) {
         const parsed = OperatorStatusUpdatedEvent.parse(data);
+
+        devLogger.log('[OPERATOR-PANEL] [SSE] STATUS_UPDATED received:', {
+            operator_id: parsed.operator_id,
+            status: parsed.status,
+            total_count: parsed.total_count,
+            active_count: parsed.active_count,
+            web_session_id: parsed.web_session_id
+        });
 
         if (parsed.total_count !== null) {
             this._totalOperatorCount = parsed.total_count;
@@ -154,10 +170,16 @@ export class OperatorPanel {
                 status_class: String(parsed.status).toLowerCase(),
                 bound_web_session_id: parsed.web_session_id ?? existing.bound_web_session_id,
             };
+            devLogger.log('[OPERATOR-PANEL] Status updated in local state:', {
+                operator_id: parsed.operator_id,
+                old_status: existing.status,
+                new_status: parsed.status
+            });
+        } else {
+            devLogger.warn('[OPERATOR-PANEL] Operator not found in local state for status update:', parsed.operator_id);
         }
 
         operatorSessionService.setBoundOperators(this._operators);
-        devLogger.log('[OPERATOR-PANEL] Status updated:', parsed.operator_id, parsed.status);
         this._applyOperatorState({ cause: 'status_updated' });
     }
 
@@ -166,7 +188,25 @@ export class OperatorPanel {
         const heartbeatTimestamp = parsed.metrics?.timestamp ?? null;
         this._lastHeartbeat = heartbeatTimestamp ? heartbeatTimestamp.getTime() : Date.now();
         this._isConnected = true;
-        devLogger.log('[OPERATOR-PANEL] Heartbeat:', parsed.operator_id);
+        
+        devLogger.log('[OPERATOR-PANEL] [SSE] HEARTBEAT_RECEIVED:', {
+            operator_id: parsed.operator_id,
+            status: parsed.status,
+            heartbeat_timestamp: heartbeatTimestamp,
+            has_metrics: !!parsed.metrics,
+            metrics_keys: parsed.metrics ? Object.keys(parsed.metrics) : [],
+            performance: parsed.metrics?.performance ? {
+                cpu_percent: parsed.metrics.performance.cpu_percent,
+                memory_percent: parsed.metrics.performance.memory_percent,
+                disk_percent: parsed.metrics.performance.disk_percent,
+                network_latency: parsed.metrics.performance.network_latency
+            } : null,
+            system_identity: parsed.metrics?.system_identity ? {
+                hostname: parsed.metrics.system_identity.hostname,
+                os: parsed.metrics.system_identity.os,
+                architecture: parsed.metrics.system_identity.architecture
+            } : null
+        });
 
         const operatorIndex = this._operators.findIndex(op => op.operator_id === parsed.operator_id);
         if (operatorIndex !== -1) {
@@ -177,8 +217,18 @@ export class OperatorPanel {
                 status_display: String(parsed.status).toUpperCase(),
                 status_class: String(parsed.status).toLowerCase(),
                 latest_heartbeat_snapshot: parsed.metrics,
-                last_heartbeat: heartbeatTimestamp,
             };
+            devLogger.log('[OPERATOR-PANEL] Heartbeat applied to local operator state:', {
+                operator_id: parsed.operator_id,
+                old_status: existing.status,
+                new_status: parsed.status
+            });
+        } else {
+            devLogger.warn('[OPERATOR-PANEL] Operator not found in local state for heartbeat:', {
+                operator_id: parsed.operator_id,
+                current_operators_count: this._operators.length,
+                current_operator_ids: this._operators.map(op => op.operator_id)
+            });
         }
 
         this._heartbeatDirty = true;
@@ -187,6 +237,7 @@ export class OperatorPanel {
         if (parsed.operator_id === this.selectedMetricsOperatorId) {
             const heartbeatData = this._operators.find(op => op.operator_id === parsed.operator_id);
             if (heartbeatData) {
+                devLogger.log('[OPERATOR-PANEL] Updating metrics panel for selected operator:', parsed.operator_id);
                 this.updateMetrics(heartbeatData);
                 this.updateStatus(heartbeatData.status || OperatorStatus.ACTIVE);
             }
@@ -518,7 +569,6 @@ export class OperatorPanel {
             if (!this._isRendered) return;
             if (this.isCollapsed) return;
             if (document.visibilityState !== 'visible') return;
-            if (!this._heartbeatDirty) return;
 
             this._applyOperatorState({ cause: 'scheduled' });
             this._heartbeatDirty = false;

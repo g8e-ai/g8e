@@ -130,7 +130,6 @@ export class OperatorSlot extends FrontendBaseModel {
         is_g8ep:        { type: F.boolean, default: false },
         first_deployed: { type: F.date,    default: null },
         claimed_at:     { type: F.date,    default: null },
-        last_heartbeat: { type: F.date,    default: null },
         latest_heartbeat_snapshot: { type: F.object, default: null },
     };
 }
