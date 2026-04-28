@@ -13,7 +13,6 @@
 
 from __future__ import annotations
 
-import shlex
 import logging
 
 from app.constants import (
@@ -29,7 +28,6 @@ logger = logging.getLogger(__name__)
 
 TRIBUNAL_MIN_CONSENSUS = 2
 
-from app.utils.command import normalise_command
 
 def weighted_vote(candidates: list[CandidateCommand], total_members: int) -> tuple[str | None, float, VoteBreakdown, list[CandidateCommand] | None]:
     """Compute uniform-weighted majority vote with deterministic tie-breaking.

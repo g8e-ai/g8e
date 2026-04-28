@@ -153,7 +153,7 @@ class AgentInputs(G8eBaseModel):
     AgentStreamState; splitting the two prevents load-bearing writes to
     request inputs from sneaking in unnoticed.
     """
-    model_config = ConfigDict(arbitrary_types_allowed=True, extra='forbid')
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra="forbid")
 
     case_id: str | None = None
     investigation_id: str | None = None
@@ -188,7 +188,7 @@ class AgentStreamState(G8eBaseModel):
     AgentInputs makes the authoritative post-run fields obvious at every
     call site and prevents accidental in-place mutation of request inputs.
     """
-    model_config = ConfigDict(arbitrary_types_allowed=True, extra='forbid')
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra="forbid")
 
     response_text: str = ""
     token_usage: TokenUsage | None = None

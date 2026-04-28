@@ -44,7 +44,7 @@ from app.models.operators import (
     DirectCommandResult,
 )
 from app.models.internal_api import DirectCommandRequest
-from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope
+from app.models.pubsub_messages import G8eMessage
 from app.models.tool_results import (
     CommandInternalResult,
     CommandExecutionResult,
@@ -187,7 +187,7 @@ class OperatorCommandService:
     ) -> OperatorCommandService:
         """Construct, wire, and return a fully-initialised OperatorCommandService."""
         pubsub_service = OperatorPubSubService()
-        
+
         lfaa_service = OperatorLFAAService(
             pubsub_service=pubsub_service,
         )
@@ -457,7 +457,7 @@ class OperatorCommandService:
                     g8e_context,
                     task_id=AITaskId.COMMAND,
                 )
-            except Exception as e:  # noqa: BLE001 — best-effort notification
+            except Exception as e:
                 logger.warning("[COMMAND] Failed to publish FAILED event for %s: %s", op_id, e)
 
         async def _dispatch(op: OperatorDocument, exec_id: str) -> BatchOperatorExecutionResult:
@@ -518,7 +518,7 @@ class OperatorCommandService:
                         g8e_context=g8e_context,
                         timeout_seconds=args.timeout_seconds,
                     )
-                except Exception as e:  # noqa: BLE001 — isolate per-operator failure
+                except Exception as e:
                     logger.exception("[COMMAND] Per-operator dispatch failed on %s: %s", op_id, e)
                     if fail_fast:
                         cancel_event.set()

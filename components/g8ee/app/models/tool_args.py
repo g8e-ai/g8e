@@ -18,7 +18,6 @@ These are the argument shapes used by the AI when calling Operator tools.
 They are validated by the tool_service before being converted to pub/sub payloads.
 """
 
-from typing import Literal
 
 from pydantic import Field
 
@@ -26,22 +25,22 @@ from app.models.base import G8eBaseModel
 from app.models.command_request_payloads import TargetedOperatorBase
 
 __all__ = [
+    "CheckPortArgs",
+    "FetchExecutionOutputArgs",
+    "FetchFileDiffArgs",
+    "FetchFileHistoryArgs",
+    "FetchSessionHistoryArgs",
     "FileCreateArgs",
-    "FileWriteArgs",
     "FileReadArgs",
     "FileUpdateArgs",
-    "SearchWebArgs",
-    "CheckPortArgs",
-    "FsReadArgs",
+    "FileWriteArgs",
     "FsListArgs",
-    "FetchExecutionOutputArgs",
-    "FetchSessionHistoryArgs",
-    "FetchFileHistoryArgs",
-    "RestoreFileArgs",
-    "FetchFileDiffArgs",
+    "FsReadArgs",
     "GrantIntentArgs",
-    "RevokeIntentArgs",
     "QueryInvestigationContextArgs",
+    "RestoreFileArgs",
+    "RevokeIntentArgs",
+    "SearchWebArgs",
     "SshInventoryArgs",
     "StreamOperatorArgs",
 ]

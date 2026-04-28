@@ -33,6 +33,7 @@ from urllib.parse import quote
 import aiohttp
 
 from app.models.settings import ListenSettings
+from app.services.infra.settings_service import SettingsService
 from app.constants import BatchWriteOpType, INTERNAL_AUTH_HEADER
 from app.errors import (
     DatabaseError,
@@ -51,22 +52,20 @@ class DBClient:
     """HTTP shim over the g8es Document Store API."""
 
     def __init__(
-        self, 
-        ca_cert_path: str, 
+        self,
+        ca_cert_path: str,
         internal_auth_token: str | None = None,
         listen_settings: ListenSettings | None = None,
     ) -> None:
         if internal_auth_token is None:
-            from app.services.infra.settings_service import SettingsService
             service = SettingsService()
             local_settings = service.get_local_settings()
             internal_auth_token = local_settings.auth.internal_auth_token
 
         if listen_settings is None:
-            from app.services.infra.settings_service import SettingsService
             service = SettingsService()
             listen_settings = ListenSettings.from_bootstrap(service)
-            
+
         self._base_url = listen_settings.http_url
         self._ca_cert_path = ca_cert_path
         self._internal_auth_token = internal_auth_token
@@ -80,11 +79,11 @@ class DBClient:
             session = await self._get_http_session()
             async with session.get(f"{self._base_url}/health") as resp:
                 if resp.status == 200:
-                    logger.info(f"[DB-CLIENT] Connected to {self._base_url}")
+                    logger.info("[DB-CLIENT] Connected to %s", self._base_url)
                     return True
                 return False
         except Exception as e:
-            logger.error(f"[DB-CLIENT] Connection failed: {e}")
+            logger.error("[DB-CLIENT] Connection failed: %s", e)
             return False
 
     async def _get_http_session(self) -> aiohttp.ClientSession:
@@ -161,7 +160,7 @@ class DBClient:
                 code=ErrorCode.DB_WRITE_ERROR,
                 component="g8ee",
                 cause=e,
-            )
+            ) from e
 
     async def get_document(
         self,
@@ -180,7 +179,7 @@ class DBClient:
                 code=ErrorCode.DB_QUERY_ERROR,
                 component="g8ee",
                 cause=e,
-            )
+            ) from e
 
     async def update_document(
         self,
@@ -226,7 +225,7 @@ class DBClient:
                 code=ErrorCode.DB_WRITE_ERROR,
                 component="g8ee",
                 cause=e,
-            )
+            ) from e
 
     async def delete_document(
         self,
@@ -245,7 +244,7 @@ class DBClient:
                 code=ErrorCode.DB_WRITE_ERROR,
                 component="g8ee",
                 cause=e,
-            )
+            ) from e
 
     async def query_collection(
         self,
@@ -286,7 +285,7 @@ class DBClient:
                 code=ErrorCode.DB_QUERY_ERROR,
                 component="g8ee",
                 cause=e,
-            )
+            ) from e
 
     async def count_documents(
         self,

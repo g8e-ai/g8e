@@ -409,7 +409,7 @@ class WebSearchProvider:
                     results=results,
                     total_results=str(total_size),
                 )
-            except asyncio.TimeoutError as e:
+            except TimeoutError as e:
                 last_error = e
                 logger.warning(
                     "[WEB_SEARCH] Timeout on attempt %d/%d",

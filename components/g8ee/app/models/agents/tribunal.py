@@ -56,14 +56,14 @@ class TribunalConsensusFailedError(TribunalError):
 
     def __init__(self, request: str, vote_breakdown: "VoteBreakdown") -> None:
         self.vote_breakdown = vote_breakdown
-        
+
         # Build a structured summary of candidates by member for the LLM
         candidates = [
-            f"- {member}: {cmd}" 
+            f"- {member}: {cmd}"
             for member, cmd in vote_breakdown.candidates_by_member.items()
         ]
         summary = "\n".join(candidates)
-        
+
         user_message = (
             "Tribunal consensus failed: no two members agreed on a command. "
             f"Candidates produced:\n{summary}\n\n"

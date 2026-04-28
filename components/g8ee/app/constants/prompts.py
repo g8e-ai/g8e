@@ -53,24 +53,24 @@ class PromptFile(str, Enum):
     # System
     SYSTEM_RESPONSE_CONSTRAINTS = "system/response_constraints.txt"
     SYSTEM_SENTINEL_MODE = "system/sentinel_mode.txt"
-    
+
     # Modes - Operator Bound
     MODE_OPERATOR_BOUND_CAPABILITIES = "modes/operator_bound/capabilities.txt"
     MODE_OPERATOR_BOUND_EXECUTION = "modes/operator_bound/execution.txt"
     MODE_OPERATOR_BOUND_TOOLS = "modes/operator_bound/tools.txt"
-    
+
     # Modes - Operator Not Bound
     MODE_OPERATOR_NOT_BOUND_CAPABILITIES = "modes/operator_not_bound/capabilities.txt"
     MODE_OPERATOR_NOT_BOUND_EXECUTION = "modes/operator_not_bound/execution.txt"
     MODE_OPERATOR_NOT_BOUND_TOOLS = "modes/operator_not_bound/tools.txt"
     MODE_OPERATOR_NOT_BOUND_CAPABILITIES_NO_SEARCH = "modes/operator_not_bound/capabilities_no_search.txt"
     MODE_OPERATOR_NOT_BOUND_EXECUTION_NO_SEARCH = "modes/operator_not_bound/execution_no_search.txt"
-    
+
     # Modes - Cloud Operator Bound
     MODE_CLOUD_OPERATOR_BOUND_CAPABILITIES = "modes/cloud_operator_bound/capabilities.txt"
     MODE_CLOUD_OPERATOR_BOUND_EXECUTION = "modes/cloud_operator_bound/execution.txt"
     MODE_CLOUD_OPERATOR_BOUND_TOOLS = "modes/cloud_operator_bound/tools.txt"
-    
+
     # Tools
     TOOL_RUN_COMMANDS = "tools/run_commands_with_operator.txt"
     TOOL_FILE_CREATE = "tools/file_create_on_operator.txt"

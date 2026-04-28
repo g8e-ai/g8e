@@ -198,7 +198,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
             investigation = await self.get_investigation(investigation_id)
             if not investigation:
                 raise ValueError(f"Investigation {investigation_id} not found")
-            
+
             if not investigation.conversation_history:
                 # First entry - use genesis hash
                 prev_hash = genesis_hash(investigation.id, investigation.created_at.isoformat())
@@ -380,13 +380,13 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
             if entry.details:
                 if entry.event_type == EventType.OPERATOR_COMMAND_EXECUTION:
                     status = entry.details.status
-                    if hasattr(status, 'value'):
+                    if hasattr(status, "value"):
                         status = status.value
                     status = status if status else "unknown"
                 else:
                     status = "success" if entry.details.approved else "failed"
                 lines.append(f"  Result: {status}")
-        
+
         return "\n".join(lines)
 
     async def get_chat_messages(self, investigation_id: str) -> list[ConversationHistoryMessage]:

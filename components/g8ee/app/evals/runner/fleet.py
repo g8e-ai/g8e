@@ -89,7 +89,7 @@ class FleetManager:
         print("[fleet] Polling for fleet ready status...")
         health_url = "https://g8e.local/health"
         start_time = time.time()
-        
+
         async with aiohttp.ClientSession(connector=connector) as session:
             while time.time() - start_time < timeout:
                 try:
@@ -101,7 +101,7 @@ class FleetManager:
                                 return
                 except Exception:
                     pass
-                
+
                 await asyncio.sleep(2)
-        
+
         raise TimeoutError(f"Fleet failed to become ready within {timeout} seconds")

@@ -5,9 +5,8 @@
 
 from __future__ import annotations
 
-import asyncio
 import ssl
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 import aiohttp
 import json
@@ -49,7 +48,7 @@ class G8edClient:
         # Chat API lazy creates investigations, but for evals we might want to get existing ones
         # or we just rely on the first message creating it. The backend uses the case context
         # to link messages.
-        # Actually `ChatPaths.INVESTIGATIONS` is GET, and we can fetch one. 
+        # Actually `ChatPaths.INVESTIGATIONS` is GET, and we can fetch one.
         # But wait, there is no explicit create. If we just return a fake ID, the backend might handle it
         # or we could make a dummy request to list investigations.
         # Wait, the backend lazy creates it. Let's just return a placeholder ID.
@@ -86,10 +85,10 @@ class G8edClient:
             resp.raise_for_status()
 
             async for line in resp.content:
-                line = line.decode('utf-8').strip()
-                if line.startswith('data: '):
+                line = line.decode("utf-8").strip()
+                if line.startswith("data: "):
                     data = line[6:]
-                    if data == '[DONE]':
+                    if data == "[DONE]":
                         break
                     try:
                         import json

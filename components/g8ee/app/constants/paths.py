@@ -13,14 +13,14 @@
 
 import json
 
-# The bridge to shared paths. 
+# The bridge to shared paths.
 # In container, this is always /app/shared/constants/paths.json
 _CONTAINER_SHARED_CONSTANTS_DIR = "/app/shared/constants"
 _PATH_FILE = _CONTAINER_SHARED_CONSTANTS_DIR + "/paths.json"
 
 def _load_paths() -> dict:
     try:
-        with open(_PATH_FILE, "r") as f:
+        with open(_PATH_FILE) as f:
             return json.load(f)
     except Exception:
         # Emergency fallbacks for when shared volume isn't ready

@@ -82,7 +82,7 @@ class EventService:
                 "task_id": task_id,
             },
         )
-        
+
         try:
             await self.publish(
                 SessionEvent(
@@ -119,7 +119,7 @@ class EventService:
                 "user_id": user_id,
             },
         )
-        
+
         try:
             await self.publish(
                 SessionEvent(
@@ -150,7 +150,7 @@ class EventService:
                 "web_session_id": g8e_context.web_session_id,
             },
         )
-        
+
         try:
             await self.publish(
                 SessionEvent(

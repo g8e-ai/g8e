@@ -34,7 +34,7 @@ def canonical_json(obj: dict) -> bytes:
         if isinstance(obj, datetime):
             return obj.isoformat()
         raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
-    
+
     # Sort keys recursively, no whitespace, ensure_ascii=False for UTF-8
     return json.dumps(
         obj,
@@ -60,13 +60,13 @@ def compute_entry_hash(entry: dict, prev_hash: str | None) -> str:
     """
     # Create a copy without the hash fields to avoid circular dependency
     entry_copy = {k: v for k, v in entry.items() if k not in ("prev_hash", "entry_hash")}
-    
+
     hasher = hashlib.sha256()
     hasher.update(canonical_json(entry_copy))
-    
+
     if prev_hash:
         hasher.update(prev_hash.encode("utf-8"))
-    
+
     return hasher.hexdigest()
 
 
@@ -84,7 +84,7 @@ def genesis_hash(investigation_id: str, created_at: str) -> str:
         Hexadecimal SHA256 hash string (64 characters)
     """
     hasher = hashlib.sha256()
-    hasher.update(f"{investigation_id}:{created_at}".encode("utf-8"))
+    hasher.update(f"{investigation_id}:{created_at}".encode())
     return hasher.hexdigest()
 
 
@@ -110,25 +110,25 @@ def verify_chain(
     """
     if not entries:
         return True, None
-    
+
     # Start with genesis hash
     expected_prev_hash = genesis_hash(investigation_id, created_at)
-    
+
     for idx, entry in enumerate(entries):
         # Check if entry has required hash fields
         if "entry_hash" not in entry or "prev_hash" not in entry:
             return False, idx
-        
+
         # Verify prev_hash matches expected
         if entry["prev_hash"] != expected_prev_hash:
             return False, idx
-        
+
         # Verify entry_hash is correct
         computed_hash = compute_entry_hash(entry, entry["prev_hash"])
         if entry["entry_hash"] != computed_hash:
             return False, idx
-        
+
         # Move to next entry
         expected_prev_hash = entry["entry_hash"]
-    
+
     return True, None

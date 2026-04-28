@@ -11,7 +11,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import json
 import logging
 import re
 from pathlib import Path
@@ -365,7 +364,7 @@ class CommandWhitelistValidator:
             option_part, _ = safe_option.split("=", 1)
             arg_part, _ = arg.split("=", 1)
             return option_part.strip() == arg_part.strip()
-        option_part = safe_option.split("<")[0].strip()
+        option_part = safe_option.split("<", maxsplit=1)[0].strip()
         return arg == option_part
 
     def _extract_parameter_name(self, safe_option: str) -> str | None:
@@ -378,16 +377,16 @@ class CommandWhitelistValidator:
         command_config = self._find_command_config(command)
         if not command_config:
             return None
-        
+
         category_name, config = command_config
         category_enum = self._parse_category(category_name)
-        
+
         safe_options = config.get("safe_options", {})
         if isinstance(safe_options, dict):
             platform_options = safe_options.get(platform, [])
         else:
             platform_options = safe_options
-            
+
         return WhitelistedCommand(
             command=config.get("command", command),
             category=category_enum,

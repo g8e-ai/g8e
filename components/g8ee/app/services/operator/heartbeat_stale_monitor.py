@@ -13,7 +13,7 @@
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 from app.constants import EventType, OperatorStatus, HEARTBEAT_STALE_THRESHOLD_SECONDS
 from app.models.events import BackgroundEvent
@@ -60,7 +60,7 @@ def resolve_heartbeat_transition(current_status: OperatorStatus, is_stale: bool)
         if current_status == OperatorStatus.ACTIVE:
             return OperatorStatus.OFFLINE
         return None
-    
+
     if current_status == OperatorStatus.STALE:
         return OperatorStatus.BOUND
     if current_status == OperatorStatus.OFFLINE:
@@ -91,7 +91,7 @@ class HeartbeatStaleMonitorService:
     async def start(self) -> None:
         if self._task:
             return
-        
+
         self._task = asyncio.create_task(self._run_loop())
         logger.info(
             "[HEARTBEAT-MONITOR] Started",
@@ -134,7 +134,7 @@ class HeartbeatStaleMonitorService:
                 field_filters=[],
                 bypass_cache=True
             )
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
 
             transitions = 0
             for op in operators:
@@ -149,14 +149,14 @@ class HeartbeatStaleMonitorService:
                         last_hb = datetime.fromisoformat(last_hb.replace("Z", "+00:00"))
                     except ValueError:
                         continue
-                
+
                 if not isinstance(last_hb, datetime):
                     continue
 
                 age_seconds = (now - last_hb).total_seconds()
                 is_stale = age_seconds > self._threshold_seconds
                 target = resolve_heartbeat_transition(op.status, is_stale)
-                
+
                 if not target:
                     continue
 
@@ -177,7 +177,7 @@ class HeartbeatStaleMonitorService:
                 operator_id=operator_id,
                 status=target_status,
             )
-            
+
             if not success:
                 logger.warning(
                     "[HEARTBEAT-MONITOR] Failed to persist status transition",
@@ -222,15 +222,15 @@ class HeartbeatStaleMonitorService:
                 status=target_status,
                 hostname=operator.current_hostname,
                 system_fingerprint=operator.latest_heartbeat_snapshot.system_fingerprint if operator.latest_heartbeat_snapshot else None,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )
-            
+
             event = BackgroundEvent(
                 event_type=operator_status_to_event_type(target_status),
                 payload=payload,
                 user_id=operator.user_id,
             )
-            
+
             await self._event_service.publish(event)
         except Exception:
             logger.warning(

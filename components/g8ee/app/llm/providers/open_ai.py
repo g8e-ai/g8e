@@ -105,8 +105,8 @@ class OpenAIProvider(LLMProvider):
 
         # Ensure endpoint has /v1 suffix for OpenAI API
         base_url = endpoint
-        if not base_url.endswith('/v1'):
-            base_url = base_url + '/v1'
+        if not base_url.endswith("/v1"):
+            base_url = base_url + "/v1"
 
         self._client = AsyncOpenAI(
             base_url=base_url,
@@ -122,7 +122,7 @@ class OpenAIProvider(LLMProvider):
 
     async def _close_resources(self):
         """Clean up provider resources."""
-        if hasattr(self._client, 'close'):
+        if hasattr(self._client, "close"):
             await self._client.close()
         logger.info("OpenAI provider closed")
 
@@ -227,7 +227,7 @@ class OpenAIProvider(LLMProvider):
                 reasoning = getattr(choice.message, "reasoning_content", None)
                 if reasoning:
                     yield StreamChunkFromModel(text=reasoning, thought=True)
-                
+
                 if choice.message.content:
                     yield StreamChunkFromModel(text=choice.message.content)
 

@@ -35,7 +35,7 @@ from app.utils.agent_persona_loader import get_agent_persona, AgentPersona
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar('T', bound=G8eBaseModel)
+T = TypeVar("T", bound=G8eBaseModel)
 
 
 def _build_warden_command_risk_template(

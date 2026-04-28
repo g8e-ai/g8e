@@ -68,7 +68,7 @@ class HTTPService:
             raise ValidationError(f"HTTP client is required for service '{service_name}'", component="g8ee")
         if not service_name:
             raise ValidationError("service_name is required for HTTP client registration", component="g8ee")
-        
+
         self._active_clients[service_name] = client
         logger.info(f"[HTTP] HTTP client configured for service: {service_name}")
 
@@ -88,10 +88,10 @@ class HTTPService:
         if self._http_ready:
             logger.info("[HTTP] HTTP service already ready")
             return
-        
+
         if not self._active_clients:
             logger.warning("[HTTP] No HTTP clients registered - service ready but no clients available")
-        
+
         self._http_ready = True
         logger.info(f"[HTTP] HTTP service ready with {len(self._active_clients)} registered clients")
 

@@ -110,7 +110,7 @@ class g8eEngine:
         inputs: AgentInputs,
         g8ed_event_service: EventService,
         llm_provider: LLMProvider,
-    ) -> AsyncGenerator[StreamChunkFromModel, None]:
+    ) -> AsyncGenerator[StreamChunkFromModel]:
         """
         Stream AI response with full tool support.
 
@@ -240,7 +240,7 @@ class g8eEngine:
         inputs: AgentInputs,
         llm_provider: LLMProvider,
         g8ed_event_service: EventService,
-    ) -> AsyncGenerator[StreamChunkFromModel, None]:
+    ) -> AsyncGenerator[StreamChunkFromModel]:
         """
         ReAct function-calling loop.
 
@@ -258,11 +258,11 @@ class g8eEngine:
         contents = list(inputs.contents)
         generation_config = inputs.generation_config
         model_name = inputs.model_to_use
-        
+
         # These should be validated by run_with_sse, but add assertions for type safety
         assert generation_config is not None, "generation_config must not be None"
         assert model_name is not None, "model_name must not be None"
-        
+
         case_id = inputs.case_id
         investigation_id = inputs.investigation_id
 

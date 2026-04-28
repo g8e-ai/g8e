@@ -15,7 +15,7 @@
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable, TYPE_CHECKING, Callable, Coroutine, Any
+from typing import Protocol, runtime_checkable, TYPE_CHECKING, Any
 
 from app.constants import (
     ComponentName,
@@ -274,7 +274,7 @@ class OperatorDataServiceProtocol(Protocol):
     """Protocol for operator-specific data operations (pure CRUD)."""
 
     collection: str
-    cache: "CacheAsideService"
+    cache: CacheAsideService
 
     async def get_operator(self, operator_id: str) -> OperatorDocument | None:
         """Retrieve operator metadata."""
@@ -701,26 +701,26 @@ class ToolExecutorProtocol(Protocol):
 @runtime_checkable
 class HTTPServiceProtocol(Protocol):
     """Protocol for HTTP service managing client lifecycle and connections."""
-    
+
     @property
     def is_ready(self) -> bool: ...
-    
+
     def set_http_client(self, client: HTTPClient, service_name: str) -> None: ...
-    
+
     def get_client(self, service_name: str) -> HTTPClient | None: ...
-    
+
     async def start(self) -> None: ...
-    
+
     async def stop(self) -> None: ...
-    
+
     async def register_service_client(
-        self, 
-        service_name: str, 
+        self,
+        service_name: str,
         client: HTTPClient
     ) -> None: ...
-    
+
     async def deregister_service_client(self, service_name: str) -> None: ...
-    
+
     def list_active_clients(self) -> list[str]: ...
 
     def get_client_status(self) -> dict[str, HTTPClientStatus]: ...

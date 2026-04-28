@@ -26,7 +26,7 @@ from app.models.sessions import (
     OperatorSessionDocument,
 )
 from app.services.cache.cache_aside import CacheAsideService
-from app.utils.timestamp import now, add_seconds, seconds_between
+from app.utils.timestamp import now, add_seconds
 
 logger = logging.getLogger(__name__)
 
@@ -58,15 +58,15 @@ class OperatorSessionService:
         """Create a new operator session."""
         session_id = self._generate_session_id()
         ts = now()
-        
+
         ttl = ttl_seconds if ttl_seconds is not None else self.session_ttl
         absolute_ttl = ttl_seconds if ttl_seconds is not None else self.absolute_timeout
-        
+
         absolute_expires_at = add_seconds(ts, absolute_ttl)
         idle_expires_at = add_seconds(ts, ttl)
 
         ctx = request_context or {}
-        
+
         session = OperatorSessionDocument(
             id=session_id,
             session_type=SessionType.OPERATOR,
@@ -93,7 +93,7 @@ class OperatorSessionService:
             document_id=session_id,
             data=session
         )
-        
+
         if not result.success:
             raise Exception(f"Failed to persist operator session: {result.error}")
 
@@ -110,17 +110,17 @@ class OperatorSessionService:
             return None
 
         session = OperatorSessionDocument.model_validate(data)
-        
+
         if not session.is_active:
             return None
 
         check_time = now()
-        
+
         if session.absolute_expires_at and check_time > session.absolute_expires_at:
             logger.warning(f"[OPERATOR-SESSION-SERVICE] Session {session_id} absolute timeout")
             await self.end_session(session_id, reason=SessionEndReason.TIMEOUT_ABSOLUTE)
             return None
-            
+
         if session.idle_expires_at and check_time > session.idle_expires_at:
             logger.warning(f"[OPERATOR-SESSION-SERVICE] Session {session_id} idle timeout")
             await self.end_session(session_id, reason=SessionEndReason.TIMEOUT_IDLE)
@@ -137,12 +137,12 @@ class OperatorSessionService:
 
         ts = now()
         new_idle_expiry = add_seconds(ts, self.session_ttl)
-        
+
         updates = {
             "last_activity": ts,
             "idle_expires_at": new_idle_expiry
         }
-        
+
         result = await self.cache.update_document(
             collection=self.collection,
             document_id=session_id,
@@ -157,8 +157,8 @@ class OperatorSessionService:
             collection=self.collection,
             document_id=session_id
         )
-        
+
         if result.success:
             logger.info(f"[OPERATOR-SESSION-SERVICE] Operator session ended: {session_id} (reason: {reason})")
-            
+
         return result.success

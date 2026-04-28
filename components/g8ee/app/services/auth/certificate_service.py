@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 import os
 import datetime
-from typing import Dict, Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.services.auth.certificate_data_service import CertificateDataService
@@ -89,26 +89,26 @@ class CertificateService:
                     self.ca_cert = x509.load_pem_x509_certificate(f.read())
                 with open(found_key_path, "rb") as f:
                     self.ca_key = serialization.load_pem_private_key(f.read(), password=None)
-                
+
                 if not isinstance(self.ca_key, ec.EllipticCurvePrivateKey):
                     raise ValueError("CA key is not an EC key")
 
                 logger.info(f"[CERT-SERVICE] CA certificate loaded from {found_cert_path}")
                 self.initialized = True
             except Exception as e:
-                logger.error(f"[CERT-SERVICE] Failed to load CA certificate or key: {str(e)}")
-                raise RuntimeError(f"Failed to load CA: {str(e)}")
+                logger.error(f"[CERT-SERVICE] Failed to load CA certificate or key: {e!s}")
+                raise RuntimeError(f"Failed to load CA: {e!s}")
         else:
             logger.error(f"[CERT-SERVICE] CA certificate or key not found in {self.ssl_dir}")
             # In a production environment, this should probably be a hard error.
             # For now we log and let it fail on first use if not found.
 
     async def generate_operator_certificate(
-        self, 
-        operator_id: str, 
-        user_id: str, 
+        self,
+        operator_id: str,
+        user_id: str,
         organization_id: str
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         """Generate and sign a new per-operator client certificate."""
         if not self.initialized:
             await self.initialize()
@@ -131,13 +131,13 @@ class CertificateService:
             x509.NameAttribute(NameOID.COUNTRY_NAME, CERT_SUBJECT_COUNTRY),
         ]))
         builder = builder.issuer_name(self.ca_cert.subject)
-        builder = builder.not_valid_before(datetime.datetime.now(datetime.timezone.utc))
+        builder = builder.not_valid_before(datetime.datetime.now(datetime.UTC))
         builder = builder.not_valid_after(
-            datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=CLIENT_CERT_VALIDITY_DAYS)
+            datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=CLIENT_CERT_VALIDITY_DAYS)
         )
         builder = builder.serial_number(x509.random_serial_number())
         builder = builder.public_key(public_key)
-        
+
         # Extensions
         builder = builder.add_extension(
             x509.BasicConstraints(ca=False, path_length=None), critical=True
@@ -185,7 +185,7 @@ class CertificateService:
         """Revoke a certificate by serial number."""
         serial_upper = serial.upper()
         logger.info(f"[CERT-SERVICE] Revoking certificate {serial_upper} (reason: {reason}, operator_id: {operator_id})")
-        
+
         # 1. Persist to DB
         if self.data_service:
             await self.data_service.revoke_certificate(serial_upper, reason, operator_id)
@@ -198,7 +198,7 @@ class CertificateService:
         """Check if a certificate serial is revoked."""
         return serial.upper() in self._revoked_serials
 
-    def get_crl(self) -> Dict[str, Any]:
+    def get_crl(self) -> dict[str, Any]:
         """Generate a basic CRL structure."""
         return {
             "version": 1,

@@ -128,8 +128,8 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ),
     ToolSpec(
         name=OperatorToolName.STREAM_OPERATOR,
-        # must be ToolScope.UNIVERSAL despite being executor-shaped — the auth gate 
-        # rejects any OPERATOR_TOOLS member when no operator is bound, and 
+        # must be ToolScope.UNIVERSAL despite being executor-shaped — the auth gate
+        # rejects any OPERATOR_TOOLS member when no operator is bound, and
         # stream_operator is the whole point of running unbound.
         scope=ToolScope.UNIVERSAL,
         agent_modes=_ALL_MODES,

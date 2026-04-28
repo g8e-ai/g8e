@@ -35,7 +35,6 @@ COPY components/g8ee/requirements.txt /app/components/g8ee/requirements.txt
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-RUN mkdir -p /data /app/components/g8ee/.ruff_cache && \
-    chown -R g8e:g8e /data /app/components/g8ee/.ruff_cache
+RUN mkdir -p /data && chown -R g8e:g8e /data
 
 USER g8e

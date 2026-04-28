@@ -91,9 +91,8 @@ class BootstrapService:
                 self._cached_token = token_path.read_text().strip()
                 self._logger.info("Loaded internal auth token from g8es volume")
                 return self._cached_token
-            else:
-                self._logger.info("Internal auth token not found in g8es volume")
-                return None
+            self._logger.info("Internal auth token not found in g8es volume")
+            return None
         except Exception as e:
             self._logger.warning(f"Failed to read internal auth token: {e}")
             return None
@@ -109,9 +108,8 @@ class BootstrapService:
                 self._cached_key = key_path.read_text().strip()
                 self._logger.info("Loaded session encryption key from g8es volume")
                 return self._cached_key
-            else:
-                self._logger.info("Session encryption key not found in g8es volume")
-                return None
+            self._logger.info("Session encryption key not found in g8es volume")
+            return None
         except Exception as e:
             self._logger.warning(f"Failed to read session encryption key: {e}")
             return None
@@ -133,9 +131,8 @@ class BootstrapService:
                 self._cached_auditor_hmac_key = key_path.read_text().strip()
                 self._logger.info("Loaded auditor HMAC key from g8es volume")
                 return self._cached_auditor_hmac_key
-            else:
-                self._logger.info("Auditor HMAC key not found in g8es volume")
-                return None
+            self._logger.info("Auditor HMAC key not found in g8es volume")
+            return None
         except Exception as e:
             self._logger.warning(f"Failed to read auditor HMAC key: {e}")
             return None

@@ -16,10 +16,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, List
+from typing import Any
 
 from ..constants import (
-    AgentName,
+    ReasoningAgent,
     CloudSubtype,
     FORBIDDEN_COMMAND_PATTERNS,
     OperatorType,
@@ -43,7 +43,7 @@ def _format_operator_doc(op_doc, index: int) -> str:
     snapshot = op_doc.latest_heartbeat_snapshot
     op_id = op_doc.id or f"operator_{index + 1}"
     hostname = op_doc.current_hostname or (snapshot.system_identity.hostname if snapshot else None)
-    
+
     details = [
         f"hostname={hostname}" if hostname else None,
         f"os={snapshot.system_identity.os}" if snapshot and snapshot.system_identity.os else None,
@@ -51,7 +51,7 @@ def _format_operator_doc(op_doc, index: int) -> str:
         f"type={op_doc.operator_type}",
         f"session={op_doc.operator_session_id[:12]}..." if op_doc.operator_session_id else None,
     ]
-    
+
     return f"  [{index + 1}] {op_id}: {', '.join(filter(None, details))}"
 
 
@@ -70,8 +70,8 @@ def build_investigation_context_section(
         ("severity", InvestigationContextLabel.SEVERITY),
     ]
 
-    context_parts = [f"{label.value}: {getattr(investigation, field)}" 
-                     for field, label in fields 
+    context_parts = [f"{label.value}: {getattr(investigation, field)}"
+                     for field, label in fields
                      if getattr(investigation, field)]
 
     if investigation.conversation_history:
@@ -80,7 +80,7 @@ def build_investigation_context_section(
     if investigation.operator_documents:
         context_parts.append(f"Operators: {len(investigation.operator_documents)} bound")
         context_parts.extend(
-            _format_operator_doc(op_doc, i) 
+            _format_operator_doc(op_doc, i)
             for i, op_doc in enumerate(investigation.operator_documents)
         )
 
@@ -171,14 +171,14 @@ def build_command_constraints_message(
         if whitelisted_commands:
             command_names = [cmd.command for cmd in whitelisted_commands]
             parts.append(f"Whitelisting is ENABLED. Only these commands are allowed: {', '.join(command_names)}")
-            
+
             # Add detailed constraint information for each command
             constraint_details = []
             for cmd in whitelisted_commands:
                 cmd_name = cmd.command
                 safe_options = cmd.safe_options
                 validation = cmd.validation
-                
+
                 if safe_options or validation:
                     details = f"{cmd_name}:"
                     if safe_options:
@@ -186,12 +186,12 @@ def build_command_constraints_message(
                     if validation:
                         details += f" validation_patterns={list(validation.keys())}"
                     constraint_details.append(details)
-            
+
             if constraint_details:
                 parts.append("Command-specific constraints: " + "; ".join(constraint_details))
         else:
             parts.append("Whitelisting is ENABLED, but no commands are whitelisted. ALL commands will be rejected.")
-    
+
     if blacklisting_enabled:
         if blacklisted_commands:
             blacklisted_names = [c.get("command", "unknown") for c in blacklisted_commands]
@@ -274,7 +274,7 @@ def build_tribunal_prompt_fields(
         user_context = f"{username} (uid={uid})"
     else:
         user_context = username or "unknown"
-        
+
     return {
         "os": os_name,
         "shell": shell,
@@ -290,7 +290,7 @@ def build_tribunal_prompt_fields(
 def build_tribunal_auditor_context(
     mode: str,
     winner: str | None,
-    clusters: List[dict[str, Any]],
+    clusters: list[dict[str, Any]],
 ) -> str:
     """Build the mode-specific context for the auditor prompt.
     
@@ -300,15 +300,15 @@ def build_tribunal_auditor_context(
         clusters: List of dicts with keys: cluster_id, command, support_count
     """
     parts = []
-    
+
     if mode == "unanimous":
         parts.append(f"<candidate_command>\n{winner}\n</candidate_command>")
         parts.append("\nUNANIMOUS CONSENSUS: All Tribunal members produced the command above.")
         parts.append("Validate it for syntactic correctness, safety, and alignment with the request.")
         parts.append("\nResponse format:")
-        parts.append("- status: \"ok\" (if correct) or \"revised\" (if needs fix)")
-        parts.append("- revised_command: the corrected command string (only if status is \"revised\")")
-        
+        parts.append('- status: "ok" (if correct) or "revised" (if needs fix)')
+        parts.append('- revised_command: the corrected command string (only if status is "revised")')
+
     elif mode == "majority":
         parts.append("<candidates_by_cluster>")
         for c in clusters:
@@ -317,10 +317,10 @@ def build_tribunal_auditor_context(
         parts.append(f"\nMAJORITY WINNER: [{clusters[0]['cluster_id']}]")
         parts.append("\nObserve the winner and the dissenting clusters above. You may approve the winner, swap to a dissenter, or issue a revision.")
         parts.append("\nResponse format:")
-        parts.append("- status: \"ok\" (approve winner), \"swap\" (pick another cluster), or \"revised\"")
-        parts.append("- swap_to_cluster: e.g. \"cluster_b\" (only if status is \"swap\")")
-        parts.append("- revised_command: corrected string (only if status is \"revised\")")
-        
+        parts.append('- status: "ok" (approve winner), "swap" (pick another cluster), or "revised"')
+        parts.append('- swap_to_cluster: e.g. "cluster_b" (only if status is "swap")')
+        parts.append('- revised_command: corrected string (only if status is "revised")')
+
     elif mode == "tied":
         parts.append("<tied_candidates>")
         for c in clusters:
@@ -329,10 +329,10 @@ def build_tribunal_auditor_context(
         parts.append("\nVOTING TIED: The tie-break ladder could not resolve a single winner.")
         parts.append("YOU MUST DISAMBIGUATE. Pick the best cluster from the tied set or provide a revision.")
         parts.append("\nResponse format:")
-        parts.append("- status: \"swap\" (pick one) or \"revised\"")
-        parts.append("- swap_to_cluster: e.g. \"cluster_a\" (required for status \"swap\")")
-        parts.append("- revised_command: corrected string (only if status is \"revised\")")
-        
+        parts.append('- status: "swap" (pick one) or "revised"')
+        parts.append('- swap_to_cluster: e.g. "cluster_a" (required for status "swap")')
+        parts.append('- revised_command: corrected string (only if status is "revised")')
+
     return "\n".join(parts)
 
 
@@ -368,7 +368,7 @@ def build_tribunal_generator_prompt(
             prompt_file = prompt_file_map.get(member.lower(), PromptFile.TRIBUNAL_GENERATOR_ROUND_2)
         else:
             prompt_file = PromptFile.TRIBUNAL_GENERATOR_ROUND_2
-        
+
         template = load_prompt(prompt_file)
         return template.format(
             request=request,
@@ -382,7 +382,7 @@ def build_tribunal_generator_prompt(
             operator_context=operator_context_str,
             cluster_context=cluster_context,
         )
-    
+
     template = load_prompt(PromptFile.TRIBUNAL_GENERATOR)
     return template.format(
         request=request,
@@ -434,7 +434,7 @@ def _build_system_context_section(
             continue
 
         if len(contexts_to_render) > 1:
-            system_parts.append(f"<operator index=\"{idx}\">")
+            system_parts.append(f'<operator index="{idx}">')
 
         if ctx.operator_type:
             if ctx.operator_type == OperatorType.CLOUD:
@@ -501,7 +501,7 @@ def build_modular_system_prompt(
     investigation: EnrichedInvestigationContext | None,
     g8e_web_search_available: bool = True,
     triage_result: TriageResult | None = None,
-    agent_name: AgentName | None = None,
+    agent_name: ReasoningAgent | None = None,
 ) -> tuple[str, dict[str, int]]:
     """
     Build system prompt using modular architecture.

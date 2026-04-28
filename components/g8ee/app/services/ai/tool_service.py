@@ -72,13 +72,13 @@ class AIToolService:
 
     def __init__(
         self,
-        operator_command_service: "OperatorCommandService",
+        operator_command_service: OperatorCommandService,
         investigation_service: InvestigationService,
         reputation_data_service: ReputationDataService,
         reputation_service: ReputationService,
         chat_task_manager: BackgroundTaskManager,
         ssh_inventory_service: SshInventoryService,
-        stream_executor: "OperatorStreamExecutor",
+        stream_executor: OperatorStreamExecutor,
         web_search_provider: WebSearchProvider | None,
         platform_settings: G8eePlatformSettings | None = None,
         user_settings: G8eeUserSettings | None = None,
@@ -222,7 +222,7 @@ class AIToolService:
         return self._ssh_inventory_service
 
     @property
-    def stream_executor(self) -> "OperatorStreamExecutor":
+    def stream_executor(self) -> OperatorStreamExecutor:
         """The configured ``OperatorStreamExecutor`` (required)."""
         return self._stream_executor
 

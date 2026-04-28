@@ -21,7 +21,7 @@ Defines data structures for tracking g8eo operators and their runtime configurat
 
 import asyncio
 import logging
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import ConfigDict, Field, PrivateAttr, ValidationInfo, field_validator, model_validator
 
@@ -93,7 +93,7 @@ class OperatorHistoryEntry(G8eBaseModel):
     entry_hash: str | None = Field(default=None, description="Hash of this entry (hex SHA256, 64 chars)")
 
     @model_validator(mode="after")
-    def _seal_entry_hash(self) -> "OperatorHistoryEntry":
+    def _seal_entry_hash(self) -> OperatorHistoryEntry:
         """Auto-compute entry_hash if not provided."""
         if self.entry_hash is None:
             from app.utils.ledger_hash import compute_entry_hash
@@ -400,7 +400,7 @@ class HeartbeatSnapshot(G8eBaseModel):
     ledger_enabled: bool = Field(default=False, description="True when LFAA ledger mirroring is active")
 
     @classmethod
-    def from_wire(cls, payload: G8eoHeartbeatPayload) -> "HeartbeatSnapshot":
+    def from_wire(cls, payload: G8eoHeartbeatPayload) -> HeartbeatSnapshot:
         """Create HeartbeatSnapshot from the typed g8eo wire payload.
 
         Canonical wire shape: shared/models/wire/heartbeat.json.
@@ -408,10 +408,10 @@ class HeartbeatSnapshot(G8eBaseModel):
         before this is called.
         """
         wire_dict = payload.model_dump(mode="json", exclude={"event_type", "operator_id", "operator_session_id", "case_id", "investigation_id", "user_id", "api_key"})
-        
+
         wire_dict["timestamp"] = now()
         wire_dict["heartbeat_type"] = _coerce_heartbeat_type(payload.heartbeat_type)
-        
+
         wire_dict["performance"] = wire_dict.pop("performance_metrics")
         wire_dict["network"] = wire_dict.pop("network_info")
         uptime_info = wire_dict.pop("uptime_info")
@@ -419,23 +419,23 @@ class HeartbeatSnapshot(G8eBaseModel):
             "uptime_display": uptime_info.get("uptime"),
             "uptime_seconds": uptime_info.get("uptime_seconds"),
         }
-        
+
         if wire_dict.get("network") and wire_dict["network"].get("connectivity_status"):
             wire_dict["network"]["connectivity_status"] = [
                 HeartbeatNetworkInterface(name=s["name"], ip=s["ip"], mtu=s["mtu"])
                 for s in wire_dict["network"]["connectivity_status"]
             ]
-        
+
         wire_dict["is_cloud_operator"] = False
         wire_dict["cloud_provider"] = None
-        
+
         cap = payload.capability_flags
         wire_dict["local_storage_enabled"] = cap.local_storage_enabled
         wire_dict["git_available"] = cap.git_available
         wire_dict["ledger_enabled"] = cap.ledger_enabled
-        
+
         wire_dict.pop("capability_flags", None)
-        
+
         return cls.model_validate(wire_dict)
 
 
@@ -692,7 +692,7 @@ class TruncatedOutput(G8eBaseModel):
     truncate_limit: int = Field(default=20, description="Lines kept from each end")
 
     @classmethod
-    def from_output(cls, output: str, limit: int = 20) -> "TruncatedOutput":
+    def from_output(cls, output: str, limit: int = 20) -> TruncatedOutput:
         """
         Create TruncatedOutput from raw output string.
         
@@ -762,15 +762,15 @@ class HeartbeatSSEEnvelope(G8eBaseModel):
 
     operator_id: str = Field(description="Operator ID")
     status: OperatorStatus = Field(description="Authoritative operator status from OperatorDocument")
-    metrics: "HeartbeatSnapshot" = Field(description="Full HeartbeatSnapshot snapshot (nested)")
+    metrics: HeartbeatSnapshot = Field(description="Full HeartbeatSnapshot snapshot (nested)")
 
     @classmethod
     def from_heartbeat(
         cls,
         operator_id: str,
         status: OperatorStatus,
-        heartbeat: "HeartbeatSnapshot",
-    ) -> "HeartbeatSSEEnvelope":
+        heartbeat: HeartbeatSnapshot,
+    ) -> HeartbeatSSEEnvelope:
         """Build the envelope from an authoritative operator_id+status plus the
         full HeartbeatSnapshot. `metrics` holds the heartbeat instance as-is."""
         return cls(

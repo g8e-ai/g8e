@@ -20,12 +20,12 @@ from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, ValidationEr
 __all__ = [
     "ConfigDict",
     "Field",
-    "ValidationError",
     "G8eAuditableModel",
     "G8eBaseModel",
     "G8eIdentifiableModel",
     "G8eTimestampedModel",
     "UTCDatetime",
+    "ValidationError",
     "_to_iso_z",
     "field_validator",
     "model_validator",
@@ -124,8 +124,7 @@ class G8eTimestampedModel(G8eBaseModel):
         if isinstance(v, datetime):
             if v.tzinfo is None:
                 return v.replace(tzinfo=UTC)
-            else:
-                return v.astimezone(UTC)
+            return v.astimezone(UTC)
         return v
 
     def update_timestamp(self) -> None:

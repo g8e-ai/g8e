@@ -16,7 +16,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
-from typing import TYPE_CHECKING, Any, List, NoReturn
+from typing import TYPE_CHECKING, NoReturn
 
 from app.errors import OllamaEmptyResponseError
 from app.models.base import G8eBaseModel
@@ -28,7 +28,6 @@ from app.constants import (
     DEFAULT_OS_NAME,
     DEFAULT_SHELL,
     DEFAULT_WORKING_DIRECTORY,
-    FORBIDDEN_COMMAND_PATTERNS,
     TribunalMember,
     EventType,
     AuditorReason,
@@ -84,7 +83,7 @@ class AuditorInput(G8eBaseModel):
 # Removed validate_command_safety - moved to app.utils.safety
 
 async def fail_auditor(
-    emitter: "TribunalEmitter",
+    emitter: TribunalEmitter,
     request: str,
     reason: AuditorReason,
     error_msg: str,
@@ -108,8 +107,8 @@ async def fail_auditor(
     )
 
 def parse_auditor_response(
-    raw_text: str, 
-    mode: str, 
+    raw_text: str,
+    mode: str,
     cluster_ids: list[str]
 ) -> tuple[str, str | None, str | None]:
     """Parse and validate auditor JSON response with mode-specific rules."""
@@ -121,7 +120,7 @@ def parse_auditor_response(
         status = data.get("status", "").lower()
         revised_raw = data.get("revised_command")
         swap_to_cluster = data.get("swap_to_cluster")
-        
+
         # Mode-specific validation
         if mode == "unanimous":
             if status not in ("ok", "revised"):
@@ -142,13 +141,13 @@ def parse_auditor_response(
                 raise ValueError("Auditor returned status='swap' but no swap_to_cluster")
             if swap_to_cluster not in cluster_ids:
                 raise ValueError(f"invalid swap_to_cluster {swap_to_cluster!r}")
-        
+
         if status == "revised" and not revised_raw:
             raise ValueError("Auditor returned status='revised' but no revised_command")
-            
+
         return status, revised_raw, swap_to_cluster
     except (AttributeError) as exc:
-        raise ValueError(f"Auditor returned malformed JSON structure: {str(exc)}") from exc
+        raise ValueError(f"Auditor returned malformed JSON structure: {exc!s}") from exc
 
 async def run_auditor(
     provider: LLMProvider,
@@ -160,7 +159,7 @@ async def run_auditor(
     vote_breakdown: VoteBreakdown,
     tied_candidates: list[CandidateCommand] | None,
     operator_context: OperatorContext | None,
-    emitter: "TribunalEmitter",
+    emitter: TribunalEmitter,
     command_constraints_message: str,
     auditor_persona: TribunalMember,
     whitelisting_enabled: bool = False,
@@ -171,7 +170,7 @@ async def run_auditor(
     clusters: list[AuditorClusterInfo] = []
     cluster_to_cmd: dict[str, str] = {}
     cluster_to_members: dict[str, list[str]] = {}
-    
+
     # 1. Add winner as cluster_a
     if not vote_winner:
         raise ValueError("vote_winner is required - no fallback allowed")
@@ -216,13 +215,13 @@ async def run_auditor(
         default_shell=DEFAULT_SHELL,
         default_working_directory=DEFAULT_WORKING_DIRECTORY,
     )
-    
+
     # Prepare clusters for the prompt context function
     clusters_data = [
         {"cluster_id": c.cluster_id, "command": c.command, "support_count": c.support_count}
         for c in clusters
     ]
-    
+
     auditor_context = build_tribunal_auditor_context(mode, target_cmd, clusters_data)
     prompt = build_tribunal_auditor_prompt(
         request=request,
@@ -237,7 +236,7 @@ async def run_auditor(
 
     logger.info("[TRIBUNAL-AUDITOR] mode=%s winner=%r clusters=%d", mode, target_cmd, len(clusters))
     model_config = get_model_config(model)
-    
+
     response_format = None
     if model_config.supports_structured_output:
         response_format = ResponseFormat.from_pydantic_schema(
@@ -285,7 +284,7 @@ async def run_auditor(
                     tool_calls_count=0,
                     ctx_overflow_suspected=False,
                 )
-            
+
             status, revised_raw, swap_to_cluster = parse_auditor_response(
                 raw_text, mode, list(cluster_to_cmd.keys())
             )
@@ -301,7 +300,7 @@ async def run_auditor(
             if status == "swap":
                 final_cmd = cluster_to_cmd[swap_to_cluster]
                 swap_to_member = cluster_to_members[swap_to_cluster][0] # Pick first member for telemetry
-                
+
                 # RE-VALIDATE SWAP TARGET SAFETY (L1 Technical Bedrock)
                 safety_result = validate_command_safety(final_cmd, whitelisting_enabled, blacklisting_enabled, operator_context)
                 if not safety_result.is_safe:
@@ -311,7 +310,7 @@ async def run_auditor(
                 await emitter.emit(
                     EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED,
                     TribunalAuditorCompletedPayload(
-                        passed=True, 
+                        passed=True,
                         reason=AuditorReason.SWAPPED_TO_DISSENTER,
                         swap_to_cluster=swap_to_cluster,
                         swap_to_member=swap_to_member
@@ -347,7 +346,7 @@ async def run_auditor(
                 if isinstance(exc, OllamaEmptyResponseError):
                     await fail_auditor(emitter, request, AuditorReason.EMPTY_RESPONSE, str(exc), target_cmd)
                 else:
-                    await fail_auditor(emitter, request, AuditorReason.NO_VALID_REVISION, f"Failed to parse auditor response after {max_attempts} attempts: {str(exc)}", target_cmd)
+                    await fail_auditor(emitter, request, AuditorReason.NO_VALID_REVISION, f"Failed to parse auditor response after {max_attempts} attempts: {exc!s}", target_cmd)
             continue
         except TribunalAuditorFailedError:
             raise

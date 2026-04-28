@@ -20,7 +20,6 @@ tool call dispatch, and sequential turn-level execution loop.
 
 import asyncio
 import logging
-from typing import Any, List, Dict, Tuple
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 
@@ -59,7 +58,6 @@ from app.models.settings import G8eeUserSettings
 from app.models.agents.tribunal import (
     CommandGenerationResult,
     TribunalError,
-    TribunalConsensusFailedError,
 )
 from app.services.investigation.investigation_service import extract_operator_context_by_target, extract_single_operator_context
 from app.services.ai.tool_service import AIToolService
@@ -461,7 +459,7 @@ async def execute_turn_tool_calls(
     result_out: list[list[ToolCallResponse]],
     request_settings: G8eeUserSettings,
     g8ed_event_service: EventService,
-) -> AsyncGenerator[StreamChunkFromModel, None]:
+) -> AsyncGenerator[StreamChunkFromModel]:
     """
     Execute all tool calls from one turn sequentially.
 

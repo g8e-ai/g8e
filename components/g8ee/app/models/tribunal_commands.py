@@ -13,10 +13,10 @@
 
 from pydantic import Field
 
-from app.constants import CommandGenerationOutcome, TribunalMember, TieBreakReason, AuditorReason
+from app.constants import CommandGenerationOutcome, AuditorReason
 from app.models.agents.tribunal import CandidateCommand, VoteBreakdown
 
-from .base import Field as BaseField, G8eIdentifiableModel, UTCDatetime
+from .base import G8eIdentifiableModel, UTCDatetime
 
 
 class TribunalCommandRequestContext(G8eIdentifiableModel.model.__base__):
@@ -81,9 +81,9 @@ class TribunalCommand(G8eIdentifiableModel):
 
 __all__ = [
     "TribunalCommand",
-    "TribunalCommandRequestContext",
-    "TribunalCommandGenerationResult",
     "TribunalCommandAuditor",
-    "TribunalCommandPipelineMetadata",
     "TribunalCommandErrorContext",
+    "TribunalCommandGenerationResult",
+    "TribunalCommandPipelineMetadata",
+    "TribunalCommandRequestContext",
 ]

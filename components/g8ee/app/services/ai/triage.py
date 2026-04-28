@@ -173,7 +173,7 @@ class TriageAgent:
             content = (msg.content or "").strip()
             if not content:
                 continue
-            
+
             # Use MessageSender for proper sender identification
             role = Role.USER if msg.sender == MessageSender.USER_CHAT else Role.MODEL
             lines.append(f"{role.value}: {content}")

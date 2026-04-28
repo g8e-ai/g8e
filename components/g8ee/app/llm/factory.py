@@ -98,7 +98,7 @@ def _get_provider_cache_key(settings: LLMSettings, is_assistant: bool = False, i
         provider_type = settings.assistant_provider
     else:
         provider_type = settings.primary_provider
-    
+
     provider_value = provider_type.value if provider_type else "none"
     key_parts = [provider_value]
 

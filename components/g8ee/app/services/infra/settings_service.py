@@ -18,9 +18,6 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from app.constants import (
     ErrorCode,
-    OPENAI_DEFAULT_ENDPOINT,
-    OLLAMA_DEFAULT_ENDPOINT,
-    ANTHROPIC_DEFAULT_ENDPOINT,
     LogLevel,
 )
 from app.constants.collections import (
@@ -116,7 +113,7 @@ class SettingsService:
             passkey_rp_id="g8e",
             passkey_origin="http://localhost:443",
         )
-        
+
         # Load secrets from bootstrap service
         internal_token = self._bootstrap.load_internal_auth_token()
         if internal_token:
@@ -207,7 +204,7 @@ class SettingsService:
             )
 
         doc = PlatformSettingsDocument.model_validate(doc_dict)
-        
+
         settings = self.get_local_settings()
         return self.overlay_platform_data(settings, doc.settings)
 
@@ -230,7 +227,7 @@ class SettingsService:
                 document_id=PLATFORM_SETTINGS_DOC,
             )
             platform_doc = PlatformSettingsDocument.model_validate(platform_doc_dict)
-            
+
             return G8eeUserSettings(
                 llm=LLMSettings(),
                 search=self._build_search_settings(platform_doc.settings),

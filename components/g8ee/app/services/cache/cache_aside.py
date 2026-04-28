@@ -109,12 +109,12 @@ class CacheAsideService(DocumentServiceProtocol):
     async def close(self) -> None:
         """Close underlying KV and DB HTTP clients to prevent resource leaks."""
         try:
-            if hasattr(self._kv, 'close'):
+            if hasattr(self._kv, "close"):
                 await self._kv.close()  # type: ignore[attr-defined]
         except Exception as exc:
             logger.info("Error closing KV service: %s", exc)
         try:
-            if hasattr(self._db, 'close'):
+            if hasattr(self._db, "close"):
                 await self._db.close()  # type: ignore[attr-defined]
         except Exception as exc:
             logger.info("Error closing DB service: %s", exc)

@@ -11,7 +11,6 @@ Consolidates three scoring paths:
 
 import re
 from typing import Any
-from .metrics import EvalRow
 
 
 def score_benchmark_scenario(

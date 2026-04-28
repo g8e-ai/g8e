@@ -20,7 +20,6 @@ from app.constants import (
     INVESTIGATION_LOOKUP_RETRY_DELAYS_MS,
     ComponentName,
     EventType,
-    FileOperation,
     OperatorStatus,
     OperatorType,
 )
@@ -34,14 +33,12 @@ from app.models.investigations import (
     EnrichedInvestigationContext,
     InvestigationModel,
     InvestigationUpdateRequest,
-    InvestigationQueryRequest,
-    InvestigationHistoryEntry,
     ConversationMessageMetadata,
     ConversationHistoryMessage,
     InvestigationCreateRequest,
 )
-from app.models.operators import CommandInternalResult, OperatorDocument
-from app.models.tool_results import FileEditResult, TokenUsage
+from app.models.operators import OperatorDocument
+from app.models.tool_results import TokenUsage
 from app.services.protocols import InvestigationDataServiceProtocol, OperatorDataServiceProtocol, MemoryDataServiceProtocol
 
 logger = logging.getLogger(__name__)
@@ -546,12 +543,12 @@ def extract_operator_context_by_target(
     for operator_doc in investigation.operator_documents:
         if operator_doc.id == target_operator:
             return extract_single_operator_context(operator_doc)
-    
+
     # Try to find operator by hostname
     for operator_doc in investigation.operator_documents:
         if operator_doc.hostname == target_operator:
             return extract_single_operator_context(operator_doc)
-    
+
     # Try to parse as index (e.g., "0", "1", "2")
     try:
         index = int(target_operator)
@@ -559,7 +556,7 @@ def extract_operator_context_by_target(
             return extract_single_operator_context(investigation.operator_documents[index])
     except ValueError:
         pass
-    
+
     # If not found, fall back to first operator
     logger.warning(
         "[CONTEXT] Target operator '%s' not found, falling back to first operator",

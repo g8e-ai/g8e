@@ -136,6 +136,40 @@ The Tribunal translates natural language intent into executable commands using f
 - **Codex & Scribe**: Title cases and build persistent, scrubbed user preference models.
 - **Judge**: Evaluates AI performance against gold-standard rubrics for reputation signals.
 
+### Dynamic System Prompts
+g8e uses a modular system prompt architecture that dynamically assembles context on each turn. The prompt is built from 11 sections optimized for prefix-cache reuse:
+
+**Static sections (cached):**
+1. Safety — absolute forbidden operations
+2. Loyalty — mission-over-moment doctrine
+3. Dissent — warning protocol, denial memory, escalation
+4. Capabilities/Execution/Tools — mode-dependent
+5. Response constraints — SDK hard cutoff guidance
+6. Identity/Persona — per-agent
+
+**Dynamic per-turn sections:**
+7. System context — Operator details (hostname, OS, user, container info, granted_intents)
+8. Sentinel mode — Injected when investigation.sentinel_mode is True
+9. Triage context — Request posture and intent summary
+10. Investigation context — Case details, status, priority, bound operators
+11. Learned context — User preferences and past investigation memories
+
+The modular design places shared static sections first for llama.cpp/vLLM prefix-cache optimization, with dynamic per-turn context appended last.
+
+[View implementation](components/g8ee/app/llm/prompts.py#L496-L670)
+
+### Enriched Context
+The `EnrichedInvestigationContext` model extends the persisted `InvestigationModel` with transient runtime fields that are never written to the database. This enrichment provides AI agents with complete operational context during reasoning:
+
+- **operator_documents** — Bound OperatorDocument instances with heartbeat data
+- **memory** — Attached InvestigationMemory for AI context (user preferences, investigation summaries)
+- **bound_operators** — BoundOperator instances from G8eHttpContext
+- **operator_session_token** — Transient session token for authorization validation
+
+The enrichment pipeline assembles investigation data, operator details, user memories, and session context into a single model passed to AI agents. This enables agents to make decisions with full awareness of the operational environment, user preferences, and historical context.
+
+[View implementation](components/g8ee/app/models/investigations.py#L514-L549)
+
 ### Architecture & Persistence
 g8e uses a **Local-First Audit Architecture (LFAA)** where the system of record lives on your hardware, not in the cloud.
 

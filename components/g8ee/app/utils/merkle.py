@@ -29,14 +29,14 @@ hex (64 chars).
 from __future__ import annotations
 
 import hashlib
-from typing import Sequence
+from collections.abc import Sequence
 
 
 __all__ = [
-    "scalar_to_canonical_str",
     "leaf_bytes",
-    "merkle_root",
     "merkle_proof",
+    "merkle_root",
+    "scalar_to_canonical_str",
     "verify_proof",
 ]
 
@@ -57,7 +57,7 @@ def leaf_bytes(agent_id: str, scalar: float) -> bytes:
 
     Encoding: ``sha256(f"{agent_id}:{canonical_scalar}".encode("utf-8"))``.
     """
-    payload = f"{agent_id}:{scalar_to_canonical_str(scalar)}".encode("utf-8")
+    payload = f"{agent_id}:{scalar_to_canonical_str(scalar)}".encode()
     return hashlib.sha256(payload).digest()
 
 

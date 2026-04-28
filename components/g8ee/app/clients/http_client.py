@@ -54,14 +54,14 @@ from app.utils.timestamp import now
 
 logger = logging.getLogger(__name__)
 
-JSONPayload = Union[Mapping[str, Any], G8eBaseModel]
+JSONPayload = Mapping[str, Any] | G8eBaseModel
 """Typed JSON request body: a Pydantic model or a dict-shaped mapping.
 
 HTTPClient callers must pass a typed model or a mapping already serialized to
 JSON-safe primitives (e.g. via ``model.model_dump(mode=\"json\")``). Raw
 ``Any`` is rejected per the developer guide (no ``Any`` in signatures)."""
 
-QueryParams = Mapping[str, Union[str, int, float, bool]]
+QueryParams = Mapping[str, str | int | float | bool]
 
 DEFAULT_RETRY_METHODS: set[str] = {"GET", "PUT", "DELETE", "HEAD", "OPTIONS"}
 DEFAULT_RETRY_STATUS_CODES: set[int] = {408, 429, 500, 502, 503, 504}
@@ -154,7 +154,7 @@ class CircuitBreaker:
                     self.state = CircuitBreakerState.CLOSED
                     self.failures = 0
                     self.successes = 0
-                    logger.info(f"Circuit breaker for {self.endpoint} is now CLOSED after successful recovery")
+                    logger.info("Circuit breaker for %s is now CLOSED after successful recovery", self.endpoint)
 
     async def record_failure(self) -> None:
         """Record a failed operation"""
@@ -164,11 +164,11 @@ class CircuitBreaker:
                 self.failures += 1
                 if self.failures >= self.config.failure_threshold:
                     self.state = CircuitBreakerState.OPEN
-                    logger.error(f"Circuit breaker for {self.endpoint} is now OPEN after {self.failures} failures")
+                    logger.error("Circuit breaker for %s is now OPEN after %d failures", self.endpoint, self.failures)
             elif self.state == CircuitBreakerState.HALF_OPEN:
                 self.state = CircuitBreakerState.OPEN
                 self.successes = 0
-                logger.error(f"Circuit breaker for {self.endpoint} returned to OPEN state after failure in HALF_OPEN")
+                logger.error("Circuit breaker for %s returned to OPEN state after failure in HALF_OPEN", self.endpoint)
 
     async def allow_request(self) -> bool:
         """
@@ -184,7 +184,7 @@ class CircuitBreaker:
                 if time.time() - self.last_failure_time > self.config.recovery_time:
                     self.state = CircuitBreakerState.HALF_OPEN
                     self.successes = 0
-                    logger.info(f"Circuit breaker for {self.endpoint} is now HALF_OPEN, testing service recovery")
+                    logger.info("Circuit breaker for %s is now HALF_OPEN, testing service recovery", self.endpoint)
                     return True
                 return False
             return True
@@ -192,7 +192,7 @@ class CircuitBreaker:
 
 class AiohttpResponse:
     """Lightweight response wrapper over aiohttp (used by LLM providers).
-    
+
     aiohttp responses must be consumed inside their context manager. This wrapper
     reads the body eagerly and exposes .status_code, .json(), .text, and .is_success.
     """
@@ -222,7 +222,7 @@ class AiohttpResponse:
 class HTTPClient:
     """
     A robust HTTP client for inter-component communication within the g8e ecosystem.
-    
+
     Features:
     - Automatic retry for transient failures with exponential backoff
     - Circuit breaker pattern to fail fast when services are unavailable
@@ -304,7 +304,7 @@ class HTTPClient:
 
     async def _prepare_request(
         self,
-        method: str,
+        _method: str,
         url: str,
         headers: dict[str, str] | None,
         context: G8eHttpContext | None,
@@ -367,15 +367,13 @@ class HTTPClient:
             return False
         if status_code in self.retry_config.retry_status_codes:
             return True
-        if exception and isinstance(exception, (
+        return bool(exception and isinstance(exception, (
             aiohttp.ClientConnectorError,
             aiohttp.ClientOSError,
             aiohttp.ServerDisconnectedError,
             aiohttp.ServerTimeoutError,
             asyncio.TimeoutError,
-        )):
-            return True
-        return False
+        )))
 
     def _calculate_backoff(self, retry_count: int) -> float:
         backoff = self.retry_config.retry_backoff_factor * (2 ** retry_count)
@@ -438,8 +436,8 @@ class HTTPClient:
                 },
                 retry_suggested=False
             )
-            logger.error(f"Circuit breaker prevented request: {error}")
-            raise error
+            logger.error("Circuit breaker prevented request: %s", error)
+            raise error from error
 
         retry_count = 0
         session = await self._get_http_session()
@@ -462,7 +460,7 @@ class HTTPClient:
                     await circuit_breaker.record_success()
                     trace.finish()
                     logger.info(
-                        f"HTTP request successful: {method} {final_url}",
+                        "HTTP request successful: %s %s", method, final_url,
                         extra={
                             "request_method": method,
                             "request_url": final_url,
@@ -481,7 +479,8 @@ class HTTPClient:
                     retry_count += 1
                     backoff = self._calculate_backoff(retry_count)
                     logger.error(
-                        f"Retrying request due to status {wrapped.status_code}: {method} {final_url} (attempt {retry_count}/{self.retry_config.max_retries}, backoff {backoff:.2f}s)",
+                        "Retrying request due to status %d: %s %s (attempt %d/%d, backoff %.2fs)",
+                        wrapped.status_code, method, final_url, retry_count, self.retry_config.max_retries, backoff,
                         extra={
                             "request_method": method,
                             "request_url": final_url,
@@ -518,7 +517,7 @@ class HTTPClient:
                 )
 
                 logger.error(
-                    f"HTTP request failed: {method} {final_url}",
+                    "HTTP request failed: %s %s", method, final_url,
                     extra={
                         "request_method": method,
                         "request_url": final_url,
@@ -536,7 +535,8 @@ class HTTPClient:
                     retry_count += 1
                     backoff = self._calculate_backoff(retry_count)
                     logger.error(
-                        f"Retrying request due to timeout: {method} {final_url} (attempt {retry_count}/{self.retry_config.max_retries}, backoff {backoff:.2f}s)",
+                        "Retrying request due to timeout: %s %s (attempt %d/%d, backoff %.2fs)",
+                        method, final_url, retry_count, self.retry_config.max_retries, backoff,
                         extra={
                             "request_method": method,
                             "request_url": final_url,
@@ -568,7 +568,7 @@ class HTTPClient:
                 )
 
                 logger.error(
-                    f"HTTP request timed out: {method} {final_url}",
+                    "HTTP request timed out: %s %s", method, final_url,
                     extra={
                         "request_method": method,
                         "request_url": final_url,
@@ -585,7 +585,8 @@ class HTTPClient:
                     retry_count += 1
                     backoff = self._calculate_backoff(retry_count)
                     logger.error(
-                        f"Retrying request due to connection error: {method} {final_url} (attempt {retry_count}/{self.retry_config.max_retries}, backoff {backoff:.2f}s)",
+                        "Retrying request due to connection error: %s %s (attempt %d/%d, backoff %.2fs)",
+                        method, final_url, retry_count, self.retry_config.max_retries, backoff,
                         extra={
                             "request_method": method,
                             "request_url": final_url,
@@ -616,7 +617,7 @@ class HTTPClient:
                 )
 
                 logger.error(
-                    f"HTTP connection error: {method} {final_url}",
+                    "HTTP connection error: %s %s", method, final_url,
                     extra={
                         "request_method": method,
                         "request_url": final_url,
@@ -647,16 +648,15 @@ class HTTPClient:
                     cause=e
                 )
 
-                logger.error(
-                    f"Unexpected HTTP request error: {method} {final_url}",
+                logger.exception(
+                    "Unexpected HTTP request error: %s %s", method, final_url,
                     extra={
                         "request_method": method,
                         "request_url": final_url,
                         "duration_ms": trace.duration_ms,
                         "error": str(error),
                         "execution_id": trace.execution_id,
-                    },
-                    exc_info=True
+                    }
                 )
 
                 raise error
@@ -748,7 +748,7 @@ class HTTPClient:
                 details={"url": final_url, "method": method},
                 retry_suggested=True,
                 cause=e,
-            )
+            ) from e
         except (aiohttp.ClientError, OSError) as e:
             await circuit_breaker.record_failure()
             raise NetworkError(
@@ -757,7 +757,7 @@ class HTTPClient:
                 details={"url": final_url, "method": method},
                 retry_suggested=True,
                 cause=e,
-            )
+            ) from e
 
     async def close(self) -> None:
         if self._session is not None and not self._session.closed:
@@ -815,6 +815,6 @@ def get_service_client(
         ca_cert_path=ca_cert_path,
     )
 
-    logger.info(f"Created HTTP client for service {target_service} with base URL {base_url}")
+    logger.info("Created HTTP client for service %s with base URL %s", target_service, base_url)
 
     return client

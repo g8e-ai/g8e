@@ -36,15 +36,15 @@ from pydantic import Field, model_validator
 from .base import G8eBaseModel, G8eIdentifiableModel, UTCDatetime
 
 __all__ = [
-    "ReputationState",
+    "GENESIS_PREV_ROOT",
     "ReputationCommitment",
     "ReputationCommitmentCreatedPayload",
     "ReputationCommitmentFailedPayload",
     "ReputationLeaf",
+    "ReputationState",
     "SlashTier",
     "StakeResolution",
     "StakeResolutionPayload",
-    "GENESIS_PREV_ROOT",
 ]
 
 

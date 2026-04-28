@@ -168,7 +168,7 @@ class AllServices:
 
 class ServiceFactory:
     """Factory for creating g8ee services with consistent dependency injection."""
-    
+
     @staticmethod
     def create_core_services(
         settings: G8eePlatformSettings, cache_aside_service: CacheAsideService
@@ -202,7 +202,7 @@ class ServiceFactory:
             supervisor_service=supervisor_service,
             settings_service=settings_service,
         )
-    
+
     @staticmethod
     def create_data_services(
         settings: G8eePlatformSettings,
@@ -258,7 +258,7 @@ class ServiceFactory:
             reputation_data_service=reputation_data_service,
             stake_resolution_data_service=stake_resolution_data_service,
         )
-    
+
     @staticmethod
     def create_domain_services(
         settings: G8eePlatformSettings, data_services: DataServices
@@ -288,19 +288,19 @@ class ServiceFactory:
             reputation_service=reputation_service,
             ssh_inventory_service=ssh_inventory_service,
         )
-    
+
     @staticmethod
     def create_operator_services(
         core_services: CoreServices,
         data_services: DataServices,
         cache_aside_service: CacheAsideService,
-        pubsub_client: "PubSubClient | None" = None,
+        pubsub_client: PubSubClient | None = None,
     ) -> OperatorServices:
         """Create operator-specific services."""
         api_key_service = ApiKeyService(cache_aside=cache_aside_service)
-        
+
         operator_session_service = OperatorSessionService(cache_aside=cache_aside_service)
-        
+
         certificate_service = CertificateService()
 
         operator_auth_service = OperatorAuthService(
@@ -337,13 +337,13 @@ class ServiceFactory:
             api_key_service=api_key_service,
             certificate_service=certificate_service,
         )
-    
+
     @staticmethod
     def create_all_services(
         settings: G8eePlatformSettings,
         cache_aside_service: CacheAsideService,
-        pubsub_client: "PubSubClient | None" = None,
-        blob_service: "BlobClient | None" = None,
+        pubsub_client: PubSubClient | None = None,
+        blob_service: BlobClient | None = None,
         web_search_provider: WebSearchProvider | None = None,
     ) -> AllServices:
         """Create all g8ee services in proper dependency order.
@@ -396,9 +396,9 @@ class ServiceFactory:
             settings=settings,
         )
 
-        from app.utils.whitelist_validator import CommandWhitelistValidator, get_whitelist_validator, register_whitelist_validator
-        from app.utils.blacklist_validator import CommandBlacklistValidator, get_blacklist_validator, register_blacklist_validator
-        from app.utils.auto_approved_validator import CommandAutoApprovedValidator, get_auto_approved_validator, register_auto_approved_validator
+        from app.utils.whitelist_validator import get_whitelist_validator, register_whitelist_validator
+        from app.utils.blacklist_validator import get_blacklist_validator, register_blacklist_validator
+        from app.utils.auto_approved_validator import get_auto_approved_validator, register_auto_approved_validator
 
         whitelist_validator = get_whitelist_validator()
         blacklist_validator = get_blacklist_validator()

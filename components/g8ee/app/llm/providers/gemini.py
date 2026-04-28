@@ -434,7 +434,7 @@ class GeminiProvider(LLMProvider):
                 f"allowed_tools={len(fc_cfg.allowed_tool_names) if fc_cfg and fc_cfg.allowed_tool_names else 0}",
             ])
             logger.info(" ".join(log_parts))
-            
+
             config_kwargs = {
                 "max_output_tokens": settings.max_output_tokens,
                 "system_instruction": settings.system_instructions,
@@ -446,31 +446,30 @@ class GeminiProvider(LLMProvider):
                 config_kwargs["top_p"] = settings.top_p_nucleus_sampling
             if settings.top_k_filtering is not None:
                 config_kwargs["top_k"] = settings.top_k_filtering
-            
+
             return genai_types.GenerateContentConfig(**config_kwargs)
-        else:
-            log_parts = [
-                f"[GEMINI] Building config: model={model}",
-                f"max_output_tokens={settings.max_output_tokens}",
-            ]
-            if settings.top_p_nucleus_sampling is not None:
-                log_parts.append(f"top_p={settings.top_p_nucleus_sampling}")
-            if settings.top_k_filtering is not None:
-                log_parts.append(f"top_k={settings.top_k_filtering}")
-            log_parts.append(f"response_format={settings.response_format is not None}")
-            logger.info(" ".join(log_parts))
-            
-            config_kwargs = {
-                "max_output_tokens": settings.max_output_tokens,
-                "response_mime_type": "application/json" if settings.response_format else None,
-                "response_json_schema": _response_format_to_genai(settings.response_format) if settings.response_format else None,
-            }
-            if settings.top_p_nucleus_sampling is not None:
-                config_kwargs["top_p"] = settings.top_p_nucleus_sampling
-            if settings.top_k_filtering is not None:
-                config_kwargs["top_k"] = settings.top_k_filtering
-            
-            return genai_types.GenerateContentConfig(**config_kwargs)
+        log_parts = [
+            f"[GEMINI] Building config: model={model}",
+            f"max_output_tokens={settings.max_output_tokens}",
+        ]
+        if settings.top_p_nucleus_sampling is not None:
+            log_parts.append(f"top_p={settings.top_p_nucleus_sampling}")
+        if settings.top_k_filtering is not None:
+            log_parts.append(f"top_k={settings.top_k_filtering}")
+        log_parts.append(f"response_format={settings.response_format is not None}")
+        logger.info(" ".join(log_parts))
+
+        config_kwargs = {
+            "max_output_tokens": settings.max_output_tokens,
+            "response_mime_type": "application/json" if settings.response_format else None,
+            "response_json_schema": _response_format_to_genai(settings.response_format) if settings.response_format else None,
+        }
+        if settings.top_p_nucleus_sampling is not None:
+            config_kwargs["top_p"] = settings.top_p_nucleus_sampling
+        if settings.top_k_filtering is not None:
+            config_kwargs["top_k"] = settings.top_k_filtering
+
+        return genai_types.GenerateContentConfig(**config_kwargs)
 
     @staticmethod
     def _sdk_chunk_to_stream_from_model_chunks(chunk) -> list[StreamChunkFromModel]:
@@ -586,7 +585,7 @@ class GeminiProvider(LLMProvider):
 
     async def _stream_with_retry(
         self, model: str, contents: list[dict], config,
-    ) -> AsyncGenerator[StreamChunkFromModel, None]:
+    ) -> AsyncGenerator[StreamChunkFromModel]:
         """Run a streaming generate call with tenacity retry on initial connection."""
         stream_iter = None
         async for attempt in AsyncRetrying(
@@ -610,7 +609,7 @@ class GeminiProvider(LLMProvider):
         model: str,
         contents: list[Content],
         primary_llm_settings: PrimaryLLMSettings,
-    ) -> AsyncGenerator[StreamChunkFromModel, None]:
+    ) -> AsyncGenerator[StreamChunkFromModel]:
         logger.info(
             "[GEMINI] generate_content_stream_primary: model=%s contents=%d "
             "max_output_tokens=%d top_k=%s top_p=%s "
@@ -680,7 +679,7 @@ class GeminiProvider(LLMProvider):
         model: str,
         contents: list[Content],
         assistant_llm_settings: AssistantLLMSettings,
-    ) -> AsyncGenerator[StreamChunkFromModel, None]:
+    ) -> AsyncGenerator[StreamChunkFromModel]:
         logger.info(
             "[GEMINI] generate_content_stream_assistant: model=%s contents=%d "
             "max_output_tokens=%d top_k=%s top_p=%s "
@@ -713,7 +712,7 @@ class GeminiProvider(LLMProvider):
         model: str,
         contents: list[Content],
         lite_llm_settings: LiteLLMSettings,
-    ) -> AsyncGenerator[StreamChunkFromModel, None]:
+    ) -> AsyncGenerator[StreamChunkFromModel]:
         logger.info(
             "[GEMINI] generate_content_stream_lite: model=%s contents=%d "
             "max_output_tokens=%d top_k=%s top_p=%s "

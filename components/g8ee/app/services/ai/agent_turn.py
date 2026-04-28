@@ -113,7 +113,7 @@ def handle_tool_call_chunk(chunk: types.StreamChunkFromModel, state: TurnState) 
                 type=StreamChunkFromModelType.THINKING_END,
                 data=StreamChunkData(),
             )
-        
+
         logger.info("[TURN] Function call(s) received: count=%d names=%s", len(chunk.tool_calls), [fc.name for fc in chunk.tool_calls])
         for i, fc in enumerate(chunk.tool_calls):
             state.model_response_parts.append(types.Part(
@@ -134,7 +134,7 @@ def handle_text_chunk(chunk: types.StreamChunkFromModel, state: TurnState) -> St
                 type=StreamChunkFromModelType.THINKING_END,
                 data=StreamChunkData(),
             )
-        
+
         state.model_response_parts.append(types.Part(
             text=chunk.text,
             thought_signature=chunk.thought_signature,
@@ -147,10 +147,10 @@ def handle_text_chunk(chunk: types.StreamChunkFromModel, state: TurnState) -> St
 
 
 async def process_provider_turn(
-    stream_response: AsyncGenerator[types.StreamChunkFromModel, None],
+    stream_response: AsyncGenerator[types.StreamChunkFromModel],
     model_name: str,
     result_out: list[TurnResult],
-) -> AsyncGenerator[StreamChunkFromModel, None]:
+) -> AsyncGenerator[StreamChunkFromModel]:
     """
     Consume one provider stream turn.
 
@@ -183,7 +183,7 @@ async def process_provider_turn(
                 state.flush_thinking_block()
                 yield StreamChunkFromModel(type=StreamChunkFromModelType.THINKING_END, data=StreamChunkData())
                 state.thinking_active = False
-            
+
             logger.info("[TURN] Function call(s) received: count=%d names=%s", len(chunk.tool_calls), [fc.name for fc in chunk.tool_calls])
             for i, fc in enumerate(chunk.tool_calls):
                 state.model_response_parts.append(types.Part(
@@ -207,7 +207,7 @@ async def process_provider_turn(
                 state.flush_thinking_block()
                 yield StreamChunkFromModel(type=StreamChunkFromModelType.THINKING_END, data=StreamChunkData())
                 state.thinking_active = False
-            
+
             state.model_response_parts.append(types.Part(
                 text=chunk.text,
                 thought_signature=chunk.thought_signature,
@@ -258,9 +258,9 @@ def consolidate_model_parts(
     """
     def _is_plain_text(p: types.Part) -> bool:
         return (
-            p.text is not None and 
-            not p.thought and 
-            p.tool_call is None and 
+            p.text is not None and
+            not p.thought and
+            p.tool_call is None and
             p.thought_signature is None
         )
 
@@ -321,7 +321,7 @@ def should_retry_error(error: Exception) -> bool:
     # Non-retryable errors - these should fail immediately
     if isinstance(error, (PermissionError, ValueError)):
         return False
-    
+
     try:
         from httpx import TimeoutException as HttpxTimeout
         if isinstance(error, HttpxTimeout):
@@ -352,5 +352,5 @@ def extract_status_code(error: Exception) -> int | None:
     status_code = getattr(error, "status_code", None)
     if isinstance(status_code, int):
         return status_code
-    
+
     return None

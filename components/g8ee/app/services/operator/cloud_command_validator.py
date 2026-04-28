@@ -18,7 +18,6 @@ Pattern-based checks for cloud operator command routing and auto-approval rules.
 """
 
 import re
-from app.constants import CloudSubtype
 
 CLOUD_ONLY_COMMAND_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"^aws\s"),

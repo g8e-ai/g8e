@@ -112,13 +112,12 @@ class ApiKeyService:
 
             if result.success:
                 logger.info(
-                    f"[API-KEY-SERVICE] API key issued",
+                    "[API-KEY-SERVICE] API key issued",
                     extra={"doc_id": doc_id[:8] + "...", "user_id": user_id}
                 )
                 return True
-            else:
-                logger.error(f"[API-KEY-SERVICE] Failed to issue API key: {result.error}")
-                return False
+            logger.error(f"[API-KEY-SERVICE] Failed to issue API key: {result.error}")
+            return False
 
         except Exception as e:
             logger.error(f"[API-KEY-SERVICE] Failed to issue API key: {e}")
@@ -159,7 +158,7 @@ class ApiKeyService:
         organization_id: str | None,
         operator_id: str,
         is_g8ep: bool,
-        settings_service: "SettingsServiceProtocol",
+        settings_service: SettingsServiceProtocol,
         client_name: str = "operator",
         permissions: list[str] | None = None,
     ) -> bool:
@@ -207,7 +206,7 @@ class ApiKeyService:
         organization_id: str | None,
         operator_id: str,
         is_g8ep: bool,
-        settings_service: "SettingsServiceProtocol",
+        settings_service: SettingsServiceProtocol,
         client_name: str = "operator",
         permissions: list[str] | None = None,
     ) -> bool:
@@ -246,7 +245,7 @@ class ApiKeyService:
         self,
         api_key: str,
         is_g8ep: bool,
-        settings_service: "SettingsServiceProtocol",
+        settings_service: SettingsServiceProtocol,
     ) -> bool:
         """Revoke an operator API key in the canonical store, then clear the
         platform_settings mirror if this was a g8ep key.

@@ -539,7 +539,7 @@ class G8eMessage(G8eBaseModel):
     operator_id: str | None = Field(default=None, description="Operator ID for g8eo Operator identification")
     api_key: str | None = Field(default=None, description="Operator API key carried on pub/sub messages for identity continuity")
     payload: G8eOutboundPayload | None = Field(
-        default=None, 
+        default=None,
         discriminator="payload_type",
         description="Typed payload for this message — uses discriminator for type-safe parsing"
     )

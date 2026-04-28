@@ -180,10 +180,10 @@ def _resolve_model(llm_settings: LLMSettings, tier: str = "assistant", request: 
         resolved = llm_settings.resolved_lite_model
         if resolved:
             return resolved
-    
+
     if tier == "assistant" and llm_settings.assistant_model:
         return llm_settings.assistant_model
-    
+
     if tier == "primary" and llm_settings.primary_model:
         return llm_settings.primary_model
 
@@ -333,12 +333,12 @@ async def _run_generation_pass(
         return normalised
 
     except OllamaEmptyResponseError as exc:
-        error_msg = f"Pass {pass_index} ({member.value}): {str(exc)}"
+        error_msg = f"Pass {pass_index} ({member.value}): {exc!s}"
         pass_errors.append(error_msg)
         logger.error("[TRIBUNAL-PASS] %s", error_msg)
         return None
     except Exception as exc:
-        error_msg = f"Pass {pass_index} ({member.value}): {str(exc)}"
+        error_msg = f"Pass {pass_index} ({member.value}): {exc!s}"
         pass_errors.append(error_msg)
         logger.error("[TRIBUNAL-PASS] %s", error_msg, exc_info=True)
         return None
@@ -467,7 +467,7 @@ async def _run_voting_stage(
             logger.info("[TRIBUNAL-TELEMETRY] Candidate breakdown for consensus failure:")
             for member, cmd in vote_breakdown.candidates_by_member.items():
                 logger.info("[TRIBUNAL-TELEMETRY]   %s: %s", member, cmd[:200] + "..." if len(cmd) > 200 else cmd)
-            
+
         await emitter.emit(
             EventType.TRIBUNAL_VOTING_CONSENSUS_FAILED,
             TribunalConsensusFailedPayload(
@@ -486,7 +486,7 @@ async def _run_voting_stage(
                 vote_breakdown=vote_breakdown,
             ),
         )
-        
+
         for cmd, members in vote_breakdown.dissenters_by_command.items():
             await emitter.emit(
                 EventType.TRIBUNAL_VOTING_DISSENT_RECORDED,

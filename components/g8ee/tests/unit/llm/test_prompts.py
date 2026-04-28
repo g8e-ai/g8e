@@ -521,7 +521,7 @@ def test_operator_not_bound_prompt_does_not_contradict_capabilities():
 def test_build_modular_system_prompt_with_agent_name_uses_persona_not_core_identity(mock_loader, operator_context):
     """When agent_name is provided, the persona's system prompt should be used
     instead of CORE_IDENTITY to avoid duplicate role tags."""
-    from app.constants import AgentName
+    from app.constants import ReasoningAgent
 
     prompt, context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
@@ -529,7 +529,7 @@ def test_build_modular_system_prompt_with_agent_name_uses_persona_not_core_ident
         user_memories=[],
         case_memories=[],
         investigation=None,
-        agent_name=AgentName.SAGE,
+        agent_name=ReasoningAgent.SAGE,
     )
 
     # Should NOT contain CORE_IDENTITY when agent_name is provided
@@ -569,7 +569,7 @@ def test_build_modular_system_prompt_no_duplicate_role_tags_with_agent_name(mock
     """When agent_name is provided, there should be no duplicate <role> tags.
     This regression test ensures the fix for fragmented prompt logic prevents
     CORE_IDENTITY and persona system prompt from both adding role tags."""
-    from app.constants import AgentName
+    from app.constants import ReasoningAgent
 
     prompt, context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
@@ -577,7 +577,7 @@ def test_build_modular_system_prompt_no_duplicate_role_tags_with_agent_name(mock
         user_memories=[],
         case_memories=[],
         investigation=None,
-        agent_name=AgentName.DASH,
+        agent_name=ReasoningAgent.DASH,
     )
 
     # Count occurrences of <role> tag - should be exactly 1 (from persona)
@@ -590,7 +590,7 @@ def test_build_modular_system_prompt_no_duplicate_role_tags_with_agent_name(mock
 
 def test_build_modular_system_prompt_dash_uses_persona_not_core_identity(mock_loader, operator_context):
     """Dash agent should use its persona system prompt, not CORE_IDENTITY."""
-    from app.constants import AgentName
+    from app.constants import ReasoningAgent
 
     prompt, context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
@@ -598,7 +598,7 @@ def test_build_modular_system_prompt_dash_uses_persona_not_core_identity(mock_lo
         user_memories=[],
         case_memories=[],
         investigation=None,
-        agent_name=AgentName.DASH,
+        agent_name=ReasoningAgent.DASH,
     )
 
     # Should NOT contain CORE_IDENTITY
@@ -620,7 +620,7 @@ def test_build_modular_system_prompt_dash_includes_full_governance_stack(mock_lo
     that stripped this governance bundle; this test pins the unified
     behaviour so that regression cannot return without being seen.
     """
-    from app.constants import AgentName
+    from app.constants import ReasoningAgent
 
     prompt, _ = prompts.build_modular_system_prompt(
         operator_bound=True,
@@ -628,7 +628,7 @@ def test_build_modular_system_prompt_dash_includes_full_governance_stack(mock_lo
         user_memories=[],
         case_memories=[],
         investigation=None,
-        agent_name=AgentName.DASH,
+        agent_name=ReasoningAgent.DASH,
     )
 
     # The shared governance stack must be present for Dash, exactly as
@@ -660,7 +660,7 @@ def test_build_modular_system_prompt_shared_prefix_precedes_persona(mock_loader,
     llama-server / vLLM prefix caches can reuse that prefix across
     every agent that shares the mode (Dash and Sage included).
     """
-    from app.constants import AgentName
+    from app.constants import ReasoningAgent
 
     prompt, _ = prompts.build_modular_system_prompt(
         operator_bound=True,
@@ -668,7 +668,7 @@ def test_build_modular_system_prompt_shared_prefix_precedes_persona(mock_loader,
         user_memories=[],
         case_memories=[],
         investigation=None,
-        agent_name=AgentName.SAGE,
+        agent_name=ReasoningAgent.SAGE,
     )
 
     safety_pos = prompt.index(f"Content of {PromptFile.CORE_SAFETY}")

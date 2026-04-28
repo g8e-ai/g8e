@@ -217,7 +217,7 @@ class G8eHttpContext(G8eBaseModel):
                 f"{G8eHeaders.CASE_ID} header is required for all internal requests",
                 component=ComponentName.G8EE,
             )
-        elif new_case and not case_id:
+        if new_case and not case_id:
             case_id = NEW_CASE_ID
 
         investigation_id = request.headers.get(G8eHeaders.INVESTIGATION_ID.lower())
@@ -240,7 +240,7 @@ class G8eHttpContext(G8eBaseModel):
                 f"{G8eHeaders.INVESTIGATION_ID} header is required for all internal requests",
                 component=ComponentName.G8EE,
             )
-        elif new_case and not investigation_id:
+        if new_case and not investigation_id:
             investigation_id = NEW_CASE_ID
 
         context_kwargs: dict[str, Any] = {

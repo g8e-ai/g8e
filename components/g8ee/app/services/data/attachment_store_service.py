@@ -70,7 +70,7 @@ class AttachmentService:
         for text_type in text_types:
             if content_type.startswith(text_type):
                 return True
-        
+
         # Check extension without using os.path
         filename_lower = filename.lower()
         for ext in text_extensions:

@@ -146,11 +146,11 @@ def is_ollama_endpoint(url: str | None) -> bool:
         parsed = urlparse(url)
         if parsed.port == 11434:
             return True
-        
+
         hostname = parsed.hostname
         if hostname and "ollama" in hostname.lower():
             return True
-            
+
         if "ollama" in parsed.path.lower():
             return True
 
@@ -188,11 +188,10 @@ def resolve_model(
     """
     if tier == "primary":
         return primary_override if primary_override else settings_primary_model
-    elif tier == "assistant":
+    if tier == "assistant":
         return assistant_override if assistant_override else settings_assistant_model
-    elif tier == "lite":
+    if tier == "lite":
         return lite_override if lite_override else settings_lite_model
-    else:
-        raise ValueError(
-            f"Invalid model tier: {tier}. Must be 'primary', 'assistant', or 'lite'."
-        )
+    raise ValueError(
+        f"Invalid model tier: {tier}. Must be 'primary', 'assistant', or 'lite'."
+    )

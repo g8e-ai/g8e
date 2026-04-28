@@ -103,7 +103,7 @@ def _load_agents_json() -> dict[str, Any]:
     every chat turn and previously re-read + re-parsed the file each time.
     """
     try:
-        with open(_AGENTS_JSON_PATH, "r") as f:
+        with open(_AGENTS_JSON_PATH) as f:
             return json.load(f)
     except FileNotFoundError:
         logger.error(f"Agents file not found at {_AGENTS_JSON_PATH}")
@@ -133,16 +133,16 @@ def get_agent_persona(agent_id: str) -> AgentPersona:
     """
     agents_data = _load_agents_json()
     agent_metadata = agents_data.get("agent.metadata", {})
-    
+
     if agent_id not in agent_metadata:
         available = ", ".join(agent_metadata.keys())
         raise KeyError(
             f"Agent '{agent_id}' not found in agents.json. "
             f"Available agents: {available}"
         )
-    
+
     data = agent_metadata[agent_id]
-    
+
     return AgentPersona.model_validate(data)
 
 

@@ -35,7 +35,7 @@ from app.constants import (
 )
 from app.models.base import G8eBaseModel, UTCDatetime
 from app.models.ssh_inventory import SshHost
-from app.models.whitelist import CommandValidationResult, WhitelistedCommand
+from app.models.whitelist import WhitelistedCommand
 
 
 class FsListEntry(G8eBaseModel):
@@ -125,15 +125,15 @@ class CommandInternalResult(G8eBaseModel):
         """Get output truncated to first/last N lines."""
         if not self.output:
             return ""
-        
+
         lines = self.output.splitlines()
         if len(lines) <= limit * 2:
             return self.output
-            
+
         first = lines[:limit]
         last = lines[-limit:]
         middle_count = len(lines) - (len(first) + len(last))
-        
+
         return "\n".join(first) + f"\n\n... [{middle_count} lines truncated] ...\n\n" + "\n".join(last)
 
 

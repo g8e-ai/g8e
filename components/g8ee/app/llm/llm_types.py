@@ -50,7 +50,7 @@ class ThoughtSignature:
     value: str
 
     @classmethod
-    def from_sdk(cls, raw) -> "ThoughtSignature | None":
+    def from_sdk(cls, raw) -> ThoughtSignature | None:
         """Normalise an inbound SDK thought_signature to ThoughtSignature.
 
         Accepts bytes, bytearray, or str. Returns None when raw is None or
@@ -98,15 +98,15 @@ class Part:
     thought_signature: ThoughtSignature | None = None
 
     @classmethod
-    def from_text(cls, text: str) -> "Part":
+    def from_text(cls, text: str) -> Part:
         return cls(text=text)
 
     @classmethod
-    def from_bytes(cls, data: bytes, mime_type: str) -> "Part":
+    def from_bytes(cls, data: bytes, mime_type: str) -> Part:
         return cls(inline_data=InlineData(mime_type=mime_type, data=data))
 
     @classmethod
-    def from_tool_response(cls, name: str, response: dict[str, Any], id: str | None = None) -> "Part":
+    def from_tool_response(cls, name: str, response: dict[str, Any], id: str | None = None) -> Part:
         return cls(tool_response=ToolResponse(name=name, response=response, id=id))
 
 
@@ -137,13 +137,13 @@ class Type(Enum):
 class Schema:
     type: Type
     description: str | None = None
-    properties: dict[str, "Schema"] | None = None
+    properties: dict[str, Schema] | None = None
     required: list[str] | None = None
     items: Schema | None = None
     enum: list[str] | None = None
 
 
-_JSON_TYPE_MAP: dict[str, "Type"] = {
+_JSON_TYPE_MAP: dict[str, Type] = {
     "string": Type.STRING,
     "integer": Type.INTEGER,
     "number": Type.NUMBER,
@@ -154,11 +154,11 @@ _JSON_TYPE_MAP: dict[str, "Type"] = {
 
 
 def _resolve_ref(ref: str, defs: dict) -> dict:
-    name = ref.split("/")[-1]
+    name = ref.rsplit("/", maxsplit=1)[-1]
     return defs.get(name, {})
 
 
-def _json_schema_to_schema(node: dict, defs: dict) -> "Schema":
+def _json_schema_to_schema(node: dict, defs: dict) -> Schema:
     if "$ref" in node:
         node = _resolve_ref(node["$ref"], defs)
 
@@ -187,9 +187,9 @@ def _json_schema_to_schema(node: dict, defs: dict) -> "Schema":
     description = node.get("description")
     enum = node.get("enum")
 
-    properties: dict[str, "Schema"] | None = None
+    properties: dict[str, Schema] | None = None
     required: list[str] | None = None
-    items: "Schema | None" = None
+    items: Schema | None = None
 
     if schema_type == Type.OBJECT and "properties" in node:
         properties = {
@@ -213,7 +213,7 @@ def _json_schema_to_schema(node: dict, defs: dict) -> "Schema":
     )
 
 
-def schema_from_model(model_cls: type, required_override: list[str] | None = None) -> "Schema":
+def schema_from_model(model_cls: type, required_override: list[str] | None = None) -> Schema:
     """Derive a types.Schema from a G8eBaseModel subclass.
 
     Uses model_json_schema() as the source of truth. Field descriptions come
@@ -375,7 +375,7 @@ class ResponseFormat(G8eBaseModel):
     json_schema: ResponseJsonSchema
 
     @classmethod
-    def from_pydantic_schema(cls, json_schema: dict[str, Any], name: str = "response") -> "ResponseFormat":
+    def from_pydantic_schema(cls, json_schema: dict[str, Any], name: str = "response") -> ResponseFormat:
         return cls(json_schema=ResponseJsonSchema(json_schema_dict=json_schema, name=name))
 
     def flatten_for_ollama(self) -> dict[str, Any]:

@@ -13,8 +13,6 @@
 
 from __future__ import annotations
 
-import json
-import logging
 
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
@@ -199,7 +197,7 @@ class ConversationHistoryMessage(G8eIdentifiableModel):
     entry_hash: str | None = Field(default=None, description="Hash of this entry (hex SHA256, 64 chars)")
 
     @model_validator(mode="after")
-    def _seal_entry_hash(self) -> "ConversationHistoryMessage":
+    def _seal_entry_hash(self) -> ConversationHistoryMessage:
         """Auto-compute entry_hash if not provided."""
         if self.entry_hash is None:
             from app.utils.ledger_hash import compute_entry_hash
@@ -291,7 +289,7 @@ class InvestigationHistoryEntry(G8eBaseModel):
     entry_hash: str | None = Field(default=None, description="Hash of this entry (hex SHA256, 64 chars)")
 
     @model_validator(mode="after")
-    def _seal_entry_hash(self) -> "InvestigationHistoryEntry":
+    def _seal_entry_hash(self) -> InvestigationHistoryEntry:
         """Auto-compute entry_hash if not provided."""
         if self.entry_hash is None:
             from app.utils.ledger_hash import compute_entry_hash
@@ -535,7 +533,7 @@ class EnrichedInvestigationContext(InvestigationModel):
     def g8e_context(self) -> G8eHttpContext:
         """Create a G8eHttpContext from this investigation context for agent compatibility."""
         from app.constants import ComponentName
-        
+
         return G8eHttpContext(
             web_session_id=self.web_session_id,
             user_id=self.user_id,

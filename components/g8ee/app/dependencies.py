@@ -353,7 +353,7 @@ async def get_g8ee_user_settings(
     """
     user_id = request.headers.get(G8eHeaders.USER_ID.lower())
     if not user_id:
-        # We need to return G8eeUserSettings, so we'll get it via the service 
+        # We need to return G8eeUserSettings, so we'll get it via the service
         # which will handle the merging logic.
         return await settings_service.get_user_settings("default") # This will likely return merged platform data
     return await settings_service.get_user_settings(user_id)
@@ -380,38 +380,38 @@ async def health_check_dependencies(request: Request) -> HealthCheckResult:
 
 
 __all__ = [
-    "get_g8ee_platform_settings",
-    "get_g8ee_pubsub_client",
-    "get_g8ee_kv_cache_client",
+    "get_g8e_http_context",
+    "get_g8ee_api_key_service",
+    "get_g8ee_approval_service",
+    "get_g8ee_attachment_service",
     "get_g8ee_blob_client",
     "get_g8ee_blob_service",
     "get_g8ee_cache_aside_service",
-    "get_g8ee_investigation_data_service",
-    "get_g8ee_investigation_service",
     "get_g8ee_case_data_service",
-    "get_g8ee_memory_service",
-    "get_g8ee_memory_generation_service",
+    "get_g8ee_certificate_service",
     "get_g8ee_chat_pipeline",
     "get_g8ee_chat_task_manager",
+    "get_g8ee_current_active_user",
+    "get_g8ee_event_service",
+    "get_g8ee_g8ed_http_client",
+    "get_g8ee_grounding_service",
+    "get_g8ee_investigation_data_service",
+    "get_g8ee_investigation_service",
+    "get_g8ee_kv_cache_client",
+    "get_g8ee_memory_generation_service",
+    "get_g8ee_memory_service",
+    "get_g8ee_operator_auth_service",
     "get_g8ee_operator_cache",
-    "get_g8ee_approval_service",
     "get_g8ee_operator_command_service",
     "get_g8ee_operator_data_service",
     "get_g8ee_operator_lifecycle_service",
     "get_g8ee_operator_session_service",
-    "get_g8ee_operator_auth_service",
+    "get_g8ee_platform_settings",
+    "get_g8ee_pubsub_client",
     "get_g8ee_session_auth_listener",
-    "get_g8ee_api_key_service",
-    "get_g8ee_certificate_service",
-    "get_g8ee_attachment_service",
-    "get_g8ee_g8ed_http_client",
-    "get_g8ee_event_service",
-    "get_g8e_http_context",
-    "get_g8ee_current_active_user",
-    "require_proxy_auth",
-    "require_internal_origin",
-    "is_infrastructure_health_check_ip",
-    "health_check_dependencies",
-    "get_g8ee_grounding_service",
     "get_g8eeweb_search_provider",
+    "health_check_dependencies",
+    "is_infrastructure_health_check_ip",
+    "require_internal_origin",
+    "require_proxy_auth",
 ]

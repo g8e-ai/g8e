@@ -13,7 +13,7 @@
 
 import base64
 import logging
-from typing import Any, List
+from typing import Any
 
 import httpx
 
@@ -36,25 +36,25 @@ class SupervisorService:
         settings = await self._settings_service.get_platform_settings()
         port = settings.get("supervisor_port", "443")
         token = settings.get("internal_auth_token", "")
-        
-        auth_bytes = f"g8e-internal:{token}".encode("utf-8")
+
+        auth_bytes = f"g8e-internal:{token}".encode()
         auth_header = f"Basic {base64.b64encode(auth_bytes).decode('utf-8')}"
-        
+
         return {
             "supervisor_url": f"http://g8ep:{port}/RPC2",
             "auth_header": auth_header,
         }
 
-    async def xmlrpc_call(self, method: str, params: List[Any]) -> str:
+    async def xmlrpc_call(self, method: str, params: list[Any]) -> str:
         """Performs an XML-RPC call to Supervisor."""
-        
+
         # Build XML-RPC body manually for simplicity and control
         params_xml = ""
         for p in params:
             if isinstance(p, bool):
                 val = f"<boolean>{'1' if p else '0'}</boolean>"
             else:
-                val = f"<string>{str(p)}</string>"
+                val = f"<string>{p!s}</string>"
             params_xml += f"<param><value>{val}</value></param>"
 
         body = f"""<?xml version="1.0"?>
@@ -66,7 +66,7 @@ class SupervisorService:
 </methodCall>"""
 
         resolved = await self._resolve_settings()
-        
+
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             try:
                 response = await client.post(
@@ -77,7 +77,7 @@ class SupervisorService:
                         "Authorization": resolved["auth_header"],
                     }
                 )
-                
+
                 if response.status_code != 200:
                     logger.error(
                         f"[SUPERVISOR] Connection failed: {response.status_code} {response.text}",
@@ -91,27 +91,26 @@ class SupervisorService:
                     import re
                     code_match = re.search(r"<int>([^<]+)</int>", xml)
                     string_match = re.search(r"<string>([^<]+)</string>", xml)
-                    
+
                     fault_code = int(code_match.group(1)) if code_match else None
                     fault_string = string_match.group(1) if string_match else "Unknown Supervisor fault"
-                    
+
                     # Map common Supervisor fault codes
                     if fault_code == 10:  # BAD_NAME
                         raise Exception("Operator process not found in g8ep configuration.")
-                    elif fault_code == 60:  # ALREADY_STARTED
+                    if fault_code == 60:  # ALREADY_STARTED
                         raise Exception("ALREADY_STARTED")
-                    elif fault_code == 70:  # NOT_RUNNING
+                    if fault_code == 70:  # NOT_RUNNING
                         return xml  # Ignore if trying to stop
-                    elif fault_code == 90:  # SPAWN_ERROR
+                    if fault_code == 90:  # SPAWN_ERROR
                         raise Exception("Failed to spawn operator process. Check g8ep logs.")
-                    else:
-                        raise Exception(f"Supervisor error ({fault_code}): {fault_string}")
+                    raise Exception(f"Supervisor error ({fault_code}): {fault_string}")
 
                 return xml
 
             except httpx.RequestError as exc:
                 logger.error(f"[SUPERVISOR] Request error: {exc}", extra={"method": method})
-                raise Exception(f"Failed to communicate with Supervisor: {str(exc)}")
+                raise Exception(f"Failed to communicate with Supervisor: {exc!s}")
 
     async def start_process(self, name: str, wait: bool = False) -> bool:
         """Starts a supervised process."""
@@ -128,7 +127,7 @@ class SupervisorService:
                 logger.info(f"[SUPERVISOR] Process {name} not running (may be FATAL), attempting start")
                 await self.xmlrpc_call("supervisor.startProcess", [name, wait])
                 return True
-            logger.error(f"[SUPERVISOR] Failed to start process {name}: {str(e)}")
+            logger.error(f"[SUPERVISOR] Failed to start process {name}: {e!s}")
             raise
 
     async def stop_process(self, name: str, wait: bool = True) -> bool:
@@ -137,5 +136,5 @@ class SupervisorService:
             await self.xmlrpc_call("supervisor.stopProcess", [name, wait])
             return True
         except Exception as e:
-            logger.warning(f"[SUPERVISOR] Failed to stop process {name} (non-fatal): {str(e)}")
+            logger.warning(f"[SUPERVISOR] Failed to stop process {name} (non-fatal): {e!s}")
             return False

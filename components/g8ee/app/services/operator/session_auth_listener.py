@@ -15,12 +15,9 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import json
 import logging
-from typing import Any
 
 from app.clients.pubsub_client import PubSubClient
-from app.constants import PubSubChannel
 from app.services.operator.operator_session_service import OperatorSessionService
 from app.services.operator.operator_data_service import OperatorDataService
 
@@ -53,17 +50,17 @@ class SessionAuthListener:
         respond with bootstrap config once.
         """
         session_hash = hashlib.sha256(operator_session_id.encode()).hexdigest()
-        
+
         # We need the actual prefixes from constants
         # In g8ee, PubSubChannel has different attributes than g8ed JS.
         # I'll check app/constants/channels.py in g8ee.
-        
+
         # Based on g8ed JS:
         # authChannel     = `${PubSubChannel.AUTH_PUBLISH_SESSION_PREFIX}${sessionHash}`;
         # responseChannel = `${PubSubChannel.AUTH_RESPONSE_SESSION_PREFIX}${sessionHash}`;
-        
+
         # I'll hardcode them for now if not in g8ee constants, but I should check.
-        
+
         auth_channel = f"auth.publish:session:{session_hash}"
         response_channel = f"auth.response:session:{session_hash}"
 
@@ -118,9 +115,9 @@ class SessionAuthListener:
         self._active_listeners[auth_channel] = message_handler
         self.pubsub_client.on_channel_message(auth_channel, message_handler)
         await self.pubsub_client.subscribe(auth_channel)
-        
+
         logger.info(f"[SESSION-AUTH-LISTENER] Listening for session auth on {auth_channel}")
-        
+
         # Auto cleanup after timeout
         asyncio.create_task(self._auto_cleanup(auth_channel, SESSION_AUTH_LISTEN_TTL_SECONDS))
 

@@ -46,7 +46,7 @@ def build() -> types.ToolDeclaration:
 
 
 async def _get_investigation_or_error(
-    investigation_service: "InvestigationService",
+    investigation_service: InvestigationService,
     investigation_id: str,
     data_type: str,
 ) -> tuple[dict[str, Any] | None, InvestigationContextResult | None]:
@@ -63,7 +63,7 @@ async def _get_investigation_or_error(
 
 
 async def handle(
-    svc: "AIToolService",
+    svc: AIToolService,
     tool_args: dict[str, object],
     investigation: EnrichedInvestigationContext,
     g8e_context: G8eHttpContext,
@@ -98,15 +98,7 @@ async def handle(
             data = [msg.model_dump() for msg in messages]
             item_count = len(messages)
 
-        elif args.data_type == "investigation_status":
-            data, error_res = await _get_investigation_or_error(
-                investigation_service, investigation_id, args.data_type
-            )
-            if error_res:
-                return error_res
-            item_count = 1
-
-        elif args.data_type == "history_trail":
+        elif args.data_type == "investigation_status" or args.data_type == "history_trail":
             data, error_res = await _get_investigation_or_error(
                 investigation_service, investigation_id, args.data_type
             )

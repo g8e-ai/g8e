@@ -82,16 +82,16 @@ class SshInventoryService:
         """Recursively compute a combined mtime 'hash' (sum) for the config and its includes."""
         if seen is None:
             seen = set()
-            
+
         canonical = str(path.resolve())
         if canonical in seen:
             return 0.0
         seen.add(canonical)
-        
+
         try:
             total_mtime = path.stat().st_mtime
             raw = path.read_text(encoding="utf-8", errors="replace")
-            
+
             for line in raw.splitlines():
                 kv = _split_kv(line)
                 if kv and kv[0] == "include":
@@ -165,16 +165,16 @@ def _resolve_include_path(pattern: str, config_dir: Path) -> list[Path]:
     """
     # Expand ~ to home directory
     expanded = os.path.expanduser(pattern)
-    
+
     # If the path is absolute, use it as-is; otherwise, make it relative to config_dir
     if os.path.isabs(expanded):
         glob_pattern = expanded
     else:
         glob_pattern = str(config_dir / expanded)
-    
+
     # Resolve the glob pattern
     matched = glob.glob(glob_pattern)
-    
+
     # Sort for deterministic ordering
     return sorted(Path(p) for p in matched)
 
@@ -239,9 +239,9 @@ def _parse_ssh_config(
                         canonical_path,
                     )
                     continue
-                
+
                 included_files.add(canonical_path)
-                
+
                 try:
                     included_raw = include_path.read_text(encoding="utf-8", errors="replace")
                     yield from _parse_ssh_config(

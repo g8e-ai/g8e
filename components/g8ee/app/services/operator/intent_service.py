@@ -263,7 +263,7 @@ class OperatorIntentService:
                     justification="IAM Policy Update",
                 ),
             )
-            
+
             iam_result, _envelope = await self.execution_service.execute(msg, g8e_context)
             iam_results.append(IamIntentResult(intent=intent, result=iam_result))
 
@@ -296,7 +296,7 @@ class OperatorIntentService:
             return IntentPermissionResult(success=False, approved=True, error="Partial IAM failure", failed_intents=failed_intents, iam_results=iam_results)
 
         return IntentPermissionResult(
-            success=True, approved=True, intent_name=all_intents[0], all_intents=all_intents, 
+            success=True, approved=True, intent_name=all_intents[0], all_intents=all_intents,
             message=f"Permission granted for {', '.join(all_intents)}", iam_results=iam_results, timestamp=now()
         )
 

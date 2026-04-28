@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 
 import app.llm.llm_types as types
 from app.constants.prompts import PromptFile
-from app.constants.status import CommandErrorType, OperatorToolName
+from app.constants.status import OperatorToolName
 from app.llm.llm_types import schema_from_model
 from app.llm.prompts import load_prompt
 from app.models.http_context import G8eHttpContext
@@ -44,7 +44,7 @@ def build() -> types.ToolDeclaration:
 
 
 async def handle(
-    svc: "AIToolService",
+    svc: AIToolService,
     tool_args: dict[str, object],
     investigation: EnrichedInvestigationContext,
     g8e_context: G8eHttpContext,
@@ -54,7 +54,7 @@ async def handle(
     """Execute the stream_operator tool via the OperatorStreamExecutor."""
     args = StreamOperatorArgs.model_validate(tool_args)
     logger.info("[STREAM_OPERATOR] Dispatching to executor: hosts=%d", len(args.hosts))
-    
+
     return await svc.stream_executor.execute_stream(
         args=args,
         g8e_context=g8e_context,

@@ -20,16 +20,15 @@ Orchestrates the Phase 4 'stream' operation:
 """
 
 import logging
-import subprocess
 import asyncio
 from typing import TYPE_CHECKING
 
 from app.constants.status import CommandErrorType, ComponentName
-from app.models.operators import StreamApprovalRequest, ApprovalResult
+from app.models.operators import StreamApprovalRequest
 from app.models.tool_results import CommandExecutionResult
 from app.models.http_context import G8eHttpContext
 from app.models.tool_args import StreamOperatorArgs
-from app.errors import ExternalServiceError, ValidationError
+from app.errors import ExternalServiceError
 
 if TYPE_CHECKING:
     from app.services.operator.approval_service import OperatorApprovalService
@@ -58,7 +57,7 @@ class OperatorStreamExecutor:
         execution_id: str,
     ) -> CommandExecutionResult:
         """Execute the stream operation across multiple hosts."""
-        
+
         # 1. Mint dlk_ token
         try:
             # Note: We need to verify the exact endpoint for minting dlk_ tokens in g8ed
@@ -122,7 +121,7 @@ class OperatorStreamExecutor:
         ]
 
         logger.info("[STREAM_EXECUTOR] Executing: %s", " ".join(cmd))
-        
+
         try:
             # We use asyncio.create_subprocess_exec for non-blocking execution
             process = await asyncio.create_subprocess_exec(
@@ -130,13 +129,13 @@ class OperatorStreamExecutor:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
-            
+
             stdout, stderr = await process.communicate()
-            
+
             success = process.returncode == 0
             output = stdout.decode().strip()
             error_output = stderr.decode().strip()
-            
+
             if success:
                 logger.info("[STREAM_EXECUTOR] Stream succeeded: %s", output)
                 return CommandExecutionResult(
@@ -145,17 +144,16 @@ class OperatorStreamExecutor:
                     execution_id=execution_id,
                     command_executed=" ".join(cmd[:6]) + " ... [REDACTED TOKEN]"
                 )
-            else:
-                logger.error("[STREAM_EXECUTOR] Stream failed (exit %d): %s", process.returncode, error_output)
-                return CommandExecutionResult(
-                    success=False,
-                    error=f"Stream execution failed: {error_output}",
-                    output=output,
-                    error_type=CommandErrorType.EXECUTION_ERROR,
-                    execution_id=execution_id,
-                    exit_code=process.returncode
-                )
-                
+            logger.error("[STREAM_EXECUTOR] Stream failed (exit %d): %s", process.returncode, error_output)
+            return CommandExecutionResult(
+                success=False,
+                error=f"Stream execution failed: {error_output}",
+                output=output,
+                error_type=CommandErrorType.EXECUTION_ERROR,
+                execution_id=execution_id,
+                exit_code=process.returncode
+            )
+
         except Exception as e:
             logger.exception("[STREAM_EXECUTOR] Exception during docker exec: %s", e)
             return CommandExecutionResult(

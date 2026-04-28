@@ -80,7 +80,7 @@ class AIGenerationConfigBuilder:
         tool_names: list[str] = []
         for t in (tools or []):
             for fd in (t.tools or []):
-                tool_names.append(getattr(fd, 'name', '?'))
+                tool_names.append(getattr(fd, "name", "?"))
         return tool_names
 
     @staticmethod
@@ -136,7 +136,7 @@ class AIGenerationConfigBuilder:
     @staticmethod
     def build_primary_settings(
         model: str,
-        
+
         max_tokens: int | None,
         system_instructions: str,
         tools: list[types.ToolGroup],
@@ -173,7 +173,7 @@ class AIGenerationConfigBuilder:
     @staticmethod
     def build_assistant_settings(
         model: str,
-        
+
         max_tokens: int | None,
         system_instructions: str,
         response_format: types.ResponseFormat | None = None,
@@ -202,7 +202,7 @@ class AIGenerationConfigBuilder:
     @staticmethod
     def build_lite_settings(
         model: str,
-        
+
         max_tokens: int | None,
         system_instructions: str,
         response_format: types.ResponseFormat | None = None,
@@ -229,7 +229,7 @@ class AIGenerationConfigBuilder:
     @staticmethod
     def build_config(
         model: str,
-        
+
         max_tokens: int | None,
         system_instructions: str,
         tools: list[types.ToolGroup],
@@ -264,7 +264,7 @@ class AIGenerationConfigBuilder:
     @staticmethod
     def get_lite_generation_config(
         model: str,
-        
+
         max_tokens: int | None,
         system_instructions: str,
     ) -> types.GenerateContentConfig:

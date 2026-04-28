@@ -51,21 +51,21 @@ class InternalApiPaths(metaclass=_InternalApiPathsMeta):
 def validate_api_paths_sync() -> None:
     """Validate that all keys in api_paths.json are accessible via InternalApiPaths."""
     errors = []
-    
+
     for key in API_PATHS["g8ee"]:
         attr_name = f"G8EE_{key.upper()}"
         try:
             getattr(InternalApiPaths, attr_name)
         except AttributeError:
             errors.append(f"g8ee key '{key}' not accessible as '{attr_name}'")
-    
+
     for key in API_PATHS["g8ed"]:
         attr_name = f"G8ED_{key.upper()}"
         try:
             getattr(InternalApiPaths, attr_name)
         except AttributeError:
             errors.append(f"g8ed key '{key}' not accessible as '{attr_name}'")
-    
+
     if errors:
         raise RuntimeError(
             "api_paths.json and InternalApiPaths are out of sync:\n" + "\n".join(errors)

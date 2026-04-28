@@ -20,10 +20,6 @@ if TYPE_CHECKING:
 from app.constants.collections import (
     DB_COLLECTION_OPERATORS,
 )
-from app.constants.headers import (
-    INTERNAL_AUTH_HEADER,
-    WEB_SESSION_ID_HEADER,
-)
 from app.constants.settings import (
     MAX_COMMAND_RESULTS_HISTORY,
     MAX_HEARTBEAT_HISTORY,
@@ -34,11 +30,9 @@ from app.constants.events import (
 from app.constants.status import (
     OperatorHistoryEventType,
     OperatorStatus,
-    OperatorType,
 )
 from app.constants.status import ComponentName
-from app.errors import ExternalServiceError, NetworkError, ValidationError
-from app.models.http_context import G8eHttpContext
+from app.errors import ExternalServiceError, ValidationError
 from app.models.investigations import ConversationHistoryMessage, ConversationMessageMetadata
 from app.models.operators import (
     CommandResultRecord,
@@ -46,7 +40,6 @@ from app.models.operators import (
     OperatorHistoryEntry,
     HeartbeatSnapshot,
 )
-from app.models import BindOperatorsRequest, BindOperatorsResponse
 from app.models.cache import ArrayUnion
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.protocols import OperatorDataServiceProtocol
@@ -101,39 +94,39 @@ class OperatorDataService(OperatorDataServiceProtocol):
         """Create a new Operator document in the database."""
         if not operator.id:
             raise ValidationError("id is required")
-        
+
         # Convert to dict for storage
         operator_data = operator.model_dump(mode="json")
-        
+
         result = await self.cache.create_document(
             collection=self.collection,
             document_id=operator.id,
             data=operator_data
         )
-        
+
         if not result.success:
             raise ExternalServiceError(f"Failed to create Operator {operator.id}: {result.error}", service_name="operator_service")
-        
+
         return True
 
     async def update_operator(self, operator: OperatorDocument) -> bool:
         """Update an existing Operator document in the database."""
         if not operator.id:
             raise ValidationError("id is required")
-        
+
         # Convert to dict for storage
         operator_data = operator.model_dump(mode="json")
-        
+
         result = await self.cache.update_document(
             collection=self.collection,
             document_id=operator.id,
             data=operator_data,
             merge=True
         )
-        
+
         if not result.success:
             raise ExternalServiceError(f"Failed to update Operator {operator.id}: {result.error}", service_name="operator_service")
-        
+
         return True
 
     async def add_history_entry(

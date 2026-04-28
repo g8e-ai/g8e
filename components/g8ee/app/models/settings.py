@@ -30,7 +30,6 @@ from app.constants import (
     DB_COLLECTION_WEB_SESSIONS,
     DB_COLLECTION_USERS,
     OPENAI_DEFAULT_ENDPOINT,
-    OLLAMA_DEFAULT_ENDPOINT,
     ANTHROPIC_DEFAULT_ENDPOINT,
     LLAMACPP_DEFAULT_ENDPOINT,
     G8EL_DEFAULT_ENDPOINT,
@@ -219,7 +218,7 @@ class ListenSettings(G8eBaseModel):
         return v.rstrip("/")
 
     @classmethod
-    def from_bootstrap(cls, settings_service: Any) -> "ListenSettings":
+    def from_bootstrap(cls, settings_service: Any) -> ListenSettings:
         """Load ListenSettings from bootstrap (volume-based secrets)."""
         settings = settings_service.get_local_settings()
         return settings.listen
@@ -377,11 +376,11 @@ class G8eePlatformSettings(G8eBaseModel):
         try:
             with open(ca_path):
                 return ca_path
-        except (OSError, IOError):
+        except OSError:
             return None
 
     @classmethod
-    async def from_db(cls, settings_service: Any) -> "G8eePlatformSettings":
+    async def from_db(cls, settings_service: Any) -> G8eePlatformSettings:
         """Load platform settings from DB: Defaults < Env < Platform."""
         return await settings_service.get_platform_settings()
 
@@ -394,6 +393,6 @@ class G8eeUserSettings(G8eBaseModel):
     command_validation: CommandValidationSettings = Field(default_factory=CommandValidationSettings)
 
     @classmethod
-    async def from_db(cls, settings_service: Any, user_id: str) -> "G8eeUserSettings":
+    async def from_db(cls, settings_service: Any, user_id: str) -> G8eeUserSettings:
         """Load user settings from DB."""
         return await settings_service.get_user_settings(user_id)

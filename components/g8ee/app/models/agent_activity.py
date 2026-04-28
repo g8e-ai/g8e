@@ -18,7 +18,7 @@ Metadata models for AI agent activity tracking and data science analysis.
 from pydantic import Field
 
 from app.constants import AgentMode, TriageComplexityClassification, TriageConfidence
-from app.models.base import G8eIdentifiableModel, UTCDatetime
+from app.models.base import G8eIdentifiableModel
 from app.models.tool_results import TokenUsage
 
 
@@ -29,23 +29,23 @@ class AgentActivityMetadata(G8eIdentifiableModel):
     model usage, token consumption, tool execution patterns, triage
     classification, and performance metrics.
     """
-    
+
     user_id: str | None = Field(default=None, description="User who initiated the request")
     user_email: str | None = Field(default=None, description="Email of the user")
-    
+
     investigation_id: str | None = Field(default=None, description="Investigation ID")
     case_id: str | None = Field(default=None, description="Case ID")
     web_session_id: str | None = Field(default=None, description="Web session ID")
-    
+
     agent_mode: AgentMode | None = Field(default=None, description="Agent execution mode")
-    
+
     model_name: str | None = Field(default=None, description="LLM model used")
     provider: str | None = Field(default=None, description="LLM provider (gemini, anthropic, etc.)")
-    
+
     token_usage: TokenUsage | None = Field(default=None, description="Token consumption metrics")
-    
+
     finish_reason: str | None = Field(default=None, description="Why the agent stopped (stop, length, error, etc.)")
-    
+
     triage_complexity: TriageComplexityClassification | None = Field(
         default=None, description="Triage complexity classification"
     )
@@ -60,21 +60,21 @@ class AgentActivityMetadata(G8eIdentifiableModel):
     triage_posture_confidence: TriageConfidence | None = Field(
         default=None, description="Confidence in posture classification"
     )
-    
+
     tool_call_count: int = Field(default=0, description="Number of tool calls executed")
     tool_types_used: list[str] = Field(default_factory=list, description="Types of tools used")
-    
+
     duration_seconds: float | None = Field(default=None, description="Total request duration in seconds")
-    
+
     has_attachments: bool = Field(default=False, description="Whether attachments were present")
     attachment_count: int = Field(default=0, description="Number of attachments")
-    
+
     grounding_used: bool = Field(default=False, description="Whether grounding/citations were used")
     citation_count: int = Field(default=0, description="Number of citations returned")
-    
+
     operator_bound: bool = Field(default=False, description="Whether operators were bound")
     bound_operator_count: int = Field(default=0, description="Number of bound operators")
-    
+
     response_length: int = Field(default=0, description="Length of AI response in characters")
 
     context_sizes: dict[str, int] | None = Field(

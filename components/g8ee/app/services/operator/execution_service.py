@@ -185,21 +185,21 @@ class OperatorExecutionService(ExecutionServiceProtocol):
             error_msg = (
                 f"Multiple operators ({len(operator_documents)}) are bound to this session. "
             )
-            
+
             if tool_name and "command" in tool_name.lower():
                 error_msg += (
-                    f"You MUST specify either target_operator (single host: operator_id, hostname, or index) "
-                    f"or target_operators (list of hosts for batch execution under one approval).\n"
+                    "You MUST specify either target_operator (single host: operator_id, hostname, or index) "
+                    "or target_operators (list of hosts for batch execution under one approval).\n"
                 )
             else:
                 error_msg += (
-                    f"This tool only supports single-target execution. "
-                    f"You MUST specify target_operator (operator_id or hostname).\n"
-                    f"Note: target_operators (batch execution) is only supported by run_commands_with_operator.\n"
+                    "This tool only supports single-target execution. "
+                    "You MUST specify target_operator (operator_id or hostname).\n"
+                    "Note: target_operators (batch execution) is only supported by run_commands_with_operator.\n"
                 )
-            
-            error_msg += f"Available operators:\n" + "\n".join(available)
-            
+
+            error_msg += "Available operators:\n" + "\n".join(available)
+
             raise ValidationError(
                 error_msg,
                 component="g8ee",
@@ -353,7 +353,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
 
         try:
             envelope = await asyncio.wait_for(future, timeout=timeout_seconds)
-        except (asyncio.TimeoutError, TimeoutError):
+        except TimeoutError:
             self.pubsub_service.release_future(execution_id)
             return CommandInternalResult(
                 execution_id=execution_id,
@@ -531,7 +531,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
 
             logger.info("[EXECUTION] Direct command result broadcasted for %s", execution_id)
 
-        except (asyncio.TimeoutError, TimeoutError):
+        except TimeoutError:
             logger.warning("[EXECUTION] Direct command timed out waiting for result for %s", execution_id)
         except Exception as e:
             logger.error("[EXECUTION] Failed to broadcast direct command result for %s: %s", execution_id, e, exc_info=True)

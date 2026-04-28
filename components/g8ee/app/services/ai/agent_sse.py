@@ -54,7 +54,7 @@ logger = logging.getLogger(__name__)
 
 
 async def deliver_via_sse(
-    stream: AsyncGenerator[StreamChunkFromModel, None],
+    stream: AsyncGenerator[StreamChunkFromModel],
     inputs: AgentInputs,
     state: AgentStreamState,
     g8ed_event_service: EventService,
@@ -302,7 +302,7 @@ async def deliver_via_sse(
                         "agent_mode": agent_mode,
                     }
                 )
-                
+
                 # Publish the error event and continue - don't raise exception
                 await _publish(
                     EventType.LLM_CHAT_ITERATION_FAILED,

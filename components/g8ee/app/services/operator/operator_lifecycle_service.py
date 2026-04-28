@@ -14,9 +14,8 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, List, Dict
+from typing import TYPE_CHECKING
 
-from app.constants.collections import DB_COLLECTION_OPERATORS
 from app.constants.status import (
     ComponentName,
     OperatorHistoryEventType,
@@ -24,7 +23,7 @@ from app.constants.status import (
     OperatorType,
 )
 from app.errors import ValidationError
-from app.models.operators import OperatorDocument, OperatorHistoryEntry
+from app.models.operators import OperatorDocument
 from app.services.protocols import OperatorDataServiceProtocol, SupervisorServiceProtocol
 from app.utils.timestamp import now
 
@@ -48,16 +47,16 @@ class OperatorLifecycleService:
         self,
         operator_data_service: OperatorDataServiceProtocol,
         supervisor_service: SupervisorServiceProtocol,
-        settings_service: "SettingsService",
+        settings_service: SettingsService,
     ):
         self.operator_data_service = operator_data_service
         self.supervisor_service = supervisor_service
         self.settings_service = settings_service
-        self._api_key_service: "ApiKeyService | None" = None
+        self._api_key_service: ApiKeyService | None = None
         # Access the underlying cache for direct document updates
-        self._cache: "CacheAsideService" = operator_data_service.cache  # type: ignore
+        self._cache: CacheAsideService = operator_data_service.cache  # type: ignore
 
-    def set_api_key_service(self, api_key_service: "ApiKeyService") -> None:
+    def set_api_key_service(self, api_key_service: ApiKeyService) -> None:
         """Inject ApiKeyService after construction.
 
         ApiKeyService is created in a later factory phase than this service,
@@ -227,7 +226,7 @@ class OperatorLifecycleService:
                 return
 
             operator = operators[0]
-            
+
             # If already active/bound — nothing to do
             if operator.status in [OperatorStatus.ACTIVE, OperatorStatus.BOUND]:
                 logger.info(f"[OPERATOR-LIFECYCLE] g8ep operator already active for user {user_id}", extra={
@@ -244,7 +243,7 @@ class OperatorLifecycleService:
             await self.launch_g8ep_operator(operator.api_key)
 
         except Exception as e:
-            logger.warning(f"[OPERATOR-LIFECYCLE] g8ep operator activation failed (non-fatal): {str(e)}", extra={
+            logger.warning(f"[OPERATOR-LIFECYCLE] g8ep operator activation failed (non-fatal): {e!s}", extra={
                 "user_id": user_id
             })
 
@@ -297,7 +296,7 @@ class OperatorLifecycleService:
         #    the single source of truth and eliminates the phantom-key class of
         #    bugs where g8ep boots with a key that was never registered.
         import secrets
-        operator_suffix = operator_id.split('-')[-1][:8]
+        operator_suffix = operator_id.split("-")[-1][:8]
         random_token = secrets.token_hex(32)
         new_api_key = f"g8e_{operator_suffix}_{random_token}"
 

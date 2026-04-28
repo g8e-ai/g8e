@@ -39,7 +39,7 @@ class SafetyValidationResult:
         self.is_safe = is_safe
         self.error_message = error_message
         self.error_type = error_type
-    
+
     @property
     def safe(self) -> bool:
         """Alias for is_safe for backward compatibility."""
@@ -59,14 +59,13 @@ def map_os_string_to_platform(os_name: str | None) -> Platform:
     """
     if not os_name:
         return Platform.LINUX
-    
+
     os_lower = os_name.lower()
     if os_lower == "windows":
         return Platform.WINDOWS
-    elif os_lower == "darwin" or os_lower == "macos":
+    if os_lower == "darwin" or os_lower == "macos":
         return Platform.DARWIN
-    else:
-        return Platform.LINUX
+    return Platform.LINUX
 
 def validate_command_safety(
     command: str,

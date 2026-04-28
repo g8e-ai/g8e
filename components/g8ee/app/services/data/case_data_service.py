@@ -51,8 +51,8 @@ class CaseDataService:
     """Domain service for Case and Task data management using CacheAsideService."""
 
     def __init__(
-        self, 
-        settings: G8eePlatformSettings, 
+        self,
+        settings: G8eePlatformSettings,
         cache: CacheAsideService,
         event_service: EventService
     ):

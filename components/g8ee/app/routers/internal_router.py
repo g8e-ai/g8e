@@ -29,7 +29,6 @@ from app.constants import (
     ComponentName,
     DB_COLLECTION_MEMORIES,
     EventType,
-    OperatorHistoryEventType,
     OperatorStatus,
     Priority,
     InternalApiPaths,
@@ -843,7 +842,7 @@ async def create_operator_slot(
         operator_id = str(uuid.uuid4())
 
         # Generate API key (authority: g8ee for operator bootstrap)
-        operator_suffix = operator_id.split('-')[-1][:8]
+        operator_suffix = operator_id.rsplit("-", maxsplit=1)[-1][:8]
         random_token = secrets.token_hex(32)
         api_key = f"g8e_{operator_suffix}_{random_token}"
 
@@ -942,7 +941,6 @@ async def update_operator_api_key(
     architectural boundary: after auth, g8ed has no business writing to operators.
     SECURITY: Internal only - g8ed component.
     """
-    from app.models.operators import OperatorDocument
     from app.utils.timestamp import now
 
     try:
@@ -1020,7 +1018,7 @@ async def generate_api_key(
             api_key=api_key
         )
     except Exception as e:
-        logger.error(f"[INTERNAL-HTTP] Failed to generate API key: {str(e)}")
+        logger.error(f"[INTERNAL-HTTP] Failed to generate API key: {e!s}")
         return ApiKeyGenerationResponse(
             success=False,
             error=str(e)
@@ -1045,7 +1043,7 @@ async def revoke_operator_certificate(
         )
         return OperatorCertificateRevokeResponse(success=success)
     except Exception as e:
-        logger.error(f"[INTERNAL-HTTP] Failed to revoke certificate: {str(e)}")
+        logger.error(f"[INTERNAL-HTTP] Failed to revoke certificate: {e!s}")
         return OperatorCertificateRevokeResponse(success=False, error=str(e))
 
 
@@ -1063,8 +1061,6 @@ async def claim_operator_slot(
     architectural boundary: after auth, g8ed has no business writing to operators.
     SECURITY: Internal only - g8ed component.
     """
-    from app.models.operators import OperatorDocument
-    from app.utils.timestamp import now
 
     try:
         success = await operator_lifecycle_service.claim_operator_slot(
@@ -1276,11 +1272,10 @@ async def authenticate_operator(
 
     if result.get("success"):
         return OperatorAuthenticateResponse(**result)
-    else:
-        return OperatorAuthenticateResponse(
-            success=False,
-            error=result.get("error")
-        )
+    return OperatorAuthenticateResponse(
+        success=False,
+        error=result.get("error")
+    )
 
 
 @router.post(InternalApiPaths.G8EE_OPERATORS_DEVICE_LINK_REGISTER, response_model=OperatorDeviceLinkRegisterResponse)
@@ -1323,8 +1318,7 @@ async def validate_operator_session(
                 operator_id=session.operator_id,
                 session_type=session.session_type.value
             )
-        else:
-            return OperatorSessionValidateResponse(success=True, valid=False)
+        return OperatorSessionValidateResponse(success=True, valid=False)
     except Exception as e:
         logger.error(f"[INTERNAL-HTTP] Session validation failed: {e}")
         return OperatorSessionValidateResponse(success=False, valid=False, error=str(e))
@@ -1350,8 +1344,7 @@ async def refresh_operator_session(
                     "expires_at": session.absolute_expires_at if session else None,
                 }
             )
-        else:
-            return OperatorSessionRefreshResponse(success=False, error="Session not found or expired")
+        return OperatorSessionRefreshResponse(success=False, error="Session not found or expired")
     except Exception as e:
         logger.error(f"[INTERNAL-HTTP] Session refresh failed: {e}")
         return OperatorSessionRefreshResponse(success=False, error=str(e))

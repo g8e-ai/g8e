@@ -24,6 +24,7 @@ g8es endpoints:
     DELETE /blob/{namespace}        -> delete all blobs in namespace
 """
 
+import json
 import logging
 from urllib.parse import quote
 
@@ -32,6 +33,7 @@ import aiohttp
 from app.constants import INTERNAL_AUTH_HEADER
 from app.errors import DatabaseError, ErrorCode, NetworkError
 from app.models.settings import ListenSettings
+from app.services.infra.settings_service import SettingsService
 from app.utils.aiohttp_session import new_component_http_session
 
 logger = logging.getLogger(__name__)
@@ -49,13 +51,11 @@ class BlobClient:
         listen_settings: ListenSettings | None = None,
     ) -> None:
         if internal_auth_token is None:
-            from app.services.infra.settings_service import SettingsService
             service = SettingsService()
             local_settings = service.get_local_settings()
             internal_auth_token = local_settings.auth.internal_auth_token
 
         if listen_settings is None:
-            from app.services.infra.settings_service import SettingsService
             service = SettingsService()
             listen_settings = ListenSettings.from_bootstrap(service)
 
@@ -131,7 +131,7 @@ class BlobClient:
                 code=ErrorCode.DB_WRITE_ERROR,
                 component="g8ee",
                 cause=e,
-            )
+            ) from e
 
     async def get_blob(self, namespace: str, blob_id: str) -> bytes | None:
         """Retrieve a binary blob. Returns None on 404."""
@@ -153,7 +153,7 @@ class BlobClient:
                 code=ErrorCode.DB_WRITE_ERROR,
                 component="g8ee",
                 cause=e,
-            )
+            ) from e
 
     async def delete_blob(self, namespace: str, blob_id: str) -> None:
         """Delete a single blob."""
@@ -173,7 +173,7 @@ class BlobClient:
                 code=ErrorCode.DB_WRITE_ERROR,
                 component="g8ee",
                 cause=e,
-            )
+            ) from e
 
     async def delete_namespace(self, namespace: str) -> int:
         """Delete all blobs in a namespace. Returns count of deleted blobs."""
@@ -184,7 +184,6 @@ class BlobClient:
                 if resp.status >= 400:
                     text = await resp.text()
                     raise NetworkError(f"g8es blob DELETE ns {resp.status}: {text}", component="g8ee")
-                import json
                 body = json.loads(await resp.text())
                 count = body.get("deleted", 0)
                 logger.info("[BLOB-CLIENT] Deleted namespace %s (%d blobs)", namespace, count)
@@ -197,4 +196,4 @@ class BlobClient:
                 code=ErrorCode.DB_WRITE_ERROR,
                 component="g8ee",
                 cause=e,
-            )
+            ) from e

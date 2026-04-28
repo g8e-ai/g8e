@@ -47,7 +47,7 @@ def build() -> types.ToolDeclaration:
 
 
 async def handle(
-    svc: "AIToolService",
+    svc: AIToolService,
     tool_args: dict[str, object],
     investigation: EnrichedInvestigationContext,
     g8e_context: G8eHttpContext,

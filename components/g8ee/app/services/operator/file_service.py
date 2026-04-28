@@ -16,7 +16,6 @@
 Handles file-related operations (edit, read, write, update) on Operators.
 """
 
-import asyncio
 import logging
 
 from app.services.protocols import (
@@ -109,14 +108,14 @@ class OperatorFileService:
             operation = args.operation
             justification = args.justification.strip() if args.justification else ""
             exec_id = args.execution_id
-            
+
             op_name = getattr(operation, "value", operation)
             logger.info("[FILE] Starting %s on %s", op_name, file_path)
 
             # 1. Validation
             if not file_path or not file_path.strip():
                 return FileEditResult(success=False, error="File path parameter is required", error_type=CommandErrorType.VALIDATION_ERROR)
-            
+
             if not justification:
                 return FileEditResult(success=False, error="Justification parameter is required", error_type=CommandErrorType.VALIDATION_ERROR)
 
@@ -148,7 +147,7 @@ class OperatorFileService:
             except Exception as e:
                 logger.error("[FILE-ERROR] Operator resolution failed: %s", e, exc_info=True)
                 return FileEditResult(
-                    success=False, 
+                    success=False,
                     error=f"Operator resolution failed: {e}. Ensure at least one operator is online and has a valid session, then retry.",
                     error_type=CommandErrorType.OPERATOR_RESOLUTION_ERROR if operator_documents else CommandErrorType.NO_OPERATORS_AVAILABLE,
                 )
@@ -215,7 +214,7 @@ class OperatorFileService:
                         task_id=AITaskId.FILE_EDIT,
                     )
                     return FileEditResult(
-                        success=False, 
+                        success=False,
                         approved=False,
                         error=approval_result.reason or "Denied by user",
                         error_type=CommandErrorType.APPROVAL_DENIED if approval_result.error_type != ApprovalErrorType.APPROVAL_TIMEOUT else CommandErrorType.APPROVAL_TIMEOUT
@@ -256,8 +255,8 @@ class OperatorFileService:
 
             # Notify completion/failure
             completion_event_type = (
-                EventType.OPERATOR_FILE_EDIT_COMPLETED 
-                if internal_result and internal_result.status == ExecutionStatus.COMPLETED 
+                EventType.OPERATOR_FILE_EDIT_COMPLETED
+                if internal_result and internal_result.status == ExecutionStatus.COMPLETED
                 else EventType.OPERATOR_FILE_EDIT_FAILED
             )
 
@@ -355,8 +354,8 @@ class OperatorFileService:
 
             # Notify completion/failure
             completion_event_type = (
-                EventType.OPERATOR_FILE_HISTORY_FETCH_COMPLETED 
-                if internal_result and internal_result.status == ExecutionStatus.COMPLETED 
+                EventType.OPERATOR_FILE_HISTORY_FETCH_COMPLETED
+                if internal_result and internal_result.status == ExecutionStatus.COMPLETED
                 else EventType.OPERATOR_FILE_HISTORY_FETCH_FAILED
             )
 
@@ -467,8 +466,8 @@ class OperatorFileService:
 
             # Notify completion/failure
             completion_event_type = (
-                EventType.OPERATOR_FILE_DIFF_FETCH_COMPLETED 
-                if internal_result and internal_result.status == ExecutionStatus.COMPLETED 
+                EventType.OPERATOR_FILE_DIFF_FETCH_COMPLETED
+                if internal_result and internal_result.status == ExecutionStatus.COMPLETED
                 else EventType.OPERATOR_FILE_DIFF_FETCH_FAILED
             )
 

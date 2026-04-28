@@ -29,7 +29,6 @@ keeps the vortex (GDD §3) intact.
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from app.constants import (
     DB_COLLECTION_REPUTATION_COMMITMENTS,

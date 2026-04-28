@@ -160,11 +160,11 @@ def _normalize_ollama_host(endpoint: str) -> str:
     The Ollama native API lives at /api/chat, not /v1; any /v1 path suffix is
     stripped so httpx base_url joining produces the correct URL.
     """
-    cleaned = (endpoint or "").strip().rstrip('/')
-    while cleaned.endswith('/v1'):
-        cleaned = cleaned[:-3].rstrip('/')
-    if cleaned and not cleaned.startswith(('http://', 'https://')):
-        cleaned = 'http://' + cleaned
+    cleaned = (endpoint or "").strip().rstrip("/")
+    while cleaned.endswith("/v1"):
+        cleaned = cleaned[:-3].rstrip("/")
+    if cleaned and not cleaned.startswith(("http://", "https://")):
+        cleaned = "http://" + cleaned
     return cleaned
 
 
@@ -178,7 +178,7 @@ class OllamaProvider(LLMProvider):
 
     async def _close_resources(self):
         """Clean up provider resources."""
-        if hasattr(self._client, 'close'):
+        if hasattr(self._client, "close"):
             await self._client.close()
 
     @staticmethod
@@ -271,7 +271,7 @@ class OllamaProvider(LLMProvider):
             raise
 
         thinking_buffer = []
-        
+
         async for chunk in stream:
             msg = chunk.message
             if getattr(msg, "thinking", None):
@@ -280,7 +280,7 @@ class OllamaProvider(LLMProvider):
                     thinking = thinking.replace("\\n", "\n")
                 thinking_buffer.append(thinking)
                 combined = "".join(thinking_buffer)
-                should_flush = combined and any(combined.endswith(delim) for delim in ['. ', '! ', '? ', '\n', '\t'])
+                should_flush = combined and any(combined.endswith(delim) for delim in [". ", "! ", "? ", "\n", "\t"])
                 if should_flush or len(combined) > 200:
                     yield StreamChunkFromModel(text=combined, thought=True)
                     thinking_buffer.clear()
@@ -291,7 +291,7 @@ class OllamaProvider(LLMProvider):
                         yield StreamChunkFromModel(text=combined, thought=True)
                     thinking_buffer.clear()
                 yield StreamChunkFromModel(text=msg.content)
-            
+
             if getattr(msg, "tool_calls", None):
                 if thinking_buffer:
                     combined = "".join(thinking_buffer)
@@ -303,14 +303,14 @@ class OllamaProvider(LLMProvider):
                     args = tc.function.arguments
                     calls.append(ToolCall(name=tc.function.name, args=args, id=None))
                 yield StreamChunkFromModel(tool_calls=calls)
-                
+
             if chunk.done:
                 if thinking_buffer:
                     combined = "".join(thinking_buffer)
                     if combined:
                         yield StreamChunkFromModel(text=combined, thought=True)
                     thinking_buffer.clear()
-                
+
                 usage = None
                 if getattr(chunk, "prompt_eval_count", None) is not None and getattr(chunk, "eval_count", None) is not None:
                     usage = UsageMetadata(
@@ -374,7 +374,7 @@ class OllamaProvider(LLMProvider):
                 parts.append(Part(tool_call=ToolCall(
                     name=tc.function.name, args=tc.function.arguments, id=None
                 )))
-                
+
         usage = None
         if getattr(response, "prompt_eval_count", None) is not None and getattr(response, "eval_count", None) is not None:
             usage = UsageMetadata(
@@ -415,12 +415,12 @@ class OllamaProvider(LLMProvider):
         }
         self._apply_think_kwarg(chat_kwargs, model, None)
         stream = await self._client.chat(**chat_kwargs)
-        
+
         async for chunk in stream:
             msg = chunk.message
             if getattr(msg, "content", None):
                 yield StreamChunkFromModel(text=msg.content)
-            
+
             if chunk.done:
                 usage = None
                 if getattr(chunk, "prompt_eval_count", None) is not None and getattr(chunk, "eval_count", None) is not None:
@@ -467,7 +467,7 @@ class OllamaProvider(LLMProvider):
         parts = []
         if getattr(response.message, "content", None):
             parts.append(Part(text=response.message.content))
-                
+
         usage = None
         if getattr(response, "prompt_eval_count", None) is not None and getattr(response, "eval_count", None) is not None:
             usage = UsageMetadata(
@@ -508,12 +508,12 @@ class OllamaProvider(LLMProvider):
         }
         self._apply_think_kwarg(chat_kwargs, model, None)
         stream = await self._client.chat(**chat_kwargs)
-        
+
         async for chunk in stream:
             msg = chunk.message
             if getattr(msg, "content", None):
                 yield StreamChunkFromModel(text=msg.content)
-            
+
             if chunk.done:
                 usage = None
                 if getattr(chunk, "prompt_eval_count", None) is not None and getattr(chunk, "eval_count", None) is not None:
@@ -560,7 +560,7 @@ class OllamaProvider(LLMProvider):
         parts = []
         if getattr(response.message, "content", None):
             parts.append(Part(text=response.message.content))
-                
+
         usage = None
         if getattr(response, "prompt_eval_count", None) is not None and getattr(response, "eval_count", None) is not None:
             usage = UsageMetadata(

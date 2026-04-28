@@ -107,7 +107,6 @@ class LLMProvider(ABC):
 
     async def _close_resources(self):
         """Internal method to actually close resources. Override in subclasses."""
-        pass
 
     async def force_close(self):
         """Force close provider resources even if it's a cached singleton."""

@@ -188,9 +188,9 @@ class EvalJudge:
         template = JUDGE_EVALUATION_TEMPLATE.format(
             user_query=user_query,
             expected_behavior=expected_behavior,
-            required_concepts=', '.join(required_concepts),
-            expected_tools=', '.join(expected_tools or []),
-            forbidden_tools=', '.join(forbidden_tools or []),
+            required_concepts=", ".join(required_concepts),
+            expected_tools=", ".join(expected_tools or []),
+            forbidden_tools=", ".join(forbidden_tools or []),
             interaction_trace=interaction_trace
         )
         prompt = f"{persona.get_system_prompt()}{template}"

@@ -288,7 +288,7 @@ class InternalHttpClient:
                 headers=self._auth_headers(),
                 context=context,
             )
-            
+
             result = OperatorLinkResponse.model_validate(response.json())
             if response.is_success and result.success:
                 logger.info(
@@ -315,4 +315,4 @@ class InternalHttpClient:
                 cause=e,
             )
 
-    
+

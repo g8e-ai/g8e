@@ -211,7 +211,7 @@ run_g8ee() {
         python -m pyright --project pyrightconfig.services.json
     fi
     if [[ "$RUFF" == "true" ]]; then
-        local ruff_args=(check . --cache-dir /tmp/ruff_cache)
+        local ruff_args=(check .)
         [[ "$RUFF_FIX" == "true" ]] && ruff_args+=(--fix)
         python -m ruff "${ruff_args[@]}"
     fi

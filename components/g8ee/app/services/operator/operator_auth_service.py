@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from app.constants import DB_COLLECTION_USERS, OperatorStatus, DEFAULT_OPERATOR_CONFIG
+from app.constants import DB_COLLECTION_USERS, DEFAULT_OPERATOR_CONFIG
 from app.services.auth.api_key_service import ApiKeyService
 from app.services.auth.certificate_service import CertificateService
 from app.services.operator.operator_session_service import OperatorSessionService
