@@ -926,11 +926,12 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             expect(document.getElementById(WIDGET_ID).querySelector('.tribunal__spinner')).toBeNull();
         });
 
-        it('shows "Consensus" label for consensus outcome', () => {
+        it('shows check icon for consensus outcome', () => {
             terminal.completeTribunal({ id: WIDGET_ID, finalCommand: 'ls -la', outcome: 'consensus' });
 
             const status = document.getElementById(WIDGET_ID).querySelector('.tribunal__status');
-            expect(status.textContent).toContain('Consensus');
+            expect(status.textContent).toBe('check');
+            expect(status.innerHTML).toContain('material-symbols-outlined');
         });
 
         it('shows "Revised" label for verification_failed outcome', () => {
@@ -940,11 +941,12 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             expect(status.textContent).toContain('Revised');
         });
 
-        it('shows "Verified" label for verified outcome', () => {
+        it('shows check icon for verified outcome', () => {
             terminal.completeTribunal({ id: WIDGET_ID, finalCommand: 'ls -la', outcome: 'verified' });
 
             const status = document.getElementById(WIDGET_ID).querySelector('.tribunal__status');
-            expect(status.textContent).toContain('Verified');
+            expect(status.textContent).toBe('check');
+            expect(status.innerHTML).toContain('material-symbols-outlined');
         });
 
         it('shows "Consensus failed" label for consensus_failed outcome', () => {
@@ -955,19 +957,20 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             expect(status.classList.contains('tribunal__status--failed')).toBe(true);
         });
 
-        it('includes the final command in the status text', () => {
+        it('does not include final command in status text for successful outcomes', () => {
             terminal.completeTribunal({ id: WIDGET_ID, finalCommand: 'ls -la /home', outcome: 'consensus' });
 
             const status = document.getElementById(WIDGET_ID).querySelector('.tribunal__status');
-            expect(status.textContent).toContain('ls -la /home');
+            expect(status.textContent).toBe('check');
         });
 
-        it('renders the final command literally without double-escaping', () => {
+        it('includes the final command in the status text for failed outcomes', () => {
             const complexCommand = 'apt-get update && apt-get install -y tcpdump';
-            terminal.completeTribunal({ id: WIDGET_ID, finalCommand: complexCommand, outcome: 'verified' });
+            terminal.completeTribunal({ id: WIDGET_ID, finalCommand: complexCommand, outcome: 'verification_failed' });
 
             const status = document.getElementById(WIDGET_ID).querySelector('.tribunal__status');
-            expect(status.textContent).toBe(`checkVerified · ${complexCommand}`);
+            expect(status.textContent).toContain('Revised');
+            expect(status.textContent).toContain(complexCommand);
             // Check innerHTML to ensure no double escaping of &
             // Literal & in textContent will be &amp; in innerHTML (normal browser behavior)
             // Double escaping would produce &amp;amp;
