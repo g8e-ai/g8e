@@ -70,10 +70,10 @@ from app.models.operators import (
     HeartbeatSnapshot,
     HeartbeatSystemIdentity,
     HeartbeatNetworkInfo,
-    SystemInfoOSDetails,
-    SystemInfoUserDetails,
-    SystemInfoMemoryDetails,
-    SystemInfoDiskDetails,
+    HeartbeatOSDetails,
+    HeartbeatUserDetails,
+    HeartbeatMemoryDetails,
+    HeartbeatDiskDetails,
     HeartbeatEnvironment,
 )
 from app.models.agent import OperatorContext
@@ -986,42 +986,45 @@ class TestAIContextExtraction:
             hostname="extract-host",
         )
         
-        # Add comprehensive system info for the test
-        operator.system_info = OperatorSystemInfo(
-            hostname="extract-host",
-            os="linux",
-            architecture="x86_64",
-            cpu_count=4,
-            memory_mb=8192,
-            public_ip="192.168.1.100",
-            os_details=SystemInfoOSDetails(
+        # Update latest_heartbeat_snapshot with comprehensive details for the test
+        operator.latest_heartbeat_snapshot = HeartbeatSnapshot(
+            system_identity=HeartbeatSystemIdentity(
+                hostname="extract-host",
+                os="linux",
+                architecture="x86_64",
+                cpu_count=4,
+                memory_mb=8192,
+                current_user="testuser",
+            ),
+            network=HeartbeatNetworkInfo(
+                public_ip="192.168.1.100",
+            ),
+            os_details=HeartbeatOSDetails(
                 distro="Ubuntu",
                 kernel="5.15.0",
                 version="22.04",
             ),
-            user_details=SystemInfoUserDetails(
+            user_details=HeartbeatUserDetails(
                 username="testuser",
                 home="/home/testuser",
                 shell="/bin/bash",
             ),
-            environment=SystemInfoEnvironment(
+            environment=HeartbeatEnvironment(
                 pwd="/home/testuser",
                 timezone="UTC",
                 is_container=False,
                 init_system="systemd",
             ),
-            memory_details=SystemInfoMemoryDetails(
+            memory_details=HeartbeatMemoryDetails(
                 total_mb=8192,
                 available_mb=4485,
                 percent=45.2,
             ),
-            disk_details=SystemInfoDiskDetails(
+            disk_details=HeartbeatDiskDetails(
                 total_gb=100.0,
                 free_gb=74.5,
                 percent=25.5,
             ),
-            is_container=False,
-            init_system="systemd",
         )
         
         investigation = EnrichedInvestigationContext(
@@ -1220,17 +1223,15 @@ class TestAIContextExtraction:
         # Test extraction
         context = extract_system_context(investigation)
         
-        # Verify - system info should be available, even if heartbeat-derived fields are from system_info fallback
+        # Verify - without heartbeat snapshot, all identity fields are None
         assert isinstance(context, OperatorContext)
         assert context.operator_id == "op-no-hb"
-        assert context.os == "linux"  # From system_info
-        assert context.hostname == "eval-node-01"  # From system_info
+        assert context.os is None  # No system_info fallback anymore
+        assert context.hostname is None  # No system_info fallback anymore
         
-        # Fields that exist in system_info fallback should NOT be None
-        assert context.working_directory == "/root"  # Fallback from system_info
-        assert context.username == "root"  # Fallback from system_info
-        
-        # Truly heartbeat-only fields (not in default system_info) should be None
+        # All heartbeat-derived fields should be None when snapshot is missing
+        assert context.working_directory is None
+        assert context.username is None
         assert context.distro is None
         assert context.kernel is None
         assert context.disk_percent is None

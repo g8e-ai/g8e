@@ -229,6 +229,7 @@ export class OperatorDocument extends G8eIdentifiableModel {
         termination_reason:           { type: F.string,  default: null },
         stop_reason:                  { type: F.string,  default: null },
         shutdown_reason:              { type: F.string,  default: null },
+        latest_heartbeat_snapshot:   { type: F.object, default: null },
     };
 
     static parse(raw = {}) {

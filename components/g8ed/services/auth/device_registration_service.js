@@ -67,7 +67,7 @@ export class DeviceRegistrationService {
      *   operator_type: string,
      *   g8eContext:    { web_session_id: string|null, user_id: string, organization_id: string|null },
      * }} params
-     * @returns {Promise<{ success: boolean, operator_session_id?: string, operator_id?: string, system_info?: object, api_key?: string, operator_cert?: string, operator_cert_key?: string, session?: object, error?: string }>}
+     * @returns {Promise<{ success: boolean, operator_session_id?: string, operator_id?: string, api_key?: string, operator_cert?: string, operator_cert_key?: string, session?: object, error?: string }>}
      */
     async registerDevice({ operator_id: id, deviceInfo, operator_type = OperatorType.SYSTEM, g8eContext }) {
         const { user_id, web_session_id } = g8eContext;

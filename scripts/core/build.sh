@@ -41,7 +41,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 DEV_MODE=false
 COMPOSE="docker compose -f $PROJECT_ROOT/docker-compose.yml"
 
-MANAGED_SERVICES=(g8es g8ee g8ed g8ep g8el)
+MANAGED_SERVICES=(g8es g8ee g8ed g8ep)
 TEST_RUNNER_SERVICES=(g8ee-test-runner g8ed-test-runner g8eo-test-runner)
 OPTIONAL_SERVICES=(g8el)
 
@@ -64,11 +64,11 @@ Commands:
   status                          Show container status and component versions
   up [component ...]              Start managed services -- no build
                                   Default (no components): g8es g8ee g8ed g8ep
-                                  Valid: g8es g8ee g8ed g8ep g8el
+                                  Valid: g8es g8ee g8ed g8ep g8el (use --profile g8el)
   down                            Stop managed containers -- nothing is removed
   rebuild [component ...]         Rebuild + restart of managed services using layer cache (no volume wipe)
                                   Default (no components): g8es g8ee g8ed g8ep
-                                  Valid: g8es g8ee g8ed g8ep g8el g8es-test-runner g8ee-test-runner g8eo-test-runner
+                                  Valid: g8es g8ee g8ed g8ep g8el g8es-test-runner g8ee-test-runner g8eo-test-runner (use --profile g8el for g8el)
   reset                           Wipe DB data volumes + rebuild images from scratch
                                   Removes: g8es, g8ee, g8ed volumes; SSL certs preserved
   wipe                            Clear app data from the database (all collections except platform settings)
@@ -88,6 +88,7 @@ Examples:
   $(basename "$0") rebuild                      Rebuild g8es, g8ee, g8ed, g8ep images (preserve volumes)
   $(basename "$0") rebuild g8ee g8ed            Rebuild g8ee and g8ed only (preserve volumes)
   $(basename "$0") rebuild g8ep                 Rebuild the g8ep image
+  $(basename "$0") rebuild g8el                 Rebuild the g8el image (requires --profile g8el)
   $(basename "$0") rebuild test-runners         Rebuild test-runner containers
   $(basename "$0") wipe                         Clear app data from the database; restart g8ee/g8ed
   $(basename "$0") reset                        Wipe ALL data volumes and rebuild from scratch
@@ -342,8 +343,9 @@ fi
 # ─── down ─────────────────────────────────────────────────────────────────────
 
 if [[ "$COMMAND" == "down" ]]; then
-    echo "Stopping managed containers (g8es, g8ee, g8ed, g8ep, g8el)..."
-    $COMPOSE stop g8es g8ee g8ed g8ep g8el 2>/dev/null || true
+    echo "Stopping managed containers (g8es, g8ee, g8ed, g8ep)..."
+    $COMPOSE stop g8es g8ee g8ed g8ep 2>/dev/null || true
+    $COMPOSE --profile g8el stop g8el 2>/dev/null || true
     echo "Done. Volumes, images, and networks are preserved."
     exit 0
 fi
@@ -352,12 +354,12 @@ fi
 
 if [[ "$COMMAND" == "restart" ]]; then
     _preflight
-    echo "Restarting managed containers (g8es, g8ee, g8ed, g8ep, g8el)..."
-    $COMPOSE stop g8es g8ee g8ed g8ep g8el 2>/dev/null || true
+    echo "Restarting managed containers (g8es, g8ee, g8ed, g8ep)..."
+    $COMPOSE stop g8es g8ee g8ed g8ep 2>/dev/null || true
     if [[ "$DEV_MODE" == true ]]; then
-        $COMPOSE --profile development up -d g8es g8ee g8ed g8ep g8el
+        $COMPOSE --profile development up -d g8es g8ee g8ed g8ep
     else
-        $COMPOSE up -d g8es g8ee g8ed g8ep g8el
+        $COMPOSE up -d g8es g8ee g8ed g8ep
     fi
     echo ""
     echo "Waiting for services..."
@@ -365,7 +367,6 @@ if [[ "$COMMAND" == "restart" ]]; then
     _wait_healthy g8ee    120 2
     _wait_curl    g8ed "https://localhost/health" '"status"' 120 2
     _wait_healthy g8ep    30  2
-    _wait_healthy g8el    300  5
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Restart complete."
@@ -380,11 +381,13 @@ fi
 # Use 'clean' to remove everything including SSL.
 
 if [[ "$COMMAND" == "reset" ]]; then
-    REBUILD_COMPONENTS=(g8es g8ee g8ed g8el)
+    REBUILD_COMPONENTS=(g8es g8ee g8ed)
 
     echo "Wiping DB data volumes (g8es, g8ee, g8ed) — SSL certs preserved..."
-    $COMPOSE stop g8es g8ee g8ed g8ep g8el 2>/dev/null || true
-    $COMPOSE rm -f g8es g8ee g8ed g8ep g8el 2>/dev/null || true
+    $COMPOSE stop g8es g8ee g8ed g8ep 2>/dev/null || true
+    $COMPOSE --profile g8el stop g8el 2>/dev/null || true
+    $COMPOSE rm -f g8es g8ee g8ed g8ep 2>/dev/null || true
+    $COMPOSE --profile g8el rm -f g8el 2>/dev/null || true
     for svc in g8es g8ee g8ed; do
         vol="$(_service_volume "$svc")"
         [[ -n "$vol" ]] && docker volume rm "$vol" 2>/dev/null || true
@@ -395,14 +398,13 @@ if [[ "$COMMAND" == "reset" ]]; then
     _preflight
 
     echo "Building and starting all services..."
-    $COMPOSE up -d --build --force-recreate g8es g8ee g8ed g8ep g8el
+    $COMPOSE up -d --build --force-recreate g8es g8ee g8ed g8ep
     echo ""
     echo "Waiting for services..."
     _wait_healthy g8es     300 2
     _wait_healthy g8ee    120 2
     _wait_curl    g8ed "https://localhost/health" '"status"' 120 2
     _wait_healthy g8ep    30  2
-    _wait_healthy g8el    300 5
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Reset complete. SSL certs preserved — no need to re-trust."
@@ -517,7 +519,7 @@ _preflight
 if [[ "$COMMAND" == "up" ]]; then
     UP_COMPONENTS=("${REBUILD_COMPONENTS[@]}")
     if [[ ${#UP_COMPONENTS[@]} -eq 0 ]]; then
-        UP_COMPONENTS=(g8es g8ee g8ed g8ep g8el)
+        UP_COMPONENTS=(g8es g8ee g8ed g8ep)
     fi
     if [[ "$DEV_MODE" == true ]]; then
         echo "Starting services in development mode (hot-reload enabled): ${UP_COMPONENTS[*]}..."
@@ -532,7 +534,7 @@ if [[ "$COMMAND" == "up" ]]; then
     printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8ee  && _wait_healthy g8ee    120 2
     printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8ed && _wait_curl    g8ed "https://localhost/health" '"status"' 120 2
     printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8ep  && _wait_healthy g8ep    30  2
-    printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8el  && _wait_healthy g8el    300  5
+    printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8el  && $COMPOSE --profile g8el up -d g8el && _wait_healthy g8el    300  5
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -552,18 +554,19 @@ fi
 
 if [[ "$COMMAND" == "setup" ]]; then
     echo "Stopping all managed containers..."
-    $COMPOSE stop g8es g8ee g8ed g8ep g8el 2>/dev/null || true
-    $COMPOSE rm -f g8es g8ee g8ed g8ep g8el 2>/dev/null || true
+    $COMPOSE stop g8es g8ee g8ed g8ep 2>/dev/null || true
+    $COMPOSE --profile g8el stop g8el 2>/dev/null || true
+    $COMPOSE rm -f g8es g8ee g8ed g8ep 2>/dev/null || true
+    $COMPOSE --profile g8el rm -f g8el 2>/dev/null || true
 
     echo "Building and starting all services..."
-    $COMPOSE up -d --build --force-recreate g8es g8ee g8ed g8ep g8el
+    $COMPOSE up -d --build --force-recreate g8es g8ee g8ed g8ep
     echo ""
     echo "Waiting for services..."
     _wait_healthy g8es     300 2
     _wait_healthy g8ee    120 2
     _wait_curl    g8ed "https://localhost/health" '"status"' 120 2
     _wait_healthy g8ep    30  2
-    _wait_healthy g8el    300 5
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -579,7 +582,7 @@ fi
 
 if [[ "$COMMAND" == "rebuild" ]]; then
     if [[ ${#REBUILD_COMPONENTS[@]} -eq 0 ]]; then
-        REBUILD_COMPONENTS=(g8es g8ee g8ed g8ep g8el)
+        REBUILD_COMPONENTS=(g8es g8ee g8ed g8ep)
     fi
 
     echo "Removing containers for: ${REBUILD_COMPONENTS[*]}..."
@@ -598,7 +601,7 @@ if [[ "$COMMAND" == "rebuild" ]]; then
     printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8ee  && _wait_healthy g8ee    120 2
     printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8ed && _wait_curl    g8ed "https://localhost/health" '"status"' 30 2
     printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8ep && _wait_healthy g8ep    30  2
-    printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8el && _wait_healthy g8el    300  5
+    printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8el && $COMPOSE --profile g8el up -d --build --force-recreate g8el && _wait_healthy g8el    300  5
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

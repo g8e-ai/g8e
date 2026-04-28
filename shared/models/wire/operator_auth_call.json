@@ -8,11 +8,6 @@
         "required": true,
         "description": "The Bearer token (API key) for the operator. MUST be sent in the body of internal cluster calls to ensure typed contract safety."
       },
-      "system_info": {
-        "type": "object",
-        "required": false,
-        "description": "System information for the operator"
-      },
       "runtime_config": {
         "type": "object",
         "required": false,

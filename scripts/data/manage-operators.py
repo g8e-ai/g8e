@@ -114,15 +114,17 @@ class OperatorManager:
             f"    Terminated:      {op.get('terminated_at') or 'N/A'}",
         ]
 
-        system_info = op.get('system_info') or {}
-        if system_info:
+        heartbeat_snapshot = op.get('latest_heartbeat_snapshot')
+        if heartbeat_snapshot:
+            system_identity = heartbeat_snapshot.get('system_identity') or {}
+            network = heartbeat_snapshot.get('network') or {}
             lines += [
                 "",
-                "  System Info:",
-                f"    Hostname:        {system_info.get('hostname') or 'N/A'}",
-                f"    OS:              {system_info.get('os') or 'N/A'}",
-                f"    Architecture:    {system_info.get('arch') or 'N/A'}",
-                f"    Public IP:       {system_info.get('public_ip') or 'N/A'}",
+                "  System Info (from latest heartbeat):",
+                f"    Hostname:        {system_identity.get('hostname') or 'N/A'}",
+                f"    OS:              {system_identity.get('os') or 'N/A'}",
+                f"    Architecture:    {system_identity.get('architecture') or 'N/A'}",
+                f"    Public IP:       {network.get('public_ip') or 'N/A'}",
             ]
 
         lines += ["=" * 80, ""]

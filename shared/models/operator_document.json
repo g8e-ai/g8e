@@ -212,16 +212,16 @@
     },
 
     "fingerprint": {
-      "_description": "Top-level fingerprint columns denormalized from system_info for efficient SQLite queries.",
+      "_description": "Top-level fingerprint columns denormalized from latest_heartbeat_snapshot for efficient SQLite queries.",
       "system_fingerprint": {
         "type": "string",
         "required": false,
-        "description": "SHA256 fingerprint of the operator host. Copied from system_info.system_fingerprint."
+        "description": "SHA256 fingerprint of the operator host. Copied from latest_heartbeat_snapshot.system_fingerprint."
       },
       "fingerprint_details": {
         "type": "object",
         "required": false,
-        "description": "Structured fingerprint sub-fields. Copied from system_info.fingerprint_details."
+        "description": "Structured fingerprint sub-fields. Copied from latest_heartbeat_snapshot.fingerprint_details."
       }
     },
 

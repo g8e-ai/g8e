@@ -26,10 +26,10 @@ from app.models.operators import (
     HeartbeatSnapshot,
     HeartbeatSystemIdentity,
     HeartbeatNetworkInfo,
-    SystemInfoOSDetails,
-    SystemInfoUserDetails,
-    SystemInfoDiskDetails,
-    SystemInfoMemoryDetails,
+    HeartbeatOSDetails,
+    HeartbeatUserDetails,
+    HeartbeatDiskDetails,
+    HeartbeatMemoryDetails,
     HeartbeatEnvironment,
 )
 from app.services.investigation.investigation_service import extract_single_operator_context
@@ -63,12 +63,12 @@ class TestExtractSingleOperatorContext:
                     internal_ip="10.0.0.1",
                     interfaces=["eth0"],
                 ),
-                os_details=SystemInfoOSDetails(
+                os_details=HeartbeatOSDetails(
                     distro="ubuntu",
                     kernel="5.15.0",
                     version="22.04",
                 ),
-                user_details=SystemInfoUserDetails(
+                user_details=HeartbeatUserDetails(
                     username="testuser",
                     uid="1000",
                     gid="1000",
@@ -82,12 +82,12 @@ class TestExtractSingleOperatorContext:
                     container_runtime=None,
                     init_system="systemd",
                 ),
-                disk_details=SystemInfoDiskDetails(
+                disk_details=HeartbeatDiskDetails(
                     percent=45.0,
                     total_gb=500,
                     free_gb=275,
                 ),
-                memory_details=SystemInfoMemoryDetails(
+                memory_details=HeartbeatMemoryDetails(
                     percent=60.0,
                     total_mb=16384,
                     available_mb=6553,

@@ -695,7 +695,11 @@ export class TerminalOutputMixin {
         if (!statusEl) return;
 
         const label = this._tribunalOutcomeLabel(outcome);
-        statusEl.textContent = label;
+        if (finalCommand) {
+            statusEl.textContent = `${label} · ${finalCommand}`;
+        } else {
+            statusEl.textContent = label;
+        }
         statusEl.classList.add('tribunal__status--done');
         if (outcome === TribunalOutcome.CONSENSUS_FAILED) {
             statusEl.classList.add('tribunal__status--failed');

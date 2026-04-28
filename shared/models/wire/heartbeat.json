@@ -113,15 +113,15 @@
       "disk_total_gb": { "type": "number" }
     },
 
-    "os_details": { "$ref": "system_info.json#system_info/fields/os_details" },
+    "os_details": { "$ref": "system_info.json#os_details" },
 
-    "user_details": { "$ref": "system_info.json#system_info/fields/user_details" },
+    "user_details": { "$ref": "system_info.json#user_details" },
 
-    "disk_details": { "$ref": "system_info.json#system_info/fields/disk_details" },
+    "disk_details": { "$ref": "system_info.json#disk_details" },
 
-    "memory_details": { "$ref": "system_info.json#system_info/fields/memory_details" },
+    "memory_details": { "$ref": "system_info.json#memory_details" },
 
-    "environment": { "$ref": "system_info.json#system_info/fields/environment" },
+    "environment": { "$ref": "system_info.json#environment" },
 
     "capability_flags": {
       "_description": "Operator capability flags indicating available features on this host.",
@@ -160,14 +160,14 @@
       "uptime_seconds": { "type": "integer" }
     },
     "version_info":   { "$ref": "#heartbeat/version_info" },
-    "os_details":     { "$ref": "system_info.json#system_info/fields/os_details" },
-    "user_details":   { "$ref": "system_info.json#system_info/fields/user_details" },
-    "disk_details":   { "$ref": "system_info.json#system_info/fields/disk_details" },
-    "memory_details": { "$ref": "system_info.json#system_info/fields/memory_details" },
-    "environment":    { "$ref": "system_info.json#system_info/fields/environment" },
+    "os_details":     { "$ref": "system_info.json#os_details" },
+    "user_details":   { "$ref": "system_info.json#user_details" },
+    "disk_details":   { "$ref": "system_info.json#disk_details" },
+    "memory_details": { "$ref": "system_info.json#memory_details" },
+    "environment":    { "$ref": "system_info.json#environment" },
 
     "system_fingerprint":    { "type": "string", "description": "SHA256 fingerprint of stable host attributes." },
-    "fingerprint_details":   { "$ref": "system_info.json#system_info/fields/fingerprint_details" },
+    "fingerprint_details":   { "$ref": "system_info.json#fingerprint_details" },
 
     "is_cloud_operator": { "type": "boolean", "default": false, "description": "True when the operator is cloud-hosted." },
     "cloud_provider":    { "type": "string", "description": "Cloud provider identifier (null when not cloud-hosted)." },

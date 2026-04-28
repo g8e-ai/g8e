@@ -30,7 +30,7 @@ import { redactWebSessionId } from '../../utils/security.js';
  * @param {Object} options.authorizationMiddleware - Authorization middleware object
  */
 export function createInternalSSERouter({ services, authorizationMiddleware }) {
-    const { sseService } = services;
+    const { sseService, operatorDataService } = services;
     const { requireInternalOrigin } = authorizationMiddleware;
     const router = express.Router();
 
@@ -48,6 +48,30 @@ export function createInternalSSERouter({ services, authorizationMiddleware }) {
             });
 
             logger.info(`[SESSION TRACE] g8ed received SSE push - web_session_id=${redactWebSessionId(pushReq.web_session_id)}, event_type=${pushReq.event.type}`);
+
+            // Handle heartbeat events - update operator document with latest_heartbeat_snapshot
+            if (pushReq.event.type === 'g8e.v1.operator.heartbeat.received' && pushReq.event.metrics) {
+                const operatorId = pushReq.event.operator_id;
+                const heartbeatSnapshot = pushReq.event.metrics;
+
+                try {
+                    await operatorDataService.updateOperator(operatorId, {
+                        latest_heartbeat_snapshot: heartbeatSnapshot,
+                        last_heartbeat: new Date(pushReq.event.timestamp || Date.now())
+                    });
+
+                    logger.info('[INTERNAL-HTTP] Updated operator with heartbeat snapshot', {
+                        operator_id: operatorId,
+                        has_system_identity: !!heartbeatSnapshot.system_identity,
+                        has_performance: !!heartbeatSnapshot.performance
+                    });
+                } catch (error) {
+                    logger.error('[INTERNAL-HTTP] Failed to update operator with heartbeat snapshot', {
+                        operator_id: operatorId,
+                        error: error.message
+                    });
+                }
+            }
 
             if (pushReq.web_session_id) {
                 // SessionEvent: targeted delivery to a specific web session.

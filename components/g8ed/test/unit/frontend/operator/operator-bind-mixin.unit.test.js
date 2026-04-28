@@ -945,14 +945,14 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
             const result = ctx._createBindAllOperatorItem(operator);
 
             expect(result).toContain(operator.operator_id);
-            expect(result).toContain(operator.system_info.hostname);
-            expect(result).toContain(operator.system_info.os);
-            expect(result).toContain(operator.system_info.internal_ip);
+            expect(result).toContain(operator.latest_heartbeat_snapshot.system_identity.hostname);
+            expect(result).toContain(operator.latest_heartbeat_snapshot.system_identity.os);
+            expect(result).toContain(operator.latest_heartbeat_snapshot.network.internal_ip);
         });
 
-        it('uses defaults for missing system_info', () => {
+        it('uses defaults for missing latest_heartbeat_snapshot', () => {
             const ctx = createMixinContext();
-            const operator = { operator_id: TEST_OPERATOR_ID, system_info: null };
+            const operator = { operator_id: TEST_OPERATOR_ID, latest_heartbeat_snapshot: null };
 
             const result = ctx._createBindAllOperatorItem(operator);
 
@@ -968,9 +968,9 @@ describe('BindOperatorsMixin [UNIT - jsdom]', () => {
             const result = ctx._createUnbindAllOperatorItem(operator);
 
             expect(result).toContain(operator.operator_id);
-            expect(result).toContain(operator.system_info.hostname);
-            expect(result).toContain(operator.system_info.os);
-            expect(result).toContain(operator.system_info.public_ip);
+            expect(result).toContain(operator.latest_heartbeat_snapshot.system_identity.hostname);
+            expect(result).toContain(operator.latest_heartbeat_snapshot.system_identity.os);
+            expect(result).toContain(operator.latest_heartbeat_snapshot.network.public_ip);
         });
 
         it('includes stale status class for stale operators', () => {

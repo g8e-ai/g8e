@@ -842,7 +842,7 @@ class OperatorStatusUpdatedPayload(G8eBaseModel):
 
     operator_id: str = Field(description="Operator ID")
     status: OperatorStatus = Field(description="New operator status")
-    hostname: str | None = Field(default=None, description="Hostname from operator system_info")
+    hostname: str | None = Field(default=None, description="Hostname from latest_heartbeat_snapshot.system_identity")
     system_fingerprint: str | None = Field(default=None, description="SHA256 fingerprint of stable host attributes")
     timestamp: UTCDatetime | None = Field(default=None, description="Transition timestamp")
 

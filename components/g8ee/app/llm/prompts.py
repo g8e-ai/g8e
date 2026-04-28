@@ -40,14 +40,14 @@ logger = logging.getLogger(__name__)
 
 def _format_operator_doc(op_doc, index: int) -> str:
     """Format a single operator document for investigation context."""
-    sys_info = op_doc.system_info
+    snapshot = op_doc.latest_heartbeat_snapshot
     op_id = op_doc.id or f"operator_{index + 1}"
-    hostname = op_doc.current_hostname or (sys_info.hostname if sys_info else None)
+    hostname = op_doc.current_hostname or (snapshot.system_identity.hostname if snapshot else None)
     
     details = [
         f"hostname={hostname}" if hostname else None,
-        f"os={sys_info.os}" if sys_info and sys_info.os else None,
-        f"arch={sys_info.architecture}" if sys_info and sys_info.architecture else None,
+        f"os={snapshot.system_identity.os}" if snapshot and snapshot.system_identity.os else None,
+        f"arch={snapshot.system_identity.architecture}" if snapshot and snapshot.system_identity.architecture else None,
         f"type={op_doc.operator_type}",
         f"session={op_doc.operator_session_id[:12]}..." if op_doc.operator_session_id else None,
     ]

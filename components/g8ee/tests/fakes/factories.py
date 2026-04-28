@@ -53,10 +53,9 @@ from app.models.operators import (
     HeartbeatNetworkInfo,
     OperatorDocument,
     HeartbeatSnapshot,
-    SystemInfoEnvironment,
-    SystemInfoUserDetails,
-    SystemInfoOSDetails,
     HeartbeatEnvironment,
+    HeartbeatUserDetails,
+    HeartbeatOSDetails,
 )
 from app.utils.timestamp import now
 
@@ -315,7 +314,7 @@ def build_production_operator_document(
                 memory_mb=16384,
             ),
             network=HeartbeatNetworkInfo(),
-            user_details=SystemInfoUserDetails(
+            user_details=HeartbeatUserDetails(
                 username="root",
                 uid="0",
                 gid="0",
@@ -327,7 +326,7 @@ def build_production_operator_document(
                 is_container=False,
                 init_system="systemd",
             ),
-            os_details=SystemInfoOSDetails(
+            os_details=HeartbeatOSDetails(
                 distro="ubuntu",
                 kernel="5.15.0",
                 version="22.04",

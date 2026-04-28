@@ -412,14 +412,13 @@ The API key path is the standard long-running operator authentication method, ha
 3. **Download-only key rejection** — If the key has no `operator_id` binding (download-only key) → 403 with `DOWNLOAD_KEY_NOT_ALLOWED` code. Download keys (`G8E_DOWNLOAD_KEY`) fetch the binary; they cannot authenticate an operator process.
 4. **`last_used_at` update** — `ApiKeyService.updateLastUsed` called after successful validation (non-blocking; errors are logged and do not fail auth).
 5. **User existence check** — `UserService.getUser(user_id)` from key data → 404 if not found.
-6. **System fingerprint requirement** — `system_info.system_fingerprint` must be present in the request body → 400 if missing.
-7. **Operator ownership check** — `operator.user_id` must match the authenticated `user_id` → 403 if not.
-8. **Operator type immutability** — If the slot has an existing fingerprint + type, the requested type (system vs. cloud) must match → 403 with `OPERATOR_TYPE_MISMATCH` code. Operator type is permanent once set.
-9. **Active operator reconnect check** — If the operator is `ACTIVE` or `BOUND`: reconnection is permitted only if the fingerprint matches (same-system restart) or the operator is stale (no heartbeat for >60s). Otherwise → 409.
-10. **Fingerprint binding check** — If the operator is not active/bound: if a fingerprint is already stored and it does not match the incoming fingerprint → 403 with `FINGERPRINT_MISMATCH` code.
-11. **Slot claim vs. reconnect** — `is_claiming_slot = true` when no fingerprint has been stored yet (first-ever auth). First auth claims the slot via `OperatorDataService.claimOperatorSlot`. The per-operator mTLS client certificate is generated during slot creation and returned in the bootstrap response. Subsequent auths call `updateOperatorForReconnection`. If the operator was previously `BOUND`, its KV binding is refreshed to the new operator session ID.
-12. **Session creation and activation** — Operator session created, operator activated, `OPERATOR_STATUS_UPDATED` SSE broadcast to all active user web sessions.
-13. **Bootstrap response** — Returns `operator_session_id`, `operator_id`, `user_id`, `api_key` (echoed back for in-memory use), `config`, and the per-operator mTLS client certificate + private key.
+6. **Operator ownership check** — `operator.user_id` must match the authenticated `user_id` → 403 if not.
+7. **Operator type immutability** — If the slot has an existing fingerprint + type, the requested type (system vs. cloud) must match → 403 with `OPERATOR_TYPE_MISMATCH` code. Operator type is permanent once set.
+8. **Active operator reconnect check** — If the operator is `ACTIVE` or `BOUND`: reconnection is permitted only if the fingerprint matches (same-system restart) or the operator is stale (no heartbeat for >60s). Otherwise → 409.
+9. **Fingerprint binding check** — If the operator is not active/bound: if a fingerprint is already stored and it does not match the incoming fingerprint → 403 with `FINGERPRINT_MISMATCH` code.
+10. **Slot claim vs. reconnect** — `is_claiming_slot = true` when no fingerprint has been stored yet (first-ever auth). First auth claims the slot via `OperatorDataService.claimOperatorSlot`. The per-operator mTLS client certificate is generated during slot creation and returned in the bootstrap response. Subsequent auths call `updateOperatorForReconnection`. If the operator was previously `BOUND`, its KV binding is refreshed to the new operator session ID.
+11. **Session creation and activation** — Operator session created, operator activated, `OPERATOR_STATUS_UPDATED` SSE broadcast to all active user web sessions.
+12. **Bootstrap response** — Returns `operator_session_id`, `operator_id`, `user_id`, `api_key` (echoed back for in-memory use), `config`, and the per-operator mTLS client certificate + private key.
 
 | Check | Failure code | HTTP |
 |---|---|---|
@@ -795,7 +794,7 @@ The KV keys are the authoritative runtime state; the document store is the durab
 1. `getBindingService().getBoundOperatorSessionIds(webSessionId)` — reads `sessionWebBind` KV key.
 2. For each operator session ID: `getOperatorSessionService().validateSession(operatorSessionId)` — confirms the session is live and retrieves `operator_id`.
 3. Verify the reverse binding: `getBindingService().getWebSessionForOperator(operatorSessionId)` — confirms `sessionBindOperators` resolves back to this web session. Mismatch → skipped.
-4. Fetch the operator document from g8es for current `status`, `system_info`, `operator_type`.
+4. Fetch the operator document from g8es for current `status`, `operator_type`.
 5. Serialize each valid operator as a `BoundOperatorContext` and JSON-encode the array into `X-G8E-Bound-Operators`.
 
 `X-G8E-Bound-Operators` is the **exclusive source of truth** for which operators are available to the AI on any given request. g8ee performs no independent operator lookup to resolve binding state — if `g8e_context.bound_operators` is empty, the session has no bound operators.

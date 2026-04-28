@@ -1,149 +1,80 @@
 {
   "_comment": "Reusable sub-shape definitions referenced by wire/heartbeat.json (os_details, user_details, disk_details, memory_details, environment, fingerprint_details). These are NOT the deleted OperatorDocument.system_info field.",
 
-  "system_info": {
-    "_description": "Static host identity information sent by g8eo at authentication time and updated on each heartbeat.",
+  "os_details": {
+    "type": "object",
+    "required": false,
+    "description": "Detailed operating system information",
     "fields": {
-      "hostname": {
-        "type": "string",
-        "required": false,
-        "description": "System hostname"
-      },
-      "os": {
-        "type": "string",
-        "required": false,
-        "description": "Operating system name (e.g. linux, windows, darwin). See status.json platform."
-      },
-      "architecture": {
-        "type": "string",
-        "required": false,
-        "description": "CPU architecture (e.g. amd64, arm64)"
-      },
-      "cpu_count": {
-        "type": "integer",
-        "required": false,
-        "description": "Number of logical CPU cores"
-      },
-      "memory_mb": {
-        "type": "integer",
-        "required": false,
-        "description": "Total system memory in MB"
-      },
-      "public_ip": {
-        "type": "string",
-        "required": false,
-        "description": "Public IPv4 address of the operator host"
-      },
-      "internal_ip": {
-        "type": "string",
-        "required": false,
-        "description": "Primary internal/private IP address"
-      },
-      "interfaces": {
-        "type": "array",
-        "items": "string",
-        "required": false,
-        "description": "List of network interface names",
-        "default": []
-      },
-      "current_user": {
-        "type": "string",
-        "required": false,
-        "description": "Username of the OS user running the operator"
-      },
-      "system_fingerprint": {
-        "type": "string",
-        "required": false,
-        "description": "SHA256 fingerprint derived from stable host attributes (OS, arch, cpu_count, machine_id)"
-      },
-      "fingerprint_details": {
-        "type": "object",
-        "required": false,
-        "description": "Structured sub-fields used to compute system_fingerprint",
-        "fields": {
-          "os": { "type": "string" },
-          "architecture": { "type": "string" },
-          "cpu_count": { "type": "integer" },
-          "machine_id": { "type": "string" }
-        }
-      },
-      "os_details": {
-        "type": "object",
-        "required": false,
-        "description": "Detailed operating system information",
-        "fields": {
-          "kernel": { "type": "string" },
-          "distro": { "type": "string" },
-          "version": { "type": "string" }
-        }
-      },
-      "user_details": {
-        "type": "object",
-        "required": false,
-        "description": "Details about the current OS user",
-        "fields": {
-          "username": { "type": "string" },
-          "uid": { "type": "integer" },
-          "gid": { "type": "integer" },
-          "home": { "type": "string" },
-          "name": { "type": "string" },
-          "shell": { "type": "string" }
-        }
-      },
-      "disk_details": {
-        "type": "object",
-        "required": false,
-        "description": "Root filesystem disk usage",
-        "fields": {
-          "total_gb": { "type": "number" },
-          "used_gb": { "type": "number" },
-          "free_gb": { "type": "number" },
-          "percent": { "type": "number" }
-        }
-      },
-      "memory_details": {
-        "type": "object",
-        "required": false,
-        "description": "Detailed memory usage breakdown",
-        "fields": {
-          "total_mb": { "type": "integer" },
-          "available_mb": { "type": "integer" },
-          "used_mb": { "type": "integer" },
-          "percent": { "type": "number" }
-        }
-      },
-      "environment": {
-        "type": "object",
-        "required": false,
-        "description": "Environment and container context",
-        "fields": {
-          "pwd": { "type": "string" },
-          "lang": { "type": "string" },
-          "timezone": { "type": "string" },
-          "term": { "type": "string" },
-          "is_container": { "type": "boolean" },
-          "container_runtime": { "type": "string" },
-          "container_signals": { "type": "array", "items": "string" },
-          "init_system": { "type": "string" }
-        }
-      },
-      "is_cloud_operator": {
-        "type": "boolean",
-        "required": false,
-        "default": false,
-        "description": "True when this is a cloud-hosted operator"
-      },
-      "cloud_provider": {
-        "type": "string",
-        "required": false,
-        "description": "Cloud provider identifier. See status.json cloud.subtype."
-      },
-      "local_storage_enabled": {
-        "type": "boolean",
-        "required": false,
-        "default": true,
-        "description": "True when local (Project Chronos) vault storage is active on this operator"
-      }
+      "kernel": { "type": "string" },
+      "distro": { "type": "string" },
+      "version": { "type": "string" }
+    }
+  },
+
+  "user_details": {
+    "type": "object",
+    "required": false,
+    "description": "Details about the current OS user",
+    "fields": {
+      "username": { "type": "string" },
+      "uid": { "type": "integer" },
+      "gid": { "type": "integer" },
+      "home": { "type": "string" },
+      "name": { "type": "string" },
+      "shell": { "type": "string" }
+    }
+  },
+
+  "disk_details": {
+    "type": "object",
+    "required": false,
+    "description": "Root filesystem disk usage",
+    "fields": {
+      "total_gb": { "type": "number" },
+      "used_gb": { "type": "number" },
+      "free_gb": { "type": "number" },
+      "percent": { "type": "number" }
+    }
+  },
+
+  "memory_details": {
+    "type": "object",
+    "required": false,
+    "description": "Detailed memory usage breakdown",
+    "fields": {
+      "total_mb": { "type": "integer" },
+      "available_mb": { "type": "integer" },
+      "used_mb": { "type": "integer" },
+      "percent": { "type": "number" }
+    }
+  },
+
+  "environment": {
+    "type": "object",
+    "required": false,
+    "description": "Environment and container context",
+    "fields": {
+      "pwd": { "type": "string" },
+      "lang": { "type": "string" },
+      "timezone": { "type": "string" },
+      "term": { "type": "string" },
+      "is_container": { "type": "boolean" },
+      "container_runtime": { "type": "string" },
+      "container_signals": { "type": "array", "items": "string" },
+      "init_system": { "type": "string" }
+    }
+  },
+
+  "fingerprint_details": {
+    "type": "object",
+    "required": false,
+    "description": "Structured sub-fields used to compute system_fingerprint",
+    "fields": {
+      "os": { "type": "string" },
+      "architecture": { "type": "string" },
+      "cpu_count": { "type": "integer" },
+      "machine_id": { "type": "string" }
     }
   }
 }

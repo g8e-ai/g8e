@@ -631,7 +631,35 @@ export class SettingsPage {
 
         let inputEl;
 
-        if (setting.type === 'select' && setting.options) {
+        if (setting.type === 'toggle') {
+            const label = document.createElement('label');
+            label.className = 'settings-toggle';
+
+            inputEl = document.createElement('input');
+            inputEl.type = 'checkbox';
+            inputEl.setAttribute('data-key', setting.key);
+            inputEl.checked = setting.value === true || setting.value === 'true';
+
+            const track = document.createElement('span');
+            track.className = 'settings-toggle-track';
+            const thumb = document.createElement('span');
+            thumb.className = 'settings-toggle-thumb';
+            track.appendChild(thumb);
+
+            const toggleLabel = document.createElement('span');
+            toggleLabel.className = 'settings-toggle-label';
+            toggleLabel.textContent = inputEl.checked ? 'Enabled' : 'Disabled';
+
+            label.appendChild(inputEl);
+            label.appendChild(track);
+            label.appendChild(toggleLabel);
+            wrap.appendChild(label);
+
+            inputEl.addEventListener('change', () => {
+                toggleLabel.textContent = inputEl.checked ? 'Enabled' : 'Disabled';
+                this._markDirty(setting.key, inputEl.checked);
+            });
+        } else if (setting.type === 'select' && setting.options) {
             inputEl = document.createElement('select');
             inputEl.className = 'settings-select';
             inputEl.setAttribute('data-key', setting.key);

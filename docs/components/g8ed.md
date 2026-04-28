@@ -628,8 +628,7 @@ Operator list events use `OperatorSlot` projections instead of full `OperatorDoc
 - `is_g8ep` — g8e node operator flag
 - `first_deployed` — first deployment timestamp
 - `last_heartbeat` — last heartbeat timestamp
-- `system_info` — minimal system info (hostname, os, internal_ip, public_ip)
-- `latest_heartbeat_snapshot` — most recent performance metrics snapshot
+- `latest_heartbeat_snapshot` — most recent performance metrics snapshot and system identity
 
 **Projection path:** `OperatorDocument` → `OperatorSlot.fromOperator()` → `forClient()` → SSE payload
 
@@ -687,8 +686,7 @@ g8es pub/sub  →  g8ee (OperatorHeartbeatService)
 **g8es document store fields (managed by g8e):**
 - `last_heartbeat` — timestamp of most recent heartbeat
 - `heartbeat_history` — rolling buffer of last 10 heartbeats
-- `latest_heartbeat_snapshot` — most recent metrics for UI
-- `system_info` — static system data
+- `latest_heartbeat_snapshot` — most recent metrics and system identity for UI
 
 **Heartbeat SSE envelope (g8ee → g8ed → browser):** canonical shape in `shared/models/wire/heartbeat_sse.json`. The envelope splits authorship:
 

@@ -498,11 +498,7 @@ export const USER_SETTINGS = Object.freeze([
         section: 'validation',
         label: 'Command Whitelisting',
         description: 'Only allow commands that match the configured whitelist.',
-        type: 'select',
-        options: Object.freeze([
-            Object.freeze({ value: false, label: 'Disabled (default)' }),
-            Object.freeze({ value: true, label: 'Enabled' }),
-        ]),
+        type: 'toggle',
         secret: false,
         placeholder: '',
         default: false,
@@ -515,7 +511,7 @@ export const USER_SETTINGS = Object.freeze([
         type: 'text',
         secret: false,
         placeholder: 'uptime,df,free,ps',
-        default: '',
+        default: 'ls,cd,pwd,id,whoami,echo,date,true,false,clear,wc,basename,dirname,cat,head,tail,grep,sort,uniq,cut,tr,diff,uptime,df,du,free,uname,hostname,env,printenv,which,type,command,whereis,stat,file,sleep,time,ps,pgrep,pidof,pstree,ip,ss,netstat,nslookup,dig,route,arp,vmstat,iostat,dmesg,journalctl,lscpu,lsblk,lsmod,lspci,lsusb,find,locate,who,w,last',
         validate: v => {
             if (typeof v !== 'string') return false;
             if (v === '') return true;
@@ -529,25 +525,34 @@ export const USER_SETTINGS = Object.freeze([
         section: 'validation',
         label: 'Command Blacklisting',
         description: 'Block commands that match the configured blacklist.',
-        type: 'select',
-        options: Object.freeze([
-            Object.freeze({ value: false, label: 'Disabled (default)' }),
-            Object.freeze({ value: true, label: 'Enabled' }),
-        ]),
+        type: 'toggle',
         secret: false,
         placeholder: '',
         default: false,
+    }),
+    Object.freeze({
+        key: 'blacklisted_commands_csv',
+        section: 'validation',
+        label: 'Blacklisted Commands',
+        description: 'Comma-separated list of blacklisted commands (e.g., rm,format,mkfs). Blocked if Command Blacklisting is enabled.',
+        type: 'text',
+        secret: false,
+        placeholder: 'rm,format,mkfs',
+        default: '',
+        validate: v => {
+            if (typeof v !== 'string') return false;
+            if (v === '') return true;
+            const parts = v.split(',').map(p => p.trim()).filter(Boolean);
+            const unsafeChars = /[;|`$<>&\n\r\t ]/;
+            return parts.every(part => !unsafeChars.test(part));
+        },
     }),
     Object.freeze({
         key: 'enable_command_auto_approve',
         section: 'validation',
         label: 'Skip Human Approval (Auto-Approve)',
         description: 'Skip the human approval prompt for commands listed in Auto-Approved Commands. The human is rubber-stamping these as benign in advance. Auto-approve does NOT widen the whitelist and does NOT bypass the blacklist or forbidden patterns; the command must still pass all hard gates.',
-        type: 'select',
-        options: Object.freeze([
-            Object.freeze({ value: false, label: 'Disabled (default)' }),
-            Object.freeze({ value: true, label: 'Enabled' }),
-        ]),
+        type: 'toggle',
         secret: false,
         placeholder: '',
         default: false,
@@ -560,7 +565,7 @@ export const USER_SETTINGS = Object.freeze([
         type: 'text',
         secret: false,
         placeholder: 'uptime,df,free,ps',
-        default: '',
+        default: 'ls,cd,pwd,id,whoami,echo,date,true,false,clear,wc,basename,dirname,cat,head,tail,grep,sort,uniq,cut,tr,diff,uptime,df,du,free,uname,hostname,env,printenv,which,type,command,whereis,stat,file,sleep,time,ps,pgrep,pidof,pstree,ip,ss,netstat,nslookup,dig,route,arp,vmstat,iostat,dmesg,journalctl,lscpu,lsblk,lsmod,lspci,lsusb,find,locate,who,w,last',
         validate: v => {
             if (typeof v !== 'string') return false;
             if (v === '') return true;
@@ -627,6 +632,12 @@ export const PLATFORM_SETTINGS = Object.freeze([
     Object.freeze({ key: 'g8es_wss_port',               default: '9001'            }),
     Object.freeze({ key: 'supervisor_port',              default: '443'             }),
     Object.freeze({ key: 'g8ep_operator_api_key',   default: '', secret: true  }),
+    Object.freeze({
+        key: 'auditor_hmac_key',
+        writeOnce: true,
+        secret: true,
+        default: '',
+    }),
 ]);
 
 // ---------------------------------------------------------------------------
@@ -780,6 +791,11 @@ export function validatePlatformSettings(updates, existingSettings = {}) {
         if (field.writeOnce) {
             const existing = existingSettings?.[key];
             if (existing !== undefined && existing !== null && existing !== '') {
+                // If the new value is the same as the existing value, it's not an overwrite
+                if (existing === value) {
+                    valid[key] = value;
+                    continue;
+                }
                 skipped.push(key);
                 errors.push(`${key} is writeOnce and already set; refusing overwrite`);
                 continue;

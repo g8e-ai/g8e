@@ -17,6 +17,7 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 
@@ -116,6 +117,13 @@ func (hs *HeartbeatService) Build(heartbeatType models.HeartbeatType) *models.He
 			GitAvailable:        hs.config.GitAvailable,
 			LedgerMirrorEnabled: hs.config.GitAvailable && !hs.config.NoGit,
 		},
+		FingerprintDetails: &models.HeartbeatFingerprintDetails{
+			OS:           runtime.GOOS,
+			Architecture: runtime.GOARCH,
+			CPUCount:     runtime.NumCPU(),
+			MachineID:    hs.config.SystemFingerprint,
+		},
+		SystemFingerprint: hs.config.SystemFingerprint,
 
 		APIKey: hs.config.APIKey,
 	}

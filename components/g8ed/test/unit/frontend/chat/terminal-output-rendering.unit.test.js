@@ -889,7 +889,7 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             await terminal.showTribunal({ id, model: 'test-model', numPasses: 5, command: 'ls', webSessionId: WEB_SESSION_ID });
 
             const widget = document.getElementById(id);
-            const dots = widget.querySelectorAll('.tribunal__dot');
+            const dots = widget.querySelectorAll('.tribunal__passes .tribunal__dot');
             expect(dots.length).toBe(5);
         });
     });
@@ -1394,7 +1394,7 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             expect(approvals[0].getAttribute('data-approval-id')).toBe('approval-upgrade-corr');
             expect(approvals[0].hasAttribute('data-approval-refining')).toBe(false);
             // Tribunal dots/status are preserved within the upgraded header.
-            expect(approvals[0].querySelectorAll('.tribunal__dot').length).toBe(3);
+            expect(approvals[0].querySelectorAll('.tribunal__passes .tribunal__dot').length).toBe(3);
         });
 
         it('upgrades the refining widget in place via web_session_id fallback when correlation_id is absent', async () => {
@@ -1422,7 +1422,7 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             expect(approvals.length).toBe(1);
             expect(approvals[0].getAttribute('data-approval-id')).toBe('approval-upgrade-ws');
             expect(approvals[0].hasAttribute('data-approval-refining')).toBe(false);
-            expect(approvals[0].querySelectorAll('.tribunal__dot').length).toBe(3);
+            expect(approvals[0].querySelectorAll('.tribunal__passes .tribunal__dot').length).toBe(3);
         });
 
         it('does not cross-claim sibling tribunals: correlation_id match targets only the matching widget', async () => {
@@ -1589,7 +1589,7 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             const approvals = terminal.outputContainer.querySelectorAll('.anchored-terminal__approval');
             expect(approvals.length).toBe(1);
             expect(approvals[0].getAttribute('data-approval-id')).toBe('approval-uptime');
-            expect(approvals[0].querySelectorAll('.tribunal__dot').length).toBe(3);
+            expect(approvals[0].querySelectorAll('.tribunal__passes .tribunal__dot').length).toBe(3);
         });
     });
 });

@@ -87,7 +87,6 @@ export const F = Object.freeze({
 //       sentinel_mode:{ type: F.boolean, default: true },
 //       limit:        { type: F.number,  default: 20, min: 1, max: 100 },
 //       created_at:   { type: F.date,    default: () => now() },
-//       system_info:  { type: F.object,  model: SystemInfo, default: () => new SystemInfo() },
 //       history:      { type: F.array,   items: HistoryEntry, default: () => [] },
 //   };
 //
