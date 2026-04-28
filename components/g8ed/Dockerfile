@@ -31,7 +31,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-COPY --from=g8ed-builder /app/node_modules ./node_modules
+COPY --from=g8ed-builder /app/node_modules /node_modules
 
 # Source (./components/g8ed -> /app) and shared (./shared -> /shared) are
 # supplied by docker-compose bind mounts at runtime. Only the entrypoint is

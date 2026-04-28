@@ -161,9 +161,6 @@ services:
       - ./docs:/docs:ro
       - ./README.md:/readme/README.md:ro
       - ./components/g8ed:/app:ro
-      # Anonymous volume ensures the image's node_modules are used 
-      # and not overwritten by the bind mount above.
-      - /app/node_modules
     read_only: true
     tmpfs:
       - /tmp
