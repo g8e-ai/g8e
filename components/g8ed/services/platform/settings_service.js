@@ -36,7 +36,7 @@
 import { logger } from '../../utils/logger.js';
 import { Collections } from '../../constants/collections.js';
 import { SETTINGS_DOC_ID, USER_SETTINGS_DOC_PREFIX } from '../../constants/service_config.js';
-import { apiPaths } from '../../constants/api_paths.js';
+import { ApiPaths } from '../../constants/api_paths.js';
 import { 
     USER_SETTINGS,
     PLATFORM_SETTINGS,
@@ -285,7 +285,7 @@ class SettingsService {
         // Sync to g8ee if internalHttpClient is available
         if (this.internalHttpClient) {
             try {
-                await this.internalHttpClient.request('g8ee', apiPaths.g8ee.settingsUser(), {
+                await this.internalHttpClient.request('g8ee', ApiPaths.g8ee.settingsUser(), {
                     method: 'PATCH',
                     body: validation.valid,
                 });

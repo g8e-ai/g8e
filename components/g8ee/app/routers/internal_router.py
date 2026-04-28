@@ -33,7 +33,6 @@ from app.constants import (
     OperatorStatus,
     Priority,
     InternalApiPaths,
-    API_PATHS,
 )
 from app.errors import ResourceNotFoundError, ServiceUnavailableError
 from app.models import CaseCreateRequest, CaseEventPayload, CaseUpdateRequest
@@ -143,7 +142,7 @@ from ..dependencies import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix=InternalApiPaths.PREFIX, tags=["internal"])
+router = APIRouter(tags=["internal"])
 
 
 
@@ -183,7 +182,7 @@ async def _generate_and_update_title(
         )
 
 
-@router.post(API_PATHS["g8ee"]["chat"], response_model=ChatStartedResponse)
+@router.post(InternalApiPaths.G8EE_CHAT, response_model=ChatStartedResponse)
 async def internal_chat(
     request: ChatMessageRequest,
     platform_settings: G8eePlatformSettings = Depends(get_g8ee_platform_settings),
@@ -337,7 +336,7 @@ async def internal_chat(
     )
 
 
-@router.post(API_PATHS["g8ee"]["chat_triage_answer"])
+@router.post(InternalApiPaths.G8EE_CHAT_TRIAGE_ANSWER)
 async def internal_triage_answer(
     request: TriageAnswerRequest,
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
@@ -373,7 +372,7 @@ async def internal_triage_answer(
     return {"success": True}
 
 
-@router.post(API_PATHS["g8ee"]["chat_triage_skip"])
+@router.post(InternalApiPaths.G8EE_CHAT_TRIAGE_SKIP)
 async def internal_triage_skip(
     request: TriageSkipRequest,
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
@@ -404,7 +403,7 @@ async def internal_triage_skip(
     return {"success": True}
 
 
-@router.post(API_PATHS["g8ee"]["chat_triage_timeout"])
+@router.post(InternalApiPaths.G8EE_CHAT_TRIAGE_TIMEOUT)
 async def internal_triage_timeout(
     request: TriageTimeoutRequest,
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
@@ -435,7 +434,7 @@ async def internal_triage_timeout(
     return {"success": True}
 
 
-@router.post(API_PATHS["g8ee"]["chat_stop"], response_model=StopAIResponse)
+@router.post(InternalApiPaths.G8EE_CHAT_STOP, response_model=StopAIResponse)
 async def stop_ai_processing(
     request: StopAIRequest,
     g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
@@ -491,7 +490,7 @@ async def stop_ai_processing(
     )
 
 
-@router.post(API_PATHS["g8ee"]["operator_approval_respond"], response_model=ApprovalRespondedResponse)
+@router.post(InternalApiPaths.G8EE_OPERATOR_APPROVAL_RESPOND, response_model=ApprovalRespondedResponse)
 async def operator_approval_respond(
     request: OperatorApprovalResponse,
     g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
@@ -536,7 +535,7 @@ async def operator_approval_respond(
     )
 
 
-@router.get(API_PATHS["g8ee"]["operator_approval_pending"], response_model=PendingApprovalsResponse)
+@router.get(InternalApiPaths.G8EE_OPERATOR_APPROVAL_PENDING, response_model=PendingApprovalsResponse)
 async def get_pending_approvals(
     approval_service: OperatorApprovalService = Depends(get_g8ee_approval_service),
 ):
@@ -554,7 +553,7 @@ async def get_pending_approvals(
     return PendingApprovalsResponse(pending_approvals=pending_approvals)
 
 
-@router.post(API_PATHS["g8ee"]["operators_g8ep_activate"], response_model=G8epOperatorActivationResponse)
+@router.post(InternalApiPaths.G8EE_OPERATORS_G8EP_ACTIVATE, response_model=G8epOperatorActivationResponse)
 async def activate_g8ep_operator(
     request: G8epOperatorActivationRequest,
     operator_lifecycle_service: "OperatorLifecycleService" = Depends(get_g8ee_operator_lifecycle_service),
@@ -576,7 +575,7 @@ async def activate_g8ep_operator(
         return G8epOperatorActivationResponse(success=False, error=str(e))
 
 
-@router.post(API_PATHS["g8ee"]["operators_g8ep_relaunch"], response_model=G8epOperatorRelaunchResponse)
+@router.post(InternalApiPaths.G8EE_OPERATORS_G8EP_RELAUNCH, response_model=G8epOperatorRelaunchResponse)
 async def relaunch_g8ep_operator(
     request: G8epOperatorRelaunchRequest,
     operator_lifecycle_service: "OperatorLifecycleService" = Depends(get_g8ee_operator_lifecycle_service),
@@ -602,7 +601,7 @@ async def relaunch_g8ep_operator(
         return G8epOperatorRelaunchResponse(success=False, error=str(e))
 
 
-@router.post(API_PATHS["g8ee"]["operator_direct_command"], response_model=DirectCommandSentResponse)
+@router.post(InternalApiPaths.G8EE_OPERATOR_DIRECT_COMMAND, response_model=DirectCommandSentResponse)
 async def execute_direct_command(
     request: DirectCommandRequest,
     g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
@@ -642,7 +641,7 @@ async def execute_direct_command(
     )
 
 
-@router.get(API_PATHS["g8ee"]["case"], response_model=CaseResponse)
+@router.get(InternalApiPaths.G8EE_CASE, response_model=CaseResponse)
 async def get_case(
     case_id: str,
     case_service: CaseDataService = Depends(get_g8ee_case_data_service),
@@ -653,7 +652,7 @@ async def get_case(
     return CaseResponse(success=True, case=case)
 
 
-@router.patch(API_PATHS["g8ee"]["case"], response_model=CaseResponse)
+@router.patch(InternalApiPaths.G8EE_CASE, response_model=CaseResponse)
 async def update_case(
     case_id: str,
     updates: CaseUpdateRequest,
@@ -678,7 +677,7 @@ async def update_case(
     return CaseResponse(success=True, case=case)
 
 
-@router.delete(API_PATHS["g8ee"]["case"], status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(InternalApiPaths.G8EE_CASE, status_code=status.HTTP_204_NO_CONTENT)
 async def delete_case(
     case_id: str,
     case_service: CaseDataService = Depends(get_g8ee_case_data_service),
@@ -764,7 +763,7 @@ async def delete_case(
 
 
 
-@router.post(API_PATHS["g8ee"]["operators_terminate"], response_model=OperatorTerminateResponse)
+@router.post(InternalApiPaths.G8EE_OPERATORS_TERMINATE, response_model=OperatorTerminateResponse)
 async def terminate_operator(
     request: OperatorTerminateRequest,
     operator_lifecycle_service: "OperatorLifecycleService" = Depends(get_g8ee_operator_lifecycle_service),
@@ -798,7 +797,7 @@ async def terminate_operator(
     return OperatorTerminateResponse(success=True)
 
 
-@router.post(API_PATHS["g8ee"]["operators_listen_session_auth"])
+@router.post(InternalApiPaths.G8EE_OPERATORS_LISTEN_SESSION_AUTH)
 async def listen_session_auth(
     request: OperatorListenSessionAuthRequest,
     session_auth_listener: SessionAuthListener = Depends(get_g8ee_session_auth_listener),
@@ -819,7 +818,7 @@ async def listen_session_auth(
         return {"success": False, "error": "Failed to start session auth listener"}
 
 
-@router.post(API_PATHS["g8ee"]["operators_create_slot"], response_model=OperatorSlotCreationResponse)
+@router.post(InternalApiPaths.G8EE_OPERATORS_CREATE_SLOT, response_model=OperatorSlotCreationResponse)
 async def create_operator_slot(
     request: OperatorSlotCreationRequest,
     operator_data_service: "OperatorDataService" = Depends(get_g8ee_operator_data_service),
@@ -866,16 +865,19 @@ async def create_operator_slot(
 
         await operator_data_service.create_operator(operator_doc)
 
-        # Issue API key to api_keys collection (authority: g8ee)
-        # This must happen BEFORE persisting to platform_settings to eliminate write-order race
-        key_issued = await api_key_service.issue_key(
+        # Issue API key to api_keys collection (canonical) and, if this is a
+        # g8ep operator, mirror to platform_settings in a single coordinated
+        # call. The coordinator rolls back the api_keys entry if the mirror
+        # write fails so we never leave authoritative-without-mirror state.
+        key_issued = await api_key_service.issue_operator_key(
             api_key=api_key,
             user_id=request.user_id,
             organization_id=request.organization_id,
             operator_id=operator_id,
+            is_g8ep=request.is_g8e_node,
+            settings_service=settings_service,
             client_name="operator",
             permissions=["OPERATOR_BOOTSTRAP", "OPERATOR_HEARTBEAT", "OPERATOR_DOWNLOAD"],
-            status="ACTIVE",
         )
 
         if not key_issued:
@@ -889,10 +891,7 @@ async def create_operator_slot(
                 error="Failed to issue API key",
             )
 
-        # If this is a g8ep operator, persist the API key to platform_settings
-        # so g8ep's fetch-key-and-run.sh can retrieve it
         if request.is_g8e_node:
-            await settings_service.update_g8ep_operator_api_key(api_key)
             logger.info(
                 "[INTERNAL-HTTP] g8ep operator API key persisted to platform_settings",
                 extra={"operator_id": operator_id, "user_id": request.user_id}
@@ -926,11 +925,12 @@ async def create_operator_slot(
         )
 
 
-@router.post(API_PATHS["g8ee"]["operators_update_api_key"], response_model=OperatorUpdateApiKeyResponse)
+@router.post(InternalApiPaths.G8EE_OPERATORS_UPDATE_API_KEY, response_model=OperatorUpdateApiKeyResponse)
 async def update_operator_api_key(
     request: OperatorUpdateApiKeyRequest,
     operator_data_service: "OperatorDataService" = Depends(get_g8ee_operator_data_service),
     settings_service: SettingsService = Depends(get_g8ee_settings_service_write),
+    api_key_service: ApiKeyService = Depends(get_g8ee_api_key_service),
     g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
 ):
     """
@@ -954,7 +954,27 @@ async def update_operator_api_key(
             )
             return OperatorUpdateApiKeyResponse(success=False, error="Operator not found")
 
-        # Update operator document with new API key
+        # Rotate the API key in the canonical store (and the platform_settings
+        # mirror if g8ep) BEFORE updating the operator doc. Failure here means
+        # the operator doc is left untouched and the old key remains
+        # authoritative — no phantom keys, no split-brain.
+        rotated = await api_key_service.rotate_operator_key(
+            old_api_key=operator.api_key,
+            new_api_key=request.api_key,
+            user_id=operator.user_id,
+            organization_id=operator.organization_id,
+            operator_id=operator.id,
+            is_g8ep=operator.is_g8ep,
+            settings_service=settings_service,
+            permissions=["OPERATOR_BOOTSTRAP", "OPERATOR_HEARTBEAT", "OPERATOR_DOWNLOAD"],
+        )
+        if not rotated:
+            logger.error(
+                "[INTERNAL-HTTP] Failed to rotate operator API key",
+                extra={"operator_id": request.operator_id}
+            )
+            return OperatorUpdateApiKeyResponse(success=False, error="Failed to rotate API key")
+
         updated_operator = operator.model_copy(update={
             "api_key": request.api_key,
             "updated_at": now(),
@@ -962,9 +982,7 @@ async def update_operator_api_key(
 
         await operator_data_service.update_operator(updated_operator)
 
-        # If this is a g8ep operator, persist the API key to platform_settings
         if operator.is_g8ep:
-            await settings_service.update_g8ep_operator_api_key(request.api_key)
             logger.info(
                 "[INTERNAL-HTTP] g8ep operator API key updated in platform_settings",
                 extra={"operator_id": request.operator_id}
@@ -985,7 +1003,7 @@ async def update_operator_api_key(
         return OperatorUpdateApiKeyResponse(success=False, error=str(e))
 
 
-@router.post(API_PATHS["g8ee"]["auth_generate_key"], response_model=ApiKeyGenerationResponse)
+@router.post(InternalApiPaths.G8EE_AUTH_GENERATE_KEY, response_model=ApiKeyGenerationResponse)
 async def generate_api_key(
     request: ApiKeyGenerationRequest,
     api_key_service: ApiKeyService = Depends(get_g8ee_api_key_service),
@@ -1009,7 +1027,7 @@ async def generate_api_key(
         )
 
 
-@router.post(API_PATHS["g8ee"]["auth_revoke_cert"], response_model=OperatorCertificateRevokeResponse)
+@router.post(InternalApiPaths.G8EE_AUTH_REVOKE_CERT, response_model=OperatorCertificateRevokeResponse)
 async def revoke_operator_certificate(
     request: OperatorCertificateRevokeRequest,
     certificate_service: CertificateService = Depends(get_g8ee_certificate_service),
@@ -1031,7 +1049,7 @@ async def revoke_operator_certificate(
         return OperatorCertificateRevokeResponse(success=False, error=str(e))
 
 
-@router.post(API_PATHS["g8ee"]["operators_claim_slot"], response_model=OperatorSlotClaimResponse)
+@router.post(InternalApiPaths.G8EE_OPERATORS_CLAIM_SLOT, response_model=OperatorSlotClaimResponse)
 async def claim_operator_slot(
     request: OperatorSlotClaimRequest,
     operator_lifecycle_service: "OperatorLifecycleService" = Depends(get_g8ee_operator_lifecycle_service),
@@ -1084,7 +1102,7 @@ async def claim_operator_slot(
         )
 
 
-@router.post(API_PATHS["g8ee"]["operators_bind"], response_model=OperatorBindResponse)
+@router.post(InternalApiPaths.G8EE_OPERATORS_BIND, response_model=OperatorBindResponse)
 async def bind_operators(
     request: OperatorBindRequest,
     operator_data_service: "OperatorDataService" = Depends(get_g8ee_operator_data_service),
@@ -1160,7 +1178,7 @@ async def bind_operators(
     )
 
 
-@router.post(API_PATHS["g8ee"]["operators_unbind"], response_model=OperatorUnbindResponse)
+@router.post(InternalApiPaths.G8EE_OPERATORS_UNBIND, response_model=OperatorUnbindResponse)
 async def unbind_operators(
     request: OperatorUnbindRequest,
     operator_data_service: "OperatorDataService" = Depends(get_g8ee_operator_data_service),
@@ -1266,7 +1284,7 @@ async def authenticate_operator(
         )
 
 
-@router.post(API_PATHS["g8ee"]["operators_device_link_register"], response_model=OperatorDeviceLinkRegisterResponse)
+@router.post(InternalApiPaths.G8EE_OPERATORS_DEVICE_LINK_REGISTER, response_model=OperatorDeviceLinkRegisterResponse)
 async def register_device_link_operator(
     request: OperatorDeviceLinkRegisterRequest,
     operator_auth_service: OperatorAuthService = Depends(get_g8ee_operator_auth_service),
@@ -1341,7 +1359,7 @@ async def refresh_operator_session(
         return OperatorSessionRefreshResponse(success=False, error=str(e))
 
 
-@router.post(API_PATHS["g8ee"]["operators_register_session"], response_model=OperatorSessionRegisteredResponse)
+@router.post(InternalApiPaths.G8EE_OPERATORS_REGISTER_SESSION, response_model=OperatorSessionRegisteredResponse)
 async def register_operator_session(
     request: OperatorSessionRegistrationRequest,
     heartbeat_service: OperatorHeartbeatService = Depends(get_g8ee_heartbeat_service),
@@ -1374,7 +1392,7 @@ async def register_operator_session(
     )
 
 
-@router.post(API_PATHS["g8ee"]["operators_deregister_session"], response_model=OperatorSessionRegisteredResponse)
+@router.post(InternalApiPaths.G8EE_OPERATORS_DEREGISTER_SESSION, response_model=OperatorSessionRegisteredResponse)
 async def deregister_operator_session(
     request: OperatorSessionRegistrationRequest,
     heartbeat_service: OperatorHeartbeatService = Depends(get_g8ee_heartbeat_service),
@@ -1406,7 +1424,7 @@ async def deregister_operator_session(
     )
 
 
-@router.post(API_PATHS["g8ee"]["operators_stop"], response_model=OperatorStoppedResponse)
+@router.post(InternalApiPaths.G8EE_OPERATORS_STOP, response_model=OperatorStoppedResponse)
 async def stop_operator(
     request: StopOperatorRequest,
     g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
@@ -1462,7 +1480,7 @@ async def stop_operator(
     )
 
 
-@router.get(API_PATHS["g8ee"]["investigations"])
+@router.get(InternalApiPaths.G8EE_INVESTIGATIONS)
 async def query_investigations(
     request: Request,
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
@@ -1489,7 +1507,7 @@ async def query_investigations(
     return investigations
 
 
-@router.get(API_PATHS["g8ee"]["investigation"], response_model=InvestigationModel)
+@router.get(InternalApiPaths.G8EE_INVESTIGATION, response_model=InvestigationModel)
 async def get_investigation(
     investigation_id: str,
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
@@ -1532,7 +1550,7 @@ async def get_investigation(
     return investigation
 
 
-@router.get(API_PATHS["g8ee"]["health"])
+@router.get(InternalApiPaths.G8EE_HEALTH)
 async def health_check():
     """Health check for internal API"""
     return {

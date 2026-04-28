@@ -15,17 +15,24 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from typing import TYPE_CHECKING
 
 from app.constants import DB_COLLECTION_API_KEYS
 from app.models.api_keys import ApiKeyDocument
 from app.services.cache.cache_aside import CacheAsideService
 from app.utils.timestamp import now
 
+if TYPE_CHECKING:
+    from app.services.infra.settings_service import SettingsServiceProtocol
+
 logger = logging.getLogger(__name__)
 
 # Constants for hashing (aligned with g8ed)
 API_KEY_HASH_ALGORITHM = "sha256"
 API_KEY_HASH_LENGTH = 32
+
+API_KEY_STATUS_ACTIVE = "ACTIVE"
+API_KEY_STATUS_REVOKED = "REVOKED"
 
 class ApiKeyService:
     """
@@ -116,6 +123,153 @@ class ApiKeyService:
         except Exception as e:
             logger.error(f"[API-KEY-SERVICE] Failed to issue API key: {e}")
             return False
+
+    async def revoke_key(self, api_key: str) -> bool:
+        """Mark an API key as REVOKED in the api_keys collection.
+
+        Returns True on success or if the key did not exist (idempotent).
+        Returns False only on storage failure.
+        """
+        if not api_key:
+            return True
+        doc_id = self.make_doc_id(api_key)
+        try:
+            existing = await self.cache.get_document_with_cache(self.collection, doc_id)
+            if not existing:
+                return True
+            await self.cache.update_document(
+                collection=self.collection,
+                document_id=doc_id,
+                data={"status": API_KEY_STATUS_REVOKED, "revoked_at": now()},
+                merge=True,
+            )
+            logger.info(
+                "[API-KEY-SERVICE] API key revoked",
+                extra={"doc_id": doc_id[:8] + "..."},
+            )
+            return True
+        except Exception as e:
+            logger.error(f"[API-KEY-SERVICE] Failed to revoke API key: {e}")
+            return False
+
+    async def issue_operator_key(
+        self,
+        api_key: str,
+        user_id: str,
+        organization_id: str | None,
+        operator_id: str,
+        is_g8ep: bool,
+        settings_service: "SettingsServiceProtocol",
+        client_name: str = "operator",
+        permissions: list[str] | None = None,
+    ) -> bool:
+        """Issue an operator API key with canonical-first dual-write.
+
+        1. Writes the key to the ``api_keys`` collection (canonical).
+        2. If ``is_g8ep`` is True, mirrors the key to
+           ``platform_settings.g8ep_operator_api_key`` so g8ep's
+           ``fetch-key-and-run.sh`` can retrieve it on bootstrap.
+        3. If step 2 fails, the canonical record is rolled back to REVOKED
+           so we never leave a key authoritative-without-mirror.
+        """
+        issued = await self.issue_key(
+            api_key=api_key,
+            user_id=user_id,
+            organization_id=organization_id,
+            operator_id=operator_id,
+            client_name=client_name,
+            permissions=permissions,
+            status=API_KEY_STATUS_ACTIVE,
+        )
+        if not issued:
+            return False
+
+        if not is_g8ep:
+            return True
+
+        try:
+            await settings_service.update_g8ep_operator_api_key(api_key)
+            return True
+        except Exception as e:
+            logger.error(
+                "[API-KEY-SERVICE] Failed to mirror g8ep operator API key to "
+                "platform_settings; rolling back api_keys entry",
+                extra={"operator_id": operator_id, "error": str(e)},
+            )
+            await self.revoke_key(api_key)
+            return False
+
+    async def rotate_operator_key(
+        self,
+        old_api_key: str | None,
+        new_api_key: str,
+        user_id: str,
+        organization_id: str | None,
+        operator_id: str,
+        is_g8ep: bool,
+        settings_service: "SettingsServiceProtocol",
+        client_name: str = "operator",
+        permissions: list[str] | None = None,
+    ) -> bool:
+        """Rotate an operator API key.
+
+        Issues + mirrors the new key first via ``issue_operator_key`` so a
+        failure leaves the OLD key authoritative everywhere. Only after the
+        new key is fully in place is the old key revoked in ``api_keys``.
+        Old-key revocation is best-effort; failure is logged but not fatal.
+        """
+        ok = await self.issue_operator_key(
+            api_key=new_api_key,
+            user_id=user_id,
+            organization_id=organization_id,
+            operator_id=operator_id,
+            is_g8ep=is_g8ep,
+            settings_service=settings_service,
+            client_name=client_name,
+            permissions=permissions,
+        )
+        if not ok:
+            return False
+
+        if old_api_key and old_api_key != new_api_key:
+            revoked = await self.revoke_key(old_api_key)
+            if not revoked:
+                logger.warning(
+                    "[API-KEY-SERVICE] Old operator API key revocation failed "
+                    "after successful rotation; reconciliation will catch up",
+                    extra={"operator_id": operator_id},
+                )
+
+        return True
+
+    async def revoke_operator_key(
+        self,
+        api_key: str,
+        is_g8ep: bool,
+        settings_service: "SettingsServiceProtocol",
+    ) -> bool:
+        """Revoke an operator API key in the canonical store, then clear the
+        platform_settings mirror if this was a g8ep key.
+
+        ``api_keys`` is intentionally revoked first: even if the mirror clear
+        fails, the key cannot authenticate anymore, and the startup
+        reconciler will clear the stale mirror on next boot.
+        """
+        ok = await self.revoke_key(api_key)
+        if not ok:
+            return False
+
+        if is_g8ep:
+            try:
+                await settings_service.clear_g8ep_operator_api_key(expected=api_key)
+            except Exception as e:
+                logger.warning(
+                    "[API-KEY-SERVICE] Failed to clear g8ep operator API key "
+                    "from platform_settings after revoke; reconciler will "
+                    "catch up",
+                    extra={"error": str(e)},
+                )
+        return True
 
     async def record_usage(self, api_key: str) -> None:
         """Update the last used timestamp of a key."""

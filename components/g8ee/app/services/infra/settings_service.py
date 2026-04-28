@@ -68,6 +68,18 @@ class SettingsServiceProtocol(Protocol):
         """Update the g8ep operator API key in platform settings."""
         ...
 
+    async def clear_g8ep_operator_api_key(self, expected: str | None = None) -> None:
+        """Clear the g8ep operator API key from platform settings.
+
+        If *expected* is provided, only clear when the stored value matches
+        — prevents racing reconcilers from wiping a freshly rotated key.
+        """
+        ...
+
+    async def get_stored_g8ep_operator_api_key(self) -> str | None:
+        """Read the raw mirrored g8ep operator API key from platform_settings."""
+        ...
+
 
 class SettingsService:
     """Service for managing g8ee settings with bootstrap loading and cache-aside logic."""
@@ -256,10 +268,55 @@ class SettingsService:
         await self._cache_aside.update_document(
             collection=DB_COLLECTION_SETTINGS,
             document_id=PLATFORM_SETTINGS_DOC,
-            update_data={"settings": {"g8ep_operator_api_key": api_key}}
+            data={"settings": {"g8ep_operator_api_key": api_key}},
+            merge=True
         )
 
         self._logger.info(
             "g8ep operator API key updated in platform settings",
             extra={"api_key_prefix": api_key[:8] + "..."}
         )
+
+    async def clear_g8ep_operator_api_key(self, expected: str | None = None) -> None:
+        """Clear the g8ep operator API key field in platform_settings.
+
+        If *expected* is provided and the stored value differs, the clear is
+        skipped — this prevents a delayed revoke from wiping a freshly
+        rotated key. Authority: g8ee.
+        """
+        if not self._cache_aside:
+            raise ConfigurationError("CacheAsideService required for updating platform settings")
+
+        if expected is not None:
+            current = await self.get_stored_g8ep_operator_api_key()
+            if current is None:
+                return
+            if current != expected:
+                self._logger.info(
+                    "Skipping g8ep operator API key clear: stored value no longer matches expected",
+                )
+                return
+
+        await self._cache_aside.update_document(
+            collection=DB_COLLECTION_SETTINGS,
+            document_id=PLATFORM_SETTINGS_DOC,
+            data={"settings": {"g8ep_operator_api_key": None}},
+            merge=True,
+        )
+        self._logger.info("g8ep operator API key cleared from platform settings")
+
+    async def get_stored_g8ep_operator_api_key(self) -> str | None:
+        """Read the raw mirrored g8ep operator API key from platform_settings.
+
+        Bypasses the typed ``get_platform_settings`` overlay so the reconciler
+        can observe the on-disk value without bootstrap merging.
+        """
+        if not self._cache_aside:
+            return None
+        doc = await self._cache_aside.get_document_with_cache(
+            collection=DB_COLLECTION_SETTINGS,
+            document_id=PLATFORM_SETTINGS_DOC,
+        )
+        if not doc:
+            return None
+        return (doc.get("settings") or {}).get("g8ep_operator_api_key")

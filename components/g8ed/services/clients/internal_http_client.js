@@ -401,7 +401,7 @@ class InternalHttpClient{
             answer: data.answer
         });
 
-        return this.request('g8ee', InternalApiPaths.g8ee.chat_triage_answer, {
+        return this.request('g8ee', ApiPaths.g8ee.chatTriageAnswer(), {
             method: 'POST',
             body: data,
             g8eContext
@@ -422,7 +422,7 @@ class InternalHttpClient{
             investigationId: data.investigation_id
         });
 
-        return this.request('g8ee', InternalApiPaths.g8ee.chat_triage_skip, {
+        return this.request('g8ee', ApiPaths.g8ee.chatTriageSkip(), {
             method: 'POST',
             body: data,
             g8eContext
@@ -443,7 +443,7 @@ class InternalHttpClient{
             investigationId: data.investigation_id
         });
 
-        return this.request('g8ee', InternalApiPaths.g8ee.chat_triage_timeout, {
+        return this.request('g8ee', ApiPaths.g8ee.chatTriageTimeout(), {
             method: 'POST',
             body: data,
             g8eContext

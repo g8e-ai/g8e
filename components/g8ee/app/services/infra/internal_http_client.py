@@ -127,7 +127,7 @@ class InternalHttpClient:
 
         try:
             response = await self._http.post(
-                InternalApiPaths.PREFIX + InternalApiPaths.G8ED_SSE_PUSH,
+                InternalApiPaths.G8ED_SSE_PUSH,
                 json_data=wire_model,
                 headers=self._auth_headers(),
             )
@@ -184,7 +184,7 @@ class InternalHttpClient:
             request_payload = IntentRequestPayload(intent=intent)
 
             response = await self._http.post(
-                (InternalApiPaths.PREFIX + InternalApiPaths.G8ED_GRANT_INTENT).format(operator_id=operator_id),
+                InternalApiPaths.G8ED_GRANT_INTENT.format(operator_id=operator_id),
                 json_data=request_payload,
                 headers=self._auth_headers(),
                 context=context,
@@ -234,7 +234,7 @@ class InternalHttpClient:
             request_payload = IntentRequestPayload(intent=intent)
 
             response = await self._http.post(
-                (InternalApiPaths.PREFIX + InternalApiPaths.G8ED_REVOKE_INTENT).format(operator_id=operator_id),
+                InternalApiPaths.G8ED_REVOKE_INTENT.format(operator_id=operator_id),
                 json_data=request_payload,
                 headers=self._auth_headers(),
                 context=context,
@@ -283,7 +283,7 @@ class InternalHttpClient:
             )
 
             response = await self._http.post(
-                InternalApiPaths.PREFIX + InternalApiPaths.G8ED_CREATE_OPERATOR_LINK,
+                InternalApiPaths.G8ED_CREATE_OPERATOR_LINK,
                 json_data=request_payload,
                 headers=self._auth_headers(),
                 context=context,

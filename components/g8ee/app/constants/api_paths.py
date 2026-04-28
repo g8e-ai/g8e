@@ -28,44 +28,45 @@ def _load(filename: str) -> dict:
 
 API_PATHS = _load("api_paths.json")
 
-class InternalApiPaths:
+class _InternalApiPathsMeta(type):
+    def __getattr__(cls, name: str) -> str:
+        if name.startswith("G8EE_"):
+            key = name[5:].lower()
+            if key in cls._G8EE_PATHS:
+                return cls.PREFIX + cls._G8EE_PATHS[key]
+        elif name.startswith("G8ED_"):
+            key = name[5:].lower()
+            if key in cls._G8ED_PATHS:
+                return cls.PREFIX + cls._G8ED_PATHS[key]
+        raise AttributeError(f"'{cls.__name__}' object has no attribute '{name}'")
+
+class InternalApiPaths(metaclass=_InternalApiPathsMeta):
     """Internal API paths shared across g8ee and g8ed."""
     PREFIX: str = API_PATHS["internal_prefix"]
+
+    _G8EE_PATHS: dict = API_PATHS["g8ee"]
+    _G8ED_PATHS: dict = API_PATHS["g8ed"]
+
+
+def validate_api_paths_sync() -> None:
+    """Validate that all keys in api_paths.json are accessible via InternalApiPaths."""
+    errors = []
     
-    # g8ee Endpoints (relative to PREFIX)
-    G8EE_CHAT: str = PREFIX + API_PATHS["g8ee"]["chat"]
-    G8EE_CHAT_STOP: str = PREFIX + API_PATHS["g8ee"]["chat_stop"]
-    G8EE_INVESTIGATIONS: str = PREFIX + API_PATHS["g8ee"]["investigations"]
-    G8EE_INVESTIGATION: str = PREFIX + API_PATHS["g8ee"]["investigation"]
-    G8EE_CASES: str = PREFIX + API_PATHS["g8ee"]["cases"]
-    G8EE_CASE: str = PREFIX + API_PATHS["g8ee"]["case"]
-    G8EE_OPERATORS_STOP: str = PREFIX + API_PATHS["g8ee"]["operators_stop"]
-    G8EE_OPERATORS_REGISTER_SESSION: str = PREFIX + API_PATHS["g8ee"]["operators_register_session"]
-    G8EE_OPERATORS_DEREGISTER_SESSION: str = PREFIX + API_PATHS["g8ee"]["operators_deregister_session"]
-    G8EE_OPERATORS_CREATE_SLOT: str = PREFIX + API_PATHS["g8ee"]["operators_create_slot"]
-    G8EE_OPERATORS_CLAIM_SLOT: str = PREFIX + API_PATHS["g8ee"]["operators_claim_slot"]
-    G8EE_OPERATORS_BIND: str = PREFIX + API_PATHS["g8ee"]["operators_bind"]
-    G8EE_OPERATORS_UNBIND: str = PREFIX + API_PATHS["g8ee"]["operators_unbind"]
-    G8EE_OPERATORS_AUTHENTICATE: str = PREFIX + API_PATHS["g8ee"]["operators_authenticate"]
-    G8EE_OPERATORS_VALIDATE_SESSION: str = PREFIX + API_PATHS["g8ee"]["operators_validate_session"]
-    G8EE_OPERATORS_REFRESH_SESSION: str = PREFIX + API_PATHS["g8ee"]["operators_refresh_session"]
-    G8EE_OPERATORS_LISTEN_SESSION_AUTH: str = PREFIX + API_PATHS["g8ee"]["operators_listen_session_auth"]
-    G8EE_OPERATORS_G8EP_ACTIVATE: str = PREFIX + API_PATHS["g8ee"]["operators_g8ep_activate"]
-    G8EE_OPERATORS_G8EP_RELAUNCH: str = PREFIX + API_PATHS["g8ee"]["operators_g8ep_relaunch"]
-    G8EE_OPERATORS_TERMINATE: str = PREFIX + API_PATHS["g8ee"]["operators_terminate"]
-    G8EE_OPERATOR_DIRECT_COMMAND: str = PREFIX + API_PATHS["g8ee"]["operator_direct_command"]
-    G8EE_OPERATOR_APPROVAL_RESPOND: str = PREFIX + API_PATHS["g8ee"]["operator_approval_respond"]
-    G8EE_OPERATOR_APPROVAL_PENDING: str = PREFIX + API_PATHS["g8ee"]["operator_approval_pending"]
-    G8EE_AUTH_GENERATE_KEY: str = PREFIX + API_PATHS["g8ee"]["auth_generate_key"]
-    G8EE_AUTH_REVOKE_CERT: str = PREFIX + API_PATHS["g8ee"]["auth_revoke_cert"]
-    G8EE_CHAT_TRIAGE_ANSWER: str = PREFIX + API_PATHS["g8ee"]["chat_triage_answer"]
-    G8EE_CHAT_TRIAGE_SKIP: str = PREFIX + API_PATHS["g8ee"]["chat_triage_skip"]
-    G8EE_CHAT_TRIAGE_TIMEOUT: str = PREFIX + API_PATHS["g8ee"]["chat_triage_timeout"]
-    G8EE_SETTINGS_USER: str = PREFIX + API_PATHS["g8ee"]["settings_user"]
+    for key in API_PATHS["g8ee"]:
+        attr_name = f"G8EE_{key.upper()}"
+        try:
+            getattr(InternalApiPaths, attr_name)
+        except AttributeError:
+            errors.append(f"g8ee key '{key}' not accessible as '{attr_name}'")
     
-    # g8ed Endpoints (relative to PREFIX)
-    G8ED_SSE_PUSH: str = API_PATHS["g8ed"]["sse_push"]
-    G8ED_GRANT_INTENT: str = API_PATHS["g8ed"]["grant_intent"]
-    G8ED_REVOKE_INTENT: str = API_PATHS["g8ed"]["revoke_intent"]
-    G8ED_CREATE_OPERATOR_LINK: str = API_PATHS["g8ed"]["create_operator_link"]
-    G8ED_HEALTH: str = API_PATHS["g8ed"]["health"]
+    for key in API_PATHS["g8ed"]:
+        attr_name = f"G8ED_{key.upper()}"
+        try:
+            getattr(InternalApiPaths, attr_name)
+        except AttributeError:
+            errors.append(f"g8ed key '{key}' not accessible as '{attr_name}'")
+    
+    if errors:
+        raise RuntimeError(
+            "api_paths.json and InternalApiPaths are out of sync:\n" + "\n".join(errors)
+        )

@@ -14,7 +14,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OperatorRelayService } from '@g8ed/services/operator/operator_relay_service.js';
 import { G8eHttpContext } from '@g8ed/models/request_models.js';
-import { apiPaths } from '@g8ed/constants/api_paths.js';
+import { ApiPaths } from '@g8ed/constants/api_paths.js';
 
 describe('OperatorRelayService', () => {
     let service;
@@ -45,7 +45,7 @@ describe('OperatorRelayService', () => {
         it('should relay stop request with correct parameters', async () => {
             await service.relayStopCommandToG8ee(context);
 
-            expect(mockHttpClient.request).toHaveBeenCalledWith('g8ee', apiPaths.g8ee.operatorsStop(), expect.objectContaining({
+            expect(mockHttpClient.request).toHaveBeenCalledWith('g8ee', ApiPaths.g8ee.operatorsStop(), expect.objectContaining({
                 method: 'POST',
                 body: expect.objectContaining({
                     operator_id: 'op-123',
@@ -65,7 +65,7 @@ describe('OperatorRelayService', () => {
         it('should relay deregistration request', async () => {
             await service.deregisterOperatorSessionInG8ee(context);
 
-            expect(mockHttpClient.request).toHaveBeenCalledWith('g8ee', apiPaths.g8ee.operatorsDeregisterSession(), expect.objectContaining({
+            expect(mockHttpClient.request).toHaveBeenCalledWith('g8ee', ApiPaths.g8ee.operatorsDeregisterSession(), expect.objectContaining({
                 method: 'POST',
                 body: expect.objectContaining({
                     operator_id: 'op-123',
@@ -85,7 +85,7 @@ describe('OperatorRelayService', () => {
 
             await service.relayDirectCommandToG8ee(commandData, context);
 
-            expect(mockHttpClient.request).toHaveBeenCalledWith('g8ee', apiPaths.g8ee.operatorDirectCommand(), expect.objectContaining({
+            expect(mockHttpClient.request).toHaveBeenCalledWith('g8ee', ApiPaths.g8ee.operatorDirectCommand(), expect.objectContaining({
                 method: 'POST',
                 body: expect.objectContaining({
                     command: 'ls',
@@ -100,7 +100,7 @@ describe('OperatorRelayService', () => {
         it('should relay registration request', async () => {
             await service.relayRegisterOperatorSessionToG8ee(context);
 
-            expect(mockHttpClient.request).toHaveBeenCalledWith('g8ee', apiPaths.g8ee.operatorsRegisterSession(), expect.objectContaining({
+            expect(mockHttpClient.request).toHaveBeenCalledWith('g8ee', ApiPaths.g8ee.operatorsRegisterSession(), expect.objectContaining({
                 method: 'POST',
                 body: expect.objectContaining({
                     operator_id: 'op-123',
@@ -127,7 +127,7 @@ describe('OperatorRelayService', () => {
 
             await service.relayApprovalResponseToG8ee(approvalData, context);
 
-            expect(mockHttpClient.request).toHaveBeenCalledWith('g8ee', apiPaths.g8ee.operatorApprovalRespond(), expect.objectContaining({
+            expect(mockHttpClient.request).toHaveBeenCalledWith('g8ee', ApiPaths.g8ee.operatorApprovalRespond(), expect.objectContaining({
                 method: 'POST',
                 body: expect.objectContaining({
                     approval_id: 'app-123',
@@ -162,7 +162,7 @@ describe('OperatorRelayService', () => {
         it('should fetch pending approvals from g8ee', async () => {
             await service.relayPendingApprovalsFromG8ee(context);
 
-            expect(mockHttpClient.request).toHaveBeenCalledWith('g8ee', apiPaths.g8ee.operatorApprovalPending(), expect.objectContaining({
+            expect(mockHttpClient.request).toHaveBeenCalledWith('g8ee', ApiPaths.g8ee.operatorApprovalPending(), expect.objectContaining({
                 method: 'GET',
                 g8eContext: context
             }));
@@ -186,7 +186,7 @@ describe('OperatorRelayService', () => {
 
             await service.relayPendingApprovalsFromG8ee(contextWithIds);
 
-            expect(mockHttpClient.request).toHaveBeenCalledWith('g8ee', apiPaths.g8ee.operatorApprovalPending(), expect.objectContaining({
+            expect(mockHttpClient.request).toHaveBeenCalledWith('g8ee', ApiPaths.g8ee.operatorApprovalPending(), expect.objectContaining({
                 method: 'GET',
                 g8eContext: contextWithIds
             }));

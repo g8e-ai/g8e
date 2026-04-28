@@ -308,7 +308,8 @@ class TestSettingsService:
         cache_mock.update_document.assert_called_once_with(
             collection=DB_COLLECTION_SETTINGS,
             document_id=PLATFORM_SETTINGS_DOC,
-            update_data={"settings": {"g8ep_operator_api_key": api_key}}
+            data={"settings": {"g8ep_operator_api_key": api_key}},
+            merge=True
         )
 
     async def test_update_g8ep_operator_api_key_without_cache_raises_error(self):
