@@ -27,9 +27,12 @@ describe('OperatorService', () => {
                 getOperator: vi.fn(),
                 getOperatorFresh: vi.fn(),
                 queryOperators: vi.fn(),
-                queryListedOperators: vi.fn().mockImplementation((filters) => {
+                queryOperatorsFresh: vi.fn(),
+                queryListedOperators: vi.fn().mockImplementation((filters, options = {}) => {
                     // Filter out TERMINATED operators
-                    const allOperators = mocks.operatorDataService.queryOperators(filters);
+                    const allOperators = options.fresh
+                        ? mocks.operatorDataService.queryOperatorsFresh(filters)
+                        : mocks.operatorDataService.queryOperators(filters);
                     return allOperators.then(ops => ops.filter(op => op.status !== OperatorStatus.TERMINATED));
                 }),
                 updateOperator: vi.fn(),
@@ -146,7 +149,7 @@ describe('OperatorService', () => {
                 new OperatorDocument({ id: 'op-1', user_id: 'u-1', status: OperatorStatus.ACTIVE, name: 'node-01', bound_web_session_id: 'ws-1' }),
                 new OperatorDocument({ id: 'op-2', user_id: 'u-1', status: OperatorStatus.AVAILABLE })
             ];
-            mocks.operatorDataService.queryOperators.mockResolvedValue(operators);
+            mocks.operatorDataService.queryOperatorsFresh.mockResolvedValue(operators);
 
             const result = await service.getUserOperators('u-1');
 
@@ -175,7 +178,7 @@ describe('OperatorService', () => {
                 new OperatorDocument({ id: 'op-1', user_id: 'u-1', status: OperatorStatus.ACTIVE }),
                 new OperatorDocument({ id: 'op-2', user_id: 'u-1', status: OperatorStatus.TERMINATED })
             ];
-            mocks.operatorDataService.queryOperators.mockResolvedValue(operators);
+            mocks.operatorDataService.queryOperatorsFresh.mockResolvedValue(operators);
 
             const result = await service.getUserOperators('u-1');
             expect(result.operators).toHaveLength(1);
@@ -187,7 +190,7 @@ describe('OperatorService', () => {
                 new OperatorDocument({ id: 'op-1', user_id: 'u-1', status: OperatorStatus.ACTIVE }),
                 new OperatorDocument({ id: 'op-2', user_id: 'u-1', status: OperatorStatus.TERMINATED })
             ];
-            mocks.operatorDataService.queryOperators.mockResolvedValue(operators);
+            mocks.operatorDataService.queryOperatorsFresh.mockResolvedValue(operators);
 
             const result = await service.getUserOperators('u-1', true);
             expect(result.operators).toHaveLength(2);
@@ -227,6 +230,7 @@ describe('OperatorService', () => {
             expect(result.total_count).toBe(2);
             expect(result.active_count).toBe(1);
             expect(result.operators.find(op => op.id === 'op-3')).toBeUndefined();
+            expect(mocks.operatorDataService.queryListedOperators).toHaveBeenCalledWith([], { fresh: false });
         });
 
         it('should return all operators including terminated if allStatuses is true', async () => {
@@ -241,6 +245,80 @@ describe('OperatorService', () => {
             expect(result.operators).toHaveLength(2);
             expect(result.total_count).toBe(2);
             expect(result.operators.find(op => op.id === 'op-2')).toBeDefined();
+            expect(mocks.operatorDataService.queryOperators).toHaveBeenCalledWith([]);
+        });
+
+        it('should use fresh queries when fresh=true', async () => {
+            const operators = [
+                new OperatorDocument({ id: 'op-1', user_id: 'u-1', status: OperatorStatus.ACTIVE }),
+                new OperatorDocument({ id: 'op-2', user_id: 'u-2', status: OperatorStatus.AVAILABLE })
+            ];
+            mocks.operatorDataService.queryOperatorsFresh.mockResolvedValue(operators);
+
+            const result = await service.getAllOperators(false, true);
+
+            expect(result.operators).toHaveLength(2);
+            expect(mocks.operatorDataService.queryListedOperators).toHaveBeenCalledWith([], { fresh: true });
+        });
+
+        it('should use fresh queries when fresh=true and allStatuses=true', async () => {
+            const operators = [
+                new OperatorDocument({ id: 'op-1', user_id: 'u-1', status: OperatorStatus.ACTIVE }),
+                new OperatorDocument({ id: 'op-2', user_id: 'u-1', status: OperatorStatus.TERMINATED })
+            ];
+            mocks.operatorDataService.queryOperatorsFresh.mockResolvedValue(operators);
+
+            const result = await service.getAllOperators(true, true);
+
+            expect(result.operators).toHaveLength(2);
+            expect(mocks.operatorDataService.queryOperatorsFresh).toHaveBeenCalledWith([]);
+        });
+
+        it('should prevent stale data when fresh=true (regression test)', async () => {
+            const staleOperators = [
+                new OperatorDocument({ 
+                    id: 'op-1', 
+                    user_id: 'u-1', 
+                    status: OperatorStatus.ACTIVE,
+                    latest_heartbeat_snapshot: { system_identity: { os: '' } }
+                }),
+                new OperatorDocument({ 
+                    id: 'op-2', 
+                    user_id: 'u-2', 
+                    status: OperatorStatus.ACTIVE,
+                    latest_heartbeat_snapshot: { system_identity: { os: '' } }
+                })
+            ];
+            const freshOperators = [
+                new OperatorDocument({ 
+                    id: 'op-1', 
+                    user_id: 'u-1', 
+                    status: OperatorStatus.ACTIVE,
+                    latest_heartbeat_snapshot: { system_identity: { os: 'linux' } }
+                }),
+                new OperatorDocument({ 
+                    id: 'op-2', 
+                    user_id: 'u-2', 
+                    status: OperatorStatus.ACTIVE,
+                    latest_heartbeat_snapshot: { system_identity: { os: 'darwin' } }
+                })
+            ];
+            
+            mocks.operatorDataService.queryOperators.mockResolvedValue(staleOperators);
+            mocks.operatorDataService.queryListedOperators.mockImplementation((filters, options) => {
+                return options.fresh 
+                    ? Promise.resolve(freshOperators)
+                    : Promise.resolve(staleOperators);
+            });
+
+            const staleResult = await service.getAllOperators(false, false);
+            expect(staleResult.operators).toHaveLength(2);
+            expect(staleResult.operators[0].latest_heartbeat_snapshot.system_identity.os).toBe('');
+
+            const freshResult = await service.getAllOperators(false, true);
+            expect(freshResult.operators).toHaveLength(2);
+            expect(freshResult.operators[0].latest_heartbeat_snapshot.system_identity.os).toBe('linux');
+            expect(freshResult.operators[1].latest_heartbeat_snapshot.system_identity.os).toBe('darwin');
         });
     });
 
@@ -373,6 +451,47 @@ describe('OperatorService', () => {
             mocks.operatorDataService.queryOperators.mockResolvedValue([]);
             const result = await service.getOperatorByUserId('u-1');
             expect(result).toBeNull();
+        });
+
+        it('should use fresh query when fresh=true', async () => {
+            const operators = [
+                new OperatorDocument({ id: 'op-active', user_id: 'u-1', status: OperatorStatus.ACTIVE })
+            ];
+            mocks.operatorDataService.queryOperatorsFresh.mockResolvedValue(operators);
+
+            const result = await service.getOperatorByUserId('u-1', true);
+            expect(result.id).toBe('op-active');
+            expect(mocks.operatorDataService.queryOperatorsFresh).toHaveBeenCalledWith([{ field: 'user_id', operator: '==', value: 'u-1' }]);
+        });
+
+        it('should prevent stale data when fresh=true (regression test)', async () => {
+            const staleOperators = [
+                new OperatorDocument({ 
+                    id: 'op-stale', 
+                    user_id: 'u-1', 
+                    status: OperatorStatus.ACTIVE,
+                    latest_heartbeat_snapshot: { system_identity: { os: '' } }
+                })
+            ];
+            const freshOperators = [
+                new OperatorDocument({ 
+                    id: 'op-fresh', 
+                    user_id: 'u-1', 
+                    status: OperatorStatus.ACTIVE,
+                    latest_heartbeat_snapshot: { system_identity: { os: 'linux' } }
+                })
+            ];
+            
+            mocks.operatorDataService.queryOperators.mockResolvedValue(staleOperators);
+            mocks.operatorDataService.queryOperatorsFresh.mockResolvedValue(freshOperators);
+
+            const staleResult = await service.getOperatorByUserId('u-1', false);
+            expect(staleResult.id).toBe('op-stale');
+            expect(staleResult.latest_heartbeat_snapshot.system_identity.os).toBe('');
+
+            const freshResult = await service.getOperatorByUserId('u-1', true);
+            expect(freshResult.id).toBe('op-fresh');
+            expect(freshResult.latest_heartbeat_snapshot.system_identity.os).toBe('linux');
         });
     });
 

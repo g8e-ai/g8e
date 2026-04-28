@@ -142,5 +142,5 @@ else
     echo "[$NODE_ID] nginx is NOT running - config error"
 fi
 
-# Keep container alive
-wait
+# Keep container alive even if all background processes exit
+while true; do sleep 3600; done

@@ -250,7 +250,7 @@ describe('UserService [UNIT]', () => {
     });
 
     describe('findUserByEmail', () => {
-        it('queries documents by email field', async () => {
+        it('queries documents by email field with fresh query', async () => {
             const mockUser = { id: 'u1', email: 'test@example.com' };
             cacheAside.queryDocuments.mockResolvedValue([mockUser]);
 
@@ -259,7 +259,9 @@ describe('UserService [UNIT]', () => {
             expect(result.id).toBe('u1');
             expect(cacheAside.queryDocuments).toHaveBeenCalledWith(
                 Collections.USERS,
-                expect.arrayContaining([{ field: 'email', operator: '==', value: 'test@example.com' }])
+                [{ field: 'email', operator: '==', value: 'test@example.com' }],
+                null,
+                true
             );
         });
 
@@ -277,7 +279,7 @@ describe('UserService [UNIT]', () => {
     });
 
     describe('getUserByApiKey', () => {
-        it('queries documents by g8e_key field', async () => {
+        it('queries documents by g8e_key field with fresh query', async () => {
             const mockUser = { id: 'u1', email: 'test@example.com', g8e_key: 'key1' };
             cacheAside.queryDocuments.mockResolvedValue([mockUser]);
 
@@ -286,7 +288,9 @@ describe('UserService [UNIT]', () => {
             expect(result.id).toBe('u1');
             expect(cacheAside.queryDocuments).toHaveBeenCalledWith(
                 Collections.USERS,
-                expect.arrayContaining([{ field: 'g8e_key', operator: '==', value: 'key1' }])
+                [{ field: 'g8e_key', operator: '==', value: 'key1' }],
+                null,
+                true
             );
         });
 

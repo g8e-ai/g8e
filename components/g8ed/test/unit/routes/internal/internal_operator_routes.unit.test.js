@@ -85,7 +85,7 @@ describe('Internal Operator Routes [UNIT]', () => {
 
             await getRoute()(req, res);
 
-            expect(mockOperatorService.getAllOperators).toHaveBeenCalledWith(false);
+            expect(mockOperatorService.getAllOperators).toHaveBeenCalledWith(false, true);
             expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
                 success: true,
                 total_count: 1
@@ -104,7 +104,7 @@ describe('Internal Operator Routes [UNIT]', () => {
 
             await getRoute()(req, res);
 
-            expect(mockOperatorService.getAllOperators).toHaveBeenCalledWith(true);
+            expect(mockOperatorService.getAllOperators).toHaveBeenCalledWith(true, true);
         });
     });
 
