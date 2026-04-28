@@ -153,15 +153,16 @@ export class TerminalOperatorMixin {
         this.isOperatorBound = true;
         this.boundOperator = operator;
 
-        const systemInfo = operator.system_info || {};
+        const heartbeatSnapshot = operator.latest_heartbeat_snapshot || {};
+        const systemIdentity = heartbeatSnapshot.system_identity || {};
 
         if (this.hostnameElement) {
-            const hostname = systemInfo.hostname || operator.name || 'operator';
+            const hostname = systemIdentity.hostname || operator.name || 'operator';
             this.hostnameElement.textContent = hostname;
         }
 
         if (this.promptElement) {
-            const user = systemInfo.current_user || '$';
+            const user = systemIdentity.current_user || '$';
             this.promptElement.textContent = user === '$' ? '$' : `${user}$`;
         }
 

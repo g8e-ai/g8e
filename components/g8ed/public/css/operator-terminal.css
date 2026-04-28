@@ -275,12 +275,20 @@
 .approval-compact__header {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+    gap: 8px;
+    padding: 6px 10px;
+    border-bottom: 1px solid rgba(var(--text-rgb), 0.05);
+    background: rgba(var(--text-rgb), 0.02);
     color: var(--text-secondary);
+}
+
+.approval-compact__title {
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    flex-grow: 1;
 }
 
 .approval-compact__icon {

@@ -281,9 +281,24 @@ export class TerminalExecutionMixin {
         // Preserve tribunal passes + status (final state) when upgrading a refining widget.
         let tribunalHtml = '';
         if (refiningWidget) {
-            const passesEl = refiningWidget.querySelector('.tribunal__passes');
-            const statusEl = refiningWidget.querySelector('.tribunal__status');
-            tribunalHtml = (passesEl ? passesEl.outerHTML : '') + (statusEl ? statusEl.outerHTML : '');
+            const tribunalEl = refiningWidget.querySelector('.tribunal');
+            if (tribunalEl) {
+                tribunalHtml = tribunalEl.outerHTML;
+            } else {
+                // Fallback for older structure if needed
+                const passesEl = refiningWidget.querySelector('.tribunal__passes');
+                const gapEl = refiningWidget.querySelector('.tribunal__gap');
+                const auditorEl = refiningWidget.querySelector('.tribunal__dot--auditor');
+                const statusEl = refiningWidget.querySelector('.tribunal__status');
+                tribunalHtml = (passesEl ? passesEl.outerHTML : '') + 
+                              (gapEl ? gapEl.outerHTML : '') +
+                              (auditorEl ? auditorEl.outerHTML : '') +
+                              (statusEl ? statusEl.outerHTML : '');
+                
+                if (tribunalHtml) {
+                    tribunalHtml = `<div class="tribunal">${tribunalHtml}</div>`;
+                }
+            }
         }
 
         let headerText = 'Command';

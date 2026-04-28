@@ -201,6 +201,8 @@ export class OperatorStatusInfo extends G8eBaseModel {
     };
 
     static fromOperator(operator) {
+        const heartbeatSnapshot = operator.latest_heartbeat_snapshot || {};
+        const systemIdentity = heartbeatSnapshot.system_identity || {};
         return new OperatorStatusInfo({
             id:                       operator.id,
             user_id:                   operator.user_id,
@@ -217,7 +219,7 @@ export class OperatorStatusInfo extends G8eBaseModel {
             operator_type:             operator.operator_type ?? null,
             granted_intents:           Array.isArray(operator.granted_intents) ? operator.granted_intents : [],
             cloud_subtype:             operator.cloud_subtype ?? null,
-            current_hostname:          operator.system_info?.hostname ?? null,
+            current_hostname:          systemIdentity.hostname ?? operator.system_info?.hostname ?? null,
             session_token:             operator.session_token ?? null,
             session_expires_at:        operator.session_expires_at ?? null,
         });
@@ -279,6 +281,12 @@ export class OperatorDocument extends G8eIdentifiableModel {
         }
         if (parsed.fingerprint_details === null && parsed.system_info?.fingerprint_details) {
             parsed.fingerprint_details = parsed.system_info.fingerprint_details;
+        }
+        if (parsed.system_fingerprint === null && parsed.latest_heartbeat_snapshot?.system_fingerprint) {
+            parsed.system_fingerprint = parsed.latest_heartbeat_snapshot.system_fingerprint;
+        }
+        if (parsed.fingerprint_details === null && parsed.latest_heartbeat_snapshot?.fingerprint_details) {
+            parsed.fingerprint_details = parsed.latest_heartbeat_snapshot.fingerprint_details;
         }
         return parsed;
     }
@@ -465,6 +473,27 @@ export class OperatorSlotSystemInfo extends G8eBaseModel {
             environment:    systemInfo.environment ?? null,
         });
     }
+
+    static fromHeartbeatSnapshot(heartbeatSnapshot) {
+        if (!heartbeatSnapshot) return new OperatorSlotSystemInfo({});
+        const systemIdentity = heartbeatSnapshot.system_identity || {};
+        const network = heartbeatSnapshot.network || {};
+        return new OperatorSlotSystemInfo({
+            hostname:       systemIdentity.hostname ?? null,
+            os:             systemIdentity.os ?? null,
+            architecture:   systemIdentity.architecture ?? null,
+            cpu_count:      systemIdentity.cpu_count ?? null,
+            memory_mb:      systemIdentity.memory_mb ?? null,
+            current_user:   systemIdentity.current_user ?? null,
+            internal_ip:    network.internal_ip ?? null,
+            public_ip:      network.public_ip ?? null,
+            os_details:     heartbeatSnapshot.os_details ?? null,
+            user_details:   heartbeatSnapshot.user_details ?? null,
+            disk_details:   heartbeatSnapshot.disk_details ?? null,
+            memory_details: heartbeatSnapshot.memory_details ?? null,
+            environment:    heartbeatSnapshot.environment ?? null,
+        });
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -498,7 +527,9 @@ export class OperatorSlot extends G8eBaseModel {
             is_g8ep:        operator.is_g8ep ?? false,
             first_deployed: operator.first_deployed ?? null,
             last_heartbeat: operator.last_heartbeat ?? null,
-            system_info:    OperatorSlotSystemInfo.fromSystemInfo(operator.system_info),
+            system_info:    operator.latest_heartbeat_snapshot
+                ? OperatorSlotSystemInfo.fromHeartbeatSnapshot(operator.latest_heartbeat_snapshot)
+                : OperatorSlotSystemInfo.fromSystemInfo(operator.system_info),
             latest_heartbeat_snapshot: operator.latest_heartbeat_snapshot ?? null,
         });
     }

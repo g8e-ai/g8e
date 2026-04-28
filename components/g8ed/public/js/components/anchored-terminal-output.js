@@ -21,7 +21,7 @@
 
 import { templateLoader } from '../utils/template-loader.js';
 import { TribunalOutcome, EventType } from '../constants/events.js';
-import { TribunalMemberIcons } from '../constants/agents.js';
+import { TribunalMemberIcons, AuditorIcon } from '../constants/agents.js';
 
 export class TerminalOutputMixin {
     _cancelPendingTimers() {
@@ -620,9 +620,15 @@ export class TerminalOutputMixin {
         }).join('');
 
         const tribunalHtml =
-            `<span class="tribunal__passes">${dots}</span>` +
-            `<span class="tribunal__status">Generating alternatives...</span>` +
-            `<span class="tribunal__spinner"></span>`;
+            `<div class="tribunal">` +
+                `<span class="tribunal__passes">${dots}</span>` +
+                `<span class="tribunal__gap"></span>` +
+                `<span class="tribunal__dot tribunal__dot--auditor" title="Auditor">
+                    <span class="material-symbols-outlined tribunal__dot-icon">${AuditorIcon}</span>
+                </span>` +
+                `<span class="tribunal__status">Generating alternatives...</span>` +
+                `<span class="tribunal__spinner"></span>` +
+            `</div>`;
 
         const parts = [];
         if (request) parts.push(request);
@@ -679,11 +685,17 @@ export class TerminalOutputMixin {
         const spinner = widget.querySelector('.tribunal__spinner');
         if (spinner) spinner.remove();
 
+        const auditorDot = widget.querySelector('.tribunal__dot--auditor');
+        if (auditorDot) {
+            const success = outcome === TribunalOutcome.CONSENSUS || outcome === TribunalOutcome.VERIFIED;
+            auditorDot.classList.add(success ? 'tribunal__dot--ok' : 'tribunal__dot--fail');
+        }
+
         const statusEl = widget.querySelector('.tribunal__status');
         if (!statusEl) return;
 
         const label = this._tribunalOutcomeLabel(outcome);
-        statusEl.textContent = finalCommand ? `${label} \u00b7 ${finalCommand}` : label;
+        statusEl.textContent = label;
         statusEl.classList.add('tribunal__status--done');
         if (outcome === TribunalOutcome.CONSENSUS_FAILED) {
             statusEl.classList.add('tribunal__status--failed');
