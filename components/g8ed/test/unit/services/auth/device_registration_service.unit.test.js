@@ -164,15 +164,6 @@ describe('DeviceRegistrationService', () => {
                 mockG8eContext
             );
             
-            expect(operatorService.relayListenSessionAuthToG8ee).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    operator_session_id: operatorSessionId,
-                    operator_id: operatorId,
-                    user_id: mockG8eContext.user_id
-                }),
-                mockG8eContext
-            );
-            
             // Verify direct SSE notification
             expect(sseService.publishEvent).toHaveBeenCalledWith(
                 mockG8eContext.web_session_id,
@@ -212,15 +203,6 @@ describe('DeviceRegistrationService', () => {
                 expect.objectContaining({
                     operator_id: operatorId,
                     operator_type: OperatorType.SYSTEM
-                }),
-                mockG8eContext
-            );
-
-            expect(operatorService.relayListenSessionAuthToG8ee).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    operator_session_id: operatorSessionId,
-                    operator_id: operatorId,
-                    user_id: mockG8eContext.user_id
                 }),
                 mockG8eContext
             );

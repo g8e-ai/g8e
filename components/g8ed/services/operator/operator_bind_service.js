@@ -109,28 +109,6 @@ export class BindOperatorsService {
                 // 3. Link sessions in KV & Durability
                 await this.bindingService.bind(operatorSessionId, webSessionId, userId, operatorId);
 
-                // 4. Relay to g8ee
-                const contextWrapper = await this.operatorService.getOperatorWithSessionContext(operatorId);
-                if (contextWrapper) {
-                    const g8eContext = G8eHttpContext.parse({
-                        web_session_id:      webSessionId,
-                        user_id:             userId,
-                        organization_id:     contextWrapper.organization_id,
-                        case_id:             contextWrapper.case_id,
-                        investigation_id:    contextWrapper.investigation_id,
-                        task_id:             contextWrapper.task_id,
-                        bound_operators: [
-                            BoundOperatorContext.parse({
-                                operator_id:         contextWrapper.id,
-                                operator_session_id: contextWrapper.operator_session_id,
-                                bound_web_session_id: contextWrapper.bound_web_session_id,
-                                status:              contextWrapper.status,
-                                operator_type:       contextWrapper.operator_type,
-                            })
-                        ]
-                    });
-                    await this.operatorService.relayRegisterOperatorSessionToG8ee(g8eContext).catch(() => {});
-                }
                 bound.push(operatorId);
 
             } catch (err) {
@@ -231,29 +209,6 @@ export class BindOperatorsService {
                 // 3. Unlink sessions in KV & Durability
                 if (operatorSessionId) {
                     await this.bindingService.unbind(operatorSessionId, webSessionId, operatorId);
-                }
-                
-                // 4. Relay to g8ee
-                const contextWrapper = await this.operatorService.getOperatorWithSessionContext(operatorId);
-                if (contextWrapper) {
-                    const g8eContext = G8eHttpContext.parse({
-                        web_session_id:      webSessionId,
-                        user_id:             userId,
-                        organization_id:     contextWrapper.organization_id,
-                        case_id:             contextWrapper.case_id,
-                        investigation_id:    contextWrapper.investigation_id,
-                        task_id:             contextWrapper.task_id,
-                        bound_operators: [
-                            BoundOperatorContext.parse({
-                                operator_id:         contextWrapper.id,
-                                operator_session_id: contextWrapper.operator_session_id,
-                                bound_web_session_id: contextWrapper.bound_web_session_id,
-                                status:              contextWrapper.status,
-                                operator_type:       contextWrapper.operator_type,
-                            })
-                        ]
-                    });
-                    await this.operatorService.relayRegisterOperatorSessionToG8ee(g8eContext).catch(() => {});
                 }
                 
                 unbound.push(operatorId);

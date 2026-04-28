@@ -347,29 +347,6 @@ describe('OperatorService', () => {
         });
     });
 
-    describe('getOperatorStatusInfo', () => {
-        it('should return OperatorStatusInfo if operator exists', async () => {
-            const opDoc = new OperatorDocument({ 
-                id: 'op-1', 
-                user_id: 'u-1', 
-                status: OperatorStatus.ACTIVE 
-            });
-            mocks.operatorDataService.getOperator.mockResolvedValue(opDoc);
-
-            const result = await service.getOperatorStatusInfo('op-1');
-
-            expect(result).not.toBeNull();
-            expect(result.id).toBe('op-1');
-            expect(result.status).toBe(OperatorStatus.ACTIVE);
-        });
-
-        it('should return null if operator does not exist', async () => {
-            mocks.operatorDataService.getOperator.mockResolvedValue(null);
-            const result = await service.getOperatorStatusInfo('op-1');
-            expect(result).toBeNull();
-        });
-    });
-
     describe('getOperatorByUserId', () => {
         it('should return active/bound operator first', async () => {
             const operators = [

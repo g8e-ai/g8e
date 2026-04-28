@@ -627,7 +627,8 @@ Operator list events use `OperatorSlot` projections instead of full `OperatorDoc
 - `bound_web_session_id` — bound web session (if any)
 - `is_g8ep` — g8e node operator flag
 - `first_deployed` — first deployment timestamp
-- `last_heartbeat` — last heartbeat timestamp
+- `claimed_at` — when the slot was claimed (set at claim time, not heartbeat time)
+- `last_heartbeat` — last heartbeat timestamp (set only on actual heartbeat ingestion)
 - `latest_heartbeat_snapshot` — most recent performance metrics snapshot and system identity
 
 **Projection path:** `OperatorDocument` → `OperatorSlot.fromOperator()` → `forClient()` → SSE payload
@@ -684,7 +685,7 @@ g8es pub/sub  →  g8ee (OperatorHeartbeatService)
 ```
 
 **g8es document store fields (managed by g8e):**
-- `last_heartbeat` — timestamp of most recent heartbeat
+- `last_heartbeat` — timestamp of most recent heartbeat (set only on actual heartbeat ingestion)
 - `heartbeat_history` — rolling buffer of last 10 heartbeats
 - `latest_heartbeat_snapshot` — most recent metrics and system identity for UI
 

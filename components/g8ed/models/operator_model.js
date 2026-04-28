@@ -139,52 +139,6 @@ export class CertInfo extends G8eBaseModel {
 }
 
 // ---------------------------------------------------------------------------
-// OperatorStatusInfo  (read-only projection returned by getOperatorStatus)
-// ---------------------------------------------------------------------------
-
-export class OperatorStatusInfo extends G8eBaseModel {
-    static fields = {
-        id:                       { type: F.string, required: true },
-        user_id:                   { type: F.string, required: true },
-        status:                    { type: F.string, required: true },
-        bound_web_session_id:      { type: F.string, default: null },
-        operator_session_id:       { type: F.string, default: null },
-        last_heartbeat:            { type: F.date,   default: null },
-        investigation_id:          { type: F.string, default: null },
-        case_id:                   { type: F.string, default: null },
-        is_active:                 { type: F.boolean, default: false },
-        operator_type:             { type: F.string, default: null },
-        granted_intents:           { type: F.array,  default: () => [] },
-        cloud_subtype:             { type: F.string, default: null },
-        current_hostname:          { type: F.string, default: null },
-        session_token:             { type: F.string, default: null },
-        session_expires_at:        { type: F.date,   default: null },
-    };
-
-    static fromOperator(operator) {
-        const heartbeatSnapshot = operator.latest_heartbeat_snapshot || {};
-        const systemIdentity = heartbeatSnapshot.system_identity || {};
-        return new OperatorStatusInfo({
-            id:                       operator.id,
-            user_id:                   operator.user_id,
-            status:                    operator.status,
-            bound_web_session_id:      operator.bound_web_session_id ?? null,
-            operator_session_id:       operator.operator_session_id ?? null,
-            last_heartbeat:            operator.last_heartbeat ?? null,
-            investigation_id:          operator.investigation_id ?? null,
-            case_id:                   operator.case_id ?? null,
-            is_active:                 operator.status === OperatorStatus.ACTIVE,
-            operator_type:             operator.operator_type ?? null,
-            granted_intents:           Array.isArray(operator.granted_intents) ? operator.granted_intents : [],
-            cloud_subtype:             operator.cloud_subtype ?? null,
-            current_hostname:          systemIdentity.hostname ?? null,
-            session_token:             operator.session_token ?? null,
-            session_expires_at:        operator.session_expires_at ?? null,
-        });
-    }
-}
-
-// ---------------------------------------------------------------------------
 // OperatorDocument  (full Operator record stored in g8es document store)
 // ---------------------------------------------------------------------------
 
@@ -209,6 +163,7 @@ export class OperatorDocument extends G8eIdentifiableModel {
         started_at:                   { type: F.date,    default: null },
         terminated_at:                { type: F.date,    default: null },
         first_deployed:               { type: F.date,    default: null },
+        claimed_at:                   { type: F.date,    default: null },
         last_heartbeat:               { type: F.date,    default: null },
         runtime_config:               { type: F.object,  default: () => ({}) },
         system_fingerprint:           { type: F.string,  default: null },
@@ -387,6 +342,7 @@ export class OperatorSlot extends G8eBaseModel {
         bound_web_session_id: { type: F.string,  default: null },
         is_g8ep:        { type: F.boolean, default: false },
         first_deployed: { type: F.date,    default: null },
+        claimed_at:     { type: F.date,    default: null },
         last_heartbeat: { type: F.date,    default: null },
         latest_heartbeat_snapshot: { type: F.object, default: null },
     };
@@ -402,6 +358,7 @@ export class OperatorSlot extends G8eBaseModel {
             bound_web_session_id: operator.bound_web_session_id ?? null,
             is_g8ep:        operator.is_g8ep ?? false,
             first_deployed: operator.first_deployed ?? null,
+            claimed_at:     operator.claimed_at ?? null,
             last_heartbeat: operator.last_heartbeat ?? null,
             latest_heartbeat_snapshot: operator.latest_heartbeat_snapshot ?? null,
         });

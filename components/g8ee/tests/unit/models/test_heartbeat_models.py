@@ -28,8 +28,9 @@ Coverage:
 """
 
 import pytest
-from app.constants import HeartbeatType, OperatorStatus, VersionStability
+from app.constants import EventType, HeartbeatType, OperatorStatus, VersionStability
 from app.models.operators import (
+    HeartbeatFingerprintDetails,
     HeartbeatNetworkInfo,
     HeartbeatNetworkInterface,
     HeartbeatPerformanceMetrics,
@@ -42,94 +43,92 @@ from app.models.operators import (
 )
 from app.models.pubsub_messages import (
     G8eoHeartbeatCapabilityFlags,
+    G8eoHeartbeatDiskDetails,
+    G8eoHeartbeatEnvironment,
+    G8eoHeartbeatFingerprintDetails,
+    G8eoHeartbeatMemoryDetails,
+    G8eoHeartbeatNetworkInfo,
+    G8eoHeartbeatOSDetails,
     G8eoHeartbeatPayload,
+    G8eoHeartbeatPerformanceMetrics,
+    G8eoHeartbeatSystemIdentity,
+    G8eoHeartbeatUptimeInfo,
+    G8eoHeartbeatUserDetails,
+    G8eoHeartbeatVersionInfo,
+    NetworkConnectivityStatus,
 )
 
 pytestmark = [pytest.mark.unit]
 
 
-# =============================================================================
-# Helpers
-# =============================================================================
-
-def _full_payload(**overrides) -> G8eoHeartbeatPayload:
-    """Return a G8eoHeartbeatPayload with all sections populated."""
-    from app.constants import EventType
-    from app.models.pubsub_messages import (
-        NetworkConnectivityStatus,
-        G8eoHeartbeatDiskDetails,
-        G8eoHeartbeatEnvironment,
-        G8eoHeartbeatMemoryDetails,
-        G8eoHeartbeatNetworkInfo,
-        G8eoHeartbeatOSDetails,
-        G8eoHeartbeatPerformanceMetrics,
-        G8eoHeartbeatSystemIdentity,
-        G8eoHeartbeatUptimeInfo,
-        G8eoHeartbeatUserDetails,
-        G8eoHeartbeatVersionInfo,
-    )
-
-    defaults = dict(
-        event_type=EventType.OPERATOR_HEARTBEAT_SENT,
-        operator_id="op-full-001",
-        operator_session_id="sess-full-001",
-        heartbeat_type=HeartbeatType.AUTOMATIC,
-        system_identity=G8eoHeartbeatSystemIdentity(
-            hostname="testhost",
-            os="linux",
-            architecture="amd64",
-            pwd="/home/admin",
-            current_user="admin",
-            cpu_count=8,
-            memory_mb=16384,
-        ),
-        network_info=G8eoHeartbeatNetworkInfo(
-            public_ip="1.2.3.4",
-            interfaces=["eth0", "lo"],
-            connectivity_status=[
-                NetworkConnectivityStatus(name="eth0", ip="192.168.1.10", mtu=1500),
-                NetworkConnectivityStatus(name="lo", ip="127.0.0.1", mtu=65536),
-            ],
-        ),
-        version_info=G8eoHeartbeatVersionInfo(
-            operator_version="1.2.3",
-            status="stable",
-        ),
-        uptime_info=G8eoHeartbeatUptimeInfo(
-            uptime="2 days, 4:30:00",
-            uptime_seconds=191400,
-        ),
-        performance_metrics=G8eoHeartbeatPerformanceMetrics(
-            cpu_percent=42.5,
-            memory_percent=61.0,
-            disk_percent=35.0,
-            network_latency=8.0,
-            memory_used_mb=9830.0,
-            memory_total_mb=16384.0,
-            disk_used_gb=120.0,
-            disk_total_gb=500.0,
-        ),
-        os_details=G8eoHeartbeatOSDetails(kernel="5.15.0", distro="Ubuntu", version="22.04"),
-        user_details=G8eoHeartbeatUserDetails(
-            username="admin", uid="1000", gid="1000",
-            home="/home/admin", name="Admin User", shell="/bin/bash",
-        ),
-        disk_details=G8eoHeartbeatDiskDetails(total_gb=500.0, used_gb=120.0, free_gb=380.0, percent=24.0),
-        memory_details=G8eoHeartbeatMemoryDetails(
-            total_mb=16384, available_mb=6554, used_mb=9830, percent=60.0,
-        ),
-        environment=G8eoHeartbeatEnvironment(
-            pwd="/home/admin", lang="en_US.UTF-8", timezone="UTC",
-            term="xterm-256color", is_container=False,
-        ),
-        capability_flags=G8eoHeartbeatCapabilityFlags(
-            local_storage_enabled=True,
-            git_available=True,
-            ledger_enabled=False,
-        ),
-    )
-    defaults.update(overrides)
-    return G8eoHeartbeatPayload(**defaults)
+# Canonical wire payload: every section of shared/models/wire/heartbeat.json
+# populated. Used directly by round-trip tests; overrides use model_copy.
+PAYLOAD = G8eoHeartbeatPayload(
+    event_type=EventType.OPERATOR_HEARTBEAT_SENT,
+    operator_id="op-full-001",
+    operator_session_id="sess-full-001",
+    heartbeat_type=HeartbeatType.AUTOMATIC,
+    system_identity=G8eoHeartbeatSystemIdentity(
+        hostname="testhost",
+        os="linux",
+        architecture="amd64",
+        pwd="/home/admin",
+        current_user="admin",
+        cpu_count=8,
+        memory_mb=16384,
+    ),
+    network_info=G8eoHeartbeatNetworkInfo(
+        public_ip="1.2.3.4",
+        interfaces=["eth0", "lo"],
+        connectivity_status=[
+            NetworkConnectivityStatus(name="eth0", ip="192.168.1.10", mtu=1500),
+            NetworkConnectivityStatus(name="lo", ip="127.0.0.1", mtu=65536),
+        ],
+    ),
+    version_info=G8eoHeartbeatVersionInfo(
+        operator_version="1.2.3",
+        status="stable",
+    ),
+    uptime_info=G8eoHeartbeatUptimeInfo(
+        uptime="2 days, 4:30:00",
+        uptime_seconds=191400,
+    ),
+    performance_metrics=G8eoHeartbeatPerformanceMetrics(
+        cpu_percent=42.5,
+        memory_percent=61.0,
+        disk_percent=35.0,
+        network_latency=8.0,
+        memory_used_mb=9830.0,
+        memory_total_mb=16384.0,
+        disk_used_gb=120.0,
+        disk_total_gb=500.0,
+    ),
+    os_details=G8eoHeartbeatOSDetails(kernel="5.15.0", distro="Ubuntu", version="22.04"),
+    user_details=G8eoHeartbeatUserDetails(
+        username="admin", uid="1000", gid="1000",
+        home="/home/admin", name="Admin User", shell="/bin/bash",
+    ),
+    disk_details=G8eoHeartbeatDiskDetails(total_gb=500.0, used_gb=120.0, free_gb=380.0, percent=24.0),
+    memory_details=G8eoHeartbeatMemoryDetails(
+        total_mb=16384, available_mb=6554, used_mb=9830, percent=60.0,
+    ),
+    environment=G8eoHeartbeatEnvironment(
+        pwd="/home/admin", lang="en_US.UTF-8", timezone="UTC",
+        term="xterm-256color", is_container=False,
+    ),
+    capability_flags=G8eoHeartbeatCapabilityFlags(
+        local_storage_enabled=True,
+        git_available=True,
+        ledger_enabled=False,
+    ),
+    system_fingerprint="fp-sha256-abc123",
+    fingerprint_details=G8eoHeartbeatFingerprintDetails(
+        os="linux",
+        architecture="amd64",
+        cpu_count=8,
+        machine_id="machine-id-xyz",
+    ),
+)
 
 
 # =============================================================================
@@ -386,7 +385,7 @@ class TestCoerceHeartbeatType:
 class TestHeartbeatSnapshotFromWireFull:
 
     def test_system_identity_all_fields_mapped(self):
-        hb = HeartbeatSnapshot.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(PAYLOAD)
         assert hb.system_identity.hostname == "testhost"
         assert hb.system_identity.os == "linux"
         assert hb.system_identity.architecture == "amd64"
@@ -396,7 +395,7 @@ class TestHeartbeatSnapshotFromWireFull:
         assert hb.system_identity.memory_mb == 16384
 
     def test_performance_metrics_all_fields_mapped(self):
-        hb = HeartbeatSnapshot.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(PAYLOAD)
         assert hb.performance.cpu_percent == 42.5
         assert hb.performance.memory_percent == 61.0
         assert hb.performance.disk_percent == 35.0
@@ -407,21 +406,21 @@ class TestHeartbeatSnapshotFromWireFull:
         assert hb.performance.disk_total_gb == 500.0
 
     def test_network_latency_field_name_not_network_latency_ms(self):
-        hb = HeartbeatSnapshot.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(PAYLOAD)
         assert hasattr(hb.performance, "network_latency")
         assert not hasattr(hb.performance, "network_latency_ms")
 
     def test_uptime_seconds_is_int(self):
-        hb = HeartbeatSnapshot.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(PAYLOAD)
         assert hb.uptime.uptime_seconds == 191400
         assert isinstance(hb.uptime.uptime_seconds, int)
 
     def test_uptime_display_mapped_from_uptime_field(self):
-        hb = HeartbeatSnapshot.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(PAYLOAD)
         assert hb.uptime.uptime_display == "2 days, 4:30:00"
 
     def test_network_info_mapped(self):
-        hb = HeartbeatSnapshot.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(PAYLOAD)
         assert hb.network.public_ip == "1.2.3.4"
         assert hb.network.interfaces == ["eth0", "lo"]
         assert hb.network.connectivity_status is not None
@@ -430,81 +429,101 @@ class TestHeartbeatSnapshotFromWireFull:
         assert hb.network.connectivity_status[0].ip == "192.168.1.10"
 
     def test_version_info_mapped(self):
-        hb = HeartbeatSnapshot.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(PAYLOAD)
         assert hb.version_info.operator_version == "1.2.3"
 
     def test_capability_flags_local_storage_enabled(self):
-        hb = HeartbeatSnapshot.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(PAYLOAD)
         assert hb.local_storage_enabled is True
 
     def test_capability_flags_git_available(self):
-        hb = HeartbeatSnapshot.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(PAYLOAD)
         assert hb.git_available is True
 
     def test_capability_flags_ledger_enabled_false(self):
-        hb = HeartbeatSnapshot.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(PAYLOAD)
         assert hb.ledger_enabled is False
 
     def test_capability_flags_all_false_when_default(self):
-        from app.models.pubsub_messages import G8eoHeartbeatCapabilityFlags
-        payload = _full_payload(
-            capability_flags=G8eoHeartbeatCapabilityFlags(
+        payload = PAYLOAD.model_copy(update={
+            "capability_flags": G8eoHeartbeatCapabilityFlags(
                 local_storage_enabled=False,
                 git_available=False,
                 ledger_enabled=False,
             )
-        )
+        })
         hb = HeartbeatSnapshot.from_wire(payload)
         assert hb.local_storage_enabled is False
         assert hb.git_available is False
         assert hb.ledger_enabled is False
 
     def test_heartbeat_type_automatic(self):
-        hb = HeartbeatSnapshot.from_wire(_full_payload(heartbeat_type=HeartbeatType.AUTOMATIC))
+        hb = HeartbeatSnapshot.from_wire(PAYLOAD.model_copy(update={"heartbeat_type": HeartbeatType.AUTOMATIC}))
         assert hb.heartbeat_type == HeartbeatType.AUTOMATIC.value
 
     def test_heartbeat_type_bootstrap(self):
-        hb = HeartbeatSnapshot.from_wire(_full_payload(heartbeat_type=HeartbeatType.BOOTSTRAP))
+        hb = HeartbeatSnapshot.from_wire(PAYLOAD.model_copy(update={"heartbeat_type": HeartbeatType.BOOTSTRAP}))
         assert hb.heartbeat_type == HeartbeatType.BOOTSTRAP.value
 
     def test_heartbeat_type_requested(self):
-        hb = HeartbeatSnapshot.from_wire(_full_payload(heartbeat_type=HeartbeatType.REQUESTED))
+        hb = HeartbeatSnapshot.from_wire(PAYLOAD.model_copy(update={"heartbeat_type": HeartbeatType.REQUESTED}))
         assert hb.heartbeat_type == HeartbeatType.REQUESTED.value
 
     def test_os_details_mapped(self):
-        hb = HeartbeatSnapshot.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(PAYLOAD)
         assert hb.os_details.kernel == "5.15.0"
         assert hb.os_details.distro == "Ubuntu"
         assert hb.os_details.version == "22.04"
 
     def test_user_details_mapped(self):
-        hb = HeartbeatSnapshot.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(PAYLOAD)
         assert hb.user_details.username == "admin"
         assert hb.user_details.shell == "/bin/bash"
 
     def test_disk_details_mapped(self):
-        hb = HeartbeatSnapshot.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(PAYLOAD)
         assert hb.disk_details.total_gb == 500.0
         assert hb.disk_details.used_gb == 120.0
 
     def test_memory_details_mapped(self):
-        hb = HeartbeatSnapshot.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(PAYLOAD)
         assert hb.memory_details.total_mb == 16384
         assert hb.memory_details.used_mb == 9830
 
     def test_environment_mapped(self):
-        hb = HeartbeatSnapshot.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(PAYLOAD)
         assert hb.environment.pwd == "/home/admin"
         assert hb.environment.timezone == "UTC"
         assert hb.environment.is_container is False
 
+    def test_fingerprint_details_mapped_to_snapshot_type(self):
+        """Regression: from_wire must coerce G8eoHeartbeatFingerprintDetails (wire)
+        into HeartbeatFingerprintDetails (snapshot). Passing the wire instance
+        directly caused pydantic ValidationError and dropped every heartbeat.
+        """
+        hb = HeartbeatSnapshot.from_wire(PAYLOAD)
+        assert hb.system_fingerprint == "fp-sha256-abc123"
+        assert isinstance(hb.fingerprint_details, HeartbeatFingerprintDetails)
+        assert hb.fingerprint_details.os == "linux"
+        assert hb.fingerprint_details.architecture == "amd64"
+        assert hb.fingerprint_details.cpu_count == 8
+        assert hb.fingerprint_details.machine_id == "machine-id-xyz"
+
+    def test_fingerprint_details_none_when_wire_missing(self):
+        payload = G8eoHeartbeatPayload(
+            event_type=EventType.OPERATOR_HEARTBEAT_SENT,
+            operator_id="op-min",
+            operator_session_id="sess-min",
+        )
+        hb = HeartbeatSnapshot.from_wire(payload)
+        assert hb.fingerprint_details is None
+
     def test_timestamp_is_set(self):
         from datetime import datetime
-        hb = HeartbeatSnapshot.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(PAYLOAD)
         assert isinstance(hb.timestamp, datetime)
 
     def test_minimal_payload_does_not_raise(self):
-        from app.constants import EventType
         payload = G8eoHeartbeatPayload(
             event_type=EventType.OPERATOR_HEARTBEAT_SENT,
             operator_id="op-min",
@@ -527,7 +546,7 @@ class TestHeartbeatSSEEnvelope:
     metrics."""
 
     def _make_heartbeat(self) -> HeartbeatSnapshot:
-        return HeartbeatSnapshot.from_wire(_full_payload())
+        return HeartbeatSnapshot.from_wire(PAYLOAD)
 
     def _make_envelope(self, status: OperatorStatus = OperatorStatus.ACTIVE) -> HeartbeatSSEEnvelope:
         return HeartbeatSSEEnvelope.from_heartbeat("op-sse-001", status, self._make_heartbeat())
@@ -599,7 +618,7 @@ class TestHeartbeatSSEEnvelope:
         assert m.ledger_enabled is False
 
     def test_heartbeat_type_preserved(self):
-        hb = HeartbeatSnapshot.from_wire(_full_payload(heartbeat_type=HeartbeatType.BOOTSTRAP))
+        hb = HeartbeatSnapshot.from_wire(PAYLOAD.model_copy(update={"heartbeat_type": HeartbeatType.BOOTSTRAP}))
         env = HeartbeatSSEEnvelope.from_heartbeat("op-sse-001", OperatorStatus.ACTIVE, hb)
         assert env.metrics.heartbeat_type == HeartbeatType.BOOTSTRAP
 
@@ -642,7 +661,7 @@ class TestHeartbeatSSEEnvelopeFlattenForWire:
     no JSON-as-string coercion)."""
 
     def _make_envelope(self) -> HeartbeatSSEEnvelope:
-        hb = HeartbeatSnapshot.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(PAYLOAD)
         return HeartbeatSSEEnvelope.from_heartbeat("op-sse-001", OperatorStatus.ACTIVE, hb)
 
     def test_envelope_top_level_shape(self):

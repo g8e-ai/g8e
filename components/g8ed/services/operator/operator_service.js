@@ -16,7 +16,6 @@ import { redactWebSessionId } from '../../utils/security.js';
 import { OperatorStatus } from '../../constants/operator.js';
 import { 
     OperatorDocument, 
-    OperatorStatusInfo, 
     OperatorWithSessionContext, 
     GrantedIntent, 
     OperatorSlot,
@@ -112,15 +111,6 @@ class OperatorService {
 
     async getOperatorFresh(operatorId) {
         return this.operatorDataService.getOperatorFresh(operatorId);
-    }
-
-    async getOperatorStatusInfo(operatorId) {
-        const operator = await this.getOperator(operatorId);
-        return operator ? OperatorStatusInfo.fromOperator(operator) : null;
-    }
-
-    async getOperatorStatus(operatorId) {
-        return this.getOperatorStatusInfo(operatorId);
     }
 
     async getOperatorByUserId(userId) {

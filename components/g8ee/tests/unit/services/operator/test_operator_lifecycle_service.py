@@ -216,7 +216,7 @@ class TestOperatorLifecycleService:
         assert success is True
         assert mock_cache.update_document.call_count == 1
 
-    async def test_update_operator_status_active_sets_heartbeat_if_missing(self, lifecycle_service, mock_cache):
+    async def test_update_operator_status_active_does_not_set_heartbeat(self, lifecycle_service, mock_cache):
         operator_id = "op-123"
         mock_cache.get_document_with_cache.return_value = {
             "id": operator_id,
@@ -228,9 +228,10 @@ class TestOperatorLifecycleService:
 
         await lifecycle_service.update_operator_status(operator_id, OperatorStatus.ACTIVE)
 
-        # First call is status update
+        # Verify status update does NOT set last_heartbeat (only set on actual heartbeat ingestion)
         args, kwargs = mock_cache.update_document.call_args_list[0]
-        assert "last_heartbeat" in kwargs["data"]
+        assert "last_heartbeat" not in kwargs["data"]
+        assert kwargs["data"]["status"] == OperatorStatus.ACTIVE
 
     async def test_update_operator_status_not_found_returns_false(self, lifecycle_service, mock_cache):
         mock_cache.get_document_with_cache.return_value = None

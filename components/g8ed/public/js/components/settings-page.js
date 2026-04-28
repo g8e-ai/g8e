@@ -460,19 +460,14 @@ export class SettingsPage {
 
         // Create custom model dropdown section (3 dropdowns in a row, categorized)
         const modelSelectionContainer = document.createElement('div');
-        modelSelectionContainer.className = 'settings-model-selection';
-        modelSelectionContainer.style.background = 'rgba(var(--accent-blue-rgb), 0.04)';
-        modelSelectionContainer.style.border = '1px solid rgba(var(--accent-blue-rgb), 0.15)';
-        modelSelectionContainer.style.borderRadius = '8px';
-        modelSelectionContainer.style.padding = '1rem';
-        modelSelectionContainer.style.marginBottom = '1rem';
+        modelSelectionContainer.className = 'setup-fields-model-selection';
+
+        const wizardModelSelection = document.createElement('div');
+        wizardModelSelection.className = 'wizard-model-selection';
+        wizardModelSelection.id = 'wizard-model-selection';
 
         const modelFields = document.createElement('div');
         modelFields.className = 'wizard-model-fields';
-        modelFields.style.display = 'grid';
-        modelFields.style.gridTemplateColumns = 'repeat(3, minmax(0, 1fr))';
-        modelFields.style.gap = '1rem';
-        modelFields.style.minWidth = '0';
 
         // Primary model dropdown
         const primaryModelField = this._buildModelDropdownField('primary', 'Primary Model', 'model_training');
@@ -486,38 +481,16 @@ export class SettingsPage {
         const liteModelField = this._buildModelDropdownField('lite', 'Lite Model', 'bolt');
         modelFields.appendChild(liteModelField);
 
-        modelSelectionContainer.appendChild(modelFields);
+        wizardModelSelection.appendChild(modelFields);
+        modelSelectionContainer.appendChild(wizardModelSelection);
         panel.appendChild(modelSelectionContainer);
 
-        // Add note about encrypted API keys
-        const encryptionNote = document.createElement('div');
-        encryptionNote.className = 'settings-encryption-note';
-        encryptionNote.style.background = 'rgba(var(--accent-blue-rgb), 0.04)';
-        encryptionNote.style.border = '1px solid rgba(var(--accent-blue-rgb), 0.15)';
-        encryptionNote.style.borderRadius = '8px';
-        encryptionNote.style.padding = '0.75rem 1rem';
-        encryptionNote.style.marginBottom = '1rem';
-        encryptionNote.style.fontSize = '0.875rem';
-        encryptionNote.style.color = 'var(--text-secondary)';
-        encryptionNote.style.display = 'flex';
-        encryptionNote.style.alignItems = 'flex-start';
-        encryptionNote.style.gap = '0.5rem';
+        // API keys section
+        const apiKeysContainer = document.createElement('div');
+        apiKeysContainer.className = 'setup-fields-api-keys';
 
-        const noteIcon = document.createElement('span');
-        noteIcon.className = 'material-symbols-outlined';
-        noteIcon.textContent = 'lock';
-        noteIcon.style.fontSize = '1.25rem';
-        noteIcon.style.color = 'var(--accent-blue)';
-
-        const noteText = document.createElement('span');
-        noteText.textContent = 'API keys are encrypted at rest and not displayable. You can update them here if needed.';
-
-        encryptionNote.appendChild(noteIcon);
-        encryptionNote.appendChild(noteText);
-        panel.appendChild(encryptionNote);
-
-        const specificContainer = document.createElement('div');
-        specificContainer.className = 'settings-llm-specific';
+        // Group settings by provider
+        const providerGroups = {};
         providerSpecificSettings.forEach(s => {
             // Skip model fields since they're now handled by custom dropdowns
             if (s.key === 'llm_model' || s.key === 'llm_assistant_model' || s.key === 'llm_lite_model') {
@@ -533,11 +506,79 @@ export class SettingsPage {
                 }
                 return;
             }
-            const field = this._buildField(s);
-            field.setAttribute('data-provider', s.provider);
-            specificContainer.appendChild(field);
+            if (!providerGroups[s.provider]) {
+                providerGroups[s.provider] = [];
+            }
+            providerGroups[s.provider].push(s);
         });
-        panel.appendChild(specificContainer);
+
+        // Build provider rows matching setup.ejs structure
+        const providerConfig = {
+            gemini: {
+                icon: 'auto_awesome',
+                name: 'Gemini',
+                sub: 'Google'
+            },
+            anthropic: {
+                icon: 'smart_toy',
+                name: 'Claude',
+                sub: 'Anthropic'
+            },
+            openai: {
+                icon: 'hub',
+                name: 'GPT',
+                sub: 'OpenAI'
+            },
+            ollama: {
+                icon: 'lan',
+                name: 'Ollama',
+                sub: 'Self-Hosted'
+            }
+        };
+
+        for (const [provider, config] of Object.entries(providerConfig)) {
+            const providerSettings = providerGroups[provider] || [];
+            if (providerSettings.length === 0) continue;
+
+            const providerRow = document.createElement('div');
+            providerRow.className = 'wizard-provider-key-row';
+            providerRow.setAttribute('data-provider', provider);
+
+            const providerHeader = document.createElement('div');
+            providerHeader.className = 'wizard-provider-key-header';
+
+            const headerIcon = document.createElement('span');
+            headerIcon.className = 'material-symbols-outlined wizard-provider-key-icon';
+            headerIcon.textContent = config.icon;
+
+            const nameStrong = document.createElement('strong');
+            nameStrong.textContent = config.name;
+
+            const subSpan = document.createElement('span');
+            subSpan.className = 'wizard-provider-key-sub';
+            subSpan.textContent = config.sub;
+
+            const statusSpan = document.createElement('span');
+            statusSpan.className = 'wizard-provider-key-status';
+            statusSpan.id = `status-${provider}`;
+
+            providerHeader.appendChild(headerIcon);
+            providerHeader.appendChild(nameStrong);
+            providerHeader.appendChild(subSpan);
+            providerHeader.appendChild(statusSpan);
+
+            providerRow.appendChild(providerHeader);
+
+            // Add the field(s) for this provider
+            providerSettings.forEach(s => {
+                const field = this._buildProviderField(s);
+                providerRow.appendChild(field);
+            });
+
+            apiKeysContainer.appendChild(providerRow);
+        }
+
+        panel.appendChild(apiKeysContainer);
 
         // Use requestAnimationFrame to ensure DOM is fully rendered before initializing dropdowns
         requestAnimationFrame(() => {
@@ -546,13 +587,115 @@ export class SettingsPage {
         });
     }
 
+    _buildProviderField(setting) {
+        const field = document.createElement('div');
+        field.className = 'setup-field';
+
+        if (setting.type === 'password') {
+            const inputWrap = document.createElement('div');
+            inputWrap.className = 'setup-input-wrap';
+
+            const input = document.createElement('input');
+            input.type = 'password';
+            input.id = setting.key;
+            input.name = setting.key;
+            input.className = 'setup-input has-toggle';
+            input.placeholder = setting.placeholder || '';
+            input.autocomplete = 'new-password';
+            input.spellcheck = false;
+            input.setAttribute('data-key', setting.key);
+
+            if (setting.value) {
+                input.setAttribute('data-real-value', setting.value);
+                input.value = '*'.repeat(Math.min(setting.value.length, 32));
+            } else {
+                input.value = '';
+            }
+
+            inputWrap.appendChild(input);
+
+            const revealBtn = document.createElement('button');
+            revealBtn.type = 'button';
+            revealBtn.className = 'setup-reveal-btn';
+            revealBtn.ariaLabel = 'Toggle visibility';
+            revealBtn.setAttribute('data-for', setting.key);
+
+            const revealIcon = document.createElement('span');
+            revealIcon.className = 'material-symbols-outlined';
+            revealIcon.textContent = 'visibility';
+            revealBtn.appendChild(revealIcon);
+
+            inputWrap.appendChild(revealBtn);
+            field.appendChild(inputWrap);
+
+            // Event listeners
+            const handleInputChange = () => {
+                this._markDirty(setting.key, input.value);
+                if (setting.provider) {
+                    this.lastProviderEdited = setting.provider;
+                    this._validateApiKey(setting.provider, input);
+                    this._updateModelDropdowns();
+                }
+            };
+
+            input.addEventListener('input', handleInputChange);
+            input.addEventListener('change', handleInputChange);
+
+            revealBtn.addEventListener('click', () => {
+                const isHidden = input.type === 'password';
+                input.type = isHidden ? 'text' : 'password';
+
+                if (isHidden) {
+                    const realValue = input.getAttribute('data-real-value');
+                    if (realValue) {
+                        input.setAttribute('data-obfuscated-value', input.value);
+                        input.value = realValue;
+                    }
+                } else {
+                    const obfuscatedValue = input.getAttribute('data-obfuscated-value');
+                    if (obfuscatedValue) {
+                        input.value = obfuscatedValue;
+                    }
+                }
+
+                revealIcon.textContent = isHidden ? 'visibility_off' : 'visibility';
+            });
+        } else {
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.id = setting.key;
+            input.name = setting.key;
+            input.className = 'setup-input';
+            input.placeholder = setting.placeholder || '';
+            input.spellcheck = false;
+            input.autocomplete = 'off';
+            input.value = setting.value || '';
+            input.setAttribute('data-key', setting.key);
+
+            field.appendChild(input);
+
+            const handleInputChange = () => {
+                this._markDirty(setting.key, input.value);
+                if (setting.provider) {
+                    this.lastProviderEdited = setting.provider;
+                    this._updateModelDropdowns();
+                }
+            };
+
+            input.addEventListener('input', handleInputChange);
+            input.addEventListener('change', handleInputChange);
+        }
+
+        return field;
+    }
+
     _buildModelDropdownField(role, label, iconName) {
         const field = document.createElement('div');
         field.className = 'setup-field';
-        field.style.minWidth = '0';
 
         const labelEl = document.createElement('label');
         labelEl.className = 'setup-label';
+        labelEl.setAttribute('for', `${role}_model`);
         labelEl.textContent = label;
         field.appendChild(labelEl);
 
@@ -578,14 +721,6 @@ export class SettingsPage {
         badge.className = 'llm-model-dropdown__recommended-badge';
         badge.textContent = 'Recommended';
         badge.style.display = 'none';
-        badge.style.background = 'var(--accent-blue)';
-        badge.style.color = 'white';
-        badge.style.fontSize = '10px';
-        badge.style.padding = '2px 6px';
-        badge.style.borderRadius = '10px';
-        badge.style.marginLeft = '8px';
-        badge.style.fontWeight = '600';
-        badge.style.textTransform = 'uppercase';
 
         const arrow = document.createElement('span');
         arrow.className = 'llm-model-dropdown__arrow material-symbols-outlined';

@@ -48,10 +48,15 @@
         "required": false,
         "description": "ISO timestamp of first deployment"
       },
+      "claimed_at": {
+        "type": "string",
+        "required": false,
+        "description": "ISO timestamp when the slot was claimed (set at claim time, not heartbeat time)"
+      },
       "last_heartbeat": {
         "type": "string",
         "required": false,
-        "description": "ISO timestamp of last heartbeat"
+        "description": "ISO timestamp of last heartbeat (set only on actual heartbeat ingestion)"
       },
       "latest_heartbeat_snapshot": {
         "type": "object",

@@ -92,6 +92,13 @@ describe('g8ed OperatorSlot matches shared/models/wire/operator_slot.json', () =
         expect(modelFields.first_deployed.required).toBeUndefined();
     });
 
+    it('claimed_at field exists and is optional', () => {
+        expect(wireFields.claimed_at).toBeDefined();
+        expect(wireFields.claimed_at.required).toBe(false);
+        expect(modelFields.claimed_at).toBeDefined();
+        expect(modelFields.claimed_at.required).toBeUndefined();
+    });
+
     it('last_heartbeat field exists and is optional', () => {
         expect(wireFields.last_heartbeat).toBeDefined();
         expect(wireFields.last_heartbeat.required).toBe(false);

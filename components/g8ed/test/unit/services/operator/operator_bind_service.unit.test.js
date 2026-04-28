@@ -116,7 +116,6 @@ describe('BindOperatorsService', () => {
                 expect.any(Object)
             );
             expect(mocks.bindingService.bind).toHaveBeenCalledWith('os-123', 'ws-123', 'u-123', 'op-123');
-            expect(mocks.operatorService.relayRegisterOperatorSessionToG8ee).toHaveBeenCalledWith(expect.any(G8eHttpContext));
         });
     });
 
@@ -151,7 +150,6 @@ describe('BindOperatorsService', () => {
                 expect.any(Object)
             );
             expect(mocks.bindingService.unbind).toHaveBeenCalledWith('os-123', 'ws-123', 'op-123');
-            expect(mocks.operatorService.relayRegisterOperatorSessionToG8ee).toHaveBeenCalledWith(expect.any(G8eHttpContext));
         });
     });
 
@@ -629,84 +627,6 @@ describe('BindOperatorsService', () => {
             expect(result.bound_count).toBe(1);
             expect(mocks.operatorService.relayBindOperatorsToG8ee).toHaveBeenCalled();
             expect(mocks.bindingService.bind).toHaveBeenCalled();
-        });
-
-        it('should continue bind when broadcastOperatorListToSession fails', async () => {
-            const operator = new OperatorDocument({
-                id: 'op-broadcast-fail',
-                user_id: 'u-123',
-                operator_session_id: 'os-broadcast-fail',
-                status: OperatorStatus.ACTIVE
-            });
-            mocks.operatorService.getOperator.mockResolvedValue(operator);
-            mocks.bindingService.getBoundOperatorSessionIds.mockResolvedValue([]);
-            mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(
-                OperatorWithSessionContext.create(operator, { id: 'os-broadcast-fail' }, { id: 'ws-123' })
-            );
-
-            const bindReq = new BindOperatorsRequest({
-                operator_ids: ['op-broadcast-fail'],
-                web_session_id: 'ws-123',
-                user_id: 'u-123'
-            });
-
-            const result = await service.bindOperators(bindReq);
-
-            expect(result.success).toBe(true);
-            expect(result.bound_count).toBe(1);
-            expect(mocks.operatorService.relayBindOperatorsToG8ee).toHaveBeenCalled();
-        });
-
-        it('should continue unbind when relayRegisterOperatorSessionToG8ee fails', async () => {
-            const operator = new OperatorDocument({
-                id: 'op-unbind-relay-fail',
-                user_id: 'u-123',
-                operator_session_id: 'os-unbind-relay-fail',
-                status: OperatorStatus.BOUND
-            });
-            mocks.operatorService.getOperator.mockResolvedValue(operator);
-            mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(
-                OperatorWithSessionContext.create(operator, { id: 'os-unbind-relay-fail' }, { id: 'ws-123' })
-            );
-            mocks.operatorService.relayRegisterOperatorSessionToG8ee.mockRejectedValue(new Error('g8ee unreachable'));
-
-            const unbindReq = new UnbindOperatorsRequest({
-                operator_ids: ['op-unbind-relay-fail'],
-                web_session_id: 'ws-123',
-                user_id: 'u-123'
-            });
-
-            const result = await service.unbindOperators(unbindReq);
-
-            expect(result.success).toBe(true);
-            expect(result.unbound_count).toBe(1);
-            expect(mocks.operatorService.relayUnbindOperatorsToG8ee).toHaveBeenCalled();
-            expect(mocks.bindingService.unbind).toHaveBeenCalled();
-        });
-
-        it('should continue unbind when broadcastOperatorListToSession fails', async () => {
-            const operator = new OperatorDocument({
-                id: 'op-unbind-broadcast-fail',
-                user_id: 'u-123',
-                operator_session_id: 'os-unbind-broadcast-fail',
-                status: OperatorStatus.BOUND
-            });
-            mocks.operatorService.getOperator.mockResolvedValue(operator);
-            mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(
-                OperatorWithSessionContext.create(operator, { id: 'os-unbind-broadcast-fail' }, { id: 'ws-123' })
-            );
-
-            const unbindReq = new UnbindOperatorsRequest({
-                operator_ids: ['op-unbind-broadcast-fail'],
-                web_session_id: 'ws-123',
-                user_id: 'u-123'
-            });
-
-            const result = await service.unbindOperators(unbindReq);
-
-            expect(result.success).toBe(true);
-            expect(result.unbound_count).toBe(1);
-            expect(mocks.operatorService.relayUnbindOperatorsToG8ee).toHaveBeenCalled();
         });
     });
 

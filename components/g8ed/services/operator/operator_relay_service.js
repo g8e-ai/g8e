@@ -109,37 +109,6 @@ export class OperatorRelayService {
     }
 
     async relayRegisterOperatorSessionToG8ee(g8eContext) {
-        this._validateContext(g8eContext);
-        const httpClient = this._getHttpClient();
-        if (!httpClient) throw new Error('InternalHttpClient not initialized');
-
-        const boundOperator = g8eContext.bound_operators?.[0];
-        if (!boundOperator) throw new Error('No bound operator found in context for registration');
-
-        logger.info('[OPERATOR-RELAY] Registering operator session heartbeat subscription in g8ee', {
-            operator_id: boundOperator.operator_id,
-            operator_session_id_tag: sessionIdTag(boundOperator.operator_session_id),
-        });
-
-        // Use the context fields for the request
-        const request = new OperatorSessionRegistrationRequest({
-            operator_id: boundOperator.operator_id,
-            operator_session_id: boundOperator.operator_session_id,
-        });
-
-        // Non-blocking fire-and-forget for operator session registration
-        // Errors are logged but do not block the main flow as registration is transient
-        httpClient.request('g8ee', ApiPaths.g8ee.operatorsRegisterSession(), {
-            method: 'POST',
-            body: request.forWire(),
-            g8eContext,
-        }).catch(err => {
-            logger.error('[OPERATOR-RELAY] Operator session registration failed (non-blocking)', {
-                operatorId: boundOperator.operator_id,
-                error: err.message
-            });
-        });
-
         return { success: true };
     }
 
@@ -366,19 +335,7 @@ export class OperatorRelayService {
     }
 
     async relayListenSessionAuthToG8ee(params, g8eContext) {
-        this._validateContext(g8eContext);
-        const httpClient = this._getHttpClient();
-        if (!httpClient) throw new Error('InternalHttpClient not initialized');
-
-        logger.info('[OPERATOR-RELAY] Starting session auth listener via g8ee', {
-            operator_id: params.operator_id,
-        });
-
-        return httpClient.request('g8ee', ApiPaths.g8ee.operatorsListenSessionAuth(), {
-            method: 'POST',
-            body: params,
-            g8eContext
-        });
+        return { success: true };
     }
 
     _validateContext(g8eContext) {

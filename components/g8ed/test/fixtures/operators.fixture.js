@@ -52,6 +52,7 @@ export const mockOperators = {
         hostname: 'workstation-1'
       }
     },
+    claimed_at: addSeconds(now(), -120),
     last_heartbeat: addSeconds(now(), -120),
     created_at: addSeconds(now(), -3600),
     updated_at: addSeconds(now(), -120)
@@ -73,6 +74,7 @@ export const mockOperators = {
         hostname: 'old-workstation'
       }
     },
+    claimed_at: addSeconds(now(), -7200),
     last_heartbeat: addSeconds(now(), -120),
     created_at: addSeconds(now(), -7200),
     updated_at: addSeconds(now(), -120)
@@ -110,6 +112,7 @@ export const mockOperators = {
         hostname: 'active-workstation'
       }
     },
+    claimed_at: addSeconds(now(), -300),
     last_heartbeat: now()
   })
 };

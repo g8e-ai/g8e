@@ -48,8 +48,11 @@ def _make_mock_pubsub_client() -> MagicMock:
     client.ensure_connected = AsyncMock()
     client.subscribe = AsyncMock()
     client.unsubscribe = AsyncMock()
+    client.psubscribe = AsyncMock()
+    client.punsubscribe = AsyncMock()
     client.on_channel_message = MagicMock()
     client.off_channel_message = MagicMock()
+    client.on_pmessage = MagicMock()
     client.on_disconnect = MagicMock()
     client.off_disconnect = MagicMock()
     return client
@@ -113,7 +116,7 @@ class TestHeartbeatServiceLifecycle:
 
         client.ensure_connected.assert_not_called()
 
-    async def test_stop_unsubscribes_all_active_sessions_and_clears_ready(self, service):
+    async def test_stop_punsubscribes_pattern_and_clears_ready(self, service):
         client = _make_mock_pubsub_client()
         service.set_pubsub_client(client)
         service._active_sessions = {("op-1", "sess-1"), ("op-2", "sess-2")}
@@ -122,7 +125,10 @@ class TestHeartbeatServiceLifecycle:
         await service.stop()
 
         assert service._ready is False
-        assert client.unsubscribe.call_count == 2
+        client.punsubscribe.assert_called_once()
+        # The pattern subscription is shared across all operators; sessions
+        # are tracked in-memory only and are cleared on stop.
+        assert service._active_sessions == set()
 
     async def test_stop_with_no_active_sessions_clears_ready(self, service):
         service._ready = True
@@ -131,38 +137,53 @@ class TestHeartbeatServiceLifecycle:
 
         assert service._ready is False
 
+    async def test_start_pattern_subscribes_to_heartbeats(self, service):
+        client = _make_mock_pubsub_client()
+        service.set_pubsub_client(client)
+
+        await service.start()
+
+        client.psubscribe.assert_called_once()
+        pattern = client.psubscribe.call_args.args[0]
+        assert pattern.startswith("heartbeat:")
+        assert pattern.endswith("*")
+        client.on_pmessage.assert_called_once()
+
 
 class TestRegisterDeregisterSession:
-    """register_operator_session / deregister_operator_session — pub/sub channel management."""
+    """register_operator_session / deregister_operator_session — bookkeeping only.
+
+    Heartbeat subscription is set up once via a shared ``heartbeat:*`` pattern
+    in ``start()``. These methods only track which (operator, session) pairs
+    are considered active and never open or close per-channel pubsub state.
+    """
 
     @pytest.fixture
     def service(self):
         return _make_service()
 
-    async def test_register_raises_configuration_error_without_client(self, service):
-        with pytest.raises(ConfigurationError, match="pubsub_client is not set"):
-            await service.register_operator_session("op-1", "sess-1")
+    async def test_register_does_not_require_client(self, service):
+        # No pubsub client is needed; register is pure in-memory bookkeeping.
+        await service.register_operator_session("op-1", "sess-1")
+        assert ("op-1", "sess-1") in service._active_sessions
 
-    async def test_register_subscribes_to_channel(self, service):
+    async def test_register_does_not_open_per_session_subscription(self, service):
         client = _make_mock_pubsub_client()
         service.set_pubsub_client(client)
 
         await service.register_operator_session("op-1", "sess-1")
 
-        client.on_channel_message.assert_called_once()
-        client.subscribe.assert_called_once()
+        client.on_channel_message.assert_not_called()
+        client.subscribe.assert_not_called()
         assert ("op-1", "sess-1") in service._active_sessions
 
     async def test_register_is_idempotent_for_same_session(self, service):
-        client = _make_mock_pubsub_client()
-        service.set_pubsub_client(client)
-
         await service.register_operator_session("op-1", "sess-1")
         await service.register_operator_session("op-1", "sess-1")
 
-        assert client.subscribe.call_count == 1
+        assert service._active_sessions == {("op-1", "sess-1")}
 
-    async def test_deregister_removes_session_and_calls_unsubscribe(self, service):
+    async def test_deregister_removes_session_without_pubsub_calls(self, service):
         client = _make_mock_pubsub_client()
         service.set_pubsub_client(client)
         await service.register_operator_session("op-1", "sess-1")
@@ -170,8 +191,8 @@ class TestRegisterDeregisterSession:
         await service.deregister_operator_session("op-1", "sess-1")
 
         assert ("op-1", "sess-1") not in service._active_sessions
-        client.unsubscribe.assert_called_once()
-        client.off_channel_message.assert_called_once()
+        client.unsubscribe.assert_not_called()
+        client.off_channel_message.assert_not_called()
 
     async def test_deregister_without_client_does_not_raise(self, service):
         service._active_sessions = {("op-1", "sess-1")}
@@ -180,13 +201,9 @@ class TestRegisterDeregisterSession:
 
         assert ("op-1", "sess-1") not in service._active_sessions
 
-    async def test_deregister_nonexistent_session_does_not_raise(self, service):
-        client = _make_mock_pubsub_client()
-        service.set_pubsub_client(client)
-
+    async def test_deregister_nonexistent_session_is_noop(self, service):
         await service.deregister_operator_session("op-999", "sess-999")
-
-        client.unsubscribe.assert_called_once()
+        assert service._active_sessions == set()
 
 
 class TestOnHeartbeatMessage:
@@ -218,15 +235,29 @@ class TestOnHeartbeatMessage:
 
         mock_proc.assert_called_once()
 
-    async def test_on_heartbeat_message_auto_registers_unknown_session(self, service):
+    async def test_on_heartbeat_message_tracks_unknown_session(self, service):
+        """Pattern subscription delivers heartbeats for sessions never seen before.
+        The handler must record the (operator, session) pair so subsequent
+        bookkeeping (e.g. liveness queries) sees it as active.
+        """
         service._active_sessions = set()
         data = _make_payload().model_dump()
 
-        with patch.object(service, "register_operator_session", new=AsyncMock()) as mock_reg:
-            with patch.object(service, "process_heartbeat_message", new=AsyncMock(return_value=True)):
-                await service._on_heartbeat_message(PubSubChannel.heartbeat("op-222", "op-session-111"), data)
+        with patch.object(service, "process_heartbeat_message", new=AsyncMock(return_value=True)):
+            await service._on_heartbeat_message(PubSubChannel.heartbeat("op-222", "op-session-111"), data)
 
-        mock_reg.assert_called_once_with("op-222", "op-session-111")
+        assert ("op-222", "op-session-111") in service._active_sessions
+
+    async def test_on_pattern_heartbeat_message_dispatches_by_channel(self, service):
+        service._active_sessions = set()
+        channel = PubSubChannel.heartbeat("op-333", "op-session-444")
+        data = _make_payload(operator_id="op-333", operator_session_id="op-session-444").model_dump()
+
+        with patch.object(service, "process_heartbeat_message", new=AsyncMock(return_value=True)) as mock_proc:
+            await service._on_pattern_heartbeat_message("heartbeat:*", channel, data)
+
+        mock_proc.assert_called_once()
+        assert ("op-333", "op-session-444") in service._active_sessions
 
     async def test_on_heartbeat_message_swallows_exceptions_silently(self, service):
         with patch.object(service, "process_heartbeat_message", new=AsyncMock(side_effect=RuntimeError("boom"))):
@@ -612,7 +643,9 @@ class TestWsDisconnectHandler:
         assert service._ready is False
 
     async def test_disconnect_preserves_active_sessions(self, service):
-        """Disconnect should preserve active sessions for re-subscription on reconnect."""
+        """Disconnect should preserve active sessions for observability across
+        reconnect — the shared heartbeat:* pattern subscription is restored
+        independently by the pubsub client's reconnect logic."""
         service._ready = True
         service._active_sessions = {("op-1", "sess-1"), ("op-2", "sess-2")}
 
@@ -641,31 +674,26 @@ class TestWsDisconnectHandler:
         await service.start()
         assert service._ready is True
 
-    async def test_start_resubscribes_active_sessions_after_disconnect(self, service):
-        """After disconnect, start() should re-subscribe to all previously active sessions."""
+    async def test_start_re_psubscribes_pattern_after_disconnect(self, service):
+        """After disconnect, start() must re-issue the heartbeat:* pattern
+        subscription so the service resumes capturing every operator's
+        heartbeats once the websocket reconnects."""
         client = _make_mock_pubsub_client()
         service.set_pubsub_client(client)
-        
-        # Register sessions normally
+
         await service.register_operator_session("op-1", "sess-1")
         await service.register_operator_session("op-2", "sess-2")
-        assert service._active_sessions == {("op-1", "sess-1"), ("op-2", "sess-2")}
-        
-        # Reset mocks to track re-subscription calls
-        client.on_channel_message.reset_mock()
-        client.subscribe.reset_mock()
-        
-        # Simulate disconnect
+
+        await service.start()
+        assert client.psubscribe.call_count == 1
+
         await service._on_ws_disconnect()
         assert service._ready is False
-        assert service._active_sessions == {("op-1", "sess-1"), ("op-2", "sess-2")}  # Sessions preserved
-        
-        # Re-start should re-subscribe to all active sessions
+        assert service._active_sessions == {("op-1", "sess-1"), ("op-2", "sess-2")}
+
         await service.start()
-        
-        # Verify re-subscription calls
-        assert client.on_channel_message.call_count == 2
-        assert client.subscribe.call_count == 2
+
+        assert client.psubscribe.call_count == 2
         assert service._ready is True
 
 

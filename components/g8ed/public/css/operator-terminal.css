@@ -280,6 +280,8 @@
     border-bottom: 1px solid rgba(var(--text-rgb), 0.05);
     background: rgba(var(--text-rgb), 0.02);
     color: var(--text-secondary);
+    flex-wrap: nowrap;
+    overflow: hidden;
 }
 
 .approval-compact__title {
@@ -289,6 +291,10 @@
     text-transform: uppercase;
     letter-spacing: 0.03em;
     flex-grow: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .approval-compact__icon {

@@ -881,7 +881,7 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             const widget = document.getElementById(WIDGET_ID);
             const statusEl = widget.querySelector('.approval-compact__header .tribunal__status');
             expect(statusEl).not.toBeNull();
-            expect(statusEl.textContent).toContain('Generating alternatives');
+            expect(statusEl.textContent).toContain('Generating');
         });
 
         it('renders correct number of dots for custom numPasses', async () => {

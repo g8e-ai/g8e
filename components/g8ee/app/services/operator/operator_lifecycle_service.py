@@ -92,7 +92,7 @@ class OperatorLifecycleService:
             "bound_web_session_id": bound_web_session_id,
             "claimed": True,
             "updated_at": now_timestamp,
-            "last_heartbeat": now_timestamp,
+            "claimed_at": now_timestamp,
         }
 
         # Record first deployment timestamp on initial claim
@@ -200,8 +200,6 @@ class OperatorLifecycleService:
         }
 
         operator = await self.operator_data_service.get_operator(operator_id)
-        if operator and status == OperatorStatus.ACTIVE and not operator.last_heartbeat:
-            updates["last_heartbeat"] = now_timestamp
 
         result = await self._cache.update_document(
             collection=self.operator_data_service.collection,

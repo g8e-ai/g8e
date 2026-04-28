@@ -556,6 +556,12 @@ export class TerminalOutputMixin {
 
         this._removeWelcome();
 
+        // Check for existing widget to avoid duplicates
+        const existingWidget = document.getElementById(id);
+        if (existingWidget) {
+            return id;
+        }
+
         // The Tribunal refining widget visually supersedes the "Preparing"
         // indicator for the same command. Absorb any active preparing
         // indicator by removing it and reusing its execution bubble, so the
@@ -626,7 +632,7 @@ export class TerminalOutputMixin {
                 `<span class="tribunal__dot tribunal__dot--auditor" title="Auditor">
                     <span class="material-symbols-outlined tribunal__dot-icon">${AuditorIcon}</span>
                 </span>` +
-                `<span class="tribunal__status">Generating alternatives...</span>` +
+                `<span class="tribunal__status">Generating...</span>` +
                 `<span class="tribunal__spinner"></span>` +
             `</div>`;
 
@@ -639,7 +645,7 @@ export class TerminalOutputMixin {
             cardModifier: 'approval-compact--refining',
             icon: 'auto_fix_high',
             iconModifier: 'approval-compact__icon--refining',
-            headerText: 'Refining command',
+            headerText: 'Refining',
             tribunalHtml,
             riskBadgeHtml: '',
             promptHtml: '',
@@ -694,10 +700,11 @@ export class TerminalOutputMixin {
         const statusEl = widget.querySelector('.tribunal__status');
         if (!statusEl) return;
 
-        const label = this._tribunalOutcomeLabel(outcome);
-        if (finalCommand) {
-            statusEl.textContent = `${label} · ${finalCommand}`;
+        const success = outcome === TribunalOutcome.CONSENSUS || outcome === TribunalOutcome.VERIFIED;
+        if (success) {
+            statusEl.innerHTML = '<span class="material-symbols-outlined">check</span>';
         } else {
+            const label = this._tribunalOutcomeLabel(outcome);
             statusEl.textContent = label;
         }
         statusEl.classList.add('tribunal__status--done');

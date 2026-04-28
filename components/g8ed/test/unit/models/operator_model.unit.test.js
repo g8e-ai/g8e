@@ -17,7 +17,6 @@ import {
     HeartbeatNotification,
     HistoryEntry,
     CertInfo,
-    OperatorStatusInfo,
     OperatorDocument,
     OperatorListUpdatedEvent,
     GeneratedCertificate,
@@ -191,71 +190,6 @@ describe('CertInfo [UNIT - PURE LOGIC]', () => {
         expect(cert.serial).toBe('ABC123');
         expect(cert.not_before).toBeInstanceOf(Date);
         expect(cert.not_after).toBeInstanceOf(Date);
-    });
-});
-
-describe('OperatorStatusInfo [UNIT - PURE LOGIC]', () => {
-    it('accepts valid required fields with defaults', () => {
-        const info = OperatorStatusInfo.parse({
-            id: 'op-123',
-            user_id: 'user-456',
-            status: OperatorStatus.ACTIVE,
-        });
-        expect(info.id).toBe('op-123');
-        expect(info.user_id).toBe('user-456');
-        expect(info.status).toBe(OperatorStatus.ACTIVE);
-        expect(info.bound_web_session_id).toBeNull();
-        expect(info.is_active).toBe(false);
-    });
-
-    it('is_active is computed by fromOperator() based on status', () => {
-        const activeOp = new OperatorDocument({
-            id: 'op-1',
-            user_id: 'user-1',
-            status: OperatorStatus.ACTIVE,
-        });
-        const active = OperatorStatusInfo.fromOperator(activeOp);
-        expect(active.is_active).toBe(true);
-
-        const boundOp = new OperatorDocument({
-            id: 'op-2',
-            user_id: 'user-2',
-            status: OperatorStatus.BOUND,
-        });
-        const bound = OperatorStatusInfo.fromOperator(boundOp);
-        expect(bound.is_active).toBe(false);
-    });
-
-    it('fromOperator() maps OperatorDocument to status info', () => {
-        const operator = new OperatorDocument({
-            id: 'op-123',
-            user_id: 'user-456',
-            status: OperatorStatus.ACTIVE,
-            bound_web_session_id: 'ws-789',
-            operator_session_id: 'os-101',
-            last_heartbeat: new Date('2026-01-01T00:00:00.000Z'),
-            latest_heartbeat_snapshot: {
-                system_identity: { hostname: 'test-host' },
-            },
-            investigation_id: 'inv-111',
-            case_id: 'case-222',
-            operator_type: OperatorType.SYSTEM,
-            granted_intents: [GrantedIntent.create('test')],
-            cloud_subtype: CloudOperatorSubtype.AWS,
-        });
-        const info = OperatorStatusInfo.fromOperator(operator);
-        expect(info.id).toBe('op-123');
-        expect(info.user_id).toBe('user-456');
-        expect(info.status).toBe(OperatorStatus.ACTIVE);
-        expect(info.bound_web_session_id).toBe('ws-789');
-        expect(info.operator_session_id).toBe('os-101');
-        expect(info.is_active).toBe(true);
-        expect(info.current_hostname).toBe('test-host');
-        expect(info.investigation_id).toBe('inv-111');
-        expect(info.case_id).toBe('case-222');
-        expect(info.operator_type).toBe(OperatorType.SYSTEM);
-        expect(info.cloud_subtype).toBe(CloudOperatorSubtype.AWS);
-        expect(info.granted_intents).toHaveLength(1);
     });
 });
 

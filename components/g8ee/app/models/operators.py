@@ -129,7 +129,8 @@ class OperatorDocument(G8eIdentifiableModel):
     status: OperatorStatus = Field(default=OperatorStatus.AVAILABLE, description="Current Operator status")
     bound_web_session_id: str | None = Field(default=None, description="Bound web session ID")
     operator_session_id: str | None = Field(default=None, description="Current Operator session ID")
-    last_heartbeat: UTCDatetime | None = Field(default=None, description="Last heartbeat timestamp")
+    claimed_at: UTCDatetime | None = Field(default=None, description="When the slot was claimed (set at claim time, not heartbeat time)")
+    last_heartbeat: UTCDatetime | None = Field(default=None, description="Last heartbeat timestamp (set only on actual heartbeat ingestion)")
     terminated_at: UTCDatetime | None = Field(default=None, description="When the operator was terminated")
     latest_heartbeat_snapshot: HeartbeatSnapshot | None = Field(default=None, description="Latest heartbeat metrics")
     investigation_id: str | None = Field(default=None, description="Current investigation ID")
@@ -406,89 +407,36 @@ class HeartbeatSnapshot(G8eBaseModel):
         Validation happens once at the pub/sub boundary in heartbeat_service.py
         before this is called.
         """
+        wire_dict = payload.model_dump(mode="json", exclude={"event_type", "operator_id", "operator_session_id", "case_id", "investigation_id", "user_id", "api_key"})
+        
+        wire_dict["timestamp"] = now()
+        wire_dict["heartbeat_type"] = _coerce_heartbeat_type(payload.heartbeat_type)
+        
+        wire_dict["performance"] = wire_dict.pop("performance_metrics")
+        wire_dict["network"] = wire_dict.pop("network_info")
+        uptime_info = wire_dict.pop("uptime_info")
+        wire_dict["uptime"] = {
+            "uptime_display": uptime_info.get("uptime"),
+            "uptime_seconds": uptime_info.get("uptime_seconds"),
+        }
+        
+        if wire_dict.get("network") and wire_dict["network"].get("connectivity_status"):
+            wire_dict["network"]["connectivity_status"] = [
+                HeartbeatNetworkInterface(name=s["name"], ip=s["ip"], mtu=s["mtu"])
+                for s in wire_dict["network"]["connectivity_status"]
+            ]
+        
+        wire_dict["is_cloud_operator"] = False
+        wire_dict["cloud_provider"] = None
+        
         cap = payload.capability_flags
-        return cls(
-            timestamp=now(),
-            heartbeat_type=_coerce_heartbeat_type(payload.heartbeat_type),
-            system_identity=HeartbeatSystemIdentity(
-                hostname=payload.system_identity.hostname,
-                os=payload.system_identity.os,
-                architecture=payload.system_identity.architecture,
-                pwd=payload.system_identity.pwd,
-                current_user=payload.system_identity.current_user,
-                cpu_count=payload.system_identity.cpu_count,
-                memory_mb=payload.system_identity.memory_mb,
-            ),
-            performance=HeartbeatPerformanceMetrics(
-                cpu_percent=payload.performance_metrics.cpu_percent,
-                memory_percent=payload.performance_metrics.memory_percent,
-                disk_percent=payload.performance_metrics.disk_percent,
-                network_latency=payload.performance_metrics.network_latency,
-                memory_used_mb=payload.performance_metrics.memory_used_mb,
-                memory_total_mb=payload.performance_metrics.memory_total_mb,
-                disk_used_gb=payload.performance_metrics.disk_used_gb,
-                disk_total_gb=payload.performance_metrics.disk_total_gb,
-            ),
-            network=HeartbeatNetworkInfo(
-                public_ip=payload.network_info.public_ip,
-                internal_ip=payload.network_info.internal_ip,
-                interfaces=payload.network_info.interfaces,
-                connectivity_status=[
-                    HeartbeatNetworkInterface(name=s.name, ip=s.ip, mtu=s.mtu)
-                    for s in payload.network_info.connectivity_status
-                ] if payload.network_info.connectivity_status is not None else None,
-            ),
-            uptime=HeartbeatUptimeInfo(
-                uptime_display=payload.uptime_info.uptime,
-                uptime_seconds=payload.uptime_info.uptime_seconds,
-            ),
-            os_details=HeartbeatOSDetails(
-                kernel=payload.os_details.kernel,
-                distro=payload.os_details.distro,
-                version=payload.os_details.version,
-            ),
-            user_details=HeartbeatUserDetails(
-                username=payload.user_details.username,
-                uid=payload.user_details.uid,
-                gid=payload.user_details.gid,
-                home=payload.user_details.home,
-                name=payload.user_details.name,
-                shell=payload.user_details.shell,
-            ),
-            environment=HeartbeatEnvironment(
-                pwd=payload.environment.pwd,
-                lang=payload.environment.lang,
-                timezone=payload.environment.timezone,
-                term=payload.environment.term,
-                is_container=payload.environment.is_container,
-                container_runtime=payload.environment.container_runtime,
-                container_signals=payload.environment.container_signals,
-                init_system=payload.environment.init_system,
-            ),
-            version_info=HeartbeatVersionInfo(
-                operator_version=payload.version_info.operator_version,
-                status=payload.version_info.status,
-            ),
-            disk_details=HeartbeatDiskDetails(
-                total_gb=payload.disk_details.total_gb,
-                used_gb=payload.disk_details.used_gb,
-                free_gb=payload.disk_details.free_gb,
-                percent=payload.disk_details.percent,
-            ),
-            memory_details=HeartbeatMemoryDetails(
-                total_mb=payload.memory_details.total_mb,
-                available_mb=payload.memory_details.available_mb,
-                used_mb=payload.memory_details.used_mb,
-                percent=payload.memory_details.percent,
-            ),
-            system_fingerprint=payload.system_fingerprint,
-            fingerprint_details=payload.fingerprint_details,
-            is_cloud_operator=False,
-            cloud_provider=None,
-            local_storage_enabled=cap.local_storage_enabled,
-            git_available=cap.git_available,
-            ledger_enabled=cap.ledger_enabled,
-        )
+        wire_dict["local_storage_enabled"] = cap.local_storage_enabled
+        wire_dict["git_available"] = cap.git_available
+        wire_dict["ledger_enabled"] = cap.ledger_enabled
+        
+        wire_dict.pop("capability_flags", None)
+        
+        return cls.model_validate(wire_dict)
 
 
 

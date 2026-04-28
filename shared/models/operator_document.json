@@ -136,11 +136,17 @@
         "required": false,
         "description": "When this operator slot was first ever activated (persisted across resets)"
       },
+      "claimed_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false,
+        "description": "When the slot was claimed (set at claim time, not heartbeat time)"
+      },
       "last_heartbeat": {
         "type": "string",
         "format": "iso8601",
         "required": false,
-        "description": "Timestamp of the most recently received heartbeat"
+        "description": "Timestamp of the most recently received heartbeat (set only on actual heartbeat ingestion)"
       }
     },
 

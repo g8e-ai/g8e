@@ -144,13 +144,6 @@ export class DeviceRegistrationService {
             operator_session_id_tag: sessionIdTag(operator_session_id),
         });
 
-        await this._operatorService.relayListenSessionAuthToG8ee({
-            operator_session_id,
-            operator_id: id,
-            user_id,
-            organization_id: g8eContext.organization_id || null,
-        }, g8eContext);
-
         return {
             success: true,
             operator_session_id,
