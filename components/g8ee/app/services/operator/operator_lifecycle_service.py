@@ -156,6 +156,8 @@ class OperatorLifecycleService:
             "updated_at": terminated_at,
             "operator_session_id": None,
             "bound_web_session_id": None,
+            "claimed": False,
+            "claimed_at": None,
         }
 
         # Perform the status update and history append atomically via data service
@@ -321,6 +323,7 @@ class OperatorLifecycleService:
             "operator_session_id": None,
             "bound_web_session_id": None,
             "claimed": False,
+            "claimed_at": None,
         }
 
         reset_result = await self._cache.update_document(

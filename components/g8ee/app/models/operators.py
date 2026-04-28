@@ -129,6 +129,7 @@ class OperatorDocument(G8eIdentifiableModel):
     status: OperatorStatus = Field(default=OperatorStatus.AVAILABLE, description="Current Operator status")
     bound_web_session_id: str | None = Field(default=None, description="Bound web session ID")
     operator_session_id: str | None = Field(default=None, description="Current Operator session ID")
+    claimed: bool = Field(default=False, description="True when the slot has been claimed by a running g8eo process")
     claimed_at: UTCDatetime | None = Field(default=None, description="When the slot was claimed (set at claim time, not heartbeat time)")
     last_heartbeat: UTCDatetime | None = Field(default=None, description="Last heartbeat timestamp (set only on actual heartbeat ingestion)")
     terminated_at: UTCDatetime | None = Field(default=None, description="When the operator was terminated")

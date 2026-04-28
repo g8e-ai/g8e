@@ -22,6 +22,7 @@ from app.services.protocols import (
     OperatorDataServiceProtocol,
     EventServiceProtocol,
 )
+from app.utils.timestamp import parse_iso
 
 logger = logging.getLogger(__name__)
 
@@ -140,13 +141,19 @@ class HeartbeatStaleMonitorService:
             for op in operators:
                 if op.status not in MONITORED_STATUSES:
                     continue
-                if not op.last_heartbeat:
-                    continue
 
                 last_hb = op.last_heartbeat
+                if not last_hb:
+                    # Fallback to claimed_at if last_heartbeat is missing.
+                    # This handles operators that authenticated but never sent a heartbeat.
+                    last_hb = op.claimed_at
+
+                if not last_hb:
+                    continue
+
                 if isinstance(last_hb, str):
                     try:
-                        last_hb = datetime.fromisoformat(last_hb.replace("Z", "+00:00"))
+                        last_hb = parse_iso(last_hb)
                     except ValueError:
                         continue
 

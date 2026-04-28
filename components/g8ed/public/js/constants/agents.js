@@ -25,6 +25,18 @@ export const TribunalMemberIcons = Object.freeze({
 });
 
 /**
+ * Tribunal Member Names
+ * Persona names for each tribunal member, indexed by pass number.
+ */
+export const TribunalMemberNames = Object.freeze({
+    0: 'Axiom',
+    1: 'Concord',
+    2: 'Variance',
+    3: 'Pragma',
+    4: 'Nemesis',
+});
+
+/**
  * Auditor Icon
  * Icon for the Tribunal auditor.
  * These are Material Symbols names.

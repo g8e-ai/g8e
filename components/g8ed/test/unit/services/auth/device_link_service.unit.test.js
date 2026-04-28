@@ -582,7 +582,15 @@ describe('DeviceLinkService', () => {
             mockCache.kvSet.mockResolvedValue(null);
             mockOperatorService.queryListedOperators.mockResolvedValue([]);
 
+            const setTimeoutMock = vi.fn((fn, delay) => {
+                fn();
+                return 1;
+            });
+            vi.stubGlobal('setTimeout', setTimeoutMock);
+
             const result = await service.registerDevice(validToken, mockDeviceInfo);
+
+            vi.unstubAllGlobals();
 
             expect(result.success).toBe(false);
             expect(result.error).toBe(DeviceLinkError.REGISTRATION_BUSY);
@@ -810,6 +818,137 @@ describe('DeviceLinkService', () => {
             expect(mockDeviceRegistration.registerDevice).toHaveBeenCalledWith(expect.objectContaining({
                 operator_id: 'op-matching'
             }));
+        });
+
+        it('should use adaptive retry count based on device link width (max_uses)', async () => {
+            const token = validToken;
+            const linkData = new DeviceLinkData({
+                token,
+                user_id: mockG8eContext.user_id,
+                organization_id: mockG8eContext.organization_id,
+                max_uses: 10,
+                status: DeviceLinkStatus.ACTIVE,
+                expires_at: addSeconds(now(), 3600),
+                claims: []
+            });
+
+            mockCache._seedKV(KVKey.deviceLink(validToken), linkData.forKV());
+            
+            let lockAttempts = 0;
+            mockCache.kvSet.mockImplementation(() => {
+                lockAttempts++;
+                if (lockAttempts < 28) {
+                    return Promise.resolve(null);
+                }
+                return Promise.resolve('OK');
+            });
+            
+            mockOperatorService.queryListedOperators.mockResolvedValue([]);
+            mockOperatorService.createOperatorSlot.mockResolvedValue({ success: true, operator_id: 'op-new' });
+            mockCache.kvSadd.mockResolvedValue(1);
+            mockCache.kvIncr.mockResolvedValue(1);
+            mockCache.kvGet.mockResolvedValue(`${validToken}:abc123def456:123456`);
+            mockCache.kvTtl.mockResolvedValue(3600);
+            mockCache.kvExpire.mockResolvedValue(1);
+            mockWebSessionService.getUserActiveSession.mockResolvedValue('web-sess-1');
+            mockDeviceRegistration.registerDevice.mockResolvedValue({
+                success: true,
+                operator_id: 'op-new',
+                operator_session_id: 'op-sess-1'
+            });
+
+            const setTimeoutMock = vi.fn((fn, delay) => {
+                fn();
+                return 1;
+            });
+            vi.stubGlobal('setTimeout', setTimeoutMock);
+
+            const result = await service.registerDevice(token, mockDeviceInfo);
+
+            vi.unstubAllGlobals();
+
+            expect(result.success).toBe(true);
+            expect(lockAttempts).toBeGreaterThan(LOCK_MAX_RETRIES);
+        });
+
+        it('should handle high-concurrency registration with adaptive retries', async () => {
+            const token = validToken;
+            const linkData = new DeviceLinkData({
+                token,
+                user_id: mockG8eContext.user_id,
+                organization_id: mockG8eContext.organization_id,
+                max_uses: 20,
+                status: DeviceLinkStatus.ACTIVE,
+                expires_at: addSeconds(now(), 3600),
+                claims: []
+            });
+
+            mockCache._seedKV(KVKey.deviceLink(validToken), linkData.forKV());
+            
+            let lockAttempts = 0;
+            mockCache.kvSet.mockImplementation(() => {
+                lockAttempts++;
+                if (lockAttempts < 50) {
+                    return Promise.resolve(null);
+                }
+                return Promise.resolve('OK');
+            });
+            
+            mockOperatorService.queryListedOperators.mockResolvedValue([]);
+            mockOperatorService.createOperatorSlot.mockResolvedValue({ success: true, operator_id: 'op-new' });
+            mockCache.kvSadd.mockResolvedValue(1);
+            mockCache.kvIncr.mockResolvedValue(1);
+            mockCache.kvGet.mockResolvedValue(`${validToken}:abc123def456:123456`);
+            mockCache.kvTtl.mockResolvedValue(3600);
+            mockCache.kvExpire.mockResolvedValue(1);
+            mockWebSessionService.getUserActiveSession.mockResolvedValue('web-sess-1');
+            mockDeviceRegistration.registerDevice.mockResolvedValue({
+                success: true,
+                operator_id: 'op-new',
+                operator_session_id: 'op-sess-1'
+            });
+
+            const setTimeoutMock = vi.fn((fn, delay) => {
+                fn();
+                return 1;
+            });
+            vi.stubGlobal('setTimeout', setTimeoutMock);
+
+            const result = await service.registerDevice(token, mockDeviceInfo);
+
+            vi.unstubAllGlobals();
+
+            expect(result.success).toBe(true);
+            expect(lockAttempts).toBeGreaterThan(LOCK_MAX_RETRIES);
+        });
+
+        it('should still fail after adaptive max retries if lock cannot be acquired', async () => {
+            const token = validToken;
+            const linkData = new DeviceLinkData({
+                token,
+                user_id: mockG8eContext.user_id,
+                max_uses: 10,
+                status: DeviceLinkStatus.ACTIVE,
+                expires_at: addSeconds(now(), 3600),
+                claims: []
+            });
+
+            mockCache._seedKV(KVKey.deviceLink(validToken), linkData.forKV());
+            mockCache.kvSet.mockResolvedValue(null);
+            mockOperatorService.queryListedOperators.mockResolvedValue([]);
+
+            const setTimeoutMock = vi.fn((fn, delay) => {
+                fn();
+                return 1;
+            });
+            vi.stubGlobal('setTimeout', setTimeoutMock);
+
+            const result = await service.registerDevice(token, mockDeviceInfo);
+
+            vi.unstubAllGlobals();
+
+            expect(result.success).toBe(false);
+            expect(result.error).toBe(DeviceLinkError.REGISTRATION_BUSY);
         });
     });
 

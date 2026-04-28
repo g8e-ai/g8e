@@ -22,7 +22,7 @@
 import { templateLoader } from '../utils/template-loader.js';
 import { escapeHtml } from '../utils/html.js';
 import { TribunalOutcome, EventType } from '../constants/events.js';
-import { TribunalMemberIcons, AuditorIcon } from '../constants/agents.js';
+import { TribunalMemberIcons, TribunalMemberNames, AuditorIcon } from '../constants/agents.js';
 
 export class TerminalOutputMixin {
     _cancelPendingTimers() {
@@ -621,7 +621,8 @@ export class TerminalOutputMixin {
 
         const dots = Array.from({ length: numPasses || 3 }, (_, i) => {
             const icon = TribunalMemberIcons[i] || 'circle';
-            return `<span class="tribunal__dot" data-pass="${i}" title="Pass ${i + 1}">
+            const name = TribunalMemberNames[i] || `Pass ${i + 1}`;
+            return `<span class="tribunal__dot" data-pass="${i}" title="${name}">
                 <span class="material-symbols-outlined tribunal__dot-icon">${icon}</span>
             </span>`;
         }).join('');
@@ -669,12 +670,14 @@ export class TerminalOutputMixin {
         if (dot) {
             dot.classList.add(success ? 'tribunal__dot--ok' : 'tribunal__dot--fail');
             if (candidate) {
-                dot.setAttribute('title', `Pass ${passIndex + 1}: ${candidate}`);
+                const name = TribunalMemberNames[passIndex] || `Pass ${passIndex + 1}`;
+                dot.setAttribute('title', `${name}: ${candidate}`);
             }
         }
         const statusEl = widget.querySelector('.tribunal__status');
         if (statusEl) {
-            statusEl.textContent = `Pass ${passIndex + 1} ${success ? 'complete' : 'failed'}`;
+            const name = TribunalMemberNames[passIndex] || `Pass ${passIndex + 1}`;
+            statusEl.textContent = `${name} ${success ? 'complete' : 'failed'}`;
         }
     }
 

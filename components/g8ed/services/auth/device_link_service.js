@@ -372,13 +372,28 @@ class DeviceLinkService {
         const lockValue = `${token}:${sanitizedFingerprint}:${Date.now()}`;
         let lockAcquired = false;
 
-        for (let attempt = 0; attempt < LOCK_MAX_RETRIES; attempt++) {
+        // Adaptive retry: scale max retries based on device link width (max_uses)
+        // to handle high-concurrency registration events. If a link is created for
+        // N concurrent registrations, ensure retry mechanism is sufficient.
+        const concurrencyWidth = linkData.max_uses || DEFAULT_DEVICE_LINK_MAX_USES;
+        const adaptiveMaxRetries = Math.min(
+            LOCK_MAX_RETRIES + Math.ceil(concurrencyWidth * 2),
+            LOCK_MAX_RETRIES * 3
+        );
+
+        for (let attempt = 0; attempt < adaptiveMaxRetries; attempt++) {
             const acquired = await this._cache_aside.kvSet(lockKey, lockValue, 'PX', LOCK_TTL_MS, 'NX');
             if (acquired) {
                 lockAcquired = true;
                 break;
             }
-            await new Promise(resolve => setTimeout(resolve, LOCK_RETRY_DELAY_MS));
+            // Exponential backoff with jitter to reduce thundering herd
+            const backoffMs = Math.min(
+                LOCK_RETRY_DELAY_MS * Math.pow(1.5, Math.floor(attempt / 5)),
+                LOCK_RETRY_DELAY_MS * 4
+            );
+            const jitter = Math.random() * 50;
+            await new Promise(resolve => setTimeout(resolve, backoffMs + jitter));
         }
 
         if (!lockAcquired) {
