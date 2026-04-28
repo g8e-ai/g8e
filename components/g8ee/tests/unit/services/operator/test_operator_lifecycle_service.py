@@ -17,14 +17,13 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.constants import OperatorStatus, ComponentName, OperatorType
+from app.clients.http_client import HTTPClient
+from app.constants import ComponentName, OperatorStatus, OperatorType
 from app.errors import ValidationError
-from app.models.operators import OperatorDocument
-from app.services.infra.supervisor_service import SupervisorService
-from app.services.operator.operator_lifecycle_service import OperatorLifecycleService
-from app.services.operator.operator_data_service import OperatorDataService
 from app.models.cache import CacheOperationResult
-from app.clients.http_client import HTTPClient 
+from app.services.infra.supervisor_service import SupervisorService
+from app.services.operator.operator_data_service import OperatorDataService
+from app.services.operator.operator_lifecycle_service import OperatorLifecycleService
 from app.utils.timestamp import now
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
@@ -66,7 +65,7 @@ class TestOperatorLifecycleService:
     async def test_claim_operator_slot_success(self, lifecycle_service, operator_data_service, mock_cache):
         operator_id = "op-123"
         operator_session_id = "session-abc"
-        
+
         mock_cache.get_document_with_cache.side_effect = [
             {
                 "id": operator_id,
@@ -103,7 +102,7 @@ class TestOperatorLifecycleService:
         assert success is True
         # add_history_entry calls update_document once
         assert mock_cache.update_document.call_count == 1
-        
+
         # Verify history append via update_document in add_history_entry
         call_args = mock_cache.update_document.call_args
         update_data = call_args.kwargs["data"]
@@ -184,7 +183,7 @@ class TestOperatorLifecycleService:
 
     async def test_terminate_operator_not_found_raises_validation_error(self, lifecycle_service, mock_cache):
         mock_cache.get_document_with_cache.return_value = None
-        
+
         with pytest.raises(ValidationError, match="Operator missing not found"):
             await lifecycle_service.terminate_operator("missing")
 
@@ -236,7 +235,7 @@ class TestOperatorLifecycleService:
     async def test_update_operator_status_not_found_returns_false(self, lifecycle_service, mock_cache):
         mock_cache.get_document_with_cache.return_value = None
         mock_cache.update_document.return_value = CacheOperationResult(success=False)
-        
+
         success = await lifecycle_service.update_operator_status("missing", OperatorStatus.ACTIVE)
         assert success is False
 
@@ -281,9 +280,9 @@ class TestOperatorLifecycleService:
             "created_at": now().isoformat(),
             "updated_at": now().isoformat(),
         }]
-        
+
         await lifecycle_service.activate_g8ep_operator(user_id)
-        
+
         assert mock_cache.update_document.call_count == 0
         assert mock_supervisor_service.start_process.call_count == 0
 

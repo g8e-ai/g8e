@@ -46,14 +46,20 @@ Only request stub is mocked — the header-parsing function itself runs real.
 """
 
 import json
-import pytest
-from typing import Dict, Any
+from typing import Any
 
-from app.constants import ComponentName, OperatorStatus, NEW_CASE_ID, G8eHeaders, INTERNAL_AUTH_HEADER
+import pytest
+
+from app.constants import (
+    INTERNAL_AUTH_HEADER,
+    NEW_CASE_ID,
+    ComponentName,
+    G8eHeaders,
+    OperatorStatus,
+)
 from app.dependencies import get_g8e_http_context
 from app.errors import AuthenticationError
 from app.models.http_context import BoundOperator, G8eHttpContext
-
 
 # ---------------------------------------------------------------------------
 # Segment 1 — happy-path extraction
@@ -356,14 +362,14 @@ class TestOptionalHeaderPassthrough:
 
 def _base_headers(
     web_session_id: str = "test-web-session",
-    user_id: str = "test-user-id", 
+    user_id: str = "test-user-id",
     case_id: str = "test-case-id",
     investigation_id: str = "test-investigation-id",
     source_component: str = "g8ed",
     bound_operators: str = "[]",
     new_case: str = "false",
     **kwargs
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """Create base headers with all required g8e headers."""
     headers = {
         G8eHeaders.WEB_SESSION_ID: web_session_id,
@@ -375,16 +381,16 @@ def _base_headers(
         G8eHeaders.NEW_CASE: new_case,
         INTERNAL_AUTH_HEADER: "test-auth-token",
     }
-    
+
     # Add any additional headers
     headers.update(kwargs)
     return headers
 
 
-def _make_request(headers: Dict[str, str]) -> Any:
+def _make_request(headers: dict[str, str]) -> Any:
     """Create a mock request object with the given headers."""
     from unittest.mock import Mock
-    
+
     request = Mock()
     # Convert all header keys to lowercase to match FastAPI's behavior
     request.headers = {k.lower(): v for k, v in headers.items()}

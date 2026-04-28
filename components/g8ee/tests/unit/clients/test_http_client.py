@@ -15,7 +15,6 @@
 Unit tests for HTTPClient , CircuitBreaker, RequestTrace, and get_service_client.
 """
 
-import asyncio
 import json
 from datetime import UTC
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -30,12 +29,11 @@ from app.clients.http_client import (
     AiohttpResponse,
     CircuitBreaker,
     CircuitBreakerConfig,
+    HTTPClient,
     RequestTrace,
     RetryConfig,
-    HTTPClient ,
     get_service_client,
 )
-from app.utils.timestamp import now
 from app.constants import (
     DEFAULT_HTTP_CLIENT_TIMEOUT as DEFAULT_TIMEOUT,
 )
@@ -49,6 +47,7 @@ from app.constants import (
 )
 from app.errors import NetworkError, ValidationError
 from app.models.http_context import G8eHttpContext
+from app.utils.timestamp import now
 
 pytestmark = pytest.mark.unit
 
@@ -606,7 +605,7 @@ class TestShouldRetry:
             headers={},
             ca_cert_path="/mock/ca.crt",
         )
-        assert c._should_retry("GET", 0, 0, asyncio.TimeoutError()) is True
+        assert c._should_retry("GET", 0, 0, TimeoutError()) is True
 
     def test_returns_true_for_server_timeout_exception(self):
         c = HTTPClient (
@@ -881,9 +880,8 @@ class TestG8eHTTPClientRequest:
         session.request = original_request
         c._session = session
 
-        with patch("asyncio.sleep", new_callable=AsyncMock):
-            with pytest.raises(NetworkError):
-                await c.request("GET", "/api/flaky", headers={}, json_data=None, context=None)
+        with patch("asyncio.sleep", new_callable=AsyncMock), pytest.raises(NetworkError):
+            await c.request("GET", "/api/flaky", headers={}, json_data=None, context=None)
 
         assert original_request.call_count == 3
 
@@ -912,9 +910,8 @@ class TestG8eHTTPClientRequest:
         session.request = MagicMock(return_value=resp)
         c._session = session
 
-        with patch("asyncio.sleep", new_callable=AsyncMock):
-            with pytest.raises(NetworkError):
-                await c.request("GET", "/api/disconnected", headers={}, json_data=None, context=None)
+        with patch("asyncio.sleep", new_callable=AsyncMock), pytest.raises(NetworkError):
+            await c.request("GET", "/api/disconnected", headers={}, json_data=None, context=None)
 
         assert session.request.call_count == 3
 

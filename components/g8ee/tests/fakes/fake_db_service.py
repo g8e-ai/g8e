@@ -14,9 +14,9 @@
 """Typed fake for DocumentServiceProtocol."""
 
 from app.constants import EventType
+from app.models.cache import CacheOperationResult
 from app.models.operators import CommandResultRecord
 from app.services.protocols import DocumentServiceProtocol
-from app.models.cache import CacheOperationResult
 
 
 class FakeDBService:

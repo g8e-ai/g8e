@@ -29,13 +29,13 @@ All integration tests should use these fixtures to ensure consistency
 and avoid code duplication.
 """
 
-import asyncio
 import logging
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 
 import pytest
 import pytest_asyncio
+
 from app.models.operators import ApprovalType, PendingApproval
 from app.models.settings import G8eeUserSettings
 from app.services.service_factory import ServiceFactory
@@ -242,7 +242,7 @@ async def cleanup(cache_aside_service, all_services):
     """
     tracker = IntegrationCleanupTracker(cache_aside_service)
     yield tracker
-    
+
     await tracker.cleanup()
 
 
@@ -255,13 +255,13 @@ async def user_settings(cache_aside_service, test_settings):
     """
     from app.llm.factory import get_llm_settings, get_search_settings
     from app.services.infra.settings_service import SettingsService
-    
+
     # Use TEST_LLM settings if available
     llm = get_llm_settings()
     search = get_search_settings()
     if llm:
         return G8eeUserSettings(llm=llm, search=search or test_settings.search)
-    
+
     # Otherwise load from g8es
     settings_service = SettingsService(cache_aside_service=cache_aside_service)
     return await settings_service.get_user_settings("test-user-id")
@@ -275,11 +275,12 @@ def unified_metrics_collector(request):
     prints a text summary to stdout and persists artifacts (report.txt, results.csv,
     summary.json) to components/g8ee/reports/evals/<timestamp>/ at session end.
     """
+    from datetime import UTC, datetime
+
+    from app.constants.paths import PATHS
     from app.evals.runner.metrics import EvalRow, FullReport
     from app.evals.runner.reporter import compute_summaries, persist_report, render_text_table
-    from app.constants.paths import PATHS
     from app.llm.factory import get_llm_settings
-    from datetime import datetime, UTC
 
     class UnifiedMetricsCollector:
         def __init__(self):

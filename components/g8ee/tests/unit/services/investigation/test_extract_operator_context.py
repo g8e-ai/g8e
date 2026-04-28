@@ -20,17 +20,17 @@ and handles missing snapshot gracefully.
 
 import pytest
 
-from app.constants import OperatorType, CloudSubtype
+from app.constants import CloudSubtype, OperatorType
 from app.models.operators import (
-    OperatorDocument,
-    HeartbeatSnapshot,
-    HeartbeatSystemIdentity,
+    HeartbeatDiskDetails,
+    HeartbeatEnvironment,
+    HeartbeatMemoryDetails,
     HeartbeatNetworkInfo,
     HeartbeatOSDetails,
+    HeartbeatSnapshot,
+    HeartbeatSystemIdentity,
     HeartbeatUserDetails,
-    HeartbeatDiskDetails,
-    HeartbeatMemoryDetails,
-    HeartbeatEnvironment,
+    OperatorDocument,
 )
 from app.services.investigation.investigation_service import extract_single_operator_context
 

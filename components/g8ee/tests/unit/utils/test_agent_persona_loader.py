@@ -14,9 +14,14 @@
 """Unit tests for agent_persona_loader module."""
 
 import pytest
-
-from app.utils.agent_persona_loader import get_agent_persona, get_tribunal_member, list_all_agents, AgentPersona
 from pydantic import ValidationError
+
+from app.utils.agent_persona_loader import (
+    AgentPersona,
+    get_agent_persona,
+    get_tribunal_member,
+    list_all_agents,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -156,7 +161,7 @@ class TestGetAgentPersona:
         """Test that tools field is always a list."""
         triage = get_agent_persona("triage")
         assert isinstance(triage.tools, list)
-        
+
         sage = get_agent_persona("sage")
         assert isinstance(sage.tools, list)
         assert len(sage.tools) > 0
@@ -193,8 +198,8 @@ class TestPipelineTemplateContract:
     def test_tribunal_prompt_template_renders_with_member_voice(self):
         """The shared TRIBUNAL_PROMPT_TEMPLATE must render cleanly using the
         kwargs command_generator._run_generation_pass supplies."""
-        from app.prompts_data.loader import load_prompt
         from app.llm.prompts import PromptFile
+        from app.prompts_data.loader import load_prompt
 
         template = load_prompt(PromptFile.TRIBUNAL_GENERATOR)
 
@@ -217,8 +222,8 @@ class TestPipelineTemplateContract:
     def test_auditor_template_renders_and_enforces_ok_contract(self):
         """TRIBUNAL_AUDITOR_TEMPLATE must carry the terse
         'ok / corrected-command' output contract that the pipeline parses."""
-        from app.prompts_data.loader import load_prompt
         from app.llm.prompts import PromptFile, build_tribunal_auditor_context
+        from app.prompts_data.loader import load_prompt
         from app.services.ai.auditor_service import AuditorInput
 
         template = load_prompt(PromptFile.TRIBUNAL_AUDITOR)
@@ -247,8 +252,8 @@ class TestPipelineTemplateContract:
         for needle in ("FORBIDDEN", "CONSTRAINTS", "list files", "linux", "ls -la"):
             assert needle in formatted
         # The pipeline parses JSON with status "ok" or "revised"
-        assert "\"ok\"" in formatted
-        assert "\"revised\"" in formatted
+        assert '"ok"' in formatted
+        assert '"revised"' in formatted
 
 
 class TestTribunalTemplatePrefixCacheOrdering:
@@ -263,8 +268,8 @@ class TestTribunalTemplatePrefixCacheOrdering:
     """
 
     def test_generator_template_static_prefix_precedes_dynamic_suffix(self):
-        from app.prompts_data.loader import load_prompt
         from app.llm.prompts import PromptFile
+        from app.prompts_data.loader import load_prompt
 
         template = load_prompt(PromptFile.TRIBUNAL_GENERATOR)
         # Each tag should appear at most once; we use the first occurrence.
@@ -291,8 +296,8 @@ class TestTribunalTemplatePrefixCacheOrdering:
         )
 
     def test_auditor_template_static_prefix_precedes_dynamic_suffix(self):
-        from app.prompts_data.loader import load_prompt
         from app.llm.prompts import PromptFile
+        from app.prompts_data.loader import load_prompt
 
         template = load_prompt(PromptFile.TRIBUNAL_AUDITOR)
         idx = lambda tag: template.index(tag)

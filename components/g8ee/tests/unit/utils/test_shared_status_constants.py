@@ -25,9 +25,9 @@ import pytest
 
 from app.constants import (
     CloudSubtype,
-    OperatorType,
     OperatorHistoryEventType,
     OperatorStatus,
+    OperatorType,
 )
 
 pytestmark = pytest.mark.unit

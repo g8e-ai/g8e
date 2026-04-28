@@ -47,6 +47,7 @@ COMPONENT=""
 COVERAGE=false
 PYRIGHT=false
 RUFF=false
+RUFF_FIX=false
 E2E=false
 PARALLEL=""
 QUIET=false
@@ -63,6 +64,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --coverage                Generate coverage reports"
             echo "  --pyright                 Run pyright strict gate (g8ee only)"
             echo "  --ruff                    Run ruff lint check (g8ee only)"
+            echo "  --ruff-fix                Run ruff with --fix to auto-fix issues (g8ee only)"
             echo "  --e2e                     Run E2E operator lifecycle tests (g8ee only)"
             echo "  -j, --parallel <N|auto>   Run pytest in parallel via pytest-xdist (g8ee only)"
             echo ""
@@ -85,6 +87,7 @@ while [[ $# -gt 0 ]]; do
         --coverage) COVERAGE=true; shift ;;
         --pyright)  PYRIGHT=true;  shift ;;
         --ruff)     RUFF=true;     shift ;;
+        --ruff-fix) RUFF=true; RUFF_FIX=true; shift ;;
         --e2e)      E2E=true;      shift ;;
         -q|--quiet)
             QUIET=true
@@ -208,7 +211,9 @@ run_g8ee() {
         python -m pyright --project pyrightconfig.services.json
     fi
     if [[ "$RUFF" == "true" ]]; then
-        python -m ruff check .
+        local ruff_args=(check . --cache-dir /tmp/ruff_cache)
+        [[ "$RUFF_FIX" == "true" ]] && ruff_args+=(--fix)
+        python -m ruff "${ruff_args[@]}"
     fi
     local cov_args=(-rs)
     [[ "$COVERAGE" == "true" ]] && cov_args+=("--cov" "--cov-report=term-missing")

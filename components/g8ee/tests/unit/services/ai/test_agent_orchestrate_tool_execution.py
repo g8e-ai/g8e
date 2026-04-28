@@ -43,19 +43,23 @@ import pytest
 
 import app.services.ai.agent_tool_loop as agent_tool_loop_module
 from app.constants import CommandErrorType, OperatorStatus, OperatorToolName, OperatorType
-from app.models.agents.tribunal import TribunalSystemError
 from app.llm.llm_types import ToolCall
 from app.models.agent import StreamChunkData
-from app.models.operators import OperatorDocument, HeartbeatSnapshot, HeartbeatSystemIdentity, HeartbeatNetworkInfo, HeartbeatEnvironment
-from app.services.ai.agent_tool_loop import ToolCallResult
+from app.models.agents.tribunal import TribunalSystemError
+from app.models.operators import (
+    HeartbeatNetworkInfo,
+    HeartbeatSnapshot,
+    HeartbeatSystemIdentity,
+    OperatorDocument,
+)
+from app.models.settings import G8eeUserSettings, LLMSettings
 from app.models.tool_results import CommandExecutionResult
-from app.models.settings import LLMSettings, G8eeUserSettings
-from app.services.ai.agent_tool_loop import orchestrate_tool_execution
+from app.services.ai.agent_tool_loop import ToolCallResult, orchestrate_tool_execution
 from app.services.ai.tool_service import AIToolService
 from tests.fakes.factories import (
-    build_g8e_http_context,
-    build_enriched_context,
     build_bound_operator,
+    build_enriched_context,
+    build_g8e_http_context,
 )
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
@@ -70,22 +74,22 @@ def mock_tool_executor():
     """Mock AIToolService executor for unit tests."""
     executor = MagicMock(spec=AIToolService)
     executor.web_search_provider = None
-    
+
     # Mock OperatorCommandService with required _settings
     mock_exec_svc = MagicMock()
     mock_exec_svc._settings = MagicMock()
     executor.operator_command_service = mock_exec_svc
-    
+
     # Mock user settings and validators for command constraints
     from app.models.settings import CommandValidationSettings
     mock_user_settings = MagicMock()
     mock_user_settings.command_validation = CommandValidationSettings()
     executor._user_settings = mock_user_settings
-    
-    from app.utils.validators import get_whitelist_validator, get_blacklist_validator
+
+    from app.utils.validators import get_blacklist_validator, get_whitelist_validator
     executor._whitelist_validator = get_whitelist_validator()
     executor._blacklist_validator = get_blacklist_validator()
-    
+
     executor.reputation_data_service = MagicMock()
     executor.auditor_hmac_key = "test-hmac-key"
 
@@ -585,16 +589,16 @@ class TestToolCallResultStructure:
 
         # Verify execution_id is consistent across call_info and result_info
         assert result.call_info.execution_id == result.result_info.execution_id
-        
+
         # Verify execution_id was used in event emission (if events were captured)
         # The exact event structure depends on the SSE event format, but the key
         # invariant is that the same execution_id appears in related events
         if captured_events:
             execution_ids_in_events = []
             for event in captured_events:
-                if hasattr(event, 'execution_id'):
+                if hasattr(event, "execution_id"):
                     execution_ids_in_events.append(event.execution_id)
-            
+
             # All events for this tool call should share the same execution_id
             if execution_ids_in_events:
                 assert len(set(execution_ids_in_events)) == 1, (
@@ -994,7 +998,7 @@ class TestTargetOperatorResolution:
         """Setup multi-operator investigation for target operator tests."""
         self.multi_op_investigation = build_enriched_context(
             investigation_id="inv-multi-test",
-            case_id="case-multi-test", 
+            case_id="case-multi-test",
             user_id="user-multi-test",
             operator_documents=[
                 OperatorDocument(
@@ -1014,7 +1018,7 @@ class TestTargetOperatorResolution:
                 ),
                 OperatorDocument(
                     id="op-ubuntu",
-                    operator_session_id="session-ubuntu", 
+                    operator_session_id="session-ubuntu",
                     status=OperatorStatus.AVAILABLE,
                     operator_type=OperatorType.SYSTEM,
                     current_hostname="ubuntu-host",

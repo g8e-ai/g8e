@@ -11,18 +11,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from app.constants import CommandErrorType
+from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext, InvestigationModel
 from app.models.settings import G8eeUserSettings
-from app.models.http_context import G8eHttpContext
 from app.models.tool_results import InvestigationContextResult
-from app.services.ai.tool_service import AIToolService
+from app.services.ai.grounding.web_search_provider import WebSearchProvider
 from app.services.ai.tools import query_investigation_context as qic_tool
 from app.services.investigation.investigation_service import InvestigationService
-from app.services.ai.grounding.web_search_provider import WebSearchProvider
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 
@@ -65,12 +65,12 @@ class TestHandleQueryInvestigationContext:
     async def test_no_investigation_id(self, tool_service, g8e_context, user_settings):
         inv = MagicMock(spec=EnrichedInvestigationContext)
         inv.id = None
-        
+
         tool_args = {"data_type": "conversation_history"}
         result = await qic_tool.handle(tool_service,
             tool_args, inv, g8e_context, user_settings, execution_id=None
         )
-        
+
         assert isinstance(result, InvestigationContextResult)
         assert result.success is False
         assert "No investigation ID" in result.error
@@ -81,7 +81,7 @@ class TestHandleQueryInvestigationContext:
         result = await qic_tool.handle(tool_service,
             tool_args, investigation_context, g8e_context, user_settings, execution_id=None
         )
-        
+
         assert result.success is False
         assert "Invalid data_type" in result.error
         assert result.error_type == CommandErrorType.VALIDATION_ERROR
@@ -90,12 +90,12 @@ class TestHandleQueryInvestigationContext:
         mock_msg = MagicMock()
         mock_msg.model_dump.return_value = {"text": "hello"}
         mock_investigation_service.get_chat_messages = AsyncMock(return_value=[mock_msg] * 5)
-        
+
         tool_args = {"data_type": "conversation_history", "limit": 2}
         result = await qic_tool.handle(tool_service,
             tool_args, investigation_context, g8e_context, user_settings, execution_id=None
         )
-        
+
         assert result.success is True
         assert result.data_type == "conversation_history"
         assert len(result.data) == 2
@@ -106,12 +106,12 @@ class TestHandleQueryInvestigationContext:
         mock_inv = MagicMock(spec=InvestigationModel)
         mock_inv.model_dump.return_value = {"id": "inv-123", "status": "Open"}
         mock_investigation_service.get_investigation = AsyncMock(return_value=mock_inv)
-        
+
         tool_args = {"data_type": "investigation_status"}
         result = await qic_tool.handle(tool_service,
             tool_args, investigation_context, g8e_context, user_settings, execution_id=None
         )
-        
+
         assert result.success is True
         assert result.data_type == "investigation_status"
         assert result.data["status"] == "Open"
@@ -119,12 +119,12 @@ class TestHandleQueryInvestigationContext:
 
     async def test_investigation_status_not_found(self, tool_service, mock_investigation_service, investigation_context, g8e_context, user_settings):
         mock_investigation_service.get_investigation = AsyncMock(return_value=None)
-        
+
         tool_args = {"data_type": "investigation_status"}
         result = await qic_tool.handle(tool_service,
             tool_args, investigation_context, g8e_context, user_settings, execution_id=None
         )
-        
+
         assert result.success is False
         assert "Investigation not found" in result.error
         assert result.error_type == CommandErrorType.VALIDATION_ERROR
@@ -133,24 +133,24 @@ class TestHandleQueryInvestigationContext:
         mock_investigation_service.get_operator_actions_for_ai_context = AsyncMock(return_value="action1\naction2")
         mock_inv = MagicMock(spec=InvestigationModel)
         mock_investigation_service.get_investigation = AsyncMock(return_value=mock_inv)
-        
+
         tool_args = {"data_type": "operator_actions"}
         result = await qic_tool.handle(tool_service,
             tool_args, investigation_context, g8e_context, user_settings, execution_id=None
         )
-        
+
         assert result.success is True
         assert result.data == "action1\naction2"
         assert result.item_count == 1
 
     async def test_service_exception_handling(self, tool_service, mock_investigation_service, investigation_context, g8e_context, user_settings):
         mock_investigation_service.get_chat_messages = AsyncMock(side_effect=Exception("Service failure"))
-        
+
         tool_args = {"data_type": "conversation_history"}
         result = await qic_tool.handle(tool_service,
             tool_args, investigation_context, g8e_context, user_settings, execution_id=None
         )
-        
+
         assert result.success is False
         assert "Service failure" in result.error
         assert result.error_type == CommandErrorType.EXECUTION_ERROR

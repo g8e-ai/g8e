@@ -28,6 +28,7 @@ Usage via the ``cleanup`` autouse fixture in ``integration/conftest.py``::
 """
 
 import logging
+
 from app.services.cache.cache_aside import CacheAsideService
 
 logger = logging.getLogger(__name__)

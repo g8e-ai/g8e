@@ -28,17 +28,20 @@ import os
 import pytest
 import pytest_asyncio
 
-from app.clients.kv_cache_client import KVCacheClient
 from app.clients.db_client import DBClient
-from app.models.settings import G8eePlatformSettings, ListenSettings
-from app.services.infra.settings_service import SettingsService
-from app.services.cache.cache_aside import CacheAsideService
-from app.db.kv_service import KVService
+from app.clients.kv_cache_client import KVCacheClient
+from app.constants import (
+    CloudSubtype,
+    ComponentName,
+    InvestigationStatus,
+    LLMProvider,
+    OperatorType,
+)
 from app.db.db_service import DBService
-from app.constants import CloudSubtype, ComponentName, InvestigationStatus, LLMProvider, OperatorType, ThinkingLevel
-from app.errors import ThinkingNotSupportedError, ToolsNotSupportedError
-from app.models.settings import LLMSettings, SearchSettings
-from app.models.model_configs import MODEL_REGISTRY
+from app.db.kv_service import KVService
+from app.models.settings import G8eePlatformSettings, ListenSettings, LLMSettings, SearchSettings
+from app.services.cache.cache_aside import CacheAsideService
+from app.services.infra.settings_service import SettingsService
 from tests.fakes.builder import (
     create_mock_cache_aside_service,
 )
@@ -155,8 +158,8 @@ def _llm_settings_from_env() -> LLMSettings | None:
             kwargs[field] = assistant_endpoint
 
     return LLMSettings(**kwargs)
-    
-    
+
+
 def _web_search_settings_from_env() -> SearchSettings | None:
     """Build SearchSettings from TEST_WEB_SEARCH_* env vars set by ./g8e test flags.
     
@@ -224,7 +227,8 @@ async def _load_settings_from_g8es(timeout: float = 5.0) -> G8eePlatformSettings
 
 def pytest_configure(config):
     import asyncio
-    from app.llm.factory import set_settings, set_llm_settings, set_search_settings
+
+    from app.llm.factory import set_llm_settings, set_search_settings, set_settings
 
     logger.info("Pytest configure started.")
 
@@ -251,7 +255,7 @@ def pytest_configure(config):
 
 
 def pytest_collection_modifyitems(config, items):
-    from app.llm.factory import get_settings, get_llm_settings, get_search_settings
+    from app.llm.factory import get_llm_settings, get_search_settings, get_settings
     settings = get_settings()
     llm = get_llm_settings()
     search_settings = get_search_settings()
@@ -259,20 +263,20 @@ def pytest_collection_modifyitems(config, items):
 
     # Check for LLM credentials from TEST_LLM_* env vars
     has_test_llm_creds = _has_llm_credentials(llm)
-    
+
     # Don't skip ai_integration tests if TEST_LLM_* env vars are not set,
     # because tests now load user settings from g8es which may have API keys configured
     # Only skip if TEST_LLM_* env vars are explicitly set but invalid
     env_llm_provider = os.environ.get("TEST_LLM_PROVIDER", "").strip()
-    
+
     # If env var is set, use the credentials check.
     # If env var is NOT set, we check if the platform settings from g8es have
     # any LLM info, but since LLM info is in UserSettings, we can't easily check
-    # here during collection. 
-    # For now, let's at least check if we have a primary_model in the platform 
+    # here during collection.
+    # For now, let's at least check if we have a primary_model in the platform
     # settings which some older tests might use, or if we should just skip.
     has_llm_credentials = has_test_llm_creds if env_llm_provider else (llm is not None and llm.primary_provider is not None)
-    
+
     has_vertex_search = search_settings.enabled if search_settings else False
     has_web_search = (
         search_settings.enabled
@@ -288,7 +292,7 @@ def pytest_collection_modifyitems(config, items):
     skip_no_llm = pytest.mark.skip(reason=f"ai_integration tests require LLM flags. has_creds={has_llm_credentials}")
     skip_no_vertex = pytest.mark.skip(reason="requires_api tests require Vertex AI Search credentials (VERTEX_SEARCH_ENABLED, VERTEX_SEARCH_PROJECT_ID, VERTEX_SEARCH_ENGINE_ID, VERTEX_SEARCH_API_KEY)")
     skip_no_web_search = pytest.mark.skip(reason=f"requires_web_search tests require web search configuration (search.enabled, project_id, engine_id, api_key). has_web_search={has_web_search}")
-    
+
 
     for item in items:
         if item.get_closest_marker("ai_integration") and not has_llm_credentials:
@@ -297,14 +301,14 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skip_no_vertex)
         if item.get_closest_marker("requires_web_search") and not has_web_search:
             item.add_marker(skip_no_web_search)
-            
+
         # Dynamically add markers based on scenario data for accuracy tests
         if "test_agent_accuracy" in item.name or "test_gemini_accuracy" in item.name:
             scenario = item.callspec.params.get("scenario") if hasattr(item, "callspec") else None
             if scenario:
                 if scenario.get("agent_mode") == "operator_bound" or scenario.get("expected_tools"):
                     item.add_marker(pytest.mark.tools)
-                
+
                 # Assume all complex scenarios benefit from thinking
                 if scenario.get("agent_mode") == "operator_bound":
                     item.add_marker(pytest.mark.thinking)
@@ -353,7 +357,7 @@ class TaskTracker:
     def _fake_create_task(self, coro):
         import asyncio
         if not asyncio.iscoroutine(coro):
-            # If it's not a real coroutine (e.g. it's a mock), 
+            # If it's not a real coroutine (e.g. it's a mock),
             # we just return a new mock to represent the task.
             from unittest.mock import MagicMock
             return MagicMock()
@@ -400,7 +404,7 @@ class TaskTracker:
         for task in self._captured_tasks:
             if not task.done():
                 task.cancel()
-        
+
         if self._captured_tasks:
             # Gather all tasks to ensure they are awaited, even if they were cancelled
             await asyncio.gather(*self._captured_tasks, return_exceptions=True)
@@ -479,9 +483,9 @@ def test_settings():
     """
     from app.llm.factory import get_settings
     from app.models.settings import AuthSettings, ListenSettings
-    
+
     settings = get_settings()
-    if settings is None or not hasattr(settings, 'auth'):
+    if settings is None or not hasattr(settings, "auth"):
         return G8eePlatformSettings(port=443, auth=AuthSettings(), listen=ListenSettings())
     return settings
 
@@ -503,6 +507,7 @@ def fake_cache_aside_service():
 def mock_blob_service():
     """Pure MagicMock spec'd to BlobService for unit tests."""
     from unittest.mock import MagicMock
+
     from app.db.blob_service import BlobService
     mock = MagicMock(spec=BlobService)
     return mock
@@ -550,15 +555,15 @@ def enriched_investigation():
 @pytest.fixture
 def cloud_operator_doc():
     from app.models.operators import (
-        OperatorDocument,
-        HeartbeatSnapshot,
-        HeartbeatSystemIdentity,
+        HeartbeatDiskDetails,
+        HeartbeatEnvironment,
+        HeartbeatMemoryDetails,
         HeartbeatNetworkInfo,
         HeartbeatOSDetails,
+        HeartbeatSnapshot,
+        HeartbeatSystemIdentity,
         HeartbeatUserDetails,
-        HeartbeatDiskDetails,
-        HeartbeatMemoryDetails,
-        HeartbeatEnvironment,
+        OperatorDocument,
     )
     return OperatorDocument(
         id="cloud-op-1",
@@ -590,15 +595,15 @@ def cloud_operator_doc():
 @pytest.fixture
 def binary_operator_doc():
     from app.models.operators import (
-        OperatorDocument,
-        HeartbeatSnapshot,
-        HeartbeatSystemIdentity,
+        HeartbeatDiskDetails,
+        HeartbeatEnvironment,
+        HeartbeatMemoryDetails,
         HeartbeatNetworkInfo,
         HeartbeatOSDetails,
+        HeartbeatSnapshot,
+        HeartbeatSystemIdentity,
         HeartbeatUserDetails,
-        HeartbeatDiskDetails,
-        HeartbeatMemoryDetails,
-        HeartbeatEnvironment,
+        OperatorDocument,
     )
     return OperatorDocument(
         id="binary-op-1",
@@ -642,8 +647,8 @@ def provider_config():
     This follows the documented pattern in testing.md and provides
     a default configuration for isolated unit tests.
     """
-    from app.llm.llm_types import GenerateContentConfig
     from app.constants import LLM_DEFAULT_MAX_OUTPUT_TOKENS
+    from app.llm.llm_types import GenerateContentConfig
     return GenerateContentConfig(
         max_output_tokens=LLM_DEFAULT_MAX_OUTPUT_TOKENS,
     )
@@ -657,13 +662,13 @@ def provider_config():
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def cache_aside_service(test_settings):
+    from app.db import DBClient
     from app.db.db_service import DBService
     from app.db.kv_service import KVService
-    from app.db import DBClient
     from app.services.cache.cache_aside import CacheAsideService
-    
+
     settings = test_settings
-    
+
     raw_kv = KVCacheClient(
         ca_cert_path=settings.ca_cert_path,
         internal_auth_token=settings.auth.internal_auth_token,
@@ -676,10 +681,10 @@ async def cache_aside_service(test_settings):
         internal_auth_token=settings.auth.internal_auth_token
     )
     await raw_db.connect()
-    
+
     kv = KVService(raw_kv)
     db = DBService(raw_db)
-    
+
     service = CacheAsideService(
         kv=kv,
         db=db,
@@ -706,20 +711,20 @@ async def db_client(cache_aside_service):
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def pubsub_service(test_settings):
     from app.clients.pubsub_client import PubSubClient
-    
+
     settings = test_settings
-    
+
     client = PubSubClient(
         pubsub_url=settings.listen.pubsub_url,
         internal_auth_token=settings.auth.internal_auth_token,
         component_name=ComponentName.G8EE,
     )
     await client.connect()
-    
+
     class FakeService:
         def __init__(self, c):
             self.pubsub_client = c
-            
+
     yield FakeService(client)
     await client.close()
 

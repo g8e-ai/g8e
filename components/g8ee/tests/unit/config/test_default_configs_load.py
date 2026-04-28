@@ -16,14 +16,13 @@
 This ensures that typos or gutted config files are caught by CI before deploy.
 """
 
-import pytest
 
-from app.utils.whitelist_validator import get_whitelist_validator, register_whitelist_validator
-from app.utils.blacklist_validator import get_blacklist_validator, register_blacklist_validator
 from app.utils.auto_approved_validator import (
     get_auto_approved_validator,
     register_auto_approved_validator,
 )
+from app.utils.blacklist_validator import get_blacklist_validator, register_blacklist_validator
+from app.utils.whitelist_validator import get_whitelist_validator, register_whitelist_validator
 
 
 class TestDefaultWhitelistConfigLoads:

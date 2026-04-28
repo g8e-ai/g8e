@@ -41,7 +41,6 @@ from app.services.ai.reputation_service import (
     AUDITOR_ID,
     BOOTSTRAP_SCALAR,
     DEFAULT_EMA_HALF_LIFE,
-    NEMESIS_ID,
     SAGE_ID,
     TRIBUNAL_HONEST_FOUR,
     ClassifierInputs,
@@ -51,7 +50,6 @@ from app.services.ai.reputation_service import (
     ema_update,
 )
 from app.services.data.stake_resolution_data_service import stake_resolution_id
-
 
 pytestmark = [pytest.mark.unit]
 
@@ -110,7 +108,7 @@ def _result(
     )
 
 
-def _outcomes_by_agent(rows) -> dict[str, "object"]:
+def _outcomes_by_agent(rows) -> dict[str, object]:
     return {row.agent_id: row for row in rows}
 
 

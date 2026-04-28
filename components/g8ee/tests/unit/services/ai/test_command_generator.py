@@ -13,68 +13,68 @@
 
 """Regression tests for the Tribunal command generator."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from app.constants import (
+    AuditorReason,
     CommandGenerationOutcome,
-    LLMProvider,
-    TribunalMember,
     ComponentName,
     EventType,
-    AuditorReason,
+    LLMProvider,
     TieBreakReason,
+    TribunalMember,
 )
 from app.llm.llm_types import Role
-from app.models.model_configs import LLMModelConfig
-from app.models.settings import LLMSettings, G8eeUserSettings
+from app.llm.prompts import (
+    build_forbidden_patterns_message as _format_forbidden_patterns_message,
+)
+from app.llm.prompts import (
+    build_tribunal_operator_context_string as _build_operator_context_string,
+)
+from app.llm.prompts import (
+    build_tribunal_prompt_fields as _prompt_fields,
+)
 from app.models.agent import OperatorContext
 from app.models.agents.tribunal import (
+    TribunalAuditorFailedError,
+    TribunalAuditorFailedPayload,
     TribunalDisabledError,
     TribunalGenerationFailedError,
     TribunalModelNotConfiguredError,
     TribunalProviderUnavailableError,
-    TribunalSessionGenerationFailedPayload,
-    TribunalSessionModelNotConfiguredPayload,
-    TribunalSessionStartedPayload,
-    TribunalSessionSystemErrorPayload,
     TribunalSessionCompletedPayload,
     TribunalSessionDisabledPayload,
+    TribunalSessionGenerationFailedPayload,
+    TribunalSessionModelNotConfiguredPayload,
     TribunalSessionProviderUnavailablePayload,
-    TribunalAuditorFailedPayload,
+    TribunalSessionStartedPayload,
+    TribunalSessionSystemErrorPayload,
     TribunalSystemError,
-    TribunalAuditorFailedError,
+)
+from app.models.http_context import G8eHttpContext
+from app.models.model_configs import LLMModelConfig
+from app.models.reputation import ReputationCommitment
+from app.models.settings import G8eeUserSettings, LLMSettings
+from app.services.ai.auditor_service import (
+    _MAX_TOKENS_AUDITOR,
+    run_auditor,
 )
 from app.services.ai.generator import (
+    _MAX_TOKENS_GENERATION,
+    TribunalEmitter,
     _build_and_emit_result,
     _is_system_error,
-    _MAX_TOKENS_GENERATION,
     _member_for_pass,
     _resolve_model,
+    _run_audit_stage,
     _run_generation_pass,
     _run_generation_stage,
-    _run_audit_stage,
     _run_voting_stage,
     generate_command,
-    TribunalEmitter,
-)
-from app.services.ai.voter import (
-    normalise_command,
-    weighted_vote,
-)
-from app.services.ai.auditor_service import (
-    run_auditor,
-    _MAX_TOKENS_AUDITOR,
-)
-from app.llm.prompts import (
-    build_tribunal_operator_context_string as _build_operator_context_string,
-    build_forbidden_patterns_message as _format_forbidden_patterns_message,
-    build_tribunal_prompt_fields as _prompt_fields,
 )
 from app.utils.agent_persona_loader import get_agent_persona
-from app.models.http_context import G8eHttpContext
-from app.models.reputation import ReputationCommitment
-
 
 _TEST_HMAC_KEY = "a" * 64
 
@@ -256,7 +256,7 @@ class TestRoleImportRegression:
             emitter=emitter,
             pass_errors=pass_errors,
             command_constraints_message="No whitelist or blacklist constraints are active.",
-        
+
         )
 
         assert result == "ls -la"
@@ -375,7 +375,7 @@ class TestPassErrorsCollection:
             emitter=emitter,
             pass_errors=pass_errors,
             command_constraints_message="No whitelist or blacklist constraints are active.",
-        
+
         )
 
         assert result is None
@@ -402,7 +402,7 @@ class TestPassErrorsCollection:
             emitter=emitter,
             pass_errors=pass_errors,
             command_constraints_message="No whitelist or blacklist constraints are active.",
-        
+
         )
 
         assert result is None
@@ -429,7 +429,7 @@ class TestPassErrorsCollection:
             emitter=emitter,
             pass_errors=pass_errors,
             command_constraints_message="No whitelist or blacklist constraints are active.",
-        
+
         )
 
         assert result == "ls -la"
@@ -772,7 +772,7 @@ class TestTribunalAuditorFailedError:
         mock_provider = MagicMock()
         mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
         emitter = TribunalEmitter(None, _make_mock_g8e_context())
-        
+
         vote_breakdown = VoteBreakdown(
             candidates_by_member={},
             candidates_by_command={"ls -la": ["axiom"]},
@@ -812,7 +812,7 @@ class TestTribunalAuditorFailedError:
         mock_provider = MagicMock()
         mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
         emitter = TribunalEmitter(None, _make_mock_g8e_context())
-        
+
         vote_breakdown = VoteBreakdown(
             candidates_by_member={},
             candidates_by_command={"ls -la": ["axiom"]},
@@ -850,7 +850,7 @@ class TestTribunalAuditorFailedError:
             side_effect=RuntimeError("Auditor API timeout")
         )
         emitter = TribunalEmitter(None, _make_mock_g8e_context())
-        
+
         vote_breakdown = VoteBreakdown(
             candidates_by_member={},
             candidates_by_command={"ls -la": ["axiom"]},
@@ -1349,7 +1349,7 @@ class TestRunVerificationStage:
     @pytest.mark.asyncio
     async def test_auditor_swap_to_dissenter_returns_verified(self):
         """Auditor swaps to a dissenting cluster."""
-        from app.models.agents.tribunal import VoteBreakdown, CandidateCommand
+        from app.models.agents.tribunal import CandidateCommand, VoteBreakdown
         vote_breakdown = VoteBreakdown(
             candidates_by_member={},
             candidates_by_command={"ls -la": ["axiom"], "ls -l": ["concord"]},
@@ -1387,7 +1387,7 @@ class TestRunVerificationStage:
     @pytest.mark.asyncio
     async def test_auditor_revise_from_dissent(self):
         """Auditor revises from a dissenting cluster."""
-        from app.models.agents.tribunal import VoteBreakdown, CandidateCommand
+        from app.models.agents.tribunal import CandidateCommand, VoteBreakdown
         vote_breakdown = VoteBreakdown(
             candidates_by_member={},
             candidates_by_command={"ls -la": ["axiom"], "ls -l": ["concord"]},
@@ -1424,7 +1424,7 @@ class TestRunVerificationStage:
     @pytest.mark.asyncio
     async def test_tied_mode_auditor_disambiguation(self):
         """Auditor must disambiguate in tied mode (cannot return ok)."""
-        from app.models.agents.tribunal import VoteBreakdown, CandidateCommand
+        from app.models.agents.tribunal import CandidateCommand, VoteBreakdown
         vote_breakdown = VoteBreakdown(
             candidates_by_member={},
             candidates_by_command={"ls -la": ["axiom"], "ls -l": ["concord"]},
@@ -1621,17 +1621,16 @@ class TestGenerateCommandHappyPath:
             resp = MagicMock()
             if call_count <= passes:
                 resp.text = generation_text
-            else:
-                if auditor_text is not None:
-                    # Convert auditor text to JSON format
-                    if auditor_text == "ok":
-                        resp.text = '{"status": "ok"}'
-                    else:
-                        # Assume it's a revised command
-                        import json
-                        resp.text = json.dumps({"status": "revised", "revised_command": auditor_text})
+            elif auditor_text is not None:
+                # Convert auditor text to JSON format
+                if auditor_text == "ok":
+                    resp.text = '{"status": "ok"}'
                 else:
-                    resp.text = generation_text
+                    # Assume it's a revised command
+                    import json
+                    resp.text = json.dumps({"status": "revised", "revised_command": auditor_text})
+            else:
+                resp.text = generation_text
             return resp
 
         return _make_mock_provider(generate_content_lite_side_effect=_side_effect)
@@ -2061,7 +2060,7 @@ class TestGenerateCommandAuditorFailure:
                 raise auditor_side_effect
             if auditor_return is not None:
                 # Convert auditor response to JSON format if it's plain text
-                if hasattr(auditor_return, 'text'):
+                if hasattr(auditor_return, "text"):
                     text = auditor_return.text
                     if text == "ok":
                         auditor_return.text = '{"status": "ok"}'
@@ -2329,7 +2328,7 @@ class TestMaxTokensConstants:
         emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
         # Mock get_model_config to return a config for auditor
-        with patch('app.models.model_configs.get_model_config') as mock_get_config:
+        with patch("app.models.model_configs.get_model_config") as mock_get_config:
             mock_config = LLMModelConfig(
                 name="test-model",
                 max_output_tokens=_MAX_TOKENS_AUDITOR,
@@ -2481,10 +2480,10 @@ class TestPromptFields:
         and TRIBUNAL_AUDITOR_TEMPLATE — not in the persona text itself. This test
         guards against drift in either the templates or _prompt_fields.
         """
-        from app.utils.agent_persona_loader import get_agent_persona, get_tribunal_member
-        from app.prompts_data.loader import load_prompt
-        from app.llm.prompts import PromptFile
         from app.constants import DEFAULT_OS_NAME, DEFAULT_SHELL, DEFAULT_WORKING_DIRECTORY
+        from app.llm.prompts import PromptFile
+        from app.prompts_data.loader import load_prompt
+        from app.utils.agent_persona_loader import get_agent_persona
 
         TRIBUNAL_PROMPT_TEMPLATE = load_prompt(PromptFile.TRIBUNAL_GENERATOR)
         TRIBUNAL_AUDITOR_TEMPLATE = load_prompt(PromptFile.TRIBUNAL_AUDITOR)
@@ -2579,9 +2578,9 @@ class TestTribunalEmitter:
     @pytest.mark.asyncio
     async def test_progress_event_publish_failure_swallowed(self):
         """Progress event publish failures are logged but not re-raised."""
+        from app.models.agents.tribunal import TribunalPassCompletedPayload
         from app.models.http_context import G8eHttpContext
         from app.services.infra.g8ed_event_service import EventService
-        from app.models.agents.tribunal import TribunalPassCompletedPayload
 
         mock_event_service = MagicMock(spec=EventService)
         mock_event_service.publish = AsyncMock(side_effect=RuntimeError("broker down"))
@@ -2639,7 +2638,7 @@ class TestTribunalEmitter:
         with patch("app.services.ai.generator.get_llm_provider", return_value=mock_provider):
             mock_event_service = MagicMock()
             mock_event_service.publish = AsyncMock()
-            
+
             result = await generate_command(
                 request="test round 2",
                 guidelines="",
@@ -2658,7 +2657,7 @@ class TestTribunalEmitter:
             assert len(result.round_2_candidates) == 3
             assert result.round_2_vote_breakdown is not None
             assert result.round_2_vote_breakdown.winner == "cmd_consensus"
-            
+
             # Verify event emissions for Round 2
             emitted_types = [args[0][0].event_type for args in mock_event_service.publish.call_args_list]
             assert EventType.TRIBUNAL_VOTING_ROUND_2_STARTED in emitted_types
@@ -2667,16 +2666,13 @@ class TestTribunalEmitter:
     @pytest.mark.asyncio
     async def test_all_terminal_events_raise_on_publish_failure(self):
         """All TRIBUNAL_SESSION_* events are terminal and should re-raise on publish failure."""
+        from app.models.agents.tribunal import (
+            TribunalSessionModelNotConfiguredPayload,
+            TribunalSessionStartedPayload,
+            TribunalSessionSystemErrorPayload,
+        )
         from app.models.http_context import G8eHttpContext
         from app.services.infra.g8ed_event_service import EventService
-        from app.models.agents.tribunal import (
-            TribunalSessionStartedPayload,
-            TribunalSessionDisabledPayload,
-            TribunalSessionModelNotConfiguredPayload,
-            TribunalSessionProviderUnavailablePayload,
-            TribunalSessionSystemErrorPayload,
-            TribunalAuditorFailedPayload,
-        )
 
         mock_event_service = MagicMock(spec=EventService)
         mock_event_service.publish = AsyncMock(side_effect=RuntimeError("broker down"))

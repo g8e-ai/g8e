@@ -31,7 +31,6 @@ the JSON+CSV union logic in ``CommandAutoApprovedValidator.is_auto_approved``.
 from __future__ import annotations
 
 import json
-import tempfile
 from pathlib import Path
 
 import pytest

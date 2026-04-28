@@ -15,12 +15,13 @@
 Unit tests for the Title Generator service.
 """
 
-import pytest
 from unittest.mock import AsyncMock, patch
 
-from app.llm.llm_types import Content, Part, GenerateContentResponse, Candidate
-from app.services.ai.title_generator import generate_case_title, _create_fallback_title
+import pytest
+
+from app.llm.llm_types import Candidate, Content, GenerateContentResponse, Part
 from app.models.agents.title_generator import CaseTitleResult
+from app.services.ai.title_generator import _create_fallback_title, generate_case_title
 
 pytestmark = [pytest.mark.unit]
 

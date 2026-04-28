@@ -13,12 +13,12 @@
 
 """Unit tests for AgentActivityDataService."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
-from app.constants import AgentMode, TriageComplexityClassification, TriageConfidence
-from app.errors import ValidationError, DatabaseError
+from app.constants import AgentMode
+from app.errors import DatabaseError, ValidationError
 from app.models.agent_activity import AgentActivityMetadata
 from app.models.tool_results import TokenUsage
 from app.services.data.agent_activity_data_service import AgentActivityDataService

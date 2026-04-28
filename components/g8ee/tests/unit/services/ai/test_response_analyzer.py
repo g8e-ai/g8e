@@ -15,19 +15,20 @@
 Unit tests for AIResponseAnalyzer.
 """
 
-import pytest
 from unittest.mock import patch
 
+import pytest
+
 from app.constants import ErrorAnalysisCategory, RiskLevel
-from app.llm.llm_types import Content, Part, GenerateContentResponse, Candidate
-from app.services.ai.response_analyzer import AIResponseAnalyzer
-from tests.fakes.fake_llm_provider import FakeLLMProvider
+from app.llm.llm_types import Candidate, Content, GenerateContentResponse, Part
 from app.models.settings import G8eeUserSettings, LLMSettings
 from app.models.tool_results import (
     CommandRiskContext,
     ErrorAnalysisContext,
     FileOperationRiskContext,
 )
+from app.services.ai.response_analyzer import AIResponseAnalyzer
+from tests.fakes.fake_llm_provider import FakeLLMProvider
 
 pytestmark = [pytest.mark.unit]
 
@@ -70,7 +71,7 @@ def analyzer():
 @pytest.mark.asyncio
 async def test_analyze_command_risk_success(analyzer, fake_provider, mock_settings):
     fake_provider.add_response('{"risk_level": "LOW", "reasoning": "Read-only command"}')
-    
+
     with patch("app.services.ai.response_analyzer.get_llm_provider", return_value=fake_provider):
         result = await analyzer.analyze_command_risk(
             "ls -la",
@@ -78,7 +79,7 @@ async def test_analyze_command_risk_success(analyzer, fake_provider, mock_settin
             CommandRiskContext(),
             mock_settings
         )
-    
+
     assert result.risk_level == RiskLevel.LOW
 
 
@@ -139,7 +140,7 @@ async def test_analyze_command_risk_fallback_on_empty_response(analyzer, fake_pr
     # Queue a response with no text parts
     response = GenerateContentResponse(candidates=[Candidate(content=Content(role="model", parts=[]), finish_reason="STOP")])
     fake_provider.responses.append(response)
-    
+
     with patch("app.services.ai.response_analyzer.get_llm_provider", return_value=fake_provider):
         result = await analyzer.analyze_command_risk(
             "rm -rf /",
@@ -147,7 +148,7 @@ async def test_analyze_command_risk_fallback_on_empty_response(analyzer, fake_pr
             CommandRiskContext(),
             mock_settings
         )
-    
+
     assert result.risk_level == RiskLevel.HIGH
 
 
@@ -160,7 +161,7 @@ async def test_analyze_command_risk_fallback_on_exception(analyzer, fake_provide
             CommandRiskContext(),
             mock_settings
         )
-    
+
     assert result.risk_level == RiskLevel.HIGH
 
 
@@ -171,7 +172,7 @@ async def test_analyze_command_risk_fallback_on_exception(analyzer, fake_provide
 @pytest.mark.asyncio
 async def test_analyze_error_short_circuit_at_retry_limit(analyzer, mock_settings):
     context = ErrorAnalysisContext(retry_count=2)
-    
+
     result = await analyzer.analyze_error_and_suggest_fix(
         command="npm install",
         exit_code=1,
@@ -180,7 +181,7 @@ async def test_analyze_error_short_circuit_at_retry_limit(analyzer, mock_setting
         context=context,
         settings=mock_settings
     )
-    
+
     assert result.can_auto_fix is False
     assert result.should_escalate is True
     assert "Retry limit reached" in result.reasoning
@@ -188,7 +189,7 @@ async def test_analyze_error_short_circuit_at_retry_limit(analyzer, mock_setting
 
 @pytest.mark.asyncio
 async def test_analyze_error_success(analyzer, fake_provider, mock_settings):
-    fake_provider.add_response('''{
+    fake_provider.add_response("""{
             "error_category": "dependency",
             "root_cause": "Missing npm package",
             "can_auto_fix": true,
@@ -196,8 +197,8 @@ async def test_analyze_error_success(analyzer, fake_provider, mock_settings):
             "reasoning": "Package is missing, can install",
             "suggested_fix": "npm install lodash",
             "user_message": "I'll install the missing package."
-        }''')
-    
+        }""")
+
     with patch("app.services.ai.response_analyzer.get_llm_provider", return_value=fake_provider):
         result = await analyzer.analyze_error_and_suggest_fix(
             command="node app.js",
@@ -207,7 +208,7 @@ async def test_analyze_error_success(analyzer, fake_provider, mock_settings):
             context=ErrorAnalysisContext(),
             settings=mock_settings
         )
-    
+
     assert result.error_category == ErrorAnalysisCategory.DEPENDENCY
     assert result.can_auto_fix is True
     assert result.suggested_fix == "npm install lodash"
@@ -216,15 +217,15 @@ async def test_analyze_error_success(analyzer, fake_provider, mock_settings):
 @pytest.mark.asyncio
 async def test_analyze_error_enforces_escalation_at_retry_limit(analyzer, fake_provider, mock_settings):
     # LLM might incorrectly say it's fixable even at limit
-    fake_provider.add_response('''{
+    fake_provider.add_response("""{
             "error_category": "dependency",
             "root_cause": "Still missing",
             "can_auto_fix": true,
             "should_escalate": false,
             "reasoning": "Try again",
             "user_message": "Trying again"
-        }''')
-    
+        }""")
+
     with patch("app.services.ai.response_analyzer.get_llm_provider", return_value=fake_provider):
         result = await analyzer.analyze_error_and_suggest_fix(
             command="node app.js",
@@ -234,7 +235,7 @@ async def test_analyze_error_enforces_escalation_at_retry_limit(analyzer, fake_p
             context=ErrorAnalysisContext(retry_count=2),
             settings=mock_settings
         )
-    
+
     assert result.can_auto_fix is False
     assert result.should_escalate is True
 
@@ -250,7 +251,7 @@ async def test_analyze_error_fallback_on_exception(analyzer, fake_provider, mock
             context=ErrorAnalysisContext(),
             settings=mock_settings
         )
-    
+
     assert result.can_auto_fix is False
     assert result.should_escalate is True
     assert result.error_category == ErrorAnalysisCategory.UNKNOWN
@@ -262,14 +263,14 @@ async def test_analyze_error_fallback_on_exception(analyzer, fake_provider, mock
 
 @pytest.mark.asyncio
 async def test_analyze_file_operation_risk_success(analyzer, fake_provider, mock_settings):
-    fake_provider.add_response('''{
+    fake_provider.add_response("""{
             "risk_level": "MEDIUM",
             "is_system_file": false,
             "safe_to_proceed": true,
             "blocking_issues": [],
             "approval_prompt": "Proceed with editing app.py?"
-        }''')
-    
+        }""")
+
     with patch("app.services.ai.response_analyzer.get_llm_provider", return_value=fake_provider):
         result = await analyzer.analyze_file_operation_risk(
             operation="edit",
@@ -278,7 +279,7 @@ async def test_analyze_file_operation_risk_success(analyzer, fake_provider, mock
             context=FileOperationRiskContext(),
             settings=mock_settings
         )
-    
+
     assert result.risk_level == RiskLevel.MEDIUM
     assert result.is_system_file is False
     assert result.safe_to_proceed is True
@@ -287,14 +288,14 @@ async def test_analyze_file_operation_risk_success(analyzer, fake_provider, mock
 @pytest.mark.asyncio
 async def test_analyze_file_operation_risk_system_file_override(analyzer, fake_provider, mock_settings):
     # LLM might say it's not a system file, but code overrides based on prefix
-    fake_provider.add_response('''{
+    fake_provider.add_response("""{
             "risk_level": "HIGH",
             "is_system_file": false,
             "safe_to_proceed": true,
             "blocking_issues": [],
             "approval_prompt": "Proceed?"
-        }''')
-    
+        }""")
+
     with patch("app.services.ai.response_analyzer.get_llm_provider", return_value=fake_provider):
         result = await analyzer.analyze_file_operation_risk(
             operation="edit",
@@ -303,7 +304,7 @@ async def test_analyze_file_operation_risk_system_file_override(analyzer, fake_p
             context=FileOperationRiskContext(),
             settings=mock_settings
         )
-    
+
     assert result.is_system_file is True
     assert result.safe_to_proceed is False  # HIGH + system file = safe_to_proceed False
 
@@ -318,7 +319,7 @@ async def test_analyze_file_operation_risk_fallback_on_exception(analyzer, fake_
             context=FileOperationRiskContext(),
             settings=mock_settings
         )
-    
+
     assert result.risk_level == RiskLevel.HIGH
     assert result.safe_to_proceed is False
     assert "Risk analysis failed" in result.blocking_issues[0]

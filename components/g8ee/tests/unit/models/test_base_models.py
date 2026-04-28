@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 from enum import Enum
 
 import pytest
+
 from app.models.base import (
     Field,
     G8eAuditableModel,

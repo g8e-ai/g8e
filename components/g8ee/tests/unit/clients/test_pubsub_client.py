@@ -19,7 +19,13 @@ import aiohttp
 import pytest
 
 from app.clients.pubsub_client import PubSubClient
-from app.constants import ComponentName, PubSubAction, PubSubField, PubSubMessageType, PubSubWireEventType
+from app.constants import (
+    ComponentName,
+    PubSubAction,
+    PubSubField,
+    PubSubMessageType,
+    PubSubWireEventType,
+)
 from tests.fakes.async_helpers import async_iter
 
 pytestmark = pytest.mark.unit

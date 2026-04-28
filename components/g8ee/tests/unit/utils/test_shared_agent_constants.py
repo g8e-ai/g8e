@@ -17,18 +17,19 @@ in shared/constants/agents.json and shared/models/agents/*.json.
 """
 
 import json
-import pytest
 from pathlib import Path
 
-from app.constants.shared import _AGENTS
+import pytest
+
 from app.constants import (
+    AuditorReason,
+    CommandGenerationOutcome,
     TriageComplexityClassification,
     TriageConfidence,
     TriageIntentClassification,
-    CommandGenerationOutcome,
     TribunalMember,
-    AuditorReason,
 )
+from app.constants.shared import _AGENTS
 
 pytestmark = pytest.mark.unit
 
@@ -37,7 +38,7 @@ _SHARED_MODELS_DIR = Path(__file__).parent.parent.parent.parent.parent.parent / 
 def _load_model_json(filename: str) -> dict:
     """Load a shared model JSON file."""
     path = _SHARED_MODELS_DIR / filename
-    with open(path, "r") as f:
+    with open(path) as f:
         return json.load(f)
 
 class TestAgentConstantsMatchSharedJSON:
@@ -179,7 +180,7 @@ class TestSharedModelJSONEnumsMatchG8ee:
         """tribunal.json outcome enum must match CommandGenerationOutcome."""
         model = _load_model_json("tribunal.json")
         json_outcomes = model["voting_result"]["outcome"]["enum"]
-        
+
         g8ee_outcomes = [e.value for e in CommandGenerationOutcome]
         assert set(json_outcomes) == set(g8ee_outcomes), (
             f"tribunal.json outcome enum {json_outcomes} does not match "
@@ -190,7 +191,7 @@ class TestSharedModelJSONEnumsMatchG8ee:
         """tribunal.json member enum must match TribunalMember."""
         model = _load_model_json("tribunal.json")
         json_members = model["voting_result"]["candidates"]["items"]["properties"]["member"]["enum"]
-        
+
         g8ee_members = [e.value for e in TribunalMember]
         assert set(json_members) == set(g8ee_members), (
             f"tribunal.json member enum {json_members} does not match "
@@ -201,7 +202,7 @@ class TestSharedModelJSONEnumsMatchG8ee:
         """auditor.json reason_enum must match AuditorReason."""
         model = _load_model_json("auditor.json")
         json_reasons = model["result"]["reason_enum"]["enum"]
-        
+
         g8ee_reasons = [e.value for e in AuditorReason]
         assert set(json_reasons) == set(g8ee_reasons), (
             f"auditor.json reason_enum {json_reasons} does not match "
@@ -212,7 +213,7 @@ class TestSharedModelJSONEnumsMatchG8ee:
         """triage.json complexity enum must match TriageComplexityClassification."""
         model = _load_model_json("triage.json")
         json_complexity = model["result"]["complexity"]["enum"]
-        
+
         g8ee_complexity = [e.value for e in TriageComplexityClassification]
         assert set(json_complexity) == set(g8ee_complexity), (
             f"triage.json complexity enum {json_complexity} does not match "
@@ -223,7 +224,7 @@ class TestSharedModelJSONEnumsMatchG8ee:
         """triage.json complexity_confidence enum must match TriageConfidence."""
         model = _load_model_json("triage.json")
         json_confidence = model["result"]["complexity_confidence"]["enum"]
-        
+
         g8ee_confidence = [e.value for e in TriageConfidence]
         assert set(json_confidence) == set(g8ee_confidence), (
             f"triage.json complexity_confidence enum {json_confidence} does not match "
@@ -234,7 +235,7 @@ class TestSharedModelJSONEnumsMatchG8ee:
         """triage.json intent enum must match TriageIntentClassification."""
         model = _load_model_json("triage.json")
         json_intent = model["result"]["intent"]["enum"]
-        
+
         g8ee_intent = [e.value for e in TriageIntentClassification]
         assert set(json_intent) == set(g8ee_intent), (
             f"triage.json intent enum {json_intent} does not match "
@@ -245,7 +246,7 @@ class TestSharedModelJSONEnumsMatchG8ee:
         """triage.json intent_confidence enum must match TriageConfidence."""
         model = _load_model_json("triage.json")
         json_confidence = model["result"]["intent_confidence"]["enum"]
-        
+
         g8ee_confidence = [e.value for e in TriageConfidence]
         assert set(json_confidence) == set(g8ee_confidence), (
             f"triage.json intent_confidence enum {json_confidence} does not match "

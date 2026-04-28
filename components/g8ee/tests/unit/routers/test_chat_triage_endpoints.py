@@ -12,12 +12,18 @@
 # limitations under the License.
 
 from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 from fastapi import Request
+
 from app.constants import AuthMethod, MessageSender
 from app.constants.events import EventType
 from app.models.triage_api import TriageAnswerRequest, TriageSkipRequest, TriageTimeoutRequest
-from app.routers.chat_router import answer_triage_question, skip_triage_questions, timeout_triage_questions
+from app.routers.chat_router import (
+    answer_triage_question,
+    skip_triage_questions,
+    timeout_triage_questions,
+)
 from tests.fakes.factories import build_authenticated_user, create_investigation_data
 
 pytestmark = [pytest.mark.unit]

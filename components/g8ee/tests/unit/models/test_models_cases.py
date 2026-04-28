@@ -21,7 +21,6 @@ import uuid
 from datetime import UTC, datetime
 
 import pytest
-from app.models.base import ValidationError
 
 from app.constants import (
     CaseStatus,
@@ -30,6 +29,7 @@ from app.constants import (
     Priority,
     Severity,
 )
+from app.models.base import ValidationError
 from app.models.cases import CaseCreateRequest, CaseModel, CaseUpdateRequest, HistoryEntry
 
 pytestmark = [pytest.mark.unit]

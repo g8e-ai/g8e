@@ -1,6 +1,8 @@
 import pytest
 from pydantic import ValidationError
+
 from app.models.internal_api import InternalOperatorAuthCall
+
 
 def test_operator_authenticate_request_fails_with_extra():
     payload = {

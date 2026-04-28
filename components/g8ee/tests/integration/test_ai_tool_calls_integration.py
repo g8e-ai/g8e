@@ -39,23 +39,23 @@ Tests cover all 16 AI tools:
 All tests use mocked pubsub and deterministic payloads to verify AI tool handling.
 """
 
-import pytest
-
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from app.constants import (
+    CloudSubtype,
     InvestigationStatus,
     OperatorType,
-    CloudSubtype,
 )
 from app.constants.status import OperatorToolName
-from app.errors import  ExternalServiceError, ValidationError
+from app.errors import ExternalServiceError, ValidationError
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.settings import G8eeUserSettings
 from app.models.tool_results import (
     CommandExecutionResult,
-    FetchFileHistoryToolResult,
     FetchFileDiffToolResult,
+    FetchFileHistoryToolResult,
     FileEditResult,
     FsListToolResult,
     FsReadToolResult,
@@ -64,14 +64,13 @@ from app.models.tool_results import (
     SearchWebResult,
     ToolResult,
 )
-
-from app.services.ai.tool_service import AIToolService
-from app.services.operator.command_service import OperatorCommandService
-from app.services.investigation.investigation_service import InvestigationService
 from app.services.ai.grounding.web_search_provider import WebSearchProvider
+from app.services.ai.tool_service import AIToolService
+from app.services.investigation.investigation_service import InvestigationService
+from app.services.operator.command_service import OperatorCommandService
 from tests.fakes.factories import (
-    build_g8e_http_context,
     build_bound_operator,
+    build_g8e_http_context,
 )
 
 pytestmark = [pytest.mark.integration]
@@ -226,11 +225,11 @@ class TestCommandExecutionTools:
         # Verify payload was processed correctly
         assert isinstance(result, ToolResult)
         assert result.success
-        
+
         # Verify command service was called with correct payload
         mock_operator_command_service.execute_command.assert_called_once()
         call_args = mock_operator_command_service.execute_command.call_args[1]
-        
+
         # Check the ExecutorCommandArgs payload
         assert "args" in call_args
         args = call_args["args"]
@@ -337,11 +336,11 @@ class TestFileOperationTools:
         # Verify payload processing
         assert isinstance(result, ToolResult)
         assert result.success
-        
+
         # Verify command service was called with correct payload
         mock_operator_command_service.execute_file_edit.assert_called_once()
         call_args = mock_operator_command_service.execute_file_edit.call_args[1]
-        
+
         assert "args" in call_args
         args = call_args["args"]
         assert args.file_path == "/tmp/test.txt"
@@ -383,11 +382,11 @@ class TestFileOperationTools:
         # Verify payload processing
         assert isinstance(result, ToolResult)
         assert result.success
-        
+
         # Verify command service was called with correct payload
         mock_operator_command_service.execute_file_edit.assert_called_once()
         call_args = mock_operator_command_service.execute_file_edit.call_args[1]
-        
+
         assert "args" in call_args
         args = call_args["args"]
         assert args.file_path == "/tmp/test.txt"
@@ -428,11 +427,11 @@ class TestFileOperationTools:
         # Verify payload processing
         assert isinstance(result, ToolResult)
         assert result.success
-        
+
         # Verify command service was called with correct payload
         mock_operator_command_service.execute_file_edit.assert_called_once()
         call_args = mock_operator_command_service.execute_file_edit.call_args[1]
-        
+
         assert "args" in call_args
         args = call_args["args"]
         assert args.file_path == "/tmp/test.txt"
@@ -474,11 +473,11 @@ class TestFileOperationTools:
         # Verify payload processing
         assert isinstance(result, ToolResult)
         assert result.success
-        
+
         # Verify command service was called with correct payload
         mock_operator_command_service.execute_file_edit.assert_called_once()
         call_args = mock_operator_command_service.execute_file_edit.call_args[1]
-        
+
         assert "args" in call_args
         args = call_args["args"]
         assert args.file_path == "/tmp/test.txt"
@@ -536,11 +535,11 @@ class TestFileSystemTools:
         # Verify payload processing
         assert isinstance(result, ToolResult)
         assert result.success
-        
+
         # Verify command service was called with correct payload
         mock_operator_command_service.execute_fs_list.assert_called_once()
         call_args = mock_operator_command_service.execute_fs_list.call_args[1]
-        
+
         assert "args" in call_args
         args = call_args["args"]
         assert args.path == "/home/user"
@@ -581,11 +580,11 @@ class TestFileSystemTools:
         # Verify payload processing
         assert isinstance(result, ToolResult)
         assert result.success
-        
+
         # Verify command service was called with correct payload
         mock_operator_command_service.execute_file_edit.assert_called_once()
         call_args = mock_operator_command_service.execute_file_edit.call_args[1]
-        
+
         assert "args" in call_args
         args = call_args["args"]
         assert args.file_path == "/tmp/test.txt"
@@ -629,11 +628,11 @@ class TestFileSystemTools:
         # Verify payload processing
         assert isinstance(result, ToolResult)
         assert result.success
-        
+
         # Verify command service was called with correct payload
         mock_operator_command_service.execute_fetch_file_history.assert_called_once()
         call_args = mock_operator_command_service.execute_fetch_file_history.call_args[1]
-        
+
         assert "args" in call_args
         assert "execution_id" not in call_args
         args = call_args["args"]
@@ -676,11 +675,11 @@ class TestFileSystemTools:
         # Verify payload processing
         assert isinstance(result, ToolResult)
         assert result.success
-        
+
         # Verify command service was called with correct payload
         mock_operator_command_service.execute_file_edit.assert_called_once()
         call_args = mock_operator_command_service.execute_file_edit.call_args[1]
-        
+
         assert "args" in call_args
         args = call_args["args"]
         assert args.file_path == "/tmp/test.txt"
@@ -734,11 +733,11 @@ class TestFileSystemTools:
         # Verify payload processing
         assert isinstance(result, ToolResult)
         assert result.success
-        
+
         # Verify command service was called with correct payload
         mock_operator_command_service.execute_fetch_file_diff.assert_called_once()
         call_args = mock_operator_command_service.execute_fetch_file_diff.call_args[1]
-        
+
         assert "args" in call_args
         assert "execution_id" not in call_args
         args = call_args["args"]
@@ -792,11 +791,11 @@ class TestNetworkSearchTools:
         # Verify payload processing
         assert isinstance(result, ToolResult)
         assert result.success
-        
+
         # Verify command service was called with correct payload
         mock_operator_command_service.execute_port_check.assert_called_once()
         call_args = mock_operator_command_service.execute_port_check.call_args[1]
-        
+
         assert "args" in call_args
         args = call_args["args"]
         assert args.host == "example.com"
@@ -843,11 +842,11 @@ class TestNetworkSearchTools:
         # Verify payload processing
         assert isinstance(result, ToolResult)
         assert result.success
-        
+
         # Verify web search provider was called with correct payload
         mock_web_search_provider.search.assert_called_once()
         call_args = mock_web_search_provider.search.call_args[1]
-        
+
         assert call_args["query"] == "Kubernetes troubleshooting"
         assert call_args["num"] == 5
 
@@ -924,11 +923,11 @@ class TestPermissionSessionTools:
         # Verify payload processing
         assert isinstance(result, ToolResult)
         assert result.success
-        
+
         # Verify command service was called with correct payload
         mock_operator_command_service.execute_intent_permission_request.assert_called_once()
         call_args = mock_operator_command_service.execute_intent_permission_request.call_args[1]
-        
+
         assert "args" in call_args
         args = call_args["args"]
         assert args.intent_name == "s3_read"
@@ -966,17 +965,17 @@ class TestPermissionSessionTools:
         # Verify payload processing
         assert isinstance(result, ToolResult)
         assert result.success
-        
+
         # Verify command service was called with correct payload
         mock_operator_command_service.execute_intent_revocation.assert_called_once()
         call_args = mock_operator_command_service.execute_intent_revocation.call_args[1]
-        
+
         assert "args" in call_args
         args = call_args["args"]
         assert args.intent_name == "s3_read"
         assert args.justification == "No longer need file access"
 
-    
+
 
 
 # ---------------------------------------------------------------------------
@@ -1010,11 +1009,11 @@ class TestToolIntegration:
             OperatorToolName.SSH_INVENTORY,
             OperatorToolName.STREAM_OPERATOR,
         }
-        
+
         # Add G8E_SEARCH_WEB if available
         if tool_service.web_search_provider is not None:
             expected_tools.add(OperatorToolName.G8E_SEARCH_WEB)
-        
+
         registered_tools = set(tool_service._tool_declarations.keys())
         assert registered_tools == expected_tools
 
@@ -1055,7 +1054,7 @@ class TestToolIntegration:
         # Verify payload was handled correctly
         assert isinstance(result, ToolResult)
         assert result.success
-        
+
         # Verify the complex payload was preserved
         call_args = mock_operator_command_service.execute_command.call_args[1]
         assert "Hello, World! 🌍" in call_args["args"].command

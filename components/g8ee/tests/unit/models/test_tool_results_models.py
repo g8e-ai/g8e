@@ -14,9 +14,9 @@
 from datetime import UTC, datetime
 
 import pytest
-from app.models.base import ValidationError, G8eBaseModel
 
 from app.constants import ErrorAnalysisCategory, ExecutionStatus, RiskLevel
+from app.models.base import G8eBaseModel, ValidationError
 from app.models.tool_results import (
     CommandInternalResult,
     CommandRiskAnalysis,

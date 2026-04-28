@@ -12,7 +12,6 @@
 # limitations under the License.
 
 import ast
-import os
 from pathlib import Path
 
 import pytest
@@ -60,14 +59,14 @@ def get_all_python_files(root: Path):
 
 def check_file_for_violations(file_path: Path) -> list[str]:
     """Returns a list of violation descriptions found in the file."""
-    with open(file_path, "r", encoding="utf-8") as f:
+    with open(file_path, encoding="utf-8") as f:
         try:
             tree = ast.parse(f.read())
         except SyntaxError:
             return []
 
     violations = []
-    
+
     for node in ast.walk(tree):
         # 1. Check for imports of the data service
         if isinstance(node, ast.Import):
@@ -100,17 +99,17 @@ def check_file_for_violations(file_path: Path) -> list[str]:
 def test_reputation_vortex_invariant():
     """Vortex Invariant: Only allow-listed services may touch reputation data or models."""
     all_violations = {}
-    
+
     for py_file in get_all_python_files(PROJECT_ROOT):
         relative_path = str(py_file.relative_to(PROJECT_ROOT))
-        
+
         if relative_path in ALLOW_LIST:
             continue
-            
+
         file_violations = check_file_for_violations(py_file)
         if file_violations:
             all_violations[relative_path] = file_violations
-            
+
     if all_violations:
         msg = "GDD §3 Vortex Invariant violation! The following files touch reputation data or models but are not in the allow-list:\n"
         for path, issues in all_violations.items():

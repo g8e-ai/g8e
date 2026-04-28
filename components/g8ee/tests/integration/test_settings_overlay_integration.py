@@ -11,16 +11,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
-from app.services.infra.settings_service import SettingsService
+
+import pytest
+
 from app.constants.collections import (
+    DB_COLLECTION_SETTINGS,
     PLATFORM_SETTINGS_DOC,
     USER_SETTINGS_DOC_PREFIX,
-    DB_COLLECTION_SETTINGS,
 )
 from app.models.settings import G8eePlatformSettings
-from app.constants.settings import LLMProvider
+from app.services.infra.settings_service import SettingsService
+
 
 @pytest.mark.asyncio
 class TestG8eeSettingsOverlayIntegration:
@@ -123,7 +125,7 @@ class TestG8eeSettingsOverlayIntegration:
         """Verify user settings overlay platform defaults correctly."""
         user_id = "test-user-123"
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
-        
+
         platform_data = {
             "id": "platform-doc-id",
             "settings": {
@@ -192,7 +194,7 @@ class TestG8eeSettingsOverlayIntegration:
             "created_at": "2026-01-01T00:00:00Z",
             "updated_at": "2026-01-01T00:00:00Z"
         }
-        
+
         user_data = {
             "id": "user-doc-id",
             "user_id": user_id,
@@ -230,7 +232,7 @@ class TestG8eeSettingsOverlayIntegration:
         # g8ee SettingsService.get_user_settings currently only returns the UserSettings part
         # overlaid on schema defaults, but we want to ensure it uses the user document if present.
         user_settings = await settings_service.get_user_settings(user_id)
-        
+
         assert user_settings.llm.primary_provider == "openai"
         assert user_settings.llm.primary_model == "gpt-4o"
         assert user_settings.llm.openai_api_key == "user-key"
@@ -282,7 +284,7 @@ class TestG8eeSettingsOverlayIntegration:
         """Verify user settings return empty LLMSettings with None provider when UserSettingsDocument is missing."""
         user_id = "new-user"
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
-        
+
         platform_data = {
             "id": "platform-doc-id",
             "settings": {

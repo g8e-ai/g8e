@@ -12,13 +12,18 @@
 # limitations under the License.
 
 import asyncio
-import pytest
 from unittest.mock import AsyncMock
 
-from app.constants import EventType, ComponentName
-from app.models.investigations import InvestigationModel, InvestigationCreateRequest, ConversationMessageMetadata
+import pytest
+
+from app.constants import EventType
+from app.models.investigations import (
+    ConversationMessageMetadata,
+    InvestigationModel,
+)
 from app.services.investigation.investigation_data_service import InvestigationDataService
 from app.utils.ledger_hash import verify_chain
+
 
 @pytest.fixture
 def mock_cache_aside_service():
@@ -42,12 +47,12 @@ async def test_concurrent_chat_appends_preserve_chain_under_load(service, mock_c
         user_id="user-1",
         sentinel_mode=True
     )
-    
+
     created_at = initial_inv.created_at.isoformat()
-    
+
     # Use a shared object to represent the "database" state.
     shared_db_state = [initial_inv.model_dump(mode="json")]
-    
+
     async def mock_get_document(collection, document_id):
         await asyncio.sleep(0.01)
         # Return a copy to simulate a fresh read from the "database"
@@ -90,9 +95,9 @@ async def test_concurrent_chat_appends_preserve_chain_under_load(service, mock_c
 
     history = shared_db_state[0].get("conversation_history", [])
     print(f"Final conversation history length: {len(history)}")
-    
+
     assert len(history) == num_concurrent, f"Expected {num_concurrent} entries, but got {len(history)}. Race condition detected!"
-    
+
     is_valid, bad_idx = verify_chain(
         entries=history,
         investigation_id=investigation_id,

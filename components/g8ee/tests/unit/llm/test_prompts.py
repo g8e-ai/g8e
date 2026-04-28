@@ -11,24 +11,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
 from unittest.mock import patch
+
+import pytest
 
 from app.constants import (
     CloudSubtype,
     EventType,
+    InvestigationStatus,
     OperatorType,
+    Priority,
     PromptFile,
     PromptSection,
     Severity,
-    Priority,
-    InvestigationStatus,
 )
 from app.llm import prompts
-from app.utils.agent_persona_loader import get_agent_persona
 from app.models.agent import OperatorContext
-from app.models.investigations import EnrichedInvestigationContext, ConversationHistoryMessage, ConversationMessageMetadata
+from app.models.investigations import (
+    ConversationHistoryMessage,
+    ConversationMessageMetadata,
+    EnrichedInvestigationContext,
+)
 from app.models.memory import InvestigationMemory
+from app.utils.agent_persona_loader import get_agent_persona
+
 
 @pytest.fixture
 def mock_loader():
@@ -92,12 +98,12 @@ def test_build_learned_context_section_empty():
 
 def test_build_learned_context_section_full():
     user_mem = [InvestigationMemory(
-        case_id="c1", investigation_id="i1", user_id="u1", 
+        case_id="c1", investigation_id="i1", user_id="u1",
         status=InvestigationStatus.OPEN, case_title="T1",
         communication_preferences="Brief"
     )]
     case_mem = [InvestigationMemory(
-        case_id="c2", investigation_id="i2", user_id="u2", 
+        case_id="c2", investigation_id="i2", user_id="u2",
         status=InvestigationStatus.CLOSED, case_title="T2",
         investigation_summary="Fixed CPU spike"
     )]
@@ -114,7 +120,7 @@ def test_build_modular_system_prompt_basic(mock_loader, operator_context, enrich
         case_memories=[],
         investigation=enriched_investigation
     )
-    
+
     assert f"Content of {PromptFile.CORE_IDENTITY}" in prompt
     assert f"Content of {PromptFile.CORE_SAFETY}" in prompt
     # Loyal-friction doctrine: loyalty + dissent must load right after safety
@@ -250,7 +256,7 @@ def test_build_modular_system_prompt_cloud_operator(mock_loader):
         granted_intents=["s3:ListBucket"],
         is_cloud_operator=True
     )
-    
+
     prompt, context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
         system_context=cloud_context,
@@ -258,7 +264,7 @@ def test_build_modular_system_prompt_cloud_operator(mock_loader):
         case_memories=[],
         investigation=None
     )
-    
+
     assert "Operator Type: Cloud Operator for AWS" in prompt
     assert "granted_intents: ['s3:ListBucket']" in prompt
 
@@ -308,7 +314,7 @@ def test_build_modular_system_prompt_no_systemd(mock_loader):
         is_container=True,
         init_system="openrc"
     )
-    
+
     prompt, context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
         system_context=no_systemd_context,
@@ -316,7 +322,7 @@ def test_build_modular_system_prompt_no_systemd(mock_loader):
         case_memories=[],
         investigation=None
     )
-    
+
     assert "WARNING: systemd is NOT available" in prompt
 
 def test_build_modular_system_prompt_sentinel_mode(mock_loader, enriched_investigation):
@@ -328,7 +334,7 @@ def test_build_modular_system_prompt_sentinel_mode(mock_loader, enriched_investi
         case_memories=[],
         investigation=enriched_investigation
     )
-    
+
     assert f"Content of {PromptFile.SYSTEM_SENTINEL_MODE}" in prompt
 
 def test_build_modular_system_prompt_multi_operator(mock_loader):
@@ -344,9 +350,9 @@ def test_build_modular_system_prompt_multi_operator(mock_loader):
         container_runtime="docker",
         init_system="systemd"
     )
-    
+
     operator2 = OperatorContext(
-        operator_id="op_456", 
+        operator_id="op_456",
         os="ubuntu",
         hostname="test-host-2",
         username="ubuntu",
@@ -355,7 +361,7 @@ def test_build_modular_system_prompt_multi_operator(mock_loader):
         is_container=False,
         init_system="systemd"
     )
-    
+
     operator3 = OperatorContext(
         operator_id="op_789",
         operator_type=OperatorType.CLOUD,
@@ -363,7 +369,7 @@ def test_build_modular_system_prompt_multi_operator(mock_loader):
         granted_intents=["s3:ListBucket", "ec2:DescribeInstances"],
         is_cloud_operator=True
     )
-    
+
     prompt, context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
         system_context=[operator1, operator2, operator3],
@@ -371,26 +377,26 @@ def test_build_modular_system_prompt_multi_operator(mock_loader):
         case_memories=[],
         investigation=None
     )
-    
+
     # Should contain all three operators with proper tags
     assert "<system_context>" in prompt
-    assert "<operator index=\"0\">" in prompt
-    assert "<operator index=\"1\">" in prompt
-    assert "<operator index=\"2\">" in prompt
+    assert '<operator index="0">' in prompt
+    assert '<operator index="1">' in prompt
+    assert '<operator index="2">' in prompt
     assert "</operator>" in prompt
-    
+
     # Operator 1 details
     assert "Hostname: test-host-1" in prompt
     assert "OS: linux" in prompt
     assert "Container Environment: YES" in prompt
-    
-    # Operator 2 details  
+
+    # Operator 2 details
     assert "Hostname: test-host-2" in prompt
     assert "OS: ubuntu" in prompt
     assert "User: ubuntu" in prompt
     # Should NOT have container environment for operator 2
-    assert "Container Environment: YES" not in prompt.split("<operator index=\"1\">")[1].split("</operator>")[0]
-    
+    assert "Container Environment: YES" not in prompt.split('<operator index="1">')[1].split("</operator>")[0]
+
     # Operator 3 details (cloud operator)
     assert "Operator Type: Cloud Operator for AWS" in prompt
     assert "granted_intents: ['s3:ListBucket', 'ec2:DescribeInstances']" in prompt
@@ -404,7 +410,7 @@ def test_build_modular_system_prompt_backward_compatibility(mock_loader, operato
         case_memories=[],
         investigation=None
     )
-    
+
     # Should work exactly like before - no operator tags for single operator
     assert "<system_context>" in prompt
     assert "<operator index=" not in prompt  # No operator tags for single
@@ -418,13 +424,13 @@ def test_build_modular_system_prompt_mixed_cloud_operator_detection(mock_loader)
         operator_type=OperatorType.SYSTEM,
         is_cloud_operator=False
     )
-    
+
     cloud_operator = OperatorContext(
         operator_id="op_cloud",
         operator_type=OperatorType.CLOUD,
         is_cloud_operator=True
     )
-    
+
     # Single system operator - should not be cloud mode
     prompt, context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
@@ -434,7 +440,7 @@ def test_build_modular_system_prompt_mixed_cloud_operator_detection(mock_loader)
         investigation=None
     )
     # This test mainly ensures the function doesn't crash with mixed operators
-    
+
     # Mixed operators - should detect cloud operator
     prompt, context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
@@ -444,8 +450,8 @@ def test_build_modular_system_prompt_mixed_cloud_operator_detection(mock_loader)
         investigation=None
     )
     # Should contain both operators
-    assert "<operator index=\"0\">" in prompt
-    assert "<operator index=\"1\">" in prompt
+    assert '<operator index="0">' in prompt
+    assert '<operator index="1">' in prompt
     assert "Operator Type: Operator - Standard system access" in prompt
     assert "Operator Type: Cloud Operator" in prompt
 
@@ -516,7 +522,7 @@ def test_build_modular_system_prompt_with_agent_name_uses_persona_not_core_ident
     """When agent_name is provided, the persona's system prompt should be used
     instead of CORE_IDENTITY to avoid duplicate role tags."""
     from app.constants import AgentName
-    
+
     prompt, context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
         system_context=operator_context,
@@ -525,14 +531,14 @@ def test_build_modular_system_prompt_with_agent_name_uses_persona_not_core_ident
         investigation=None,
         agent_name=AgentName.SAGE,
     )
-    
+
     # Should NOT contain CORE_IDENTITY when agent_name is provided
     assert f"Content of {PromptFile.CORE_IDENTITY}" not in prompt
-    
+
     # Should contain the persona's system prompt (which includes role, identity, purpose, autonomy)
     # The persona prompt will contain the agent's role from agents.json
     assert "reasoner" in prompt.lower() or "sage" in prompt.lower()
-    
+
     # Should still contain the core doctrine sections (safety, loyalty, dissent)
     assert f"Content of {PromptFile.CORE_SAFETY}" in prompt
     assert f"Content of {PromptFile.CORE_LOYALTY}" in prompt
@@ -549,10 +555,10 @@ def test_build_modular_system_prompt_without_agent_name_uses_core_identity(mock_
         investigation=None,
         agent_name=None,
     )
-    
+
     # Should contain CORE_IDENTITY when no agent_name is provided
     assert f"Content of {PromptFile.CORE_IDENTITY}" in prompt
-    
+
     # Should still contain the core doctrine sections
     assert f"Content of {PromptFile.CORE_SAFETY}" in prompt
     assert f"Content of {PromptFile.CORE_LOYALTY}" in prompt
@@ -564,7 +570,7 @@ def test_build_modular_system_prompt_no_duplicate_role_tags_with_agent_name(mock
     This regression test ensures the fix for fragmented prompt logic prevents
     CORE_IDENTITY and persona system prompt from both adding role tags."""
     from app.constants import AgentName
-    
+
     prompt, context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
         system_context=operator_context,
@@ -573,11 +579,11 @@ def test_build_modular_system_prompt_no_duplicate_role_tags_with_agent_name(mock
         investigation=None,
         agent_name=AgentName.DASH,
     )
-    
+
     # Count occurrences of <role> tag - should be exactly 1 (from persona)
     role_count = prompt.count("<role>")
     assert role_count == 1, f"Expected exactly 1 <role> tag, found {role_count}"
-    
+
     # Verify CORE_IDENTITY is not included (which would add a second role tag)
     assert f"Content of {PromptFile.CORE_IDENTITY}" not in prompt
 
@@ -585,7 +591,7 @@ def test_build_modular_system_prompt_no_duplicate_role_tags_with_agent_name(mock
 def test_build_modular_system_prompt_dash_uses_persona_not_core_identity(mock_loader, operator_context):
     """Dash agent should use its persona system prompt, not CORE_IDENTITY."""
     from app.constants import AgentName
-    
+
     prompt, context_sizes = prompts.build_modular_system_prompt(
         operator_bound=True,
         system_context=operator_context,
@@ -594,10 +600,10 @@ def test_build_modular_system_prompt_dash_uses_persona_not_core_identity(mock_lo
         investigation=None,
         agent_name=AgentName.DASH,
     )
-    
+
     # Should NOT contain CORE_IDENTITY
     assert f"Content of {PromptFile.CORE_IDENTITY}" not in prompt
-    
+
     # Should contain Dash-specific content from its persona
     assert "responder" in prompt.lower() or "dash" in prompt.lower()
 

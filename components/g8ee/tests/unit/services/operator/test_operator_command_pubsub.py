@@ -254,7 +254,7 @@ class TestHandlePubSubResultMessage:
             "investigation_id": "inv-456",
             "payload": {
                 "payload_type": "execution_result",
-                "execution_id": "exec-789", 
+                "execution_id": "exec-789",
                 "status": ExecutionStatus.COMPLETED
             },
         }
@@ -308,7 +308,7 @@ class TestHandlePubSubResultMessage:
             "task_id": "task-top",
             "payload": {
                 "payload_type": "execution_result",
-                "execution_id": "exec-002", 
+                "execution_id": "exec-002",
                 "status": ExecutionStatus.COMPLETED
             },
         }
@@ -330,10 +330,10 @@ class TestHandlePubSubResultMessage:
         await command_service._pubsub_service._handle_pubsub_result_message(
             "my-operator", "my-session",
             {
-                "event_type": EventType.OPERATOR_COMMAND_COMPLETED, 
+                "event_type": EventType.OPERATOR_COMMAND_COMPLETED,
                 "payload": {
                     "payload_type": "execution_result",
-                    "execution_id": "exec-003", 
+                    "execution_id": "exec-003",
                     "status": ExecutionStatus.COMPLETED
                 }
             }
@@ -356,6 +356,6 @@ class TestHandlePubSubResultMessage:
 
 class TestParseG8eoPayloadNativeEventTypes:
     """Regression coverage for discriminator-based parsing."""
-    
+
     async def test_placeholder(self):
         pass

@@ -20,21 +20,18 @@ misled documentation and approval-gate reasoning; ``_assert_tool_registry_invari
 is the enforcement point and these tests cover it directly.
 """
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
 from app.constants.status import OperatorToolName
+from app.errors import ConfigurationError
+from app.services.ai.grounding.web_search_provider import WebSearchProvider
 from app.services.ai.tool_registry import (
     AI_UNIVERSAL_TOOLS,
     OPERATOR_TOOLS,
 )
-from app.errors import ConfigurationError
-from app.services.ai.grounding.web_search_provider import WebSearchProvider
 from app.services.ai.tool_service import AIToolService
-from app.services.ai.ssh_inventory_service import SshInventoryService
-from app.services.investigation.investigation_service import InvestigationService
-from app.services.operator.command_service import OperatorCommandService
 
 pytestmark = [pytest.mark.unit]
 
@@ -224,6 +221,7 @@ def test_every_spec_has_builder_and_handler_callable():
     with a non-callable (e.g. ``None``) wired in.
     """
     import inspect
+
     from app.services.ai.tool_registry import TOOL_SPECS
 
     for spec in TOOL_SPECS:

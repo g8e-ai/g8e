@@ -14,16 +14,16 @@
 """Typed fake for ExecutionServiceProtocol."""
 
 from typing import Any
-from app.models.tool_results import CommandInternalResult
-from app.models.operators import OperatorDocument, TargetSystem, DirectCommandResult
-from app.models.internal_api import DirectCommandRequest
-from app.models.http_context import G8eHttpContext
-from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope
-from app.services.protocols import ExecutionServiceProtocol
-from app.utils.whitelist_validator import CommandWhitelistValidator
-from app.utils.blacklist_validator import CommandBlacklistValidator
-from app.constants.status import ExecutionStatus
 
+from app.constants.status import ExecutionStatus
+from app.models.http_context import G8eHttpContext
+from app.models.internal_api import DirectCommandRequest
+from app.models.operators import DirectCommandResult, OperatorDocument, TargetSystem
+from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope
+from app.models.tool_results import CommandInternalResult
+from app.services.protocols import ExecutionServiceProtocol
+from app.utils.blacklist_validator import CommandBlacklistValidator
+from app.utils.whitelist_validator import CommandWhitelistValidator
 
 # Create a default operator for the protocol instance
 _default_operator = OperatorDocument(
@@ -87,8 +87,8 @@ class FakeExecutionService:
                 command_data=g8e_message,
             )
         return CommandInternalResult(
-            exit_code=self._exit_code, 
-            output=self._output, 
+            exit_code=self._exit_code,
+            output=self._output,
             status=ExecutionStatus.COMPLETED
         ), self._envelope
 

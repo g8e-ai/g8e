@@ -26,6 +26,7 @@ Run with:
 """
 
 from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 
 from app.models.agent import ExecutorCommandArgs, OperatorContext, SageOperatorRequest
@@ -39,8 +40,8 @@ from app.services.ai.generator import (
     TribunalDisabledError,
 )
 from app.services.ai.tool_service import AIToolService
-from app.utils.whitelist_validator import CommandWhitelistValidator
 from app.utils.blacklist_validator import CommandBlacklistValidator
+from app.utils.whitelist_validator import CommandWhitelistValidator
 
 pytestmark = [pytest.mark.unit]
 

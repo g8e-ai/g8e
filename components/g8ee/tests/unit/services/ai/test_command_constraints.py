@@ -31,7 +31,7 @@ Run with:
 """
 
 from unittest.mock import AsyncMock, MagicMock
-import logging
+
 import pytest
 
 from app.constants import AgentMode, OperatorToolName
@@ -41,10 +41,9 @@ from app.models.investigations import EnrichedInvestigationContext
 from app.models.settings import CommandValidationSettings, G8eeUserSettings
 from app.models.tool_results import CommandConstraintsResult
 from app.models.whitelist import CommandValidationResult, WhitelistedCommand
-from app.services.ai.tool_service import AIToolService
 from app.services.ai.tools import get_command_constraints as gcc_tool
+from app.utils.blacklist_validator import CommandBlacklistResult, CommandBlacklistValidator
 from app.utils.whitelist_validator import CommandWhitelistValidator
-from app.utils.blacklist_validator import CommandBlacklistValidator, CommandBlacklistResult
 
 pytestmark = [pytest.mark.unit]
 
@@ -172,7 +171,7 @@ def mock_request_settings():
     settings = MagicMock(spec=G8eeUserSettings)
     settings.operator_context = MagicMock(spec=OperatorContext)
     settings.operator_context.os = "linux"
-    
+
     # Needs a mock command_validation object
     from app.models.settings import CommandValidationSettings
     cv_settings = MagicMock(spec=CommandValidationSettings)
@@ -181,7 +180,7 @@ def mock_request_settings():
     cv_settings.enable_auto_approve = False
     cv_settings.whitelisted_commands = ""
     settings.command_validation = cv_settings
-    
+
     return settings
 
 
@@ -572,9 +571,9 @@ def test_blacklist_validator_get_forbidden_commands():
         "forbidden_arguments": [],
         "forbidden_patterns": [],
     }
-    
+
     result = validator.get_forbidden_commands()
-    
+
     assert len(result) == 2
     assert result[0] == {"command": "rm", "reason": "Destructive"}
     assert result[1] == {"command": "dd", "reason": "Disk destruction"}
@@ -592,9 +591,9 @@ def test_blacklist_validator_get_forbidden_substrings():
         "forbidden_arguments": [],
         "forbidden_patterns": [],
     }
-    
+
     result = validator.get_forbidden_substrings()
-    
+
     assert len(result) == 1
     assert result[0] == {"substring": "format", "reason": "Disk formatting"}
 
@@ -611,9 +610,9 @@ def test_blacklist_validator_get_forbidden_patterns():
             {"value": r"rm\s+-rf\s+/", "reason": "Recursive delete"},
         ],
     }
-    
+
     result = validator.get_forbidden_patterns()
-    
+
     assert len(result) == 1
     assert result[0] == {"pattern": r"rm\s+-rf\s+/", "reason": "Recursive delete"}
 
@@ -640,9 +639,9 @@ def test_command_constraints_result_serialization():
         global_forbidden_directories=["/etc"],
         message="Whitelisting ENABLED",
     )
-    
+
     data = result.model_dump()
-    
+
     assert data["success"] is True
     assert data["whitelisting_enabled"] is True
     assert data["blacklisting_enabled"] is False
@@ -669,9 +668,9 @@ def test_command_constraints_result_deserialization():
         "global_forbidden_directories": ["/etc"],
         "message": "Whitelisting ENABLED",
     }
-    
+
     result = CommandConstraintsResult(**data)
-    
+
     assert result.success is True
     assert result.whitelisting_enabled is True
     assert result.blacklisting_enabled is False
@@ -694,17 +693,17 @@ async def test_get_tools_includes_get_command_constraints(
         whitelist_validator=mock_whitelist_validator,
         blacklist_validator=mock_blacklist_validator
     )
-    
+
     # Test in operator_bound mode
     tools_operator = tool_service.get_tools(agent_mode=AgentMode.OPERATOR_BOUND, model_to_use=None)
     tool_names_operator = [tool.name for group in tools_operator for tool in group.tools]
     assert OperatorToolName.GET_COMMAND_CONSTRAINTS in tool_names_operator
-    
+
     # Test in cloud_operator_bound mode
     tools_cloud = tool_service.get_tools(agent_mode=AgentMode.CLOUD_OPERATOR_BOUND, model_to_use=None)
     tool_names_cloud = [tool.name for group in tools_cloud for tool in group.tools]
     assert OperatorToolName.GET_COMMAND_CONSTRAINTS in tool_names_cloud
-    
+
     # Test in unbound mode
     tools_unbound = tool_service.get_tools(agent_mode=AgentMode.OPERATOR_NOT_BOUND, model_to_use=None)
     tool_names_unbound = [tool.name for group in tools_unbound for tool in group.tools]

@@ -11,9 +11,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-import httpx
+
+import pytest
 
 from app.services.infra.supervisor_service import SupervisorService
 
@@ -36,9 +36,9 @@ class TestSupervisorService:
     async def test_start_process_success(self, supervisor_service):
         with patch("httpx.AsyncClient.post") as mock_post:
             mock_post.return_value = MagicMock(status_code=200, text="<methodResponse><params><param><value><boolean>1</boolean></value></param></params></methodResponse>")
-            
+
             result = await supervisor_service.start_process("operator")
-            
+
             assert result is True
             assert mock_post.call_count == 1
             args, kwargs = mock_post.call_args
@@ -63,25 +63,25 @@ class TestSupervisorService:
     </value>
   </fault>
 </methodResponse>"""
-        
+
         with patch("httpx.AsyncClient.post") as mock_post:
             mock_post.side_effect = [
                 MagicMock(status_code=200, text=fault_xml), # First start fails
                 MagicMock(status_code=200, text="OK"),       # Stop succeeds
                 MagicMock(status_code=200, text="OK"),       # Second start succeeds
             ]
-            
+
             result = await supervisor_service.start_process("operator")
-            
+
             assert result is True
             assert mock_post.call_count == 3
 
     async def test_stop_process_success(self, supervisor_service):
         with patch("httpx.AsyncClient.post") as mock_post:
             mock_post.return_value = MagicMock(status_code=200, text="OK")
-            
+
             result = await supervisor_service.stop_process("operator")
-            
+
             assert result is True
             assert mock_post.call_count == 1
             args, kwargs = mock_post.call_args
@@ -105,9 +105,9 @@ class TestSupervisorService:
     </value>
   </fault>
 </methodResponse>"""
-        
+
         with patch("httpx.AsyncClient.post") as mock_post:
             mock_post.return_value = MagicMock(status_code=200, text=fault_xml)
-            
+
             with pytest.raises(Exception, match="Operator process not found"):
                 await supervisor_service.xmlrpc_call("supervisor.startProcess", ["wrong-name"])

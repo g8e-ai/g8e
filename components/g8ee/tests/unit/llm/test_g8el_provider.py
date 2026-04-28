@@ -18,8 +18,9 @@ Tests construction, service_name, and inheritance from LlamaCppProvider.
 Note: Basic identity tests are in test_openai_compatibility.py
 """
 
-import pytest
 from unittest.mock import patch
+
+import pytest
 
 from app.llm.providers.g8el import G8elProvider
 from app.llm.providers.llama_cpp import LlamaCppProvider

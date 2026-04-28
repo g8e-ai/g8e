@@ -11,22 +11,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
-from app.services.infra.settings_service import SettingsService
+
+import pytest
+
 from app.constants.collections import (
+    DB_COLLECTION_SETTINGS,
     PLATFORM_SETTINGS_DOC,
     USER_SETTINGS_DOC_PREFIX,
-    DB_COLLECTION_SETTINGS,
 )
 from app.constants.settings import LLMProvider
 from app.models.settings import (
-    PlatformSettingsDocument,
-    UserSettingsDocument,
     G8eePlatformSettings,
     G8eeUserSettings,
     LLMSettings,
+    PlatformSettingsDocument,
+    UserSettingsDocument,
 )
+from app.services.infra.settings_service import SettingsService
+
 
 @pytest.mark.asyncio
 class TestSettingsService:
@@ -34,10 +37,10 @@ class TestSettingsService:
         """Test retrieving user settings when the document exists."""
         cache_mock = MagicMock()
         cache_mock.get_document_with_cache = AsyncMock()
-        
+
         user_id = "user_123"
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
-        
+
         # Mock user document
         user_settings = G8eeUserSettings(
             llm=LLMSettings(
@@ -53,14 +56,14 @@ class TestSettingsService:
         cache_mock.get_document_with_cache.side_effect = lambda collection, document_id: (
             user_doc.model_dump() if document_id == user_doc_id else None
         )
-        
+
         service = SettingsService(cache_aside_service=cache_mock)
         settings = await service.get_user_settings(user_id)
-        
+
         assert settings.llm.primary_provider == LLMProvider.OPENAI
         assert settings.llm.primary_model == "gpt-4"
         assert settings.llm.openai_api_key == "sk-user-key"
-        
+
         # Verify cache calls
         cache_mock.get_document_with_cache.assert_any_call(
             collection=DB_COLLECTION_SETTINGS,
@@ -71,10 +74,10 @@ class TestSettingsService:
         """Test that missing user settings returns empty LLMSettings (no platform fallback for LLM keys)."""
         cache_mock = MagicMock()
         cache_mock.get_document_with_cache = AsyncMock()
-        
+
         user_id = "user_456"
         user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
-        
+
         # Mock platform document (without LLM keys since they are user-specific only)
         platform_settings = G8eePlatformSettings(
             port=8080
@@ -82,7 +85,7 @@ class TestSettingsService:
         platform_doc = PlatformSettingsDocument(
             settings=platform_settings
         )
-        
+
         # Return None for user doc, valid for platform doc
         def get_doc_mock(collection, document_id):
             if document_id == user_doc_id:
@@ -90,9 +93,9 @@ class TestSettingsService:
             if document_id == PLATFORM_SETTINGS_DOC:
                 return platform_doc.model_dump()
             return None
-            
+
         cache_mock.get_document_with_cache.side_effect = get_doc_mock
-        
+
         service = SettingsService(cache_aside_service=cache_mock)
         settings = await service.get_user_settings(user_id)
 
@@ -102,7 +105,7 @@ class TestSettingsService:
         assert settings.llm.anthropic_api_key is None
         assert settings.llm.gemini_api_key is None
         assert settings.llm.ollama_api_key is None
-        
+
         # Verify both lookups happened
         cache_mock.get_document_with_cache.assert_any_call(
             collection=DB_COLLECTION_SETTINGS,

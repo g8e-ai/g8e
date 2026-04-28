@@ -14,6 +14,7 @@
 """Typed fake for AIResponseAnalyzerProtocol."""
 
 from __future__ import annotations
+
 from app.constants import FileOperation, RiskLevel
 from app.models.settings import G8eeUserSettings
 from app.models.tool_results import (

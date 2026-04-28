@@ -42,11 +42,11 @@ from app.models.model_configs import (
     ANTHROPIC_DEFAULT_THINKING_BUDGETS,
     GEMINI_3_1_FLASH_LITE_CONFIG,
     GEMINI_3_FLASH_CONFIG,
-    LLMModelConfig,
     OLLAMA_LLAMA_3_2_3B_CONFIG,
     OLLAMA_QWEN3_5_122B_CONFIG,
     OPENAI_DEFAULT_CONFIG,
     OPENAI_GPT_5_4_MINI_CONFIG,
+    LLMModelConfig,
     clamp_thinking_level,
 )
 

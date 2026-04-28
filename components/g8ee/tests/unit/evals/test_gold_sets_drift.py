@@ -1,6 +1,7 @@
 import json
-import pytest
 from pathlib import Path
+
+import pytest
 
 _GOLD_SETS_DIR = Path(__file__).resolve().parents[4] / "evals" / "gold_sets"
 
@@ -32,7 +33,7 @@ def test_accuracy_gold_set_tools_exist(valid_tool_names: set[str]):
     for scenario in scenarios:
         for tool in scenario.get("expected_tools", []):
             assert tool in valid_tool_names, f"Expected tool '{tool}' in scenario '{scenario['id']}' does not exist in registry."
-        
+
         if "expected_tool" in scenario:
             assert scenario["expected_tool"] in valid_tool_names, f"Expected tool '{scenario['expected_tool']}' in scenario '{scenario['id']}' does not exist in registry."
 
@@ -45,7 +46,7 @@ def test_benchmark_gold_set_tools_exist(valid_tool_names: set[str]):
     for scenario in scenarios:
         for tool in scenario.get("expected_tools", []):
             assert tool in valid_tool_names, f"Expected tool '{tool}' in scenario '{scenario['id']}' does not exist in registry."
-            
+
         if "expected_tool" in scenario:
             assert scenario["expected_tool"] in valid_tool_names, f"Expected tool '{scenario['expected_tool']}' in scenario '{scenario['id']}' does not exist in registry."
 

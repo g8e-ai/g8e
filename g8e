@@ -725,6 +725,12 @@ case "$TOP" in
                         _TEST_PASSTHROUGH+=("--parallel" "auto")
                         _args=("${_args[@]:1}")
                     fi ;;
+                --ruff)
+                    _TEST_PASSTHROUGH+=("--ruff")
+                    _args=("${_args[@]:1}") ;;
+                --ruff-fix)
+                    _TEST_PASSTHROUGH+=("--ruff-fix")
+                    _args=("${_args[@]:1}") ;;
                 --)
                     _TEST_PASSTHROUGH+=("${_args[@]}")
                     break ;;

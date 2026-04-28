@@ -28,15 +28,15 @@ import json
 
 import pytest
 
-from app.constants import Platform, CommandCategory
-from app.utils.whitelist_validator import (
-    CommandWhitelistValidator,
-    _COMMON_SAFE_PATTERNS,
-    get_whitelist_validator,
-    validate_command_against_whitelist,
-    get_whitelisted_commands,
-)
+from app.constants import CommandCategory, Platform
 from app.utils.csv_commands import parse_command_csv
+from app.utils.whitelist_validator import (
+    _COMMON_SAFE_PATTERNS,
+    CommandWhitelistValidator,
+    get_whitelist_validator,
+    get_whitelisted_commands,
+    validate_command_against_whitelist,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -361,8 +361,9 @@ class TestLoadWhitelistErrors:
     def test_default_path_missing_raises_configuration_error(self, monkeypatch):
         # Force it to look for a nonexistent default path
         # Use a fresh instance to avoid global state issues
-        from app.errors import ConfigurationError
         from unittest.mock import patch
+
+        from app.errors import ConfigurationError
         with patch("app.utils.whitelist_validator.Path.exists", return_value=False):
             with pytest.raises(ConfigurationError, match="Required whitelist configuration not found"):
                 CommandWhitelistValidator(whitelist_path=None)

@@ -21,28 +21,27 @@ This test verifies the full Phase 2 pipeline:
 4. Commitment ID propagation to the final result
 """
 
-import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from datetime import datetime, UTC
+import pytest
+
 from app.constants import (
-    CommandGenerationOutcome,
+    AuditorReason,
     EventType,
     TribunalMember,
-    AuditorReason,
 )
 from app.models.agents.tribunal import (
     CandidateCommand,
     VoteBreakdown,
-    CommandGenerationResult,
 )
-from app.models.reputation import ReputationCommitment, ReputationState
+from app.models.reputation import ReputationState
 from app.services.ai.generator import generate_command
+from app.services.data.reputation_data_service import ReputationDataService
 from tests.fakes.agent_helpers import (
     make_agent_run_args,
     make_g8ed_event_service,
 )
-from app.services.data.reputation_data_service import ReputationDataService
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
 
@@ -61,10 +60,10 @@ class TestCommandGeneratorWithCommitment:
             user_id="commitment-test-user-001",
         )
         event_svc = make_g8ed_event_service()
-        
+
         # Use real ReputationDataService with fake cache/db
         reputation_svc = ReputationDataService(fake_cache_aside_service)
-        
+
         # Seed some initial reputation state
         await reputation_svc.upsert_state(ReputationState(
             agent_id="axiom",
@@ -75,13 +74,13 @@ class TestCommandGeneratorWithCommitment:
         mock_candidates = [
             CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM)
         ]
-        
+
         with patch("app.services.ai.generator._run_generation_stage", new_callable=AsyncMock) as mock_gen, \
              patch("app.services.ai.generator._run_voting_stage", new_callable=AsyncMock) as mock_vote, \
              patch("app.services.ai.generator.run_auditor", new_callable=AsyncMock) as mock_run_auditor:
-            
+
             mock_gen.return_value = mock_candidates
-            
+
             # Mock voting stage result
             vote_breakdown = MagicMock(spec=VoteBreakdown)
             vote_breakdown.candidates_by_member = {"axiom": "ls -la"}
@@ -90,9 +89,9 @@ class TestCommandGeneratorWithCommitment:
             vote_breakdown.winner_supporters = ["axiom"]
             vote_breakdown.consensus_strength = 1.0
             vote_breakdown.tie_break_reason = None
-            
+
             mock_vote.return_value = ("ls -la", 1.0, vote_breakdown, None)
-            
+
             # Mock auditor to pass
             mock_run_auditor.return_value = (True, "ls -la", None, AuditorReason.OK, None, None)
 
@@ -140,14 +139,14 @@ class TestCommandGeneratorWithCommitment:
         with patch("app.services.ai.generator._run_generation_stage", new_callable=AsyncMock) as mock_gen, \
              patch("app.services.ai.generator._run_voting_stage", new_callable=AsyncMock) as mock_vote, \
              patch("app.services.ai.generator.run_auditor", new_callable=AsyncMock) as mock_run_auditor:
-            
+
             mock_gen.return_value = [CandidateCommand(command="rm -rf /", pass_index=0, member=TribunalMember.AXIOM)]
-            
+
             vote_breakdown = MagicMock(spec=VoteBreakdown)
             vote_breakdown.consensus_strength = 1.0
             vote_breakdown.tie_break_reason = None
             mock_vote.return_value = ("rm -rf /", 1.0, vote_breakdown, None)
-            
+
             # Mock auditor to REJECT
             mock_run_auditor.return_value = (False, None, None, AuditorReason.WHITELIST_VIOLATION, None, None)
 
@@ -167,7 +166,7 @@ class TestCommandGeneratorWithCommitment:
 
         # Verify no commitment ID
         assert gen_result.reputation_commitment_id is None
-        
+
         # Verify no commitment events
         published = event_svc._published_events
         commitment_events = [e for e in published if e.event_type == EventType.REPUTATION_COMMITMENT_CREATED]

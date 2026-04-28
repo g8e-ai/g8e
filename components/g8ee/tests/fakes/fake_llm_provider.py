@@ -28,6 +28,7 @@ from app.llm.llm_types import (
 )
 from app.llm.provider import LLMProvider
 
+
 class FakeLLMProvider(LLMProvider):
     """A fake LLM provider for testing that avoids AsyncMock/MagicMock.
     
@@ -57,7 +58,7 @@ class FakeLLMProvider(LLMProvider):
         model: str,
         contents: list[Content],
         primary_llm_settings: PrimaryLLMSettings,
-    ) -> AsyncGenerator[StreamChunkFromModel, None]:
+    ) -> AsyncGenerator[StreamChunkFromModel]:
         self.call_log.append({
             "method": "generate_content_stream_primary",
             "model": model,
@@ -91,7 +92,7 @@ class FakeLLMProvider(LLMProvider):
         model: str,
         contents: list[Content],
         assistant_llm_settings: AssistantLLMSettings,
-    ) -> AsyncGenerator[StreamChunkFromModel, None]:
+    ) -> AsyncGenerator[StreamChunkFromModel]:
         self.call_log.append({
             "method": "generate_content_stream_assistant",
             "model": model,
@@ -125,7 +126,7 @@ class FakeLLMProvider(LLMProvider):
         model: str,
         contents: list[Content],
         lite_llm_settings: LiteLLMSettings,
-    ) -> AsyncGenerator[StreamChunkFromModel, None]:
+    ) -> AsyncGenerator[StreamChunkFromModel]:
         self.call_log.append({
             "method": "generate_content_stream_lite",
             "model": model,
@@ -182,7 +183,7 @@ class FakeLLMProvider(LLMProvider):
         config: GenerateContentConfig,
         tools: list[ToolGroup] = None,
         system_instructions: str = None,
-    ) -> AsyncGenerator[StreamChunkFromModel, None]:
+    ) -> AsyncGenerator[StreamChunkFromModel]:
         self.call_log.append({
             "method": "generate_content_stream",
             "model": model,
@@ -193,7 +194,7 @@ class FakeLLMProvider(LLMProvider):
         })
         if not self.stream_chunks:
             return
-        
+
         chunks = self.stream_chunks.pop(0)
         for chunk in chunks:
             yield chunk

@@ -48,17 +48,17 @@ from app.models.agent import (
     StreamChunkFromModel,
     StreamChunkFromModelType,
 )
-from app.models.tool_results import SearchWebResult
 from app.models.grounding import GroundingMetadata
+from app.models.tool_results import SearchWebResult
 from app.services.ai.agent import g8eEngine
 from app.services.ai.agent_tool_loop import ToolCallResponse
 from tests.fakes.agent_helpers import (
     make_agent_inputs,
     make_agent_stream_state,
     make_g8e_agent,
+    make_g8ed_event_service,
     make_gen_config,
     make_provider_chunk,
-    make_g8ed_event_service,
 )
 
 pytestmark = pytest.mark.unit
@@ -436,11 +436,10 @@ class TestStreamWithToolLoop:
                         finish_reason="STOP",
                     )
                 return _gen()
-            else:
-                async def _gen():
-                    yield make_provider_chunk(text="Second turn")
-                    yield make_provider_chunk(finish_reason="STOP")
-                return _gen()
+            async def _gen():
+                yield make_provider_chunk(text="Second turn")
+                yield make_provider_chunk(finish_reason="STOP")
+            return _gen()
 
         provider.generate_content_stream_primary = tool_stream
 
@@ -730,11 +729,10 @@ class TestGroundingMetadata:
                         finish_reason="STOP",
                     )
                 return _gen()
-            else:
-                async def _gen():
-                    yield make_provider_chunk(text="Done")
-                    yield make_provider_chunk(finish_reason="STOP")
-                return _gen()
+            async def _gen():
+                yield make_provider_chunk(text="Done")
+                yield make_provider_chunk(finish_reason="STOP")
+            return _gen()
 
         provider.generate_content_stream_primary = stream
 
@@ -750,7 +748,7 @@ class TestGroundingMetadata:
                 query="test",
                 results=[],
             )
-            result_out = kwargs.get('result_out')
+            result_out = kwargs.get("result_out")
             if result_out is not None:
                 result_out.append([
                     ToolCallResponse(

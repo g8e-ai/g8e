@@ -15,10 +15,8 @@ import pytest
 
 from app.constants import ComponentName, EventType
 from app.models.investigations import (
-    ConversationHistoryMessage,
     ConversationMessageMetadata,
     InvestigationCreateRequest,
-    InvestigationCurrentState,
 )
 from app.services.investigation.investigation_data_service import InvestigationDataService
 from app.utils.ledger_hash import verify_chain
@@ -41,7 +39,7 @@ async def test_chat_message_creates_hash_chain(investigation_data_service):
         user_id="test-user",
     )
     investigation = await investigation_data_service.create_investigation(request)
-    
+
     # Add multiple chat messages
     metadata1 = ConversationMessageMetadata(event_type=EventType.INVESTIGATION_CHAT_MESSAGE_USER)
     await investigation_data_service.add_chat_message(
@@ -50,7 +48,7 @@ async def test_chat_message_creates_hash_chain(investigation_data_service):
         content="First message",
         metadata=metadata1,
     )
-    
+
     metadata2 = ConversationMessageMetadata(event_type=EventType.INVESTIGATION_CHAT_MESSAGE_AI)
     await investigation_data_service.add_chat_message(
         investigation_id=investigation.id,
@@ -58,7 +56,7 @@ async def test_chat_message_creates_hash_chain(investigation_data_service):
         content="Second message",
         metadata=metadata2,
     )
-    
+
     metadata3 = ConversationMessageMetadata(event_type=EventType.INVESTIGATION_CHAT_MESSAGE_USER)
     await investigation_data_service.add_chat_message(
         investigation_id=investigation.id,
@@ -66,11 +64,11 @@ async def test_chat_message_creates_hash_chain(investigation_data_service):
         content="Third message",
         metadata=metadata3,
     )
-    
+
     # Verify the chain
     updated_investigation = await investigation_data_service.get_investigation(investigation.id)
     entries = [msg.model_dump(mode="json") for msg in updated_investigation.conversation_history]
-    
+
     valid, bad_index = verify_chain(entries, investigation.id, investigation.created_at.isoformat())
     assert valid is True
     assert bad_index is None
@@ -87,7 +85,7 @@ async def test_history_entry_creates_hash_chain(investigation_data_service):
         user_id="test-user",
     )
     investigation = await investigation_data_service.create_investigation(request)
-    
+
     # Add multiple history entries
     details1 = ConversationMessageMetadata()
     await investigation_data_service.add_history_entry(
@@ -97,7 +95,7 @@ async def test_history_entry_creates_hash_chain(investigation_data_service):
         summary="First entry",
         details=details1,
     )
-    
+
     details2 = ConversationMessageMetadata()
     await investigation_data_service.add_history_entry(
         investigation_id=investigation.id,
@@ -106,7 +104,7 @@ async def test_history_entry_creates_hash_chain(investigation_data_service):
         summary="Second entry",
         details=details2,
     )
-    
+
     details3 = ConversationMessageMetadata()
     await investigation_data_service.add_history_entry(
         investigation_id=investigation.id,
@@ -115,11 +113,11 @@ async def test_history_entry_creates_hash_chain(investigation_data_service):
         summary="Third entry",
         details=details3,
     )
-    
+
     # Verify the chain
     updated_investigation = await investigation_data_service.get_investigation(investigation.id)
     entries = [entry.model_dump(mode="json") for entry in updated_investigation.history_trail]
-    
+
     valid, bad_index = verify_chain(entries, investigation.id, investigation.created_at.isoformat())
     assert valid is True
     assert bad_index is None
@@ -136,7 +134,7 @@ async def test_concurrent_appends_produce_valid_chain(investigation_data_service
         user_id="test-user",
     )
     investigation = await investigation_data_service.create_investigation(request)
-    
+
     # Add messages sequentially (the service should serialize these)
     for i in range(5):
         metadata = ConversationMessageMetadata(event_type=EventType.INVESTIGATION_CHAT_MESSAGE_USER)
@@ -146,11 +144,11 @@ async def test_concurrent_appends_produce_valid_chain(investigation_data_service
             content=f"Message {i}",
             metadata=metadata,
         )
-    
+
     # Verify the chain
     updated_investigation = await investigation_data_service.get_investigation(investigation.id)
     entries = [msg.model_dump(mode="json") for msg in updated_investigation.conversation_history]
-    
+
     valid, bad_index = verify_chain(entries, investigation.id, investigation.created_at.isoformat())
     assert valid is True
     assert bad_index is None
@@ -167,7 +165,7 @@ async def test_first_entry_uses_genesis_hash(investigation_data_service):
         user_id="test-user",
     )
     investigation = await investigation_data_service.create_investigation(request)
-    
+
     # Add first message
     metadata = ConversationMessageMetadata(event_type=EventType.INVESTIGATION_CHAT_MESSAGE_USER)
     await investigation_data_service.add_chat_message(
@@ -176,14 +174,14 @@ async def test_first_entry_uses_genesis_hash(investigation_data_service):
         content="First message",
         metadata=metadata,
     )
-    
+
     # Check that first entry uses genesis hash
     from app.utils.ledger_hash import genesis_hash
     expected_genesis = genesis_hash(investigation.id, investigation.created_at.isoformat())
-    
+
     updated_investigation = await investigation_data_service.get_investigation(investigation.id)
     first_entry = updated_investigation.conversation_history[0]
-    
+
     assert first_entry.prev_hash == expected_genesis
     assert first_entry.entry_hash is not None
     assert len(first_entry.entry_hash) == 64

@@ -143,10 +143,9 @@ class TestAgentInputsImmutability:
         must be preserved when dumping to dict and reconstructing, ensuring
         no silent data loss occurs during persistence or transmission.
         """
-        from app.models.agent import AgentInputs
-        from tests.fakes.factories import build_enriched_context, build_g8e_http_context
-        from app.models.settings import G8eeUserSettings, LLMSettings
         from app.constants import AgentMode
+        from app.models.settings import G8eeUserSettings, LLMSettings
+        from tests.fakes.factories import build_enriched_context, build_g8e_http_context
 
         inv = build_enriched_context(investigation_id="inv-immutable-test")
         g8e_ctx = build_g8e_http_context(user_id="user-immutable-test")

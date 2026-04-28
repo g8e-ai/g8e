@@ -19,7 +19,6 @@ from unittest.mock import AsyncMock
 
 from app.constants import EventType
 from app.models.events import BackgroundEvent, SessionEvent
-from app.services.protocols import EventServiceProtocol
 
 
 class FakeEventService:
@@ -32,7 +31,7 @@ class FakeEventService:
     def __init__(self) -> None:
         self.published: list[SessionEvent | BackgroundEvent] = []
         self.command_events: list[dict] = []
-        
+
         # Initialize as a proper AsyncMock for call assertions
         # We manually record to self.published in the side_effect
         self.publish = AsyncMock(side_effect=self._record_publish)
@@ -48,8 +47,8 @@ class FakeEventService:
     async def publish_command_event(
         self,
         event_type: EventType,
-        data: "G8eBaseModel",
-        g8e_context: "G8eHttpContext",
+        data: G8eBaseModel,
+        g8e_context: G8eHttpContext,
         *,
         task_id: str,
     ) -> None:
@@ -78,7 +77,7 @@ class FakeEventService:
         self,
         investigation_id: str,
         event_type: EventType,
-        payload: dict[str, object] | "G8eBaseModel",
+        payload: dict[str, object] | G8eBaseModel,
         web_session_id: str,
         case_id: str,
         user_id: str,

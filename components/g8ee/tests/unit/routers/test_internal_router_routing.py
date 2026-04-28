@@ -23,8 +23,9 @@ starting the actual application or mocking dependencies.
 """
 
 import pytest
-from app.routers.internal_router import router as internal_router
+
 from app.constants import InternalApiPaths
+from app.routers.internal_router import router as internal_router
 
 
 @pytest.mark.unit

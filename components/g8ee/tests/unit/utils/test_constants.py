@@ -31,16 +31,16 @@ from app.constants import (
     CHANNEL_SEGMENT_COUNT,
     DB_COLLECTION_API_KEYS,
     DB_COLLECTION_CASES,
-    DB_COLLECTION_SETTINGS,
-    DB_COLLECTION_SETTINGS,
     DB_COLLECTION_INVESTIGATIONS,
     DB_COLLECTION_MEMORIES,
-    DB_COLLECTION_OPERATORS,
     DB_COLLECTION_OPERATOR_SESSIONS,
+    DB_COLLECTION_OPERATORS,
     DB_COLLECTION_ORGANIZATIONS,
+    DB_COLLECTION_SETTINGS,
     DB_COLLECTION_TASKS,
-    DB_COLLECTION_WEB_SESSIONS,
     DB_COLLECTION_USERS,
+    DB_COLLECTION_WEB_SESSIONS,
+    AgentMode,
     AITaskId,
     ApiKeyStatus,
     ApprovalType,
@@ -60,8 +60,8 @@ from app.constants import (
     InvestigationStatus,
     NetworkProtocol,
     OperatorChannel,
-    OperatorToolName,
     OperatorStatus,
+    OperatorToolName,
     OperatorType,
     Platform,
     PubSubAction,
@@ -75,14 +75,13 @@ from app.constants import (
     TaskStatus,
     VaultMode,
     VersionStability,
-    AgentMode,
-)
-from app.constants.settings import (
-    CommandGenerationOutcome,
-    ApprovalErrorType,
-    AttachmentType,
 )
 from app.constants.api_paths import validate_api_paths_sync
+from app.constants.settings import (
+    ApprovalErrorType,
+    AttachmentType,
+    CommandGenerationOutcome,
+)
 from app.models.agent import (
     AgentInputs,
     OperatorContext,
@@ -1674,9 +1673,10 @@ class TestAttachmentTypeMatchesSharedJSON:
 
 from app.models.settings import G8eeUserSettings, LLMSettings
 from tests.fakes.factories import (
-    build_g8e_http_context,
     build_enriched_context,
+    build_g8e_http_context,
 )
+
 
 class TestAgentModeValidation:
     def test_accepts_enum(self):

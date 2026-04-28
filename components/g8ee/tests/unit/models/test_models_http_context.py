@@ -22,7 +22,6 @@ import json
 from datetime import UTC, datetime
 
 import pytest
-from app.models.base import ValidationError
 
 from app.constants import (
     AuthMethod,
@@ -31,6 +30,7 @@ from app.constants import (
     OperatorStatus,
 )
 from app.models.auth import AuthenticatedUser
+from app.models.base import ValidationError
 from app.models.health import (
     DependencyStatus,
     HealthCheckResult,

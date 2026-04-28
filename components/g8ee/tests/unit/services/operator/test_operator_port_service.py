@@ -15,16 +15,20 @@
 Unit tests for OperatorPortService (port_service.py).
 """
 
-import pytest
-import asyncio
-from typing import cast
 
-from app.constants import CommandErrorType, EventType, OperatorStatus, NetworkProtocol
+import pytest
+
+from app.constants import CommandErrorType, EventType, OperatorStatus
 from app.constants.status import ExecutionStatus
 from app.errors import BusinessLogicError, ValidationError
 from app.models.command_request_payloads import CheckPortRequestPayload
-from app.models.operators import OperatorDocument, HeartbeatSnapshot, HeartbeatSystemIdentity, HeartbeatNetworkInfo
-from app.models.pubsub_messages import PortCheckResultPayload, G8eoResultEnvelope
+from app.models.operators import (
+    HeartbeatNetworkInfo,
+    HeartbeatSnapshot,
+    HeartbeatSystemIdentity,
+    OperatorDocument,
+)
+from app.models.pubsub_messages import G8eoResultEnvelope, PortCheckResultPayload
 from app.models.tool_results import CommandInternalResult
 from app.services.operator.port_service import OperatorPortService
 from tests.fakes.factories import (
@@ -71,8 +75,8 @@ def _make_service(
     operator = resolved_operator or _make_operator()
     event_service = FakeEventService()
     execution = FakeExecutionService(
-        resolved_operator=operator, 
-        resolve_error=resolve_error, 
+        resolved_operator=operator,
+        resolve_error=resolve_error,
         g8ed_event_service=event_service,
         pubsub_service=pubsub
     )
@@ -365,17 +369,16 @@ class TestTimeout:
 
         # Simulate timeout by having execution return no envelope
         execution._envelope = None
-        
+
         async def _mock_execute(*args, **kwargs):
-            from app.models.tool_results import CommandInternalResult
-            from app.constants.status import ExecutionStatus, CommandErrorType
+            from app.constants.status import CommandErrorType, ExecutionStatus
             return CommandInternalResult(
                 execution_id="test",
                 status=ExecutionStatus.TIMEOUT,
                 error="timed out",
                 error_type=CommandErrorType.COMMAND_TIMEOUT
             ), None
-            
+
         execution.execute = _mock_execute
 
         result = await service.execute_port_check(args, investigation, _make_context())

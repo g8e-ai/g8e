@@ -53,8 +53,8 @@ class TestCacheAsideService:
 
     @pytest.fixture
     def service(self, mock_kv_cache_client, mock_db_client):
-        from app.db.kv_service import KVService
         from app.db.db_service import DBService
+        from app.db.kv_service import KVService
         return CacheAsideService(
             kv=KVService(mock_kv_cache_client),
             db=DBService(mock_db_client),
@@ -79,7 +79,7 @@ class TestCacheAsideService:
         data = {"id": "user-1", "name": "Alice"}
         # Mock DB check for existence (returns not found)
         mock_db_client.get_document.return_value = DocumentResult(success=True, data=None)
-        
+
         result = await service.create_document(DB_COLLECTION_USERS, "user-1", data)
 
         assert result.success is True
@@ -94,10 +94,10 @@ class TestCacheAsideService:
     async def test_create_document_invalidates_kv_cache(self, service, mock_kv_cache_client, mock_db_client):
         data = {"id": "user-2", "name": "Admin"}
         mock_db_client.get_document.return_value = DocumentResult(success=True, data=None)
-        
+
         key = service._make_key(DB_COLLECTION_USERS, "user-2")
         mock_kv_cache_client.seed_json(key, {"old": "data"})
-        
+
         await service.create_document(DB_COLLECTION_USERS, "user-2", data)
 
         cached = await mock_kv_cache_client.get_json(key)
@@ -108,7 +108,7 @@ class TestCacheAsideService:
         # Ensure the side_effect is cleared so it uses the mock value
         mock_db_client.get_document.side_effect = None
         mock_db_client.get_document.return_value = DocumentResult(success=True, data={"id": "user-3"})
-        
+
         with pytest.raises(DatabaseError, match="already exists"):
             await service.create_document(DB_COLLECTION_USERS, "user-3", data)
 
@@ -426,14 +426,14 @@ class TestCacheAsideService:
         assert op.merge is False
 
     def test_component_name_defaults_to_g8ee_enum(self, mock_kv_cache_client, mock_db_client):
-        from app.db.kv_service import KVService
         from app.db.db_service import DBService
+        from app.db.kv_service import KVService
         svc = CacheAsideService(kv=KVService(mock_kv_cache_client), db=DBService(mock_db_client))
         assert svc.component_name == ComponentName.G8EE
 
     def test_component_name_accepts_enum(self, mock_kv_cache_client, mock_db_client):
-        from app.db.kv_service import KVService
         from app.db.db_service import DBService
+        from app.db.kv_service import KVService
         svc = CacheAsideService(
             kv=KVService(mock_kv_cache_client),
             db=DBService(mock_db_client),

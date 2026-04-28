@@ -13,11 +13,12 @@
 
 """Consolidated tool executor helpers for g8ee tests."""
 
-from unittest.mock import MagicMock, AsyncMock
-from .fake_web_search_provider import FakeWebSearchProvider
+from unittest.mock import AsyncMock, MagicMock
+
 from app.services.ai.tool_service import AIToolService
 from app.services.protocols import MemoryDataServiceProtocol
 
+from .fake_web_search_provider import FakeWebSearchProvider
 
 
 def create_tool_service_fake(investigation_service=None, web_search_provider=None, with_run_commands_result=None, auto_approve=True, event_service=None, whitelist_validator=None, blacklist_validator=None, auto_approved_validator=None):
@@ -26,11 +27,12 @@ def create_tool_service_fake(investigation_service=None, web_search_provider=Non
     Uses build_command_service to ensure we have a real OperatorCommandService
     with awaitable methods on its sub-services.
     """
-    from .builder import build_command_service
-    from app.services.investigation.investigation_service import InvestigationService
     from app.models.operators import PendingApproval
+    from app.services.investigation.investigation_service import InvestigationService
     from app.utils.timestamp import now
-    
+
+    from .builder import build_command_service
+
     # Build a real wired OperatorCommandService using our fakes
     operator_command_service = build_command_service(
         investigation_service=investigation_service,
@@ -48,7 +50,7 @@ def create_tool_service_fake(investigation_service=None, web_search_provider=Non
                 reason="Auto-approved by test runner",
                 responded_at=now()
             ))
-        
+
         operator_command_service._approval_service.set_on_approval_requested(_auto_approve_callback)
 
     memory_data_service = MagicMock(spec=MemoryDataServiceProtocol)
@@ -60,7 +62,7 @@ def create_tool_service_fake(investigation_service=None, web_search_provider=Non
         operator_data_service=operator_command_service.operator_data_service,
         memory_data_service=memory_data_service,
     )
-    
+
     # Default investigation_service to a fake if not provided
     if investigation_service is None:
         investigation_service = operator_command_service.investigation_service

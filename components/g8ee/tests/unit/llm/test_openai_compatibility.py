@@ -11,12 +11,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
 from unittest.mock import patch
 
-from app.llm.providers.open_ai import OpenAIProvider
-from app.llm.providers.llama_cpp import LlamaCppProvider
+import pytest
+
 from app.llm.providers.g8el import G8elProvider
+from app.llm.providers.llama_cpp import LlamaCppProvider
+from app.llm.providers.open_ai import OpenAIProvider
+
 
 @pytest.mark.unit
 class TestOpenAICompatibility:

@@ -13,7 +13,10 @@
 
 import pytest
 
-from app.models.operators import OperatorDocument, OperatorStatus, HeartbeatSnapshot, HeartbeatSystemIdentity
+from app.models.operators import (
+    OperatorDocument,
+    OperatorStatus,
+)
 
 pytestmark = [pytest.mark.unit]
 

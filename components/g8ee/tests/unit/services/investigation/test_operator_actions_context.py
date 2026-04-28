@@ -6,9 +6,10 @@ fields crashes with AttributeError. These tests ensure the formatting
 methods handle the already-extracted string values correctly.
 """
 
-import pytest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from app.constants import ComponentName, EventType, ExecutionStatus
 from app.models.investigations import (
@@ -31,7 +32,7 @@ def _make_history_entry(
     metadata = ConversationMessageMetadata(status=status, approved=approved)
     return InvestigationHistoryEntry(
         attempt_number=1,
-        timestamp=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        timestamp=datetime(2026, 1, 1, tzinfo=UTC),
         event_type=event_type,
         actor=ComponentName.G8EE,
         summary=summary,

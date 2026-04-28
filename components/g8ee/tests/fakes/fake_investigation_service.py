@@ -14,15 +14,16 @@
 """Typed fake for InvestigationServiceProtocol."""
 
 from unittest.mock import MagicMock
+
+from app.constants import ComponentName, EventType
 from app.models.investigations import (
+    ConversationMessageMetadata,
     EnrichedInvestigationContext,
     InvestigationModel,
-    ConversationMessageMetadata,
 )
-from app.models.tool_results import CommandInternalResult, FileEditResult
 from app.models.operators import FileOperation
-from app.constants import ComponentName, EventType
-from app.services.protocols import InvestigationServiceProtocol, InvestigationDataServiceProtocol
+from app.models.tool_results import CommandInternalResult, FileEditResult
+from app.services.protocols import InvestigationDataServiceProtocol, InvestigationServiceProtocol
 
 
 class FakeInvestigationService:
@@ -46,13 +47,13 @@ class FakeInvestigationService:
 
     async def get_investigation(self, investigation_id: str):
         return None
-        
+
     async def get_chat_messages(self, investigation_id: str):
         return []
-        
+
     async def get_enriched_investigation_context(self, investigation, user_id, g8e_context):
         return investigation
-        
+
     async def update_investigation(self, investigation_id, request, actor=None):
         return None
 

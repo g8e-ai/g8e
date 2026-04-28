@@ -25,20 +25,21 @@ Tests cover:
 """
 
 import json
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
+from app.llm.llm_types import Candidate, Content, GenerateContentResponse, Part
+from app.models.settings import EvalJudgeSettings
 from app.services.ai.eval_judge import (
-    EvalJudge,
-    EvalGrade,
-    EvalJudgeError,
+    _MAX_RETRIES,
     PASSING_THRESHOLD,
+    EvalGrade,
+    EvalJudge,
+    EvalJudgeError,
     _extract_json,
     _is_retryable,
-    _MAX_RETRIES,
 )
-from app.llm.llm_types import GenerateContentResponse, Candidate, Content, Part
-from app.models.settings import EvalJudgeSettings
 
 
 def _build_response(text: str) -> GenerateContentResponse:

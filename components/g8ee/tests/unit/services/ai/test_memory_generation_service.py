@@ -13,8 +13,9 @@
 
 """Unit tests for MemoryGenerationService."""
 
+from datetime import UTC, datetime
+
 import pytest
-from datetime import datetime, UTC
 
 from app.constants import EventType, InvestigationStatus
 from app.constants.message_sender import MessageSender
@@ -26,11 +27,11 @@ from app.models.investigations import (
     InvestigationModel,
 )
 from app.models.memory import InvestigationMemory, MemoryAnalysis
-from app.models.settings import LLMSettings, G8eeUserSettings
+from app.models.settings import G8eeUserSettings, LLMSettings
 from app.services.ai.memory_generation_service import (
-    MemoryGenerationService,
     CONVERSATION_HISTORY_LIMIT,
     FALLBACK_TEXT_LIMIT,
+    MemoryGenerationService,
 )
 from tests.fakes.fake_memory_data_service import FakeMemoryDataService
 
@@ -228,7 +229,7 @@ class TestConversationToContents:
 
         assert len(contents) == 3  # Memory context + normal message + analysis request (thinking filtered)
         # Extract all text from content parts
-        all_text = ' '.join([part.text for content in contents for part in content.parts])
+        all_text = " ".join([part.text for content in contents for part in content.parts])
         assert "Normal message" in all_text
         assert "Thinking message" not in all_text
 
@@ -375,16 +376,16 @@ class TestExtractJsonFromMarkdown:
         assert result == '{\n  "key": "value"\n}'
 
     def test_returns_none_when_no_json_block(self):
-        text = 'Plain text without json'
+        text = "Plain text without json"
         result = MemoryGenerationService._extract_json_from_markdown(text)
         assert result is None
 
     def test_returns_none_for_empty_string(self):
-        result = MemoryGenerationService._extract_json_from_markdown('')
+        result = MemoryGenerationService._extract_json_from_markdown("")
         assert result is None
 
     def test_ignores_non_object_blocks(self):
-        text = '```\njust text\n```'
+        text = "```\njust text\n```"
         result = MemoryGenerationService._extract_json_from_markdown(text)
         assert result is None
 
@@ -398,56 +399,56 @@ class TestExtractKeyValuePairs:
     """Test _extract_key_value_pairs static method."""
 
     def test_extracts_simple_key_value(self):
-        text = 'key: value'
+        text = "key: value"
         result = MemoryGenerationService._extract_key_value_pairs(text)
-        assert result == {'key': 'value'}
+        assert result == {"key": "value"}
 
     def test_extracts_quoted_key(self):
         text = '"key": "value"'
         result = MemoryGenerationService._extract_key_value_pairs(text)
-        assert result == {'key': 'value'}
+        assert result == {"key": "value"}
 
     def test_extracts_single_quoted_value(self):
         text = "key: 'value'"
         result = MemoryGenerationService._extract_key_value_pairs(text)
-        assert result == {'key': 'value'}
+        assert result == {"key": "value"}
 
     def test_removes_trailing_comma(self):
-        text = 'key: value,'
+        text = "key: value,"
         result = MemoryGenerationService._extract_key_value_pairs(text)
-        assert result == {'key': 'value'}
+        assert result == {"key": "value"}
 
     def test_handles_multiline_values(self):
-        text = 'key: value\ncontinued'
+        text = "key: value\ncontinued"
         result = MemoryGenerationService._extract_key_value_pairs(text)
-        assert result == {'key': 'value continued'}
+        assert result == {"key": "value continued"}
 
     def test_normalizes_key_to_snake_case(self):
-        text = 'Key Name: value'
+        text = "Key Name: value"
         result = MemoryGenerationService._extract_key_value_pairs(text)
-        assert 'key_name' in result
+        assert "key_name" in result
 
     def test_skips_comment_lines(self):
-        text = '# comment\nkey: value\n// another comment'
+        text = "# comment\nkey: value\n// another comment"
         result = MemoryGenerationService._extract_key_value_pairs(text)
-        assert result == {'key': 'value'}
+        assert result == {"key": "value"}
 
     def test_skips_empty_lines(self):
-        text = '\n\nkey: value\n\n'
+        text = "\n\nkey: value\n\n"
         result = MemoryGenerationService._extract_key_value_pairs(text)
-        assert result == {'key': 'value'}
+        assert result == {"key": "value"}
 
     def test_handles_multiple_pairs(self):
-        text = 'key1: value1\nkey2: value2'
+        text = "key1: value1\nkey2: value2"
         result = MemoryGenerationService._extract_key_value_pairs(text)
-        assert result == {'key1': 'value1', 'key2': 'value2'}
+        assert result == {"key1": "value1", "key2": "value2"}
 
     def test_dash_prefixed_lines_treated_as_continuation(self):
-        text = '- item\nkey: value\n- another item'
+        text = "- item\nkey: value\n- another item"
         result = MemoryGenerationService._extract_key_value_pairs(text)
         # Dash-prefixed lines are treated as continuation lines when they appear after a key
         # The dash is preserved in the continuation
-        assert result == {'key': 'value - another item'}
+        assert result == {"key": "value - another item"}
 
 
 class TestParseMemoryAnalysis:
@@ -467,19 +468,19 @@ class TestParseMemoryAnalysis:
         assert result.technical_background == "Test background"
 
     def test_fallback_to_key_value_extraction(self):
-        text = 'technical_background: Test background\ncommunication_preferences: email'
+        text = "technical_background: Test background\ncommunication_preferences: email"
         result = self.service._parse_memory_analysis(text)
         assert result.technical_background == "Test background"
         assert result.communication_preferences == "email"
 
     def test_maps_field_aliases(self):
-        text = 'summary: Test\nbackground: Test background'
+        text = "summary: Test\nbackground: Test background"
         result = self.service._parse_memory_analysis(text)
         assert result.investigation_summary == "Test"
         assert result.technical_background == "Test background"
 
     def test_fallback_raw_text_to_summary(self):
-        text = 'Plain text without structure'
+        text = "Plain text without structure"
         result = self.service._parse_memory_analysis(text)
         assert result.investigation_summary == "Plain text without structure"
 
@@ -489,38 +490,38 @@ class TestParseMemoryAnalysis:
         assert len(result.investigation_summary) == FALLBACK_TEXT_LIMIT
 
     def test_fallback_strips_braces_from_raw_text(self):
-        text = '{raw text inside braces}'
+        text = "{raw text inside braces}"
         result = self.service._parse_memory_analysis(text)
         assert result.investigation_summary == "raw text inside braces"
 
     def test_fallback_strips_brackets_from_raw_text(self):
-        text = '[raw text inside brackets]'
+        text = "[raw text inside brackets]"
         result = self.service._parse_memory_analysis(text)
         assert result.investigation_summary == "raw text inside brackets"
 
     def test_returns_empty_analysis_for_empty_string(self):
-        result = self.service._parse_memory_analysis('')
-        assert result.investigation_summary == ''
-        assert result.technical_background == ''
+        result = self.service._parse_memory_analysis("")
+        assert result.investigation_summary == ""
+        assert result.technical_background == ""
 
     def test_returns_empty_analysis_for_whitespace_only(self):
-        result = self.service._parse_memory_analysis('   ')
-        assert result.investigation_summary == ''
-        assert result.technical_background == ''
+        result = self.service._parse_memory_analysis("   ")
+        assert result.investigation_summary == ""
+        assert result.technical_background == ""
 
     def test_key_value_fallback_when_json_fails(self):
-        text = 'summary: value'
+        text = "summary: value"
         result = self.service._parse_memory_analysis(text)
         assert result.investigation_summary == "value"
 
     def test_all_field_aliases_mapped(self):
         text = (
-            'summary: Test\n'
-            'communication: email\n'
-            'background: tech\n'
-            'response: formal\n'
-            'approach: systematic\n'
-            'interaction: questions'
+            "summary: Test\n"
+            "communication: email\n"
+            "background: tech\n"
+            "response: formal\n"
+            "approach: systematic\n"
+            "interaction: questions"
         )
         result = self.service._parse_memory_analysis(text)
         assert result.investigation_summary == "Test"

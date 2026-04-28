@@ -31,7 +31,6 @@ from app.constants import (
     EventType,
 )
 from app.errors import ValidationError
-
 from app.services.operator import OperatorCommandService
 from tests.fakes.builder import build_command_service
 
@@ -129,6 +128,7 @@ class TestBroadcastCommandEvent:
     async def test_publishes_event_to_g8ed(self):
         """OperatorExecutionService publishes events via g8ed_event_service.publish_command_event."""
         from unittest.mock import AsyncMock as _AsyncMock
+
         from app.models.base import G8eBaseModel
         from tests.fakes.factories import build_g8e_http_context
         service = _make_service()
@@ -169,7 +169,7 @@ class TestBroadcastCommandEvent:
         )
         class _EmptyEvent(G8eBaseModel):
             pass
-        
+
         g8e_context = build_g8e_http_context(
             web_session_id="web-abc",
             user_id="user-abc",
@@ -285,8 +285,8 @@ class TestExecuteCommandTargetSystems:
         )
 
     def _make_g8e_context(self):
-        from app.models.http_context import G8eHttpContext
         from app.constants.status import ComponentName
+        from app.models.http_context import G8eHttpContext
         return G8eHttpContext(
             web_session_id="ws-1",
             user_id="user-1",
@@ -298,11 +298,11 @@ class TestExecuteCommandTargetSystems:
     async def test_single_operator_target_systems_populated(self):
         """With a single operator, target_systems must contain that operator."""
         from app.models.agent import ExecutorCommandArgs
-        from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
-        from tests.fakes.fake_execution_service import FakeExecutionService
-        from tests.fakes.fake_event_service import FakeEventService
         from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
+        from tests.fakes.fake_approval_service import FakeApprovalService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_execution_service import FakeExecutionService
 
         approval_service = FakeApprovalService()
         event_service = FakeEventService()
@@ -334,11 +334,11 @@ class TestExecuteCommandTargetSystems:
     async def test_target_operators_arg_populates_target_systems(self):
         """When target_operators is set, target_systems must reflect all resolved operators."""
         from app.models.agent import ExecutorCommandArgs
-        from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
-        from tests.fakes.fake_execution_service import FakeExecutionService
-        from tests.fakes.fake_event_service import FakeEventService
         from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
+        from tests.fakes.fake_approval_service import FakeApprovalService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_execution_service import FakeExecutionService
 
         approval_service = FakeApprovalService()
         event_service = FakeEventService()
@@ -376,11 +376,11 @@ class TestExecuteCommandTargetSystems:
     async def test_batch_fans_out_to_all_resolved_operators(self):
         """Batch execution dispatches one message per operator and aggregates per-host results."""
         from app.models.agent import ExecutorCommandArgs
-        from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
-        from tests.fakes.fake_execution_service import FakeExecutionService
-        from tests.fakes.fake_event_service import FakeEventService
         from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
+        from tests.fakes.fake_approval_service import FakeApprovalService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_execution_service import FakeExecutionService
 
         approval_service = FakeApprovalService()
         event_service = FakeEventService()
@@ -429,11 +429,11 @@ class TestExecuteCommandTargetSystems:
     async def test_target_operators_without_target_operator_does_not_raise(self):
         """Providing only target_operators (no singular target_operator) must resolve cleanly."""
         from app.models.agent import ExecutorCommandArgs
-        from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
-        from tests.fakes.fake_execution_service import FakeExecutionService
-        from tests.fakes.fake_event_service import FakeEventService
         from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
+        from tests.fakes.fake_approval_service import FakeApprovalService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_execution_service import FakeExecutionService
 
         approval_service = FakeApprovalService()
         event_service = FakeEventService()
@@ -480,11 +480,11 @@ class TestExecuteCommandTargetSystems:
             G8eeUserSettings,
             LLMSettings,
         )
-        from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
-        from tests.fakes.fake_execution_service import FakeExecutionService
-        from tests.fakes.fake_event_service import FakeEventService
         from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
+        from tests.fakes.fake_approval_service import FakeApprovalService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_execution_service import FakeExecutionService
 
         approval_service = FakeApprovalService()
         event_service = FakeEventService()
@@ -524,11 +524,11 @@ class TestExecuteCommandTargetSystems:
             G8eeUserSettings,
             LLMSettings,
         )
-        from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
-        from tests.fakes.fake_execution_service import FakeExecutionService
-        from tests.fakes.fake_event_service import FakeEventService
         from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
+        from tests.fakes.fake_approval_service import FakeApprovalService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_execution_service import FakeExecutionService
 
         approval_service = FakeApprovalService()
         event_service = FakeEventService()
@@ -567,11 +567,11 @@ class TestExecuteCommandTargetSystems:
             G8eeUserSettings,
             LLMSettings,
         )
-        from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
-        from tests.fakes.fake_execution_service import FakeExecutionService
-        from tests.fakes.fake_event_service import FakeEventService
         from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
+        from tests.fakes.fake_approval_service import FakeApprovalService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_execution_service import FakeExecutionService
 
         approval_service = FakeApprovalService()
         event_service = FakeEventService()
@@ -610,11 +610,11 @@ class TestExecuteCommandTargetSystems:
             G8eeUserSettings,
             LLMSettings,
         )
-        from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
-        from tests.fakes.fake_execution_service import FakeExecutionService
-        from tests.fakes.fake_event_service import FakeEventService
         from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
+        from tests.fakes.fake_approval_service import FakeApprovalService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_execution_service import FakeExecutionService
 
         approval_service = FakeApprovalService()
         event_service = FakeEventService()
@@ -655,11 +655,11 @@ class TestExecuteCommandTargetSystems:
             G8eeUserSettings,
             LLMSettings,
         )
-        from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
-        from tests.fakes.fake_execution_service import FakeExecutionService
-        from tests.fakes.fake_event_service import FakeEventService
         from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
+        from tests.fakes.fake_approval_service import FakeApprovalService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_execution_service import FakeExecutionService
 
         approval_service = FakeApprovalService()
         event_service = FakeEventService()
@@ -704,11 +704,11 @@ class TestExecuteCommandTargetSystems:
             G8eeUserSettings,
             LLMSettings,
         )
-        from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
-        from tests.fakes.fake_execution_service import FakeExecutionService
-        from tests.fakes.fake_event_service import FakeEventService
         from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
+        from tests.fakes.fake_approval_service import FakeApprovalService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_execution_service import FakeExecutionService
 
         approval_service = FakeApprovalService()
         event_service = FakeEventService()
@@ -744,11 +744,11 @@ class TestExecuteCommandTargetSystems:
     async def test_target_systems_never_empty_for_valid_operator(self):
         """target_systems must never be empty when a valid operator is resolved."""
         from app.models.agent import ExecutorCommandArgs
-        from tests.fakes.fake_approval_service import FakeApprovalService
         from tests.fakes.builder import build_command_service
-        from tests.fakes.fake_execution_service import FakeExecutionService
-        from tests.fakes.fake_event_service import FakeEventService
         from tests.fakes.fake_ai_response_analyzer import FakeAIResponseAnalyzer
+        from tests.fakes.fake_approval_service import FakeApprovalService
+        from tests.fakes.fake_event_service import FakeEventService
+        from tests.fakes.fake_execution_service import FakeExecutionService
 
         approval_service = FakeApprovalService()
         event_service = FakeEventService()

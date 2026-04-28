@@ -26,7 +26,7 @@ from app.utils.ledger_hash import verify_chain
 async def test_full_chat_turn_produces_valid_chain(fake_cache_aside_service):
     """A full chat turn produces a valid hash chain."""
     investigation_data_service = InvestigationDataService(fake_cache_aside_service)
-    
+
     # Create investigation
     request = InvestigationCreateRequest(
         case_id="test-case",
@@ -35,7 +35,7 @@ async def test_full_chat_turn_produces_valid_chain(fake_cache_aside_service):
         user_id="test-user",
     )
     investigation = await investigation_data_service.create_investigation(request)
-    
+
     # Simulate a chat turn: user message + AI response + system notification
     user_metadata = ConversationMessageMetadata(event_type=EventType.INVESTIGATION_CHAT_MESSAGE_USER)
     await investigation_data_service.add_chat_message(
@@ -44,7 +44,7 @@ async def test_full_chat_turn_produces_valid_chain(fake_cache_aside_service):
         content="Help me debug this issue",
         metadata=user_metadata,
     )
-    
+
     ai_metadata = ConversationMessageMetadata(
         event_type=EventType.INVESTIGATION_CHAT_MESSAGE_AI,
         model="gpt-4",
@@ -56,7 +56,7 @@ async def test_full_chat_turn_produces_valid_chain(fake_cache_aside_service):
         content="I'll help you debug. Let me check the logs.",
         metadata=ai_metadata,
     )
-    
+
     system_metadata = ConversationMessageMetadata(event_type=EventType.INVESTIGATION_STATUS_UPDATED_OPEN)
     await investigation_data_service.add_chat_message(
         investigation_id=investigation.id,
@@ -64,11 +64,11 @@ async def test_full_chat_turn_produces_valid_chain(fake_cache_aside_service):
         content="Investigation status updated",
         metadata=system_metadata,
     )
-    
+
     # Verify the chain
     updated_investigation = await investigation_data_service.get_investigation(investigation.id)
     entries = [msg.model_dump(mode="json") for msg in updated_investigation.conversation_history]
-    
+
     valid, bad_index = verify_chain(entries, investigation.id, investigation.created_at.isoformat())
     assert valid is True, f"Chain validation failed at index {bad_index}"
     assert bad_index is None
@@ -78,7 +78,7 @@ async def test_full_chat_turn_produces_valid_chain(fake_cache_aside_service):
 async def test_mixed_history_and_chat_chains(fake_cache_aside_service):
     """conversation_history maintains valid chain when history_trail is also updated."""
     investigation_data_service = InvestigationDataService(fake_cache_aside_service)
-    
+
     # Create investigation
     request = InvestigationCreateRequest(
         case_id="test-case",
@@ -87,7 +87,7 @@ async def test_mixed_history_and_chat_chains(fake_cache_aside_service):
         user_id="test-user",
     )
     investigation = await investigation_data_service.create_investigation(request)
-    
+
     # Add chat message
     chat_metadata = ConversationMessageMetadata(event_type=EventType.INVESTIGATION_CHAT_MESSAGE_USER)
     await investigation_data_service.add_chat_message(
@@ -96,7 +96,7 @@ async def test_mixed_history_and_chat_chains(fake_cache_aside_service):
         content="User message",
         metadata=chat_metadata,
     )
-    
+
     # Add history entry
     from app.constants import ComponentName
     history_details = ConversationMessageMetadata()
@@ -107,7 +107,7 @@ async def test_mixed_history_and_chat_chains(fake_cache_aside_service):
         summary="History entry",
         details=history_details,
     )
-    
+
     # Add another chat message
     await investigation_data_service.add_chat_message(
         investigation_id=investigation.id,
@@ -115,10 +115,10 @@ async def test_mixed_history_and_chat_chains(fake_cache_aside_service):
         content="AI response",
         metadata=ConversationMessageMetadata(event_type=EventType.INVESTIGATION_CHAT_MESSAGE_AI),
     )
-    
+
     # Verify conversation_history chain (primary ledger)
     updated_investigation = await investigation_data_service.get_investigation(investigation.id)
-    
+
     chat_entries = [msg.model_dump(mode="json") for msg in updated_investigation.conversation_history]
     chat_valid, chat_bad_index = verify_chain(chat_entries, investigation.id, investigation.created_at.isoformat())
     assert chat_valid is True, f"Chat chain validation failed at index {chat_bad_index}"
@@ -135,7 +135,7 @@ async def test_mixed_history_and_chat_chains(fake_cache_aside_service):
 async def test_chain_persists_across_retrieval(fake_cache_aside_service):
     """Hash chain persists correctly across investigation retrieval."""
     investigation_data_service = InvestigationDataService(fake_cache_aside_service)
-    
+
     # Create investigation and add messages
     request = InvestigationCreateRequest(
         case_id="test-case",
@@ -144,7 +144,7 @@ async def test_chain_persists_across_retrieval(fake_cache_aside_service):
         user_id="test-user",
     )
     investigation = await investigation_data_service.create_investigation(request)
-    
+
     for i in range(3):
         await investigation_data_service.add_chat_message(
             investigation_id=investigation.id,
@@ -152,17 +152,17 @@ async def test_chain_persists_across_retrieval(fake_cache_aside_service):
             content=f"Message {i}",
             metadata=ConversationMessageMetadata(event_type=EventType.INVESTIGATION_CHAT_MESSAGE_USER),
         )
-    
+
     # Retrieve and verify chain
     retrieved = await investigation_data_service.get_investigation(investigation.id)
     entries = [msg.model_dump(mode="json") for msg in retrieved.conversation_history]
-    
+
     valid, bad_index = verify_chain(entries, investigation.id, investigation.created_at.isoformat())
     assert valid is True, f"Chain validation failed at index {bad_index}"
-    
+
     # Retrieve again to ensure persistence
     retrieved_again = await investigation_data_service.get_investigation(investigation.id)
     entries_again = [msg.model_dump(mode="json") for msg in retrieved_again.conversation_history]
-    
+
     valid_again, bad_index_again = verify_chain(entries_again, investigation.id, investigation.created_at.isoformat())
     assert valid_again is True, f"Chain validation failed on second retrieval at index {bad_index_again}"

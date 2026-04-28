@@ -12,9 +12,9 @@
 # limitations under the License.
 
 import pytest
-from app.models.base import ValidationError
 
-from app.constants import BatchWriteOpType, DB_COLLECTION_INVESTIGATIONS, InvestigationStatus
+from app.constants import DB_COLLECTION_INVESTIGATIONS, BatchWriteOpType, InvestigationStatus
+from app.models.base import ValidationError
 from app.models.cache import BatchWriteOperation, FieldFilter, QueryOrderBy
 
 pytestmark = pytest.mark.unit

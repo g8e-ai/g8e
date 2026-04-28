@@ -17,14 +17,14 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.constants import OperatorStatus, DB_COLLECTION_USERS
+from app.constants import OperatorStatus
+from app.models.operators import OperatorDocument
 from app.services.auth.api_key_service import ApiKeyService
 from app.services.auth.certificate_service import CertificateService
-from app.services.operator.operator_auth_service import OperatorAuthService
-from app.services.operator.operator_session_service import OperatorSessionService
-from app.services.operator.operator_data_service import OperatorDataService
 from app.services.cache.cache_aside import CacheAsideService
-from app.models.operators import OperatorDocument
+from app.services.operator.operator_auth_service import OperatorAuthService
+from app.services.operator.operator_data_service import OperatorDataService
+from app.services.operator.operator_session_service import OperatorSessionService
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 
@@ -78,9 +78,9 @@ class TestOperatorAuthService:
         operator_id = "op-123"
         user_id = "user-456"
         org_id = "org-789"
-        
+
         mock_api_key_service.validate_key.return_value = (True, MagicMock(user_id=user_id, operator_id=operator_id, organization_id=org_id), None)
-        
+
         operator_doc = MagicMock(spec=OperatorDocument)
         operator_doc.id = operator_id
         operator_doc.user_id = user_id
@@ -88,24 +88,24 @@ class TestOperatorAuthService:
         operator_doc.operator_type = "system"
         operator_doc.bound_web_session_id = "web-session"
         mock_operator_data_service.get_operator.return_value = operator_doc
-        
+
         mock_cache.get_document_with_cache.return_value = {"id": user_id, "name": "test-user"}
-        
+
         session_mock = MagicMock()
         session_mock.id = "session-123"
         mock_session_service.create_operator_session.return_value = session_mock
-        
+
         mock_lifecycle_service.claim_operator_slot.return_value = True
-        
+
         mock_certificate_service.generate_operator_certificate.return_value = {"cert": "CERT", "key": "KEY"}
-        
+
         # Execute
         result = await auth_service.authenticate_operator(
             authorization_header=f"Bearer {api_key}",
             body={},
             request_context={}
         )
-        
+
         # Assert
         assert result["success"] is True
         assert result["operator_session_id"] == "session-123"
@@ -136,7 +136,7 @@ class TestOperatorAuthService:
     async def test_authenticate_via_api_key_unknown_operator(self, auth_service, mock_api_key_service, mock_operator_data_service):
         mock_api_key_service.validate_key.return_value = (True, MagicMock(user_id="u", operator_id="missing"), None)
         mock_operator_data_service.get_operator.return_value = None
-        
+
         result = await auth_service.authenticate_operator(
             authorization_header="Bearer key",
             body={},
@@ -148,7 +148,7 @@ class TestOperatorAuthService:
     async def test_authenticate_via_api_key_user_mismatch(self, auth_service, mock_api_key_service, mock_operator_data_service):
         mock_api_key_service.validate_key.return_value = (True, MagicMock(user_id="user-a", operator_id="op-1"), None)
         mock_operator_data_service.get_operator.return_value = MagicMock(user_id="user-b")
-        
+
         result = await auth_service.authenticate_operator(
             authorization_header="Bearer key",
             body={},
@@ -162,7 +162,7 @@ class TestOperatorAuthService:
         operator_id = "op-123"
         user_id = "user-456"
         api_key = "g8e_device_key"
-        
+
         operator_doc = MagicMock(spec=OperatorDocument)
         operator_doc.id = operator_id
         operator_doc.user_id = user_id
@@ -170,16 +170,16 @@ class TestOperatorAuthService:
         operator_doc.status = OperatorStatus.AVAILABLE
         operator_doc.bound_web_session_id = "web-123"
         mock_operator_data_service.get_operator.return_value = operator_doc
-        
+
         mock_cache.get_document_with_cache.return_value = {"id": user_id}
-        
+
         session_mock = MagicMock()
         session_mock.id = "session-789"
         mock_session_service.create_operator_session.return_value = session_mock
-        
+
         mock_lifecycle_service.claim_operator_slot.return_value = True
         mock_certificate_service.generate_operator_certificate.return_value = {"cert": "C", "key": "K"}
-        
+
         # Execute
         result = await auth_service.register_device_link_operator(
             operator_id=operator_id,
@@ -188,7 +188,7 @@ class TestOperatorAuthService:
             operator_type="system",
             request_context={}
         )
-        
+
         # Assert
         assert result["success"] is True
         assert result["api_key"] == api_key
@@ -200,7 +200,7 @@ class TestOperatorAuthService:
         operator_doc.user_id = "user-1"
         operator_doc.api_key = None
         mock_operator_data_service.get_operator.return_value = operator_doc
-        
+
         result = await auth_service.register_device_link_operator(
             operator_id="op-1",
             user_id="user-1",

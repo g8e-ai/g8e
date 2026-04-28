@@ -15,7 +15,9 @@
 
 import uuid
 from datetime import datetime
+
 from app.constants import (
+    NEW_CASE_ID,
     AuthMethod,
     CaseStatus,
     ComponentName,
@@ -24,19 +26,18 @@ from app.constants import (
     EventType,
     HeartbeatType,
     InvestigationStatus,
-    NEW_CASE_ID,
     OperatorStatus,
     OperatorType,
     Priority,
     Severity,
     TribunalMember,
 )
-from app.models.auth import AuthenticatedUser
 from app.models.agents.tribunal import (
     CandidateCommand,
 )
-from app.models.http_context import BoundOperator, G8eHttpContext
+from app.models.auth import AuthenticatedUser
 from app.models.cases import CaseModel
+from app.models.http_context import BoundOperator, G8eHttpContext
 from app.models.investigations import (
     ConversationHistoryMessage,
     ConversationMessageMetadata,
@@ -47,18 +48,17 @@ from app.models.investigations import (
 )
 from app.models.memory import InvestigationMemory
 from app.models.operators import (
+    HeartbeatEnvironment,
+    HeartbeatNetworkInfo,
+    HeartbeatOSDetails,
     HeartbeatPerformanceMetrics,
+    HeartbeatSnapshot,
     HeartbeatSystemIdentity,
     HeartbeatUptimeInfo,
-    HeartbeatNetworkInfo,
-    OperatorDocument,
-    HeartbeatSnapshot,
-    HeartbeatEnvironment,
     HeartbeatUserDetails,
-    HeartbeatOSDetails,
+    OperatorDocument,
 )
 from app.utils.timestamp import now
-
 
 # ---------------------------------------------------------------------------
 # Investigation Factories
@@ -104,7 +104,7 @@ def create_investigation_data(
         investigation_id = investigation_id or f"test-inv-{unique_suffix}"
         case_id = case_id or f"test-case-{unique_suffix}"
         user_id = user_id or f"test-user-{unique_suffix}"
-    
+
     return InvestigationModel(
         id=investigation_id,
         status=status,
@@ -397,11 +397,12 @@ def create_mock_llm_provider(text: str):
     If text is provided, generate_content returns a mock response with that text.
     """
     from unittest.mock import AsyncMock, MagicMock
-    from app.llm.llm_types import GenerateContentResponse, Candidate, Content, Part
-    
+
+    from app.llm.llm_types import Candidate, Content, GenerateContentResponse, Part
+
     provider = MagicMock()
     provider.generate_content_stream = AsyncMock()
-    
+
     if text is not None:
         mock_response = GenerateContentResponse(
             candidates=[Candidate(content=Content(role="model", parts=[Part.from_text(text)]))]
@@ -409,7 +410,7 @@ def create_mock_llm_provider(text: str):
         provider.generate_content = AsyncMock(return_value=mock_response)
     else:
         provider.generate_content = AsyncMock()
-        
+
     return provider
 
 
@@ -464,7 +465,7 @@ def create_investigation_memory(
         investigation_id = investigation_id or f"test-inv-{unique_suffix}"
         case_id = case_id or f"test-case-{unique_suffix}"
         user_id = user_id or f"test-user-{unique_suffix}"
-    
+
     return InvestigationMemory(
         investigation_id=investigation_id,
         case_id=case_id,

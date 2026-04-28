@@ -11,8 +11,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from app.models.model_configs import get_model_config
 from app.constants import GEMINI_3_1_FLASH_LITE, ThinkingLevel
+from app.models.model_configs import get_model_config
+
 
 def test_gemini_3_1_flash_lite_config():
     """Verify that gemini-3.1-flash-lite-preview is correctly registered and configured."""

@@ -21,31 +21,32 @@ Verifies that when triage returns LOW confidence, the pipeline:
 """
 
 import asyncio
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from app.constants import (
+    LLM_DEFAULT_MAX_OUTPUT_TOKENS,
+    AgentMode,
     EventType,
+    ThinkingLevel,
     TriageComplexityClassification,
     TriageConfidence,
     TriageIntentClassification,
-    AgentMode,
-    LLM_DEFAULT_MAX_OUTPUT_TOKENS,
-    ThinkingLevel,
 )
 from app.llm.llm_types import (
     PrimaryLLMSettings,
     ThinkingConfig,
-    ToolConfig,
     ToolCallingConfig,
+    ToolConfig,
 )
 from app.llm.utils import ModelOverrideResolver
 from app.models.agent import AgentInputs, AgentStreamState
 from app.models.agents.triage import TriageResult
 from app.services.ai.chat_pipeline import ChatPipelineService
 from tests.fakes.factories import (
-    build_g8e_http_context,
     build_enriched_context,
+    build_g8e_http_context,
 )
 from tests.fakes.fake_event_service import FakeEventService as create_mock_event_service
 
@@ -88,7 +89,7 @@ def _make_chat_context(triage_result: TriageResult) -> tuple[AgentInputs, AgentS
     g8e_ctx = build_g8e_http_context(user_id="user-1")
     from app.models.settings import G8eeUserSettings, LLMSettings
     request_settings = G8eeUserSettings(llm=LLMSettings())
-    
+
     inputs = AgentInputs(
         investigation=inv,
         g8e_context=g8e_ctx,
@@ -120,7 +121,7 @@ def _make_chat_context(triage_result: TriageResult) -> tuple[AgentInputs, AgentS
         case_memories=[],
         triage_result=triage_result,
     )
-    
+
     state = AgentStreamState()
     return inputs, state
 
@@ -132,7 +133,7 @@ async def test_run_chat_impl_short_circuits_correctly():
     svc = _make_pipeline()
     g8e_ctx = build_g8e_http_context(investigation_id="inv-1", web_session_id="web-1")
     inputs, state = _make_chat_context(triage_result=LOW_CONFIDENCE_TRIAGE_RESULT)
-    
+
     # Mock _prepare_chat_context to return our prepared context
     svc._prepare_chat_context = AsyncMock(return_value=inputs)
     # Mock get_llm_provider to avoid actual LLM client creation
@@ -150,20 +151,20 @@ async def test_run_chat_impl_short_circuits_correctly():
             llm_lite_model="lite-model",
             user_settings=MagicMock(),
         )
-    
+
     # 1. Verify event publishing
     # We use our FakeEventService which records events
     events = svc.g8ed_event_service.published
-    
+
     # Filter for our investigation and event types
     started_events = [e for e in events if e.investigation_id == "inv-1" and e.event_type == EventType.LLM_CHAT_ITERATION_STARTED]
     chunk_events = [e for e in events if e.investigation_id == "inv-1" and e.event_type == EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED]
     complete_events = [e for e in events if e.investigation_id == "inv-1" and e.event_type == EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED]
-    
+
     assert len(started_events) == 1
     assert len(chunk_events) == 1
     assert len(complete_events) == 1
-    
+
     # Verify STARTED arrives before CHUNK and COMPLETE
     inv_events = [e for e in events if e.investigation_id == "inv-1"]
     event_types = [e.event_type for e in inv_events]
@@ -171,24 +172,28 @@ async def test_run_chat_impl_short_circuits_correctly():
     chunk_idx = event_types.index(EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED)
     complete_idx = event_types.index(EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED)
     assert started_idx < chunk_idx < complete_idx
-    
+
     # Verify Started Payload
-    from app.models.g8ed_client import ChatProcessingStartedPayload, ChatResponseChunkPayload, ChatResponseCompletePayload
+    from app.models.g8ed_client import (
+        ChatProcessingStartedPayload,
+        ChatResponseChunkPayload,
+        ChatResponseCompletePayload,
+    )
     assert isinstance(started_events[0].payload, ChatProcessingStartedPayload)
     assert started_events[0].payload.agent_mode == AgentMode.OPERATOR_NOT_BOUND
-    
+
     # Verify Chunk Payload
     assert isinstance(chunk_events[0].payload, ChatResponseChunkPayload)
     assert chunk_events[0].payload.content == LOW_CONFIDENCE_TRIAGE_RESULT.follow_up_question
-    
+
     # Verify Complete Payload
     assert isinstance(complete_events[0].payload, ChatResponseCompletePayload)
     assert complete_events[0].payload.content == LOW_CONFIDENCE_TRIAGE_RESULT.follow_up_question
     assert complete_events[0].payload.finish_reason == "stop"
-    
+
     # 2. Verify agent was NOT called
     svc.g8e_agent.run_with_sse.assert_not_called()
-    
+
     # 3. Verify persistence
     # _persist_ai_response calls persist_ai_message, which persists the follow-up question
     svc.investigation_service.persist_ai_message.assert_called_once()
@@ -201,20 +206,20 @@ async def test_run_chat_exception_handler_publishes_iteration_failed():
     """Verify that when _run_chat_impl raises an exception, ITERATION_FAILED is published."""
     svc = _make_pipeline()
     g8e_ctx = build_g8e_http_context(investigation_id="inv-1", web_session_id="web-1", user_id="user-1", case_id="case-1")
-    
+
     # Mock _run_chat_impl to raise an exception
     test_error = ValueError("Test error from _run_chat_impl")
     svc._run_chat_impl = AsyncMock(side_effect=test_error)
-    
+
     # Mock ChatTaskManager
     from app.services.ai.chat_task_manager import ChatTaskManager
     mock_task_manager = MagicMock(spec=ChatTaskManager)
     mock_task_manager.track = AsyncMock()
     mock_task_manager.untrack = AsyncMock()
-    
+
     from app.models.settings import G8eeUserSettings, LLMSettings
     user_settings = G8eeUserSettings(llm=LLMSettings())
-    
+
     # Call run_chat - should catch exception and publish ITERATION_FAILED
     await svc.run_chat(
         message="hello",
@@ -231,16 +236,16 @@ async def test_run_chat_exception_handler_publishes_iteration_failed():
         user_settings=user_settings,
         _track_task=True,
     )
-    
+
     # Verify ITERATION_FAILED was published
     events = svc.g8ed_event_service.published
     failed_events = [e for e in events if e.investigation_id == "inv-1" and e.event_type == EventType.LLM_CHAT_ITERATION_FAILED]
-    
+
     assert len(failed_events) == 1
     from app.models.g8ed_client import ChatErrorPayload
     assert isinstance(failed_events[0].payload, ChatErrorPayload)
     assert "Test error from _run_chat_impl" in failed_events[0].payload.error
-    
+
     # Verify task was tracked and untracked
     mock_task_manager.track.assert_called_once_with("inv-1", asyncio.current_task())
     mock_task_manager.untrack.assert_called_once_with("inv-1")
@@ -372,21 +377,20 @@ async def test_run_chat_impl_rejects_unknown_provider_override():
     svc._prepare_chat_context = AsyncMock(return_value=inputs)
 
     user_settings = G8eeUserSettings(llm=LLMSettings())
-    with patch("app.services.ai.chat_pipeline.get_llm_provider"):
-        with pytest.raises(ValueError):
-            await svc._run_chat_impl(
-                message="hello",
-                g8e_context=g8e_ctx,
-                attachments=[],
-                sentinel_mode=True,
-                llm_primary_provider="not-a-real-provider",
-                llm_assistant_provider=None,
-                llm_lite_provider=None,
-                llm_primary_model="main-model",
-                llm_assistant_model="assistant-model",
-                llm_lite_model="lite-model",
-                user_settings=user_settings,
-            )
+    with patch("app.services.ai.chat_pipeline.get_llm_provider"), pytest.raises(ValueError):
+        await svc._run_chat_impl(
+            message="hello",
+            g8e_context=g8e_ctx,
+            attachments=[],
+            sentinel_mode=True,
+            llm_primary_provider="not-a-real-provider",
+            llm_assistant_provider=None,
+            llm_lite_provider=None,
+            llm_primary_model="main-model",
+            llm_assistant_model="assistant-model",
+            llm_lite_model="lite-model",
+            user_settings=user_settings,
+        )
 
 
 async def test_run_chat_impl_selects_lite_provider_for_simple_complexity():
@@ -398,7 +402,6 @@ async def test_run_chat_impl_selects_lite_provider_for_simple_complexity():
     to Anthropic endpoint). With the lite tier wiring, SIMPLE complexity now uses
     the lite provider.
     """
-    from app.constants import LLMProvider
     from app.models.settings import G8eeUserSettings, LLMSettings
 
     svc = _make_pipeline()

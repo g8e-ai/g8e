@@ -16,9 +16,8 @@ from unittest.mock import patch
 
 import pytest
 
-from app.errors import ResourceNotFoundError
 from app.constants import PromptFile
-
+from app.errors import ResourceNotFoundError
 from app.prompts_data.loader import (
     PROMPTS_DIR,
     clear_cache,

@@ -11,24 +11,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from app.constants import (
     EventType,
+    MessageSender,
     TriageComplexityClassification,
     TriageConfidence,
     TriageIntentClassification,
-    MessageSender,
 )
 from app.models.agents.triage import TriageResult
 from app.models.g8ed_client import TriageClarificationQuestionsPayload
 from tests.fakes.factories import (
     build_g8e_http_context,
-    build_enriched_context,
 )
-from tests.fakes.fake_event_service import FakeEventService as create_mock_event_service
-from .test_chat_pipeline_triage_delivery import _make_pipeline, _make_chat_context
+
+from .test_chat_pipeline_triage_delivery import _make_chat_context, _make_pipeline
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
 
@@ -46,9 +46,9 @@ async def test_run_chat_impl_emits_clarifying_questions():
     svc = _make_pipeline()
     g8e_ctx = build_g8e_http_context(investigation_id="inv-1", web_session_id="web-1")
     inputs, state = _make_chat_context(triage_result=CLARIFYING_QUESTIONS_RESULT)
-    
+
     svc._prepare_chat_context = AsyncMock(return_value=inputs)
-    
+
     with patch("app.services.ai.chat_pipeline.get_llm_provider"):
         await svc._run_chat_impl(
             message="hello",
@@ -63,15 +63,15 @@ async def test_run_chat_impl_emits_clarifying_questions():
             llm_lite_model="lite-model",
             user_settings=MagicMock(),
         )
-    
+
     # 1. Verify event publishing
     events = svc.g8ed_event_service.published
     clarify_events = [e for e in events if e.investigation_id == "inv-1" and e.event_type == EventType.AI_TRIAGE_CLARIFICATION_QUESTIONS]
-    
+
     assert len(clarify_events) == 1
     assert isinstance(clarify_events[0].payload, TriageClarificationQuestionsPayload)
     assert clarify_events[0].payload.questions == CLARIFYING_QUESTIONS_RESULT.clarifying_questions
-    
+
     # 2. Verify persistence to conversation history (ledger)
     svc.investigation_service.investigation_data_service.add_chat_message.assert_called_once()
     args, kwargs = svc.investigation_service.investigation_data_service.add_chat_message.call_args
@@ -91,13 +91,13 @@ async def test_run_chat_impl_handles_both_follow_up_and_clarifying_questions():
         follow_up_question="Follow up?",
         clarifying_questions=["Clarify 1?", "Clarify 2?", "Clarify 3?"],
     )
-    
+
     svc = _make_pipeline()
     g8e_ctx = build_g8e_http_context(investigation_id="inv-1", web_session_id="web-1")
     inputs, state = _make_chat_context(triage_result=result_with_both)
-    
+
     svc._prepare_chat_context = AsyncMock(return_value=inputs)
-    
+
     with patch("app.services.ai.chat_pipeline.get_llm_provider"):
         await svc._run_chat_impl(
             message="hello",
@@ -112,13 +112,13 @@ async def test_run_chat_impl_handles_both_follow_up_and_clarifying_questions():
             llm_lite_model="lite-model",
             user_settings=MagicMock(),
         )
-    
+
     # Verify follow-up was processed (via events)
     events = svc.g8ed_event_service.published
     chunk_events = [e for e in events if e.event_type == EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED]
     assert len(chunk_events) == 1
     assert chunk_events[0].payload.content == "Follow up?"
-    
+
     # Verify clarifying questions were also processed
     clarify_events = [e for e in events if e.event_type == EventType.AI_TRIAGE_CLARIFICATION_QUESTIONS]
     assert len(clarify_events) == 1

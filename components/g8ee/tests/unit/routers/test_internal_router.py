@@ -11,43 +11,45 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
 import re
 from unittest.mock import AsyncMock, MagicMock, patch
-from app.constants import ComponentName, NEW_CASE_ID
-from app.routers.internal_router import (
-    internal_chat,
-    stop_ai_processing,
-    operator_approval_respond,
-    execute_direct_command,
-    update_case,
-    delete_case,
-    _generate_and_update_title,
-    create_operator_slot,
-    claim_operator_slot,
-    bind_operators,
-    unbind_operators,
-)
+
+import pytest
+
+from app.constants import NEW_CASE_ID, ComponentName
+from app.errors import ResourceNotFoundError
+from app.models.agents.title_generator import CaseTitleResult
+from app.models.cases import CaseUpdateRequest
+from app.models.http_context import BoundOperator, G8eHttpContext
 from app.models.internal_api import (
     ChatMessageRequest,
-    StopAIRequest,
-    OperatorApprovalResponse,
     DirectCommandRequest,
-    OperatorSlotCreationRequest,
-    OperatorSlotClaimRequest,
+    OperatorApprovalResponse,
     OperatorBindRequest,
+    OperatorSlotClaimRequest,
+    OperatorSlotCreationRequest,
     OperatorUnbindRequest,
+    StopAIRequest,
 )
-from app.models.cases import CaseUpdateRequest
-from app.models.agents.title_generator import CaseTitleResult
-from app.models.http_context import BoundOperator, G8eHttpContext
+from app.routers.internal_router import (
+    _generate_and_update_title,
+    bind_operators,
+    claim_operator_slot,
+    create_operator_slot,
+    delete_case,
+    execute_direct_command,
+    internal_chat,
+    operator_approval_respond,
+    stop_ai_processing,
+    unbind_operators,
+    update_case,
+)
 from app.services.ai.chat_task_manager import BackgroundTaskManager
-from app.errors import ResourceNotFoundError
 from tests.fakes.factories import build_case_model, create_investigation_data
 
 # Canonical API key format from shared/constants/api_key_patterns.json
-API_KEY_OPERATOR_REGEX = re.compile(r'^g8e_[a-f0-9]{8}_[a-f0-9]{64}$')
-API_KEY_REGULAR_REGEX = re.compile(r'^g8e_[a-f0-9]{64}$')
+API_KEY_OPERATOR_REGEX = re.compile(r"^g8e_[a-f0-9]{8}_[a-f0-9]{64}$")
+API_KEY_REGULAR_REGEX = re.compile(r"^g8e_[a-f0-9]{64}$")
 
 @pytest.fixture
 def g8e_context():
@@ -64,7 +66,7 @@ def g8e_context():
 async def test_internal_chat_new_case(g8e_context, task_tracker):
     g8e_context.case_id = NEW_CASE_ID
     request = ChatMessageRequest(message="test message", sentinel_mode=True)
-    
+
     # Mock dependencies
     mock_platform_settings = MagicMock()
     mock_user_settings = MagicMock()
@@ -74,12 +76,12 @@ async def test_internal_chat_new_case(g8e_context, task_tracker):
     mock_investigation_service = MagicMock()
     mock_attachment_service = MagicMock()
     mock_event_service = MagicMock()
-    
+
     mock_case = build_case_model(case_id="case-123", user_id="user-123")
     mock_case_service.create_case = AsyncMock(return_value=mock_case)
     mock_case_service.update_case = AsyncMock(return_value=mock_case)
     mock_case_service.publish_case_update_sse = AsyncMock()
-    
+
     mock_inv = create_investigation_data(investigation_id="inv-123", case_id="case-123")
     mock_investigation_service.create_investigation = AsyncMock(return_value=mock_inv)
     mock_investigation_service.update_investigation = AsyncMock()
@@ -108,7 +110,7 @@ async def test_internal_chat_new_case(g8e_context, task_tracker):
 async def test_internal_chat_missing_investigation(g8e_context, task_tracker):
     g8e_context.investigation_id = None
     request = ChatMessageRequest(message="test message", sentinel_mode=True)
-    
+
     mock_platform_settings = MagicMock()
     mock_user_settings = MagicMock()
     mock_chat_pipeline = MagicMock()
@@ -244,13 +246,13 @@ async def test_execute_direct_command(g8e_context):
     mock_exec_service = MagicMock()
     mock_exec_service.send_command_to_operator = AsyncMock()
     mock_exec_service.send_direct_exec_audit_event = AsyncMock()
-    
+
     response = await execute_direct_command(
         request=request,
         g8e_context=g8e_context,
         operator_data_service=mock_exec_service
     )
-    
+
     assert response.success is True
     mock_exec_service.send_command_to_operator.assert_called_once()
     mock_exec_service.send_direct_exec_audit_event.assert_called_once()
@@ -280,14 +282,14 @@ async def test_update_case_with_sse(g8e_context):
     mock_case = build_case_model(case_id=case_id, title="New Title")
     mock_case_service.update_case = AsyncMock(return_value=mock_case)
     mock_case_service.publish_case_update_sse = AsyncMock()
-    
+
     response = await update_case(
         case_id=case_id,
         updates=updates,
         case_service=mock_case_service,
         g8e_context=g8e_context
     )
-    
+
     assert response.success is True
     assert response.case.title == "New Title"
     call_kwargs = mock_case_service.publish_case_update_sse.call_args.kwargs
@@ -308,10 +310,10 @@ async def test_delete_case_success(g8e_context):
     mock_cache = MagicMock()
     mock_cache.query_documents = AsyncMock(return_value=[])
     mock_cache.delete_document = AsyncMock()
-    
+
     mock_case = build_case_model(case_id=case_id, user_id="user-123")
     mock_case_service.get_case.return_value = mock_case
-    
+
     await delete_case(
         case_id=case_id,
         case_service=mock_case_service,
@@ -319,7 +321,7 @@ async def test_delete_case_success(g8e_context):
         cache_aside_service=mock_cache,
         g8e_context=g8e_context
     )
-    
+
     mock_case_service.delete_case.assert_called_once_with(case_id)
 
 @pytest.mark.asyncio
@@ -332,7 +334,7 @@ async def test_delete_case_not_found_idempotent(g8e_context):
         resource_id=case_id
     ))
     mock_case_service.delete_case = AsyncMock()
-    
+
     await delete_case(
         case_id=case_id,
         case_service=mock_case_service,
@@ -340,7 +342,7 @@ async def test_delete_case_not_found_idempotent(g8e_context):
         cache_aside_service=MagicMock(),
         g8e_context=g8e_context
     )
-    
+
     mock_case_service.delete_case.assert_not_called()
 
 @pytest.mark.asyncio
@@ -354,14 +356,14 @@ async def test_create_operator_slot_success(g8e_context):
         name_prefix="operator",
         is_g8e_node=False,
     )
-    
+
     mock_operator_data_service = MagicMock()
     mock_operator_data_service.create_operator = AsyncMock(return_value=True)
     mock_settings_service = MagicMock()
     mock_settings_service.update_g8ep_operator_api_key = AsyncMock(return_value=None)
     mock_api_key_service = MagicMock()
     mock_api_key_service.issue_operator_key = AsyncMock(return_value=True)
-    
+
     response = await create_operator_slot(
         request=request,
         operator_data_service=mock_operator_data_service,
@@ -369,12 +371,12 @@ async def test_create_operator_slot_success(g8e_context):
         api_key_service=mock_api_key_service,
         g8e_context=g8e_context
     )
-    
+
     assert response.success is True
     assert response.operator_id is not None
     mock_operator_data_service.create_operator.assert_called_once()
     mock_settings_service.update_g8ep_operator_api_key.assert_not_called()
-    
+
     # Verify API key format in response matches canonical pattern
     assert API_KEY_OPERATOR_REGEX.match(response.api_key), \
         f"API key {response.api_key} does not match canonical format g8e_[8hex]_[64hex]"
@@ -390,14 +392,14 @@ async def test_create_operator_slot_g8ep_persists_api_key(g8e_context):
         name_prefix="operator",
         is_g8e_node=True,
     )
-    
+
     mock_operator_data_service = MagicMock()
     mock_operator_data_service.create_operator = AsyncMock(return_value=True)
     mock_settings_service = MagicMock()
     mock_settings_service.update_g8ep_operator_api_key = AsyncMock(return_value=None)
     mock_api_key_service = MagicMock()
     mock_api_key_service.issue_operator_key = AsyncMock(return_value=True)
-    
+
     response = await create_operator_slot(
         request=request,
         operator_data_service=mock_operator_data_service,
@@ -405,11 +407,11 @@ async def test_create_operator_slot_g8ep_persists_api_key(g8e_context):
         api_key_service=mock_api_key_service,
         g8e_context=g8e_context
     )
-    
+
     assert response.success is True
     assert response.operator_id is not None
     mock_operator_data_service.create_operator.assert_called_once()
-    
+
     # Verify issue_operator_key was called with is_g8ep=True and settings_service
     mock_api_key_service.issue_operator_key.assert_called_once()
     call_args = mock_api_key_service.issue_operator_key.call_args
@@ -428,16 +430,16 @@ async def test_claim_operator_slot_success(g8e_context):
         bound_web_session_id="web-session-123",
         operator_type="CLOUD",
     )
-    
+
     mock_operator_lifecycle_service = MagicMock()
     mock_operator_lifecycle_service.claim_operator_slot = AsyncMock(return_value=True)
-    
+
     response = await claim_operator_slot(
         request=request,
         operator_lifecycle_service=mock_operator_lifecycle_service,
         g8e_context=g8e_context
     )
-    
+
     assert response.success is True
     mock_operator_lifecycle_service.claim_operator_slot.assert_called_once()
 
@@ -448,7 +450,7 @@ async def test_bind_operators_success(g8e_context):
         web_session_id="web-session-123",
         user_id="user-123",
     )
-    
+
     mock_operator_data_service = MagicMock()
     mock_operator = MagicMock()
     mock_operator.user_id = "user-123"
@@ -457,13 +459,13 @@ async def test_bind_operators_success(g8e_context):
     mock_result = MagicMock()
     mock_result.success = True
     mock_operator_data_service.cache.update_document = AsyncMock(return_value=mock_result)
-    
+
     response = await bind_operators(
         request=request,
         operator_data_service=mock_operator_data_service,
         g8e_context=g8e_context
     )
-    
+
     assert response.success is True
     assert response.bound_count == 2
     assert mock_operator_data_service.cache.update_document.call_count == 2
@@ -475,18 +477,18 @@ async def test_bind_operators_unauthorized(g8e_context):
         web_session_id="web-session-123",
         user_id="user-123",
     )
-    
+
     mock_operator_data_service = MagicMock()
     mock_operator = MagicMock()
     mock_operator.user_id = "different-user"
     mock_operator_data_service.get_operator = AsyncMock(return_value=mock_operator)
-    
+
     response = await bind_operators(
         request=request,
         operator_data_service=mock_operator_data_service,
         g8e_context=g8e_context
     )
-    
+
     assert response.success is False
     assert response.failed_count == 1
     assert len(response.errors) == 1
@@ -499,7 +501,7 @@ async def test_unbind_operators_success(g8e_context):
         web_session_id="web-session-123",
         user_id="user-123",
     )
-    
+
     mock_operator_data_service = MagicMock()
     mock_operator = MagicMock()
     mock_operator.user_id = "user-123"
@@ -508,13 +510,13 @@ async def test_unbind_operators_success(g8e_context):
     mock_result = MagicMock()
     mock_result.success = True
     mock_operator_data_service.cache.update_document = AsyncMock(return_value=mock_result)
-    
+
     response = await unbind_operators(
         request=request,
         operator_data_service=mock_operator_data_service,
         g8e_context=g8e_context
     )
-    
+
     assert response.success is True
     assert response.unbound_count == 2
     assert response.failed_count == 0
@@ -528,18 +530,18 @@ async def test_unbind_operators_unauthorized(g8e_context):
         web_session_id="web-session-123",
         user_id="user-123",
     )
-    
+
     mock_operator_data_service = MagicMock()
     mock_operator = MagicMock()
     mock_operator.user_id = "different-user"
     mock_operator_data_service.get_operator = AsyncMock(return_value=mock_operator)
-    
+
     response = await unbind_operators(
         request=request,
         operator_data_service=mock_operator_data_service,
         g8e_context=g8e_context
     )
-    
+
     assert response.success is False
     assert response.unbound_count == 0
     assert response.failed_count == 1

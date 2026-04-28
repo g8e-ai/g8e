@@ -20,26 +20,26 @@ Verifies that:
 3. SSE events (STATE_UPDATED, SLASH_TIERN) are emitted on resolution.
 """
 
-import pytest
 import asyncio
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime, UTC
+
+import pytest
 
 from app.constants import (
-    CommandErrorType,
     CommandGenerationOutcome,
     ComponentName,
     EventType,
     ExecutionStatus,
     OperatorToolName,
 )
+from app.llm.llm_types import ToolCall
 from app.models.agents.tribunal import CommandGenerationResult
-from app.models.reputation import ReputationState, StakeResolution, SlashTier
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
+from app.models.reputation import SlashTier, StakeResolution
 from app.models.tool_results import CommandExecutionResult, FileEditResult
 from app.services.ai.agent_tool_loop import orchestrate_tool_execution
-from app.llm.llm_types import ToolCall
 from tests.fakes.agent_helpers import (
     make_agent_run_args,
     make_g8ed_event_service,
@@ -55,7 +55,7 @@ class TestReputationPipelineIntegration:
         executor = MagicMock()
         executor.reputation_service = AsyncMock()
         executor.chat_task_manager = MagicMock()
-        
+
         # Capture the detached task for manual execution/awaiting
         detached_tasks = []
         def track_detached(task_id, task):
@@ -64,14 +64,14 @@ class TestReputationPipelineIntegration:
 
         executor.chat_task_manager.track_detached.side_effect = track_detached
         executor._detached_tasks = detached_tasks
-        
+
         return executor
 
     async def test_successful_tribunal_command_triggers_resolution(self, mock_tool_executor):
         """A successful Tribunal command should trigger reputation resolution."""
         inputs, _ = make_agent_run_args()
         event_svc = make_g8ed_event_service()
-        
+
         # Setup context
         g8e_context = G8eHttpContext(
             case_id="rep-test-case",
@@ -86,14 +86,14 @@ class TestReputationPipelineIntegration:
             user_id="rep-test-user",
             sentinel_mode=False
         )
-        
+
         # Setup tool call
         tool_call = ToolCall(
             id="call_123",
             name=OperatorToolName.RUN_COMMANDS,
             args={"request": "ls"}
         )
-        
+
         # Setup results
         gen_result = CommandGenerationResult(
             correlation_id="tribunal_123",
@@ -109,9 +109,9 @@ class TestReputationPipelineIntegration:
             exit_code=0,
             execution_status=ExecutionStatus.COMPLETED
         )
-        
+
         mock_tool_executor.execute_tool_call = AsyncMock(return_value=exec_result)
-        
+
         # Mock reputation resolution return
         resolution = StakeResolution(
             id="tribunal_123:axiom",
@@ -130,7 +130,7 @@ class TestReputationPipelineIntegration:
         # Execute loop with Tribunal mock
         with patch("app.services.ai.agent_tool_loop.TribunalInvoker.run", new_callable=AsyncMock) as mock_tribunal:
             mock_tribunal.return_value = (MagicMock(), gen_result)
-            
+
             await orchestrate_tool_execution(
                 tool_call=tool_call,
                 tool_executor=mock_tool_executor,
@@ -161,7 +161,7 @@ class TestReputationPipelineIntegration:
         """A failed Tribunal command (Tier 2) should trigger resolution with slashing."""
         inputs, _ = make_agent_run_args()
         event_svc = make_g8ed_event_service()
-        
+
         g8e_context = G8eHttpContext(
             case_id="slash-case",
             investigation_id="slash-inv",
@@ -176,7 +176,7 @@ class TestReputationPipelineIntegration:
             sentinel_mode=False
         )
         tool_call = ToolCall(id="call_456", name=OperatorToolName.RUN_COMMANDS, args={"request": "rm"})
-        
+
         gen_result = CommandGenerationResult(
             correlation_id="tribunal_456",
             outcome=CommandGenerationOutcome.VERIFIED,
@@ -191,9 +191,9 @@ class TestReputationPipelineIntegration:
             exit_code=1,
             execution_status=ExecutionStatus.FAILED
         )
-        
+
         mock_tool_executor.execute_tool_call = AsyncMock(return_value=exec_result)
-        
+
         resolution = StakeResolution(
             id="tribunal_456:axiom",
             investigation_id="slash-inv",
@@ -231,7 +231,7 @@ class TestReputationPipelineIntegration:
         """Non-Tribunal tools (e.g. file_read) should never trigger reputation resolution."""
         inputs, _ = make_agent_run_args()
         event_svc = make_g8ed_event_service()
-        
+
         # file_read is an operator tool but not RUN_COMMANDS (Tribunal)
         tool_call = ToolCall(id="call_abc", name=OperatorToolName.FILE_READ, args={"file_path": "/tmp/test"})
         mock_tool_executor.execute_tool_call = AsyncMock(return_value=FileEditResult(

@@ -12,9 +12,9 @@
 # limitations under the License.
 
 import pytest
+
 from app.constants import ScrubType
 from app.models.base import G8eBaseModel
-
 from app.security.sentinel_scrubber import (
     ScrubResult,
     SentinelConfig,
@@ -249,12 +249,13 @@ class TestPhase3PII:
         """
         import ast
         from pathlib import Path
+
         import app.security.sentinel_scrubber as ss_module
-        
+
         filepath = Path(ss_module.__file__)
-        with open(filepath, "r") as f:
+        with open(filepath) as f:
             tree = ast.parse(f.read())
-            
+
         for node in ast.walk(tree):
             if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "RegexScrubber":
                 if len(node.args) >= 2 and isinstance(node.args[1], ast.Constant) and isinstance(node.args[1].value, str):

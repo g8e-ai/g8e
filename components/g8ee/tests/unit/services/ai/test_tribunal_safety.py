@@ -11,19 +11,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, ANY
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
+import pytest
+
+from app.constants import AuditorReason, ComponentName
+from app.models.agent import OperatorContext
+from app.models.agents.tribunal import TribunalAuditorFailedError, TribunalGenerationFailedError
+from app.models.http_context import G8eHttpContext
 from app.services.ai.auditor_service import run_auditor
-from app.services.ai.generator import TribunalEmitter
-from app.services.ai.generator import generate_command
+from app.services.ai.generator import TribunalEmitter, generate_command
+from app.utils.agent_persona_loader import get_agent_persona
 from app.utils.command import normalise_command
 from app.utils.safety import validate_command_safety
-from app.models.agent import OperatorContext
-from app.models.agents.tribunal import TribunalGenerationFailedError, TribunalAuditorFailedError
-from app.constants import AuditorReason, ComponentName
-from app.utils.agent_persona_loader import get_agent_persona
-from app.models.http_context import G8eHttpContext
+
 
 def _make_mock_operator_context(os="linux"):
     return OperatorContext(
@@ -117,7 +118,7 @@ class TestValidateCommandSafety:
         from app.utils.whitelist_validator import CommandValidationResult
         mock_whitelist = MagicMock()
         mock_whitelist.validate_command.return_value = CommandValidationResult(is_valid=True, command="uptime")
-        
+
         result = validate_command_safety(
             "uptime",
             whitelisting_enabled=True,
@@ -126,7 +127,7 @@ class TestValidateCommandSafety:
             whitelisted_commands_override=["uptime", "df"],
             whitelist_validator=mock_whitelist,
         )
-        
+
         assert result.is_safe
         assert result.error_message is None
         mock_whitelist.validate_command.assert_called_once_with("uptime", ANY, allowed_commands_override=["uptime", "df"])
@@ -140,10 +141,10 @@ class TestAuditorSafety:
         mock_provider = MagicMock()
         mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
         emitter = TribunalEmitter(None, _make_mock_g8e_context())
-        
+
         with patch("app.services.ai.auditor_service.get_model_config") as mock_config:
             mock_config.return_value.supports_structured_output = False
-            
+
             from app.models.agents.tribunal import VoteBreakdown
             vote_breakdown = VoteBreakdown(
                 candidates_by_member={},
@@ -169,7 +170,7 @@ class TestAuditorSafety:
                     command_constraints_message="",
                     auditor_persona=get_agent_persona("auditor"),
                 )
-            
+
             assert exc_info.value.reason == AuditorReason.NO_VALID_REVISION
             assert "technical safety failure" in exc_info.value.error.lower()
 
@@ -179,21 +180,21 @@ class TestGenerateCommandSafety:
         # Mock successful generation of an unsafe command
         mock_response = MagicMock()
         mock_response.text = "sudo ls"
-        
+
         mock_provider = MagicMock()
         mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
-        
+
         mock_settings = MagicMock()
         mock_settings.llm.llm_command_gen_enabled = True
         mock_settings.llm.llm_command_gen_auditor = False
         mock_settings.llm.llm_command_gen_passes = 1
-        
+
         with patch("app.services.ai.generator.get_llm_provider", return_value=mock_provider), \
              patch("app.services.ai.generator._resolve_model", return_value="test-model"), \
              patch("app.services.ai.generator.get_model_config") as mock_config:
-            
+
             mock_config.return_value.supports_structured_output = False
-            
+
             with pytest.raises(TribunalGenerationFailedError) as exc_info:
                 await generate_command(
                     request="run as root",
@@ -208,7 +209,7 @@ class TestGenerateCommandSafety:
                     reputation_data_service=MagicMock(),
                     auditor_hmac_key="test-key",
                 )
-            
+
             assert "safety validation failed" in exc_info.value.pass_errors[0].lower()
 
 class TestStructuredOutputSupport:
@@ -217,16 +218,16 @@ class TestStructuredOutputSupport:
         import json
         mock_response = MagicMock()
         mock_response.text = json.dumps({"command": "ls -la"})
-        
+
         mock_provider = MagicMock()
         mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
         emitter = TribunalEmitter(None, _make_mock_g8e_context())
-        
+
         from app.services.ai.generator import _run_generation_pass
-        
+
         with patch("app.services.ai.generator.get_model_config") as mock_config:
             mock_config.return_value.supports_structured_output = True
-            
+
             result = await _run_generation_pass(
                 provider=mock_provider,
                 model="test-model",
@@ -238,5 +239,5 @@ class TestStructuredOutputSupport:
                 pass_errors=[],
                 command_constraints_message="",
             )
-            
+
             assert result == "ls -la"

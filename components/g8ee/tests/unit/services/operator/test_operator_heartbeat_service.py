@@ -21,9 +21,9 @@ from app.constants import EventType, HeartbeatType, OperatorStatus, PubSubChanne
 from app.errors import ConfigurationError
 from app.models.events import BackgroundEvent, SessionEvent
 from app.models.operators import (
+    HeartbeatSnapshot,
     HeartbeatSSEEnvelope,
     OperatorDocument,
-    HeartbeatSnapshot,
 )
 from app.models.pubsub_messages import G8eoHeartbeatPayload
 from app.services.operator.heartbeat_service import HeartbeatSnapshotService

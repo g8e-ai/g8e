@@ -17,16 +17,15 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.constants import OperatorStatus, ComponentName
+from app.clients.http_client import HTTPClient
+from app.constants import OperatorStatus
 from app.errors import ExternalServiceError, ValidationError
+from app.models.cache import CacheOperationResult
 from app.models.operators import (
     CommandResultRecord,
     OperatorDocument,
 )
 from app.services.operator.operator_data_service import OperatorDataService
-from app.models.cache import CacheOperationResult
-from app.clients.http_client import HTTPClient 
-from app.utils.timestamp import now
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 

@@ -23,7 +23,6 @@ import sys
 
 import pytest
 
-from app.models.settings import G8eePlatformSettings
 from app.constants import LogLevel
 from app.logging import (
     PII_FIELDS,
@@ -36,6 +35,7 @@ from app.logging import (
     register_component_logger,
     setup_logging,
 )
+from app.models.settings import G8eePlatformSettings
 
 pytestmark = pytest.mark.unit
 

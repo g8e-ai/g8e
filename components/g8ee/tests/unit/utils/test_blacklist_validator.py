@@ -25,7 +25,6 @@ import pytest
 from app.errors import ConfigurationError
 from app.utils.blacklist_validator import (
     CommandBlacklistValidator,
-    get_blacklist_validator,
 )
 
 pytestmark = [pytest.mark.unit]

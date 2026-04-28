@@ -27,13 +27,14 @@ callback into ``g8e_agent.run_with_sse`` such that:
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from app.constants import (
+    LLM_DEFAULT_MAX_OUTPUT_TOKENS,
     AgentMode,
     EventType,
-    LLM_DEFAULT_MAX_OUTPUT_TOKENS,
     ThinkingLevel,
     TriageComplexityClassification,
     TriageConfidence,
@@ -51,8 +52,8 @@ from app.models.agents.triage import TriageResult
 from app.models.investigations import AIResponseMetadata
 from app.models.settings import G8eeUserSettings, LLMSettings
 from app.services.ai.chat_pipeline import ChatPipelineService
-from tests.fakes.fake_event_service import FakeEventService
 from tests.fakes.factories import build_enriched_context, build_g8e_http_context
+from tests.fakes.fake_event_service import FakeEventService
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
 
@@ -138,7 +139,7 @@ def _make_ctx(triage_result: TriageResult = HIGH_CONFIDENCE_COMPLEX_TRIAGE) -> t
         user_memories=[],
         case_memories=[],
     )
-    
+
     state = AgentStreamState()
     return inputs, state
 

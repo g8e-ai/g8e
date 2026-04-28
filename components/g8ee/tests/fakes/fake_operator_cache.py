@@ -13,7 +13,7 @@
 
 """Typed fake for OperatorDataServiceProtocol."""
 
-from app.constants import OperatorStatus, OperatorHistoryEventType, ComponentName
+from app.constants import ComponentName, OperatorHistoryEventType, OperatorStatus
 from app.models.cache import CacheOperationResult
 from app.services.protocols import OperatorDataServiceProtocol
 

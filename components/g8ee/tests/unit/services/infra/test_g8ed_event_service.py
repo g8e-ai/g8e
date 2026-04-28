@@ -15,7 +15,7 @@ import pytest
 
 from app.constants import EVENT_PUBLISH_SUCCESS, EventType
 from app.errors import NetworkError
-from app.models.base import G8eBaseModel, Field
+from app.models.base import Field, G8eBaseModel
 from app.models.events import BackgroundEvent, SessionEvent
 from app.services.infra.g8ed_event_service import EventService
 from app.services.protocols import EventServiceProtocol

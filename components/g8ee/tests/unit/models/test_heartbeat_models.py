@@ -28,17 +28,18 @@ Coverage:
 """
 
 import pytest
+
 from app.constants import EventType, HeartbeatType, OperatorStatus, VersionStability
 from app.models.operators import (
     HeartbeatFingerprintDetails,
     HeartbeatNetworkInfo,
     HeartbeatNetworkInterface,
     HeartbeatPerformanceMetrics,
+    HeartbeatSnapshot,
     HeartbeatSSEEnvelope,
     HeartbeatSystemIdentity,
     HeartbeatUptimeInfo,
     HeartbeatVersionInfo,
-    HeartbeatSnapshot,
     _coerce_heartbeat_type,
 )
 from app.models.pubsub_messages import (

@@ -22,21 +22,21 @@ Covers:
 - Resilience to malformed JSON or empty model responses
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
 
-from tests.fakes.fake_llm_provider import FakeLLMProvider
+import pytest
+
 from app.constants import (
+    AgentMode,
     TriageComplexityClassification,
     TriageConfidence,
     TriageIntentClassification,
     TriageRequestPosture,
-    AgentMode,
 )
-
-from app.models.attachments import AttachmentMetadata
 from app.models.agents.triage import TriageRequest
+from app.models.attachments import AttachmentMetadata
 from app.services.ai.triage import TriageAgent
+from tests.fakes.fake_llm_provider import FakeLLMProvider
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
 
@@ -48,8 +48,8 @@ def fake_provider():
 
 @pytest.fixture
 def mock_settings():
-    from app.models.settings import G8eeUserSettings, LLMSettings
     from app.constants import LLMProvider
+    from app.models.settings import G8eeUserSettings, LLMSettings
     return G8eeUserSettings(
         llm=LLMSettings(
             primary_provider=LLMProvider.OLLAMA,
@@ -102,14 +102,14 @@ async def test_triage_escalates_immediately_if_message_empty(mock_settings):
 # ---------------------------------------------------------------------------
 
 async def test_triage_returns_simple_classification_from_llm(fake_provider, mock_settings):
-    fake_provider.add_response('''{
+    fake_provider.add_response("""{
             "intent_summary": "factual question about DNS",
             "intent": "information",
             "intent_confidence": "high",
             "complexity": "simple",
             "complexity_confidence": "high",
             "follow_up_question": null
-        }''')
+        }""")
 
     agent = TriageAgent()
     request = TriageRequest(
@@ -129,14 +129,14 @@ async def test_triage_returns_simple_classification_from_llm(fake_provider, mock
 
 
 async def test_triage_returns_complex_classification_from_llm(fake_provider, mock_settings):
-    fake_provider.add_response('''{
+    fake_provider.add_response("""{
             "intent_summary": "request to debug nginx",
             "intent": "action",
             "intent_confidence": "high",
             "complexity": "complex",
             "complexity_confidence": "high",
             "follow_up_question": null
-        }''')
+        }""")
 
     agent = TriageAgent()
     request = TriageRequest(
@@ -155,14 +155,14 @@ async def test_triage_returns_complex_classification_from_llm(fake_provider, moc
 
 
 async def test_triage_handles_low_confidence_and_follow_up(fake_provider, mock_settings):
-    fake_provider.add_response('''{
+    fake_provider.add_response("""{
             "intent_summary": "ambiguous request",
             "intent": "unknown",
             "intent_confidence": "low",
             "complexity": "complex",
             "complexity_confidence": "low",
             "follow_up_question": "Could you clarify which system you are referring to?"
-        }''')
+        }""")
 
     agent = TriageAgent()
     request = TriageRequest(
@@ -245,7 +245,7 @@ async def test_triage_defaults_to_complex_on_llm_exception(fake_provider, mock_s
 
 
 async def test_triage_cleans_markdown_json_blocks(fake_provider, mock_settings):
-    fake_provider.add_response('''```json
+    fake_provider.add_response("""```json
         {
             "intent_summary": "simple greeting",
             "intent": "information",
@@ -254,7 +254,7 @@ async def test_triage_cleans_markdown_json_blocks(fake_provider, mock_settings):
             "complexity_confidence": "high",
             "follow_up_question": null
         }
-        ```''')
+        ```""")
 
     agent = TriageAgent()
     request = TriageRequest(
@@ -277,7 +277,7 @@ async def test_triage_cleans_markdown_json_blocks(fake_provider, mock_settings):
 
 async def test_triage_parses_request_posture_from_llm(fake_provider, mock_settings):
     """When the LLM emits request_posture, it must be parsed into the result."""
-    fake_provider.add_response('''{
+    fake_provider.add_response("""{
         "intent_summary": "user pressing hard after a denial",
         "intent": "action",
         "intent_confidence": "high",
@@ -286,7 +286,7 @@ async def test_triage_parses_request_posture_from_llm(fake_provider, mock_settin
         "request_posture": "adversarial",
         "posture_confidence": "high",
         "follow_up_question": null
-    }''')
+    }""")
 
     agent = TriageAgent()
     request = TriageRequest(
@@ -306,14 +306,14 @@ async def test_triage_parses_request_posture_from_llm(fake_provider, mock_settin
 async def test_triage_defaults_posture_to_normal_when_field_missing(fake_provider, mock_settings):
     """Existing LLM outputs that predate the posture field must still parse, with
     a safe default (normal / low confidence)."""
-    fake_provider.add_response('''{
+    fake_provider.add_response("""{
         "intent_summary": "factual question",
         "intent": "information",
         "intent_confidence": "high",
         "complexity": "simple",
         "complexity_confidence": "high",
         "follow_up_question": null
-    }''')
+    }""")
 
     agent = TriageAgent()
     request = TriageRequest(

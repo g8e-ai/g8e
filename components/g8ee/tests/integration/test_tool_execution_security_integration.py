@@ -18,18 +18,19 @@ Tests the real security validation in AIToolService.execute_tool_call.
 This is a deterministic integration test with no LLM calls.
 """
 
-import pytest
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
+import pytest
 
 from app.constants import OperatorStatus
+from app.evals.runner.metrics import EvalRow
 from app.llm.llm_types import ToolCall
 from app.models.settings import G8eeUserSettings, LLMSettings
-from app.evals.runner.metrics import EvalRow
 from tests.fakes.factories import (
-    build_g8e_http_context,
-    build_enriched_investigation,
     build_bound_operator,
+    build_enriched_investigation,
+    build_g8e_http_context,
     build_production_operator_document,
 )
 from tests.integration.conftest import auto_approve_pending
@@ -54,7 +55,7 @@ async def test_orchestrate_tool_execution_security_violation(
 
     This tests the REAL security validation in AIToolService.execute_tool_call.
     """
-    start_time = datetime.now(timezone.utc)
+    start_time = datetime.now(UTC)
     operator_doc = build_production_operator_document(
         operator_id="op-test-001",
         hostname="test-server-01",
@@ -101,7 +102,7 @@ async def test_orchestrate_tool_execution_security_violation(
     await auto_approve_pending(approval_service)
 
     passed = result.success is False and "SECURITY VIOLATION" in result.error and result.error_type == "security.violation"
-    execution_time_ms = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
+    execution_time_ms = (datetime.now(UTC) - start_time).total_seconds() * 1000
 
     unified_metrics_collector.add_row(EvalRow(
         dimension="safety",

@@ -11,23 +11,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from app.constants import (
     CommandGenerationOutcome,
-    LLMProvider,
     EventType,
+    LLMProvider,
 )
-from app.models.settings import LLMSettings, G8eeUserSettings
+from app.models.settings import G8eeUserSettings, LLMSettings
 from app.services.ai.generator import (
     generate_command,
 )
 from tests.unit.services.ai.test_command_generator import (
-    _make_mock_provider,
-    _make_mock_operator_context,
     _REPUTATION_KWARGS,
+    _make_mock_operator_context,
+    _make_mock_provider,
 )
+
 
 @pytest.mark.asyncio
 async def test_generate_command_round_2_triggered():
@@ -60,7 +62,7 @@ async def test_generate_command_round_2_triggered():
     with patch("app.services.ai.generator.get_llm_provider", return_value=mock_provider):
         mock_event_service = MagicMock()
         mock_event_service.publish = AsyncMock()
-        
+
         result = await generate_command(
             request="test request",
             guidelines="",

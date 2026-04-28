@@ -20,7 +20,7 @@ would be hidden by mocking create_all_services in test_main_lifespan.py.
 
 import os
 import tempfile
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -59,7 +59,7 @@ class TestServiceFactorySmoke:
         what production code expects, catching bugs like missing parameters or
         incorrect field access that would be hidden by mocking.
         """
-        with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
             f.write("")
             ssh_config_path = f.name
 
@@ -86,7 +86,7 @@ class TestServiceFactorySmoke:
 
     def test_create_all_services_with_web_search_provider(self, mock_settings, mock_cache_aside):
         """Test create_all_services with web search provider injected."""
-        with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
             f.write("")
             ssh_config_path = f.name
 

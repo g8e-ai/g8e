@@ -25,9 +25,9 @@ main.py responsibilities:
     Shutdown: ServiceFactory.stop_services -> close clients
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi import FastAPI
 
 from app.main import lifespan
@@ -87,7 +87,7 @@ def _configure_factory(mocks):
     """Set up ServiceFactory.create_all_services / bind / start / stop."""
     from app.services.service_factory import AllServices
     factory = mocks["ServiceFactory"]
-    
+
     # Create a mock AllServices object with required attributes
     mock_services = MagicMock(spec=AllServices)
     mock_services.api_key_service = MagicMock()
@@ -100,7 +100,7 @@ def _configure_factory(mocks):
     mock_services.certificate_service = MagicMock()
     mock_services.investigation_service = MagicMock()
     mock_services.approval_service = MagicMock()
-    
+
     factory.create_all_services.return_value = mock_services
     factory.bind_to_app_state = MagicMock()
     factory.start_services = AsyncMock()

@@ -36,7 +36,6 @@ from app.llm.llm_types import (
 )
 from app.llm.providers.ollama import OllamaProvider
 
-
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
 
