@@ -59,7 +59,7 @@
     "triage": {
       "id": "triage",
       "display_name": "Triage",
-      "icon": "manage_search",
+      "icon": "scan-eye",
       "description": "Classifies incoming messages by complexity, intent, and user posture \u2014 the first read of the room.",
       "role": "classifier",
       "model_tier": "lite",
