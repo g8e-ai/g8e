@@ -159,7 +159,6 @@ services:
       - ./docs:/docs:ro
       - ./README.md:/readme/README.md:ro
       - ./components/g8ed:/app:ro
-      - g8ed-node-modules:/app/node_modules
     read_only: true
     tmpfs:
       - /tmp
@@ -460,10 +459,6 @@ volumes:
       - "io.g8e.managed=true"
   g8ed-data:
     name: g8ed-data
-    labels:
-      - "io.g8e.managed=true"
-  g8ed-node-modules:
-    name: g8ed-node-modules
     labels:
       - "io.g8e.managed=true"
   g8ed-test-node-modules:

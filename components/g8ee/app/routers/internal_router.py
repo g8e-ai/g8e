@@ -337,7 +337,7 @@ async def internal_chat(
     )
 
 
-@router.post(InternalApiPaths.G8EE_CHAT_TRIAGE_ANSWER)
+@router.post(API_PATHS["g8ee"]["chat_triage_answer"])
 async def internal_triage_answer(
     request: TriageAnswerRequest,
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
@@ -373,7 +373,7 @@ async def internal_triage_answer(
     return {"success": True}
 
 
-@router.post(InternalApiPaths.G8EE_CHAT_TRIAGE_SKIP)
+@router.post(API_PATHS["g8ee"]["chat_triage_skip"])
 async def internal_triage_skip(
     request: TriageSkipRequest,
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
@@ -404,7 +404,7 @@ async def internal_triage_skip(
     return {"success": True}
 
 
-@router.post(InternalApiPaths.G8EE_CHAT_TRIAGE_TIMEOUT)
+@router.post(API_PATHS["g8ee"]["chat_triage_timeout"])
 async def internal_triage_timeout(
     request: TriageTimeoutRequest,
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
@@ -1547,5 +1547,8 @@ async def health_check():
             InternalApiPaths.G8EE_CASE,
             InternalApiPaths.G8EE_INVESTIGATIONS,
             InternalApiPaths.G8EE_INVESTIGATION,
+            InternalApiPaths.G8EE_CHAT_TRIAGE_ANSWER,
+            InternalApiPaths.G8EE_CHAT_TRIAGE_SKIP,
+            InternalApiPaths.G8EE_CHAT_TRIAGE_TIMEOUT,
         ]
     }
