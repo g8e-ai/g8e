@@ -381,7 +381,7 @@ case "$TOP" in
             -h|--help|"")
                 help_file="$SCRIPT_DIR/docs/g8e-help.md"
                 if [[ -f "$help_file" ]]; then
-                    awk '/^platform - Docker services/,/^operator - Build and deploy/' "$help_file" | head -n -1
+                    awk '/^### platform/,/^### operator/' "$help_file" | head -n -1
                 else
                     echo "[g8e] Help file not found: $help_file" >&2
                     exit 1
@@ -451,7 +451,6 @@ case "$TOP" in
             -h|--help|"")
                 help_file="$SCRIPT_DIR/docs/g8e-help.md"
                 if [[ -f "$help_file" ]]; then
-                    # Extract only the operator section from the help file
                     awk '/^### operator/,/^### test/' "$help_file" | head -n -1
                 else
                     echo "[g8e] Help file not found: $help_file" >&2
@@ -647,7 +646,7 @@ case "$TOP" in
         if [[ -z "$_TEST_COMPONENT" || "$_TEST_COMPONENT" == "-h" || "$_TEST_COMPONENT" == "--help" ]]; then
             help_file="$SCRIPT_DIR/docs/g8e-help.md"
             if [[ -f "$help_file" ]]; then
-                awk '/^test - Run component tests/,/^security - Security tools/' "$help_file" | head -n -1
+                awk '/^### test/,/^### security/' "$help_file" | head -n -1
             else
                 echo "[g8e] Help file not found: $help_file" >&2
                 exit 1
@@ -766,7 +765,7 @@ case "$TOP" in
             -h|--help|"")
                 help_file="$SCRIPT_DIR/docs/g8e-help.md"
                 if [[ -f "$help_file" ]]; then
-                    awk '/^security - Security tools/,/^data - Data management/' "$help_file" | head -n -1
+                    awk '/^### security/,/^### data/' "$help_file" | head -n -1
                 else
                     echo "[g8e] Help file not found: $help_file" >&2
                     exit 1
@@ -824,7 +823,7 @@ case "$TOP" in
             -h|--help|"")
                 help_file="$SCRIPT_DIR/docs/g8e-help.md"
                 if [[ -f "$help_file" ]]; then
-                    awk '/^data - Data management/,/^llm - LLM tooling/' "$help_file" | head -n -1
+                    awk '/^### data/,/^### llm/' "$help_file" | head -n -1
                 else
                     echo "[g8e] Help file not found: $help_file" >&2
                     exit 1
@@ -972,7 +971,7 @@ case "$TOP" in
             -h|--help|"")
                 help_file="$SCRIPT_DIR/docs/g8e-help.md"
                 if [[ -f "$help_file" ]]; then
-                    awk '/^demo - Fleet demo/,/^DETAILED HELP/' "$help_file" | head -n -1
+                    awk '/^### demo/,/^### evals/' "$help_file" | head -n -1
                 else
                     echo "[g8e] Help file not found: $help_file" >&2
                     exit 1
@@ -999,7 +998,7 @@ case "$TOP" in
             -h|--help|"")
                 help_file="$SCRIPT_DIR/docs/g8e-help.md"
                 if [[ -f "$help_file" ]]; then
-                    awk '/^ssh - SSH credentials/,/^aws - AWS credentials/' "$help_file" | head -n -1
+                    awk '/^### ssh/,/^### aws/' "$help_file" | head -n -1
                 else
                     echo "[g8e] Help file not found: $help_file" >&2
                     exit 1
@@ -1023,7 +1022,7 @@ case "$TOP" in
             -h|--help|"")
                 help_file="$SCRIPT_DIR/docs/g8e-help.md"
                 if [[ -f "$help_file" ]]; then
-                    awk '/^aws - AWS credentials/,/^demo - Fleet demo/' "$help_file" | head -n -1
+                    awk '/^### aws/,/^### demo/' "$help_file" | head -n -1
                 else
                     echo "[g8e] Help file not found: $help_file" >&2
                     exit 1
@@ -1047,7 +1046,7 @@ case "$TOP" in
             -h|--help|"")
                 help_file="$SCRIPT_DIR/docs/g8e-help.md"
                 if [[ -f "$help_file" ]]; then
-                    awk '/^search - Web search/,/^ssh - SSH credentials/' "$help_file" | head -n -1
+                    awk '/^### search/,/^### ssh/' "$help_file" | head -n -1
                 else
                     echo "[g8e] Help file not found: $help_file" >&2
                     exit 1
@@ -1074,7 +1073,7 @@ case "$TOP" in
             -h|--help|"")
                 help_file="$SCRIPT_DIR/docs/g8e-help.md"
                 if [[ -f "$help_file" ]]; then
-                    awk '/^mcp - MCP integration/,/^search - Web search/' "$help_file" | head -n -1
+                    awk '/^### mcp/,/^### search/' "$help_file" | head -n -1
                 else
                     echo "[g8e] Help file not found: $help_file" >&2
                     exit 1
@@ -1098,7 +1097,7 @@ case "$TOP" in
             -h|--help|"")
                 help_file="$SCRIPT_DIR/docs/g8e-help.md"
                 if [[ -f "$help_file" ]]; then
-                    awk '/^llm - LLM tooling/,/^mcp - MCP integration/' "$help_file" | head -n -1
+                    awk '/^### llm/,/^### mcp/' "$help_file" | head -n -1
                 else
                     echo "[g8e] Help file not found: $help_file" >&2
                     exit 1
@@ -1126,24 +1125,13 @@ case "$TOP" in
         fi
         case "$SUB" in
             -h|--help|"")
-                echo "g8e evals - Real-operator evaluation fleet"
-                echo ""
-                echo "Usage:"
-                echo "  ./g8e evals up -d|--device-token <token> [--nodes N]"
-                echo "  ./g8e evals down"
-                echo "  ./g8e evals status"
-                echo "  ./g8e evals logs <node-name>"
-                echo ""
-                echo "Commands:"
-                echo "  up     - Bring up the eval fleet with N nodes (default: 3)"
-                echo "  down   - Tear down the eval fleet"
-                echo "  status - Show status of eval nodes"
-                echo "  logs   - Show logs for a specific node"
-                echo ""
-                echo "Prerequisites:"
-                echo "  - Platform must be running: ./g8e platform start"
-                echo "  - Device link token from dashboard: ./g8e login --device-token <token>"
-                echo ""
+                help_file="$SCRIPT_DIR/docs/g8e-help.md"
+                if [[ -f "$help_file" ]]; then
+                    awk '/^### evals/,/^## DETAILED HELP/' "$help_file" | head -n -1
+                else
+                    echo "[g8e] Help file not found: $help_file" >&2
+                    exit 1
+                fi
                 [[ -z "$SUB" ]] && exit 1 || exit 0
                 ;;
             run)

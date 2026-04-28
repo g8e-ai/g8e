@@ -57,7 +57,7 @@ flowchart LR
 |----------|---------|-------------|
 | `G8EL_MODEL_NAME` | `google_gemma-4-E2B-it-Q4_K_M.gguf` | Model filename to use |
 | `G8EL_MODEL_URL` | Hugging Face URL | URL to download model from if not present |
-| `G8EL_CONTEXT_SIZE` | `8192` | Context window size in tokens |
+| `G8EL_CONTEXT_SIZE` | `49152` | Context window size in tokens |
 | `G8EL_THREADS` | `8` | Number of CPU threads for inference |
 | `G8EL_HOST` | `0.0.0.0` | Host address to bind to |
 | `G8EL_PORT` | `11444` | Port to listen on |

@@ -10,7 +10,7 @@ The mechanism has six players, two distinct stake types, and one objective. Unde
 
 | Player | Role | Stake | Capability |
 |---|---|---|---|
-| **Dash** | Interrogator | Reputation `r_d` | Batches of 3 yes/no questions |
+| **Triage** | Interrogator | Reputation `r_d` | Clarifying questions |
 | **Sage** | Planner | Reputation `r_s` | Natural-language intent `I` |
 | **Honest Tribunal** (×4) | Validators | Per-lens reputation `r_{t,i}` | Each emits candidate command `c_i` |
 | **Nemesis** | Calibrated adversary | Reputation `r_n` | Emits flawed-but-plausible `c_n` or abstains |
@@ -27,7 +27,7 @@ The system minimizes one quantity: expected user disutility per resolved investi
 U_user = -τ_total - λ · 𝟙[execution_failure]
 ```
 
-where `τ_total` is wall-clock from message to resolution, `𝟙[execution_failure]` is whether the executed command produced an incorrect or harmful result, and `λ` is the user's revealed preference for correctness over speed (estimated from click-through behavior and challenge frequency). The mechanism is doing its job when both terms are low.
+where `τ_total` is wall-clock from message to resolution, `𝟙[execution_failure]` is whether the executed command produced an incorrect or harmful result, and `λ` is the user's revealed preference for correctness over speed (estimated from click-through behavior). The mechanism is doing its job when both terms are low.
 
 Every other reward in the system is a **gradient pointer** toward this objective. Dash's information-gain bonus exists because high-IG questions reduce expected `τ_total`. Sage's one-shot sufficiency reward exists because Round 1 convergence reduces `τ_total`. Auditor's downstream-truth bond is slashed when `𝟙[execution_failure] = 1`. The architecture is a chain of incentive-aligned proxies for the user's loss function, each scored against realized outcomes rather than ex-ante predictions.
 
@@ -122,6 +122,6 @@ Collapsing any quarantine layer creates a profitable deviation. The Vortex is th
 
 2. **Auditor convergence.** The stack depends on Auditor being a reliable oracle for downstream truth. Peer-Auditor sampling provides Byzantine resilience, but the convergence rate of Auditor's grounding accuracy under realistic deployment has not been measured.
 
-3. **User adversariality.** A user who optimizes for minimal TTR at the cost of correctness can starve the mechanism (skipping every Dash question, rubber-stamping every Auditor verdict). The current design assumes time-rational users; pathological users break the proxy chain. Whether this is a real risk depends on whether such users exist in practice or whether the gradient educates them out of the equilibrium quickly enough.
+3. **User adversariality.** A user who optimizes for minimal TTR at the cost of correctness can starve the mechanism (skipping clarifying questions, rubber-stamping every Auditor verdict). The current design assumes time-rational users; pathological users break the proxy chain. Whether this is a real risk depends on whether such users exist in practice or whether the gradient educates them out of the equilibrium quickly enough.
 
 4. **Liveness vs. correctness trade-off.** The Tier 3 liveness slashes (questions ignored, R1 missed) and the Tier 1 correctness slashes (catastrophic misjudgment) operate on different timescales. Whether their combined gradient produces stable behavior under load is an empirical question.

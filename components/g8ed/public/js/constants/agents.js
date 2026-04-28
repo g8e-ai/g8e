@@ -17,11 +17,11 @@
  * Sourced from shared/constants/agents.json agent metadata.
  */
 export const TribunalMemberIcons = Object.freeze({
-    0: 'call_merge',
-    1: 'verified',
-    2: 'account_tree',
-    3: 'menu_book',
-    4: 'report',
+    0: 'git-merge',
+    1: 'shield-check',
+    2: 'git-branch',
+    3: 'book-open',
+    4: 'shield-alert',
 });
 
 /**
@@ -29,7 +29,7 @@ export const TribunalMemberIcons = Object.freeze({
  * Icon for the Tribunal auditor.
  * Sourced from shared/constants/agents.json agent metadata.
  */
-export const AuditorIcon = 'fact_check';
+export const AuditorIcon = 'search-check';
 
 /**
  * Tribunal Outcome

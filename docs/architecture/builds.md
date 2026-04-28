@@ -160,7 +160,7 @@ g8ee is an internal-only service. g8ed proxies all traffic to it; g8ee is never 
 CMD ["node", "server.js"]
 ```
 
-g8ed is the only service with external ports (`443:443`, `80:80`). It terminates TLS, handles passkey authentication, manages operator WebSocket connections (Gateway Protocol — bridging remote g8eo operators to g8es pub/sub), and serves the browser dashboard. It runs as non-root user `g8e` (UID 1001) with `read_only: true`, `cap_drop: ALL`, and `no-new-privileges: true`. g8ed's `G8ENodeOperatorService` manages the g8ep operator process via Supervisor XML-RPC over the internal network (port 443), not via `docker exec`.
+g8ed is the only service with external ports (`443:443`, `80:80`). It terminates TLS, handles passkey authentication, manages operator WebSocket connections (Gateway Protocol — bridging remote g8eo operators to g8es pub/sub), and serves the browser terminal. It runs as non-root user `g8e` (UID 1001) with `read_only: true`, `cap_drop: ALL`, and `no-new-privileges: true`. g8ed's `G8ENodeOperatorService` manages the g8ep operator process via Supervisor XML-RPC over the internal network (port 443), not via `docker exec`.
 
 **Health check:** `curl -f --cacert /g8es/ca.crt https://localhost/health`.
 
@@ -256,7 +256,7 @@ Works identically with Docker Desktop — no `./g8e` CLI required for first-time
 
 The g8ep container runs `supervisord` as PID 1 with a config written at startup to `/tmp/g8e.operator.conf`. The `[program:operator]` entry has `autostart=true`, so the operator process starts automatically when supervisord launches. Supervisor also exposes `[inet_http_server]` on port 443 (inside the container) with HTTP Basic auth using the internal auth token as the password.
 
-When a user launches a local operator session from the dashboard, g8ed:
+When a user launches a local operator session from the terminal, g8ed:
 1. Persists the operator API key to the `platform_settings` document in g8es.
 2. Calls Supervisor XML-RPC (via the network, not `docker exec`) to start or restart the operator process in g8ep.
 

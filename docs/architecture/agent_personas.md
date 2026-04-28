@@ -23,12 +23,13 @@ All agent definitions are centralized in `@/home/bob/g8e/shared/constants/agents
 
 ## Current Agents
 
-### 1. Triage (GDD's "Dash" Interrogator)
+### 1. Triage (The Interrogator)
 - **Icon**: `scan-eye`
 - **Role**: `classifier`
 - **Model Tier**: `lite`
-- **Purpose**: First-turn classification of complexity (`simple`/`complex`), intent, and user posture (`normal`/`escalated`/`adversarial`/`confused`). In the Tribunal game design, this agent also serves as the interrogator ("Dash") producing batches of 3 yes/no questions to maximize information gain.
-- **Data Flow**: Routes complex turns to **Sage** and simple turns to **Dash**. Posture is consumed by the dissent protocol to calibrate agent friction.
+- **Purpose**: First-turn classification of complexity (`simple`/`complex`), intent, and user posture (`normal`/`escalated`/`adversarial`/`confused`). It may also serve as an interrogator, producing clarifying questions when intent confidence is low.
+- **Naming Note**: Implements the "Dash" interrogator role from GDD. Renamed to `triage` in code to avoid collision with the `dash` fast-path agent.
+- **Data Flow**: Routes complex turns to **Sage** and simple turns to **Dash**. Emits clarifying questions to the user if needed. Posture is consumed by the dissent protocol to calibrate agent friction.
 - **Staking Logic**: Stakes per question on information yield (engagement, discrimination, downstream utility, redundancy penalty). User click-through behavior is a revealed-preference stake.
 - **Data Access**: Sees user message and brief conversation history. Does NOT know Sage/Tribunal/Auditor exist (Vortex Principle).
 - **Invariants**: First-turn messages CANNOT be `adversarial`.
@@ -77,14 +78,15 @@ All agent definitions are centralized in `@/home/bob/g8e/shared/constants/agents
 - **Codex** (`analyzer`): Async extraction of user preferences and scrubbed investigation summaries.
 - **Judge** (`evaluator`): Post-hoc performance grading against gold-standard rubrics.
 
-### 7. Warden (Defensive Coordinator)
+### 7. Warden (Defensive Sub-Agents)
 - **Role**: `defender`
 - **Model Tier**: `lite`
-- **Purpose**: Coordinates specialized risk analysis. Fails closed (HIGH risk) on ambiguity.
+- **Purpose**: Collective role for specialized risk analysis sub-agents. Coordinates findings to inform human approval and Auditor decisions.
 - **Sub-Agents**:
     - `warden_command_risk`: Classifies shell command risk (LOW/MEDIUM/HIGH).
     - `warden_error`: Analyzes failures for `AUTO_FIXABLE` or `ESCALATE`.
     - `warden_file_risk`: Evaluates file operation safety, factoring in git state.
+- **Implementation**: Managed by the `AIResponseAnalyzer` service in `g8ee`.
 
 ## Persona Loader Utility
 

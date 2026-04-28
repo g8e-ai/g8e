@@ -967,7 +967,7 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             terminal.completeTribunal({ id: WIDGET_ID, finalCommand: complexCommand, outcome: 'verified' });
 
             const status = document.getElementById(WIDGET_ID).querySelector('.tribunal__status');
-            expect(status.textContent).toBe(`Verified · ${complexCommand}`);
+            expect(status.textContent).toBe(`checkVerified · ${complexCommand}`);
             // Check innerHTML to ensure no double escaping of &
             // Literal & in textContent will be &amp; in innerHTML (normal browser behavior)
             // Double escaping would produce &amp;amp;
@@ -1359,6 +1359,39 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             const approvalCard = terminal.outputContainer.querySelector('.anchored-terminal__approval');
             expect(approvalCard.textContent).toContain('Continuing');
         });
+
+        it('preserves command and justification after approval response', async () => {
+            const mockPost = vi.fn().mockResolvedValue({ success: true });
+            global.window = global.window || {};
+            global.window.serviceClient = { post: mockPost };
+
+            const { webSessionService } = await import('@g8ed/public/js/utils/web-session-service.js');
+            webSessionService.getWebSessionId.mockReturnValue('session-abc');
+
+            const command = 'rm -rf /usr/local/bin/useful-tool';
+            const justification = 'I am a chaos monkey';
+
+            await terminal.handleApprovalRequest({
+                execution_id: 'exec-preserve-1',
+                approval_id: 'approval-preserve-1',
+                case_id: 'case-1',
+                investigation_id: 'inv-1',
+                task_id: 'task-1',
+                command: command,
+                justification: justification,
+            });
+
+            const approvalCard = terminal.outputContainer.querySelector('.anchored-terminal__approval');
+            expect(approvalCard.querySelector('.approval-compact__command').textContent).toContain(command);
+            expect(approvalCard.querySelector('.approval-compact__reason').textContent).toContain(justification);
+
+            await terminal.handleApprovalResponse('approval-preserve-1', true);
+
+            // Verify it still exists after response
+            expect(approvalCard.querySelector('.approval-compact__command').textContent).toContain(command);
+            expect(approvalCard.querySelector('.approval-compact__reason').textContent).toContain(justification);
+            expect(approvalCard.querySelector('.approval-compact__status--approved')).not.toBeNull();
+        });
     });
 
     describe('Tribunal refining widget → approval upgrade', () => {
@@ -1590,6 +1623,48 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             expect(approvals.length).toBe(1);
             expect(approvals[0].getAttribute('data-approval-id')).toBe('approval-uptime');
             expect(approvals[0].querySelectorAll('.tribunal__passes .tribunal__dot').length).toBe(3);
+        });
+    });
+
+    describe('Direct Command Execution (No Approval)', () => {
+        it('handles OPERATOR_COMMAND_COMPLETED without an approval_id by falling back to execution_id', async () => {
+            const executionId = 'direct-exec-123';
+            const command = 'uptime';
+            const output = ' 13:10:02 up 2 days, 12:29,  0 users,  load average: 1.07, 0.64, 0.48\n';
+
+            // 1. Simulate command started (direct, no approval_id)
+            await terminal.handleCommandExecutionEvent({
+                eventType: EventType.OPERATOR_COMMAND_STARTED,
+                execution_id: executionId,
+                command: command
+            });
+
+            // Should have created an indicator
+            const indicator = terminal.outputContainer.querySelector('.anchored-terminal__executing');
+            expect(indicator).not.toBeNull();
+            expect(terminal.activeExecutions.has(executionId)).toBe(true);
+
+            // 2. Simulate command completed (direct, no approval_id)
+            // Before the fix, this would have logged an error and returned early
+            await terminal.handleCommandExecutionEvent({
+                eventType: EventType.OPERATOR_COMMAND_COMPLETED,
+                execution_id: executionId,
+                command: command,
+                output: output,
+                return_code: 0,
+                timestamp: new Date().toISOString()
+            });
+
+            // Should have created an execution results container and appended the result
+            const container = terminal.executionResultsContainers.get(executionId);
+            expect(container).not.toBeNull();
+            
+            const resultBody = container.querySelector('.anchored-terminal__results-body');
+            expect(resultBody).not.toBeNull();
+            expect(resultBody.textContent).toContain(output);
+            
+            // Execution should be cleared from activeExecutions
+            expect(terminal.activeExecutions.has(executionId)).toBe(false);
         });
     });
 });

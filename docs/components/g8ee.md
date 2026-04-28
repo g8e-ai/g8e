@@ -172,6 +172,8 @@ Each method accepts a role-specific settings dataclass (`PrimaryLLMSettings`, `A
 | `AnthropicProvider` | `app/llm/providers/anthropic.py` | Streams via `client.messages.stream`, accumulating tool input JSON across deltas; yields text and thinking chunks immediately, emits tool call chunks on `content_block_stop`. **Parameter constraints:** `temperature` and `top_p` are mutually exclusive on Anthropic — the provider always uses `temperature` and never sends `top_p`. When extended thinking is enabled, `temperature` is forced to `1.0` and `top_k` is omitted. **Hardened Message handling:** messages must strictly alternate between user and assistant — consecutive same-role Content objects are merged. Every `tool_result` must carry the `tool_use_id` from the preceding assistant's `tool_use` block. Empty text blocks are dropped. |
 | `OllamaProvider` | `app/llm/providers/ollama.py` | Streams via the `ollama` Python SDK's AsyncClient; selects the reasoning dialect via `LLMModelConfig.thinking_dialect` (`NONE` or `NATIVE_TOGGLE`); extracts `thinking` field from responses and streams it as `thought=True` chunks. |
 | `OpenAIProvider` | `app/llm/providers/open_ai.py` | Streams via `AsyncOpenAI` for OpenAI endpoints; translates `ThinkingLevel` into `reasoning.effort` for reasoning models; when tools are present falls back to a non-streaming call and yields the response as a single chunk |
+| `G8elProvider` | `app/llm/providers/g8el.py` | Platform's llama.cpp inference server component; inherits from `LlamaCppProvider` to reuse OpenAI-compatible logic. |
+| `LlamaCppProvider` | `app/llm/providers/llama_cpp.py` | Generic llama.cpp provider; supports streaming via OpenAI-compatible API. |
 
 **Gemini retry contract:** `_open_stream_attempt` wraps only the `generate_content_stream` API call in a tenacity retry (up to 4 attempts, exponential backoff, retryable on 429/503). Once the stream is open, chunks flow directly — no retry is possible mid-stream. If the stream breaks after yielding has started, the error propagate to the retry guard, which prevents re-attempting a partially-delivered response.
 
@@ -382,16 +384,23 @@ The `MODEL_REGISTRY` provides runtime access to model configurations via `get_mo
 #### OpenAI Models
 | Model | Thinking Levels | Tools | Context In | Context Out |
 |-------|-----------------|-------|------------|-------------|
+| `gpt-5.4` | - | Yes | 128,000 | 8,192 |
+| `gpt-5.4-pro` | - | Yes | 128,000 | 8,192 |
 | `gpt-5.4-mini` | LOW, MINIMAL | Yes | 200,000 | 8,192 |
+| `gpt-5.4-nano` | - | Yes | 128,000 | 8,192 |
+| `gpt-5.3-instant` | - | Yes | 128,000 | 8,192 |
 | `gpt-4o` | - | Yes | 128,000 | 8,192 |
+| `gpt-4o-mini` | - | Yes | 128,000 | 8,192 |
+| `gpt-4-turbo` | - | Yes | 128,000 | 8,192 |
+| `gpt-3.5-turbo` | - | Yes | 16,385 | 4,096 |
 
 #### Ollama Models
 | Model | Thinking Levels | Tools | Context In | Context Out |
 |-------|-----------------|-------|------------|-------------|
-| `gemma4:26b` | HIGH, OFF | Yes | 128,000 | 8,192 |
-| `nemotron-3-nano:30b` | HIGH, OFF | Yes | 128,000 | 8,192 |
 | `qwen3.5:122b` | HIGH, OFF | Yes | 256,000 | 8,192 |
 | `glm-5.1:cloud` | HIGH, OFF | Yes | 256,000 | 8,192 |
+| `gemma4:26b` | HIGH, OFF | Yes | 128,000 | 8,192 |
+| `nemotron-3-nano:30b` | HIGH, OFF | Yes | 128,000 | 8,192 |
 | `llama3.2:3b` | - | Yes | 32,768 | 8,192 |
 | `qwen3.5:2b` | HIGH, OFF | Yes | 32,768 | 8,192 |
 | `gemma4:e4b` | HIGH, OFF | Yes | 32,768 | 8,192 |
@@ -461,6 +470,8 @@ Consumers (auth gate, Tribunal routing, prompt assembly) all derive from this on
 | `query_investigation_context` | No | Universal | Query investigation data (conversation history, status, history trail, operator actions) on-demand |
 | `get_command_constraints` | No | Universal | Retrieve whitelisted/blacklisted command patterns |
 | `g8e_web_search` | No | Universal | Web search via Vertex AI Search — requires `vertex_search_enabled=true` in `platform_settings` |
+| `list_ssh_inventory` | No | Universal | List the platform's SSH inventory |
+| `stream_operator_to_ssh_fleet` | No | Universal | Stream the operator binary to a fleet of SSH hosts |
 
 Automatic Function Calling (AFC) is always disabled. g8ee uses a custom sequential function-calling loop to preserve thought signatures and ensure accurate tracking of intermediate steps.
 

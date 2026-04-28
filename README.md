@@ -143,7 +143,7 @@ g8e uses a **Local-First Audit Architecture (LFAA)** where the system of record 
 |---|---|
 | **g8es** | Go. SQLite document store, KV store, pub/sub broker, blob store. |
 | **g8ee** | Python. AI engine, Multi-provider abstraction, Tribunal pipeline. |
-| **g8ed** | Node.js. Dashboard, FIDO2 auth, mTLS gateway, human approval UI. |
+| **g8ed** | Node.js. Terminal, FIDO2 auth, mTLS gateway, human approval UI. |
 | **g8el** | isolated intelligence via local LLM server (llama-server). |
 | **g8eo** | Go. The Operator. Executes commands and maintains the encrypted audit vault. |
 
@@ -171,7 +171,7 @@ flowchart LR
 
     subgraph Hub [Control & Persistence Plane / Self-Hosted Hub]
         direction TB
-        g8ed[g8ed<br>Dashboard & Gateway<br>Node.js]
+        g8ed[g8ed<br>Terminal & Gateway<br>Node.js]
         g8ee[g8ee<br>AI Engine & Scrubber<br>Python / FastAPI]
         
         subgraph Data_Layer [g8es Persistence Layer]
@@ -268,7 +268,7 @@ Open `https://<host>` and register your FIDO2 passkey.
 Deploy an Operator to a remote host:
 
 ```bash
-# Generate a device link in the dashboard, then on the target host:
+# Generate a device link in the terminal, then on the target host:
 curl -fsSL http://<host>/g8e | sh -s -- <device-link-token>
 ```
 

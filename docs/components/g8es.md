@@ -63,9 +63,9 @@ g8es is the `g8e.operator` binary running in `--listen` mode. It serves as the p
 
 | Concern | Transport | Why |
 |---------|-----------|-----|
-| **Document store** | HTTP | Request/response semantics; status codes carry errors natively |
-| **KV store** | HTTP | Stateless; each operation is independent |
-| **Blob store** | HTTP | Large binary data; streamed via standard HTTP |
+| **Document store** | HTTP | Request/response semantics; status codes carry errors natively; authenticated via `X-Internal-Auth` header |
+| **KV store** | HTTP | Stateless; each operation is independent; authenticated via `X-Internal-Auth` header |
+| **Blob store** | HTTP | Large binary data; streamed via standard HTTP; authenticated via `X-Internal-Auth` header |
 | **SSE event buffer** | HTTP | Legacy ring buffer for reconnection replay (currently unused by g8ed) |
 | **Pub/Sub** | WebSocket | Server-push required; long-lived connection; no polling. Supports HTTP publish. |
 | **Operator Binaries**| HTTP | Served from the blob store under namespace `operator-binary` (`GET /blob/operator-binary/linux-{arch}`) |
@@ -101,7 +101,7 @@ g8e.operator --listen --wss-listen-port 443 --http-listen-port 443 -l debug
 
 g8es requires an internal authentication token for all API access except the health check and initial bootstrap paths.
 
-**Why internal auth?** The platform components (g8ed, g8ee, operators) run in a trusted network but still require authentication to prevent accidental misconfiguration and provide defense in depth. The token is a shared secret passed via the `X-Internal-Auth` header or WebSocket query parameter.
+**Why internal auth?** The platform components (g8ed, g8ee, operators) run in a trusted network but still require authentication to prevent accidental misconfiguration and provide defense in depth. The token is a shared secret passed via the `X-Internal-Auth` header or WebSocket `token` query parameter.
 
 ### Bootstrap Bypass
 

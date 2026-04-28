@@ -18,6 +18,8 @@ g8eo is the Go-based reference implementation of the Operator for the g8e platfo
 - **Data sovereignty**: Command output stays local by default; only metadata travels to the cloud
 - **Defense in depth**: Multiple security layers — mTLS, certificate pinning, Sentinel platform-wide protection (threat detection + multi-layer scrubbing)
 - **Outbound-only connectivity**: g8eo initiates all connections; no inbound ports required
+- **SSH Fleet Streaming**: Go-native concurrent SSH engine for ephemeral operator injection
+- **OpenClaw Integration**: Support for OpenClaw Gateway as a Node Host
 
 ---
 
@@ -39,7 +41,11 @@ In Listen Mode, g8eo acts as g8es — the platform's central backend and pub/sub
 
 ### OpenClaw Mode (`--openclaw`)
 
-Connects to an OpenClaw Gateway as a Node Host. No g8e infrastructure required — the Operator advertises shell capabilities and executes commands on behalf of the Gateway.
+Connects to an OpenClaw Gateway as a Node Host. No g8e infrastructure required — the Operator advertises shell capabilities (`system.run`, `system.which`) and executes commands on behalf of the Gateway.
+
+### SSH Stream Mode (`stream` subcommand)
+
+The `stream` subcommand is a Go-native concurrent SSH engine built into the `g8e.operator` binary. It injects the operator to remote hosts without writing to local disk, using `golang.org/x/crypto/ssh`. The binary is loaded into memory once, then fanned out across a goroutine pool (default: 50 concurrent) to remote hosts.
 
 ### MCP Satellite Mode
 
@@ -148,7 +154,7 @@ g8eo maintains four independent local stores on the Operator machine. All are SQ
 | Audit Vault | `.g8e/data/g8e.db` | LFAA structured event timeline; sensitive fields encrypted at rest; **Head/Tail truncation** for outputs >100KB |
 | Ledger | `.g8e/data/ledger` | Git-backed cryptographic version history for all Operator-modified files |
 
-Local storage is enabled by default (`-s`). Disabled with `-s=false` (full output sent to cloud instead). The Ledger requires a functional `git` binary; disabled via `--no-git`.
+Local storage is enabled by default (`-s`). Disabled with `-s=false` (full output sent to cloud instead). The Ledger requires a functional `git` binary; disabled via `--no-git` or if git is unavailable.
 
 For complete schema DDL, exact column definitions, retention policies, vault encryption details, and data flow specifics, see [architecture/storage.md](../architecture/storage.md).
 

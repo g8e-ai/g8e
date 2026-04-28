@@ -41,8 +41,8 @@ The image provides Python 3.13, supervisord for process management, Docker CLI, 
 | Category | Tools |
 |----------|-------|
 | **Process Management** | supervisor |
-| **Network Diagnostics** | curl, wget, nmap, tcpdump, iperf3, mtr, traceroute, bind-tools (dig, nslookup), iproute2, net-tools |
-| **System Utilities** | bash, git, rsync, openssh-client, htop, lsof, strace, jq, openssl |
+| **Network Diagnostics** | curl, wget, nmap, tcpdump, iperf3, mtr, traceroute, bind-tools (dig, nslookup), iproute2, net-tools, socat, whois, ipcalc |
+| **System Utilities** | bash, git, rsync, openssh-client, htop, lsof, strace, jq, openssl, uuidgen, unzip, zip |
 | **Docker** | docker-cli, docker-cli-compose |
 | **Python** | requests, aiohttp |
 
@@ -191,9 +191,33 @@ Test running is handled by dedicated per-component containers:
 | `g8ed-test-runner` | `node:22-alpine3.23` | g8ed vitest |
 | `g8eo-test-runner` | `golang:1.26-alpine3.23` | g8eo tests + operator builds |
 
-The `./g8e test <component>` CLI command routes to the correct test-runner container. The `./g8e operator build` command runs inside `g8eo-test-runner`.
+The `./g8e test <component>` CLI command routes to the correct test-runner container. The `./g8e operator build` and `./g8e operator stream` commands are also executed through the host CLI, with `stream` running inside `g8ep` via `docker exec`.
 
 See [testing.md](../testing.md) for complete test execution documentation.
+
+---
+
+## Management Commands
+
+The `g8e` CLI script provides several top-level management commands that interact with the `g8ep` environment and platform services:
+
+### LLM Management (`./g8e llm`)
+- `llm setup`: Interactive wizard to configure LLM providers (Anthropic, Gemini, OpenAI, Ollama).
+- `llm show`: Display current LLM configuration and active models.
+- `llm restart`: Force a refresh of the LLM provider state in `g8ee`.
+
+### MCP Management (`./g8e mcp`)
+- `mcp config`: Configure external MCP client integrations.
+- `mcp status`: Check the status of MCP tool bridging.
+- `mcp test`: Run diagnostic tests for MCP client connectivity.
+
+### Web Search Management (`./g8e search`)
+- `search setup`: Configure Vertex AI Search for the `search_web` tool.
+- `search disable`: Disable the web search capability platform-wide.
+
+### SSH & AWS Credentials
+- `ssh setup`: Mounts host SSH credentials (`~/.ssh`) into the `g8ep` container for fleet-wide operator streaming.
+- `aws setup`: Mounts host AWS credentials (`~/.aws`) into the `g8ep` container for cloud-integrated operator tools.
 
 ---
 

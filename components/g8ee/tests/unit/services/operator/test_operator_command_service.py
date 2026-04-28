@@ -588,7 +588,7 @@ class TestExecuteCommandTargetSystems:
         op = self._make_operator("op-1", "sess-1", "host-1")
         investigation = self._make_investigation([op])
         g8e_context = self._make_g8e_context()
-        args = ExecutorCommandArgs(command="cat /etc/hosts", request="inspect")
+        args = ExecutorCommandArgs(command="rm /tmp/test", request="cleanup")
 
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
@@ -600,7 +600,7 @@ class TestExecuteCommandTargetSystems:
         result = await service.execute_command(args, g8e_context, investigation, request_settings)
 
         assert len(approval_service.command_approval_calls) == 1
-        assert result.command_executed == "cat /etc/hosts"
+        assert result.command_executed == "rm /tmp/test"
 
     async def test_auto_approve_disabled_with_list_still_requires_approval(self):
         """auto_approved_commands without enable_auto_approve is inert."""

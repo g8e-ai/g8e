@@ -1,17 +1,17 @@
 ---
-title: Dashboard
+title: Terminal
 parent: Architecture
 ---
 
-# Dashboard
+# Terminal
 
-The dashboard is the primary UI surface in g8ed, served at `/chat`. It provides a unified interface for AI interaction, Operator management, command execution, and system diagnostics. All dashboard components communicate exclusively through the EventBus — no component holds a direct reference to another, enabling loose coupling and testability.
+The terminal is the primary UI surface in g8ed, served at `/chat`. It provides a unified interface for AI interaction, Operator management, command execution, and system diagnostics. All terminal components communicate exclusively through the EventBus — no component holds a direct reference to another, enabling loose coupling and testability.
 
 ## Architecture Principles
 
 **EventBus-Driven Communication**: Components emit events to the EventBus and subscribe to events they care about. This decouples the UI from the backend and allows components to be developed, tested, and replaced independently.
 
-**Passkey-Only Authentication**: The dashboard uses FIDO2/WebAuthn passkeys exclusively — no passwords. This eliminates password-related attack vectors and provides phishing-resistant authentication.
+**Passkey-Only Authentication**: The terminal uses FIDO2/WebAuthn passkeys exclusively — no passwords. This eliminates password-related attack vectors and provides phishing-resistant authentication.
 
 **URL-Based Session Persistence**: The active investigation ID is stored in the URL as `?investigation=<case_id>`. This enables page refresh restoration, browser back/forward navigation, and shareable conversation links.
 
@@ -19,11 +19,11 @@ The dashboard is the primary UI surface in g8ed, served at `/chat`. It provides 
 
 ## User Lifecycle
 
-A user moves through the dashboard in three phases:
+A user moves through the terminal in three phases:
 
 ### 1. First-Time Setup
 
-The Setup Wizard (`/setup`) configures AI providers and registers the first admin user with a passkey. It is completely separate from the authenticated dashboard — the route redirects to `/` once any user exists.
+The Setup Wizard (`/setup`) configures AI providers and registers the first admin user with a passkey. It is completely separate from the authenticated terminal — the route redirects to `/` once any user exists.
 
 **Why a separate setup flow?** The platform cannot authenticate without at least one user, and it cannot create users without passkey credentials. The setup wizard bootstraps this trust anchor atomically: user creation, passkey registration, and session establishment happen in a single transaction.
 
@@ -35,9 +35,9 @@ After setup, users sign in via passkey authentication. The `AuthManager` validat
 
 **Why passkeys?** They provide hardware-bound credentials that cannot be phished, replayed, or extracted. The private key never leaves the authenticator device, and the server stores only a public key credential ID.
 
-### 3. Dashboard Interaction
+### 3. Terminal Interaction
 
-Once authenticated, users interact with the dashboard through four main areas:
+Once authenticated, users interact with the terminal through four main areas:
 
 - **Header**: Profile dropdown with settings, console, audit log, and logout
 - **Operator Panel**: Lists connected Operators, shows metrics, and provides deployment tools
@@ -48,7 +48,7 @@ Once authenticated, users interact with the dashboard through four main areas:
 
 ### EventBus
 
-The EventBus (`public/js/utils/eventbus.js`) is the central message bus for all dashboard communication. Components emit events and subscribe to events they care about. Event type constants are defined in `constants/events.js`, sourced from `shared/constants/events.json` to ensure consistency across g8ed, g8ee, and g8eo.
+The EventBus (`public/js/utils/eventbus.js`) is the central message bus for all terminal communication. Components emit events and subscribe to events they care about. Event type constants are defined in `constants/events.js`, sourced from `shared/constants/events.json` to ensure consistency across g8ed, g8ee, and g8eo.
 
 **Why an EventBus?** It enables loose coupling between components. The Terminal doesn't need to know about the Operator Panel — it just emits `OPERATOR_COMMAND_APPROVAL_REQUESTED` and lets interested components react. This makes the UI easier to test, refactor, and extend.
 

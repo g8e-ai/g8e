@@ -20,6 +20,7 @@
  */
 
 import { templateLoader } from '../utils/template-loader.js';
+import { escapeHtml } from '../utils/html.js';
 import { TribunalOutcome, EventType } from '../constants/events.js';
 import { TribunalMemberIcons, AuditorIcon } from '../constants/agents.js';
 
@@ -701,11 +702,13 @@ export class TerminalOutputMixin {
         if (!statusEl) return;
 
         const success = outcome === TribunalOutcome.CONSENSUS || outcome === TribunalOutcome.VERIFIED;
+        const label = this._tribunalOutcomeLabel(outcome);
+        const statusText = finalCommand ? `${label} · ${finalCommand}` : label;
+
         if (success) {
-            statusEl.innerHTML = '<span class="material-symbols-outlined">check</span>';
+            statusEl.innerHTML = `<span class="material-symbols-outlined">check</span>${escapeHtml(statusText)}`;
         } else {
-            const label = this._tribunalOutcomeLabel(outcome);
-            statusEl.textContent = label;
+            statusEl.textContent = statusText;
         }
         statusEl.classList.add('tribunal__status--done');
         if (outcome === TribunalOutcome.CONSENSUS_FAILED) {

@@ -127,7 +127,7 @@ The g8e platform uses a dual-storage architecture:
 
 ## Platform Store (g8es)
 
-g8es is the platform's shared persistence layer — the g8eo binary running in `--listen` mode with a single SQLite database at `/data/g8e.db`. It serves both g8ed (dashboard) and g8ee (AI engine) via HTTP.
+g8es is the platform's shared persistence layer — the g8eo binary running in `--listen` mode with a single SQLite database at `/data/g8e.db`. It serves both g8ed (terminal) and g8ee (AI engine) via HTTP.
 
 ### Why g8es Exists
 

@@ -71,7 +71,7 @@ All external fetches occur exclusively at `docker build` time. Once images are b
 |---|---|---|
 | g8eo (operator) | Go modules | Yes |
 | g8eo (test tools) | Go modules | Yes |
-| g8ed (dashboard) | npm | Partial — lockfile committed |
+| g8ed (terminal) | npm | Partial — lockfile committed |
 | g8ee (engine) | pip | No |
 | g8ep (node) | pip | No |
 | g8el (llama.cpp) | External image | N/A — uses pre-built image |
@@ -80,7 +80,7 @@ All external fetches occur exclusively at `docker build` time. Once images are b
 
 ## External UI Links
 
-The dashboard contains informational links to external sites. These are not functional dependencies and will be dead links in an air-gapped environment:
+The terminal contains informational links to external sites. These are not functional dependencies and will be dead links in an air-gapped environment:
 
 - GitHub repository links in navigation menus
 - Google AI Studio link in the setup wizard

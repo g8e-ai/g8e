@@ -3,11 +3,11 @@ title: g8ed
 parent: Components
 ---
 
-# g8ed — g8e Dashboard
+# g8ed — g8e Terminal
 
 ## Overview
 
-g8ed is the authentication, session management, and dashboard backend for g8e. It serves the browser-facing web UI, manages user sessions, proxies AI interactions to g8ee, controls Operator lifecycle, and provides real-time updates to the frontend via Server-Sent Events.
+g8ed is the authentication, session management, and terminal backend for g8e. It serves the browser-facing web UI, manages user sessions, proxies AI interaction to g8ee, controls Operator lifecycle, and provides real-time updates to the frontend via Server-Sent Events.
 
 > For deep-reference security documentation — internal auth token, SSL/CA handling, web session security, operator session security, operator auth methods, operator binding, and the full threat model — see [architecture/security.md](../architecture/security.md).
 
@@ -20,6 +20,7 @@ g8ed is the authentication, session management, and dashboard backend for g8e. I
 - WebSocket proxy — `/ws/pubsub` upgrade requests forwarded to g8es internally
 - Binary distribution of the g8e Operator (`g8e.operator`)
 - Device Link — secure multi-use Operator deployment and single-use claiming
+- SSH Inventory & Streaming — managing and deploying operators to SSH fleets
 - Audit log, admin console, and platform settings
 - SSE delivery of real-time events to browser clients (AI, Operator status, investigations)
 - MCP Gateway (Model Context Protocol) — bridging external AI tools to internal platform capabilities

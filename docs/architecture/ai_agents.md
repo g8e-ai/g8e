@@ -17,6 +17,8 @@ Incoming messages are first processed by the **Triage Agent** (using a lightweig
 - **Intent**: Categorizes the goal as `information`, `action`, or `unknown`.
 - **Posture**: Identifies the user's state (e.g., `normal`, `escalated`, `adversarial`) to calibrate downstream agent behavior.
 
+If Triage has low confidence in the intent, it may emit **clarifying questions** to the user before the investigation proceeds. These questions are persisted to the conversation ledger to provide structured context for Sage.
+
 ### 2. Context Enrichment
 Before an agent receives the task, the system assembles a comprehensive "world view":
 - **Investigation History**: The recent conversation log.
@@ -33,21 +35,21 @@ To prevent hallucinations in shell syntax, agents never write commands directly.
 
 ### Protocol Phases
 
-1. **Phase 0 — Dash Triage**: The Triage agent (mapped from GDD's "Dash") produces batches of 3 yes/no questions engineered to maximize information gain. User answers populate the ledger as structured context before Sage's work.
+1. **Phase 0 — Triage**: Triage classifies the message. If intent confidence is low, it emits clarifying questions to the user. User answers populate the ledger as structured context.
 
 2. **Phase 1 — Sage Intent**: Sage receives the user message plus any Triage Q&A and produces an intent document (goals, constraints, success criteria).
 
 3. **Phase 2 — Round 1 (Blind Generation)**: All five Tribunal members produce a command independently with no visibility into each other's work. Each stakes reputation on their candidate.
 
-4. **Phase 3 — Consensus Check**: Candidates are normalized, clustered by exact match, and votes counted. A winner requires ≥2 of 5 supporting members (TRIBUNAL_MIN_CONSENSUS). Nemesis votes do not count toward consensus.
+4. **Phase 3 — Consensus Check**: Candidates are normalized, clustered by exact match, and votes counted. A winner requires ≥2 of 5 supporting members (TRIBUNAL_MIN_CONSENSUS).
 
-5. **Phase 4 — Round 2 (if Round 1 fails)**: All Round 1 candidates are shared anonymously with all members. Each receives a persona-specific prompt to converge or attack. Two Tribunal rounds maximum.
+5. **Phase 4 — Peer Review (if Round 1 fails)**: If consensus is not reached, anonymized Round 1 clusters are shared with all members. Each receives a persona-specific prompt to converge or attack.
 
-6. **Phase 5 — Auditor**: The winner plus dissenting clusters go to the Auditor, who sees persona signatures and has full memory access. The Auditor rules with grounding citations.
+6. **Phase 5 — Auditor**: The winner (or tied candidates) goes to the Auditor, who sees persona signatures and has full memory access. The Auditor can approve, swap to a dissenter, or revise the command.
 
-7. **Phase 6 — Challenge Window**: Between Auditor verdict and Human approval, any agent may stake additional reputation to challenge. Upheld challenges earn 2x stake; overturned challenges lose stake.
+7. **Phase 6 — Warden Analysis**: The Auditor-approved command is analyzed by **Warden** sub-agents for command risk, file risk, and potential errors.
 
-8. **Phase 7 — Human Approval → Operator Execution → Result to Sage**: The approved command flows back with Auditor's grounding annotations attached.
+8. **Phase 7 — Human Approval → Operator Execution**: The user reviews the command and Warden's risk assessment. Upon approval, the command is executed by the Operator. Results flow back to Sage for interpretation.
 
 ### The Vortex Principle (Tiered Information Quarantine)
 

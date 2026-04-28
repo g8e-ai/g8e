@@ -125,6 +125,7 @@ class TestApiKeyService:
         result = await api_key_service.issue_operator_key(
             api_key="g8e_op_key_12345",
             user_id="user-123",
+            organization_id="org-456",
             operator_id="op-789",
             is_g8ep=True,
             settings_service=mock_settings_service,
@@ -145,6 +146,7 @@ class TestApiKeyService:
             old_api_key="g8e_old_key_12345",
             new_api_key="g8e_new_key_67890",
             user_id="user-123",
+            organization_id="org-456",
             operator_id="op-789",
             is_g8ep=True,
             settings_service=mock_settings_service,
@@ -161,6 +163,7 @@ class TestApiKeyService:
             old_api_key="g8e_old_key_12345",
             new_api_key="g8e_new_key_67890",
             user_id="user-123",
+            organization_id="org-456",
             operator_id="op-789",
             is_g8ep=True,
             settings_service=mock_settings_service,
@@ -202,6 +205,8 @@ class TestApiKeyService:
     async def test_validate_key_success(self, api_key_service, mock_cache_aside):
         """Test validating a valid API key."""
         mock_cache_aside.get_document_with_cache.return_value = {
+            "user_id": "user-123",
+            "client_name": "operator",
             "status": API_KEY_STATUS_ACTIVE,
             "expires_at": None,
         }
@@ -225,6 +230,8 @@ class TestApiKeyService:
     async def test_validate_key_revoked(self, api_key_service, mock_cache_aside):
         """Test validating a revoked API key."""
         mock_cache_aside.get_document_with_cache.return_value = {
+            "user_id": "user-123",
+            "client_name": "operator",
             "status": API_KEY_STATUS_REVOKED,
             "expires_at": None,
         }
@@ -242,6 +249,8 @@ class TestApiKeyService:
         
         expired_time = now() - timedelta(days=1)
         mock_cache_aside.get_document_with_cache.return_value = {
+            "user_id": "user-123",
+            "client_name": "operator",
             "status": API_KEY_STATUS_ACTIVE,
             "expires_at": expired_time,
         }

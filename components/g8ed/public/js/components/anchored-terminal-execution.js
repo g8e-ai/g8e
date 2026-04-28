@@ -412,13 +412,14 @@ export class TerminalExecutionMixin {
             if (approvalEl) {
                 const actionsDiv = approvalEl.querySelector('.approval-compact__actions');
                 if (actionsDiv) {
-                    await templateLoader.renderTo(actionsDiv, 'approval-status', {
+                    const statusHtml = await templateLoader.render('approval-status', {
                         statusClass: approved ? 'approved' : 'denied',
                         statusIcon: approved ? 'check' : 'close',
                         statusText: approved
                             ? (isAgentContinue ? 'Continuing' : 'Approved')
                             : (isAgentContinue ? 'Stopped' : 'Denied')
                     });
+                    actionsDiv.innerHTML = statusHtml;
                 }
 
                 if (approved && !isAgentContinue) {
@@ -715,13 +716,18 @@ export class TerminalExecutionMixin {
                 resultsContainer = this.approvalResultsContainers.get(approvalId);
             }
 
+            if (!resultsContainer && execId) {
+                resultsContainer = this.executionResultsContainers.get(execId);
+            }
+
             if (!resultsContainer) {
-                const containerId = approvalId;
+                const containerId = approvalId || execId;
                 if (!containerId) {
-                    console.error('[TERMINAL] Final command event missing approval_id — backend contract violation', data);
+                    console.error('[TERMINAL] Final command event missing both approval_id and execution_id — backend contract violation', data);
                     return;
                 }
-                resultsContainer = await this._createResultsContainer(containerId, null, true);
+                const isApproval = !!approvalId;
+                resultsContainer = await this._createResultsContainer(containerId, null, isApproval);
             }
 
             if (resultsContainer) {
@@ -913,11 +919,12 @@ export class TerminalExecutionMixin {
             if (approvalEl) {
                 const actionsDiv = approvalEl.querySelector('.approval-compact__actions');
                 if (actionsDiv) {
-                    await templateLoader.renderTo(actionsDiv, 'approval-status', {
+                    const statusHtml = await templateLoader.render('approval-status', {
                         statusClass: 'denied',
                         statusIcon: 'close',
                         statusText: statusMessage
                     });
+                    actionsDiv.innerHTML = statusHtml;
                 }
             }
             totalDenied++;

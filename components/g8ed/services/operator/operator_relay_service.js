@@ -109,7 +109,28 @@ export class OperatorRelayService {
     }
 
     async relayRegisterOperatorSessionToG8ee(g8eContext) {
-        return { success: true };
+        this._validateContext(g8eContext);
+        const httpClient = this._getHttpClient();
+        if (!httpClient) throw new Error('InternalHttpClient not initialized');
+
+        const boundOperator = g8eContext.bound_operators?.[0];
+        if (!boundOperator) throw new Error('No bound operator found in context for registration');
+
+        logger.info('[OPERATOR-RELAY] Registering operator session in g8ee', {
+            operator_id: boundOperator.operator_id,
+            operator_session_id_tag: sessionIdTag(boundOperator.operator_session_id),
+        });
+
+        const request = new OperatorSessionRegistrationRequest({
+            operator_id: boundOperator.operator_id,
+            operator_session_id: boundOperator.operator_session_id,
+        });
+
+        return httpClient.request('g8ee', ApiPaths.g8ee.operatorsRegisterSession(), {
+            method: 'POST',
+            body: request.forWire(),
+            g8eContext,
+        });
     }
 
     async relayApprovalResponseToG8ee(approvalData, g8eContext) {

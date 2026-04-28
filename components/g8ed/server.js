@@ -14,7 +14,7 @@
 /**
  * g8ed Node.js Server - Main Entry Point
  * 
- * g8e Dashboard (g8ed) - localhost platform with local authentication,
+ * g8e Terminal (g8ed) - localhost platform with local authentication,
  * Zero-Trust AI for Real Production, and interactive terminal UI.
  */
 
