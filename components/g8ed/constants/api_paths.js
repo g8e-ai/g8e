@@ -483,7 +483,6 @@ const createG8eePathsProxy = () => {
                     let result = path;
                     const params = path.match(/\{([^}]+)\}/g) || [];
                     params.forEach((param, i) => {
-                        const paramName = param.slice(1, -1);
                         result = result.replace(param, args[i] || '');
                     });
                     return result;
