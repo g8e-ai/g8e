@@ -56,11 +56,10 @@
                     <span class="material-symbols-outlined wizard-panel-icon">key</span>
                     <div>
                         <h2 class="wizard-panel-title">AI Providers and Models</h2>
+                        <div class="setup-fields-row setup-fields-row-api-keys"></div>
                     </div>
                 </div>
-                <div class="setup-fields">
-                    <div class="setup-fields-row setup-fields-row-api-keys">
-                    
+                <div class="setup-fields">      
                     <!-- Unified model selection -->
                     <div class="setup-fields-model-selection">
                         <div class="wizard-model-selection" id="wizard-model-selection">
@@ -187,24 +186,24 @@
                     </div>
                     </div>
 
-                </div>
-
                 <!-- Web Search Section -->
                 <div class="wizard-panel-header">
                     <span class="material-symbols-outlined wizard-panel-icon">travel_explore</span>
                     <div>
-                        <h2 class="wizard-panel-title">Web Search</h2>
+                        <h2 class="wizard-panel-title">Vertex Search</h2>
+                    </div>
+                    <div class="wizard-panel-header-actions">
+                        <label class="setup-checkbox-label" id="use-gemini-key-wrap" for="use_gemini_api_key">
+                            <input type="checkbox" id="use_gemini_api_key" name="use_gemini_api_key" class="setup-checkbox">
+                            <span>Use Gemini API Key</span>
+                        </label>
+                        <a href="https://aistudio.google.com/app/api_keys" target="_blank" rel="noopener noreferrer" class="setup-label-link" id="search-api-key-link">
+                            <span class="material-symbols-outlined">open_in_new</span>Get key
+                        </a>
                     </div>
                 </div>
                 <div class="setup-fields">
-                    <div class="setup-field">
-                        <label class="setup-label" for="search_provider">Search Provider</label>
-                        <select id="search_provider" class="setup-select">
-                            <option value="">None (disable web search)</option>
-                            <option value="google">Google</option>
-                        </select>
-                    </div>
-                    <div class="setup-field setup-field-hidden" id="search-config-google">
+                    <div class="setup-fields-row" id="search-config-google">
                         <div class="setup-field">
                             <label class="setup-label" for="google_project_id">Google Project ID</label>
                             <input type="text" id="google_project_id" name="google_project_id" class="setup-input" placeholder="your-project-id" spellcheck="false" autocomplete="off">
@@ -214,16 +213,7 @@
                             <input type="text" id="vertex_ai_search_app_id" name="vertex_ai_search_app_id" class="setup-input" placeholder="your-app-id" spellcheck="false" autocomplete="off">
                         </div>
                         <div class="setup-field">
-                            <label class="setup-label" for="search_api_key">
-                                API Key
-                                <a href="https://aistudio.google.com/app/api_keys" target="_blank" rel="noopener noreferrer" class="setup-label-link" id="search-api-key-link">
-                                    <span class="material-symbols-outlined">open_in_new</span>Get key
-                                </a>
-                            </label>
-                            <label class="setup-checkbox-label setup-field-hidden" id="use-gemini-key-wrap" for="use_gemini_api_key">
-                                <input type="checkbox" id="use_gemini_api_key" name="use_gemini_api_key" class="setup-checkbox">
-                                <span>Use Gemini API Key</span>
-                            </label>
+                            <label class="setup-label" for="search_api_key">API Key</label>
                             <div class="setup-input-wrap">
                                 <input type="password" id="search_api_key" name="search_api_key" class="setup-input has-toggle" placeholder="AIza..." autocomplete="new-password" spellcheck="false">
                                 <button type="button" class="setup-reveal-btn" aria-label="Toggle visibility" data-for="search_api_key">

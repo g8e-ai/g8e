@@ -21,7 +21,7 @@
 
 import { templateLoader } from '../utils/template-loader.js';
 import { TribunalOutcome, EventType } from '../constants/events.js';
-import { TribunalMemberIcons } from '../constants/agents.js';
+import { TribunalMemberIcons, AuditorIcon } from '../constants/agents.js';
 
 export class TerminalOutputMixin {
     _cancelPendingTimers() {
@@ -619,8 +619,14 @@ export class TerminalOutputMixin {
             </span>`;
         }).join('');
 
+        const auditorDot = `<span class="tribunal__dot tribunal__dot--auditor" title="Auditor">
+            <span class="material-symbols-outlined tribunal__dot-icon">${AuditorIcon}</span>
+        </span>`;
+
         const tribunalHtml =
             `<span class="tribunal__passes">${dots}</span>` +
+            `<span class="tribunal__gap"></span>` +
+            `<span class="tribunal__passes tribunal__passes--auditor">${auditorDot}</span>` +
             `<span class="tribunal__status">Generating alternatives...</span>` +
             `<span class="tribunal__spinner"></span>`;
 
@@ -681,20 +687,16 @@ export class TerminalOutputMixin {
 
         const statusEl = widget.querySelector('.tribunal__status');
         if (statusEl) {
-            let outcomeLabel;
+            statusEl.remove();
+        }
+
+        const auditorDot = widget.querySelector('.tribunal__dot--auditor');
+        if (auditorDot) {
             if (outcome === TribunalOutcome.VERIFICATION_FAILED) {
-                outcomeLabel = 'Revised';
-            } else if (outcome === TribunalOutcome.CONSENSUS) {
-                outcomeLabel = 'Consensus';
-            } else if (outcome === TribunalOutcome.CONSENSUS_FAILED) {
-                outcomeLabel = 'Consensus failed';
-                statusEl.classList.add('tribunal__status--failed');
+                auditorDot.classList.add('tribunal__dot--fail');
             } else {
-                outcomeLabel = 'Verified';
+                auditorDot.classList.add('tribunal__dot--ok');
             }
-            const statusText = finalCommand ? `${outcomeLabel} · ${finalCommand}` : outcomeLabel;
-            statusEl.textContent = statusText;
-            statusEl.classList.add('tribunal__status--done');
         }
     }
 

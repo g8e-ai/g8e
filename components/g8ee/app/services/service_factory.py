@@ -360,6 +360,14 @@ class ServiceFactory:
         domain_services = ServiceFactory.create_domain_services(settings, data_services)
         operator_services = ServiceFactory.create_operator_services(core_services, data_services, cache_aside_service, pubsub_client)
 
+        # Wire ApiKeyService into OperatorLifecycleService now that both exist.
+        # OperatorLifecycleService is built in create_data_services (earlier phase),
+        # while ApiKeyService is built in create_operator_services. Setter injection
+        # bridges the factory phase ordering. See operator_lifecycle_service.set_api_key_service.
+        data_services.operator_lifecycle_service.set_api_key_service(  # type: ignore[union-attr]
+            operator_services.api_key_service
+        )
+
         attachment_service = AttachmentService(
             blob_service=blob_service,  # type: ignore[arg-type]
             settings=settings,

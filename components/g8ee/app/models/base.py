@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from typing import Any, Annotated
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, ValidationError, field_validator, model_validator
 
 __all__ = [
     "ConfigDict",
@@ -28,6 +28,7 @@ __all__ = [
     "UTCDatetime",
     "_to_iso_z",
     "field_validator",
+    "model_validator",
     "recursive_serialize",
 ]
 

@@ -22,6 +22,7 @@ Tests exercise actual FastAPI routing logic via TestClient, not just handler fun
 """
 
 import pytest
+from unittest.mock import MagicMock, AsyncMock
 from fastapi.testclient import TestClient
 from app.main import app
 from app.constants import InternalApiPaths
@@ -33,8 +34,83 @@ class TestInternalRouterPathRegistration:
 
     @pytest.fixture
     def client(self):
-        """FastAPI TestClient for making HTTP requests."""
-        return TestClient(app)
+        """FastAPI TestClient for making HTTP requests with dependency overrides."""
+        from app.dependencies import (
+            get_g8ee_operator_lifecycle_service,
+            get_g8ee_operator_auth_service,
+            get_g8ee_heartbeat_service,
+            get_g8ee_operator_data_service,
+            get_g8ee_session_auth_listener,
+            get_g8ee_certificate_service,
+            get_g8ee_investigation_service,
+            get_g8ee_approval_service,
+            get_g8e_http_context,
+            get_g8ee_case_data_service,
+        )
+        
+        # Override dependencies to avoid ServiceUnavailableError
+        # Use AsyncMock for services with async methods
+        operator_lifecycle_mock = AsyncMock()
+        operator_lifecycle_mock.operator_data_service = AsyncMock()
+        operator_lifecycle_mock.operator_data_service.get_operator.return_value = MagicMock(id="test-op", user_id="test-user")
+        operator_lifecycle_mock.operator_data_service.cache = MagicMock()
+        operator_lifecycle_mock.operator_data_service.cache.update_document.return_value = True
+        # Configure async methods to return actual values (not coroutines)
+        operator_lifecycle_mock.activate_g8ep_operator.return_value = None
+        operator_lifecycle_mock.relaunch_g8ep_operator.return_value = {"success": True, "operator_id": "test-op"}
+        operator_lifecycle_mock.terminate_operator.return_value = None
+        operator_lifecycle_mock.claim_operator_slot.return_value = True
+        app.dependency_overrides[get_g8ee_operator_lifecycle_service] = lambda: operator_lifecycle_mock
+        
+        app.dependency_overrides[get_g8ee_operator_auth_service] = lambda: AsyncMock()
+        app.dependency_overrides[get_g8ee_heartbeat_service] = lambda: AsyncMock()
+        
+        operator_data_mock = AsyncMock()
+        operator_data_mock.get_operator.return_value = MagicMock(id="test-op", user_id="test-user")
+        operator_data_mock.register_device_link.return_value = True
+        operator_data_mock.send_command_to_operator.return_value = None
+        operator_data_mock.send_direct_exec_audit_event.return_value = None
+        app.dependency_overrides[get_g8ee_operator_data_service] = lambda: operator_data_mock
+        
+        app.dependency_overrides[get_g8ee_session_auth_listener] = lambda: AsyncMock()
+        app.dependency_overrides[get_g8ee_certificate_service] = lambda: AsyncMock()
+        
+        investigation_mock = AsyncMock()
+        investigation_mock.investigation_data_service = AsyncMock()
+        investigation_mock.investigation_data_service.query_investigations.return_value = []
+        investigation_mock.investigation_data_service.get_investigation.return_value = MagicMock(id="test-inv")
+        investigation_mock.investigation_data_service.add_chat_message.return_value = None
+        app.dependency_overrides[get_g8ee_investigation_service] = lambda: investigation_mock
+        
+        approval_mock = AsyncMock()
+        approval_mock.get_pending_approvals.return_value = {}
+        approval_mock.handle_approval_response.return_value = None
+        app.dependency_overrides[get_g8ee_approval_service] = lambda: approval_mock
+        
+        case_mock = AsyncMock()
+        case_mock.get_case.return_value = MagicMock(id="test-case", user_id="test-user")
+        case_mock.update_case.return_value = MagicMock(id="test-case", user_id="test-user")
+        case_mock.publish_case_update_sse.return_value = None
+        case_mock.delete_case.return_value = None
+        app.dependency_overrides[get_g8ee_case_data_service] = lambda: case_mock
+        
+        # For G8eHttpContext, we need to bypass the header validation since
+        # these tests only care about path registration, not auth
+        from app.models.http_context import G8eHttpContext
+        from app.constants import ComponentName
+        app.dependency_overrides[get_g8e_http_context] = lambda: G8eHttpContext(
+            web_session_id="test-session",
+            user_id="test-user",
+            case_id="test-case",
+            investigation_id="test-inv",
+            source_component=ComponentName.G8ED,
+        )
+        
+        with TestClient(app) as test_client:
+            yield test_client
+        
+        # Clean up overrides
+        app.dependency_overrides.clear()
 
     def test_health_check_path(self, client):
         """Health check endpoint should be accessible at absolute path."""

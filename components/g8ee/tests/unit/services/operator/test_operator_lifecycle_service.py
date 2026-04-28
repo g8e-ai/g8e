@@ -51,7 +51,13 @@ class TestOperatorLifecycleService:
 
     @pytest.fixture
     def lifecycle_service(self, operator_data_service, mock_supervisor_service, mock_settings_service):
-        return OperatorLifecycleService(operator_data_service, mock_supervisor_service, mock_settings_service)
+        service = OperatorLifecycleService(operator_data_service, mock_supervisor_service, mock_settings_service)
+        # Wire api_key_service for tests that need it
+        from unittest.mock import MagicMock
+        mock_api_key_service = MagicMock()
+        mock_api_key_service.rotate_operator_key = AsyncMock(return_value={"success": True, "api_key": "new-key"})
+        service.set_api_key_service(mock_api_key_service)
+        return service
 
     @pytest.fixture
     def mock_cache(self, mock_cache_aside_service):
@@ -310,7 +316,7 @@ class TestOperatorLifecycleService:
         mock_supervisor_service.stop_process.assert_called_once_with("operator", wait=True)
         # Verify status reset (1 update for reset)
         assert mock_cache.update_document.call_count == 1
-        # Verify API key persistence via settings service
-        mock_settings_service.update_g8ep_operator_api_key.assert_called_once()
+        # Verify API key rotation via api_key_service (new implementation)
+        lifecycle_service._api_key_service.rotate_operator_key.assert_called_once()
         # Verify start called
         mock_supervisor_service.start_process.assert_called_once_with("operator", wait=False)

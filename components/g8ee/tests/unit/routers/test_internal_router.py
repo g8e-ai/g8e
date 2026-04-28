@@ -361,7 +361,7 @@ async def test_create_operator_slot_success(g8e_context):
     mock_settings_service = MagicMock()
     mock_settings_service.update_g8ep_operator_api_key = AsyncMock(return_value=None)
     mock_api_key_service = MagicMock()
-    mock_api_key_service.issue_key = AsyncMock(return_value=True)
+    mock_api_key_service.issue_operator_key = AsyncMock(return_value=True)
     
     response = await create_operator_slot(
         request=request,
@@ -397,7 +397,7 @@ async def test_create_operator_slot_g8ep_persists_api_key(g8e_context):
     mock_settings_service = MagicMock()
     mock_settings_service.update_g8ep_operator_api_key = AsyncMock(return_value=None)
     mock_api_key_service = MagicMock()
-    mock_api_key_service.issue_key = AsyncMock(return_value=True)
+    mock_api_key_service.issue_operator_key = AsyncMock(return_value=True)
     
     response = await create_operator_slot(
         request=request,
@@ -410,19 +410,16 @@ async def test_create_operator_slot_g8ep_persists_api_key(g8e_context):
     assert response.success is True
     assert response.operator_id is not None
     mock_operator_data_service.create_operator.assert_called_once()
-    mock_settings_service.update_g8ep_operator_api_key.assert_called_once()
     
-    # Regression test: verify api_keys doc was issued BEFORE platform_settings write
-    mock_api_key_service.issue_key.assert_called_once()
-    call_args = mock_api_key_service.issue_key.call_args
+    # Verify issue_operator_key was called with is_g8ep=True and settings_service
+    mock_api_key_service.issue_operator_key.assert_called_once()
+    call_args = mock_api_key_service.issue_operator_key.call_args
     assert call_args[1]["api_key"] == response.api_key
     assert call_args[1]["user_id"] == "user-123"
     assert call_args[1]["operator_id"] == response.operator_id
+    assert call_args[1]["is_g8ep"] is True
+    assert call_args[1]["settings_service"] is mock_settings_service
     assert call_args[1]["client_name"] == "operator"
-    
-    # Verify the API key was passed to the settings service
-    call_args = mock_settings_service.update_g8ep_operator_api_key.call_args
-    assert call_args[0][0] == response.api_key
 
 @pytest.mark.asyncio
 async def test_claim_operator_slot_success(g8e_context):

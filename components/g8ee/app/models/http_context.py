@@ -25,7 +25,7 @@ from app.constants import (
 from app.utils.ids import generate_execution_id
 from app.utils.timestamp import now
 
-from .base import Field, G8eBaseModel, UTCDatetime, field_validator
+from .base import Field, G8eBaseModel, UTCDatetime, field_validator, model_validator
 
 if TYPE_CHECKING:
     pass
@@ -100,22 +100,16 @@ class G8eHttpContext(G8eBaseModel):
                 ) from exc
         return v
 
-    @field_validator("web_session_id", "user_id")
-    @classmethod
-    def validate_web_session_or_operator_auth(cls, v, info):
+    @model_validator(mode="after")
+    def validate_web_session_or_operator_auth(self):
         """Ensure either web session context (web_session_id + user_id) or operator auth (null values with G8ED source)."""
-        if info.field_name == "user_id":
-            web_session_id = info.data.get("web_session_id")
-            user_id = v
-            source_component = info.data.get("source_component")
-
-            # If either web_session_id or user_id is null, this must be operator auth relay from g8ed
-            if web_session_id is None or user_id is None:
-                if source_component != ComponentName.G8ED:
-                    raise ValueError(
-                        "web_session_id and user_id are required unless source_component is G8ED (operator auth relay)"
-                    )
-        return v
+        # If either web_session_id or user_id is null, this must be operator auth relay from g8ed
+        if self.web_session_id is None or self.user_id is None:
+            if self.source_component != ComponentName.G8ED:
+                raise ValueError(
+                    "web_session_id and user_id are required unless source_component is G8ED (operator auth relay)"
+                )
+        return self
 
     def has_bound_operator(self) -> bool:
         """Returns True if at least one operator has status bound."""

@@ -110,3 +110,9 @@ export const TribunalMemberIcons = Object.freeze({
     4: _AGENTS['agent.metadata'].nemesis.icon,
 });
 
+/**
+ * Auditor Icon
+ * Icon for the Tribunal auditor.
+ */
+export const AuditorIcon = _AGENTS['agent.metadata'].auditor.icon;
+

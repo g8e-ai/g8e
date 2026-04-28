@@ -227,6 +227,22 @@ body[data-theme="light"] .wizard-panel-icon { color: var(--accent-blue); }
 
 body[data-theme="light"] .wizard-panel-title { color: var(--text-bright); }
 
+.wizard-panel-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-left: auto;
+}
+
+.wizard-panel-header .setup-checkbox-label {
+    margin-bottom: 0;
+    font-size: 0.8125rem;
+}
+
+.wizard-panel-header .setup-label-link {
+    font-size: 0.8125rem;
+}
+
 .wizard-panel-desc {
     font-size: 0.875rem;
     color: var(--text-dim);
@@ -324,6 +340,10 @@ body[data-theme="light"] .wizard-welcome-note { color: var(--text-muted); }
 .setup-fields-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
+}
+
+.setup-fields-row#search-config-google {
+    grid-template-columns: 1fr 1fr 1fr;
 }
 
 .setup-field {

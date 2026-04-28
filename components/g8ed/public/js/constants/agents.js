@@ -23,3 +23,21 @@ export const TribunalMemberIcons = Object.freeze({
     3: 'code',
     4: 'warning',
 });
+
+/**
+ * Auditor Icon
+ * Icon for the Tribunal auditor.
+ * Sourced from shared/constants/agents.json agent metadata.
+ */
+export const AuditorIcon = 'search-check';
+
+/**
+ * Tribunal Outcome
+ * Terminal outcomes the Tribunal pipeline can produce.
+ */
+export const TribunalOutcome = Object.freeze({
+    CONSENSUS: 'consensus',
+    VERIFIED: 'verified',
+    VERIFICATION_FAILED: 'verification_failed',
+    CONSENSUS_FAILED: 'consensus_failed',
+});
