@@ -4,7 +4,7 @@
   "metadata": {
     "id": "triage",
     "display_name": "Triage",
-    "icon": "scan-eye"
+    "icon": "manage_search"
   },
   "description": "Routes user messages based on complexity and intent.",
   "request": {
