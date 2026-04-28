@@ -403,6 +403,14 @@ OPERATOR_COMMAND_WAIT_TIMEOUT_SECONDS      = 300
 OPERATOR_COMMAND_SHORT_WAIT_TIMEOUT_SECONDS = 30
 FS_READ_MAX_SIZE_BYTES          = 102400
 
+# Default runtime configuration returned to operators on successful authentication
+DEFAULT_OPERATOR_CONFIG = {
+    "command_timeout": "15m",
+    "max_concurrent_tasks": 25,
+    "max_memory_mb": 2048,
+    "heartbeat_interval_seconds": 30
+}
+
 # System-wide LLM generation defaults
 # These are used when user/platform settings do not specify values
 LLM_DEFAULT_MAX_OUTPUT_TOKENS     = 20000

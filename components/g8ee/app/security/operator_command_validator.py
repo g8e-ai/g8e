@@ -64,6 +64,12 @@ class OperatorCommandValidator:
         """
         Validate that command execution is authorized for this operator.
 
+        Args:
+            system_info: Request-scoped client attestation dict (NOT the operator doc field).
+                This is a per-command attestation bag from the operator, threaded to
+                session_service.validate_session. It is unrelated to the deprecated
+                OperatorDocument.system_info field.
+
         Returns:
             bool: True if command execution is authorized
 

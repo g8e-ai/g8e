@@ -463,7 +463,7 @@ class OperatorCommandService:
         async def _dispatch(op: OperatorDocument, exec_id: str) -> BatchOperatorExecutionResult:
             op_id = op.id
             op_session_id = op.operator_session_id or ""
-            hostname = op.current_hostname or (op.system_info.hostname if op.system_info else None) or op_id
+            hostname = op.current_hostname or (op.latest_heartbeat_snapshot.system_identity.hostname if op.latest_heartbeat_snapshot else None) or op_id
 
             if cancel_event.is_set():
                 await _publish_failed(exec_id, op_id, op_session_id, hostname, "Cancelled by fail-fast")

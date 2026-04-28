@@ -177,7 +177,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
 
         if not target_operator:
             available = [
-                f"  [{i}] {op.current_hostname or (op.system_info.hostname if op.system_info else 'None')} "
+                f"  [{i}] {op.current_hostname or (op.latest_heartbeat_snapshot.system_identity.hostname if op.latest_heartbeat_snapshot else 'None')} "
                 f"({op.id}) - {op.operator_type}"
                 for i, op in enumerate(operator_documents)
             ]
@@ -209,7 +209,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                 return op
 
         for op in operator_documents:
-            hostname = op.current_hostname or (op.system_info.hostname if op.system_info else "")
+            hostname = op.current_hostname or (op.latest_heartbeat_snapshot.system_identity.hostname if op.latest_heartbeat_snapshot else "")
             if hostname and hostname.lower() == target_operator.lower():
                 return op
 
@@ -223,7 +223,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
             )
 
         available = [
-            f"  [{i}] {op.current_hostname or (op.system_info.hostname if op.system_info else 'None')} ({op.id})"
+            f"  [{i}] {op.current_hostname or (op.latest_heartbeat_snapshot.system_identity.hostname if op.latest_heartbeat_snapshot else 'None')} ({op.id})"
             for i, op in enumerate(operator_documents)
         ]
         raise ValidationError(
@@ -275,7 +275,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
     def build_target_systems_list(self, operator_documents: list[OperatorDocument]) -> list[TargetSystem]:
         systems: list[TargetSystem] = []
         for op in operator_documents:
-            hostname: str = op.current_hostname or (op.system_info.hostname if op.system_info else None) or "None"
+            hostname: str = op.current_hostname or (op.latest_heartbeat_snapshot.system_identity.hostname if op.latest_heartbeat_snapshot else None) or "None"
             systems.append(TargetSystem(
                 operator_id=op.id,
                 hostname=hostname,

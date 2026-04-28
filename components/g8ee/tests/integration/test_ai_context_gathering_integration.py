@@ -67,12 +67,14 @@ from app.models.investigations import (
 )
 from app.models.memory import InvestigationMemory
 from app.models.operators import (
-    OperatorSystemInfo,
+    HeartbeatSnapshot,
+    HeartbeatSystemIdentity,
+    HeartbeatNetworkInfo,
     SystemInfoOSDetails,
     SystemInfoUserDetails,
     SystemInfoMemoryDetails,
     SystemInfoDiskDetails,
-    SystemInfoEnvironment,
+    HeartbeatEnvironment,
 )
 from app.models.agent import OperatorContext
 from app.services.investigation.investigation_service import (

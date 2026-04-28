@@ -50,11 +50,13 @@ from app.models.operators import (
     HeartbeatPerformanceMetrics,
     HeartbeatSystemIdentity,
     HeartbeatUptimeInfo,
+    HeartbeatNetworkInfo,
     OperatorDocument,
     HeartbeatSnapshot,
-    OperatorSystemInfo,
     SystemInfoEnvironment,
     SystemInfoUserDetails,
+    SystemInfoOSDetails,
+    HeartbeatEnvironment,
 )
 from app.utils.timestamp import now
 
@@ -264,13 +266,17 @@ def build_minimal_operator_document(
         status=status,
         current_hostname=hostname,
         operator_type=operator_type,
-        system_info=OperatorSystemInfo(
-            hostname=hostname,
-            os="linux",
-            architecture="x86_64",
-            current_user="test-user",
-            environment=SystemInfoEnvironment(pwd="/home/test-user"),
-            interfaces=[],
+        latest_heartbeat_snapshot=HeartbeatSnapshot(
+            system_identity=HeartbeatSystemIdentity(
+                hostname=hostname,
+                os="linux",
+                architecture="x86_64",
+                current_user="test-user",
+                cpu_count=2,
+                memory_mb=4096,
+            ),
+            network=HeartbeatNetworkInfo(),
+            environment=HeartbeatEnvironment(pwd="/home/test-user"),
         ),
     )
 
@@ -299,11 +305,16 @@ def build_production_operator_document(
         status=OperatorStatus.BOUND,
         current_hostname=hostname,
         operator_type=operator_type,
-        system_info=OperatorSystemInfo(
-            hostname=hostname,
-            os="linux",
-            architecture="amd64",
-            current_user="root",
+        latest_heartbeat_snapshot=HeartbeatSnapshot(
+            system_identity=HeartbeatSystemIdentity(
+                hostname=hostname,
+                os="linux",
+                architecture="amd64",
+                current_user="root",
+                cpu_count=8,
+                memory_mb=16384,
+            ),
+            network=HeartbeatNetworkInfo(),
             user_details=SystemInfoUserDetails(
                 username="root",
                 uid="0",
@@ -311,12 +322,16 @@ def build_production_operator_document(
                 home="/root",
                 shell="/bin/bash",
             ),
-            environment=SystemInfoEnvironment(
+            environment=HeartbeatEnvironment(
                 pwd="/root",
                 is_container=False,
                 init_system="systemd",
             ),
-            interfaces=[],
+            os_details=SystemInfoOSDetails(
+                distro="ubuntu",
+                kernel="5.15.0",
+                version="22.04",
+            ),
         ),
     )
 

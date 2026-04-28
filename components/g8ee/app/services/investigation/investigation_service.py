@@ -401,34 +401,39 @@ class InvestigationService:
 
 
 def extract_single_operator_context(op: OperatorDocument) -> OperatorContext:
-    """Extract typed system context from a single OperatorDocument."""
-    sys_info = op.system_info
+    """Extract typed system context from a single OperatorDocument.
+
+    Reads exclusively from latest_heartbeat_snapshot, which is the canonical
+    source of truth for operator system identity and telemetry.
+    """
     hb = op.latest_heartbeat_snapshot
 
-    # Use system_info for static details, heartbeat for dynamic metrics
-    os_details = sys_info.os_details if sys_info else None
-    user_details = sys_info.user_details if sys_info else None
-    disk_details = sys_info.disk_details if sys_info else None
-    memory_details = sys_info.memory_details if sys_info else None
-    environment = sys_info.environment if sys_info else None
-
-    # Override with latest heartbeat if available
     if hb:
-        if hb.os_details: os_details = hb.os_details
-        if hb.user_details: user_details = hb.user_details
-        if hb.disk_details: disk_details = hb.disk_details
-        if hb.memory_details: memory_details = hb.memory_details
-        if hb.environment: environment = hb.environment
+        system_identity = hb.system_identity
+        network = hb.network
+        os_details = hb.os_details
+        user_details = hb.user_details
+        environment = hb.environment
+        disk_details = hb.disk_details
+        memory_details = hb.memory_details
+    else:
+        system_identity = None
+        network = None
+        os_details = None
+        user_details = None
+        environment = None
+        disk_details = None
+        memory_details = None
 
     return OperatorContext(
         operator_id=op.id,
         operator_session_id=op.operator_session_id,
-        os=sys_info.os if sys_info else None,
-        hostname=sys_info.hostname if sys_info else None,
-        architecture=sys_info.architecture if sys_info else None,
-        cpu_count=sys_info.cpu_count if sys_info else None,
-        memory_mb=sys_info.memory_mb if sys_info else None,
-        public_ip=sys_info.public_ip if sys_info else None,
+        os=system_identity.os if system_identity else None,
+        hostname=system_identity.hostname if system_identity else None,
+        architecture=system_identity.architecture if system_identity else None,
+        cpu_count=system_identity.cpu_count if system_identity else None,
+        memory_mb=system_identity.memory_mb if system_identity else None,
+        public_ip=network.public_ip if network else None,
         operator_type=op.operator_type,
         cloud_subtype=op.cloud_subtype,
         is_cloud_operator=op.operator_type == OperatorType.CLOUD,

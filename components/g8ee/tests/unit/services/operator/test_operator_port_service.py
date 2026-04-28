@@ -23,7 +23,7 @@ from app.constants import CommandErrorType, EventType, OperatorStatus, NetworkPr
 from app.constants.status import ExecutionStatus
 from app.errors import BusinessLogicError, ValidationError
 from app.models.command_request_payloads import CheckPortRequestPayload
-from app.models.operators import OperatorDocument, OperatorSystemInfo
+from app.models.operators import OperatorDocument, HeartbeatSnapshot, HeartbeatSystemIdentity, HeartbeatNetworkInfo
 from app.models.pubsub_messages import PortCheckResultPayload, G8eoResultEnvelope
 from app.models.tool_results import CommandInternalResult
 from app.services.operator.port_service import OperatorPortService
@@ -53,7 +53,10 @@ def _make_operator(
         operator_session_id=operator_session_id,
         current_hostname=hostname,
         status=OperatorStatus.BOUND,
-        system_info=OperatorSystemInfo(hostname=hostname, os="linux", architecture="x86_64"),
+        latest_heartbeat_snapshot=HeartbeatSnapshot(
+            system_identity=HeartbeatSystemIdentity(hostname=hostname, os="linux", architecture="x86_64"),
+            network=HeartbeatNetworkInfo(),
+        ),
     )
 
 def _make_service(

@@ -221,7 +221,7 @@ class HeartbeatStaleMonitorService:
                 operator_id=operator.id,
                 status=target_status,
                 hostname=operator.current_hostname,
-                system_fingerprint=operator.system_info.system_fingerprint if operator.system_info else None,
+                system_fingerprint=operator.latest_heartbeat_snapshot.system_fingerprint if operator.latest_heartbeat_snapshot else None,
                 timestamp=datetime.now(timezone.utc),
             )
             
