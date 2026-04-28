@@ -16,6 +16,7 @@
 from app.constants.settings import GroundingSource
 from app.models.grounding import GroundingChunk, GroundingMetadata, GroundingSourceInfo
 
+
 class FakeWebSearchProvider:
     """Test double for WebSearchProvider.
 
@@ -50,8 +51,8 @@ class FakeWebSearchProvider:
         chunks = []
         sources = []
         for i, item in enumerate(result.results):
-            uri = getattr(item, 'link', None) or ""
-            title = getattr(item, 'title', None) or ""
+            uri = getattr(item, "link", None) or ""
+            title = getattr(item, "title", None) or ""
             if not uri:
                 continue
             chunks.append(GroundingChunk(uri=uri, title=title))

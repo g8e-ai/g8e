@@ -56,14 +56,14 @@ class TribunalConsensusFailedError(TribunalError):
 
     def __init__(self, request: str, vote_breakdown: "VoteBreakdown") -> None:
         self.vote_breakdown = vote_breakdown
-        
+
         # Build a structured summary of candidates by member for the LLM
         candidates = [
-            f"- {member}: {cmd}" 
+            f"- {member}: {cmd}"
             for member, cmd in vote_breakdown.candidates_by_member.items()
         ]
         summary = "\n".join(candidates)
-        
+
         user_message = (
             "Tribunal consensus failed: no two members agreed on a command. "
             f"Candidates produced:\n{summary}\n\n"
@@ -343,6 +343,23 @@ class CommandGenerationResult(G8eBaseModel):
     correlation_id: str | None = Field(
         default=None,
         description="Correlation ID linking this Tribunal session to subsequent approval requests",
+    )
+    reputation_commitment_id: str | None = Field(
+        default=None,
+        description=(
+            "ID of the reputation_commitment row written inside the auditor's verdict "
+            "step (GDD §14.4). None when the commitment step was skipped (auditor did "
+            "not pass, disabled, reputation deps missing) or when the commitment write "
+            "failed non-fatally."
+        ),
+    )
+    round_2_candidates: list[CandidateCommand] | None = Field(
+        default=None,
+        description="Round 2 candidates from anonymized peer review (null if single-round)",
+    )
+    round_2_vote_breakdown: VoteBreakdown | None = Field(
+        default=None,
+        description="Round 2 vote breakdown from anonymized peer review (null if single-round)",
     )
 
 

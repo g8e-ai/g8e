@@ -53,7 +53,7 @@ export function createApiKeyMiddleware({ apiKeyService, userService }) {
                 }).forWire());
             }
 
-            const validation = await apiKeyService.validateApiKey(apiKey);
+            const validation = await apiKeyService.validateKey(apiKey);
 
             if (!validation.success) {
                 logger.warn('[API-KEY-AUTH] API key validation failed', {
@@ -105,7 +105,7 @@ export function createApiKeyMiddleware({ apiKeyService, userService }) {
                 api_key_prefix: apiKey.substring(0, API_KEY_LOG_PREFIX_LENGTH) + '...'
             });
 
-            apiKeyService.updateLastUsed(apiKey).catch(err => {
+            apiKeyService.recordUsage(apiKey).catch(err => {
                 logger.warn('[API-KEY-AUTH] Failed to update last_used_at', { error: err.message });
             });
 

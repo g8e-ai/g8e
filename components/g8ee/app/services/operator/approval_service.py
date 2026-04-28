@@ -61,6 +61,8 @@ from app.models.operators import (
     IntentApprovalEvent,
     IntentApprovalRequest,
     PendingApproval,
+    StreamApprovalEvent,
+    StreamApprovalRequest,
     TargetSystem,
 )
 from app.models.events import SessionEvent
@@ -82,10 +84,18 @@ class OperatorApprovalService:
         on_approval_requested: Callable[[str, PendingApproval], None] | None = None,
     ) -> None:
         self.g8ed_event_service = g8ed_event_service
-        self.operator_data_service = operator_data_service
-        self.investigation_data_service = investigation_data_service
+        self._operator_data_service = operator_data_service
+        self._investigation_data_service = investigation_data_service
         self._on_approval_requested = on_approval_requested
         self._pending_approvals: dict[str, PendingApproval] = {}
+
+    @property
+    def operator_data_service(self) -> OperatorDataServiceProtocol:
+        return self._operator_data_service
+
+    @property
+    def investigation_data_service(self) -> InvestigationDataServiceProtocol:
+        return self._investigation_data_service
 
     def set_on_approval_requested(self, callback: Callable[[str, PendingApproval], None] | None) -> None:
         self._on_approval_requested = callback
@@ -432,6 +442,176 @@ class OperatorApprovalService:
             return ApprovalResult(
                 approved=False,
                 reason=f"Agent continuation approval request failed: {e}",
+                error=True,
+                error_type=ApprovalErrorType.APPROVAL_EXCEPTION,
+                approval_id=approval_id,
+            )
+
+    async def request_stream_approval(self, request: StreamApprovalRequest) -> ApprovalResult:
+        """Request operator approval for an operator stream operation."""
+        return await self._request_stream_approval(
+            hosts=request.hosts,
+            arch=request.arch,
+            endpoint=request.endpoint,
+            device_token=request.device_token,
+            concurrency=request.concurrency,
+            timeout=request.timeout,
+            justification=request.justification,
+            g8e_context=request.g8e_context,
+            timeout_seconds=request.timeout_seconds,
+            user_id=request.g8e_context.user_id,
+            execution_id=request.execution_id,
+            operator_session_id=request.operator_session_id,
+            operator_id=request.operator_id,
+            correlation_id=request.correlation_id,
+        )
+
+    async def _request_stream_approval(
+        self,
+        hosts: list[str],
+        arch: str,
+        endpoint: str,
+        device_token: str,
+        concurrency: int,
+        timeout: int,
+        justification: str,
+        g8e_context: G8eHttpContext,
+        timeout_seconds: int,
+        user_id: str,
+        execution_id: str,
+        operator_session_id: str,
+        operator_id: str,
+        correlation_id: str | None = None,
+    ) -> ApprovalResult:
+        approval_id = generate_approval_id()
+        try:
+            logger.info(
+                "[STREAM_APPROVAL] Requesting approval: hosts=%d arch=%s approval_id=%s execution_id=%s",
+                len(hosts),
+                arch,
+                approval_id,
+                execution_id,
+            )
+
+            approval_event = StreamApprovalEvent(
+                approval_id=approval_id,
+                execution_id=execution_id,
+                justification=justification,
+                timeout_seconds=timeout_seconds,
+                user_id=user_id,
+                hosts=hosts,
+                concurrency=concurrency,
+                timeout=timeout,
+                preview_command=f"g8e-operator stream --hosts {','.join(hosts)} --concurrency {concurrency}",
+                correlation_id=correlation_id,
+            )
+
+            try:
+                await self.g8ed_event_service.publish(
+                    SessionEvent(
+                        event_type=EventType.OPERATOR_STREAM_APPROVAL_REQUESTED,
+                        payload=approval_event,
+                        web_session_id=g8e_context.web_session_id,
+                        user_id=g8e_context.user_id,
+                        case_id=g8e_context.case_id,
+                        investigation_id=g8e_context.investigation_id,
+                    )
+                )
+                logger.info("[STREAM_APPROVAL] Published to g8ed")
+            except Exception as publish_error:
+                error_msg = f"Failed to publish stream approval request to g8ed: {publish_error}"
+                logger.error("[STREAM_APPROVAL-PUBLISH-FAILURE] %s", error_msg, exc_info=True)
+                return ApprovalResult(
+                    approved=False,
+                    reason=error_msg,
+                    error=True,
+                    error_type=ApprovalErrorType.APPROVAL_PUBLISH_FAILURE,
+                    approval_id=approval_id,
+                )
+
+            await self._audit(
+                operator_id=None,  # Stream approval is not tied to a single bound operator
+                event_type=EventType.OPERATOR_STREAM_APPROVAL_REQUESTED,
+                metadata=ApprovalMetadata(
+                    execution_id=execution_id,
+                    approval_id=approval_id,
+                    justification=justification,
+                    requested_at=approval_event.requested_at,
+                ),
+                g8e_context=g8e_context,
+                log_tag="STREAM_APPROVAL",
+            )
+
+            pending = PendingApproval(
+                approval_id=approval_id,
+                approval_type=ApprovalType.STREAM,
+                requested_at=now(),
+                case_id=g8e_context.case_id,
+                investigation_id=g8e_context.investigation_id,
+                user_id=user_id,
+                operator_id=None,
+                operator_session_id=None,
+            )
+            self._register_pending(approval_id, pending)
+            logger.info("[STREAM_APPROVAL] Stored pending (key=%s); awaiting user response", approval_id)
+
+            await pending.wait()
+            self._pending_approvals.pop(approval_id, None)
+            logger.info("[STREAM_APPROVAL] Response received: approved=%s", pending.approved)
+
+            if pending.feedback:
+                await self._audit(
+                    operator_id=None,
+                    event_type=EventType.OPERATOR_STREAM_APPROVAL_REJECTED,
+                    metadata=ApprovalMetadata(
+                        execution_id=execution_id,
+                        approval_id=approval_id,
+                        feedback_reason=pending.reason,
+                        responded_at=pending.responded_at or now(),
+                    ),
+                    g8e_context=g8e_context,
+                    log_tag="STREAM_APPROVAL",
+                )
+                return ApprovalResult(
+                    approved=False,
+                    feedback=True,
+                    reason=pending.reason or "User provided additional context via chat message",
+                    approval_id=approval_id,
+                )
+
+            await self._audit(
+                operator_id=None,
+                event_type=(
+                    EventType.OPERATOR_STREAM_APPROVAL_GRANTED
+                    if pending.approved
+                    else EventType.OPERATOR_STREAM_APPROVAL_REJECTED
+                ),
+                metadata=ApprovalMetadata(
+                    execution_id=execution_id,
+                    approval_id=approval_id,
+                    approved=pending.approved,
+                    reason=pending.reason,
+                    responded_at=now(),
+                ),
+                g8e_context=g8e_context,
+                log_tag="STREAM_APPROVAL",
+            )
+
+            return ApprovalResult(
+                approved=pending.approved or False,
+                reason=pending.reason,
+                approval_id=approval_id,
+            )
+
+        except Exception as e:
+            logger.error(
+                "[STREAM_APPROVAL-EXCEPTION] Failed to request stream approval: %s",
+                e,
+                exc_info=True,
+            )
+            return ApprovalResult(
+                approved=False,
+                reason=f"Stream approval request failed: {e}",
                 error=True,
                 error_type=ApprovalErrorType.APPROVAL_EXCEPTION,
                 approval_id=approval_id,

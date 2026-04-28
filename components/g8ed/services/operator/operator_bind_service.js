@@ -16,6 +16,7 @@ import { sessionIdTag } from '../../utils/session_log.js';
 import { DeviceLinkError } from '../../constants/auth.js';
 import { OperatorStatus } from '../../constants/operator.js';
 import { EventType } from '../../constants/events.js';
+import { SourceComponent } from '../../constants/ai.js';
 import { G8eHttpContext, BoundOperatorContext, UnbindOperatorsRequest } from '../../models/request_models.js';
 import {
     BindOperatorsResponse,
@@ -27,19 +28,16 @@ export class BindOperatorsService {
      * @param {Object} options
      * @param {Object} options.operatorService - OperatorService (Domain Layer) instance
      * @param {Object} options.bindingService - BoundSessionsService instance
-     * @param {Object} options.operatorSessionService - OperatorSessionService instance
      * @param {Object} options.webSessionService - WebSessionService instance
      * @param {Object} options.sseService - SSEService instance (optional)
      */
-    constructor({ operatorService, bindingService, operatorSessionService, webSessionService, sseService }) {
+    constructor({ operatorService, bindingService, webSessionService, sseService }) {
         if (!operatorService) throw new Error('operatorService is required');
         if (!bindingService) throw new Error('bindingService is required');
-        if (!operatorSessionService) throw new Error('operatorSessionService is required');
         if (!webSessionService) throw new Error('webSessionService is required');
 
         this.operatorService = operatorService;
         this.bindingService = bindingService;
-        this.operatorSessionService = operatorSessionService;
         this.webSessionService = webSessionService;
         this.sseService = sseService;
     }
@@ -84,11 +82,26 @@ export class BindOperatorsService {
                     continue;
                 }
 
-                // 1. Update Operator document (status + bound_web_session_id)
-                await this.operatorService.operatorDataService.updateOperator(operatorId, { 
-                    status: OperatorStatus.BOUND,
-                    bound_web_session_id: webSessionId 
+                // 1. Use g8ee for operator binding to enforce architectural boundary
+                // g8ed should not write to operators after auth
+                const g8eContext = G8eHttpContext.parse({
+                    web_session_id: webSessionId,
+                    user_id: userId,
+                    organization_id: operator.organization_id,
+                    source_component: SourceComponent.G8ED,
                 });
+
+                const relayParams = {
+                    operator_ids: [operatorId],
+                    web_session_id: webSessionId,
+                    user_id: userId,
+                };
+
+                const response = await this.operatorService.relayBindOperatorsToG8ee(relayParams, g8eContext);
+                
+                if (!response.success || response.failed_count > 0) {
+                    throw new Error(response.errors?.[0]?.error || 'Failed to bind operator via g8ee');
+                }
 
                 // 2. Update Web Session document
                 await this.webSessionService.bindOperatorToWebSession(webSessionId, operatorId);
@@ -96,29 +109,6 @@ export class BindOperatorsService {
                 // 3. Link sessions in KV & Durability
                 await this.bindingService.bind(operatorSessionId, webSessionId, userId, operatorId);
 
-                // 4. Relay to g8ee
-                const contextWrapper = await this.operatorService.getOperatorWithSessionContext(operatorId);
-                if (contextWrapper) {
-                    const g8eContext = G8eHttpContext.parse({
-                        web_session_id:      webSessionId,
-                        user_id:             userId,
-                        organization_id:     contextWrapper.organization_id,
-                        case_id:             contextWrapper.case_id,
-                        investigation_id:    contextWrapper.investigation_id,
-                        task_id:             contextWrapper.task_id,
-                        bound_operators: [
-                            BoundOperatorContext.parse({
-                                operator_id:         contextWrapper.id,
-                                operator_session_id: contextWrapper.operator_session_id,
-                                bound_web_session_id: contextWrapper.bound_web_session_id,
-                                status:              contextWrapper.status,
-                                operator_type:       contextWrapper.operator_type,
-                                system_info:         contextWrapper.system_info,
-                            })
-                        ]
-                    });
-                    await this.operatorService.relayRegisterOperatorSessionToG8ee(g8eContext).catch(() => {});
-                }
                 bound.push(operatorId);
 
             } catch (err) {
@@ -192,11 +182,26 @@ export class BindOperatorsService {
 
                 const operatorSessionId = operator.operator_session_id;
 
-                // 1. Update Operator document (status + bound_web_session_id)
-                await this.operatorService.operatorDataService.updateOperator(operatorId, { 
-                    status: OperatorStatus.ACTIVE,
-                    bound_web_session_id: null 
+                // 1. Use g8ee for operator unbinding to enforce architectural boundary
+                // g8ed should not write to operators after auth
+                const g8eContext = G8eHttpContext.parse({
+                    web_session_id: webSessionId,
+                    user_id: userId,
+                    organization_id: operator.organization_id,
+                    source_component: SourceComponent.G8ED,
                 });
+
+                const relayParams = {
+                    operator_ids: [operatorId],
+                    web_session_id: webSessionId,
+                    user_id: userId,
+                };
+
+                const response = await this.operatorService.relayUnbindOperatorsToG8ee(relayParams, g8eContext);
+                
+                if (!response.success || response.failed_count > 0) {
+                    throw new Error(response.errors?.[0]?.error || 'Failed to unbind operator via g8ee');
+                }
 
                 // 2. Update Web Session document
                 await this.webSessionService.unbindOperatorFromWebSession(webSessionId, operatorId);
@@ -204,30 +209,6 @@ export class BindOperatorsService {
                 // 3. Unlink sessions in KV & Durability
                 if (operatorSessionId) {
                     await this.bindingService.unbind(operatorSessionId, webSessionId, operatorId);
-                }
-                
-                // 4. Relay to g8ee
-                const contextWrapper = await this.operatorService.getOperatorWithSessionContext(operatorId);
-                if (contextWrapper) {
-                    const g8eContext = G8eHttpContext.parse({
-                        web_session_id:      webSessionId,
-                        user_id:             userId,
-                        organization_id:     contextWrapper.organization_id,
-                        case_id:             contextWrapper.case_id,
-                        investigation_id:    contextWrapper.investigation_id,
-                        task_id:             contextWrapper.task_id,
-                        bound_operators: [
-                            BoundOperatorContext.parse({
-                                operator_id:         contextWrapper.id,
-                                operator_session_id: contextWrapper.operator_session_id,
-                                bound_web_session_id: contextWrapper.bound_web_session_id,
-                                status:              contextWrapper.status,
-                                operator_type:       contextWrapper.operator_type,
-                                system_info:         contextWrapper.system_info,
-                            })
-                        ]
-                    });
-                    await this.operatorService.relayRegisterOperatorSessionToG8ee(g8eContext).catch(() => {});
                 }
                 
                 unbound.push(operatorId);

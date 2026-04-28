@@ -24,27 +24,25 @@ operator, ensuring this regression is caught early in CI.
 
 from __future__ import annotations
 
-import pytest
-
 from app.models.pubsub_messages import (
-    FetchFileHistorySuccessPayload,
-    FetchFileHistoryErrorPayload,
+    CancellationResultPayload,
+    ExecutionResultsPayload,
+    ExecutionStatusPayload,
     FetchFileDiffByIdSuccessPayload,
     FetchFileDiffBySessionSuccessPayload,
     FetchFileDiffErrorPayload,
-    FetchHistorySuccessPayload,
+    FetchFileHistoryErrorPayload,
+    FetchFileHistorySuccessPayload,
     FetchHistoryErrorPayload,
-    RestoreFileSuccessPayload,
-    RestoreFileErrorPayload,
-    CancellationResultPayload,
+    FetchHistorySuccessPayload,
+    FetchLogsErrorPayload,
+    FetchLogsResultPayload,
     FileEditResultPayload,
     FsListResultPayload,
     FsReadResultPayload,
-    ExecutionResultsPayload,
-    ExecutionStatusPayload,
-    FetchLogsResultPayload,
-    FetchLogsErrorPayload,
     PortCheckResultPayload,
+    RestoreFileErrorPayload,
+    RestoreFileSuccessPayload,
 )
 
 
@@ -151,7 +149,6 @@ class TestLFAAExecutionIdFieldParsing:
 
     def test_fetch_file_diff_by_id_parses_execution_id(self):
         """FetchFileDiffByIdSuccessPayload must accept execution_id in JSON."""
-        from app.models.tool_results import FileDiffEntry
         payload_dict = {
             "execution_id": "test-exec-456",
             "diff": {
@@ -192,7 +189,6 @@ class TestLFAAExecutionIdFieldParsing:
 
     def test_fetch_history_success_parses_execution_id(self):
         """FetchHistorySuccessPayload must accept execution_id in JSON."""
-        from app.models.tool_results import AuditSessionMetadata
         payload_dict = {
             "execution_id": "test-exec-def",
             "operator_session_id": "sess-1",

@@ -1,10 +1,11 @@
 # Copyright (c) 2026 Lateralus Labs, LLC.
 # Licensed under the Apache License, Version 2.0 (the "License");
 
-import pytest
-from typing import get_args, Union
-from app.models.pubsub_messages import G8eOutboundPayload
+from typing import get_args
+
 import app.models.command_request_payloads as payloads
+from app.models.pubsub_messages import G8eOutboundPayload
+
 
 def test_g8ee_outbound_payload_union_is_exhaustive():
     """
@@ -21,15 +22,15 @@ def test_g8ee_outbound_payload_union_is_exhaustive():
         cls for name, cls in payloads.__dict__.items()
         if isinstance(cls, type) and name.endswith("RequestPayload")
     ]
-    
+
     # Get the types included in the Union
     union_types = get_args(G8eOutboundPayload)
-    
+
     missing = []
     for cls in payload_classes:
         if cls not in union_types:
             missing.append(cls.__name__)
-            
+
     assert not missing, (
         f"G8eOutboundPayload union is missing these request payload types: {', '.join(missing)}. "
         "Add them to G8eOutboundPayload in app/models/pubsub_messages.py to ensure "

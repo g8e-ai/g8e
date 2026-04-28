@@ -18,10 +18,12 @@ Provider-agnostic type system for all LLM interactions. Every service in g8ee
 uses these types instead of any provider-specific SDK types.
 """
 
+from __future__ import annotations
+
 import base64
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 from app.constants import (
     LLM_DEFAULT_MAX_OUTPUT_TOKENS,
@@ -32,13 +34,13 @@ from app.models.base import ConfigDict, G8eBaseModel
 
 @dataclass(frozen=True)
 class ThoughtSignature:
-    """Opaque encrypted context blob from the Gemini thinking API.
+    """Opaque encrypted context blob from the provider thinking API.
 
     Canonical form inside the application is always a base64-encoded string.
     The SDK returns raw bytes at the inbound provider boundary; from_sdk()
     normalises any inbound representation to this canonical form.
 
-    Rules per Gemini 3 thought-signatures spec:
+    Rules for thought-signatures:
     - Must be passed back on every toolCall Part (400 if omitted).
     - Must NOT be merged: a Part with a signature cannot be combined with
       a Part that lacks one, and two signed Parts cannot be merged.
@@ -48,7 +50,7 @@ class ThoughtSignature:
     value: str
 
     @classmethod
-    def from_sdk(cls, raw) -> "ThoughtSignature | None":
+    def from_sdk(cls, raw) -> ThoughtSignature | None:
         """Normalise an inbound SDK thought_signature to ThoughtSignature.
 
         Accepts bytes, bytearray, or str. Returns None when raw is None or
@@ -96,15 +98,15 @@ class Part:
     thought_signature: ThoughtSignature | None = None
 
     @classmethod
-    def from_text(cls, text: str) -> "Part":
+    def from_text(cls, text: str) -> Part:
         return cls(text=text)
 
     @classmethod
-    def from_bytes(cls, data: bytes, mime_type: str) -> "Part":
+    def from_bytes(cls, data: bytes, mime_type: str) -> Part:
         return cls(inline_data=InlineData(mime_type=mime_type, data=data))
 
     @classmethod
-    def from_tool_response(cls, name: str, response: dict[str, Any], id: str | None = None) -> "Part":
+    def from_tool_response(cls, name: str, response: dict[str, Any], id: str | None = None) -> Part:
         return cls(tool_response=ToolResponse(name=name, response=response, id=id))
 
 
@@ -118,7 +120,7 @@ class Role(str, Enum):
     USER = "user"
     ASSISTANT = "assistant"
     SYSTEM = "system"
-    MODEL = "model"  # Gemini specific but mapped to ASSISTANT usually
+    MODEL = "model"  # Provider-specific but often mapped to ASSISTANT
     TOOL = "tool"
 
 
@@ -135,13 +137,13 @@ class Type(Enum):
 class Schema:
     type: Type
     description: str | None = None
-    properties: dict[str, "Schema"] | None = None
+    properties: dict[str, Schema] | None = None
     required: list[str] | None = None
-    items: Optional["Schema"] = None
+    items: Schema | None = None
     enum: list[str] | None = None
 
 
-_JSON_TYPE_MAP: dict[str, "Type"] = {
+_JSON_TYPE_MAP: dict[str, Type] = {
     "string": Type.STRING,
     "integer": Type.INTEGER,
     "number": Type.NUMBER,
@@ -152,11 +154,11 @@ _JSON_TYPE_MAP: dict[str, "Type"] = {
 
 
 def _resolve_ref(ref: str, defs: dict) -> dict:
-    name = ref.split("/")[-1]
+    name = ref.rsplit("/", maxsplit=1)[-1]
     return defs.get(name, {})
 
 
-def _json_schema_to_schema(node: dict, defs: dict) -> "Schema":
+def _json_schema_to_schema(node: dict, defs: dict) -> Schema:
     if "$ref" in node:
         node = _resolve_ref(node["$ref"], defs)
 
@@ -185,9 +187,9 @@ def _json_schema_to_schema(node: dict, defs: dict) -> "Schema":
     description = node.get("description")
     enum = node.get("enum")
 
-    properties: dict[str, "Schema"] | None = None
+    properties: dict[str, Schema] | None = None
     required: list[str] | None = None
-    items: "Schema | None" = None
+    items: Schema | None = None
 
     if schema_type == Type.OBJECT and "properties" in node:
         properties = {
@@ -211,7 +213,7 @@ def _json_schema_to_schema(node: dict, defs: dict) -> "Schema":
     )
 
 
-def schema_from_model(model_cls: type, required_override: list[str] | None = None) -> "Schema":
+def schema_from_model(model_cls: type, required_override: list[str] | None = None) -> Schema:
     """Derive a types.Schema from a G8eBaseModel subclass.
 
     Uses model_json_schema() as the source of truth. Field descriptions come
@@ -264,26 +266,6 @@ class ToolGroup(G8eBaseModel):
     tools: list[ToolDeclaration] = []
     google_search: bool = False
 
-    def to_genai_tools(self) -> list:
-        """Convert ToolGroup to google.genai Tool format for LLM boundary."""
-        from app.llm.providers.gemini import genai_types
-
-        genai_tools = []
-        funcs = []
-        for tool in self.tools:
-            funcs.append({
-                "name": tool.name,
-                "description": tool.description,
-                "parameters": tool.parameters,
-            })
-        if funcs:
-            genai_tools.append(genai_types.Tool(function_declarations=funcs))
-
-        if self.google_search:
-            genai_tools.append(genai_types.Tool(google_search=genai_types.GoogleSearch()))
-
-        return genai_tools
-
 
 @dataclass
 class UsageMetadata:
@@ -326,7 +308,7 @@ class SdkSearchEntryPoint:
 class SdkGroundingRawData:
     """Typed representation of raw SDK grounding metadata extracted at the provider boundary.
 
-    Populated by GeminiProvider and attached to GenerateContentResponse.grounding_raw.
+    Populated by the respective provider and attached to GenerateContentResponse.grounding_raw.
     Consumed exclusively by GroundingService — never accessed outside the grounding boundary.
     """
     web_search_queries: list[str] = field(default_factory=list)
@@ -385,9 +367,6 @@ class ResponseJsonSchema(G8eBaseModel):
     def flatten_for_ollama(self) -> dict[str, Any]:
         return self.json_schema_dict
 
-    def flatten_for_gemini(self) -> dict[str, Any]:
-        return self.json_schema_dict
-
     def flatten_for_openai(self) -> dict[str, Any]:
         return {"name": self.name, "schema": self.json_schema_dict, "strict": self.strict}
 
@@ -396,14 +375,11 @@ class ResponseFormat(G8eBaseModel):
     json_schema: ResponseJsonSchema
 
     @classmethod
-    def from_pydantic_schema(cls, json_schema: dict[str, Any], name: str = "response") -> "ResponseFormat":
+    def from_pydantic_schema(cls, json_schema: dict[str, Any], name: str = "response") -> ResponseFormat:
         return cls(json_schema=ResponseJsonSchema(json_schema_dict=json_schema, name=name))
 
     def flatten_for_ollama(self) -> dict[str, Any]:
         return self.json_schema.flatten_for_ollama()
-
-    def flatten_for_gemini(self) -> dict[str, Any]:
-        return self.json_schema.flatten_for_gemini()
 
     def flatten_for_openai(self) -> dict[str, Any]:
         return {"type": "json_schema", "json_schema": self.json_schema.flatten_for_openai()}

@@ -12,7 +12,7 @@
 // limitations under the License.
 
 import express from 'express';
-import { ErrorResponse, OperatorApiKeyResponse, OperatorRefreshKeyResponse } from '../../models/response_models.js';
+import { ErrorResponse, OperatorApiKeyResponse } from '../../models/response_models.js';
 import { logger } from '../../utils/logger.js';
 import { OperatorPaths } from '../../constants/api_paths.js';
 
@@ -71,8 +71,9 @@ export function createOperatorApiKeyRouter({
             }
 
             const userId = req.userId;
+            const webSessionId = req.webSessionId;
 
-            const result = await operatorService.refreshOperatorApiKey(operatorId, userId);
+            const result = await operatorService.refreshOperatorApiKey(operatorId, userId, webSessionId, null);
 
             if (!result.success) {
                 return res.status(result.message.includes('Unauthorized') ? 403 : 400).json(new ErrorResponse({
@@ -87,14 +88,7 @@ export function createOperatorApiKeyRouter({
                 user_id: userId
             });
 
-            res.json(new OperatorRefreshKeyResponse({
-                success: true,
-                message: result.message,
-                old_operator_id: operatorId,
-                new_operator_id: result.new_operator_id,
-                slot_number: result.slot_number,
-                new_api_key: result.new_api_key
-            }).forClient());
+            res.json(result.forClient());
 
         } catch (error) {
             logger.error('[OPERATOR-REFRESH-KEY] Failed to refresh API key', {

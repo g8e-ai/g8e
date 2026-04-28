@@ -20,8 +20,9 @@ between components and ensures wire compatibility.
 """
 
 import json
-import pytest
 from pathlib import Path
+
+import pytest
 
 from app.constants import EventType
 from app.models.agent import StreamChunkData, StreamChunkFromModel, StreamChunkFromModelType
@@ -178,13 +179,13 @@ class TestSSEEventContract:
 
         published = event_svc._published_events
         completed_events = [e for e in published if e.event_type == EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED]
-        
+
         assert len(completed_events) >= 1
         actual_event = completed_events[0]
 
         # Compare against shared fixture
         expected_fixture = SHARED_SSE_EVENTS["text_completed"]
-        
+
         assert actual_event.event_type == expected_fixture["type"]
         assert actual_event.payload.content == expected_fixture["data"]["content"]
         assert actual_event.investigation_id == inputs.investigation_id
@@ -350,10 +351,10 @@ class TestSSEEventContract:
         # Every published event should have the required routing fields
         for event in published:
             # Check that the event has the expected routing fields
-            assert hasattr(event, 'investigation_id')
-            assert hasattr(event, 'case_id') 
-            assert hasattr(event, 'web_session_id')
-            
+            assert hasattr(event, "investigation_id")
+            assert hasattr(event, "case_id")
+            assert hasattr(event, "web_session_id")
+
             # Check that values match the inputs
             assert event.investigation_id == inputs.investigation_id
             assert event.case_id == inputs.case_id

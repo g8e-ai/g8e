@@ -168,7 +168,9 @@ class TestAuthorizationMiddleware:
             sentinel_mode=False,
         )
         mock_inv_service = MagicMock()
-        mock_inv_service.get_investigation = AsyncMock(return_value=investigation)
+        mock_inv_data_service = MagicMock()
+        mock_inv_data_service.get_investigation = AsyncMock(return_value=investigation)
+        mock_inv_service.investigation_data_service = mock_inv_data_service
         mock_request.app.state.investigation_service = mock_inv_service
 
         response = await middleware.dispatch(mock_request, mock_call_next)
@@ -190,7 +192,9 @@ class TestAuthorizationMiddleware:
             sentinel_mode=False,
         )
         mock_inv_service = MagicMock()
-        mock_inv_service.get_investigation = AsyncMock(return_value=investigation)
+        mock_inv_data_service = MagicMock()
+        mock_inv_data_service.get_investigation = AsyncMock(return_value=investigation)
+        mock_inv_service.investigation_data_service = mock_inv_data_service
         mock_request.app.state.investigation_service = mock_inv_service
 
         response = await middleware.dispatch(mock_request, mock_call_next)
@@ -211,7 +215,9 @@ class TestAuthorizationMiddleware:
             sentinel_mode=False,
         )
         mock_inv_service = MagicMock()
-        mock_inv_service.get_investigation = AsyncMock(return_value=investigation)
+        mock_inv_data_service = MagicMock()
+        mock_inv_data_service.get_investigation = AsyncMock(return_value=investigation)
+        mock_inv_service.investigation_data_service = mock_inv_data_service
         mock_request.app.state.investigation_service = mock_inv_service
 
         with pytest.raises(AuthorizationError) as exc_info:
@@ -229,7 +235,9 @@ class TestAuthorizationMiddleware:
             organization_id="org-789",
         )
         mock_inv_service = MagicMock()
-        mock_inv_service.get_investigation = AsyncMock(return_value=None)
+        mock_inv_data_service = MagicMock()
+        mock_inv_data_service.get_investigation = AsyncMock(return_value=None)
+        mock_inv_service.investigation_data_service = mock_inv_data_service
         mock_request.app.state.investigation_service = mock_inv_service
 
         with pytest.raises(AuthorizationError) as exc_info:
@@ -371,7 +379,9 @@ class TestAuthorizationMiddleware:
             sentinel_mode=False,
         )
         mock_inv_service = MagicMock()
-        mock_inv_service.get_investigation = AsyncMock(return_value=investigation)
+        mock_inv_data_service = MagicMock()
+        mock_inv_data_service.get_investigation = AsyncMock(return_value=investigation)
+        mock_inv_service.investigation_data_service = mock_inv_data_service
         mock_request.app.state.investigation_service = mock_inv_service
 
         with pytest.raises(AuthorizationError) as exc_info:

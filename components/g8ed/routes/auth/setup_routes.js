@@ -14,7 +14,7 @@
 import express from 'express';
 import { logger } from '../../utils/logger.js';
 import { SetupPaths } from '../../constants/api_paths.js';
-import { LLMProvider, PROVIDER_MODELS } from '../../constants/ai.js';
+import { LLMProvider, PROVIDER_MODELS, PROVIDER_DEFAULT_MODELS } from '../../constants/ai.js';
 
 /**
  * @param {Object} options
@@ -39,6 +39,7 @@ export function createSetupRouter({ services }) {
             llmCatalog: {
                 providers: LLMProvider,
                 providerModels: PROVIDER_MODELS,
+                providerDefaultModels: PROVIDER_DEFAULT_MODELS,
             },
         });
     });

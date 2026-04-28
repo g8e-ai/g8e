@@ -17,7 +17,6 @@ Port check operations via g8eo operators. No approval required.
 Replaces PortOperationsMixin. Uses pubsub_service.wait_for_result().
 """
 
-import asyncio
 import logging
 from typing import cast
 
@@ -42,9 +41,8 @@ from app.models.command_request_payloads import CheckPortRequestPayload
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.operators import CommandExecutingBroadcastEvent, CommandResultBroadcastEvent
-from app.models.pubsub_messages import PortCheckResultPayload, G8eoResultEnvelope, G8eMessage
+from app.models.pubsub_messages import PortCheckResultPayload, G8eMessage
 from app.models.tool_results import PortCheckToolResult
-from app.utils.timestamp import now
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +121,7 @@ class OperatorPortService:
             )
 
         _hn = resolved_operator.current_hostname or (
-            resolved_operator.system_info.hostname if resolved_operator.system_info else None
+            resolved_operator.latest_heartbeat_snapshot.system_identity.hostname if resolved_operator.latest_heartbeat_snapshot else None
         ) or "unknown"
         logger.info("[PORT_CHECK] Resolved operator: %s (hostname: %s)", operator_id, _hn)
 
@@ -208,11 +206,11 @@ class OperatorPortService:
             if isinstance(envelope.payload, PortCheckResultPayload):
                 payload = envelope.payload
                 failed = envelope.event_type == EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED
-                
+
                 # Notify completion/failure
                 completion_event_type = (
-                    EventType.OPERATOR_NETWORK_PORT_CHECK_COMPLETED 
-                    if not failed 
+                    EventType.OPERATOR_NETWORK_PORT_CHECK_COMPLETED
+                    if not failed
                     else EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED
                 )
 

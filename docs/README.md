@@ -6,70 +6,44 @@ permalink: /docs/
 
 # g8e Documentation Index
 
-Documentation for the g8e AI governance platform, organized by category.
+g8e is a Zero-Trust AI platform for secure infrastructure operations. This index maps high-level concepts to their technical implementations.
 
----
-
-## Root Documents
+## Platform Pillars
 
 | Document | Description |
 |----------|-------------|
-| [developer.md](developer.md) | Quick start, infrastructure setup, SSL, governance-first code quality rules (g8eo/g8ee/g8ed), shared constants and models, project structure |
-| [testing.md](testing.md) | Comprehensive testing guide — shared principles, test-runner containers, CI workflows, and component-specific guidelines (g8eo, g8ed, g8ee) |
-| [glossary.md](glossary.md) | Essential terminology for understanding the g8e platform, organized alphabetically |
-| [docs-guidelines.md](docs-guidelines.md) | Documentation authoring standards — structure, style, formatting, file locations, ownership rules, and sync rules |
+| [architecture/security.md](architecture/security.md) | **Zero-Trust & Governance**: LFAA (Logs, Files, Audit, Activity) encryption, Sentinel traffic analysis, and human-in-the-loop controls. |
+| [architecture/ai_agents.md](architecture/ai_agents.md) | **Agentic AI**: Multi-provider LLM abstraction (g8ee), tool-loop execution, and secure command dispatch. |
+| [architecture/operator.md](architecture/operator.md) | **Secure Execution**: The g8eo Operator lifecycle, vault management, and real-time command tunneling. |
+| [architecture/storage.md](architecture/storage.md) | **Persistence**: g8es (Data Bus) architecture using SQLite, KV stores, and secure blob storage. |
 
----
+## Component Reference
 
-## Architecture
+Technical deep-dives into the services that comprise the g8e stack.
 
-Cross-component internals — data flows, protocols, and system-wide design decisions.
+| Component | Role | Primary Implementation |
+|-----------|------|------------------------|
+| [**g8eo**](components/g8eo.md) | Operator | Go-based secure execution agent with git-backed ledger (LFAA). |
+| [**g8ee**](components/g8ee.md) | Engine | Python (FastAPI) agentic orchestrator for LLM interactions and tool dispatch. |
+| [**g8ed**](components/g8ed.md) | Terminal | Node.js (Express) management plane, SSE fan-out, and session binding. |
+| [**g8es**](components/g8es.md) | Data Bus | g8eo in `--listen` mode providing unified persistence and pub/sub. |
+| [**g8el**](components/g8el.md) | Local LLM | llama.cpp sidecar for air-gapped or local model execution. |
+| [**g8ep**](components/g8ep.md) | Sidecar | Always-on management node for fleet operations and security scanning. |
 
-| Document | Description |
-|----------|-------------|
-| [architecture/about.md](architecture/about.md) | Platform origins, story, and governance |
-| [architecture/ai_agents.md](architecture/ai_agents.md) | AI agents cross-component architecture — transport, conversation data models, command execution pipeline |
-| [architecture/builds.md](architecture/builds.md) | Build system — component builds, operator binary distribution, and CI workflows |
-| [architecture/dashboard.md](architecture/dashboard.md) | Dashboard architecture — SSE fan-out, operator panel, and frontend integration |
-| [architecture/docker.md](architecture/docker.md) | Docker architecture — service configuration, non-root users, security hardening, capability model, read-only filesystems, docker socket threat model, and dev/prod compose split |
-| [architecture/mcp.md](architecture/mcp.md) | MCP (Model Context Protocol) gateway architecture |
-| [architecture/operator.md](architecture/operator.md) | Operator architecture — g8eo lifecycle, session management, command dispatch, binding protocol, and Sentinel integration |
-| [architecture/prompts.md](architecture/prompts.md) | Prompt system — file layout, loader, assembly pipeline, mode selection, tool-description handling, and authoring conventions (positive framing, `<never>` blocks) |
-| [architecture/storage.md](architecture/storage.md) | Data storage architecture — all storage layers, component roles, topology, encryption, and retention |
-| [architecture/security.md](architecture/security.md) | Complete security architecture — authentication, session management, operator security, authorization, API security, data protection, LFAA encryption, Sentinel, threat model, and governance |
-
----
-
-## Components
-
-Technical reference for each platform component.
+## Guides & Standards
 
 | Document | Description |
 |----------|-------------|
-| [components/g8eo.md](components/g8eo.md) | g8eo (g8e Operator) — Go-based reference implementation of the Operator providing secure, real-time command execution and file management for remote system operations |
-| [components/g8ee.md](components/g8ee.md) | g8ee — AI engine providing LLM-powered interface for infrastructure operations with human-in-the-loop safety controls and multi-provider LLM abstraction |
-| [components/g8ed.md](components/g8ed.md) | g8ed (g8e Dashboard) — authentication, session management, dashboard backend, operator lifecycle, SSE fan-out, and WebSocket proxy |
-| [components/g8es.md](components/g8es.md) | g8es (g8e Data Bus) — Operator binary in `--listen` mode; single source of truth for persistence (SQLite document store, KV store, SSE event buffer, and pub/sub broker) |
-| [components/g8ep.md](components/g8ep.md) | g8e node — always-on sidecar container for operator management, security scans, and ephemeral SSH deployment |
+| [developer.md](developer.md) | Environment setup, service bootstrap, and development workflows. |
+| [testing.md](testing.md) | CI/CD, unit/integration testing on g8ep, and gold-set validation. |
+| [g8e-help.md](g8e-help.md) | CLI reference for the `/home/bob/g8e/g8e` management tool. |
+| [docs-guidelines.md](docs-guidelines.md) | Standards for documentation structure and code-first discovery rules. |
+| [glossary.md](glossary.md) | Canonical platform terminology. |
 
----
-
-## Scripts
-
-Documentation for the platform management CLI and supporting scripts.
+## Internal Protocol Reference
 
 | Document | Description |
 |----------|-------------|
-| [architecture/scripts.md](architecture/scripts.md) | Unified platform management CLI — complete command reference, workflows, and technical details |
-
----
-
-## Reference
-
-External resources and reference materials (do not modify).
-
-| Document | Description |
-|----------|-------------|
-| [reference/events.md](reference/events.md) | g8e event type specification -- complete wire-protocol event registry (238 events across 5 domains) |
-| [reference/core_principles.md](reference/core_principles.md) | Core platform principles and design philosophy |
-| [reference/mcp.yaml](reference/mcp.yaml) | MCP (Model Context Protocol) schema and tool definitions |
+| [reference/events.md](reference/events.md) | **Wire Protocol**: Registry of all internal pub/sub and SSE events. |
+| [architecture/prompts.md](architecture/prompts.md) | **Prompt Engineering**: Schema and logic for agent persona assembly. |
+| [architecture/scripts.md](architecture/scripts.md) | **Management CLI**: Architecture of the core platform orchestration scripts. |

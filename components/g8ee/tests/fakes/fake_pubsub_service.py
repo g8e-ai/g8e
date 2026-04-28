@@ -14,7 +14,7 @@
 """Typed fake for PubSubServiceProtocol."""
 
 import asyncio
-from typing import Callable, Coroutine
+
 from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope
 from app.services.protocols import PubSubServiceProtocol
 

@@ -54,6 +54,7 @@ from app.constants import (
     OLLAMA_DEFAULT_MODEL,
     OLLAMA_GEMMA4_26B,
     OLLAMA_GEMMA4_E2B,
+    OLLAMA_GEMMA4_E2B_G8EA,
     OLLAMA_GEMMA4_E4B,
     OLLAMA_GLM_5_1,
     OLLAMA_LLAMA_3_2_3B,
@@ -227,6 +228,18 @@ OLLAMA_GEMMA4_E4B_CONFIG = LLMModelConfig(
 
 OLLAMA_GEMMA4_E2B_CONFIG = LLMModelConfig(
     name=OLLAMA_GEMMA4_E2B,
+    supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.HIGH],
+    thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
+    supports_tools=True,
+    context_window_input=32_768,
+    context_window_output=8_192,
+    top_k=40,
+    top_p=1.0,
+    max_output_tokens=8_192,
+)
+
+OLLAMA_GEMMA4_E2B_G8EA_CONFIG = LLMModelConfig(
+    name=OLLAMA_GEMMA4_E2B_G8EA,
     supported_thinking_levels=[ThinkingLevel.OFF, ThinkingLevel.HIGH],
     thinking_dialect=ThinkingDialect.NATIVE_TOGGLE,
     supports_tools=True,
@@ -564,6 +577,7 @@ _OLLAMA_CONFIGS: tuple[LLMModelConfig, ...] = (
     OLLAMA_GEMMA4_26B_CONFIG,
     OLLAMA_GEMMA4_E4B_CONFIG,
     OLLAMA_GEMMA4_E2B_CONFIG,
+    OLLAMA_GEMMA4_E2B_G8EA_CONFIG,
     OLLAMA_NEMOTRON_3_30B_CONFIG,
     OLLAMA_LLAMA_3_2_3B_CONFIG,
     OLLAMA_QWEN3_5_2B_CONFIG,
@@ -591,6 +605,7 @@ MODEL_REGISTRY = LLMModelRegistry(configs=[
     OLLAMA_GEMMA4_26B_CONFIG,
     OLLAMA_GEMMA4_E4B_CONFIG,
     OLLAMA_GEMMA4_E2B_CONFIG,
+    OLLAMA_GEMMA4_E2B_G8EA_CONFIG,
     OLLAMA_NEMOTRON_3_30B_CONFIG,
     OLLAMA_LLAMA_3_2_3B_CONFIG,
     OLLAMA_QWEN3_5_2B_CONFIG,

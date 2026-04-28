@@ -26,8 +26,8 @@ What is verified:
 
 import pytest
 
-from app.services.ai.title_generator import generate_case_title
 from app.models.agents.title_generator import CaseTitleResult
+from app.services.ai.title_generator import generate_case_title
 
 pytestmark = [pytest.mark.integration, pytest.mark.ai_integration]
 

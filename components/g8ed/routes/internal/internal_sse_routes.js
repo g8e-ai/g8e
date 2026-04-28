@@ -36,6 +36,12 @@ export function createInternalSSERouter({ services, authorizationMiddleware }) {
 
     /**
      * POST /api/internal/sse/push
+     *
+     * Pure SSE transport. g8ee is the single writer for the operator document
+     * (see OperatorDataService.update_operator_heartbeat), so this route MUST
+     * NOT mutate the Operators collection on heartbeat pass-through. Doing so
+     * would race with g8ee's authoritative write and clobber denormalized
+     * fields (current_hostname, heartbeat_history) that g8ee maintains.
      */
     router.post('/push', requireInternalOrigin, async (req, res, next) => {
         try {

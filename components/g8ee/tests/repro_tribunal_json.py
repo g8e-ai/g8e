@@ -1,21 +1,17 @@
 
-import pytest
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
 from app.constants import (
-    CommandGenerationOutcome,
-    LLMProvider,
-    TribunalMember,
     ComponentName,
-    EventType,
-    AuditorReason,
 )
-from app.llm.llm_types import Role
-from app.models.agents.tribunal import VoteBreakdown, TribunalAuditorFailedError
-from app.services.ai.generator import TribunalEmitter
-from app.services.ai.auditor_service import run_auditor
+from app.models.agents.tribunal import TribunalAuditorFailedError, VoteBreakdown
 from app.models.http_context import G8eHttpContext
-from app.utils.agent_persona_loader import get_tribunal_member
+from app.services.ai.auditor_service import run_auditor
+from app.services.ai.generator import TribunalEmitter
+
 
 def _make_mock_g8e_context() -> G8eHttpContext:
     return G8eHttpContext(
@@ -31,11 +27,11 @@ async def test_auditor_repro_json_failure():
     # Mock a response that is truncated or has prose prefix that might confuse parsing
     # as seen in the logs: raw_text='Here is the JSON requested:\n```json'
     mock_response = MagicMock()
-    mock_response.text = 'Here is the JSON requested:\n```json'
+    mock_response.text = "Here is the JSON requested:\n```json"
 
     mock_provider = MagicMock()
     mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
-    
+
     # Mock emitter to avoid network calls
     emitter = MagicMock(spec=TribunalEmitter)
     emitter.emit = AsyncMock()
@@ -64,7 +60,7 @@ async def test_auditor_repro_json_failure():
             command_constraints_message="No constraints",
             auditor_persona=get_agent_persona("auditor"),
         )
-    
+
     assert "no_valid_revision" in str(exc_info.value)
     assert "Failed to parse auditor response" in str(exc_info.value)
 

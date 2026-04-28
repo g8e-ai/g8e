@@ -1,0 +1,24 @@
+<div class="triage-questions-popup" id="triage-questions-{{id}}">
+    <div class="triage-questions-header">
+        <span class="triage-questions-title">Dash needs clarification</span>
+        <button class="triage-questions-skip" id="triage-skip-{{id}}" title="Skip questions">
+            <span class="material-symbols-outlined">close</span>
+        </button>
+    </div>
+    <div class="triage-questions-list">
+        {{#each questions}}
+        <div class="triage-question-item" data-index="{{@index}}">
+            <p class="triage-question-text">{{this}}</p>
+            <div class="triage-question-actions">
+                <button class="triage-btn triage-btn-yes" data-answer="yes">Yes</button>
+                <button class="triage-btn triage-btn-no" data-answer="no">No</button>
+            </div>
+        </div>
+        {{/each}}
+    </div>
+    <div class="triage-questions-footer">
+        <div class="triage-timeout-bar">
+            <div class="triage-timeout-progress" id="triage-timeout-{{id}}"></div>
+        </div>
+    </div>
+</div>

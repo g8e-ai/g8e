@@ -32,6 +32,7 @@
     },
     "intent_summary": { "type": "string", "description": "A concise summary of the user's goal." },
     "follow_up_question": { "type": "string", "nullable": true, "description": "Clarifying question if intent is ambiguous." },
+    "clarifying_questions": { "type": "array", "items": { "type": "string" }, "nullable": true, "description": "Batch of 3 yes/no clarifying questions from the Interrogator when intent confidence is low." },
     "request_posture": {
       "type": "string",
       "enum": ["normal", "escalated", "adversarial", "confused"],

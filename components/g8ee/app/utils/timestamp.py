@@ -92,6 +92,12 @@ def add_days(dt: datetime, days: int) -> datetime:
     return dt + timedelta(days=days)
 
 
+def seconds_between(dt1: datetime, dt2: datetime) -> int:
+    """Get absolute number of seconds between two datetimes."""
+    delta = ensure_utc(dt1) - ensure_utc(dt2)
+    return int(abs(delta.total_seconds()))
+
+
 def time_ago(dt: datetime) -> str:
     """Get human-readable time difference from now."""
     delta = datetime.now(UTC) - ensure_utc(dt)

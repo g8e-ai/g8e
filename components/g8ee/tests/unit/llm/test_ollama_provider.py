@@ -17,26 +17,25 @@ Unit tests for OllamaProvider.
 Tests SSL verification strategy, close behavior, construction, and content generation.
 """
 
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.constants import LLM_OLLAMA_DEFAULT_NUM_CTX, ThinkingLevel
 from app.errors import OllamaEmptyResponseError
-from app.llm.providers.ollama import OllamaProvider
 from app.llm.llm_types import (
+    AssistantLLMSettings,
     Content,
+    LiteLLMSettings,
     Part,
     PrimaryLLMSettings,
-    AssistantLLMSettings,
-    LiteLLMSettings,
-    ThinkingConfig,
-    ToolConfig,
-    ToolCallingConfig,
     ResponseFormat,
     ResponseJsonSchema,
+    ThinkingConfig,
+    ToolCallingConfig,
+    ToolConfig,
 )
-
+from app.llm.providers.ollama import OllamaProvider
 
 PATCH_TARGET = "app.llm.providers.ollama.AsyncClient"
 
@@ -147,7 +146,7 @@ class TestOllamaProviderGeneration:
     @pytest.mark.asyncio
     async def test_generate_content_primary(self, provider):
         provider, mock_client = provider
-        
+
         mock_response = MagicMock()
         mock_response.message.content = "Hello World"
         mock_response.message.thinking = "Thinking..."
@@ -156,7 +155,7 @@ class TestOllamaProviderGeneration:
         mock_response.prompt_eval_count = 10
         mock_response.eval_count = 5
         mock_client.chat = AsyncMock(return_value=mock_response)
-        
+
         contents = [Content(role="user", parts=[Part(text="Hi")])]
         settings = PrimaryLLMSettings(
             system_instructions="You are a helpful assistant",
@@ -169,9 +168,9 @@ class TestOllamaProviderGeneration:
             thinking_config=ThinkingConfig(thinking_level=ThinkingLevel.OFF, include_thoughts=False),
             tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
         )
-        
+
         response = await provider.generate_content_primary("llama3", contents, settings)
-        
+
         mock_client.chat.assert_called_once()
         call_kwargs = mock_client.chat.call_args.kwargs
         assert call_kwargs["options"]["num_ctx"] == LLM_OLLAMA_DEFAULT_NUM_CTX, (
@@ -188,13 +187,13 @@ class TestOllamaProviderGeneration:
     @pytest.mark.asyncio
     async def test_generate_content_stream_primary(self, provider):
         provider, mock_client = provider
-        
+
         mock_chunk1 = MagicMock()
         mock_chunk1.message.content = "Hello"
         mock_chunk1.message.thinking = None
         mock_chunk1.message.tool_calls = None
         mock_chunk1.done = False
-        
+
         mock_chunk2 = MagicMock()
         mock_chunk2.message.content = " World"
         mock_chunk2.message.thinking = None
@@ -203,13 +202,13 @@ class TestOllamaProviderGeneration:
         mock_chunk2.done_reason = "stop"
         mock_chunk2.prompt_eval_count = 10
         mock_chunk2.eval_count = 5
-        
+
         async def mock_stream():
             yield mock_chunk1
             yield mock_chunk2
-            
+
         mock_client.chat = AsyncMock(return_value=mock_stream())
-        
+
         contents = [Content(role="user", parts=[Part(text="Hi")])]
         settings = PrimaryLLMSettings(
             system_instructions="You are a helpful assistant",
@@ -222,11 +221,11 @@ class TestOllamaProviderGeneration:
             thinking_config=ThinkingConfig(thinking_level=ThinkingLevel.OFF, include_thoughts=False),
             tool_config=ToolConfig(tool_calling_config=ToolCallingConfig(mode="AUTO")),
         )
-        
+
         chunks = []
         async for chunk in provider.generate_content_stream_primary("llama3", contents, settings):
             chunks.append(chunk)
-            
+
         mock_client.chat.assert_called_once()
         assert mock_client.chat.call_args.kwargs["options"]["num_ctx"] == LLM_OLLAMA_DEFAULT_NUM_CTX
         assert len(chunks) == 3
@@ -239,14 +238,14 @@ class TestOllamaProviderGeneration:
     @pytest.mark.asyncio
     async def test_generate_content_assistant(self, provider):
         provider, mock_client = provider
-        
+
         mock_response = MagicMock()
         mock_response.message.content = "Hello World"
         mock_response.done_reason = "stop"
         mock_response.prompt_eval_count = 10
         mock_response.eval_count = 5
         mock_client.chat = AsyncMock(return_value=mock_response)
-        
+
         contents = [Content(role="user", parts=[Part(text="Hi")])]
         settings = AssistantLLMSettings(
             system_instructions="You are a helpful assistant",
@@ -256,9 +255,9 @@ class TestOllamaProviderGeneration:
             stop_sequences=[],
             response_format=ResponseFormat(json_schema=ResponseJsonSchema(json_schema_dict={}, name="response")),
         )
-        
+
         response = await provider.generate_content_assistant("llama3", contents, settings)
-        
+
         mock_client.chat.assert_called_once()
         assert mock_client.chat.call_args.kwargs["options"]["num_ctx"] == LLM_OLLAMA_DEFAULT_NUM_CTX
         assert len(response.candidates) == 1
@@ -268,14 +267,14 @@ class TestOllamaProviderGeneration:
     @pytest.mark.asyncio
     async def test_generate_content_lite(self, provider):
         provider, mock_client = provider
-        
+
         mock_response = MagicMock()
         mock_response.message.content = "Hello World"
         mock_response.done_reason = "stop"
         mock_response.prompt_eval_count = 10
         mock_response.eval_count = 5
         mock_client.chat = AsyncMock(return_value=mock_response)
-        
+
         contents = [Content(role="user", parts=[Part(text="Hi")])]
         settings = LiteLLMSettings(
             system_instructions="You are a helpful assistant",
@@ -285,7 +284,7 @@ class TestOllamaProviderGeneration:
             stop_sequences=[],
             response_format=ResponseFormat(json_schema=ResponseJsonSchema(json_schema_dict={}, name="response")),
         )
-        
+
         response = await provider.generate_content_lite("llama3", contents, settings)
 
         mock_client.chat.assert_called_once()

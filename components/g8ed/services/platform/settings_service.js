@@ -36,8 +36,8 @@
 import { logger } from '../../utils/logger.js';
 import { Collections } from '../../constants/collections.js';
 import { SETTINGS_DOC_ID, USER_SETTINGS_DOC_PREFIX } from '../../constants/service_config.js';
-import { apiPaths } from '../../constants/api_paths.js';
-import { 
+import { ApiPaths } from '../../constants/api_paths.js';
+import {
     USER_SETTINGS,
     PLATFORM_SETTINGS,
     SETTINGS_PAGE_SECTIONS,
@@ -45,6 +45,7 @@ import {
     validatePlatformSettings,
     structureUserSettings,
     flattenUserSettings,
+    SETTINGS_BY_KEY,
 } from '../../models/settings_model.js';
 import { BootstrapService } from './bootstrap_service.js';
 import { G8ES_INTERNAL_HTTP_URL } from '../../constants/http_client.js';
@@ -242,24 +243,44 @@ class SettingsService {
     async updateUserSettings(userId, updates) {
         if (!userId) throw new Error('userId is required to update user settings');
 
-        const validation = validateUserSettings(updates);
+        // Convert toggle string values to booleans
+        const normalizedUpdates = {};
+        for (const [key, value] of Object.entries(updates)) {
+            const field = SETTINGS_BY_KEY.get(key);
+            if (field && field.type === 'toggle') {
+                // Convert "on", "true", "1" to true; "off", "false", "0" to false
+                if (value === 'on' || value === 'true' || value === '1' || value === 1) {
+                    normalizedUpdates[key] = true;
+                } else if (value === 'off' || value === 'false' || value === '0' || value === 0) {
+                    normalizedUpdates[key] = false;
+                } else {
+                    normalizedUpdates[key] = Boolean(value);
+                }
+            } else {
+                normalizedUpdates[key] = value;
+            }
+        }
+
+        const validation = validateUserSettings(normalizedUpdates);
         if (validation.invalid.length > 0) {
-            logger.warn('[SETTINGS-SERVICE] Invalid user settings', { 
+            logger.warn('[SETTINGS-SERVICE] Invalid user settings', {
                 userId,
-                invalid: validation.invalid, 
-                errors: validation.errors 
+                invalid: validation.invalid,
+                errors: validation.errors
             });
         }
 
         const userDocId = `${USER_SETTINGS_DOC_PREFIX}${userId}`;
         const existingDoc = await this._cache_aside.getDocument(this.collectionName, userDocId);
-        const existingNested = (existingDoc && existingDoc.settings) ? existingDoc.settings : { llm: {}, search: {}, eval_judge: {} };
+        const existingNested = (existingDoc && existingDoc.settings) ? existingDoc.settings : { llm: {}, search: {}, eval_judge: {}, command_validation: {}, security: {} };
 
         const incomingNested = structureUserSettings(validation.valid);
         const newSettings = {
-            llm:        { ...existingNested.llm,        ...incomingNested.llm },
-            search:     { ...existingNested.search,     ...incomingNested.search },
-            eval_judge: { ...existingNested.eval_judge, ...incomingNested.eval_judge },
+            llm:                { ...existingNested.llm,                ...incomingNested.llm },
+            search:             { ...existingNested.search,             ...incomingNested.search },
+            eval_judge:         { ...existingNested.eval_judge,         ...incomingNested.eval_judge },
+            command_validation: { ...existingNested.command_validation, ...incomingNested.command_validation },
+            security:           { ...existingNested.security,           ...incomingNested.security },
         };
 
         let result;
@@ -285,7 +306,7 @@ class SettingsService {
         // Sync to g8ee if internalHttpClient is available
         if (this.internalHttpClient) {
             try {
-                await this.internalHttpClient.request('g8ee', apiPaths.g8ee.settingsUser(), {
+                await this.internalHttpClient.request('g8ee', ApiPaths.g8ee.settingsUser(), {
                     method: 'PATCH',
                     body: validation.valid,
                 });

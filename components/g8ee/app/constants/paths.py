@@ -13,14 +13,14 @@
 
 import json
 
-# The bridge to shared paths. 
+# The bridge to shared paths.
 # In container, this is always /app/shared/constants/paths.json
 _CONTAINER_SHARED_CONSTANTS_DIR = "/app/shared/constants"
 _PATH_FILE = _CONTAINER_SHARED_CONSTANTS_DIR + "/paths.json"
 
 def _load_paths() -> dict:
     try:
-        with open(_PATH_FILE, "r") as f:
+        with open(_PATH_FILE) as f:
             return json.load(f)
     except Exception:
         # Emergency fallbacks for when shared volume isn't ready
@@ -30,7 +30,10 @@ def _load_paths() -> dict:
                 "ca_cert_path": "/g8es/ca.crt",
                 "ssl_dir": "/g8es",
                 "docs_dir": "/docs",
-                "shared_constants_dir": "/app/shared/constants"
+                "shared_dir": "/app/shared",
+                "shared_constants_dir": "/app/shared/constants",
+                "shared_models_dir": "/app/shared/models",
+                "ssh_config_path": "/etc/g8e/ssh_config",
             }
         }
 

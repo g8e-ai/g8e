@@ -20,7 +20,7 @@ import pytest
 
 from app.constants import EventType, ExecutionStatus, PubSubChannel
 from app.services.operator.command_service import OperatorCommandService
-from app.services.operator.heartbeat_service import OperatorHeartbeatService
+from app.services.operator.heartbeat_service import HeartbeatSnapshotService
 from tests.fakes.builder import build_command_service
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
@@ -33,6 +33,8 @@ def _make_pubsub_client():
     client.off_channel_message = MagicMock()
     client.subscribe = AsyncMock()
     client.unsubscribe = AsyncMock()
+    client.on_disconnect = MagicMock()
+    client.off_disconnect = MagicMock()
     return client
 
 
@@ -61,8 +63,8 @@ def _make_mock_hb_pubsub_client() -> MagicMock:
 
 
 @pytest.fixture
-def heartbeat_service() -> OperatorHeartbeatService:
-    svc = OperatorHeartbeatService(
+def heartbeat_service() -> HeartbeatSnapshotService:
+    svc = HeartbeatSnapshotService(
         operator_data_service=MagicMock(),
         event_service=MagicMock(),
     )
@@ -252,7 +254,7 @@ class TestHandlePubSubResultMessage:
             "investigation_id": "inv-456",
             "payload": {
                 "payload_type": "execution_result",
-                "execution_id": "exec-789", 
+                "execution_id": "exec-789",
                 "status": ExecutionStatus.COMPLETED
             },
         }
@@ -306,7 +308,7 @@ class TestHandlePubSubResultMessage:
             "task_id": "task-top",
             "payload": {
                 "payload_type": "execution_result",
-                "execution_id": "exec-002", 
+                "execution_id": "exec-002",
                 "status": ExecutionStatus.COMPLETED
             },
         }
@@ -328,10 +330,10 @@ class TestHandlePubSubResultMessage:
         await command_service._pubsub_service._handle_pubsub_result_message(
             "my-operator", "my-session",
             {
-                "event_type": EventType.OPERATOR_COMMAND_COMPLETED, 
+                "event_type": EventType.OPERATOR_COMMAND_COMPLETED,
                 "payload": {
                     "payload_type": "execution_result",
-                    "execution_id": "exec-003", 
+                    "execution_id": "exec-003",
                     "status": ExecutionStatus.COMPLETED
                 }
             }
@@ -354,6 +356,6 @@ class TestHandlePubSubResultMessage:
 
 class TestParseG8eoPayloadNativeEventTypes:
     """Regression coverage for discriminator-based parsing."""
-    
+
     async def test_placeholder(self):
         pass

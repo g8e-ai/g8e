@@ -55,6 +55,9 @@ class TriageResult(G8eBaseModel):
     follow_up_question: str | None = Field(
         default=None, description="A follow-up question if intent confidence is LOW."
     )
+    clarifying_questions: list[str] | None = Field(
+        default=None, description="Batch of 3 yes/no clarifying questions from the Interrogator when intent confidence is low."
+    )
     request_posture: TriageRequestPosture = Field(
         default=TriageRequestPosture.NORMAL,
         description=(

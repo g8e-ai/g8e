@@ -30,8 +30,9 @@ operation that simply tests TCP/UDP connectivity.
 </behavior>
 
 <examples>
-- Check if MySQL is running: port=3306, host='localhost'
-- Verify Redis connectivity: port=6379, host='redis-server'
-- Test web server: port=80 or port=443, host='example.com'
-- Check SSH access: port=22, host='remote-server'
+<example>User: "Check if MySQL is running" → check_port_status(port=3306, host="localhost")</example>
+<example>User: "Verify Redis connectivity" → check_port_status(port=6379, host="redis-server")</example>
+<example>User: "Test web server" → check_port_status(port=80, host="example.com")</example>
+<example>User: "Check SSH access" → check_port_status(port=22, host="remote-server")</example>
+<example>User: "Check if PostgreSQL is listening on default port" → check_port_status(port=5432, host="localhost")</example>
 </examples>

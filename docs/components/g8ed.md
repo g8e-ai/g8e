@@ -3,11 +3,11 @@ title: g8ed
 parent: Components
 ---
 
-# g8ed — g8e Dashboard
+# g8ed — g8e Terminal
 
 ## Overview
 
-g8ed is the authentication, session management, and dashboard backend for g8e. It serves the browser-facing web UI, manages user sessions, proxies AI interactions to g8ee, controls Operator lifecycle, and provides real-time updates to the frontend via Server-Sent Events.
+g8ed is the authentication, session management, and terminal backend for g8e. It serves the browser-facing web UI, manages user sessions, proxies AI interaction to g8ee, controls Operator lifecycle, and provides real-time updates to the frontend via Server-Sent Events.
 
 > For deep-reference security documentation — internal auth token, SSL/CA handling, web session security, operator session security, operator auth methods, operator binding, and the full threat model — see [architecture/security.md](../architecture/security.md).
 
@@ -20,6 +20,7 @@ g8ed is the authentication, session management, and dashboard backend for g8e. I
 - WebSocket proxy — `/ws/pubsub` upgrade requests forwarded to g8es internally
 - Binary distribution of the g8e Operator (`g8e.operator`)
 - Device Link — secure multi-use Operator deployment and single-use claiming
+- SSH Inventory & Streaming — managing and deploying operators to SSH fleets
 - Audit log, admin console, and platform settings
 - SSE delivery of real-time events to browser clients (AI, Operator status, investigations)
 - MCP Gateway (Model Context Protocol) — bridging external AI tools to internal platform capabilities
@@ -476,7 +477,7 @@ GET /setup  →  renders views/setup.ejs
     (Gemini / Anthropic / OpenAI / Ollama — Ollama host:port is required; API key is optional).
     Three custom dropdowns (Primary / Assistant / Lite model) populate from the
     union of configured providers; each model id is server-driven from the
-    injected catalog. The user may also type a custom model id via "Custom…".
+    injected catalog. Defaults are **mid-tier by design** (e.g. Sonnet/Flash instead of Opus/Pro) to prevent surprise billing and ensure compatibility with commodity hardware for local providers. The canonical source for these defaults is `PROVIDER_DEFAULT_MODELS` in `components/g8ed/constants/ai.js`. The user may also type a custom model id via "Custom…".
     llm_primary_provider / llm_assistant_provider / llm_lite_provider are
     derived from the selected model ids.
 
@@ -594,7 +595,8 @@ curl -fsSL http://<host>/g8e | sh -s -- <device-link-token>
 
 **Key rules:**
 - `available` is the default state — operator has been provisioned but never authenticated
-- `stale` is set by g8ed's `HeartbeatMonitorService` when a heartbeat has not been received within the stale threshold (`OperatorStaleThreshold.SECONDS`, default 60s). g8ed owns operator bind/auth state and is therefore authoritative for the staleness of that binding.
+- `stale` is set by g8ee's `HeartbeatStaleMonitorService` when a heartbeat has not been received within the stale threshold (60s). g8ee is authoritative for heartbeat status decay since it ingests all heartbeats.
+- `terminated` — decommissioning completed; document is preserved for audit but excluded from UI lists. Termination is a status transition; the operator document is preserved for audit; only TERMINATED-status operators are excluded from default listings.
 - Successful auth transitions directly from `available` to `active`
 - Binding is **always manual** — user clicks "Bind" in the UI
 - Each web session can bind to **multiple** operators simultaneously
@@ -626,9 +628,9 @@ Operator list events use `OperatorSlot` projections instead of full `OperatorDoc
 - `bound_web_session_id` — bound web session (if any)
 - `is_g8ep` — g8e node operator flag
 - `first_deployed` — first deployment timestamp
-- `last_heartbeat` — last heartbeat timestamp
-- `system_info` — minimal system info (hostname, os, internal_ip, public_ip)
-- `latest_heartbeat_snapshot` — most recent performance metrics snapshot
+- `claimed_at` — when the slot was claimed (set at claim time, not heartbeat time)
+- `last_heartbeat` — last heartbeat timestamp (set only on actual heartbeat ingestion)
+- `latest_heartbeat_snapshot` — most recent performance metrics snapshot and system identity
 
 **Projection path:** `OperatorDocument` → `OperatorSlot.fromOperator()` → `forClient()` → SSE payload
 
@@ -658,12 +660,12 @@ Additionally, `OperatorService.syncSessionOnConnect(userId, webSessionId)` handl
 
 g8eo sends heartbeats every 30 seconds directly to g8es pub/sub. g8ee subscribes, validates, and persists `last_heartbeat` / `latest_heartbeat_snapshot` to the g8es document store, then notifies g8ed via HTTP POST so g8ed can broadcast the metrics envelope over SSE.
 
-Staleness reconciliation is owned by g8ed, not g8ee: `HeartbeatMonitorService` (`services/operator/heartbeat_monitor_service.js`) runs on a timer inside g8ed and reconciles operator `status` against the age of `last_heartbeat`. Transitions are bidirectional:
+Staleness reconciliation is owned by g8ee: `HeartbeatStaleMonitorService` (`app/services/operator/heartbeat_stale_monitor.py`) runs on a timer inside g8ee and reconciles operator `status` against the age of `last_heartbeat`. Transitions are bidirectional:
 
-- `BOUND → STALE` and `ACTIVE → OFFLINE` when `(now - last_heartbeat) > OperatorStaleThreshold.SECONDS`
+- `BOUND → STALE` and `ACTIVE → OFFLINE` when `(now - last_heartbeat) > 60s`
 - `STALE → BOUND` and `OFFLINE → ACTIVE` when a fresh heartbeat resumes
 
-On each transition the updated status is persisted via `CacheAsideService` and an `OPERATOR_STATUS_UPDATED_*` SSE event is fanned out to the owning user's active sessions.
+On each transition the updated status is persisted via g8ee's `CacheAsideService` and an `OPERATOR_STATUS_UPDATED_*` SSE event is published to g8ed for fanning out to the owning user's active sessions.
 
 ```
 g8eo (every 30s)
@@ -684,10 +686,9 @@ g8es pub/sub  →  g8ee (OperatorHeartbeatService)
 ```
 
 **g8es document store fields (managed by g8e):**
-- `last_heartbeat` — timestamp of most recent heartbeat
+- `last_heartbeat` — timestamp of most recent heartbeat (set only on actual heartbeat ingestion)
 - `heartbeat_history` — rolling buffer of last 10 heartbeats
-- `latest_heartbeat_snapshot` — most recent metrics for UI
-- `system_info` — static system data
+- `latest_heartbeat_snapshot` — most recent metrics and system identity for UI
 
 **Heartbeat SSE envelope (g8ee → g8ed → browser):** canonical shape in `shared/models/wire/heartbeat_sse.json`. The envelope splits authorship:
 
@@ -757,9 +758,9 @@ Device Link is the **recommended** way to deploy operators. The user generates a
 4. g8ed returns an operator command with the device link token
 5. User runs the command on the target system
 6. Binary collects system fingerprint and registers with g8ed (operator does not need to know its `operator_id` beforehand)
-7. g8ed assigns an available operator slot and provides the `operator_id` to the binary during the bootstrap response
-8. Operator activates immediately — no browser approval needed
-7. Operator appears in the panel as active
+7. g8ed assigns an available operator slot, generates credentials, and returns `{ api_key, operator_cert, operator_cert_key, operator_id }` to the binary
+8. Operator uses the returned API key for the bootstrap process and activates immediately
+9. Operator appears in the panel as active
 
 **Token format:** `dlk_[A-Za-z0-9_-]{32}` — 24 cryptographically random bytes, validated by regex before any g8es operations.
 

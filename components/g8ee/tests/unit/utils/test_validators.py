@@ -61,7 +61,7 @@ def _minimal_whitelist(**overrides) -> dict:
 
 class TestCommandBlacklistValidatorConfigurationErrors:
     def test_missing_file_raises_configuration_error(self):
-        with pytest.raises(ConfigurationError, match="Command blacklist not found"):
+        with pytest.raises(ConfigurationError, match="command blacklist not found"):
             CommandBlacklistValidator(blacklist_path="/nonexistent/path/blacklist.json")
 
     @pytest.mark.parametrize("missing_section", [
@@ -174,7 +174,7 @@ class TestCommandBlacklistValidatorBehavior:
 
 class TestCommandWhitelistValidatorConfigurationErrors:
     def test_explicit_nonexistent_path_raises_configuration_error(self):
-        with pytest.raises(ConfigurationError, match="Required whitelist configuration not found"):
+        with pytest.raises(ConfigurationError, match="whitelist configuration not found"):
             CommandWhitelistValidator(whitelist_path="/nonexistent/path/whitelist.json")
 
     def test_missing_enforcement_policy_raises_configuration_error(self):

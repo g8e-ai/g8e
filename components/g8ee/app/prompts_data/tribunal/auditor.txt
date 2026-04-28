@@ -4,14 +4,6 @@
 {command_constraints_message}
 </constraints>
 
-<request>
-{request}
-</request>
-
-<guidelines>
-{guidelines}
-</guidelines>
-
 <os>
 {os}
 </os>
@@ -23,6 +15,14 @@
 <operator_context>
 {operator_context}
 </operator_context>
+
+<guidelines>
+{guidelines}
+</guidelines>
+
+<request>
+{request}
+</request>
 
 {auditor_context}
 

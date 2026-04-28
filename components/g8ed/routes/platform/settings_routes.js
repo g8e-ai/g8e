@@ -73,14 +73,14 @@ export function createSettingsRouter({
                 return res.status(400).json(new ErrorResponse({ error: 'settings object required' }).forClient());
             }
 
-            // Explicitly separate user vs platform updates if needed, 
+            // Explicitly separate user vs platform updates if needed,
             // but for now we assume UI only sends user-level overrides.
             const result = await settingsService.updateUserSettings(req.userId, updates);
 
             logger.info('[SETTINGS-API] Settings updated', { userId: req.userId, saved: result.saved });
 
-            return res.json(new SettingsUpdateResponse({ 
-                success: true, 
+            return res.json(new SettingsUpdateResponse({
+                success: true,
                 message: 'Settings updated successfully',
                 saved: result.saved
             }).forClient());

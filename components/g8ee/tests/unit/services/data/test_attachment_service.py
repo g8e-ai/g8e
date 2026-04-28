@@ -89,10 +89,10 @@ class TestAttachmentServiceRetrieval:
     async def test_get_attachments_by_metadata_success(self, service, mock_blob_service):
         key1 = "att:inv1/a1"
         key2 = "att:inv1/a2"
-        
+
         att1 = AttachmentData(filename="file1.txt", base64_data="data1")
         att2 = AttachmentData(filename="file2.pdf", base64_data="data2")
-        
+
         mock_blob_service.get_blob.side_effect = [
             att1.model_dump_json().encode(),
             att2.model_dump_json().encode()
@@ -136,7 +136,7 @@ class TestAttachmentServiceRetrieval:
         key1 = "att:inv1/a1"
         key2 = "att:inv1/a2"
         att1 = AttachmentData(filename="file1.txt", base64_data="data1")
-        
+
         # First call returns data, second returns None (expired)
         mock_blob_service.get_blob.side_effect = [att1.model_dump_json().encode(), None]
 

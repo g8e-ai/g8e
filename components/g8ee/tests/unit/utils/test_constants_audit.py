@@ -273,7 +273,7 @@ class TestBroadcastEventTypedFields:
         field = hints["error_type"]
         annotation = str(field.annotation)
         assert "CommandErrorType" in annotation, (
-            f"CommandFailedBroadcastEvent.error_type should be Optional[CommandErrorType], got: {annotation}"
+            f"CommandFailedBroadcastEvent.error_type should be CommandErrorType | None, got: {annotation}"
         )
 
     def test_command_failed_error_type_accepts_enum_value(self):
@@ -390,11 +390,6 @@ class TestCloudCommandValidatorModule:
         from app.services.operator.cloud_command_validator import is_cloud_only_command
         assert callable(is_cloud_only_command)
 
-    def test_is_cloud_operator_self_discovery_command_importable(self):
-        from app.services.operator.cloud_command_validator import (
-            is_cloud_operator_self_discovery_command,
-        )
-        assert callable(is_cloud_operator_self_discovery_command)
 
     def test_execution_service_does_not_define_patterns(self):
         """Verify CLOUD_ONLY_COMMAND_PATTERNS lives in cloud_command_validator, not execution_service."""
@@ -402,16 +397,10 @@ class TestCloudCommandValidatorModule:
         assert not hasattr(mod, "CLOUD_ONLY_COMMAND_PATTERNS"), (
             "CLOUD_ONLY_COMMAND_PATTERNS should be in cloud_command_validator, not execution_service"
         )
-        assert not hasattr(mod, "CLOUD_OPERATOR_AUTO_APPROVED_PATTERNS"), (
-            "CLOUD_OPERATOR_AUTO_APPROVED_PATTERNS should be in cloud_command_validator, not execution_service"
-        )
 
     def test_execution_service_does_not_define_helpers(self):
         """Verify helper functions live in cloud_command_validator, not execution_service module scope."""
         import app.services.operator.execution_service as mod
         assert not hasattr(mod, "is_cloud_only_command"), (
             "is_cloud_only_command should be in cloud_command_validator, not execution_service module scope"
-        )
-        assert not hasattr(mod, "is_cloud_operator_self_discovery_command"), (
-            "is_cloud_operator_self_discovery_command should be in cloud_command_validator, not execution_service module scope"
         )

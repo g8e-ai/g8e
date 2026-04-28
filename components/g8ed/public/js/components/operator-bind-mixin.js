@@ -169,10 +169,14 @@ export const BindOperatorsMixin = {
 
         const operatorItemHtml = this._createBindAllOperatorItem(operator || { 
             operator_id: operatorId, 
-            system_info: { 
-                hostname: operator?.system_info?.hostname || 'Unknown', 
-                os: operator?.system_info?.os || '-', 
-                internal_ip: operator?.system_info?.internal_ip || '-' 
+            latest_heartbeat_snapshot: {
+                system_identity: {
+                    hostname: operator?.latest_heartbeat_snapshot?.system_identity?.hostname || 'Unknown',
+                    os: operator?.latest_heartbeat_snapshot?.system_identity?.os || '-'
+                },
+                network: {
+                    internal_ip: operator?.latest_heartbeat_snapshot?.network?.internal_ip || '-'
+                }
             } 
         });
 
@@ -433,9 +437,12 @@ export const BindOperatorsMixin = {
     },
 
     _createBindAllOperatorItem(op) {
-        const hostname = op.system_info?.hostname || 'Unknown';
-        const os = op.system_info?.os || 'Unknown';
-        const internalIp = op.system_info?.internal_ip || '-';
+        const heartbeatSnapshot = op.latest_heartbeat_snapshot || {};
+        const systemIdentity = heartbeatSnapshot.system_identity || {};
+        const network = heartbeatSnapshot.network || {};
+        const hostname = systemIdentity.hostname || 'Unknown';
+        const os = systemIdentity.os || 'Unknown';
+        const internalIp = network.internal_ip || '-';
         const template = templateLoader.cache.get('bind-all-operator-item');
         return templateLoader.replace(template, {
             operatorId: op.operator_id,
@@ -611,9 +618,12 @@ export const BindOperatorsMixin = {
     },
 
     _createUnbindAllOperatorItem(op) {
-        const hostname = op.system_info?.hostname || 'Unknown';
-        const os = op.system_info?.os || 'Unknown';
-        const publicIp = op.system_info?.public_ip || '-';
+        const heartbeatSnapshot = op.latest_heartbeat_snapshot || {};
+        const systemIdentity = heartbeatSnapshot.system_identity || {};
+        const network = heartbeatSnapshot.network || {};
+        const hostname = systemIdentity.hostname || 'Unknown';
+        const os = systemIdentity.os || 'Unknown';
+        const publicIp = network.public_ip || '-';
         const isStale = op.status === OperatorStatus.STALE;
         const statusLabel = isStale ? 'Stale' : 'Bound';
         const statusClass = isStale ? 'unbind-all-operator-status-stale' : '';

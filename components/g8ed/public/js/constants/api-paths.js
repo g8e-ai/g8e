@@ -84,6 +84,11 @@ const Seg = {
         STOP:           'stop',
         CASES:          'cases',
         HEALTH:         'health',
+        TRIAGE: {
+            ANSWER:  'triage/answer',
+            SKIP:    'triage/skip',
+            TIMEOUT: 'triage/timeout',
+        },
     },
     approval: {
         RESPOND:        'respond',
@@ -194,6 +199,11 @@ export const ApiPaths = {
         stop:           () => `${BASE.CHAT}/${Seg.chat.STOP}`,
         cases:          (caseId) => `${BASE.CHAT}/${Seg.chat.CASES}/${caseId}`,
         health:         () => `${BASE.CHAT}/${Seg.chat.HEALTH}`,
+    },
+    triage: {
+        answer:  () => `${BASE.CHAT}/${Seg.chat.TRIAGE.ANSWER}`,
+        skip:    () => `${BASE.CHAT}/${Seg.chat.TRIAGE.SKIP}`,
+        timeout: () => `${BASE.CHAT}/${Seg.chat.TRIAGE.TIMEOUT}`,
     },
     approval: {
         respond:       () => `${BASE.APPROVAL}/${Seg.approval.RESPOND}`,

@@ -23,6 +23,7 @@ import { templateLoader } from '../utils/template-loader.js';
 import { MarkdownRenderer } from '../utils/markdown.js';
 import { MessageRenderer } from './message-renderer.js';
 import { CasesManager } from './cases-manager.js';
+import { TriageQuestionsPopup } from './triage-questions-popup.js';
 import { ChatAuthMixin } from './chat-auth.js';
 import { ChatSSEHandlersMixin, ChatOperatorExecutionMixin } from './chat-sse-handlers.js';
 import { ChatHistoryMixin } from './chat-history.js';
@@ -70,6 +71,8 @@ export class ChatComponent {
 
         this.markdownRenderer = new MarkdownRenderer();
         this.messageRenderer = new MessageRenderer(this.markdownRenderer);
+
+        this.triageQuestionsPopup = new TriageQuestionsPopup(this.eventBus, document.body);
 
         // Reconnection state
         this._reconnectAttempts = 0;

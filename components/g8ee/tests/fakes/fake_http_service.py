@@ -13,8 +13,12 @@
 
 """Typed fake for HTTPServiceProtocol."""
 
-from typing import Optional
-from app.clients.http_client import HTTPClient
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.clients.http_client import HTTPClient
 from app.services.protocols import HTTPServiceProtocol
 
 
@@ -42,7 +46,7 @@ class FakeHTTPService:
         self.set_client_calls.append((client, service_name))
         self._http_clients[service_name] = client
 
-    def get_client(self, service_name: str) -> Optional[HTTPClient]:
+    def get_client(self, service_name: str) -> HTTPClient | None:
         return self._http_clients.get(service_name)
 
     async def start(self) -> None:

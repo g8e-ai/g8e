@@ -13,7 +13,7 @@
 
 import pytest
 
-from app.constants import ExecutionStatus, CommandErrorType
+from app.constants import CommandErrorType, ExecutionStatus
 from app.models.operators import (
     CommandCancelledBroadcastEvent,
     CommandResultBroadcastEvent,

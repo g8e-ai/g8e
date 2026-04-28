@@ -111,7 +111,8 @@
     "command": "command",
     "file.edit": "file.edit",
     "intent": "intent",
-    "agent.continue": "agent.continue"
+    "agent.continue": "agent.continue",
+    "stream": "stream"
   },
 
   "approval.error.type": {
@@ -249,6 +250,12 @@
     "general":   "general"
   },
 
+  "command.category": {
+    "csv.whitelist":        "csv_whitelist",
+    "network.diagnostics": "network_diagnostics",
+    "system.diagnostics":  "system_diagnostics"
+  },
+
   "tool.call.defaults": {
     "label":    "Processing",
     "icon":     "sync",
@@ -327,7 +334,8 @@
     "fetch.file.history.failed": "fetch.file.history.failed",
     "port.check.failed": "port.check.failed",
     "approval.timeout": "approval.timeout",
-    "permission.error": "permission.error"
+    "permission.error": "permission.error",
+    "configuration.error": "configuration.error"
   },
 
   "file.operation": {
@@ -352,8 +360,7 @@
   },
 
   "auth.mode": {
-    "api_key": "api_key",
-    "operator_session": "operator_session"
+    "api_key": "api_key"
   },
 
   "auth.method": {
@@ -424,7 +431,8 @@
     "stopped": "stopped",
     "shutdown.requested": "shutdown.requested",
     "claimed": "claimed",
-    "reconnected": "reconnected"
+    "reconnected": "reconnected",
+    "registered": "registered"
   },
 
   "history.actor": {
@@ -443,7 +451,6 @@
   },
 
   "audit.event.source": {
-    "history.trail": "history_trail",
     "conversation": "conversation"
   },
 
@@ -531,7 +538,9 @@
     "fetch.file.diff": "fetch_file_diff",
     "g8e.web.search": "g8e_web_search",
     "query.investigation.context": "query_investigation_context",
-    "get.command.constraints": "get_command_constraints"
+    "get.command.constraints": "get_command_constraints",
+    "list.ssh.inventory": "list_ssh_inventory",
+    "stream.operator": "stream_operator_to_ssh_fleet"
   },
 
   "_comment.llm.models": "Canonical LLM model identifiers shared across g8ee, g8eo, and g8ed.",
@@ -558,6 +567,7 @@
       "gemma4.26b": "gemma4:26b",
       "gemma4.e4b": "gemma4:e4b",
       "gemma4.e2b": "gemma4:e2b",
+      "gemma4.e2b.g8ea": "gemma4:e2b",
       "nemotron.3.30b": "nemotron-3-nano:30b",
       "llama.3.2.3b": "llama3.2:3b",
       "qwen3.5.2b": "qwen3.5:2b"

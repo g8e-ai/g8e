@@ -196,7 +196,7 @@ export const OperatorListMixin = {
             const firstDeployedText = operator.first_deployed ? formatTimestamp(operator.first_deployed) : ' - ';
             const lastHeartbeatText = operator.last_heartbeat ? formatTimestamp(operator.last_heartbeat) : ' - ';
 
-            // latest_heartbeat_snapshot is the canonical OperatorHeartbeat shape
+            // latest_heartbeat_snapshot is the canonical HeartbeatSnapshot shape
             // (shared/models/wire/heartbeat.json#operator_heartbeat) — same shape
             // whether read from the persisted operator document or the SSE envelope.
             const perf = latestSnapshot.performance || {};

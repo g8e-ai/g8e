@@ -27,13 +27,14 @@ callback into ``g8e_agent.run_with_sse`` such that:
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from app.constants import (
+    LLM_DEFAULT_MAX_OUTPUT_TOKENS,
     AgentMode,
     EventType,
-    LLM_DEFAULT_MAX_OUTPUT_TOKENS,
     ThinkingLevel,
     TriageComplexityClassification,
     TriageConfidence,
@@ -51,8 +52,8 @@ from app.models.agents.triage import TriageResult
 from app.models.investigations import AIResponseMetadata
 from app.models.settings import G8eeUserSettings, LLMSettings
 from app.services.ai.chat_pipeline import ChatPipelineService
-from tests.fakes.fake_event_service import FakeEventService
 from tests.fakes.factories import build_enriched_context, build_g8e_http_context
+from tests.fakes.fake_event_service import FakeEventService
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
 
@@ -71,7 +72,7 @@ def _make_pipeline() -> ChatPipelineService:
     svc.g8ed_event_service = FakeEventService()
     svc.g8e_agent = MagicMock()
     svc.investigation_service = MagicMock()
-    svc.investigation_service.add_chat_message = AsyncMock(return_value=True)
+    svc.investigation_service.investigation_data_service.add_chat_message = AsyncMock(return_value=True)
     svc.agent_activity_data_service = MagicMock()
     svc.agent_activity_data_service.record_activity = AsyncMock()
 
@@ -85,7 +86,7 @@ def _make_pipeline() -> ChatPipelineService:
         # contract as production (whitespace-only text is not persisted).
         if not investigation_id or not text.strip():
             return False
-        await svc.investigation_service.add_chat_message(
+        await svc.investigation_service.investigation_data_service.add_chat_message(
             investigation_id=investigation_id,
             sender=MessageSender.AI_PRIMARY,
             content=text,
@@ -138,7 +139,7 @@ def _make_ctx(triage_result: TriageResult = HIGH_CONFIDENCE_COMPLEX_TRIAGE) -> t
         user_memories=[],
         case_memories=[],
     )
-    
+
     state = AgentStreamState()
     return inputs, state
 
@@ -187,12 +188,14 @@ async def test_intermediate_iteration_text_persists_as_ai_primary_rows():
             sentinel_mode=True,
             llm_primary_provider=None,
             llm_assistant_provider=None,
+            llm_lite_provider=None,
             llm_primary_model="",
             llm_assistant_model="",
+            llm_lite_model="",
             user_settings=user_settings,
         )
 
-    primary_calls = _ai_primary_calls(svc.investigation_service.add_chat_message)
+    primary_calls = _ai_primary_calls(svc.investigation_service.investigation_data_service.add_chat_message)
     contents = [c["content"] for c in primary_calls]
 
     assert contents == [
@@ -243,12 +246,14 @@ async def test_final_persist_skipped_when_response_text_is_whitespace_only():
             sentinel_mode=True,
             llm_primary_provider=None,
             llm_assistant_provider=None,
+            llm_lite_provider=None,
             llm_primary_model="",
             llm_assistant_model="",
+            llm_lite_model="",
             user_settings=user_settings,
         )
 
-    primary_calls = _ai_primary_calls(svc.investigation_service.add_chat_message)
+    primary_calls = _ai_primary_calls(svc.investigation_service.investigation_data_service.add_chat_message)
     contents = [c["content"] for c in primary_calls]
 
     # Only the intermediate iteration was persisted — no trailing empty row.
@@ -281,12 +286,14 @@ async def test_iteration_callback_skips_whitespace_only_text():
             sentinel_mode=True,
             llm_primary_provider=None,
             llm_assistant_provider=None,
+            llm_lite_provider=None,
             llm_primary_model="",
             llm_assistant_model="",
+            llm_lite_model="",
             user_settings=user_settings,
         )
 
-    contents = [c["content"] for c in _ai_primary_calls(svc.investigation_service.add_chat_message)]
+    contents = [c["content"] for c in _ai_primary_calls(svc.investigation_service.investigation_data_service.add_chat_message)]
     assert contents == ["Real commentary.", "Final answer."]
 
 
@@ -294,7 +301,7 @@ async def test_iteration_callback_passed_to_run_with_sse():
     """Regression: _run_chat_impl must wire a callback that writes AI_PRIMARY rows.
 
     It is not enough that *some* callable is passed — the callable must actually
-    produce an ``investigation_service.add_chat_message`` call with
+    produce an ``investigation_service.investigation_data_service.add_chat_message`` call with
     ``sender == MessageSender.AI_PRIMARY`` and
     ``metadata.source == EventType.EVENT_SOURCE_AI_PRIMARY`` when invoked with
     non-empty text. Otherwise the iteration-persistence contract can silently
@@ -327,15 +334,17 @@ async def test_iteration_callback_passed_to_run_with_sse():
             sentinel_mode=True,
             llm_primary_provider=None,
             llm_assistant_provider=None,
+            llm_lite_provider=None,
             llm_primary_model="",
             llm_assistant_model="",
+            llm_lite_model="",
             user_settings=user_settings,
         )
 
     assert "on_iteration_text" in captured
     assert callable(captured["on_iteration_text"])
 
-    primary_calls = _ai_primary_calls(svc.investigation_service.add_chat_message)
+    primary_calls = _ai_primary_calls(svc.investigation_service.investigation_data_service.add_chat_message)
     # Exactly one intermediate row (the callback invocation) plus the final
     # row from _persist_ai_response.
     assert [c["content"] for c in primary_calls] == ["mid-turn commentary", "done"]

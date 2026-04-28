@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from pydantic import Field
+from pydantic import Field, ConfigDict
 
 from app.models.attachments import AttachmentMetadata
 from app.models.base import G8eBaseModel
@@ -98,8 +98,188 @@ class OperatorApprovalResponse(G8eBaseModel):
     approval_id: str = Field(..., description="Approval ID")
     approved: bool = Field(..., description="Whether the command was approved")
     reason: str = Field(default="Approval denied by user", description="Reason for denial if not approved")
+    operator_session_id: str | None = Field(default=None, description="Operator session ID (set by router from bound operator)")
+    operator_id: str | None = Field(default=None, description="Operator ID (set by router from bound operator)")
+
+
+class OperatorSlotCreationRequest(G8eBaseModel):
+    """Request model for operator slot creation.
+
+    Called by g8ed during user initialization and device link creation.
+    g8ee handles the actual write to the operator document.
+    """
+    user_id: str = Field(..., description="User ID")
+    organization_id: str = Field(..., description="Organization ID")
+    slot_number: int = Field(..., description="Slot number")
+    operator_type: str = Field(..., description="Operator type (CLOUD, SYSTEM)")
+    cloud_subtype: str | None = Field(default=None, description="Cloud operator subtype")
+    name_prefix: str = Field(default="operator", description="Name prefix")
+    is_g8e_node: bool = Field(default=False, description="Is g8e pod operator")
+
+
+class OperatorSlotCreationResponse(G8eBaseModel):
+    """Response for operator slot creation."""
+    success: bool
+    operator_id: str | None = None
+    api_key: str | None = None
+    error: str | None = None
+
+
+class OperatorSlotClaimRequest(G8eBaseModel):
+    """Request model for operator slot claiming.
+
+    Called by g8ed during device registration.
+    g8ee handles the actual write to the operator document.
+    """
+    operator_id: str = Field(..., description="Operator ID")
+    operator_session_id: str = Field(..., description="Operator session ID")
+    bound_web_session_id: str | None = Field(default=None, description="Bound web session ID")
+    operator_type: str = Field(..., description="Operator type")
+
+
+class OperatorSlotClaimResponse(G8eBaseModel):
+    """Response for operator slot claiming."""
+    success: bool
+    error: str | None = None
+
+
+class OperatorUpdateApiKeyRequest(G8eBaseModel):
+    """Request model for updating an operator's API key.
+
+    Called by g8ed to issue API keys for existing slots that were created without keys.
+    g8ee handles the actual write to the operator document.
+    """
+    operator_id: str = Field(..., description="Operator ID")
+    api_key: str = Field(..., description="New API key")
+
+
+class OperatorUpdateApiKeyResponse(G8eBaseModel):
+    """Response for updating an operator's API key."""
+    success: bool
+    error: str | None = None
+
+
+class OperatorBindRequest(G8eBaseModel):
+    """Request model for operator binding.
+
+    Called by g8ed during operator bind operations.
+    g8ee handles the actual write to the operator document.
+    """
+    operator_ids: list[str] = Field(..., description="Operator IDs to bind")
+    web_session_id: str = Field(..., description="Web session ID")
+    user_id: str = Field(..., description="User ID")
+
+
+class OperatorBindResponse(G8eBaseModel):
+    """Response for operator binding."""
+    success: bool
+    bound_count: int = 0
+    failed_count: int = 0
+    bound_operator_ids: list[str] = Field(default_factory=list)
+    failed_operator_ids: list[str] = Field(default_factory=list)
+    errors: list[dict] = Field(default_factory=list)
+
+
+class OperatorUnbindRequest(G8eBaseModel):
+    """Request model for operator unbinding.
+
+    Called by g8ed during operator unbind operations.
+    g8ee handles the actual write to the operator document.
+    """
+    operator_ids: list[str] = Field(..., description="Operator IDs to unbind")
+    web_session_id: str = Field(..., description="Web session ID")
+    user_id: str = Field(..., description="User ID")
+
+
+class OperatorUnbindResponse(G8eBaseModel):
+    """Response for operator unbinding."""
+    success: bool
+    unbound_count: int = 0
+    failed_count: int = 0
+    unbound_operator_ids: list[str] = Field(default_factory=list)
+    failed_operator_ids: list[str] = Field(default_factory=list)
+    errors: list[dict] = Field(default_factory=list)
     operator_session_id: str = Field(default="", description="Operator session ID (set by router from bound operator)")
     operator_id: str = Field(default="", description="Operator ID (set by router from bound operator)")
+
+
+class InternalOperatorAuthCall(G8eBaseModel):
+    """Request model for operator authentication via API key (Bearer) relayed through g8ed.
+
+    Aligned with shared/models/wire/operator_auth_call.json (InternalOperatorAuthCall)
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    authorization: str = Field(..., description="The Bearer token (API key) for the operator")
+    runtime_config: dict | None = Field(default=None)
+
+
+class OperatorAuthenticateResponse(G8eBaseModel):
+    """Response model for operator authentication."""
+    success: bool
+    operator_session_id: str | None = None
+    operator_id: str | None = None
+    user_id: str | None = None
+    api_key: str | None = None
+    config: dict | None = None
+    session: dict | None = None
+    operator_cert: str | None = None
+    operator_cert_key: str | None = None
+    error: str | None = None
+
+
+class OperatorDeviceLinkRegisterRequest(G8eBaseModel):
+    """Request model for device-link operator registration.
+
+    Called by g8ed after device-link token consumption.
+    Trust model: caller is g8ed via internal mTLS. No authorization header.
+    """
+    operator_id: str = Field(..., description="Operator ID")
+    user_id: str = Field(..., description="User ID")
+    organization_id: str | None = Field(default=None, description="Organization ID")
+    operator_type: str = Field(default="SYSTEM", description="Operator type")
+    system_fingerprint: str | None = Field(default=None, description="System fingerprint")
+
+
+class OperatorDeviceLinkRegisterResponse(G8eBaseModel):
+    """Response model for device-link operator registration."""
+    success: bool
+    operator_id: str | None = None
+    operator_session_id: str | None = None
+    user_id: str | None = None
+    api_key: str | None = None
+    operator_cert: str | None = None
+    operator_cert_key: str | None = None
+    session: dict | None = None
+    error: str | None = None
+
+
+class OperatorSessionValidateRequest(G8eBaseModel):
+    """Request model for operator session validation."""
+    operator_session_id: str = Field(..., description="Operator session ID")
+
+
+class OperatorSessionValidateResponse(G8eBaseModel):
+    """Response model for operator session validation."""
+    success: bool
+    valid: bool
+    user_id: str | None = None
+    operator_id: str | None = None
+    session_type: str | None = None
+    error: str | None = None
+
+
+class OperatorSessionRefreshRequest(G8eBaseModel):
+    """Request model for operator session refresh."""
+    operator_session_id: str = Field(..., description="Operator session ID")
+
+
+class OperatorSessionRefreshResponse(G8eBaseModel):
+    """Response model for operator session refresh."""
+    success: bool
+    operator_id: str | None = None
+    session: dict | None = None
+    error: str | None = None
 
 
 class PendingApprovalsResponse(G8eBaseModel):
@@ -132,6 +312,93 @@ class OperatorSessionRegistrationRequest(G8eBaseModel):
     """
     operator_id: str = Field(..., description="Operator ID")
     operator_session_id: str = Field(..., description="Operator session ID")
+
+
+class OperatorTerminateRequest(G8eBaseModel):
+    """Request model for operator termination."""
+    operator_id: str = Field(..., description="Operator ID")
+
+
+class OperatorTerminateResponse(G8eBaseModel):
+    """Response for operator termination."""
+    success: bool
+    error: str | None = None
+
+
+class ApiKeyGenerationRequest(G8eBaseModel):
+    """Request model for API key generation.
+    
+    Authority: g8ee.
+    """
+    prefix: str = Field(default="g8e_", description="API key prefix")
+
+
+class ApiKeyGenerationResponse(G8eBaseModel):
+    """Response model for API key generation."""
+    success: bool
+    api_key: str | None = None
+    error: str | None = None
+
+
+class G8epOperatorActivationRequest(G8eBaseModel):
+    """Request model for g8ep operator activation.
+    
+    Authority: g8ee.
+    Aligned with shared/models/wire/internal_requests.json (g8ep_operator_activation)
+    """
+    user_id: str = Field(..., description="ID of the user whose g8ep operator should be activated")
+
+
+class G8epOperatorActivationResponse(G8eBaseModel):
+    """Response model for g8ep operator activation.
+    
+    Aligned with shared/models/wire/operator_management_responses.json (g8ep_operator_activation_response)
+    """
+    success: bool
+    error: str | None = Field(default=None, description="Error message when unsuccessful")
+
+
+class G8epOperatorRelaunchRequest(G8eBaseModel):
+    """Request model for g8ep operator relaunch.
+    
+    Authority: g8ee.
+    Aligned with shared/models/wire/internal_requests.json (g8ep_operator_relaunch)
+    """
+    user_id: str = Field(..., description="ID of the user whose g8ep operator should be relaunched")
+
+
+class G8epOperatorRelaunchResponse(G8eBaseModel):
+    """Response model for g8ep operator relaunch.
+    
+    Aligned with shared/models/wire/operator_management_responses.json (g8ep_operator_relaunch_response)
+    """
+    success: bool
+    operator_id: str | None = Field(default=None, description="The ID of the relaunched operator slot")
+    error: str | None = Field(default=None, description="Error message when unsuccessful")
+
+
+class OperatorListenSessionAuthRequest(G8eBaseModel):
+    """Request model for starting a session auth listener.
+    
+    Called by g8ed during device registration bootstrap.
+    """
+    operator_session_id: str = Field(..., description="Operator session ID")
+    operator_id: str = Field(..., description="Operator ID")
+    user_id: str = Field(..., description="User ID")
+    organization_id: str | None = Field(default=None, description="Organization ID")
+
+
+class OperatorCertificateRevokeRequest(G8eBaseModel):
+    """Request model for operator certificate revocation."""
+    serial: str = Field(..., description="Certificate serial number to revoke")
+    reason: str = Field(default="revoked", description="Reason for revocation")
+    operator_id: str | None = Field(default=None, description="Optional operator ID")
+
+
+class OperatorCertificateRevokeResponse(G8eBaseModel):
+    """Response model for operator certificate revocation."""
+    success: bool
+    error: str | None = None
 
 
 class DirectCommandRequest(G8eBaseModel):

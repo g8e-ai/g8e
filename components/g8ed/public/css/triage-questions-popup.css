@@ -1,0 +1,258 @@
+/* Triage Questions Popup - styled to match approval-compact pattern */
+
+.triage-questions-popup {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 420px;
+    max-width: calc(100vw - 48px);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-md);
+    box-shadow:
+        0 4px 12px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(12px);
+    z-index: 1000;
+    opacity: 0;
+    transform: translateY(16px);
+    transition: opacity var(--transition-normal), transform var(--transition-normal);
+    pointer-events: none;
+}
+
+.triage-questions-popup.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+.triage-questions-popup.is-exiting {
+    opacity: 0;
+    transform: translateY(16px);
+    transition: opacity var(--transition-fast), transform var(--transition-fast);
+}
+
+.triage-questions-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-secondary);
+}
+
+.triage-questions-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+}
+
+.triage-questions-title::before {
+    content: 'help';
+    font-family: 'Material Symbols Outlined';
+    font-size: 14px;
+    color: var(--accent-yellow);
+}
+
+.triage-questions-skip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.triage-questions-skip:hover {
+    background: rgba(var(--text-rgb), 0.1);
+    color: var(--text-primary);
+}
+
+.triage-questions-skip .material-symbols-outlined {
+    font-size: 16px;
+}
+
+.triage-questions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.triage-question-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 10px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-secondary);
+    border-radius: var(--radius-sm);
+}
+
+.triage-question-text {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-primary);
+    line-height: 1.4;
+}
+
+.triage-question-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.triage-btn {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all var(--transition-fast);
+}
+
+.triage-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+}
+
+.triage-btn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.triage-btn-yes {
+    background: rgba(var(--accent-green-rgb), 0.2);
+    border-color: rgba(var(--accent-green-rgb), 0.4);
+    color: var(--accent-green-light);
+}
+
+.triage-btn-yes:hover:not(:disabled) {
+    background: rgba(var(--accent-green-rgb), 0.3);
+    border-color: rgba(var(--accent-green-rgb), 0.6);
+}
+
+.triage-btn-no {
+    background: rgba(var(--accent-red-rgb), 0.15);
+    border-color: rgba(var(--accent-red-rgb), 0.35);
+    color: var(--accent-red);
+}
+
+.triage-btn-no:hover:not(:disabled) {
+    background: rgba(var(--accent-red-rgb), 0.25);
+    border-color: rgba(var(--accent-red-rgb), 0.5);
+}
+
+.triage-questions-footer {
+    margin-top: 4px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-secondary);
+}
+
+.triage-timeout-bar {
+    width: 100%;
+    height: 3px;
+    background: var(--bg-primary);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.triage-timeout-progress {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-yellow), var(--accent-orange));
+    border-radius: 2px;
+    transition: width linear;
+}
+
+/* Light theme */
+[data-theme="light"] .triage-questions-popup {
+    background: var(--bg-elevated);
+    border-color: var(--border-color);
+    box-shadow:
+        0 4px 12px rgba(0, 0, 0, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+[data-theme="light"] .triage-questions-header {
+    border-bottom-color: var(--border-secondary);
+}
+
+[data-theme="light"] .triage-questions-title::before {
+    color: var(--accent-yellow-dark);
+}
+
+[data-theme="light"] .triage-questions-skip:hover {
+    background: rgba(var(--text-rgb), 0.06);
+}
+
+[data-theme="light"] .triage-question-item {
+    background: var(--bg-secondary);
+    border-color: var(--border-secondary);
+}
+
+[data-theme="light"] .triage-btn-yes {
+    background: rgba(var(--accent-green-rgb), 0.15);
+    border-color: rgba(var(--accent-green-rgb), 0.4);
+    color: var(--accent-green-solid);
+}
+
+[data-theme="light"] .triage-btn-yes:hover:not(:disabled) {
+    background: rgba(var(--accent-green-rgb), 0.25);
+    border-color: rgba(var(--accent-green-rgb), 0.5);
+}
+
+[data-theme="light"] .triage-btn-no {
+    background: rgba(var(--accent-red-rgb), 0.12);
+    border-color: rgba(var(--accent-red-rgb), 0.35);
+    color: var(--accent-red-dark);
+}
+
+[data-theme="light"] .triage-btn-no:hover:not(:disabled) {
+    background: rgba(var(--accent-red-rgb), 0.2);
+    border-color: rgba(var(--accent-red-rgb), 0.45);
+}
+
+[data-theme="light"] .triage-questions-footer {
+    border-top-color: var(--border-secondary);
+}
+
+[data-theme="light"] .triage-timeout-bar {
+    background: var(--bg-tertiary);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .triage-questions-popup {
+        bottom: 16px;
+        right: 16px;
+        left: 16px;
+        width: auto;
+        max-width: none;
+    }
+
+    .triage-question-item {
+        padding: 10px 12px;
+    }
+
+    .triage-btn {
+        padding: 8px 14px;
+        font-size: 12px;
+    }
+}

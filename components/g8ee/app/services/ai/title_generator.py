@@ -53,15 +53,15 @@ async def generate_case_title(
 
     if not settings:
         return CaseTitleResult(
-            generated_title=_create_fallback_title(description, max_length), 
+            generated_title=_create_fallback_title(description, max_length),
             fallback=True
         )
 
     try:
-        provider = get_llm_provider(settings.llm, is_assistant=True)
-        model = settings.llm.resolved_assistant_model
+        provider = get_llm_provider(settings.llm, is_lite=True)
+        model = settings.llm.resolved_lite_model
         if not model:
-            logger.warning("[TITLE-GEN] No assistant_model configured, using fallback title")
+            logger.warning("[TITLE-GEN] No lite_model or assistant_model configured, using fallback title")
             return CaseTitleResult(
                 generated_title=_create_fallback_title(description, max_length),
                 fallback=True
@@ -152,12 +152,12 @@ def _create_fallback_title(description: str, max_length: int) -> str:
     if not description or not description.strip():
         return "New Technical Support Case"
 
-    first_line = description.split("\n")[0].strip()
+    first_line = description.split("\n", maxsplit=1)[0].strip()
     if not first_line:
         first_line = description.strip()
 
     prefixes_to_remove = ["hi", "hello", "hey", "i need help with", "can you help me with"]
-    
+
     changed = True
     while changed:
         changed = False

@@ -18,7 +18,8 @@ import json
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from app.models.cache import CacheOperationResult, DocumentResult, QueryResult, BatchWriteOperation
+from app.models.cache import BatchWriteOperation, CacheOperationResult, DocumentResult, QueryResult
+
 
 class FakeKVClient:
     """In-memory fake for g8es KV client.
@@ -29,7 +30,7 @@ class FakeKVClient:
 
     def __init__(self):
         self._store: dict[str, str] = {}
-        # Expose as AsyncMock for call assertions if needed, 
+        # Expose as AsyncMock for call assertions if needed,
         # but implementation is real in-memory.
         self.get = AsyncMock(side_effect=self._get)
         self.set = AsyncMock(side_effect=self._set)
@@ -57,7 +58,7 @@ class FakeKVClient:
         self.connect = AsyncMock()
         self.disconnect = AsyncMock()
         self.close = AsyncMock()
-        
+
     def seed(self, key: str, value: str):
         self._store[key] = value
 
@@ -119,7 +120,7 @@ class FakePubSubClient:
         self.disconnect = AsyncMock()
         self.close = AsyncMock()
         self.ensure_connected = AsyncMock()
-        
+
         # Pub/Sub methods
         self.on_channel_message = MagicMock()
         self.off_channel_message = MagicMock()

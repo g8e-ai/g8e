@@ -22,12 +22,15 @@ import logging
 
 from fastapi import APIRouter, Depends, Request
 
-from app.constants import ChatSessionStatus, InvestigationStatus
+from app.constants import ChatSessionStatus, InvestigationStatus, MessageSender, EventType
 from app.errors import ResourceNotFoundError
 from app.models import InvestigationModel
 from app.models.chat_api import ChatSessionDetailsResponse, ChatSessionResponse, LatestChatSessionResponse
+from app.models.investigations import ConversationMessageMetadata
 from app.models.auth import AuthenticatedUser
+from app.models.triage_api import TriageAnswerRequest, TriageSkipRequest, TriageTimeoutRequest
 from ..dependencies import get_g8ee_case_data_service, get_g8ee_investigation_service, require_proxy_auth
+from ..services.investigation.investigation_service import InvestigationService
 from ..services.investigation.investigation_data_service import InvestigationDataService
 from ..services.data.case_data_service import CaseDataService
 
@@ -37,6 +40,81 @@ logger = logging.getLogger(__name__)
 
 def _is_chat_session_active(status: InvestigationStatus) -> bool:
     return status == InvestigationStatus.OPEN
+
+
+@router.post("/chat/triage/answer")
+async def answer_triage_question(
+    request: TriageAnswerRequest,
+    investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth)
+) -> dict[str, bool]:
+    """
+    Receive user answer to a triage clarifying question and store in ledger.
+    """
+    investigation = await investigation_service.get_investigation(request.investigation_id)
+    if not investigation or investigation.user_id != user_info.uid:
+        raise ResourceNotFoundError("Investigation not found", resource_id=request.investigation_id, resource_type="investigation", component="g8ee")
+
+    # Store answer as user.chat message with structured metadata
+    await investigation_service.investigation_data_service.add_chat_message(
+        investigation_id=request.investigation_id,
+        sender=MessageSender.USER_CHAT,
+        content=f"Answered clarifying question {request.question_index}: {'Yes' if request.answer else 'No'}",
+        metadata=ConversationMessageMetadata(
+            event_type=EventType.AI_TRIAGE_CLARIFICATION_ANSWERED,
+            question_index=request.question_index,
+            answer=request.answer
+        )
+    )
+    return {"success": True}
+
+
+@router.post("/chat/triage/skip")
+async def skip_triage_questions(
+    request: TriageSkipRequest,
+    investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth)
+) -> dict[str, bool]:
+    """
+    Record that user skipped the triage clarifying questions.
+    """
+    investigation = await investigation_service.get_investigation(request.investigation_id)
+    if not investigation or investigation.user_id != user_info.uid:
+        raise ResourceNotFoundError("Investigation not found", resource_id=request.investigation_id, resource_type="investigation", component="g8ee")
+
+    await investigation_service.investigation_data_service.add_chat_message(
+        investigation_id=request.investigation_id,
+        sender=MessageSender.USER_CHAT,
+        content="Skipped clarifying questions",
+        metadata=ConversationMessageMetadata(
+            event_type=EventType.AI_TRIAGE_CLARIFICATION_SKIPPED
+        )
+    )
+    return {"success": True}
+
+
+@router.post("/chat/triage/timeout")
+async def timeout_triage_questions(
+    request: TriageTimeoutRequest,
+    investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
+    user_info: AuthenticatedUser = Depends(require_proxy_auth)
+) -> dict[str, bool]:
+    """
+    Record that triage clarifying questions timed out.
+    """
+    investigation = await investigation_service.get_investigation(request.investigation_id)
+    if not investigation or investigation.user_id != user_info.uid:
+        raise ResourceNotFoundError("Investigation not found", resource_id=request.investigation_id, resource_type="investigation", component="g8ee")
+
+    await investigation_service.investigation_data_service.add_chat_message(
+        investigation_id=request.investigation_id,
+        sender=MessageSender.USER_CHAT,
+        content="Clarifying questions timed out",
+        metadata=ConversationMessageMetadata(
+            event_type=EventType.AI_TRIAGE_CLARIFICATION_TIMEOUT
+        )
+    )
+    return {"success": True}
 
 
 @router.get("/chat/sessions/{web_session_id}")
@@ -59,7 +137,7 @@ async def get_chat_session(
     """
     authenticated_user_id = user_info.uid
 
-    investigation = await investigation_service.get_investigation(web_session_id)
+    investigation = await investigation_service.investigation_data_service.get_investigation(web_session_id)
     if investigation:
         if investigation.user_id != authenticated_user_id:
             raise ResourceNotFoundError("Chat session not found", resource_type="chat_session", resource_id=web_session_id, component="g8ee")
@@ -104,7 +182,7 @@ async def get_latest_chat_session_for_case(
     if case_user_id != authenticated_user_id:
         raise ResourceNotFoundError("Case not found", resource_type="case", resource_id=case_id, component="g8ee")
 
-    raw_investigations = await investigation_service.get_case_investigations(
+    raw_investigations = await investigation_service.investigation_data_service.get_case_investigations(
         case_id=case_id,
         user_id=authenticated_user_id
     )

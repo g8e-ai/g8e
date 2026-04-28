@@ -16,7 +16,7 @@ from enum import Enum
 # Use absolute path for shared models in container
 _SHARED_DIR = "/app/shared/models"
 
-# Note: We are using the shared/models/errors.py directly but we might want to 
+# Note: We are using the shared/models/errors.py directly but we might want to
 # eventually move these to a more central constants location if they are purely enums.
 # For now, we mirror the structure to break the circular dependency.
 

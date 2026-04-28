@@ -28,9 +28,11 @@ Usage:
     python manage-g8es.py operators reset --id OPERATOR_ID
 """
 
+from __future__ import annotations
+
 import argparse
 import sys
-from typing import Optional, Dict, Any, List
+from typing import Dict, Any, List
 
 from _lib import (
     G8ED_BASE_URL,
@@ -41,6 +43,12 @@ from _lib import (
 
 INTERNAL_OPERATORS_BASE = f'{G8ED_BASE_URL}/api/internal/operators'
 INTERNAL_USERS_BASE = f'{G8ED_BASE_URL}/api/internal/users'
+
+
+def _obfuscate_sensitive(value: str | None) -> str:
+    if not value or len(value) < 10:
+        return '***'
+    return f"{value[:5]}...{value[-5:]}"
 
 
 class OperatorManager:
@@ -106,28 +114,18 @@ class OperatorManager:
             f"    Terminated:      {op.get('terminated_at') or 'N/A'}",
         ]
 
-        system_info = op.get('system_info') or {}
-        if system_info:
+        heartbeat_snapshot = op.get('latest_heartbeat_snapshot')
+        if heartbeat_snapshot:
+            system_identity = heartbeat_snapshot.get('system_identity') or {}
+            network = heartbeat_snapshot.get('network') or {}
             lines += [
                 "",
-                "  System Info:",
-                f"    Hostname:        {system_info.get('hostname') or 'N/A'}",
-                f"    OS:              {system_info.get('os') or 'N/A'}",
-                f"    Architecture:    {system_info.get('arch') or 'N/A'}",
-                f"    Public IP:       {system_info.get('public_ip') or 'N/A'}",
+                "  System Info (from latest heartbeat):",
+                f"    Hostname:        {system_identity.get('hostname') or 'N/A'}",
+                f"    OS:              {system_identity.get('os') or 'N/A'}",
+                f"    Architecture:    {system_identity.get('architecture') or 'N/A'}",
+                f"    Public IP:       {network.get('public_ip') or 'N/A'}",
             ]
-
-        history = op.get('history_trail') or []
-        if history:
-            lines += ["", f"  History Trail ({len(history)} events):"]
-            for entry in history[-5:]:
-                ts = (entry.get('timestamp') or '')[:19]
-                event = entry.get('event_type', 'N/A')
-                summary = entry.get('summary', '')
-                actor = entry.get('actor', 'N/A')
-                lines.append(f"    [{ts}] {event} ({actor}): {summary}")
-            if len(history) > 5:
-                lines.append(f"    ... and {len(history) - 5} earlier events")
 
         lines += ["=" * 80, ""]
         return '\n'.join(lines)
@@ -136,7 +134,7 @@ class OperatorManager:
     # Commands
     # =========================================================================
 
-    def list_operators(self, user_id: Optional[str], email: Optional[str], all_statuses: bool = False) -> List[Dict]:
+    def list_operators(self, user_id: str | None, email: str | None, all_statuses: bool = False) -> List[Dict]:
         if user_id or email:
             uid = resolve_user_id(user_id, email)
             if not uid:
@@ -182,7 +180,7 @@ class OperatorManager:
         print()
         return operators
 
-    def get_operator(self, operator_id: str) -> Optional[Dict]:
+    def get_operator(self, operator_id: str) -> Dict | None:
         result = g8ed_request('GET', f'{INTERNAL_OPERATORS_BASE}/{operator_id}')
         if not result.get('success'):
             if result.get('_status_code') == 404:
@@ -195,7 +193,7 @@ class OperatorManager:
         print(self._format_operator_detail(op))
         return op
 
-    def init_slots(self, user_id: Optional[str], email: Optional[str]) -> Optional[List[str]]:
+    def init_slots(self, user_id: str | None, email: str | None) -> list[str] | None:
         uid = resolve_user_id(user_id, email)
         if not uid:
             return None
@@ -223,7 +221,7 @@ class OperatorManager:
         print()
         return operator_ids
 
-    def refresh_key(self, operator_id: str, force: bool = False) -> Optional[Dict]:
+    def refresh_key(self, operator_id: str, force: bool = False) -> Dict | None:
         existing = g8ed_request('GET', f'{INTERNAL_OPERATORS_BASE}/{operator_id}')
         if not existing.get('success'):
             if existing.get('_status_code') == 404:
@@ -266,11 +264,11 @@ class OperatorManager:
         print(f"  Old Operator ID:  {result.get('old_operator_id', operator_id)}")
         print(f"  New Operator ID:  {result.get('new_operator_id', 'N/A')}")
         print(f"  Slot Number:      {result.get('slot_number', 'N/A')}")
-        print(f"  New API Key:      {result.get('new_api_key', 'N/A')}")
+        print(f"  New API Key:      {_obfuscate_sensitive(result.get('new_api_key'))}")
         print()
         return result
 
-    def get_key(self, operator_id: str) -> Optional[str]:
+    def get_key(self, operator_id: str) -> str | None:
         result = g8ed_request('GET', f'{INTERNAL_OPERATORS_BASE}/{operator_id}')
         if not result.get('success'):
             if result.get('_status_code') == 404:
@@ -291,11 +289,11 @@ class OperatorManager:
         print(f"  Name:         {op.get('name', 'N/A')}")
         print(f"  Slot:         {op.get('slot_number', 'N/A')}")
         print(f"  Status:       {op.get('status', 'N/A')}")
-        print(f"  API Key:      {api_key}")
+        print(f"  API Key:      {_obfuscate_sensitive(api_key)}")
         print()
         return api_key
 
-    def reset(self, operator_id: str, force: bool = False) -> Optional[Dict]:
+    def reset(self, operator_id: str, force: bool = False) -> Dict | None:
         existing = g8ed_request('GET', f'{INTERNAL_OPERATORS_BASE}/{operator_id}')
         if not existing.get('success'):
             if existing.get('_status_code') == 404:

@@ -21,11 +21,14 @@ End-to-end test covering the full Tribunal → approval → response flow to ens
 4. SSE boundary validation rejects events missing web_session_id
 """
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 
-from unittest.mock import AsyncMock, patch
-from app.constants import EventType, CommandGenerationOutcome
-from app.models.agents.tribunal import TribunalSessionStartedPayload, CommandGenerationResult, CandidateCommand, VoteBreakdown
+from app.constants import CommandGenerationOutcome, EventType
+from app.models.agents.tribunal import (
+    CandidateCommand,
+)
 from app.services.ai.generator import generate_command
 from tests.fakes.agent_helpers import (
     make_agent_run_args,
@@ -53,11 +56,11 @@ class TestTribunalApprovalCorrelation:
         mock_candidates = [
             CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM)
         ]
-        
+
         with patch("app.services.ai.generator._run_generation_stage", new_callable=AsyncMock) as mock_gen, \
              patch("app.services.ai.generator._run_audit_stage", new_callable=AsyncMock) as mock_audit, \
              patch("app.services.ai.generator.weighted_vote") as mock_vote:
-            
+
             mock_gen.return_value = mock_candidates
             # Mock vote to succeed despite only 1 candidate
             from app.models.agents.tribunal import VoteBreakdown
@@ -69,7 +72,7 @@ class TestTribunalApprovalCorrelation:
                 consensus_strength=1.0
             ), None)
             # Mock audit to pass
-            mock_audit.return_value = ("ls -la", CommandGenerationOutcome.VERIFIED, True, None, "ok")
+            mock_audit.return_value = ("ls -la", CommandGenerationOutcome.VERIFIED, True, None, "ok", None)
 
             # Generate command via Tribunal
             gen_result = await generate_command(
@@ -82,6 +85,8 @@ class TestTribunalApprovalCorrelation:
                 case_id=inputs.case_id,
                 investigation_id=inputs.investigation_id,
                 settings=inputs.request_settings,
+                reputation_data_service=AsyncMock(),
+                auditor_hmac_key="test-key",
                 whitelisting_enabled=False,
                 blacklisting_enabled=False,
                 whitelisted_commands=[],
@@ -94,12 +99,12 @@ class TestTribunalApprovalCorrelation:
 
         # Verify all emitted events carry the correlation_id
         published = event_svc._published_events
-        tribunal_events = [e for e in published if e.event_type.value.startswith('g8e.v1.ai.tribunal')]
+        tribunal_events = [e for e in published if e.event_type.value.startswith("g8e.v1.ai.tribunal")]
         assert len(tribunal_events) > 0
-        
+
         for event in tribunal_events:
             # Skip failure events that might not have it if they occur very early (though here they shouldn't)
-            if event.event_type in (EventType.TRIBUNAL_SESSION_STARTED, 
+            if event.event_type in (EventType.TRIBUNAL_SESSION_STARTED,
                                  EventType.TRIBUNAL_VOTING_PASS_COMPLETED,
                                  EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED,
                                  EventType.TRIBUNAL_SESSION_COMPLETED):
@@ -119,7 +124,7 @@ class TestTribunalApprovalCorrelation:
         with patch("app.services.ai.generator._run_generation_stage", new_callable=AsyncMock) as mock_gen, \
              patch("app.services.ai.generator._run_audit_stage", new_callable=AsyncMock) as mock_audit, \
              patch("app.services.ai.generator.weighted_vote") as mock_vote:
-            
+
             mock_gen.return_value = [CandidateCommand(command="ls", pass_index=0, member="axiom")]
             # Mock vote to succeed despite only 1 candidate
             from app.models.agents.tribunal import VoteBreakdown
@@ -130,7 +135,7 @@ class TestTribunalApprovalCorrelation:
                 winner_supporters=["axiom"],
                 consensus_strength=1.0
             ), None)
-            mock_audit.return_value = ("ls", CommandGenerationOutcome.VERIFIED, True, None, "ok")
+            mock_audit.return_value = ("ls", CommandGenerationOutcome.VERIFIED, True, None, "ok", None)
 
             # Generate command via Tribunal
             await generate_command(
@@ -143,6 +148,8 @@ class TestTribunalApprovalCorrelation:
                 case_id=inputs.case_id,
                 investigation_id=inputs.investigation_id,
                 settings=inputs.request_settings,
+                reputation_data_service=AsyncMock(),
+                auditor_hmac_key="test-key",
                 whitelisting_enabled=False,
                 blacklisting_enabled=False,
                 whitelisted_commands=[],

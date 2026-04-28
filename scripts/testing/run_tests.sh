@@ -47,6 +47,7 @@ COMPONENT=""
 COVERAGE=false
 PYRIGHT=false
 RUFF=false
+RUFF_FIX=false
 E2E=false
 PARALLEL=""
 QUIET=false
@@ -63,6 +64,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --coverage                Generate coverage reports"
             echo "  --pyright                 Run pyright strict gate (g8ee only)"
             echo "  --ruff                    Run ruff lint check (g8ee only)"
+            echo "  --ruff-fix                Run ruff with --fix to auto-fix issues (g8ee only)"
             echo "  --e2e                     Run E2E operator lifecycle tests (g8ee only)"
             echo "  -j, --parallel <N|auto>   Run pytest in parallel via pytest-xdist (g8ee only)"
             echo ""
@@ -85,6 +87,7 @@ while [[ $# -gt 0 ]]; do
         --coverage) COVERAGE=true; shift ;;
         --pyright)  PYRIGHT=true;  shift ;;
         --ruff)     RUFF=true;     shift ;;
+        --ruff-fix) RUFF=true; RUFF_FIX=true; shift ;;
         --e2e)      E2E=true;      shift ;;
         -q|--quiet)
             QUIET=true
@@ -168,8 +171,10 @@ _show_llm_config() {
         echo -e "${CYAN}  LLM Configuration${NC}"
         echo -e "  Primary Provider:   ${TEST_LLM_PROVIDER}"
         [[ -n "${TEST_LLM_ASSISTANT_PROVIDER:-}" ]] && echo -e "  Assistant Provider: ${TEST_LLM_ASSISTANT_PROVIDER}"
+        [[ -n "${TEST_LLM_LITE_PROVIDER:-}" ]]      && echo -e "  Lite Provider:      ${TEST_LLM_LITE_PROVIDER}"
         [[ -n "${TEST_LLM_PRIMARY_MODEL:-}" ]]      && echo -e "  Primary Model:      ${TEST_LLM_PRIMARY_MODEL}"
         [[ -n "${TEST_LLM_ASSISTANT_MODEL:-}" ]]     && echo -e "  Assistant Model:    ${TEST_LLM_ASSISTANT_MODEL}"
+        [[ -n "${TEST_LLM_LITE_MODEL:-}" ]]          && echo -e "  Lite Model:         ${TEST_LLM_LITE_MODEL}"
         [[ -n "${TEST_LLM_ENDPOINT_URL:-}" ]]        && echo -e "  Primary Endpoint:   ${TEST_LLM_ENDPOINT_URL}"
         [[ -n "${TEST_LLM_API_KEY:-}" ]]             && echo -e "  Primary API Key:    (set)"
         echo ""
@@ -206,7 +211,9 @@ run_g8ee() {
         python -m pyright --project pyrightconfig.services.json
     fi
     if [[ "$RUFF" == "true" ]]; then
-        python -m ruff check .
+        local ruff_args=(check .)
+        [[ "$RUFF_FIX" == "true" ]] && ruff_args+=(--fix)
+        python -m ruff "${ruff_args[@]}"
     fi
     local cov_args=(-rs)
     [[ "$COVERAGE" == "true" ]] && cov_args+=("--cov" "--cov-report=term-missing")

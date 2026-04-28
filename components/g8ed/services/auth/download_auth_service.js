@@ -42,12 +42,15 @@ class DownloadAuthService {
      *   g8e_ (operator) — operator API key with operator:download permission or operator_id
      *
      * @param {import('express').Request} req
+     * @param {object} [options]
+     * @param {boolean} [options.allowDlt=true] - Whether to allow device-link tokens (dlk_*)
      * @returns {Promise<
      *   { success: true,  userId: string, organizationId: string|null, operatorId: string|null, keyType: string } |
      *   { success: false, status: number, error: string }
      * >}
      */
-    async validate(req) {
+    async validate(req, options = {}) {
+        const { allowDlt = true } = options;
         const authHeader = req.headers.authorization;
 
         if (!authHeader || !authHeader.startsWith(BEARER_PREFIX)) {
@@ -61,6 +64,17 @@ class DownloadAuthService {
         const token = authHeader.substring(BEARER_PREFIX.length);
 
         if (token.startsWith('dlk_')) {
+            if (!allowDlt) {
+                logger.warn('[DOWNLOAD-AUTH] Device-link token rejected (allowDlt=false)', {
+                    token_prefix: token.substring(0, 20) + '...',
+                    ip:           req.ip,
+                });
+                return {
+                    success: false,
+                    status:  403,
+                    error:   'Device-link tokens are not permitted for this resource.',
+                };
+            }
             return this._validateDeviceLinkToken(req, token);
         }
 

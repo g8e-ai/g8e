@@ -37,6 +37,7 @@ import { DeviceLinkStatus } from '../../constants/auth.js';
 import { KVKey } from '../../constants/kv_keys.js';
 import { TokenFormat, DeviceLinkError, DEFAULT_DEVICE_LINK_MAX_USES, DEVICE_LINK_MAX_USES_MIN, DEVICE_LINK_MAX_USES_MAX } from '../../constants/auth.js';
 import { DEVICE_LINK_TTL_SECONDS, DEVICE_LINK_TTL_MIN_SECONDS, DEVICE_LINK_TTL_MAX_SECONDS, LOCK_TTL_MS, LOCK_RETRY_DELAY_MS, LOCK_MAX_RETRIES } from '../../constants/auth.js';
+import { G8eHttpContext } from '../../models/request_models.js';
 
 export function isValidTokenFormat(token) {
     if (!token || typeof token !== 'string') return false;
@@ -153,7 +154,7 @@ class DeviceLinkService {
         return { success: true };
     }
 
-    async createLink({ user_id, organization_id, name, max_uses = DEFAULT_DEVICE_LINK_MAX_USES, ttl_seconds = DEVICE_LINK_TTL_SECONDS }) {
+    async createLink({ user_id, organization_id, name, max_uses = DEFAULT_DEVICE_LINK_MAX_USES, ttl_seconds = DEVICE_LINK_TTL_SECONDS, webSessionId = null }) {
         if (max_uses < DEVICE_LINK_MAX_USES_MIN || max_uses > DEVICE_LINK_MAX_USES_MAX) {
             return { success: false, error: DeviceLinkError.MAX_USES_INVALID };
         }
@@ -162,8 +163,7 @@ class DeviceLinkService {
             return { success: false, error: DeviceLinkError.TTL_INVALID };
         }
 
-        const allOperators = await this._operatorService.queryOperators([{ field: 'user_id', operator: '==', value: user_id }]);
-        const currentSlotCount = allOperators.filter(op => op.status !== OperatorStatus.TERMINATED).length;
+        const currentSlotCount = (await this._operatorService.queryListedOperators([{ field: 'user_id', operator: '==', value: user_id }])).length;
 
         if (max_uses > currentSlotCount) {
             const slotsToCreate = max_uses - currentSlotCount;
@@ -179,6 +179,7 @@ class DeviceLinkService {
                     cloudSubtype: null,
                     namePrefix: 'operator',
                     isG8eNode: false,
+                    webSessionId,
                 });
 
                 if (!creationResponse.success || !creationResponse.operator_id) {
@@ -255,11 +256,11 @@ class DeviceLinkService {
     }
 
     async _registerSingleOperatorLink(token, linkData, deviceInfo, sanitizedFingerprint) {
-        const g8eContext = {
+        const g8eContext = G8eHttpContext.parse({
             web_session_id: linkData.web_session_id,
             user_id: linkData.user_id,
             organization_id: linkData.organization_id,
-        };
+        });
 
         const result = await this._deviceRegistration.registerDevice({
             operator_id: linkData.operator_id,
@@ -351,22 +352,19 @@ class DeviceLinkService {
             const result = await this._deviceRegistration.registerDevice({
                 operator_id: existingClaim.operator_id,
                 deviceInfo,
-                g8eContext: {
+                g8eContext: G8eHttpContext.parse({
                     web_session_id: webSessionId,
                     user_id: linkData.user_id,
                     organization_id: linkData.organization_id,
-                },
+                }),
             });
             return result;
         }
 
         // 2. New registration for THIS LINK.
-        // Check if device already has a slot from a previous link or manual registration.
-        const allOperators = await this._operatorService.queryOperators([{ field: 'user_id', operator: '==', value: linkData.user_id }]);
-        const existingOp = allOperators.find(op => 
-            op.system_fingerprint === sanitizedFingerprint && 
-            op.status !== OperatorStatus.TERMINATED
-        );
+        // Check if device already has a non-terminated slot from a previous link or manual registration.
+        const liveOperators = await this._operatorService.queryListedOperators([{ field: 'user_id', operator: '==', value: linkData.user_id }]);
+        const existingOp = liveOperators.find(op => op.system_fingerprint === sanitizedFingerprint);
 
         // 3. Acquire distributed lock to prevent race condition where multiple
         // concurrent claims select the same available operator slot
@@ -399,12 +397,11 @@ class DeviceLinkService {
 
             if (!targetOperatorId) {
                 // Re-query operators to ensure we have latest state after lock
-                const freshOperators = await this._operatorService.queryOperators([{ field: 'user_id', operator: '==', value: linkData.user_id }]);
+                const freshOperators = await this._operatorService.queryListedOperators([{ field: 'user_id', operator: '==', value: linkData.user_id }], { fresh: true });
 
                 // Double check fingerprint match after lock
                 const opAfterLock = freshOperators.find(op => 
-                    op.system_fingerprint === sanitizedFingerprint && 
-                    op.status !== OperatorStatus.TERMINATED
+                    op.system_fingerprint === sanitizedFingerprint
                 );
 
                 if (opAfterLock) {
@@ -419,11 +416,12 @@ class DeviceLinkService {
                         const creationResponse = await this._operatorService.createOperatorSlot({
                             userId: linkData.user_id,
                             organizationId: linkData.organization_id,
-                            slotNumber: freshOperators.filter(op => op.status !== OperatorStatus.TERMINATED).length + 1,
+                            slotNumber: freshOperators.length + 1,
                             operatorType: OperatorType.SYSTEM,
                             cloudSubtype: null,
                             namePrefix: 'operator',
                             isG8eNode: false,
+                            webSessionId: null,
                         });
 
                         if (!creationResponse.success || !creationResponse.operator_id) {
@@ -460,11 +458,11 @@ class DeviceLinkService {
                 const result = await this._deviceRegistration.registerDevice({
                     operator_id: existingClaim.operator_id,
                     deviceInfo,
-                    g8eContext: {
+                    g8eContext: G8eHttpContext.parse({
                         web_session_id: webSessionId,
                         user_id: linkData.user_id,
                         organization_id: linkData.organization_id,
-                    },
+                    }),
                 });
                 return result;
             }
@@ -495,11 +493,11 @@ class DeviceLinkService {
 
             const webSessionId = await this._webSessionService.getUserActiveSession(linkData.user_id);
 
-            const g8eContext = {
+            const g8eContext = G8eHttpContext.parse({
                 web_session_id: webSessionId,
                 user_id: linkData.user_id,
                 organization_id: linkData.organization_id,
-            };
+            });
 
             const result = await this._deviceRegistration.registerDevice({
                 operator_id: targetOperatorId,

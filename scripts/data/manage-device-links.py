@@ -27,9 +27,11 @@ Usage:
     python manage-g8es.py device-links delete --token dlk_...
 """
 
+from __future__ import annotations
+
 import argparse
 import sys
-from typing import Optional, Dict, Any, List
+from typing import Dict, Any, List
 
 from _lib import (
     G8ED_BASE_URL,
@@ -65,7 +67,7 @@ def _format_link(link: Dict[str, Any], verbose: bool = False) -> str:
 
 class DeviceLinkManager:
 
-    def list_links(self, user_id: Optional[str], email: Optional[str]) -> List[Dict]:
+    def list_links(self, user_id: str | None, email: str | None) -> List[Dict]:
         uid = resolve_user_id(user_id, email)
         if not uid:
             raise RuntimeError('Provide --user-id or --email')
@@ -86,12 +88,12 @@ class DeviceLinkManager:
 
     def create_link(
         self,
-        user_id: Optional[str],
-        email: Optional[str],
-        name: Optional[str],
+        user_id: str | None,
+        email: str | None,
+        name: str | None,
         max_uses: int,
-        expires_in_hours: Optional[int],
-    ) -> Optional[Dict]:
+        expires_in_hours: int | None,
+    ) -> Dict | None:
         uid = resolve_user_id(user_id, email)
         if not uid:
             raise RuntimeError('Provide --user-id or --email')

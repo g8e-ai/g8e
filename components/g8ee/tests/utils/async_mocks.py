@@ -23,7 +23,8 @@ This module provides safe, reusable mock utilities that handle this
 cleanup automatically.
 """
 
-from typing import Any, Callable, Coroutine
+from collections.abc import Callable, Coroutine
+from typing import Any
 
 
 class SafeWaitForMock:

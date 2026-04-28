@@ -198,7 +198,7 @@ class AnthropicProvider(LLMProvider):
 
     async def _close_resources(self):
         """Clean up provider resources."""
-        if hasattr(self._client, 'close'):
+        if hasattr(self._client, "close"):
             await self._client.close()
         logger.info("Anthropic provider closed")
 

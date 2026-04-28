@@ -1,0 +1,51 @@
+{
+  "_comment": "Canonical ReputationState document shape. Cross-chain agent reputation scoreboard. Owned exclusively by g8ee's Auditor (only writer + only reader): the data-access boundary in GDD §3 is enforced by keeping the only `reputation_state` reader inside `auditor_service.py` (and the post-execution writer `reputation_service.py` in Phase 3). A field mismatch breaks reputation persistence and Merkle root computation in `reputation_commitment`.",
+  "_authority": "g8ee (Python — ReputationState in app/models/reputation.py)",
+  "_consumers": [
+    "g8ee (Auditor — reads via reputation_data_service to build per-verdict Merkle root)",
+    "g8ee (reputation_service — writes EMA updates post-execution; Phase 3)"
+  ],
+
+  "reputation_state": {
+    "_description": "Per-agent scalar reputation maintained as an exponential moving average across conversations. Scalar only; never history (GDD §5). Sybil resistance: zero-rep agents have no influence. One row per persona id (axiom, concord, variance, pragma, nemesis, sage, triage, auditor).",
+
+    "core_identity": {
+      "agent_id": {
+        "type": "string",
+        "required": true,
+        "description": "Stable persona identifier (TribunalMember enum value, or 'sage' / 'triage' / 'auditor'). Used as the document id in the reputation_state collection."
+      }
+    },
+
+    "reputation": {
+      "scalar": {
+        "type": "number",
+        "required": true,
+        "minimum": 0.0,
+        "maximum": 1.0,
+        "description": "EMA scalar in [0.0, 1.0]. 0.0 = no influence (Sybil floor); 1.0 = max influence. Bootstrap value is 0.5 (neutral)."
+      },
+      "unbonding_until": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false,
+        "description": "When the unbonding period ends after a Tier 1 slash. Null means the agent is in normal-influence operation."
+      },
+      "last_slash_tier": {
+        "type": "integer",
+        "required": false,
+        "enum": [1, 2, 3],
+        "description": "Tier of the most recent slash event applied to this agent (per GDD §6). Null when no slash has occurred."
+      }
+    },
+
+    "timestamps": {
+      "updated_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true,
+        "description": "When the scalar was last updated (UTC, ISO 8601 with Z suffix)."
+      }
+    }
+  }
+}

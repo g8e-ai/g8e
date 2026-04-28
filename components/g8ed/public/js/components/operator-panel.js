@@ -160,9 +160,6 @@ export class OperatorPanel {
     }
 
     _onHeartbeat(data) {
-        const authState = window.authState?.getState();
-        if (!authState?.isAuthenticated) return;
-
         const parsed = HeartbeatSSEEnvelope.parse(data);
         const heartbeatTimestamp = parsed.metrics?.timestamp ?? null;
         this._lastHeartbeat = heartbeatTimestamp ? heartbeatTimestamp.getTime() : Date.now();

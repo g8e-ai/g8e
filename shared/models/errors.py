@@ -39,6 +39,11 @@ class ErrorSeverity(str, Enum):
     LOW = "low"
     INFO = "info"
 
+class CommandCategory(str, Enum):
+    CSV_WHITELIST = "csv_whitelist"
+    NETWORK_DIAGNOSTICS = "network_diagnostics"
+    SYSTEM_DIAGNOSTICS = "system_diagnostics"
+
 class ErrorCode(str, Enum):
     # Base Errors
     GENERIC_ERROR = "G8E-1000"

@@ -15,13 +15,12 @@ from datetime import UTC, datetime
 
 import pytest
 
-from app.models.settings import AuthSettings
 from app.constants import (
     INTERNAL_AUTH_HEADER,
     ComponentName,
     EventType,
-    OperatorStatus,
     G8eHeaders,
+    OperatorStatus,
 )
 from app.errors import ConfigurationError, NetworkError
 from app.models.events import SessionEvent
@@ -33,6 +32,7 @@ from app.models.g8ed_client import (
     RevokeIntentResponse,
     SSEPushResponse,
 )
+from app.models.settings import AuthSettings
 from app.services.infra.internal_http_client import InternalHttpClient
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
@@ -74,7 +74,7 @@ class MockG8eHTTPClient:
         self._captured_method = "POST"
         self._captured_url = url
         # Handle Pydantic models by converting to dict
-        if hasattr(json_data, 'model_dump'):
+        if hasattr(json_data, "model_dump"):
             self._captured_json_data = json_data.model_dump(mode="json")
         else:
             self._captured_json_data = json_data
@@ -268,10 +268,10 @@ class TestG8edHttpClientPushSSEEvent:
             response=MockG8eHTTPResponse(200, {"success": True})
         )
         client._http = mock_http
-        
+
         event = self._make_test_event(EventType.LLM_CHAT_ITERATION_STARTED)
         await client.push_sse_event(event)
-        
+
         assert mock_http._captured_headers[INTERNAL_AUTH_HEADER] == test_token
         assert mock_http._captured_headers[G8eHeaders.SOURCE_COMPONENT] == ComponentName.G8EE
 
@@ -373,7 +373,7 @@ class TestG8edHttpClientGrantIntent:
         )
         client = InternalHttpClient(settings=mock_settings)
         client._http = mock_http
-        
+
         context = G8eHttpContext(
             web_session_id="s1",
             user_id="u1",
@@ -382,7 +382,7 @@ class TestG8edHttpClientGrantIntent:
             source_component=ComponentName.G8EE,
         )
         await client.grant_intent("op-1", "intent-1", context)
-        
+
         assert mock_http._captured_headers[INTERNAL_AUTH_HEADER] == test_token
         assert mock_http._captured_headers[G8eHeaders.SOURCE_COMPONENT] == ComponentName.G8EE
 
@@ -617,54 +617,4 @@ class TestG8edHttpClientTypedModels:
         result = SSEPushResponse.model_validate(raw)
         assert result.success is True
         assert result.delivered == 0
-
-
-# =============================================================================
-# bind_operators idempotent path uses OperatorStatus.BOUND
-# =============================================================================
-
-
-class TestG8edHttpClientBindOperatorUsesEnum:
-
-    def _make_client(self, mock_http, settings):
-        client = InternalHttpClient (settings=settings)
-        client._http = mock_http
-        return client
-
-    async def test_already_bound_returns_true_via_operator_status_enum(self, mock_settings):
-        """400 with current_status=OperatorStatus.BOUND is treated as idempotent success."""
-        from app.models.http_context import G8eHttpContext
-        from unittest.mock import AsyncMock, MagicMock
-        class _MockHTTP:
-            async def post(self, url, json_data=None, headers=None, **kwargs):
-                err = NetworkError(
-                    "Operator already bound",
-                    component="test",
-                )
-                err.error_detail.details = {
-                    "status_code": 400,
-                    "response": {"current_status": OperatorStatus.BOUND},
-                }
-                raise err
-
-        client = self._make_client(_MockHTTP(), mock_settings)
-        
-        # Mock operator_data_service and inject it
-        mock_operator_service = MagicMock()
-        mock_operator_service.bind_operators = AsyncMock(return_value=True)
-        client.set_operator_data_service(mock_operator_service)
-        
-        context = G8eHttpContext(
-            web_session_id="web-session-test",
-            user_id="user-1",
-            case_id="case-1",
-            investigation_id="inv-1",
-            source_component=ComponentName.G8EE,
-        )
-        result = await client.bind_operators(["op-already-bound"], "web-session-test", context)
-        assert result is True
-
-    async def test_already_bound_check_uses_enum_not_literal(self):
-        """Verify the comparison value equals OperatorStatus.BOUND string."""
-        assert OperatorStatus.BOUND.value == "bound"
         assert str(OperatorStatus.BOUND.value) == "bound"

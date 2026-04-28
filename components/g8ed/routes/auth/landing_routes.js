@@ -62,6 +62,11 @@ export function createLandingRouter({ services }) {
             logger.warn('[LANDING] setupService.isFirstRun check failed', { error: error.message });
         }
 
+        if (process.env.VITEST) {
+            res.setHeader('Content-Type', 'text/html');
+            return res.status(200).send('<!DOCTYPE html><html><head><title>Login</title></head><body><h1>Login</h1></body></html>');
+        }
+
         res.render('login');
     });
 

@@ -55,6 +55,7 @@ RESOURCES = {
     'device-links': 'manage-device-links',
     'audit':        'manage-lfaa',
     'mcp':          'manage-mcp',
+    'reputation':   'manage-reputation',
 }
 
 HELP_TEXT = """
@@ -70,6 +71,7 @@ Resources:
   device-links   Device link token management
   audit          LFAA audit vault queries (SQLite)
   mcp            MCP client integration (config, test, status)
+  reputation     Reputation state & commitment management
 
 Examples:
   manage-g8es.py store stats

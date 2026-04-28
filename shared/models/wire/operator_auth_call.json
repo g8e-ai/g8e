@@ -1,0 +1,18 @@
+{
+  "_comment": "Contract for operator authentication calls between g8ed (relay) and g8ee (authority).",
+  "InternalOperatorAuthCall": {
+    "_description": "Request model for operator authentication via API key (Bearer) relayed through g8ed.",
+    "fields": {
+      "authorization": {
+        "type": "string",
+        "required": true,
+        "description": "The Bearer token (API key) for the operator. MUST be sent in the body of internal cluster calls to ensure typed contract safety."
+      },
+      "runtime_config": {
+        "type": "object",
+        "required": false,
+        "description": "Runtime configuration for the operator"
+      }
+    }
+  }
+}

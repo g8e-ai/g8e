@@ -13,6 +13,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { ApiPaths } from '@g8ed/public/js/constants/api-paths.js';
+import { validateApiPathsSync } from '@g8ed/constants/api_paths.js';
 
 describe('ApiPaths [UNIT]', () => {
 
@@ -175,6 +176,12 @@ describe('ApiPaths [UNIT]', () => {
         it('chat.stop() matches server-side', async () => {
             const { ApiPaths: ServerApiPaths } = await import('@g8ed/constants/api_paths.js');
             expect(ApiPaths.chat.stop()).toBe(ServerApiPaths.chat.stop());
+        });
+    });
+
+    describe('build-time validation', () => {
+        it('validateApiPathsSync() does not throw when JSON and implementation are in sync', () => {
+            expect(() => validateApiPathsSync()).not.toThrow();
         });
     });
 });

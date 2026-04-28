@@ -15,14 +15,15 @@ import { now } from '../models/base.js';
 import { G8eHttpContext } from '../models/request_models.js';
 
 /**
- * Global Context Middleware
+ * g8e Context Middleware
  * 
  * Attaches a lazy-evaluated G8eHttpContext getter to the request object (req.g8eContext).
- * This allows route handlers to access a standardized context that automatically
- * includes identity data (from auth middleware) and business context (from body/query/params),
- * avoiding repetitive and error-prone manual construction in every route.
  */
-export const globalContextMiddleware = (req, res, next) => {
+export const contextMiddleware = (req, res, next) => {
+    if (req.hasOwnProperty('g8eContext')) {
+        return next();
+    }
+
     Object.defineProperty(req, 'g8eContext', {
         get() {
             if (!this._g8eContext) {
@@ -47,8 +48,12 @@ export const globalContextMiddleware = (req, res, next) => {
                 });
             }
             return this._g8eContext;
-        }
+        },
+        configurable: true // Allow routers to override if needed
     });
 
     next();
 };
+
+// Legacy alias - to be removed once all consumers are updated
+export const globalContextMiddleware = contextMiddleware;

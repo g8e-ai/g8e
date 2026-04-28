@@ -35,13 +35,13 @@ from .infra.g8ed_event_service import EventService
 from .protocols import EventServiceProtocol
 
 __all__ = [
-    "ChatPipelineService",
-    "BackgroundTaskManager",
     "AIGenerationConfigBuilder",
     "AIRequestBuilder",
     "AIResponseAnalyzer",
     "AIToolService",
-    "InvestigationDataService",
+    "BackgroundTaskManager",
+    "ChatPipelineService",
     "EventService",
     "EventServiceProtocol",
+    "InvestigationDataService",
 ]

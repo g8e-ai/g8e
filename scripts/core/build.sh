@@ -38,8 +38,12 @@ echo ""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
+DEV_MODE=false
+COMPOSE="docker compose -f $PROJECT_ROOT/docker-compose.yml"
+
 MANAGED_SERVICES=(g8es g8ee g8ed g8ep)
 TEST_RUNNER_SERVICES=(g8ee-test-runner g8ed-test-runner g8eo-test-runner)
+OPTIONAL_SERVICES=(g8el)
 
 _service_volume() {
     case "$1" in
@@ -60,11 +64,11 @@ Commands:
   status                          Show container status and component versions
   up [component ...]              Start managed services -- no build
                                   Default (no components): g8es g8ee g8ed g8ep
-                                  Valid: g8es g8ee g8ed g8ep
+                                  Valid: g8es g8ee g8ed g8ep g8el (use --profile g8el)
   down                            Stop managed containers -- nothing is removed
   rebuild [component ...]         Rebuild + restart of managed services using layer cache (no volume wipe)
                                   Default (no components): g8es g8ee g8ed g8ep
-                                  Valid: g8es g8ee g8ed g8es-test-runner g8ee-test-runner g8eo-test-runner
+                                  Valid: g8es g8ee g8ed g8ep g8el g8es-test-runner g8ee-test-runner g8eo-test-runner (use --profile g8el for g8el)
   reset                           Wipe DB data volumes + rebuild images from scratch
                                   Removes: g8es, g8ee, g8ed volumes; SSL certs preserved
   wipe                            Clear app data from the database (all collections except platform settings)
@@ -84,6 +88,7 @@ Examples:
   $(basename "$0") rebuild                      Rebuild g8es, g8ee, g8ed, g8ep images (preserve volumes)
   $(basename "$0") rebuild g8ee g8ed            Rebuild g8ee and g8ed only (preserve volumes)
   $(basename "$0") rebuild g8ep                 Rebuild the g8ep image
+  $(basename "$0") rebuild g8el                 Rebuild the g8el image (requires --profile g8el)
   $(basename "$0") rebuild test-runners         Rebuild test-runner containers
   $(basename "$0") wipe                         Clear app data from the database; restart g8ee/g8ed
   $(basename "$0") reset                        Wipe ALL data volumes and rebuild from scratch
@@ -100,13 +105,18 @@ while [[ $# -gt 0 ]]; do
             usage
             exit 0
             ;;
+        --dev)
+            DEV_MODE=true
+            COMPOSE="$COMPOSE -f $PROJECT_ROOT/docker-compose.dev.yml"
+            shift
+            ;;
         setup|up|down|restart|reset|wipe|clean|status|operator-build|operator-build-all)
             COMMAND="$1"
             shift
             while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do
-                if ! printf '%s\n' g8es g8ee g8ed g8ep | grep -qx "$1"; then
+                if ! printf '%s\n' g8es g8ee g8ed g8ep g8el g8eo-test-runner g8ee-test-runner g8ed-test-runner | grep -qx "$1"; then
                     echo "Error: Invalid component '$1'" >&2
-                    echo "Valid: g8es g8ee g8ed g8ep g8eo-test-runner g8ee-test-runner g8ed-test-runner " >&2
+                    echo "Valid: g8es g8ee g8ed g8ep g8el g8eo-test-runner g8ee-test-runner g8ed-test-runner " >&2
                     exit 1
                 fi
                 REBUILD_COMPONENTS+=("$1")
@@ -117,9 +127,9 @@ while [[ $# -gt 0 ]]; do
             COMMAND="rebuild"
             shift
             while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do
-                if ! printf '%s\n' g8es g8ee g8ed g8ep g8eo-test-runner g8ee-test-runner g8ed-test-runner | grep -qx "$1"; then
+                if ! printf '%s\n' g8es g8ee g8ed g8ep g8el g8eo-test-runner g8ee-test-runner g8ed-test-runner | grep -qx "$1"; then
                     echo "Error: Invalid component '$1'" >&2
-                    echo "Valid: g8es g8ee g8ed g8ep g8eo-test-runner g8ee-test-runner g8ed-test-runner " >&2
+                    echo "Valid: g8es g8ee g8ed g8ep g8ea g8eo-test-runner g8ee-test-runner g8ed-test-runner " >&2
                     exit 1
                 fi
                 REBUILD_COMPONENTS+=("$1")
@@ -144,7 +154,7 @@ _is_running() {
 _ensure_g8ep() {
     if ! _is_running "g8ep"; then
         echo "g8ep container is not running — starting it..."
-        docker compose -f "$PROJECT_ROOT/docker-compose.yml" up -d g8ep
+        $COMPOSE up -d g8ep
         _wait_healthy g8ep 30 1
     fi
 }
@@ -152,7 +162,7 @@ _ensure_g8ep() {
 _ensure_g8eo_test_runner() {
     if ! _is_running "g8eo-test-runner"; then
         echo "g8eo-test-runner container is not running — starting it..."
-        docker compose -f "$PROJECT_ROOT/docker-compose.yml" up -d g8eo-test-runner
+        $COMPOSE up -d g8eo-test-runner
     fi
 }
 
@@ -319,14 +329,14 @@ if [[ "$COMMAND" == "status" ]]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Component Versions"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    for svc in platform g8es g8ee g8ed g8ep; do
+    for svc in platform g8es g8ee g8ed g8ep g8el; do
         printf "  %-14s  %s\n" "$svc" "$_VER"
     done
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Container Status"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || true
+    $COMPOSE ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || true
     exit 0
 fi
 
@@ -334,7 +344,8 @@ fi
 
 if [[ "$COMMAND" == "down" ]]; then
     echo "Stopping managed containers (g8es, g8ee, g8ed, g8ep)..."
-    docker compose stop g8es g8ee g8ed g8ep 2>/dev/null || true
+    $COMPOSE stop g8es g8ee g8ed g8ep 2>/dev/null || true
+    $COMPOSE --profile g8el stop g8el 2>/dev/null || true
     echo "Done. Volumes, images, and networks are preserved."
     exit 0
 fi
@@ -344,8 +355,12 @@ fi
 if [[ "$COMMAND" == "restart" ]]; then
     _preflight
     echo "Restarting managed containers (g8es, g8ee, g8ed, g8ep)..."
-    docker compose stop g8es g8ee g8ed g8ep 2>/dev/null || true
-    docker compose up -d g8es g8ee g8ed g8ep
+    $COMPOSE stop g8es g8ee g8ed g8ep 2>/dev/null || true
+    if [[ "$DEV_MODE" == true ]]; then
+        $COMPOSE --profile development up -d g8es g8ee g8ed g8ep
+    else
+        $COMPOSE up -d g8es g8ee g8ed g8ep
+    fi
     echo ""
     echo "Waiting for services..."
     _wait_healthy g8es     60  1
@@ -356,7 +371,7 @@ if [[ "$COMMAND" == "restart" ]]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Restart complete."
     echo ""
-    docker compose ps --format "table {{.Name}}\t{{.Status}}"
+    $COMPOSE ps --format "table {{.Name}}\t{{.Status}}"
     exit 0
 fi
 
@@ -369,8 +384,10 @@ if [[ "$COMMAND" == "reset" ]]; then
     REBUILD_COMPONENTS=(g8es g8ee g8ed)
 
     echo "Wiping DB data volumes (g8es, g8ee, g8ed) — SSL certs preserved..."
-    docker compose stop g8es g8ee g8ed g8ep 2>/dev/null || true
-    docker ps -aq --filter "name=^g8es$|^g8ee$|^g8ed$|^g8ep$" 2>/dev/null | xargs -r docker rm -f 2>/dev/null || true
+    $COMPOSE stop g8es g8ee g8ed g8ep 2>/dev/null || true
+    $COMPOSE --profile g8el stop g8el 2>/dev/null || true
+    $COMPOSE rm -f g8es g8ee g8ed g8ep 2>/dev/null || true
+    $COMPOSE --profile g8el rm -f g8el 2>/dev/null || true
     for svc in g8es g8ee g8ed; do
         vol="$(_service_volume "$svc")"
         [[ -n "$vol" ]] && docker volume rm "$vol" 2>/dev/null || true
@@ -381,19 +398,18 @@ if [[ "$COMMAND" == "reset" ]]; then
     _preflight
 
     echo "Building and starting all services..."
-    docker compose up -d --build --force-recreate g8es g8ee g8ed g8ep
+    $COMPOSE up -d --build --force-recreate g8es g8ee g8ed g8ep
     echo ""
     echo "Waiting for services..."
     _wait_healthy g8es     300 2
     _wait_healthy g8ee    120 2
     _wait_curl    g8ed "https://localhost/health" '"status"' 120 2
     _wait_healthy g8ep    30  2
-
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Reset complete. SSL certs preserved — no need to re-trust."
     echo ""
-    docker compose ps --format "table {{.Name}}\t{{.Status}}"
+    $COMPOSE ps --format "table {{.Name}}\t{{.Status}}"
     exit 0
 fi
 
@@ -408,12 +424,12 @@ if [[ "$COMMAND" == "wipe" ]]; then
     _ensure_g8ep
 
     echo "Stopping g8ee, g8ed, and g8es..."
-    docker compose stop g8ee g8ed g8es 2>/dev/null || true
-    docker compose rm -f g8ee g8ed g8es 2>/dev/null || true
+    $COMPOSE stop g8ee g8ed g8es 2>/dev/null || true
+    $COMPOSE rm -f g8ee g8ed g8es 2>/dev/null || true
     echo ""
 
     echo "Restarting g8es (compiles and publishes operator binaries)..."
-    docker compose up -d --force-recreate g8es
+    $COMPOSE up -d --force-recreate g8es
     _wait_healthy g8es 120 2
 
     echo "Clearing app data from g8es..."
@@ -421,7 +437,7 @@ if [[ "$COMMAND" == "wipe" ]]; then
     echo ""
 
     echo "Restarting g8ee and g8ed..."
-    docker compose up -d --force-recreate g8ee g8ed
+    $COMPOSE up -d --force-recreate g8ee g8ed
     echo ""
     echo "Waiting for services..."
     _wait_healthy g8ee    120 2
@@ -431,7 +447,7 @@ if [[ "$COMMAND" == "wipe" ]]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Wipe complete. Platform settings, SSL certs, and auth token preserved."
     echo ""
-    docker compose ps --format "table {{.Name}}\t{{.Status}}"
+    $COMPOSE ps --format "table {{.Name}}\t{{.Status}}"
     exit 0
 fi
 
@@ -444,11 +460,10 @@ if [[ "$COMMAND" == "clean" ]]; then
 
     # 1. Stop and remove all containers with io.g8e.managed=true label
     echo "Stopping and removing containers..."
-    containers=$(docker ps -aq --filter "$FILTER_MANAGED" 2>/dev/null)
-    if [[ -n "$containers" ]]; then
-        echo "$containers" | xargs -r docker stop 2>/dev/null || true
-        echo "$containers" | xargs -r docker rm -f 2>/dev/null || true
-    fi
+    docker ps -aq --filter "$FILTER_MANAGED" 2>/dev/null | while read -r container; do
+        [[ -n "$container" ]] && docker stop "$container" 2>/dev/null || true
+        [[ -n "$container" ]] && docker rm -f "$container" 2>/dev/null || true
+    done
 
     # 2. Remove all volumes with io.g8e.managed=true label
     echo "Removing volumes..."
@@ -506,20 +521,26 @@ if [[ "$COMMAND" == "up" ]]; then
     if [[ ${#UP_COMPONENTS[@]} -eq 0 ]]; then
         UP_COMPONENTS=(g8es g8ee g8ed g8ep)
     fi
-    echo "Starting services (no build): ${UP_COMPONENTS[*]}..."
-    docker compose up -d $(printf '%s\n' "${UP_COMPONENTS[@]}" | tr '\n' ' ')
+    if [[ "$DEV_MODE" == true ]]; then
+        echo "Starting services in development mode (hot-reload enabled): ${UP_COMPONENTS[*]}..."
+        $COMPOSE --profile development up -d $(printf '%s\n' "${UP_COMPONENTS[@]}" | tr '\n' ' ')
+    else
+        echo "Starting services (no build): ${UP_COMPONENTS[*]}..."
+        $COMPOSE up -d $(printf '%s\n' "${UP_COMPONENTS[@]}" | tr '\n' ' ')
+    fi
     echo ""
     echo "Waiting for services..."
     printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8es     && _wait_healthy g8es     60  1
     printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8ee  && _wait_healthy g8ee    120 2
     printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8ed && _wait_curl    g8ed "https://localhost/health" '"status"' 120 2
     printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8ep  && _wait_healthy g8ep    30  2
+    printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8el  && $COMPOSE --profile g8el up -d g8el && _wait_healthy g8el    300  5
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Environment ready."
     echo ""
-    docker compose ps --format "table {{.Name}}\t{{.Status}}"
+    $COMPOSE ps --format "table {{.Name}}\t{{.Status}}"
     echo ""
     _print_platform_info
     exit 0
@@ -533,11 +554,13 @@ fi
 
 if [[ "$COMMAND" == "setup" ]]; then
     echo "Stopping all managed containers..."
-    docker compose stop g8es g8ee g8ed g8ep 2>/dev/null || true
-    docker compose rm -f g8es g8ee g8ed g8ep 2>/dev/null || true
+    $COMPOSE stop g8es g8ee g8ed g8ep 2>/dev/null || true
+    $COMPOSE --profile g8el stop g8el 2>/dev/null || true
+    $COMPOSE rm -f g8es g8ee g8ed g8ep 2>/dev/null || true
+    $COMPOSE --profile g8el rm -f g8el 2>/dev/null || true
 
     echo "Building and starting all services..."
-    docker compose up -d --build --force-recreate g8es g8ee g8ed g8ep
+    $COMPOSE up -d --build --force-recreate g8es g8ee g8ed g8ep
     echo ""
     echo "Waiting for services..."
     _wait_healthy g8es     300 2
@@ -549,7 +572,7 @@ if [[ "$COMMAND" == "setup" ]]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Setup complete."
     echo ""
-    docker compose ps --format "table {{.Name}}\t{{.Status}}"
+    $COMPOSE ps --format "table {{.Name}}\t{{.Status}}"
     echo ""
     _print_platform_info
     exit 0
@@ -563,22 +586,28 @@ if [[ "$COMMAND" == "rebuild" ]]; then
     fi
 
     echo "Removing containers for: ${REBUILD_COMPONENTS[*]}..."
-    docker compose rm -f "${REBUILD_COMPONENTS[@]}" 2>/dev/null || true
+    $COMPOSE rm -f "${REBUILD_COMPONENTS[@]}" 2>/dev/null || true
 
-    echo "Rebuilding and starting: ${REBUILD_COMPONENTS[*]}..."
-    docker compose up -d --build --force-recreate "${REBUILD_COMPONENTS[@]}"
+    if [[ "$DEV_MODE" == true ]]; then
+        echo "Rebuilding and starting in development mode (hot-reload enabled): ${REBUILD_COMPONENTS[*]}..."
+        $COMPOSE --profile development up -d --build --force-recreate "${REBUILD_COMPONENTS[@]}"
+    else
+        echo "Rebuilding and starting: ${REBUILD_COMPONENTS[*]}..."
+        $COMPOSE up -d --build --force-recreate "${REBUILD_COMPONENTS[@]}"
+    fi
     echo ""
     echo "Waiting for services..."
     printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8es  && _wait_healthy g8es     300 2
     printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8ee  && _wait_healthy g8ee    120 2
     printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8ed && _wait_curl    g8ed "https://localhost/health" '"status"' 30 2
     printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8ep && _wait_healthy g8ep    30  2
+    printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8el && $COMPOSE --profile g8el up -d --build --force-recreate g8el && _wait_healthy g8el    300  5
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Rebuild complete."
     echo ""
-    docker compose ps --format "table {{.Name}}\t{{.Status}}"
+    $COMPOSE ps --format "table {{.Name}}\t{{.Status}}"
     echo ""
     _print_platform_info
     exit 0
@@ -588,7 +617,7 @@ fi
 
 if [[ "$COMMAND" == "operator-build" ]]; then
     echo "Building linux/amd64 operator binary and uploading to g8es blob store..."
-    docker compose -f "$PROJECT_ROOT/docker-compose.yml" run --rm g8eo-test-runner bash -c "cd /app/components/g8eo && make build"
+    $COMPOSE run --rm g8eo-test-runner bash -c "cd /app/components/g8eo && make build"
     echo ""
     echo "Operator binary built and uploaded to g8es blob store."
     exit 0
@@ -598,7 +627,7 @@ fi
 
 if [[ "$COMMAND" == "operator-build-all" ]]; then
     echo "Building all operator architectures and uploading to g8es blob store..."
-    docker compose -f "$PROJECT_ROOT/docker-compose.yml" run --rm g8eo-test-runner bash -c "cd /app/components/g8eo && make build-all"
+    $COMPOSE run --rm g8eo-test-runner bash -c "cd /app/components/g8eo && make build-all"
     echo ""
     echo "All operator binaries built and uploaded to g8es blob store."
     exit 0

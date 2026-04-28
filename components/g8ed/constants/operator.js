@@ -16,8 +16,8 @@ import { EventType } from './events.js';
 
 /**
  * Operator Constants
- * Lifecycle status, type classification, history trail events and actors,
- * and status display helpers for the operator domain.
+ * Lifecycle status, type classification, and status display helpers
+ * for the operator domain.
  * Wire-protocol values are sourced from shared/constants/status.json.
  */
 
@@ -26,7 +26,6 @@ import { EventType } from './events.js';
 // ---------------------------------------------------------------------------
 export const DEFAULT_OPERATOR_SLOTS = 20;
 export const DEFAULT_SLOT_COST = 1;
-export const OPERATOR_HISTORY_TRAIL_MAX = 100;
 
 /**
  * Operator Status
@@ -113,33 +112,6 @@ export const CloudOperatorSubtype = Object.freeze({
     GCP:      _STATUS['cloud.subtype']['gcp'],
     AZURE:    _STATUS['cloud.subtype']['azure'],
     G8E_POD: _STATUS['cloud.subtype']['g8ep'],
-});
-
-/**
- * Operator History Trail Event Types
- * event_type values in the operator document's history_trail array.
- * Canonical values from shared/constants/status.json history.event.type.
- */
-export const HistoryEventType = Object.freeze({
-    CREATED:               _STATUS['history.event.type']['created'],
-    SLOT_CREATED:          _STATUS['history.event.type']['slot.created'],
-    SLOT_CONSUMED:         _STATUS['history.event.type']['slot.consumed'],
-    SLOT_RELEASED:         _STATUS['history.event.type']['slot.released'],
-    BOUND:                 _STATUS['history.event.type']['bound'],
-    UNBOUND:               _STATUS['history.event.type']['unbound'],
-    HEARTBEAT_RECEIVED:    _STATUS['history.event.type']['heartbeat.received'],
-    STATUS_CHANGED:        _STATUS['history.event.type']['status.changed'],
-    API_KEY_REFRESHED:     _STATUS['history.event.type']['api.key.refreshed'],
-    CREATED_FROM_REFRESH:  _STATUS['history.event.type']['created.from.refresh'],
-    TERMINATED_FOR_REFRESH: _STATUS['history.event.type']['terminated.for.refresh'],
-    RESET:                 _STATUS['history.event.type']['reset'],
-    TERMINATED:            _STATUS['history.event.type']['terminated'],
-    AUTHENTICATED:         _STATUS['history.event.type']['authenticated'],
-    DEACTIVATED:           _STATUS['history.event.type']['deactivated'],
-    STOPPED:               _STATUS['history.event.type']['stopped'],
-    SHUTDOWN_REQUESTED:    _STATUS['history.event.type']['shutdown.requested'],
-    CLAIMED:               _STATUS['history.event.type']['claimed'],
-    RECONNECTED:           _STATUS['history.event.type']['reconnected'],
 });
 
 /**

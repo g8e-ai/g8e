@@ -1,8 +1,7 @@
 {
   "operator": {
     "default_slots": 20,
-    "default_slot_cost": 1,
-    "history_trail_max": 100
+    "default_slot_cost": 1
   },
   "device_link": {
     "default_max_uses": 1,

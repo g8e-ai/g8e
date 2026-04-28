@@ -69,6 +69,14 @@ export const API_KEY_HASH_LENGTH = 64;
 export const API_KEY_LOG_PREFIX_LENGTH = 20;
 
 // ---------------------------------------------------------------------------
+// API Key Format Validation
+// Canonical format from shared/constants/api_key_patterns.json
+// ---------------------------------------------------------------------------
+export const API_KEY_OPERATOR_REGEX = /^g8e_[a-f0-9]{8}_[a-f0-9]{64}$/;
+export const API_KEY_REGULAR_REGEX = /^g8e_[a-f0-9]{64}$/;
+export const API_KEY_COMBINED_REGEX = /^g8e_[a-f0-9]{8}_[a-f0-9]{64}$|^g8e_[a-f0-9]{64}$/;
+
+// ---------------------------------------------------------------------------
 // CRL
 // ---------------------------------------------------------------------------
 export const CRL_SERIAL_MIN_LENGTH = 16;

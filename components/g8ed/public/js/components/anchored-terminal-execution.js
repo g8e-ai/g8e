@@ -256,9 +256,11 @@ export class TerminalExecutionMixin {
         const justification = data.justification;
         const isFileEdit = data.file_path && data.operation;
         const isIntent = data.intent_name && data.intent_question;
+        const isStream = data.kind === 'stream';
         const isAgentContinue = typeof data.turn_limit === 'number';
         const targetSystems = data.target_systems;
-        const isBatchExecution = data.is_batch_execution && targetSystems && targetSystems.length > 1;
+        const hosts = data.hosts;
+        const isBatchExecution = (data.is_batch_execution && targetSystems && targetSystems.length > 1) || (isStream && hosts && hosts.length > 1);
 
         if (!data.case_id || !data.investigation_id || !data.task_id) {
             devLogger.error('[ANCHORED TERMINAL] Approval data missing required fields (case_id, investigation_id, task_id)', data);
@@ -276,12 +278,27 @@ export class TerminalExecutionMixin {
         approval.removeAttribute('data-approval-refining');
         approval.id = approvalId;
 
-        // Preserve tribunal dots/status (final state) when upgrading a refining widget.
+        // Preserve tribunal passes + status (final state) when upgrading a refining widget.
         let tribunalHtml = '';
         if (refiningWidget) {
-            const passesEl = refiningWidget.querySelector('.tribunal__passes');
-            const statusEl = refiningWidget.querySelector('.tribunal__status');
-            tribunalHtml = (passesEl ? passesEl.outerHTML : '') + (statusEl ? statusEl.outerHTML : '');
+            const tribunalEl = refiningWidget.querySelector('.tribunal');
+            if (tribunalEl) {
+                tribunalHtml = tribunalEl.outerHTML;
+            } else {
+                // Fallback for older structure if needed
+                const passesEl = refiningWidget.querySelector('.tribunal__passes');
+                const gapEl = refiningWidget.querySelector('.tribunal__gap');
+                const auditorEl = refiningWidget.querySelector('.tribunal__dot--auditor');
+                const statusEl = refiningWidget.querySelector('.tribunal__status');
+                tribunalHtml = (passesEl ? passesEl.outerHTML : '') + 
+                              (gapEl ? gapEl.outerHTML : '') +
+                              (auditorEl ? auditorEl.outerHTML : '') +
+                              (statusEl ? statusEl.outerHTML : '');
+                
+                if (tribunalHtml) {
+                    tribunalHtml = `<div class="tribunal">${tribunalHtml}</div>`;
+                }
+            }
         }
 
         let headerText = 'Command';
@@ -317,16 +334,22 @@ export class TerminalExecutionMixin {
             cardModifier = 'approval-compact--intent';
             icon = 'shield';
             iconModifier = '';
+        } else if (isStream) {
+            headerText = isBatchExecution ? `Stream (${hosts.length} hosts)` : 'Stream';
+            commandDisplay = data.preview_command;
+            cardModifier = 'approval-compact--stream';
+            icon = 'ship';
+            iconModifier = '';
         } else if (isBatchExecution) {
             headerText = `Command (${targetSystems.length} systems)`;
         }
 
-        const systemsHtml = isBatchExecution ? this._buildTargetSystemsHtml(targetSystems) : '';
+        const systemsHtml = isBatchExecution ? (isStream ? this._buildHostsHtml(hosts) : this._buildTargetSystemsHtml(targetSystems)) : '';
         const approveButtonText = isAgentContinue
             ? 'Continue'
-            : (isBatchExecution ? `Approve for ${targetSystems.length} Systems` : 'Approve');
+            : (isBatchExecution ? `Approve for ${isStream ? hosts.length : targetSystems.length} ${isStream ? 'Hosts' : 'Systems'}` : 'Approve');
 
-        const riskBadgeHtml = (!isFileEdit && !isIntent && !isAgentContinue)
+        const riskBadgeHtml = (!isFileEdit && !isIntent && !isAgentContinue && !isStream)
             ? this._buildRiskBadgeHtml(data.risk_analysis)
             : '';
 
@@ -337,7 +360,7 @@ export class TerminalExecutionMixin {
             headerText,
             tribunalHtml,
             riskBadgeHtml,
-            promptHtml: (isFileEdit || isAgentContinue) ? '' : '<span class="approval-compact__prompt">$</span>',
+            promptHtml: (isFileEdit || isAgentContinue || isStream) ? '' : '<span class="approval-compact__prompt">$</span>',
             commandDisplay,
             systemsHtml,
             justification: justification || 'No justification provided',
@@ -384,24 +407,26 @@ export class TerminalExecutionMixin {
             });
 
             const isAgentContinue = typeof approvalData.turn_limit === 'number';
+            const isStream = approvalData.kind === 'stream';
 
             if (approvalEl) {
                 const actionsDiv = approvalEl.querySelector('.approval-compact__actions');
                 if (actionsDiv) {
-                    await templateLoader.renderTo(actionsDiv, 'approval-status', {
+                    const statusHtml = await templateLoader.render('approval-status', {
                         statusClass: approved ? 'approved' : 'denied',
                         statusIcon: approved ? 'check' : 'close',
                         statusText: approved
                             ? (isAgentContinue ? 'Continuing' : 'Approved')
                             : (isAgentContinue ? 'Stopped' : 'Denied')
                     });
+                    actionsDiv.innerHTML = statusHtml;
                 }
 
                 if (approved && !isAgentContinue) {
                     const resultsContainer = await this._createResultsContainer(approvalId, approvalEl, true);
                     this._pendingExecutingIndicator = await this._showExecutingIndicatorInContainer(
                         resultsContainer,
-                        approvalData.command
+                        isStream ? approvalData.preview_command : approvalData.command
                     );
                 }
             }
@@ -480,6 +505,33 @@ export class TerminalExecutionMixin {
                 </div>
                 <div class="operator-terminal__target-systems-list">
                     ${systemItems}
+                </div>
+            </div>
+        `;
+    }
+    
+    _buildHostsHtml(hosts) {
+        if (!hosts || hosts.length === 0) return '';
+
+        const hostItems = hosts.map(host => {
+            const hostname = escapeHtml(host || 'unknown');
+            return `
+                <div class="operator-terminal__target-system">
+                    <span class="material-symbols-outlined icon-16">computer</span>
+                    <span class="operator-terminal__target-hostname">${hostname}</span>
+                    <span class="operator-terminal__target-type">ssh</span>
+                </div>
+            `;
+        }).join('');
+
+        return `
+            <div class="operator-terminal__target-systems">
+                <div class="operator-terminal__target-systems-header">
+                    <span class="material-symbols-outlined icon-16">dns</span>
+                    Target Hosts (${hosts.length})
+                </div>
+                <div class="operator-terminal__target-systems-list">
+                    ${hostItems}
                 </div>
             </div>
         `;
@@ -664,13 +716,18 @@ export class TerminalExecutionMixin {
                 resultsContainer = this.approvalResultsContainers.get(approvalId);
             }
 
+            if (!resultsContainer && execId) {
+                resultsContainer = this.executionResultsContainers.get(execId);
+            }
+
             if (!resultsContainer) {
-                const containerId = approvalId;
+                const containerId = approvalId || execId;
                 if (!containerId) {
-                    console.error('[TERMINAL] Final command event missing approval_id — backend contract violation', data);
+                    console.error('[TERMINAL] Final command event missing both approval_id and execution_id — backend contract violation', data);
                     return;
                 }
-                resultsContainer = await this._createResultsContainer(containerId, null, true);
+                const isApproval = !!approvalId;
+                resultsContainer = await this._createResultsContainer(containerId, null, isApproval);
             }
 
             if (resultsContainer) {
@@ -862,11 +919,12 @@ export class TerminalExecutionMixin {
             if (approvalEl) {
                 const actionsDiv = approvalEl.querySelector('.approval-compact__actions');
                 if (actionsDiv) {
-                    await templateLoader.renderTo(actionsDiv, 'approval-status', {
+                    const statusHtml = await templateLoader.render('approval-status', {
                         statusClass: 'denied',
                         statusIcon: 'close',
                         statusText: statusMessage
                     });
+                    actionsDiv.innerHTML = statusHtml;
                 }
             }
             totalDenied++;

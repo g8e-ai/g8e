@@ -11,15 +11,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
 from unittest.mock import patch
 
+import pytest
+
 from app.constants import (
-    TriageComplexityClassification,
     AgentMode,
+    TriageComplexityClassification,
 )
-from app.services.ai.triage import TriageAgent
 from app.models.agents.triage import TriageRequest
+from app.services.ai.triage import TriageAgent
 from tests.fakes.fake_llm_provider import FakeLLMProvider
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
@@ -30,26 +31,27 @@ def fake_provider():
 
 @pytest.fixture
 def mock_settings():
-    from app.models.settings import G8eeUserSettings, LLMSettings
     from app.constants import LLMProvider
+    from app.models.settings import G8eeUserSettings, LLMSettings
     return G8eeUserSettings(
         llm=LLMSettings(
             primary_provider=LLMProvider.OLLAMA,
             primary_model="main-model",
-            assistant_model="lite-model"
+            lite_provider=LLMProvider.OLLAMA,
+            lite_model="lite-model"
         )
     )
 
 async def test_triage_handles_unclosed_json(fake_provider, mock_settings):
     # Missing closing brace
-    fake_provider.add_response('''{
+    fake_provider.add_response("""{
         "intent_summary": "factual question",
         "intent": "information",
         "intent_confidence": "high",
         "complexity": "simple",
         "complexity_confidence": "high",
         "follow_up_question": null
-    ''')
+    """)
 
     agent = TriageAgent()
     request = TriageRequest(
@@ -68,7 +70,7 @@ async def test_triage_handles_unclosed_json(fake_provider, mock_settings):
     assert result.intent_summary == "factual question"
 
 async def test_triage_handles_json_with_preamble(fake_provider, mock_settings):
-    fake_provider.add_response('''Sure, here is the analysis:
+    fake_provider.add_response("""Sure, here is the analysis:
     {
         "intent_summary": "factual question",
         "intent": "information",
@@ -76,7 +78,7 @@ async def test_triage_handles_json_with_preamble(fake_provider, mock_settings):
         "complexity": "simple",
         "complexity_confidence": "high",
         "follow_up_question": null
-    }''')
+    }""")
 
     agent = TriageAgent()
     request = TriageRequest(

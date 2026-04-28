@@ -23,6 +23,8 @@ from app.errors import (
     ConfigurationError,
     DatabaseError,
     ExternalServiceError,
+    G8eError,
+    G8eTimeoutError,
     NetworkError,
     PubSubError,
     RateLimitError,
@@ -31,8 +33,6 @@ from app.errors import (
     ServiceUnavailableError,
     StorageError,
     ValidationError,
-    G8eError,
-    G8eTimeoutError,
 )
 from app.models.errors import ErrorBody, ErrorCauseDetail, ErrorDetail, ErrorResponse
 

@@ -18,7 +18,7 @@
  * Moved from settings_service.js to follow proper model separation.
  */
 
-import { LLMProvider, SearchProvider, GeminiModel, OpenAIModel, AnthropicModel, OllamaModel, PROVIDER_MODELS } from '../constants/ai.js';
+import { LLMProvider, SearchProvider, GeminiModel, OpenAIModel, AnthropicModel, OllamaModel, LlamaCppModel, G8elModel, PROVIDER_MODELS } from '../constants/ai.js';
 
 // All models for each provider are available at every tier; the user decides
 // which model serves primary / assistant / lite.
@@ -32,6 +32,12 @@ const ANTHROPIC_MODEL_OPTIONS = Object.freeze([
     Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_OPUS_4_6,   label: 'Claude Opus 4.6' }),
     Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_SONNET_4_6, label: 'Claude Sonnet 4.6' }),
     Object.freeze({ value: AnthropicModel.ANTHROPIC_CLAUDE_HAIKU_4_5,  label: 'Claude Haiku 4.5' }),
+]);
+const LLAMACPP_MODEL_OPTIONS = Object.freeze([
+    Object.freeze({ value: LlamaCppModel.GEMMA4_E2B, label: 'Gemma 4 E2B (llama.cpp)' }),
+]);
+const G8EL_MODEL_OPTIONS = Object.freeze([
+    Object.freeze({ value: G8elModel.GEMMA4_E2B, label: 'Gemma 4 E2B (g8el)' }),
 ]);
 
 // ---------------------------------------------------------------------------
@@ -53,6 +59,8 @@ export const USER_SETTINGS = Object.freeze([
             Object.freeze({ value: LLMProvider.OLLAMA,    label: 'Ollama' }),
             Object.freeze({ value: LLMProvider.GEMINI,    label: 'Gemini (Google)' }),
             Object.freeze({ value: LLMProvider.ANTHROPIC, label: 'Anthropic (Claude)' }),
+            Object.freeze({ value: LLMProvider.LLAMACPP,  label: 'llama.cpp' }),
+            Object.freeze({ value: LLMProvider.G8EL,      label: 'g8el' }),
         ]),
         secret: false,
         placeholder: '',
@@ -69,6 +77,8 @@ export const USER_SETTINGS = Object.freeze([
             Object.freeze({ value: LLMProvider.OLLAMA,    label: 'Ollama' }),
             Object.freeze({ value: LLMProvider.GEMINI,    label: 'Gemini (Google)' }),
             Object.freeze({ value: LLMProvider.ANTHROPIC, label: 'Anthropic (Claude)' }),
+            Object.freeze({ value: LLMProvider.LLAMACPP,  label: 'llama.cpp' }),
+            Object.freeze({ value: LLMProvider.G8EL,      label: 'g8el' }),
         ]),
         secret: false,
         placeholder: '',
@@ -85,6 +95,8 @@ export const USER_SETTINGS = Object.freeze([
             Object.freeze({ value: LLMProvider.OLLAMA,    label: 'Ollama' }),
             Object.freeze({ value: LLMProvider.GEMINI,    label: 'Gemini (Google)' }),
             Object.freeze({ value: LLMProvider.ANTHROPIC, label: 'Anthropic (Claude)' }),
+            Object.freeze({ value: LLMProvider.LLAMACPP,  label: 'llama.cpp' }),
+            Object.freeze({ value: LLMProvider.G8EL,      label: 'g8el' }),
         ]),
         secret: false,
         placeholder: '',
@@ -155,17 +167,6 @@ export const USER_SETTINGS = Object.freeze([
         placeholder: '192.168.1.100:11434',
         default: '',
     }),
-    Object.freeze({
-        key: 'ollama_api_key',
-        section: 'llm',
-        label: 'Ollama API Key',
-        description: 'API key for Ollama (optional - only required for authenticated instances).',
-        type: 'password',
-        provider: LLMProvider.OLLAMA,
-        secret: true,
-        placeholder: '',
-        default: '',
-    }),
 
     // -------------------------------------------------------------------------
     // Gemini Specific
@@ -230,6 +231,130 @@ export const USER_SETTINGS = Object.freeze([
         provider: LLMProvider.ANTHROPIC,
         secret: true,
         placeholder: 'your-anthropic-api-key-here',
+        default: '',
+    }),
+
+    // -------------------------------------------------------------------------
+    // llama.cpp Specific
+    // -------------------------------------------------------------------------
+    Object.freeze({
+        key: 'llm_model',
+        section: 'llm',
+        label: 'Primary LLM Model',
+        description: 'Main model used for investigations and AI reasoning.',
+        type: 'select',
+        provider: LLMProvider.LLAMACPP,
+        options: LLAMACPP_MODEL_OPTIONS,
+        secret: false,
+        placeholder: '',
+        default: ''
+    }),
+    Object.freeze({
+        key: 'llm_assistant_model',
+        section: 'llm',
+        label: 'Assistant LLM Model',
+        description: 'Lightweight model for assistant tasks and command generation.',
+        type: 'select',
+        provider: LLMProvider.LLAMACPP,
+        options: LLAMACPP_MODEL_OPTIONS,
+        secret: false,
+        placeholder: '',
+        default: ''
+    }),
+    Object.freeze({
+        key: 'llm_lite_model',
+        section: 'llm',
+        label: 'Lite LLM Model',
+        description: 'Ultra-lightweight model for quick tasks.',
+        type: 'select',
+        provider: LLMProvider.LLAMACPP,
+        options: LLAMACPP_MODEL_OPTIONS,
+        secret: false,
+        placeholder: '',
+        default: ''
+    }),
+    Object.freeze({
+        key: 'llamacpp_endpoint',
+        section: 'llm',
+        label: 'llama.cpp Host',
+        description: 'Host and port of your llama.cpp server (e.g. g8el:11444). Do not include a scheme or path.',
+        type: 'text',
+        provider: LLMProvider.LLAMACPP,
+        secret: false,
+        placeholder: 'g8el:11444',
+        default: '',
+    }),
+    Object.freeze({
+        key: 'llamacpp_api_key',
+        section: 'llm',
+        label: 'llama.cpp API Key',
+        description: 'API key for llama.cpp (optional - only required for authenticated instances).',
+        type: 'password',
+        provider: LLMProvider.LLAMACPP,
+        secret: true,
+        placeholder: '',
+        default: '',
+    }),
+
+    // -------------------------------------------------------------------------
+    // g8el Specific
+    // -------------------------------------------------------------------------
+    Object.freeze({
+        key: 'llm_model',
+        section: 'llm',
+        label: 'Primary LLM Model',
+        description: 'Main model used for investigations and AI reasoning.',
+        type: 'select',
+        provider: LLMProvider.G8EL,
+        options: G8EL_MODEL_OPTIONS,
+        secret: false,
+        placeholder: '',
+        default: ''
+    }),
+    Object.freeze({
+        key: 'llm_assistant_model',
+        section: 'llm',
+        label: 'Assistant LLM Model',
+        description: 'Lightweight model for assistant tasks and command generation.',
+        type: 'select',
+        provider: LLMProvider.G8EL,
+        options: G8EL_MODEL_OPTIONS,
+        secret: false,
+        placeholder: '',
+        default: ''
+    }),
+    Object.freeze({
+        key: 'llm_lite_model',
+        section: 'llm',
+        label: 'Lite LLM Model',
+        description: 'Ultra-lightweight model for quick tasks.',
+        type: 'select',
+        provider: LLMProvider.G8EL,
+        options: G8EL_MODEL_OPTIONS,
+        secret: false,
+        placeholder: '',
+        default: ''
+    }),
+    Object.freeze({
+        key: 'g8el_endpoint',
+        section: 'llm',
+        label: 'g8el Host',
+        description: 'Host and port of your g8el server (e.g. g8el:11444). Do not include a scheme or path.',
+        type: 'text',
+        provider: LLMProvider.G8EL,
+        secret: false,
+        placeholder: 'g8el:11444',
+        default: '',
+    }),
+    Object.freeze({
+        key: 'g8el_api_key',
+        section: 'llm',
+        label: 'g8el API Key',
+        description: 'API key for g8el (optional - only required for authenticated instances).',
+        type: 'password',
+        provider: LLMProvider.G8EL,
+        secret: true,
+        placeholder: '',
         default: '',
     }),
     Object.freeze({
@@ -362,28 +487,81 @@ export const USER_SETTINGS = Object.freeze([
         section: 'validation',
         label: 'Command Whitelisting',
         description: 'Only allow commands that match the configured whitelist.',
-        type: 'select',
-        options: Object.freeze([
-            Object.freeze({ value: false, label: 'Disabled (default)' }),
-            Object.freeze({ value: true, label: 'Enabled' }),
-        ]),
+        type: 'toggle',
         secret: false,
         placeholder: '',
         default: false,
+    }),
+    Object.freeze({
+        key: 'whitelisted_commands_csv',
+        section: 'validation',
+        label: 'Whitelisted Commands',
+        description: 'Comma-separated list of whitelisted commands (e.g., uptime,df,free). When non-empty, this REPLACES the JSON whitelist entirely and uses only basic character-level validation. The JSON whitelist\'s per-command safe_options and validation regexes are NOT applied in CSV mode. Leave empty to use JSON whitelist with rich validation.',
+        type: 'text',
+        secret: false,
+        placeholder: 'uptime,df,free,ps',
+        default: 'ls,cd,pwd,id,whoami,echo,date,true,false,clear,wc,basename,dirname,cat,head,tail,grep,sort,uniq,cut,tr,diff,uptime,df,du,free,uname,hostname,env,printenv,which,type,command,whereis,stat,file,sleep,time,ps,pgrep,pidof,pstree,ip,ss,netstat,nslookup,dig,route,arp,vmstat,iostat,dmesg,journalctl,lscpu,lsblk,lsmod,lspci,lsusb,find,locate,who,w,last',
+        validate: v => {
+            if (typeof v !== 'string') return false;
+            if (v === '') return true;
+            const parts = v.split(',').map(p => p.trim()).filter(Boolean);
+            const unsafeChars = /[;|`$<>&\n\r\t ]/;
+            return parts.every(part => !unsafeChars.test(part));
+        },
     }),
     Object.freeze({
         key: 'enable_command_blacklisting',
         section: 'validation',
         label: 'Command Blacklisting',
         description: 'Block commands that match the configured blacklist.',
-        type: 'select',
-        options: Object.freeze([
-            Object.freeze({ value: false, label: 'Disabled (default)' }),
-            Object.freeze({ value: true, label: 'Enabled' }),
-        ]),
+        type: 'toggle',
         secret: false,
         placeholder: '',
         default: false,
+    }),
+    Object.freeze({
+        key: 'blacklisted_commands_csv',
+        section: 'validation',
+        label: 'Blacklisted Commands',
+        description: 'Comma-separated list of blacklisted commands (e.g., rm,format,mkfs). Blocked if Command Blacklisting is enabled.',
+        type: 'text',
+        secret: false,
+        placeholder: 'rm,format,mkfs',
+        default: '',
+        validate: v => {
+            if (typeof v !== 'string') return false;
+            if (v === '') return true;
+            const parts = v.split(',').map(p => p.trim()).filter(Boolean);
+            const unsafeChars = /[;|`$<>&\n\r\t ]/;
+            return parts.every(part => !unsafeChars.test(part));
+        },
+    }),
+    Object.freeze({
+        key: 'enable_command_auto_approve',
+        section: 'validation',
+        label: 'Skip Human Approval (Auto-Approve)',
+        description: 'Skip the human approval prompt for commands listed in Auto-Approved Commands. The human is rubber-stamping these as benign in advance. Auto-approve does NOT widen the whitelist and does NOT bypass the blacklist or forbidden patterns; the command must still pass all hard gates.',
+        type: 'toggle',
+        secret: false,
+        placeholder: '',
+        default: false,
+    }),
+    Object.freeze({
+        key: 'auto_approved_commands_csv',
+        section: 'validation',
+        label: 'Auto-Approved Commands',
+        description: 'Comma-separated list of base commands that skip human approval (e.g., uptime,df,free). Only used when Skip Human Approval is enabled. Enter base commands only - shell metacharacters and spaces are rejected.',
+        type: 'text',
+        secret: false,
+        placeholder: 'uptime,df,free,ps',
+        default: 'ls,cd,pwd,id,whoami,echo,date,true,false,clear,wc,basename,dirname,cat,head,tail,grep,sort,uniq,cut,tr,diff,uptime,df,du,free,uname,hostname,env,printenv,which,type,command,whereis,stat,file,sleep,time,ps,pgrep,pidof,pstree,ip,ss,netstat,nslookup,dig,route,arp,vmstat,iostat,dmesg,journalctl,lscpu,lsblk,lsmod,lspci,lsusb,find,locate,who,w,last',
+        validate: v => {
+            if (typeof v !== 'string') return false;
+            if (v === '') return true;
+            const parts = v.split(',').map(p => p.trim()).filter(Boolean);
+            const unsafeChars = /[;|`$<>&\n\r\t ]/;
+            return parts.every(part => !unsafeChars.test(part));
+        },
     }),
     Object.freeze({
         key: 'g8e_api_key',
@@ -443,6 +621,12 @@ export const PLATFORM_SETTINGS = Object.freeze([
     Object.freeze({ key: 'g8es_wss_port',               default: '9001'            }),
     Object.freeze({ key: 'supervisor_port',              default: '443'             }),
     Object.freeze({ key: 'g8ep_operator_api_key',   default: '', secret: true  }),
+    Object.freeze({
+        key: 'auditor_hmac_key',
+        writeOnce: true,
+        secret: true,
+        default: '',
+    }),
 ]);
 
 // ---------------------------------------------------------------------------
@@ -454,6 +638,8 @@ const PROVIDER_CREDENTIAL_REQUIREMENTS = Object.freeze({
     [LLMProvider.OLLAMA]: ['ollama_endpoint'],
     [LLMProvider.GEMINI]: ['gemini_api_key'],
     [LLMProvider.ANTHROPIC]: ['anthropic_api_key'],
+    [LLMProvider.LLAMACPP]: ['llamacpp_endpoint'],
+    [LLMProvider.G8EL]: ['g8el_endpoint'],
 });
 
 /**
@@ -594,6 +780,11 @@ export function validatePlatformSettings(updates, existingSettings = {}) {
         if (field.writeOnce) {
             const existing = existingSettings?.[key];
             if (existing !== undefined && existing !== null && existing !== '') {
+                // If the new value is the same as the existing value, it's not an overwrite
+                if (existing === value) {
+                    valid[key] = value;
+                    continue;
+                }
                 skipped.push(key);
                 errors.push(`${key} is writeOnce and already set; refusing overwrite`);
                 continue;
@@ -631,10 +822,13 @@ const LLM_KEY_MAP = Object.freeze({
     llm_lite_model:         'lite_model',
     openai_api_key:         'openai_api_key',
     ollama_endpoint:        'ollama_endpoint',
-    ollama_api_key:         'ollama_api_key',
     gemini_api_key:         'gemini_api_key',
     anthropic_api_key:      'anthropic_api_key',
-    llm_max_tokens:         'llm_max_tokens',
+    llamacpp_endpoint:      'llamacpp_endpoint',
+    llamacpp_api_key:       'llamacpp_api_key',
+    g8el_endpoint:          'g8el_endpoint',
+    g8el_api_key:           'g8el_api_key',
+    llm_max_tokens:         'max_tokens',
     llm_command_gen_enabled:  'llm_command_gen_enabled',
     llm_command_gen_verifier: 'llm_command_gen_verifier',
     llm_command_gen_passes:   'llm_command_gen_passes',
@@ -653,6 +847,19 @@ const EVAL_JUDGE_KEY_MAP = Object.freeze({
     eval_judge_max_tokens:  'eval_judge_max_tokens',
 });
 
+const COMMAND_VALIDATION_KEY_MAP = Object.freeze({
+    enable_command_whitelisting: 'enable_whitelisting',
+    whitelisted_commands_csv: 'whitelisted_commands',
+    enable_command_blacklisting: 'enable_blacklisting',
+    blacklisted_commands_csv: 'blacklisted_commands',
+    enable_command_auto_approve: 'enable_auto_approve',
+    auto_approved_commands_csv: 'auto_approved_commands',
+});
+
+const SECURITY_KEY_MAP = Object.freeze({
+    g8e_api_key: 'g8e_api_key',
+});
+
 /**
  * Convert flat UI settings into the nested document shape
  * expected by g8ee's UserSettingsDocument.
@@ -661,12 +868,14 @@ const EVAL_JUDGE_KEY_MAP = Object.freeze({
  * Output: { llm: { primary_provider: 'gemini', primary_model: '...' }, search: { enabled: true }, eval_judge: {} }
  *
  * @param {Object} flat - Flat key/value pairs from UI
- * @returns {{ llm: Object, search: Object, eval_judge: Object }}
+ * @returns {{ llm: Object, search: Object, eval_judge: Object, command_validation: Object, security: Object }}
  */
 export function structureUserSettings(flat) {
     const llm = {};
     const search = {};
     const evalJudge = {};
+    const commandValidation = {};
+    const security = {};
 
     for (const [key, value] of Object.entries(flat)) {
         if (key in LLM_KEY_MAP) {
@@ -675,10 +884,14 @@ export function structureUserSettings(flat) {
             search[SEARCH_KEY_MAP[key]] = value;
         } else if (key in EVAL_JUDGE_KEY_MAP) {
             evalJudge[EVAL_JUDGE_KEY_MAP[key]] = value;
+        } else if (key in COMMAND_VALIDATION_KEY_MAP) {
+            commandValidation[COMMAND_VALIDATION_KEY_MAP[key]] = value;
+        } else if (key in SECURITY_KEY_MAP) {
+            security[SECURITY_KEY_MAP[key]] = value;
         }
     }
 
-    return { llm, search, eval_judge: evalJudge };
+    return { llm, search, eval_judge: evalJudge, command_validation: commandValidation, security };
 }
 
 const REVERSE_LLM_MAP    = Object.freeze({
@@ -690,9 +903,12 @@ const REVERSE_LLM_MAP    = Object.freeze({
     lite_model: 'llm_lite_model',
     openai_api_key: 'openai_api_key',
     ollama_endpoint: 'ollama_endpoint',
-    ollama_api_key: 'ollama_api_key',
     gemini_api_key:         'gemini_api_key',
     anthropic_api_key:      'anthropic_api_key',
+    llamacpp_endpoint:      'llamacpp_endpoint',
+    llamacpp_api_key:       'llamacpp_api_key',
+    g8el_endpoint:          'g8el_endpoint',
+    g8el_api_key:           'g8el_api_key',
     llm_max_tokens:         'llm_max_tokens',
     llm_command_gen_enabled: 'llm_command_gen_enabled',
     llm_command_gen_verifier: 'llm_command_gen_verifier',
@@ -700,6 +916,8 @@ const REVERSE_LLM_MAP    = Object.freeze({
 });
 const REVERSE_SEARCH_MAP = Object.freeze(Object.fromEntries(Object.entries(SEARCH_KEY_MAP).map(([k, v]) => [v, k])));
 const REVERSE_EVAL_MAP   = Object.freeze(Object.fromEntries(Object.entries(EVAL_JUDGE_KEY_MAP).map(([k, v]) => [v, k])));
+const REVERSE_COMMAND_VALIDATION_MAP = Object.freeze(Object.fromEntries(Object.entries(COMMAND_VALIDATION_KEY_MAP).map(([k, v]) => [v, k])));
+const REVERSE_SECURITY_MAP = Object.freeze(Object.fromEntries(Object.entries(SECURITY_KEY_MAP).map(([k, v]) => [v, k])));
 
 /**
  * Flatten nested user settings back to flat UI keys.
@@ -707,7 +925,7 @@ const REVERSE_EVAL_MAP   = Object.freeze(Object.fromEntries(Object.entries(EVAL_
  * Input:  { llm: { primary_provider: 'gemini', ... }, search: { enabled: true }, eval_judge: {} }
  * Output: { llm_primary_provider: 'gemini', ..., vertex_search_enabled: true, ... }
  *
- * @param {{ llm?: Object, search?: Object, eval_judge?: Object }} nested
+ * @param {{ llm?: Object, search?: Object, eval_judge?: Object, command_validation?: Object, security?: Object }} nested
  * @returns {Object}
  */
 export function flattenUserSettings(nested) {
@@ -728,6 +946,18 @@ export function flattenUserSettings(nested) {
     if (nested.eval_judge) {
         for (const [nestedKey, value] of Object.entries(nested.eval_judge)) {
             const flatKey = REVERSE_EVAL_MAP[nestedKey];
+            if (flatKey) flat[flatKey] = value;
+        }
+    }
+    if (nested.command_validation) {
+        for (const [nestedKey, value] of Object.entries(nested.command_validation)) {
+            const flatKey = REVERSE_COMMAND_VALIDATION_MAP[nestedKey];
+            if (flatKey) flat[flatKey] = value;
+        }
+    }
+    if (nested.security) {
+        for (const [nestedKey, value] of Object.entries(nested.security)) {
+            const flatKey = REVERSE_SECURITY_MAP[nestedKey];
             if (flatKey) flat[flatKey] = value;
         }
     }

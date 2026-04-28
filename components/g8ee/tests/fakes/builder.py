@@ -18,20 +18,24 @@ wired with typed fakes. Use the individual fake constructors directly when
 testing a sub-service in isolation.
 """
 
+from app.models.cache import CacheOperationResult
 from app.models.settings import G8eePlatformSettings
 from app.services.operator.command_service import OperatorCommandService
 from app.services.operator.intent_service import OperatorIntentService
 from app.services.operator.operator_data_service import OperatorDataService
+from app.services.protocols import ExecutionServiceProtocol
+from app.utils.auto_approved_validator import CommandAutoApprovedValidator
+from app.utils.blacklist_validator import CommandBlacklistValidator
+from app.utils.whitelist_validator import CommandWhitelistValidator
+from tests.fakes.fake_g8es_clients import FakeDBClient, FakeKVClient, FakePubSubClient
 
-from app.models.cache import CacheOperationResult
 from .fake_ai_response_analyzer import FakeAIResponseAnalyzer
 from .fake_approval_service import FakeApprovalService
-from tests.fakes.fake_g8es_clients import FakeKVClient, FakeDBClient, FakePubSubClient
 from .fake_db_service import FakeDBService
 from .fake_event_service import FakeEventService
 from .fake_execution_service import FakeExecutionService
-from .fake_investigation_service import FakeInvestigationService
 from .fake_g8ed_client import FakeG8edClient
+from .fake_investigation_service import FakeInvestigationService
 
 
 def create_pure_mock_cache_aside():
@@ -40,19 +44,21 @@ def create_pure_mock_cache_aside():
     Use this for pure unit tests of services that depend on CacheAsideService
     where you only want to assert on the service-level interface calls.
     """
-    from unittest.mock import MagicMock, AsyncMock
+    from unittest.mock import AsyncMock, MagicMock
+
     from app.services.cache.cache_aside import CacheAsideService
-    
+
     mock = MagicMock(spec=CacheAsideService)
     # CRUD operations
     mock.create_document = AsyncMock(return_value=CacheOperationResult(success=True))
     mock.get_document = AsyncMock(return_value=None)
+    mock.get_document_with_cache = AsyncMock(return_value=None)
     mock.update_document = AsyncMock(return_value=CacheOperationResult(success=True))
     mock.delete_document = AsyncMock(return_value=CacheOperationResult(success=True))
     mock.query_documents = AsyncMock(return_value=[])
     mock.append_to_array = AsyncMock(return_value=CacheOperationResult(success=True))
     mock.batch_create_documents = AsyncMock(return_value=CacheOperationResult(success=True))
-    
+
     # KV operations
     mock.kv_get = AsyncMock()
     mock.kv_set = AsyncMock()
@@ -61,26 +67,26 @@ def create_pure_mock_cache_aside():
     mock.kv_lrange = AsyncMock()
     mock.kv_rpush = AsyncMock()
     mock.kv_ltrim = AsyncMock()
-    
+
     # Query cache
     mock.get_query_result = AsyncMock()
     mock.set_query_result = AsyncMock()
     mock.invalidate_query_cache = AsyncMock()
-    
+
     # Misc
     mock.get_stats = AsyncMock()
     mock.clear_all = AsyncMock()
     mock.invalidate_collection = AsyncMock()
-    
+
     return mock
 
 
 def create_mock_cache_aside_service(kv_cache_client=None, db_client=None):
     """Wired CacheAsideService with fake KV/DB for tests."""
-    from app.services.cache.cache_aside import CacheAsideService
+    from app.constants import ComponentName
     from app.db.db_service import DBService
     from app.db.kv_service import KVService
-    from app.constants import ComponentName
+    from app.services.cache.cache_aside import CacheAsideService
 
     # Use provided clients or create new fakes
     kv_raw = kv_cache_client or FakeKVClient()
@@ -120,6 +126,10 @@ def build_command_service(
     settings: G8eePlatformSettings | None = None,
     approval_service: FakeApprovalService | None = None,
     skip_pubsub_client: bool = False,
+    whitelist_validator: CommandWhitelistValidator | None = None,
+    blacklist_validator: CommandBlacklistValidator | None = None,
+    auto_approved_validator: CommandAutoApprovedValidator | None = None,
+    execution_service: ExecutionServiceProtocol | None = None,
 ) -> OperatorCommandService:
     """Build an OperatorCommandService with typed fakes for all dependencies.
 
@@ -128,30 +138,91 @@ def build_command_service(
     """
     cache_aside_service = create_mock_cache_aside_service()
     internal_http_client = g8ed_client or FakeG8edClient()
-    
+
     # Ensure all required fakes are present
     event_service = event_service or FakeEventService()
     ai_response_analyzer = ai_response_analyzer or FakeAIResponseAnalyzer()
     investigation_service = investigation_service or FakeInvestigationService()
     settings = settings or G8eePlatformSettings(port=443)
-    
+
     operator_data_service = OperatorDataService(cache=cache_aside_service, internal_http_client=internal_http_client)
-    
+
     approval_service = approval_service or FakeApprovalService()
 
-    svc = OperatorCommandService.build(
+    # Build sub-services manually (mirroring OperatorCommandService.build)
+    from app.services.operator.execution_service import OperatorExecutionService
+    from app.services.operator.file_service import OperatorFileService
+    from app.services.operator.filesystem_service import OperatorFilesystemService
+    from app.services.operator.intent_service import OperatorIntentService
+    from app.services.operator.lfaa_service import OperatorLFAAService
+    from app.services.operator.port_service import OperatorPortService
+    from app.services.operator.pubsub_service import OperatorPubSubService
+
+    pubsub_service = OperatorPubSubService()
+
+    lfaa_service = OperatorLFAAService(
+        pubsub_service=pubsub_service,
+    )
+
+    if execution_service is None:
+        execution_service = OperatorExecutionService(
+            pubsub_service=pubsub_service,
+            approval_service=approval_service,
+            g8ed_event_service=event_service,
+            settings=settings,
+            ai_response_analyzer=ai_response_analyzer,
+            operator_data_service=operator_data_service,
+            investigation_service=investigation_service,
+        )
+
+    filesystem_service = OperatorFilesystemService(
+        pubsub_service=pubsub_service,
+        execution_service=execution_service,
+        investigation_service=investigation_service,
+    )
+
+    port_service = OperatorPortService(
+        pubsub_service=pubsub_service,
+        execution_service=execution_service,
+    )
+
+    file_service = OperatorFileService(
+        pubsub_service=pubsub_service,
+        approval_service=approval_service,
+        g8ed_event_service=event_service,
+        execution_service=execution_service,
+        ai_response_analyzer=ai_response_analyzer,
+        investigation_service=investigation_service,
+    )
+
+    intent_service = OperatorIntentService(
+        approval_service=approval_service,
+        execution_service=execution_service,
+        g8ed_event_service=event_service,
+        investigation_service=investigation_service,
+        g8ed_client=internal_http_client,
+    )
+
+    svc = OperatorCommandService(
+        pubsub_service=pubsub_service,
+        approval_service=approval_service,
+        execution_service=execution_service,
+        filesystem_service=filesystem_service,
+        port_service=port_service,
+        file_service=file_service,
+        intent_service=intent_service,
+        lfaa_service=lfaa_service,
         cache_aside_service=cache_aside_service,
         operator_data_service=operator_data_service,
-        g8ed_event_service=event_service,
-        settings=settings,
-        ai_response_analyzer=ai_response_analyzer,
-        internal_http_client=internal_http_client,
         investigation_service=investigation_service,
-        approval_service=approval_service,
+        settings=settings,
+        whitelist_validator=whitelist_validator,
+        blacklist_validator=blacklist_validator,
+        auto_approved_validator=auto_approved_validator,
     )
     if not skip_pubsub_client:
         svc.set_pubsub_client(pubsub_client or FakePubSubClient())
-        
+
     svc._store = {}
     return svc
 

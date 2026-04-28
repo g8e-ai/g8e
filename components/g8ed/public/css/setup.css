@@ -20,7 +20,6 @@ body {
 }
 
 .setup-container {
-    max-width: 720px;
     margin: 1rem ;
     position: relative;
 }
@@ -190,10 +189,7 @@ body[data-theme="light"] .wizard-step.done .wizard-step-label { color: var(--acc
 
 .wizard-panel {
     display: none;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: 10px;
-    padding: 1rem;
+    padding: 0;
 }
 
 .wizard-panel.active {
@@ -205,9 +201,11 @@ body[data-theme="light"] .wizard-step.done .wizard-step-label { color: var(--acc
     display: flex;
     align-items: flex-start;
     gap: 0.875rem;
-    margin-bottom: 1rem;
-    padding-bottom: 0.75rem;
-    border-bottom: 1px solid var(--border-color);
+    padding: 1rem 1rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    background: var(--bg-secondary);
 }
 
 .wizard-panel-icon {
@@ -227,6 +225,22 @@ body[data-theme="light"] .wizard-panel-icon { color: var(--accent-blue); }
 }
 
 body[data-theme="light"] .wizard-panel-title { color: var(--text-bright); }
+
+.wizard-panel-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-left: auto;
+}
+
+.wizard-panel-header .setup-checkbox-label {
+    margin-bottom: 0;
+    font-size: 0.8125rem;
+}
+
+.wizard-panel-header .setup-label-link {
+    font-size: 0.8125rem;
+}
 
 .wizard-panel-desc {
     font-size: 0.875rem;
@@ -314,12 +328,21 @@ body[data-theme="light"] .wizard-welcome-note { color: var(--text-muted); }
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    background: var(--bg-secondary);
+    padding: 0 1rem 0.75rem;
+    margin-bottom: 1.5rem;
 }
 
 .setup-fields-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 1rem;
+}
+
+.setup-fields-row#search-config-google {
+    grid-template-columns: 1fr 1fr 1fr;
 }
 
 .setup-field {
@@ -635,10 +658,7 @@ body[data-theme="light"] .setup-select { color: var(--text-bright); background: 
     display: flex;
     align-items: flex-start;
     gap: 0.5rem;
-    padding: 0.75rem 0.875rem;
-    background: rgba(var(--accent-blue-rgb), 0.06);
-    border: 1px solid rgba(var(--accent-blue-rgb), 0.18);
-    border-radius: 6px;
+    padding: 0.75rem 0;
     font-size: 0.8125rem;
     color: var(--text-dim);
     line-height: 1.5;
@@ -652,8 +672,7 @@ body[data-theme="light"] .setup-select { color: var(--text-bright); background: 
 }
 
 body[data-theme="light"] .setup-passkey-note {
-    background: rgba(var(--accent-blue-rgb), 0.04);
-    border-color: rgba(var(--accent-blue-rgb), 0.15);
+    background: none;
     color: var(--text-dim);
 }
 
@@ -664,10 +683,7 @@ body[data-theme="light"] .setup-passkey-note .material-symbols-outlined { color:
     display: flex;
     align-items: flex-start;
     gap: 0.5rem;
-    padding: 0.625rem 0.875rem;
-    background: rgba(var(--accent-blue-rgb), 0.04);
-    border: 1px solid rgba(var(--accent-blue-rgb), 0.15);
-    border-radius: 6px;
+    padding: 0.625rem 0;
     font-size: 0.7875rem;
     color: var(--text-dim);
     line-height: 1.4;
@@ -682,8 +698,7 @@ body[data-theme="light"] .setup-passkey-note .material-symbols-outlined { color:
 }
 
 body[data-theme="light"] .setup-model-note {
-    background: rgba(var(--accent-blue-rgb), 0.03);
-    border-color: rgba(var(--accent-blue-rgb), 0.12);
+    background: none;
     color: var(--text-dim);
 }
 
@@ -710,25 +725,20 @@ body[data-theme="light"] .setup-model-note .material-symbols-outlined { color: v
 }
 
 .wizard-provider-key-row {
-    background: rgba(var(--accent-blue-rgb), 0.02);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    padding: 0.75rem 1rem;
-    transition: border-color 0.2s, background 0.2s;
+    padding: 0.5rem 0;
+    transition: none;
 }
 
 .wizard-provider-key-row.has-value {
-    border-color: rgba(var(--accent-green-rgb), 0.4);
-    background: rgba(var(--accent-green-rgb), 0.03);
+    background: none;
 }
 
 body[data-theme="light"] .wizard-provider-key-row {
-    background: rgba(var(--accent-blue-rgb), 0.015);
+    background: none;
 }
 
 body[data-theme="light"] .wizard-provider-key-row.has-value {
-    border-color: rgba(var(--accent-green-rgb), 0.35);
-    background: rgba(var(--accent-green-rgb), 0.025);
+    background: none;
 }
 
 .wizard-provider-key-header {
@@ -767,7 +777,7 @@ body[data-theme="light"] .wizard-provider-key-row.has-value {
     color: var(--accent-green);
     visibility: hidden;
     transition: visibility 0.2s;
-    width: 70px;
+    width: 80px;
     text-align: right;
 }
 
@@ -777,22 +787,17 @@ body[data-theme="light"] .wizard-provider-key-row.has-value {
 
 /* Unified model selection */
 .wizard-model-selection {
-    background: rgba(var(--accent-blue-rgb), 0.04);
-    border: 1px solid rgba(var(--accent-blue-rgb), 0.15);
-    border-radius: 8px;
-    padding: 1rem;
+    padding: 0 0 1rem 0;
     opacity: 0.5;
-    transition: opacity 0.2s, border-color 0.2s;
+    transition: opacity 0.2s;
 }
 
 .wizard-model-selection.active {
     opacity: 1;
-    border-color: rgba(var(--accent-blue-rgb), 0.3);
 }
 
 body[data-theme="light"] .wizard-model-selection {
-    background: rgba(var(--accent-blue-rgb), 0.025);
-    border-color: rgba(var(--accent-blue-rgb), 0.12);
+    background: none;
 }
 
 .wizard-model-fields {
@@ -924,19 +929,19 @@ body[data-theme="light"] .wizard-ollama-mode-option.active .wizard-ollama-mode-c
    ============================================================================ */
 
 .wizard-summary {
-    background: rgba(var(--accent-blue-rgb), 0.03);
-    border: 1px solid rgba(var(--accent-blue-rgb), 0.12);
+    border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 1.5rem;
     display: flex;
     flex-direction: column;
     gap: 1rem;
     margin-bottom: 2rem;
+    background: var(--bg-secondary);
 }
 
 body[data-theme="light"] .wizard-summary {
-    background: rgba(var(--accent-blue-rgb), 0.02);
-    border-color: rgba(var(--accent-blue-rgb), 0.1);
+    background: var(--bg-secondary);
+    border-color: var(--border-color);
 }
 
 .wizard-summary-row {

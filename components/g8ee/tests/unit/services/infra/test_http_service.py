@@ -13,12 +13,13 @@
 
 """Tests for HTTPService."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from app.clients.http_client import HTTPClient
-from app.models.infra import HTTPClientStatus
 from app.errors import ValidationError
+from app.models.infra import HTTPClientStatus
 from app.services.infra.http_service import HTTPService
 from app.services.protocols import HTTPServiceProtocol
 
@@ -41,7 +42,7 @@ class TestHTTPService:
     def test_set_http_client_success(self):
         """Test successful HTTP client registration."""
         self.http_service.set_http_client(self.mock_client, self.service_name)
-        
+
         assert self.http_service.get_client(self.service_name) is self.mock_client
         assert self.service_name in self.http_service.list_active_clients()
 
@@ -49,7 +50,7 @@ class TestHTTPService:
         """Test validation errors when setting HTTP client."""
         with pytest.raises(ValidationError, match="HTTP client is required"):
             self.http_service.set_http_client(None, self.service_name)
-        
+
         with pytest.raises(ValidationError, match="service_name is required"):
             self.http_service.set_http_client(self.mock_client, "")
 
@@ -57,10 +58,10 @@ class TestHTTPService:
         """Test that setting a client overwrites existing one."""
         original_client = MagicMock(spec=HTTPClient)
         new_client = MagicMock(spec=HTTPClient)
-        
+
         self.http_service.set_http_client(original_client, self.service_name)
         assert self.http_service.get_client(self.service_name) is original_client
-        
+
         self.http_service.set_http_client(new_client, self.service_name)
         assert self.http_service.get_client(self.service_name) is new_client
 
@@ -70,7 +71,7 @@ class TestHTTPService:
         # Start with no clients
         await self.http_service.start()
         assert self.http_service.is_ready
-        
+
         # Reset and start with clients
         self.http_service._http_ready = False
         self.http_service.set_http_client(self.mock_client, self.service_name)
@@ -90,12 +91,12 @@ class TestHTTPService:
         # Set up a client with close method
         mock_close = AsyncMock()
         self.mock_client.close = mock_close
-        
+
         self.http_service.set_http_client(self.mock_client, self.service_name)
         self.http_service._http_ready = True
-        
+
         await self.http_service.stop()
-        
+
         assert not self.http_service.is_ready
         assert self.http_service.list_active_clients() == []
         mock_close.assert_called_once()
@@ -112,13 +113,13 @@ class TestHTTPService:
         # Set up a client that raises an error on close
         mock_close = AsyncMock(side_effect=Exception("Close error"))
         self.mock_client.close = mock_close
-        
+
         self.http_service.set_http_client(self.mock_client, self.service_name)
         self.http_service._http_ready = True
-        
+
         # Should not raise an exception
         await self.http_service.stop()
-        
+
         assert not self.http_service.is_ready
         assert self.http_service.list_active_clients() == []
 
@@ -126,7 +127,7 @@ class TestHTTPService:
     async def test_register_service_client(self):
         """Test registering a new service client."""
         await self.http_service.register_service_client(self.service_name, self.mock_client)
-        
+
         assert self.http_service.get_client(self.service_name) is self.mock_client
         assert self.service_name in self.http_service.list_active_clients()
 
@@ -135,11 +136,11 @@ class TestHTTPService:
         """Test that register_service_client overwrites existing clients."""
         original_client = MagicMock(spec=HTTPClient)
         original_client.close = AsyncMock()
-        
+
         # Register first client
         await self.http_service.register_service_client(self.service_name, original_client)
         assert self.http_service.get_client(self.service_name) is original_client
-        
+
         # Register second client (should overwrite)
         await self.http_service.register_service_client(self.service_name, self.mock_client)
         assert self.http_service.get_client(self.service_name) is self.mock_client
@@ -151,13 +152,13 @@ class TestHTTPService:
         # Set up client with close method
         mock_close = AsyncMock()
         self.mock_client.close = mock_close
-        
+
         # Register then deregister
         await self.http_service.register_service_client(self.service_name, self.mock_client)
         assert self.service_name in self.http_service.list_active_clients()
-        
+
         await self.http_service.deregister_service_client(self.service_name)
-        
+
         assert self.service_name not in self.http_service.list_active_clients()
         assert self.http_service.get_client(self.service_name) is None
         mock_close.assert_called_once()
@@ -167,7 +168,7 @@ class TestHTTPService:
         """Test deregistering a non-existent client."""
         # Should not raise an exception
         await self.http_service.deregister_service_client("nonexistent")
-        
+
         assert self.http_service.list_active_clients() == []
 
     @pytest.mark.asyncio
@@ -176,21 +177,21 @@ class TestHTTPService:
         # Set up client that raises error on close
         mock_close = AsyncMock(side_effect=Exception("Close error"))
         self.mock_client.close = mock_close
-        
+
         await self.http_service.register_service_client(self.service_name, self.mock_client)
-        
+
         # Should not raise an exception
         await self.http_service.deregister_service_client(self.service_name)
-        
+
         assert self.service_name not in self.http_service.list_active_clients()
 
     def test_list_active_clients(self):
         """Test listing active clients."""
         assert self.http_service.list_active_clients() == []
-        
+
         self.http_service.set_http_client(self.mock_client, "service1")
         self.http_service.set_http_client(MagicMock(spec=HTTPClient), "service2")
-        
+
         clients = self.http_service.list_active_clients()
         assert len(clients) == 2
         assert "service1" in clients
@@ -202,11 +203,11 @@ class TestHTTPService:
         self.mock_client.base_url = "http://test.example.com"
         self.mock_client.is_session_closed = False
         self.mock_client.circuit_breakers = {}
-        
+
         self.http_service.set_http_client(self.mock_client, self.service_name)
-        
+
         status = self.http_service.get_client_status()
-        
+
         assert self.service_name in status
         client_status = status[self.service_name]
         assert isinstance(client_status, HTTPClientStatus)
@@ -218,9 +219,9 @@ class TestHTTPService:
     def test_install_client_capture(self):
         """Test the client capture functionality for tests."""
         self.http_service.set_http_client(self.mock_client, self.service_name)
-        
+
         captured = self.http_service._install_client_capture()
-        
+
         assert self.service_name in captured
         assert captured[self.service_name] is self.mock_client
 
@@ -228,15 +229,15 @@ class TestHTTPService:
         """Test that HTTPService implements HTTPServiceProtocol correctly."""
         # This is more of a type checking test
         assert isinstance(self.http_service, HTTPServiceProtocol)
-        
+
         # Test all protocol methods exist and are callable
-        assert callable(getattr(self.http_service, 'set_http_client'))
-        assert callable(getattr(self.http_service, 'get_client'))
-        assert callable(getattr(self.http_service, 'start'))
-        assert callable(getattr(self.http_service, 'stop'))
-        assert callable(getattr(self.http_service, 'register_service_client'))
-        assert callable(getattr(self.http_service, 'deregister_service_client'))
-        assert callable(getattr(self.http_service, 'list_active_clients'))
+        assert callable(self.http_service.set_http_client)
+        assert callable(self.http_service.get_client)
+        assert callable(self.http_service.start)
+        assert callable(self.http_service.stop)
+        assert callable(self.http_service.register_service_client)
+        assert callable(self.http_service.deregister_service_client)
+        assert callable(self.http_service.list_active_clients)
 
     @pytest.mark.asyncio
     async def test_lifecycle_integration(self):
@@ -246,21 +247,21 @@ class TestHTTPService:
         client1.close = AsyncMock()
         client2 = MagicMock(spec=HTTPClient)
         client2.close = AsyncMock()
-        
+
         # Register clients
         await self.http_service.register_service_client("service1", client1)
         await self.http_service.register_service_client("service2", client2)
-        
+
         # Start service
         await self.http_service.start()
         assert self.http_service.is_ready
         assert len(self.http_service.list_active_clients()) == 2
-        
+
         # Stop service
         await self.http_service.stop()
         assert not self.http_service.is_ready
         assert len(self.http_service.list_active_clients()) == 0
-        
+
         # Verify clients were closed
         client1.close.assert_called_once()
         client2.close.assert_called_once()

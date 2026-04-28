@@ -24,4 +24,5 @@ By web_session_id: array of diff summaries (no full content), total, web_session
 <examples>
 <example>User: "What changes were made to nginx.conf?" → fetch_file_diff(web_session_id="current", file_path="/etc/nginx/nginx.conf")</example>
 <example>User: "Show me the full diff for change abc123" → fetch_file_diff(diff_id="abc123")</example>
+<example>User: "What changes were made to nginx.conf on g8ep?" → fetch_file_diff(web_session_id="current", file_path="/etc/nginx/nginx.conf", target_operator="g8ep")</example>
 </examples>

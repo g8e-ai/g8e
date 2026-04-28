@@ -270,35 +270,6 @@ type FsReadResultPayload struct {
 	ErrorType         *string                   `json:"error_type,omitempty"`
 }
 
-type SystemInfo struct {
-	Hostname            string                 `json:"hostname"`
-	OS                  string                 `json:"os"`
-	Architecture        string                 `json:"architecture"`
-	CPUCount            int                    `json:"cpu_count"`
-	MemoryMB            uint64                 `json:"memory_mb"`
-	PublicIP            string                 `json:"public_ip"`
-	InternalIP          string                 `json:"internal_ip"`
-	Interfaces          []string               `json:"interfaces"`
-	CurrentUser         string                 `json:"current_user"`
-	SystemFingerprint   string                 `json:"system_fingerprint"`
-	FingerprintDetails  FingerprintDetails     `json:"fingerprint_details"`
-	OSDetails           HeartbeatOSDetails     `json:"os_details"`
-	UserDetails         HeartbeatUserDetails   `json:"user_details"`
-	DiskDetails         HeartbeatDiskDetails   `json:"disk_details"`
-	MemoryDetails       HeartbeatMemoryDetails `json:"memory_details"`
-	Environment         HeartbeatEnvironment   `json:"environment"`
-	IsCloudOperator     bool                   `json:"is_cloud_operator"`
-	CloudProvider       string                 `json:"cloud_provider"`
-	LocalStorageEnabled bool                   `json:"local_storage_enabled"`
-}
-
-type FingerprintDetails struct {
-	OS           string `json:"os"`
-	Architecture string `json:"architecture"`
-	CPUCount     int    `json:"cpu_count"`
-	MachineID    string `json:"machine_id"`
-}
-
 // RuntimeConfig captures the CLI flags and env var overrides active when the operator was started.
 // Sent to g8ed at bootstrap and stored in operator_document.runtime_config.
 type RuntimeConfig struct {

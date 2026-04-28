@@ -11,8 +11,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from app.clients.blob_client import BlobClient
 from app.errors import NetworkError
@@ -30,7 +31,7 @@ def blob_client(mock_listen_settings):
     with patch("app.services.infra.settings_service.SettingsService") as mock_svc_cls:
         mock_svc = mock_svc_cls.return_value
         mock_svc.get_local_settings.return_value.auth.internal_auth_token = "test-token"
-        
+
         client = BlobClient(
             ca_cert_path="/path/to/ca.crt",
             internal_auth_token="test-token",
@@ -44,10 +45,10 @@ class TestBlobClient:
         mock_resp = AsyncMock()
         mock_resp.status = 200
         mock_resp.__aenter__.return_value = mock_resp
-        
+
         mock_session = MagicMock()
         mock_session.get.return_value = mock_resp
-        
+
         with patch.object(blob_client, "_get_http_session", return_value=mock_session):
             assert await blob_client.connect() is True
             mock_session.get.assert_called_once_with("https://g8es:9000/health")
@@ -56,10 +57,10 @@ class TestBlobClient:
         mock_resp = AsyncMock()
         mock_resp.status = 500
         mock_resp.__aenter__.return_value = mock_resp
-        
+
         mock_session = MagicMock()
         mock_session.get.return_value = mock_resp
-        
+
         with patch.object(blob_client, "_get_http_session", return_value=mock_session):
             assert await blob_client.connect() is False
 
@@ -67,10 +68,10 @@ class TestBlobClient:
         mock_resp = AsyncMock()
         mock_resp.status = 200
         mock_resp.__aenter__.return_value = mock_resp
-        
+
         mock_session = MagicMock()
         mock_session.put.return_value = mock_resp
-        
+
         with patch.object(blob_client, "_get_http_session", return_value=mock_session):
             await blob_client.put_blob("ns", "id", b"data", "image/png")
             mock_session.put.assert_called_once_with(
@@ -84,10 +85,10 @@ class TestBlobClient:
         mock_resp.status = 400
         mock_resp.text.return_value = "Bad Request"
         mock_resp.__aenter__.return_value = mock_resp
-        
+
         mock_session = MagicMock()
         mock_session.put.return_value = mock_resp
-        
+
         with patch.object(blob_client, "_get_http_session", return_value=mock_session):
             with pytest.raises(NetworkError) as excinfo:
                 await blob_client.put_blob("ns", "id", b"data", "image/png")
@@ -98,10 +99,10 @@ class TestBlobClient:
         mock_resp.status = 200
         mock_resp.read.return_value = b"blob-data"
         mock_resp.__aenter__.return_value = mock_resp
-        
+
         mock_session = MagicMock()
         mock_session.get.return_value = mock_resp
-        
+
         with patch.object(blob_client, "_get_http_session", return_value=mock_session):
             result = await blob_client.get_blob("ns", "id")
             assert result == b"blob-data"
@@ -110,10 +111,10 @@ class TestBlobClient:
         mock_resp = AsyncMock()
         mock_resp.status = 404
         mock_resp.__aenter__.return_value = mock_resp
-        
+
         mock_session = MagicMock()
         mock_session.get.return_value = mock_resp
-        
+
         with patch.object(blob_client, "_get_http_session", return_value=mock_session):
             result = await blob_client.get_blob("ns", "id")
             assert result is None
@@ -122,10 +123,10 @@ class TestBlobClient:
         mock_resp = AsyncMock()
         mock_resp.status = 204
         mock_resp.__aenter__.return_value = mock_resp
-        
+
         mock_session = MagicMock()
         mock_session.delete.return_value = mock_resp
-        
+
         with patch.object(blob_client, "_get_http_session", return_value=mock_session):
             await blob_client.delete_blob("ns", "id")
             mock_session.delete.assert_called_once_with("https://g8es:9000/blob/ns/id")
@@ -135,10 +136,10 @@ class TestBlobClient:
         mock_resp.status = 200
         mock_resp.text.return_value = '{"deleted": 5}'
         mock_resp.__aenter__.return_value = mock_resp
-        
+
         mock_session = MagicMock()
         mock_session.delete.return_value = mock_resp
-        
+
         with patch.object(blob_client, "_get_http_session", return_value=mock_session):
             count = await blob_client.delete_namespace("ns")
             assert count == 5

@@ -19,19 +19,15 @@
  * so that an operator on the g8ep is active and ready to be bound by the
  * time the user's browser finishes loading.
  *
- * Explicit flow (three separate responsibilities):
+ * Explicit flow (single responsibility):
  *
  *   1. getG8ENodeOperatorForUser(user_id)
  *      → Queries operator slots. Returns the first operator that is already
  *        ACTIVE on the g8ep, or the first AVAILABLE slot to use. Returns
  *        null when no usable slot exists.
  *
- *   2. launchG8ENodeOperator(apiKey)
- *      → Persists the operator API key to the platform_settings document in
- *        g8es, then starts the supervised operator process via XML-RPC.
- *        The operator command fetches the key from g8es at startup.
- *        Returns immediately — the binary authenticates and SSE delivers
- *        OPERATOR_STATUS_UPDATED to the browser asynchronously.
+ * Note: g8ep operator process management is now owned by g8ee.
+ * g8ed delegates to g8ee via InternalHttpClient for activation/relaunch.
  *
  * Top-level entry point:
  *
@@ -54,21 +50,13 @@ class G8ENodeOperatorService {
      * @param {Object} options
      * @param {Object} options.settingsService - SettingsService instance (for reading/writing platform_settings)
      * @param {Object} options.operatorService - OperatorService instance
+     * @param {Object} options.internalHttpClient - InternalHttpClient instance
      */
-    constructor({ settingsService, operatorService } = {}) {
+    constructor({ settingsService, operatorService, internalHttpClient } = {}) {
         if (!settingsService) throw new Error('G8ENodeOperatorService requires settingsService');
         this._settingsService = settingsService;
         this._operatorService = operatorService;
-    }
-
-    async _resolveSettings() {
-        const settings = await this._settingsService.getPlatformSettings();
-        const port = settings.supervisor_port || '443';
-        const token = settings.internal_auth_token || '';
-        return {
-            supervisorUrl: `http://g8ep:${port}/RPC2`,
-            authHeader: `Basic ${Buffer.from(`g8e-internal:${token}`).toString('base64')}`,
-        };
+        this._internalHttpClient = internalHttpClient;
     }
 
     /**
@@ -112,107 +100,6 @@ class G8ENodeOperatorService {
         return { operator, alreadyActive };
     }
 
-    /**
-     * Launches the operator inside the g8ep container.
-     *
-     * Persists the operator API key to the platform_settings document in g8es,
-     * then starts the supervised operator process via XML-RPC. The operator
-     * command in g8ep fetches the key from g8es at startup.
-     *
-     * @param {string} apiKey  - operator API key from the operator document
-     * @returns {Promise<void>}
-     */
-    async launchG8ENodeOperator(apiKey) {
-        logger.info('[G8EP-OPERATOR] Starting operator in g8ep via XML-RPC', {
-            container: G8E_GATEWAY_CONTAINER_NAME,
-        });
-
-        try {
-            await this._settingsService.savePlatformSettings({g8ep_operator_api_key: apiKey });
-        } catch (err) {
-            throw new Error(`Failed to persist operator API key to platform_settings: ${err.message}`);
-        }
-
-        logger.info('[G8EP-OPERATOR] Operator API key persisted to platform_settings');
-
-        const resolved = await this._resolveSettings();
-
-        try {
-            await this._xmlrpcCall('supervisor.startProcess', ['operator', false], resolved);
-        } catch (err) {
-            if (err.message.includes('ALREADY_STARTED')) {
-                logger.info('[G8EP-OPERATOR] Operator already running, restarting', { error: err.message });
-                await this._xmlrpcCall('supervisor.stopProcess', ['operator', true], resolved).catch(() => {});
-                await this._xmlrpcCall('supervisor.startProcess', ['operator', false], resolved);
-            } else {
-                logger.error('[G8EP-OPERATOR] Failed to start operator via XML-RPC', { error: err.message });
-                throw err;
-            }
-        }
-
-        logger.info('[G8EP-OPERATOR] Operator service signaled in g8ep', {
-            container: G8E_GATEWAY_CONTAINER_NAME,
-        });
-    }
-
-    /**
-     * Performs an XML-RPC call to Supervisor.
-     * 
-     * @param {string} method 
-     * @param {any[]} params 
-     * @returns {Promise<any>}
-     */
-    async _xmlrpcCall(method, params = [], resolvedSettings = null) {
-        const body = `<?xml version="1.0"?>
-<methodCall>
-  <methodName>${method}</methodName>
-  <params>
-    ${params.map(p => `<param><value>${typeof p === 'boolean' ? `<boolean>${p ? '1' : '0'}</boolean>` : `<string>${p}</string>`}</value></param>`).join('\n')}
-  </params>
-</methodCall>`;
-
-        const { supervisorUrl, authHeader } = resolvedSettings || await this._resolveSettings();
-
-        const response = await fetch(supervisorUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'text/xml',
-                'Authorization': authHeader,
-            },
-            body,
-            signal: AbortSignal.timeout(G8E_GATEWAY_OPERATOR_LAUNCH_TIMEOUT_MS)
-        });
-
-        if (!response.ok) {
-            const text = await response.text();
-            throw new Error(`Supervisor connection failed: ${response.status} ${text}`);
-        }
-
-        const xml = await response.text();
-        if (xml.includes('<fault>')) {
-            const codeMatch = xml.match(/<int>([^<]+)<\/int>/);
-            const stringMatch = xml.match(/<string>([^<]+)<\/string>/);
-            const faultCode = codeMatch ? parseInt(codeMatch[1], 10) : null;
-            const faultString = stringMatch ? stringMatch[1] : 'Unknown Supervisor fault';
-
-            // Map common Supervisor fault codes to user-friendly messages
-            // https://github.com/Supervisor/supervisor/blob/master/supervisor/xmlrpc.py
-            switch (faultCode) {
-                case 10: // BAD_NAME
-                    throw new Error('Operator process not found in g8ep configuration.');
-                case 60: // ALREADY_STARTED
-                    throw new Error('ALREADY_STARTED');
-                case 70: // NOT_RUNNING
-                    return xml; // Ignore if trying to stop
-                case 90: // SPAWN_ERROR
-                    throw new Error('Failed to spawn operator process. Check g8ep logs.');
-                default:
-                    throw new Error(`Supervisor error (${faultCode}): ${faultString}`);
-            }
-        }
-
-        return xml;
-    }
 
     /**
      * Maps operator exit codes to human-readable error messages.
@@ -238,107 +125,30 @@ class G8ENodeOperatorService {
      * user, resets their operator slot to AVAILABLE, then relaunches using the
      * fresh API key produced by the reset.
      *
-     * Standalone — no coupling to auth or login. Safe to call at any time.
+     * Delegates to g8ee via InternalHttpClient.
      *
      * @param {string} user_id
      * @returns {Promise<{ success: boolean, operator_id?: string, error?: string }>}
      */
     async relaunchG8ENodeOperatorForUser(user_id) {
-        if (!this._operatorService) throw new Error('operatorService is required for relaunchG8ENodeOperatorForUser');
-
-        const slotResult = await this.getG8ENodeOperatorForUser(user_id);
-        if (!slotResult) {
-            logger.warn('[G8EP-OPERATOR] Relaunch requested but no g8ep operator slot found for user', { user_id });
-            return { success: false, error: 'No g8ep operator slot found for user' };
-        }
-
-        const { operator } = slotResult;
-        const operator_id = operator.id;
-
-        logger.info('[G8EP-OPERATOR] Stopping supervised operator service in g8ep', {
-            user_id,
-            operator_id,
-        });
-
-        const resolved = await this._resolveSettings();
-
-        await this._xmlrpcCall('supervisor.stopProcess', ['operator', true], resolved).catch(() => {});
-
-        const resetResult = await this._operatorService.resetOperator(operator_id);
-        if (!resetResult.success) {
-            logger.warn('[G8EP-OPERATOR] Operator slot reset failed during relaunch', {
-                user_id,
-                operator_id,
-                error: resetResult.error,
-            });
-            return { success: false, error: resetResult.error };
-        }
-
-        const apiKey = resetResult.operator?.api_key;
-        if (!apiKey) {
-            logger.warn('[G8EP-OPERATOR] Reset did not return an API key — cannot relaunch', {
-                user_id,
-                operator_id,
-            });
-            return { success: false, error: 'No API key available after operator reset' };
-        }
-
-        await this.launchG8ENodeOperator(apiKey);
-
-        logger.info('[G8EP-OPERATOR] g8ep operator relaunched successfully', {
-            user_id,
-            operator_id,
-        });
-
-        return { success: true, operator_id };
+        logger.info('[G8EP-OPERATOR] Relaunching g8ep operator via g8ee', { user_id });
+        return this._internalHttpClient.relaunchG8EPOperator(user_id);
     }
 
     /**
      * Orchestrates the full g8ep operator activation for a user who has
      * just logged in.
      *
-     * Steps:
-     *   1. Look up an active or available operator slot for the user.
-     *   2. If already active — nothing to do.
-     *   3. If available — read the operator API key and launch the binary.
-     *
-     * Designed to be called fire-and-forget from auth routes. Errors are caught
-     * and logged; they never propagate to the login response.
+     * Delegates to g8ee via InternalHttpClient.
      *
      * @param {string} user_id
      * @param {string|null} organization_id
      * @param {string} web_session_id
      */
     async activateG8ENodeOperatorForUser(user_id, organization_id, web_session_id) {
+        logger.info('[G8EP-OPERATOR] Activating g8ep operator via g8ee', { user_id });
         try {
-            const slotResult = await this.getG8ENodeOperatorForUser(user_id);
-
-            if (!slotResult) {
-                logger.info('[G8EP-OPERATOR] No operator slot available for user — skipping g8ep launch', { user_id });
-                return;
-            }
-
-            if (slotResult.alreadyActive) {
-                logger.info('[G8EP-OPERATOR] g8ep operator already active for user — skipping launch', {
-                    user_id,
-                    operator_id: slotResult.operator.id
-                });
-                return;
-            }
-
-            const { operator } = slotResult;
-            const apiKey = operator.api_key;
-
-            if (!apiKey) {
-                logger.warn('[G8EP-OPERATOR] Operator slot has no API key — g8ep operator will not be launched', {
-                    user_id,
-                    operator_id: operator.id,
-                });
-                return;
-            }
-
-            await this.launchG8ENodeOperator(apiKey);
-
+            await this._internalHttpClient.activateG8EPOperator(user_id);
         } catch (err) {
             logger.warn('[G8EP-OPERATOR] g8ep operator activation failed (non-fatal)', {
                 user_id,

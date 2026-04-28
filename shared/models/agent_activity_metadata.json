@@ -144,6 +144,27 @@
         "required": true,
         "default": 0,
         "description": "Length of AI response in characters"
+      },
+      "context_sizes": {
+        "type": "object",
+        "required": false,
+        "description": "Character counts for context sections (investigation_context, operator_context, memory_context, contents_total)",
+        "additionalProperties": {
+          "type": "integer"
+        }
+      },
+      "attachment_total_bytes": {
+        "type": "integer",
+        "required": false,
+        "description": "Total byte size of all attachments"
+      },
+      "tool_response_sizes": {
+        "type": "array",
+        "required": false,
+        "description": "Character sizes of individual tool responses",
+        "items": {
+          "type": "integer"
+        }
       }
     },
 

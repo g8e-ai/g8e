@@ -12,6 +12,7 @@
 // limitations under the License.
 
 import { G8eBaseModel, F, now } from './base.js';
+import { API_KEY_COMBINED_REGEX } from '../constants/auth.js';
 
 // ---------------------------------------------------------------------------
 // Response models
@@ -97,11 +98,39 @@ export class OperatorRefreshKeyResponse extends G8eBaseModel {
     static fields = {
         success:         { type: F.boolean, required: true },
         message:         { type: F.string,  default: null },
-        old_operator_id: { type: F.string,  required: true },
-        new_operator_id: { type: F.string,  required: true },
-        slot_number:     { type: F.number,  required: true },
-        new_api_key:     { type: F.string,  required: true },
+        old_operator_id: { type: F.string,  default: null },
+        new_operator_id: { type: F.string,  default: null },
+        slot_number:     { type: F.number,  default: null },
+        new_api_key:     { type: F.string,  default: null },
     };
+
+    _validate() {
+        if (this.new_api_key) {
+            if (!API_KEY_COMBINED_REGEX.test(this.new_api_key)) {
+                const err = new Error('OperatorRefreshKeyResponse validation failed: new_api_key must match g8e API key format (g8e_ prefix followed by hex characters)');
+                err.validationErrors = ['new_api_key must match g8e API key format (g8e_ prefix followed by hex characters)'];
+                throw err;
+            }
+        }
+    }
+
+    static forSuccess(newApiKey, newOperatorId, oldOperatorId, slotNumber, message = 'API key refreshed') {
+        return new OperatorRefreshKeyResponse({
+            success:         true,
+            new_api_key:     newApiKey,
+            new_operator_id: newOperatorId,
+            old_operator_id: oldOperatorId,
+            slot_number:     slotNumber,
+            message:         message,
+        });
+    }
+
+    static forFailure(message) {
+        return new OperatorRefreshKeyResponse({
+            success: false,
+            message: message,
+        });
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -175,6 +204,10 @@ export class DeviceRegistrationResponse extends G8eBaseModel {
         success:             { type: F.boolean, required: true },
         operator_session_id: { type: F.string,  required: true },
         operator_id:         { type: F.string,  required: true },
+        api_key:             { type: F.string,  default: null },
+        operator_cert:       { type: F.string,  default: null },
+        operator_cert_key:   { type: F.string,  default: null },
+        session:             { type: F.object,  default: null },
     };
 }
 
@@ -343,6 +376,33 @@ export class SSEPushResponse extends G8eBaseModel {
         success:   { type: F.boolean, required: true },
         delivered: { type: F.number,  default: 0, min: 0 },
         error:     { type: F.string,  default: null },
+    };
+}
+
+// ---------------------------------------------------------------------------
+// G8EPOperatorActivationResponse
+//
+// Aligned with shared/models/wire/operator_management_responses.json (g8ep_operator_activation_response)
+// ---------------------------------------------------------------------------
+
+export class G8EPOperatorActivationResponse extends G8eBaseModel {
+    static fields = {
+        success: { type: F.boolean, required: true },
+        error:   { type: F.string,  default: null },
+    };
+}
+
+// ---------------------------------------------------------------------------
+// G8EPOperatorRelaunchResponse
+//
+// Aligned with shared/models/wire/operator_management_responses.json (g8ep_operator_relaunch_response)
+// ---------------------------------------------------------------------------
+
+export class G8EPOperatorRelaunchResponse extends G8eBaseModel {
+    static fields = {
+        success:     { type: F.boolean, required: true },
+        operator_id: { type: F.string,  default: null },
+        error:       { type: F.string,  default: null },
     };
 }
 

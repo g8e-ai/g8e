@@ -54,7 +54,7 @@ logger = logging.getLogger(__name__)
 
 
 async def deliver_via_sse(
-    stream: AsyncGenerator[StreamChunkFromModel, None],
+    stream: AsyncGenerator[StreamChunkFromModel],
     inputs: AgentInputs,
     state: AgentStreamState,
     g8ed_event_service: EventService,
@@ -281,6 +281,8 @@ async def deliver_via_sse(
                 state.token_usage = chunk.data.token_usage
                 token_usage = chunk.data.token_usage
                 state.finish_reason = chunk.data.finish_reason
+                if chunk.data.tool_response_sizes:
+                    state.tool_response_sizes = chunk.data.tool_response_sizes
                 logger.info(
                     "[SSE] COMPLETE chunk received: finish_reason=%s response_chars=%d",
                     chunk.data.finish_reason, len(state.response_text),
@@ -300,7 +302,7 @@ async def deliver_via_sse(
                         "agent_mode": agent_mode,
                     }
                 )
-                
+
                 # Publish the error event and continue - don't raise exception
                 await _publish(
                     EventType.LLM_CHAT_ITERATION_FAILED,

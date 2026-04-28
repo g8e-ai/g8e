@@ -6,16 +6,14 @@
     "docs_dir": "/docs",
     "shared_dir": "/app/shared",
     "shared_constants_dir": "/app/shared/constants",
-    "shared_models_dir": "/app/shared/models"
+    "shared_models_dir": "/app/shared/models",
+    "ssh_config_path": "/etc/g8e/ssh_config"
   },
   "g8ee": {
     "app_dir": "/app/components/g8ee",
     "config_dir": "/app/components/g8ee/config",
     "tests_dir": "/app/components/g8ee/tests",
     "evals": {
-      "gold_set_path": "/app/components/g8ee/tests/evals/gold_set.json",
-      "benchmark_path": "/app/components/g8ee/tests/evals/benchmark_gold_set.json",
-      "privacy_gold_set_path": "/app/components/g8ee/tests/evals/privacy_gold_set.json",
       "reports_dir": "/app/components/g8ee/reports/evals"
     }
   },

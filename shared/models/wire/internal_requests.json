@@ -42,5 +42,27 @@
         "description": "ID of the user to unlock"
       }
     }
+  },
+
+  "g8ep_operator_activation": {
+    "_description": "Payload for activating the g8ep operator for a user.",
+    "fields": {
+      "user_id": {
+        "type": "string",
+        "required": true,
+        "description": "ID of the user whose g8ep operator should be activated"
+      }
+    }
+  },
+
+  "g8ep_operator_relaunch": {
+    "_description": "Payload for relaunching the g8ep operator for a user.",
+    "fields": {
+      "user_id": {
+        "type": "string",
+        "required": true,
+        "description": "ID of the user whose g8ep operator should be relaunched"
+      }
+    }
   }
 }

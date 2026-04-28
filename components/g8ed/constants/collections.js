@@ -53,6 +53,9 @@ export const Collections = Object.freeze({
     PASSKEY_CHALLENGES:     c['passkey_challenges'],
     TRIBUNAL_COMMANDS:      c['tribunal_commands'],
     AGENT_ACTIVITY_METADATA: c['agent_activity_metadata'],
+    REPUTATION_STATE:       c['reputation_state'],
+    REPUTATION_COMMITMENTS: c['reputation_commitments'],
+    STAKE_RESOLUTIONS:      c['stake_resolutions'],
 });
 
 export default Collections;

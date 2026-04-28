@@ -44,8 +44,12 @@ DB_COLLECTION_CASES             = _c["cases"]
 DB_COLLECTION_INVESTIGATIONS    = _c["investigations"]
 DB_COLLECTION_TASKS             = _c["tasks"]
 DB_COLLECTION_MEMORIES          = _c["memories"]
+DB_COLLECTION_REVOKED_CERTS      = _c.get("revoked_certificates", "revoked_certificates")
 DB_COLLECTION_TRIBUNAL_COMMANDS = _c["tribunal_commands"]
 DB_COLLECTION_AGENT_ACTIVITY_METADATA = _c["agent_activity_metadata"]
+DB_COLLECTION_REPUTATION_STATE        = _c["reputation_state"]
+DB_COLLECTION_REPUTATION_COMMITMENTS  = _c["reputation_commitments"]
+DB_COLLECTION_STAKE_RESOLUTIONS       = _c["stake_resolutions"]
 
 # Document IDs for settings collection
 PLATFORM_SETTINGS_DOC = _d["platform_settings"]

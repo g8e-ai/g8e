@@ -22,4 +22,5 @@ Fails safely if old_content is not found.
 <examples>
 <example>User: "Change nginx port to 8080" → file_update_on_operator(file_path="/etc/nginx/nginx.conf", old_content="listen 80;", new_content="listen 8080;", justification="Update nginx port")</example>
 <example>User: "Fix typo in app.py" → file_update_on_operator(file_path="/app/app.py", old_content="prnt('hello')", new_content="print('hello')", justification="Fix typo in print statement")</example>
+<example>User: "Change nginx port on g8ep" → file_update_on_operator(file_path="/etc/nginx/nginx.conf", old_content="listen 80;", new_content="listen 8080;", justification="Update nginx port", target_operator="g8ep")</example>
 </examples>

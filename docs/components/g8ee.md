@@ -5,42 +5,54 @@ parent: Components
 
 # g8ee
 
-g8ee is the AI engine for g8e. It provides an agentic, LLM-powered interface for infrastructure operations and troubleshooting, with full human-in-the-loop safety controls, data sovereignty, and multi-provider LLM abstraction.
+g8ee is the AI engine for the g8e platform. It provides an agentic, LLM-powered interface for infrastructure operations and troubleshooting, featuring human-in-the-loop safety controls, data sovereignty, and a multi-provider LLM abstraction layer.
 
-> For cross-component AI architecture — transport map, conversation data models, and command execution pipeline — see [architecture/ai_agents.md](../architecture/ai_agents.md).
->
-> For deep-reference security documentation — internal auth token, Sentinel scrubbing patterns, LFAA vault encryption, operator binding, web/operator session security, and the full threat model — see [architecture/security.md](../architecture/security.md).
+---
+
+## The AI Lifecycle
+
+g8ee follows a strict "Traceable Pipeline" model for every message. A single user request moves through six distinct phases:
+
+### 1. Ingress & Context Assembly
+The `internal_router` receives the request from `g8ed`. The `ChatPipelineService` immediately triggers `_prepare_chat_context`:
+- **Context Enrichment**: Fetches the investigation state and binds available `g8eo` operators from the `G8eHttpContext` headers.
+- **History Retrieval**: Loads prior conversation turns from the `DBService`.
+- **Memory Attachment**: Injects user-level and case-level memories from the `MemoryDataService`.
+
+### 2. Triage (The Gatekeeper)
+Before invoking the primary LLM, the `TriageAgent` classifies the message:
+- **Simple**: Handled by the **Lite** model (e.g., greetings, simple status checks).
+- **Complex**: Escalated to the **Primary** model (e.g., troubleshooting, command execution).
+- **Short-circuit**: If the intent is unclear, the agent delivers a follow-up question immediately, bypassing further processing to save tokens and time.
+
+### 3. Orchestration (The ReAct Loop)
+The `g8eEngine` runs the core agentic loop:
+- **Provider Turn**: Communicates with the configured `LLMProvider` (Gemini, Anthropic, etc.).
+- **Tool Dispatch**: If the LLM requests a tool, `AIToolService` routes it. Universal tools (like `web_search`) run locally; gated tools (like `run_commands`) route through the **Tribunal** for operator execution.
+- **Iteration**: The loop continues until the LLM provides a final text response or hits the `AGENT_MAX_TOOL_TURNS` limit.
+
+### 4. Governance & Safety
+Every gated operation is verified:
+- **Sentinel**: Scrubs sensitive data (PII, secrets) from both inputs and outputs.
+- **Approval Pipeline**: State-changing operations (file edits, commands) trigger an `OPERATOR_COMMAND_APPROVAL_REQUESTED` event, halting execution until a human approves via the UI.
+- **Tribunal**: Refines natural language requests into hardened shell commands using specialized validator models.
+
+### 5. Streaming & Delivery
+Responses are delivered via **Server-Sent Events (SSE)**:
+- **Real-time**: `deliver_via_sse` publishes chunks to `g8ed` as they arrive from the provider.
+- **Per-Iteration Persistence**: Intermediate AI commentary is persisted to the database *during* the loop, ensuring history is preserved even if the connection drops.
+
+### 6. Post-Flight & Telemetry
+After the stream completes:
+- **Final Persistence**: The complete response, token usage, and grounding metadata are saved.
+- **Background Memory**: A detached task updates the investigation's memory context based on the new turn.
+- **Activity Metadata**: Comprehensive telemetry (duration, models, tools, costs) is recorded by `AgentActivityDataService`.
 
 ---
 
 ## Architecture
 
 g8ee is a Python/FastAPI service. The `ChatPipelineService` is the central coordinator — it assembles context, drives the LLM control plane, and handles post-response persistence.
-
-```
-ChatPipelineService
-  ├── g8eEngine            — Streaming orchestrator with tool calling loop
-  │     ├── agent_tool_loop — Sequential function execution and Tribunal routing
-  │     │     └── TribunalInvoker — Natural-language command refinement pipeline
-  │     ├── AIToolService    — Tool registration (TOOL_SPECS) and execution dispatch
-  │     │     └── WebSearchProvider — Vertex AI Search (Discovery Engine) executor
-  │     └── GroundingService — Provider-native grounding extraction, inline citation insertion
-  ├── AIResponseAnalyzer      — Risk analysis (command, file op, error)
-  ├── AIRequestBuilder        — Generation config, thinking config, attachments
-  ├── InvestigationService    — (Domain Layer) Workflow determination, context enrichment, history management
-  │     ├── InvestigationDataService — (Data Layer) Pure CRUD for investigations
-  │     ├── OperatorDataService      — (Data Layer) Pure CRUD for operators
-  │     └── MemoryDataService        — (Data Layer) Pure CRUD for memories
-  ├── BackgroundTaskManager     — Task lifecycle and cancellation
-  ├── CaseDataService         — Case management and SSE updates
-  ├── AgentActivityDataService — AI agent activity metadata recording for data science
-  ├── MemoryGenerationService — Background memory updates from conversation
-  ├── AttachmentService       — Attachment storage and retrieval
-  └── EventService           — Internal SSE event delivery to g8ed
-```
-
-> [!NOTE]
-> `ChatTaskManager` is a backward compatibility alias for `BackgroundTaskManager`.
 
 
 ### Component Relationships
@@ -66,12 +78,42 @@ flowchart LR
 ```
 
 - **g8ed** -- Web gateway; relays browser requests to g8ee and SSE events back to the browser.
-- **g8es** -- Multi-purpose persistence layer:
-    - **Document Store** (SQLite `documents`) -- Investigation state, operator documents, settings, agent activity metadata.
-    - **KV Store** (SQLite `kv_store`) -- High-frequency state, session data, query cache.
-    - **Pub/Sub Broker** (WebSocket/WSS) -- Command dispatch and event bus.
-    - **Blob Store** (SQLite `blobs`) -- Binary attachments and large payloads.
-- **g8eo** -- Operator binary running on target systems; executes commands and manages local audit storage.
+- **g8es** -- Multi-purpose persistence layer (Document, KV, Pub/Sub, and Blob stores).
+- **g8eo** -- Operator binary running on target systems; the source of truth for execution and audit.
+
+---
+
+## Core Subsystems
+
+### Orchestration Layer
+- **`ChatPipelineService`**: The top-level coordinator for chat sessions. It manages the lifecycle from the HTTP entry point to final persistence.
+- **`g8eEngine`**: The core ReAct engine. It owns the retry logic, turn management, and the high-level tool execution loop.
+- **`BackgroundTaskManager`**: Tracks and manages the lifecycle of long-running AI tasks, providing the ability to stop processing on demand.
+
+### LLM Interface (`LLMProvider`)
+g8ee abstracts LLM providers through a unified interface (`app/llm/provider.py`). This allows the platform to switch between Gemini, Anthropic, OpenAI, and Ollama with zero changes to the orchestration logic.
+
+| Tier | Usage | Configuration |
+|------|-------|---------------|
+| **Primary** | Complex reasoning, troubleshooting, and final responses. | `primary_provider` + `primary_model` |
+| **Lite** | Triage, routing, and simple conversational turns. | `lite_provider` + `lite_model` |
+| **Assistant** | (Legacy) Phasing out in favor of Lite tier. | `assistant_provider` + `assistant_model` |
+
+### Triage & Routing
+The Gatekeeper (`triage.py`) ensures cost-efficiency and speed. It uses the `Lite` model to determine if a message requires the `Primary` model's reasoning capabilities. If the triage confidence is low, it can short-circuit the pipeline to ask for clarification, preventing hallucinations on ambiguous requests.
+
+### Investigation Context
+`InvestigationService` assembles the "Mental Model" for the AI on every turn. It orchestrates the retrieval and enrichment of data from:
+- **`InvestigationDataService`**: Resolves the `InvestigationModel` and maintains conversation history.
+- **`MemoryDataService`**: Fetches `InvestigationMemory` documents to provide long-term context.
+- **`OperatorDataService`**: Loads `OperatorDocument` records for all `BOUND` operators, extracting hardware, OS, and shell metadata.
+
+This enrichment ensures that every AI turn is grounded in the current reality of the infrastructure, rather than relying solely on the user's initial prompt.
+
+### Governance & Safety
+- **Sentinel**: A dual-layer scrubbing engine. `g8ee` performs ingress scrubbing to protect the LLM, while `g8eo` performs egress scrubbing to protect the host.
+- **Tribunal**: A specialized validator subsystem that refines AI-generated commands into safe, deterministic shell scripts.
+- **Approval Service**: The authority for human-in-the-loop gating. No state-changing tool can execute without an explicit approval ID from the user.
 
 ---
 
@@ -113,12 +155,12 @@ All LLM communication passes through the `LLMProvider` abstract base class (`app
 |--------|---------|----------|
 | `generate_content_stream_primary` | `AsyncGenerator[StreamChunkFromModel]` | Main primary loop — yields chunks as they arrive |
 | `generate_content_primary` | `GenerateContentResponse` | Non-streaming primary model calls |
-| `generate_content_stream_assistant` | `AsyncGenerator[StreamChunkFromModel]` | Streaming assistant model calls |
-| `generate_content_assistant` | `GenerateContentResponse` | Risk analysis, memory, title generation |
+| `generate_content_stream_assistant` | `AsyncGenerator[StreamChunkFromModel]` | Streaming assistant model calls (deprecated) |
+| `generate_content_assistant` | `GenerateContentResponse` | Risk analysis, memory, title generation (deprecated) |
 | `generate_content_stream_lite` | `AsyncGenerator[StreamChunkFromModel]` | Streaming lite model calls |
-| `generate_content_lite` | `GenerateContentResponse` | Triage, eval |
+| `generate_content_lite` | `GenerateContentResponse` | Triage, Tribunal, eval |
 
-Each method accepts a role-specific settings dataclass (`PrimaryLLMSettings`, `AssistantLLMSettings`, `LiteLLMSettings`) that carries the generation parameters appropriate for that role. LLM configuration is sourced from `G8eeUserSettings.llm` — there is no platform-level LLM default. The `get_llm_provider(settings.llm, is_assistant=False)` factory constructs a provider from user settings on each request. The `is_assistant` flag determines whether to use the `primary_provider` or `assistant_provider` configuration.
+Each method accepts a role-specific settings dataclass (`PrimaryLLMSettings`, `AssistantLLMSettings`, `LiteLLMSettings`) that carries the generation parameters appropriate for that role. LLM configuration is sourced from `G8eeUserSettings.llm` — there is no platform-level LLM default. The `get_llm_provider(settings.llm, is_lite=True)` factory constructs a provider from user settings on each request. The `is_lite` flag determines whether to use the `lite_provider` or `primary_provider` configuration.
 
 `StreamChunkFromModel` is the canonical inter-layer type (`app/models/agent.py`). Its `type` field is a `StreamChunkFromModelType` enum (`app/constants/__init__.py`) with values: `text`, `thinking`, `thinking.update`, `thinking.end`, `tool.call`, `tool.result`, `citations`, `complete`, `error`, `retry`. All provider-specific types are translated to `StreamChunkFromModel` at the provider boundary — nothing above the provider layer touches SDK types. `StreamChunkData` carries the typed payload for every chunk type, including labels, icons, and categories for tool calls.
 
@@ -130,6 +172,8 @@ Each method accepts a role-specific settings dataclass (`PrimaryLLMSettings`, `A
 | `AnthropicProvider` | `app/llm/providers/anthropic.py` | Streams via `client.messages.stream`, accumulating tool input JSON across deltas; yields text and thinking chunks immediately, emits tool call chunks on `content_block_stop`. **Parameter constraints:** `temperature` and `top_p` are mutually exclusive on Anthropic — the provider always uses `temperature` and never sends `top_p`. When extended thinking is enabled, `temperature` is forced to `1.0` and `top_k` is omitted. **Hardened Message handling:** messages must strictly alternate between user and assistant — consecutive same-role Content objects are merged. Every `tool_result` must carry the `tool_use_id` from the preceding assistant's `tool_use` block. Empty text blocks are dropped. |
 | `OllamaProvider` | `app/llm/providers/ollama.py` | Streams via the `ollama` Python SDK's AsyncClient; selects the reasoning dialect via `LLMModelConfig.thinking_dialect` (`NONE` or `NATIVE_TOGGLE`); extracts `thinking` field from responses and streams it as `thought=True` chunks. |
 | `OpenAIProvider` | `app/llm/providers/open_ai.py` | Streams via `AsyncOpenAI` for OpenAI endpoints; translates `ThinkingLevel` into `reasoning.effort` for reasoning models; when tools are present falls back to a non-streaming call and yields the response as a single chunk |
+| `G8elProvider` | `app/llm/providers/g8el.py` | Platform's llama.cpp inference server component; inherits from `LlamaCppProvider` to reuse OpenAI-compatible logic. |
+| `LlamaCppProvider` | `app/llm/providers/llama_cpp.py` | Generic llama.cpp provider; supports streaming via OpenAI-compatible API. |
 
 **Gemini retry contract:** `_open_stream_attempt` wraps only the `generate_content_stream` API call in a tenacity retry (up to 4 attempts, exponential backoff, retryable on 429/503). Once the stream is open, chunks flow directly — no retry is possible mid-stream. If the stream breaks after yielding has started, the error propagate to the retry guard, which prevents re-attempting a partially-delivered response.
 
@@ -161,8 +205,6 @@ stream_response
 Retry behaviour in `stream_response`: if the provider raises a retryable error and streaming has not yet started (`streaming_started=False`), the entire attempt is retried up to `AGENT_MAX_RETRIES` times with exponential backoff. Once any `TEXT` chunk has been yielded (`streaming_started=True`), errors are surfaced immediately — a partial response is never replayed.
 
 **Tool-loop turn limit:** `_stream_with_tool_loop` caps ReAct iterations at `AGENT_MAX_TOOL_TURNS` (default 25). When the cap is reached, the agent does **not** silently abort — instead it calls `OperatorApprovalService.request_command_approval` through the same approval pipeline that gates operator-bound tools, with a justification explaining the turn limit. On approve, the turn counter resets and the loop continues (so the operator can be asked again at the next 25-turn boundary); on deny, feedback, or timeout, the loop terminates cleanly with `finish_reason=stopped_by_operator`. If no approval service is wired (e.g., isolated test construction), the legacy behaviour of aborting at the cap is preserved.
-
-**Invocation context lifecycle:** `stream_response` is an `async generator`. Python dispatches async-generator cleanup (`async_generator_athrow`) in a new `asyncio` task that runs in a different `Context` than the request that created the generator. Because `ContextVar.reset(token)` requires the token to be reset in the exact same `Context` it was set in, the invocation context lifecycle **must not** be owned by `stream_response`. It is owned by `run_with_sse` (a normal `async def` coroutine with a stable `Context`) via `start_invocation_context` before iteration and `reset_invocation_context` in `finally`. `stream_response` reads the already-set context value; it never holds a token.
 
 `_process_provider_turn` owns all thinking state transitions for one LLM call. Thinking chunks are emitted as `StreamChunkFromModelType.THINKING` (or `THINKING_UPDATE`/`THINKING_END`) and delivered to g8ed for UI rendering if the model supports it. Text chunks are yielded as `StreamChunkFromModelType.TEXT` immediately.
 
@@ -298,34 +340,6 @@ vertex_search_enabled not set / missing  →  search_web not registered  →  se
 ```
 
 ---
-## Investigation Context
-
-### Pull and Enrichment
-
-`InvestigationService` (`components/g8ee/app/services/investigation/investigation_service.py`) is the single entry point for building the context object that Triage (The Gatekeeper) and Sage (The Architect) receive on every turn. It orchestrates `InvestigationDataService`, `OperatorDataService`, and `MemoryDataService` to assemble a complete picture of the current state.
-
-**Step 1 — fetch:** `get_investigation_context` resolves the `InvestigationModel` via `InvestigationDataService` by `investigation_id` (preferred) or by `case_id` (falls back to the most-recently-created investigation). Lookup retries up to `INVESTIGATION_LOOKUP_MAX_RETRIES` times with configurable per-attempt delays to handle propagation lag.
-
-**Step 2 — memory attach:** `_attach_memory_context` fetches the `InvestigationMemory` document for the investigation via `MemoryDataService` and attaches it to the `EnrichedInvestigationContext`. No memory is a valid state; Triage (The Gatekeeper) and Sage (The Architect) proceed without it.
-
-**Step 3 — operator enrichment:** `get_enriched_investigation_context` iterates `g8e_context.bound_operators`, loads each `OperatorDocument` via `OperatorDataService` (only `BOUND` status operators), and populates `operator_documents`. 
-
-**Step 4 — operator context extraction:** `_extract_single_operator_context` maps an `OperatorDocument` (system info + latest heartbeat snapshot) to a typed `OperatorContext` — OS, hostname, architecture, CPU, memory, disk, username, shell, working directory, timezone, container environment, init system, and cloud-specific fields.
-
-**Step 5 — conversation history:** The `InvestigationModel` (and thus `EnrichedInvestigationContext`) includes a `conversation_history` field containing all user and AI messages for the investigation. During chat pipeline preparation (`ChatPipelineService._prepare_chat_context`), conversation history is fetched separately via `get_chat_messages` and converted to LLM contents via `build_contents_from_history`. This ensures Triage (The Gatekeeper) and Sage (The Architect) receive the full conversation context on every turn. Conversation history can also be retrieved on-demand by Sage, Dash, or other agents via the `query_investigation_context` tool with `data_type="conversation_history"`.
-
-The resulting `EnrichedInvestigationContext` carries:
-- `operator_documents` — list of live `OperatorDocument` records
-- `memory` — the attached `InvestigationMemory` (or `None`)
-- `conversation_history` — list of `ConversationHistoryMessage` containing all user, AI, and system messages. Every ReAct iteration's pre-tool AI text is persisted as its own `AI_PRIMARY` row via `add_chat_message` (driven by the `on_iteration_text` callback in `deliver_via_sse`), and the closing segment is persisted by `_persist_ai_response` after the stream completes. See [SSE Delivery Pipeline → Per-Iteration AI Text Persistence](#per-iteration-ai-text-persistence).
-
-For more details on how these documents are persisted, see [architecture/storage.md](../architecture/storage.md).
-
-### Security
-
-`get_investigation_context` logs a security warning if `user_id` is not provided — all user-facing queries must be scoped by `user_id` for tenant isolation.
-
-
 ## LLM Configuration
 
 > **Recommended LLM: Google Gemini 3.1.** The platform was designed around Gemini best practices. The Gemini provider is the most robust and extensively tested integration. Other providers are supported but are not part of the standard test pipeline.
@@ -370,16 +384,23 @@ The `MODEL_REGISTRY` provides runtime access to model configurations via `get_mo
 #### OpenAI Models
 | Model | Thinking Levels | Tools | Context In | Context Out |
 |-------|-----------------|-------|------------|-------------|
+| `gpt-5.4` | - | Yes | 128,000 | 8,192 |
+| `gpt-5.4-pro` | - | Yes | 128,000 | 8,192 |
 | `gpt-5.4-mini` | LOW, MINIMAL | Yes | 200,000 | 8,192 |
+| `gpt-5.4-nano` | - | Yes | 128,000 | 8,192 |
+| `gpt-5.3-instant` | - | Yes | 128,000 | 8,192 |
 | `gpt-4o` | - | Yes | 128,000 | 8,192 |
+| `gpt-4o-mini` | - | Yes | 128,000 | 8,192 |
+| `gpt-4-turbo` | - | Yes | 128,000 | 8,192 |
+| `gpt-3.5-turbo` | - | Yes | 16,385 | 4,096 |
 
 #### Ollama Models
 | Model | Thinking Levels | Tools | Context In | Context Out |
 |-------|-----------------|-------|------------|-------------|
-| `gemma4:26b` | HIGH, OFF | Yes | 128,000 | 8,192 |
-| `nemotron-3-nano:30b` | HIGH, OFF | Yes | 128,000 | 8,192 |
 | `qwen3.5:122b` | HIGH, OFF | Yes | 256,000 | 8,192 |
 | `glm-5.1:cloud` | HIGH, OFF | Yes | 256,000 | 8,192 |
+| `gemma4:26b` | HIGH, OFF | Yes | 128,000 | 8,192 |
+| `nemotron-3-nano:30b` | HIGH, OFF | Yes | 128,000 | 8,192 |
 | `llama3.2:3b` | - | Yes | 32,768 | 8,192 |
 | `qwen3.5:2b` | HIGH, OFF | Yes | 32,768 | 8,192 |
 | `gemma4:e4b` | HIGH, OFF | Yes | 32,768 | 8,192 |
@@ -387,14 +408,15 @@ The `MODEL_REGISTRY` provides runtime access to model configurations via `get_mo
 
 ### Model Roles
 
-| Role | Env Variable | Provider Setting | Used For |
-|------|-------------|------------------|----------|
-| **Primary** | `LLM_MODEL` | `primary_provider` | All chat, reasoning, and operator-bound workflows |
-| **Assistant** | `LLM_ASSISTANT_MODEL` | `assistant_provider` | Triage, risk analysis, memory updates, Tribunal, title generation |
+| Role | Provider Setting | Used For |
+|------|------------------|----------|
+| **Primary** | `primary_provider` | Complex reasoning, Sage (main chat), Auditor (Tribunal verification), Judge (evaluation) |
+| **Lite** | `lite_provider` | Triage, Tribunal members (Axiom, Concord, Variance, Pragma, Nemesis), Dash, Scribe, Codex, Warden |
+| **Assistant** | `assistant_provider` | **Deprecated** - being phased out in favor of Lite tier |
 
-The assistant model always has thinking disabled regardless of capability.
+The lite tier always has thinking disabled regardless of capability. The primary tier supports thinking when the model capability allows it.
 
-All services access the assistant model via `LLMSettings.resolved_assistant_model`, which returns the configured value or `None`. This centralizes the "no model configured" check so that every consumer handles missing models consistently.
+All services access models via tier-specific settings (`primary_model`, `lite_model`, `assistant_model`). The `get_llm_provider(settings.llm, is_lite=True)` factory constructs a provider from user settings on each request. The `is_lite` flag determines whether to use the `lite_provider` or `primary_provider` configuration.
 
 ### Per-Message Model Override
 
@@ -406,12 +428,12 @@ On SSE connect, g8ed pushes a `llm.config` event containing provider-specific `p
 
 ### Triage & Routing
 
-Before invoking the primary model, g8ee classifies each incoming message as `simple` or `complex` using the `triage_message` utility. This avoids the full model for messages that can be handled cheaply by the `assistant` model. 
+Before invoking the primary model, g8ee classifies each incoming message as `simple` or `complex` using the `triage_message` utility. This avoids the full model for messages that can be handled cheaply by the `lite` model.
 
 **Classification Rules:**
 - **Short-circuit:** Messages with attachments always escalate to the primary model (multimodal analysis).
 - **Empty messages:** Escalated to primary model with a default follow-up question.
-- **Complexity signals:** Assistant model looks for technical depth, reasoning chains, or explicit requests for action.
+- **Complexity signals:** Lite model looks for technical depth, reasoning chains, or explicit requests for action.
 - **Short-circuit Follow-up:** If triage returns a `follow_up_question` with low confidence, `ChatPipelineService` emits `LLM_CHAT_ITERATION_STARTED` (with `ChatProcessingStartedPayload`), then delivers the follow-up question via `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` and `LLM_CHAT_ITERATION_TEXT_COMPLETED`, and stops further processing.
 
 ---
@@ -448,6 +470,8 @@ Consumers (auth gate, Tribunal routing, prompt assembly) all derive from this on
 | `query_investigation_context` | No | Universal | Query investigation data (conversation history, status, history trail, operator actions) on-demand |
 | `get_command_constraints` | No | Universal | Retrieve whitelisted/blacklisted command patterns |
 | `g8e_web_search` | No | Universal | Web search via Vertex AI Search — requires `vertex_search_enabled=true` in `platform_settings` |
+| `list_ssh_inventory` | No | Universal | List the platform's SSH inventory |
+| `stream_operator_to_ssh_fleet` | No | Universal | Stream the operator binary to a fleet of SSH hosts |
 
 Automatic Function Calling (AFC) is always disabled. g8ee uses a custom sequential function-calling loop to preserve thought signatures and ensure accurate tracking of intermediate steps.
 
@@ -459,7 +483,7 @@ Automatic Function Calling (AFC) is always disabled. g8ee uses a custom sequenti
 
 `OperatorCommandService` (`app/services/operator/command_service.py`) is the entry point for operator tool execution. It is a pure injection target — business logic is owned by focused sub-services.
 
-`AIToolService` handles the dispatch from the AI loop. It uses a `_tool_handlers` dispatch table and uniform `_handle_*` methods for every tool. For `run_commands_with_operator`, it routes through `TribunalInvoker` to refine the natural-language request into a precise shell command.
+`AIToolService` handles the dispatch from the AI loop. It uses a `_tool_handlers` dispatch table populated from per-tool modules under `app/services/ai/tools/`, each exporting an `async handle()` function with a uniform signature. For `run_commands_with_operator`, dispatch routes through `TribunalInvoker` to refine the natural-language request into a precise shell command.
 
 `OperatorApprovalService` (`app/services/operator/approval_service.py`) is a first-class service on `app.state.approval_service`, independently constructed in `main.py` and injected into `OperatorCommandService.build()`. The g8ee router for `/api/internal/operator/approval/respond` depends on `OperatorApprovalService` directly — approval responses do not pass through `OperatorCommandService`.
 
@@ -491,6 +515,8 @@ All service contracts are defined as `Protocol` types in `app/services/protocols
 ### Heartbeat Flow
 
 g8ee is the persistence authority for heartbeats. It subscribes to `heartbeat:{operator_id}:{session}` channels, validates and persists each heartbeat (rolling buffer of last 10, latest snapshot, system info), then notifies g8ed for SSE fan-out to the browser. See [components/g8ed.md — Heartbeat Architecture](g8ed.md#heartbeat-architecture) for the full end-to-end flow including g8ed's role.
+
+g8ee also owns heartbeat status decay: `HeartbeatStaleMonitorService` (`app/services/operator/heartbeat_stale_monitor.py`) runs on a timer and transitions operator status to `stale` or `offline` when heartbeats stop arriving (60s threshold). This consolidates operator status ownership in g8ee, eliminating dual-writer race conditions on the `operators` collection.
 
 ### Defensive Safety
 
@@ -527,13 +553,29 @@ g8ee implements an **MCP Client Adapter** that translates outbound tool calls in
 
 **Initialization:** `MCPGatewayService` is created on `app.state.mcp_gateway_service` during startup, after `AIToolService` and `OperatorDataService`.
 
+### Command Validation Policies
+
+`OperatorCommandService` enforces three **independent** policies on every command, configured via `settings.command_validation`:
+
+| Policy | Setting | JSON Config | Semantics | Where enforced |
+|--------|---------|-------------|-----------|----------------|
+| Whitelist (hard allow-list) | `enable_whitelisting` + `whitelisted_commands` | `config/whitelist.json` (`enabled` field) | Only listed commands may run at all. Non-listed commands are rejected at L1 safety validation. | `app/utils/safety.py::validate_command_safety` |
+| Blacklist (hard block-list) | `enable_blacklisting` | `config/blacklist.json` (`enabled` field) | Listed commands/patterns are rejected at L1 safety validation. | `app/utils/safety.py::validate_command_safety` |
+| Auto-approve (skip-approval list) | `enable_auto_approve` + `config/auto_approved.json` (platform default) + `auto_approved_commands` (CSV override) | `config/auto_approved.json` (`enabled` field) | Listed base verbs bypass the human approval prompt. The JSON file ships platform-default benign verbs (`uptime`, `df`, `free`, …) loaded by `CommandAutoApprovedValidator`; the CSV setting unions per-user extras. Does NOT widen the whitelist and does NOT bypass the blacklist or hard-coded forbidden patterns. | `OperatorCommandService.execute_command_internal` |
+
+**JSON `enabled` field semantics:** Each JSON config file has an `enabled` boolean field (defaults to `true`). When `enabled: false`, the validator loads an empty index regardless of the entries in the file — this is a file-level kill switch that allows platform operators to neutralize the entire JSON file without touching per-request settings. Enforcement requires **both** the JSON `enabled` field and the corresponding per-request setting to be `true`.
+
+The three policies are orthogonal. Auto-approve runs **after** L1 safety validation, so a command must pass every hard gate before its base verb is checked against `auto_approved_commands`. The Tribunal is informed of all three via `get_command_constraints` (`auto_approve_enabled`, `auto_approved_commands`) but must still obey hard gates regardless of auto-approve.
+
+When auto-approve applies, `OPERATOR_COMMAND_APPROVAL_PREPARING` is suppressed and `request_command_approval` is skipped entirely — the command proceeds directly to risk analysis and dispatch.
+
 ### Multi-Operator Binding
 
 When multiple operators are bound, the AI must specify a `target_operator`. Resolution tries hostname match first, then exact operator ID, then list index. For batch operations, `target_operators` accepts a list (or `["all"]`) and g8ee requests a single unified approval covering all N target systems, then fans out the command to every resolved operator in parallel (bounded by `command_validation.max_batch_concurrency`, default 10). Each per-operator execution gets its own `execution_id` and emits its own `OPERATOR_COMMAND_STARTED` / `COMPLETED` / `FAILED` events, all tagged with a shared `batch_id` for UI grouping and audit correlation. Partial failures are reported via `CommandExecutionResult.successful_count` / `failed_count` / `execution_results`; set `command_validation.batch_fail_fast=true` to cancel remaining siblings after the first failure.
 
 ### Cloud Operator Self-Discovery
 
-A small set of read-only AWS IAM introspection commands are auto-approved without user interaction (e.g., `aws sts get-caller-identity`, role/policy listing). All other AWS operations require explicit approval or an intent grant.
+Read-only AWS IAM introspection commands (e.g., `aws sts get-caller-identity`, role/policy listing) are not auto-approved by g8ee itself — they go through the same approval gate as every other command. Operators may rubber-stamp them via the `auto_approved_commands` setting (see [Command Validation Policies](#command-validation-policies)). The intent system handles privileged AWS operations: see [Cloud Operator & AWS Intents](#cloud-operator--aws-intents).
 
 ### Operator Execution History & Activity
 
@@ -818,7 +860,7 @@ When a user sends their first message in a new conversation, no `case_id` or `in
 
 `X-G8E-Bound-Operators` is the **exclusive source of truth** for which operators are available to the AI on any given request. g8ee performs no independent lookup against the operator document store to determine binding state.
 
-To prevent header bloat, this header carries only minimal identity and status (`operator_id`, `operator_session_id`, `status`). Full metadata such as `operator_type` and `system_info` is fetched by g8ee from the shared KV cache when needed.
+To prevent header bloat, this header carries only minimal identity and status (`operator_id`, `operator_session_id`, `status`). Full metadata such as `operator_type` and `latest_heartbeat_snapshot` is fetched by g8ee from the shared KV cache when needed.
 
 **How g8ee consumes it:**
 
@@ -923,7 +965,7 @@ app startup (lifespan)
 
 `SearchWebResult.results` is always `list[WebSearchResultItem]` — never `None`. On failure, `results` is an empty list. Callers must not test for `None`; test `result.success` to distinguish success from failure.
 
-- **Registered by:** `AIToolService._build_search_web_tool()`
+- **Registered by:** `app/services/ai/tools/search_web.py::build()` (referenced from `TOOL_SPECS`)
 - **Executor:** `WebSearchProvider` (`app/services/ai/grounding/web_search_provider.py`)
 - **SDK method:** `SearchServiceClient.search_lite()` (API key auth)
 - **Result type:** `SearchWebResult` (`success`, `query`, `results: list[WebSearchResultItem]`, `total_results`)
@@ -1038,6 +1080,14 @@ The `agent_tool_loop.py` extracts these constraints from `tool_executor._user_se
 |-----|---------|---------|
 | `enable_whitelisting` | `false` | Restrict commands to an allowlist |
 | `enable_blacklisting` | `false` | Block commands matching a denylist |
+| `whitelisted_commands` | — | CSV string of allowed commands (overrides default whitelist) |
+
+**Whitelist Mode Semantics:**
+- **JSON mode (default):** When `whitelisted_commands` is empty, the system uses a rich JSON whitelist (`config/whitelist.json`) with per-command `safe_options` and `validation` patterns.
+- **CSV mode (override):** When `whitelisted_commands` contains a comma-separated list (e.g., `uptime,df,free`), this list **entirely replaces** the JSON whitelist. Every argument must pass basic shell safety checks (`_is_safe_value`). Rich per-command patterns from the JSON whitelist are NOT used in this mode.
+
+**Auto-Approval Bypass Behavior:**
+When `enable_whitelisting` is true and a command successfully passes the whitelist validation (either JSON mode or CSV override mode), the command is **auto-approved**. It bypasses the human approval requirement and executes immediately.
 
 > **Note:** Command validation is configured per-user via user settings, not platform settings. Users can enable/disable whitelist and blacklist through the Settings UI or API. See [Security Architecture — Command Allowlist and Denylist](../architecture/security.md#command-allowlist-and-denylist) for details on how to configure these controls.
 
@@ -1057,65 +1107,38 @@ The `agent_tool_loop.py` extracts these constraints from `tool_executor._user_se
 
 ## AI Evaluation Reporting
 
-g8ee implements a unified metrics collection framework for AI evaluation tests across three dimensions: accuracy, safety, and privacy.
+AI agent evaluation runs through the **host-driven evals framework** at `components/g8ee/evals/`. Per the architectural mandate in [`docs/testing.md`](../testing.md#evals--public-device-token-path), evals exercise the product surface as real users experience it: device-link tokens, public g8ed HTTPS endpoints, real operator containers via docker compose. They are NOT pytest-driven and do NOT call internal services directly.
 
 ### Dimensions
 
-| Dimension | Purpose | Test Suites |
-|-----------|---------|-------------|
-| **Accuracy** | Measures the AI's ability to correctly answer questions and execute tasks | `agent_accuracy`, `gemini_accuracy`, `ollama_accuracy` |
-| **Safety** | Evaluates refusal behavior for harmful or inappropriate requests | `agent_benchmark` (security_refusal category) |
-| **Privacy** | Verifies Sentinel PII redaction across three egress layers | `agent_privacy` |
+| Dimension | Purpose | Gold Set |
+|-----------|---------|----------|
+| **Accuracy** | LLM-as-a-judge grading of agent responses against gold-standard expected behavior and required concepts | `evals/gold_sets/accuracy.json` |
+| **Safety / Benchmark** | Deterministic regex matching on tool-call payloads, including security-refusal scenarios | `evals/gold_sets/benchmark.json` |
+| **Privacy** | Sentinel PII redaction across egress layers | `evals/gold_sets/privacy.json` |
 
-### Metrics Framework
+### Running Evals
 
-The unified metrics collector (`tests/evals/conftest.py::unified_metrics_collector`) aggregates all eval results into a single report with:
+```bash
+# Bring up real-operator fleet
+./g8e evals up -d dlk_xxx
 
-- **EvalRow** - Single evaluation result with dimension, suite, scenario_id, category, passed, score, latency_ms, error, and details
-- **DimensionSummary** - Per-dimension statistics (total, passed, failed, pass_pct, avg_score, per_category breakdown)
-- **FullReport** - Complete report with all rows, summaries, metadata (started_at, finished_at, llm_config)
+# Inspect fleet status
+./g8e evals status
 
-### Artifact Persistence
+# Tear down
+./g8e evals down
+```
 
-At test session end, the collector persists three artifacts to `components/g8ee/reports/evals/<timestamp>_<run_id>/`:
+The runner under `app/evals/runner/` (invoked as `python -m app.evals.runner.cli` from the g8ee component root) is invoked separately and writes artifacts (`report.txt`, `results.csv`, `summary.json`) to `components/g8ee/reports/evals/<timestamp>/`, with a `latest` symlink to the most recent run.
 
-- **report.txt** - Human-readable ASCII table with per-dimension sections and aggregate footer
-- **results.csv** - Machine-readable CSV with one row per scenario
-- **summary.json** - Structured JSON with metrics and scenario rows
+### Internal-side Reporting Library
 
-A symlink at `components/g8ee/reports/evals/latest/` always points to the most recent run.
+A small typed reporting library lives at `app/evals/runner/{metrics,reporter}.py` (`EvalRow`, `DimensionSummary`, `FullReport`, `compute_summaries`, `persist_report`, `render_text_table`). It is reused by `tests/integration/conftest.py::unified_metrics_collector` to aggregate any internally-generated eval rows produced by safety integration tests (e.g. `tests/integration/test_tool_execution_security_integration.py`). It is intentionally decoupled from the host-driven runner.
 
 ### Privacy Evaluation Details
 
-The privacy dimension performs three-layer Sentinel verification:
-
-- **L1 (g8es persistence)** - Checks if user messages are scrubbed before storage in g8es (report-only, expected FAIL due to upstream bug)
-- **L2 (LLM egress)** - Verifies PII is scrubbed before sending to the LLM provider (strict assert)
-- **L3 (AI response)** - Ensures the AI response does not echo leaked PII (strict assert)
-
-Privacy scenarios cover all Sentinel patterns: email, SSN, credit card, phone, JWT, GitHub token, GCP API key, AWS access key, Slack token, URL with credentials, connection string, private key, IBAN, bearer token, and password config.
-
-### Running Eval Suites
-
-Run specific eval suites using pytest markers:
-
-```bash
-# Accuracy evals
-/home/bob/g8e/g8e test g8ee -m agent_eval tests/evals/
-
-# Benchmark evals
-/home/bob/g8e/g8e test g8ee -m agent_benchmark tests/evals/
-
-# Privacy evals
-/home/bob/g8e/g8e test g8ee -m agent_privacy tests/evals/
-
-# All evals
-/home/bob/g8e/g8e test g8ee -m "agent_eval or agent_benchmark or agent_privacy" tests/evals/
-```
-
-### Known Issues
-
-- **L1 privacy failure** - g8es persistence is not scrubbed before storage. This is a known upstream bug requiring Sentinel scrubbing in the g8es-write path (`chat_pipeline._run_chat_impl`). Once fixed, flip the privacy eval L1 check to strict assert.
+The privacy dimension verifies that the Sentinel scrubber redacts PII across the chat pipeline before egress. Scenarios cover all Sentinel patterns: email, SSN, credit card, phone, JWT, GitHub token, GCP API key, AWS access key, Slack token, URL with credentials, connection string, private key, IBAN, bearer token, and password config. Expected placeholders match `app/security/sentinel_scrubber.py` (`[PII]` for SSN/credit-card, `[AWS_KEY]`, `[AWS_SECRET]`, `[URL_WITH_CREDENTIALS]`, `[CONN_STRING]`, `[CREDENTIAL_REFERENCE]`, etc.).
 
 ---
 

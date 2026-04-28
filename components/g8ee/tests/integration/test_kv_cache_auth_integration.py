@@ -21,16 +21,15 @@ cache-aside operations work end-to-end.
 This test requires g8es to be running and accessible.
 """
 
-import os
 import pytest
 
-from app.clients.kv_cache_client import KVCacheClient
 from app.clients.db_client import DBClient
-from app.services.infra.settings_service import SettingsService
-from app.services.cache.cache_aside import CacheAsideService
-from app.db.kv_service import KVService
-from app.db.db_service import DBService
+from app.clients.kv_cache_client import KVCacheClient
 from app.constants import ComponentName
+from app.db.db_service import DBService
+from app.db.kv_service import KVService
+from app.services.cache.cache_aside import CacheAsideService
+from app.services.infra.settings_service import SettingsService
 
 pytestmark = pytest.mark.integration
 
@@ -40,22 +39,22 @@ async def real_kv_client():
     """Create a KVCacheClient that actually connects to g8es with real auth."""
     settings_service = SettingsService()
     bootstrap_settings = settings_service.get_local_settings()
-    
+
     # Skip test if no auth token is available (e.g., running without g8es)
     if not bootstrap_settings.auth.internal_auth_token:
         pytest.skip("No internal auth token available - g8es not accessible")
-    
+
     client = KVCacheClient(
         http_url=bootstrap_settings.listen.http_url,
         component_name=ComponentName.G8EE,
         ca_cert_path=bootstrap_settings.ca_cert_path,
         internal_auth_token=bootstrap_settings.auth.internal_auth_token,
     )
-    
+
     await client.connect()
-    
+
     yield client
-    
+
     await client.close()
 
 
@@ -64,20 +63,20 @@ async def real_db_client():
     """Create a DBClient that actually connects to g8es with real auth."""
     settings_service = SettingsService()
     bootstrap_settings = settings_service.get_local_settings()
-    
+
     # Skip test if no auth token is available
     if not bootstrap_settings.auth.internal_auth_token:
         pytest.skip("No internal auth token available - g8es not accessible")
-    
+
     client = DBClient(
         ca_cert_path=bootstrap_settings.ca_cert_path,
         internal_auth_token=bootstrap_settings.auth.internal_auth_token,
     )
-    
+
     await client.connect()
-    
+
     yield client
-    
+
     await client.close()
 
 
@@ -97,12 +96,12 @@ async def test_kv_cache_client_real_auth(real_kv_client):
     """Test that KVCacheClient is configured with correct auth settings."""
     # This test verifies the client is configured correctly with the auth token
     # and correct port. It will catch the port mismatch issue (9001 vs 9000).
-    
+
     # Verify the client has the auth token set
     assert real_kv_client._internal_auth_token is not None, "Internal auth token is None"
     assert len(real_kv_client._internal_auth_token) == 64, \
         f"Token length is {len(real_kv_client._internal_auth_token)}, expected 64"
-    
+
     # Verify the port is correct (9000 for HTTPS, not 9001 for WSS)
     assert real_kv_client.http_url.endswith(":9000"), \
         f"KVCacheClient should use port 9000, but got {real_kv_client.http_url}"
@@ -117,7 +116,7 @@ async def test_kv_cache_client_token_length(real_kv_client):
     token = real_kv_client._internal_auth_token
     assert token is not None, "Internal auth token is None"
     assert len(token) == 64, f"Token length is {len(token)}, expected 64"
-    assert all(c in '0123456789abcdef' for c in token), "Token should be hex-encoded"
+    assert all(c in "0123456789abcdef" for c in token), "Token should be hex-encoded"
 
 
 @pytest.mark.asyncio

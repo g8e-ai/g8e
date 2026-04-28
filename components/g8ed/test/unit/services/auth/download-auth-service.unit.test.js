@@ -128,6 +128,15 @@ describe('DownloadAuthService [UNIT TEST]', () => {
             expect(await kvMock.get_json(KVKey.deviceLink(VALID_DLK))).not.toBeNull();
         });
 
+        it('rejects dlk_ when allowDlt is false', async () => {
+            const result = await svc.validate(makeReq(`Bearer ${VALID_DLK}`), { allowDlt: false });
+            expect(result).toMatchObject({
+                success: false,
+                status:  403,
+                error:   expect.stringContaining('not permitted'),
+            });
+        });
+
         it('returns success for multi-use dlk_ with no operator_id', async () => {
             const linkData = new DeviceLinkData({
                 token:           VALID_DLK,

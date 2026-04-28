@@ -24,27 +24,27 @@ Segment 4: Command Generation Service
 Segment 5: Response Analysis Service
 """
 
-import pytest
-from datetime import datetime, UTC
 import uuid
+from datetime import UTC, datetime
+
+import pytest
 
 from app.constants import (
-    EventType,
     AgentMode,
+    EventType,
     InvestigationStatus,
     TriageComplexityClassification,
     TriageConfidence,
 )
-
+from app.models.agents.title_generator import CaseTitleResult
+from app.models.agents.triage import TriageRequest, TriageResult
 from app.models.investigations import ConversationHistoryMessage
 from app.models.memory import InvestigationMemory
 from app.models.tool_results import CommandRiskContext
-from app.models.agents.triage import TriageRequest, TriageResult
 from app.services.ai.generator import generate_command
 from app.services.ai.memory_generation_service import MemoryGenerationService
 from app.services.ai.response_analyzer import AIResponseAnalyzer
 from app.services.ai.title_generator import generate_case_title
-from app.models.agents.title_generator import CaseTitleResult
 from app.services.ai.triage import TriageAgent
 from tests.fakes.factories import (
     create_investigation_data,
@@ -70,9 +70,9 @@ class TestMemoryGenerationServiceIntegration:
             pytest.skip("LLM assistant_model is not configured")
 
         # Get real services from all_services fixture
-        memory_data_service = all_services['memory_data_service']
-        investigation_data_service = all_services['investigation_data_service']
-        memory_service = all_services['memory_generation_service']
+        memory_data_service = all_services.memory_data_service
+        investigation_data_service = all_services.investigation_data_service
+        memory_service = all_services.memory_generation_service
 
         # Create investigation
         investigation = create_investigation_data()
@@ -87,24 +87,32 @@ class TestMemoryGenerationServiceIntegration:
                 sender=EventType.EVENT_SOURCE_USER_CHAT,
                 content="I'm having trouble with my high-performance compute cluster in the Zurich data center. The nodes are named 'Alpine-Alpha' through 'Alpine-Zeta'. One specific node, 'Alpine-Delta', has a bright Magenta status LED blinking.",
                 timestamp=datetime.now(UTC),
+                prev_hash="0" * 64,
+                entry_hash="0" * 64,
             ),
             ConversationHistoryMessage(
                 id=str(uuid.uuid4()),
                 sender=EventType.EVENT_SOURCE_AI_ASSISTANT,
                 content="I see. A Magenta status LED on the Alpine series usually indicates a thermal throttle on the secondary NVMe drive. I'll check the temperature sensors for Alpine-Delta.",
                 timestamp=datetime.now(UTC),
+                prev_hash="0" * 64,
+                entry_hash="0" * 64,
             ),
             ConversationHistoryMessage(
                 id=str(uuid.uuid4()),
                 sender=EventType.EVENT_SOURCE_USER_CHAT,
                 content="The data center technician mentioned that the ambient temperature in Zurich is quite high today. We might need to increase the fan speed to 80% for all Alpine nodes.",
                 timestamp=datetime.now(UTC),
+                prev_hash="0" * 64,
+                entry_hash="0" * 64,
             ),
             ConversationHistoryMessage(
                 id=str(uuid.uuid4()),
                 sender=EventType.EVENT_SOURCE_AI_ASSISTANT,
                 content="Understood. I'll prepare a script to adjust fan speeds across the Zurich cluster. We'll monitor Alpine-Delta specifically for the Magenta LED to clear.",
                 timestamp=datetime.now(UTC),
+                prev_hash="0" * 64,
+                entry_hash="0" * 64,
             ),
         ]
 
@@ -154,9 +162,9 @@ class TestMemoryGenerationServiceIntegration:
             pytest.skip("LLM assistant_model is not configured")
 
         # Get real services from all_services fixture
-        memory_data_service = all_services['memory_data_service']
-        investigation_data_service = all_services['investigation_data_service']
-        memory_service = all_services['memory_generation_service']
+        memory_data_service = all_services.memory_data_service
+        investigation_data_service = all_services.investigation_data_service
+        memory_service = all_services.memory_generation_service
 
         # Create investigation
         investigation = create_investigation_data()
@@ -189,12 +197,16 @@ class TestMemoryGenerationServiceIntegration:
                 sender=EventType.EVENT_SOURCE_USER_CHAT,
                 content="The Turquoise sensor in Tokyo is fixed, but now the 'Midnight-Blue' fan controller in our Reykjavik facility is reporting an 'Amber-Alert' status code. Can you pull the RPM logs for the Midnight-Blue unit?",
                 timestamp=datetime.now(UTC),
+                prev_hash="0" * 64,
+                entry_hash="0" * 64,
             ),
             ConversationHistoryMessage(
                 id=str(uuid.uuid4()),
                 sender=EventType.EVENT_SOURCE_AI_ASSISTANT,
                 content="I'll pull the RPM logs for the Midnight-Blue controller in Reykjavik. We'll check if the Amber-Alert corresponds to a bearing failure or just a sensor glitch.",
                 timestamp=datetime.now(UTC),
+                prev_hash="0" * 64,
+                entry_hash="0" * 64,
             ),
         ]
 
@@ -219,10 +231,10 @@ class TestMemoryGenerationServiceIntegration:
         # Verify memory was updated
         assert isinstance(updated_memory, InvestigationMemory)
         assert updated_memory.investigation_id == created_investigation.id
-        
+
         # Verify both the original concepts and the new ones exist or were merged correctly
         tech_bg = updated_memory.technical_background.lower()
-        
+
         # Should still know about hardware/firmware concepts from original memory
         original_concepts = [
             ("hardware", "firmware"),  # Core technical domain
@@ -230,11 +242,11 @@ class TestMemoryGenerationServiceIntegration:
             ("sensor", "turquoise")    # Component and color identifier
         ]
         original_found = any(
-            any(concept in tech_bg for concept in concept_group) 
+            any(concept in tech_bg for concept in concept_group)
             for concept_group in original_concepts
         )
         assert original_found, f"Original technical concepts not found in: {tech_bg}"
-        
+
         # Should have incorporated new fan/cooling concepts from conversation
         new_concepts = [
             ("fan", "cooling", "airflow"),           # Cooling system concepts
@@ -245,13 +257,13 @@ class TestMemoryGenerationServiceIntegration:
             ("alert", "status", "warning", "error") # Status indicators
         ]
         new_found = any(
-            any(concept in tech_bg for concept in concept_group) 
+            any(concept in tech_bg for concept in concept_group)
             for concept_group in new_concepts
         )
         assert new_found, f"New fan/cooling concepts not found in: {tech_bg}"
 
         summary = updated_memory.investigation_summary.lower()
-        
+
         # Should capture both the resolved sensor issue and the new controller issue
         original_summary_concepts = [
             ("turquoise", "sensor"),     # Original component and color
@@ -259,11 +271,11 @@ class TestMemoryGenerationServiceIntegration:
             ("skyline", "router", "system")  # Original equipment
         ]
         original_summary_found = any(
-            any(concept in summary for concept in concept_group) 
+            any(concept in summary for concept in concept_group)
             for concept_group in original_summary_concepts
         )
         assert original_summary_found, f"Original investigation concepts not found in summary: {summary}"
-        
+
         new_summary_concepts = [
             ("midnight", "blue", "color"),      # New equipment identifier
             ("fan", "controller", "cooling"),   # New system type
@@ -272,7 +284,7 @@ class TestMemoryGenerationServiceIntegration:
             ("rpm", "logs", "data", "metrics") # Data/metrics requested
         ]
         new_summary_found = any(
-            any(concept in summary for concept in concept_group) 
+            any(concept in summary for concept in concept_group)
             for concept_group in new_summary_concepts
         )
         assert new_summary_found, f"New investigation concepts not found in summary: {summary}"
@@ -293,9 +305,9 @@ class TestMemoryGenerationServiceIntegration:
             pytest.skip("LLM assistant_model is not configured")
 
         # Get real services from all_services fixture
-        memory_data_service = all_services['memory_data_service']
-        investigation_data_service = all_services['investigation_data_service']
-        memory_service = all_services['memory_generation_service']
+        memory_data_service = all_services.memory_data_service
+        investigation_data_service = all_services.investigation_data_service
+        memory_service = all_services.memory_generation_service
 
         # Create investigation
         investigation = create_investigation_data()
@@ -348,7 +360,7 @@ class TestTitleGenerationIntegration:
         assert len(title.generated_title) > 0
         assert len(title.generated_title) <= 80
         assert title.fallback is False  # Should not be fallback
-        
+
         # Verify title captures specific key concepts - check for any of the key terms
         title_lower = title.generated_title.lower()
         # Look for router, network, or connectivity concepts
@@ -464,7 +476,7 @@ class TestTriageServiceIntegration:
 
         # Verify triage result structure
         assert isinstance(result, TriageResult)
-        
+
         # Complex issue should be classified as COMPLEX
         # Helsinki bunker with Borealis-7 chipset and Silver-Scream panic is definitely not simple.
         assert result.complexity == TriageComplexityClassification.COMPLEX
@@ -489,7 +501,7 @@ class TestTriageServiceIntegration:
 
         # Verify triage result
         assert isinstance(result, TriageResult)
-        
+
         assert result.complexity == TriageComplexityClassification.SIMPLE
 
     async def test_triage_password_reset_complexity(self, user_settings):
@@ -512,7 +524,7 @@ class TestTriageServiceIntegration:
 
         # Verify triage result
         assert isinstance(result, TriageResult)
-        
+
         # Password reset involves account access and security, so should be classified as COMPLEX
         assert result.complexity == TriageComplexityClassification.COMPLEX
 
@@ -536,7 +548,7 @@ class TestTriageServiceIntegration:
 
         # Verify triage result
         assert isinstance(result, TriageResult)
-        
+
         # Ambiguous requests can be classified as either simple or complex depending on model interpretation
         assert result.complexity in [
             TriageComplexityClassification.SIMPLE,
@@ -567,7 +579,7 @@ class TestCommandGenerationIntegration:
         # Verify function signature (this will be tested more thoroughly in agent tests)
         import inspect
         sig = inspect.signature(generate_command)
-        expected_params = ['request', 'guidelines', 'operator_context', 'g8ed_event_service', 'web_session_id', 'user_id', 'case_id', 'investigation_id', 'settings', 'whitelisting_enabled', 'blacklisting_enabled', 'whitelisted_commands', 'blacklisted_commands']
+        expected_params = ["request", "guidelines", "operator_context", "g8ed_event_service", "web_session_id", "user_id", "case_id", "investigation_id", "settings", "reputation_data_service", "auditor_hmac_key", "whitelisting_enabled", "blacklisting_enabled", "whitelisted_commands", "blacklisted_commands"]
         actual_params = list(sig.parameters.keys())
         assert actual_params == expected_params
 
@@ -575,10 +587,10 @@ class TestCommandGenerationIntegration:
         """Test that FORBIDDEN_COMMAND_PATTERNS changes are reflected in Tribunal prompts."""
         from app.constants import FORBIDDEN_COMMAND_PATTERNS
         from app.llm.prompts import build_forbidden_patterns_message
-        
+
         if not user_settings.llm.primary_model:
             pytest.skip("LLM provider is not configured")
-        
+
         # The platform forbids privilege-escalation tokens unconditionally (see
         # tool_service.execute_tool_call); the Tribunal prompt must reflect that regardless of uid.
         message = build_forbidden_patterns_message()
@@ -598,7 +610,8 @@ class TestCommandGenerationIntegration:
     async def test_command_constraints_message_formatting(self, test_settings):
         """Test that command constraints (whitelist/blacklist) are properly formatted for Tribunal prompts."""
         from app.llm.prompts import build_command_constraints_message
-        
+        from app.models.whitelist import WhitelistedCommand
+
         # Test with no constraints
         message = build_command_constraints_message(
             whitelisting_enabled=False,
@@ -607,21 +620,21 @@ class TestCommandGenerationIntegration:
             blacklisted_commands=None,
         )
         assert "No whitelist or blacklist constraints are active" in message
-        
-        # Test with metadata-rich whitelist
+
+        # Test with metadata-rich whitelist using WhitelistedCommand objects
         whitelisted_metadata = [
-            {
-                "command": "ping",
-                "category": "network",
-                "safe_options": ["-c <count>", "-W <timeout>"],
-                "validation": {"count": r"^\d+$", "timeout": r"^\d+$"}
-            },
-            {
-                "command": "ls",
-                "category": "filesystem",
-                "safe_options": ["-la", "-lh"],
-                "validation": {}
-            }
+            WhitelistedCommand(
+                command="ping",
+                category="network_diagnostics",
+                safe_options=["-c <count>", "-W <timeout>"],
+                validation={"count": r"^\d+$", "timeout": r"^\d+$"}
+            ),
+            WhitelistedCommand(
+                command="ls",
+                category="system_diagnostics",
+                safe_options=["-la", "-lh"],
+                validation={}
+            )
         ]
         message = build_command_constraints_message(
             whitelisting_enabled=True,
@@ -634,12 +647,16 @@ class TestCommandGenerationIntegration:
         assert "ls" in message
         assert "safe_options" in message
         assert "validation_patterns" in message
-        
-        # Test with whitelist only
+
+        # Test with whitelist only using WhitelistedCommand objects
         message = build_command_constraints_message(
             whitelisting_enabled=True,
             blacklisting_enabled=False,
-            whitelisted_commands=[{"command": "ls -la"}, {"command": "pwd"}, {"command": "whoami"}],
+            whitelisted_commands=[
+                WhitelistedCommand(command="ls -la"),
+                WhitelistedCommand(command="pwd"),
+                WhitelistedCommand(command="whoami")
+            ],
             blacklisted_commands=None,
         )
         assert "Whitelisting is ENABLED" in message
@@ -647,7 +664,7 @@ class TestCommandGenerationIntegration:
         assert "ls -la" in message
         assert "pwd" in message
         assert "whoami" in message
-        
+
         # Test with blacklist only
         message = build_command_constraints_message(
             whitelisting_enabled=False,
@@ -659,12 +676,12 @@ class TestCommandGenerationIntegration:
         assert "These commands are FORBIDDEN" in message
         assert "rm -rf" in message
         assert "sudo" in message
-        
+
         # Test with both whitelist and blacklist
         message = build_command_constraints_message(
             whitelisting_enabled=True,
             blacklisting_enabled=True,
-            whitelisted_commands=[{"command": "ls"}],
+            whitelisted_commands=[WhitelistedCommand(command="ls")],
             blacklisted_commands=[{"command": "rm -rf"}],
         )
         assert "Whitelisting is ENABLED" in message
@@ -677,10 +694,10 @@ class TestCommandGenerationIntegration:
         blocks commands that violate whitelist constraints, ensuring the Auditor
         has the correct context to flag WHITELIST_VIOLATION reasons.
         """
-        from app.utils.safety import validate_command_safety, map_os_string_to_platform
-        from app.models.agent import OperatorContext
         from app.constants.status import Platform
-        
+        from app.models.agent import OperatorContext
+        from app.utils.safety import map_os_string_to_platform, validate_command_safety
+
         # Create a mock operator context
         operator_context = OperatorContext(
             operator_id="test-operator",
@@ -693,25 +710,28 @@ class TestCommandGenerationIntegration:
             working_directory="/home/testuser",
             architecture="x86_64",
         )
-        
-        # Test 1: Valid whitelisted command should pass
-        is_safe, error = validate_command_safety(
+
+        # Test 1: Valid whitelisted command should pass (whitelisting disabled)
+        result = validate_command_safety(
             command="ping -c 4 google.com",
-            whitelisting_enabled=True,
+            whitelisting_enabled=False,
             blacklisting_enabled=False,
             operator_context=operator_context,
         )
-        
+        assert result.is_safe, "ping command should pass when whitelist is disabled"
+        assert result.error_message is None
+        assert result.error_type is None
+
         # Test 2: Command with forbidden flag should fail
-        is_safe, error = validate_command_safety(
+        result = validate_command_safety(
             command="sudo ls",
             whitelisting_enabled=True,
             blacklisting_enabled=False,
             operator_context=operator_context,
         )
-        assert not is_safe, "sudo command should be blocked by forbidden patterns"
-        assert "forbidden" in error.lower() or "sudo" in error.lower()
-        
+        assert not result.is_safe, "sudo command should be blocked by forbidden patterns"
+        assert "forbidden" in result.error_message.lower() or "sudo" in result.error_message.lower()
+
         # Test 3: Platform mapping works correctly
         assert map_os_string_to_platform("linux") == Platform.LINUX
         assert map_os_string_to_platform("windows") == Platform.WINDOWS
@@ -756,9 +776,9 @@ class TestResponseAnalysisIntegration:
 
         # Verify analysis result
         assert result is not None
-        assert hasattr(result, 'risk_level')
-        
-        assert result.risk_level == 'LOW'
+        assert hasattr(result, "risk_level")
+
+        assert result.risk_level == "LOW"
 
     async def test_analyze_high_risk_command(self, user_settings):
         """AIResponseAnalyzer correctly identifies high-risk commands."""
@@ -786,10 +806,10 @@ class TestResponseAnalysisIntegration:
 
         # Verify analysis result
         assert result is not None
-        assert hasattr(result, 'risk_level')
+        assert hasattr(result, "risk_level")
 
         # rm -rf /data/... as root is HIGH risk.
-        assert result.risk_level == 'HIGH'
+        assert result.risk_level == "HIGH"
 
     async def test_analyzer_interface_exists(self, user_settings):
         """Test that AIResponseAnalyzer interface exists and can be instantiated."""
@@ -799,5 +819,5 @@ class TestResponseAnalysisIntegration:
         # Test that the class can be instantiated
         analyzer = AIResponseAnalyzer()
         assert analyzer is not None
-        assert hasattr(analyzer, 'analyze_command_risk')
-        assert callable(getattr(analyzer, 'analyze_command_risk'))
+        assert hasattr(analyzer, "analyze_command_risk")
+        assert callable(analyzer.analyze_command_risk)

@@ -135,6 +135,10 @@ export const ChatSSEHandlersMixin = {
             this.handleOperatorExecutionRequest(data);
         });
 
+        this.eventBus.on(EventType.AI_TRIAGE_CLARIFICATION_QUESTIONS, (data) => {
+            this.handleTriageClarificationQuestions(data);
+        });
+
         this.eventBus.on(EventType.OPERATOR_COMMAND_APPROVAL_PREPARING, () => {
             this.approvalPending = true;
             this.showAIStopButton();
@@ -469,6 +473,20 @@ export const ChatSSEHandlersMixin = {
                 category: ToolDisplayCategory.GENERAL,
             });
         }
+    },
+
+    handleTriageClarificationQuestions(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        if (!this.triageQuestionsPopup) {
+            console.error('[TRIAGE] triageQuestionsPopup not initialized');
+            return;
+        }
+
+        if (this.anchoredTerminal) {
+            this.anchoredTerminal.hideWaitingIndicator();
+        }
+
+        this.triageQuestionsPopup.show(data);
     },
 
     handleTribunalStarted(data) {

@@ -349,22 +349,43 @@
     to { transform: rotate(360deg); }
 }
 
+.tribunal {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
 .tribunal__passes {
     display: inline-flex;
     align-items: center;
     gap: 5px;
 }
 
+.tribunal__gap {
+    width: 15px;
+}
+
 .tribunal__dot {
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    background: var(--border-color);
-    transition: background 0.2s ease, transform 0.2s ease;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    transition: all 0.2s ease;
     flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+.tribunal__dot--auditor {
+    background: rgba(var(--accent-blue-rgb), 0.1);
+    border-color: rgba(var(--accent-blue-rgb), 0.3);
+}
+
+.tribunal__dot--auditor .tribunal__dot-icon {
+    color: var(--accent-blue);
 }
 
 .tribunal__dot-icon {
@@ -392,6 +413,10 @@
 .tribunal__status {
     font-size: 11px;
     color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
 }
 
 .tribunal__status--done {

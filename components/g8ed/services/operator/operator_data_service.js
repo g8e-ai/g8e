@@ -13,6 +13,7 @@
 
 import { logger } from '../../utils/logger.js';
 import { Collections } from '../../constants/collections.js';
+import { OperatorStatus } from '../../constants/operator.js';
 import { OperatorDocument } from '../../models/operator_model.js';
 
 /**
@@ -45,6 +46,20 @@ export class OperatorDataService {
     async queryOperatorsFresh(filters) {
         const data = await this._cache_aside.queryDocuments(this.collectionName, filters, null, true);
         return data || [];
+    }
+
+    /**
+     * Query operators and filter out TERMINATED ones.
+     * Use this for all business logic that should only operate on "live" or "available" slots.
+     */
+    async queryListedOperators(filters = [], options = {}) {
+        const operators = options.fresh 
+            ? await this.queryOperatorsFresh(filters)
+            : await this.queryOperators(filters);
+            
+        // Centralized TERMINATED filter
+        // Status can be null if not yet initialized, but we only exclude explicit TERMINATED
+        return operators.filter(op => op.status !== 'TERMINATED');
     }
 
     async createOperator(operatorId, operatorDoc) {

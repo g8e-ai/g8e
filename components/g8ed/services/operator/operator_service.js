@@ -16,7 +16,6 @@ import { redactWebSessionId } from '../../utils/security.js';
 import { OperatorStatus } from '../../constants/operator.js';
 import { 
     OperatorDocument, 
-    OperatorStatusInfo, 
     OperatorWithSessionContext, 
     GrantedIntent, 
     OperatorSlot,
@@ -41,28 +40,29 @@ class OperatorService {
      * @param {Object} [options.userService] - UserService instance
      * @param {Object} [options.apiKeyService] - ApiKeyService instance
      * @param {Object} [options.certificateService] - CertificateService instance
-     * @param {Object} [options.operatorSessionService] - OperatorSessionService instance
      * @param {Object} [options.webSessionService] - WebSessionService instance
      * @param {Object} [options.sseService] - SSEService instance
+     * @param {Object} [options.internalHttpClient] - InternalHttpClient instance
      */
     constructor({
         operatorDataService,
         userService,
         apiKeyService,
         certificateService,
-        operatorSessionService,
         webSessionService,
-        sseService
+        sseService,
+        internalHttpClient
     }) {
         if (!operatorDataService) throw new Error('operatorDataService is required');
+        if (!internalHttpClient) throw new Error('internalHttpClient is required');
         
         this.operatorDataService = operatorDataService;
         this.userService = userService;
         this.apiKeyService = apiKeyService;
         this.certificateService = certificateService;
-        this.operatorSessionService = operatorSessionService;
         this.webSessionService = webSessionService;
         this.sseService = sseService;
+        this.internalHttpClient = internalHttpClient;
         
         this.collectionName = this.operatorDataService.collectionName;
 
@@ -71,10 +71,12 @@ class OperatorService {
             operatorDataService: this.operatorDataService,
             apiKeyService,
             certificateService,
-            operatorSessionService,
+            operatorService: this,
         });
 
-        this.relay = new OperatorRelayService();
+        this.relay = new OperatorRelayService({
+            internalHttpClient: this.internalHttpClient
+        });
 
         this.notifications = new OperatorNotificationService({
             webSessionService,
@@ -111,15 +113,6 @@ class OperatorService {
         return this.operatorDataService.getOperatorFresh(operatorId);
     }
 
-    async getOperatorStatusInfo(operatorId) {
-        const operator = await this.getOperator(operatorId);
-        return operator ? OperatorStatusInfo.fromOperator(operator) : null;
-    }
-
-    async getOperatorStatus(operatorId) {
-        return this.getOperatorStatusInfo(operatorId);
-    }
-
     async getOperatorByUserId(userId) {
         const data = await this.queryOperators([{ field: 'user_id', operator: '==', value: userId }]);
         if (!data || data.length === 0) return null;
@@ -131,8 +124,15 @@ class OperatorService {
     async getOperatorWithSessionContext(operatorId) {
         const operator = await this.getOperator(operatorId);
         if (!operator) return null;
-        const operatorSession = operator.operator_session_id && this.operatorSessionService
-            ? await this.operatorSessionService.validateSession(operator.operator_session_id)
+        
+        const g8eContext = {
+            user_id: operator.user_id,
+            organization_id: operator.organization_id,
+            source_component: 'g8ed',
+        };
+
+        const operatorSession = operator.operator_session_id
+            ? await this.relay.relayValidateOperatorSessionToG8ee(operator.operator_session_id, g8eContext).then(res => res.session).catch(() => null)
             : null;
         const webSession = operator.bound_web_session_id && this.webSessionService
             ? await this.webSessionService.validateSession(operator.bound_web_session_id)
@@ -162,14 +162,62 @@ class OperatorService {
         return this.relay.relayApprovalResponseToG8ee(approvalData, g8eContext);
     }
 
-    // --- Slots ---
-
-    async initializeOperatorSlots(userId, organizationId) {
-        return this.slots.initializeOperatorSlots(userId, organizationId);
+    async relayCreateOperatorSlotToG8ee(params, g8eContext) {
+        return this.relay.relayCreateOperatorSlotToG8ee(params, g8eContext);
     }
 
-    async refreshOperatorApiKey(operatorId, userId) {
-        return this.slots.refreshOperatorApiKey(operatorId, userId);
+    async relayUpdateOperatorApiKeyToG8ee(operatorId, apiKey, g8eContext) {
+        return this.relay.relayUpdateOperatorApiKeyToG8ee(operatorId, apiKey, g8eContext);
+    }
+
+    async relayClaimOperatorSlotToG8ee(params, g8eContext) {
+        return this.relay.relayClaimOperatorSlotToG8ee(params, g8eContext);
+    }
+
+    async relayBindOperatorsToG8ee(params, g8eContext) {
+        return this.relay.relayBindOperatorsToG8ee(params, g8eContext);
+    }
+
+    async relayUnbindOperatorsToG8ee(params, g8eContext) {
+        return this.relay.relayUnbindOperatorsToG8ee(params, g8eContext);
+    }
+
+    async relayAuthenticateOperatorToG8ee(params, g8eContext) {
+        return this.relay.relayAuthenticateOperatorToG8ee(params, g8eContext);
+    }
+
+    async relayRegisterDeviceLinkToG8ee(params, g8eContext) {
+        return this.relay.relayRegisterDeviceLinkToG8ee(params, g8eContext);
+    }
+
+    async relayValidateOperatorSessionToG8ee(operatorSessionId, g8eContext) {
+        return this.relay.relayValidateOperatorSessionToG8ee(operatorSessionId, g8eContext);
+    }
+
+    async relayRefreshOperatorSessionToG8ee(operatorSessionId, g8eContext) {
+        return this.relay.relayRefreshOperatorSessionToG8ee(operatorSessionId, g8eContext);
+    }
+
+    async relayEndOperatorSessionToG8ee(operatorSessionId, g8eContext) {
+        return this.relay.relayEndOperatorSessionToG8ee(operatorSessionId, g8eContext);
+    }
+
+    async relayListenSessionAuthToG8ee(params, g8eContext) {
+        return this.relay.relayListenSessionAuthToG8ee(params, g8eContext);
+    }
+
+    async relayTerminateOperatorToG8ee(operatorId, g8eContext) {
+        return this.relay.relayTerminateOperatorToG8ee(operatorId, g8eContext);
+    }
+
+    // --- Slots ---
+
+    async initializeOperatorSlots(userId, organizationId, webSessionId) {
+        return this.slots.initializeOperatorSlots(userId, organizationId, webSessionId);
+    }
+
+    async refreshOperatorApiKey(operatorId, userId, webSessionId, broadcastFn) {
+        return this.slots.refreshOperatorApiKey(operatorId, userId, webSessionId, broadcastFn);
     }
 
     async createOperatorSlot(params) {
@@ -191,10 +239,13 @@ class OperatorService {
     }
 
     async getUserVisibleOperatorStats(userId, allStatuses = false) {
-        const allOperators = await this.operatorDataService.queryOperators([{ field: 'user_id', operator: '==', value: userId }]);
-        let operators = allOperators;
+        let operators;
         if (!allStatuses) {
-            operators = allOperators.filter(op => op.status !== OperatorStatus.UNAVAILABLE && op.status !== OperatorStatus.TERMINATED);
+            operators = await this.operatorDataService.queryListedOperators([{ field: 'user_id', operator: '==', value: userId }]);
+            // Also filter out UNAVAILABLE for user-visible stats
+            operators = operators.filter(op => op.status !== OperatorStatus.UNAVAILABLE);
+        } else {
+            operators = await this.operatorDataService.queryOperators([{ field: 'user_id', operator: '==', value: userId }]);
         }
         const activeCount = operators.filter(op => op.status === OperatorStatus.ACTIVE || op.status === OperatorStatus.BOUND).length;
         return { operators, totalCount: operators.length, activeCount };
@@ -222,11 +273,11 @@ class OperatorService {
      */
     async getAllOperators(allStatuses = false) {
         const filters = [];
-        const allOperators = await this.operatorDataService.queryOperators(filters);
-        
-        let filtered = allOperators;
+        let filtered;
         if (!allStatuses) {
-            filtered = allOperators.filter(op => op.status !== OperatorStatus.TERMINATED);
+            filtered = await this.operatorDataService.queryListedOperators(filters);
+        } else {
+            filtered = await this.operatorDataService.queryOperators(filters);
         }
 
         const activeCount = filtered.filter(op => op.status === OperatorStatus.ACTIVE || op.status === OperatorStatus.BOUND).length;
@@ -282,6 +333,10 @@ class OperatorService {
         const data = await this.operatorDataService.queryOperators(filters);
         return (data || []).map(op => OperatorDocument.fromDB(op));
     }
+
+    async queryListedOperators(filters) {
+        return this.operatorDataService.queryListedOperators(filters);
+    }
     
     async resetOperator(operatorId) {
         const existing = await this.getOperator(operatorId);
@@ -312,13 +367,48 @@ class OperatorService {
         const existing = await this.getOperator(operatorId);
         if (!existing) return { success: false, operator: null, error: 'Operator not found' };
 
-        const userId = existing.user_id;
-
-        await this.operatorDataService.deleteOperator(operatorId);
-
         const g8eContext = await this.getOperatorWithSessionContext(operatorId);
-        if (g8eContext) {
-            await this.relay.deregisterOperatorSessionInG8ee(g8eContext).catch(() => {});
+        if (!g8eContext) {
+            // Should be unreachable: getOperatorWithSessionContext only returns null
+            // when the operator does not exist, which we just verified above.
+            return { success: false, error: 'Failed to build g8e context for terminate' };
+        }
+
+        // Authority: g8ee owns the operator document. It writes TERMINATED status
+        // and appends the audit history entry atomically. g8ed must NOT delete the
+        // document afterwards or the audit trail entry just written will be lost.
+        try {
+            await this.relayTerminateOperatorToG8ee(operatorId, g8eContext);
+        } catch (err) {
+            logger.error('[OPERATOR-SERVICE] Failed to relay terminate to g8ee', {
+                operatorId,
+                error: err.message,
+            });
+            return { success: false, id: operatorId, error: err.message };
+        }
+
+        // Best-effort resource cleanup in g8ed
+        if (existing.api_key && this.apiKeyService) {
+            await this.apiKeyService.revokeKey(existing.api_key).catch(err => {
+                logger.warn('[OPERATOR-SERVICE] Failed to revoke API key during termination', { operatorId, error: err.message });
+            });
+        }
+
+        if (existing.operator_cert_serial && this.certificateService) {
+            await this.certificateService.revokeCertificate(existing.operator_cert_serial).catch(err => {
+                logger.warn('[OPERATOR-SERVICE] Failed to revoke certificate during termination', { operatorId, error: err.message });
+            });
+        }
+
+        try {
+            await this.relay.deregisterOperatorSessionInG8ee(g8eContext);
+        } catch (err) {
+            // Deregistration is best-effort cleanup — operator is already TERMINATED
+            // in the authoritative store, so we surface but do not fail the call.
+            logger.warn('[OPERATOR-SERVICE] Failed to deregister operator session after terminate', {
+                operatorId,
+                error: err.message,
+            });
         }
 
         return { success: true, id: operatorId, error: null };

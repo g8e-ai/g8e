@@ -101,12 +101,13 @@ up: build
 
 setup-ssh:
 	@docker cp $(CONTAINER_PREFIX)-01:/opt/demo-key ./.demo-key 2>/dev/null && chmod 600 ./.demo-key
-	@docker exec g8ep mkdir -p /home/g8e/.ssh
-	@cat ./.demo-key | docker exec -i g8ep bash -c "cat > /home/g8e/.ssh/id_ed25519"
+	@# Reset .ssh as root to clear any stale files from prior runs that may have been
+	@# created with different ownership, then chown back to g8e.
+	@docker exec -u root g8ep sh -c 'rm -rf /home/g8e/.ssh && mkdir -p /home/g8e/.ssh && chown -R g8e:g8e /home/g8e/.ssh && chmod 700 /home/g8e/.ssh'
+	@cat ./.demo-key | docker exec -i -u g8e g8ep sh -c 'cat > /home/g8e/.ssh/id_ed25519'
 	@printf 'Host web-node-* node-*\n    User $(SSH_USER)\n    IdentityFile /home/g8e/.ssh/id_ed25519\n    StrictHostKeyChecking accept-new\n' \
-		| docker exec -i g8ep bash -c "cat > /home/g8e/.ssh/config"
-	@docker exec g8ep chmod 700 /home/g8e/.ssh
-	@docker exec g8ep chmod 600 /home/g8e/.ssh/id_ed25519 /home/g8e/.ssh/config
+		| docker exec -i -u g8e g8ep sh -c 'cat > /home/g8e/.ssh/config'
+	@docker exec -u g8e g8ep chmod 600 /home/g8e/.ssh/id_ed25519 /home/g8e/.ssh/config
 
 down:
 	@echo "Stopping fleet..."
