@@ -79,10 +79,6 @@ class G8eHttpContext(G8eBaseModel):
         default_factory=now,
         description="Timestamp of context creation"
     )
-    new_case: bool = Field(
-        default=False,
-        description="True when g8ed signals that no prior case exists and g8ee must create one inline"
-    )
     source_component: ComponentName = Field(
         description="Component that created this context"
     )
@@ -114,6 +110,11 @@ class G8eHttpContext(G8eBaseModel):
     def has_bound_operator(self) -> bool:
         """Returns True if at least one operator has status bound."""
         return any(op.status == OperatorStatus.BOUND for op in self.bound_operators)
+
+    @property
+    def new_case(self) -> bool:
+        """Returns True if this context represents a new case being created."""
+        return self.case_id == NEW_CASE_ID
 
     @classmethod
     async def from_request(cls, request: Request) -> "G8eHttpContext":
@@ -248,7 +249,6 @@ class G8eHttpContext(G8eBaseModel):
             "organization_id": request.headers.get(G8eHeaders.ORGANIZATION_ID.lower()),
             "case_id": case_id,
             "investigation_id": investigation_id,
-            "new_case": new_case,
             "task_id": request.headers.get(G8eHeaders.TASK_ID.lower()),
             "bound_operators": request.headers.get(G8eHeaders.BOUND_OPERATORS.lower(), "[]"),
             "source_component": source_component,

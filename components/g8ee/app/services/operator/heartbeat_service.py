@@ -22,7 +22,7 @@ from app.models.events import BackgroundEvent, SessionEvent
 from app.models.operators import (
     HeartbeatSSEEnvelope,
     OperatorDocument,
-    OperatorHeartbeat,
+    HeartbeatSnapshot,
 )
 from app.models.pubsub_messages import G8eoHeartbeatPayload
 from app.security.request_timestamp import RequestValidationResult, validate_timestamp
@@ -32,7 +32,7 @@ from ..protocols import OperatorDataServiceProtocol, EventServiceProtocol
 logger = logging.getLogger(__name__)
 
 
-class OperatorHeartbeatService:
+class HeartbeatSnapshotService:
 
     def __init__(
         self,
@@ -58,7 +58,7 @@ class OperatorHeartbeatService:
             raise ConfigurationError("client is required for heartbeat pub/sub", component="g8ee")
         self._pubsub_client = client
         self._pubsub_client.on_disconnect(self._on_ws_disconnect)
-        logger.info("OperatorHeartbeatService pubsub client configured")
+        logger.info("HeartbeatSnapshotService pubsub client configured")
 
     async def start(self) -> None:
         if self._ready:
@@ -191,7 +191,7 @@ class OperatorHeartbeatService:
         if not operator:
             return False
 
-        heartbeat = OperatorHeartbeat.from_wire(payload)
+        heartbeat = HeartbeatSnapshot.from_wire(payload)
 
         db_success = await self.operator_data_service.update_operator_heartbeat(
             operator_id=operator_id,

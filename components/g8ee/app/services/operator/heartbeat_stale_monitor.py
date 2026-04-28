@@ -173,7 +173,6 @@ class HeartbeatStaleMonitorService:
         operator_id = operator.id
         from_status = operator.status
         try:
-            # update_operator_status is already defined in OperatorDataServiceProtocol/impl
             success = await self._operator_data_service.update_operator_status(
                 operator_id=operator_id,
                 status=target_status,

@@ -14,7 +14,7 @@
 import pytest
 import re
 from unittest.mock import AsyncMock, MagicMock, patch
-from app.constants import ComponentName
+from app.constants import ComponentName, NEW_CASE_ID
 from app.routers.internal_router import (
     internal_chat,
     stop_ai_processing,
@@ -62,7 +62,7 @@ def g8e_context():
 
 @pytest.mark.asyncio
 async def test_internal_chat_new_case(g8e_context, task_tracker):
-    g8e_context.new_case = True
+    g8e_context.case_id = NEW_CASE_ID
     request = ChatMessageRequest(message="test message", sentinel_mode=True)
     
     # Mock dependencies
@@ -107,7 +107,6 @@ async def test_internal_chat_new_case(g8e_context, task_tracker):
 @pytest.mark.asyncio
 async def test_internal_chat_missing_investigation(g8e_context, task_tracker):
     g8e_context.investigation_id = None
-    g8e_context.new_case = False
     request = ChatMessageRequest(message="test message", sentinel_mode=True)
     
     mock_platform_settings = MagicMock()

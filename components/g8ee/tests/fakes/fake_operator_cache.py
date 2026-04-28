@@ -13,7 +13,8 @@
 
 """Typed fake for OperatorDataServiceProtocol."""
 
-from app.constants import OperatorStatus
+from app.constants import OperatorStatus, OperatorHistoryEventType, ComponentName
+from app.models.cache import CacheOperationResult
 from app.services.protocols import OperatorDataServiceProtocol
 
 
@@ -42,8 +43,22 @@ class FakeOperatorCache:
     async def create_operator(self, operator) -> bool:
         return True
 
-    async def update_document(self, collection: str, document_id: str, data: dict, merge: bool = True):
+    async def update_operator(self, operator) -> bool:
         return True
+
+    async def add_history_entry(
+        self,
+        operator_id: str,
+        event_type: OperatorHistoryEventType,
+        actor: ComponentName,
+        summary: str,
+        details: dict[str, object] | None = None,
+        additional_updates: dict[str, object] | None = None,
+    ):
+        return None
+
+    async def update_document(self, collection: str, document_id: str, data: dict, merge: bool = True) -> CacheOperationResult:
+        return CacheOperationResult(success=True, document_id=document_id)
 
     async def update_operator_heartbeat(self, operator_id, heartbeat, investigation_id, case_id):
         return True
@@ -55,9 +70,6 @@ class FakeOperatorCache:
         return True
 
     async def add_operator_approval(self, operator_id, event_type, metadata):
-        return True
-
-    async def bind_operators(self, operator_ids, web_session_id, context):
         return True
 
 

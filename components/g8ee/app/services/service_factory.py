@@ -57,8 +57,8 @@ from app.services.protocols import (
     OperatorDataServiceProtocol,
     OperatorLifecycleServiceProtocol,
     MemoryDataServiceProtocol,
-    OperatorHeartbeatServiceProtocol,
-    OperatorHeartbeatStaleMonitorServiceProtocol,
+    HeartbeatSnapshotServiceProtocol,
+    HeartbeatSnapshotStaleMonitorServiceProtocol,
     EventServiceProtocol,
     AIResponseAnalyzerProtocol,
     ToolExecutorProtocol,
@@ -69,7 +69,7 @@ from app.services.operator.command_service import OperatorCommandService
 from app.services.operator.operator_data_service import OperatorDataService
 from app.services.operator.operator_lifecycle_service import OperatorLifecycleService
 from app.services.data.case_data_service import CaseDataService
-from app.services.operator.heartbeat_service import OperatorHeartbeatService
+from app.services.operator.heartbeat_service import HeartbeatSnapshotService
 from app.models.settings import G8eePlatformSettings
 
 if TYPE_CHECKING:
@@ -79,7 +79,7 @@ if TYPE_CHECKING:
     from app.services.investigation.investigation_data_service import InvestigationDataService
     from app.services.operator.operator_data_service import OperatorDataService
     from app.services.investigation.memory_data_service import MemoryDataService
-    from app.services.operator.heartbeat_service import OperatorHeartbeatService
+    from app.services.operator.heartbeat_service import HeartbeatSnapshotService
     from app.services.ai.response_analyzer import AIResponseAnalyzer
     from app.services.operator.approval_service import OperatorApprovalService
 
@@ -115,8 +115,8 @@ class DomainServices:
 
 @dataclass(frozen=True)
 class OperatorServices:
-    heartbeat_service: OperatorHeartbeatService | OperatorHeartbeatServiceProtocol
-    heartbeat_stale_monitor: HeartbeatStaleMonitorService | OperatorHeartbeatStaleMonitorServiceProtocol
+    heartbeat_service: HeartbeatSnapshotService | HeartbeatSnapshotServiceProtocol
+    heartbeat_stale_monitor: HeartbeatStaleMonitorService | HeartbeatSnapshotStaleMonitorServiceProtocol
     operator_session_service: OperatorSessionService
     operator_auth_service: OperatorAuthService
     session_auth_listener: SessionAuthListener
@@ -157,8 +157,8 @@ class AllServices:
     memory_generation_service: MemoryGenerationService
     reputation_service: ReputationService
     ssh_inventory_service: SshInventoryService
-    heartbeat_service: OperatorHeartbeatService | OperatorHeartbeatServiceProtocol
-    heartbeat_stale_monitor: HeartbeatStaleMonitorService | OperatorHeartbeatStaleMonitorServiceProtocol
+    heartbeat_service: HeartbeatSnapshotService | HeartbeatSnapshotServiceProtocol
+    heartbeat_stale_monitor: HeartbeatStaleMonitorService | HeartbeatSnapshotStaleMonitorServiceProtocol
     operator_session_service: OperatorSessionService
     operator_auth_service: OperatorAuthService
     session_auth_listener: SessionAuthListener
@@ -318,7 +318,7 @@ class ServiceFactory:
             operator_data_service=data_services.operator_data_service, # type: ignore[arg-type]
         )
 
-        heartbeat_service = OperatorHeartbeatService(
+        heartbeat_service = HeartbeatSnapshotService(
             operator_data_service=data_services.operator_data_service,
             event_service=core_services.g8ed_event_service,
         )

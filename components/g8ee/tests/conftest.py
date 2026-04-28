@@ -552,7 +552,7 @@ def cloud_operator_doc():
     from app.models.operators import (
         OperatorDocument,
         OperatorSystemInfo,
-        OperatorHeartbeat,
+        HeartbeatSnapshot,
         SystemInfoOSDetails,
         SystemInfoUserDetails,
         SystemInfoDiskDetails,
@@ -574,7 +574,7 @@ def cloud_operator_doc():
             memory_mb=8192,
             public_ip="54.123.45.67",
         ),
-        latest_heartbeat_snapshot=OperatorHeartbeat(
+        latest_heartbeat_snapshot=HeartbeatSnapshot(
             os_details=SystemInfoOSDetails(distro="Amazon Linux", kernel="6.1.0", version="2023"),
             user_details=SystemInfoUserDetails(username="ec2-user", home="/home/ec2-user", shell="/bin/bash"),
             disk_details=SystemInfoDiskDetails(percent=45.2, total_gb=100, free_gb=54.8),
@@ -589,7 +589,7 @@ def binary_operator_doc():
     from app.models.operators import (
         OperatorDocument,
         OperatorSystemInfo,
-        OperatorHeartbeat,
+        HeartbeatSnapshot,
         SystemInfoOSDetails,
         SystemInfoUserDetails,
         SystemInfoDiskDetails,
@@ -609,7 +609,7 @@ def binary_operator_doc():
             cpu_count=8,
             memory_mb=16384,
         ),
-        latest_heartbeat_snapshot=OperatorHeartbeat(
+        latest_heartbeat_snapshot=HeartbeatSnapshot(
             os_details=SystemInfoOSDetails(distro="Ubuntu", kernel="5.15.0", version="22.04"),
             user_details=SystemInfoUserDetails(username="root", home="/root", shell="/bin/bash"),
             disk_details=SystemInfoDiskDetails(percent=10.0, total_gb=500, free_gb=450),

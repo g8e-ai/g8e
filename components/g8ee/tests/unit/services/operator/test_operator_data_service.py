@@ -130,3 +130,42 @@ class TestOperatorDataService:
         assert kwargs["document_id"] == operator_id
         assert kwargs["array_field"] == "activity_log"
 
+    async def test_update_operator_status_success(self, service, mock_cache):
+        operator_id = "op-123"
+        mock_cache.update_document.return_value = CacheOperationResult(success=True)
+
+        success = await service.update_operator_status(operator_id, OperatorStatus.STALE)
+
+        assert success is True
+        mock_cache.update_document.assert_called_once()
+        _, kwargs = mock_cache.update_document.call_args
+        assert kwargs["document_id"] == operator_id
+        assert kwargs["data"]["status"] == OperatorStatus.STALE
+        assert "updated_at" in kwargs["data"]
+        assert kwargs["merge"] is True
+
+    async def test_update_operator_status_empty_id_raises_validation_error(self, service):
+        with pytest.raises(ValidationError, match="operator_id is required"):
+            await service.update_operator_status("", OperatorStatus.OFFLINE)
+
+    async def test_update_operator_status_failure_raises_external_service_error(self, service, mock_cache):
+        operator_id = "op-123"
+        mock_cache.update_document.return_value = CacheOperationResult(success=False, error="db down")
+
+        with pytest.raises(
+            ExternalServiceError,
+            match="Failed to update Operator op-123 status: db down",
+        ):
+            await service.update_operator_status(operator_id, OperatorStatus.STALE)
+
+    async def test_satisfies_operator_data_service_protocol(self, service):
+        """Regression: ``HeartbeatStaleMonitorService`` is typed against
+        ``OperatorDataServiceProtocol`` and calls ``update_operator_status``.
+        A protocol-conformance check would have caught the gap where the
+        protocol declared a method the implementation lacked (or vice versa).
+        """
+        from app.services.protocols import OperatorDataServiceProtocol
+
+        assert isinstance(service, OperatorDataServiceProtocol)
+        assert hasattr(service, "update_operator_status")
+

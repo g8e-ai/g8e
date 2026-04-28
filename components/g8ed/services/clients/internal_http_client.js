@@ -93,7 +93,7 @@ class InternalHttpClient{
             throw new Error('ENFORCEMENT VIOLATION: buildG8eContextHeaders requires G8eHttpContext instance');
         }
 
-        const isNewCase = context.new_case;
+        const isNewCase = !context.case_id;
 
         const headers = {};
 

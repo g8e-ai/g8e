@@ -44,7 +44,7 @@ from app.models.operators import (
     CommandResultRecord,
     OperatorDocument,
     OperatorHistoryEntry,
-    OperatorHeartbeat,
+    HeartbeatSnapshot,
     OperatorSystemInfo,
 )
 from app.models import BindOperatorsRequest, BindOperatorsResponse
@@ -202,7 +202,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
     async def update_operator_heartbeat(
         self,
         operator_id: str,
-        heartbeat: OperatorHeartbeat,
+        heartbeat: HeartbeatSnapshot,
         investigation_id: str | None,
         case_id: str | None,
     ) -> bool:
@@ -335,4 +335,32 @@ class OperatorDataService(OperatorDataServiceProtocol):
             content=f"{event_type.value} ({metadata.approval_id})",
             metadata=metadata,
         )
+
+    async def update_operator_status(
+        self,
+        operator_id: str,
+        status: OperatorStatus,
+    ) -> bool:
+        """Update operator status."""
+        if not operator_id:
+            raise ValidationError("operator_id is required")
+
+        now_timestamp = now()
+        updates: dict[str, object] = {
+            "status": status,
+            "updated_at": now_timestamp,
+        }
+
+        result = await self.cache.update_document(
+            collection=self.collection,
+            document_id=operator_id,
+            data=updates,
+            merge=True,
+        )
+
+        if result.success:
+            logger.info(f"Updated Operator {operator_id} status to {status}")
+            return True
+
+        raise ExternalServiceError(f"Failed to update Operator {operator_id} status: {result.error}", service_name="operator_service")
 

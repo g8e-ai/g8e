@@ -213,7 +213,7 @@ class OperatorDocument(G8eIdentifiableModel):
     last_heartbeat: UTCDatetime | None = Field(default=None, description="Last heartbeat timestamp")
     terminated_at: UTCDatetime | None = Field(default=None, description="When the operator was terminated")
     system_info: OperatorSystemInfo | None = Field(default=None, description="System information")
-    latest_heartbeat_snapshot: OperatorHeartbeat | None = Field(default=None, description="Latest heartbeat metrics")
+    latest_heartbeat_snapshot: HeartbeatSnapshot | None = Field(default=None, description="Latest heartbeat metrics")
     investigation_id: str | None = Field(default=None, description="Current investigation ID")
     case_id: str | None = Field(default=None, description="Current case ID")
     api_key: str | None = Field(default=None, description="Operator API key (authority: g8ee)")
@@ -249,7 +249,7 @@ class OperatorDocument(G8eIdentifiableModel):
     def coerce_heartbeat_snapshot(cls, v: object) -> object:
         if isinstance(v, dict):
             try:
-                return OperatorHeartbeat.model_validate(v)
+                return HeartbeatSnapshot.model_validate(v)
             except Exception:
                 return None
         return v
@@ -340,7 +340,7 @@ class HeartbeatVersionInfo(G8eBaseModel):
 
 
 
-class OperatorHeartbeat(G8eBaseModel):
+class HeartbeatSnapshot(G8eBaseModel):
     """
     Clean, normalized heartbeat data structure.
     
@@ -435,8 +435,8 @@ class OperatorHeartbeat(G8eBaseModel):
     ledger_enabled: bool = Field(default=False, description="True when LFAA ledger mirroring is active")
 
     @classmethod
-    def from_wire(cls, payload: G8eoHeartbeatPayload) -> "OperatorHeartbeat":
-        """Create OperatorHeartbeat from the typed g8eo wire payload.
+    def from_wire(cls, payload: G8eoHeartbeatPayload) -> "HeartbeatSnapshot":
+        """Create HeartbeatSnapshot from the typed g8eo wire payload.
 
         Canonical wire shape: shared/models/wire/heartbeat.json.
         Validation happens once at the pub/sub boundary in heartbeat_service.py
@@ -842,7 +842,7 @@ class HeartbeatSSEEnvelope(G8eBaseModel):
 
     Canonical shape: shared/models/wire/heartbeat_sse.json#envelope. Authorship
     boundary: g8ee owns `operator_id` and `status` (the authoritative value from
-    OperatorDocument); `metrics` carries the g8eo-authored OperatorHeartbeat
+    OperatorDocument); `metrics` carries the g8eo-authored HeartbeatSnapshot
     snapshot verbatim (shared/models/wire/heartbeat.json#operator_heartbeat) —
     the same instance persisted as `latest_heartbeat_snapshot` on the operator
     document. There is no flat projection: wire, persistence, and browser
@@ -852,17 +852,17 @@ class HeartbeatSSEEnvelope(G8eBaseModel):
 
     operator_id: str = Field(description="Operator ID")
     status: OperatorStatus = Field(description="Authoritative operator status from OperatorDocument")
-    metrics: "OperatorHeartbeat" = Field(description="Full OperatorHeartbeat snapshot (nested)")
+    metrics: "HeartbeatSnapshot" = Field(description="Full HeartbeatSnapshot snapshot (nested)")
 
     @classmethod
     def from_heartbeat(
         cls,
         operator_id: str,
         status: OperatorStatus,
-        heartbeat: "OperatorHeartbeat",
+        heartbeat: "HeartbeatSnapshot",
     ) -> "HeartbeatSSEEnvelope":
         """Build the envelope from an authoritative operator_id+status plus the
-        full OperatorHeartbeat. `metrics` holds the heartbeat instance as-is."""
+        full HeartbeatSnapshot. `metrics` holds the heartbeat instance as-is."""
         return cls(
             operator_id=operator_id,
             status=status,

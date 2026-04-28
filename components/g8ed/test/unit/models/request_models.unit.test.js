@@ -64,7 +64,6 @@ describe('G8eHttpContext [UNIT - PURE LOGIC]', () => {
         expect(ctx.bound_operators).toEqual([]);
         expect(ctx.execution_id).toBeNull();
         expect(ctx.timestamp).toBeInstanceOf(Date);
-        expect(ctx.new_case).toBe(true);
         expect(ctx.source_component).toBe('g8ed');
     });
 
@@ -84,7 +83,6 @@ describe('G8eHttpContext [UNIT - PURE LOGIC]', () => {
             bound_operators: [boundOp],
             execution_id: 'exec-jkl',
             timestamp: timestamp,
-            new_case: false,
             source_component: 'g8ee',
         });
         expect(ctx.organization_id).toBe('org-789');
@@ -94,7 +92,6 @@ describe('G8eHttpContext [UNIT - PURE LOGIC]', () => {
         expect(ctx.bound_operators).toEqual([boundOp]);
         expect(ctx.execution_id).toBe('exec-jkl');
         expect(ctx.timestamp).toEqual(timestamp);
-        expect(ctx.new_case).toBe(false);
         expect(ctx.source_component).toBe('g8ee');
     });
 
@@ -554,7 +551,7 @@ describe('AttestationResponseJSON [UNIT - PURE LOGIC]', () => {
             id: 'cred-123',
             rawId: 'raw-cred-123',
             type: 'public-key',
-        })).toThrow('AttestationResponseJSON requires response object');
+        })).toThrow('response is required');
     });
 
     it('throws when response is not an object', () => {
@@ -563,7 +560,7 @@ describe('AttestationResponseJSON [UNIT - PURE LOGIC]', () => {
             rawId: 'raw-cred-123',
             type: 'public-key',
             response: 'invalid',
-        })).toThrow('AttestationResponseJSON requires response object');
+        })).toThrow('AttestationResponseJSON requires response.clientDataJSON string');
     });
 
     it('throws when response.clientDataJSON is missing', () => {
@@ -657,7 +654,7 @@ describe('AssertionResponseJSON [UNIT - PURE LOGIC]', () => {
             id: 'cred-123',
             rawId: 'raw-cred-123',
             type: 'public-key',
-        })).toThrow('AssertionResponseJSON requires response object');
+        })).toThrow('response is required');
     });
 
     it('throws when response is not an object', () => {
@@ -666,7 +663,7 @@ describe('AssertionResponseJSON [UNIT - PURE LOGIC]', () => {
             rawId: 'raw-cred-123',
             type: 'public-key',
             response: 'invalid',
-        })).toThrow('AssertionResponseJSON requires response object');
+        })).toThrow('AssertionResponseJSON requires response.clientDataJSON string');
     });
 
     it('throws when response.clientDataJSON is missing', () => {

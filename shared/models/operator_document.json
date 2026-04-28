@@ -250,7 +250,7 @@
       "latest_heartbeat_snapshot": {
         "type": "object",
         "required": false,
-        "description": "Most recent heartbeat performance snapshot for quick UI reads. Shape: { timestamp, cpu_percent, memory_percent, disk_percent, network_latency, uptime, uptime_seconds }. Full heartbeat data is in wire/heartbeat.json."
+        "description": "Most recent heartbeat metrics snapshot. Shape matches HeartbeatSnapshot (shared/models/wire/heartbeat.json#operator_heartbeat): nested objects for system_identity, performance, network, uptime, etc. Strictly enforced across the wire."
       }
     },
 
@@ -299,7 +299,11 @@
       "operator_session_id": { "type": "string", "required": false },
       "last_heartbeat": { "type": "string", "format": "iso8601", "required": false },
       "system_info": { "type": "object", "required": false, "ref": "wire/system_info.json#system_info" },
-      "latest_heartbeat_snapshot": { "type": "object", "required": false },
+      "latest_heartbeat_snapshot": {
+        "type": "object",
+        "required": false,
+        "description": "Most recent heartbeat metrics snapshot (nested HeartbeatSnapshot shape). Strictly enforced across the wire."
+      },
       "investigation_id": { "type": "string", "required": false },
       "case_id": { "type": "string", "required": false },
       "is_active": {

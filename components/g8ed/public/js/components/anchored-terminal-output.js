@@ -21,7 +21,7 @@
 
 import { templateLoader } from '../utils/template-loader.js';
 import { TribunalOutcome, EventType } from '../constants/events.js';
-import { TribunalMemberIcons, AuditorIcon } from '../constants/agents.js';
+import { TribunalMemberIcons } from '../constants/agents.js';
 
 export class TerminalOutputMixin {
     _cancelPendingTimers() {
@@ -619,14 +619,8 @@ export class TerminalOutputMixin {
             </span>`;
         }).join('');
 
-        const auditorDot = `<span class="tribunal__dot tribunal__dot--auditor" title="Auditor">
-            <span class="material-symbols-outlined tribunal__dot-icon">${AuditorIcon}</span>
-        </span>`;
-
         const tribunalHtml =
             `<span class="tribunal__passes">${dots}</span>` +
-            `<span class="tribunal__gap"></span>` +
-            `<span class="tribunal__passes tribunal__passes--auditor">${auditorDot}</span>` +
             `<span class="tribunal__status">Generating alternatives...</span>` +
             `<span class="tribunal__spinner"></span>`;
 
@@ -686,17 +680,28 @@ export class TerminalOutputMixin {
         if (spinner) spinner.remove();
 
         const statusEl = widget.querySelector('.tribunal__status');
-        if (statusEl) {
-            statusEl.remove();
-        }
+        if (!statusEl) return;
 
-        const auditorDot = widget.querySelector('.tribunal__dot--auditor');
-        if (auditorDot) {
-            if (outcome === TribunalOutcome.VERIFICATION_FAILED) {
-                auditorDot.classList.add('tribunal__dot--fail');
-            } else {
-                auditorDot.classList.add('tribunal__dot--ok');
-            }
+        const label = this._tribunalOutcomeLabel(outcome);
+        statusEl.textContent = finalCommand ? `${label} \u00b7 ${finalCommand}` : label;
+        statusEl.classList.add('tribunal__status--done');
+        if (outcome === TribunalOutcome.CONSENSUS_FAILED) {
+            statusEl.classList.add('tribunal__status--failed');
+        }
+    }
+
+    _tribunalOutcomeLabel(outcome) {
+        switch (outcome) {
+            case TribunalOutcome.CONSENSUS:
+                return 'Consensus';
+            case TribunalOutcome.VERIFIED:
+                return 'Verified';
+            case TribunalOutcome.VERIFICATION_FAILED:
+                return 'Revised';
+            case TribunalOutcome.CONSENSUS_FAILED:
+                return 'Consensus failed';
+            default:
+                return 'Complete';
         }
     }
 

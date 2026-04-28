@@ -55,7 +55,7 @@ from app.models.operators import (
     FileEditApprovalRequest,
     IntentApprovalRequest,
     OperatorDocument,
-    OperatorHeartbeat,
+    HeartbeatSnapshot,
     PendingApproval,
     StreamApprovalRequest,
     TargetSystem,
@@ -309,6 +309,19 @@ class OperatorDataServiceProtocol(Protocol):
         """Atomic status + history update under a keyed lock."""
         ...
 
+    async def update_operator_status(
+        self,
+        operator_id: str,
+        status: OperatorStatus,
+    ) -> bool:
+        """Update an operator's ``status`` field (no history entry).
+
+        Used by reconcilers (e.g. ``HeartbeatStaleMonitorService``) that need a
+        plain status write without the audit-trail semantics of
+        ``add_history_entry``.
+        """
+        ...
+
     async def update_document(
         self,
         collection: str,
@@ -322,7 +335,7 @@ class OperatorDataServiceProtocol(Protocol):
     async def update_operator_heartbeat(
         self,
         operator_id: str,
-        heartbeat: OperatorHeartbeat,
+        heartbeat: HeartbeatSnapshot,
         investigation_id: str | None,
         case_id: str | None,
     ) -> bool:
@@ -522,7 +535,7 @@ class PubSubServiceProtocol(Protocol):
     async def publish_command(self, operator_id: str, operator_session_id: str, command_data: G8eMessage) -> int: ...
 
 @runtime_checkable
-class OperatorHeartbeatStaleMonitorServiceProtocol(Protocol):
+class HeartbeatSnapshotStaleMonitorServiceProtocol(Protocol):
     async def start(self) -> None:
         ...
 
@@ -534,7 +547,7 @@ class OperatorHeartbeatStaleMonitorServiceProtocol(Protocol):
 
 
 @runtime_checkable
-class OperatorHeartbeatServiceProtocol(Protocol):
+class HeartbeatSnapshotServiceProtocol(Protocol):
     @property
     def operator_data_service(self) -> OperatorDataServiceProtocol: ...
     @property

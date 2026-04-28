@@ -21,8 +21,8 @@ Coverage:
 - HeartbeatNetworkInfo / HeartbeatNetworkInterface: connectivity_status shape
 - HeartbeatVersionInfo: operator_version, status
 - G8eoHeartbeatCapabilityFlags: nested shape, defaults
-- OperatorHeartbeat.from_wire: full round-trip from a complete G8eoHeartbeatPayload
-- HeartbeatSSEEnvelope.from_heartbeat: envelope carries the OperatorHeartbeat verbatim as `metrics`
+- HeartbeatSnapshot.from_wire: full round-trip from a complete G8eoHeartbeatPayload
+- HeartbeatSSEEnvelope.from_heartbeat: envelope carries the HeartbeatSnapshot verbatim as `metrics`
 - HeartbeatSSEEnvelope serialization: nested models serialized to dicts at the wire boundary
 - _coerce_heartbeat_type: valid values pass through, unknown falls back to AUTOMATIC
 """
@@ -37,7 +37,7 @@ from app.models.operators import (
     HeartbeatSystemIdentity,
     HeartbeatUptimeInfo,
     HeartbeatVersionInfo,
-    OperatorHeartbeat,
+    HeartbeatSnapshot,
     _coerce_heartbeat_type,
 )
 from app.models.pubsub_messages import (
@@ -380,13 +380,13 @@ class TestCoerceHeartbeatType:
 
 
 # =============================================================================
-# OperatorHeartbeat.from_wire — full round-trip
+# HeartbeatSnapshot.from_wire — full round-trip
 # =============================================================================
 
-class TestOperatorHeartbeatFromWireFull:
+class TestHeartbeatSnapshotFromWireFull:
 
     def test_system_identity_all_fields_mapped(self):
-        hb = OperatorHeartbeat.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(_full_payload())
         assert hb.system_identity.hostname == "testhost"
         assert hb.system_identity.os == "linux"
         assert hb.system_identity.architecture == "amd64"
@@ -396,7 +396,7 @@ class TestOperatorHeartbeatFromWireFull:
         assert hb.system_identity.memory_mb == 16384
 
     def test_performance_metrics_all_fields_mapped(self):
-        hb = OperatorHeartbeat.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(_full_payload())
         assert hb.performance.cpu_percent == 42.5
         assert hb.performance.memory_percent == 61.0
         assert hb.performance.disk_percent == 35.0
@@ -407,21 +407,21 @@ class TestOperatorHeartbeatFromWireFull:
         assert hb.performance.disk_total_gb == 500.0
 
     def test_network_latency_field_name_not_network_latency_ms(self):
-        hb = OperatorHeartbeat.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(_full_payload())
         assert hasattr(hb.performance, "network_latency")
         assert not hasattr(hb.performance, "network_latency_ms")
 
     def test_uptime_seconds_is_int(self):
-        hb = OperatorHeartbeat.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(_full_payload())
         assert hb.uptime.uptime_seconds == 191400
         assert isinstance(hb.uptime.uptime_seconds, int)
 
     def test_uptime_display_mapped_from_uptime_field(self):
-        hb = OperatorHeartbeat.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(_full_payload())
         assert hb.uptime.uptime_display == "2 days, 4:30:00"
 
     def test_network_info_mapped(self):
-        hb = OperatorHeartbeat.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(_full_payload())
         assert hb.network.public_ip == "1.2.3.4"
         assert hb.network.interfaces == ["eth0", "lo"]
         assert hb.network.connectivity_status is not None
@@ -430,19 +430,19 @@ class TestOperatorHeartbeatFromWireFull:
         assert hb.network.connectivity_status[0].ip == "192.168.1.10"
 
     def test_version_info_mapped(self):
-        hb = OperatorHeartbeat.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(_full_payload())
         assert hb.version_info.operator_version == "1.2.3"
 
     def test_capability_flags_local_storage_enabled(self):
-        hb = OperatorHeartbeat.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(_full_payload())
         assert hb.local_storage_enabled is True
 
     def test_capability_flags_git_available(self):
-        hb = OperatorHeartbeat.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(_full_payload())
         assert hb.git_available is True
 
     def test_capability_flags_ledger_enabled_false(self):
-        hb = OperatorHeartbeat.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(_full_payload())
         assert hb.ledger_enabled is False
 
     def test_capability_flags_all_false_when_default(self):
@@ -454,53 +454,53 @@ class TestOperatorHeartbeatFromWireFull:
                 ledger_enabled=False,
             )
         )
-        hb = OperatorHeartbeat.from_wire(payload)
+        hb = HeartbeatSnapshot.from_wire(payload)
         assert hb.local_storage_enabled is False
         assert hb.git_available is False
         assert hb.ledger_enabled is False
 
     def test_heartbeat_type_automatic(self):
-        hb = OperatorHeartbeat.from_wire(_full_payload(heartbeat_type=HeartbeatType.AUTOMATIC))
+        hb = HeartbeatSnapshot.from_wire(_full_payload(heartbeat_type=HeartbeatType.AUTOMATIC))
         assert hb.heartbeat_type == HeartbeatType.AUTOMATIC.value
 
     def test_heartbeat_type_bootstrap(self):
-        hb = OperatorHeartbeat.from_wire(_full_payload(heartbeat_type=HeartbeatType.BOOTSTRAP))
+        hb = HeartbeatSnapshot.from_wire(_full_payload(heartbeat_type=HeartbeatType.BOOTSTRAP))
         assert hb.heartbeat_type == HeartbeatType.BOOTSTRAP.value
 
     def test_heartbeat_type_requested(self):
-        hb = OperatorHeartbeat.from_wire(_full_payload(heartbeat_type=HeartbeatType.REQUESTED))
+        hb = HeartbeatSnapshot.from_wire(_full_payload(heartbeat_type=HeartbeatType.REQUESTED))
         assert hb.heartbeat_type == HeartbeatType.REQUESTED.value
 
     def test_os_details_mapped(self):
-        hb = OperatorHeartbeat.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(_full_payload())
         assert hb.os_details.kernel == "5.15.0"
         assert hb.os_details.distro == "Ubuntu"
         assert hb.os_details.version == "22.04"
 
     def test_user_details_mapped(self):
-        hb = OperatorHeartbeat.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(_full_payload())
         assert hb.user_details.username == "admin"
         assert hb.user_details.shell == "/bin/bash"
 
     def test_disk_details_mapped(self):
-        hb = OperatorHeartbeat.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(_full_payload())
         assert hb.disk_details.total_gb == 500.0
         assert hb.disk_details.used_gb == 120.0
 
     def test_memory_details_mapped(self):
-        hb = OperatorHeartbeat.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(_full_payload())
         assert hb.memory_details.total_mb == 16384
         assert hb.memory_details.used_mb == 9830
 
     def test_environment_mapped(self):
-        hb = OperatorHeartbeat.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(_full_payload())
         assert hb.environment.pwd == "/home/admin"
         assert hb.environment.timezone == "UTC"
         assert hb.environment.is_container is False
 
     def test_timestamp_is_set(self):
         from datetime import datetime
-        hb = OperatorHeartbeat.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(_full_payload())
         assert isinstance(hb.timestamp, datetime)
 
     def test_minimal_payload_does_not_raise(self):
@@ -510,7 +510,7 @@ class TestOperatorHeartbeatFromWireFull:
             operator_id="op-min",
             operator_session_id="sess-min",
         )
-        hb = OperatorHeartbeat.from_wire(payload)
+        hb = HeartbeatSnapshot.from_wire(payload)
         assert hb is not None
         assert hb.performance.cpu_percent is None
         assert hb.uptime.uptime_seconds is None
@@ -522,12 +522,12 @@ class TestOperatorHeartbeatFromWireFull:
 
 class TestHeartbeatSSEEnvelope:
     """Verifies the authorship split: operator_id + status are g8ee-owned
-    envelope fields; `metrics` carries the g8eo-authored OperatorHeartbeat
+    envelope fields; `metrics` carries the g8eo-authored HeartbeatSnapshot
     verbatim (same nested shape that is persisted). Status never leaks into
     metrics."""
 
-    def _make_heartbeat(self) -> OperatorHeartbeat:
-        return OperatorHeartbeat.from_wire(_full_payload())
+    def _make_heartbeat(self) -> HeartbeatSnapshot:
+        return HeartbeatSnapshot.from_wire(_full_payload())
 
     def _make_envelope(self, status: OperatorStatus = OperatorStatus.ACTIVE) -> HeartbeatSSEEnvelope:
         return HeartbeatSSEEnvelope.from_heartbeat("op-sse-001", status, self._make_heartbeat())
@@ -553,7 +553,7 @@ class TestHeartbeatSSEEnvelope:
 
     def test_metrics_is_operator_heartbeat(self):
         env = self._make_envelope()
-        assert isinstance(env.metrics, OperatorHeartbeat)
+        assert isinstance(env.metrics, HeartbeatSnapshot)
 
     def test_metrics_is_same_instance_as_source_heartbeat(self):
         hb = self._make_heartbeat()
@@ -599,7 +599,7 @@ class TestHeartbeatSSEEnvelope:
         assert m.ledger_enabled is False
 
     def test_heartbeat_type_preserved(self):
-        hb = OperatorHeartbeat.from_wire(_full_payload(heartbeat_type=HeartbeatType.BOOTSTRAP))
+        hb = HeartbeatSnapshot.from_wire(_full_payload(heartbeat_type=HeartbeatType.BOOTSTRAP))
         env = HeartbeatSSEEnvelope.from_heartbeat("op-sse-001", OperatorStatus.ACTIVE, hb)
         assert env.metrics.heartbeat_type == HeartbeatType.BOOTSTRAP
 
@@ -642,7 +642,7 @@ class TestHeartbeatSSEEnvelopeFlattenForWire:
     no JSON-as-string coercion)."""
 
     def _make_envelope(self) -> HeartbeatSSEEnvelope:
-        hb = OperatorHeartbeat.from_wire(_full_payload())
+        hb = HeartbeatSnapshot.from_wire(_full_payload())
         return HeartbeatSSEEnvelope.from_heartbeat("op-sse-001", OperatorStatus.ACTIVE, hb)
 
     def test_envelope_top_level_shape(self):
@@ -683,7 +683,7 @@ class TestHeartbeatSSEEnvelopeFlattenForWire:
         """A minimal heartbeat leaves nested leaf fields None; model_dump should
         omit them (G8eBaseModel drops None by default) while keeping the
         nested sections themselves."""
-        hb = OperatorHeartbeat.from_wire(
+        hb = HeartbeatSnapshot.from_wire(
             G8eoHeartbeatPayload(
                 event_type="g8e.v1.operator.heartbeat.sent",
                 operator_id="op-min",

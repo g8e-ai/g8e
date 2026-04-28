@@ -278,13 +278,12 @@ export class TerminalExecutionMixin {
         approval.removeAttribute('data-approval-refining');
         approval.id = approvalId;
 
-        // Preserve tribunal dots/gap/auditor (final state) when upgrading a refining widget.
+        // Preserve tribunal passes + status (final state) when upgrading a refining widget.
         let tribunalHtml = '';
         if (refiningWidget) {
             const passesEl = refiningWidget.querySelector('.tribunal__passes');
-            const gapEl = refiningWidget.querySelector('.tribunal__gap');
-            const auditorPassesEl = refiningWidget.querySelector('.tribunal__passes--auditor');
-            tribunalHtml = (passesEl ? passesEl.outerHTML : '') + (gapEl ? gapEl.outerHTML : '') + (auditorPassesEl ? auditorPassesEl.outerHTML : '');
+            const statusEl = refiningWidget.querySelector('.tribunal__status');
+            tribunalHtml = (passesEl ? passesEl.outerHTML : '') + (statusEl ? statusEl.outerHTML : '');
         }
 
         let headerText = 'Command';

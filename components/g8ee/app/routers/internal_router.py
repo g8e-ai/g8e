@@ -98,7 +98,7 @@ from app.models.events import SessionEvent
 from app.models.http_context import G8eHttpContext
 from app.services.operator.session_auth_listener import SessionAuthListener
 from app.services.operator.operator_data_service import OperatorDataService
-from app.services.operator.heartbeat_service import OperatorHeartbeatService
+from app.services.operator.heartbeat_service import HeartbeatSnapshotService
 from app.services.operator.approval_service import OperatorApprovalService
 from app.services.operator.command_service import OperatorCommandService
 from app.services.operator.operator_session_service import OperatorSessionService
@@ -1254,7 +1254,7 @@ async def unbind_operators(
     )
 
 
-@router.post("/operators/authenticate", response_model=OperatorAuthenticateResponse)
+@router.post(InternalApiPaths.G8EE_OPERATORS_AUTHENTICATE, response_model=OperatorAuthenticateResponse)
 async def authenticate_operator(
     request: InternalOperatorAuthCall,
     operator_auth_service: OperatorAuthService = Depends(get_g8ee_operator_auth_service),
@@ -1307,7 +1307,7 @@ async def register_device_link_operator(
     return OperatorDeviceLinkRegisterResponse(success=False, error=result.get("error"))
 
 
-@router.post("/operators/validate-session", response_model=OperatorSessionValidateResponse)
+@router.post(InternalApiPaths.G8EE_OPERATORS_VALIDATE_SESSION, response_model=OperatorSessionValidateResponse)
 async def validate_operator_session(
     request: OperatorSessionValidateRequest,
     session_service: OperatorSessionService = Depends(get_g8ee_operator_session_service),
@@ -1332,7 +1332,7 @@ async def validate_operator_session(
         return OperatorSessionValidateResponse(success=False, valid=False, error=str(e))
 
 
-@router.post("/operators/refresh-session", response_model=OperatorSessionRefreshResponse)
+@router.post(InternalApiPaths.G8EE_OPERATORS_REFRESH_SESSION, response_model=OperatorSessionRefreshResponse)
 async def refresh_operator_session(
     request: OperatorSessionRefreshRequest,
     session_service: OperatorSessionService = Depends(get_g8ee_operator_session_service),
@@ -1362,7 +1362,7 @@ async def refresh_operator_session(
 @router.post(InternalApiPaths.G8EE_OPERATORS_REGISTER_SESSION, response_model=OperatorSessionRegisteredResponse)
 async def register_operator_session(
     request: OperatorSessionRegistrationRequest,
-    heartbeat_service: OperatorHeartbeatService = Depends(get_g8ee_heartbeat_service),
+    heartbeat_service: HeartbeatSnapshotService = Depends(get_g8ee_heartbeat_service),
     g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
 ):
     """
@@ -1395,7 +1395,7 @@ async def register_operator_session(
 @router.post(InternalApiPaths.G8EE_OPERATORS_DEREGISTER_SESSION, response_model=OperatorSessionRegisteredResponse)
 async def deregister_operator_session(
     request: OperatorSessionRegistrationRequest,
-    heartbeat_service: OperatorHeartbeatService = Depends(get_g8ee_heartbeat_service),
+    heartbeat_service: HeartbeatSnapshotService = Depends(get_g8ee_heartbeat_service),
     g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
 ):
     """

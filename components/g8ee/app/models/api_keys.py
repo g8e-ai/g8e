@@ -26,3 +26,4 @@ class ApiKeyDocument(G8eBaseModel):
     created_at: UTCDatetime = Field(default_factory=now, description="When the key was created")
     last_used_at: UTCDatetime | None = Field(default=None, description="When the key was last used")
     expires_at: UTCDatetime | None = Field(default=None, description="When the key expires")
+    revoked_at: UTCDatetime | None = Field(default=None, description="When the key was revoked")

@@ -46,26 +46,17 @@ export class G8eHttpContext extends G8eBaseModel {
         bound_operators:   { type: F.array,   default: () => [] }, // Array of BoundOperatorContext
         execution_id:      { type: F.string,  default: null },
         timestamp:         { type: F.date,    default: () => new Date() },
-        new_case:          { type: F.boolean, default: false },
         source_component:  { type: F.string,  default: SourceComponent.G8ED },
     };
 
-    static parse(raw = {}) {
-        // Handle new case signal logic here instead of in routes
-        const data = { ...raw };
-        if (!data.case_id || data.case_id === '') {
-            data.case_id = null; // Let the client/headers logic handle NEW_CASE_ID
-            if (data.new_case === undefined) {
-                data.new_case = true;
-            }
-        }
-        return super.parse(data);
-    }
-
-    // Mirror of g8ee G8eHttpContext.validate_web_session_or_operator_auth.
-    // Null web_session_id / user_id is only allowed for operator-auth relays
-    // originated by g8ed (Bearer-token operator authentication).
     _validate() {
+        // Normalize empty-string case_id so the model invariant below applies uniformly.
+        if (this.case_id === '') {
+            this.case_id = null;
+        }
+        // Mirror of g8ee G8eHttpContext.validate_web_session_or_operator_auth.
+        // Null web_session_id / user_id is only allowed for operator-auth relays
+        // originated by g8ed (Bearer-token operator authentication).
         if (this.web_session_id === null || this.user_id === null) {
             if (this.source_component !== SourceComponent.G8ED) {
                 throw new Error(
@@ -278,20 +269,16 @@ export class AttestationResponseJSON extends G8eBaseModel {
         },
     };
 
-    static parse(raw = {}) {
-        if (!raw || typeof raw !== 'object') {
-            throw new Error('AttestationResponseJSON.parse() requires a plain object');
-        }
-        if (!raw.response || typeof raw.response !== 'object') {
+    _validate() {
+        if (!this.response || typeof this.response !== 'object') {
             throw new Error('AttestationResponseJSON requires response object');
         }
-        if (typeof raw.response.clientDataJSON !== 'string') {
+        if (typeof this.response.clientDataJSON !== 'string') {
             throw new Error('AttestationResponseJSON requires response.clientDataJSON string');
         }
-        if (typeof raw.response.attestationObject !== 'string') {
+        if (typeof this.response.attestationObject !== 'string') {
             throw new Error('AttestationResponseJSON requires response.attestationObject string');
         }
-        return super.parse(raw);
     }
 }
 
@@ -312,23 +299,19 @@ export class AssertionResponseJSON extends G8eBaseModel {
         },
     };
 
-    static parse(raw = {}) {
-        if (!raw || typeof raw !== 'object') {
-            throw new Error('AssertionResponseJSON.parse() requires a plain object');
-        }
-        if (!raw.response || typeof raw.response !== 'object') {
+    _validate() {
+        if (!this.response || typeof this.response !== 'object') {
             throw new Error('AssertionResponseJSON requires response object');
         }
-        if (typeof raw.response.clientDataJSON !== 'string') {
+        if (typeof this.response.clientDataJSON !== 'string') {
             throw new Error('AssertionResponseJSON requires response.clientDataJSON string');
         }
-        if (typeof raw.response.authenticatorData !== 'string') {
+        if (typeof this.response.authenticatorData !== 'string') {
             throw new Error('AssertionResponseJSON requires response.authenticatorData string');
         }
-        if (typeof raw.response.signature !== 'string') {
+        if (typeof this.response.signature !== 'string') {
             throw new Error('AssertionResponseJSON requires response.signature string');
         }
-        return super.parse(raw);
     }
 }
 

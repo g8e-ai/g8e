@@ -17,11 +17,11 @@
  * Sourced from shared/constants/agents.json agent metadata.
  */
 export const TribunalMemberIcons = Object.freeze({
-    0: 'minimize',
-    1: 'shield',
-    2: 'layers',
-    3: 'code',
-    4: 'warning',
+    0: 'git-merge',
+    1: 'shield-check',
+    2: 'git-branch',
+    3: 'book-open',
+    4: 'shield-alert',
 });
 
 /**

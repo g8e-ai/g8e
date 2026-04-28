@@ -23,10 +23,10 @@ from app.models.events import BackgroundEvent, SessionEvent
 from app.models.operators import (
     HeartbeatSSEEnvelope,
     OperatorDocument,
-    OperatorHeartbeat,
+    HeartbeatSnapshot,
 )
 from app.models.pubsub_messages import G8eoHeartbeatPayload
-from app.services.operator.heartbeat_service import OperatorHeartbeatService
+from app.services.operator.heartbeat_service import HeartbeatSnapshotService
 from app.utils.timestamp import now
 
 pytestmark = [pytest.mark.unit]
@@ -56,7 +56,7 @@ def _make_mock_pubsub_client() -> MagicMock:
 
 
 def _make_service(operator_data_service=None, event_service=None):
-    return OperatorHeartbeatService(
+    return HeartbeatSnapshotService(
         operator_data_service=operator_data_service or MagicMock(),
         event_service=event_service or MagicMock(),
     )
@@ -233,7 +233,7 @@ class TestOnHeartbeatMessage:
             await service._on_heartbeat_message(PubSubChannel.heartbeat("op-222", "op-session-111"), _make_payload().model_dump())
 
 
-class TestOperatorHeartbeatServiceIdentity:
+class TestHeartbeatSnapshotServiceIdentity:
     """_validate_operator_identity — channel vs wire claim cross-check."""
 
     @pytest.fixture
@@ -253,7 +253,7 @@ class TestOperatorHeartbeatServiceIdentity:
         assert service._validate_operator_identity("op-222", payload, "sess-111") is True
 
 
-class TestOperatorHeartbeatServiceOperatorValidation:
+class TestHeartbeatSnapshotServiceOperatorValidation:
     """_get_and_validate_operator — data service lookup and status gating."""
 
     @pytest.fixture
@@ -299,7 +299,7 @@ class TestOperatorHeartbeatServiceOperatorValidation:
 
 
 
-class TestOperatorHeartbeatServiceProcessMessage:
+class TestHeartbeatSnapshotServiceProcessMessage:
     """process_heartbeat_message — full pipeline using G8eoHeartbeatPayload directly."""
 
     @pytest.fixture
@@ -352,7 +352,7 @@ class TestOperatorHeartbeatServiceProcessMessage:
         )
 
         _, kwargs = mock_operator_data_service.update_operator_heartbeat.call_args
-        assert isinstance(kwargs["heartbeat"], OperatorHeartbeat)
+        assert isinstance(kwargs["heartbeat"], HeartbeatSnapshot)
         assert kwargs["investigation_id"] == "inv-789"
         assert kwargs["case_id"] == "case-456"
 
@@ -465,7 +465,7 @@ class TestPushHeartbeatSSE:
         envelope = HeartbeatSSEEnvelope(
             operator_id="op-222",
             status=OperatorStatus.ACTIVE,
-            metrics=OperatorHeartbeat(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
+            metrics=HeartbeatSnapshot(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
         )
         payload = _make_payload()
 
@@ -490,7 +490,7 @@ class TestPushHeartbeatSSE:
         envelope = HeartbeatSSEEnvelope(
             operator_id="op-222",
             status=OperatorStatus.ACTIVE,
-            metrics=OperatorHeartbeat(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
+            metrics=HeartbeatSnapshot(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
         )
 
         await service._push_heartbeat_sse(envelope, _make_payload(), operator)
@@ -513,7 +513,7 @@ class TestPushHeartbeatSSE:
         envelope = HeartbeatSSEEnvelope(
             operator_id="op-222",
             status=OperatorStatus.ACTIVE,
-            metrics=OperatorHeartbeat(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
+            metrics=HeartbeatSnapshot(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
         )
 
         await service._push_heartbeat_sse(
@@ -533,7 +533,7 @@ class TestPushHeartbeatSSE:
         envelope = HeartbeatSSEEnvelope(
             operator_id="op-222",
             status=OperatorStatus.ACTIVE,
-            metrics=OperatorHeartbeat(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
+            metrics=HeartbeatSnapshot(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
         )
         mock_event_service.publish.side_effect = Exception("network down")
 
@@ -554,7 +554,7 @@ class TestPushHeartbeatSSE:
         envelope = HeartbeatSSEEnvelope(
             operator_id="op-333",
             status=OperatorStatus.ACTIVE,
-            metrics=OperatorHeartbeat(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
+            metrics=HeartbeatSnapshot(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
         )
         mock_event_service.publish.side_effect = AttributeError(
             "'InternalHttpClient' object has no attribute '_context'"
@@ -689,7 +689,7 @@ class TestHeartbeatServiceConstruction:
     """Direct construction via __init__ — dependency injection contract."""
 
     async def test_constructs_with_required_dependencies(self):
-        svc = OperatorHeartbeatService(
+        svc = HeartbeatSnapshotService(
             operator_data_service=MagicMock(),
             event_service=MagicMock(),
         )

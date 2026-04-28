@@ -51,7 +51,7 @@ from app.models.operators import (
     HeartbeatSystemIdentity,
     HeartbeatUptimeInfo,
     OperatorDocument,
-    OperatorHeartbeat,
+    HeartbeatSnapshot,
     OperatorSystemInfo,
     SystemInfoEnvironment,
     SystemInfoUserDetails,
@@ -352,9 +352,9 @@ def build_case_model(
 def build_operator_heartbeat(
     operator_id: str = "test-operator-id",
     timestamp: datetime | None = None,
-) -> OperatorHeartbeat:
-    """Build a valid OperatorHeartbeat for testing."""
-    return OperatorHeartbeat(
+) -> HeartbeatSnapshot:
+    """Build a valid HeartbeatSnapshot for testing."""
+    return HeartbeatSnapshot(
         timestamp=timestamp or now(),
         heartbeat_type=HeartbeatType.AUTOMATIC,
         system_identity=HeartbeatSystemIdentity(

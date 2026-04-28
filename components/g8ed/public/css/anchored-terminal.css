@@ -355,11 +355,6 @@
     gap: 5px;
 }
 
-.tribunal__gap {
-    width: 15px;
-    flex-shrink: 0;
-}
-
 .tribunal__dot {
     width: 20px;
     height: 20px;
