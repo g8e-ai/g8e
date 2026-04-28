@@ -1,6 +1,11 @@
 {
   "_comment": "Canonical Triage model. Classifies incoming user messages into complexity and intent buckets to route to the appropriate AI (Assistant vs Primary).",
   "name": "Triage",
+  "metadata": {
+    "id": "triage",
+    "display_name": "Triage",
+    "icon": "manage_search"
+  },
   "description": "Routes user messages based on complexity and intent.",
   "request": {
     "message": { "type": "string", "description": "The user message to triage." },

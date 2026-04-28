@@ -377,6 +377,7 @@ export class OperatorListUpdatedEvent extends G8eBaseModel {
         active_count: { type: F.number, default: 0 },
         used_slots:   { type: F.number, default: 0 },
         max_slots:    { type: F.number, default: 0 },
+        is_platform_setup_pending: { type: F.boolean, default: false },
         timestamp:    { type: F.date,   default: () => now() },
     };
 

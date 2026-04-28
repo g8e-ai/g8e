@@ -1,6 +1,11 @@
 {
   "_comment": "Canonical Primary AI model. The main Large LLM responsible for high-complexity reasoning, tool calling, and multi-turn planning.",
   "name": "PrimaryAI",
+  "metadata": {
+    "id": "sage",
+    "display_name": "Sage",
+    "icon": "psychology"
+  },
   "description": "Main reasoning AI for complex tasks.",
   "request": {
     "message": { "type": "string", "description": "The user message to process." },

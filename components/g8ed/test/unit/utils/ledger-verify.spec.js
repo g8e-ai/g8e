@@ -12,7 +12,7 @@
 // limitations under the License.
 
 import { describe, it, expect } from 'vitest';
-import { canonicalJson, computeEntryHash, genesisHash, verifyChain } from '../../../public/js/utils/ledger-verify.js';
+import { canonicalJson, computeEntryHash, genesisHash, verifyChain } from '../../../utils/ledger-verify.js';
 
 describe('ledger-verify', () => {
     describe('canonicalJson', () => {

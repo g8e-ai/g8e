@@ -59,7 +59,7 @@
     "triage": {
       "id": "triage",
       "display_name": "Triage",
-      "icon": "scan-eye",
+      "icon": "manage_search",
       "description": "Classifies incoming messages by complexity, intent, and user posture — the first read of the room.",
       "role": "classifier",
       "model_tier": "lite",
@@ -71,7 +71,7 @@
     "sage": {
       "id": "sage",
       "display_name": "Sage",
-      "icon": "cpu",
+      "icon": "psychology",
       "description": "The senior reasoning agent — plans investigations, articulates intent, interprets results.",
       "role": "reasoner",
       "model_tier": "primary",
@@ -97,7 +97,7 @@
     "dash": {
       "id": "dash",
       "display_name": "Dash",
-      "icon": "zap",
+      "icon": "bolt",
       "description": "The fast-path agent — resolves simple requests with minimum viable work.",
       "role": "responder",
       "model_tier": "assistant",
@@ -123,7 +123,7 @@
     "tribunal": {
       "id": "tribunal",
       "display_name": "Tribunal",
-      "icon": "users",
+      "icon": "groups",
       "description": "The five-member command-translation panel — converts Sage's intent into an executable command through ensemble consensus.",
       "role": "arbitrator",
       "model_tier": "lite",
@@ -135,7 +135,7 @@
     "auditor": {
       "id": "auditor",
       "display_name": "Auditor",
-      "icon": "search-check",
+      "icon": "fact_check",
       "description": "The Tribunal auditor — judges Tribunal output against Sage's intent with dissent awareness and disambiguation authority.",
       "role": "auditor",
       "model_tier": "primary",
@@ -147,7 +147,7 @@
     "axiom": {
       "id": "axiom",
       "display_name": "Axiom",
-      "icon": "git-merge",
+      "icon": "call_merge",
       "description": "The Composer — translates Sage's intent into the most coherent composed command that fulfills the full intent in one invocation.",
       "role": "tribunal_member",
       "model_tier": "lite",
@@ -160,7 +160,7 @@
     "concord": {
       "id": "concord",
       "display_name": "Concord",
-      "icon": "shield-check",
+      "icon": "verified_user",
       "description": "The Guardian — translates Sage's intent into the safest command that does the job.",
       "role": "tribunal_member",
       "model_tier": "lite",
@@ -173,7 +173,7 @@
     "variance": {
       "id": "variance",
       "display_name": "Variance",
-      "icon": "git-branch",
+      "icon": "call_split",
       "description": "The Exhaustive — translates Sage's intent into a command that handles the edge cases an obvious version misses.",
       "role": "tribunal_member",
       "model_tier": "lite",
@@ -186,7 +186,7 @@
     "pragma": {
       "id": "pragma",
       "display_name": "Pragma",
-      "icon": "book-open",
+      "icon": "menu_book",
       "description": "The Conventional — translates Sage's intent into the command the target system's community would produce.",
       "role": "tribunal_member",
       "model_tier": "lite",
@@ -199,7 +199,7 @@
     "nemesis": {
       "id": "nemesis",
       "display_name": "Nemesis",
-      "icon": "shield-alert",
+      "icon": "gpp_maybe",
       "description": "The Adversary — always present in the Tribunal; produces a plausible-but-flawed command, or honestly abstains when no attack surface exists.",
       "role": "tribunal_member",
       "model_tier": "lite",
@@ -212,7 +212,7 @@
     "scribe": {
       "id": "scribe",
       "display_name": "Scribe",
-      "icon": "type",
+      "icon": "title",
       "description": "Generates concise, specific case titles.",
       "role": "summarizer",
       "model_tier": "lite",
@@ -224,7 +224,7 @@
     "codex": {
       "id": "codex",
       "display_name": "Codex",
-      "icon": "brain",
+      "icon": "neurology",
       "description": "Extracts durable user preferences and scrubbed investigation summaries from conversation history.",
       "role": "analyzer",
       "model_tier": "lite",
@@ -260,7 +260,7 @@
     "warden_command_risk": {
       "id": "warden_command_risk",
       "display_name": "Command Risk Analyzer",
-      "icon": "shield-alert",
+      "icon": "gpp_maybe",
       "description": "Classifies shell command risk as LOW, MEDIUM, or HIGH.",
       "role": "defender",
       "model_tier": "lite",
@@ -272,7 +272,7 @@
     "warden_error": {
       "id": "warden_error",
       "display_name": "Error Analyzer",
-      "icon": "alert-triangle",
+      "icon": "warning",
       "description": "Classifies command failures as AUTO_FIXABLE, ESCALATE, or RETRY_LIMIT.",
       "role": "defender",
       "model_tier": "lite",
@@ -284,7 +284,7 @@
     "warden_file_risk": {
       "id": "warden_file_risk",
       "display_name": "File Operation Risk Analyzer",
-      "icon": "file-shield",
+      "icon": "admin_panel_settings",
       "description": "Classifies file operation risk as LOW, MEDIUM, or HIGH.",
       "role": "defender",
       "model_tier": "lite",

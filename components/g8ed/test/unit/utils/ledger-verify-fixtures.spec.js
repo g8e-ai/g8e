@@ -25,7 +25,7 @@ import {
     computeEntryHash,
     genesisHash,
     verifyChain,
-} from '../../../public/js/utils/ledger-verify.js';
+} from '../../../utils/ledger-verify.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const fixturesPath = resolve(__dirname, '../../../../../shared/test-fixtures/ledger-hash-fixtures.json');

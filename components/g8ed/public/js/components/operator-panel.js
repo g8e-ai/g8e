@@ -61,6 +61,7 @@ export class OperatorPanel {
         this._activeOperatorCount = 0;
         this._usedSlots = 0;
         this._maxSlots = 1;
+        this._isPlatformSetupPending = false;
         this._isConnected = false;
         this._lastHeartbeat = null;
 
@@ -129,8 +130,9 @@ export class OperatorPanel {
         this._activeOperatorCount = parsed.active_count;
         this._usedSlots = parsed.used_slots;
         this._maxSlots = parsed.max_slots;
+        this._isPlatformSetupPending = parsed.is_platform_setup_pending;
         operatorSessionService.setBoundOperators(this._operators);
-        devLogger.log('[OPERATOR-PANEL] List updated:', this._totalOperatorCount, 'total,', this._activeOperatorCount, 'active');
+        devLogger.log('[OPERATOR-PANEL] List updated:', this._totalOperatorCount, 'total,', this._activeOperatorCount, 'active, pending setup:', this._isPlatformSetupPending);
         this._applyOperatorState({ cause: 'list_updated' });
     }
 
@@ -204,6 +206,7 @@ export class OperatorPanel {
         this.activeOperatorCount = this._activeOperatorCount;
         this.usedSlots           = this._usedSlots;
         this.maxSlots            = this._maxSlots;
+        this.isPlatformSetupPending = this._isPlatformSetupPending;
         this.isConnected         = this._isConnected;
         this.lastHeartbeat       = this._lastHeartbeat;
 
