@@ -360,8 +360,7 @@
   },
 
   "auth.mode": {
-    "api_key": "api_key",
-    "operator_session": "operator_session"
+    "api_key": "api_key"
   },
 
   "auth.method": {

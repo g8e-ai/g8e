@@ -851,6 +851,7 @@ const COMMAND_VALIDATION_KEY_MAP = Object.freeze({
     enable_command_whitelisting: 'enable_whitelisting',
     whitelisted_commands_csv: 'whitelisted_commands',
     enable_command_blacklisting: 'enable_blacklisting',
+    blacklisted_commands_csv: 'blacklisted_commands',
     enable_command_auto_approve: 'enable_auto_approve',
     auto_approved_commands_csv: 'auto_approved_commands',
 });

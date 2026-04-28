@@ -255,6 +255,12 @@ func main() {
 			os.Exit(constants.ExitAuthFailure)
 		}
 		logger.Info("Device authentication successful", "operator_id", deviceResult.OperatorID)
+
+		// Consume API key from device link response if provided
+		if deviceResult.APIKey != "" {
+			apiKey = deviceResult.APIKey
+			logger.Info("API key received from device link registration")
+		}
 	}
 
 	if logLevel == "info" {

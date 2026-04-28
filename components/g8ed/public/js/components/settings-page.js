@@ -929,7 +929,7 @@ export class SettingsPage {
             inputEl = document.createElement('input');
             inputEl.type = 'checkbox';
             inputEl.setAttribute('data-key', setting.key);
-            inputEl.checked = setting.value === true || setting.value === 'true';
+            inputEl.checked = setting.value === true;
 
             const track = document.createElement('span');
             track.className = 'settings-toggle-track';
