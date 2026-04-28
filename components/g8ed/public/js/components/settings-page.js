@@ -162,12 +162,10 @@ export class SettingsPage {
             const dropdown = document.getElementById(`${role}_model`);
             const menu = document.getElementById(`${role}_model-menu`);
             const text = dropdown?.querySelector('.llm-model-dropdown__text');
-            const badge = dropdown?.querySelector('.llm-model-dropdown__recommended-badge');
 
             if (!dropdown || !menu) return;
 
             menu.innerHTML = '';
-            if (badge) badge.style.display = 'none';
 
             let prevValue = this.selectedModels[role] || '';
             if (text && !prevValue) text.textContent = EMPTY_MODEL_PLACEHOLDER;
@@ -189,12 +187,6 @@ export class SettingsPage {
                         this._markDirty(_getModelKey(role), prevValue);
                     }
                 }
-            }
-
-            // Show recommended badge if the selected model matches the default for its provider
-            const provider = _modelToProvider(prevValue, this.PROVIDER_MODELS);
-            if (provider && this.PROVIDER_DEFAULT_MODELS[provider]?.[role] === prevValue) {
-                if (badge) badge.style.display = '';
             }
 
             // Try to find the selected model in ALL providers (not just active) to get its label
@@ -443,6 +435,8 @@ export class SettingsPage {
 
             if (sec.id === 'llm') {
                 this._buildLlmSection(panel, secSettings);
+            } else if (sec.id === 'search') {
+                this._buildSearchSection(panel, secSettings);
             } else if (sec.id === 'advanced') {
                 this._buildAdvancedSection(panel);
             } else {
@@ -587,6 +581,174 @@ export class SettingsPage {
         });
     }
 
+    _buildSearchSection(panel, settings) {
+        // Create wizard-panel-header matching setup.ejs
+        const panelHeader = document.createElement('div');
+        panelHeader.className = 'wizard-panel-header';
+
+        const headerIcon = document.createElement('span');
+        headerIcon.className = 'material-symbols-outlined wizard-panel-icon';
+        headerIcon.textContent = 'travel_explore';
+
+        const headerDiv = document.createElement('div');
+        const headerTitle = document.createElement('h2');
+        headerTitle.className = 'wizard-panel-title';
+        headerTitle.textContent = 'Vertex Search';
+        headerDiv.appendChild(headerTitle);
+
+        panelHeader.appendChild(headerIcon);
+        panelHeader.appendChild(headerDiv);
+        panel.appendChild(panelHeader);
+
+        // Create setup-fields container
+        const setupFields = document.createElement('div');
+        setupFields.className = 'setup-fields';
+
+        // Create setup-fields-row
+        const fieldsRow = document.createElement('div');
+        fieldsRow.className = 'setup-fields-row';
+
+        // Build each search field
+        settings.forEach(setting => {
+            if (setting.key === 'vertex_search_enabled') {
+                // Add the enabled dropdown at the top before the row
+                const field = this._buildSearchField(setting);
+                fieldsRow.insertBefore(field, fieldsRow.firstChild);
+            } else if (setting.key === 'vertex_search_location') {
+                // Skip location field as it's not in setup.ejs
+            } else {
+                const field = this._buildSearchField(setting);
+                fieldsRow.appendChild(field);
+            }
+        });
+
+        setupFields.appendChild(fieldsRow);
+        panel.appendChild(setupFields);
+    }
+
+    _buildSearchField(setting) {
+        const field = document.createElement('div');
+        field.className = 'setup-field';
+
+        const label = document.createElement('label');
+        label.className = 'setup-label';
+        label.setAttribute('for', setting.key);
+        label.textContent = setting.label;
+        field.appendChild(label);
+
+        if (setting.type === 'password') {
+            const inputWrap = document.createElement('div');
+            inputWrap.className = 'setup-input-wrap';
+
+            const input = document.createElement('input');
+            input.type = 'password';
+            input.id = setting.key;
+            input.name = setting.key;
+            input.className = 'setup-input has-toggle';
+            input.placeholder = setting.placeholder || '';
+            input.autocomplete = 'new-password';
+            input.spellcheck = false;
+            input.setAttribute('data-key', setting.key);
+
+            if (setting.value) {
+                input.setAttribute('data-real-value', setting.value);
+                input.value = '*'.repeat(Math.min(setting.value.length, 32));
+            } else {
+                input.value = '';
+            }
+
+            inputWrap.appendChild(input);
+
+            const revealBtn = document.createElement('button');
+            revealBtn.type = 'button';
+            revealBtn.className = 'setup-reveal-btn';
+            revealBtn.ariaLabel = 'Toggle visibility';
+            revealBtn.setAttribute('data-for', setting.key);
+
+            const revealIcon = document.createElement('span');
+            revealIcon.className = 'material-symbols-outlined';
+            revealIcon.textContent = 'visibility';
+            revealBtn.appendChild(revealIcon);
+
+            inputWrap.appendChild(revealBtn);
+            field.appendChild(inputWrap);
+
+            const handleInputChange = () => {
+                this._markDirty(setting.key, input.value);
+            };
+
+            input.addEventListener('input', handleInputChange);
+            input.addEventListener('change', handleInputChange);
+
+            revealBtn.addEventListener('click', () => {
+                const isHidden = input.type === 'password';
+                input.type = isHidden ? 'text' : 'password';
+
+                if (isHidden) {
+                    const realValue = input.getAttribute('data-real-value');
+                    if (realValue) {
+                        input.setAttribute('data-obfuscated-value', input.value);
+                        input.value = realValue;
+                    }
+                } else {
+                    const obfuscatedValue = input.getAttribute('data-obfuscated-value');
+                    if (obfuscatedValue) {
+                        input.value = obfuscatedValue;
+                    }
+                }
+
+                revealIcon.textContent = isHidden ? 'visibility_off' : 'visibility';
+            });
+        } else if (setting.type === 'select' && setting.options) {
+            const select = document.createElement('select');
+            select.id = setting.key;
+            select.name = setting.key;
+            select.className = 'setup-input';
+            select.setAttribute('data-key', setting.key);
+
+            setting.options.forEach(opt => {
+                const option = document.createElement('option');
+                option.value = String(opt.value);
+                option.textContent = opt.label;
+                if (setting.value === opt.value) {
+                    option.selected = true;
+                }
+                select.appendChild(option);
+            });
+
+            field.appendChild(select);
+
+            const handleInputChange = () => {
+                const selectedOption = select.options[select.selectedIndex];
+                this._markDirty(setting.key, selectedOption.value);
+            };
+
+            select.addEventListener('change', handleInputChange);
+        } else {
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.id = setting.key;
+            input.name = setting.key;
+            input.className = 'setup-input';
+            input.placeholder = setting.placeholder || '';
+            input.spellcheck = false;
+            input.autocomplete = 'off';
+            input.value = setting.value || '';
+            input.setAttribute('data-key', setting.key);
+
+            field.appendChild(input);
+
+            const handleInputChange = () => {
+                this._markDirty(setting.key, input.value);
+            };
+
+            input.addEventListener('input', handleInputChange);
+            input.addEventListener('change', handleInputChange);
+        }
+
+        return field;
+    }
+
     _buildProviderField(setting) {
         const field = document.createElement('div');
         field.className = 'setup-field';
@@ -717,18 +879,12 @@ export class SettingsPage {
         text.className = 'llm-model-dropdown__text';
         text.textContent = EMPTY_MODEL_PLACEHOLDER;
 
-        const badge = document.createElement('span');
-        badge.className = 'llm-model-dropdown__recommended-badge';
-        badge.textContent = 'Recommended';
-        badge.style.display = 'none';
-
         const arrow = document.createElement('span');
         arrow.className = 'llm-model-dropdown__arrow material-symbols-outlined';
         arrow.textContent = 'expand_more';
 
         selected.appendChild(icon);
         selected.appendChild(text);
-        selected.appendChild(badge);
         selected.appendChild(arrow);
 
         const menu = document.createElement('div');

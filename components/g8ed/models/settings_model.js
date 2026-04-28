@@ -167,17 +167,6 @@ export const USER_SETTINGS = Object.freeze([
         placeholder: '192.168.1.100:11434',
         default: '',
     }),
-    Object.freeze({
-        key: 'ollama_api_key',
-        section: 'llm',
-        label: 'Ollama API Key',
-        description: 'API key for Ollama (optional - only required for authenticated instances).',
-        type: 'password',
-        provider: LLMProvider.OLLAMA,
-        secret: true,
-        placeholder: '',
-        default: '',
-    }),
 
     // -------------------------------------------------------------------------
     // Gemini Specific
@@ -833,7 +822,6 @@ const LLM_KEY_MAP = Object.freeze({
     llm_lite_model:         'lite_model',
     openai_api_key:         'openai_api_key',
     ollama_endpoint:        'ollama_endpoint',
-    ollama_api_key:         'ollama_api_key',
     gemini_api_key:         'gemini_api_key',
     anthropic_api_key:      'anthropic_api_key',
     llamacpp_endpoint:      'llamacpp_endpoint',
@@ -914,7 +902,6 @@ const REVERSE_LLM_MAP    = Object.freeze({
     lite_model: 'llm_lite_model',
     openai_api_key: 'openai_api_key',
     ollama_endpoint: 'ollama_endpoint',
-    ollama_api_key: 'ollama_api_key',
     gemini_api_key:         'gemini_api_key',
     anthropic_api_key:      'anthropic_api_key',
     llamacpp_endpoint:      'llamacpp_endpoint',

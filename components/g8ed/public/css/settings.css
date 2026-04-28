@@ -839,6 +839,55 @@ body[data-theme="light"] .settings-model-selection {
    Setup-style classes for LLM section (matching setup.ejs phase 1)
    ============================================================================ */
 
+/* Search section wizard panel styles (matching setup.ejs) */
+.wizard-panel-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.875rem;
+    padding: 1rem 1rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+    background: var(--bg-secondary);
+    margin-bottom: 0;
+}
+
+.wizard-panel-icon {
+    font-size: 1.5rem;
+    color: var(--accent-blue);
+    flex-shrink: 0;
+    margin-top: 0.125rem;
+}
+
+body[data-theme="light"] .wizard-panel-icon { color: var(--accent-blue); }
+
+.wizard-panel-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 0.2rem;
+}
+
+body[data-theme="light"] .wizard-panel-title { color: var(--text-bright); }
+
+.setup-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    background: var(--bg-secondary);
+    padding: 0 1rem 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.setup-fields-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
 .setup-fields-model-selection {
     display: flex;
     flex-direction: column;
