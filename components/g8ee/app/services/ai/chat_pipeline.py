@@ -717,7 +717,7 @@ class ChatPipelineService:
                 user_id=g8e_context.user_id,
             )
 
-        if not follow_up and not (inputs.triage_result and inputs.triage_result.clarifying_questions) and inputs.model_to_use and inputs.generation_config:
+        if not follow_up and inputs.model_to_use and inputs.generation_config:
             logger.info("[SSE-CHAT] Running full agent execution")
 
             async def _persist_iteration_text(text: str) -> None:

@@ -208,6 +208,7 @@ export class DeviceRegistrationResponse extends G8eBaseModel {
         operator_cert:       { type: F.string,  default: null },
         operator_cert_key:   { type: F.string,  default: null },
         session:             { type: F.object,  default: null },
+        config:              { type: F.object,  default: null },
     };
 }
 

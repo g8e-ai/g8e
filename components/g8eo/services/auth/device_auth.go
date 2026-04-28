@@ -35,6 +35,7 @@ type DeviceAuthResult struct {
 	APIKey            string
 	OperatorCert      string
 	OperatorCertKey   string
+	Config            *BootstrapConfig
 }
 
 // DeviceInfo contains device information sent during device link registration
@@ -51,13 +52,14 @@ type DeviceInfo struct {
 // plain string (legacy / success=false envelope) or the standard g8ed error
 // object shape: { code, message, category, ... }.
 type deviceRegisterResponse struct {
-	Success           bool            `json:"success"`
-	OperatorSessionID string          `json:"operator_session_id"`
-	OperatorID        string          `json:"operator_id"`
-	APIKey            string          `json:"api_key,omitempty"`
-	OperatorCert      string          `json:"operator_cert,omitempty"`
-	OperatorCertKey   string          `json:"operator_cert_key,omitempty"`
-	Error             json.RawMessage `json:"error,omitempty"`
+	Success           bool             `json:"success"`
+	OperatorSessionID string           `json:"operator_session_id"`
+	OperatorID        string           `json:"operator_id"`
+	APIKey            string           `json:"api_key,omitempty"`
+	OperatorCert      string           `json:"operator_cert,omitempty"`
+	OperatorCertKey   string           `json:"operator_cert_key,omitempty"`
+	Config            *BootstrapConfig `json:"config,omitempty"`
+	Error             json.RawMessage  `json:"error,omitempty"`
 }
 
 // extractErrorMessage is retained as a thin alias for test readability; the
@@ -188,5 +190,6 @@ func authenticateWithDeviceTokenUsingClient(token string, endpoint string, logge
 		APIKey:            result.APIKey,
 		OperatorCert:      result.OperatorCert,
 		OperatorCertKey:   result.OperatorCertKey,
+		Config:            result.Config,
 	}, nil
 }

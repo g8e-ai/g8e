@@ -1,6 +1,11 @@
 {
   "_comment": "Canonical Tribunal model. The caller (Sage or Dash) never proposes shell commands; the caller sends the Tribunal a natural-language `request` plus optional `guidelines`, and the Tribunal is the sole authority for producing the final command string. There is no fallback \u2014 when the Tribunal fails, the tool call fails.",
   "name": "Tribunal",
+  "metadata": {
+    "id": "tribunal",
+    "display_name": "Tribunal",
+    "icon": "groups"
+  },
   "description": "Command authority. Converts the caller's natural-language request + guidelines into a precise shell command through multi-perspective voting and verification.",
   "member_result": {
     "reasoning": {

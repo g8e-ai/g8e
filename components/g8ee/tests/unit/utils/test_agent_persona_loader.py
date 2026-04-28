@@ -34,8 +34,7 @@ class TestGetAgentPersona:
         persona = get_agent_persona("triage")
         assert persona.agent_id == "triage"
         assert persona.display_name == "Triage"
-        # "scan-eye" reflects Triage's sharpened role as gatekeeper / posture reader.
-        assert persona.icon == "scan-eye"
+        assert persona.icon == "manage_search"
         assert persona.role == "classifier"
         assert persona.model_tier == "lite"
         assert persona.tools == []

@@ -117,7 +117,16 @@ export const OperatorListMixin = {
         }
 
         const loadingEl = document.getElementById('operator-drawer-loading');
-        if (loadingEl) loadingEl.classList.add('initially-hidden');
+        const loadingMsgEl = document.getElementById('operator-loading-message');
+        if (loadingEl) {
+            if (this.isPlatformSetupPending) {
+                loadingEl.classList.remove('initially-hidden');
+                if (loadingMsgEl) loadingMsgEl.textContent = 'Waiting for platform operator...';
+            } else {
+                loadingEl.classList.add('initially-hidden');
+                if (loadingMsgEl) loadingMsgEl.textContent = 'Loading operators...';
+            }
+        }
 
         this.boundOperatorIds = [];
 

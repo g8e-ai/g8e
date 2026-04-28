@@ -9,7 +9,8 @@
       },
       "ai": {
         "primary": "g8e.v1.source.ai.primary",
-        "assistant": "g8e.v1.source.ai.assistant"
+        "assistant": "g8e.v1.source.ai.assistant",
+        "triage": "g8e.v1.source.ai.triage"
       },
       "system": "g8e.v1.source.system"
     },

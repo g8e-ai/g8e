@@ -345,7 +345,7 @@ async def internal_triage_answer(
     Receive user answer to a triage clarifying question - internal cluster use only.
     """
     from app.models.investigations import ConversationMessageMetadata
-    from app.models.investigation_status import MessageSender
+    from app.constants.message_sender import MessageSender
 
     logger.info(
         "[INTERNAL-HTTP] Triage answer received",
@@ -381,7 +381,7 @@ async def internal_triage_skip(
     Skip triage clarifying questions - internal cluster use only.
     """
     from app.models.investigations import ConversationMessageMetadata
-    from app.models.investigation_status import MessageSender
+    from app.constants.message_sender import MessageSender
 
     logger.info(
         "[INTERNAL-HTTP] Triage skip received",
@@ -412,7 +412,7 @@ async def internal_triage_timeout(
     Record triage clarifying questions timeout - internal cluster use only.
     """
     from app.models.investigations import ConversationMessageMetadata
-    from app.models.investigation_status import MessageSender
+    from app.constants.message_sender import MessageSender
 
     logger.info(
         "[INTERNAL-HTTP] Triage timeout received",

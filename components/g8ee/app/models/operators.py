@@ -793,6 +793,7 @@ class OperatorStatusUpdatedPayload(G8eBaseModel):
     hostname: str | None = Field(default=None, description="Hostname from latest_heartbeat_snapshot.system_identity")
     system_fingerprint: str | None = Field(default=None, description="SHA256 fingerprint of stable host attributes")
     timestamp: UTCDatetime | None = Field(default=None, description="Transition timestamp")
+    metrics: HeartbeatSnapshot | None = Field(default=None, description="Full HeartbeatSnapshot snapshot from latest_heartbeat_snapshot")
 
 
 # =============================================================================

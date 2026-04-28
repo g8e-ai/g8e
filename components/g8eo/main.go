@@ -243,6 +243,8 @@ func main() {
 	}
 	logger.Info("Hub CA certificate loaded")
 
+	var deviceAuthResult *auth.DeviceAuthResult
+
 	if deviceToken == "" {
 		deviceToken = settings.DeviceToken
 	}
@@ -261,6 +263,9 @@ func main() {
 			apiKey = deviceResult.APIKey
 			logger.Info("API key received from device link registration")
 		}
+
+		// Store device result for later bootstrap config application
+		deviceAuthResult = deviceResult
 	}
 
 	if logLevel == "info" {
@@ -316,6 +321,21 @@ func main() {
 	}
 
 	cfg.Version = version
+
+	// Apply bootstrap config from device-link registration if available
+	if deviceAuthResult != nil && deviceAuthResult.Config != nil {
+		logger.Info("Applying bootstrap config from device-link registration")
+		bootstrapService, err := auth.NewBootstrapService(cfg, logger)
+		if err != nil {
+			logger.Error("Failed to create bootstrap service", "error", err)
+			os.Exit(constants.ExitConfigError)
+		}
+		if err := bootstrapService.ApplyBootstrapConfig(deviceAuthResult.Config); err != nil {
+			logger.Error("Failed to apply bootstrap config", "error", err)
+			os.Exit(constants.ExitCodeFromError(err))
+		}
+		logger.Info("Bootstrap config applied successfully")
+	}
 
 	if cfg.CloudMode {
 		logger.Info("Cloud Operator mode enabled", "provider", cfg.CloudProvider)
