@@ -68,7 +68,7 @@ Used for global aggregation and real-time event streaming to frontends.
 `shared/constants/channels.json` defines all prefixes and formats. All components MUST consume these values or their typed wrappers.
 
 ### Python (`g8ee`)
-Use `PubSubChannel` and `OperatorChannel` in `@/home/bob/g8e/components/g8ee/app/constants/channels.py`.
+Use `PubSubChannel` and `OperatorChannel` in `@/components/g8ee/app/constants/channels.py`.
 
 ```python
 # RIGHT: Use typed constructors
@@ -79,7 +79,7 @@ prefix, op_id, sess_id = OperatorChannel.parse(channel)
 ```
 
 ### Go (`g8eo`)
-Use the constructors in `@/home/bob/g8e/components/g8eo/constants/channels.go`.
+Use the constructors in `@/components/g8eo/constants/channels.go`.
 
 ```go
 // RIGHT: Use typed constructors

@@ -22,7 +22,7 @@ Tests:
 - TribunalInvoker.run correctly propagates operator context defaults when empty operator_documents
 
 Run with:
-    /home/bob/g8e/g8e test g8ee -- tests/unit/services/ai/test_agent_tool_loop.py
+    ./g8e test g8ee -- tests/unit/services/ai/test_agent_tool_loop.py
 """
 
 from unittest.mock import AsyncMock, MagicMock

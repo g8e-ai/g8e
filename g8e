@@ -1088,7 +1088,7 @@ case "$TOP" in
             exit 1
         fi
         
-        docker exec -i g8ep /bin/bash -c "cd /home/bob/g8e/components/g8ee && python -m app.evals.runner.cli --device-token $_device_token ${run_args[*]}"
+        docker exec -i g8ep /bin/bash -c "cd /app/components/g8ee && python -m app.evals.runner.cli --device-token $_device_token ${run_args[*]}"
         ;;
     up)
                 _banner "evals up"

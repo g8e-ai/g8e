@@ -14,7 +14,7 @@
 """Unit tests for ``CommandBlacklistValidator``.
 
 Run with:
-    /home/bob/g8e/g8e test g8ee -- tests/unit/utils/test_blacklist_validator.py
+    ./g8e test g8ee -- tests/unit/utils/test_blacklist_validator.py
 """
 
 import json
