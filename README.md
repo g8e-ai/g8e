@@ -12,6 +12,10 @@ Self-hosted · Air-gap capable · Zero cloud dependencies
 
 </div>
 
+<p align="center">
+  <img src="shared/media/denied-with-solution.png" alt="g8e governance in action" width="800">
+</p>
+
 ---
 
 ## Introduction
@@ -232,6 +236,10 @@ flowchart LR
     
     g8ee -. "Sentinel-Scrubbed Metadata<br>(No Raw Data)" .-> LLM
 ```
+
+<p align="center">
+  <img src="shared/media/llm-provider-agnostic.png" alt="LLM provider agnostic architecture" width="600">
+</p>
 
 ---
 
