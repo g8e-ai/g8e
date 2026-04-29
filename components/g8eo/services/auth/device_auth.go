@@ -22,6 +22,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
@@ -192,4 +193,45 @@ func authenticateWithDeviceTokenUsingClient(token string, endpoint string, logge
 		OperatorCertKey:   result.OperatorCertKey,
 		Config:            result.Config,
 	}, nil
+}
+
+// PersistRegistration saves registration credentials to the specified data directory.
+func PersistRegistration(dataDir string, result *DeviceAuthResult, logger *slog.Logger) error {
+	if result == nil {
+		return nil
+	}
+
+	if err := os.MkdirAll(dataDir, 0700); err != nil {
+		return fmt.Errorf("failed to create data directory: %w", err)
+	}
+
+	sslDir := filepath.Join(dataDir, "ssl")
+	if err := os.MkdirAll(sslDir, 0700); err != nil {
+		return fmt.Errorf("failed to create ssl directory: %w", err)
+	}
+
+	if result.APIKey != "" {
+		keyPath := filepath.Join(dataDir, "operator.key")
+		if err := os.WriteFile(keyPath, []byte(result.APIKey), 0600); err != nil {
+			return fmt.Errorf("failed to persist API key: %w", err)
+		}
+		logger.Info("API key persisted to disk", "path", keyPath)
+	}
+
+	if result.OperatorCert != "" && result.OperatorCertKey != "" {
+		certPath := filepath.Join(sslDir, "operator.crt")
+		keyPath := filepath.Join(sslDir, "operator.key")
+
+		if err := os.WriteFile(certPath, []byte(result.OperatorCert), 0644); err != nil {
+			return fmt.Errorf("failed to persist operator certificate: %w", err)
+		}
+		if err := os.WriteFile(keyPath, []byte(result.OperatorCertKey), 0600); err != nil {
+			return fmt.Errorf("failed to persist operator certificate key: %w", err)
+		}
+		logger.Info("Operator mTLS certificates persisted to disk",
+			"cert_path", certPath,
+			"key_path", keyPath)
+	}
+
+	return nil
 }
