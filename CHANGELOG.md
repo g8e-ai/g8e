@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-04-29
+
+### Added
+- **Vortex Round 2:** Enhanced reputation staking system with improved governance and consensus mechanisms.
+- **Reputation Staking:** Implemented multi-phase reputation commitment and stake resolution for operator trust management.
+- **Bug Fixes:** Resolved various issues across platform components for improved stability.
+
 ## [0.1.5] - 2026-04-28
 
 ### Added
