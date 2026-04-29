@@ -111,6 +111,114 @@ export const ChatSSEHandlersMixin = {
             this.handleUniversalToolFailed(data);
         });
 
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_CREATE_REQUESTED, (data) => {
+            this.handleUniversalToolStarted(data, 'file-create', data.display_label || 'Creating file', data.display_icon, data.category);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_CREATE_COMPLETED, (data) => {
+            this.handleUniversalToolCompleted(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_CREATE_FAILED, (data) => {
+            this.handleUniversalToolFailed(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_WRITE_REQUESTED, (data) => {
+            this.handleUniversalToolStarted(data, 'file-write', data.display_label || 'Writing file', data.display_icon, data.category);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_WRITE_COMPLETED, (data) => {
+            this.handleUniversalToolCompleted(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_WRITE_FAILED, (data) => {
+            this.handleUniversalToolFailed(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_READ_REQUESTED, (data) => {
+            this.handleUniversalToolStarted(data, 'file-read', data.display_label || 'Reading file', data.display_icon, data.category);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_READ_COMPLETED, (data) => {
+            this.handleUniversalToolCompleted(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_READ_FAILED, (data) => {
+            this.handleUniversalToolFailed(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_UPDATE_REQUESTED, (data) => {
+            this.handleUniversalToolStarted(data, 'file-update', data.display_label || 'Updating file', data.display_icon, data.category);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_UPDATE_COMPLETED, (data) => {
+            this.handleUniversalToolCompleted(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_UPDATE_FAILED, (data) => {
+            this.handleUniversalToolFailed(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_LIST_REQUESTED, (data) => {
+            this.handleUniversalToolStarted(data, 'file-list', data.display_label || 'Listing files', data.display_icon, data.category);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_LIST_COMPLETED, (data) => {
+            this.handleUniversalToolCompleted(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_LIST_FAILED, (data) => {
+            this.handleUniversalToolFailed(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_HISTORY_FETCH_REQUESTED, (data) => {
+            this.handleUniversalToolStarted(data, 'file-history', data.display_label || 'Fetching file history', data.display_icon, data.category);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_HISTORY_FETCH_COMPLETED, (data) => {
+            this.handleUniversalToolCompleted(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_HISTORY_FETCH_FAILED, (data) => {
+            this.handleUniversalToolFailed(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_DIFF_FETCH_REQUESTED, (data) => {
+            this.handleUniversalToolStarted(data, 'file-diff', data.display_label || 'Fetching file diff', data.display_icon, data.category);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_DIFF_FETCH_COMPLETED, (data) => {
+            this.handleUniversalToolCompleted(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_DIFF_FETCH_FAILED, (data) => {
+            this.handleUniversalToolFailed(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_INTENT_GRANT_REQUESTED, (data) => {
+            this.handleUniversalToolStarted(data, 'intent-grant', data.display_label || 'Granting intent', data.display_icon, data.category);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_INTENT_GRANT_COMPLETED, (data) => {
+            this.handleUniversalToolCompleted(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_INTENT_GRANT_FAILED, (data) => {
+            this.handleUniversalToolFailed(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_INTENT_REVOKE_REQUESTED, (data) => {
+            this.handleUniversalToolStarted(data, 'intent-revoke', data.display_label || 'Revoking intent', data.display_icon, data.category);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_INTENT_REVOKE_COMPLETED, (data) => {
+            this.handleUniversalToolCompleted(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_INTENT_REVOKE_FAILED, (data) => {
+            this.handleUniversalToolFailed(data);
+        });
+
         this.eventBus.on(EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED, (data) => {
             this.approvalPending = true;
             this.showAIStopButton();
@@ -356,6 +464,37 @@ export const ChatSSEHandlersMixin = {
         this.clearChat();
     },
 
+    _clearPendingActivityIndicators(webSessionId) {
+        if (!this.anchoredTerminal) return;
+
+        // 1. Clear processing indicators ("Reviewing results")
+        if (this._processingIndicators) {
+            const processingIndicatorId = this._processingIndicators.get(webSessionId);
+            if (processingIndicatorId) {
+                this.anchoredTerminal.completeActivityIndicator(processingIndicatorId);
+                this._processingIndicators.delete(webSessionId);
+            }
+        }
+
+        // 2. Clear universal tool indicators ("Checking constraints", etc.)
+        if (this._universalToolIndicators) {
+            for (const [execId, indicatorId] of this._universalToolIndicators.entries()) {
+                this.anchoredTerminal.completeActivityIndicator(indicatorId);
+            }
+            this._universalToolIndicators.clear();
+        }
+
+        // 3. Clear port check indicators
+        if (this._portCheckIndicators) {
+            for (const [execId, indicatorId] of this._portCheckIndicators.entries()) {
+                this.anchoredTerminal.completeActivityIndicator(indicatorId);
+            }
+            this._portCheckIndicators.clear();
+        }
+
+        // 4. Clear search web indicators
+        this._searchWebIndicators?.clear();
+    },
     handleIterationStarted(data) {
         if (!data.web_session_id) {
             return;
@@ -381,14 +520,7 @@ export const ChatSSEHandlersMixin = {
             this.thinkingManager.hideThinkingIndicator(data.web_session_id);
         }
 
-        // Hide processing indicator when text streaming starts
-        if (this._processingIndicators && this.anchoredTerminal) {
-            const processingIndicatorId = this._processingIndicators.get(data.web_session_id);
-            if (processingIndicatorId) {
-                this.anchoredTerminal.completeActivityIndicator(processingIndicatorId);
-                this._processingIndicators.delete(data.web_session_id);
-            }
-        }
+        this._clearPendingActivityIndicators(data.web_session_id);
 
         this.streamingActive = true;
         this.showAIStopButton();
@@ -457,6 +589,8 @@ export const ChatSSEHandlersMixin = {
             this.anchoredTerminal.sealStreamingResponse(webSessionId);
             this.streamingActive = false;
         }
+
+        this._clearPendingActivityIndicators(webSessionId);
 
         // Show processing indicator after tool execution (turn > 0), before next AI response
         // Only show on subsequent turns to indicate processing of tool results
@@ -626,9 +760,8 @@ export const ChatSSEHandlersMixin = {
         }
 
         this.anchoredTerminal?.hideWaitingIndicator();
+        this._clearPendingActivityIndicators(webSessionId);
         this.anchoredTerminal?.clearActivityIndicators();
-        this._portCheckIndicators?.clear();
-        this._searchWebIndicators?.clear();
         this._hasResetAutoScrollForSession?.delete(webSessionId);
 
         if (this.anchoredTerminal && data.content) {
@@ -748,6 +881,8 @@ export const ChatSSEHandlersMixin = {
         if (!this.shouldProcessEvent(data)) return;
         if (!this.anchoredTerminal) return;
 
+        this._clearPendingActivityIndicators(data.web_session_id);
+
         const executionId = data.execution_id;
         if (!executionId) return;
 
@@ -818,5 +953,7 @@ export const ChatOperatorExecutionMixin = {
         if (this.thinkingManager) {
             this.thinkingManager.hideThinkingIndicator(webSessionId);
         }
+
+        this._clearPendingActivityIndicators(webSessionId);
     },
 };

@@ -65,7 +65,7 @@ class OperatorManager:
         has_key = 'yes' if op.get('has_api_key') or op.get('operator_api_key') else 'no'
         claimed = 'yes' if op.get('claimed') else 'no'
         is_g8ep = 'yes' if op.get('is_g8ep') else 'no'
-        heartbeat = (op.get('last_heartbeat') or 'never')[:19]
+        heartbeat = (op.get('latest_heartbeat_snapshot', {}).get('timestamp') or 'never')[:19]
         return (
             f"  {op_id}  "
             f"{name:<22} "
@@ -110,7 +110,7 @@ class OperatorManager:
             f"    Updated:         {op.get('updated_at', 'N/A')}",
             f"    Started:         {op.get('started_at') or 'N/A'}",
             f"    First Deployed:  {op.get('first_deployed') or 'N/A'}",
-            f"    Last Heartbeat:  {op.get('last_heartbeat') or 'never'}",
+            f"    Last Heartbeat:  {op.get('latest_heartbeat_snapshot', {}).get('timestamp') or 'never'}",
             f"    Terminated:      {op.get('terminated_at') or 'N/A'}",
         ]
 

@@ -28,20 +28,21 @@ const TEST_TEMPLATE = `<div class="opdeploy">
                 <span class="opdeploy__step-badge">1</span>
             </div>
             <div class="opdeploy__step-content">
-                <div class="opdeploy__step-title">Bind an Operator</div>
+                <div class="opdeploy__step-title">Download the Operator</div>
+                <div class="opdeploy__step-desc">Run the deployment script on your target host to download and launch the operator binary.</div>
+                <div class="opdeploy__step-note"><code>curl -fsSL http://&lt;host&gt;/g8e | sh -s -- &lt;token&gt;</code></div>
             </div>
         </div>
-    </div>
-    <div class="opdeploy__section">
-        <div class="opdeploy__section-header">
-            <span class="material-symbols-outlined opdeploy__section-icon">key</span>
-            <span class="opdeploy__section-title">Operator API Keys</span>
+        <div class="opdeploy__step">
+            <div class="opdeploy__step-number">
+                <span class="opdeploy__step-badge">2</span>
+            </div>
+            <div class="opdeploy__step-content">
+                <div class="opdeploy__step-title">Manually Bind to Web Session</div>
+                <div class="opdeploy__step-desc">Explicitly bind the operator to your web session in the terminal.</div>
+                <div class="opdeploy__step-note">g8ep is ready.</div>
+            </div>
         </div>
-        <div class="opdeploy__section-desc">Each operator has a unique API key assigned at creation.</div>
-    </div>
-    <div class="opdeploy__footer">
-        <span class="material-symbols-outlined opdeploy__footer-icon">info</span>
-        <span class="opdeploy__footer-text">Your g8ep operator is already authenticated.</span>
     </div>
 </div>`;
 
@@ -129,6 +130,22 @@ describe('OperatorDeployment [UNIT - jsdom]', () => {
             await deployment.mount(container);
 
             expect(deployment._container).toBe(container);
+        });
+
+        it('replaces <host> placeholder with actual hostname', async () => {
+            const container = buildMockContainer();
+            Object.defineProperty(window, 'location', {
+                value: { hostname: 'g8e.local' },
+                writable: true,
+            });
+
+            const deployment = new OperatorDeployment();
+            await deployment.mount(container);
+
+            const codeElement = container.querySelector('code');
+            expect(codeElement).not.toBeNull();
+            expect(codeElement.textContent).toContain('curl -fsSL http://g8e.local/g8e');
+            expect(codeElement.textContent).not.toContain('&lt;host&gt;');
         });
     });
 

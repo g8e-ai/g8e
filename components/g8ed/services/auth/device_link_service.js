@@ -35,8 +35,7 @@ import { logger } from '../../utils/logger.js';
 import { OperatorStatus, OperatorType } from '../../constants/operator.js';
 import { DeviceLinkStatus } from '../../constants/auth.js';
 import { KVKey } from '../../constants/kv_keys.js';
-import { TokenFormat, DeviceLinkError, DEFAULT_DEVICE_LINK_MAX_USES, DEVICE_LINK_MAX_USES_MIN, DEVICE_LINK_MAX_USES_MAX } from '../../constants/auth.js';
-import { DEVICE_LINK_TTL_SECONDS, DEVICE_LINK_TTL_MIN_SECONDS, DEVICE_LINK_TTL_MAX_SECONDS, LOCK_TTL_MS, LOCK_RETRY_DELAY_MS, LOCK_MAX_RETRIES } from '../../constants/auth.js';
+import { TokenFormat, DeviceLinkError, DEVICE_LINK_TTL_SECONDS, DEVICE_LINK_TTL_MIN_SECONDS, DEVICE_LINK_TTL_MAX_SECONDS, LOCK_TTL_MS, LOCK_RETRY_DELAY_MS, LOCK_MAX_RETRIES } from '../../constants/auth.js';
 import { G8eHttpContext } from '../../models/request_models.js';
 
 export function isValidTokenFormat(token) {
@@ -154,48 +153,16 @@ class DeviceLinkService {
         return { success: true };
     }
 
-    async createLink({ user_id, organization_id, name, max_uses = DEFAULT_DEVICE_LINK_MAX_USES, ttl_seconds = DEVICE_LINK_TTL_SECONDS, webSessionId = null }) {
-        if (max_uses < DEVICE_LINK_MAX_USES_MIN || max_uses > DEVICE_LINK_MAX_USES_MAX) {
+    async createLink({ user_id, organization_id, name, max_uses, ttl_seconds = DEVICE_LINK_TTL_SECONDS, webSessionId = null }) {
+        if (max_uses === undefined || max_uses === null) {
+            return { success: false, error: DeviceLinkError.MAX_USES_INVALID };
+        }
+        if (max_uses < 1 || max_uses > 100) {
             return { success: false, error: DeviceLinkError.MAX_USES_INVALID };
         }
 
         if (ttl_seconds < DEVICE_LINK_TTL_MIN_SECONDS || ttl_seconds > DEVICE_LINK_TTL_MAX_SECONDS) {
             return { success: false, error: DeviceLinkError.TTL_INVALID };
-        }
-
-        const currentSlotCount = (await this._operatorService.queryListedOperators([{ field: 'user_id', operator: '==', value: user_id }])).length;
-
-        if (max_uses > currentSlotCount) {
-            const slotsToCreate = max_uses - currentSlotCount;
-            const createdSlotIds = [];
-
-            for (let i = 0; i < slotsToCreate; i++) {
-                const slotNumber = currentSlotCount + i + 1;
-                const creationResponse = await this._operatorService.createOperatorSlot({
-                    userId: user_id,
-                    organizationId: organization_id,
-                    slotNumber: slotNumber,
-                    operatorType: OperatorType.SYSTEM,
-                    cloudSubtype: null,
-                    namePrefix: 'operator',
-                    isG8eNode: false,
-                    webSessionId,
-                });
-
-                if (!creationResponse.success || !creationResponse.operator_id) {
-                    for (const id of createdSlotIds) {
-                        await this._operatorService.terminateOperator(id).catch(() => {});
-                    }
-                    return { success: false, error: DeviceLinkError.SLOT_CREATE_FAILED };
-                }
-                createdSlotIds.push(creationResponse.operator_id);
-            }
-
-            logger.info('[DEVICE-LINK] Generated operator slots for device link', {
-                user_id,
-                slots_created: slotsToCreate,
-                total_slots: max_uses
-            });
         }
 
         const token = `dlk_${crypto.randomBytes(24).toString('base64url')}`;
@@ -265,7 +232,7 @@ class DeviceLinkService {
         const result = await this._deviceRegistration.registerDevice({
             operator_id: linkData.operator_id,
             deviceInfo,
-            operator_type: OperatorType.SYSTEM,
+            operator_type: OperatorType.CLOUD,
             g8eContext,
         });
 
@@ -299,7 +266,12 @@ class DeviceLinkService {
         return {
             success: true,
             operator_session_id: result.operator_session_id,
-            operator_id: result.operator_id
+            operator_id: result.operator_id,
+            api_key: result.api_key,
+            operator_cert: result.operator_cert,
+            operator_cert_key: result.operator_cert_key,
+            session: result.session,
+            config: result.config
         };
     }
 
@@ -361,24 +333,37 @@ class DeviceLinkService {
             return result;
         }
 
-        // 2. New registration for THIS LINK.
-        // Check if device already has a non-terminated slot from a previous link or manual registration.
-        const liveOperators = await this._operatorService.queryListedOperators([{ field: 'user_id', operator: '==', value: linkData.user_id }]);
-        const existingOp = liveOperators.find(op => op.system_fingerprint === sanitizedFingerprint);
+        // 2. g8ee is authoritative for slot management - always pass null operator_id
+        // g8ee will find existing slot by fingerprint or create new slot on-demand
+        const targetOperatorId = null;
 
-        // 3. Acquire distributed lock to prevent race condition where multiple
-        // concurrent claims select the same available operator slot
+        // 3. Acquire distributed lock for fingerprint deduplication
         const lockKey = KVKey.deviceLinkRegistrationLock(token);
         const lockValue = `${token}:${sanitizedFingerprint}:${Date.now()}`;
         let lockAcquired = false;
 
-        for (let attempt = 0; attempt < LOCK_MAX_RETRIES; attempt++) {
+        // Adaptive retry: scale max retries based on device link width (max_uses)
+        // to handle high-concurrency registration events. If a link is created for
+        // N concurrent registrations, ensure retry mechanism is sufficient.
+        const concurrencyWidth = linkData.max_uses;
+        const adaptiveMaxRetries = Math.min(
+            LOCK_MAX_RETRIES + Math.ceil(concurrencyWidth * 2),
+            LOCK_MAX_RETRIES * 3
+        );
+
+        for (let attempt = 0; attempt < adaptiveMaxRetries; attempt++) {
             const acquired = await this._cache_aside.kvSet(lockKey, lockValue, 'PX', LOCK_TTL_MS, 'NX');
             if (acquired) {
                 lockAcquired = true;
                 break;
             }
-            await new Promise(resolve => setTimeout(resolve, LOCK_RETRY_DELAY_MS));
+            // Exponential backoff with jitter to reduce thundering herd
+            const backoffMs = Math.min(
+                LOCK_RETRY_DELAY_MS * Math.pow(1.5, Math.floor(attempt / 5)),
+                LOCK_RETRY_DELAY_MS * 4
+            );
+            const jitter = Math.random() * 50;
+            await new Promise(resolve => setTimeout(resolve, backoffMs + jitter));
         }
 
         if (!lockAcquired) {
@@ -393,45 +378,6 @@ class DeviceLinkService {
         const linkTtl = await this._cache_aside.kvTtl(KVKey.deviceLink(token));
 
         try {
-            let targetOperatorId = existingOp?.id;
-
-            if (!targetOperatorId) {
-                // Re-query operators to ensure we have latest state after lock
-                const freshOperators = await this._operatorService.queryListedOperators([{ field: 'user_id', operator: '==', value: linkData.user_id }], { fresh: true });
-
-                // Double check fingerprint match after lock
-                const opAfterLock = freshOperators.find(op => 
-                    op.system_fingerprint === sanitizedFingerprint
-                );
-
-                if (opAfterLock) {
-                    targetOperatorId = opAfterLock.id;
-                } else {
-                    // Re-use an available operator if one exists
-                    const availableOperator = freshOperators.find(op => op.status === OperatorStatus.AVAILABLE);
-                    
-                    if (availableOperator) {
-                        targetOperatorId = availableOperator.id;
-                    } else {
-                        const creationResponse = await this._operatorService.createOperatorSlot({
-                            userId: linkData.user_id,
-                            organizationId: linkData.organization_id,
-                            slotNumber: freshOperators.length + 1,
-                            operatorType: OperatorType.SYSTEM,
-                            cloudSubtype: null,
-                            namePrefix: 'operator',
-                            isG8eNode: false,
-                            webSessionId: null,
-                        });
-
-                        if (!creationResponse.success || !creationResponse.operator_id) {
-                            return { success: false, error: DeviceLinkError.SLOT_CREATE_FAILED };
-                        }
-                        targetOperatorId = creationResponse.operator_id;
-                    }
-                }
-            }
-
             // Dedup check (fingerprint only — same physical device must not register twice on this link).
             // This MUST happen after lock acquisition and before use counter increment to prevent
             // race conditions where concurrent requests from the same device consume the quota.
@@ -456,13 +402,14 @@ class DeviceLinkService {
                 await this._cache_aside.kvSrem(fingerprintKey, sanitizedFingerprint);
                 const webSessionId = await this._webSessionService.getUserActiveSession(linkData.user_id);
                 const result = await this._deviceRegistration.registerDevice({
-                    operator_id: existingClaim.operator_id,
+                    operator_id: null,
                     deviceInfo,
                     g8eContext: G8eHttpContext.parse({
                         web_session_id: webSessionId,
                         user_id: linkData.user_id,
                         organization_id: linkData.organization_id,
                     }),
+                    device_link_token: token,
                 });
                 return result;
             }
@@ -470,7 +417,7 @@ class DeviceLinkService {
             freshLinkData.claims.push(DeviceLinkClaim.parse({
                 system_fingerprint: sanitizedFingerprint,
                 hostname: sanitizeString(deviceInfo.hostname, 255),
-                operator_id: targetOperatorId,
+                operator_id: null,
                 claimed_at: now()
             }));
 
@@ -482,14 +429,6 @@ class DeviceLinkService {
 
             const remainingTtl = linkTtl > 0 ? linkTtl : DEVICE_LINK_TTL_MIN_SECONDS;
             await this._cache_aside.kvSetJson(KVKey.deviceLink(token), freshLinkData.forKV(), remainingTtl);
-
-            // Now increment use counter AFTER claim is persisted
-            const usesKey = KVKey.deviceLinkUses(token);
-            const newUsesCount = await this._cache_aside.kvIncr(usesKey);
-
-            if (linkTtl > 0) {
-                await this._cache_aside.kvExpire(usesKey, linkTtl);
-            }
 
             const webSessionId = await this._webSessionService.getUserActiveSession(linkData.user_id);
 
@@ -503,10 +442,10 @@ class DeviceLinkService {
                 operator_id: targetOperatorId,
                 deviceInfo,
                 g8eContext,
+                device_link_token: token,
             });
 
             if (!result.success) {
-                await this._cache_aside.kvDecr(usesKey);
                 await this._cache_aside.kvSrem(fingerprintKey, sanitizedFingerprint);
                 // Remove the claim we added
                 freshLinkData.claims = freshLinkData.claims.filter(c => c.system_fingerprint !== sanitizedFingerprint);
@@ -521,13 +460,18 @@ class DeviceLinkService {
             logger.info('[DEVICE-LINK] Device registered', {
                 token_prefix: token.substring(0, 20) + '...',
                 operator_id: result.operator_id,
-                uses: `${newUsesCount}/${freshLinkData.max_uses}`
+                uses: `${freshLinkData.uses}/${freshLinkData.max_uses}`
             });
 
             return {
                 success: true,
                 operator_session_id: result.operator_session_id,
-                operator_id: result.operator_id
+                operator_id: result.operator_id,
+                api_key: result.api_key,
+                operator_cert: result.operator_cert,
+                operator_cert_key: result.operator_cert_key,
+                session: result.session,
+                config: result.config
             };
         } finally {
             const currentValue = await this._cache_aside.kvGet(lockKey);

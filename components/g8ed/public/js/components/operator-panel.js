@@ -55,20 +55,21 @@ export class OperatorPanel {
     constructor(eventBus) {
         this.eventBus = eventBus;
 
-        // Operator state (previously in OperatorSSEHandler)
-        this._operators = [];
-        this._totalOperatorCount = 0;
-        this._activeOperatorCount = 0;
-        this._usedSlots = 0;
-        this._maxSlots = 1;
-        this._isPlatformSetupPending = false;
-        this._isConnected = false;
-        this._lastHeartbeat = null;
+        // Operator state - SSE events are the source of truth, no local cache
+        this.operators = [];
+        this.totalOperatorCount = 0;
+        this.activeOperatorCount = 0;
+        this.usedSlots = 0;
+        this.maxSlots = 1;
+        this.isPlatformSetupPending = false;
+        this.isConnected = false;
+        this.lastHeartbeat = null;
 
         // Component state
         this.isCollapsed = false;
         this._isRendered = false;
-        this._pendingRender = null;
+        this._statePendingDuringRender = false;
+        this._pendingListUpdateData = null;
 
         // Heartbeat buffering state
         this._fullRenderIntervalMs = 20000;
@@ -98,9 +99,9 @@ export class OperatorPanel {
         this.bindEvents();
         this.setupThemeListener();
         this._setupAuthStateListener();
-        if (this._pendingRender) {
-            this._applyOperatorState(this._pendingRender);
-            this._pendingRender = null;
+        if (this._statePendingDuringRender || this._pendingListUpdateData) {
+            this._triggerRender({ cause: 'render_complete' });
+            this._pendingListUpdateData = null;
         }
         this._startFullRenderTimer();
         this.eventBus.emit(EventType.AUTH_COMPONENT_INITIALIZED_OPERATOR, {
@@ -125,68 +126,117 @@ export class OperatorPanel {
 
     _onListUpdated(data) {
         const parsed = OperatorListUpdatedEvent.parse(data);
-        this._operators = parsed.operators;
-        this._totalOperatorCount = parsed.total_count;
-        this._activeOperatorCount = parsed.active_count;
-        this._usedSlots = parsed.used_slots;
-        this._maxSlots = parsed.max_slots;
-        this._isPlatformSetupPending = parsed.is_platform_setup_pending;
-        operatorSessionService.setBoundOperators(this._operators);
-        devLogger.log('[OPERATOR-PANEL] List updated:', this._totalOperatorCount, 'total,', this._activeOperatorCount, 'active, pending setup:', this._isPlatformSetupPending);
-        this._applyOperatorState({ cause: 'list_updated' });
+        this.operators = parsed.operators;
+        this.totalOperatorCount = parsed.total_count;
+        this.activeOperatorCount = parsed.active_count;
+        this.usedSlots = parsed.used_slots;
+        this.maxSlots = parsed.max_slots;
+        this.isPlatformSetupPending = parsed.is_platform_setup_pending;
+        operatorSessionService.setBoundOperators(this.operators);
+        devLogger.log('[OPERATOR-PANEL] [SSE] LIST_UPDATED received:', {
+            total_count: this.totalOperatorCount,
+            active_count: this.activeOperatorCount,
+            used_slots: this.used_slots,
+            max_slots: this.maxSlots,
+            is_platform_setup_pending: this.isPlatformSetupPending,
+            operators_count: this.operators.length,
+            operators: this.operators
+        });
+        if (!this._isRendered) {
+            this._pendingListUpdateData = data;
+            this._statePendingDuringRender = true;
+            return;
+        }
+        this._triggerRender({ cause: 'list_updated' });
     }
 
     _onStatusUpdated(data) {
         const parsed = OperatorStatusUpdatedEvent.parse(data);
 
+        devLogger.log('[OPERATOR-PANEL] [SSE] STATUS_UPDATED received:', {
+            operator_id: parsed.operator_id,
+            status: parsed.status,
+            total_count: parsed.total_count,
+            active_count: parsed.active_count,
+            web_session_id: parsed.web_session_id
+        });
+
         if (parsed.total_count !== null) {
-            this._totalOperatorCount = parsed.total_count;
-            this._activeOperatorCount = parsed.active_count ?? 0;
+            this.totalOperatorCount = parsed.total_count;
+            this.activeOperatorCount = parsed.active_count ?? 0;
         }
 
-        const operatorIndex = this._operators.findIndex(op => op.operator_id === parsed.operator_id);
+        const operatorIndex = this.operators.findIndex(op => op.operator_id === parsed.operator_id);
         if (operatorIndex !== -1) {
-            const existing = this._operators[operatorIndex];
-            this._operators[operatorIndex] = {
+            const existing = this.operators[operatorIndex];
+            this.operators[operatorIndex] = {
                 ...existing,
                 status: parsed.status,
                 status_display: String(parsed.status).toUpperCase(),
                 status_class: String(parsed.status).toLowerCase(),
                 bound_web_session_id: parsed.web_session_id ?? existing.bound_web_session_id,
             };
+            devLogger.log('[OPERATOR-PANEL] Status updated:', {
+                operator_id: parsed.operator_id,
+                old_status: existing.status,
+                new_status: parsed.status
+            });
+        } else {
+            devLogger.warn('[OPERATOR-PANEL] Operator not found for status update:', parsed.operator_id);
         }
 
-        operatorSessionService.setBoundOperators(this._operators);
-        devLogger.log('[OPERATOR-PANEL] Status updated:', parsed.operator_id, parsed.status);
-        this._applyOperatorState({ cause: 'status_updated' });
+        operatorSessionService.setBoundOperators(this.operators);
+        if (!this._isRendered) {
+            this._statePendingDuringRender = true;
+            return;
+        }
+        this._triggerRender({ cause: 'status_updated' });
     }
 
     _onHeartbeat(data) {
         const parsed = HeartbeatSSEEnvelope.parse(data);
         const heartbeatTimestamp = parsed.metrics?.timestamp ?? null;
-        this._lastHeartbeat = heartbeatTimestamp ? heartbeatTimestamp.getTime() : Date.now();
-        this._isConnected = true;
-        devLogger.log('[OPERATOR-PANEL] Heartbeat:', parsed.operator_id);
+        this.lastHeartbeat = heartbeatTimestamp ? heartbeatTimestamp.getTime() : Date.now();
+        this.isConnected = true;
+        
+        devLogger.log('[OPERATOR-PANEL] [SSE] HEARTBEAT_RECEIVED:', {
+            operator_id: parsed.operator_id,
+            status: parsed.status,
+            heartbeat_timestamp: heartbeatTimestamp,
+            metrics: parsed.metrics
+        });
 
-        const operatorIndex = this._operators.findIndex(op => op.operator_id === parsed.operator_id);
+        const operatorIndex = this.operators.findIndex(op => op.operator_id === parsed.operator_id);
         if (operatorIndex !== -1) {
-            const existing = this._operators[operatorIndex];
-            this._operators[operatorIndex] = {
+            const existing = this.operators[operatorIndex];
+            const updatedOperator = {
                 ...existing,
                 status: parsed.status,
                 status_display: String(parsed.status).toUpperCase(),
                 status_class: String(parsed.status).toLowerCase(),
                 latest_heartbeat_snapshot: parsed.metrics,
-                last_heartbeat: heartbeatTimestamp,
             };
+            this.operators[operatorIndex] = updatedOperator;
+            devLogger.log('[OPERATOR-PANEL] Heartbeat applied:', {
+                operator_id: parsed.operator_id,
+                old_status: existing.status,
+                new_status: parsed.status
+            });
+        } else {
+            devLogger.warn('[OPERATOR-PANEL] Operator not found for heartbeat:', {
+                operator_id: parsed.operator_id,
+                current_operators_count: this.operators.length,
+                current_operators: this.operators
+            });
         }
 
         this._heartbeatDirty = true;
         this._patchOperatorCard(parsed.operator_id);
 
         if (parsed.operator_id === this.selectedMetricsOperatorId) {
-            const heartbeatData = this._operators.find(op => op.operator_id === parsed.operator_id);
+            const heartbeatData = this.operators.find(op => op.operator_id === parsed.operator_id);
             if (heartbeatData) {
+                devLogger.log('[OPERATOR-PANEL] Updating metrics panel for selected operator:', parsed.operator_id);
                 this.updateMetrics(heartbeatData);
                 this.updateStatus(heartbeatData.status || OperatorStatus.ACTIVE);
             }
@@ -195,20 +245,13 @@ export class OperatorPanel {
         this.updatePanelStatusFromOperatorCounts();
     }
 
-    _applyOperatorState({ cause }) {
+    _triggerRender({ cause }) {
         if (!this._isRendered) {
-            this._pendingRender = { cause };
+            this._statePendingDuringRender = true;
             return;
         }
 
-        this.operators           = this._operators;
-        this.totalOperatorCount  = this._totalOperatorCount;
-        this.activeOperatorCount = this._activeOperatorCount;
-        this.usedSlots           = this._usedSlots;
-        this.maxSlots            = this._maxSlots;
-        this.isPlatformSetupPending = this._isPlatformSetupPending;
-        this.isConnected         = this._isConnected;
-        this.lastHeartbeat       = this._lastHeartbeat;
+        this._statePendingDuringRender = false;
 
         if (cause === 'scheduled') {
             this.updatePanelStatusFromOperatorCounts();
@@ -325,17 +368,10 @@ export class OperatorPanel {
         this.downloadSectionPopulated = false;
 
         // Operator list state
-        this.operators = [];
         this.boundOperatorIds = [];
         this.selectedMetricsOperatorId = null;
         this.bindAllOverlay = null;
         this.unbindAllOverlay = null;
-
-        // Counts for dynamic title
-        this.totalOperatorCount = 0;
-        this.activeOperatorCount = 0;
-        this.usedSlots = 0;
-        this.maxSlots = 1;
 
         // Pagination state
         this.currentPage = 1;
@@ -518,9 +554,8 @@ export class OperatorPanel {
             if (!this._isRendered) return;
             if (this.isCollapsed) return;
             if (document.visibilityState !== 'visible') return;
-            if (!this._heartbeatDirty) return;
 
-            this._applyOperatorState({ cause: 'scheduled' });
+            this._triggerRender({ cause: 'scheduled' });
             this._heartbeatDirty = false;
         }, this._fullRenderIntervalMs);
     }

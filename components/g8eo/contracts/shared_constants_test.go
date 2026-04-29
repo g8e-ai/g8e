@@ -315,10 +315,6 @@ type sharedAITaskIDValues struct {
 	FetchFileDiff    string `json:"fetch.file.diff"`
 }
 
-type sharedAuthModeValues struct {
-	APIKey string `json:"api_key"`
-}
-
 type sharedHeartbeatTypeValues struct {
 	Automatic string `json:"automatic"`
 	Bootstrap string `json:"bootstrap"`
@@ -344,7 +340,6 @@ type sharedStatusJSON struct {
 	Platform         sharedPlatformValues         `json:"platform"`
 	AISource         sharedAISourceValues         `json:"ai.source"`
 	AITaskID         sharedAITaskIDValues         `json:"ai.task.id"`
-	AuthMode         sharedAuthModeValues         `json:"auth.mode"`
 	HeartbeatType    sharedHeartbeatTypeValues    `json:"heartbeat.type"`
 	ExecutionStatus  sharedExecutionStatusValues  `json:"execution.status"`
 }
@@ -638,10 +633,6 @@ func TestSharedStatusMatchesGoConstants(t *testing.T) {
 		assert.Equal(t, st.AITaskID.FetchFileHistory, constants.Status.AITaskID.FetchFileHistory)
 		assert.Equal(t, st.AITaskID.RestoreFile, constants.Status.AITaskID.RestoreFile)
 		assert.Equal(t, st.AITaskID.FetchFileDiff, constants.Status.AITaskID.FetchFileDiff)
-	})
-
-	t.Run("auth.mode", func(t *testing.T) {
-		assert.Equal(t, st.AuthMode.APIKey, constants.Status.AuthMode.APIKey)
 	})
 }
 

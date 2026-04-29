@@ -74,6 +74,11 @@ class KVKey:
         return f"{CACHE_PREFIX}:user:{user_id}:operators"
 
     @classmethod
+    def operator_slot_counter(cls, user_id: str) -> str:
+        """g8e:user:{user.id}:operator.slot.counter - atomic counter for next slot number"""
+        return f"{CACHE_PREFIX}:user:{user_id}:operator.slot.counter"
+
+    @classmethod
     def user_web_sessions(cls, user_id: str) -> str:
         """g8e:user:{user.id}:web_sessions"""
         return f"{CACHE_PREFIX}:user:{user_id}:web_sessions"

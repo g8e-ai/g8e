@@ -11,8 +11,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
 from enum import Enum
+from pathlib import Path
+
 from app.constants.shared import _AGENTS, _STATUS
+
+
+def _load_security_constraints() -> dict:
+    """Load security constraints from shared model."""
+    shared_models_path = Path(__file__).parent.parent.parent.parent / "shared" / "models" / "security_constraints.json"
+    try:
+        with open(shared_models_path, "r") as f:
+            constraints = json.load(f)
+        return constraints
+    except Exception:
+        return {}
+
+
+_SECURITY_CONSTRAINTS = _load_security_constraints()
 
 
 class LLMProvider(str, Enum):
@@ -491,61 +508,63 @@ INVESTIGATION_LOOKUP_RETRY_DELAYS_MS = [100, 200, 300]
 DB_TIMESTAMP = "__SERVER_TIMESTAMP__"
 NEW_CASE_ID  = "new-case-via-g8ed"
 
-FORBIDDEN_COMMAND_PATTERNS: tuple[str, ...] = (
-    "sudo",
-    "su ",
-    "su\t",
-    "su -",
-    "pkexec",
-    "doas",
-    "runas",
-    "chmod +s",
-    "chmod u+s",
-    "chmod g+s",
-    "setuid",
-    "setgid",
-    "eval ",
-    "exec ",
-    "$(",
-    "`",
-    "> /dev/sd",
-    "> /dev/nvme",
-    "> /dev/vd",
-    "dd if=",
-    "nsenter",
-    "unshare",
-    ":(){ :|:& };:",
-    "| bash",
-    "| sh",
-    "| zsh",
-    "| python",
-    "| perl",
-    "| php",
-    "| ruby",
-    "| node",
-    "base64 -d",
-    "base64 --decode",
-    "rm -rf /",
-    "rm -rf /etc",
-    "rm -rf /var",
-    "rm -rf /usr",
-    "rm -rf /bin",
-    "chmod 777",
-    "chmod -R 777",
-    "chmod a+rwx",
-    "chown -R",
-    "> /etc/passwd",
-    "> /etc/shadow",
-    "> /etc/sudoers",
-    ">> /etc/passwd",
-    ">> /etc/shadow",
-    ">> /etc/sudoers",
-    "iptables -F",
-    "ufw disable",
-    "history -c",
-    "unset HISTFILE",
-    "rm $0",
-    "rm $BASH_SOURCE",
+FORBIDDEN_COMMAND_PATTERNS: tuple[str, ...] = tuple(
+    _SECURITY_CONSTRAINTS.get("forbidden_command_patterns", {}).get("patterns", [
+        "sudo",
+        "su ",
+        "su\t",
+        "su -",
+        "pkexec",
+        "doas",
+        "runas",
+        "chmod +s",
+        "chmod u+s",
+        "chmod g+s",
+        "setuid",
+        "setgid",
+        "eval ",
+        "exec ",
+        "$(",
+        "`",
+        "> /dev/sd",
+        "> /dev/nvme",
+        "> /dev/vd",
+        "dd if=",
+        "nsenter",
+        "unshare",
+        ":(){ :|:& };:",
+        "| bash",
+        "| sh",
+        "| zsh",
+        "| python",
+        "| perl",
+        "| php",
+        "| ruby",
+        "| node",
+        "base64 -d",
+        "base64 --decode",
+        "rm -rf /",
+        "rm -rf /etc",
+        "rm -rf /var",
+        "rm -rf /usr",
+        "rm -rf /bin",
+        "chmod 777",
+        "chmod -R 777",
+        "chmod a+rwx",
+        "chown -R",
+        "> /etc/passwd",
+        "> /etc/shadow",
+        "> /etc/sudoers",
+        ">> /etc/passwd",
+        ">> /etc/shadow",
+        ">> /etc/sudoers",
+        "iptables -F",
+        "ufw disable",
+        "history -c",
+        "unset HISTFILE",
+        "rm $0",
+        "rm $BASH_SOURCE",
+    ])
 )
 
 G8EE_APP_TITLE                       = "g8e Engine"

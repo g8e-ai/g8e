@@ -65,7 +65,7 @@ func (hs *HeartbeatService) SetContext(ctx context.Context) {
 func (hs *HeartbeatService) Build(heartbeatType models.HeartbeatType) *models.Heartbeat {
 	pwd, _ := os.Getwd()
 
-	return &models.Heartbeat{
+	heartbeat := &models.Heartbeat{
 		EventType:         constants.Event.Operator.Heartbeat,
 		SourceComponent:   constants.Status.ComponentName.G8EO,
 		OperatorID:        hs.config.OperatorID,
@@ -127,28 +127,57 @@ func (hs *HeartbeatService) Build(heartbeatType models.HeartbeatType) *models.He
 
 		APIKey: hs.config.APIKey,
 	}
+
+	hs.logger.Info("[HEARTBEAT] Built heartbeat payload",
+		"heartbeat_type", heartbeat.HeartbeatType,
+		"operator_id", heartbeat.OperatorID,
+		"operator_session_id", heartbeat.OperatorSessionID,
+		"hostname", heartbeat.SystemIdentity.Hostname,
+		"os", heartbeat.SystemIdentity.OS,
+		"architecture", heartbeat.SystemIdentity.Architecture,
+		"cpu_percent", heartbeat.PerformanceMetrics.CPUPercent,
+		"memory_percent", heartbeat.PerformanceMetrics.MemoryPercent,
+		"disk_percent", heartbeat.PerformanceMetrics.DiskPercent,
+		"network_latency", heartbeat.PerformanceMetrics.NetworkLatency,
+		"uptime_seconds", heartbeat.UptimeInfo.UptimeSeconds,
+		"public_ip", heartbeat.NetworkInfo.PublicIP,
+		"internal_ip", heartbeat.NetworkInfo.InternalIP)
+
+	return heartbeat
 }
 
 // HandleRequest processes an inbound heartbeat request message.
 func (hs *HeartbeatService) HandleRequest(ctx context.Context, msg PubSubCommandMessage) {
-	hs.logger.Info("Heartbeat requested")
+	hs.logger.Info("[HEARTBEAT] Heartbeat request received",
+		"case_id", msg.CaseID,
+		"investigation_id", msg.InvestigationID,
+		"operator_session_id", msg.OperatorSessionID)
 	heartbeat := hs.Build(models.HeartbeatTypeRequested)
 	heartbeat.CaseID = msg.CaseID
 	heartbeat.InvestigationID = msg.InvestigationID
 	if hs.results != nil {
 		if err := hs.results.PublishHeartbeat(ctx, heartbeat); err != nil {
-			hs.logger.Error("Failed to send heartbeat", "error", err)
+			hs.logger.Error("[HEARTBEAT] Failed to send requested heartbeat", "error", err)
+		} else {
+			hs.logger.Info("[HEARTBEAT] Requested heartbeat sent successfully")
 		}
+	} else {
+		hs.logger.Warn("[HEARTBEAT] Results publisher not set, cannot send heartbeat")
 	}
 }
 
 // SendAutomatic builds and publishes an automatic heartbeat immediately.
 func (hs *HeartbeatService) SendAutomatic() {
+	hs.logger.Info("[HEARTBEAT] Sending automatic heartbeat")
 	heartbeat := hs.Build(models.HeartbeatTypeAutomatic)
 	if hs.results != nil {
 		if err := hs.results.PublishHeartbeat(hs.ctx, heartbeat); err != nil {
-			hs.logger.Error("Failed to send automatic heartbeat", "error", err)
+			hs.logger.Error("[HEARTBEAT] Failed to send automatic heartbeat", "error", err)
+		} else {
+			hs.logger.Info("[HEARTBEAT] Automatic heartbeat sent successfully")
 		}
+	} else {
+		hs.logger.Warn("[HEARTBEAT] Results publisher not set, cannot send automatic heartbeat")
 	}
 }
 
@@ -169,6 +198,7 @@ func (hs *HeartbeatService) StartSchedulerUnlocked() {
 
 func (hs *HeartbeatService) startSchedulerUnlocked() {
 	if hs.config.HeartbeatInterval <= 0 {
+		hs.logger.Info("[HEARTBEAT] Heartbeat scheduler disabled (interval <= 0)")
 		return
 	}
 
@@ -177,16 +207,21 @@ func (hs *HeartbeatService) startSchedulerUnlocked() {
 	ticker := hs.ticker
 	done := hs.done
 
+	hs.logger.Info("[HEARTBEAT] Heartbeat scheduler started",
+		"interval_seconds", hs.config.HeartbeatInterval.Seconds())
+
 	hs.wg.Add(1)
 	go func() {
 		defer hs.wg.Done()
 		for {
 			select {
 			case <-done:
+				hs.logger.Info("[HEARTBEAT] Heartbeat scheduler stopped via done channel")
 				return
 			case <-ticker.C:
 				hs.SendAutomatic()
 			case <-hs.ctx.Done():
+				hs.logger.Info("[HEARTBEAT] Heartbeat scheduler stopped via context cancellation")
 				return
 			}
 		}
@@ -210,6 +245,7 @@ func (hs *HeartbeatService) stopSchedulerUnlocked() {
 	if hs.ticker != nil {
 		hs.ticker.Stop()
 		hs.ticker = nil
+		hs.logger.Info("[HEARTBEAT] Heartbeat ticker stopped")
 	}
 	if hs.done != nil {
 		close(hs.done)

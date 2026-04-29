@@ -11,7 +11,7 @@ The g8e platform utilizes a centralized agent persona system to define and manag
 
 ## Agent Registry
 
-All agent definitions are centralized in `@/home/bob/g8e/shared/constants/agents.json`. Each entry in `agent.metadata` contains:
+All agent definitions are centralized in `@/shared/constants/agents.json`. Each entry in `agent.metadata` contains:
 
 - **Identity Metadata**: `id`, `display_name`, `icon`, `description`.
 - **Structural Metadata**: `role`, `model_tier`, `tools`.
@@ -42,7 +42,7 @@ All agent definitions are centralized in `@/home/bob/g8e/shared/constants/agents
 - **Execution**: Drives multi-step tool loops and articulates intent to the Tribunal.
 - **Staking Logic**: Stakes on one-shot sufficiency. Win if Round 1 passes AND Auditor rules ok. Graduated loss: R2 converges < Auditor revises < Auditor swaps < round fails.
 - **Data Access**: Sees user message + Triage Q&A (as "user context"). Does NOT know Triage is a distinct agent; does NOT know Auditor has memory (Vortex Principle).
-- **System Prompt**: Assembled via `build_modular_system_prompt` in `@/home/bob/g8e/components/g8ee/app/llm/prompts.py`, prepending the persona to core safety, loyalty, and dissent doctrine.
+- **System Prompt**: Assembled via `build_modular_system_prompt` in `@/components/g8ee/app/llm/prompts.py`, prepending the persona to core safety, loyalty, and dissent doctrine.
 
 ### 3. Dash (Assistant AI)
 - **Icon**: `zap`
@@ -90,7 +90,7 @@ All agent definitions are centralized in `@/home/bob/g8e/shared/constants/agents
 
 ## Persona Loader Utility
 
-The `@/home/bob/g8e/components/g8ee/app/utils/agent_persona_loader.py` utility provides centralized loading and validation:
+The `@/components/g8ee/app/utils/agent_persona_loader.py` utility provides centralized loading and validation:
 
 - **Validation**: Uses Pydantic `AgentPersona` model to enforce field presence and alignment.
 - **Caching**: `agents.json` is loaded via `@lru_cache(maxsize=1)`, making it process-lifetime immutable for performance.

@@ -23,6 +23,7 @@ import { SSEPushRequest } from '../../models/request_models.js';
 import { ErrorResponse, SSEPushResponse } from '../../models/response_models.js';
 import { logger } from '../../utils/logger.js';
 import { redactWebSessionId } from '../../utils/security.js';
+import { getOperatorService } from '../../services/initialization.js';
 
 /**
  * @param {Object} options
@@ -47,46 +48,93 @@ export function createInternalSSERouter({ services, authorizationMiddleware }) {
         try {
             const pushReq = SSEPushRequest.parse(req.body);
 
-            logger.info('[INTERNAL-HTTP] SSE push request received', {
-                webSessionId: redactWebSessionId(pushReq.web_session_id),
-                userId: pushReq.user_id,
-                eventType: pushReq.event.type
-            });
+            const isHeartbeat = pushReq.event.type === 'g8e.v1.operator.heartbeat.received';
+            if (isHeartbeat) {
+                logger.info('[SSE-ROUTING] [HEARTBEAT] Heartbeat SSE push received from g8ee', {
+                    webSessionId: redactWebSessionId(pushReq.web_session_id),
+                    userId: pushReq.user_id,
+                    eventType: pushReq.event.type,
+                    operator_id: pushReq.event.payload?.operator_id,
+                    operator_status: pushReq.event.payload?.status,
+                    has_metrics: !!pushReq.event.payload?.metrics
+                });
+            } else {
+                logger.info('[SSE-ROUTING] SSE push request received', {
+                    webSessionId: redactWebSessionId(pushReq.web_session_id),
+                    userId: pushReq.user_id,
+                    eventType: pushReq.event.type
+                });
+            }
 
             logger.info(`[SESSION TRACE] g8ed received SSE push - web_session_id=${redactWebSessionId(pushReq.web_session_id)}, event_type=${pushReq.event.type}`);
 
             if (pushReq.web_session_id) {
                 // SessionEvent: targeted delivery to a specific web session.
+                if (isHeartbeat) {
+                    logger.info('[SSE-ROUTING] [HEARTBEAT] Routing heartbeat to targeted web session', {
+                        webSessionId: redactWebSessionId(pushReq.web_session_id),
+                        operator_id: pushReq.event.payload?.operator_id
+                    });
+                }
                 const delivered = await sseService.publishEvent(pushReq.web_session_id, pushReq.event, (status) => {
                     if (status.delivered) {
-                        logger.info('[INTERNAL-HTTP] SSE event delivered via callback', {
-                            webSessionId: redactWebSessionId(pushReq.web_session_id),
-                            eventType: pushReq.event.type
-                        });
+                        if (isHeartbeat) {
+                            logger.info('[SSE-ROUTING] [HEARTBEAT] Heartbeat delivered to web session', {
+                                webSessionId: redactWebSessionId(pushReq.web_session_id),
+                                operator_id: pushReq.event.payload?.operator_id
+                            });
+                        } else {
+                            logger.info('[INTERNAL-HTTP] SSE event delivered via callback', {
+                                webSessionId: redactWebSessionId(pushReq.web_session_id),
+                                eventType: pushReq.event.type
+                            });
+                        }
                     } else {
-                        logger.warn('[INTERNAL-HTTP] SSE event delivery failed via callback', {
-                            webSessionId: redactWebSessionId(pushReq.web_session_id),
-                            eventType: pushReq.event.type
-                        });
+                        if (isHeartbeat) {
+                            logger.warn('[SSE-ROUTING] [HEARTBEAT] Heartbeat delivery failed via callback', {
+                                webSessionId: redactWebSessionId(pushReq.web_session_id),
+                                operator_id: pushReq.event.payload?.operator_id
+                            });
+                        } else {
+                            logger.warn('[INTERNAL-HTTP] SSE event delivery failed via callback', {
+                                webSessionId: redactWebSessionId(pushReq.web_session_id),
+                                eventType: pushReq.event.type
+                            });
+                        }
                     }
                 });
 
                 if (!delivered) {
                     // Targeted session not locally connected. A failed targeted
                     // push IS an error (the caller expected a specific session).
-                    logger.warn('[INTERNAL-HTTP] Failed to publish SSE event to targeted session', {
-                        webSessionId: redactWebSessionId(pushReq.web_session_id),
-                        userId: pushReq.user_id
-                    });
+                    if (isHeartbeat) {
+                        logger.warn('[SSE-ROUTING] [HEARTBEAT] Failed to publish heartbeat to targeted session (session not connected)', {
+                            webSessionId: redactWebSessionId(pushReq.web_session_id),
+                            userId: pushReq.user_id,
+                            operator_id: pushReq.event.payload?.operator_id
+                        });
+                    } else {
+                        logger.warn('[INTERNAL-HTTP] Failed to publish SSE event to targeted session', {
+                            webSessionId: redactWebSessionId(pushReq.web_session_id),
+                            userId: pushReq.user_id
+                        });
+                    }
                     return res.status(500).json(new ErrorResponse({
                         error: 'Failed to publish event'
                     }).forWire());
                 }
 
-                logger.info('[INTERNAL-HTTP] SSE event delivered via HTTP (targeted)', {
-                    webSessionId: redactWebSessionId(pushReq.web_session_id),
-                    eventType: pushReq.event.type
-                });
+                if (isHeartbeat) {
+                    logger.info('[SSE-ROUTING] [HEARTBEAT] Heartbeat delivered via HTTP (targeted session)', {
+                        webSessionId: redactWebSessionId(pushReq.web_session_id),
+                        operator_id: pushReq.event.payload?.operator_id
+                    });
+                } else {
+                    logger.info('[INTERNAL-HTTP] SSE event delivered via HTTP (targeted)', {
+                        webSessionId: redactWebSessionId(pushReq.web_session_id),
+                        eventType: pushReq.event.type
+                    });
+                }
                 return res.json(new SSEPushResponse({ success: true, delivered: 1 }).forWire());
             }
 
@@ -96,12 +144,46 @@ export function createInternalSSERouter({ services, authorizationMiddleware }) {
             // A zero count is the documented outcome when the user has no connected
             // sessions and is NOT an error - collapsing it into a 500 would mask real
             // g8ed outages when BackgroundEvent fan-out is routine.
+            if (isHeartbeat) {
+                logger.info('[SSE-ROUTING] [HEARTBEAT] Fanning out heartbeat to all user sessions', {
+                    userId: pushReq.user_id,
+                    operator_id: pushReq.event.payload?.operator_id
+                });
+            }
             const successCount = await sseService.publishToUser(pushReq.user_id, pushReq.event);
-            logger.info('[INTERNAL-HTTP] SSE event fanned out to user sessions', {
-                userId: pushReq.user_id,
-                successCount,
-                eventType: pushReq.event.type
-            });
+            if (isHeartbeat) {
+                logger.info('[SSE-ROUTING] [HEARTBEAT] Heartbeat fanned out to user sessions', {
+                    userId: pushReq.user_id,
+                    successCount,
+                    operator_id: pushReq.event.payload?.operator_id
+                });
+
+                // Broadcast full operator list to all connected clients for this user
+                // This ensures the UI gets the hostname from the heartbeat snapshot
+                try {
+                    const operatorService = getOperatorService();
+                    const operatorList = await operatorService.getUserOperators(pushReq.user_id);
+                    const userSessions = sseService.userSessions.get(pushReq.user_id);
+                    if (userSessions) {
+                        for (const sessionId of userSessions) {
+                            await sseService.publishEvent(sessionId, operatorList);
+                        }
+                        logger.info('[SSE-ROUTING] [HEARTBEAT] Broadcast operator list after heartbeat', {
+                            userId: pushReq.user_id,
+                            operator_id: pushReq.event.payload?.operator_id,
+                            sessionCount: userSessions.size
+                        });
+                    }
+                } catch (error) {
+                    logger.warn('[SSE-ROUTING] [HEARTBEAT] Failed to broadcast operator list after heartbeat', { error: error.message });
+                }
+            } else {
+                logger.info('[INTERNAL-HTTP] SSE event fanned out to user sessions', {
+                    userId: pushReq.user_id,
+                    successCount,
+                    eventType: pushReq.event.type
+                });
+            }
             return res.json(new SSEPushResponse({ success: true, delivered: successCount }).forWire());
 
         } catch (error) {

@@ -112,7 +112,7 @@ class OperatorStreamExecutor:
         hosts_str = ",".join(args.hosts)
         cmd = [
             "docker", "exec", "g8ep",
-            "/home/bob/g8e/g8e", "operator", "stream",
+            "/app/g8e", "operator", "stream",
             "--hosts", hosts_str,
             "--arch", args.arch,
             "--token", device_token,

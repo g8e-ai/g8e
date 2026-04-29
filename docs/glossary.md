@@ -124,6 +124,8 @@ The platform name. g8e is an open-source, air-gapped capable AI governance platf
 
 A pre-authorized deployment method for installing Operators on one or many systems from a single token. Users generate a Device Link from the Operator Panel with configurable `max_uses` (1–10,000, default 1) and expiry (1 minute to 7 days, default 1 hour). The token (`dlk_` prefix) is distributed via Ansible, SSH, or configuration management as `g8e.operator --device-token dlk_xxx`. Each system auto-registers: the platform claims an existing AVAILABLE Operator slot for that user, or creates one on demand if none exist. No browser approval required — the link itself is the authorization. Operator slots are the accounting unit — each registered device consumes one slot.
 
+**Authority Split:** g8ed is authoritative for device link documents (usage tracking, exhaustion checking, claims management); g8ee is authoritative for operator documents (slot management, lifecycle operations).
+
 ---
 
 ## g8e Sentinel

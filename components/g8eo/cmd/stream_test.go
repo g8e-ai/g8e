@@ -364,14 +364,14 @@ func TestSSHPatternMatch_MultiplePatterns(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestResolveHost_UserAtHost(t *testing.T) {
-	r := resolveHost("deploy@10.0.0.5", "", "")
+	r := resolveHost("deploy@10.0.0.5", "", "", "", "")
 	assert.Equal(t, "deploy", r.user)
 	assert.Equal(t, "10.0.0.5", r.hostname)
 	assert.Equal(t, "22", r.port)
 }
 
 func TestResolveHost_UserAtHostPort(t *testing.T) {
-	r := resolveHost("admin@myhost:2222", "", "")
+	r := resolveHost("admin@myhost:2222", "", "", "", "")
 	assert.Equal(t, "admin", r.user)
 	assert.Equal(t, "myhost", r.hostname)
 	assert.Equal(t, "2222", r.port)
@@ -388,7 +388,7 @@ Host myalias
 `
 	require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
 
-	r := resolveHost("myalias", cfg, "")
+	r := resolveHost("myalias", cfg, "", "", "")
 	assert.Equal(t, "ubuntu", r.user)
 	assert.Equal(t, "192.168.1.50", r.hostname)
 	assert.Equal(t, "2222", r.port)
@@ -404,12 +404,12 @@ Host myhost
 	require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
 
 	// Explicit user@host overrides config User
-	r := resolveHost("explicit@myhost", cfg, "")
+	r := resolveHost("explicit@myhost", cfg, "", "", "")
 	assert.Equal(t, "explicit", r.user)
 }
 
 func TestResolveHost_DefaultPort(t *testing.T) {
-	r := resolveHost("somehost", "/nonexistent", "")
+	r := resolveHost("somehost", "/nonexistent", "", "", "")
 	assert.Equal(t, "22", r.port)
 }
 
@@ -494,7 +494,7 @@ Host prod-*
 `
 	require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
 
-	r := resolveHost("prod-web-01", cfg, "")
+	r := resolveHost("prod-web-01", cfg, "", "", "")
 	assert.Equal(t, "ubuntu", r.user)
 	assert.Equal(t, "prod-web-01", r.hostname)
 	assert.Equal(t, "22", r.port)
@@ -511,13 +511,13 @@ Host myhost
 `
 	require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
 
-	r := resolveHost("myhost", cfg, "")
+	r := resolveHost("myhost", cfg, "", "", "")
 	assert.Equal(t, "22", r.port)
 	assert.Equal(t, "10.0.0.1", r.hostname)
 }
 
 func TestResolveHost_NoSSHConfig_DefaultsApplied(t *testing.T) {
-	r := resolveHost("bare-host", "/nonexistent/ssh/config", "fallback-user")
+	r := resolveHost("bare-host", "/nonexistent/ssh/config", "fallback-user", "", "")
 	assert.Equal(t, "bare-host", r.hostname)
 	assert.Equal(t, "22", r.port)
 	assert.NotEmpty(t, r.user)
@@ -533,7 +533,7 @@ Host alias
 `
 	require.NoError(t, os.WriteFile(cfg, []byte(content), 0600))
 
-	r := resolveHost("alias", cfg, "")
+	r := resolveHost("alias", cfg, "", "", "")
 	assert.Equal(t, "192.168.99.1", r.hostname)
 	assert.Equal(t, "alias", r.original)
 }
@@ -722,7 +722,7 @@ func TestEmitJSON_TsIsRFC3339(t *testing.T) {
 
 func TestRunConcurrentStream_NoHosts(t *testing.T) {
 	ctx := context.Background()
-	results := runConcurrentStream(ctx, nil, []byte("bin"), "", "", 10, 5*time.Second, "", "")
+	results := runConcurrentStream(ctx, nil, []byte("bin"), "", "", 10, 5*time.Second, "", "", "", "")
 	assert.Empty(t, results)
 }
 
@@ -731,7 +731,7 @@ func TestRunConcurrentStream_ContextCancelled(t *testing.T) {
 	cancel()
 
 	hosts := []string{"host1", "host2", "host3"}
-	results := runConcurrentStream(ctx, hosts, []byte("bin"), "", "", 10, 100*time.Millisecond, "", "")
+	results := runConcurrentStream(ctx, hosts, []byte("bin"), "", "", 10, 100*time.Millisecond, "", "", "", "")
 
 	assert.Len(t, results, len(hosts))
 	for _, res := range results {
@@ -745,7 +745,7 @@ func TestRunConcurrentStream_AllResultsCollected(t *testing.T) {
 	cancel()
 
 	hosts := []string{"a", "b", "c", "d", "e"}
-	results := runConcurrentStream(ctx, hosts, []byte("x"), "", "", 5, 50*time.Millisecond, "", "")
+	results := runConcurrentStream(ctx, hosts, []byte("x"), "", "", 5, 50*time.Millisecond, "", "", "", "")
 
 	assert.Len(t, results, len(hosts), "must collect exactly one result per host")
 
@@ -767,7 +767,7 @@ func TestRunConcurrentStream_ConcurrencyLimitRespected(t *testing.T) {
 		hosts[i] = "host"
 	}
 
-	results := runConcurrentStream(ctx, hosts, []byte("bin"), "", "", 3, 50*time.Millisecond, "", "")
+	results := runConcurrentStream(ctx, hosts, []byte("bin"), "", "", 3, 50*time.Millisecond, "", "", "", "")
 	assert.Len(t, results, len(hosts))
 }
 
@@ -782,7 +782,7 @@ func TestRunConcurrentStream_EmitsPerHostEventsToStdout(t *testing.T) {
 	cancel()
 
 	hosts := []string{"host-a", "host-b"}
-	runConcurrentStream(ctx, hosts, []byte("bin"), "", "", 10, 50*time.Millisecond, "", "")
+	runConcurrentStream(ctx, hosts, []byte("bin"), "", "", 10, 50*time.Millisecond, "", "", "", "")
 	w.Close()
 
 	var buf bytes.Buffer
@@ -885,7 +885,7 @@ func TestRunStream_ValidBinaryWithCancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	results := runConcurrentStream(ctx, []string{"host1"}, binaryData, "", "", 1, 50*time.Millisecond, "", "")
+	results := runConcurrentStream(ctx, []string{"host1"}, binaryData, "", "", 1, 50*time.Millisecond, "", "", "", "")
 	require.Len(t, results, 1)
 	assert.NotEmpty(t, results[0].Error)
 }

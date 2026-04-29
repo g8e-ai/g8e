@@ -51,11 +51,6 @@ const (
 	HeartbeatTypeRequested HeartbeatType = "requested"
 )
 
-// authModeValues defines the supported operator authentication modes.
-type authModeValues struct {
-	APIKey string
-}
-
 // operatorStatusValues mirrors shared/constants/status.json g8e.status.
 type operatorStatusValues struct {
 	Available   string
@@ -139,7 +134,6 @@ type listenModeValues struct {
 
 // statusValues is the top-level namespace. Canonical values from shared/constants/status.json.
 type statusValues struct {
-	AuthMode         authModeValues
 	ListenMode       listenModeValues
 	OperatorStatus   operatorStatusValues
 	OperatorType     operatorTypeValues
@@ -155,9 +149,6 @@ type statusValues struct {
 // Status is the package-level entry point for all status constants.
 // Usage: constants.Status.OperatorStatus.Bound
 var Status = statusValues{
-	AuthMode: authModeValues{
-		APIKey: "api_key",
-	},
 	ListenMode: listenModeValues{
 		StatusOK: "ok",
 		Mode:     "listen",

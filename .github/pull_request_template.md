@@ -17,7 +17,7 @@
 ## Testing
 - [ ] I have reproduced the bug (if applicable) with a test before fixing it.
 - [ ] I have added/updated tests to cover the changes.
-- [ ] All tests pass locally using `/home/bob/g8e/g8e test <component>`.
+- [ ] All tests pass locally using `./g8e test <component>`.
 
 ## Related Documentation
 - [ ] I have reviewed and updated relevant documentation in `docs/` as necessary.

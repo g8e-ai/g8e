@@ -202,6 +202,8 @@ For full details on every g8eo security layer — CA trust bootstrap, mTLS, fing
 | **API Key** | Traditional | Pass `--key` or set `G8E_OPERATOR_API_KEY` |
 | **Device Link** | Deployment | Auth via `--device-token` or `G8E_DEVICE_TOKEN`; returns API key + certificate |
 
+**Authority Split:** g8ed is authoritative for device link documents (usage tracking, exhaustion checking, claims management); g8ee is authoritative for operator documents (slot management, lifecycle operations).
+
 ### Session Naming
 
 - All session ID fields use `snake_case` in JSON/API payloads (`operator_session_id`)

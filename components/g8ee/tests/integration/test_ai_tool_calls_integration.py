@@ -161,8 +161,8 @@ def sample_investigation():
             "latest_heartbeat_snapshot": HeartbeatSnapshot(
                 system_identity=HeartbeatSystemIdentity(
                     os="linux",
-                    hostname="bobuntu",
-                    current_user="bob",
+                    hostname="g8ebuntu",
+                    current_user="g8e",
                     architecture="amd64"
                 )
             )

@@ -335,15 +335,30 @@ func (rr *PubSubResultsService) PublishResult(ctx context.Context, result *model
 
 // PublishHeartbeat publishes heartbeat to dedicated g8es pub/sub heartbeat channel
 func (rr *PubSubResultsService) PublishHeartbeat(ctx context.Context, heartbeat *models.Heartbeat) error {
+	rr.logger.Info("[HEARTBEAT] Publishing heartbeat to g8es pub/sub",
+		"operator_id", heartbeat.OperatorID,
+		"operator_session_id", heartbeat.OperatorSessionID,
+		"heartbeat_type", heartbeat.HeartbeatType,
+		"hostname", heartbeat.SystemIdentity.Hostname,
+		"cpu_percent", heartbeat.PerformanceMetrics.CPUPercent,
+		"memory_percent", heartbeat.PerformanceMetrics.MemoryPercent,
+		"disk_percent", heartbeat.PerformanceMetrics.DiskPercent,
+		"network_latency", heartbeat.PerformanceMetrics.NetworkLatency)
+
 	data, err := json.Marshal(heartbeat)
 	if err != nil {
+		rr.logger.Error("[HEARTBEAT] Failed to marshal heartbeat", "error", err)
 		return fmt.Errorf("failed to marshal heartbeat: %w", err)
 	}
 	channelName := constants.HeartbeatChannel(rr.config.OperatorID, heartbeat.OperatorSessionID)
+	rr.logger.Info("[HEARTBEAT] Publishing to channel", "channel", channelName)
 	if err := rr.client.Publish(ctx, channelName, data); err != nil {
+		rr.logger.Error("[HEARTBEAT] Failed to publish to g8es pub/sub", "error", err, "channel", channelName)
 		return fmt.Errorf("failed to send heartbeat: %w", err)
 	}
-	rr.logger.Info("Heartbeat transmitted", "operator_session_id", heartbeat.OperatorSessionID)
+	rr.logger.Info("[HEARTBEAT] Heartbeat transmitted successfully",
+		"operator_session_id", heartbeat.OperatorSessionID,
+		"channel", channelName)
 	return nil
 }
 

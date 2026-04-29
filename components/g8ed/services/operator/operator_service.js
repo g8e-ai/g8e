@@ -113,8 +113,10 @@ class OperatorService {
         return this.operatorDataService.getOperatorFresh(operatorId);
     }
 
-    async getOperatorByUserId(userId) {
-        const data = await this.queryOperators([{ field: 'user_id', operator: '==', value: userId }]);
+    async getOperatorByUserId(userId, fresh = false) {
+        const data = fresh
+            ? await this.operatorDataService.queryOperatorsFresh([{ field: 'user_id', operator: '==', value: userId }])
+            : await this.queryOperators([{ field: 'user_id', operator: '==', value: userId }]);
         if (!data || data.length === 0) return null;
         const deployed = data.find(op => op.status === OperatorStatus.ACTIVE || op.status === OperatorStatus.BOUND);
         if (deployed) return deployed;
@@ -238,21 +240,23 @@ class OperatorService {
         return true;
     }
 
-    async getUserVisibleOperatorStats(userId, allStatuses = false) {
+    async getUserVisibleOperatorStats(userId, allStatuses = false, fresh = false) {
         let operators;
         if (!allStatuses) {
-            operators = await this.operatorDataService.queryListedOperators([{ field: 'user_id', operator: '==', value: userId }]);
+            operators = await this.operatorDataService.queryListedOperators([{ field: 'user_id', operator: '==', value: userId }], { fresh });
             // Also filter out UNAVAILABLE for user-visible stats
             operators = operators.filter(op => op.status !== OperatorStatus.UNAVAILABLE);
         } else {
-            operators = await this.operatorDataService.queryOperators([{ field: 'user_id', operator: '==', value: userId }]);
+            operators = fresh
+                ? await this.operatorDataService.queryOperatorsFresh([{ field: 'user_id', operator: '==', value: userId }])
+                : await this.operatorDataService.queryOperators([{ field: 'user_id', operator: '==', value: userId }]);
         }
         const activeCount = operators.filter(op => op.status === OperatorStatus.ACTIVE || op.status === OperatorStatus.BOUND).length;
         return { operators, totalCount: operators.length, activeCount };
     }
 
     async getUserOperators(userId, allStatuses = false) {
-        const stats = await this.getUserVisibleOperatorStats(userId, allStatuses);
+        const stats = await this.getUserVisibleOperatorStats(userId, allStatuses, true);
         const { usedSlots } = this.calculateSlotUsage(stats.operators);
         const slots = stats.operators.map(op => OperatorSlot.fromOperator(op));
 
@@ -282,13 +286,15 @@ class OperatorService {
      * Get all operators across all users.
      * Excludes terminated operators by default.
      */
-    async getAllOperators(allStatuses = false) {
+    async getAllOperators(allStatuses = false, fresh = false) {
         const filters = [];
         let filtered;
         if (!allStatuses) {
-            filtered = await this.operatorDataService.queryListedOperators(filters);
+            filtered = await this.operatorDataService.queryListedOperators(filters, { fresh });
         } else {
-            filtered = await this.operatorDataService.queryOperators(filters);
+            filtered = fresh
+                ? await this.operatorDataService.queryOperatorsFresh(filters)
+                : await this.operatorDataService.queryOperators(filters);
         }
 
         const activeCount = filtered.filter(op => op.status === OperatorStatus.ACTIVE || op.status === OperatorStatus.BOUND).length;
@@ -306,7 +312,7 @@ class OperatorService {
      */
     async syncSessionOnConnect(userId, webSessionId) {
         try {
-            const { operators: allOperators } = await this.getUserVisibleOperatorStats(userId);
+            const { operators: allOperators } = await this.getUserVisibleOperatorStats(userId, false, true);
             
             // Re-bind any operators that were bound to a different session ID (tab swap/refresh)
             for (const op of allOperators) {

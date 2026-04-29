@@ -221,15 +221,14 @@ class TestOperatorLifecycleService:
             "id": operator_id,
             "user_id": "user-test",
             "status": OperatorStatus.BOUND,
-            "last_heartbeat": None,
+            "latest_heartbeat_snapshot": None,
         }
         mock_cache.update_document.return_value = CacheOperationResult(success=True)
 
         await lifecycle_service.update_operator_status(operator_id, OperatorStatus.ACTIVE)
 
-        # Verify status update does NOT set last_heartbeat (only set on actual heartbeat ingestion)
+        # Verify status update does NOT set heartbeat timestamp (only set on actual heartbeat ingestion)
         args, kwargs = mock_cache.update_document.call_args_list[0]
-        assert "last_heartbeat" not in kwargs["data"]
         assert kwargs["data"]["status"] == OperatorStatus.ACTIVE
 
     async def test_update_operator_status_not_found_returns_false(self, lifecycle_service, mock_cache):

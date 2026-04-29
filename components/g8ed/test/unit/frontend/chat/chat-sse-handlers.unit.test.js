@@ -359,6 +359,26 @@ describe('ChatComponent — handleAITextChunk edge cases [FRONTEND - jsdom]', ()
         expect(terminalSpy.appendStreamingTextChunk).not.toHaveBeenCalled();
     });
 
+    it('clears pending activity indicators when text streaming starts', () => {
+        // Setup existing indicators
+        chat._processingIndicators = new Map([[WEB_SESSION_ID, 'proc-1']]);
+        chat._universalToolIndicators = new Map([['exec-1', 'tool-1']]);
+        chat._portCheckIndicators = new Map([['exec-2', 'port-1']]);
+
+        chat.handleAITextChunk({
+            web_session_id: WEB_SESSION_ID,
+            investigation_id: INVESTIGATION_ID,
+            content: 'starting text',
+        });
+
+        expect(terminalSpy.completeActivityIndicator).toHaveBeenCalledWith('proc-1');
+        expect(terminalSpy.completeActivityIndicator).toHaveBeenCalledWith('tool-1');
+        expect(terminalSpy.completeActivityIndicator).toHaveBeenCalledWith('port-1');
+        expect(chat._processingIndicators.size).toBe(0);
+        expect(chat._universalToolIndicators.size).toBe(0);
+        expect(chat._portCheckIndicators.size).toBe(0);
+    });
+
     it('event bus wiring: LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED triggers handleAITextChunk', () => {
         chat.setupSSEListeners();
 

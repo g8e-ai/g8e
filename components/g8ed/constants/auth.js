@@ -20,12 +20,6 @@ import { _DOCUMENT_IDS } from './shared.js';
  * Wire-protocol values are sourced from shared/constants/status.json.
  */
 
-// ---------------------------------------------------------------------------
-// Device Link Defaults
-// ---------------------------------------------------------------------------
-export const DEFAULT_DEVICE_LINK_MAX_USES = 1;
-export const DEVICE_LINK_MAX_USES_MIN = 1;
-export const DEVICE_LINK_MAX_USES_MAX = 10000;
 
 // ---------------------------------------------------------------------------
 // Session TTL Overrides
@@ -132,16 +126,6 @@ export const ApiKeyStatus = Object.freeze({
     REVOKED:   _STATUS['api.key.status']['revoked'],
     EXPIRED:   _STATUS['api.key.status']['expired'],
     SUSPENDED: _STATUS['api.key.status']['suspended'],
-});
-
-/**
- * Authentication Mode identifiers
- * Sent by g8eo in the auth_mode field of POST /api/auth/g8e.
- * Canonical values from shared/constants/status.json auth.mode.
- */
-export const AuthMode = Object.freeze({
-    API_KEY:          _STATUS['auth.mode']['api_key'],
-    OPERATOR_SESSION: _STATUS['auth.mode']['operator_session'],
 });
 
 /**

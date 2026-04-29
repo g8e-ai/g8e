@@ -36,7 +36,7 @@ export function createInternalOperatorRouter({ services, authorizationMiddleware
             const allStatuses = req.query.all === 'true';
             logger.info('[INTERNAL-HTTP] Listing all operators', { allStatuses });
 
-            const { operators, total_count, active_count } = await operatorService.getAllOperators(allStatuses);
+            const { operators, total_count, active_count } = await operatorService.getAllOperators(allStatuses, true);
 
             logger.info('[INTERNAL-HTTP] All operators listed', {
                 total_count,

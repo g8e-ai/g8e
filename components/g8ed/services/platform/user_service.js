@@ -280,7 +280,7 @@ class UserService {
         try {
             const result = await this._cache_aside.queryDocuments(this.collectionName, [
                 { field: 'email', operator: '==', value: email.toLowerCase() }
-            ]);
+            ], null, true);
 
             if (result.length > 0) {
                 return UserDocument.parse(result[0]);
@@ -302,7 +302,7 @@ class UserService {
         try {
             const result = await this._cache_aside.queryDocuments(this.collectionName, [
                 { field: 'g8e_key', operator: '==', value: apiKey }
-            ]);
+            ], null, true);
 
             if (result.length > 0) {
                 const userDoc = UserDocument.parse(result[0]);

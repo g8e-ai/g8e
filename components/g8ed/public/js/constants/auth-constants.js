@@ -32,13 +32,6 @@ export const DeviceLinkStatus = Object.freeze({
     REVOKED:   'revoked',
 });
 
-// ---------------------------------------------------------------------------
-// Device Link Defaults
-// ---------------------------------------------------------------------------
-export const DEFAULT_DEVICE_LINK_MAX_USES = 1;
-export const DEVICE_LINK_MAX_USES_MIN = 1;
-export const DEVICE_LINK_MAX_USES_MAX = 10000;
-
 export const IntentStatus = Object.freeze({
     GRANTED: 'granted',
     FAILED:  'failed',

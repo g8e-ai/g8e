@@ -6,7 +6,7 @@ set -e
 NODE_ID="${EVAL_NODE_ID:-eval-node-01}"
 NODE_PROFILE="${EVAL_PROFILE:-healthy}"
 OPERATOR_ENDPOINT="${G8E_ENDPOINT:-g8e.local}"
-OPERATOR_BINARY="/opt/g8e.operator"
+OPERATOR_BINARY="/opt/g8e/g8e.operator"
 OPERATOR_LOG_PREFIX="[$NODE_ID operator]"
 
 echo "[$NODE_ID] Starting eval node (profile: $NODE_PROFILE)"

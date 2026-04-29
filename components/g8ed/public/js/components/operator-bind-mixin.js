@@ -328,6 +328,20 @@ export const BindOperatorsMixin = {
                     selectAllCheckbox.checked = allChecked;
                 });
             });
+
+            const operatorItems = overlay.querySelectorAll('.bind-all-operator-item');
+            operatorItems.forEach(item => {
+                item.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('operator-select-checkbox')) {
+                        return;
+                    }
+                    const checkbox = item.querySelector('.operator-select-checkbox');
+                    if (checkbox) {
+                        checkbox.checked = !checkbox.checked;
+                        checkbox.dispatchEvent(new Event('change'));
+                    }
+                });
+            });
         }
 
         const closeOverlay = () => {

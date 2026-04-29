@@ -48,16 +48,18 @@ func RunStream(args []string) {
 	fs := flag.NewFlagSet("stream", flag.ContinueOnError)
 
 	var (
-		arch         string
-		hostsFile    string
-		concurrency  int
-		timeoutSec   int
-		endpoint     string
-		deviceToken  string
-		apiKey       string
-		noGit        bool
-		sshConfigArg string
-		binaryDir    string
+		arch            string
+		hostsFile       string
+		concurrency     int
+		timeoutSec      int
+		endpoint        string
+		deviceToken     string
+		apiKey          string
+		noGit           bool
+		sshConfigArg    string
+		binaryDir       string
+		sshIdentityFile string
+		sshUser         string
 	)
 
 	fs.StringVar(&arch, "arch", defaultArch, "Target architecture: amd64, arm64, 386")
@@ -70,6 +72,8 @@ func RunStream(args []string) {
 	fs.BoolVar(&noGit, "no-git", false, "Disable ledger")
 	fs.StringVar(&sshConfigArg, "ssh-config", "", "Path to SSH config file (default: ~/.ssh/config)")
 	fs.StringVar(&binaryDir, "binary-dir", defaultBinaryDir, "Directory containing arch-specific operator builds")
+	fs.StringVar(&sshIdentityFile, "ssh-identity-file", "", "SSH identity file path")
+	fs.StringVar(&sshUser, "ssh-user", "", "SSH username")
 
 	positionalHosts, err := parseInterleavedArgs(fs, args)
 	if err != nil {
@@ -147,7 +151,7 @@ func RunStream(args []string) {
 
 	// Run concurrent streaming
 	wallStart := time.Now()
-	results := runConcurrentStream(ctx, hosts, binaryData, operatorArgs, sshConfigArg, concurrency, dialTimeout, settings.SSHAuthSock, settings.User)
+	results := runConcurrentStream(ctx, hosts, binaryData, operatorArgs, sshConfigArg, concurrency, dialTimeout, settings.SSHAuthSock, settings.User, sshIdentityFile, sshUser)
 
 	// Tally results
 	var succeeded, failed int
@@ -191,6 +195,8 @@ func runConcurrentStream(
 	dialTimeout time.Duration,
 	sshAuthSock string,
 	username string,
+	sshIdentityFile string,
+	sshUser string,
 ) []streamResult {
 	resultCh := make(chan streamResult, len(hosts))
 	sem := make(chan struct{}, concurrency)
@@ -202,7 +208,7 @@ func runConcurrentStream(
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			streamToHost(ctx, h, binaryData, operatorArgs, sshConfigPath, dialTimeout, sshAuthSock, username, resultCh)
+			streamToHost(ctx, h, binaryData, operatorArgs, sshConfigPath, dialTimeout, sshAuthSock, username, sshIdentityFile, sshUser, resultCh)
 		}(host)
 	}
 

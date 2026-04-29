@@ -47,5 +47,11 @@ class KVService:
     async def lrange(self, key: str, start: int, stop: int) -> list[object]:
         return await self.client.lrange(key, start, stop)
 
+    async def incr(self, key: str, amount: int = 1) -> int:
+        return await self.client.incr(key, amount)
+
+    async def decr(self, key: str, amount: int = 1) -> int:
+        return await self.client.decr(key, amount)
+
     def is_healthy(self) -> bool:
         return self.client.is_healthy()

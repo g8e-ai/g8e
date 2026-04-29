@@ -8,36 +8,28 @@ const PORT = 3000;
 app.use(express.static('public'));
 
 const NODES = [
-  { id: 'node-01', profile: 'healthy' },
-  { id: 'node-02', profile: 'healthy' },
-  { id: 'node-03', profile: 'healthy' },
-  { id: 'node-04', profile: 'healthy' },
-  { id: 'node-05', profile: 'healthy' },
-  { id: 'node-06', profile: 'bad_upstream' },
-  { id: 'node-07', profile: 'ssl_expired' },
-  { id: 'node-08', profile: 'wrong_root' },
-  { id: 'node-09', profile: 'high_load' },
-  { id: 'node-10', profile: 'crashed' },
+  { id: 'node-01' },
+  { id: 'node-02' },
+  { id: 'node-03' },
+  { id: 'node-04' },
+  { id: 'node-05' },
+  { id: 'node-06' },
+  { id: 'node-07' },
+  { id: 'node-08' },
+  { id: 'node-09' },
+  { id: 'node-10' },
 ];
-
-const PROFILE_LABELS = {
-  healthy: 'Healthy',
-  bad_upstream: 'Bad Upstream',
-  ssl_expired: 'SSL Expired',
-  wrong_root: 'Wrong Root',
-  high_load: 'High Load',
-  crashed: 'Crashed',
-};
 
 async function checkNode(node) {
   const appUrl   = `http://${node.id}:5000/health`;
-  const nginxUrl = `http://${node.id}:8181/health`;
+  const nginxUrl = `http://${node.id}:8181/`;
   const start = Date.now();
 
-  const [appRes, nginxRes] = await Promise.all([
-    fetch(appUrl, { timeout: 3000 }).catch(err => ({ ok: false, _err: err.message })),
-    fetch(nginxUrl, { timeout: 3000 }).catch(err => ({ ok: false, status: null, _err: err.message })),
-  ]);
+  // Check nginx HTTP status
+  const nginxRes = await fetch(nginxUrl, { timeout: 3000 }).catch(err => ({ ok: false, status: null, _err: err.message }));
+  
+  // Check app health
+  const appRes = await fetch(appUrl, { timeout: 3000 }).catch(err => ({ ok: false, _err: err.message }));
   const elapsed = Date.now() - start;
 
   let uptime = null, requests = null, appBody = null;
@@ -47,28 +39,51 @@ async function checkNode(node) {
     requests = appBody?.requests_served ?? null;
   }
 
-  if (nginxRes.ok) {
-    return {
-      ...node,
-      http_status: nginxRes.status,
-      app_status: 'healthy',
-      uptime,
-      requests,
-      latency_ms: elapsed,
-      error: null,
-    };
+  // Determine real status based on actual HTTP response
+  let profile, app_status, error, nginx_running;
+  
+  if (nginxRes.ok && nginxRes.status === 200) {
+    profile = 'healthy';
+    app_status = 'healthy';
+    error = null;
+    nginx_running = true;
+  } else if (nginxRes.status === 502) {
+    profile = 'bad_upstream';
+    app_status = 'error';
+    error = '502 Bad Gateway';
+    nginx_running = true;
+  } else if (nginxRes.status === 404) {
+    profile = 'wrong_root';
+    app_status = 'error';
+    error = '404 Not Found';
+    nginx_running = true;
+  } else if (nginxRes.status === 504) {
+    profile = 'high_load';
+    app_status = 'warning';
+    error = '504 Gateway Timeout';
+    nginx_running = true;
+  } else if (nginxRes._err) {
+    profile = 'crashed';
+    app_status = 'down';
+    error = 'nginx unreachable';
+    nginx_running = false;
+  } else {
+    profile = 'degraded';
+    app_status = 'error';
+    error = `HTTP ${nginxRes.status}`;
+    nginx_running = true;
   }
 
-  const status = nginxRes.status || null;
-  const errMsg = nginxRes._err || `HTTP ${status}`;
   return {
     ...node,
-    http_status: status,
-    app_status: nginxRes._err ? 'unreachable' : 'error',
+    profile,
+    http_status: nginxRes.status,
+    app_status,
     uptime,
     requests,
     latency_ms: elapsed,
-    error: errMsg,
+    error,
+    nginx_running,
   };
 }
 
