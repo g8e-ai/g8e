@@ -136,7 +136,7 @@ export class OperatorPanel {
         devLogger.log('[OPERATOR-PANEL] [SSE] LIST_UPDATED received:', {
             total_count: this.totalOperatorCount,
             active_count: this.activeOperatorCount,
-            used_slots: this.usedSlots,
+            used_slots: this.used_slots,
             max_slots: this.maxSlots,
             is_platform_setup_pending: this.isPlatformSetupPending,
             operators_count: this.operators.length,
@@ -144,6 +144,7 @@ export class OperatorPanel {
         });
         if (!this._isRendered) {
             this._pendingListUpdateData = data;
+            this._statePendingDuringRender = true;
             return;
         }
         this._triggerRender({ cause: 'list_updated' });
@@ -185,6 +186,10 @@ export class OperatorPanel {
         }
 
         operatorSessionService.setBoundOperators(this.operators);
+        if (!this._isRendered) {
+            this._statePendingDuringRender = true;
+            return;
+        }
         this._triggerRender({ cause: 'status_updated' });
     }
 

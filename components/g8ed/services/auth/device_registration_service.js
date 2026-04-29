@@ -92,6 +92,11 @@ export class DeviceRegistrationService {
             return { success: false, error: DeviceLinkError.INVALID_FINGERPRINT };
         }
 
+        const operator = await this._operatorService.getOperator(id);
+        if (!operator) {
+            return { success: false, error: DeviceLinkError.OPERATOR_NOT_FOUND };
+        }
+
         const user = await this._userService.getUser(user_id);
         if (!user) {
             return { success: false, error: DeviceLinkError.USER_NOT_FOUND };
@@ -101,7 +106,7 @@ export class DeviceRegistrationService {
             operator_id: id,
             user_id: user.id,
             organization_id: user.organization_id,
-            operator_type: OperatorType.CLOUD,
+            operator_type,
             device_link_token,
             system_fingerprint: deviceInfo.system_fingerprint,
         }, g8eContext);

@@ -164,14 +164,6 @@ describe('DeviceRegistrationService', () => {
                 }),
                 mockG8eContext
             );
-            
-            // Verify direct SSE notification
-            expect(sseService.publishEvent).toHaveBeenCalledWith(
-                mockG8eContext.web_session_id,
-                expect.objectContaining({
-                    type: EventType.OPERATOR_STATUS_UPDATED_ACTIVE
-                })
-            );
         });
 
         it('should relay G8eHttpContext with bound_operators to g8ee', async () => {

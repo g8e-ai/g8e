@@ -76,6 +76,13 @@ class TestGetAgentPersona:
         assert "shell command string" in system_prompt
         assert "nothing else" in system_prompt
 
+    def test_triage_has_explicit_output_contract(self):
+        """Test that triage persona has explicit output_contract field."""
+        triage = get_agent_persona("triage")
+        assert triage.output_contract is not None, "triage should have output_contract field"
+        assert "JSON object" in triage.output_contract
+        assert "no XML tags" in triage.output_contract
+
     def test_get_invalid_agent_raises_keyerror(self):
         """Test that requesting an invalid agent ID raises KeyError."""
         with pytest.raises(KeyError) as exc_info:

@@ -32,7 +32,8 @@ class TriagePersona(AgentPersonaModel):
             tools=[],
             identity=self._get_identity(),
             purpose="Emit TriageResult: complexity, intent, request_posture, intent_summary, plus confidences. Pipeline uses complexity to pick model tier, intent to shape tools, posture to calibrate downstream agent behavior. request_posture is most load-bearing — flag adversarial only when conversation history shows a prior denial. First-turn messages CANNOT be adversarial.",
-            autonomy="Your classification is final. No reviewer revises it. Read, decide, commit."
+            autonomy="Your classification is final. No reviewer revises it. Read, decide, commit.",
+            output_contract="Emit a JSON object with the TriageResult schema: complexity (simple/complex), complexity_confidence (high/low), intent (information/action/unknown), intent_confidence (high/low), intent_summary (string), follow_up_question (string or null), clarifying_questions (array of strings or null), request_posture (normal/escalated/adversarial/confused), posture_confidence (high/low). Output only the JSON object — no XML tags, no markdown fences, no explanatory prose. The XML tags in the prompt are for instruction formatting, not output formatting."
         )
 
     def _get_identity(self) -> str:

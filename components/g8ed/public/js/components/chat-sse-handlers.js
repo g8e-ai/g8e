@@ -491,6 +491,9 @@ export const ChatSSEHandlersMixin = {
             }
             this._portCheckIndicators.clear();
         }
+
+        // 4. Clear search web indicators
+        this._searchWebIndicators?.clear();
     },
     handleIterationStarted(data) {
         if (!data.web_session_id) {
