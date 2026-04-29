@@ -30,6 +30,10 @@ vi.mock('@g8ed/public/js/components/auth.js', () => {
         constructor(eventBus) {
             this.eventBus = eventBus;
             this.init = vi.fn();
+            this.getState = vi.fn().mockReturnValue({
+                isAuthenticated: false,
+                webSessionId: null
+            });
         }
     }
     return { AuthManager: MockAuthManager };
@@ -371,12 +375,56 @@ describe('g8eApp [FRONTEND - jsdom]', () => {
             expect(setupEventListenersSpy).toHaveBeenCalledTimes(1);
         });
 
+        it('initializes OperatorPanel when AUTH_COMPONENT_INITIALIZED_CHAT fires', () => {
+            document.body.innerHTML = '';
+            app = new g8eApp();
+            app.init();
+            app.eventBus.emit(EventType.AUTH_COMPONENT_INITIALIZED_CHAT);
+            expect(app.operatorPanel.init).toHaveBeenCalledTimes(1);
+        });
+
+        it('initializes SSE when AUTH_COMPONENT_INITIALIZED_OPERATOR fires with authenticated state', () => {
+            document.body.innerHTML = '';
+            app = new g8eApp();
+            app.init();
+            app.auth.getState = vi.fn().mockReturnValue({
+                isAuthenticated: true,
+                webSessionId: 'test-session-id'
+            });
+            app.eventBus.emit(EventType.AUTH_COMPONENT_INITIALIZED_OPERATOR);
+            expect(app.sseConnectionManager.initializeConnection).toHaveBeenCalledWith('test-session-id');
+        });
+
+        it('does not initialize SSE when AUTH_COMPONENT_INITIALIZED_OPERATOR fires without authentication', () => {
+            document.body.innerHTML = '';
+            app = new g8eApp();
+            app.init();
+            app.auth.getState = vi.fn().mockReturnValue({
+                isAuthenticated: false,
+                webSessionId: 'test-session-id'
+            });
+            app.eventBus.emit(EventType.AUTH_COMPONENT_INITIALIZED_OPERATOR);
+            expect(app.sseConnectionManager.initializeConnection).not.toHaveBeenCalled();
+        });
+
+        it('does not initialize SSE when AUTH_COMPONENT_INITIALIZED_OPERATOR fires without webSessionId', () => {
+            document.body.innerHTML = '';
+            app = new g8eApp();
+            app.init();
+            app.auth.getState = vi.fn().mockReturnValue({
+                isAuthenticated: true,
+                webSessionId: null
+            });
+            app.eventBus.emit(EventType.AUTH_COMPONENT_INITIALIZED_OPERATOR);
+            expect(app.sseConnectionManager.initializeConnection).not.toHaveBeenCalled();
+        });
+
         it('PLATFORM_TERMINAL_OPENED does not throw when terminal element does not exist', () => {
             document.body.innerHTML = '';
             app = new g8eApp();
             app.init();
             expect(() => {
-                eventBus.emit(EventType.PLATFORM_TERMINAL_OPENED);
+                app.eventBus.emit(EventType.PLATFORM_TERMINAL_OPENED);
             }).not.toThrow();
         });
 
@@ -385,7 +433,7 @@ describe('g8eApp [FRONTEND - jsdom]', () => {
             app = new g8eApp();
             app.init();
             expect(() => {
-                eventBus.emit(EventType.PLATFORM_TERMINAL_MINIMIZED);
+                app.eventBus.emit(EventType.PLATFORM_TERMINAL_MINIMIZED);
             }).not.toThrow();
         });
 
@@ -394,7 +442,7 @@ describe('g8eApp [FRONTEND - jsdom]', () => {
             app = new g8eApp();
             app.init();
             expect(() => {
-                eventBus.emit(EventType.PLATFORM_TERMINAL_MAXIMIZED);
+                app.eventBus.emit(EventType.PLATFORM_TERMINAL_MAXIMIZED);
             }).not.toThrow();
         });
     });

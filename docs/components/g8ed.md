@@ -782,7 +782,7 @@ Device Link is the **recommended** way to deploy operators. The user generates a
 **Security controls:**
 - Token format validated before any g8es operations (injection prevention)
 - Time-limited TTL (1 min–7 days, default 1h)
-- Count-limited claims (`max_uses` 1–10,000, default 1)
+- Count-limited claims (`max_uses` 1–100, required)
 - Same system cannot claim the same link twice (fingerprint dedup)
 - Atomic claim via g8es KV prevents race conditions
 - Slot provisioning — uses an existing AVAILABLE slot or creates one on-demand if none exist

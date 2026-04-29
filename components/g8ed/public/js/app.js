@@ -92,22 +92,22 @@ class g8eApp {
         });
 
         this.eventBus.once(EventType.AUTH_COMPONENT_INITIALIZED_CHAT, () => {
-            console.log('[g8eApp] AUTH_COMPONENT_INITIALIZED_CHAT fired, initializing SSE');
+            console.log('[g8eApp] AUTH_COMPONENT_INITIALIZED_CHAT fired, initializing operator panel');
+            if (this.operatorPanel) {
+                this.operatorPanel.init().catch(error => {
+                    console.error('[g8eApp] Failed to initialize OperatorPanel:', error);
+                });
+            } else {
+                console.error('[g8eApp] AUTH_COMPONENT_INITIALIZED_CHAT fired but operatorPanel is null');
+            }
+        });
+
+        this.eventBus.once(EventType.AUTH_COMPONENT_INITIALIZED_OPERATOR, () => {
+            console.log('[g8eApp] AUTH_COMPONENT_INITIALIZED_OPERATOR fired, initializing SSE');
             const authState = window.authState.getState();
             if (authState.isAuthenticated && authState.webSessionId) {
                 this.sseConnectionManager.initializeConnection(authState.webSessionId);
             }
-
-            this.eventBus.once(EventType.PLATFORM_SSE_CONNECTION_OPENED, () => {
-                console.log('[g8eApp] SSE connection established, initializing operator panel');
-                if (this.operatorPanel) {
-                    this.operatorPanel.init().catch(error => {
-                        console.error('[g8eApp] Failed to initialize OperatorPanel:', error);
-                    });
-                } else {
-                    console.error('[g8eApp] PLATFORM_SSE_CONNECTION_OPENED fired but operatorPanel is null');
-                }
-            });
         });
 
         this.eventBus.on(EventType.PLATFORM_TERMINAL_OPENED, () => {

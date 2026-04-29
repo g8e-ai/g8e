@@ -1108,19 +1108,19 @@ case "$TOP" in
                     exit 1
                 fi
                 echo "  Bringing up $_nodes eval nodes..."
-                DEVICE_TOKEN="$_device_token" docker compose -f "$EVALS_COMPOSE" up -d --scale eval-node-01=1 --scale eval-node-02=1 --scale eval-node-03=1
+                DEVICE_TOKEN="$_device_token" COMPOSE_PROJECT_NAME=evals docker compose -f "$EVALS_COMPOSE" up -d --build --scale eval-node-01=1 --scale eval-node-02=1 --scale eval-node-03=1
                 echo ""
                 echo "  Eval fleet is up. Check status with: ./g8e evals status"
                 exit 0 ;;
             down)
                 _banner "evals down"
-                docker compose -f "$EVALS_COMPOSE" down
+                COMPOSE_PROJECT_NAME=evals docker compose -f "$EVALS_COMPOSE" down
                 echo ""
                 echo "  Eval fleet is down."
                 exit 0 ;;
             status)
                 _banner "evals status"
-                docker compose -f "$EVALS_COMPOSE" ps
+                COMPOSE_PROJECT_NAME=evals docker compose -f "$EVALS_COMPOSE" ps
                 exit 0 ;;
             logs)
                 _banner "evals logs ${3:-}"

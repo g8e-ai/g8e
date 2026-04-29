@@ -23,6 +23,7 @@ import { SSEPushRequest } from '../../models/request_models.js';
 import { ErrorResponse, SSEPushResponse } from '../../models/response_models.js';
 import { logger } from '../../utils/logger.js';
 import { redactWebSessionId } from '../../utils/security.js';
+import { getOperatorService } from '../../services/initialization.js';
 
 /**
  * @param {Object} options
@@ -156,6 +157,26 @@ export function createInternalSSERouter({ services, authorizationMiddleware }) {
                     successCount,
                     operator_id: pushReq.event.payload?.operator_id
                 });
+
+                // Broadcast full operator list to all connected clients for this user
+                // This ensures the UI gets the hostname from the heartbeat snapshot
+                try {
+                    const operatorService = getOperatorService();
+                    const operatorList = await operatorService.getUserOperators(pushReq.user_id);
+                    const userSessions = sseService.userSessions.get(pushReq.user_id);
+                    if (userSessions) {
+                        for (const sessionId of userSessions) {
+                            await sseService.publishEvent(sessionId, operatorList);
+                        }
+                        logger.info('[SSE-ROUTING] [HEARTBEAT] Broadcast operator list after heartbeat', {
+                            userId: pushReq.user_id,
+                            operator_id: pushReq.event.payload?.operator_id,
+                            sessionCount: userSessions.size
+                        });
+                    }
+                } catch (error) {
+                    logger.warn('[SSE-ROUTING] [HEARTBEAT] Failed to broadcast operator list after heartbeat', { error: error.message });
+                }
             } else {
                 logger.info('[INTERNAL-HTTP] SSE event fanned out to user sessions', {
                     userId: pushReq.user_id,

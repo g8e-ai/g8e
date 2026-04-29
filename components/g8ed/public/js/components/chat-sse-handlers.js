@@ -111,6 +111,114 @@ export const ChatSSEHandlersMixin = {
             this.handleUniversalToolFailed(data);
         });
 
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_CREATE_REQUESTED, (data) => {
+            this.handleUniversalToolStarted(data, 'file-create', data.display_label || 'Creating file', data.display_icon, data.category);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_CREATE_COMPLETED, (data) => {
+            this.handleUniversalToolCompleted(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_CREATE_FAILED, (data) => {
+            this.handleUniversalToolFailed(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_WRITE_REQUESTED, (data) => {
+            this.handleUniversalToolStarted(data, 'file-write', data.display_label || 'Writing file', data.display_icon, data.category);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_WRITE_COMPLETED, (data) => {
+            this.handleUniversalToolCompleted(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_WRITE_FAILED, (data) => {
+            this.handleUniversalToolFailed(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_READ_REQUESTED, (data) => {
+            this.handleUniversalToolStarted(data, 'file-read', data.display_label || 'Reading file', data.display_icon, data.category);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_READ_COMPLETED, (data) => {
+            this.handleUniversalToolCompleted(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_READ_FAILED, (data) => {
+            this.handleUniversalToolFailed(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_UPDATE_REQUESTED, (data) => {
+            this.handleUniversalToolStarted(data, 'file-update', data.display_label || 'Updating file', data.display_icon, data.category);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_UPDATE_COMPLETED, (data) => {
+            this.handleUniversalToolCompleted(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_UPDATE_FAILED, (data) => {
+            this.handleUniversalToolFailed(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_LIST_REQUESTED, (data) => {
+            this.handleUniversalToolStarted(data, 'file-list', data.display_label || 'Listing files', data.display_icon, data.category);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_LIST_COMPLETED, (data) => {
+            this.handleUniversalToolCompleted(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_LIST_FAILED, (data) => {
+            this.handleUniversalToolFailed(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_HISTORY_FETCH_REQUESTED, (data) => {
+            this.handleUniversalToolStarted(data, 'file-history', data.display_label || 'Fetching file history', data.display_icon, data.category);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_HISTORY_FETCH_COMPLETED, (data) => {
+            this.handleUniversalToolCompleted(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_HISTORY_FETCH_FAILED, (data) => {
+            this.handleUniversalToolFailed(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_DIFF_FETCH_REQUESTED, (data) => {
+            this.handleUniversalToolStarted(data, 'file-diff', data.display_label || 'Fetching file diff', data.display_icon, data.category);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_DIFF_FETCH_COMPLETED, (data) => {
+            this.handleUniversalToolCompleted(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_FILE_DIFF_FETCH_FAILED, (data) => {
+            this.handleUniversalToolFailed(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_INTENT_GRANT_REQUESTED, (data) => {
+            this.handleUniversalToolStarted(data, 'intent-grant', data.display_label || 'Granting intent', data.display_icon, data.category);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_INTENT_GRANT_COMPLETED, (data) => {
+            this.handleUniversalToolCompleted(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_INTENT_GRANT_FAILED, (data) => {
+            this.handleUniversalToolFailed(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_INTENT_REVOKE_REQUESTED, (data) => {
+            this.handleUniversalToolStarted(data, 'intent-revoke', data.display_label || 'Revoking intent', data.display_icon, data.category);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_INTENT_REVOKE_COMPLETED, (data) => {
+            this.handleUniversalToolCompleted(data);
+        });
+
+        this.eventBus.on(EventType.LLM_TOOL_G8E_INTENT_REVOKE_FAILED, (data) => {
+            this.handleUniversalToolFailed(data);
+        });
+
         this.eventBus.on(EventType.OPERATOR_COMMAND_APPROVAL_REQUESTED, (data) => {
             this.approvalPending = true;
             this.showAIStopButton();

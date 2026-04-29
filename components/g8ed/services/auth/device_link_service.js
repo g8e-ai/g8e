@@ -232,7 +232,7 @@ class DeviceLinkService {
         const result = await this._deviceRegistration.registerDevice({
             operator_id: linkData.operator_id,
             deviceInfo,
-            operator_type: OperatorType.SYSTEM,
+            operator_type: OperatorType.CLOUD,
             g8eContext,
         });
 

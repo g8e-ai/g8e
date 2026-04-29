@@ -20,6 +20,7 @@ import { OperatorSessionRole, DeviceLinkError } from '../../constants/auth.js';
 import { EventType } from '../../constants/events.js';
 import { G8eHttpContext, BoundOperatorContext } from '../../models/request_models.js';
 import { DEFAULT_OPERATOR_CONFIG } from '../../constants/operator_defaults.js';
+import { getOperatorService } from '../initialization.js';
 
 function sanitizeString(input, maxLength = 255) {
     if (!input || typeof input !== 'string') return '';
@@ -100,7 +101,7 @@ export class DeviceRegistrationService {
             operator_id: id,
             user_id: user.id,
             organization_id: user.organization_id,
-            operator_type,
+            operator_type: OperatorType.CLOUD,
             device_link_token,
             system_fingerprint: deviceInfo.system_fingerprint,
         }, g8eContext);
@@ -111,19 +112,6 @@ export class DeviceRegistrationService {
 
         const operator_session_id = result.operator_session_id;
         const operator_id = result.operator_id;
-
-        if (web_session_id) {
-            const event = OperatorStatusUpdatedEvent.parse({
-                type: EventType.OPERATOR_STATUS_UPDATED_ACTIVE,
-                data: OperatorStatusUpdatedData.parse({
-                    operator_id: operator_id,
-                    status: OperatorStatus.ACTIVE,
-                }),
-                timestamp: now(),
-            });
-            
-            await this._sseService.publishEvent(web_session_id, event);
-        }
 
         logger.info('[DEVICE-REGISTRATION] Device registered for operator via g8ee', {
             operator_id,

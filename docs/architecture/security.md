@@ -369,7 +369,7 @@ Operators (g8eo) authenticate via one of three methods. All result in the same b
 |---|---|
 | **API Key** | Standard long-running Operator — pass `--key` or set `G8E_OPERATOR_API_KEY` |
 | **Device Link (single-use)** | One-off automated deployment — token format `dlk_`, single use, time-limited |
-| **Device Link (multi-use)** | Fleet deployment — configurable `max_uses` (1–10,000) and expiry (1 min–7 days) |
+| **Device Link (multi-use)** | Fleet deployment — configurable `max_uses` (1–100, required) and expiry (1 min–7 days) |
 
 ### Bootstrap Sequence (all methods)
 

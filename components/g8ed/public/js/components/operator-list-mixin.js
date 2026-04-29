@@ -144,7 +144,7 @@ export const OperatorListMixin = {
 
         devLogger.log('[OPERATOR-PANEL] [RENDER] Displaying operators:', {
             operators_count: operators.length,
-            operator_ids: operators.map(op => op.operator_id),
+            operators: operators,
             current_page: this.currentPage,
             operators_per_page: this.operatorsPerPage
         });
@@ -627,7 +627,7 @@ export const OperatorListMixin = {
             devLogger.warn('[OPERATOR-PANEL] [PATCH] Card DOM element not found for operator:', {
                 operatorId,
                 current_operators_count: this.operators.length,
-                current_operator_ids: this.operators.map(op => op.operator_id)
+                current_operators: this.operators
             });
             return;
         }
