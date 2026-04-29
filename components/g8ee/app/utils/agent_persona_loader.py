@@ -23,6 +23,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
+from ..models.personas import get_persona, list_persona_ids, AgentPersonaModel
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,23 @@ class AgentPersona(BaseModel):
     output_contract: str | None = Field(default=None, alias="output_contract")
 
     model_config = ConfigDict(populate_by_name=True)
+
+    @staticmethod
+    def from_model(model: AgentPersonaModel) -> "AgentPersona":
+        """Convert an AgentPersonaModel to an AgentPersona."""
+        return AgentPersona(
+            id=model.id,
+            display_name=model.display_name,
+            icon=model.icon,
+            description=model.description,
+            role=model.role,
+            model_tier=model.model_tier,
+            tools=model.tools,
+            identity=model.identity,
+            purpose=model.purpose,
+            autonomy=model.autonomy,
+            output_contract=model.output_contract,
+        )
 
     @staticmethod
     def format_xml_tag(tag_name: str, content: str) -> str:
@@ -128,29 +146,33 @@ def get_agent_persona(agent_id: str) -> AgentPersona:
         AgentPersona object with all metadata and prompt template
         
     Raises:
-        KeyError: If agent_id is not found in agents.json
+        KeyError: If agent_id is not found in the registry
         ValidationError: If agent data fails Pydantic validation
     """
-    agents_data = _load_agents_json()
-    agent_metadata = agents_data.get("agent.metadata", {})
+    try:
+        model = get_persona(agent_id)
+        return AgentPersona.from_model(model)
+    except KeyError:
+        # Fallback to agents.json for any personas not yet migrated
+        agents_data = _load_agents_json()
+        agent_metadata = agents_data.get("agent.metadata", {})
 
-    if agent_id not in agent_metadata:
-        available = ", ".join(agent_metadata.keys())
-        raise KeyError(
-            f"Agent '{agent_id}' not found in agents.json. "
-            f"Available agents: {available}"
-        )
+        if agent_id not in agent_metadata:
+            available = ", ".join(set(list(agent_metadata.keys()) + list_persona_ids()))
+            raise KeyError(
+                f"Agent '{agent_id}' not found in registry or agents.json. "
+                f"Available agents: {available}"
+            )
 
-    data = agent_metadata[agent_id]
-
-    return AgentPersona.model_validate(data)
+        data = agent_metadata[agent_id]
+        return AgentPersona.model_validate(data)
 
 
 def list_all_agents() -> list[str]:
     """Return a list of all available agent IDs."""
     agents_data = _load_agents_json()
     agent_metadata = agents_data.get("agent.metadata", {})
-    return list(agent_metadata.keys())
+    return list(set(list(agent_metadata.keys()) + list_persona_ids()))
 
 
 def get_tribunal_member(member_id: str) -> AgentPersona:
