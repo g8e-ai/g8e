@@ -81,7 +81,7 @@ class TestGetAgentPersona:
         with pytest.raises(KeyError) as exc_info:
             get_agent_persona("nonexistent_agent")
         assert "nonexistent_agent" in str(exc_info.value)
-        assert "not found in agents.json" in str(exc_info.value)
+        assert "not found in registry" in str(exc_info.value)
 
     def test_get_system_prompt_constructs_from_fields(self):
         """Test get_system_prompt constructs prompt from individual fields."""

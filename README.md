@@ -13,7 +13,8 @@ Self-hosted · Air-gap capable · Zero cloud dependencies
 </div>
 
 <p align="center">
-  <img src="shared/media/denied-with-solution.png" alt="g8e governance in action" width="800">
+  <img src="shared/media/denied-with-solution.png" alt="g8e governance in action - denied" width="400">
+  <img src="shared/media/approved-with-results-and-solution.png" alt="g8e governance in action - approved" width="400">
 </p>
 
 ---

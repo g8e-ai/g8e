@@ -397,6 +397,11 @@ if [[ "$COMMAND" == "reset" ]]; then
 
     _preflight
 
+    echo "Syncing personas from Python models to agents.json..."
+    python3 "$PROJECT_ROOT/scripts/data/sync-personas.py" || {
+        echo "Warning: Persona sync failed, continuing with reset"
+    }
+
     echo "Building and starting all services..."
     $COMPOSE up -d --build --force-recreate g8es g8ee g8ed g8ep
     echo ""
@@ -559,6 +564,11 @@ if [[ "$COMMAND" == "setup" ]]; then
     $COMPOSE rm -f g8es g8ee g8ed g8ep 2>/dev/null || true
     $COMPOSE --profile g8el rm -f g8el 2>/dev/null || true
 
+    echo "Syncing personas from Python models to agents.json..."
+    python3 "$PROJECT_ROOT/scripts/data/sync-personas.py" || {
+        echo "Warning: Persona sync failed, continuing with setup"
+    }
+
     echo "Building and starting all services..."
     $COMPOSE up -d --build --force-recreate g8es g8ee g8ed g8ep
     echo ""
@@ -583,6 +593,14 @@ fi
 if [[ "$COMMAND" == "rebuild" ]]; then
     if [[ ${#REBUILD_COMPONENTS[@]} -eq 0 ]]; then
         REBUILD_COMPONENTS=(g8es g8ee g8ed g8ep)
+    fi
+
+    # Sync personas from Python models to agents.json before rebuilding g8ee
+    if printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8ee; then
+        echo "Syncing personas from Python models to agents.json..."
+        python3 "$PROJECT_ROOT/scripts/data/sync-personas.py" || {
+            echo "Warning: Persona sync failed, continuing with rebuild"
+        }
     fi
 
     echo "Removing containers for: ${REBUILD_COMPONENTS[*]}..."

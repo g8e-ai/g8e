@@ -13,21 +13,15 @@
 
 """Agent Persona Loader
 
-Centralized loader for AI agent persona definitions from shared/constants/agents.json.
-Provides a single source of truth for agent identities, purposes, and prompt templates.
+Centralized loader for AI agent persona definitions from code models in app/models/personas.
+The shared/constants/agents.json file is generated from these models and consumed by Node.js.
 """
 
-import json
 import logging
-from functools import lru_cache
-from pathlib import Path
-from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 from ..models.personas import get_persona, list_persona_ids, AgentPersonaModel
 
 logger = logging.getLogger(__name__)
-
-_AGENTS_JSON_PATH = Path(__file__).parent.parent.parent.parent.parent / "shared" / "constants" / "agents.json"
 
 
 class AgentPersona(BaseModel):
@@ -113,66 +107,28 @@ class AgentPersona(BaseModel):
         return "\n\n".join(parts)
 
 
-@lru_cache(maxsize=1)
-def _load_agents_json() -> dict[str, Any]:
-    """Load the agents.json file from shared constants.
-
-    Cached: agents.json is immutable at runtime. Prompt builds happen on
-    every chat turn and previously re-read + re-parsed the file each time.
-    """
-    try:
-        with open(_AGENTS_JSON_PATH) as f:
-            return json.load(f)
-    except FileNotFoundError:
-        logger.error(f"Agents file not found at {_AGENTS_JSON_PATH}")
-        raise
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse agents.json: {e}")
-        raise
-
-
-def clear_agents_json_cache() -> None:
-    """Clear the agents.json read cache. Test-only."""
-    _load_agents_json.cache_clear()
 
 
 def get_agent_persona(agent_id: str) -> AgentPersona:
     """Retrieve an agent persona by ID.
-    
+
     Args:
         agent_id: The agent identifier (e.g., "triage", "primary", "assistant")
-        
+
     Returns:
         AgentPersona object with all metadata and prompt template
-        
+
     Raises:
         KeyError: If agent_id is not found in the registry
         ValidationError: If agent data fails Pydantic validation
     """
-    try:
-        model = get_persona(agent_id)
-        return AgentPersona.from_model(model)
-    except KeyError:
-        # Fallback to agents.json for any personas not yet migrated
-        agents_data = _load_agents_json()
-        agent_metadata = agents_data.get("agent.metadata", {})
-
-        if agent_id not in agent_metadata:
-            available = ", ".join(set(list(agent_metadata.keys()) + list_persona_ids()))
-            raise KeyError(
-                f"Agent '{agent_id}' not found in registry or agents.json. "
-                f"Available agents: {available}"
-            )
-
-        data = agent_metadata[agent_id]
-        return AgentPersona.model_validate(data)
+    model = get_persona(agent_id)
+    return AgentPersona.from_model(model)
 
 
 def list_all_agents() -> list[str]:
     """Return a list of all available agent IDs."""
-    agents_data = _load_agents_json()
-    agent_metadata = agents_data.get("agent.metadata", {})
-    return list(set(list(agent_metadata.keys()) + list_persona_ids()))
+    return list_persona_ids()
 
 
 def get_tribunal_member(member_id: str) -> AgentPersona:
