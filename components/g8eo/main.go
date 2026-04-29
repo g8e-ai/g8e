@@ -258,20 +258,6 @@ func main() {
 		}
 		logger.Info("Device authentication successful", "operator_id", deviceResult.OperatorID)
 
-		// Persist registration results (API key and certificates) immediately to disk
-		persistDir := settings.DataDir
-		if persistDir == "" {
-			// Resolve the effective working directory: flag overrides launch dir.
-			effectiveWorkDir := launchDir
-			if workingDir != "" {
-				effectiveWorkDir = workingDir
-			}
-			persistDir = filepath.Join(effectiveWorkDir, ".g8e", "data")
-		}
-		if err := auth.PersistRegistration(persistDir, deviceResult, logger); err != nil {
-			logger.Warn("Failed to persist registration results to disk", "error", err)
-		}
-
 		// Consume API key from device link response if provided
 		if deviceResult.APIKey != "" {
 			apiKey = deviceResult.APIKey
@@ -280,6 +266,15 @@ func main() {
 
 		// Store device result for later bootstrap config application
 		deviceAuthResult = deviceResult
+	}
+
+	if deviceAuthResult != nil && deviceAuthResult.Config != nil {
+		logger.Info("Applying bootstrap config from device-link registration")
+		// Apply it to our local variables which will then be used to construct the real 'cfg'
+		if deviceAuthResult.Config.APIKey != "" {
+			apiKey = deviceAuthResult.Config.APIKey
+		}
+		// We still need to apply other config fields (like certs) once 'cfg' is created
 	}
 
 	if logLevel == "info" {
@@ -328,8 +323,6 @@ func main() {
 		TZ:                  settings.TZ,
 		IPService:           settings.IPService,
 		IPResolver:          settings.IPResolver,
-		OperatorCert:        settings.OperatorCert,
-		OperatorCertKey:     settings.OperatorCertKey,
 	})
 	if err != nil {
 		logger.Error("Failed to load configuration", "error", err)
@@ -338,28 +331,14 @@ func main() {
 
 	cfg.Version = version
 
-	// Create bootstrap service to handle per-operator mTLS upgrade
-	bootstrapService, err := auth.NewBootstrapService(cfg, logger)
-	if err != nil {
-		logger.Error("Failed to create bootstrap service", "error", err)
-		os.Exit(constants.ExitConfigError)
-	}
-
-	// If we have persisted mTLS credentials, apply them immediately
-	if cfg.OperatorCert != "" && cfg.OperatorCertKey != "" {
-		logger.Info("Found persisted per-operator mTLS certificates, upgrading transport")
-		if err := bootstrapService.ApplyBootstrapConfig(&auth.BootstrapConfig{
-			OperatorID:      cfg.OperatorID,
-			OperatorCert:    cfg.OperatorCert,
-			OperatorCertKey: cfg.OperatorCertKey,
-		}); err != nil {
-			logger.Warn("Failed to apply persisted per-operator mTLS certs", "error", err)
-		}
-	}
-
-	// Apply bootstrap config from device-link registration if available
+	// Apply remaining bootstrap config from device-link registration if available
 	if deviceAuthResult != nil && deviceAuthResult.Config != nil {
-		logger.Info("Applying bootstrap config from device-link registration")
+		logger.Info("Applying remaining bootstrap config from device-link registration")
+		bootstrapService, err := auth.NewBootstrapService(cfg, logger)
+		if err != nil {
+			logger.Error("Failed to create bootstrap service", "error", err)
+			os.Exit(constants.ExitConfigError)
+		}
 		if err := bootstrapService.ApplyBootstrapConfig(deviceAuthResult.Config); err != nil {
 			logger.Error("Failed to apply bootstrap config", "error", err)
 			os.Exit(constants.ExitCodeFromError(err))

@@ -16,7 +16,7 @@ import crypto from 'crypto';
 import { DeviceLinkService } from '@g8ed/services/auth/device_link_service.js';
 import { createMockCacheAside } from '@test/mocks/cache-aside.mock.js';
 import { DeviceLinkData } from '@g8ed/models/auth_models.js';
-import { DeviceLinkStatus, DeviceLinkError, DEVICE_LINK_TTL_SECONDS, DEVICE_LINK_TTL_MIN_SECONDS, DEVICE_LINK_TTL_MAX_SECONDS, LOCK_TTL_MS, LOCK_RETRY_DELAY_MS, LOCK_MAX_RETRIES, DEFAULT_DEVICE_LINK_MAX_USES, DEVICE_LINK_MAX_USES_MIN, DEVICE_LINK_MAX_USES_MAX } from '@g8ed/constants/auth.js';
+import { DeviceLinkStatus, DeviceLinkError, DEVICE_LINK_TTL_SECONDS, DEVICE_LINK_TTL_MIN_SECONDS, DEVICE_LINK_TTL_MAX_SECONDS, LOCK_TTL_MS, LOCK_RETRY_DELAY_MS, LOCK_MAX_RETRIES } from '@g8ed/constants/auth.js';
 import { OperatorStatus, OperatorType } from '@g8ed/constants/operator.js';
 import { Collections } from '@g8ed/constants/collections.js';
 import { KVKey } from '@g8ed/constants/kv_keys.js';
@@ -157,7 +157,7 @@ describe('DeviceLinkService', () => {
 
         it('should create link without name', async () => {
             mockOperatorService.queryOperators.mockResolvedValue(
-                Array.from({ length: DEFAULT_DEVICE_LINK_MAX_USES }, (_, i) => ({
+                Array.from({ length: 5 }, (_, i) => ({
                     id: `op-${i}`,
                     status: OperatorStatus.AVAILABLE
                 }))
@@ -167,7 +167,7 @@ describe('DeviceLinkService', () => {
             const result = await service.createLink({
                 user_id: mockG8eContext.user_id,
                 organization_id: mockG8eContext.organization_id,
-                max_uses: DEFAULT_DEVICE_LINK_MAX_USES
+                max_uses: 5
             });
 
             expect(result.success).toBe(true);
@@ -185,11 +185,21 @@ describe('DeviceLinkService', () => {
             expect(result.error).toBe(DeviceLinkError.MAX_USES_INVALID);
         });
 
+        it('should fail if max_uses is not provided', async () => {
+            const result = await service.createLink({
+                user_id: mockG8eContext.user_id,
+                organization_id: mockG8eContext.organization_id
+            });
+
+            expect(result.success).toBe(false);
+            expect(result.error).toBe(DeviceLinkError.MAX_USES_INVALID);
+        });
+
         it('should fail if max_uses exceeds maximum', async () => {
             const result = await service.createLink({
                 user_id: mockG8eContext.user_id,
                 organization_id: mockG8eContext.organization_id,
-                max_uses: 10001
+                max_uses: 101
             });
 
             expect(result.success).toBe(false);

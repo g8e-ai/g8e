@@ -247,8 +247,8 @@ class TestOperatorAuthService:
         mock_lifecycle_service.claim_operator_slot.assert_called_once()
         
         # Verify KV operations for atomic slot counter
-        # incr called twice: once for slot counter, once for device link uses
-        assert mock_cache.kv.incr.call_count == 2
+        # incr called once: for slot counter only (device link usage tracking is handled by g8ed)
+        assert mock_cache.kv.incr.call_count == 1
 
     async def test_register_device_link_operator_concurrent_slot_assignment(self, auth_service, mock_operator_data_service, mock_session_service, mock_lifecycle_service, mock_certificate_service, mock_cache, mock_api_key_service):
         # Test that concurrent requests get unique slot numbers via atomic KV increment
@@ -292,57 +292,9 @@ class TestOperatorAuthService:
         assert result["user_id"] == user_id
         mock_operator_data_service.create_operator.assert_called_once()
         
-        # Verify atomic increment was called twice (slot counter + device link usage counter)
-        assert mock_cache.kv.incr.call_count == 2
-
-    async def test_register_device_link_operator_increments_usage_counter(self, auth_service, mock_operator_data_service, mock_session_service, mock_lifecycle_service, mock_certificate_service, mock_cache):
-        # Test that device link usage counter is incremented in g8ee
-        user_id = "user-456"
-        token = "dlk_test_token"
-        
-        # Link has capacity
-        mock_cache.kv.get_json.return_value = {"max_uses": 5, "uses": 0}
-        
-        # Existing operator
-        operator_doc = MagicMock(spec=OperatorDocument)
-        operator_doc.id = "op-123"
-        operator_doc.user_id = user_id
-        operator_doc.api_key = "g8e_device_key"
-        operator_doc.status = OperatorStatus.AVAILABLE
-        operator_doc.bound_web_session_id = "web-123"
-        mock_operator_data_service.get_operator.return_value = operator_doc
-        
-        mock_cache.get_document_with_cache.return_value = {"id": user_id}
-        
-        session_mock = MagicMock()
-        session_mock.id = "session-789"
-        mock_session_service.create_operator_session.return_value = session_mock
-        
-        mock_lifecycle_service.claim_operator_slot.return_value = True
-        mock_certificate_service.generate_operator_certificate.return_value = {"cert": "C", "key": "K"}
-        
-        mock_cache.kv.incr.return_value = 1
-
-        # Execute
-        result = await auth_service.register_device_link_operator(
-            operator_id="op-123",
-            user_id=user_id,
-            organization_id="org-1",
-            operator_type="system",
-            device_link_token=token,
-            system_fingerprint="fp-123",
-            request_context={}
-        )
-
-        # Assert
-        assert result["success"] is True
-        # Verify device link usage counter is incremented
-        mock_cache.kv.incr.assert_called_once()
-        
-        # Verify the increment was called with the device link uses key
-        from app.constants.kv_keys import KVKey
-        expected_key = KVKey.device_link_uses(token)
-        mock_cache.kv.incr.assert_called_with(expected_key)
+        # Verify atomic increment was called once (slot counter only)
+        # Device link usage tracking is handled by g8ed
+        assert mock_cache.kv.incr.call_count == 1
 
     async def test_register_device_link_operator_no_api_key_on_slot(self, auth_service, mock_operator_data_service):
         operator_doc = MagicMock(spec=OperatorDocument)

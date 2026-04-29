@@ -15,7 +15,6 @@ package config
 
 import (
 	"os"
-	"path/filepath"
 
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
 )
@@ -36,10 +35,6 @@ type Settings struct {
 	DataDir           string
 	IPService         string
 	IPResolver        string
-
-	// Per-operator mTLS credentials (persisted from registration)
-	OperatorCert    string
-	OperatorCertKey string
 
 	// OpenClaw
 	OpenClawGatewayToken string
@@ -69,41 +64,8 @@ func LoadSettings() Settings {
 		user = readVar(constants.EnvVar.Username)
 	}
 
-	apiKey := readVar(constants.EnvVar.OperatorAPIKey)
-	dataDir := readVar(constants.EnvVar.DataDir)
-
-	// If no explicit data-dir was provided, we must check the default location
-	// (.g8e/data relative to current working directory) for persisted credentials.
-	effectiveDataDir := dataDir
-	if effectiveDataDir == "" {
-		if cwd, err := os.Getwd(); err == nil {
-			effectiveDataDir = filepath.Join(cwd, ".g8e", "data")
-		}
-	}
-
-	// Load persisted API key if not in environment
-	if apiKey == "" && effectiveDataDir != "" {
-		keyPath := filepath.Join(effectiveDataDir, "operator.key")
-		if data, err := os.ReadFile(keyPath); err == nil {
-			apiKey = string(data)
-		}
-	}
-
-	// Load persisted certificates if they exist
-	var opCert, opCertKey string
-	if effectiveDataDir != "" {
-		certPath := filepath.Join(effectiveDataDir, "ssl", "operator.crt")
-		keyPath := filepath.Join(effectiveDataDir, "ssl", "operator.key")
-		if certData, err := os.ReadFile(certPath); err == nil {
-			if keyData, err := os.ReadFile(keyPath); err == nil {
-				opCert = string(certData)
-				opCertKey = string(keyData)
-			}
-		}
-	}
-
 	return Settings{
-		OperatorAPIKey:       apiKey,
+		OperatorAPIKey:       readVar(constants.EnvVar.OperatorAPIKey),
 		OperatorEndpoint:     readVar(constants.EnvVar.OperatorEndpoint),
 		OperatorSessionID:    readVar(constants.EnvVar.OperatorSessionID),
 		InternalAuthToken:    readVar(constants.EnvVar.InternalAuthToken),
@@ -111,11 +73,9 @@ func LoadSettings() Settings {
 		PubSubCACert:         readVar(constants.EnvVar.PubSubCACert),
 		DeviceToken:          readVar(constants.EnvVar.DeviceToken),
 		LogLevel:             readVar(constants.EnvVar.LogLevel),
-		DataDir:              dataDir,
+		DataDir:              readVar(constants.EnvVar.DataDir),
 		IPService:            readVar(constants.EnvVar.IPService),
 		IPResolver:           readVar(constants.EnvVar.IPResolver),
-		OperatorCert:         opCert,
-		OperatorCertKey:      opCertKey,
 		OpenClawGatewayToken: readVar(constants.EnvVar.OpenClawGatewayToken),
 		Shell:                readVar(constants.EnvVar.Shell),
 		Lang:                 readVar(constants.EnvVar.Lang),

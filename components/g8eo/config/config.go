@@ -57,10 +57,6 @@ type LoadOptions struct {
 	TZ         string // TZ value
 	IPService  string // G8E_IP_SERVICE value
 	IPResolver string // G8E_IP_RESOLVER value
-
-	// Per-operator mTLS credentials (persisted from registration)
-	OperatorCert    string
-	OperatorCertKey string
 }
 
 // ListenConfig holds configuration for --listen mode.
@@ -172,10 +168,6 @@ type Config struct {
 	IPService  string // G8E_IP_SERVICE — URL for public IP detection
 	IPResolver string // G8E_IP_RESOLVER — UDP target for local IP detection
 
-	// Per-operator mTLS certificates (persisted from registration)
-	OperatorCert    string
-	OperatorCertKey string
-
 	// Listen mode configuration
 	Listen ListenConfig
 }
@@ -277,10 +269,6 @@ func Load(opts LoadOptions) (*Config, error) {
 		TZ:         opts.TZ,
 		IPService:  opts.IPService,
 		IPResolver: opts.IPResolver,
-
-		// Per-operator mTLS credentials
-		OperatorCert:    opts.OperatorCert,
-		OperatorCertKey: opts.OperatorCertKey,
 	}
 
 	return cfg, nil

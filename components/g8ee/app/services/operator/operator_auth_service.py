@@ -109,21 +109,8 @@ class OperatorAuthService:
             if not device_link_token:
                 return {"success": False, "error": "operator_id or device_link_token is required"}
 
-            # Check if device link allows more uses
-            from app.constants.kv_keys import KVKey
-            link_data = await self._cache.get_document_with_cache("auth:token:device", device_link_token)
-            if not link_data:
-                # Fallback to direct KV check if not in doc-cache
-                link_data = await self._cache.kv.get_json(KVKey.device_link(device_link_token))
-            
-            if not link_data:
-                return {"success": False, "error": "Device link not found"}
-
-            max_uses = link_data.get("max_uses", 1)
-            uses = link_data.get("uses", 0)
-            
-            if uses >= max_uses:
-                return {"success": False, "error": "Device link exhausted"}
+            # g8ed is authoritative for device link management (usage tracking, exhaustion checking)
+            # g8ed validates the device link before calling g8ee, so no need to re-check here
 
             # Query all operators for user once, then filter in memory
             all_user_operators = await self._operator_data_service.query_operators([
@@ -232,21 +219,9 @@ class OperatorAuthService:
         if not claim_success:
             return {"success": False, "error": "Failed to claim operator slot"}
 
-        # 6. Increment device link usage counter (unified counting in g8ee)
-        if device_link_token:
-            from app.constants.kv_keys import KVKey
-            uses_key = KVKey.device_link_uses(device_link_token)
-            try:
-                await self._cache.kv.incr(uses_key)
-                logger.info(
-                    "[OPERATOR-AUTH] Device link usage counter incremented",
-                    extra={"device_link_token": device_link_token[:20] + "...", "operator_id": operator_id}
-                )
-            except Exception as e:
-                logger.error(
-                    "[OPERATOR-AUTH] Failed to increment device link usage counter",
-                    extra={"device_link_token": device_link_token[:20] + "...", "error": str(e)}
-                )
+        # 6. Device link usage tracking is handled by g8ed
+        # g8ed updates the 'uses' field in the device link document based on claims array length
+        # g8ee is authoritative for operator documents only
 
         # 7. Generate certificate
         certs = await self._certificate_service.generate_operator_certificate(

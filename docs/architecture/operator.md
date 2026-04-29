@@ -168,6 +168,10 @@ Authentication occurs once at startup via HTTP to the platform, producing sessio
 
 **Device link token**: Pass `--device-token` / `-D` or set `G8E_DEVICE_TOKEN`. The Operator registers at `https://{endpoint}/auth/link/{token}/register` with system fingerprint, hostname, OS, arch, and username. On success, receives an API key and per-operator certificate directly. This key is then used for the standard bootstrap POST. Device tokens support `max_uses` for fleet-scale deployment — g8ed pre-provisions operator slots, each registration claims one atomically.
 
+**Authority Split:**
+- **g8ed** is authoritative for device link documents (usage tracking, exhaustion checking, claims management)
+- **g8ee** is authoritative for operator documents (slot management, lifecycle operations)
+
 ### Bootstrap Exchange
 
 All auth methods converge on POST `/api/auth/operator` using API key authentication. The platform responds with:

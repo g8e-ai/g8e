@@ -203,6 +203,7 @@
     border: 1px solid var(--border-color);
     border-radius: 0.25rem;
     transition: all 0.2s ease;
+    cursor: pointer;
 }
 
 .bind-all-operator-item:hover {

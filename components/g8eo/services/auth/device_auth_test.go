@@ -44,6 +44,12 @@ func TestAuthenticateWithDeviceTokenUsingClient(t *testing.T) {
 				Success:           true,
 				OperatorSessionID: "sess-123",
 				OperatorID:        "op-456",
+				APIKey:            "new-api-key",
+				OperatorCert:      "cert-pem",
+				OperatorCertKey:   "key-pem",
+				Config: &BootstrapConfig{
+					MaxConcurrentTasks: 5,
+				},
 			}
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(resp)
@@ -56,6 +62,11 @@ func TestAuthenticateWithDeviceTokenUsingClient(t *testing.T) {
 		require.NotNil(t, result)
 		assert.Equal(t, "sess-123", result.OperatorSessionID)
 		assert.Equal(t, "op-456", result.OperatorID)
+		assert.Equal(t, "new-api-key", result.APIKey)
+		assert.Equal(t, "cert-pem", result.OperatorCert)
+		assert.Equal(t, "key-pem", result.OperatorCertKey)
+		require.NotNil(t, result.Config)
+		assert.Equal(t, 5, result.Config.MaxConcurrentTasks)
 	})
 
 	t.Run("invalid token format", func(t *testing.T) {

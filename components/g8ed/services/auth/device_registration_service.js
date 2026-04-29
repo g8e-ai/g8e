@@ -110,12 +110,13 @@ export class DeviceRegistrationService {
         }
 
         const operator_session_id = result.operator_session_id;
+        const operator_id = result.operator_id;
 
         if (web_session_id) {
             const event = OperatorStatusUpdatedEvent.parse({
                 type: EventType.OPERATOR_STATUS_UPDATED_ACTIVE,
                 data: OperatorStatusUpdatedData.parse({
-                    operator_id: id,
+                    operator_id: operator_id,
                     status: OperatorStatus.ACTIVE,
                 }),
                 timestamp: now(),
@@ -125,7 +126,7 @@ export class DeviceRegistrationService {
         }
 
         logger.info('[DEVICE-REGISTRATION] Device registered for operator via g8ee', {
-            id,
+            operator_id,
             hostname:           sanitized.hostname,
             operator_session_id_tag: sessionIdTag(operator_session_id),
         });
@@ -133,7 +134,7 @@ export class DeviceRegistrationService {
         return {
             success: true,
             operator_session_id,
-            operator_id: id,
+            operator_id: operator_id,
             api_key: result.api_key,
             operator_cert: result.operator_cert,
             operator_cert_key: result.operator_cert_key,

@@ -262,9 +262,10 @@ func (bs *BootstrapService) SetHTTPClient(client *http.Client) {
 	bs.httpClient = client
 }
 
-// ApplyBootstrapConfig applies bootstrap configuration to the service config
+// ApplyBootstrapConfig applies bootstrap configuration to the service config.
+// This data is held strictly in memory within the config.Config struct and is never persisted to disk.
 func (bs *BootstrapService) ApplyBootstrapConfig(bootstrapConfig *BootstrapConfig) error {
-	bs.logger.Info("Applying Operator configuration...")
+	bs.logger.Info("Applying Operator configuration in-memory")
 
 	if bootstrapConfig.MaxConcurrentTasks > 0 {
 		bs.config.MaxConcurrentTasks = bootstrapConfig.MaxConcurrentTasks
@@ -273,10 +274,15 @@ func (bs *BootstrapService) ApplyBootstrapConfig(bootstrapConfig *BootstrapConfi
 		bs.config.MaxMemoryMB = bootstrapConfig.MaxMemoryMB
 	}
 
-	bs.config.OperatorID = bootstrapConfig.OperatorID
-	bs.config.OperatorSessionId = bootstrapConfig.OperatorSessionId
+	if bootstrapConfig.OperatorID != "" {
+		bs.config.OperatorID = bootstrapConfig.OperatorID
+	}
+	if bootstrapConfig.OperatorSessionId != "" {
+		bs.config.OperatorSessionId = bootstrapConfig.OperatorSessionId
+	}
 	if bootstrapConfig.APIKey != "" {
 		bs.config.APIKey = bootstrapConfig.APIKey
+		bs.logger.Info("API key applied to in-memory configuration")
 	}
 
 	if bootstrapConfig.HeartbeatIntervalSeconds > 0 {
@@ -294,7 +300,7 @@ func (bs *BootstrapService) ApplyBootstrapConfig(bootstrapConfig *BootstrapConfi
 				"error", err)
 			return fmt.Errorf("cert trust failure: per-operator mTLS cert invalid: %w", err)
 		}
-		bs.logger.Info("HTTP transport upgraded to per-operator mTLS certificate")
+		bs.logger.Info("HTTP transport upgraded to per-operator mTLS certificate (in-memory)")
 	}
 
 	return nil

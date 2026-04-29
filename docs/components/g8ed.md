@@ -749,6 +749,10 @@ Operator binaries are stored in the g8es blob store (namespace `operator-binary`
 
 Device Link is the **recommended** way to deploy operators. The user generates a time-limited token in the Operator Panel; the token is embedded in a ready-to-run command for the target system.
 
+**Authority Split:**
+- **g8ed** is authoritative for device link documents (usage tracking, exhaustion checking, claims management)
+- **g8ee** is authoritative for operator documents (slot management, lifecycle operations)
+
 **User flow:**
 1. User clicks "Add Operator" → "Device Link" in the Operator Panel
 2. User specifies the number of operator slots needed (`max_uses`)

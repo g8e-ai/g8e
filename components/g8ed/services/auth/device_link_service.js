@@ -35,8 +35,7 @@ import { logger } from '../../utils/logger.js';
 import { OperatorStatus, OperatorType } from '../../constants/operator.js';
 import { DeviceLinkStatus } from '../../constants/auth.js';
 import { KVKey } from '../../constants/kv_keys.js';
-import { TokenFormat, DeviceLinkError, DEFAULT_DEVICE_LINK_MAX_USES, DEVICE_LINK_MAX_USES_MIN, DEVICE_LINK_MAX_USES_MAX } from '../../constants/auth.js';
-import { DEVICE_LINK_TTL_SECONDS, DEVICE_LINK_TTL_MIN_SECONDS, DEVICE_LINK_TTL_MAX_SECONDS, LOCK_TTL_MS, LOCK_RETRY_DELAY_MS, LOCK_MAX_RETRIES } from '../../constants/auth.js';
+import { TokenFormat, DeviceLinkError, DEVICE_LINK_TTL_SECONDS, DEVICE_LINK_TTL_MIN_SECONDS, DEVICE_LINK_TTL_MAX_SECONDS, LOCK_TTL_MS, LOCK_RETRY_DELAY_MS, LOCK_MAX_RETRIES } from '../../constants/auth.js';
 import { G8eHttpContext } from '../../models/request_models.js';
 
 export function isValidTokenFormat(token) {
@@ -154,8 +153,11 @@ class DeviceLinkService {
         return { success: true };
     }
 
-    async createLink({ user_id, organization_id, name, max_uses = DEFAULT_DEVICE_LINK_MAX_USES, ttl_seconds = DEVICE_LINK_TTL_SECONDS, webSessionId = null }) {
-        if (max_uses < DEVICE_LINK_MAX_USES_MIN || max_uses > DEVICE_LINK_MAX_USES_MAX) {
+    async createLink({ user_id, organization_id, name, max_uses, ttl_seconds = DEVICE_LINK_TTL_SECONDS, webSessionId = null }) {
+        if (max_uses === undefined || max_uses === null) {
+            return { success: false, error: DeviceLinkError.MAX_USES_INVALID };
+        }
+        if (max_uses < 1 || max_uses > 100) {
             return { success: false, error: DeviceLinkError.MAX_USES_INVALID };
         }
 
@@ -343,7 +345,7 @@ class DeviceLinkService {
         // Adaptive retry: scale max retries based on device link width (max_uses)
         // to handle high-concurrency registration events. If a link is created for
         // N concurrent registrations, ensure retry mechanism is sufficient.
-        const concurrencyWidth = linkData.max_uses || DEFAULT_DEVICE_LINK_MAX_USES;
+        const concurrencyWidth = linkData.max_uses;
         const adaptiveMaxRetries = Math.min(
             LOCK_MAX_RETRIES + Math.ceil(concurrencyWidth * 2),
             LOCK_MAX_RETRIES * 3

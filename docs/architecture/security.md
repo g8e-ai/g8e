@@ -393,6 +393,11 @@ A second authentication attempt from the same system (matching fingerprint) is a
 
 Device links are pre-signed, time-bounded authorization tokens that solve the bootstrap problem — how to authorize an Operator on a remote host without requiring the user to manually paste credentials — without leaving any long-lived credential exposed.
 
+**Authority Split:**
+- **g8ed** is authoritative for device link documents (usage tracking, exhaustion checking, claims management)
+- **g8ee** is authoritative for operator documents (slot management, lifecycle operations)
+
+**Device Link Properties:**
 - Tokens are cryptographically random with the `dlk_` prefix and a strict, verifiable format (`dlk_[A-Za-z0-9_-]{32}`).
 - Every token has both a `max_uses` ceiling and an absolute `expires_at` timestamp.
 - When a device link is created, g8ed automatically provisions the required operator slots upfront to fulfill the `max_uses` limit.
