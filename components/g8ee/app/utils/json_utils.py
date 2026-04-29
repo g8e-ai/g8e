@@ -25,6 +25,8 @@ from decimal import Decimal
 from functools import partial
 from typing import Any
 
+from app.utils.timestamp import parse_iso
+
 logger = logging.getLogger(__name__)
 
 
@@ -115,10 +117,7 @@ def loads_with_datetime(json_str: str, **kwargs) -> Any:
             if isinstance(value, str):
                 try:
                     if "T" in value:
-                        if value.endswith("Z"):
-                            dct[key] = datetime.fromisoformat(value.replace("Z", "+00:00"))
-                        else:
-                            dct[key] = datetime.fromisoformat(value)
+                        dct[key] = parse_iso(value)
                 except (ValueError, AttributeError):
                     pass
         return dct

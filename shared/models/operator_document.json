@@ -141,12 +141,6 @@
         "format": "iso8601",
         "required": false,
         "description": "When the slot was claimed (set at claim time, not heartbeat time)"
-      },
-      "last_heartbeat": {
-        "type": "string",
-        "format": "iso8601",
-        "required": false,
-        "description": "Timestamp of the most recently received heartbeat (set only on actual heartbeat ingestion)"
       }
     },
 
@@ -298,7 +292,6 @@
       "status": { "type": "string", "required": true },
       "web_session_id": { "type": "string", "required": false },
       "operator_session_id": { "type": "string", "required": false },
-      "last_heartbeat": { "type": "string", "format": "iso8601", "required": false },
       "latest_heartbeat_snapshot": {
         "type": "object",
         "required": false,

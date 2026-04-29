@@ -12,12 +12,7 @@
 // limitations under the License.
 
 import { devLogger } from '../utils/dev-logger.js';
-import { 
-    DeviceLinkStatus,
-    DEFAULT_DEVICE_LINK_MAX_USES,
-    DEVICE_LINK_MAX_USES_MIN,
-    DEVICE_LINK_MAX_USES_MAX
-} from '../constants/auth-constants.js';
+import { DeviceLinkStatus } from '../constants/auth-constants.js';
 import { operatorPanelService } from '../utils/operator-panel-service.js';
 import { OperatorDialogs } from '../constants/operator-messages.js';
 import { escapeHtml } from '../utils/html.js';
@@ -105,12 +100,12 @@ export const OperatorDeviceLinkMixin = {
 
         const name = nameInput?.value?.trim();
         const rawMaxUses = parseInt(maxRegInput?.value, 10);
-        const maxUses = Number.isNaN(rawMaxUses) ? DEFAULT_DEVICE_LINK_MAX_USES : rawMaxUses;
+        const maxUses = rawMaxUses;
         const rawExpiresInHours = parseInt(expirySelect?.value, 10);
         const expiresInHours = Number.isNaN(rawExpiresInHours) ? 48 : rawExpiresInHours;
 
-        if (maxUses < DEVICE_LINK_MAX_USES_MIN || maxUses > DEVICE_LINK_MAX_USES_MAX) {
-            this._showDeviceLinkError(errorDiv, errorText, `Max uses must be between ${DEVICE_LINK_MAX_USES_MIN.toLocaleString()} and ${DEVICE_LINK_MAX_USES_MAX.toLocaleString()}`);
+        if (Number.isNaN(maxUses) || maxUses < 1 || maxUses > 100) {
+            this._showDeviceLinkError(errorDiv, errorText, 'Max uses must be between 1 and 100');
             return;
         }
 

@@ -234,10 +234,11 @@ class OperatorDeviceLinkRegisterRequest(G8eBaseModel):
     Called by g8ed after device-link token consumption.
     Trust model: caller is g8ed via internal mTLS. No authorization header.
     """
-    operator_id: str = Field(..., description="Operator ID")
+    operator_id: str | None = Field(default=None, description="Operator ID (optional if creating on-demand)")
     user_id: str = Field(..., description="User ID")
     organization_id: str | None = Field(default=None, description="Organization ID")
     operator_type: str = Field(default="SYSTEM", description="Operator type")
+    device_link_token: str | None = Field(default=None, description="Device link token for on-demand slot creation")
     system_fingerprint: str | None = Field(default=None, description="System fingerprint")
 
 

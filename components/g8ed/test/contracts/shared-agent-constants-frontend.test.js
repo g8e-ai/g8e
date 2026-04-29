@@ -33,6 +33,7 @@ import {
 } from '@g8ed/constants/agents.js';
 import {
     TribunalMemberIcons,
+    TribunalMemberNames,
     AuditorIcon,
     TribunalOutcome,
 } from '@g8ed/public/js/constants/agents.js';
@@ -53,6 +54,24 @@ describe('Browser-side agent constants mirror shared/constants/agents.json', () 
         });
         it('Pass 4 (Nemesis) icon matches JSON metadata', () => {
             expect(TribunalMemberIcons[4]).toBe(_AGENTS['agent.metadata'].nemesis.icon);
+        });
+    });
+
+    describe('TribunalMemberNames (browser mirror)', () => {
+        it('Pass 0 (Axiom) name matches JSON metadata', () => {
+            expect(TribunalMemberNames[0]).toBe(_AGENTS['agent.metadata'].axiom.display_name);
+        });
+        it('Pass 1 (Concord) name matches JSON metadata', () => {
+            expect(TribunalMemberNames[1]).toBe(_AGENTS['agent.metadata'].concord.display_name);
+        });
+        it('Pass 2 (Variance) name matches JSON metadata', () => {
+            expect(TribunalMemberNames[2]).toBe(_AGENTS['agent.metadata'].variance.display_name);
+        });
+        it('Pass 3 (Pragma) name matches JSON metadata', () => {
+            expect(TribunalMemberNames[3]).toBe(_AGENTS['agent.metadata'].pragma.display_name);
+        });
+        it('Pass 4 (Nemesis) name matches JSON metadata', () => {
+            expect(TribunalMemberNames[4]).toBe(_AGENTS['agent.metadata'].nemesis.display_name);
         });
     });
 

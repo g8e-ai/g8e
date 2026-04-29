@@ -169,10 +169,17 @@ class TestOutputContractIsExplicitField:
     """
 
     def test_no_persona_embeds_output_contract_in_identity(self) -> None:
-        from app.utils.agent_persona_loader import _load_agents_json
+        import json
+        from pathlib import Path
+
+        agents_json_path = (
+            Path(__file__).parent.parent.parent.parent.parent / "shared" / "constants" / "agents.json"
+        )
+        with open(agents_json_path) as f:
+            agents_data = json.load(f)
 
         offenders: list[str] = []
-        for agent_id, agent in _load_agents_json()["agent.metadata"].items():
+        for agent_id, agent in agents_data["agent.metadata"].items():
             if "<output_contract>" in agent.get("identity", ""):
                 offenders.append(agent_id)
         assert not offenders, (

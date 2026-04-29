@@ -40,19 +40,25 @@
         <div class="operator-item-expanded-details op-card-{{healthClass}}" data-metric="card-container">
             <div class="op-card-top-row">
                 <span class="op-status-pill {{healthClass}}" data-metric="status-pill">&#9679; {{statusPillText}}</span>
-                <svg class="op-ring" width="44" height="44" viewBox="0 0 48 48" aria-hidden="true">
+                <svg class="op-ring" width="44" height="44" viewBox="0 0 48 48">
                     <circle cx="24" cy="24" r="22" class="op-ring-track" stroke-width="2.5" fill="none"/>
                     <circle cx="24" cy="24" r="22" class="op-ring-arc op-ring-cpu" stroke-width="2.5" fill="none"
                             stroke-dasharray="138.23" stroke-dashoffset="{{cpuRingOffset}}" stroke-linecap="round"
-                            transform="rotate(-90 24 24)" data-metric="cpu-ring"/>
+                            transform="rotate(-90 24 24)" data-metric="cpu-ring">
+                        <title>CPU: {{cpuPercent}}</title>
+                    </circle>
                     <circle cx="24" cy="24" r="16" class="op-ring-track" stroke-width="2.5" fill="none"/>
                     <circle cx="24" cy="24" r="16" class="op-ring-arc op-ring-mem" stroke-width="2.5" fill="none"
                             stroke-dasharray="100.53" stroke-dashoffset="{{memRingOffset}}" stroke-linecap="round"
-                            transform="rotate(-90 24 24)" data-metric="mem-ring"/>
+                            transform="rotate(-90 24 24)" data-metric="mem-ring">
+                        <title>Memory: {{memoryPercent}}</title>
+                    </circle>
                     <circle cx="24" cy="24" r="10" class="op-ring-track" stroke-width="2.5" fill="none"/>
                     <circle cx="24" cy="24" r="10" class="op-ring-arc op-ring-disk" stroke-width="2.5" fill="none"
                             stroke-dasharray="62.83" stroke-dashoffset="{{diskRingOffset}}" stroke-linecap="round"
-                            transform="rotate(-90 24 24)" data-metric="disk-ring"/>
+                            transform="rotate(-90 24 24)" data-metric="disk-ring">
+                        <title>Disk: {{diskPercent}}</title>
+                    </circle>
                 </svg>
             </div>
 

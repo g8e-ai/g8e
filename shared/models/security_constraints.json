@@ -1,0 +1,110 @@
+{
+  "_comment": "Canonical security constraints model for g8e. Defines system paths, forbidden patterns, and other security-related constants used across components. Authority: G8EE. Consumers: g8ee (response_analyzer.py, validators).",
+
+  "_description": "Security constraints including forbidden system paths, high-risk file patterns, and related security constants used by AI response analysis and command validation.",
+
+  "system_path_prefixes": {
+    "_description": "Path prefixes that indicate system directories. Operations on files in these paths are treated as high-risk.",
+    "_authority": "g8ee",
+    "_consumers": ["g8ee (response_analyzer.py)"],
+    "prefixes": [
+      "/etc/",
+      "/usr/",
+      "/sys/",
+      "/proc/",
+      "/bin/",
+      "/sbin/",
+      "/boot/",
+      "/lib/"
+    ]
+  },
+
+  "high_risk_system_files": {
+    "_description": "Specific system files that are considered high-risk to modify.",
+    "_authority": "g8ee",
+    "_consumers": ["g8ee (response_analyzer.py)"],
+    "files": [
+      "/etc/passwd",
+      "/etc/shadow",
+      "/etc/fstab"
+    ],
+    "patterns": [
+      "kernel files",
+      "system binaries"
+    ]
+  },
+
+  "forbidden_directories": {
+    "_description": "Directories that are forbidden for command execution or file operations. These are global restrictions applied regardless of whitelist/blacklist configuration.",
+    "_authority": "g8ee",
+    "_consumers": ["g8ee (whitelist_validator.py, response_analyzer.py)"],
+    "directories": [
+      "/etc",
+      "/boot",
+      "/sys",
+      "/proc"
+    ]
+  },
+
+  "forbidden_command_patterns": {
+    "_description": "Command patterns that are globally forbidden. These are applied as a last-resort safety net.",
+    "_authority": "g8ee",
+    "_consumers": ["g8ee (safety.py, settings.py)"],
+    "patterns": [
+      "sudo",
+      "su ",
+      "su\t",
+      "su -",
+      "pkexec",
+      "doas",
+      "runas",
+      "chmod +s",
+      "chmod u+s",
+      "chmod g+s",
+      "setuid",
+      "setgid",
+      "eval ",
+      "exec ",
+      "$(",
+      "`",
+      "> /dev/sd",
+      "> /dev/nvme",
+      "> /dev/vd",
+      "dd if=",
+      "nsenter",
+      "unshare",
+      ":(){ :|:& };:",
+      "| bash",
+      "| sh",
+      "| zsh",
+      "| python",
+      "| perl",
+      "| php",
+      "| ruby",
+      "| node",
+      "base64 -d",
+      "base64 --decode",
+      "rm -rf /",
+      "rm -rf /etc",
+      "rm -rf /var",
+      "rm -rf /usr",
+      "rm -rf /bin",
+      "chmod 777",
+      "chmod -R 777",
+      "chmod a+rwx",
+      "chown -R",
+      "> /etc/passwd",
+      "> /etc/shadow",
+      "> /etc/sudoers",
+      ">> /etc/passwd",
+      ">> /etc/shadow",
+      ">> /etc/sudoers",
+      "iptables -F",
+      "ufw disable",
+      "history -c",
+      "unset HISTFILE",
+      "rm $0",
+      "rm $BASH_SOURCE"
+    ]
+  }
+}

@@ -14,12 +14,7 @@
 // @vitest-environment jsdom
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { 
-    DeviceLinkStatus,
-    DEFAULT_DEVICE_LINK_MAX_USES,
-    DEVICE_LINK_MAX_USES_MIN,
-    DEVICE_LINK_MAX_USES_MAX
-} from '@g8ed/public/js/constants/auth-constants.js';
+import { DeviceLinkStatus } from '@g8ed/public/js/constants/auth-constants.js';
 
 let OperatorDeviceLinkMixin;
 let operatorPanelService;
@@ -261,13 +256,13 @@ describe('OperatorDeviceLinkMixin [UNIT - jsdom]', () => {
 
         it('shows error if max uses is out of range (above max)', async () => {
             const ctx = createMixinContext();
-            elements['#device-link-max-uses'].value = String(DEVICE_LINK_MAX_USES_MAX + 1);
+            elements['#device-link-max-uses'].value = '101';
 
             const spy = vi.spyOn(ctx, '_showDeviceLinkError');
 
             await ctx._createDeviceLink(overlay);
 
-            const expectedMsg = `Max uses must be between ${DEVICE_LINK_MAX_USES_MIN.toLocaleString()} and ${DEVICE_LINK_MAX_USES_MAX.toLocaleString()}`;
+            const expectedMsg = 'Max uses must be between 1 and 100';
             expect(spy).toHaveBeenCalledWith(
                 elements['#device-link-create-error'],
                 elements['#device-link-create-error-text'],
@@ -286,7 +281,7 @@ describe('OperatorDeviceLinkMixin [UNIT - jsdom]', () => {
 
             await ctx._createDeviceLink(overlay);
 
-            const expectedMsg = `Max uses must be between ${DEVICE_LINK_MAX_USES_MIN.toLocaleString()} and ${DEVICE_LINK_MAX_USES_MAX.toLocaleString()}`;
+            const expectedMsg = 'Max uses must be between 1 and 100';
             expect(spy).toHaveBeenCalledWith(
                 elements['#device-link-create-error'],
                 elements['#device-link-create-error-text'],
@@ -295,26 +290,22 @@ describe('OperatorDeviceLinkMixin [UNIT - jsdom]', () => {
             expect(operatorPanelService.createDeviceLink).not.toHaveBeenCalled();
         });
 
-        it('defaults to DEFAULT_DEVICE_LINK_MAX_USES when input is empty/NaN', async () => {
+        it('shows error if max uses is empty/NaN', async () => {
             const ctx = createMixinContext();
             elements['#device-link-max-uses'].value = '';
             elements['#device-link-token-name'].value = '';
 
-            operatorPanelService.createDeviceLink.mockResolvedValue({
-                ok: true,
-                json: async () => ({ success: true, token: TEST_TOKEN })
-            });
-
-            ctx._loadDeviceLinks = vi.fn();
-            ctx._loadDeviceLinkAvailableSlots = vi.fn();
+            const spy = vi.spyOn(ctx, '_showDeviceLinkError');
 
             await ctx._createDeviceLink(overlay);
 
-            expect(operatorPanelService.createDeviceLink).toHaveBeenCalledWith({
-                name: '',
-                maxUses: DEFAULT_DEVICE_LINK_MAX_USES,
-                expiresInHours: 24
-            });
+            const expectedMsg = 'Max uses must be between 1 and 100';
+            expect(spy).toHaveBeenCalledWith(
+                elements['#device-link-create-error'],
+                elements['#device-link-create-error-text'],
+                expectedMsg
+            );
+            expect(operatorPanelService.createDeviceLink).not.toHaveBeenCalled();
         });
 
         it('handles API errors gracefully', async () => {

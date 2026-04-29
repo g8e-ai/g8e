@@ -128,12 +128,12 @@ class OperatorCommandValidator:
             logger.error("WebSession token required but not provided", extra={"operator_id": operator_id})
             raise AuthenticationError("WebSession token required for command execution", component="g8ee")
 
-        if operator.last_heartbeat:
-            time_since_heartbeat = (now() - operator.last_heartbeat).total_seconds()
+        if operator.latest_heartbeat_snapshot:
+            time_since_heartbeat = (now() - operator.latest_heartbeat_snapshot.timestamp).total_seconds()
             if time_since_heartbeat > HEARTBEAT_STALE_THRESHOLD_SECONDS:
                 logger.warning("Operator heartbeat is stale", extra={
                     "operator_id": operator_id,
-                    "last_heartbeat": operator.last_heartbeat.isoformat(),
+                    "heartbeat_timestamp": operator.latest_heartbeat_snapshot.timestamp.isoformat(),
                     "seconds_since": time_since_heartbeat
                 })
 
@@ -334,12 +334,12 @@ class OperatorCommandValidator:
             healthy=operator.status in self.allowed_statuses,
             operator_id=operator_id,
             status=operator.status,
-            last_heartbeat=operator.last_heartbeat,
+            heartbeat_timestamp=operator.latest_heartbeat_snapshot.timestamp if operator.latest_heartbeat_snapshot else None,
             session_expires_at=operator.session_expires_at
         )
 
-        if operator.last_heartbeat:
-            seconds_since_heartbeat = (now() - operator.last_heartbeat).total_seconds()
+        if operator.latest_heartbeat_snapshot:
+            seconds_since_heartbeat = (now() - operator.latest_heartbeat_snapshot.timestamp).total_seconds()
             health_status.seconds_since_heartbeat = seconds_since_heartbeat
             health_status.heartbeat_stale = seconds_since_heartbeat > HEARTBEAT_STALE_THRESHOLD_SECONDS
 

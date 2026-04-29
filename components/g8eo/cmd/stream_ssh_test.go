@@ -171,6 +171,8 @@ func TestStreamToHost_Success(t *testing.T) {
 		2*time.Second,
 		"", // no agent
 		"testuser",
+		"", // sshIdentityFile
+		"", // sshUser
 		resultCh,
 	)
 
@@ -198,6 +200,8 @@ func TestStreamToHost_ContextCancelled(t *testing.T) {
 		2*time.Second,
 		"",
 		"user",
+		"", // sshIdentityFile
+		"", // sshUser
 		resultCh,
 	)
 
@@ -242,6 +246,8 @@ func TestStreamToHost_DialFailure(t *testing.T) {
 		500*time.Millisecond,
 		"",
 		"user",
+		"", // sshIdentityFile
+		"", // sshUser
 		resultCh,
 	)
 

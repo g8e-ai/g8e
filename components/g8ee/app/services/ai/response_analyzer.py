@@ -11,8 +11,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
 import logging
 from collections.abc import Callable
+from pathlib import Path
 from typing import TypeVar
 
 import app.llm.llm_types as types
@@ -36,6 +38,24 @@ from app.utils.agent_persona_loader import get_agent_persona, AgentPersona
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=G8eBaseModel)
+
+
+def _load_security_constraints() -> dict:
+    """Load security constraints from shared model."""
+    shared_models_path = Path(__file__).parent.parent.parent.parent.parent / "shared" / "models" / "security_constraints.json"
+    try:
+        with open(shared_models_path, "r") as f:
+            constraints = json.load(f)
+        logger.info("Loaded security constraints from %s", shared_models_path)
+        return constraints
+    except Exception as e:
+        logger.error("Failed to load security constraints from %s: %s", shared_models_path, e)
+        return {}
+
+
+_SECURITY_CONSTRAINTS = _load_security_constraints()
+SYSTEM_PATH_PREFIXES = tuple(_SECURITY_CONSTRAINTS.get("system_path_prefixes", {}).get("prefixes", ["/etc/", "/usr/", "/sys/", "/proc/", "/bin/", "/sbin/", "/boot/", "/lib/"]))
+HIGH_RISK_SYSTEM_FILES = _SECURITY_CONSTRAINTS.get("high_risk_system_files", {})
 
 
 def _build_warden_command_risk_template(
@@ -125,8 +145,11 @@ def _build_warden_file_risk_template(
 Backup Available: {backup_available}"""
     parts.append(AgentPersona.format_xml_tag("context", context))
 
-    system_file_patterns = """HIGH risk paths: /etc/, /usr/, /sys/, /proc/, /bin/, /sbin/, /boot/, /lib/
-HIGH risk files: /etc/passwd, /etc/shadow, /etc/fstab, kernel files, system binaries"""
+    high_risk_paths = ", ".join(SYSTEM_PATH_PREFIXES)
+    high_risk_files = ", ".join(HIGH_RISK_SYSTEM_FILES.get("files", []))
+    high_risk_patterns = ", ".join(HIGH_RISK_SYSTEM_FILES.get("patterns", []))
+    system_file_patterns = f"""HIGH risk paths: {high_risk_paths}
+HIGH risk files: {high_risk_files}, {high_risk_patterns}"""
     parts.append(AgentPersona.format_xml_tag("system_file_patterns", system_file_patterns))
 
     risk_levels = """LOW: Build artifacts, temp files (/tmp), generated output
@@ -347,8 +370,7 @@ class AIResponseAnalyzer:
         lite_model = resolved_settings.llm.resolved_lite_model
 
         def post_process(analysis: FileOperationRiskAnalysis) -> None:
-            system_prefixes = ("/etc/", "/usr/", "/sys/", "/proc/", "/bin/", "/sbin/", "/boot/", "/lib/")
-            analysis.is_system_file = any(file_path.startswith(p) for p in system_prefixes)
+            analysis.is_system_file = any(file_path.startswith(p) for p in SYSTEM_PATH_PREFIXES)
 
             if analysis.risk_level == RiskLevel.HIGH and analysis.is_system_file:
                 analysis.safe_to_proceed = False

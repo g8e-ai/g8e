@@ -31,7 +31,7 @@ import { isValidTokenFormat } from '../../services/auth/device_link_service.js';
 import { OperatorLinkRequest } from '../../models/request_models.js';
 import { ErrorResponse, DeviceLinkResponse, DeviceLinkListResponse, SimpleSuccessResponse } from '../../models/response_models.js';
 import { AuthPaths, DeviceLinkPaths } from '../../constants/api_paths.js';
-import { DEVICE_LINK_TTL_SECONDS, DeviceLinkError, DeviceLinkSuccess, DEFAULT_DEVICE_LINK_MAX_USES } from '../../constants/auth.js';
+import { DEVICE_LINK_TTL_SECONDS, DeviceLinkError, DeviceLinkSuccess } from '../../constants/auth.js';
 
 /**
  * @param {Object} options
@@ -104,7 +104,7 @@ export function createInternalDeviceLinkRouter({ services, authorizationMiddlewa
                 user_id: userId,
                 organization_id: userId,
                 name,
-                max_uses: max_uses !== undefined ? max_uses : DEFAULT_DEVICE_LINK_MAX_USES,
+                max_uses: max_uses,
                 ttl_seconds
             });
 

@@ -5,6 +5,8 @@ const PROFILE_LABELS = {
   wrong_root: 'Wrong Root',
   high_load: 'High Load',
   crashed: 'Crashed',
+  degraded: 'Degraded',
+  unreachable: 'Unreachable',
 };
 
 function fmt(n) {
@@ -24,6 +26,8 @@ function esc(s) {
 function renderCard(node) {
   const isWarning  = node.profile === 'high_load';
   const isHealthy  = node.profile === 'healthy';
+  const isCrashed  = node.profile === 'crashed';
+  const isUnreachable = node.profile === 'unreachable';
   const cardClass  = isHealthy ? 'healthy' : (isWarning ? 'warning' : 'degraded');
   const dotClass   = isHealthy ? 'dot-green' : (isWarning ? 'dot-yellow' : 'dot-red');
   const badgeClass = isHealthy ? 'badge-healthy' : (isWarning ? 'badge-warning' : 'badge-degraded');
@@ -39,6 +43,7 @@ function renderCard(node) {
           <div class="metrics">
             <span><span>HTTP Status</span><span class="val">${esc(node.http_status) || '—'}</span></span>
             <span><span>App Status</span><span class="val">${esc(node.app_status)}</span></span>
+            <span><span>Nginx Running</span><span class="val">${node.nginx_running ? 'Yes' : 'No'}</span></span>
             <span><span>Latency</span><span class="val">${esc(node.latency_ms)}ms</span></span>
             ${node.uptime != null ? `<span><span>Uptime</span><span class="val">${fmt(node.uptime)}s</span></span>` : ''}
             ${node.requests != null ? `<span><span>Requests</span><span class="val">${fmt(node.requests)}</span></span>` : ''}

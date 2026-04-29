@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+import time
 from typing import TYPE_CHECKING, NoReturn
 
 from app.errors import OllamaEmptyResponseError
@@ -207,6 +208,9 @@ async def run_auditor(
         correlation_id=correlation_id,
     )
 
+    auditor_start_time = time.time()
+
+    prompt_build_start = time.time()
     fields = build_tribunal_prompt_fields(
         operator_context,
         request=request,
@@ -233,8 +237,8 @@ async def run_auditor(
         operator_context_str=fields["operator_context"],
         auditor_context=auditor_context,
     )
-
-    logger.info("[TRIBUNAL-AUDITOR] mode=%s winner=%r clusters=%d", mode, target_cmd, len(clusters))
+    prompt_build_duration_ms = (time.time() - prompt_build_start) * 1000
+    logger.info("[TRIBUNAL-AUDITOR] mode=%s winner=%r clusters=%d prompt_build_duration_ms=%.2f", mode, target_cmd, len(clusters), prompt_build_duration_ms)
     model_config = get_model_config(model)
 
     response_format = None
@@ -264,11 +268,14 @@ async def run_auditor(
             logger.info("[TRIBUNAL-AUDITOR] Retry attempt %d for mode=%s", attempt + 1, mode)
 
         try:
+            llm_call_start = time.time()
             response = await provider.generate_content_lite(
                 model=model,
                 contents=[Content(role=Role.USER, parts=[Part.from_text(current_prompt)])],
                 lite_llm_settings=settings,
             )
+            llm_call_duration_ms = (time.time() - llm_call_start) * 1000
+            logger.info("[TRIBUNAL-AUDITOR] LLM call attempt %d duration_ms=%.2f", attempt + 1, llm_call_duration_ms)
             raw_text = (response.text or "").strip()
             if not raw_text:
                 raise OllamaEmptyResponseError(
@@ -290,6 +297,8 @@ async def run_auditor(
             )
 
             if status == "ok":
+                total_duration_ms = (time.time() - auditor_start_time) * 1000
+                logger.info("[TRIBUNAL-AUDITOR] Completed with status=ok total_duration_ms=%.2f", total_duration_ms)
                 await emitter.emit(
                     EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED,
                     TribunalAuditorCompletedPayload(passed=True, reason=AuditorReason.OK),
@@ -307,6 +316,8 @@ async def run_auditor(
                     reason = AuditorReason.WHITELIST_VIOLATION if safety_result.error_type == CommandErrorType.WHITELIST_VIOLATION else AuditorReason.NO_VALID_REVISION
                     await fail_auditor(emitter, request, reason, f"Swap target technical safety failure: {safety_result.error_message}", target_cmd)
 
+                total_duration_ms = (time.time() - auditor_start_time) * 1000
+                logger.info("[TRIBUNAL-AUDITOR] Completed with status=swap total_duration_ms=%.2f", total_duration_ms)
                 await emitter.emit(
                     EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED,
                     TribunalAuditorCompletedPayload(
@@ -331,6 +342,8 @@ async def run_auditor(
                 await fail_auditor(emitter, request, reason, f"Revision technical safety failure: {safety_result.error_message}", target_cmd)
 
             reason = AuditorReason.REVISED_FROM_DISSENT if mode in ("majority", "tied") else AuditorReason.REVISED
+            total_duration_ms = (time.time() - auditor_start_time) * 1000
+            logger.info("[TRIBUNAL-AUDITOR] Completed with status=revised total_duration_ms=%.2f", total_duration_ms)
             await emitter.emit(
                 EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED,
                 TribunalAuditorCompletedPayload(passed=False, revision=revised, reason=reason),
@@ -343,6 +356,8 @@ async def run_auditor(
             logger.warning("[TRIBUNAL-AUDITOR] Attempt %d failed: %s (raw_text=%r)", attempt + 1, exc, raw_text[:200] if raw_text else "None")
             if attempt == max_attempts - 1:
                 # Final attempt failed
+                total_duration_ms = (time.time() - auditor_start_time) * 1000
+                logger.info("[TRIBUNAL-AUDITOR] Failed after %d attempts total_duration_ms=%.2f", max_attempts, total_duration_ms)
                 if isinstance(exc, OllamaEmptyResponseError):
                     await fail_auditor(emitter, request, AuditorReason.EMPTY_RESPONSE, str(exc), target_cmd)
                 else:
@@ -351,6 +366,8 @@ async def run_auditor(
         except TribunalAuditorFailedError:
             raise
         except Exception as exc:
+            total_duration_ms = (time.time() - auditor_start_time) * 1000
+            logger.info("[TRIBUNAL-AUDITOR] Unexpected error total_duration_ms=%.2f", total_duration_ms)
             logger.error("[TRIBUNAL-AUDITOR] Unexpected error: %s (raw_text=%r)", exc, raw_text[:200] if raw_text else "None", exc_info=True)
             await fail_auditor(emitter, request, AuditorReason.AUDITOR_ERROR, str(exc), target_cmd)
 

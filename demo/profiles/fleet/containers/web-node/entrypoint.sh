@@ -158,11 +158,13 @@ _run_operator() {
 
     # Supervised restart loop.
     while true; do
-        echo "$_operator_log_prefix starting: sudo $_operator_binary -e $_operator_endpoint -D *** --no-git"
+        echo "$_operator_log_prefix starting: sudo $_operator_binary --endpoint $_operator_endpoint --working-dir /home/appuser --log info --cloud false -D ***"
         sudo "$_operator_binary" \
-            -e "$_operator_endpoint" \
-            -D "$DEVICE_TOKEN" \
-            --no-git 2>&1 \
+            --endpoint "$_operator_endpoint" \
+            --working-dir /home/appuser \
+            --log info \
+            --cloud false \
+            -D "$DEVICE_TOKEN" 2>&1 \
             | sed -u "s/^/$_operator_log_prefix /"
         rc=${PIPESTATUS[0]}
         echo "$_operator_log_prefix exited rc=$rc; restarting in 5s"

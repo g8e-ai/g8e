@@ -98,6 +98,9 @@ class DeviceLinkManager:
         if not uid:
             raise RuntimeError('Provide --user-id or --email')
 
+        if max_uses is None or max_uses < 1 or max_uses > 100:
+            raise RuntimeError('max_uses must be between 1 and 100')
+
         body: Dict[str, Any] = {'max_uses': max_uses}
         if name:
             body['name'] = name
@@ -190,8 +193,8 @@ Examples:
     sp = subparsers.add_parser('create', help='Create a new device link')
     _add_user_args(sp)
     sp.add_argument('--name', help='Human-readable label for this link')
-    sp.add_argument('--max-uses', type=int, default=1,
-                    help='Max number of devices that can claim this link (default: 1)')
+    sp.add_argument('--max-uses', type=int, required=True,
+                    help='Max number of devices that can claim this link (required, min: 1, max: 100)')
     sp.add_argument('--expires-in-hours', type=int, default=None,
                     help='Token lifetime in hours (default: 1 hour)')
 

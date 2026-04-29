@@ -359,10 +359,6 @@
     "passkey": "passkey"
   },
 
-  "auth.mode": {
-    "api_key": "api_key"
-  },
-
   "auth.method": {
     "kv.pubsub": "kv_pubsub",
     "session": "session"

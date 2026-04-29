@@ -14,7 +14,7 @@
 """Unit tests for ``CommandAutoApprovedValidator``.
 
 Run with:
-    /home/bob/g8e/g8e test g8ee -- tests/unit/utils/test_auto_approved_validator.py
+    ./g8e test g8ee -- tests/unit/utils/test_auto_approved_validator.py
 """
 
 import json

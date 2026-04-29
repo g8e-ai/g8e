@@ -164,7 +164,6 @@ export class OperatorDocument extends G8eIdentifiableModel {
         terminated_at:                { type: F.date,    default: null },
         first_deployed:               { type: F.date,    default: null },
         claimed_at:                   { type: F.date,    default: null },
-        last_heartbeat:               { type: F.date,    default: null },
         runtime_config:               { type: F.object,  default: () => ({}) },
         system_fingerprint:           { type: F.string,  default: null },
         fingerprint_details:          { type: F.object, default: null },
@@ -343,7 +342,6 @@ export class OperatorSlot extends G8eBaseModel {
         is_g8ep:        { type: F.boolean, default: false },
         first_deployed: { type: F.date,    default: null },
         claimed_at:     { type: F.date,    default: null },
-        last_heartbeat: { type: F.date,    default: null },
         latest_heartbeat_snapshot: { type: F.object, default: null },
     };
 
@@ -359,7 +357,6 @@ export class OperatorSlot extends G8eBaseModel {
             is_g8ep:        operator.is_g8ep ?? false,
             first_deployed: operator.first_deployed ?? null,
             claimed_at:     operator.claimed_at ?? null,
-            last_heartbeat: operator.last_heartbeat ?? null,
             latest_heartbeat_snapshot: operator.latest_heartbeat_snapshot ?? null,
         });
     }

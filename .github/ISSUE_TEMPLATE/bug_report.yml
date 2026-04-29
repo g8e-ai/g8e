@@ -12,7 +12,7 @@ body:
       label: Reproduction Steps
       description: How did you encounter this bug?
       placeholder: |
-        1. Run `/home/bob/g8e/g8e test ...`
+        1. Run `./g8e test ...`
         2. ...
     validations:
       required: true

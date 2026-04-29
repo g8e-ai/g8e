@@ -169,7 +169,7 @@ export class OperatorSlotService {
 
         const relayParams = {
             user_id: userId,
-            organization_id: organizationId,
+            organization_id: organizationId || userId,
             slot_number: slotNumber,
             operator_type: operatorType,
             cloud_subtype: cloudSubtype,

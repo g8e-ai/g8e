@@ -112,7 +112,7 @@ class ConsoleMetricsService {
     async getUserStats() {
         return this._getCachedMetric('user_stats', async () => {
             // Get all users
-            const users = await this._cache_aside.queryDocuments(Collections.USERS, []);
+            const users = await this._cache_aside.queryDocuments(Collections.USERS, [], null, true);
             const ts = now();
             const thirtyDaysAgo = addSeconds(ts, -CONSOLE_METRICS_WINDOW_30_DAYS_SECONDS);
             const sevenDaysAgo = addSeconds(ts, -CONSOLE_METRICS_WINDOW_7_DAYS_SECONDS);
@@ -153,83 +153,81 @@ class ConsoleMetricsService {
     }
 
     async getOperatorStats() {
-        return this._getCachedMetric('operator_stats', async () => {
-            const operators = await this._cache_aside.queryDocuments(Collections.OPERATORS, []);
+        const operators = await this._cache_aside.queryDocuments(Collections.OPERATORS, [], null, true);
 
-            const statusDistribution = {
-                [OperatorStatus.AVAILABLE]: 0,
-                [OperatorStatus.ACTIVE]: 0,
-                [OperatorStatus.BOUND]: 0,
-                [OperatorStatus.OFFLINE]: 0,
-                [OperatorStatus.STALE]: 0,
-                [OperatorStatus.STOPPED]: 0,
-                [OperatorStatus.TERMINATED]: 0,
-                [OperatorStatus.UNAVAILABLE]: 0
-            };
+        const statusDistribution = {
+            [OperatorStatus.AVAILABLE]: 0,
+            [OperatorStatus.ACTIVE]: 0,
+            [OperatorStatus.BOUND]: 0,
+            [OperatorStatus.OFFLINE]: 0,
+            [OperatorStatus.STALE]: 0,
+            [OperatorStatus.STOPPED]: 0,
+            [OperatorStatus.TERMINATED]: 0,
+            [OperatorStatus.UNAVAILABLE]: 0
+        };
 
-            const typeDistribution = {
-                [OperatorType.SYSTEM]: 0,
-                [OperatorType.CLOUD]: 0
-            };
+        const typeDistribution = {
+            [OperatorType.SYSTEM]: 0,
+            [OperatorType.CLOUD]: 0
+        };
 
-            let healthyCount = 0;
-            let totalLatency = 0;
-            let latencyCount = 0;
-            let avgCpu = 0;
-            let avgMemory = 0;
-            let metricsCount = 0;
+        let healthyCount = 0;
+        let totalLatency = 0;
+        let latencyCount = 0;
+        let avgCpu = 0;
+        let avgMemory = 0;
+        let metricsCount = 0;
 
-            for (const op of operators) {
-                const status = op.status || OperatorStatus.OFFLINE;
-                if (statusDistribution.hasOwnProperty(status)) {
-                    statusDistribution[status]++;
-                }
-
-                const type = op.operator_type || OperatorType.SYSTEM;
-                if (typeDistribution.hasOwnProperty(type)) {
-                    typeDistribution[type]++;
-                }
-
-                const heartbeat = op.latest_heartbeat_snapshot;
-                if (heartbeat) {
-                    if (status === OperatorStatus.ACTIVE || status === OperatorStatus.BOUND) {
-                        healthyCount++;
-                    }
-
-                    // latest_heartbeat_snapshot is the canonical HeartbeatSnapshot shape
-                    // (shared/models/wire/heartbeat.json#operator_heartbeat) — persisted
-                    // and SSE envelope both carry the same nested shape.
-                    const perf = heartbeat.performance || {};
-
-                    if (perf.network_latency !== null && perf.network_latency !== undefined) {
-                        totalLatency += perf.network_latency;
-                        latencyCount++;
-                    }
-
-                    if (perf.cpu_percent !== null && perf.cpu_percent !== undefined) {
-                        avgCpu += perf.cpu_percent;
-                        metricsCount++;
-                    }
-
-                    if (perf.memory_percent !== null && perf.memory_percent !== undefined) {
-                        avgMemory += perf.memory_percent;
-                    }
-                }
+        for (const op of operators) {
+            const status = op.status || OperatorStatus.OFFLINE;
+            if (statusDistribution.hasOwnProperty(status)) {
+                statusDistribution[status]++;
             }
 
-            return {
-                total: operators.length,
-                statusDistribution,
-                typeDistribution,
-                health: {
-                    healthy: healthyCount,
-                    unhealthy: operators.length - healthyCount - statusDistribution[OperatorStatus.AVAILABLE] - statusDistribution[OperatorStatus.TERMINATED],
-                    avgLatencyMs: latencyCount > 0 ? Math.round(totalLatency / latencyCount) : 0,
-                    avgCpuPercent: metricsCount > 0 ? Math.round(avgCpu / metricsCount) : 0,
-                    avgMemoryPercent: metricsCount > 0 ? Math.round(avgMemory / metricsCount) : 0
+            const type = op.operator_type || OperatorType.SYSTEM;
+            if (typeDistribution.hasOwnProperty(type)) {
+                typeDistribution[type]++;
+            }
+
+            const heartbeat = op.latest_heartbeat_snapshot;
+            if (heartbeat) {
+                if (status === OperatorStatus.ACTIVE || status === OperatorStatus.BOUND) {
+                    healthyCount++;
                 }
-            };
-        });
+
+                // latest_heartbeat_snapshot is the canonical HeartbeatSnapshot shape
+                // (shared/models/wire/heartbeat.json#operator_heartbeat) — persisted
+                // and SSE envelope both carry the same nested shape.
+                const perf = heartbeat.performance || {};
+
+                if (perf.network_latency !== null && perf.network_latency !== undefined) {
+                    totalLatency += perf.network_latency;
+                    latencyCount++;
+                }
+
+                if (perf.cpu_percent !== null && perf.cpu_percent !== undefined) {
+                    avgCpu += perf.cpu_percent;
+                    metricsCount++;
+                }
+
+                if (perf.memory_percent !== null && perf.memory_percent !== undefined) {
+                    avgMemory += perf.memory_percent;
+                }
+            }
+        }
+
+        return {
+            total: operators.length,
+            statusDistribution,
+            typeDistribution,
+            health: {
+                healthy: healthyCount,
+                unhealthy: operators.length - healthyCount - statusDistribution[OperatorStatus.AVAILABLE] - statusDistribution[OperatorStatus.TERMINATED],
+                avgLatencyMs: latencyCount > 0 ? Math.round(totalLatency / latencyCount) : 0,
+                avgCpuPercent: metricsCount > 0 ? Math.round(avgCpu / metricsCount) : 0,
+                avgMemoryPercent: metricsCount > 0 ? Math.round(avgMemory / metricsCount) : 0
+            }
+        };
     }
 
     async _scanKeys(cacheAside, pattern) {
@@ -320,7 +318,7 @@ class ConsoleMetricsService {
             
             const events = await this._cache_aside.queryDocuments(Collections.LOGIN_AUDIT, [
                 { field: 'timestamp', operator: '>=', value: new DateQueryValue({ value: oneDayAgo }).forDB() }
-            ]);
+            ], null, true);
             
             const stats = {
                 total: events.length,
@@ -364,7 +362,7 @@ class ConsoleMetricsService {
             
             const investigations = await this._cache_aside.queryDocuments(Collections.INVESTIGATIONS, [
                 { field: 'created_at', operator: '>=', value: new DateQueryValue({ value: sevenDaysAgo }).forDB() }
-            ]);
+            ], null, true);
 
             return {
                 totalInvestigations: investigations.length,

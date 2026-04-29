@@ -23,6 +23,7 @@ import pytest
 
 ALLOW_LIST = {
     "app/services/data/reputation_data_service.py",  # The service itself
+    "app/services/data/stake_resolution_data_service.py",  # Stake resolution log service
     "app/services/service_factory.py",                # Dependency injection
     "app/services/ai/auditor_service.py",            # Reader (Artifact B)
     "app/services/ai/reputation_service.py",          # Writer (Artifact A)
@@ -45,7 +46,7 @@ REPUTATION_FIELDS = {
     "reputation_commitment_id",
 }
 
-PROJECT_ROOT = Path("/home/bob/g8e/components/g8ee")
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
 
 def get_all_python_files(root: Path):

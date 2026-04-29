@@ -207,7 +207,6 @@ class OperatorDataService(OperatorDataServiceProtocol):
         heartbeat_record = heartbeat.model_dump(mode="json")
 
         update_data: dict[str, object] = {
-            "last_heartbeat": now_timestamp,
             "updated_at": now_timestamp,
             "current_hostname": heartbeat.system_identity.hostname,
             "latest_heartbeat_snapshot": heartbeat_record,

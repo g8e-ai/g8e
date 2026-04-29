@@ -32,8 +32,8 @@ def make_operator(**kwargs):
         "id": "op-1",
         "user_id": "user-1",
         "status": OperatorStatus.BOUND,
-        "last_heartbeat": datetime.now(UTC) - timedelta(seconds=10),
         "latest_heartbeat_snapshot": HeartbeatSnapshot(
+            timestamp=datetime.now(UTC) - timedelta(seconds=10),
             system_identity=HeartbeatSystemIdentity(hostname="node-02")
         ),
         "system_fingerprint": "fp-1",
@@ -74,7 +74,10 @@ async def test_tick_transitions_stale_bound_to_stale():
 
     op = make_operator(
         status=OperatorStatus.BOUND,
-        last_heartbeat=datetime.now(UTC) - timedelta(seconds=THRESHOLD_SECONDS + 30)
+        latest_heartbeat_snapshot=HeartbeatSnapshot(
+            timestamp=datetime.now(UTC) - timedelta(seconds=THRESHOLD_SECONDS + 30),
+            system_identity=HeartbeatSystemIdentity(hostname="node-02")
+        )
     )
     operator_data_service.query_operators.return_value = [op]
     operator_data_service.update_operator_status.return_value = True
@@ -105,7 +108,10 @@ async def test_tick_transitions_stale_active_to_offline():
 
     op = make_operator(
         status=OperatorStatus.ACTIVE,
-        last_heartbeat=datetime.now(UTC) - timedelta(seconds=THRESHOLD_SECONDS + 10)
+        latest_heartbeat_snapshot=HeartbeatSnapshot(
+            timestamp=datetime.now(UTC) - timedelta(seconds=THRESHOLD_SECONDS + 10),
+            system_identity=HeartbeatSystemIdentity(hostname="node-02")
+        )
     )
     operator_data_service.query_operators.return_value = [op]
     operator_data_service.update_operator_status.return_value = True
@@ -130,7 +136,10 @@ async def test_tick_recovers_stale_to_bound():
 
     op = make_operator(
         status=OperatorStatus.STALE,
-        last_heartbeat=datetime.now(UTC) - timedelta(seconds=5)
+        latest_heartbeat_snapshot=HeartbeatSnapshot(
+            timestamp=datetime.now(UTC) - timedelta(seconds=5),
+            system_identity=HeartbeatSystemIdentity(hostname="node-02")
+        )
     )
     operator_data_service.query_operators.return_value = [op]
     operator_data_service.update_operator_status.return_value = True
@@ -155,7 +164,10 @@ async def test_tick_recovers_offline_to_active():
 
     op = make_operator(
         status=OperatorStatus.OFFLINE,
-        last_heartbeat=datetime.now(UTC) - timedelta(seconds=5)
+        latest_heartbeat_snapshot=HeartbeatSnapshot(
+            timestamp=datetime.now(UTC) - timedelta(seconds=5),
+            system_identity=HeartbeatSystemIdentity(hostname="node-02")
+        )
     )
     operator_data_service.query_operators.return_value = [op]
     operator_data_service.update_operator_status.return_value = True
@@ -174,12 +186,14 @@ async def test_tick_recovers_offline_to_active():
     )
 
 @pytest.mark.asyncio
-async def test_tick_ignores_missing_heartbeat():
+async def test_tick_transitions_missing_heartbeat_to_stale():
     operator_data_service = AsyncMock()
     event_service = AsyncMock()
 
-    op = make_operator(status=OperatorStatus.BOUND, last_heartbeat=None)
+    # Operator is BOUND with no heartbeat - should transition immediately to STALE
+    op = make_operator(status=OperatorStatus.BOUND, latest_heartbeat_snapshot=None)
     operator_data_service.query_operators.return_value = [op]
+    operator_data_service.update_operator_status.return_value = True
 
     service = HeartbeatStaleMonitorService(
         operator_data_service=operator_data_service,
@@ -189,7 +203,10 @@ async def test_tick_ignores_missing_heartbeat():
 
     await service.tick()
 
-    operator_data_service.update_operator_status.assert_not_called()
+    operator_data_service.update_operator_status.assert_called_once_with(
+        operator_id="op-1",
+        status=OperatorStatus.STALE
+    )
 
 @pytest.mark.asyncio
 async def test_tick_ignores_non_monitored_statuses():
@@ -198,9 +215,15 @@ async def test_tick_ignores_non_monitored_statuses():
 
     old_ts = datetime.now(UTC) - timedelta(days=1)
     operators = [
-        make_operator(id="op-1", status=OperatorStatus.AVAILABLE, last_heartbeat=old_ts),
-        make_operator(id="op-2", status=OperatorStatus.TERMINATED, last_heartbeat=old_ts),
-        make_operator(id="op-3", status=OperatorStatus.STOPPED, last_heartbeat=old_ts),
+        make_operator(id="op-1", status=OperatorStatus.AVAILABLE, latest_heartbeat_snapshot=HeartbeatSnapshot(
+            timestamp=old_ts, system_identity=HeartbeatSystemIdentity(hostname="node-02")
+        )),
+        make_operator(id="op-2", status=OperatorStatus.TERMINATED, latest_heartbeat_snapshot=HeartbeatSnapshot(
+            timestamp=old_ts, system_identity=HeartbeatSystemIdentity(hostname="node-02")
+        )),
+        make_operator(id="op-3", status=OperatorStatus.STOPPED, latest_heartbeat_snapshot=HeartbeatSnapshot(
+            timestamp=old_ts, system_identity=HeartbeatSystemIdentity(hostname="node-02")
+        )),
     ]
     operator_data_service.query_operators.return_value = operators
 
@@ -222,7 +245,10 @@ async def test_tick_continues_on_publish_failure():
 
     op = make_operator(
         status=OperatorStatus.BOUND,
-        last_heartbeat=datetime.now(UTC) - timedelta(seconds=THRESHOLD_SECONDS + 10)
+        latest_heartbeat_snapshot=HeartbeatSnapshot(
+            timestamp=datetime.now(UTC) - timedelta(seconds=THRESHOLD_SECONDS + 10),
+            system_identity=HeartbeatSystemIdentity(hostname="node-02")
+        )
     )
     operator_data_service.query_operators.return_value = [op]
     operator_data_service.update_operator_status.return_value = True

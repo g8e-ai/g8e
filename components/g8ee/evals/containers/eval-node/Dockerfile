@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y \
     openssh-client \
     grep \
     sed \
-    awk \
+    mawk \
     findutils \
     less \
     && rm -rf /var/lib/apt/lists/*

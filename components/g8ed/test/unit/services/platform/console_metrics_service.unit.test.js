@@ -64,11 +64,13 @@ describe('ConsoleMetricsService [UNIT]', () => {
             expect(stats.newUsersLastWeek).toBe(1);
         });
 
-        it('caches results', async () => {
+        it('caches results at metrics layer but bypasses document cache', async () => {
             cacheAside.queryDocuments.mockResolvedValue([]);
             await service.getUserStats();
             await service.getUserStats();
+            // Should call queryDocuments once due to metrics cache, but with bypassCache=true
             expect(cacheAside.queryDocuments).toHaveBeenCalledTimes(1);
+            expect(cacheAside.queryDocuments).toHaveBeenCalledWith(Collections.USERS, [], null, true);
         });
     });
 
@@ -91,6 +93,7 @@ describe('ConsoleMetricsService [UNIT]', () => {
             expect(stats.health.healthy).toBe(2); // ACTIVE + BOUND
             expect(stats.health.avgLatencyMs).toBe(15);
             expect(stats.health.avgCpuPercent).toBe(10);
+            expect(cacheAside.queryDocuments).toHaveBeenCalledWith(Collections.OPERATORS, [], null, true);
         });
 
         it('reads metrics from the nested OperatorHeartbeat shape (performance.*)', async () => {
@@ -118,6 +121,22 @@ describe('ConsoleMetricsService [UNIT]', () => {
             expect(stats.health.avgLatencyMs).toBe(15);
             expect(stats.health.avgCpuPercent).toBe(50);
             expect(stats.health.avgMemoryPercent).toBe(60);
+            expect(cacheAside.queryDocuments).toHaveBeenCalledWith(Collections.OPERATORS, [], null, true);
+        });
+
+        it('bypasses cache to prevent stale heartbeat data (regression test)', async () => {
+            const operators = [
+                { status: OperatorStatus.ACTIVE, latest_heartbeat_snapshot: { performance: { network_latency: 10, cpu_percent: 5, memory_percent: 20 } } }
+            ];
+            cacheAside.queryDocuments.mockResolvedValue(operators);
+
+            await service.getOperatorStats();
+            await service.getOperatorStats();
+
+            // Should call queryDocuments twice since we bypassed the metrics cache
+            expect(cacheAside.queryDocuments).toHaveBeenCalledTimes(2);
+            expect(cacheAside.queryDocuments).toHaveBeenNthCalledWith(1, Collections.OPERATORS, [], null, true);
+            expect(cacheAside.queryDocuments).toHaveBeenNthCalledWith(2, Collections.OPERATORS, [], null, true);
         });
     });
 
@@ -150,6 +169,81 @@ describe('ConsoleMetricsService [UNIT]', () => {
             expect(metrics.timestamp).toBeDefined();
             expect(metrics.g8es.memoryUsed).toBeDefined();
             expect(metrics.cache).toBeDefined();
+        });
+    });
+
+    describe('getLoginAuditStats', () => {
+        it('calculates login event statistics correctly', async () => {
+            const now = new Date('2026-03-30T12:00:00Z');
+            vi.setSystemTime(now);
+
+            const events = [
+                { event_type: 'login_success', timestamp: now.toISOString() },
+                { event_type: 'login_failed', timestamp: now.toISOString() },
+                { event_type: 'account_locked', timestamp: now.toISOString() },
+                { event_type: 'login_anomaly', timestamp: now.toISOString() },
+            ];
+            cacheAside.queryDocuments.mockResolvedValue(events);
+
+            const stats = await service.getLoginAuditStats();
+
+            expect(stats.total).toBe(4);
+            expect(stats.successful).toBe(1);
+            expect(stats.failed).toBe(1);
+            expect(stats.locked).toBe(1);
+            expect(stats.anomalies).toBe(1);
+        });
+
+        it('bypasses document cache to prevent stale data (regression test)', async () => {
+            cacheAside.queryDocuments.mockResolvedValue([]);
+
+            await service.getLoginAuditStats();
+            await service.getLoginAuditStats();
+
+            // Should call queryDocuments once due to metrics cache, but with bypassCache=true
+            expect(cacheAside.queryDocuments).toHaveBeenCalledTimes(1);
+            expect(cacheAside.queryDocuments).toHaveBeenCalledWith(
+                Collections.LOGIN_AUDIT,
+                expect.any(Array),
+                null,
+                true
+            );
+        });
+    });
+
+    describe('getAIUsageStats', () => {
+        it('calculates investigation statistics correctly', async () => {
+            const now = new Date('2026-03-30T12:00:00Z');
+            vi.setSystemTime(now);
+
+            const investigations = [
+                { status: 'active', created_at: now.toISOString() },
+                { status: 'active', created_at: now.toISOString() },
+                { status: 'completed', created_at: now.toISOString() },
+            ];
+            cacheAside.queryDocuments.mockResolvedValue(investigations);
+
+            const stats = await service.getAIUsageStats();
+
+            expect(stats.totalInvestigations).toBe(3);
+            expect(stats.activeInvestigations).toBe(2);
+            expect(stats.completedInvestigations).toBe(1);
+        });
+
+        it('bypasses document cache to prevent stale data (regression test)', async () => {
+            cacheAside.queryDocuments.mockResolvedValue([]);
+
+            await service.getAIUsageStats();
+            await service.getAIUsageStats();
+
+            // Should call queryDocuments once due to metrics cache, but with bypassCache=true
+            expect(cacheAside.queryDocuments).toHaveBeenCalledTimes(1);
+            expect(cacheAside.queryDocuments).toHaveBeenCalledWith(
+                Collections.INVESTIGATIONS,
+                expect.any(Array),
+                null,
+                true
+            );
         });
     });
 });

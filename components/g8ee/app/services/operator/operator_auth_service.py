@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from app.constants import DB_COLLECTION_USERS, DEFAULT_OPERATOR_CONFIG
+from app.constants import DB_COLLECTION_USERS, DEFAULT_OPERATOR_CONFIG, OperatorStatus
 from app.services.auth.api_key_service import ApiKeyService
 from app.services.auth.certificate_service import CertificateService
 from app.services.operator.operator_session_service import OperatorSessionService
@@ -83,10 +83,12 @@ class OperatorAuthService:
 
     async def register_device_link_operator(
         self,
-        operator_id: str,
+        operator_id: str | None,
         user_id: str,
         organization_id: str | None,
         operator_type: str,
+        device_link_token: str | None,
+        system_fingerprint: str | None,
         request_context: dict[str, Any] | None,
     ) -> dict[str, Any]:
         """Bootstrap an operator after device-link consumption.
@@ -95,10 +97,94 @@ class OperatorAuthService:
         Inputs are taken at face value (operator_id, user_id come from a verified
         device-link token on g8ed's side).
         """
-        # 1. Get operator
-        operator = await self._operator_data_service.get_operator(operator_id)
+        # 1. Resolve operator slot
+        operator = None
+        if operator_id:
+            operator = await self._operator_data_service.get_operator(operator_id)
+            if not operator:
+                return {"success": False, "error": f"Operator {operator_id} not found"}
+        
+        # On-demand slot resolution/creation
         if not operator:
-            return {"success": False, "error": "Operator not found"}
+            if not device_link_token:
+                return {"success": False, "error": "operator_id or device_link_token is required"}
+
+            # g8ed is authoritative for device link management (usage tracking, exhaustion checking)
+            # g8ed validates the device link before calling g8ee, so no need to re-check here
+
+            # Query all operators for user once, then filter in memory
+            all_user_operators = await self._operator_data_service.query_operators([
+                {"field": "user_id", "op": "==", "value": user_id}
+            ])
+
+            # 1a. Try to find existing operator by system_fingerprint (same physical device)
+            if system_fingerprint:
+                operator = next(
+                    (op for op in all_user_operators 
+                     if op.latest_heartbeat_snapshot and op.latest_heartbeat_snapshot.system_fingerprint == system_fingerprint),
+                    None
+                )
+                if operator:
+                    operator_id = operator.id
+
+            # 1b. If no fingerprint match, try to find an existing AVAILABLE slot
+            if not operator:
+                operator = next(
+                    (op for op in all_user_operators if op.status == OperatorStatus.AVAILABLE),
+                    None
+                )
+                if operator:
+                    operator_id = operator.id
+
+            # 1c. If still no operator, create a new slot on-demand
+            if not operator:
+                import uuid
+                import secrets
+                operator_id = str(uuid.uuid4())
+                operator_suffix = operator_id.rsplit("-", maxsplit=1)[-1][:8]
+                api_key = f"g8e_{operator_suffix}_{secrets.token_hex(32)}"
+                
+                # Use atomic KV counter for slot number to prevent race conditions
+                # during concurrent device-link registration
+                from app.constants.kv_keys import KVKey
+                slot_counter_key = KVKey.operator_slot_counter(user_id)
+                
+                # Atomically increment to get next slot number
+                # KV incr initializes to 0 if key doesn't exist, then increments
+                slot_number = await self._cache.kv.incr(slot_counter_key, amount=1)
+
+                from app.models.operators import OperatorDocument
+                from app.utils.timestamp import now
+                operator_doc = OperatorDocument(
+                    id=operator_id,
+                    user_id=user_id,
+                    organization_id=organization_id or user_id,
+                    name=f"operator-{slot_number}",
+                    slot_number=slot_number,
+                    operator_type=operator_type,
+                    status=OperatorStatus.AVAILABLE,
+                    api_key=api_key,
+                    created_at=now(),
+                    updated_at=now(),
+                )
+                
+                await self._operator_data_service.create_operator(operator_doc)
+                
+                # Issue API key (canonical)
+                # Note: This uses api_key_service which is already in __init__
+                await self._api_key_service.issue_key(
+                    api_key=api_key,
+                    user_id=user_id,
+                    organization_id=organization_id,
+                    operator_id=operator_id,
+                    permissions=["OPERATOR_BOOTSTRAP", "OPERATOR_HEARTBEAT", "OPERATOR_DOWNLOAD"],
+                )
+                
+                operator = operator_doc
+
+        # Verify operator was resolved
+        if not operator:
+            return {"success": False, "error": "Failed to resolve operator slot"}
 
         # 2. Ownership check
         if operator.user_id != user_id:
@@ -111,6 +197,7 @@ class OperatorAuthService:
             return {"success": False, "error": "Operator slot missing api_key - configuration error"}
 
         # 4. Create session
+        from app.constants import DB_COLLECTION_USERS
         user_data = await self._cache.get_document_with_cache(DB_COLLECTION_USERS, user_id)
         session_data = {
             "user_id": user_id,
@@ -132,14 +219,18 @@ class OperatorAuthService:
         if not claim_success:
             return {"success": False, "error": "Failed to claim operator slot"}
 
-        # 6. Generate certificate
+        # 6. Device link usage tracking is handled by g8ed
+        # g8ed updates the 'uses' field in the device link document based on claims array length
+        # g8ee is authoritative for operator documents only
+
+        # 7. Generate certificate
         certs = await self._certificate_service.generate_operator_certificate(
             operator_id=operator_id,
             user_id=user_id,
             organization_id=organization_id or user_id,
         )
 
-        # 7. Return response
+        # 8. Return response
         return {
             "success": True,
             "operator_session_id": session.id,

@@ -173,7 +173,7 @@ func matchGlob(pattern, s string) bool {
 
 // resolveHost reads ~/.ssh/config (or the provided path) and resolves SSH
 // connection parameters for the given alias or user@host[:port] string.
-func resolveHost(target, sshConfigPath, username string) resolvedHost {
+func resolveHost(target, sshConfigPath, username, sshIdentityFile, sshUser string) resolvedHost {
 	r := resolvedHost{original: target}
 
 	// Parse user@host:port if present
@@ -208,6 +208,16 @@ func resolveHost(target, sshConfigPath, username string) resolvedHost {
 			r.hostname = block.hostname
 		}
 		r.keyFiles = append(r.keyFiles, block.identityFiles...)
+	}
+
+	// Explicit SSH user flag overrides config and parsed user@host
+	if sshUser != "" {
+		r.user = sshUser
+	}
+
+	// Explicit SSH identity file flag overrides config
+	if sshIdentityFile != "" {
+		r.keyFiles = []string{sshIdentityFile}
 	}
 
 	// Defaults
@@ -306,6 +316,8 @@ func streamToHost(
 	dialTimeout time.Duration,
 	sshAuthSock string,
 	username string,
+	sshIdentityFile string,
+	sshUser string,
 	resultCh chan<- streamResult,
 ) {
 	start := time.Now()
@@ -328,7 +340,7 @@ func streamToHost(
 	default:
 	}
 
-	r = resolveHost(target, sshConfigPath, username)
+	r = resolveHost(target, sshConfigPath, username, sshIdentityFile, sshUser)
 
 	authMethods := buildAuthMethods(r, sshAuthSock)
 	if len(authMethods) == 0 {

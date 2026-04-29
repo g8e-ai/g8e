@@ -268,6 +268,15 @@ func main() {
 		deviceAuthResult = deviceResult
 	}
 
+	if deviceAuthResult != nil && deviceAuthResult.Config != nil {
+		logger.Info("Applying bootstrap config from device-link registration")
+		// Apply it to our local variables which will then be used to construct the real 'cfg'
+		if deviceAuthResult.Config.APIKey != "" {
+			apiKey = deviceAuthResult.Config.APIKey
+		}
+		// We still need to apply other config fields (like certs) once 'cfg' is created
+	}
+
 	if logLevel == "info" {
 		if settings.LogLevel != "" {
 			logLevel = settings.LogLevel
@@ -322,9 +331,9 @@ func main() {
 
 	cfg.Version = version
 
-	// Apply bootstrap config from device-link registration if available
+	// Apply remaining bootstrap config from device-link registration if available
 	if deviceAuthResult != nil && deviceAuthResult.Config != nil {
-		logger.Info("Applying bootstrap config from device-link registration")
+		logger.Info("Applying remaining bootstrap config from device-link registration")
 		bootstrapService, err := auth.NewBootstrapService(cfg, logger)
 		if err != nil {
 			logger.Error("Failed to create bootstrap service", "error", err)

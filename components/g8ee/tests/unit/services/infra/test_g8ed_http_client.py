@@ -103,7 +103,7 @@ def _make_operator_doc_dict(**overrides):
         "status": OperatorStatus.BOUND,
         "web_session_id": "sess-999",
         "operator_session_id": "op-sess-111",
-        "last_heartbeat": datetime.now(UTC).isoformat(),
+        "latest_heartbeat_snapshot": {"timestamp": datetime.now(UTC).isoformat()},
     }
     base.update(overrides)
     return base

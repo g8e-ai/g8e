@@ -409,7 +409,7 @@ class LoginSecurityService {
     }
 
     async getLockedAccounts() {
-        const results = await this._cache_aside.queryDocuments(ACCOUNT_LOCKS_COLLECTION_BASE, []);
+        const results = await this._cache_aside.queryDocuments(ACCOUNT_LOCKS_COLLECTION_BASE, [], null, true);
         return results.map(raw => AccountLockData.parse(raw));
     }
 

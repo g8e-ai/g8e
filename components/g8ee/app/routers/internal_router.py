@@ -1290,6 +1290,8 @@ async def register_device_link_operator(
         user_id=request.user_id,
         organization_id=request.organization_id,
         operator_type=request.operator_type,
+        device_link_token=request.device_link_token,
+        system_fingerprint=request.system_fingerprint,
         request_context={
             "ip": http_request.client.host if http_request.client else None,
             "user_agent": http_request.headers.get("user-agent"),

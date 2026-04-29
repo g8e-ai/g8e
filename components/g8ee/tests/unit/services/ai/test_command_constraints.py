@@ -27,7 +27,7 @@ Tests:
 - OperatorCommandService enforcement integration
 
 Run with:
-    /home/bob/g8e/g8e test g8ee -- tests/unit/services/ai/test_command_constraints.py
+    ./g8e test g8ee -- tests/unit/services/ai/test_command_constraints.py
 """
 
 from unittest.mock import AsyncMock, MagicMock

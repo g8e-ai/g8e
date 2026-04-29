@@ -136,12 +136,30 @@ class HeartbeatSnapshotService:
             operator_id = parts[1]
             operator_session_id = parts[2]
 
+            logger.info(
+                "[HEARTBEAT] Received heartbeat message from pubsub",
+                extra={
+                    "channel": channel,
+                    "operator_id": operator_id,
+                    "operator_session_id": operator_session_id,
+                }
+            )
+
             if not operator_id or not operator_session_id:
                 logger.warning("[HEARTBEAT] Missing operator_id or operator_session_id in channel: %s", channel)
                 return
             raw = data if isinstance(data, dict) else json.loads(data)
             payload = G8eoHeartbeatPayload.model_validate(raw)
             self._active_sessions.add((operator_id, operator_session_id))
+            logger.info(
+                "[HEARTBEAT] Payload validated, processing heartbeat",
+                extra={
+                    "operator_id": operator_id,
+                    "operator_session_id": operator_session_id,
+                    "event_type": payload.event_type,
+                    "hostname": payload.system_identity.hostname if payload.system_identity else None,
+                }
+            )
             success = await self.process_heartbeat_message(operator_id, operator_session_id, payload)
             if not success:
                 logger.warning("[HEARTBEAT] Heartbeat processing failed for operator %s", operator_id)
@@ -168,10 +186,12 @@ class HeartbeatSnapshotService:
             return False
 
         logger.info(
-            "Heartbeat service received message from g8eo",
+            "[HEARTBEAT] Timestamp validated, processing heartbeat for operator %s",
+            operator_id,
             extra={
-                "event_type": payload.event_type,
+                "operator_id": operator_id,
                 "operator_session_id": operator_session_id,
+                "event_type": payload.event_type,
                 "system_hostname": payload.system_identity.hostname,
                 "system_os": payload.system_identity.os,
                 "system_architecture": payload.system_identity.architecture,
@@ -188,14 +208,22 @@ class HeartbeatSnapshotService:
         )
 
         if not self._validate_operator_identity(operator_id, payload, operator_session_id):
+            logger.warning("[HEARTBEAT] Operator identity validation failed for %s", operator_id)
             return False
 
+        logger.info("[HEARTBEAT] Operator identity validated, fetching operator document")
         operator = await self._get_and_validate_operator(operator_id, operator_session_id, payload)
         if not operator:
+            logger.warning("[HEARTBEAT] Operator validation failed for %s", operator_id)
             return False
 
+        logger.info(
+            "[HEARTBEAT] Converting payload to HeartbeatSnapshot",
+            extra={"operator_id": operator_id, "operator_status": operator.status}
+        )
         heartbeat = HeartbeatSnapshot.from_wire(payload)
 
+        logger.info("[HEARTBEAT] Updating operator heartbeat in database")
         db_success = await self.operator_data_service.update_operator_heartbeat(
             operator_id=operator_id,
             heartbeat=heartbeat,
@@ -204,8 +232,14 @@ class HeartbeatSnapshotService:
         )
 
         if not db_success:
+            logger.warning("[HEARTBEAT] Database update failed for operator %s", operator_id)
             return False
 
+        logger.info(
+            "[HEARTBEAT] Building SSE envelope for operator %s (status: %s)",
+            operator_id,
+            operator.status
+        )
         envelope = HeartbeatSSEEnvelope.from_heartbeat(operator_id, operator.status, heartbeat)
         await self._push_heartbeat_sse(envelope, payload, operator)
 
@@ -287,8 +321,25 @@ class HeartbeatSnapshotService:
         operator: OperatorDocument,
     ) -> None:
         event = self._build_heartbeat_event(envelope, payload, operator)
+        event_type_str = "SessionEvent" if isinstance(event, SessionEvent) else "BackgroundEvent"
+        logger.info(
+            "[HEARTBEAT] Publishing SSE event (%s) for operator %s",
+            event_type_str,
+            operator.id,
+            extra={
+                "operator_id": operator.id,
+                "operator_status": operator.status,
+                "event_type": event_type_str,
+                "bound_web_session_id": operator.bound_web_session_id,
+                "user_id": operator.user_id,
+            }
+        )
         try:
             await self.event_service.publish(event)
+            logger.info(
+                "[HEARTBEAT] SSE event published successfully for operator %s",
+                operator.id
+            )
         except Exception as e:
             logger.warning(
                 "[HEARTBEAT] SSE push failed (non-blocking): %s",
@@ -306,6 +357,11 @@ class HeartbeatSnapshotService:
         web session (targeted delivery), BackgroundEvent otherwise (fan-out by user_id).
         """
         if operator.bound_web_session_id:
+            logger.info(
+                "[HEARTBEAT] Building SessionEvent for bound operator %s -> web_session %s",
+                operator.id,
+                operator.bound_web_session_id
+            )
             return SessionEvent(
                 event_type=EventType.OPERATOR_HEARTBEAT_RECEIVED,
                 payload=envelope,
@@ -314,6 +370,11 @@ class HeartbeatSnapshotService:
                 case_id=payload.case_id,
                 investigation_id=payload.investigation_id,
             )
+        logger.info(
+            "[HEARTBEAT] Building BackgroundEvent for unbound operator %s -> user %s",
+            operator.id,
+            operator.user_id
+        )
         return BackgroundEvent(
             event_type=EventType.OPERATOR_HEARTBEAT_RECEIVED,
             payload=envelope,

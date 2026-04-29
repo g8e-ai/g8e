@@ -131,7 +131,6 @@ describe('OperatorSlot [FRONTEND UNIT]', () => {
             is_g8ep: false,
             first_deployed: '2026-01-01T00:00:00.000Z',
             claimed_at: '2026-01-01T12:00:00.000Z',
-            last_heartbeat: '2026-01-02T00:00:00.000Z',
             latest_heartbeat_snapshot: {
                 system_identity: {
                     hostname: 'test-host',
@@ -148,7 +147,6 @@ describe('OperatorSlot [FRONTEND UNIT]', () => {
         expect(slot.is_g8ep).toBe(false);
         expect(slot.first_deployed).toEqual(new Date('2026-01-01T00:00:00.000Z'));
         expect(slot.claimed_at).toEqual(new Date('2026-01-01T12:00:00.000Z'));
-        expect(slot.last_heartbeat).toEqual(new Date('2026-01-02T00:00:00.000Z'));
         expect(slot.latest_heartbeat_snapshot.system_identity.hostname).toBe('test-host');
         expect(slot.latest_heartbeat_snapshot.system_identity.os).toBe('linux');
     });

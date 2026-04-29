@@ -171,6 +171,20 @@ class OperatorFileService:
                         settings=G8eeUserSettings(llm=LLMSettings()),
                     )
                     if risk_analysis and not risk_analysis.safe_to_proceed:
+                        # Broadcast Warden block to UI
+                        await self.g8ed_event_service.publish_command_event(
+                            EventType.OPERATOR_FILE_EDIT_FAILED,
+                            CommandFailedBroadcastEvent(
+                                command=f"file_edit {op_name} {file_path}",
+                                execution_id=exec_id,
+                                operator_session_id=operator_session_id,
+                                status=ExecutionStatus.FAILED,
+                                error=f"WARDEN BLOCK: {risk_analysis.blocking_issues[0] if risk_analysis.blocking_issues else 'Operation deemed unsafe'}",
+                                error_type=CommandErrorType.RISK_ANALYSIS_BLOCKED,
+                            ),
+                            g8e_context,
+                            task_id=AITaskId.FILE_EDIT,
+                        )
                         return FileEditResult(
                             success=False,
                             error="Risk analysis blocked operation",
@@ -253,6 +267,11 @@ class OperatorFileService:
                 timeout_seconds=60,
             )
 
+            # Fix: Ensure content is extracted for READ operations
+            content = getattr(args, "content", None) or getattr(args, "new_content", None)
+            if operation == FileOperation.READ and internal_result and internal_result.status == ExecutionStatus.COMPLETED:
+                content = internal_result.output
+
             # Notify completion/failure
             completion_event_type = (
                 EventType.OPERATOR_FILE_EDIT_COMPLETED
@@ -271,7 +290,7 @@ class OperatorFileService:
                     status=internal_result.status if internal_result else ExecutionStatus.FAILED,
                     error=internal_result.error if internal_result else "Execution result is None",
                     stderr=internal_result.stderr if internal_result else None,
-                    content=getattr(args, "content", None) or getattr(args, "new_content", None),
+                    content=content,
                     approval_id=getattr(approval_result, "approval_id", None) if "approval_result" in locals() else None,
                 ),
                 g8e_context,
@@ -282,6 +301,7 @@ class OperatorFileService:
                 success=internal_result.status == ExecutionStatus.COMPLETED if internal_result else False,
                 file_path=file_path,
                 operation=operation,
+                content=content if operation == FileOperation.READ else None,
                 error=internal_result.error if internal_result else "Execution result is None",
             )
         except Exception as e:

@@ -36,7 +36,7 @@ Technical deep-dives into the services that comprise the g8e stack.
 |----------|-------------|
 | [developer.md](developer.md) | Environment setup, service bootstrap, and development workflows. |
 | [testing.md](testing.md) | CI/CD, unit/integration testing on g8ep, and gold-set validation. |
-| [g8e-help.md](g8e-help.md) | CLI reference for the `/home/bob/g8e/g8e` management tool. |
+| [g8e-help.md](g8e-help.md) | CLI reference for the `./g8e` management tool. |
 | [docs-guidelines.md](docs-guidelines.md) | Standards for documentation structure and code-first discovery rules. |
 | [glossary.md](glossary.md) | Canonical platform terminology. |
 

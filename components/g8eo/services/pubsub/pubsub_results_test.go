@@ -223,6 +223,49 @@ func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
 
 		require.NoError(t, err)
 	})
+
+	t.Run("successful read operation populates content field", func(t *testing.T) {
+		db := NewMockG8esPubSubClient()
+		defer db.Close()
+
+		cfg := testutil.NewTestConfig(t)
+		cfg.OperatorSessionId = "test-session-123"
+		cfg.OperatorID = "test-operator-id"
+		logger := testutil.NewTestLogger()
+
+		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
+		require.NoError(t, err)
+
+		content := "file content for read operation"
+		result := &models.FileEditResult{
+			ExecutionID:     "req-123",
+			CaseID:          "case-456",
+			Operation:       models.FileEditOperationRead,
+			FilePath:        "/tmp/test.txt",
+			Status:          constants.ExecutionStatusCompleted,
+			Content:         &content,
+			DurationSeconds: 1.0,
+		}
+
+		originalMsg := PubSubCommandMessage{
+			ID:        "msg-123",
+			EventType: constants.Event.Operator.FileEdit.Requested,
+			CaseID:    "case-456",
+		}
+
+		err = svc.PublishFileEditResult(context.Background(), result, originalMsg)
+		require.NoError(t, err)
+
+		receivedMsg := requireLastPublished(t, db)
+		var parsedMsg models.G8eMessage
+		require.NoError(t, json.Unmarshal(receivedMsg, &parsedMsg))
+
+		var payload models.FileEditResultPayload
+		require.NoError(t, json.Unmarshal(parsedMsg.Payload, &payload))
+		require.NotNil(t, payload.Content, "Content field must be populated for read operations")
+		assert.Equal(t, content, *payload.Content, "Content field must match the read content")
+		assert.Equal(t, len(content), payload.StdoutSize, "StdoutSize must match content length")
+	})
 }
 
 func TestPubSubResultsService_PublishHeartbeat(t *testing.T) {

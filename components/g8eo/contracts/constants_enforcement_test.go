@@ -102,10 +102,7 @@ var allowlistedValues = map[string]bool{
 	"raw":      true,
 	"scrubbed": true,
 
-	// AuthMode values - also used as CLI flag names, slog key names, and sentinel pattern strings
-	"api_key":          true,
-	"operator_session": true,
-	"listen":           true,
+	"listen": true,
 }
 
 // constantInfo tracks where a constant value is defined

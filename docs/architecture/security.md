@@ -369,7 +369,7 @@ Operators (g8eo) authenticate via one of three methods. All result in the same b
 |---|---|
 | **API Key** | Standard long-running Operator — pass `--key` or set `G8E_OPERATOR_API_KEY` |
 | **Device Link (single-use)** | One-off automated deployment — token format `dlk_`, single use, time-limited |
-| **Device Link (multi-use)** | Fleet deployment — configurable `max_uses` (1–10,000) and expiry (1 min–7 days) |
+| **Device Link (multi-use)** | Fleet deployment — configurable `max_uses` (1–100, required) and expiry (1 min–7 days) |
 
 ### Bootstrap Sequence (all methods)
 
@@ -393,6 +393,11 @@ A second authentication attempt from the same system (matching fingerprint) is a
 
 Device links are pre-signed, time-bounded authorization tokens that solve the bootstrap problem — how to authorize an Operator on a remote host without requiring the user to manually paste credentials — without leaving any long-lived credential exposed.
 
+**Authority Split:**
+- **g8ed** is authoritative for device link documents (usage tracking, exhaustion checking, claims management)
+- **g8ee** is authoritative for operator documents (slot management, lifecycle operations)
+
+**Device Link Properties:**
 - Tokens are cryptographically random with the `dlk_` prefix and a strict, verifiable format (`dlk_[A-Za-z0-9_-]{32}`).
 - Every token has both a `max_uses` ceiling and an absolute `expires_at` timestamp.
 - When a device link is created, g8ed automatically provisions the required operator slots upfront to fulfill the `max_uses` limit.
@@ -546,7 +551,7 @@ g8eo (every 10s)
     │ WebSocket (mTLS)
     ▼
 g8es pub/sub → g8ee (OperatorHeartbeatService)
-                    │ write last_heartbeat, latest_heartbeat_snapshot to g8es
+                    │ write latest_heartbeat_snapshot to g8es
                     │ detect staleness, manage operator status transitions
                     │ publish OPERATOR_HEARTBEAT_RECEIVED internal event
                     ▼
