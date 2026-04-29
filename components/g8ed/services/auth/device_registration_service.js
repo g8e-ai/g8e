@@ -67,10 +67,11 @@ export class DeviceRegistrationService {
      *   deviceInfo:    object,
      *   operator_type: string,
      *   g8eContext:    { web_session_id: string|null, user_id: string, organization_id: string|null },
+     *   device_link_token: string,
      * }} params
      * @returns {Promise<{ success: boolean, operator_session_id?: string, operator_id?: string, api_key?: string, operator_cert?: string, operator_cert_key?: string, session?: object, error?: string }>}
      */
-    async registerDevice({ operator_id: id, deviceInfo, operator_type = OperatorType.SYSTEM, g8eContext }) {
+    async registerDevice({ operator_id: id, deviceInfo, operator_type = OperatorType.SYSTEM, g8eContext, device_link_token }) {
         const { user_id, web_session_id } = g8eContext;
 
         if (!deviceInfo.system_fingerprint) {
@@ -90,34 +91,18 @@ export class DeviceRegistrationService {
             return { success: false, error: DeviceLinkError.INVALID_FINGERPRINT };
         }
 
-        const operator = await this._operatorService.getOperator(id);
-        if (!operator) {
-            return { success: false, error: DeviceLinkError.OPERATOR_NOT_FOUND };
-        }
-
         const user = await this._userService.getUser(user_id);
         if (!user) {
             return { success: false, error: DeviceLinkError.USER_NOT_FOUND };
         }
-
-        const sessionData = {
-            user_id: user.id,
-            user_data: {
-                email:           user.email,
-                name:            user.name,
-                picture:         user.profile_picture,
-                id:              user.id,
-                organization_id: user.organization_id,
-                roles:           user.roles || [OperatorSessionRole.OPERATOR],
-            },
-            operator_id: id,
-        };
 
         const result = await this._operatorService.relayRegisterDeviceLinkToG8ee({
             operator_id: id,
             user_id: user.id,
             organization_id: user.organization_id,
             operator_type,
+            device_link_token,
+            system_fingerprint: deviceInfo.system_fingerprint,
         }, g8eContext);
 
         if (!result.success) {

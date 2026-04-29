@@ -135,16 +135,6 @@ export const ApiKeyStatus = Object.freeze({
 });
 
 /**
- * Authentication Mode identifiers
- * Sent by g8eo in the auth_mode field of POST /api/auth/g8e.
- * Canonical values from shared/constants/status.json auth.mode.
- */
-export const AuthMode = Object.freeze({
-    API_KEY:          _STATUS['auth.mode']['api_key'],
-    OPERATOR_SESSION: _STATUS['auth.mode']['operator_session'],
-});
-
-/**
  * Authentication Method identifiers
  * Records how authentication was performed in audit log entries.
  * Canonical values from shared/constants/status.json auth.method.

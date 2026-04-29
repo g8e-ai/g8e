@@ -397,7 +397,6 @@ describe('DeviceLinkService', () => {
             mockCache._seedKV(KVKey.deviceLink(token), linkData.forKV());
 
             mockCache.kvSadd.mockResolvedValue(1);
-            mockCache.kvIncr.mockResolvedValue(1);
             mockCache.kvSet.mockResolvedValue('OK');
             mockCache.kvGet.mockResolvedValue(`${token}:abc123def456:123456`);
             mockCache.kvTtl.mockResolvedValue(3600);
@@ -609,7 +608,6 @@ describe('DeviceLinkService', () => {
 
             mockCache._seedKV(KVKey.deviceLink(validToken), linkData.forKV());
             mockCache.kvSadd.mockResolvedValue(1);
-            mockCache.kvIncr.mockResolvedValue(1);
             mockCache.kvSet.mockResolvedValue('OK');
             mockCache.kvGet.mockResolvedValue(`${validToken}:abc123def456:123456`);
             mockCache.kvTtl.mockResolvedValue(3600);
@@ -675,7 +673,6 @@ describe('DeviceLinkService', () => {
 
             mockCache._seedKV(KVKey.deviceLink(validToken), linkData.forKV());
             mockCache.kvSadd.mockResolvedValue(1);
-            mockCache.kvIncr.mockResolvedValue(1);
             mockCache.kvSet.mockResolvedValue('OK');
             mockCache.kvGet.mockResolvedValue(`${validToken}:abc123def456:123456`);
             mockCache.kvTtl.mockResolvedValue(3600);
@@ -693,7 +690,6 @@ describe('DeviceLinkService', () => {
 
             expect(result.success).toBe(false);
             expect(result.error).toBe('Registration failed');
-            expect(mockCache.kvDecr).toHaveBeenCalled();
             expect(mockCache.kvSrem).toHaveBeenCalled();
         });
 
@@ -714,7 +710,6 @@ describe('DeviceLinkService', () => {
 
             mockCache._seedKV(KVKey.deviceLink(validToken), linkData.forKV());
             mockCache.kvSadd.mockResolvedValue(1);
-            mockCache.kvIncr.mockResolvedValue(2);
             mockCache.kvSet.mockResolvedValue('OK');
             mockCache.kvGet.mockResolvedValue(`${validToken}:abc123def456:123456`);
             mockCache.kvTtl.mockResolvedValue(3600);
@@ -752,7 +747,6 @@ describe('DeviceLinkService', () => {
 
             mockCache._seedKV(KVKey.deviceLink(validToken), linkData.forKV());
             mockCache.kvSadd.mockResolvedValue(1);
-            mockCache.kvIncr.mockResolvedValue(1);
             mockCache.kvSet.mockResolvedValue('OK');
             mockCache.kvGet.mockResolvedValue(`${validToken}:abc123def456:123456`);
             mockCache.kvTtl.mockResolvedValue(3600);
@@ -793,7 +787,6 @@ describe('DeviceLinkService', () => {
 
             mockCache._seedKV(KVKey.deviceLink(validToken), linkData.forKV());
             mockCache.kvSadd.mockResolvedValue(1);
-            mockCache.kvIncr.mockResolvedValue(1);
             mockCache.kvSet.mockResolvedValue('OK');
             mockCache.kvGet.mockResolvedValue(`${validToken}:abc123def456:123456`);
             mockCache.kvTtl.mockResolvedValue(3600);
@@ -846,7 +839,6 @@ describe('DeviceLinkService', () => {
             mockOperatorService.queryListedOperators.mockResolvedValue([]);
             mockOperatorService.createOperatorSlot.mockResolvedValue({ success: true, operator_id: 'op-new' });
             mockCache.kvSadd.mockResolvedValue(1);
-            mockCache.kvIncr.mockResolvedValue(1);
             mockCache.kvGet.mockResolvedValue(`${validToken}:abc123def456:123456`);
             mockCache.kvTtl.mockResolvedValue(3600);
             mockCache.kvExpire.mockResolvedValue(1);
@@ -897,7 +889,6 @@ describe('DeviceLinkService', () => {
             mockOperatorService.queryListedOperators.mockResolvedValue([]);
             mockOperatorService.createOperatorSlot.mockResolvedValue({ success: true, operator_id: 'op-new' });
             mockCache.kvSadd.mockResolvedValue(1);
-            mockCache.kvIncr.mockResolvedValue(1);
             mockCache.kvGet.mockResolvedValue(`${validToken}:abc123def456:123456`);
             mockCache.kvTtl.mockResolvedValue(3600);
             mockCache.kvExpire.mockResolvedValue(1);

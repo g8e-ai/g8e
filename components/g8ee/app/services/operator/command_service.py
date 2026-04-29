@@ -393,6 +393,34 @@ class OperatorCommandService:
             settings=request_settings,
         )
 
+        if risk_analysis and risk_analysis.risk_level == RiskLevel.HIGH and not is_auto_approved:
+            # Broadcast Warden block to UI
+            await self.g8ed_event_service.publish_command_event(
+                EventType.OPERATOR_COMMAND_FAILED,
+                self._CommandResultBroadcastEvent(
+                    execution_id=approval_execution_id,
+                    command=command,
+                    status=ExecutionStatus.FAILED,
+                    error=f"WARDEN BLOCK: High risk command detected. Propose a safer alternative or request manual override.",
+                    error_type=CommandErrorType.RISK_ANALYSIS_BLOCKED,
+                    operator_id=primary_operator_id,
+                    operator_session_id=primary_session_id,
+                    batch_id=batch_id,
+                ),
+                g8e_context,
+                task_id=AITaskId.COMMAND,
+            )
+            return CommandExecutionResult(
+                success=False,
+                error="Risk analysis blocked command",
+                error_type=CommandErrorType.RISK_ANALYSIS_BLOCKED,
+                command_executed=command,
+                justification=justification,
+                warden_risk=risk_analysis.risk_level,
+                execution_id=approval_execution_id,
+                batch_id=batch_id,
+            )
+
         # 4. Approval gate — a single approval covers the whole batch.
         # Auto-approved base commands skip the human approval prompt
         # (the human has rubber-stamped them via auto_approved_commands).

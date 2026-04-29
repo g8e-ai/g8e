@@ -226,77 +226,6 @@ OPERATOR_SESSION_ID=""
 USER_ID=""
 OPERATOR_ID=""
 
-_authenticate_user() {
-    local api_key="$1"
-    local device_token="$2"
-    local save_session="${3:-false}"
-
-    if [[ -z "$api_key" && -z "$device_token" ]]; then
-        echo "[g8e] Authentication required: Provide --api-key or --device-token" >&2
-        echo "  Usage: ./g8e <command> --api-key <key>" >&2
-        echo "         ./g8e <command> --device-token <token>" >&2
-        echo "  Or authenticate once: ./g8e login --api-key <key>" >&2
-        exit 1
-    fi
-
-    local auth_url="https://localhost/api/auth/operator"
-    local response=""
-    local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")
-
-    if [[ -n "$device_token" ]]; then
-        # Authenticate via device link token
-        response=$(docker exec -i g8ed \
-            curl -sk -X POST \
-            -H 'Content-Type: application/json' \
-            -H "X-Request-Timestamp: $timestamp" \
-            -d "{\"auth_mode\":\"operator_session\",\"operator_session_id\":\"$device_token\"}" \
-            "$auth_url" 2>/dev/null || true)
-    else
-        # Authenticate via API key
-        response=$(docker exec -i g8ed \
-            curl -sk -X POST \
-            -H 'Content-Type: application/json' \
-            -H "Authorization: Bearer $api_key" \
-            -H "X-Request-Timestamp: $timestamp" \
-            -d '{}' \
-            "$auth_url" 2>/dev/null || true)
-    fi
-
-    if [[ -z "$response" ]]; then
-        echo "[g8e] Authentication failed: No response from auth endpoint" >&2
-        exit 1
-    fi
-
-    # Check if response contains success
-    if echo "$response" | grep -q '"success":true'; then
-        OPERATOR_SESSION_ID=$(echo "$response" | grep -o '"operator_session_id":"[^"]*"' | cut -d'"' -f4)
-        USER_ID=$(echo "$response" | grep -o '"user_id":"[^"]*"' | cut -d'"' -f4)
-        OPERATOR_ID=$(echo "$response" | grep -o '"operator_id":"[^"]*"' | cut -d'"' -f4)
-
-        if [[ -z "$OPERATOR_SESSION_ID" ]]; then
-            echo "[g8e] Authentication failed: No operator_session_id in response" >&2
-            exit 1
-        fi
-
-        export OPERATOR_SESSION_ID
-        export USER_ID
-        export OPERATOR_ID
-
-        # Save to local credential store if requested
-        if [[ "$save_session" == "true" ]]; then
-            _save_credentials "$OPERATOR_SESSION_ID" "$USER_ID" "$OPERATOR_ID"
-            echo "[g8e] Session saved to $G8E_CREDENTIALS_FILE"
-        fi
-    else
-        local error_msg=$(echo "$response" | grep -o '"message":"[^"]*"' | cut -d'"' -f4)
-        if [[ -z "$error_msg" ]]; then
-            error_msg=$(echo "$response" | grep -o '"error":"[^"]*"' | cut -d'"' -f4)
-        fi
-        echo "[g8e] Authentication failed: ${error_msg:-Unknown error}" >&2
-        exit 1
-    fi
-}
-
 _ensure_authenticated() {
     # First, try loading from local credential store
     if _load_credentials; then
@@ -309,18 +238,6 @@ _ensure_authenticated() {
     export USER_ID="default-user-id"
     export OPERATOR_ID="default-operator-id"
     return 0
-
-    # Fall back to command-line flags
-    if [[ -z "$API_KEY" && -z "$DEVICE_TOKEN" ]]; then
-        echo "[g8e] Authentication required." >&2
-        echo "  Options:" >&2
-        echo "    1. Authenticate once: ./g8e login --api-key <key>" >&2
-        echo "    2. Use flags: ./g8e <command> --api-key <key>" >&2
-        echo "    3. Use flags: ./g8e <command> --device-token <token>" >&2
-        exit 1
-    fi
-
-    _authenticate_user "$API_KEY" "$DEVICE_TOKEN" false
 }
 
 # Commands that require authentication

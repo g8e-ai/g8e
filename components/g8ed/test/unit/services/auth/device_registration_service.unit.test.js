@@ -159,7 +159,8 @@ describe('DeviceRegistrationService', () => {
             expect(operatorService.relayRegisterDeviceLinkToG8ee).toHaveBeenCalledWith(
                 expect.objectContaining({
                     operator_id: operatorId,
-                    operator_type: OperatorType.SYSTEM
+                    operator_type: OperatorType.SYSTEM,
+                    system_fingerprint: mockDeviceInfo.system_fingerprint
                 }),
                 mockG8eContext
             );
@@ -202,7 +203,8 @@ describe('DeviceRegistrationService', () => {
             expect(operatorService.relayRegisterDeviceLinkToG8ee).toHaveBeenCalledWith(
                 expect.objectContaining({
                     operator_id: operatorId,
-                    operator_type: OperatorType.SYSTEM
+                    operator_type: OperatorType.SYSTEM,
+                    system_fingerprint: mockDeviceInfo.system_fingerprint
                 }),
                 mockG8eContext
             );

@@ -142,5 +142,11 @@ else
     echo "[$NODE_ID] nginx is NOT running - config error"
 fi
 
+# Tail operator log to stdout when it appears (started by deploy)
+(
+  while [ ! -f /g8e.operator.log ]; do sleep 1; done
+  tail -f /g8e.operator.log
+) &
+
 # Keep container alive even if all background processes exit
 while true; do sleep 3600; done

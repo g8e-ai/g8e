@@ -165,7 +165,7 @@ deploy:
 				-o g8e.operator.sha256 \"https://g8e.local/operator/download/linux/amd64/sha256\" && \
 			sha256sum -c g8e.operator.sha256 && \
 			chmod +x g8e.operator && \
-			nohup sudo ./g8e.operator --endpoint g8e.local --working-dir /home/appuser --log info -D \"$$TOKEN\" > g8e.operator.log 2>&1 & \
+			nohup sudo ./g8e.operator --endpoint g8e.local --working-dir /home/appuser --log info -D "$$TOKEN" < /dev/null > g8e.operator.log 2>&1 & \
 			PID=\$$!; \
 			echo \"    operator started (pid: \$$PID)\"" || true; \
 	done; \
