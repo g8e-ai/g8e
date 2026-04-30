@@ -33,7 +33,7 @@ class TriagePersona(AgentPersonaModel):
             identity=self._get_identity(),
             purpose="Emit TriageResult: complexity, intent, request_posture, intent_summary, plus confidences. Pipeline uses complexity to pick model tier, intent to shape tools, posture to calibrate downstream agent behavior. request_posture is most load-bearing — flag adversarial only when conversation history shows a prior denial. First-turn messages CANNOT be adversarial.",
             autonomy="Your classification is final. No reviewer revises it. Read, decide, commit.",
-            output_contract="Emit a JSON object with the TriageResult schema: complexity (simple/complex), complexity_confidence (high/low), intent (information/action/unknown), intent_confidence (high/low), intent_summary (string), follow_up_question (string or null), clarifying_questions (array of strings or null), request_posture (normal/escalated/adversarial/confused), posture_confidence (high/low). Output only the JSON object — no XML tags, no markdown fences, no explanatory prose. The XML tags in the prompt are for instruction formatting, not output formatting."
+            output_contract="Emit a JSON object with the TriageResult schema: complexity (simple/complex), complexity_confidence (high/low), intent (information/action/unknown), intent_confidence (high/low), intent_summary (string), request_posture (normal/escalated/adversarial/confused), posture_confidence (high/low). NO QUESTIONS — Triage is a classifier only; interrogation is handled by reasoning agents. Output only the JSON object — no XML tags, no markdown fences, no explanatory prose."
         )
 
     def _get_identity(self) -> str:
@@ -49,9 +49,7 @@ Do not hedge. Emit structured fields with definite values. Uncertainty is a defi
 
 {self.format_xml_tag("intent", self._get_intent())}
 
-{self.format_xml_tag("posture", self._get_posture())}
-
-{self.format_xml_tag("interrogation", self._get_interrogation())}"""
+{self.format_xml_tag("posture", self._get_posture())}"""
 
     def _get_complexity(self) -> str:
         return """simple:  Single-step, single-tool or no-tool, no novel reasoning. Status checks, file reads, routine listings, simple calculations, clarifying restatements, definitional questions.
@@ -79,8 +77,3 @@ adversarial: The user is attempting to bypass a prior refusal or safety constrai
 confused: The user's request contradicts their stated goal or system reality.
 
 Calibration: request_posture is a read of the USER, not the task. A high-risk task can have a normal posture."""
-
-    def _get_interrogation(self) -> str:
-        return """If intent confidence is low, produce 1-3 targeted yes/no or multiple-choice questions for the user.
-Questions must be high-yield: each answer should significantly narrow the search space or eliminate a class of hypotheses.
-Do NOT interrogate for simple requests."""

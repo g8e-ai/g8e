@@ -583,14 +583,12 @@
 .operator-download-bar-icon {
   font-size: 18px;
   letter-spacing: 0;
-  color: var(--accent-blue);
 }
 
 .operator-download-bar-title {
   text-align: center;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: var(--accent-blue);
 }
 
 .operator-download-bar-chevron {

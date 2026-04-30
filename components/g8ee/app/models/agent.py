@@ -26,6 +26,7 @@ from pydantic import ConfigDict, Field
 from app.constants import (
     OperatorType,
     AgentMode,
+    ReasoningAgent,
 )
 from app.models.base import G8eBaseModel
 from app.models.grounding import GroundingMetadata
@@ -44,6 +45,7 @@ from app.models.tool_results import (
 from app.constants import (
     StreamChunkFromModelType,
 )
+from app.constants.message_sender import MessageSender
 _TARGET_OPERATORS_DESCRIPTION = (
     "Run on MULTIPLE operators simultaneously under a SINGLE approval. "
     "STRONGLY PREFER passing ['all'] whenever the user's intent covers every bound system "
@@ -163,6 +165,7 @@ class AgentInputs(G8eBaseModel):
     web_session_id: str | None = None
     task_id: str | None = None
     agent_mode: AgentMode
+    active_agent: ReasoningAgent | None = None
     request_settings: G8eeUserSettings
 
     operator_bound: bool = False
@@ -177,6 +180,11 @@ class AgentInputs(G8eBaseModel):
     triage_result: TriageResult | None = None
     sentinel_mode: bool = True
     context_sizes: dict[str, int] = Field(default_factory=dict)
+
+    @property
+    def message_sender(self) -> MessageSender:
+        """Map active_agent to MessageSender for persistence."""
+        return MessageSender.AI_ASSISTANT if self.active_agent == ReasoningAgent.DASH else MessageSender.AI_PRIMARY
 
 
 class AgentStreamState(G8eBaseModel):

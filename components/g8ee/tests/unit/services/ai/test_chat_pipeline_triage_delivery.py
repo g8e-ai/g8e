@@ -62,7 +62,6 @@ LOW_CONFIDENCE_TRIAGE_RESULT = TriageResult(
     intent=TriageIntentClassification.UNKNOWN,
     intent_confidence=TriageConfidence.LOW,
     intent_summary="ambiguous",
-    follow_up_question="Could you clarify what you mean?",
 )
 
 # ---------------------------------------------------------------------------
@@ -128,79 +127,6 @@ def _make_chat_context(triage_result: TriageResult) -> tuple[AgentInputs, AgentS
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
-
-async def test_run_chat_impl_short_circuits_correctly():
-    svc = _make_pipeline()
-    g8e_ctx = build_g8e_http_context(investigation_id="inv-1", web_session_id="web-1")
-    inputs, state = _make_chat_context(triage_result=LOW_CONFIDENCE_TRIAGE_RESULT)
-
-    # Mock _prepare_chat_context to return our prepared context
-    svc._prepare_chat_context = AsyncMock(return_value=inputs)
-    # Mock get_llm_provider to avoid actual LLM client creation
-    with patch("app.services.ai.chat_pipeline.get_llm_provider"):
-        await svc._run_chat_impl(
-            message="hello",
-            g8e_context=g8e_ctx,
-            attachments=[],
-            sentinel_mode=True,
-            llm_primary_provider="openai",
-            llm_assistant_provider="openai",
-            llm_lite_provider="openai",
-            llm_primary_model="main-model",
-            llm_assistant_model="assistant-model",
-            llm_lite_model="lite-model",
-            user_settings=MagicMock(),
-        )
-
-    # 1. Verify event publishing
-    # We use our FakeEventService which records events
-    events = svc.g8ed_event_service.published
-
-    # Filter for our investigation and event types
-    started_events = [e for e in events if e.investigation_id == "inv-1" and e.event_type == EventType.LLM_CHAT_ITERATION_STARTED]
-    chunk_events = [e for e in events if e.investigation_id == "inv-1" and e.event_type == EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED]
-    complete_events = [e for e in events if e.investigation_id == "inv-1" and e.event_type == EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED]
-
-    assert len(started_events) == 1
-    assert len(chunk_events) == 1
-    assert len(complete_events) == 1
-
-    # Verify STARTED arrives before CHUNK and COMPLETE
-    inv_events = [e for e in events if e.investigation_id == "inv-1"]
-    event_types = [e.event_type for e in inv_events]
-    started_idx = event_types.index(EventType.LLM_CHAT_ITERATION_STARTED)
-    chunk_idx = event_types.index(EventType.LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED)
-    complete_idx = event_types.index(EventType.LLM_CHAT_ITERATION_TEXT_COMPLETED)
-    assert started_idx < chunk_idx < complete_idx
-
-    # Verify Started Payload
-    from app.models.g8ed_client import (
-        ChatProcessingStartedPayload,
-        ChatResponseChunkPayload,
-        ChatResponseCompletePayload,
-    )
-    assert isinstance(started_events[0].payload, ChatProcessingStartedPayload)
-    assert started_events[0].payload.agent_mode == AgentMode.OPERATOR_NOT_BOUND
-
-    # Verify Chunk Payload
-    assert isinstance(chunk_events[0].payload, ChatResponseChunkPayload)
-    assert chunk_events[0].payload.content == LOW_CONFIDENCE_TRIAGE_RESULT.follow_up_question
-
-    # Verify Complete Payload
-    assert isinstance(complete_events[0].payload, ChatResponseCompletePayload)
-    assert complete_events[0].payload.content == LOW_CONFIDENCE_TRIAGE_RESULT.follow_up_question
-    assert complete_events[0].payload.finish_reason == "stop"
-
-    # 2. Verify agent was NOT called
-    svc.g8e_agent.run_with_sse.assert_not_called()
-
-    # 3. Verify persistence
-    # _persist_ai_response calls persist_ai_message, which persists the follow-up question
-    svc.investigation_service.persist_ai_message.assert_called_once()
-    call_args = svc.investigation_service.persist_ai_message.call_args
-    assert call_args.kwargs["text"] == LOW_CONFIDENCE_TRIAGE_RESULT.follow_up_question
-    assert call_args.kwargs["investigation_id"] == "inv-1"
-
 
 async def test_run_chat_exception_handler_publishes_iteration_failed():
     """Verify that when _run_chat_impl raises an exception, ITERATION_FAILED is published."""
