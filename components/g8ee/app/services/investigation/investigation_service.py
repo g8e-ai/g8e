@@ -371,12 +371,12 @@ class InvestigationService:
         text: str,
         grounding_metadata: GroundingMetadata | None = None,
         token_usage: TokenUsage | None = None,
+        sender: MessageSender = MessageSender.AI_PRIMARY,
     ) -> bool:
-        """Persist an AI-generated message as an AI_PRIMARY conversation row.
+        """Persist an AI-generated message to the conversation ledger.
 
-        Centralizes the strip-guard + AIResponseMetadata construction that was
-        previously duplicated between ChatPipelineService._persist_iteration_text
-        (intermediate per-turn commentary) and _persist_ai_response (final wrap-up).
+        Centralizes the strip-guard + AIResponseMetadata construction.
+        The sender identifies which agent (Sage/Dash) produced the response.
 
         Returns False when the text is whitespace-only or the investigation_id is
         missing; returns True when a row was written.
@@ -384,12 +384,17 @@ class InvestigationService:
         if not investigation_id or not text.strip():
             return False
 
+        # Map MessageSender to appropriate EventSource for metadata
+        source = EventType.EVENT_SOURCE_AI_PRIMARY
+        if sender == MessageSender.AI_ASSISTANT:
+            source = EventType.EVENT_SOURCE_AI_ASSISTANT
+
         return await self.investigation_data_service.add_chat_message(
             investigation_id=investigation_id,
-            sender=MessageSender.AI_PRIMARY,
+            sender=sender,
             content=text,
             metadata=AIResponseMetadata(
-                source=EventType.EVENT_SOURCE_AI_PRIMARY,
+                source=source,
                 grounding_metadata=grounding_metadata,
                 token_usage=token_usage,
             ),

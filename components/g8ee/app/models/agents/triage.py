@@ -52,12 +52,6 @@ class TriageResult(G8eBaseModel):
         description="Confidence in the intent classification."
     )
     intent_summary: str = Field(description="A concise summary of the user's true intent / end goal.")
-    follow_up_question: str | None = Field(
-        default=None, description="A follow-up question if intent confidence is LOW."
-    )
-    clarifying_questions: list[str] | None = Field(
-        default=None, description="Batch of 3 yes/no clarifying questions from the Interrogator when intent confidence is low."
-    )
     request_posture: TriageRequestPosture = Field(
         default=TriageRequestPosture.NORMAL,
         description=(

@@ -49,8 +49,7 @@ async def test_triage_handles_unclosed_json(fake_provider, mock_settings):
         "intent": "information",
         "intent_confidence": "high",
         "complexity": "simple",
-        "complexity_confidence": "high",
-        "follow_up_question": null
+        "complexity_confidence": "high"
     """)
 
     agent = TriageAgent()
@@ -76,8 +75,7 @@ async def test_triage_handles_json_with_preamble(fake_provider, mock_settings):
         "intent": "information",
         "intent_confidence": "high",
         "complexity": "simple",
-        "complexity_confidence": "high",
-        "follow_up_question": null
+        "complexity_confidence": "high"
     }""")
 
     agent = TriageAgent()
