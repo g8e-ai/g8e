@@ -148,7 +148,7 @@ done
 
 
 _is_running() {
-    docker ps --filter "name=^$1$" --filter "status=running" --format "{{.Names}}" | grep -q "^$1$"
+    docker ps --filter "name=^$1$" --filter "status=running" --format "{{.Names}}" 2>/dev/null | grep -q "^$1$"
 }
 
 _ensure_g8ep() {
@@ -471,7 +471,7 @@ if [[ "$COMMAND" == "clean" ]]; then
 
     # 1. Stop and remove all containers with io.g8e.managed=true label
     echo "Stopping and removing containers..."
-    docker ps -aq --filter "$FILTER_MANAGED" 2>/dev/null | while read -r container; do
+    docker ps -aq --filter "$FILTER_MANAGED" --format "{{.ID}}" 2>/dev/null | while read -r container; do
         [[ -n "$container" ]] && docker stop "$container" 2>/dev/null || true
         [[ -n "$container" ]] && docker rm -f "$container" 2>/dev/null || true
     done

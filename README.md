@@ -317,6 +317,10 @@ curl -fsSL http://<host>/g8e | sh -s -- <device-link-token>
 
 One command. It pulls the CA, fetches the binary, starts the Operator. No root, no package manager, no dependencies. The binary self-deletes when the session ends.
 
+**Issue Intent:**
+
+Tell the AI what you want to do on those remote systems with bound operators. Type your request in the chat to begin the co-validation lifecycle.
+
 ---
 
 ## CLI

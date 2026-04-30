@@ -45,7 +45,7 @@
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-lg);
-    min-width: 140px;
+    min-width: 180px;
     max-height: calc(100vh - 80px);
     opacity: 0;
     visibility: hidden;
@@ -64,17 +64,22 @@
 .hamburger-menu-item {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 0.75rem;
+    gap: 0.75rem;
+    padding: 0.65rem 0.85rem;
     color: var(--text-primary);
-    font-family: var(--font-mono);
+    font-family: var(--font-sans);
     text-decoration: none;
-    font-weight: 600;
+    font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.025em;
     transition: all var(--transition-fast);
+    border: none;
     border-bottom: 1px solid var(--border-color);
     cursor: pointer;
+    background: transparent;
+    width: 100%;
+    text-align: left;
+    font-size: 0.825rem;
 }
 
 .hamburger-menu-item:last-child {
@@ -93,8 +98,14 @@
 }
 
 .hamburger-menu-item .material-symbols-outlined {
-    font-size: 16px;
-    flex-shrink: 0;}
+    font-size: 18px;
+    flex-shrink: 0;
+    color: var(--text-dim);
+}
+
+.hamburger-menu-item:hover .material-symbols-outlined {
+    color: var(--accent-blue);
+}
 
 /* Collapsible Sections */
 .hamburger-section {
@@ -166,11 +177,7 @@
     background: transparent;
     border: none;
     justify-content: flex-start;
-    font-family: var(--font-mono);
-    font-size: inherit;
-    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
     color: var(--text-primary);
 }
 

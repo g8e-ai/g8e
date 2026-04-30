@@ -12,6 +12,7 @@
 // limitations under the License.
 
 import { templateLoader } from '../utils/template-loader.js';
+import { tutorialManager } from '../utils/tutorial-manager.js';
 
 /**
  * OperatorDeployment - Operator binary usage reference panel.
@@ -28,9 +29,14 @@ export class OperatorDeployment {
         const template = await templateLoader.load('operator-deployment');
         const wrap = document.createElement('div');
         wrap.innerHTML = template;
-        const hostname = window.location.hostname;
-        wrap.innerHTML = wrap.innerHTML.replace(/&lt;host&gt;/g, hostname);
         container.appendChild(wrap.firstElementChild);
+
+        const tutorialBtn = container.querySelector('#start-tutorial-btn');
+        if (tutorialBtn) {
+            tutorialBtn.addEventListener('click', () => {
+                tutorialManager.start();
+            });
+        }
     }
 
     destroy() {

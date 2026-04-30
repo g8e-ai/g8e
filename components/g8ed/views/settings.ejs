@@ -53,6 +53,27 @@
 
                 <!-- Section content -->
                 <div id="settings-sections"></div>
+
+                <!-- Operator Download Key Section -->
+                <div class="settings-section" data-section="operator-download">
+                    <div class="settings-section-header">
+                        <span class="material-symbols-outlined settings-section-icon">download</span>
+                        <h2 class="settings-section-title">Operator Download</h2>
+                    </div>
+                    <div class="settings-field">
+                        <div class="settings-field-label">Download API Key</div>
+                        <div class="settings-field-desc">This key is used to authorize the download of operator binaries. It is not used for operator authentication or communication.</div>
+                        <div class="operator-deploy-api-key-row" style="margin-top: 12px; display: flex; align-items: center; gap: 8px; background: var(--bg-secondary); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                            <div class="operator-deploy-api-key-value obfuscated" id="settings-download-api-key" style="font-family: monospace; flex-grow: 1; overflow: hidden; text-overflow: ellipsis;"></div>
+                            <button class="operator-deploy-icon-btn" id="settings-download-api-key-toggle" type="button" title="Show/Hide" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 4px;">
+                                <span class="material-symbols-outlined">visibility</span>
+                            </button>
+                            <button class="operator-deploy-icon-btn" id="settings-download-api-key-copy" type="button" title="Copy" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 4px;">
+                                <span class="material-symbols-outlined">content_copy</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Advanced / Dev Panel (Moved from top banner to be managed by JS sections) -->
