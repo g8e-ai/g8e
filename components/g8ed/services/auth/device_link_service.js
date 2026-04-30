@@ -402,7 +402,7 @@ class DeviceLinkService {
                 await this._cache_aside.kvSrem(fingerprintKey, sanitizedFingerprint);
                 const webSessionId = await this._webSessionService.getUserActiveSession(linkData.user_id);
                 const result = await this._deviceRegistration.registerDevice({
-                    operator_id: null,
+                    operator_id: existingClaim.operator_id,
                     deviceInfo,
                     g8eContext: G8eHttpContext.parse({
                         web_session_id: webSessionId,
@@ -413,22 +413,6 @@ class DeviceLinkService {
                 });
                 return result;
             }
-
-            freshLinkData.claims.push(DeviceLinkClaim.parse({
-                system_fingerprint: sanitizedFingerprint,
-                hostname: sanitizeString(deviceInfo.hostname, 255),
-                operator_id: null,
-                claimed_at: now()
-            }));
-
-            freshLinkData.uses = freshLinkData.claims.length;
-
-            if (freshLinkData.claims.length >= freshLinkData.max_uses) {
-                freshLinkData.status = DeviceLinkStatus.EXHAUSTED;
-            }
-
-            const remainingTtl = linkTtl > 0 ? linkTtl : DEVICE_LINK_TTL_MIN_SECONDS;
-            await this._cache_aside.kvSetJson(KVKey.deviceLink(token), freshLinkData.forKV(), remainingTtl);
 
             const webSessionId = await this._webSessionService.getUserActiveSession(linkData.user_id);
 
@@ -447,15 +431,25 @@ class DeviceLinkService {
 
             if (!result.success) {
                 await this._cache_aside.kvSrem(fingerprintKey, sanitizedFingerprint);
-                // Remove the claim we added
-                freshLinkData.claims = freshLinkData.claims.filter(c => c.system_fingerprint !== sanitizedFingerprint);
-                freshLinkData.uses = freshLinkData.claims.length;
-                if (freshLinkData.claims.length < freshLinkData.max_uses) {
-                    freshLinkData.status = DeviceLinkStatus.ACTIVE;
-                }
-                await this._cache_aside.kvSetJson(KVKey.deviceLink(token), freshLinkData.forKV(), remainingTtl);
                 return result;
             }
+
+            // Add claim with actual operator_id from successful registration
+            freshLinkData.claims.push(DeviceLinkClaim.parse({
+                system_fingerprint: sanitizedFingerprint,
+                hostname: sanitizeString(deviceInfo.hostname, 255),
+                operator_id: result.operator_id,
+                claimed_at: now()
+            }));
+
+            freshLinkData.uses = freshLinkData.claims.length;
+
+            if (freshLinkData.claims.length >= freshLinkData.max_uses) {
+                freshLinkData.status = DeviceLinkStatus.EXHAUSTED;
+            }
+
+            const remainingTtl = linkTtl > 0 ? linkTtl : DEVICE_LINK_TTL_MIN_SECONDS;
+            await this._cache_aside.kvSetJson(KVKey.deviceLink(token), freshLinkData.forKV(), remainingTtl);
 
             logger.info('[DEVICE-LINK] Device registered', {
                 token_prefix: token.substring(0, 20) + '...',
