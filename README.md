@@ -90,7 +90,7 @@ flowchart TD
 2. **Sage** writes an intent document — goals, constraints, success criteria — and hands it to the Tribunal.
 3. **The Tribunal** is five blind validators (Axiom, Concord, Variance, Pragma, Nemesis), each generating a candidate command independently with no visibility into the others. Two of five must converge for a winner. If not, an anonymized peer-review round runs.
 4. **The Auditor** reviews the winner with full memory access and may approve, swap, or revise. The Auditor is bonded 2–3× heavier than any Tribunal member and is itself peer-reviewed across conversations.
-5. **Warden** scans the approved command for risk — MITRE ATT&CK pattern matches, file/error blast radius, common destructive idioms.
+5. **Warden** (running on the Engine) scans the approved command for risk — MITRE ATT&CK pattern matches, file/error blast radius, and destructive idioms.
 6. **You** review the command and the risk assessment, and sign with a passkey, or you don't.
 7. **The Operator** receives the signed command over the outbound WebSocket, runs it in an isolated process group, captures the result into the local audit vault, and snapshots state into a git-backed ledger.
 
@@ -209,7 +209,8 @@ System fingerprint binding ties the Operator's mTLS cert to the host it was issu
 
 - **Auth** — FIDO2 / WebAuthn passkeys only. Passwords are unsupported by design.
 - **Transport** — TLS 1.3. Platform-generated ECDSA P-384 CA. Per-Operator mTLS client certs issued at claim time.
-- **Sentinel & Warden** — Pre-execution defensive analysis: command/error/file risk classifiers, MITRE-mapped detectors, double-pass scrubbing before any data reaches a model provider.
+- **Sentinel** — On-host defensive analysis: 46 MITRE-mapped detectors, 28 scrubbing patterns, and command allowlist/denylist enforcement.
+- **Warden** — Engine-side defensive coordination: command/error/file risk classifiers applied before human approval.
 - **Sessions** — Encrypted cookies, idle and absolute timeouts, IP tracking, timestamp + nonce replay protection.
 - **Sovereignty** — Raw command output never leaves the host. Only Sentinel-scrubbed metadata reaches model providers. Engine outage does not erase history.
 - **Compliance alignment** — NSA Zero Trust (exceeds requirements in 6 of 7 pillars), HIPAA-ready, FedRAMP-aligned controls.
