@@ -73,9 +73,9 @@ Host Filesystem / AWS / Target System
 | **g8ed → g8ee** | Internal Docker network only, `X-Internal-Auth` shared secret (constant-time comparison), never exposed externally |
 | **g8ee → g8es** | Internal Docker network, `X-Internal-Auth` token (strictly enforced by g8es/g8eo in `--listen` mode) |
 | **g8ed → g8es** | Internal Docker network, `X-Internal-Auth` token (strictly enforced by g8es/g8eo in `--listen` mode) |
-| **g8ee → LLM (AI)** | Sentinel ingress scrubbing — a redundant layer of protection for all Operator data before it is transmitted to any model provider; raw output, credentials, and PII are replaced with safe placeholders |
+| **g8ee → LLM (AI)** | Sentinel ingress scrubbing — a redundant layer of protection for all user messages and terminal output before they are transmitted to any model provider; raw output, credentials, and PII are replaced with safe placeholders |
 | **g8ed → g8eo** | WebSocket over mTLS (TLS 1.3), per-operator client certificate issued during device registration or bootstrap, platform CA fetched from hub at operator startup |
-| **Operator → Host** | Sentinel pre-execution threat blocking (46 MITRE-mapped detectors), egress data scrubbing, command allowlist/denylist, Human-in-the-Loop approval required for every state change |
+| **Operator → Host** | Sentinel pre-execution threat blocking (46 MITRE-mapped detectors), egress data scrubbing (stdout/stderr), command allowlist/denylist, Human-in-the-Loop approval required for every state change |
 | **Data at Rest (g8es)** | SQLite at `0600` filesystem permissions (4 tables: documents, kv_store, sse_events, blobs); session fields encrypted at application layer by g8ed before persistence; **bootstrap secrets (`internal_auth_token`, `session_encryption_key`, `auditor_hmac_key`) persisted on the `g8es-ssl` volume and mirrored into the `platform_settings` document for consistency** |
 | **Data at Rest (LFAA Vaults)** | AES-256-GCM field-level encryption (content, stdout, stderr); DEK envelope encryption; KEK derived on-demand from operator API key via HKDF-SHA256 |
 
@@ -699,24 +699,30 @@ Tribunal — N concurrent generation passes (default: 3, `llm_command_gen_passes
   Members: Axiom, Concord, Variance, Pragma, Nemesis
   │
   ▼
-Round 1: Initial generation and weighted majority voting
+Stage 1: Concurrent Generation
+  N parallel generation passes using mapped Tribunal member personas.
+  Each pass is validated for basic syntax and Sentinel safety.
   │
   ▼
-Round 2 (Optional): Peer review if consensus is low
-  Members review anonymized candidate clusters from Round 1
+Stage 2: Weighted Majority Voting (`voter.py`)
+  Uniform-weighted majority vote across all successful candidates.
+  Deterministic tie-breaking ladder:
+    1. Shortest command wins (compositional pressure)
+    2. Non-Nemesis cluster wins over Nemesis-including cluster
+    3. Alphabetical (final deterministic fallback)
   │
   ▼
-Auditor verification (optional, enabled via `llm_command_gen_verifier=true`)
-  Auditor makes a reputation commitment via Merkle tree signed with `auditor_hmac_key`
-  Returns approval, revision, or cluster swap based on reputation analysis
+Stage 3: Auditor Verification (Optional)
+  Enabled via `llm_command_gen_verifier=true`.
+  Uses the primary model to review the winning candidate or disambiguate ties.
+  Auditor can: Approve (OK), Revise (REVISED), or Swap (SWAP to different cluster).
   │
   ▼
 Final command presented to human for approval
 ```
 
-**Fallback guarantee:** If the tribunal fails for any reason, the original Large LLM command is used and `FALLBACK` is recorded. The human approval prompt always fires regardless.
-
-**Auditor system:** When enabled (`llm_command_gen_verifier=true`), the auditor uses the primary model as a reputation-based verifier. It binds every verdict to a snapshot of the reputation scoreboard by writing a signed Merkle commitment. The auditor can approve the winning candidate, provide a corrected command, or swap the winner to a dissenting cluster if it detects a more reliable alternative.
+**Reputation & Stake Resolution:**
+After execution, the `ReputationService` resolves stakes for all participating members based on the execution outcome (success vs failure) and any system-detected risk (Warden). Slashing is applied to the agent's reputation standing for faults, which impacts their weight in future Tribunal sessions.
 
 ### Command Allowlist, Denylist, and Auto-Approve
 
@@ -855,11 +861,13 @@ The Ledger (`.g8e/data/ledger/`) is a standard Git repository maintained by g8eo
 
 ---
 
-## Sentinel Output Scrubbing
+### Sentinel Output Scrubbing
 
 After any command executes, before its output reaches g8ee (and therefore any AI provider), Sentinel replaces sensitive patterns with safe placeholders.
 
-**Implementation split:** The g8eo Go sentinel handles command output scrubbing. The g8ee Python scrubber handles user message scrubbing. Threat detection is Go-only (g8eo).
+**Implementation split:** 
+- **g8eo (Go)**: Handles **egress scrubbing** (command stdout/stderr) and **pre-execution threat detection**.
+- **g8ee (Python)**: Handles **ingress scrubbing** for user chat messages and terminal input before they are sent to the cloud AI.
 
 ### Scrubbing Patterns (applied sequentially)
 
@@ -871,7 +879,7 @@ After any command executes, before its output reaches g8ee (and therefore any AI
 | Financial / generic PII | Credit card numbers, SSNs, phone numbers, IBANs | `[PII]`, `[PHONE]`, `[IBAN]` |
 | Generic credentials | `password`/`secret` config patterns, bearer tokens | `[CREDENTIAL_REFERENCE]`, `[BEARER_TOKEN]` |
 
-**What is preserved (operational data the AI needs):** IP addresses, hostnames, MAC addresses, file paths, URLs without credentials, UUIDs, AWS ARNs, AWS account IDs, filenames, hashes, base64 content.
+**What is preserved (operational data the AI needs):** IP addresses, hostnames, MAC addresses, file paths (including home directories), URLs without credentials, UUIDs, AWS ARNs, AWS account IDs, filenames, hashes, base64 content.
 
 ---
 
@@ -931,26 +939,28 @@ The AI operates through a defined set of tools. Each tool is classified at the p
 
 The user's stated intent in chat is sufficient authorization for read-only activity. Any operation that **changes state** — writing a file, executing a command, modifying cloud permissions — requires an explicit approval action from the user in the UI before it executes.
 
-Automatic Function Calling (AFC) is **permanently disabled** in G8EE. The AI cannot chain tool calls through an auto-approve path. Every step of a multi-step operation that touches state surfaces its own approval prompt.
+Automatic Function Calling (AFC) is **permanently disabled** in g8e. The AI cannot chain tool calls through an auto-approve path. Every step of a multi-step operation that touches state surfaces its own approval prompt.
 
 ### Function Tool Approval Classification
 
-| Tool | Approval | What it does |
-|---|---|---|
-| `run_commands_with_operator` | **Required** | Execute shell commands on target systems |
-| `file_create_on_operator` | **Required** | Create new files with content |
-| `file_write_on_operator` | **Required** | Replace entire file contents |
-| `file_update_on_operator` | **Required** | Surgical find-and-replace within a file |
-| `grant_intent_permission` | **Required** (intent flow) | Request AWS intent permissions for cloud operators |
-| `revoke_intent_permission` | **Required** (intent flow) | Revoke AWS intent permissions |
-| `file_read_on_operator` | No | Read file content (with optional line ranges) |
-| `list_files_and_directories_with_detailed_metadata` | No | Directory listing with metadata |
-| `fetch_file_history` | No | Retrieve git version history for a file from the Ledger |
-| `fetch_file_diff` | No | Retrieve Sentinel-scrubbed file diffs from the Operator vault |
-| `check_port_status` | No | Check TCP/UDP port reachability |
-| `query_investigation_context` | No | Retrieve case/investigation context from g8es |
-| `get_command_constraints` | No | Return the active whitelist/blacklist state for Tribunal awareness |
-| `g8e_web_search` | No | Web search (only registered when a `WebSearchProvider` is configured) |
+| Tool | Approval | Scope | Description |
+|---|---|---|---|
+| `run_commands_with_operator` | **Required** | Gated | Execute shell commands on target systems |
+| `file_create_on_operator` | **Required** | Gated | Create new files with content |
+| `file_write_on_operator` | **Required** | Gated | Replace entire file contents |
+| `file_update_on_operator` | **Required** | Gated | Surgical find-and-replace within a file |
+| `grant_intent_permission` | **Required** | Gated | Request AWS intent permissions for cloud operators |
+| `revoke_intent_permission` | **Required** | Gated | Revoke AWS intent permissions |
+| `file_read_on_operator` | No | Gated | Read file content (with optional line ranges) |
+| `list_files_and_directories_with_detailed_metadata` | No | Gated | Directory listing with metadata |
+| `fetch_file_history` | No | Gated | Retrieve git version history for a file from the Ledger |
+| `fetch_file_diff` | No | Gated | Retrieve Sentinel-scrubbed file diffs from the Operator vault |
+| `check_port_status` | No | Gated | Check TCP/UDP port reachability |
+| `query_investigation_context` | No | Universal | Retrieve case/investigation context from g8es |
+| `get_command_constraints` | No | Universal | Return active whitelist/blacklist/auto-approve state |
+| `ssh_inventory` | No | Universal | List discovered SSH targets |
+| `stream_operator` | No | Universal | Stream a temporary operator to a remote host |
+| `g8e_web_search` | No | Universal | Perform a web search (provider dependent) |
 
 The tool declarations that the AI can actually invoke are built in `AIToolService.__init__` (`components/g8ee/app/services/ai/tool_service.py`). The `restore_file`, `fetch_execution_output`, `fetch_session_history`, and `read_file_content` enum members exist in `OperatorToolName` but are not currently surfaced as AI-callable tool declarations — file restores and execution-output retrieval are driven directly by g8ee services rather than being exposed to the model.
 
