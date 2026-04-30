@@ -13,10 +13,11 @@ g8el is the llama.cpp inference server component for g8e. It provides local LLM 
 
 g8el extends the official llama.cpp server image (`ghcr.io/ggml-org/llama.cpp:server`) with:
 
-- **Custom entrypoint script** (`entrypoint.sh`) that handles model download and server startup with KV cache optimization flags
+- **Custom entrypoint script** (`entrypoint.sh`) that handles model download and server startup with KV cache and Flash Attention optimization flags
 - **Configurable environment variables** for model selection, context size, threads, and network settings
 - **Docker network integration** with the g8e internal network for service-to-service communication
 - **Memory locking** with `--mlock` flag to keep model weights pinned in RAM
+- **Hardware optimization** using `--flash-attn on` for compatible hardware
 - **KV cache optimization** with `--cache-reuse`, `--keep`, and `--parallel` flags for Tribunal pipeline performance
 
 ### Component Relationships
@@ -56,9 +57,10 @@ flowchart LR
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `G8EL_MODEL_NAME` | `google_gemma-4-E2B-it-Q4_K_M.gguf` | Model filename to use |
-| `G8EL_MODEL_URL` | Hugging Face URL | URL to download model from if not present |
+| `G8EL_MODEL_URL` | `https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf` | URL to download model from if not present |
 | `G8EL_CONTEXT_SIZE` | `49152` | Context window size in tokens |
 | `G8EL_THREADS` | `8` | Number of CPU threads for inference |
+| `OMP_NUM_THREADS` | `8` | OpenMP thread count for linear algebra performance |
 | `G8EL_HOST` | `0.0.0.0` | Host address to bind to |
 | `G8EL_PORT` | `11444` | Port to listen on |
 
@@ -66,7 +68,7 @@ flowchart LR
 
 g8el uses the following Docker configuration in `docker-compose.yml`:
 
-- **CPU affinity**: `cpuset: "0-7"` binds the container to CPU cores 0-7
+- **CPU affinity**: `cpuset: "0-3"` binds the container to CPU cores 0-3
 - **Memory locking**: `ulimit memlock: -1` allows unlimited memory locking for `--mlock`
 - **Security**: All capabilities dropped, no-new-privileges enabled
 - **Network**: Internal `g8e-network` with alias `g8el` for service discovery
@@ -149,6 +151,7 @@ The `G8elProvider` (via its inheritance from `LlamaCppProvider` and `OpenAIProvi
 The entrypoint.sh script includes the following llama.cpp server flags for optimal performance:
 
 - `--mlock`: Locks model in RAM, preventing OS swapping and ensuring consistent inference performance
+- `--flash-attn on`: Enables Flash Attention for significantly faster prefill and generation on compatible CPUs/GPUs
 - `--cache-reuse 256`: Enables KV cache reuse up to 256 tokens for Tribunal pipeline efficiency
 - `--keep -1`: Keeps the KV cache between requests (default is to clear after each request)
 - `--parallel 6`: Configures 6 parallel processing slots for Tribunal (5 members + 1 auditor)
@@ -220,7 +223,7 @@ If g8el runs out of memory:
 
 If inference is slow:
 
-1. Verify the optimization flags are active: `docker inspect g8el --format='{{.Config.Cmd}}'` should show `--cache-reuse`, `--keep`, and `--parallel`
-2. Check CPU affinity is working: `docker inspect g8el --format='{{.HostConfig.CpusetCpus}}'` should show `0-7`
+1. Verify the optimization flags are active: `docker inspect g8el --format='{{.Config.Cmd}}'` should show `--cache-reuse`, `--keep`, `--parallel`, and `--flash-attn`
+2. Check CPU affinity is working: `docker inspect g8el --format='{{.HostConfig.CpusetCpus}}'` should show `0-3`
 3. Verify memory locking is enabled: `docker exec g8el ulimit -l` should show `unlimited`
 4. Consider using a smaller model or quantization level

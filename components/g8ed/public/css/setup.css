@@ -339,6 +339,7 @@ body[data-theme="light"] .wizard-welcome-note { color: var(--text-muted); }
 .setup-fields-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
+    gap: 1rem;
 }
 
 .setup-fields-row#search-config-google {

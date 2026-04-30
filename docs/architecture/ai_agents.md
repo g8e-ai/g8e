@@ -7,118 +7,71 @@ parent: Architecture
 
 The g8e platform utilizes a specialized multi-agent system designed for autonomous technical investigations. The architecture prioritizes safety, cryptographic auditability, and human-in-the-loop control while maintaining high reasoning performance.
 
-## The Agent Lifecycle
+## Core Principles
 
-Every user message triggers a structured pipeline that ensures complex tasks receive deep reasoning while simple requests remain fast and efficient.
+- **Structural Safety**: Invariants are enforced by code models (Pydantic), not just prompts.
+- **Intent-Driven Execution**: Reasoning agents (Sage/Dash) never write shell commands; they articulate intent to a specialized Tribunal.
+- **Tiered Information Quarantine**: Agents operate in sealed environments with limited visibility into the overall pipeline.
+- **Reputation-Backed Consensus**: The Tribunal uses a staking and reputation system to ensure command accuracy and safety.
+
+## The Agent Pipeline
+
+Every user message triggers a structured pipeline that routes the request based on complexity and state.
 
 ### 1. Triage (The Gatekeeper)
-Incoming messages are first processed by the **Triage Agent** (using a lightweight model). It performs three critical classifications:
-- **Complexity**: Routes "simple" requests (status checks, basic lookups) to **Dash** and "complex" requests (investigations, multi-step actions) to **Sage**.
+Incoming messages are first processed by the **Triage Agent** (using a `lite` model tier). It performs three critical classifications:
+- **Complexity**: Routes `simple` requests (status checks, basic lookups) to **Dash** and `complex` requests (investigations, multi-step actions) to **Sage**.
 - **Intent**: Categorizes the goal as `information`, `action`, or `unknown`.
-- **Posture**: Identifies the user's state (e.g., `normal`, `escalated`, `adversarial`) to calibrate downstream agent behavior.
+- **Posture**: Identifies the user's state (`normal`, `escalated`, `adversarial`, `confused`) to calibrate downstream agent behavior (Warning Protocol, Denial Memory).
 
-If Triage has low confidence in the intent, it may emit **clarifying questions** to the user before the investigation proceeds. These questions are persisted to the conversation ledger to provide structured context for Sage.
+**Clarifying Questions**: If Triage has low confidence or identifies a `confused` posture, it emits clarifying questions to the user. These questions and their answers are persisted to the conversation ledger as structured context.
 
 ### 2. Context Enrichment
 Before an agent receives the task, the system assembles a comprehensive "world view":
-- **Investigation History**: The recent conversation log.
-- **Operator Context**: Real-time system metadata (OS, shell, architecture, permissions) from the target operator.
-- **Memories**: Preferences and summaries extracted by **Codex** in previous turns.
+- **Investigation Context**: Case metadata, status, and priority.
+- **Operator Context**: Real-time system metadata (OS, shell, architecture, permissions) extracted from `OperatorDocument` heartbeats.
+- **Learned Context**: Durable user preferences and technical background extracted by **Codex**.
+- **Triage Context**: The posture and intent summary produced by the Triage agent.
 
-### 3. Reasoning & Tool Loops
-- **Dash (Fast-path)**: A direct responder that resolves simple tasks with minimal latency. It can call single tools but escalates to Sage if the plan exceeds a single turn.
-- **Sage (Primary Reasoner)**: The senior investigator. It operates in a **ReAct loop**, proposing tools, interpreting results, and refining its plan until the investigation is complete.
+### 3. Reasoning Agents
+- **Dash (Fast-path)**: A direct responder for `simple` tasks. It prioritizes speed and minimal ceremony. It can call single tools but escalates to Sage if the plan exceeds a single turn.
+- **Sage (Primary Reasoner)**: The senior investigator for `complex` tasks. It operates in a **ReAct loop**, planning investigations, proposing tool calls, and interpreting results.
 
-## The Tribunal: Intent-Driven Execution
+## The Tribunal: Command Translation
 
-To prevent hallucinations in shell syntax, agents never write commands directly. Instead, they articulate **Investigative Intent**. This intent is translated into executable commands by **The Tribunal**:
+To prevent hallucinations and ensure safety, agents never write shell commands directly. Instead, they articulate **Investigative Intent** using the `SageOperatorRequest` model.
 
-### Protocol Phases
+### Execution Protocol
+1. **Intent Articulation**: Sage (or Dash) describes the goal, information targets, and constraints in natural language.
+2. **Tribunal Generation (Round 1)**: Five independent members produce a candidate command:
+    - **Axiom**: Focuses on optimal composition and pipelines.
+    - **Concord**: Focuses on defensive safety and read-only preferences.
+    - **Variance**: Focuses on robust edge-case handling (spaces, symlinks, locales).
+    - **Pragma**: Focuses on idiomatic conventions for the target OS/shell.
+    - **Nemesis**: The "immune system" — produces plausible-but-flawed commands or honestly abstains.
+3. **Consensus & Tie-breaking**: Candidates are clustered by exact match. A winner is selected via ranked vote.
+4. **Auditor Review**: The **Auditor** judges the winning command against the intent. It can approve (`ok`), provide a `revised` command, or `swap` to a better dissenting cluster.
+5. **Warden Analysis**: The **Warden** sub-agents perform a final pre-execution risk assessment (Command, File, and Error risk).
+6. **Human Approval**: The user reviews the command and risk assessment before execution on the Operator.
 
-1. **Phase 0 — Triage**: Triage classifies the message. If intent confidence is low, it emits clarifying questions to the user. User answers populate the ledger as structured context.
+## Security & Governance
 
-2. **Phase 1 — Sage Intent**: Sage receives the user message plus any Triage Q&A and produces an intent document (goals, constraints, success criteria).
+### The "Vortex" (Information Quarantine)
+- **Triage/Dash**: Believes it's an optimized interrogator; unaware of Sage or the Tribunal.
+- **Sage**: Believes it's talking to a translation layer; unaware of the distinct Triage agent or the Auditor's memory access.
+- **Tribunal**: Members are blind to each other; they believe they are proposing commands for a merit judge.
 
-3. **Phase 2 — Round 1 (Blind Generation)**: All five Tribunal members produce a command independently with no visibility into each other's work. Each stakes reputation on their candidate.
+### Reputation & Slashing
+Agents stake reputation on their contributions. Reputation influences tie-breaking and is subject to **Slashing Tiers**:
+- **Tier 1 (Catastrophic)**: 50–100% stake loss for approving destructive or harmful commands.
+- **Tier 2 (Faults)**: 5–20% stake loss for unparseable commands or contradictions.
+- **Tier 3 (Liveness)**: 0.1–1% stake loss for missed submissions or thin intent.
 
-4. **Phase 3 — Consensus Check**: Candidates are normalized, clustered by exact match, and votes counted. A winner requires ≥2 of 5 supporting members (TRIBUNAL_MIN_CONSENSUS).
+### Memory & Learning (Codex)
+Learning happens asynchronously via **Codex** after a turn completes:
+- **Preference Extraction**: Updates user communication style and technical depth.
+- **Investigation Summaries**: Maintains scrubbed (redacted) high-level progress logs.
 
-5. **Phase 4 — Peer Review (if Round 1 fails)**: If consensus is not reached, anonymized Round 1 clusters are shared with all members. Each receives a persona-specific prompt to converge or attack.
-
-6. **Phase 5 — Auditor**: The winner (or tied candidates) goes to the Auditor, who sees persona signatures and has full memory access. The Auditor can approve, swap to a dissenter, or revise the command.
-
-7. **Phase 6 — Warden Analysis**: The Auditor-approved command is analyzed by **Warden** sub-agents for command risk, file risk, and potential errors.
-
-8. **Phase 7 — Human Approval → Operator Execution**: The user reviews the command and Warden's risk assessment. Upon approval, the command is executed by the Operator. Results flow back to Sage for interpretation.
-
-### The Vortex Principle (Tiered Information Quarantine)
-
-Dash, Sage, and Tribunal all operate in sealed information environments. Each believes they're playing a smaller game than they're actually in:
-
-- **Dash/Triage** believes it's playing optimized 20-questions; doesn't know Sage/Tribunal/Auditor exist
-- **Sage** believes it's producing intent for a translation layer; doesn't know Triage is a distinct agent (its Q&A appears as "user context"); doesn't know Auditor has memory
-- **Tribunal** believes they're proposing commands for a merit judge; doesn't know Nemesis is among them, doesn't know cross-chain grounding exists, doesn't know other agents have reputation
-
-This tiered information quarantine is load-bearing. Collapsing it collapses the diversity and honesty that produce safety.
-
-### Reputation & Staking System
-
-Each agent stakes reputation on their contributions:
-
-- **Triage (Dash)**: Stakes per question on information yield (engagement, discrimination, downstream utility, redundancy penalty)
-- **Sage**: Stakes on one-shot sufficiency (win if Round 1 passes AND Auditor rules ok)
-- **Tribunal honest four**: Stake per-lens, with Auditor annotating why a command won and resolving against dimensions owned by each persona
-- **Nemesis**: Stakes on calibration using a proper scoring rule (attack on flawed = gain, abstain on clean = gain, false alarm = loss)
-- **Auditor**: Stakes on downstream truth (execution outcomes, forward-hook hit rate, peer-review agreement), bonding 2-3x any Tribunal member
-
-**User as Implicit Co-Staker**: Users don't see reputation scores but their click-through behavior is a revealed-preference stake. Tight messages + answered questions → faster consensus; vague messages + ignored questions → longer investigation.
-
-**Stake-Weighted Influence**: Higher reputation → slightly heavier tiebreak vote and weightier dissent notes, capped at 1.5x baseline to prevent calcification.
-
-### Slashing Tiers
-
-**Tier 1 — Correlated/Catastrophic (50–100% stake)**: Concord approving destructive commands, Auditor approving harmful commands, Nemesis colluding, Dash extracting sensitive info.
-
-**Tier 2 — Provable faults (5–20% stake)**: Unparseable commands, Auditor citing non-existent ledger entries, Sage contradictions, Dash non-binary questions.
-
-**Tier 3 — Liveness (0.1–1% stake)**: Missed Round 1 submission, Nemesis perpetually abstaining, Sage producing thin intent, Dash questions ignored by user.
-
-### Memory Model
-
-The Auditor is the sole memory holder, structurally equivalent to a blockchain archive node with oracle authority:
-
-- **Append-only**: No quiet revision
-- **Hash-chained**: Merkle proofs on citation
-- **Falsifiable citations**: Verifiable hash per reference
-- **Protocol-owned storage**: Persists across Auditor instances
-
-Grounding sources are separately labeled: in-conversation ledger (tactical) and cross-conversation precedent (strategic). Auditor cannot launder strategic recall as tactical ledger citation.
-
-### Oracle Peer Review
-
-Auditor capture = total capture. Mandatory safeguards include peer Auditor re-judgment of sampled past conversations from ledgers alone, triggered by every Nth conversation, every Nemesis challenge, and random audits. Disagreement → Human arbitration → slash the wrong Auditor instance.
-
-### Ledger Structure
-
-The ledger is append-only and per-conversation. Every event writes one entry with role-gated permissions (dash_questions, dash_answers, intent, r1_candidate, r1_votes, r2_candidate, r2_votes, verdict, challenge, approval, execution_result, stake_resolution). Each entry includes `prev_hash` and `entry_hash` for cryptographic chain integrity.
-
-### Per-Role Scoring
-
-- **Triage (Dash)**: Question CTR, information yield, downstream citation rate, non-redundancy
-- **Sage**: Consensus rate, Auditor ok rate, downstream execution success
-- **Axiom/Concord/Variance/Pragma**: R1 diversity (lens expression), R2 convergence discipline, per-lens contribution to winner
-- **Nemesis**: Attack rate on flawed consensus, abstention rate on clean consensus
-- **Auditor**: Swap-rate correlation with downstream success, grounding accuracy, forward-hook hit rate, peer-review agreement
-
-## Memory & Background Learning
-
-Learning happens off the critical path via **Codex**, which runs asynchronously after a turn completes:
-- **Preference Extraction**: Updates the user's communication style, technical background, and problem-solving approach.
-- **Investigation Summaries**: Maintains high-level progress logs, enabling the system to resume long-running investigations without context loss.
-
-## Governance & Sovereignty
-
-Safety is enforced through the **Local-First Audit Architecture (LFAA)**. The platform acts as a stateless relay; the **Operator** is the system of record.
-- **Audit Vault**: All activity (messages, intents, commands, results) is persisted in an encrypted, tamper-evident SQLite database on the target host.
-- **Ledger**: Every file mutation is backed by a local Git repository, providing immutable version history and rollback capability.
-- **Warden**: Performs pre-execution risk assessment (Command, File, and Error risk) to ensure the user is fully informed before granting approval.
+### Local-First Audit Architecture (LFAA)
+- **Audit Vault**: All activity is persisted in an encrypted, tamper-evident SQLite database on the target host.
+- **Immutable Ledger**: Every file mutation is backed by a local Git repository on the Operator.

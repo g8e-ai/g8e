@@ -73,24 +73,17 @@ function buildMockContainer() {
                         </button>
                     </div>
                     <div class="operator-device-link-result initially-hidden" id="device-link-result">
-                        <span class="operator-deploy-sublabel">Curl Command</span>
-                        <div class="operator-deploy-cmd-row">
-                            <div class="operator-deploy-cmd obfuscated" id="device-link-curl-cmd"></div>
-                            <button class="operator-deploy-icon-btn" id="device-link-curl-toggle" type="button" title="Show/Hide">
-                                <span class="material-symbols-outlined">visibility</span>
-                            </button>
-                            <button class="operator-deploy-icon-btn" id="device-link-copy-curl" type="button" title="Copy">
-                                <span class="material-symbols-outlined">content_copy</span>
-                            </button>
-                        </div>
                         <span class="operator-deploy-sublabel">Device Link Token</span>
                         <div class="operator-deploy-cmd-row">
                             <div class="operator-deploy-cmd obfuscated" id="device-link-token"></div>
                             <button class="operator-deploy-icon-btn" id="device-link-token-toggle" type="button" title="Show/Hide">
                                 <span class="material-symbols-outlined">visibility</span>
                             </button>
-                            <button class="operator-deploy-icon-btn" id="device-link-copy-token" type="button" title="Copy">
+                            <button class="operator-deploy-icon-btn" id="device-link-copy-token" type="button" title="Copy Token">
                                 <span class="material-symbols-outlined">content_copy</span>
+                            </button>
+                            <button class="operator-deploy-icon-btn" id="device-link-copy-curl" type="button" title="Copy Curl">
+                                <span class="material-symbols-outlined">terminal</span>
                             </button>
                         </div>
                     </div>
@@ -417,11 +410,8 @@ describe('OperatorDownloadMixin [UNIT - jsdom]', () => {
             generateBtn.click();
 
             await vi.waitFor(() => {
-                const curlCmd = container.querySelector('#device-link-curl-cmd');
-                expect(obfuscateCurlCommand).toHaveBeenCalledWith(expect.stringContaining('curl -fsSL'));
-                expect(curlCmd.dataset.curlCommand).toContain('curl -fsSL');
-                expect(curlCmd.dataset.curlCommand).toContain(testToken);
-                expect(curlCmd.classList.contains('obfuscated')).toBe(true);
+                const tokenDiv = container.querySelector('#device-link-token');
+                expect(tokenDiv.dataset.token).toBe(testToken);
             });
 
             const tokenDiv = container.querySelector('#device-link-token');
@@ -538,7 +528,8 @@ describe('OperatorDownloadMixin [UNIT - jsdom]', () => {
             generateBtn.click();
 
             await vi.waitFor(() => {
-                expect(container.querySelector('#device-link-curl-cmd').textContent).toContain(testToken);
+                const tokenDiv = container.querySelector('#device-link-token');
+                expect(tokenDiv.dataset.token).toBe(testToken);
             });
 
             const copyCurlBtn = container.querySelector('#device-link-copy-curl');

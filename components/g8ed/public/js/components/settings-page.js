@@ -11,6 +11,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import { webSessionService } from '../utils/web-session-service.js';
+import { obfuscateApiKey, copyToClipboardWithFeedback } from '../utils/ui-utils.js';
+import { notificationService } from '../utils/notification-service.js';
+import { devLogger } from '../utils/dev-logger.js';
 import { ApiPaths } from '../constants/api-paths.js';
 
 /**
@@ -73,7 +77,12 @@ export const EMPTY_MODEL_PLACEHOLDER = 'Select a Model';
 export class SettingsPage {
     constructor(options = {}) {
         this.allSettings = [];
-        this.sections = [];
+        this.sections = [
+            { id: 'llm', label: 'AI Models', icon: 'psychology' },
+            { id: 'search', label: 'Vertex Search', icon: 'travel_explore' },
+            { id: 'operator-download', label: 'Operator Download', icon: 'download' },
+            { id: 'advanced', label: 'Advanced', icon: 'settings_applications' }
+        ];
         this.dirty = new Map();
         this.activeSection = null;
         this.selectedModels = { primary: '', assistant: '', lite: '' };
@@ -88,6 +97,34 @@ export class SettingsPage {
     init() {
         document.getElementById('save-btn').addEventListener('click', () => this._saveSettings());
         this._loadSettings();
+        this._initDownloadApiKey();
+    }
+
+    _initDownloadApiKey() {
+        const apiKey = webSessionService.getApiKey();
+        const display = document.getElementById('settings-download-api-key');
+        const toggle = document.getElementById('settings-download-api-key-toggle');
+        const copy = document.getElementById('settings-download-api-key-copy');
+
+        if (!display) return;
+
+        display.textContent = obfuscateApiKey(apiKey);
+        display.setAttribute('data-api-key', apiKey);
+
+        if (toggle) {
+            toggle.addEventListener('click', () => {
+                const isObfuscated = display.classList.toggle('obfuscated');
+                const icon = toggle.querySelector('.material-symbols-outlined');
+                if (icon) icon.textContent = isObfuscated ? 'visibility' : 'visibility_off';
+                display.textContent = isObfuscated ? obfuscateApiKey(apiKey) : apiKey;
+            });
+        }
+
+        if (copy) {
+            copy.addEventListener('click', () => {
+                copyToClipboardWithFeedback(apiKey, copy, devLogger.log.bind(devLogger, '[SETTINGS]'), notificationService.error.bind(notificationService));
+            });
+        }
     }
 
     _initModelDropdowns() {

@@ -49,25 +49,25 @@ function loadJsBindingCollections() {
 }
 
 /**
- * Extract collection names from the Key Collections section in storage.md.
+ * Extract collection names from the Canonical Collections section in storage.md.
  *
  * The section lists collections in bullet points with backticks:
  *
- *     ## Key Collections
+ *     ## Canonical Collections
  *     **Authentication & Sessions**:
  *     - `users`: User accounts, credentials, roles
  *     - `web_sessions`, `operator_sessions`, `cli_sessions`: Session state
  *
- * We locate the `## Key Collections` heading and extract all collection names
+ * We locate the `## Canonical Collections` heading and extract all collection names
  * wrapped in backticks.
  */
 function loadDocsCollections() {
     const md = readFileSync(STORAGE_MD_PATH, 'utf-8');
     const lines = md.split('\n');
 
-    const headingIdx = lines.findIndex(l => l.trim() === '## Key Collections');
+    const headingIdx = lines.findIndex(l => l.trim() === '## Canonical Collections');
     if (headingIdx === -1) {
-        throw new Error('docs/architecture/storage.md is missing the "## Key Collections" heading');
+        throw new Error('docs/architecture/storage.md is missing the "## Canonical Collections" heading');
     }
 
     const collections = new Set();

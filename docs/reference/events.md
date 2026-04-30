@@ -28,7 +28,7 @@ g8e.v<version>.<domain>.<resource>[.<sub-resource>...].<action>
 
 | Component | File | Mechanism |
 |-----------|------|-----------|
-| g8ee (Python) | `components/g8ee/app/constants/events.py` | `EventType(str, Enum)` with hardcoded wire values |
+| g8ee (Python) | `components/g8ee/app/constants/events.py` | `EventType(str, Enum)` mirroring wire values |
 | g8ed (Node.js server) | `components/g8ed/constants/events.js` | `EventType` frozen object, reads from `events.json` via `shared.js` |
 | g8ed (browser client) | `components/g8ed/public/js/constants/events.js` | `EventType` frozen object with hardcoded wire values (subset) |
 | g8eo (Go) | `components/g8eo/constants/events.go` | `Event` struct tree with hardcoded wire values (operator subset) |
@@ -54,15 +54,15 @@ g8e.v<version>.<domain>.<resource>[.<sub-resource>...].<action>
 
 ## Domains
 
-The protocol defines five top-level domains. Total event count: **241**.
+The protocol defines five top-level domains. Total event count: **273**.
 
 | Domain | Count | Description | See Definition |
 |--------|-------|-------------|----------------|
-| `app` | 35 | Application-layer entities: cases, tasks, investigations | [`events.json`](../../shared/constants/events.json#L9) |
-| `operator` | 114 | Operator (g8eo) lifecycle, commands, file ops, network, audit, bootstrap | [`events.json`](../../shared/constants/events.json#L63) |
-| `ai` | 51 | LLM chat, streaming, lifecycle, tool calls, tribunal | [`events.json`](../../shared/constants/events.json#L264) |
-| `platform` | 36 | Auth, SSE transport, terminal UI, telemetry, sentinel | [`events.json`](../../shared/constants/events.json#L360) |
-| `source` | 5 | Event origin tags for message attribution | [`events.json`](../../shared/constants/events.json#L430) |
+| `app` | 35 | Application-layer entities: cases, tasks, investigations | [`events.json`](../../shared/constants/events.json#L8) |
+| `operator` | 114 | Operator (g8eo) lifecycle, commands, file ops, network, audit, bootstrap | [`events.json`](../../shared/constants/events.json#L65) |
+| `ai` | 83 | LLM chat, streaming, lifecycle, tool calls, tribunal, reputation | [`events.json`](../../shared/constants/events.json#L293) |
+| `platform` | 36 | Auth, SSE transport, terminal UI, telemetry, sentinel | [`events.json`](../../shared/constants/events.json#L464) |
+| `source` | 5 | Event origin tags for message attribution | [`events.json`](../../shared/constants/events.json#L554) |
 
 ---
 
@@ -74,10 +74,10 @@ Not every component needs every event. This table shows which domains each compo
 |--------|:---:|:---:|:---:|:---:|:---:|
 | `app` | 35 | 35 | 35 | 35 | -- |
 | `operator` | 114 | 114 | 114 | 114 | 65 |
-| `ai` | 51 | 51 | 51 | 51 | -- |
+| `ai` | 83 | 83 | 83 | 83 | -- |
 | `platform` | 36 | 36 | 36 | 36 | -- |
 | `source` | 5 | 5 | 5 | 5 | -- |
-| **Total** | **241** | **241** | **241** | **241** | **65** |
+| **Total** | **273** | **273** | **273** | **273** | **65** |
 
 g8eo only binds the operator-domain events it produces or consumes. g8ed client JS mirrors all events with hardcoded values. g8ed server JS and g8ee mirror the full set.
 

@@ -11,7 +11,7 @@ g8es is the `g8e.operator` binary running in `--listen` mode. It serves as the p
 
 **Why a single binary?** This design eliminates duplicate code paths, reduces operational complexity, and ensures consistency between operator execution and platform infrastructure. The listen mode is a distinct operational mode of the same codebase, not a separate component.
 
-**Zero external dependencies.** Uses only Go's standard library `net/http` and `github.com/gorilla/websocket`. Compiles to a single static binary that runs anywhere — Docker, bare metal, air-gapped environments.
+**Zero C dependencies.** Uses only Go's standard library and pure-Go implementations (e.g., `modernc.org/sqlite`). This ensures the binary is truly static and cross-compiles easily to any target architecture without requiring a C toolchain or shared libraries.
 
 ## Architecture
 
@@ -79,7 +79,7 @@ The g8es container performs the following sequence on startup:
 1. **Start the listen server** on configured HTTP and WSS ports. The `g8e.operator` binary reads `internal_auth_token` and `session_encryption_key` directly from `--ssl-dir /ssl`; no environment injection is performed.
 2. **Upload operator binaries** to the blob store in the background after the health check passes
 
-**Why background upload?** This keeps container startup fast — the health check returns before the uploads complete, allowing other services (g8ed, g8ee) to begin connecting immediately. The upload runs as a fire-and-forget background job.
+**Why background upload?** This keeps container startup fast — the health check returns before the uploads complete, allowing other services (g8ed, g8ee) to begin connecting immediately. The upload runs as a fire-and-forget background job in the container entrypoint.
 
 ### Operator Binary Distribution
 
@@ -94,7 +94,7 @@ The g8es Dockerfile cross-compiles the operator binary for three architectures (
 g8e.operator --listen
 
 # With custom ports
-g8e.operator --listen --wss-listen-port 443 --http-listen-port 443 -l debug
+g8e.operator --listen --wss-listen-port 9001 --http-listen-port 9000 -l debug
 ```
 
 ## Internal Authentication
@@ -110,7 +110,7 @@ During first-start (before `internal_auth_token` is initialized), the following 
 - `GET/PUT /db/settings/platform_settings` - Allows seeding the initial settings document
 - `ANY /kv/*` - Enables coordination during bootstrap
 - `ANY /ws/*` - Allows WebSocket connections for pub/sub
-- `GET /ssl/ca.crt` - Allows Operators to fetch the CA certificate
+- `GET /ssl/ca.crt` - Allows Operators to fetch the CA certificate (Note: This is allowed by auth middleware but must be served by the platform)
 
 ### Credentials Management
 
@@ -130,7 +130,7 @@ The `internal_auth_token` is written to the SSL volume and also stored in the `s
 
 The server certificate includes the following SANs:
 - **DNS:** `g8e.local`, `localhost`, `g8es`, `g8ee`, `g8ed`
-- **IP:** `127.0.0.1` plus any extra IPs passed to `EnsureCerts`
+- **IP:** `127.0.0.1` plus any host IPs detected at runtime
 
 The `ca.crt` mirror at the ssl root is what g8ed, g8ee, and field Operators consume.
 
@@ -173,7 +173,7 @@ GET /health
 ← 200 OK  {"status": "ok", "mode": "listen", "version": "<build version>"}
 ```
 
-The health check is the only endpoint that does not require authentication. It returns `503 Service Unavailable` during initialization.
+The health check is the only endpoint that does not require authentication. It returns `503 Service Unavailable` during initialization or if `platform_settings` are missing.
 
 ### Operator Binary Distribution
 
@@ -227,13 +227,13 @@ POST   /kv/_scan              → Paginated key scan  {"pattern": "...", "cursor
 POST   /kv/_delete_pattern    → Delete by pattern   {"pattern": "cache:user:*"} → {"deleted": N}
 ```
 
-**Why a separate KV store?** The document store is optimized for complex queries and structured data. The KV store is optimized for simple key-based lookups with expiration, making it ideal for caching, session state, and coordination primitives. TTL is handled at the storage layer rather than in application logic.
+**Why a separate KV store?** The document store is optimized for complex queries and structured data. The KV store is optimized for simple key-based lookups with expiration, making it ideal for caching, session state, and coordination primitives. TTL is handled at the storage layer.
 
-`ttl: 0` on `PUT /kv/{key}` means no expiration. Expired keys are cleaned up by a background goroutine every 30 seconds, and are filtered out of `GET`, `_keys`, and `_scan` results.
+`ttl: 0` on `PUT /kv/{key}` means no expiration. Expired keys are cleaned up by a background goroutine every 30 seconds, and are filtered out of results.
 
 ### SSE Event Buffer
 
-g8es provides a per-session event ring buffer table (`sse_events`). **Note:** This is currently a legacy component. In the current architecture, `g8ee` pushes events to `g8ed` via HTTP, and `g8ed` delivers them to local SSE connections (fire-and-forget). The g8es buffer is not used for reconnection replay in the 2026 stack.
+g8es provides a per-session event ring buffer table (`sse_events`). **Note:** This is currently a legacy component. In the current architecture, `g8ee` pushes events to `g8ed` via HTTP, and `g8ed` delivers them to local SSE connections.
 
 ```
 DELETE /db/_sse_events         → Wipe all SSE events
@@ -252,7 +252,7 @@ GET    /blob/{namespace}/{id}/meta  → Metadata only (no data)
 DELETE /blob/{namespace}            → Delete all blobs in namespace
 ```
 
-**Why a separate blob store?** Storing large binary data in the document store would bloat the database and impact query performance. The blob store keeps binaries in a separate table with efficient streaming, while the document store references them by namespace/id. This is used for operator binaries, attachments, and other large payloads.
+**Why a separate blob store?** Storing large binary data in the document store would bloat the database and impact query performance. The blob store keeps binaries in a separate table with efficient streaming.
 
 **Constraints:**
 - **Max size**: 15MB per blob (hard cap at the transport layer)
@@ -270,7 +270,7 @@ POST /pubsub/publish  {"channel": "cmd:op1:sess1", "data": {...}}
 
 WebSocket (subscribe + publish):
 ```
-wss://g8es:443/ws/pubsub?token={token}
+wss://g8es:9001/ws/pubsub?token={token}
 
 → {"action": "subscribe",   "channel": "results:op1:sess1"}
 → {"action": "psubscribe",  "channel": "heartbeat:*"}
@@ -280,25 +280,24 @@ wss://g8es:443/ws/pubsub?token={token}
 ← {"type": "pmessage",      "channel": "heartbeat:op1", "pattern": "heartbeat:*", "data": {...}}
 ```
 
-**Why WebSocket for pub/sub?** Server-push is required for real-time command output and heartbeat streams. Long-lived WebSocket connections eliminate polling overhead and provide low-latency bidirectional communication. HTTP publish is provided for components that don't hold a persistent WebSocket connection (e.g., one-off notifications).
-
-Each subscriber has a 4096-message send buffer with drop-oldest back-pressure handling. Patterns support Redis-style globbing (`*`, `?`).
+**Why WebSocket for pub/sub?** Server-push is required for real-time command output and heartbeat streams. Pattern matching supports Redis-style globbing (`*`, `?`).
 
 ## Client Libraries
 
 ### g8ed (Node.js)
 
-g8ed uses purpose-built clients in `components/g8ed/services/clients/`:
+g8ed uses purpose-built clients in `components/g8ed/services/clients/` and `components/g8ed/services/platform/`:
 
 | Client | File | Transport | Scope |
 |--------|------|-----------|-------|
 | `G8esDocumentClient` | `g8es_document_client.js` | HTTP | Document store CRUD (`/db/...`) |
 | `KVCacheClient` | `g8es_kv_cache_client.js` | HTTP | KV store operations (`/kv/...`) |
 | `G8esPubSubClient` | `g8es_pubsub_client.js` | WebSocket | Pub/sub messaging (`/ws/pubsub`) |
+| `G8esBlobClient` | `g8es_blob_client.js` | HTTP | Blob store operations (`/blob/...`) |
 | `G8esHttpClient` | `g8es_http_client.js` | HTTP | Base client for HTTP operations |
 | `InternalHttpClient` | `internal_http_client.js` | HTTP | General internal service communication |
 
-**Atomicity Warning:** Compound operations (e.g., `increment`, `arrayUnion`, `arrayRemove`) are implemented as read-modify-write cycles over HTTP and are **not atomic**. Use transactions for operations requiring atomicity.
+**Atomicity Warning:** Compound operations (e.g., `increment`, `arrayUnion`) are implemented as read-modify-write cycles over HTTP and are **not atomic**.
 
 ### g8ee (Python)
 
@@ -314,10 +313,10 @@ g8ee uses clients in `components/g8ee/app/clients/`:
 
 ## SQLite Schema
 
-The canonical schema is defined in `components/g8eo/services/listen/schema.sql` and embedded into the binary via `//go:embed`. This file is the single source of truth — do not duplicate it elsewhere.
+The canonical schema is defined in `components/g8eo/services/listen/schema.sql` and embedded into the binary via `//go:embed`.
 
 Single database at `/data/g8e.db` with the following tables:
-- `documents` - Collection-based JSON storage with automatic timestamps
+- `documents` - Collection-based JSON storage
 - `kv_store` - Key/value storage with TTL support
 - `sse_events` - Per-session event ring buffer (legacy)
 - `blobs` - Raw binary storage with namespace isolation
@@ -341,4 +340,4 @@ node components/g8ed/server.js
 python components/g8ee/app/main.py
 ```
 
-**Why this works in air-gap?** The operator binary is self-contained with no external dependencies. All three components communicate via localhost HTTP/WebSocket to the listen mode instance. No external network access is required after initial deployment.
+**Why this works in air-gap?** The operator binary is self-contained with no C dependencies. All components communicate via localhost HTTP/WebSocket to the listen mode instance. No external network access is required after initial deployment.

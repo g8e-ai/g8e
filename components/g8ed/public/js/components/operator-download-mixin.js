@@ -165,7 +165,6 @@ export const OperatorDownloadMixin = {
 
         if (generateBtn) {
             const resultDiv = container.querySelector('#device-link-result');
-            const curlCmdDiv = container.querySelector('#device-link-curl-cmd');
             const tokenDiv = container.querySelector('#device-link-token');
             const copyCurlBtn = container.querySelector('#device-link-copy-curl');
             const copyTokenBtn = container.querySelector('#device-link-copy-token');
@@ -196,10 +195,6 @@ export const OperatorDownloadMixin = {
                     const dropUrl = `http://${window.location.hostname}/g8e`;
                     const curlCommand = `curl -fsSL ${dropUrl} | sh -s -- ${token}`;
 
-                    if (curlCmdDiv) {
-                        curlCmdDiv.setAttribute('data-curl-command', curlCommand);
-                        curlCmdDiv.textContent = obfuscateCurlCommand(curlCommand);
-                    }
                     if (tokenDiv) {
                         tokenDiv.setAttribute('data-token', token);
                         tokenDiv.textContent = obfuscateApiKey(token);
@@ -226,27 +221,16 @@ export const OperatorDownloadMixin = {
                 }
             });
 
-        const tokenToggleBtn = container.querySelector('#device-link-token-toggle');
-        if (tokenToggleBtn && tokenDiv) {
-            tokenToggleBtn.addEventListener('click', () => {
-                const isObfuscated = tokenDiv.classList.toggle('obfuscated');
-                const icon = tokenToggleBtn.querySelector('.material-symbols-outlined');
-                if (icon) icon.textContent = isObfuscated ? 'visibility' : 'visibility_off';
-                const token = tokenDiv.getAttribute('data-token');
-                tokenDiv.textContent = isObfuscated ? obfuscateApiKey(token) : token;
-            });
-        }
-
-        const curlToggleBtn = container.querySelector('#device-link-curl-toggle');
-        if (curlToggleBtn && curlCmdDiv) {
-            curlToggleBtn.addEventListener('click', () => {
-                const isObfuscated = curlCmdDiv.classList.toggle('obfuscated');
-                const icon = curlToggleBtn.querySelector('.material-symbols-outlined');
-                if (icon) icon.textContent = isObfuscated ? 'visibility' : 'visibility_off';
-                const curlCommand = curlCmdDiv.getAttribute('data-curl-command');
-                curlCmdDiv.textContent = isObfuscated ? obfuscateCurlCommand(curlCommand) : curlCommand;
-            });
-        }
+            const tokenToggleBtn = container.querySelector('#device-link-token-toggle');
+            if (tokenToggleBtn && tokenDiv) {
+                tokenToggleBtn.addEventListener('click', () => {
+                    const isObfuscated = tokenDiv.classList.toggle('obfuscated');
+                    const icon = tokenToggleBtn.querySelector('.material-symbols-outlined');
+                    if (icon) icon.textContent = isObfuscated ? 'visibility' : 'visibility_off';
+                    const token = tokenDiv.getAttribute('data-token');
+                    tokenDiv.textContent = isObfuscated ? obfuscateApiKey(token) : token;
+                });
+            }
         }
     },
 

@@ -155,6 +155,24 @@ The operation is idempotent — safe to call whether or not the operator is curr
 
 ---
 
+## AWS Cloud Operator (Intent-Based Policies)
+
+By default, the g8ep operator runs with a `g8ep` subtype, granting it direct system access to the container environment but bypassing the Just-in-Time (JIT) IAM policy escalation logic. To use g8ep as a full AWS Cloud Operator with intent-based policy grants, the following plumbing must be enabled:
+
+### 1. Update Operator Subtype
+The `cloud_subtype` for the g8ep operator slot must be updated from `g8ep` to `aws` in the database. This allows the Engine to recognize it as a target for AWS IAM intent operations.
+
+### 2. Enable JIT Escalation in Engine
+The explicit validation block in `OperatorIntentService` must be removed or modified to allow the `g8ep` subtype (or the updated `aws` subtype) to request intent grants. 
+
+### 3. Credential Configuration
+Run `./g8e aws setup` to mount host AWS credentials into the g8ep container. The operator requires an IAM Role identity (not an IAM User) to support the **Two-Role Architecture** (Escalation Role pattern).
+
+### 4. IAM Permissions
+The identity used by g8ep must have `sts:AssumeRole` permissions for the corresponding `-Escalation-Role` in the target account.
+
+---
+
 ## Process Management Architecture
 
 **g8ee is the single writer for the g8ep operator lifecycle.** This separation of concerns ensures:

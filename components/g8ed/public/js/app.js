@@ -23,6 +23,7 @@ import { notificationService } from './utils/notification-service.js';
 import { CssClass } from './constants/ui-constants.js';
 import { webSessionService } from './utils/web-session-service.js';
 import { operatorSessionService } from './utils/operator-session-service.js';
+import { tutorialManager } from './utils/tutorial-manager.js';
 
 class g8eApp {
     constructor() {
@@ -36,6 +37,7 @@ class g8eApp {
         this.chat = null;
         this.operatorPanel = null;
         this.footer = null;
+        this.tutorial = tutorialManager;
     }
 
     init() {
@@ -80,6 +82,37 @@ class g8eApp {
 
         this.setupEventListeners();
         this.auth.init();
+        this.initTutorial();
+    }
+
+    initTutorial() {
+        // Auto-start tutorial on first login
+        this.eventBus.once(EventType.AUTH_USER_AUTHENTICATED, () => {
+            const hasSeenTutorial = localStorage.getItem('g8e_tutorial_seen');
+            if (!hasSeenTutorial) {
+                // Short delay to ensure components are rendered
+                setTimeout(() => {
+                    this.tutorial.start();
+                    localStorage.setItem('g8e_tutorial_seen', 'true');
+                    
+                    notificationService.info('You can always restart the tutorial from the hamburger menu.', { 
+                        duration: 8000 
+                    });
+                }, 1000);
+            }
+        });
+
+        const tutorialBtn = document.getElementById('hamburger-tutorial-btn');
+        if (tutorialBtn) {
+            tutorialBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                // Close hamburger menu if it exists
+                const dropdown = document.getElementById('hamburger-dropdown');
+                if (dropdown) dropdown.classList.remove('active');
+                
+                this.tutorial.start();
+            });
+        }
     }
 
     setupUI() {

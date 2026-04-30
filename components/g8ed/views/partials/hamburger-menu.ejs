@@ -16,12 +16,26 @@
         <span class="material-symbols-outlined">description</span>
     </button>
     <div id="hamburger-dropdown" class="hamburger-dropdown">
-        <a href="/" class="hamburger-menu-item <%= isActive('home') %>">Home</a>
-        <a href="/docs" class="hamburger-menu-item <%= isActive('docs') %>">Docs</a>
-        <a href="https://github.com/g8e-ai/g8e" target="_blank" rel="noopener noreferrer" class="hamburger-menu-item">GitHub</a>
+        <a href="/" class="hamburger-menu-item <%= isActive('home') %>">
+            <span class="material-symbols-outlined">home</span>
+            Home
+        </a>
+        <a href="/docs" class="hamburger-menu-item <%= isActive('docs') %>">
+            <span class="material-symbols-outlined">description</span>
+            Docs
+        </a>
+        <a href="https://github.com/g8e-ai/g8e" target="_blank" rel="noopener noreferrer" class="hamburger-menu-item">
+            <span class="material-symbols-outlined">code</span>
+            GitHub
+        </a>
         <div class="hamburger-menu-divider"></div>
         <button id="hamburger-theme-toggle" class="hamburger-menu-item hamburger-theme-toggle">
-            <span><%= theme === 'light' ? 'Go Dark' : 'Go Light' %></span>
+            <span class="material-symbols-outlined"><%= theme === 'light' ? 'dark_mode' : 'light_mode' %></span>
+            <%= theme === 'light' ? 'Go Dark' : 'Go Light' %>
+        </button>
+        <button id="hamburger-tutorial-btn" class="hamburger-menu-item hamburger-tutorial-btn">
+            <span class="material-symbols-outlined">school</span>
+            Tutorial
         </button>
     </div>
 </div>

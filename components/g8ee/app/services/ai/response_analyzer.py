@@ -13,6 +13,7 @@
 
 import json
 import logging
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import TypeVar
@@ -201,11 +202,14 @@ class AIResponseAnalyzer:
                 system_instructions=prompt,
                 response_format=types.ResponseFormat.from_pydantic_schema(response_model.model_json_schema()),
             )
+            llm_call_start = time.time()
             response = await client.generate_content_lite(
                 model=lite_model,
                 contents=[types.Content(role=Role.USER, parts=[types.Part(text=prompt)])],
                 lite_llm_settings=config,
             )
+            llm_call_duration_ms = (time.time() - llm_call_start) * 1000
+            logger.info("[WARDEN-LLM] %s LLM call duration_ms=%.2f", log_context, llm_call_duration_ms)
 
             response_text = response.text
             analysis = parse_structured_response(response_text, response_model)
@@ -229,10 +233,12 @@ class AIResponseAnalyzer:
         context: CommandRiskContext,
         settings: G8eeUserSettings,
     ) -> CommandRiskAnalysis:
+        analysis_start_time = time.time()
         context = context or CommandRiskContext()
         working_dir = context.working_directory
         resolved_settings = settings
 
+        prompt_build_start = time.time()
         command_risk_persona = get_agent_persona("warden_command_risk")
         template = _build_warden_command_risk_template(
             command=command,
@@ -240,11 +246,14 @@ class AIResponseAnalyzer:
             working_dir=working_dir
         )
         prompt = f"{command_risk_persona.get_system_prompt()}\n\n{template}"
+        prompt_build_duration_ms = (time.time() - prompt_build_start) * 1000
+        logger.info("[WARDEN-COMMAND-RISK] command=%r prompt_build_duration_ms=%.2f", command[:60], prompt_build_duration_ms)
 
         lite_model = resolved_settings.llm.resolved_lite_model
 
         def log_result(analysis: CommandRiskAnalysis) -> None:
-            logger.info("Command risk analysis completed: command=%s risk_level=%s", command[:60], analysis.risk_level)
+            total_duration_ms = (time.time() - analysis_start_time) * 1000
+            logger.info("[WARDEN-COMMAND-RISK] Completed command=%r risk_level=%s total_duration_ms=%.2f", command[:60], analysis.risk_level, total_duration_ms)
 
         return await self._run_lite_analysis(
             prompt=prompt,
@@ -267,6 +276,7 @@ class AIResponseAnalyzer:
         context: ErrorAnalysisContext,
         settings: G8eeUserSettings,
     ) -> ErrorAnalysisResult:
+        analysis_start_time = time.time()
         context = context or ErrorAnalysisContext()
         retry_count = context.retry_count
         working_dir = context.working_directory
@@ -286,6 +296,7 @@ class AIResponseAnalyzer:
                 user_message=f"Command failed after {retry_count} retries. Manual intervention required.",
             )
 
+        prompt_build_start = time.time()
         error_persona = get_agent_persona("warden_error")
         template = _build_warden_error_template(
             command=command,
@@ -296,6 +307,8 @@ class AIResponseAnalyzer:
             working_dir=working_dir
         )
         prompt = f"{error_persona.get_system_prompt()}\n\n{template}"
+        prompt_build_duration_ms = (time.time() - prompt_build_start) * 1000
+        logger.info("[WARDEN-ERROR] command=%r retry_count=%d prompt_build_duration_ms=%.2f", command[:60], retry_count, prompt_build_duration_ms)
 
         lite_model = resolved_settings.llm.resolved_lite_model
 
@@ -304,9 +317,10 @@ class AIResponseAnalyzer:
                 analysis.can_auto_fix = False
                 analysis.should_escalate = True
                 analysis.reasoning = (analysis.reasoning or "") + " (Retry limit reached - escalating to prevent infinite loop)"
+            total_duration_ms = (time.time() - analysis_start_time) * 1000
             logger.info(
-                "Error analysis completed: command=%s error_category=%s can_auto_fix=%s should_escalate=%s",
-                command[:60], analysis.error_category, analysis.can_auto_fix, analysis.should_escalate,
+                "[WARDEN-ERROR] Completed command=%r error_category=%s can_auto_fix=%s should_escalate=%s total_duration_ms=%.2f",
+                command[:60], analysis.error_category, analysis.can_auto_fix, analysis.should_escalate, total_duration_ms,
             )
 
         return await self._run_lite_analysis(
@@ -350,6 +364,7 @@ class AIResponseAnalyzer:
         context: FileOperationRiskContext,
         settings: G8eeUserSettings,
     ) -> FileOperationRiskAnalysis:
+        analysis_start_time = time.time()
         context = context or FileOperationRiskContext()
         git_status = context.git_status
         backup_available = context.backup_available
@@ -357,6 +372,7 @@ class AIResponseAnalyzer:
 
         content_preview = content[:500] if content else "N/A"
 
+        prompt_build_start = time.time()
         file_risk_persona = get_agent_persona("warden_file_risk")
         template = _build_warden_file_risk_template(
             operation=operation,
@@ -366,6 +382,8 @@ class AIResponseAnalyzer:
             backup_available=backup_available
         )
         prompt = f"{file_risk_persona.get_system_prompt()}\n\n{template}"
+        prompt_build_duration_ms = (time.time() - prompt_build_start) * 1000
+        logger.info("[WARDEN-FILE-RISK] operation=%s file_path=%r prompt_build_duration_ms=%.2f", operation, file_path[:60], prompt_build_duration_ms)
 
         lite_model = resolved_settings.llm.resolved_lite_model
 
@@ -375,9 +393,10 @@ class AIResponseAnalyzer:
             if analysis.risk_level == RiskLevel.HIGH and analysis.is_system_file:
                 analysis.safe_to_proceed = False
 
+            total_duration_ms = (time.time() - analysis_start_time) * 1000
             logger.info(
-                "File operation risk analysis completed: operation=%s file_path=%s risk_level=%s is_system_file=%s safe_to_proceed=%s",
-                operation, file_path, analysis.risk_level, analysis.is_system_file, analysis.safe_to_proceed,
+                "[WARDEN-FILE-RISK] Completed operation=%s file_path=%r risk_level=%s is_system_file=%s safe_to_proceed=%s total_duration_ms=%.2f",
+                operation, file_path, analysis.risk_level, analysis.is_system_file, analysis.safe_to_proceed, total_duration_ms,
             )
 
         return await self._run_lite_analysis(

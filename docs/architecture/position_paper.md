@@ -57,8 +57,9 @@ There are three actors and two coupled systems.
         │       Engine            │
         │  (stateless reasoner)   │
         │                         │
-        │  Triage → Sage →        │
-        │  Tribunal → Auditor     │
+        │ Triage (interrogator) → │
+        │ Sage → Tribunal →       │
+        │ Auditor                 │
         └────────────┬────────────┘
                      │
         intent + verdict + grounding
@@ -153,11 +154,11 @@ The audit vault is encrypted at rest. The Git ledger is structurally append-only
 
 ### Zero standing privileges
 
-For Cloud Operators on AWS, the Operator implements Zero Standing Privileges: it holds no permanent IAM credentials. When the Engine articulates an intent that requires AWS access, the Operator generates a session-scoped IAM role with permissions derived from the intent itself — read-only when the intent is read-only, write-scoped to the specific resource when the intent is write — and assumes that role only for the duration of the executing command.
+For Cloud Operators on AWS, the Operator implements Zero Standing Privileges via a **Two-Role architecture**. It holds no permanent permissions for managed resources. When the Engine articulates an intent that requires AWS access, the Operator assumes a high-privilege **Escalation Role** just long enough to attach a scoped **Intent Policy** to its own identity.
 
-This is the architectural complement to the Engine's intent articulation. The planner produces an intent in natural language. The Tribunal translates intent into a candidate command. The Auditor verifies the command matches the intent. The Operator translates the intent into the minimum IAM scope sufficient to execute the command. **The same intent document is the input to every layer's contract.**
+This is the architectural complement to the Engine's intent articulation. The planner produces an intent. The Tribunal translates intent into a command. The Operator attaches the minimum IAM policy mapped to that intent.
 
-The result: no human and no AI agent ever needs to hold privileged AWS credentials at rest. Privileges are minted just-in-time, scoped to the specific action, and dissolved on completion. A compromise of any layer — the User's session, the Engine's reasoning state, the Operator's binary — cannot exfiltrate persistent credentials, because no persistent credentials exist.
+The result: no human and no AI agent ever needs to hold privileged AWS credentials at rest. Privileges are attached just-in-time, scoped to the intent, and revoked on completion. A compromise of any layer — the User's session, the Engine's reasoning state, the Operator's binary — cannot exfiltrate persistent credentials, because no persistent credentials exist.
 
 ### The Warden
 
@@ -169,11 +170,9 @@ The Warden fails closed. Ambiguous risk is classified high. The Warden cannot lo
 
 To make this stop reading abstract, here is what actually happens when a User says: *"Clean up the old logs on the production database server, but be careful — we had an incident last month where someone deleted the wrong directory and we lost three days of audit data."*
 
-**Triage** classifies the message: complex, action-oriented, posture cautious. Routes to Sage.
+**Triage** (the interrogator) classifies the message: complex, action-oriented, posture cautious. It detects the need for more context and issues three clarifying questions in parallel: *"Older than 30 days?"* *"Compressed archives included?"* *"Retain anything matching `audit_*`?"* The User clicks the answers in five seconds. Each answer is scored against realized information value when the verdict comes in.
 
-**Dash** issues three yes/no questions in parallel: *"Older than 30 days?"* *"Compressed archives included?"* *"Retain anything matching `audit_*`?"* The User clicks the answers in five seconds. Each answer is scored against realized information value when the verdict comes in.
-
-**Sage** produces an intent: *"Delete files in `/var/log/db/` older than 30 days, exclude any matching pattern `audit_*`, log all deletions to a manifest before removal, do not follow symlinks."* Sage never writes shell syntax. Sage doesn't know Dash exists; the questions appear as user context.
+**Sage** (the planner) produces an intent: *"Delete files in `/var/log/db/` older than 30 days, exclude any matching pattern `audit_*`, log all deletions to a manifest before removal, do not follow symlinks."* Sage never writes shell syntax. Triage's questions appear as user context.
 
 **The Tribunal** produces five candidates in parallel. Axiom proposes a `find` pipeline with `-mtime +30 -not -name 'audit_*' -delete`. Concord proposes the same pipeline but with `-print` first to a manifest file, then a separate deletion step, with `-xdev` to prevent crossing filesystems. Variance proposes the Concord version plus explicit handling of filenames containing spaces and a check that the directory exists. Pragma proposes the same with idiomatic logging redirection. **Nemesis** proposes a tighter version that omits the manifest write — fast, plausible, and quietly dangerous because it loses the audit trail.
 
@@ -181,13 +180,13 @@ Round 1 votes: Concord, Variance, and Pragma cluster on the manifest-first versi
 
 **The Auditor** reviews. It sees Sage's intent, the winning candidate, the dissenting clusters with their persona signatures, and pulls cross-conversation memory: *"This User had an incident last month involving wrong-directory deletion."* The Auditor verifies the manifest-first design matches the intent's caution and grounds the verdict in the precedent. The Nemesis attack is logged as a confirmed flaw caught — Nemesis's stake increases. The verdict is cryptographically committed to the reputation ledger.
 
-**The Operator** receives the verdict over mTLS WebSocket. The **Warden** runs locally: command risk medium (mass deletion), file operation risk medium-high (operations on a directory containing audit-relevant files, even with the exclusion), error risk classified as escalate-on-failure. The Operator generates a JIT IAM scope: read access to `/var/log/db/`, write access only for the manifest path, no privileges beyond what the command requires.
+**The Operator** receives the verdict over mTLS WebSocket. The **Warden** runs locally: command risk medium (mass deletion), file operation risk medium-high (operations on a directory containing audit-relevant files, even with the exclusion), error risk classified as escalate-on-failure. The Operator prepares the JIT IAM scope: it attaches the `Log-Management` intent policy to its role, granting read access to `/var/log/db/` and write access for the manifest path.
 
 **The Operator presents to the User**: the proposed command, the manifest path, the Auditor's grounding (*"matches your stated caution; cross-references prior incident"*), the Warden's risk classifications, and an expandable view of the Nemesis dissent (*"a candidate without manifest-first was rejected — here's why"*).
 
 **The User** reads the manifest path, confirms audit files are excluded, sees the Nemesis dissent and understands what was avoided. They click approve. Five seconds.
 
-The Operator executes under the JIT scope. Output is captured, scrubbed for any PII, and returned to the Engine. The full transaction — message, Dash Q&A, Sage intent, Tribunal candidates, Auditor verdict, Warden assessment, User approval, execution result — is written to the encrypted audit vault. The manifest file itself is committed to the Git ledger.
+The Operator executes the command. Output is captured, scrubbed for any PII by Sentinel, and returned to the Engine. The full transaction — message, Triage Q&A, Sage intent, Tribunal candidates, Auditor verdict, Warden assessment, User approval, execution result — is written to the encrypted audit vault. The manifest file itself is committed to the Git ledger. The Operator then detaches the intent policy.
 
 Codex, asynchronously, extracts the preference: *"User has heightened sensitivity around log/audit operations. Prefer manifest-first patterns by default."* This becomes part of the Auditor's cross-conversation memory for the next investigation.
 
@@ -222,7 +221,7 @@ I am honest about what I have not yet resolved.
 
 **Auditor convergence under distribution shift.** The Auditor's grounding accuracy is presumed to converge through peer-Auditor sampling. I do not have empirical bounds on the convergence rate, nor characterizations of the failure modes when the Auditor encounters tasks systematically outside its training distribution. This is the most important open empirical question.
 
-**Pathological Users.** Users who optimize for low time-to-resolution at any cost — skipping every Dash question, rubber-stamping every verdict — can starve the mechanism. The current design assumes time-rational Users; pathological Users break the proxy chain. Whether the gradient educates them out of pathological play quickly enough to bound damage is something I am actively measuring.
+**Pathological Users.** Users who optimize for low time-to-resolution at any cost — skipping every Triage question, rubber-stamping every verdict — can starve the mechanism. The current design assumes time-rational Users; pathological Users break the proxy chain. Whether the gradient educates them out of pathological play quickly enough to bound damage is something I am actively measuring.
 
 **Operator-to-Operator coordination.** The architecture treats each Operator as an isolated execution domain. Workflows that span hosts (e.g., a database migration coordinated across replicas) currently rely on the Engine to sequence operations. A more interesting future is direct Operator-to-Operator coordination over a shared consensus substrate, which would extend the co-validation model to distributed operations. This is genuine future work.
 
