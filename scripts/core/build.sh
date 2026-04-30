@@ -259,56 +259,62 @@ _print_platform_info() {
     local _dashboard_url
     local _ssl_setup_url
     local _host_ip
-    
+    local _primary_ip
+
     if [[ -n "$_app_url" ]]; then
         _dashboard_url="$_app_url"
         _ssl_setup_url="${_app_url}/trust"
     elif [[ "$_https_port" == "443" ]]; then
         _dashboard_url="https://localhost"
-        _ssl_setup_url="https://127.0.0.1/trust"
+        _ssl_setup_url="http://localhost"
     else
         _dashboard_url="https://localhost"
-        _ssl_setup_url="https://127.0.0.1/trust"
+        _ssl_setup_url="http://localhost"
     fi
-    
+
+    if [[ -n "$HOST_IPS" ]]; then
+        IFS=',' read -ra IPS <<< "$HOST_IPS"
+        _primary_ip="${IPS[0]}"
+    else
+        _primary_ip="127.0.0.1"
+    fi
+
     echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  g8e requires secure web connections (TLS 1.3 over a locally generated"
     echo "  ECDSA P-384 private CA). Your device must trust this certificate before"
-    echo "  you can proceed."
+    echo "  you can use the g8e GUI in your browser."
     echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
-    echo "  Dashboard : $_dashboard_url"
-    echo "  SSL Setup  : $_ssl_setup_url"
-    
-    if [[ -n "$HOST_IPS" ]]; then
-        echo ""
-        echo "  Remote Access (from other devices on your network):"
-        IFS=',' read -ra IPS <<< "$HOST_IPS"
-        for ip in "${IPS[@]}"; do
-            echo "    Dashboard : https://$ip"
-            echo "    SSL Setup  : http://$ip/trust"
-        done
-    fi
-    
+    echo "  Trusting the certificate adds g8e's self-signed CA to your browser's"
+    echo "  trusted store, allowing your browser to connect to https://localhost"
+    echo "  or https://g8e.local without security warnings."
     echo ""
-    echo "  Terminal one-liner (macOS/Linux):"
-    if [[ -n "$HOST_IPS" ]]; then
-        IFS=',' read -ra IPS <<< "$HOST_IPS"
-        echo "    curl -fsSL http://${IPS[0]}/trust | sudo sh"
-    else
-        echo "    curl -fsSL http://127.0.0.1/trust | sudo sh"
-    fi
+    echo "  Note: For operator systems, add g8e.local to your DNS or /etc/hosts"
+    echo "  file pointing to this server's IP address (192.168.1.62)."
     echo ""
-    echo "  Windows (PowerShell):"
-    if [[ -n "$HOST_IPS" ]]; then
-        IFS=',' read -ra IPS <<< "$HOST_IPS"
-        echo "    irm http://${IPS[0]}/trust | iex"
-    else
-        echo "    irm http://127.0.0.1/trust | iex"
-    fi
     echo ""
-    echo "  Alternative: Visit $_ssl_setup_url for manual download options."
-    echo "  After trusting, restart your browser."
+    echo "  STEP 1: Trust the certificate"
+    echo ""
+    echo "    If g8e is running on your local workstation:"
+    echo "      Visit http://localhost to download and trust the certificate"
+    echo ""
+    echo "    If g8e is running on a remote system:"
+    echo "      Visit http://$_primary_ip to download and trust the certificate"
+    echo ""
+    echo "    Or run the certificate trust script:"
+    echo "      macOS/Linux:  curl -fsSL http://$_primary_ip/trust | sudo sh"
+    echo "      Windows:      irm http://$_primary_ip/trust | iex"
+    echo ""
+    echo "    After trusting, restart your browser."
+    echo ""
+    echo ""
+    echo "  STEP 2: Access the dashboard"
+    echo ""
+    echo "    If g8e is running on your local workstation:"
+    echo "      Dashboard: https://localhost"
+    echo ""
+    echo "    If g8e is running on a remote system (DNS or hosts file required for https):"
+    echo "      Dashboard: https://g8e.local"
 }
 
 if [[ -z "$COMMAND" ]]; then
