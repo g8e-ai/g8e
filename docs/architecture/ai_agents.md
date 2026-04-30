@@ -51,7 +51,7 @@ To prevent hallucinations and ensure safety, agents never write shell commands d
     - **Nemesis**: The "immune system" — produces plausible-but-flawed commands or honestly abstains.
 3. **Consensus & Tie-breaking**: Candidates are clustered by exact match. A winner is selected via ranked vote.
 4. **Auditor Review**: The **Auditor** judges the winning command against the intent. It can approve (`ok`), provide a `revised` command, or `swap` to a better dissenting cluster.
-5. **Warden Analysis**: The **Warden** sub-agents perform a final pre-execution risk assessment (Command, File, and Error risk).
+5. **Warden Analysis**: The **Warden** (running on the Engine) performs a pre-execution risk assessment (Command, File, and Error risk) using specialized sub-agents.
 6. **Human Approval**: The user reviews the command and risk assessment before execution on the Operator.
 
 ## Security & Governance
