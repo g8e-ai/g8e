@@ -2,59 +2,47 @@
 
 # g8e
 
-**governance architecture for trustless environments**
+**AI-powered, human-driven infrastructure.**
 
-The AI reasons. You decide. The architecture enforces it.
+governance architecture for trustless environments
 
-Self-hosted · Air-gap capable · Zero cloud dependencies
-
-[Architecture](docs/architecture/about.md) · [Security](docs/architecture/security.md) · [Quick Start](#quick-start) · [Contributing](#contributing)
+[Position Paper](docs/architecture/position_paper.md) · [Architecture](docs/architecture/about.md) · [Security](docs/architecture/security.md) · [Quick Start](#quick-start) · [Contributing](#contributing)
 
 </div>
 
-<p align="center">
-  <img src="shared/media/denied-with-solution.png" alt="g8e governance in action - denied" width="400">
-  <img src="shared/media/approved-with-results-and-solution.png" alt="g8e governance in action - approved" width="400">
-</p>
+---
+
+- 4MB statically-compiled Go Operator on every managed host
+- FIDO2/WebAuthn at every state change — no passwords, by design
+- Byzantine consensus over five blind LLM personas, with a calibrated adversary
+- Outbound-only mTLS — no inbound ports on managed hosts
+- Local-first audit; the host is the system of record, not the cloud
+- Model-agnostic — swap providers without losing history
+- Apache 2.0 · Self-hosted · Air-gap capable · No SaaS, no telemetry
 
 ---
 
-## Introduction
+## What this is
 
-Agentic AI in infrastructure faces two architectural failures. **Fully autonomous agents** act without human verification of contextual intent — they produce outcomes that are technically correct and contextually wrong, doing exactly what they understood the request to mean while missing what the user actually meant. **Human-in-the-loop systems** retrofit oversight through approval prompts, producing alert fatigue: when verification is costly and approval is cheap, humans rubber-stamp, and the nominal oversight becomes substantively absent.
+g8e is a platform for running AI agents against production infrastructure without giving up sovereignty, auditability, or sleep. A stateless reasoning **Engine** runs Byzantine consensus over heterogeneous LLM personas. A sovereign **Operator** binary runs on every managed host, enforces FIDO2 approval at the execution boundary, and owns the local-first audit ledger.
 
-Both failures share the same root: they treat human and machine as substitutable validators on the same questions. They are not.
+The Engine is replaceable. The Operator is the system of record. You hold the only signature only a human can produce.
 
-g8e takes a third path: **co-validation**. The machine handles what is machine-checkable — internal consistency, procedural correctness, pattern-match safety, falsifiability of evidence, cross-conversation grounding. The human handles what is only human-checkable — intent fidelity in their actual environment, contextual stakes, acceptance of real-world consequences, and implicit values the agent layer cannot access. Both signatures are required for every state change.
+## Why
 
-The architecture has two coupled components. The **Engine** is a stateless reasoning system running a Byzantine consensus protocol over heterogeneous AI personas; it produces verdicts with cryptographic attestations. The **Operator** is a single-binary sovereign execution layer on each managed host — it receives verdicts, performs local risk assessment, requires human approval at the execution boundary, executes approved commands, and maintains a tamper-evident local audit ledger. The Engine is replaceable; the Operator is the system of record.
+Every production AI agent system in 2026 is one of two shapes, and both are broken.
 
-The economic commitment is precise: the user's time is not a free resource the system can spend, but a stake contributed for the judgment only they can provide. Every component upstream of human approval exists to minimize what reaches the user, so that what does reach them is exclusively the human-domain question they alone are qualified to answer.
+**Autonomous agents** plan, act, and report. They produce technically correct, contextually wrong outcomes — doing exactly what they understood the request to mean while missing what you actually meant. Nothing in the system is structurally positioned to catch the gap.
 
-Full treatment: [docs/architecture/position_paper.md](docs/architecture/position_paper.md)
+**Human-in-the-loop** systems retrofit oversight with approval prompts. When verification is costly and approval is cheap, humans rubber-stamp. The oversight is nominal; the behavior converges to autonomous.
 
----
+Both fail because they treat humans and machines as substitutable validators on the same questions. They are not. g8e splits the work: machine-domain checks (internal consistency, falsifiability, pattern-match safety, cross-conversation grounding) go to the AI layer; human-domain checks (intent fidelity in your environment, contextual stakes, real-world consequences) go to you. Both signatures are required for every state change.
 
-## Governance
-
-g8e is a governance architecture designed to solve the **consensus problem** in agentic AI. Rather than relying on fragile model alignment or manual control, g8e frames safety as an economic and information-theoretic challenge.
-
-The system aligns multi-agent behavior through a **Proof of Stake reputation economy** and the **Vortex Principle** (tiered information quarantine). Agents — including a planner, an ensemble tribunal, and a calibrated adversary (Nemesis) — do not just propose actions; they stake their reputation on them.
-
-Key structural safeguards include:
-- **The Vortex**: A strict information-theoretic boundary that eliminates collusion by ensuring agents cannot see each other's reasoning or downstream plans.
-- **Co-validation Partition**: A non-hierarchical division of labor where the **Auditor** handles machine-domain validation (consistency, grounding) and the **User** handles human-domain validation (intent fidelity, contextual stakes).
-- **FIDO2-Gated Execution**: Every state-changing action requires explicit human approval, enforced at the binary and network layer where prompt injection cannot reach.
-
-By forcing agents to stake reputation with real consequences, g8e incentivizes the safest, most effective solutions while minimizing the user's non-fungible stake: their time.
-
-Full mechanism design: [docs/architecture/governance.md](docs/architecture/governance.md)
+The full thesis: [position_paper.md](docs/architecture/position_paper.md).
 
 ---
 
-## The Lifecycle/Pipeline
-
-The progression of a request through the g8e system involves strict classification, reasoning, and pre-execution verification before reaching a human approver.
+## How a request flows
 
 ```mermaid
 flowchart TD
@@ -71,7 +59,7 @@ flowchart TD
     Context --> Sage[Sage<br>Senior Reasoner]
 
     subgraph Phase_2 [Phase 2: Reasoning]
-        Sage -- "Articulates Investigative Intent" --> Tribunal
+        Sage -- "Articulates Intent" --> Tribunal
     end
 
     subgraph Phase_3 [Phase 3: The Tribunal]
@@ -91,100 +79,26 @@ flowchart TD
     subgraph Phase_5 [Phase 5: Execution]
         Challenge --> Warden[Warden<br>Pre-Execution Risk Assessment]
         Warden --> Human{Human Approval}
-        Human -- "Approved" --> Operator[Operator<br>Executes Command via LFAA]
+        Human -- "Approved" --> Operator[Operator<br>Executes via LFAA]
         Operator -- "Results" --> Sage
     end
-    
+
     Human -- "Rejected" --> Sage
 ```
 
-**Phase 1: Triage & Classification**  
-Every message is read by **Triage**, which routes simple requests to **Dash** and complex requests to **Sage** (enriched with **Codex** and **Scribe** context).
+1. **Triage** classifies the request. Trivial questions go to **Dash** (fast-path responder). Anything that may state-change is enriched with operator context and routed to **Sage**.
+2. **Sage** writes an intent document — goals, constraints, success criteria — and hands it to the Tribunal.
+3. **The Tribunal** is five blind validators (Axiom, Concord, Variance, Pragma, Nemesis), each generating a candidate command independently with no visibility into the others. Two of five must converge for a winner. If not, an anonymized peer-review round runs.
+4. **The Auditor** reviews the winner with full memory access and may approve, swap, or revise. The Auditor is bonded 2–3× heavier than any Tribunal member and is itself peer-reviewed across conversations.
+5. **Warden** scans the approved command for risk — MITRE ATT&CK pattern matches, file/error blast radius, common destructive idioms.
+6. **You** review the command and the risk assessment, and sign with a passkey, or you don't.
+7. **The Operator** receives the signed command over the outbound WebSocket, runs it in an isolated process group, captures the result into the local audit vault, and snapshots state into a git-backed ledger.
 
-**Phase 2 & 3: Reasoning and The Tribunal**  
-**Sage** articulates intent, which **The Tribunal** (Axiom, Concord, Variance, Pragma, Nemesis) translates into candidate commands. A consensus vote selects the optimal command.
-
-**Phase 4 & 5: Judgment and Execution**  
-The **Auditor** verifies the winner, **Warden** assesses risks, and the **Operator** executes upon FIDO2 human approval.
-
----
-
-## The Operator
-
-The **Operator (g8eo)** is a ~4MB statically compiled Go binary that serves as the platform's terminal execution and persistence layer. It is the final link in the consensus chain.
-
-### Consensus-to-Execution Bridge
-When the consensus mechanism selects a winning command and you provide FIDO2 approval, the following happens:
-
-1.  **Outbound Command Fetch**: Receives the command via an outbound-only mTLS WebSocket.
-2.  **Sentinel Pre-Execution Analysis**: Blocks commands matching MITRE ATT&CK patterns.
-3.  **Atomic Execution**: Runs in an isolated process group with closed stdin.
-4.  **Local-First Audit**: Captures output into the **Raw Vault** (unfiltered) and **Scrubbed Vault** (AI-accessible).
-5.  **Cryptographic Ledgering**: Automatically creates snapshots in a local **Git Ledger**.
+The point of steps 1–5 is to minimize what reaches step 6. Your time is the only stake the system can't fake; everything upstream exists to spend it well.
 
 ---
 
-## Core Subsystems
-
-### The Tribunal
-The Tribunal translates natural language intent into executable commands using five parallel personas. Each casts a vote, and a two-vote consensus threshold gates the winner.
-
-| Persona | Archetype |
-|---|---|
-| **Axiom** | The Composer — statistical probability, resource efficiency |
-| **Concord** | The Guardian — harm minimization, ethical integrity |
-| **Variance** | The Exhaustive — edge case hunter, adversarial simulation |
-| **Pragma** | The Conventional — idiomatic, least-surprise correctness |
-| **Nemesis** | The Adversary — always present, always pushing against the other four |
-
-### Context & Post-Hoc Analysis
-- **Codex & Scribe**: Title cases and build persistent, scrubbed user preference models.
-- **Judge**: Evaluates AI performance against gold-standard rubrics for reputation signals.
-
-### Dynamic System Prompts
-g8e uses a modular system prompt architecture that dynamically assembles context on each turn. The prompt is built from 11 sections optimized for prefix-cache reuse:
-
-**Static sections (cached):**
-1. Safety — absolute forbidden operations
-2. Loyalty — mission-over-moment doctrine
-3. Dissent — warning protocol, denial memory, escalation
-4. Capabilities/Execution/Tools — mode-dependent
-5. Response constraints — SDK hard cutoff guidance
-6. Identity/Persona — per-agent
-
-**Dynamic per-turn sections:**
-7. System context — Operator details (hostname, OS, user, container info, granted_intents)
-8. Sentinel mode — Injected when investigation.sentinel_mode is True
-9. Triage context — Request posture and intent summary
-10. Investigation context — Case details, status, priority, bound operators
-11. Learned context — User preferences and past investigation memories
-
-The modular design places shared static sections first for llama.cpp/vLLM prefix-cache optimization, with dynamic per-turn context appended last.
-
-[View implementation](components/g8ee/app/llm/prompts.py#L496-L670)
-
-### Enriched Context
-The `EnrichedInvestigationContext` model extends the persisted `InvestigationModel` with transient runtime fields that are never written to the database. This enrichment provides AI agents with complete operational context during reasoning:
-
-- **operator_documents** — Bound OperatorDocument instances with heartbeat data
-- **memory** — Attached InvestigationMemory for AI context (user preferences, investigation summaries)
-- **bound_operators** — BoundOperator instances from G8eHttpContext
-- **operator_session_token** — Transient session token for authorization validation
-
-The enrichment pipeline assembles investigation data, operator details, user memories, and session context into a single model passed to AI agents. This enables agents to make decisions with full awareness of the operational environment, user preferences, and historical context.
-
-[View implementation](components/g8ee/app/models/investigations.py#L514-L549)
-
-### Architecture & Persistence
-g8e uses a **Local-First Audit Architecture (LFAA)** where the system of record lives on your hardware, not in the cloud.
-
-| Component | Responsibility |
-|---|---|
-| **g8es** | Go. SQLite document store, KV store, pub/sub broker, blob store. |
-| **g8ee** | Python. AI engine, Multi-provider abstraction, Tribunal pipeline. |
-| **g8ed** | Node.js. Terminal, FIDO2 auth, mTLS gateway, human approval UI. |
-| **g8el** | isolated intelligence via local LLM server (llama-server). |
-| **g8eo** | Go. The Operator. Executes commands and maintains the encrypted audit vault. |
+## Architecture
 
 ```mermaid
 flowchart LR
@@ -192,104 +106,121 @@ flowchart LR
 
     subgraph Exec_Plane [Execution Plane / Managed Host]
         direction TB
-        g8eo[g8eo<br>Standard Mode Operator<br>Go Binary]
-        
+        g8eo[g8eo<br>Operator<br>Go Binary]
+
         HostOS[Target System / Shell]
-        g8eo -- "Sentinel Pre-Execution<br>Threat Analysis" --> HostOS
+        g8eo -- "Sentinel<br>Pre-Execution Analysis" --> HostOS
 
         subgraph LFAA [Local-First Audit Architecture]
             direction LR
-            Scrubbed[(Scrubbed Vault<br>.g8e/local_state.db)]
-            Raw[(Raw Vault<br>.g8e/raw_vault.db)]
-            Audit[(Audit Vault<br>.g8e/data/g8e.db)]
-            Ledger[(Git Ledger<br>.g8e/data/ledger)]
+            Scrubbed[(Scrubbed Vault)]
+            Raw[(Raw Vault)]
+            Audit[(Audit Vault)]
+            Ledger[(Git Ledger)]
         end
-        
+
         g8eo --- Scrubbed & Raw & Audit & Ledger
     end
 
     subgraph Hub [Control & Persistence Plane / Self-Hosted Hub]
         direction TB
         g8ed[g8ed<br>Terminal & Gateway<br>Node.js]
-        g8ee[g8ee<br>AI Engine & Scrubber<br>Python / FastAPI]
-        
+        g8ee[g8ee<br>AI Engine & Scrubber<br>Python]
+
         subgraph Data_Layer [g8es Persistence Layer]
             direction LR
-            g8es[(g8es<br>Listen Mode Operator)]
-            DS[(Document Store<br>SQLite)]
+            g8es[(g8es<br>Listen Mode)]
+            DS[(Document Store)]
             KS[(KV Store & TTL)]
-            PS((PubSub Broker))
-            
+            PS((PubSub))
+
             g8es --- DS & KS & PS
         end
 
-        g8ed -- "Internal HTTP<br>(X-Internal-Auth)" --> g8ee
-        g8ed -- "Internal HTTP / WS" --> g8es
-        g8ee -- "Internal HTTP / WS" --> g8es
+        g8ed -- "Internal" --> g8ee
+        g8ed -- "Internal" --> g8es
+        g8ee -- "Internal" --> g8es
     end
 
-    LLM((External LLM<br>Model Providers))
+    LLM((External LLM<br>Providers))
 
-    %% Explicit Connections
-    Browser -- "HTTPS / TLS 1.3<br>Encrypted Cookie" --> g8ed
-    
-    g8eo -- "Outbound WebSocket<br>mTLS" --> g8ed
-    
-    g8ee -. "Sentinel-Scrubbed Metadata<br>(No Raw Data)" .-> LLM
+    Browser -- "TLS 1.3" --> g8ed
+    g8eo -- "Outbound mTLS WebSocket" --> g8ed
+    g8ee -. "Scrubbed metadata only" .-> LLM
 ```
 
-<p align="center">
-  <img src="shared/media/llm-provider-agnostic.png" alt="LLM provider agnostic architecture" width="600">
-</p>
+| Component | Stack | Role |
+|---|---|---|
+| **g8eo** | Go (~4MB static) | The Operator. Runs on every managed host. Executes commands. Owns the audit ledger. |
+| **g8ee** | Python / FastAPI | The Engine. Multi-provider LLM abstraction. Tribunal, Auditor, Warden. |
+| **g8ed** | Node.js | Terminal, FIDO2 auth, mTLS gateway, approval UI. |
+| **g8es** | Go | Document store, KV, pub/sub, blob store (SQLite-backed). |
+| **g8el** | llama-server | Optional local LLM for air-gapped deployments. |
+
+Browser to `g8ed` over TLS 1.3 with encrypted cookies. Operator to Hub via outbound-only mTLS WebSocket. No inbound ports on managed hosts. Every connection mutually authenticated; every state change requires a passkey signature.
 
 ---
 
-## Governance & Safety
+## The Tribunal
 
-### Cryptoeconomic Mechanism Design
+Five LLM personas generate candidate commands in parallel, blind to each other:
 
-g8e aligns multi-agent behavior through a Proof of Stake reputation economy. Agents do not just propose actions—they stake their reputation on them.
+| Persona | Lens | Pressure |
+|---|---|---|
+| **Axiom** | Composition | Clean multi-stage pipelines, resource efficiency |
+| **Concord** | Safety | Defensive flags, read-only discipline |
+| **Variance** | Edge cases | Locales, spaces, nulls, boundary conditions |
+| **Pragma** | Convention | Idiomatic, OS-specific, least-surprise |
+| **Nemesis** | Calibrated adversary | Proposes flawed-but-plausible commands to stress the Auditor |
 
-- **The Genesis Block** — A user's initial prompt generates the genesis block, anchored by a Merkle root.
-- **Proof of Stake Economy** — Dash, Sage, the Tribunal, and the Auditor all operate within a unified reputation market.
-- **Skin in the Game** — When an agent proposes a solution, they stake reputation proportional to their confidence. 
-- **Verifiable Resolution** — When you approve a command execution, the Auditor awards reputation to the agents whose proposals succeeded.
-- **Immutable Ledger** — The Auditor cryptographically signs each turn, appending it as a new block in the conversation's immutable ledger.
-- **Cross-Chain Reputation** — The Auditor maintains visibility across all conversations ("cross-chain"), ensuring an agent's reputation persists and compounds across different investigations.
+A winner requires ≥2 of 5 supporting votes. If consensus is weak, anonymized peer review runs and members may converge or hold.
 
-By forcing agents to stake reputation with real consequences, their personas are economically incentivized to propose the safest, most effective solutions for an environment that voters are sworn to protect.
+**The Vortex Principle** is the load-bearing safety property: each agent operates in a sealed information environment, believing it is playing a smaller game than it actually is. Triage doesn't know Sage exists. Sage doesn't know the Tribunal exists. The Tribunal doesn't know one of its members is Nemesis or that the Auditor has cross-conversation memory. Only the Auditor has full visibility, and the Auditor is bonded most heavily and peer-reviewed.
 
-### Eight Directives
+The quarantine eliminates collusion strategies that would otherwise be profitable. Collapse any layer and a deviation strategy opens up. It is not a UX choice; it is the safety mechanism.
 
-The architectural bedrock of g8e. [Detailed definitions & philosophy](docs/architecture/about.md#core-principles).
+Reputation staking, slashing tiers, and the full mechanism design: [governance.md](docs/architecture/governance.md).
 
+---
+
+## The Operator
+
+A statically compiled Go binary, ~4MB, no dependencies. One command installs it on a host:
+
+```bash
+curl -fsSL http://<hub>/g8e | sh -s -- <device-link-token>
 ```
-  I.  AUTHORITY     Every write gated by FIDO2. No exceptions.
- II.  TRUST         Zero standing credentials. Per-action scope.
-III.  STRUCTURE     Enforced at binary and network layer.
- IV.  SOVEREIGNTY   Data stays on your hardware. Host as system of record.
-  V.  PRESENCE      4MB static binary. Outbound-only. No inbound ports.
- VI.  AUDIT         Encrypted SQLite vaults + git-backed file ledger.
-VII.  ISOLATION     Self-hosted. No SaaS, no telemetry, no phone-home.
-VIII. AGNOSTIC      Swap models or providers at will. Governance persists.
-```
 
-### Security at a Glance
+It pulls the platform CA, fetches the binary, registers itself with the Hub via system fingerprint, runs as the Operator, and self-deletes when the session ends. No root, no package manager, no inbound ports.
 
-- **Authentication** — FIDO2 / WebAuthn passkeys only. Passwords are unsupported by design.
-- **Transport** — TLS 1.3 throughout. Platform-generated ECDSA P-384 CA. Per-operator mTLS client certs issued at claim time.
-- **Sentinel & Warden** — Pre-execution defensive analysis. Warden classifies command/error/file risks. 46 MITRE ATT&CK-mapped threat detectors. 28 scrubbing patterns applied twice (egress on the host, ingress on the engine) before any data reaches a model provider.
+What happens on every state change:
+
+1. **Receives** the signed command via outbound mTLS WebSocket.
+2. **Pre-screens** with the Sentinel — 46 MITRE ATT&CK detectors, 28 scrubbing patterns applied twice (egress on host, ingress on engine).
+3. **Executes** in an isolated process group with closed stdin.
+4. **Captures** output into a Raw Vault (encrypted, host-only) and a Scrubbed Vault (AI-accessible).
+5. **Snapshots** the audit state into a local git-backed ledger.
+
+System fingerprint binding ties the Operator's mTLS cert to the host it was issued on. A stolen API key is useless from a different machine.
+
+---
+
+## Security
+
+- **Auth** — FIDO2 / WebAuthn passkeys only. Passwords are unsupported by design.
+- **Transport** — TLS 1.3. Platform-generated ECDSA P-384 CA. Per-Operator mTLS client certs issued at claim time.
+- **Sentinel & Warden** — Pre-execution defensive analysis: command/error/file risk classifiers, MITRE-mapped detectors, double-pass scrubbing before any data reaches a model provider.
 - **Sessions** — Encrypted cookies, idle and absolute timeouts, IP tracking, timestamp + nonce replay protection.
-- **Operator Binding** — System fingerprint locked at first auth. A stolen API key is useless from a different machine.
-- **Compliance Alignment** — NSA Zero Trust Guidelines (exceeds requirements in 6 of 7 pillars), HIPAA-ready architecture, FedRAMP-aligned controls.
+- **Sovereignty** — Raw command output never leaves the host. Only Sentinel-scrubbed metadata reaches model providers. Engine outage does not erase history.
+- **Compliance alignment** — NSA Zero Trust (exceeds requirements in 6 of 7 pillars), HIPAA-ready, FedRAMP-aligned controls.
 
-Full threat model and control catalogue: [docs/architecture/security.md](docs/architecture/security.md).
+Threat model and full control catalogue: [security.md](docs/architecture/security.md).
 
 ---
 
 ## Quick Start
 
-**Prerequisites:** Docker 24+ and Docker Compose v2.
+Prerequisites: Docker 24+, Docker Compose v2.
 
 ```bash
 git clone https://github.com/g8e-ai/g8e.git && cd g8e
@@ -306,20 +237,13 @@ curl -fsSL http://<host>/trust | sudo sh
 irm http://<host>/trust | iex
 ```
 
-Open `https://<host>` and register your FIDO2 passkey.
-
-Deploy an Operator to a remote host:
+Open `https://<host>`, register a passkey, generate a device-link token, then on any host you want to manage:
 
 ```bash
-# Generate a device link in the terminal, then on the target host:
 curl -fsSL http://<host>/g8e | sh -s -- <device-link-token>
 ```
 
-One command. It pulls the CA, fetches the binary, starts the Operator. No root, no package manager, no dependencies. The binary self-deletes when the session ends.
-
----
-
-## CLI
+### CLI
 
 ```bash
 ./g8e platform build       # First-time build and start
@@ -335,20 +259,18 @@ One command. It pulls the CA, fetches the binary, starts the Operator. No root, 
 
 ## Status
 
-**Alpha.** A research project with a paranoia-first security posture. No external audit yet. Read the [security architecture](docs/architecture/security.md) and judge the threat model for yourself before any production use.
+**Alpha.** No external audit yet. Read the [security architecture](docs/architecture/security.md) and judge the threat model for yourself before any production use.
 
-A significant portion of this codebase was written with AI assistance. If you have been around long enough to know what that means, you already know there are bugs, hallucinated branches, and abstractions a human would have written differently. We built a platform to govern AI agents because we lived the danger of unconstrained ones — while building this platform with those same agents.
+A significant portion of this codebase was written with AI assistance. If you have been around long enough to know what that means, you already know there are bugs, hallucinated branches, and abstractions a human would have written differently. The platform was built to govern AI agents because the author lived the danger of unconstrained ones — while building this platform with those same agents.
 
 ---
 
 ## Contributing
 
-The architecture is designed to support capabilities that do not exist yet. A good PR that improves any part of the platform gets merged.
-
-What we value:
+The architecture is designed to support capabilities that don't exist yet. A good PR that improves any part of the platform gets merged.
 
 - Bug fixes and real-world edge cases
-- Security hardening and threat model improvements
+- Security hardening and threat-model improvements
 - New Operator capabilities and tool implementations
 - LLM provider integrations and model-specific optimizations
 - Documentation, testing, and developer experience
@@ -356,7 +278,7 @@ What we value:
 
 If you see something broken, fix it. If you see something missing, build it. If you have an idea nobody has built yet, open an issue.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for environment setup.
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
@@ -364,10 +286,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for environment setup.
 
 | Document | Description |
 |---|---|
-| [Architecture Overview](docs/architecture/about.md) | Origins, governance philosophy, core principles |
-| [Security Architecture](docs/architecture/security.md) | Authentication, Sentinel, LFAA, threat model |
+| [Position Paper](docs/architecture/position_paper.md) | The thesis: AI-Powered, Human-Driven Infrastructure |
+| [Architecture](docs/architecture/about.md) | Origins, governance philosophy, core principles |
+| [Security](docs/architecture/security.md) | Authentication, Sentinel, LFAA, threat model |
 | [AI Control Plane](docs/architecture/ai_control_plane.md) | ReAct loop, Tribunal, prompts, tools, providers |
-| [Operator Binary](docs/architecture/operator.md) | Lifecycle, modes, deployment, on-host storage |
+| [Operator](docs/architecture/operator.md) | Lifecycle, modes, deployment, on-host storage |
 | [Developer Guide](docs/developer.md) | Setup, code quality rules, project structure |
 | [Testing Guide](docs/testing.md) | Test infrastructure, component guidelines, CI |
 | [Glossary](docs/glossary.md) | Platform terminology |
@@ -382,6 +305,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for environment setup.
 
 <div align="center">
 
-*g8e is developed by [Lateralus Labs, LLC](https://lateraluslabs.com), a Certified Veteran Owned Small Business (VOSB).*
+*g8e is built by [Lateralus Labs, LLC](https://lateraluslabs.com), a Certified Veteran-Owned Small Business.*
 
 </div>

@@ -1,5 +1,8 @@
 <!-- Operator Binary Downloads -->
 <div class="operator-binary-downloads" id="operator-binary-downloads">
+    <div class="operator-download-title-section">
+        <span class="operator-download-title">Direct Operator Binary Download</span>
+    </div>
     <div class="operator-download-links-row">
         <a class="operator-download-link" data-os="linux" data-arch="amd64" href="#">Linux x64</a>
         <a class="operator-download-link" data-os="linux" data-arch="arm64" href="#">Linux ARM64</a>
@@ -7,21 +10,6 @@
     </div>
     <div class="operator-download-separator"></div>
     <div class="operator-deploy-section">
-        <div class="operator-deploy-row">
-            <span class="operator-deploy-label">API Key</span>
-            <div class="operator-deploy-api-key-row">
-                <div class="operator-deploy-api-key-value obfuscated" id="deploy-api-key-value"></div>
-                <button class="operator-deploy-icon-btn" id="deploy-api-key-toggle" type="button" title="Show/Hide">
-                    <span class="material-symbols-outlined">visibility</span>
-                </button>
-                <button class="operator-deploy-icon-btn" id="deploy-api-key-copy" type="button" title="Copy">
-                    <span class="material-symbols-outlined">content_copy</span>
-                </button>
-                <button class="operator-deploy-icon-btn" id="deploy-api-key-refresh" type="button" title="Refresh API Key">
-                    <span class="material-symbols-outlined">refresh</span>
-                </button>
-            </div>
-        </div>
         <div class="operator-deploy-row">
             <span class="operator-deploy-label">Device Link</span>
             <div class="operator-device-link-generate-row">
@@ -53,18 +41,11 @@
                     <button class="operator-deploy-icon-btn" id="device-link-token-toggle" type="button" title="Show/Hide">
                         <span class="material-symbols-outlined">visibility</span>
                     </button>
-                    <button class="operator-deploy-icon-btn" id="device-link-copy-token" type="button" title="Copy">
+                    <button class="operator-deploy-icon-btn" id="device-link-copy-token" type="button" title="Copy Token">
                         <span class="material-symbols-outlined">content_copy</span>
                     </button>
-                </div>
-                <span class="operator-deploy-sublabel">Curl Command</span>
-                <div class="operator-deploy-cmd-row">
-                    <div class="operator-deploy-cmd obfuscated" id="device-link-curl-cmd"></div>
-                    <button class="operator-deploy-icon-btn" id="device-link-curl-toggle" type="button" title="Show/Hide">
-                        <span class="material-symbols-outlined">visibility</span>
-                    </button>
-                    <button class="operator-deploy-icon-btn" id="device-link-copy-curl" type="button" title="Copy">
-                        <span class="material-symbols-outlined">content_copy</span>
+                    <button class="operator-deploy-icon-btn" id="device-link-copy-curl" type="button" title="Copy Curl">
+                        <span class="material-symbols-outlined">terminal</span>
                     </button>
                 </div>
             </div>

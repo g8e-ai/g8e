@@ -7,9 +7,23 @@
 .opdeploy {
     display: flex;
     flex-direction: column;
-    gap: 20px;
-    padding: 16px 24px;
-    max-width: 560px;
+    max-width: 800px;
+}
+
+.opdeploy__step-desc pre {
+    background: rgba(var(--text-tertiary-rgb), 0.1);
+    padding: 10px 14px;
+    border-radius: 6px;
+    margin: 8px 0;
+    overflow-x: auto;
+    border: 1px solid rgba(var(--text-tertiary-rgb), 0.15);
+}
+
+.opdeploy__step-desc pre code {
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 12px;
+    color: var(--accent-cyan);
+    white-space: pre;
 }
 
 .opdeploy__header {
@@ -28,6 +42,7 @@
     font-weight: 600;
     color: var(--text-bright);
     letter-spacing: 0.01em;
+    margin-bottom: 0.5rem;
 }
 
 .opdeploy__steps {
@@ -309,6 +324,43 @@
     color: var(--text-secondary);
     font-style: italic;
     margin-top: 4px;
+}
+
+.opdeploy__tutorial-section {
+    display: flex;
+    justify-content: flex-start;
+    padding-top: 12px;
+    border-top: 1px solid rgba(var(--text-tertiary-rgb), 0.08);
+    margin-bottom: 1rem;
+}
+
+.opdeploy__tutorial-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: rgba(var(--accent-cyan-rgb), 0.1);
+    border: 1px solid rgba(var(--accent-cyan-rgb), 0.3);
+    border-radius: 8px;
+    color: var(--accent-cyan);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.opdeploy__tutorial-btn:hover {
+    background: rgba(var(--accent-cyan-rgb), 0.2);
+    border-color: rgba(var(--accent-cyan-rgb), 0.5);
+    transform: translateY(-1px);
+}
+
+.opdeploy__tutorial-btn:active {
+    transform: translateY(0);
+}
+
+.opdeploy__tutorial-btn .material-symbols-outlined {
+    font-size: 20px;
 }
 
 [data-theme="light"] .opdeploy__step {

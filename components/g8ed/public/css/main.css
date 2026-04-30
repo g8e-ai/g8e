@@ -216,6 +216,66 @@
 
 }
 
+/* Driver.js Custom Theme */
+.driver-popover.g8e-tutorial-popover {
+    background-color: var(--bg-secondary) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
+    max-width: 350px !important;
+}
+
+.driver-popover.g8e-tutorial-popover .driver-popover-arrow {
+    border-color: var(--bg-secondary) !important;
+}
+
+.driver-popover.g8e-tutorial-popover .driver-popover-title {
+    font-family: 'Inter', system-ui, sans-serif !important;
+    margin-bottom: 8px !important;
+}
+
+.driver-popover.g8e-tutorial-popover .driver-popover-description {
+    font-family: 'Inter', system-ui, sans-serif !important;
+    line-height: 1.5 !important;
+}
+
+.driver-popover.g8e-tutorial-popover .driver-popover-footer {
+    margin-top: 16px !important;
+}
+
+.driver-popover.g8e-tutorial-popover .driver-popover-btn {
+    background-color: var(--bg-tertiary) !important;
+    border: 1px solid var(--border-color) !important;
+    color: var(--text-primary) !important;
+    text-shadow: none !important;
+    border-radius: 4px !important;
+    font-size: 12px !important;
+    padding: 6px 12px !important;
+    transition: all 0.2s ease !important;
+}
+
+.driver-popover.g8e-tutorial-popover .driver-popover-btn:hover {
+    background-color: var(--bg-hover) !important;
+    border-color: var(--accent-blue-solid) !important;
+    color: var(--text-bright) !important;
+}
+
+.driver-popover.g8e-tutorial-popover .driver-popover-next-btn {
+    background-color: var(--accent-blue-solid) !important;
+    border-color: var(--accent-blue-dark) !important;
+    color: white !important;
+}
+
+.driver-popover.g8e-tutorial-popover .driver-popover-next-btn:hover {
+    background-color: var(--accent-blue-dark) !important;
+}
+
+.driver-popover.g8e-tutorial-popover .driver-popover-progress-text {
+    color: var(--text-tertiary) !important;
+    font-size: 11px !important;
+}
+
+
 /* Light Theme */
 [data-theme="light"] {
     /* Accent Colors - Light Mode (darker, less bright) */

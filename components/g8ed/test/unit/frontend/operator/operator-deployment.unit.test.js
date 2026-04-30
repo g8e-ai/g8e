@@ -17,8 +17,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 let OperatorDeployment;
 let templateLoader;
+let tutorialManager;
 
 const TEST_TEMPLATE = `<div class="opdeploy">
+    <div class="opdeploy__tutorial-section">
+        <button id="start-tutorial-btn">Start Tutorial</button>
+    </div>
     <div class="opdeploy__header">
         <span class="opdeploy__header-text">Getting Started</span>
     </div>
@@ -26,21 +30,40 @@ const TEST_TEMPLATE = `<div class="opdeploy">
         <div class="opdeploy__step">
             <div class="opdeploy__step-number">
                 <span class="opdeploy__step-badge">1</span>
+                <span class="material-symbols-outlined opdeploy__step-arrow" data-direction="down">arrow_downward</span>
             </div>
             <div class="opdeploy__step-content">
-                <div class="opdeploy__step-title">Download the Operator</div>
-                <div class="opdeploy__step-desc">Run the deployment script on your target host to download and launch the operator binary.</div>
-                <div class="opdeploy__step-note"><code>curl -fsSL http://&lt;host&gt;/g8e | sh -s -- &lt;token&gt;</code></div>
+                <div class="opdeploy__step-title">Operator Download & Authentication</div>
+                <div class="opdeploy__step-desc">
+                    Authenticate and deploy the operator binary to your target host using one of the following methods:
+                    <ul class="opdeploy__methods">
+                        <li><strong>Manual:</strong> Download the binary to your desktop, copy it to the remote system, and run it using its unique API key:
+                            <pre><code>./g8e.operator -k &lt;api_key&gt;</code></pre>
+                        </li>
+                        <li><strong>Device Link:</strong> Generate a short-lived token to authenticate. Once generated, you can:
+                            <ul>
+                                <li>Click the <span class="material-symbols-outlined opdeploy__step-inline-icon">terminal</span> icon to copy and run the <strong>one-line deployment script</strong> via curl/wget.
+                                    <pre><code>curl -fsSL http://g8e.local/g8e | sh -s -- &lt;device link token&gt;</code></pre>
+                                </li>
+                                <li>Or, manually run: <pre><code>./g8e.operator -D &lt;token&gt;</code></pre></li>
+                            </ul>
+                        </li>
+                        <li><strong>Fleet:</strong> Use the <code>g8e</code> script for fleet-scale injection:
+                            <pre><code>./g8e operator stream --hosts hosts.txt --device-token &lt;token&gt;</code></pre>
+                        </li>
+                    </ul>
+                </div>
             </div>
         </div>
         <div class="opdeploy__step">
             <div class="opdeploy__step-number">
                 <span class="opdeploy__step-badge">2</span>
+                <span class="material-symbols-outlined opdeploy__step-arrow" data-direction="left">arrow_back</span>
             </div>
             <div class="opdeploy__step-content">
-                <div class="opdeploy__step-title">Manually Bind to Web Session</div>
-                <div class="opdeploy__step-desc">Explicitly bind the operator to your web session in the terminal.</div>
-                <div class="opdeploy__step-note">g8ep is ready.</div>
+                <div class="opdeploy__step-title">Bind to Web Session</div>
+                <div class="opdeploy__step-desc">Manually <strong>bind</strong> Active operators to your session to enable co-validation. The AI has no standing authority; it can only propose actions on bound operators, which <strong>require your explicit approval</strong> to execute.</div>
+                <div class="opdeploy__step-note">g8ep is ready. Click the <span class="material-symbols-outlined opdeploy__step-inline-icon">link</span> icon to begin.</div>
             </div>
         </div>
     </div>
@@ -60,11 +83,20 @@ beforeEach(async () => {
         },
     }));
 
+    vi.doMock('@g8ed/public/js/utils/tutorial-manager.js', () => ({
+        tutorialManager: {
+            start: vi.fn(),
+        },
+    }));
+
     const mod = await import('@g8ed/public/js/components/operator-deployment.js');
     OperatorDeployment = mod.OperatorDeployment;
 
     const tlMod = await import('@g8ed/public/js/utils/template-loader.js');
     templateLoader = tlMod.templateLoader;
+
+    const tutMod = await import('@g8ed/public/js/utils/tutorial-manager.js');
+    tutorialManager = tutMod.tutorialManager;
 });
 
 afterEach(() => {
@@ -132,20 +164,16 @@ describe('OperatorDeployment [UNIT - jsdom]', () => {
             expect(deployment._container).toBe(container);
         });
 
-        it('replaces <host> placeholder with actual hostname', async () => {
+        it('binds start tutorial button to tutorialManager.start', async () => {
             const container = buildMockContainer();
-            Object.defineProperty(window, 'location', {
-                value: { hostname: 'g8e.local' },
-                writable: true,
-            });
-
             const deployment = new OperatorDeployment();
             await deployment.mount(container);
 
-            const codeElement = container.querySelector('code');
-            expect(codeElement).not.toBeNull();
-            expect(codeElement.textContent).toContain('curl -fsSL http://g8e.local/g8e');
-            expect(codeElement.textContent).not.toContain('&lt;host&gt;');
+            const tutorialBtn = container.querySelector('#start-tutorial-btn');
+            expect(tutorialBtn).not.toBeNull();
+
+            tutorialBtn.click();
+            expect(tutorialManager.start).toHaveBeenCalled();
         });
     });
 

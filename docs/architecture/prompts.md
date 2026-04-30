@@ -3,117 +3,99 @@ title: Prompts
 parent: Architecture
 ---
 
-# Prompts
+# Prompt System
 
-g8ee's prompt system is a hybrid of static file-based fragments (`components/g8ee/app/prompts_data/`) and canonical persona definitions (`shared/constants/agents.json`). This modular architecture is designed for prefix-cache reuse in reasoning models and strict structural enforcement through XML-like scaffolding.
+The g8e prompt system is a hybrid architecture designed for **prefix-cache reuse** and **strict structural enforcement**. It composes a final system prompt from modular fragments, canonical persona definitions, and dynamic turn-specific context.
 
----
-
-## Prompt Categories
-
-Three categories of content are composed into the final prompts:
-
-- **System-prompt fragments** — Static doctrinal files (safety, loyalty, dissent, capabilities, execution, tools, response constraints). These are the shared "base layers" of the system.
-- **Agent Personas** — Structured identity, role, and purpose definitions from `agents.json`. Every agent (Sage, Dash, Triage, etc.) has a unique persona block.
-- **Tool Descriptions** — Individual files under `prompts_data/tools/` that populate the `description` field of `ToolDeclaration` schemas.
-- **Ensemble Prompts** — Single-purpose templates for the Tribunal (generation, auditing) and Warden (risk analysis), often containing complex `{placeholders}` for turn-specific context.
+The system is optimized for high-reasoning models (like those in llama.cpp or vLLM) by placing static, unchanging content at the beginning of the prompt to maximize KV-cache hits across multiple agent turns.
 
 ---
 
-## File Layout
+## The Assembly Pipeline
 
-### 1. Static Fragments (`components/g8ee/app/prompts_data/`)
-```
-components/g8ee/app/prompts_data/
-├── loader.py                         # load_prompt, load_mode_prompts, list_prompts
-├── core/                             # Always loaded (Safety, Loyalty, Dissent)
-├── system/                           # Global constraints (Response length, Sentinel mode)
-├── modes/                            # Context-dependent behavior (Bound vs. Not Bound)
-├── tools/                            # One file per registered tool
-└── tribunal/                         # Special-purpose templates for ensemble members
-    ├── generator.txt                 # Round 1 generation
-    ├── generator_round_2.txt         # Round 2 peer-review base
-    ├── auditor.txt                   # Auditor verification
-    └── round_2/                      # Persona-specific Round 2 overrides
-        └── {axiom, concord, ...}.txt
-```
+The modular system prompt is built by `build_modular_system_prompt` in `components/g8ee/app/llm/prompts.py`. Sections are concatenated in a fixed order based on their stability.
 
-### 2. Canonical Personas (`shared/constants/agents.json`)
-This file is the single source of truth for agent identities across all components.
-- **`agent.metadata`**: Maps agent IDs (e.g., `sage`, `dash`, `triage`) to their `identity`, `purpose`, and `autonomy` blocks.
-- **Terminology Mapping**: Per the Tribunal GDD (§14.1), the code uses specific mappings to resolve naming collisions:
-  - **GDD Dash** (Interrogator) -> `triage` agent.
-  - **GDD Sage** (Investigator) -> `primary` model tier (using `sage` persona).
-  - **Code Dash** -> `assistant` model tier (using `dash` persona), the fast-path responder.
+| # | Section | Content Source | Stability | Rationale |
+|---|---------|----------------|-----------|-----------|
+| 1 | **Safety** | `core/safety.txt` | Global Static | Absolute behavioral guardrails. |
+| 2 | **Loyalty** | `core/loyalty.txt` | Global Static | Mission-over-moment doctrine. |
+| 3 | **Dissent** | `core/dissent.txt` | Global Static | Protocol for warnings and denials. |
+| 4 | **Capabilities** | `modes/{mode}/capabilities.txt` | Per-Mode Static | What the agent can do in this mode. |
+| 5 | **Execution** | `modes/{mode}/execution.txt` | Per-Mode Static | How the agent should execute tasks. |
+| 6 | **Tools** | `modes/{mode}/tools.txt` | Per-Mode Static | High-level tool usage guidance. |
+| 7 | **Response Constraints** | `system/response_constraints.txt` | Global Static | Guidance on response length and style. |
+| 8 | **Agent Persona** | `agents.json` via `AgentPersona` | Per-Agent Static | Identity, role, purpose, and autonomy. |
+| 9 | **System Context** | `OperatorContext` | Dynamic | Current system state (OS, hostname, etc.). |
+| 10 | **Sentinel Mode** | `system/sentinel_mode.txt` | Per-Case Dynamic | Injected only when Sentinel mode is active. |
+| 11 | **Triage Context** | `TriageResult` | Per-Turn Dynamic | The classification and posture of the request. |
+| 12 | **Investigation Context** | `EnrichedInvestigationContext` | Per-Turn Dynamic | Case details and bound operator list. |
+| 13 | **Learned Context** | `InvestigationMemory` | Per-User/Case Dynamic | Durable preferences and past findings. |
 
 ---
 
-## Loader
+## Core Components
 
-`components/g8ee/app/prompts_data/loader.py` provides:
-- `load_prompt(PromptFile) -> str`: Reads a file from `prompts_data/`. Cached via `@lru_cache`.
-- `load_mode_prompts(...) -> dict[str, str]`: Resolves the active `AgentMode` and loads the associated `capabilities`, `execution`, and `tools` files.
+### 1. Static Fragments (`prompts_data/`)
+Located in `components/g8ee/app/prompts_data/`, these `.txt` files provide the doctrinal foundation.
+- **`core/`**: Safety, Loyalty, and Dissent fragments shared by all agents.
+- **`modes/`**: Context-dependent files based on whether an operator is `bound`, `not_bound`, or a `cloud_operator`.
+- **`system/`**: Global constraints and special modes (Sentinel).
+- **`tools/`**: Individual descriptions that populate `ToolDeclaration` schemas.
 
-**No Interpolation**: The loader returns raw text. Composition (interpolation of `{request}`, etc.) is performed by the calling service (e.g., `llm/prompts.py`) using standard Python `str.format`.
+### 2. Canonical Personas (`agents.json`)
+`shared/constants/agents.json` is the single source of truth for all AI identities.
+- **Identity Mapping**: Per the Tribunal GDD (§14.1), names are mapped to avoid collisions:
+  - **GDD Dash** (Interrogator) maps to the `triage` agent.
+  - **Code Dash** is the fast-path responder (`assistant` tier).
+  - **Sage** is the senior reasoning investigator (`primary` tier).
 
----
-
-## Assembly Pipeline (The Modular System Prompt)
-
-`build_modular_system_prompt` in `components/g8ee/app/llm/prompts.py` is the entry point for all agentic turns. It concatenates sections in a **fixed order optimized for llama.cpp prefix-cache reuse**. Static, unchanging blocks appear first; dynamic, per-turn data appears last.
-
-| # | Section | Content Source | Priority |
-|---|---------|----------------|----------|
-| 1 | **Safety** | `core/safety.txt` | Static (Shared) |
-| 2 | **Loyalty** | `core/loyalty.txt` | Static (Shared) |
-| 3 | **Dissent** | `core/dissent.txt` | Static (Shared) |
-| 4 | **Capabilities** | `modes/{mode}/capabilities.txt` | Static (Per Mode) |
-| 5 | **Execution** | `modes/{mode}/execution.txt` | Static (Per Mode) |
-| 6 | **Tools** | `modes/{mode}/tools.txt` | Static (Per Mode) |
-| 7 | **Response Constraints** | `system/response_constraints.txt` | Static (Shared) |
-| 8 | **Agent Persona** | `agents.json` (wrapped in tags) | Static (Per Agent) |
-| 9 | **System Context** | `OperatorContext` metadata | Dynamic (Per Turn) |
-| 10 | **Sentinel Mode** | `system/sentinel_mode.txt` | Dynamic (Per Case) |
-| 11 | **Triage Context** | `TriageResult` (request_posture) | Dynamic (Per Turn) |
-| 12 | **Investigation Context** | `EnrichedInvestigationContext` | Dynamic (Per Turn) |
-| 13 | **Learned Context** | User/Case Memories | Dynamic (Per User) |
+### 3. The Tribunal Ensemble
+The Tribunal uses a different prompt strategy located in `prompts_data/tribunal/`.
+- **Generator**: Round 1 and Round 2 templates for member candidates.
+- **Persona-specific R2**: `axiom`, `concord`, `variance`, `pragma`, and `nemesis` have unique Round 2 overrides to sharpen their specific lens during peer review.
+- **Auditor**: A high-reasoning prompt that evaluates candidate clusters against the original intent.
 
 ---
 
-## Authoring Conventions
+## Authoring Principles
 
-Every prompt file must adhere to these conventions. Reviews reject violations.
+All prompt content must adhere to these invariants to maintain system reliability.
 
-### 1. Positive, Authorizing Language
-Tell the model what it **is authorized** to do. Positive framing improves reliability and aligns with the platform's governance posture.
-- **Do**: `Authoritative tool for X.`, `The authorized path is to Y.`
-- **Avoid**: `Do not X.`, `Never need to Z.` (Unless in a `<never>` block).
-
-### 2. XML Scaffolding
-Prompt sections use XML-like tags to enforce structural boundaries. `AgentPersona.format_xml_tag` enforces a canonical "scaffolding" pattern:
+### 1. XML Scaffolding
+All sections must be wrapped in XML-like tags to enforce structural boundaries. The `AgentPersona.format_xml_tag` utility in `components/g8ee/app/utils/agent_persona_loader.py` enforces this pattern:
 - Opening tag on its own line.
 - Content on its own line.
 - Closing tag on its own line.
 
-Conventional tags:
-- `<identity>`, `<role>`, `<purpose>`, `<autonomy>`: Persona structure.
-- `<never>`: Consolidated prohibitions (always at the end of the file).
-- `<system_context>`, `<investigation_context>`, `<learned_context>`: Dynamic sections.
+### 2. Positive Framing
+Prompts should authorize behavior rather than just prohibiting it.
+- **Authorized**: "You are authorized to use X for Y."
+- **Positive**: "The standard path for Z is to use the A tool."
 
 ### 3. The `<never>` Block
-Hard prohibitions (statements of the form "Never X") live in a dedicated `<never>` block at the end of a file. This isolates absolute rules from descriptive prose, making them easier for the model to attend to and for humans to audit.
+Hard prohibitions are consolidated into `<never>` or `<constraints>` blocks at the end of a fragment. This ensures they are not diluted by descriptive prose and are easily weighted by the model.
 
 ### 4. Signal Discipline
-- **Tense**: Present tense, active voice.
-- **Formatting**: Backticks for tool names, parameter names, file paths, shell commands.
-- **No Emojis**: Emojis are strictly forbidden in prompt files.
-- **Time/Date**: Reference the current year (2026) and knowledge cutoff (Jan 2025) if timing is critical.
+- **Voice**: Present tense, active voice, technical and direct.
+- **Formatting**: Use backticks for symbols (tools, variables, paths).
+- **No Emojis**: Strictly forbidden in all prompt files.
+- **Truth over Coherence**: Direct the model to value evidence (command output) over plausible-sounding fabrication.
 
 ---
 
-## Adding a New Agent or Prompt
+## Operational Guide
 
-1. **For a new Agent**: Add a entry to `shared/constants/agents.json`. Use `id`, `role`, `identity`, `purpose`, and `autonomy`.
-2. **For a new Fragment**: Add the `.txt` file to `prompts_data/` and register it in `PromptFile` (`constants/prompts.py`).
-3. **For a new Section**: Register a `PromptSection` member and wire it into `build_modular_system_prompt`.
-4. **Verification**: Update unit tests in `components/g8ee/tests/unit/llm/` to assert on section order and content.
+### Adding a New Agent
+1. Define the metadata in `shared/constants/agents.json`.
+2. Add the agent ID to the `ReasoningAgent` enum in `components/g8ee/app/constants/`.
+
+### Adding a Prompt Fragment
+1. Create the `.txt` file in the appropriate `prompts_data/` subdirectory.
+2. Register the file in the `PromptFile` enum in `components/g8ee/app/constants/prompts.py`.
+3. If it's a new section, add it to `PromptSection` and update `build_modular_system_prompt`.
+
+### Verification
+Changes to prompts should be verified by running the alignment tests:
+```bash
+/home/bob/g8e/g8e test g8ee -- tests/unit/llm/test_prompts.py
+```

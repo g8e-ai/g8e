@@ -36,8 +36,8 @@ The platform is a stateless relay. Raw command output and file contents stay on 
 1.  **Browser:** The user interface for interacting with the platform.
 2.  **g8ed (Node.js/Express):** Web frontend and Gateway Protocol. Handles user authentication, session management, and routes requests to g8ee.
 3.  **g8ee (Python/FastAPI):** The AI Engine. Manages chat pipelines, AI reasoning, tool orchestration, and coordinates with g8es for persistence.
-4.  **g8eo (Go):** The Operator reference implementation. Executes commands on target systems, enforces LFAA, and reports results via pub/sub. Any client following the g8e events protocol can act as an Operator.
-5.  **g8es (Go/SQLite):** A standalone Go service providing persistence (SQLite document store), KV cache, and pub/sub messaging. The g8eo binary can run in multiple modes: standard operator mode (executes commands on target systems), listen mode (acts as the platform's central persistence and pub/sub broker), or OpenClaw node host mode (connects to an OpenClaw Gateway).
+4.  **g8eo (Go):** The Operator reference implementation. Executes commands on target systems, enforces LFAA, and reports results via pub/sub. The `g8eo` binary is versatile: it acts as the Standard Operator on target systems, but also serves as the platform's central persistence and pub/sub broker (running in `--listen` mode as `g8es`). Any client following the g8e events protocol can act as an Operator.
+5.  **g8es (Go/SQLite):** A standalone Go service (provided by the `g8eo` binary in `--listen` mode) providing persistence (SQLite document store), KV cache, and pub/sub messaging.
 6.  **g8el (llama.cpp):** Optional local LLM inference server. Provides OpenAI-compatible API for running quantized models (e.g., Gemma 4 E2B) using the llama.cpp library. Integrates with g8ee as the LLAMACPP provider.
 
 ### Communication Flow
@@ -99,7 +99,7 @@ Platform Domain
 ├── AttachmentService ──────────> CacheAsideService, G8esBlobClient
 ├── CertificateService ─────────> BootstrapService, InternalHttpClient
 ├── ConsoleMetricsService ──────> CacheAsideService, InternalHttpClient
-├── G8ENodeOperatorService ─────> SettingsService, OperatorService
+├── G8ENodeOperatorService ─────> SettingsService, OperatorService, InternalHttpClient
 ├── HealthCheckService ─────────> CacheAsideService, WebSessionService
 ├── InvestigationService ───────> CacheAsideService
 ├── SetupService ───────────────> UserService, SettingsService
@@ -124,12 +124,15 @@ Cache Layer
 Infra Services
 ├── HTTPService (Aiohttp)
 ├── InternalHttpClient ─────────> G8eePlatformSettings
-└── EventService (g8ed) ────────> InternalHttpClient
+├── EventService (g8ed) ────────> InternalHttpClient
+├── SettingsService ────────────> CacheAsideService
+└── SupervisorService ──────────> SettingsService
 
 Data Layer (CRUD)
 ├── CaseDataService ────────────> CacheAsideService, EventService
 ├── InvestigationDataService ───> CacheAsideService
 ├── OperatorDataService ────────> CacheAsideService, InternalHttpClient
+├── OperatorLifecycleService ───> OperatorDataService, SupervisorService, SettingsService
 ├── MemoryDataService ──────────> CacheAsideService
 ├── AgentActivityDataService ───> CacheAsideService
 ├── ReputationDataService ──────> CacheAsideService
@@ -146,16 +149,19 @@ Domain Layer (Orchestration)
 Operator Services
 ├── OperatorHeartbeatService ───> OperatorDataService, EventService, PubSubClient
 ├── HeartbeatStaleMonitorService > OperatorDataService, EventService
+├── OperatorSessionService ─────> CacheAsideService
+├── OperatorAuthService ────────> ApiKeyService, OperatorSessionService,
+│                                 OperatorDataService, OperatorLifecycleService,
+│                                 CertificateService, CacheAsideService
+├── SessionAuthListener ────────> PubSubClient, OperatorSessionService, OperatorDataService
 ├── OperatorCommandService ─────> PubSubService, ApprovalService, ExecutionService,
 │                                 FilesystemService, PortService, FileService,
 │                                 IntentService, LFAAService, OperatorDataService
 ├── OperatorApprovalService ────> EventService, OperatorDataService,
 │                                 InvestigationDataService
 ├── OperatorExecutionService ───> PubSubService, OperatorApprovalService,
-│                                 EventService, AIResponseAnalyzer
-├── OperatorStreamExecutor ─────> OperatorApprovalService, InternalHttpClient
-└── OperatorAuthService ────────> ApiKeyService, OperatorSessionService,
-                                  OperatorDataService, CertificateService
+│                                 EventService, AIResponseAnalyzer, OperatorDataService
+└── OperatorStreamExecutor ─────> OperatorApprovalService, InternalHttpClient
 
 AI Pipeline
 ├── AIToolService ──────────────> OperatorCommandService, InvestigationService,

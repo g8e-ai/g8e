@@ -81,7 +81,12 @@ describe('SettingsPage [UNIT - jsdom]', () => {
     describe('constructor', () => {
         it('initializes with empty state', () => {
             expect(page.allSettings).toEqual([]);
-            expect(page.sections).toEqual([]);
+            expect(page.sections).toEqual([
+                { id: 'llm', label: 'AI Models', icon: 'psychology' },
+                { id: 'search', label: 'Vertex Search', icon: 'travel_explore' },
+                { id: 'operator-download', label: 'Operator Download', icon: 'download' },
+                { id: 'advanced', label: 'Advanced', icon: 'settings_applications' }
+            ]);
             expect(page.dirty).toBeInstanceOf(Map);
             expect(page.dirty.size).toBe(0);
             expect(page.activeSection).toBeNull();

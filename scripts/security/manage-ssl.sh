@@ -189,25 +189,71 @@ _stream_ca_pem() {
 _trust_local_linux() {
     local ca_path="$1"
     log "Trusting CA on this machine (Linux)..."
+
+    # 1. System-wide trust store
     if command -v update-ca-certificates >/dev/null 2>&1; then
-        log "  Installing system-wide (Debian/Ubuntu)..."
-        if [[ "$ca_path" == "-" ]]; then
-            _stream_ca_pem | sudo tee /usr/local/share/ca-certificates/g8e-ca.crt >/dev/null
+        # Debian, Ubuntu, Alpine, Gentoo
+        log "  Installing system-wide (update-ca-certificates)..."
+        local target="/usr/local/share/ca-certificates/g8e-ca.crt"
+        # Alpine uses /usr/local/share/ca-certificates/ but some distros might prefer a subdir
+        if [ -d "/usr/local/share/ca-certificates" ]; then
+             if [[ "$ca_path" == "-" ]]; then
+                _stream_ca_pem | sudo tee "$target" >/dev/null
+            else
+                sudo cp "$ca_path" "$target"
+            fi
+            sudo update-ca-certificates
         else
-            sudo cp "$ca_path" /usr/local/share/ca-certificates/g8e-ca.crt
+            warn "Expected /usr/local/share/ca-certificates to exist. Skipping update-ca-certificates."
         fi
-        sudo update-ca-certificates
     elif command -v update-ca-trust >/dev/null 2>&1; then
-        log "  Installing system-wide (RHEL/Fedora)..."
-        if [[ "$ca_path" == "-" ]]; then
-            _stream_ca_pem | sudo tee /etc/pki/ca-trust/source/anchors/g8e-ca.crt >/dev/null
-        else
-            sudo cp "$ca_path" /etc/pki/ca-trust/source/anchors/g8e-ca.crt
+        # RHEL, Fedora, CentOS, Arch, openSUSE
+        log "  Installing system-wide (update-ca-trust)..."
+        local anchor_dir=""
+        if [ -d "/etc/pki/ca-trust/source/anchors" ]; then
+            # RHEL/Fedora
+            anchor_dir="/etc/pki/ca-trust/source/anchors"
+        elif [ -d "/etc/ca-certificates/trust-source/anchors" ]; then
+            # Arch
+            anchor_dir="/etc/ca-certificates/trust-source/anchors"
         fi
-        sudo update-ca-trust
+
+        if [ -n "$anchor_dir" ]; then
+            local target="$anchor_dir/g8e-ca.crt"
+            if [[ "$ca_path" == "-" ]]; then
+                _stream_ca_pem | sudo tee "$target" >/dev/null
+            else
+                sudo cp "$ca_path" "$target"
+            fi
+            sudo update-ca-trust extract
+        else
+            # openSUSE or other update-ca-trust variants
+            log "  Falling back to /etc/pki/trust/anchors (openSUSE style)..."
+            sudo mkdir -p /etc/pki/trust/anchors
+            local target="/etc/pki/trust/anchors/g8e-ca.crt"
+            if [[ "$ca_path" == "-" ]]; then
+                _stream_ca_pem | sudo tee "$target" >/dev/null
+            else
+                sudo cp "$ca_path" "$target"
+            fi
+            sudo update-ca-trust
+        fi
+    elif command -v trust >/dev/null 2>&1 && trust list >/dev/null 2>&1; then
+        # Generic p11-kit trust tool
+        log "  Installing via p11-kit trust tool..."
+        if [[ "$ca_path" == "-" ]]; then
+            _stream_ca_pem | sudo trust anchor /dev/stdin
+        else
+            sudo trust anchor "$ca_path"
+        fi
+    elif [ -f "/etc/nixos/configuration.nix" ]; then
+        log "  NixOS detected. Manual configuration required."
+        warn "  Add the CA to 'security.pki.certificateFiles' in your configuration.nix"
     else
         warn "No known system trust store tool found — see manual instructions below."
     fi
+
+    # 2. NSS database (Chrome/Firefox)
     if command -v certutil >/dev/null 2>&1; then
         local nssdb="$HOME/.pki/nssdb"
         if [ -d "$nssdb" ]; then
@@ -319,13 +365,25 @@ _print_remote_instructions() {
         linux)
             echo "  Run on your Linux workstation:"
             echo ""
-            echo "  Debian / Ubuntu (fetch + trust in one pipeline):"
+            echo "  Debian / Ubuntu / Alpine / Gentoo (fetch + trust in one pipeline):"
             echo ""
             echo "    ${fetch_cmd} | sudo tee /usr/local/share/ca-certificates/g8e-ca.crt >/dev/null && sudo update-ca-certificates"
             echo ""
-            echo "  RHEL / Fedora:"
+            echo "  RHEL / Fedora / CentOS:"
             echo ""
             echo "    ${fetch_cmd} | sudo tee /etc/pki/ca-trust/source/anchors/g8e-ca.crt >/dev/null && sudo update-ca-trust"
+            echo ""
+            echo "  Arch Linux:"
+            echo ""
+            echo "    ${fetch_cmd} | sudo tee /etc/ca-certificates/trust-source/anchors/g8e-ca.crt >/dev/null && sudo update-ca-trust extract"
+            echo ""
+            echo "  openSUSE:"
+            echo ""
+            echo "    sudo mkdir -p /etc/pki/trust/anchors && ${fetch_cmd} | sudo tee /etc/pki/trust/anchors/g8e-ca.crt >/dev/null && sudo update-ca-trust"
+            echo ""
+            echo "  NixOS (manual):"
+            echo "    Add the following to your configuration.nix:"
+            echo "    security.pki.certificateFiles = [ ./g8e-ca.crt ];"
             ;;
     esac
 

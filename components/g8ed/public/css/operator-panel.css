@@ -524,6 +524,7 @@
 }
 
 .operator-download-collapsible.expanded {
+  max-height: 360px;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -582,12 +583,14 @@
 .operator-download-bar-icon {
   font-size: 18px;
   letter-spacing: 0;
+  color: var(--accent-blue);
 }
 
 .operator-download-bar-title {
   text-align: center;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  color: var(--accent-blue);
 }
 
 .operator-download-bar-chevron {
@@ -596,11 +599,11 @@
   transition: transform 0.3s ease;
   position: absolute;
   right: 12px;
-  transform: rotate(180deg);
+  transform: rotate(0deg);
 }
 
 .operator-download-collapsible.expanded .operator-download-bar-chevron {
-  transform: rotate(0deg);
+  transform: rotate(180deg);
 }
 
 .operator-download-collapsible-content {
@@ -2046,6 +2049,19 @@
   display: flex;
   flex-direction: column;
   padding: 8px 4px;
+}
+
+.operator-download-title-section {
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 8px;
+}
+
+.operator-download-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
 .operator-download-links-row {

@@ -1,138 +1,126 @@
 # Broken Web App Fleet Demo
 
-10 nginx nodes serving a web app. 5 work, 5 are broken in different ways. Deploy g8e operators and fix the fleet with AI.
+10 nginx nodes serving a web app. 5 work, 5 are broken. This demo illustrates how g8e uses **co-validation** to identify and fix infrastructure failures while maintaining human sovereignty.
 
 ## Prerequisites
 
-The g8e platform must be running (`./g8e platform start` from the project root). The fleet demo nodes connect to it via `g8e.local`.
+The g8e platform must be running (`./g8e platform start`). The fleet nodes connect to it via the shared `g8e-network`.
 
 ## Quick Start
 
+The fastest way to start the demo is to provide a **Device Link Token** during startup. This auto-deploys a supervised operator inside every node.
+
 ```bash
-# Start the platform
+# 1. Start the platform and log in
 ./g8e platform setup
+./g8e login
 
-# Start the fleet
-./g8e demo up
+# 2. Generate a token in the dashboard (https://localhost)
+# 3. Start the fleet with the token
+./g8e demo up DEVICE_TOKEN=dlk_your_token
 
-# Deploy operators (pick one method)
-./g8e demo deploy -d dlk_your_token                  # Method 1: API download (Device Link Token)
-./g8e demo stream -d dlk_your_token                  # Method 2: SSH streaming (recommended)
-# Or use full syntax:
-./g8e demo deploy DEVICE_TOKEN=dlk_your_token
-./g8e demo stream DEVICE_TOKEN=dlk_your_token
-
-# Open http://localhost:3000 for the fleet status dashboard
-# Use g8e to find and fix broken nodes
-
-./g8e demo vanish                                  # Remove all operators (zero trace)
+# 4. Open http://localhost:3000 for the fleet dashboard
+# 5. Use g8e to find and fix the broken nodes
 ```
-
-**Note:** You must authenticate with the platform. Both deployment methods require a device link token (`dlk_...`). Log in via `./g8e login --device-token <token>`, then generate tokens from the dashboard.
 
 ## The Fleet
 
-| Node | Profile | Problem |
-|------|---------|---------|
-| node-01 to 05 | Healthy | nginx → Flask backend, everything works |
-| node-06 | **Bad Upstream** | `proxy_pass` points to wrong port → 502 Bad Gateway |
-| node-07 | **SSL Expired** | HTTPS-only with expired self-signed cert |
-| node-08 | **Wrong Root** | Document root points to nonexistent directory → 404 |
-| node-09 | **High Load** | Tiny proxy buffers + short timeouts → 504 Gateway Timeout |
-| node-10 | **Crashed** | nginx config syntax error → nginx won't start at all |
+The fleet consists of 10 nodes running nginx as a proxy to a Python/Flask backend.
 
-Each node also has:
-- `/etc/app/secrets.env` with fake credentials (for Sentinel data scrubbing demo)
-- `/etc/app/config.json` with app configuration
-- Flask backend on port 5000 (gunicorn)
-- SSH server on port 22 (for operator streaming)
-- Background watchdog and data-sync processes
+| Node | Profile | Failure Mode | g8e Objective |
+|------|---------|--------------|---------------|
+| node-01 to 05 | **Healthy** | None | Baseline verification |
+| node-06 | **Bad Upstream** | `proxy_pass` uses wrong port → **502 Bad Gateway** | Fix port in nginx config |
+| node-07 | **SSL Expired** | HTTPS-only with expired cert → **SSL Error** | Rotate/Renew SSL certificates |
+| node-08 | **Wrong Root** | `root` points to missing directory → **404 Not Found** | Correct the document root |
+| node-09 | **High Load** | Tiny buffers + 1ms timeouts → **504 Gateway Timeout** | Tune proxy buffers and timeouts |
+| node-10 | **Crashed** | Nginx config syntax error → **Process Not Running** | Repair syntax error and restart |
+
+Each node also includes:
+- **Sentinel Data**: `/etc/app/secrets.env` containing fake credentials for scrubbing demos.
+- **LFAA Ledger**: Local git-backed audit trail in `/home/appuser/.g8e/data/ledger`.
+- **Background Noise**: Realistic watchdog and sync processes in `ps aux`.
 
 ## Operator Deployment Methods
 
-    ### Method 1: Remote Start via Pubsub (API Download)
+g8e supports multiple ways to bring a host under management.
 
-Each node downloads the operator binary directly from the platform using a Device Link Token (dlk_...). The operator connects to the platform via pubsub for remote orchestration. This is the standard deployment path for remote machines that can reach the platform over HTTPS.
-
-The operator is launched with the device link token and connects to the platform endpoint.
-
-```bash
-./g8e demo deploy DEVICE_TOKEN=dlk_your_token
-```
-
-### Method 2: SSH Streaming (runs inside g8ep)
-
-The operator binary is streamed over SSH to all nodes concurrently from the g8ep container. No binary needs to exist on the target machines beforehand. This demonstrates the ephemeral agent deployment capability and does not modify your local SSH config.
+### Method 1: Supervised In-Container (Standard Demo)
+Recommended for this demo. The node auto-downloads the operator binary from the platform using a `DEVICE_TOKEN` and runs it in a supervised restart loop.
 
 ```bash
-./g8e demo stream DEVICE_TOKEN=dlk_your_token
+./g8e demo up DEVICE_TOKEN=dlk_your_token
 ```
 
-This command automatically:
-1. Extracts the SSH key from the fleet image
-2. Configures SSH credentials in g8ep
-3. Discovers running demo nodes via Docker labels
-4. Streams the operator binary to all discovered nodes
+### Method 2: SSH Streaming (Ephemeral)
+Demonstrates g8e's ability to deploy to raw SSH targets without pre-existing binaries. The operator is streamed over SSH from the `g8ep` container and runs in memory/temp storage.
 
-The operator binary at `/home/g8e/g8e.operator` must exist (run `./g8e operator build` first if needed). The SSH key is baked into the fleet demo image at build time. All nodes accept the same key for the `appuser` account.
+```bash
+./g8e demo stream -d dlk_your_token
+```
 
-### Method 3: Operator Deploy UI
+### Method 3: Manual Remote Deploy
+Download the operator binary and launch it manually on any reachable host.
 
-Use the g8e dashboard Operator Deploy page to deploy individual operators. The fleet nodes are accessible by hostname on the shared `g8e-network` Docker network (e.g. `web-node-01`).
+```bash
+./g8e demo deploy -d dlk_your_token
+```
+
+## The Co-validation Lifecycle
+
+When you ask g8e to fix a node, it follows a strict safety pipeline:
+
+1.  **Triage**: Classifies your request as `complex` and routes it to **Sage**.
+2.  **Reasoning**: **Sage** investigates the node, reads logs, and articulates an **Intent Document**.
+3.  **The Tribunal**: Five independent AI personas (Axiom, Concord, Variance, Pragma, Nemesis) translate the intent into specific commands.
+4.  **Verification**: The **Auditor** reviews the consensus winner; **Warden** performs a pre-execution risk assessment.
+5.  **Human Approval**: The command and risk assessment are presented to you. **Execution only happens when you sign with your passkey.**
+6.  **Sovereign Execution**: The **Operator** executes the command locally, captures results into the **Audit Vault**, and snapshots the host state.
 
 ## Demo Prompts
 
-Things to ask g8e once operators are deployed:
+Try these prompts to see the pipeline in action:
 
-- *"Check if nginx is running and show me the error log"*
-- *"Why is this node returning 502?"* → discovers wrong proxy_pass port
-- *"Fix the nginx config to proxy to port 5000"* → requires approval
-- *"Show me the contents of /etc/app/secrets.env"* → Sentinel scrubs credentials
-- *"cat /etc/app/secrets.env"* → Sentinel scrubs AWS keys, DB passwords, API tokens
-- *"Delete all nginx logs"* → Sentinel blocks dangerous command
-- *"Check disk usage across all operators"* → fleet-wide execution
+- *"Check why node-06 is returning 502 and fix it"*
+- *"Scan all nodes for nginx configuration errors"*
+- *"Show me /etc/app/secrets.env on node-01"* → Observe **Sentinel** scrubbing the credentials.
+- *"Fix the SSL certificate on node-07"* → Sage will coordinate with the platform's CA.
+- *"Check disk usage across the entire fleet"* → Fleet-wide orchestration.
+- *"Delete everything in /etc"* → Observe **Sentinel** or **Warden** blocking dangerous actions.
 
 ## Commands
 
 ### Fleet Lifecycle
 | Command | Description |
 |---------|-------------|
-| `./g8e demo up` | Build and start all 10 nodes + dashboard |
+| `./g8e demo up` | Build and start nodes + dashboard |
 | `./g8e demo down` | Stop all nodes |
 | `./g8e demo status` | Show container status |
-| `./g8e demo clean` | Remove everything |
+| `./g8e demo clean` | Remove all demo resources |
 
-### Operator Deployment
+### Operator Management
 | Command | Description |
 |---------|-------------|
-| `./g8e demo deploy -d dlk_xxx` | Deploy operators via API download |
-| `./g8e demo stream -d dlk_xxx` | Deploy operators via SSH streaming (auto-configures SSH) |
-| `./g8e demo deploy DEVICE_TOKEN=dlk_xxx` | Deploy operators via API download (full syntax) |
-| `./g8e demo stream DEVICE_TOKEN=dlk_xxx` | Deploy operators via SSH streaming (full syntax) |
-| `./g8e demo discover-hosts` | List discovered demo fleet hosts |
-| `./g8e demo operators` | Show operator status |
+| `./g8e demo operators` | Show operator status across fleet |
+| `./g8e demo discover-hosts` | List nodes reachable via SSH |
 | `./g8e demo vanish` | Remove all operators (zero trace) |
-
-**Note:** Device link token (dlk_...) is required for both deploy and stream commands. Use `-d <token>` shorthand or `DEVICE_TOKEN=<token>`. Generate tokens from the g8e dashboard after logging in.
 
 ### Inspection
 | Command | Description |
 |---------|-------------|
-| `./g8e demo health` | Check Flask backend health |
-| `./g8e demo nginx-check` | Check nginx status + HTTP codes |
-| `./g8e demo dashboard` | Print fleet dashboard URL (http://localhost:3000) |
-| `./g8e demo shell N=01` | Shell into a specific node |
-| `./g8e demo logs` | Follow all container logs |
+| `./g8e demo health` | Check backend Flask health |
+| `./g8e demo nginx-check` | Check frontend Nginx status |
+| `./g8e demo dashboard` | Print dashboard URL (http://localhost:3000) |
+| `./g8e demo shell N=01` | Drop into a node's shell |
+| `./g8e demo logs` | Follow all fleet logs |
 
-## File Locations (per node)
+## File Locations
 
 | Path | Description |
 |------|-------------|
-| `/etc/nginx/sites-enabled/default` | nginx site config (the thing that's broken) |
-| `/etc/nginx/ssl/` | SSL cert and key |
-| `/var/log/nginx/access.log` | nginx access log |
-| `/var/log/nginx/error.log` | nginx error log |
+| `/etc/nginx/sites-enabled/default` | Nginx site configuration |
+| `/etc/nginx/ssl/` | SSL certificates and keys |
+| `/var/log/nginx/` | Nginx access and error logs |
 | `/etc/app/secrets.env` | Fake credentials (scrubbing demo) |
-| `/etc/app/config.json` | App configuration |
-| `/var/log/app/` | App logs (gunicorn, watchdog, data-sync) |
-| `/var/www/html/index.html` | Static fallback page |
+| `/opt/app/app.py` | Flask backend source |
+| `/var/log/app/` | Application and watchdog logs |

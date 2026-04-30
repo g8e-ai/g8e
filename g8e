@@ -1,6 +1,41 @@
 #!/usr/bin/env bash
 set -e
 
+# Check for common dependencies
+_check_deps() {
+    local missing=()
+    for cmd in docker curl; do
+        if ! command -v "$cmd" >/dev/null 2>&1; then
+            missing+=("$cmd")
+        fi
+    done
+
+    # Check for docker-compose-plugin (preferred) or docker-compose (v1)
+    if ! docker compose version >/dev/null 2>&1 && ! command -v docker-compose >/dev/null 2>&1; then
+        missing+=("docker-compose")
+    fi
+
+    if [ ${#missing[@]} -gt 0 ]; then
+        echo -e "\033[0;31m[g8e] ERROR: Missing required dependencies: ${missing[*]}\033[0m" >&2
+        case "$(uname -s)" in
+            Linux)
+                if command -v apt-get >/dev/null 2>&1; then
+                    echo "  Install via: sudo apt-get update && sudo apt-get install -y docker.io docker-compose-v2 curl"
+                elif command -v dnf >/dev/null 2>&1; then
+                    echo "  Install via: sudo dnf install docker docker-compose-plugin curl"
+                elif command -v pacman >/dev/null 2>&1; then
+                    echo "  Install via: sudo pacman -S docker docker-compose curl"
+                elif command -v apk >/dev/null 2>&1; then
+                    echo "  Install via: sudo apk add docker docker-compose curl"
+                fi
+                ;;
+        esac
+        exit 1
+    fi
+}
+
+_check_deps
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 COMPOSE="docker compose -f $SCRIPT_DIR/docker-compose.yml"
 CONTAINER="g8ep"
@@ -20,11 +55,11 @@ _banner() {
 }
 
 _container_running() {
-    docker ps --filter "name=^${1}$" --filter "status=running" -q 2>/dev/null | grep -q .
+    docker ps --filter "name=^${1}$" --filter "status=running" --format "{{.Names}}" 2>/dev/null | grep -q "^${1}$"
 }
 
 _container_exists() {
-    docker ps -a --filter "name=^${1}$" -q 2>/dev/null | grep -q .
+    docker ps -a --filter "name=^${1}$" --format "{{.Names}}" 2>/dev/null | grep -q "^${1}$"
 }
 
 _g8ep_running() { _container_running "$CONTAINER"; }
