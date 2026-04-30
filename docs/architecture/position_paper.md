@@ -38,7 +38,11 @@ The machine handles what is **machine-checkable**: internal consistency between 
 
 The human handles what is **only human-checkable**: intent fidelity at the deepest level — whether the action matches what they meant in their world, including unarticulated context — contextual stakes specific to their environment, acceptance of real-world consequences they alone will live with, implicit values the agent layer cannot access.
 
-Both signatures are required because the union of their competencies is what constitutes "safe to execute." Neither alone is sufficient. This is the architectural commitment from which everything else follows.
+This division of labor is expressed by the **Co-Validation Identity**:
+
+$$ \text{Safe}(a) \iff \sigma_{\text{machine}}(a) \wedge \sigma_{\text{human}}(a) $$
+
+Neither signature is sufficient alone; only the conjunction of both constitutes "safe to execute." This is the architectural commitment from which everything else follows.
 
 The economic implication is precise: **the User's time is not a free resource the system can spend at will. It is a stake the User contributes in exchange for the service only they can validate.** Every component upstream of human judgment exists to minimize what reaches the User, so that what does reach them is exclusively the human-domain question they alone can answer. This reframes the User's experience entirely. They are not babysitting an agent. They are providing the irreducible input the system structurally cannot generate.
 
@@ -52,28 +56,22 @@ There are three actors and two coupled systems.
 
 **The User** is the human who owns the infrastructure being operated. The User is external to both the Engine and the Operator. The Operator presents prompts to the User and receives the User's signature, but the User is not a sub-component of either system.
 
-```
-        ┌─────────────────────────┐
-        │       Engine            │
-        │  (stateless reasoner)   │
-        │                         │
-        │ Triage (interrogator) → │
-        │ Sage → Tribunal →       │
-        │ Auditor                 │
-        └────────────┬────────────┘
-                     │
-        intent + verdict + grounding
-                     │
-                     ▼
-        ┌─────────────────────────┐         ┌──────────────┐
-        │       Operator          │ ──prompt──▶│              │
-        │  (sovereign executor)   │         │     User     │
-        │                         │ ◀─approval──│   (human)    │
-        │  Warden → Exec → Audit  │         │              │
-        │       Vault + Git       │         └──────────────┘
-        └─────────────────────────┘
-                per-host,
-                local-first
+```mermaid
+graph TD
+    U[User]
+    subgraph Engine [The Engine]
+        T[Triage] --> S[Sage]
+        S --> Tr[Tribunal]
+        Tr --> Au[Auditor]
+        Au --> W[Warden]
+    end
+    subgraph Operator [The Operator]
+        Ex[Exec]
+        Ex --> Ad[Audit Vault]
+        Ad --> G[Git Ledger]
+    end
+    U[User] -- signature --> W
+    W -- co-validated command --> Ex
 ```
 
 The Engine is replaceable. The Operator is the system of record. This inversion is the architectural payload of the proposal: the AI layer can be swapped, audited, or revoked without losing history, because history lives on the host that owns the infrastructure being operated, not in the cloud where the AI runs.
@@ -87,6 +85,12 @@ The Engine implements a consensus mechanism in which AI personas are validators 
 ### The Vortex Principle
 
 The Engine's consensus is built on **tiered information quarantine**, which I call the Vortex Principle. Each agent operates in a sealed information environment, believing it is playing a smaller game than it is actually in. The interrogator does not know the planner exists. The planner does not know the auditor has cross-conversation memory. The validator panel does not know which member among them is the calibrated adversary. Only one role — the Auditor — has full visibility, and the Auditor is bonded most heavily and subject to peer review.
+
+The mathematical invariant of the Vortex is the **Independence of Validators**:
+
+$$ \forall p_i, p_j \in \text{Tribunal}, i \neq j: I(X_i ; X_j | \mathcal{V}) \approx 0 $$
+
+Where $I$ is mutual information between the information states $X$ of two personas given the Vortex structure $\mathcal{V}$.
 
 The Vortex is load-bearing. Each quarantined view eliminates the deviation strategies that would otherwise be profitable. Agents cannot coordinate to game the consensus because they cannot identify their counterparties. Agents cannot shape their output to fit a known downstream expectation because they cannot see the downstream. The information-theoretic structure is what makes the consensus produce honest votes. Collapsing any quarantine layer creates a profitable deviation. The Vortex is not a UX choice. It is the safety mechanism.
 
@@ -102,7 +106,17 @@ The consensus round is run by a five-member Tribunal of LLM-instantiated persona
 
 Each member emits a candidate command independently with no visibility into the others. Candidates are clustered by exact match and votes are tallied. A winner requires ≥2 of 5 supporting votes. If consensus is weak, members enter Round 2 with anonymized peer review and may converge or hold.
 
-The Nemesis is the most novel element. Rather than relying on an external red team, I embed a calibrated adversary inside the consensus pool, scored on a proper scoring rule: attacks on flawed consensus that the Auditor confirms earn large gains; abstentions on clean consensus earn small gains; false alarms and misses lose stake. The dominant strategy is honest calibration. The realized attack rate becomes a learned signal of actual flaw density in the honest four's output — adversarial pressure as continuous quality measurement.
+This is governed by the **Plurality Consensus Rule**:
+
+$$ \text{Consensus}(c) \iff |\{ p \in \text{Tribunal} : p(I) = c \}| \geq 2 $$
+
+The Nemesis is the most novel element. Rather than relying on an external red team, I embed a calibrated adversary inside the consensus pool, scored on a proper scoring rule: attacks on flawed consensus that the Auditor confirms earn large gains; abstentions on clean consensus earn small gains; false alarms and misses lose stake. The dominant strategy is honest calibration. 
+
+The **Nemesis Scoring Rule** is defined as:
+
+$$ S = \begin{cases} R_{hit} & \text{if } c_{nemesis} \text{ identifies a flaw confirmed by Auditor} \\ R_{abstain} & \text{if } c_{nemesis} = \emptyset \text{ and Tribunal is clean} \\ -R_{miss} & \text{if } c_{nemesis} = \emptyset \text{ and Tribunal is flawed} \\ -R_{false} & \text{if } c_{nemesis} \text{ proposes a flaw rejected by Auditor} \end{cases} $$
+
+The realized attack rate becomes a learned signal of actual flaw density in the honest four's output — adversarial pressure as continuous quality measurement.
 
 ### The Auditor and the User
 
@@ -158,11 +172,15 @@ For Cloud Operators on AWS, the Operator implements Zero Standing Privileges via
 
 This is the architectural complement to the Engine's intent articulation. The planner produces an intent. The Tribunal translates intent into a command. The Operator attaches the minimum IAM policy mapped to that intent.
 
+The **Temporal Privilege Function** ensures zero standing privileges:
+
+$$ P(t) = \begin{cases} P_{\text{base}} \cup P_{\text{intent}} & t \in [t_{\text{start}}, t_{\text{end}}] \\ P_{\text{base}} & t \notin [t_{\text{start}}, t_{\text{end}}] \end{cases} $$
+
 The result: no human and no AI agent ever needs to hold privileged AWS credentials at rest. Privileges are attached just-in-time, scoped to the intent, and revoked on completion. A compromise of any layer — the User's session, the Engine's reasoning state, the Operator's binary — cannot exfiltrate persistent credentials, because no persistent credentials exist.
 
 ### The Warden
 
-The Operator runs the Warden, a defensive coordinator that performs pre-execution risk assessment locally. The Warden classifies command risk (low/medium/high), file operation risk (factoring in Git state — operations that lose history are higher risk than reversible ones), and analyzes failures for auto-fix safety. The Warden's classifications populate the User's approval prompt with concrete risk indicators, making the User's co-validation more efficient.
+The Engine runs the Warden, a defensive coordinator that performs pre-execution risk assessment. The Warden classifies command risk (low/medium/high), file operation risk (factoring in Git state — operations that lose history are higher risk than reversible ones), and analyzes failures for auto-fix safety. The Warden's classifications populate the User's approval prompt with concrete risk indicators, making the User's co-validation more efficient.
 
 The Warden fails closed. Ambiguous risk is classified high. The Warden cannot lower a classification produced by deterministic pattern filters — `rm -rf /` is high regardless of AI judgment. The User is presented with the highest classification any layer produced.
 
@@ -180,7 +198,7 @@ Round 1 votes: Concord, Variance, and Pragma cluster on the manifest-first versi
 
 **The Auditor** reviews. It sees Sage's intent, the winning candidate, the dissenting clusters with their persona signatures, and pulls cross-conversation memory: *"This User had an incident last month involving wrong-directory deletion."* The Auditor verifies the manifest-first design matches the intent's caution and grounds the verdict in the precedent. The Nemesis attack is logged as a confirmed flaw caught — Nemesis's stake increases. The verdict is cryptographically committed to the reputation ledger.
 
-**The Operator** receives the verdict over mTLS WebSocket. The **Warden** runs locally: command risk medium (mass deletion), file operation risk medium-high (operations on a directory containing audit-relevant files, even with the exclusion), error risk classified as escalate-on-failure. The Operator prepares the JIT IAM scope: it attaches the `Log-Management` intent policy to its role, granting read access to `/var/log/db/` and write access for the manifest path.
+**The Operator receives the verdict over mTLS WebSocket.** The **Warden** (running on the Engine) has already classified the risk: command risk medium (mass deletion), file operation risk medium-high (operations on a directory containing audit-relevant files, even with the exclusion), error risk classified as escalate-on-failure. The Operator prepares the JIT IAM scope: it attaches the `Log-Management` intent policy to its role, granting read access to `/var/log/db/` and write access for the manifest path.
 
 **The Operator presents to the User**: the proposed command, the manifest path, the Auditor's grounding (*"matches your stated caution; cross-references prior incident"*), the Warden's risk classifications, and an expandable view of the Nemesis dissent (*"a candidate without manifest-first was rejected — here's why"*).
 
