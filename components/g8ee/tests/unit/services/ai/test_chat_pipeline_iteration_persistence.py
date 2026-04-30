@@ -81,6 +81,7 @@ def _make_pipeline() -> ChatPipelineService:
         text,
         grounding_metadata=None,
         token_usage=None,
+        sender=MessageSender.AI_PRIMARY,
     ) -> bool:
         # Mirror the real helper's strip-guard so tests exercise the same
         # contract as production (whitespace-only text is not persisted).
@@ -88,7 +89,7 @@ def _make_pipeline() -> ChatPipelineService:
             return False
         await svc.investigation_service.investigation_data_service.add_chat_message(
             investigation_id=investigation_id,
-            sender=MessageSender.AI_PRIMARY,
+            sender=sender,
             content=text,
             metadata=AIResponseMetadata(
                 source=EventType.EVENT_SOURCE_AI_PRIMARY,

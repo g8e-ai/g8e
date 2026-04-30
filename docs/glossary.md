@@ -268,7 +268,7 @@ Security measures that prevent attackers from intercepting or modifying communic
 
 ## Message Triage
 
-The classification of incoming user messages as "simple" or "complex" using the lightweight assistant model (`LLM_ASSISTANT_MODEL`) before deciding which LLM to invoke. A short-circuit decision tree first checks for OPERATOR_BOUND workflow (always escalates), attachments (always escalates), or empty messages (always escalates). If none apply, the assistant model receives the last 6 conversation history messages (`TRIAGE_CONVERSATION_TAIL_LIMIT = 6`) plus the current message and responds with a structured JSON classification containing complexity, intent, confidence, and follow-up question. "simple" uses the assistant model; "complex" escalates to the main model. Any ambiguous or error response defaults to complex (fail-safe escalation).
+The classification of incoming user messages as "simple" or "complex" using the lightweight model (`LLM_LITE_MODEL`) before deciding which LLM to invoke. Per GDD §14.1, Triage is a classifier ONLY — it does NOT generate clarifying questions. A short-circuit decision tree first checks for OPERATOR_BOUND workflow (always escalates), attachments (always escalates), or empty messages (always escalates). If none apply, the lite model receives the last 6 conversation history messages (`TRIAGE_CONVERSATION_TAIL_LIMIT = 6`) plus the current message and responds with a structured JSON classification containing complexity, intent, confidence, and posture. "simple" routes to Dash (assistant tier); "complex" escalates to Sage (primary tier). Any ambiguous or error response defaults to complex (fail-safe escalation).
 
 ---
 

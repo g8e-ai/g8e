@@ -43,10 +43,11 @@ logger = logging.getLogger(__name__)
 
 class TriageAgent:
     """Agent responsible for classifying user intent and message complexity.
-    
-    Naming Note: This agent implements the 'Dash' interrogator role from GDD §2. 
-    The g8e codebase already has a 'dash' agent (fast-path responder), so this 
-    role remains named 'triage' in the code to avoid collision.
+
+    Per GDD §14.1: Triage is the Gatekeeper/Classifier only. It reads every user
+    message and emits structured classification metadata (complexity, intent, posture).
+    It does NOT generate questions or interrogations - that responsibility belongs
+    to the reasoning agents (Dash/Sage) per the Interrogation Protocol.
     """
 
     def __init__(self):
@@ -83,7 +84,6 @@ class TriageAgent:
                 intent=TriageIntentClassification.UNKNOWN,
                 intent_confidence=TriageConfidence.LOW,
                 intent_summary="Empty message provided.",
-                follow_up_question="How can I help you today?",
                 request_posture=TriageRequestPosture.NORMAL,
                 posture_confidence=TriageConfidence.LOW,
             )

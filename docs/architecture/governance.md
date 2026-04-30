@@ -8,7 +8,7 @@ The mechanism has six players, two distinct stake types, and one objective. Unde
 
 | Player | Role | Stake | Capability |
 |---|---|---|---|
-| **Triage** | Interrogator | Reputation `r_d` | Analyzes user posture, emits intent summary `I` |
+| **Triage** | Gatekeeper/Classifier | Reputation `r_t` | Analyzes user posture, emits classification metadata `C` (complexity, intent, posture) |
 | **Sage** | Planner | Reputation `r_s` | Natural-language request `R` + guidelines `G` |
 | **Honest Tribunal** (×4) | Validators | Per-lens reputation `r_{t,i}` | Each emits candidate command `c_i` |
 | **Nemesis** | Calibrated adversary | Reputation `r_n` | Emits flawed-but-plausible `c_n` or abstains |

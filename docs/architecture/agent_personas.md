@@ -30,12 +30,12 @@ The canonical truth for agent personas resides in **Python models** located in `
 
 ## Current Agents
 
-### 1. Triage (The Interrogator)
+### 1. Triage (The Gatekeeper/Classifier)
 - **Icon**: `manage_search`
 - **Role**: `classifier`
 - **Model Tier**: `lite`
 - **Purpose**: First-turn classification of complexity (`simple`/`complex`), intent, and user posture.
-- **Interrogation**: If intent confidence is low, Triage produces 1-3 targeted clarifying questions to narrow the search space.
+- **Scope**: Per GDD §14.1, Triage is a classifier ONLY. It does NOT generate questions or interrogations — that responsibility belongs to the reasoning agents (Dash/Sage) per the Interrogation Protocol.
 - **Invariants**: First-turn messages CANNOT be `adversarial`. Security-sensitive requests are ALWAYS `complex`.
 - **Data Flow**: Routes `complex` turns to **Sage** and `simple` turns to **Dash**.
 
@@ -95,7 +95,7 @@ GDD §3 defines the Vortex: agents operate in a sealed information environment t
 | Role | Information Visible |
 |---|---|
 | **Triage** | User message + brief history. Doesn't know Sage/Tribunal exist. |
-| **Sage** | User message + Triage Q&A. Doesn't know Triage is a separate agent. |
+| **Sage** | User message + Triage classification. Doesn't know Triage is a separate agent. |
 | **Tribunal** | Intent from Sage + OS/Shell context. Doesn't know Nemesis is present. |
 | **Auditor** | Full visibility: User msg, Sage intent, Persona signatures, Reputation state. |
 
