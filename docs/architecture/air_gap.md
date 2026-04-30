@@ -5,110 +5,93 @@ parent: Architecture
 
 # Air-Gap Architecture
 
-g8e supports air-gapped deployment with zero runtime internet dependencies when configured with a local LLM provider. Container images must be built on an internet-connected machine, then transferred to the air-gapped environment.
+g8e supports fully air-gapped deployments with **zero runtime internet dependencies**. The platform achieves this by self-hosting all core infrastructure, vendoring critical dependencies, and providing a local inference server for LLMs.
 
 ---
 
-## Runtime Dependencies
+## Zero-Trust Privacy Principle
 
-The platform has **no runtime internet dependencies** when configured correctly:
+The air-gap configuration is the "Canonical Truth" of g8e's privacy model. In this mode, the platform operates as a completely sealed unit:
+- **No Telemetry:** No outbound usage or health data is sent to Lateralus Labs.
+- **No CDNs:** All frontend assets (fonts, icons, JS libraries) are served from the local `g8ed` container.
+- **Local Persistence:** Data is stored in a local SQLite database managed by the `g8es` service.
+- **Local Intelligence:** LLM inference is handled by `g8el` or a local Ollama instance.
 
-- **LLM Provider:** Use Ollama (local), llama.cpp (g8el), or any OpenAI-compatible local endpoint (vLLM, LM Studio, text-generation-webui). Cloud providers (Gemini, OpenAI, Anthropic) are available but only active when explicitly configured.
-- **Web Search Grounding:** Disabled by default. Uses Google Discovery Engine when enabled — leave disabled for air-gap. Note: the web search provider includes a hardcoded Google favicon URL (`www.google.com/s2/favicons`) for source display. This only triggers when web search is actively used.
-- **Frontend Assets:** All fonts, icons, CSS, and vendor JS (markdown-it, highlight.js) are self-hosted. No CDN references.
-- **TLS:** Self-signed CA generated at startup by g8es (operator in listen mode). No external certificate authority dependency.
+---
+
+## Runtime Backbone: g8es
+
+In air-gapped environments, the standard cloud-backed `g8es` is replaced by the **Operator Listen Mode**. The `g8eo` binary is launched with the `--listen` flag, assuming the role of the platform's central nervous system.
+
+### Responsibilities
+- **Persistence:** Provides a high-performance SQLite-backed KV store for `g8ee` and `g8ed`.
+- **Messaging:** Acts as the Pub/Sub broker (WSS on port 9001) for all component communication.
+- **Security:** Serves as the internal Certificate Authority (CA), auto-generating self-signed TLS certificates for all inter-container traffic.
+- **Auth Proxy:** Handles internal authentication between services on port 9000.
+
+---
+
+## Local Inference: g8el
+
+The `g8el` service provides a local `llama.cpp` inference server. It is the recommended LLM provider for air-gapped deployments.
+
+- **Port:** `11444`
+- **Default Model:** `google_gemma-4-E2B-it-Q4_K_M.gguf`
+- **Air-Gap Requirement:** Model files must be pre-downloaded and placed in the `components/g8ee/models/` directory on the host, which is mapped to `/models` inside the container.
+- **Entrypoint Logic:** If the model file is missing at startup, the container will attempt to download it from HuggingFace. In an air-gapped environment, this will fail unless the model is pre-staged.
 
 ---
 
 ## Build-Time Dependencies
 
-All external fetches occur exclusively at `docker build` time. Once images are built, no internet access is required.
+While runtime has no dependencies, the build process (`docker build`) requires internet access or a local mirror.
 
 ### Docker Base Images
 
-| Image | Used By |
-|---|---|
-| `node:22-alpine3.23` | g8ed, g8ed-test-runner |
-| `python:3.12-slim` | g8ee, g8ee-test-runner |
-| `python:3.13-alpine` | g8ep |
-| `golang:1.26-alpine3.23` | g8es builder stage, g8eo-test-runner |
-| `alpine:3.23` | g8es final stage |
-| `ghcr.io/ggml-org/llama.cpp:server` | g8el (llama.cpp inference server) |
-
-**Air-gap path:** Pre-pull images on an internet-connected machine, transfer via `docker save` / `docker load` or push to a local registry (Harbor, registry:2).
-
-### OS Packages
-
-- **apk (Alpine):** `curl`, `ca-certificates`, `bash`, `openssl`, `jq`, `git`, `make`, `gcc`, `musl-dev`, `upx`, and network tools (g8ep only)
-- **apt-get (Debian slim):** `curl`, `procps`, `net-tools`, `ca-certificates`, `openssl`, `jq`
-
-**Air-gap path:** Pre-bake packages into custom base images, or configure a local APK/APT mirror.
-
-### Language Package Managers
-
-**Python (pip):**
-- `components/g8ee/requirements.txt` — production and test dependencies from PyPI
-- `components/g8ep/Dockerfile` — `pip install requests aiohttp`
-
-**Air-gap path:** Bundle a vendored wheelhouse (`pip download`) or use a local PyPI mirror (devpi, bandersnatch).
-
-**Node.js (npm):**
-- `components/g8ed/package.json` — runtime dependencies from npmjs.org
-- `node_modules` and `package-lock.json` are committed to the repo
-- The builder stage runs `npm ci` to install from the lockfile
-
-**Air-gap path:** Use the committed lockfile with a local npm registry (Verdaccio), or pre-populate `node_modules` in the build context.
-
-**Go:**
-- `components/g8eo/vendor/` — all operator dependencies vendored, builds use `-mod=vendor`
-- `components/g8eo/tools/vendor/` — gotestsum and its dependencies vendored for test runner
-
----
-
-## Vendoring State
-
-| Component | Package Manager | Vendored |
+| Image | Component | Purpose |
 |---|---|---|
-| g8eo (operator) | Go modules | Yes |
-| g8eo (test tools) | Go modules | Yes |
-| g8ed (terminal) | npm | Partial — lockfile committed |
-| g8ee (engine) | pip | No |
-| g8ep (node) | pip | No |
-| g8el (llama.cpp) | External image | N/A — uses pre-built image |
+| `golang:1.26-alpine3.23` | `g8es` (builder) | Compiling the Operator binary |
+| `alpine:3.23` | `g8es` (final) | Runtime environment for the backbone |
+| `node:22-alpine3.23` | `g8ed` | Frontend and Terminal backend |
+| `python:3.12-slim` | `g8ee` | AI Engine and reasoning logic |
+| `python:3.13-alpine` | `g8ep` | Node host and test runner |
+| `ghcr.io/ggml-org/llama.cpp:server` | `g8el` | Local LLM inference |
+
+### Language Vendoring
+
+- **Go (g8eo):** 100% vendored in `components/g8eo/vendor/`. Builds use `-mod=vendor`.
+- **Node.js (g8ed):** `package-lock.json` is committed. The build uses `npm ci` for deterministic installs.
+- **Python (g8ee/g8ep):** Uses standard `pip` requirements. For air-gap builds, use a local PyPI mirror or pre-download wheels into the build context.
 
 ---
 
-## External UI Links
+## Vault & Secret Management
 
-The terminal contains informational links to external sites. These are not functional dependencies and will be dead links in an air-gapped environment:
+Secrets in an air-gapped environment (API keys, session tokens, HMAC keys) are managed by the `g8eo` SecretManager and stored in the local Vault.
 
-- GitHub repository links in navigation menus
-- Google AI Studio link in the setup wizard
-- License and contact URLs in settings constants
+### Offline Vault Operations
+The Operator provides a CLI for managing the encrypted vault without internet access:
+- **Rekey:** `g8e.operator --rekey-vault --old-key <old> -k <new>`
+- **Verify:** `g8e.operator --verify-vault -k <key>`
+- **Reset:** `g8e.operator --reset-vault` (Destructive)
 
 ---
 
-## Air-Gap Deployment
+## Deployment Workflow
 
-### Standard Deployment
+### 1. Build & Stage
+On an internet-connected machine:
+1. Build all images: `./g8e platform setup`
+2. Download the default model: `google_gemma-4-E2B-it-Q4_K_M.gguf`
+3. Export images: `docker save g8es g8ee g8ed g8ep g8el | gzip > g8e-images.tar.gz`
 
-1. **Build images on an internet-connected machine** using `./g8e platform setup`
-2. **Export images:** `docker save g8es g8ee g8ed g8ep g8el | gzip > g8e-images.tar.gz`
-3. **Transfer** the archive to the air-gapped host
-4. **Load images:** `docker load < g8e-images.tar.gz`
-5. **Configure LLM provider** to use Ollama, llama.cpp (g8el), or an OpenAI-compatible local endpoint
-6. **For g8el (llama.cpp):** Pre-download model files from HuggingFace on an internet-connected machine and transfer to `/components/g8ee/models/` on the air-gapped host
-7. **Disable web search grounding** in user settings
-8. **Start the platform:** `./g8e platform start`
+### 2. Transfer
+Move `g8e-images.tar.gz` and the model file to the air-gapped host via physical media or secure transfer.
 
-### Fully Offline Build
-
-For environments that cannot run `docker build` with internet access, set up the following infrastructure:
-
-1. **Local container registry** (Harbor, registry:2) — pre-populate with base images
-2. **Local PyPI mirror** (devpi, bandersnatch) — host Python packages
-3. **Local npm registry** (Verdaccio) — host Node.js packages
-4. **Local APK/APT mirror** — host OS packages
-5. **Configure Dockerfile build args** to point to local mirrors
-
-Once local mirrors are configured, build images on an air-gapped machine and deploy normally.
+### 3. Deploy
+On the air-gapped host:
+1. Load images: `docker load < g8e-images.tar.gz`
+2. Place the model file in `components/g8ee/models/`
+3. Configure `LLMProvider.G8EL` as the primary provider in settings.
+4. Ensure `SearchSettings.enabled` is `false` (default).
+5. Start the platform: `./g8e platform start`

@@ -14,46 +14,49 @@ g8ee is the AI engine for the g8e platform. It provides an agentic, LLM-powered 
 g8ee follows a strict "Traceable Pipeline" model for every message. A single user request moves through six distinct phases:
 
 ### 1. Ingress & Context Assembly
-The `internal_router` receives the request from `g8ed`. The `ChatPipelineService` immediately triggers `_prepare_chat_context`:
-- **Context Enrichment**: Fetches the investigation state and binds available `g8eo` operators from the `G8eHttpContext` headers.
-- **History Retrieval**: Loads prior conversation turns from the `DBService`.
-- **Memory Attachment**: Injects user-level and case-level memories from the `MemoryDataService`.
+The `internal_router` receives the request. `ChatPipelineService` triggers `_prepare_chat_context`, performing a 15-step assembly process:
+- **Context Enrichment**: Fetches the investigation state and binds available `g8eo` operators.
+- **Workflow Detection**: Determines if the investigation is `OPERATOR_BOUND` or `OPERATOR_NOT_BOUND`.
+- **Memory Injection**: Retrieves user-level and case-level memories from `MemoryDataService`.
+- **System Prompt Assembly**: Builds a modular system prompt based on agent mode, bound operators, and investigation state.
 
 ### 2. Triage (The Gatekeeper)
 Before invoking the primary LLM, the `TriageAgent` classifies the message:
-- **Simple**: Handled by the **Lite** model (e.g., greetings, simple status checks).
-- **Complex**: Escalated to the **Primary** model (e.g., troubleshooting, command execution).
-- **Short-circuit**: If the intent is unclear, the agent delivers a follow-up question immediately, bypassing further processing to save tokens and time.
+- **Simple**: Routed to the **Dash** agent using the **Lite** model (e.g., greetings, simple status checks).
+- **Complex**: Escalated to the **Sage** agent using the **Primary** model (e.g., troubleshooting, command execution).
+- **Short-circuit**: If the intent is ambiguous, Triage delivers a clarification question immediately, bypassing the ReAct loop.
+
+> **Naming Note**: The GDD's "Dash" (triage interrogator) maps to the `triage` agent in code. The `dash` agent in code is the fast-path responder for simple tasks.
 
 ### 3. Orchestration (The ReAct Loop)
 The `g8eEngine` runs the core agentic loop:
-- **Provider Turn**: Communicates with the configured `LLMProvider` (Gemini, Anthropic, etc.).
-- **Tool Dispatch**: If the LLM requests a tool, `AIToolService` routes it. Universal tools (like `web_search`) run locally; gated tools (like `run_commands`) route through the **Tribunal** for operator execution.
+- **Provider Turn**: Communicates with the configured `LLMProvider` (Gemini, Anthropic, Ollama, etc.).
+- **Tool Dispatch**: If the LLM requests a tool, `AIToolService` routes it. Universal tools (like `web_search`) run locally; gated tools (like `run_commands_with_operator`) route through the **Tribunal**.
 - **Iteration**: The loop continues until the LLM provides a final text response or hits the `AGENT_MAX_TOOL_TURNS` limit.
 
 ### 4. Governance & Safety
-Every gated operation is verified:
-- **Sentinel**: Scrubs sensitive data (PII, secrets) from both inputs and outputs.
-- **Approval Pipeline**: State-changing operations (file edits, commands) trigger an `OPERATOR_COMMAND_APPROVAL_REQUESTED` event, halting execution until a human approves via the UI.
-- **Tribunal**: Refines natural language requests into hardened shell commands using specialized validator models.
+Every gated operation is verified through multiple layers:
+- **Sentinel**: Scrubs sensitive data (PII, secrets) from inputs and outputs.
+- **Tribunal**: An ensemble of five independent agents that translates intent into hardened shell commands.
+- **Auditor**: A high-reasoning agent that verifies the Tribunal's output against the original intent.
+- **Approval Pipeline**: State-changing operations trigger an `OPERATOR_COMMAND_APPROVAL_REQUESTED` event, halting execution until a human approves via the UI.
 
 ### 5. Streaming & Delivery
 Responses are delivered via **Server-Sent Events (SSE)**:
-- **Real-time**: `deliver_via_sse` publishes chunks to `g8ed` as they arrive from the provider.
-- **Per-Iteration Persistence**: Intermediate AI commentary is persisted to the database *during* the loop, ensuring history is preserved even if the connection drops.
+- **Real-time**: `deliver_via_sse` publishes chunks (text, thinking, tool calls) to `g8ed` as they arrive.
+- **Per-Iteration Persistence**: Intermediate AI commentary is persisted to the database *during* the loop, ensuring history is preserved if the connection drops.
 
 ### 6. Post-Flight & Telemetry
 After the stream completes:
 - **Final Persistence**: The complete response, token usage, and grounding metadata are saved.
-- **Background Memory**: A detached task updates the investigation's memory context based on the new turn.
-- **Activity Metadata**: Comprehensive telemetry (duration, models, tools, costs) is recorded by `AgentActivityDataService`.
+- **LFAA Audit**: `OperatorLFAAService` publishes Local-First Audit Architecture events to the operator for an immutable execution record.
+- **Background Memory**: `MemoryGenerationService` (Codex) updates the investigation's memory context based on the turn.
 
 ---
 
 ## Architecture
 
-g8ee is a Python/FastAPI service. The `ChatPipelineService` is the central coordinator — it assembles context, drives the LLM control plane, and handles post-response persistence.
-
+g8ee is a Python/FastAPI service. It follows a strict service hierarchy to ensure isolation and testability.
 
 ### Component Relationships
 
@@ -77,43 +80,52 @@ flowchart LR
     Browser((Browser)) -- "HTTPS / SSE" --> g8ed
 ```
 
-- **g8ed** -- Web gateway; relays browser requests to g8ee and SSE events back to the browser.
-- **g8es** -- Multi-purpose persistence layer (Document, KV, Pub/Sub, and Blob stores).
-- **g8eo** -- Operator binary running on target systems; the source of truth for execution and audit.
+### Data Access Hierarchy
+1. **Clients**: Handle raw transport/protocol (e.g., `DBClient`, `PubSubClient`, `BlobClient`).
+2. **Handler Services**: Wrap clients with domain logic and error handling (e.g., `DBService`, `KVService`, `BlobService`).
+3. **Orchestrators**: Consume handler services to implement platform features (e.g., `ChatPipelineService`, `InvestigationService`).
 
 ---
 
 ## Core Subsystems
 
-### Orchestration Layer
-- **`ChatPipelineService`**: The top-level coordinator for chat sessions. It manages the lifecycle from the HTTP entry point to final persistence.
-- **`g8eEngine`**: The core ReAct engine. It owns the retry logic, turn management, and the high-level tool execution loop.
-- **`BackgroundTaskManager`**: Tracks and manages the lifecycle of long-running AI tasks, providing the ability to stop processing on demand.
+### The Tribunal (Ensemble Command Generation)
+The Tribunal is a five-member panel that converts Sage's intent into executable commands. Members receive the same intent, cannot see each other, and operate under distinct lenses to surface diverse technical considerations:
+- **Axiom**: Focuses on **Composition** (clean, efficient pipelines).
+- **Concord**: Focuses on **Safety** (defensive flags, minimal permissions).
+- **Variance**: Focuses on **Edge Cases** (whitespaces, symlinks, locales, null inputs).
+- **Pragma**: Focuses on **Convention** (idiomatic tool usage for the target OS/shell).
+- **Nemesis**: The **Adversary**—produces plausible-but-flawed commands to ensure the Auditor is vigilant.
+
+The Tribunal uses a ranked-vote system to select a winner, which is then verified by the **Auditor** agent against the original intent.
+
+### LFAA (Local-First Audit Architecture)
+`OperatorLFAAService` ensures every action taken by the AI is recorded on the target system. This provides an immutable audit trail that persists even if the control plane is compromised or inaccessible.
+
+### Warden (Defensive Coordination)
+The `warden` agent coordinates defensive analysis, classifying the risk of commands, errors, and file operations before they are presented for approval.
 
 ### LLM Interface (`LLMProvider`)
-g8ee abstracts LLM providers through a unified interface (`app/llm/provider.py`). This allows the platform to switch between Gemini, Anthropic, OpenAI, and Ollama with zero changes to the orchestration logic.
+g8ee abstracts LLM providers through a unified interface (`app/llm/provider.py`). This allows the platform to switch between Gemini, Anthropic, OpenAI, and Ollama with zero changes to orchestration logic.
 
 | Tier | Usage | Configuration |
 |------|-------|---------------|
-| **Primary** | Complex reasoning, troubleshooting, and final responses. | `primary_provider` + `primary_model` |
-| **Lite** | Triage, routing, and simple conversational turns. | `lite_provider` + `lite_model` |
-| **Assistant** | (Legacy) Phasing out in favor of Lite tier. | `assistant_provider` + `assistant_model` |
+| **Primary** | Complex reasoning (Sage), Auditor, Judge. | `primary_provider` |
+| **Lite** | Triage, Tribunal members, Scribe, Codex, Warden. | `lite_provider` |
+| **Assistant** | (Legacy) Phasing out in favor of Lite tier. | `assistant_provider` |
 
-### Triage & Routing
-The Gatekeeper (`triage.py`) ensures cost-efficiency and speed. It uses the `Lite` model to determine if a message requires the `Primary` model's reasoning capabilities. If the triage confidence is low, it can short-circuit the pipeline to ask for clarification, preventing hallucinations on ambiguous requests.
+---
 
-### Investigation Context
-`InvestigationService` assembles the "Mental Model" for the AI on every turn. It orchestrates the retrieval and enrichment of data from:
-- **`InvestigationDataService`**: Resolves the `InvestigationModel` and maintains conversation history.
-- **`MemoryDataService`**: Fetches `InvestigationMemory` documents to provide long-term context.
-- **`OperatorDataService`**: Loads `OperatorDocument` records for all `BOUND` operators, extracting hardware, OS, and shell metadata.
+## Governance & Audit
 
-This enrichment ensures that every AI turn is grounded in the current reality of the infrastructure, rather than relying solely on the user's initial prompt.
+### Agent Reputation (The Scoreboard)
+g8ee maintains a reputation scoreboard for all AI agents. After every Tribunal invocation, the `ReputationService` updates scores based on the Auditor's verdict and the results of the ranked vote.
 
-### Governance & Safety
-- **Sentinel**: A dual-layer scrubbing engine. `g8ee` performs ingress scrubbing to protect the LLM, while `g8eo` performs egress scrubbing to protect the host.
-- **Tribunal**: A specialized validator subsystem that refines AI-generated commands into safe, deterministic shell scripts.
-- **Approval Service**: The authority for human-in-the-loop gating. No state-changing tool can execute without an explicit approval ID from the user.
+### Merkle Commitments (Artifact B)
+The Auditor binds every verdict to a snapshot of the current reputation state by writing a signed Merkle commitment. These commitments are chained (`prev_root`) via HMAC-SHA256 signatures to provide a verifiable, tamper-evident history of agent performance.
+
+### LFAA (Local-First Audit Architecture)
+`OperatorLFAAService` ensures every action taken by the AI is recorded on the target system. This provides an immutable audit trail that persists even if the control plane is compromised or inaccessible. The Operator remains the system of record for all infrastructure mutations.
 
 ---
 
@@ -308,22 +320,21 @@ For the full list of call behaviors and TTL strategies, see [architecture/storag
 
 ### Operator Bound
 
-Activated when at least one g8eo Operator has `status=bound`.
+Activated when at least one `g8eo` Operator has `status=bound`.
 
-- **Full tool suite** — command execution, file operations, directory listing, port checks, web search (if configured).
-- **Human-in-the-loop** — all state-changing operations require explicit user approval before execution.
-- **Thinking** — enabled for models whose `supported_thinking_levels` list contains at least one non-`OFF` level; the request builder asks for the highest level the model exposes and the per-provider translator clamps to exactly what goes on the wire. See [architecture/thinking_levels.md](../architecture/thinking_levels.md) for the full vocabulary and translator contract.
-- **Cloud Operators** — AWS-type operators use the intent system for Just-in-Time permission escalation (see [Cloud Operator & AWS Intents](#cloud-operator--aws-intents)). g8ep operators (`cloud_subtype=g8ep`) are a special type of cloud operator that provide direct system access and bypass the intent system.
-- **Multi-operator** — multiple operators may be bound simultaneously; the AI selects the target per command using `target_operator` (hostname, operator ID, or index). Batch operations use `target_operators` for unified single-approval execution across N systems.
+- **Full Tool Suite**: Command execution (via Tribunal), file operations, directory listing, port checks, and web search (if configured).
+- **Human-in-the-Loop**: All state-changing operations require explicit user approval.
+- **Thinking**: Enabled for models supporting reasoning levels (`MINIMAL`, `LOW`, `MEDIUM`, `HIGH`).
+- **Cloud Operators**: AWS-type operators use JIT permission escalation via the **Intent System**. `g8ep` operators (`cloud_subtype=g8ep`) are a special type of cloud operator that provides direct system access and bypasses the intent system.
+- **Multi-Operator**: The AI selects the target per command using `target_operator`. Batch operations fan out across `target_operators` with a single unified approval.
 
-### Operator Not Bound
+### Operator Not Bound (Advisory Mode)
 
-Advisory mode — no operator connected.
+Advisory mode—no operator connected.
 
-- **Limited tools** — `search_web` only (when `vertex_search_enabled=true` in `platform_settings` and credentials are configured); no execution capability.
-- **No tools** — when `vertex_search_enabled` is not set or credentials are missing, zero tools are registered. The system prompt automatically uses the no-search variant (`capabilities_no_search.txt`, `execution_no_search.txt`) and suppresses the tools section entirely, preventing `MALFORMED_TOOL_CALL` from the model attempting an undeclared function.
-- **Thinking** — same model-capability rules apply.
-- **Behavior** — AI provides guidance, suggested commands, and analysis without executing anything.
+- **Limited Tools**: `search_web` only (if Vertex AI Search is configured and credentials are present).
+- **No Tools**: If search is not configured, zero tools are registered. The system automatically swaps to `*_no_search.txt` prompt variants to prevent the model from attempting undeclared functions.
+- **Behavior**: AI provides guidance, suggested commands, and analysis, but cannot execute any actions on infrastructure.
 
 #### Tool Availability Model
 
@@ -1010,9 +1021,15 @@ The following sections are read from the `settings` map inside the settings docu
 |-----|---------|-------------|
 | `llm.primary_provider` | `ollama` | The active primary LLM provider (`ollama`, `openai`, `anthropic`, `gemini`). Alias: `llm_primary_provider`. |
 | `llm.assistant_provider` | `ollama` | The active assistant LLM provider. Alias: `llm_assistant_provider`. |
-| `llm.primary_model` | `gemma4-e4b` | The model name for the primary workflow. Alias: `llm_model`. |
-| `llm.assistant_model` | `gemma4-e4b` | The model name for assistant tasks (Triage, Tribunal, Memory). Alias: `llm_assistant_model`. |
-| `llm.ollama_endpoint` | `host.docker.internal:11434` | The Ollama API host (`host:port`). Bare `host:port` is preferred; `http://` scheme and legacy `/v1` suffix are tolerated and normalized by the backend. |
+| `llm.lite_provider` | `ollama` | The active lite LLM provider. Alias: `llm_lite_provider`. |
+| `llm.primary_model` | — | The model name for the primary workflow. Alias: `llm_model`. |
+| `llm.assistant_model` | — | The model name for assistant tasks (Scribe, Codex). Alias: `llm_assistant_model`. |
+| `llm.lite_model` | — | The model name for lite tasks (Triage, Tribunal, Warden). Alias: `llm_lite_model`. |
+| `llm.llm_command_gen_enabled` | `true` | Master switch for Tribunal command generation. |
+| `llm.llm_command_gen_auditor` | `true` | Enable the Auditor verification pass in the Tribunal. |
+| `llm.llm_command_gen_passes` | `5` | Number of parallel generation passes (Axiom, Concord, etc.). |
+| `llm.llm_command_gen_rounds` | `2` | Number of Tribunal voting rounds (1=single-round, 2=two-round with peer review). |
+| `llm.ollama_endpoint` | — | The Ollama API host (`host:port`). Bare `host:port` is preferred; `http://` scheme and legacy `/v1` suffix are tolerated and normalized by the backend. |
 | `llm.openai_endpoint` | `https://api.openai.com/v1` | The OpenAI API endpoint |
 | `llm.openai_api_key` | - | OpenAI API key |
 | `llm.anthropic_endpoint` | `https://api.anthropic.com/v1` | The Anthropic API endpoint |
@@ -1038,17 +1055,11 @@ The following sections are read from the `settings` map inside the settings docu
 
 #### Tribunal Command Generator (`LLMSettings`)
 
-| Key | Default | Purpose |
-|-----|---------|---------|
-| `command_gen_enabled` | `true` | Master switch for Tribunal command generation |
-| `command_gen_passes` | `5` | Number of independent generation passes (1–10) |
-| `command_gen_verifier` | `true` | Enable the SLM verifier pass |
+The Tribunal implements a multi-stage pipeline for producing safe, valid shell commands:
 
-The Tribunal implements a four-stage pipeline for producing safe, valid shell commands:
-
-1.  **Generation**: N independent parallel passes using distinct Tribunal personas (Axiom, Concord, Variance, etc.).
+1.  **Generation**: N independent parallel passes (default 5) using distinct Tribunal personas (Axiom, Concord, Variance, etc.).
 2.  **Voting**: Uniform per-member voting over normalised candidates to reach consensus, with deterministic tie-breaking (shortest command → non-Nemesis cluster → alphabetical).
-3.  **Verification**: Optional verifier pass that evaluates the winner and can suggest a safer revision.
+3.  **Auditor Verification**: The Auditor evaluates the winner and can suggest a safer revision or swap to a dissenting cluster.
 4.  **Safety Enforcement**: Final structural and security validation before returning the command.
 
 **Enhanced Normalization & Syntax Validation:**

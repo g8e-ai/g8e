@@ -14,59 +14,42 @@ This document outlines the testing architecture, core principles, and how to wri
 - **Real Infrastructure** — All testing must occur against real services and real inter-component communications. This means using a real `CacheAsideService` with a real `g8es` backend, real pub/sub over WebSockets, and real network stacks.
 - **The "No Mocks" Policy** — We strictly prohibit mocking internal services, database clients, or LLM providers. Integration tests must use real services. If a scenario is extremely difficult to test without a mock, you must justify its necessity in the PR.
 - **Real LLM Calls** — AI tests use real provider API calls. No `MagicMock`, `AsyncMock`, or HTTP interception on LLM clients. The system handles transient failures via exponential backoff in `EvalJudge`.
-- **Contract Enforcement** — We use AST-scanning contract tests to ensure our source-of-truth constants (events, statuses, JSON schemas) match the application code across Go, Python, and Node.js. Shared fixtures in `shared/test-fixtures/` (e.g., `sse-events.json`) are used to enforce cross-component wire compatibility.
+- **Contract Enforcement** — We use `scripts/testing/check_model_parity.py` to ensure our source-of-truth constants (events, statuses, JSON schemas) match across Go, Python, and Node.js. This script runs automatically before every `./g8e test` command.
 
-## AI Benchmarks & Evaluations
+## Test Harness Architecture: E2E vs Evals
 
-Evaluating non-deterministic AI models requires a multi-layered approach. g8ee uses a host-driven eval framework at `components/g8ee/evals/` that exercises the product through real operator containers and the public g8ed surface — see the [Evals — Public Device-Token Path](#evals--public-device-token-path) section below for the architectural rules.
+The platform maintains two distinct "real operator" test harnesses with **strictly separated authentication and lifecycle patterns**. This separation is architectural and must be enforced in code review.
 
-Evals are NOT pytest-driven and do NOT run inside the test-runner container. They are launched from the Docker host via `./g8e evals` after a device-link token has been issued from the dashboard.
+### 1. E2E Tests (Internal Lifecycle Path)
+**Command:** `./g8e test g8ee --e2e` or `./g8e test g8ed test/integration/setup`
+**Purpose:** Validate the internal operator lifecycle and platform infrastructure.
+- **Pattern:** Provisions operator slots via `g8ed` internal API, uses `X-Internal-Auth`, reads API keys from `g8es`.
+- **Rationale:** Validates the platform's own internal mechanisms.
 
-### Deterministic Benchmarks
-
-The agent's tool-call payloads are graded against strict boolean criteria. No LLM is involved in grading. The runner at `app/evals/runner/scorer.py::score_benchmark_scenario` performs regex matching on the actual command arguments for a reproducible pass/fail metric, driven by `evals/gold_sets/benchmark.json`.
-
-- **Binary pass/fail**: No partial credit. All payload matchers must pass.
-- **Payload grading**: Grades the actual tool-call arguments (e.g., the `command` field), not the text reasoning.
-- **Aggregate percentage**: `passed_scenarios / total_scenarios`.
-
-### Subjective Evaluations (LLM-as-a-Judge)
-
-For reasoning and concept application, the `EvalJudge` (`app/services/ai/eval_judge.py`) uses the platform's Primary Model to score the Assistant Model (Sage) against `evals/gold_sets/accuracy.json`.
-
-- **Deterministic thresholds**: `passed` is computed strictly from `score >= 3`.
-- **Error separation**: System failures (invalid JSON, missing fields) raise `EvalJudgeError`. A low score is a valid evaluation; a system error is a runner failure.
-- **Unified reporting**: Runner persists `report.txt`, `results.csv`, `summary.json` to `components/g8ee/reports/evals/<timestamp>/`.
-
-### Privacy Evaluation
-
-`evals/gold_sets/privacy.json` covers every Sentinel scrubber pattern. Expected placeholders match `app/security/sentinel_scrubber.py` exactly (`[PII]` for SSN/credit-card, `[AWS_KEY]`, `[AWS_SECRET]`, `[URL_WITH_CREDENTIALS]`, `[CONN_STRING]`, `[CREDENTIAL_REFERENCE]`, etc.). Drift is caught when the runner asserts placeholder presence in the egress payload.
-
-### Running Evals
-
-```bash
-./g8e platform start
-./g8e evals up -d dlk_xxx
-./g8e evals status
-./g8e evals down
-```
+### 2. Evals (Public Device-Token Path)
+**Command:** `./g8e evals up -d <token>` then `./g8e evals run --gold-set <path>`
+**Purpose:** Evaluate AI agent (Sage) behavior against the product surface that real users experience.
+- **Pattern:** Uses public device-link tokens, hits public `g8ed` HTTPS endpoints, no internal auth.
+- **Rationale:** Exercises the product exactly as users experience it.
 
 ## Running Tests
 
 All tests are orchestrated via the `./g8e` CLI, which routes each component to its dedicated test-runner container. **Never call `go test`, `pytest`, or `vitest` directly on your host machine.**
 
-| Command | Container | Framework |
-|---------|-----------|-----------|
-| `./g8e test g8ee` | `g8ee-test-runner` | pytest + pyright |
-| `./g8e test g8ed` | `g8ed-test-runner` | vitest |
-| `./g8e test g8eo` | `g8eo-test-runner` | go test |
+| Command | Container | Framework | Primary Use |
+|---------|-----------|-----------|-------------|
+| `./g8e test g8ee` | `g8ee-test-runner` | `pytest` | Python logic, AI integration |
+| `./g8e test g8ed` | `g8ed-test-runner` | `vitest` | Node.js API, Orchestration |
+| `./g8e test g8eo` | `g8eo-test-runner` | `gotestsum` | Go Operator, Low-level tools |
+
+### Common Commands
 
 ```bash
 # Start the platform infrastructure first
 ./g8e platform start
 
-# Authenticate once
-./g8e login --api-key <key>
+# Authenticate once to local store
+./g8e login
 
 # Run a specific component
 ./g8e test g8ee
@@ -74,181 +57,78 @@ All tests are orchestrated via the `./g8e` CLI, which routes each component to i
 # Run with coverage
 ./g8e test g8eo --coverage
 
-# Run g8ee with strict pyright type checking
-./g8e test g8ee --pyright
-
-# Run g8ee with ruff lint check
-./g8e test g8ee --ruff
-
-# Run g8ee with E2E operator lifecycle tests
-./g8e test g8ee --e2e
-
-# Run g8ee tests in parallel
-./g8e test g8ee -j auto
+# Run g8ee with parallelism and strict type checking
+./g8e test g8ee -j auto --pyright --ruff
 ```
 
----
+## AI Benchmarks & Evaluations (Evals)
+
+Evaluating non-deterministic AI models requires a multi-layered approach using the `evals` subsystem. Evals are **not** pytest-driven and run outside the standard test-runner containers.
+
+### Eval Workflow
+
+```bash
+# 1. Start a fleet of real operator nodes linked via a device token
+./g8e evals up --device-token dlk_xxx --nodes 3
+
+# 2. Run the eval runner (executes in g8ep)
+./g8e evals run --gold-set evals/gold_sets/accuracy.json --device-token dlk_xxx
+
+# 3. View status and logs
+./g8e evals status
+./g8e evals logs eval-node-01
+
+# 4. Tear down the fleet
+./g8e evals down
+```
+
+### Evaluation Types
+
+- **Deterministic Benchmarks**: Tool-call payloads graded via regex matching in `scorer.py` against `benchmark.json`.
+- **Subjective Evaluations**: `EvalJudge` uses the Primary Model to score the Assistant Model (Sage) against `accuracy.json`.
+- **Privacy Evaluation**: Asserts Sentinel scrubber placeholders (`[PII]`, `[AWS_KEY]`, etc.) are present in egress payloads via `privacy.json`.
 
 ## Component Testing Strategies
 
-Each component has specific testing patterns tailored to its language and ecosystem, while adhering to the global principles.
-
 ### Go (g8eo)
-
-The Go operator enforces a strict separation between in-memory logic and wire-level integration.
-
-- **Unit**: Pure in-memory, no I/O. Uses `MockG8esPubSubClient` for asserting pub/sub payloads.
-- **Loopback**: Uses an in-process `PubSubBroker` (`loopbackFixture`) over real WebSockets. Validates the full dispatch/routing wire path without requiring a live g8es instance.
-- **Integration**: Tagged with `//go:build integration`. Requires live g8es infrastructure. Exercises the full end-to-end stack, including real network, TLS, and broker behavior.
-- **Contract**: AST scanners ensure Go structs exactly match our shared JSON models and constants.
-
-**Rule:** Always use `t.TempDir()` for file operations, and always run tests with `-race`. Any goroutines spawned in tests must be stopped via `t.Cleanup()`.
+- **gotestsum**: Used for formatted output and race detection (`-race`).
+- **Loopback**: Uses an in-process `PubSubBroker` over real WebSockets for full wire-path validation without a live `g8es`.
+- **Integration**: Tagged with `//go:build integration`. Requires live platform infrastructure.
 
 ### Node.js (g8ed)
-
-The Node.js orchestration layer uses `vitest` for backend execution and integration testing.
-
-- **Integration via `getTestServices()`**: Tests requiring live services must use the global `getTestServices()` singleton. Never initialize core services manually in integration tests.
-- **Collection Isolation**: Tests never write to the real collections. We use automated test collection overrides (`_test` suffix) managed by `TestCleanupHelper` to prevent state bleed.
-- **SSE Testing**: Server-Sent Events are tested using `MockSSEResponse` and `MockSSEBrowser` which enforce W3C specs and simulate real-world network failures (broken pipes, slow connections, malformed frames).
-- **Mocks (Exception)**: Unit tests for individual services or route handlers in `test/unit/` may use mocks for direct dependencies to isolate logic. Integration tests must use real services.
+- **vitest**: Primary test runner for the orchestration layer.
+- **Test Services**: Uses `getTestServices()` singleton to ensure consistent service initialization.
+- **Isolation**: Managed by `TestCleanupHelper` using `_test` collection suffixes.
 
 ### Python (g8ee)
+- **pytest**: Primary test runner for the AI engine.
+- **Type Safety**: `--pyright` runs strict AST-level type checking before tests.
+- **Linting**: `--ruff` (and `--ruff-fix`) enforces code style.
+- **Markers**: `@pytest.mark.ai_integration` and `@pytest.mark.requires_web_search` manage tests requiring external credentials.
 
-The Python execution engine runs `pytest` inside the `g8ee-test-runner` container.
+## Security & Audit
 
-- **Pyright Integration**: Type checking is enforced at test time. Running `./g8e test g8ee --pyright` runs strict pyright checks before `pytest`, failing immediately on type errors.
-- **Real APIs Only**: No patches or mocks on LLM clients. All tests use real provider API calls. The `ai_integration` marker ensures these tests skip if credentials are not provided.
-- **Web Search**: Tests requiring external capabilities (like Google Web Search) are isolated via the `requires_web_search` marker and gracefully skip when credentials are not provided.
-- **E2E Infrastructure**: E2E tests for the platform orchestration are primarily located in `components/g8ed/test/integration/setup/` and use real HTTP requests against the application.
-
-### Security Audits
-
-The `g8ep` container includes a comprehensive suite of security scan scripts volume-mounted into `scripts/security/`. Tools are lazy-installed and execute against the running platform.
+The platform includes automated security verification tools run via `g8ep`.
 
 ```bash
-# Run full mTLS and configuration audit (testssl.sh, Nuclei, Trivy, nmap)
-./g8e login --api-key <key>
+# Run mTLS and configuration audit
 ./g8e security mtls-test
+
+# Validate platform security posture
+./g8e security validate
+
+# Scan for dependency licenses
+./g8e security scan-licenses
 ```
 
 ## Shared Test Fixtures
 
-Shared test fixtures are stored in `shared/test-fixtures/` to ensure consistency and prevent drift across all g8e components.
-
-### SSE Events (`sse-events.json`)
-
-Canonical SSE event structures used by both g8ee (Python) and g8ed (Node.js) tests.
-
-#### Usage in g8ee (Python)
-
-```python
-import json
-from pathlib import Path
-
-# Load shared fixtures
-fixtures_path = Path(__file__).parent.parent / "shared" / "test-fixtures" / "sse-events.json"
-with open(fixtures_path) as f:
-    sse_events = json.load(f)
-
-# Use in tests
-text_chunk_event = sse_events["text_chunk_received"]
-```
-
-#### Usage in g8ed (Node.js)
-
-```javascript
-import fs from 'fs';
-import path from 'path';
-
-// Load shared fixtures
-const fixturesPath = path.resolve(__dirname, '../../../shared/test-fixtures/sse-events.json');
-const sseEvents = JSON.parse(fs.readFileSync(fixturesPath, 'utf8'));
-
-// Use in tests
-const textChunkEvent = sseEvents.text_chunk_received;
-```
-
-#### Fixture Structure
-
-Each fixture includes:
-- `type`: Event type constant
-- `data`: Event payload with required routing fields (`investigation_id`, `case_id`, `web_session_id`)
-- Realistic example values for testing
-
-#### Contract Tests
-
-Both g8ee and g8ed include contract tests that verify:
-1. Events emitted match the shared fixture structure
-2. Required routing fields are present
-3. Event types match constants in `shared/constants/events.json`
-
-#### Maintenance
-
-When adding new SSE events:
-1. Add the event structure to `sse-events.json`
-2. Update any relevant contract tests
-3. Document the event in component-specific testing guides
+Shared fixtures in `shared/test-fixtures/` (e.g., `sse-events.json`) are used to enforce cross-component wire compatibility. Contract tests in each component verify that emitted events match these shared structures.
 
 ## Continuous Integration
 
-Our GitHub workflows enforce these constraints on every commit to `main`:
-- Full multi-architecture container builds.
-- Matrix execution of `g8ee`, `g8ed`, and `g8eo` tests against running infrastructure.
-- Real AI integration tests using live API keys.
-- Contract enforcement and pyright strict type checking.
-
----
-
-## Test Harness Architecture: E2E vs Evals
-
-The platform maintains two distinct "real operator" test harnesses with **strictly separated authentication and lifecycle patterns**. This separation is architectural and must be enforced in code review.
-
-### E2E Tests — Internal Lifecycle Path
-
-**Location:** `components/g8ed/test/integration/setup/` (and other `*.e2e.test.js` files)
-
-**Purpose:** Validate the internal operator lifecycle and platform infrastructure.
-
-**Pattern:**
-- Provisions operator slots via `g8ed` internal API (`/api/internal/operators/...`)
-- Reads API keys directly from `g8es` document store
-- Uses `X-Internal-Auth` header for all internal API calls
-- Subscribes to real PubSub heartbeat channels
-- Launches real operator binary in isolated sandbox
-
-**Correct because:** E2E tests validate the internal platform infrastructure. They are allowed to use internal auth tokens and direct `g8es` document access because they are testing the platform's own internal mechanisms.
-
-### Evals — Public Device-Token Path
-
-**Location:** `components/g8ee/evals/` (host-driven runner, not pytest)
-
-**Purpose:** Evaluate AI agent (Sage) behavior against the product surface that real users experience.
-
-**Pattern:**
-- Uses device-link tokens generated from the dashboard (same as end users)
-- Hits public `g8ed` HTTPS API endpoints (chat, approvals, SSE)
-- No `X-Internal-Auth` header usage
-- No direct `g8es` document writes
-- Operator containers authenticate via device token, not internal slot provisioning
-
-**Correct because:** Evals exercise the product as users experience it. They must not bypass the public authentication surface or use internal shortcuts, as that would invalidate the evaluation of real-world behavior.
-
-### Code Review Guidelines
-
-**For E2E test PRs:**
-- Internal auth and direct `g8es` access are expected and correct
-- Review focus: infrastructure validation, lifecycle correctness, PubSub event handling
-
-**For evals PRs:**
-- **REJECT** any changes that introduce `X-Internal-Auth` usage
-- **REJECT** any changes that perform direct `g8es` document writes
-- **REJECT** any changes that use internal API endpoints (`/api/internal/...`)
-- **REJECT** any changes that bypass device-token authentication
-- Review focus: public API correctness, device-token flow, realistic user scenarios
-
-**Rationale:** The separation ensures that:
-1. E2E tests validate internal infrastructure without constraints
-2. Evals validate the product surface exactly as users experience it
-3. Performance or security regressions in the public path are caught by evals
-4. Internal implementation changes don't accidentally invalidate eval results
+Our GitHub workflows (`.github/workflows/build-and-test.yml`) enforce:
+- Multi-architecture container builds (amd64, arm64).
+- Matrix execution of all component tests against real infrastructure.
+- Contract enforcement via `check_model_parity.py`.
+- Automated eval runs for core agent behaviors.

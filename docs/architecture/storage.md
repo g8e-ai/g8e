@@ -170,14 +170,38 @@ The Audit Vault (`.g8e/data/g8e.db`) is encrypted using AES-256-GCM when an encr
 
 | Collection | Description |
 |---|---|
+| **Authentication & Sessions** |
 | `users` | Account data and credential metadata. |
 | `web_sessions` | UI sessions (encrypted). |
+| `operator_sessions` | Operator CLI sessions (encrypted). |
+| `cli_sessions` | Direct CLI sessions (encrypted). |
+| `api_keys` | API key credentials for external integrations. |
+| `passkey_challenges` | Passkey authentication challenges. |
+| `account_locks` | Account lockout status and metadata. |
+| **Audit & Security** |
+| `login_audit` | Login attempt history and security events. |
+| `auth_admin_audit` | Administrative authentication actions. |
+| `console_audit` | Console command execution audit trail. |
+| `bound_sessions` | Session binding records for security. |
+| **Operators & Usage** |
 | `operators` | Registration and heartbeat status for managed hosts. |
-| `cases` / `investigations` | Higher-level support and forensic groupings. |
+| `operator_usage` | Operator resource usage metrics. |
+| **Organizations** |
+| `organizations` | Organization accounts and memberships. |
+| **Cases & Investigations** |
+| `cases` | Support cases and forensic investigations. |
+| `investigations` | Detailed forensic investigation records. |
+| `tasks` | Task queue and execution status. |
+| **AI & Context** |
 | `memories` | AI-generated long-term context. |
-| `settings` | Global and user-level overrides. |
 | `tribunal_commands` | History of commands reviewed by the Tribunal. |
 | `agent_activity_metadata` | Execution context and performance metrics. |
+| **Configuration** |
+| `settings` | Global and user-level overrides. |
+| **Reputation System** |
+| `reputation_state` | Reputation scores and state. |
+| `reputation_commitments` | Reputation stake commitments. |
+| `stake_resolutions` | Reputation stake resolution records. |
 
 ---
 
