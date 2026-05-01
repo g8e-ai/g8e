@@ -1,6 +1,7 @@
 # AI-Powered, Human-Driven Infrastructure
 
 *Danny Barbour · [github.com/g8e-ai/g8e](https://github.com/g8e-ai/g8e)*
+*Available for short-term engagements: agent governance review, threat modeling, eval pipeline design. 1–4 week scopes.*
 
 ---
 

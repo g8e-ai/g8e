@@ -296,6 +296,13 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 | [Testing Guide](docs/testing.md) | Test infrastructure, component guidelines, CI |
 | [Glossary](docs/glossary.md) | Platform terminology |
 
+
+---
+
+## Engagements
+
+For commercial engagements, partnerships, or short-term contracts: danny@g8e.ai
+
 ---
 
 ## License

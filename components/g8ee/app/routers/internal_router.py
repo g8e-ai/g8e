@@ -95,6 +95,7 @@ from app.models.investigations import (
 )
 from app.models.events import SessionEvent
 from app.models.http_context import G8eHttpContext
+from app.models.operators import OperatorStatusUpdatedPayload
 from app.services.operator.session_auth_listener import SessionAuthListener
 from app.services.operator.operator_data_service import OperatorDataService
 from app.services.operator.heartbeat_service import HeartbeatSnapshotService
@@ -1101,6 +1102,7 @@ async def claim_operator_slot(
 async def bind_operators(
     request: OperatorBindRequest,
     operator_data_service: "OperatorDataService" = Depends(get_g8ee_operator_data_service),
+    event_service: EventService = Depends(get_g8ee_event_service),
     g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
 ):
     """
@@ -1146,6 +1148,26 @@ async def bind_operators(
 
             if result.success:
                 bound.append(operator_id)
+
+                # Publish status update event to SSE stream
+                try:
+                    heartbeat_snapshot = operator.latest_heartbeat_snapshot
+                    system_identity = heartbeat_snapshot.system_identity if heartbeat_snapshot else None
+                    await event_service.publish(
+                        SessionEvent(
+                            event_type=EventType.OPERATOR_STATUS_UPDATED_BOUND,
+                            payload=OperatorStatusUpdatedPayload(
+                                operator_id=operator_id,
+                                status=OperatorStatus.BOUND,
+                                hostname=system_identity.hostname if system_identity else None,
+                                system_fingerprint=heartbeat_snapshot.system_fingerprint if heartbeat_snapshot else None,
+                                metrics=heartbeat_snapshot,
+                            ),
+                            web_session_id=request.web_session_id,
+                        )
+                    )
+                except Exception as e:
+                    logger.warning(f"[INTERNAL-HTTP] Failed to publish bind event for {operator_id}: {e}")
             else:
                 failed.append(operator_id)
                 errors.append({"operator_id": operator_id, "error": result.error or "Failed to update operator"})
@@ -1177,6 +1199,7 @@ async def bind_operators(
 async def unbind_operators(
     request: OperatorUnbindRequest,
     operator_data_service: "OperatorDataService" = Depends(get_g8ee_operator_data_service),
+    event_service: EventService = Depends(get_g8ee_event_service),
     g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
 ):
     """
@@ -1222,6 +1245,26 @@ async def unbind_operators(
 
             if result.success:
                 unbound.append(operator_id)
+
+                # Publish status update event to SSE stream
+                try:
+                    heartbeat_snapshot = operator.latest_heartbeat_snapshot
+                    system_identity = heartbeat_snapshot.system_identity if heartbeat_snapshot else None
+                    await event_service.publish(
+                        SessionEvent(
+                            event_type=EventType.OPERATOR_STATUS_UPDATED_ACTIVE,
+                            payload=OperatorStatusUpdatedPayload(
+                                operator_id=operator_id,
+                                status=OperatorStatus.ACTIVE,
+                                hostname=system_identity.hostname if system_identity else None,
+                                system_fingerprint=heartbeat_snapshot.system_fingerprint if heartbeat_snapshot else None,
+                                metrics=heartbeat_snapshot,
+                            ),
+                            web_session_id=request.web_session_id,
+                        )
+                    )
+                except Exception as e:
+                    logger.warning(f"[INTERNAL-HTTP] Failed to publish unbind event for {operator_id}: {e}")
             else:
                 failed.append(operator_id)
                 errors.append({"operator_id": operator_id, "error": result.error or "Failed to update operator"})
