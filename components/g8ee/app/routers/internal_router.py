@@ -1164,6 +1164,7 @@ async def bind_operators(
                                 metrics=heartbeat_snapshot,
                             ),
                             web_session_id=request.web_session_id,
+                            user_id=request.user_id,
                         )
                     )
                 except Exception as e:
@@ -1261,6 +1262,7 @@ async def unbind_operators(
                                 metrics=heartbeat_snapshot,
                             ),
                             web_session_id=request.web_session_id,
+                            user_id=request.user_id,
                         )
                     )
                 except Exception as e:

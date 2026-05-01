@@ -529,6 +529,7 @@ async def _run_audit_stage(
     settings: G8eeUserSettings,
     ai_response_analyzer: AIResponseAnalyzerProtocol | None = None,
     investigation_state: Any | None = None,
+    investigation_context: str = "",
     tied_candidates: list[CandidateCommand] | None = None,
     whitelisting_enabled: bool = False,
     blacklisting_enabled: bool = False,
@@ -553,7 +554,10 @@ async def _run_audit_stage(
         risk_analysis = await ai_response_analyzer.analyze_command_risk(
             command=vote_winner,
             justification=justification,
-            context=CommandRiskContext(working_directory=operator_context.working_directory if operator_context else ""),
+            context=CommandRiskContext(
+                working_directory=operator_context.working_directory if operator_context else "",
+                investigation_context=investigation_context,
+            ),
             settings=settings,
         )
 
@@ -782,6 +786,7 @@ async def generate_command(
     auditor_hmac_key: str,
     ai_response_analyzer: AIResponseAnalyzerProtocol | None = None,
     investigation_state: Any | None = None,
+    investigation_context: str = "",
     whitelisting_enabled: bool = False,
     blacklisting_enabled: bool = False,
     whitelisted_commands: list[WhitelistedCommand] | None = None,
@@ -1032,6 +1037,7 @@ async def generate_command(
         settings=settings,
         ai_response_analyzer=ai_response_analyzer,
         investigation_state=investigation_state,
+        investigation_context=investigation_context,
         whitelisting_enabled=whitelisting_enabled,
         blacklisting_enabled=blacklisting_enabled,
     )

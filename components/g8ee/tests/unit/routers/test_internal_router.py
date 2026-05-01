@@ -454,21 +454,27 @@ async def test_bind_operators_success(g8e_context):
     mock_operator_data_service = MagicMock()
     mock_operator = MagicMock()
     mock_operator.user_id = "user-123"
+    mock_operator.latest_heartbeat_snapshot = None
     mock_operator_data_service.get_operator = AsyncMock(return_value=mock_operator)
     mock_operator_data_service.cache = MagicMock()
     mock_result = MagicMock()
     mock_result.success = True
     mock_operator_data_service.cache.update_document = AsyncMock(return_value=mock_result)
 
+    mock_event_service = MagicMock()
+    mock_event_service.publish = AsyncMock(return_value=None)
+
     response = await bind_operators(
         request=request,
         operator_data_service=mock_operator_data_service,
+        event_service=mock_event_service,
         g8e_context=g8e_context
     )
 
     assert response.success is True
     assert response.bound_count == 2
     assert mock_operator_data_service.cache.update_document.call_count == 2
+    assert mock_event_service.publish.call_count == 2
 
 @pytest.mark.asyncio
 async def test_bind_operators_unauthorized(g8e_context):
@@ -481,11 +487,16 @@ async def test_bind_operators_unauthorized(g8e_context):
     mock_operator_data_service = MagicMock()
     mock_operator = MagicMock()
     mock_operator.user_id = "different-user"
+    mock_operator.latest_heartbeat_snapshot = None
     mock_operator_data_service.get_operator = AsyncMock(return_value=mock_operator)
+
+    mock_event_service = MagicMock()
+    mock_event_service.publish = AsyncMock(return_value=None)
 
     response = await bind_operators(
         request=request,
         operator_data_service=mock_operator_data_service,
+        event_service=mock_event_service,
         g8e_context=g8e_context
     )
 
@@ -505,15 +516,20 @@ async def test_unbind_operators_success(g8e_context):
     mock_operator_data_service = MagicMock()
     mock_operator = MagicMock()
     mock_operator.user_id = "user-123"
+    mock_operator.latest_heartbeat_snapshot = None
     mock_operator_data_service.get_operator = AsyncMock(return_value=mock_operator)
     mock_operator_data_service.cache = MagicMock()
     mock_result = MagicMock()
     mock_result.success = True
     mock_operator_data_service.cache.update_document = AsyncMock(return_value=mock_result)
 
+    mock_event_service = MagicMock()
+    mock_event_service.publish = AsyncMock(return_value=None)
+
     response = await unbind_operators(
         request=request,
         operator_data_service=mock_operator_data_service,
+        event_service=mock_event_service,
         g8e_context=g8e_context
     )
 
@@ -522,6 +538,7 @@ async def test_unbind_operators_success(g8e_context):
     assert response.failed_count == 0
     assert len(response.unbound_operator_ids) == 2
     assert mock_operator_data_service.cache.update_document.call_count == 2
+    assert mock_event_service.publish.call_count == 2
 
 @pytest.mark.asyncio
 async def test_unbind_operators_unauthorized(g8e_context):
@@ -534,11 +551,16 @@ async def test_unbind_operators_unauthorized(g8e_context):
     mock_operator_data_service = MagicMock()
     mock_operator = MagicMock()
     mock_operator.user_id = "different-user"
+    mock_operator.latest_heartbeat_snapshot = None
     mock_operator_data_service.get_operator = AsyncMock(return_value=mock_operator)
+
+    mock_event_service = MagicMock()
+    mock_event_service.publish = AsyncMock(return_value=None)
 
     response = await unbind_operators(
         request=request,
         operator_data_service=mock_operator_data_service,
+        event_service=mock_event_service,
         g8e_context=g8e_context
     )
 

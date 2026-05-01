@@ -160,6 +160,9 @@ class TribunalInvoker:
             len(whitelisted_commands), len(blacklisted_commands),
         )
 
+        investigation_context_parts = [p for p in [investigation.case_title, investigation.case_description] if p]
+        investigation_context = " | ".join(investigation_context_parts)
+
         gen_result = await generate_command(
             request=request,
             guidelines=guidelines,
@@ -174,6 +177,7 @@ class TribunalInvoker:
             auditor_hmac_key=tool_executor.auditor_hmac_key,
             ai_response_analyzer=tool_executor.ai_response_analyzer,
             investigation_state=investigation.current_state,
+            investigation_context=investigation_context,
             whitelisting_enabled=whitelisting_enabled,
             blacklisting_enabled=blacklisting_enabled,
             whitelisted_commands=whitelisted_commands,

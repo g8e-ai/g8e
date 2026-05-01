@@ -153,6 +153,25 @@ async def test_analyze_command_risk_fallback_on_empty_response(analyzer, fake_pr
 
 
 @pytest.mark.asyncio
+async def test_analyze_command_risk_with_investigation_context(analyzer, fake_provider, mock_settings):
+    """investigation_context in CommandRiskContext is passed to the template and does not break analysis."""
+    fake_provider.add_response('{"risk_level": "MEDIUM"}')
+
+    with patch("app.services.ai.response_analyzer.get_llm_provider", return_value=fake_provider):
+        result = await analyzer.analyze_command_risk(
+            "sed -i 's/proxy_pass/;/' /etc/nginx/sites-available/default",
+            "Fix nginx config syntax error",
+            CommandRiskContext(
+                working_directory="/etc/nginx",
+                investigation_context="nginx troubleshooting | reverse proxy returning 502",
+            ),
+            mock_settings,
+        )
+
+    assert result.risk_level == RiskLevel.MEDIUM
+
+
+@pytest.mark.asyncio
 async def test_analyze_command_risk_fallback_on_exception(analyzer, fake_provider, mock_settings):
     with patch("app.services.ai.response_analyzer.get_llm_provider", side_effect=Exception("LLM error")):
         result = await analyzer.analyze_command_risk(
