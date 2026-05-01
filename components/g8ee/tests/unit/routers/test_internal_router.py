@@ -454,6 +454,7 @@ async def test_bind_operators_success(g8e_context):
     mock_operator_data_service = MagicMock()
     mock_operator = MagicMock()
     mock_operator.user_id = "user-123"
+    mock_operator.name = None
     mock_operator.latest_heartbeat_snapshot = None
     mock_operator_data_service.get_operator = AsyncMock(return_value=mock_operator)
     mock_operator_data_service.cache = MagicMock()
@@ -487,6 +488,7 @@ async def test_bind_operators_unauthorized(g8e_context):
     mock_operator_data_service = MagicMock()
     mock_operator = MagicMock()
     mock_operator.user_id = "different-user"
+    mock_operator.name = None
     mock_operator.latest_heartbeat_snapshot = None
     mock_operator_data_service.get_operator = AsyncMock(return_value=mock_operator)
 
@@ -516,6 +518,7 @@ async def test_unbind_operators_success(g8e_context):
     mock_operator_data_service = MagicMock()
     mock_operator = MagicMock()
     mock_operator.user_id = "user-123"
+    mock_operator.name = None
     mock_operator.latest_heartbeat_snapshot = None
     mock_operator_data_service.get_operator = AsyncMock(return_value=mock_operator)
     mock_operator_data_service.cache = MagicMock()
@@ -551,6 +554,7 @@ async def test_unbind_operators_unauthorized(g8e_context):
     mock_operator_data_service = MagicMock()
     mock_operator = MagicMock()
     mock_operator.user_id = "different-user"
+    mock_operator.name = None
     mock_operator.latest_heartbeat_snapshot = None
     mock_operator_data_service.get_operator = AsyncMock(return_value=mock_operator)
 

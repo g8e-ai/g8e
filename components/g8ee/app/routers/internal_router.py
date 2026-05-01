@@ -1159,6 +1159,7 @@ async def bind_operators(
                             payload=OperatorStatusUpdatedPayload(
                                 operator_id=operator_id,
                                 status=OperatorStatus.BOUND,
+                                name=operator.name,
                                 hostname=system_identity.hostname if system_identity else None,
                                 system_fingerprint=heartbeat_snapshot.system_fingerprint if heartbeat_snapshot else None,
                                 metrics=heartbeat_snapshot,
@@ -1257,6 +1258,7 @@ async def unbind_operators(
                             payload=OperatorStatusUpdatedPayload(
                                 operator_id=operator_id,
                                 status=OperatorStatus.ACTIVE,
+                                name=operator.name,
                                 hostname=system_identity.hostname if system_identity else None,
                                 system_fingerprint=heartbeat_snapshot.system_fingerprint if heartbeat_snapshot else None,
                                 metrics=heartbeat_snapshot,

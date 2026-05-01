@@ -74,6 +74,31 @@ export const ChatSSEHandlersMixin = {
             this.handleNetworkPortCheckFailed(data);
         });
 
+        // Filesystem tool handlers for native lifecycle events
+        this.eventBus.on(EventType.OPERATOR_FILESYSTEM_LIST_STARTED, (data) => {
+            this.handleFilesystemListStarted(data);
+        });
+
+        this.eventBus.on(EventType.OPERATOR_FILESYSTEM_LIST_COMPLETED, (data) => {
+            this.handleFilesystemListCompleted(data);
+        });
+
+        this.eventBus.on(EventType.OPERATOR_FILESYSTEM_LIST_FAILED, (data) => {
+            this.handleFilesystemListFailed(data);
+        });
+
+        this.eventBus.on(EventType.OPERATOR_FILESYSTEM_READ_STARTED, (data) => {
+            this.handleFilesystemReadStarted(data);
+        });
+
+        this.eventBus.on(EventType.OPERATOR_FILESYSTEM_READ_COMPLETED, (data) => {
+            this.handleFilesystemReadCompleted(data);
+        });
+
+        this.eventBus.on(EventType.OPERATOR_FILESYSTEM_READ_FAILED, (data) => {
+            this.handleFilesystemReadFailed(data);
+        });
+
         // Universal tool handlers for native lifecycle events
         this.eventBus.on(EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED, (data) => {
             this.handleUniversalToolStarted(data, 'web-search', data.display_label || 'Searching web', data.display_icon, data.category);
@@ -492,7 +517,15 @@ export const ChatSSEHandlersMixin = {
             this._portCheckIndicators.clear();
         }
 
-        // 4. Clear search web indicators
+        // 4. Clear filesystem indicators
+        if (this._filesystemIndicators) {
+            for (const [execId, indicatorId] of this._filesystemIndicators.entries()) {
+                this.anchoredTerminal.completeActivityIndicator(indicatorId);
+            }
+            this._filesystemIndicators.clear();
+        }
+
+        // 5. Clear search web indicators
         this._searchWebIndicators?.clear();
     },
     handleIterationStarted(data) {
@@ -578,6 +611,80 @@ export const ChatSSEHandlersMixin = {
         if (!indicatorId) return;
         this.anchoredTerminal.completeActivityIndicator(indicatorId);
         this._portCheckIndicators.delete(data.execution_id);
+    },
+
+    handleFilesystemListStarted(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        const webSessionId = data.web_session_id;
+        if (!webSessionId || !this.anchoredTerminal) return;
+        const executionId = data.execution_id;
+        if (!executionId) return;
+        const indicatorId = `fs-list-${executionId}`;
+        if (!this._filesystemIndicators) this._filesystemIndicators = new Map();
+        this._filesystemIndicators.set(executionId, indicatorId);
+        const path = data.command?.replace(/^ls\s+/, '') || 'directory';
+        this.anchoredTerminal.appendActivityIndicator({
+            id: indicatorId,
+            icon: 'folder',
+            label: 'Listing directory',
+            detail: path,
+            category: ToolDisplayCategory.FILE,
+        });
+    },
+
+    handleFilesystemListCompleted(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        if (!this.anchoredTerminal || !this._filesystemIndicators) return;
+        const indicatorId = this._filesystemIndicators.get(data.execution_id);
+        if (!indicatorId) return;
+        this.anchoredTerminal.completeActivityIndicator(indicatorId);
+        this._filesystemIndicators.delete(data.execution_id);
+    },
+
+    handleFilesystemListFailed(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        if (!this.anchoredTerminal || !this._filesystemIndicators) return;
+        const indicatorId = this._filesystemIndicators.get(data.execution_id);
+        if (!indicatorId) return;
+        this.anchoredTerminal.completeActivityIndicator(indicatorId);
+        this._filesystemIndicators.delete(data.execution_id);
+    },
+
+    handleFilesystemReadStarted(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        const webSessionId = data.web_session_id;
+        if (!webSessionId || !this.anchoredTerminal) return;
+        const executionId = data.execution_id;
+        if (!executionId) return;
+        const indicatorId = `fs-read-${executionId}`;
+        if (!this._filesystemIndicators) this._filesystemIndicators = new Map();
+        this._filesystemIndicators.set(executionId, indicatorId);
+        const path = data.command?.replace(/^cat\s+/, '') || 'file';
+        this.anchoredTerminal.appendActivityIndicator({
+            id: indicatorId,
+            icon: 'description',
+            label: 'Reading file',
+            detail: path,
+            category: ToolDisplayCategory.FILE,
+        });
+    },
+
+    handleFilesystemReadCompleted(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        if (!this.anchoredTerminal || !this._filesystemIndicators) return;
+        const indicatorId = this._filesystemIndicators.get(data.execution_id);
+        if (!indicatorId) return;
+        this.anchoredTerminal.completeActivityIndicator(indicatorId);
+        this._filesystemIndicators.delete(data.execution_id);
+    },
+
+    handleFilesystemReadFailed(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        if (!this.anchoredTerminal || !this._filesystemIndicators) return;
+        const indicatorId = this._filesystemIndicators.get(data.execution_id);
+        if (!indicatorId) return;
+        this.anchoredTerminal.completeActivityIndicator(indicatorId);
+        this._filesystemIndicators.delete(data.execution_id);
     },
 
     handleTurnComplete(data) {

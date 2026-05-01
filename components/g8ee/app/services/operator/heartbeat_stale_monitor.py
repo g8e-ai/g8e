@@ -181,6 +181,11 @@ class HeartbeatStaleMonitorService:
     async def _apply_transition(self, operator: OperatorDocument, target_status: OperatorStatus, age_seconds: float) -> bool:
         operator_id = operator.id
         from_status = operator.status
+
+        # Skip if already in target status (prevents duplicate events from race conditions)
+        if from_status == target_status:
+            return False
+
         try:
             success = await self._operator_data_service.update_operator_status(
                 operator_id=operator_id,
@@ -229,6 +234,7 @@ class HeartbeatStaleMonitorService:
             payload = OperatorStatusUpdatedPayload(
                 operator_id=operator.id,
                 status=target_status,
+                name=operator.name,
                 hostname=operator.current_hostname,
                 system_fingerprint=operator.latest_heartbeat_snapshot.system_fingerprint if operator.latest_heartbeat_snapshot else None,
                 timestamp=datetime.now(UTC),
