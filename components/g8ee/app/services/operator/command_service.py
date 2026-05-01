@@ -394,14 +394,78 @@ class OperatorCommandService:
         )
 
         if risk_analysis and risk_analysis.risk_level == RiskLevel.HIGH and not is_auto_approved:
-            # Broadcast Warden block to UI
+            # Two-Strike Circuit Breaker with Contextual Backpressure
+            # Track warden blocks per investigation to prevent infinite loops
+            current_state = investigation.current_state if investigation else None
+            block_count = current_state.warden_block_count if current_state else 0
+
+            if block_count >= 1:
+                # SECOND STRIKE: Agent Conflict detected - Sage and Warden cannot agree
+                logger.warning("[WARDEN-CIRCUIT-BREAKER] Second warden block detected for investigation=%s - triggering AGENT_CONFLICT", investigation.id if investigation else "unknown")
+
+                # Reset block count for future attempts
+                if current_state:
+                    current_state.warden_block_count = 0
+
+                # Publish Agent Conflict event for UI to render approval dialog
+                await self.g8ed_event_service.publish_command_event(
+                    EventType.AI_AGENT_CONFLICT_DETECTED,
+                    self._CommandResultBroadcastEvent(
+                        execution_id=approval_execution_id,
+                        command=command,
+                        status=ExecutionStatus.FAILED,
+                        error="AGENT CONFLICT: Warden blocked Sage's command twice. The AI agents cannot agree on a safe approach. Human intervention required.",
+                        error_type=CommandErrorType.AGENT_CONFLICT,
+                        operator_id=primary_operator_id,
+                        operator_session_id=primary_session_id,
+                        batch_id=batch_id,
+                    ),
+                    g8e_context,
+                    task_id=AITaskId.COMMAND,
+                )
+
+                return CommandExecutionResult(
+                    success=False,
+                    error="Agent Conflict: Warden blocked Sage's command twice. The AI agents cannot agree on a safe approach. Please provide guidance or manually approve a command.",
+                    error_type=CommandErrorType.AGENT_CONFLICT,
+                    command_executed=command,
+                    justification=justification,
+                    warden_risk=risk_analysis.risk_level,
+                    execution_id=approval_execution_id,
+                    batch_id=batch_id,
+                )
+
+            # FIRST STRIKE: Get contextual feedback via Assistant model
+            logger.info("[WARDEN-CIRCUIT-BREAKER] First warden block for investigation=%s - generating contextual feedback", investigation.id if investigation else "unknown")
+
+            # Increment block count
+            if current_state:
+                current_state.warden_block_count = block_count + 1
+
+            # Generate contextual feedback using Assistant model via error analysis
+            from app.models.tool_results import ErrorAnalysisContext
+            error_analysis = await self._execution_service.ai_response_analyzer.analyze_error_and_suggest_fix(
+                command=command,
+                exit_code=None,
+                stdout="",
+                stderr=f"WARDEN BLOCK: Command classified as HIGH risk. Justification: {justification}",
+                context=ErrorAnalysisContext(retry_count=0, working_directory=""),
+                settings=request_settings,
+            )
+
+            # Build contextual feedback message
+            feedback_msg = error_analysis.user_message if error_analysis and error_analysis.user_message else "Command blocked as high risk. Propose a safer alternative."
+            if error_analysis and error_analysis.suggested_fix:
+                feedback_msg += f" Suggestion: {error_analysis.suggested_fix}"
+
+            # Broadcast Warden block with contextual feedback to UI
             await self.g8ed_event_service.publish_command_event(
                 EventType.OPERATOR_COMMAND_FAILED,
                 self._CommandResultBroadcastEvent(
                     execution_id=approval_execution_id,
                     command=command,
                     status=ExecutionStatus.FAILED,
-                    error=f"WARDEN BLOCK: High risk command detected. Propose a safer alternative or request manual override.",
+                    error=f"WARDEN BLOCK: {feedback_msg}",
                     error_type=CommandErrorType.RISK_ANALYSIS_BLOCKED,
                     operator_id=primary_operator_id,
                     operator_session_id=primary_session_id,
@@ -412,7 +476,7 @@ class OperatorCommandService:
             )
             return CommandExecutionResult(
                 success=False,
-                error="Risk analysis blocked command",
+                error=f"Risk analysis blocked command: {feedback_msg}",
                 error_type=CommandErrorType.RISK_ANALYSIS_BLOCKED,
                 command_executed=command,
                 justification=justification,

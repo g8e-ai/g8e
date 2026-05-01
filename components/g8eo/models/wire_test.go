@@ -120,6 +120,51 @@ func TestG8eMessage_Marshal_RoundTrip(t *testing.T) {
 	assert.Equal(t, msg.SystemFingerprint, decoded.SystemFingerprint)
 }
 
+// TestFsReadResultPayload_PayloadTypeAlwaysPresent pins the contract that
+// payload_type is always serialised so the Python discriminated union can route
+// the message to FsReadResultPayload regardless of whether content is empty.
+func TestFsReadResultPayload_PayloadTypeAlwaysPresent(t *testing.T) {
+	payload := FsReadResultPayload{
+		PayloadType: "fs_read_result",
+		ExecutionID: "exec-1",
+		Path:        "/tmp/test.txt",
+		Status:      constants.ExecutionStatusCompleted,
+		Content:     "hello",
+		SizeBytes:   5,
+	}
+	data, err := json.Marshal(payload)
+	require.NoError(t, err)
+	var m map[string]interface{}
+	require.NoError(t, json.Unmarshal(data, &m))
+	assert.Equal(t, "fs_read_result", m["payload_type"], "payload_type must be present for discriminated union routing")
+	assert.Equal(t, "hello", m["content"])
+}
+
+// TestFsReadResultPayload_EmptyContentAlwaysPresent is the regression test for
+// the bug where empty file content caused FsReadResultPayload to be
+// misidentified as FsListResultPayload on the Python side. The content field
+// must never be omitted even when empty.
+func TestFsReadResultPayload_EmptyContentAlwaysPresent(t *testing.T) {
+	payload := FsReadResultPayload{
+		PayloadType: "fs_read_result",
+		ExecutionID: "exec-empty",
+		Path:        "/tmp/empty.txt",
+		Status:      constants.ExecutionStatusCompleted,
+		Content:     "",
+		SizeBytes:   0,
+	}
+	data, err := json.Marshal(payload)
+	require.NoError(t, err)
+
+	var m map[string]interface{}
+	require.NoError(t, json.Unmarshal(data, &m))
+
+	assert.Equal(t, "fs_read_result", m["payload_type"], "payload_type must be present")
+	contentVal, hasContent := m["content"]
+	assert.True(t, hasContent, "content field must be present in JSON even when empty string")
+	assert.Equal(t, "", contentVal, "content must be empty string, not missing")
+}
+
 func TestG8eMessage_Marshal_ProducesValidJSON(t *testing.T) {
 	msg, err := NewG8eMessage(constants.Event.Operator.Heartbeat, "c", "o", "s", "f", struct{}{})
 	require.NoError(t, err)

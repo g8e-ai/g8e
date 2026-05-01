@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Warden Reputation Staking:** Warden now stakes reputation on accurate risk assessment. Ground truth (execution outcomes) grades Warden's decisions — not another agent's opinion. Warden earns reputation for correctly identifying dangerous commands and loses reputation for blocking safe operations (over-caution) or allowing dangerous ones (under-caution).
+- **Two-Strike Circuit Breaker:** Implemented contextual backpressure for Warden-Sage disagreements. First strike generates Assistant model feedback; second strike triggers `AI_AGENT_CONFLICT_DETECTED` event and surfaces "Agent Conflict" dialog to user.
+- **New Event Types:** `AI_AGENT_CONFLICT_DETECTED`, `AI_AGENT_CONFLICT_RESOLVED` for agent disagreement handling.
+- **New Error Type:** `AGENT_CONFLICT` for circuit breaker triggers.
+
+### Changed
+- **Warden Personas:** Updated `warden_command_risk` and `warden_file_risk` personas to reflect reputation accountability and staking behavior.
+- **Investigation State:** Added `warden_block_count` field to `InvestigationCurrentState` for circuit breaker tracking.
+
 ## [0.1.6] - 2026-04-29
 
 ### Added

@@ -126,6 +126,7 @@ func (hs *HistoryService) handleFetchFromScrubbedVault(ctx context.Context, msg 
 func (hs *HistoryService) publishFetchLogsResultFromRaw(ctx context.Context, msg PubSubCommandMessage, record *storage.RawExecutionRecord) {
 	publishLFAATypedResponseTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Completed,
 		models.FetchLogsResultPayload{
+			PayloadType:       "fetch_logs_result",
 			ExecutionID:       record.ID,
 			Command:           record.Command,
 			ExitCode:          record.ExitCode,
@@ -148,6 +149,7 @@ func (hs *HistoryService) publishFetchLogsResultFromRaw(ctx context.Context, msg
 func (hs *HistoryService) publishFetchLogsResult(ctx context.Context, msg PubSubCommandMessage, record *storage.ExecutionRecord) {
 	publishLFAATypedResponseTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Completed,
 		models.FetchLogsResultPayload{
+			PayloadType:       "fetch_logs_result",
 			ExecutionID:       record.ID,
 			Command:           record.Command,
 			ExitCode:          record.ExitCode,

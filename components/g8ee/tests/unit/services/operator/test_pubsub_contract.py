@@ -20,6 +20,7 @@ import pytest
 from app.models.pubsub_messages import (
     ExecutionResultsPayload,
     FsListResultPayload,
+    FsReadResultPayload,
     G8eoResultPayload,
     PortCheckResultPayload,
 )
@@ -79,6 +80,68 @@ def test_invalid_payload_type_raises_validation_error():
 
     with pytest.raises(ValidationError):
         parse_inbound_g8eo_payload(payload_raw)
+
+def test_discriminator_parsing_fs_read_with_content():
+    """Verify that FsReadResultPayload parses correctly when content is present."""
+    payload_raw = {
+        "payload_type": "fs_read_result",
+        "execution_id": "exec-read-1",
+        "path": "/tmp/test.txt",
+        "status": "completed",
+        "content": "hello world",
+        "size_bytes": 11,
+        "truncated": False,
+        "duration_seconds": 0.1,
+    }
+    result = parse_inbound_g8eo_payload(payload_raw)
+    assert isinstance(result, FsReadResultPayload)
+    assert result.content == "hello world"
+    assert result.payload_type == "fs_read_result"
+
+
+def test_discriminator_parsing_fs_read_empty_content():
+    """Regression: FsReadResultPayload with empty content must NOT be misidentified
+    as FsListResultPayload. This was the root cause of empty file read results.
+    Without payload_type on the wire, Pydantic picked FsListResultPayload because
+    content was absent (Go omitempty on empty string)."""
+    payload_raw = {
+        "payload_type": "fs_read_result",
+        "execution_id": "exec-read-empty",
+        "path": "/tmp/empty.txt",
+        "status": "completed",
+        "content": "",
+        "size_bytes": 0,
+        "truncated": False,
+        "duration_seconds": 0.05,
+    }
+    result = parse_inbound_g8eo_payload(payload_raw)
+    assert isinstance(result, FsReadResultPayload), (
+        f"Expected FsReadResultPayload, got {type(result).__name__} — "
+        "empty content must not cause misidentification as FsListResultPayload"
+    )
+    assert result.content == ""
+    assert result.payload_type == "fs_read_result"
+
+
+def test_discriminator_parsing_fs_read_failed():
+    """Verify that a failed FsReadResultPayload parses correctly."""
+    payload_raw = {
+        "payload_type": "fs_read_result",
+        "execution_id": "exec-read-fail",
+        "path": "/tmp/no-such-file.txt",
+        "status": "failed",
+        "content": "",
+        "size_bytes": 0,
+        "truncated": False,
+        "duration_seconds": 0.01,
+        "error_message": "open /tmp/no-such-file.txt: no such file or directory",
+        "error_type": "read_error",
+    }
+    result = parse_inbound_g8eo_payload(payload_raw)
+    assert isinstance(result, FsReadResultPayload)
+    assert result.status.value == "failed"
+    assert result.error_message == "open /tmp/no-such-file.txt: no such file or directory"
+
 
 def test_all_payload_models_have_discriminator():
     """Verify that all models in G8eoResultPayload union have a payload_type field."""

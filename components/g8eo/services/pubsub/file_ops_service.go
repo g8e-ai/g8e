@@ -413,6 +413,7 @@ func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg PubSubCom
 		errMsg := err.Error()
 		errType := "read_error"
 		payload := models.FsReadResultPayload{
+			PayloadType:       "fs_read_result",
 			ExecutionID:       requestID,
 			Path:              p.Path,
 			Status:            constants.ExecutionStatusFailed,
@@ -435,6 +436,7 @@ func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg PubSubCom
 		errMsg := err.Error()
 		errType := "read_error"
 		payload := models.FsReadResultPayload{
+			PayloadType:       "fs_read_result",
 			ExecutionID:       requestID,
 			Path:              p.Path,
 			Status:            constants.ExecutionStatusFailed,
@@ -463,6 +465,7 @@ func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg PubSubCom
 		errMsg := err.Error()
 		errType := "read_error"
 		payload := models.FsReadResultPayload{
+			PayloadType:       "fs_read_result",
 			ExecutionID:       requestID,
 			Path:              p.Path,
 			Status:            constants.ExecutionStatusFailed,
@@ -486,6 +489,7 @@ func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg PubSubCom
 	}
 
 	payload := models.FsReadResultPayload{
+		PayloadType:       "fs_read_result",
 		ExecutionID:       requestID,
 		Path:              p.Path,
 		Status:            constants.ExecutionStatusCompleted,

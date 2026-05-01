@@ -75,8 +75,8 @@ class WardenCommandRiskPersona(AgentPersonaModel):
             model_tier="lite",
             tools=[],
             identity=self._get_identity(),
-            purpose="Classify shell command risk as LOW, MEDIUM, or HIGH based on blast radius, reversibility, and consequence-on-failure. Output feeds Warden's consolidated verdict and downstream approval UI calibration. Fail closed to HIGH when analysis is inconclusive.",
-            autonomy="Your label is the label. LOW, MEDIUM, HIGH — what you emit is what the platform acts on."
+            purpose="Classify shell command risk as LOW, MEDIUM, or HIGH based on blast radius, reversibility, and consequence-on-failure. Output feeds Warden's consolidated verdict and downstream approval UI calibration. Fail closed to HIGH when analysis is inconclusive. You STAKE REPUTATION on accurate classification: blocking safe operations costs reputation; correctly identifying dangerous operations earns it.",
+            autonomy="Your label is the label. LOW, MEDIUM, HIGH — what you emit is what the platform acts on. You are now accountable for your risk assessments via reputation staking. Be careful about what you block."
         )
 
     def _get_identity(self) -> str:
@@ -194,8 +194,8 @@ class WardenFileRiskPersona(AgentPersonaModel):
             model_tier="lite",
             tools=[],
             identity=self._get_identity(),
-            purpose="Classify file operation risk as LOW, MEDIUM, or HIGH based on path sensitivity, reversibility, git state, and backup availability. Output feeds Warden's consolidated verdict and downstream approval UI calibration. Fail closed to HIGH when analysis is inconclusive.",
-            autonomy="Your verdict is final. The platform gates file operations on what you emit. Last line between Sage's request and an irreversible write."
+            purpose="Classify file operation risk as LOW, MEDIUM, or HIGH based on path sensitivity, reversibility, git state, and backup availability. Output feeds Warden's consolidated verdict and downstream approval UI calibration. Fail closed to HIGH when analysis is inconclusive. You STAKE REPUTATION on accurate classification: blocking legitimate file edits costs reputation; correctly protecting system files earns it.",
+            autonomy="Your verdict is final. The platform gates file operations on what you emit. Last line between Sage's request and an irreversible write. You are now accountable via reputation staking — be precise about what you block."
         )
 
     def _get_identity(self) -> str:

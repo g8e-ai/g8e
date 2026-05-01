@@ -4,7 +4,7 @@
 
 Agentic AI safety is conventionally framed as an alignment problem (will the model do what we want?) or a control problem (can we stop it when it doesn't?). We frame it instead as a **consensus problem**: given a population of LLM-instantiated personas with different lenses, a calibrated adversary among them, and a human user with finite attention, how do we converge on an executable command that is safe, audited, and minimally costly to all participants?
 
-The mechanism has six players, two distinct stake types, and one objective. Under the Vortex Principle, honest play is the dominant strategy for every player. The objective is the user's time.
+The mechanism has seven players, two distinct stake types, and one objective. Under the Vortex Principle, honest play is the dominant strategy for every player. The objective is the user's time.
 
 | Player | Role | Stake | Capability |
 |---|---|---|---|
@@ -13,6 +13,7 @@ The mechanism has six players, two distinct stake types, and one objective. Unde
 | **Honest Tribunal** (×4) | Validators | Per-lens reputation `r_{t,i}` | Each emits candidate command `c_i` |
 | **Nemesis** | Calibrated adversary | Reputation `r_n` | Emits flawed-but-plausible `c_n` or abstains |
 | **Auditor** | Machine-domain validator | Reputation `r_a`, bonded 2–3× any `r_{t,i}` | Verifies consistency, grounding, and protocol adherence |
+| **Warden** | Risk assessor | Reputation `r_w` | Classifies command/file/error risk (LOW/MEDIUM/HIGH) |
 | **User** | Human-domain validator | Time `τ` | Verifies intent fidelity and accepts consequences |
 
 Reputation is a cross-chain EMA scalar `[0.0, 1.0]` maintained in the `reputation_state` collection. Time is non-fungible and unilaterally priced by the user's revealed preference.
@@ -81,6 +82,22 @@ with graduated_loss escalating: `R2_converges < Auditor_revises < Auditor_swaps 
 Dominant strategy: honest calibration. A Nemesis that always attacks bleeds out on false alarms; one that never attacks bleeds out on misses. The realized attack rate becomes a learned signal of actual flaw density in the honest four's output.
 
 **Auditor** handles the machine-domain validation: consistency, grounding, procedural correctness. Auditor stakes on downstream truth — execution outcomes and forward-hook hit rate. Auditor produces a `ReputationCommitment` (Merkle root over the `reputation_state` snapshot) for every verdict, binding the scoreboard to the execution ledger. The 2–3× bonding asymmetry makes capture economically unattractive. Peer-Auditor re-judgment provides Byzantine fault tolerance.
+
+**Warden** stakes on accurate risk assessment via the Two-Strike Circuit Breaker:
+
+| Scenario | Outcome | Warden Payoff |
+|---|---|---|
+| Block HIGH risk command | Correct caution | +0.85 reputation |
+| Block MEDIUM risk command | Over-caution | +0.60 reputation |
+| Block LOW risk command | Excessive blocking | +0.30 reputation, Tier 3 slash |
+| Allow LOW risk, success | Accurate assessment | +1.00 reputation |
+| Allow MEDIUM risk, success | Accurate assessment | +0.90 reputation |
+| Allow HIGH risk, success | Under-caution | +0.70 reputation |
+| Allow LOW risk, failure | Major miss | +0.10 reputation, Tier 2 slash |
+| Allow MEDIUM risk, failure | Moderate miss | +0.35 reputation |
+| Allow HIGH risk, failure | Correctly flagged (approval failed) | +0.75 reputation |
+
+Warden uses ground truth (execution outcomes) as its oracle — not another agent's judgment. This creates direct accountability: Warden loses reputation for blocking safe operations and gains reputation for correctly identifying dangerous ones.
 
 **User** stakes time and provides human-domain validation. The user's payoff is `-U_user` from above. Crucially, the user has no explicit knowledge of the staking mechanism; their participation is a *revealed-preference bond*. Tight messages and answered questions reduce `τ_total`; vague messages and ignored questions extend it. The user does not need to understand the mechanism to play it correctly — the gradient teaches them. This is robust to users of any sophistication, including users who would refuse to engage with an explicit staking UI. The mechanism's promise to the user is precise: *we will only ask you for what only you can provide, and we will use everything else in the system to minimize that ask.*
 

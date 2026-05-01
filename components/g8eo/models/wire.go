@@ -62,6 +62,7 @@ func (r *G8eMessage) Marshal() ([]byte, error) {
 }
 
 type CancellationResultPayload struct {
+	PayloadType       string                    `json:"payload_type"`
 	ExecutionID       string                    `json:"execution_id"`
 	Status            constants.ExecutionStatus `json:"status"`
 	OperatorID        string                    `json:"operator_id"`
@@ -71,6 +72,7 @@ type CancellationResultPayload struct {
 }
 
 type FileEditResultPayload struct {
+	PayloadType       string                    `json:"payload_type"`
 	ExecutionID       string                    `json:"execution_id"`
 	Operation         FileEditOperation         `json:"operation"`
 	FilePath          string                    `json:"file_path"`
@@ -92,6 +94,7 @@ type FileEditResultPayload struct {
 }
 
 type FsListResultPayload struct {
+	PayloadType       string                    `json:"payload_type"`
 	ExecutionID       string                    `json:"execution_id"`
 	Path              string                    `json:"path"`
 	Status            constants.ExecutionStatus `json:"status"`
@@ -111,6 +114,7 @@ type FsListResultPayload struct {
 }
 
 type ExecutionStatusPayload struct {
+	PayloadType       string                    `json:"payload_type"`
 	ExecutionID       string                    `json:"execution_id"`
 	Command           string                    `json:"command"`
 	Status            constants.ExecutionStatus `json:"status"`
@@ -156,6 +160,7 @@ type PortCheckEntry struct {
 }
 
 type PortCheckResultPayload struct {
+	PayloadType       string                    `json:"payload_type"`
 	ExecutionID       string                    `json:"execution_id"`
 	Status            constants.ExecutionStatus `json:"status"`
 	OperatorID        string                    `json:"operator_id"`
@@ -174,6 +179,7 @@ type LFAAErrorPayload struct {
 }
 
 type FetchLogsResultPayload struct {
+	PayloadType       string `json:"payload_type"`
 	ExecutionID       string `json:"execution_id"`
 	Command           string `json:"command"`
 	ExitCode          *int   `json:"exit_code,omitempty"`
@@ -257,10 +263,11 @@ type RestoreFileResultPayload struct {
 }
 
 type FsReadResultPayload struct {
+	PayloadType       string                    `json:"payload_type"`
 	ExecutionID       string                    `json:"execution_id"`
 	Path              string                    `json:"path"`
 	Status            constants.ExecutionStatus `json:"status"`
-	Content           string                    `json:"content,omitempty"`
+	Content           string                    `json:"content"`
 	SizeBytes         int                       `json:"size_bytes"`
 	Truncated         bool                      `json:"truncated"`
 	DurationSeconds   float64                   `json:"duration_seconds"`

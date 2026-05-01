@@ -382,15 +382,22 @@ async def orchestrate_tool_execution(
         and tool_name == OperatorToolName.RUN_COMMANDS
         and isinstance(result, CommandExecutionResult)
     ):
+        # Reset warden block count on successful command (new turn starts fresh)
+        if result.success and investigation and investigation.current_state:
+            investigation.current_state.warden_block_count = 0
+            logger.info("[WARDEN-CIRCUIT-BREAKER] Reset warden block count for investigation=%s after successful command", investigation.id)
+
         # Schedule fire-and-forget reputation resolution
         async def _resolve_and_emit():
             try:
+                warden_blocked = result.error_type == CommandErrorType.RISK_ANALYSIS_BLOCKED
                 res = await tool_executor.reputation_service.resolve_stakes(
                     tribunal_command_id=gen_result.correlation_id,
                     investigation_id=investigation.id,
                     gen_result=gen_result,
                     execution_result=result,
                     warden_risk=result.warden_risk,
+                    warden_blocked=warden_blocked,
                 )
 
                 for outcome in res.resolutions:

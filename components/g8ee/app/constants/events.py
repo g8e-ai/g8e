@@ -260,6 +260,10 @@ class EventType(str, Enum):
     AI_AGENT_CONTINUE_APPROVAL_GRANTED = "g8e.v1.ai.agent.continue.approval.granted"
     AI_AGENT_CONTINUE_APPROVAL_REJECTED = "g8e.v1.ai.agent.continue.approval.rejected"
 
+    # ai.agent.conflict (Two-Strike Circuit Breaker - warden vs sage disagreement)
+    AI_AGENT_CONFLICT_DETECTED = "g8e.v1.ai.agent.conflict.detected"
+    AI_AGENT_CONFLICT_RESOLVED = "g8e.v1.ai.agent.conflict.resolved"
+
     # ai.triage (Dash interrogator - GDD §2)
     AI_TRIAGE_CLARIFICATION_QUESTIONS = "g8e.v1.ai.triage.clarification.questions"
     AI_TRIAGE_CLARIFICATION_ANSWERED = "g8e.v1.ai.triage.clarification.answered"

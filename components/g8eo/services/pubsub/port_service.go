@@ -89,6 +89,7 @@ func (ps *PortService) HandlePortCheckRequest(ctx context.Context, msg PubSubCom
 	}
 
 	payload := models.PortCheckResultPayload{
+		PayloadType:       "port_check_result",
 		ExecutionID:       executionID,
 		Status:            constants.ExecutionStatusCompleted,
 		OperatorID:        ps.config.OperatorID,

@@ -77,11 +77,15 @@ A five-member panel that translates Sage's intent into an executable command thr
 - **Icon**: `shield`
 - **Role**: `defender`
 - **Model Tier**: `lite`
-- **Purpose**: Orchestrates specialized risk analysis sub-agents to produce a consolidated safety verdict for the Operator.
+- **Purpose**: Orchestrates specialized risk analysis sub-agents to produce a consolidated safety verdict for the Operator. Stakes reputation on accurate risk assessment.
 - **Sub-Agents**:
     - `warden_command_risk`: Classifies command blast radius (LOW/MEDIUM/HIGH).
     - `warden_file_risk`: Evaluates file operation sensitivity and git-reversibility.
     - `warden_error`: Analyzes failures for `AUTO_FIXABLE` or `ESCALATE`.
+- **Staking**: Warden stakes reputation on accurate risk classification. It earns reputation for correctly identifying dangerous commands and loses reputation for blocking safe operations (over-caution) or allowing dangerous ones (under-caution).
+- **Two-Strike Circuit Breaker**: When Warden blocks a command:
+    - **First Strike**: Assistant model generates contextual feedback explaining why the command was blocked and suggesting safer alternatives. Sage receives this feedback and can propose a revised command.
+    - **Second Strike**: If Warden blocks Sage's revised command, the system triggers an `AI_AGENT_CONFLICT_DETECTED` event, halts the ReAct loop, and surfaces an "Agent Conflict" dialog to the user for human intervention.
 
 ### 7. Specialists
 - **Scribe** (`title`): Generates concise 3-7 word case titles.
