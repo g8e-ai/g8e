@@ -237,9 +237,9 @@ export class ChatComponent {
         this.executionActive = false;
         this.approvalPending = false;
         this.hideAIStopButton();
-        this._portCheckIndicators.clear();
-        this._searchWebIndicators.clear();
-        this._processingIndicators.clear();
+        this._portCheckIndicators?.clear();
+        this._searchWebIndicators?.clear();
+        this._processingIndicators?.clear();
         this.pendingCitations.clear();
         this.streamingContent.clear();
         this._hasResetAutoScrollForSession.clear();

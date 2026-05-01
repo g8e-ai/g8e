@@ -7,6 +7,8 @@
 
 **TL;DR.** I propose an architecture for AI agent systems: AI personas and humans as first-class co-validators in a Byzantine consensus protocol, with the User's time as their stake, a stateless reasoning Engine, and a sovereign single-binary Operator that runs on every managed host with tamper-evident local audit. The Engine is replaceable. The Operator is the system of record. The User holds the only signature only a human can produce. This is AI-powered, human-driven infrastructure.
 
+![alt text](../../components/g8ed/public/media/fixed-by-g8e.png)
+
 ---
 
 ## Opening
