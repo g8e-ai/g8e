@@ -241,6 +241,11 @@ class AIToolService:
         """The configured auto-approved-list validator."""
         return self._auto_approved_validator
 
+    @property
+    def ai_response_analyzer(self):
+        """The AIResponseAnalyzerProtocol from the wired execution service."""
+        return self.operator_command_service._execution_service.ai_response_analyzer
+
     def get_tools(
         self,
         agent_mode: AgentMode,

@@ -77,8 +77,17 @@ export class ChatComponent {
         // Reconnection state
         this._reconnectAttempts = 0;
         this._maxReconnectAttempts = 5;
-        this._reconnectDelay = 1000; // Start with 1 second
+        this._reconnectDelay = 1000;
         this._reconnectTimer = null;
+
+        // SSE handler state (must be instance properties, not on prototype)
+        this._sseListenersRegistered = false;
+        this._portCheckIndicators = new Map();
+        this._filesystemIndicators = new Map();
+        this._searchWebIndicators = new Map();
+        this._processingIndicators = new Map();
+        this._universalToolIndicators = new Map();
+        this._tribunalWidgetIds = new Map();
     }
 
     init() {
@@ -135,8 +144,8 @@ export class ChatComponent {
             }
 
             this.anchoredTerminal?.clearActivityIndicators();
-            this._portCheckIndicators?.clear();
-            this._searchWebIndicators?.clear();
+            this._portCheckIndicators.clear();
+            this._searchWebIndicators.clear();
             this.pendingCitations.delete(this.currentWebSessionId);
             this.hideAIStopButton();
 
@@ -228,9 +237,9 @@ export class ChatComponent {
         this.executionActive = false;
         this.approvalPending = false;
         this.hideAIStopButton();
-        this._portCheckIndicators?.clear();
-        this._searchWebIndicators?.clear();
-        this._processingIndicators?.clear();
+        this._portCheckIndicators.clear();
+        this._searchWebIndicators.clear();
+        this._processingIndicators.clear();
         this.pendingCitations.clear();
         this.streamingContent.clear();
         this._hasResetAutoScrollForSession.clear();
