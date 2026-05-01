@@ -57,6 +57,7 @@ def mock_tool_executor():
     tool_executor.blacklist_validator = MagicMock(spec=CommandBlacklistValidator)
     tool_executor.reputation_data_service = MagicMock()
     tool_executor.auditor_hmac_key = "test-hmac-key"
+    tool_executor.ai_response_analyzer = MagicMock()
     return tool_executor
 
 
@@ -79,6 +80,7 @@ def mock_investigation():
     investigation = MagicMock(spec=EnrichedInvestigationContext)
     investigation.id = "inv-001"
     investigation.operator_documents = []
+    investigation.current_state = MagicMock()
     return investigation
 
 

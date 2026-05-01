@@ -46,7 +46,7 @@ async def run_dry_run(device_token: str, g8ed_url: str = "https://g8e.local") ->
         fleet.up(nodes=3, device_token=device_token)
 
         print("[evals] Waiting for operators to bind...")
-        await fleet.wait_bound(timeout=60, device_token=device_token)
+        await fleet.wait_bound(timeout=60)
 
         print("[evals] Fleet is up. Running canned chat: 'uname -a'")
 
@@ -163,24 +163,52 @@ async def run_scenario(
 
 
 async def run_full_eval(
-    device_token: str,
+    device_token: str | None,
     gold_set_path: str,
     g8ed_url: str = "https://g8e.local",
     nodes: int = 3,
     parallel: int = 1,
-    model: str = "gemini-2.5-pro",
+    judge_model: str = "gemini-2.5-pro",
+    llm_provider: str | None = None,
+    llm_primary_model: str | None = None,
+    llm_assistant_model: str | None = None,
+    llm_lite_model: str | None = None,
+    llm_endpoint: str | None = None,
+    llm_api_key: str | None = None,
 ) -> None:
     """Run full eval suite against gold set.
 
     Args:
-        device_token: Device link token for operator authentication
+        device_token: Device link token for operator authentication (optional if fleet is running)
         gold_set_path: Path to gold set JSON file
         g8ed_url: g8ed API base URL
         nodes: Number of eval nodes to use
         parallel: Number of scenarios to run in parallel
-        model: Eval judge model name
+        judge_model: Eval judge model name
+        llm_provider: LLM provider (openai, anthropic, gemini, ollama, llamacpp, g8el)
+        llm_primary_model: Primary LLM model
+        llm_assistant_model: Assistant LLM model
+        llm_lite_model: Lite LLM model
+        llm_endpoint: LLM provider endpoint URL
+        llm_api_key: LLM provider API key
     """
     fleet = FleetManager(_COMPOSE_FILE)
+
+    if device_token is None:
+        if fleet.is_running():
+            device_token = fleet.get_device_token()
+            if device_token:
+                print("[evals] Using device token from running fleet")
+            else:
+                print("[evals] Error: Fleet is running but device token not found")
+                print("[evals] Run './g8e evals down' then './g8e evals up --device-token <token>'")
+                sys.exit(1)
+        else:
+            print("[evals] Error: Fleet is not running and no device token provided")
+            print("[evals] Run './g8e evals up --device-token <token>' first")
+            sys.exit(1)
+
+    fleet_was_running = fleet.is_running()
 
     with open(gold_set_path) as f:
         scenarios = json.load(f)
@@ -188,16 +216,56 @@ async def run_full_eval(
     operator_bound_scenarios = [s for s in scenarios if s.get("agent_mode") == "OPERATOR_BOUND"]
     print(f"[evals] Found {len(operator_bound_scenarios)} OPERATOR_BOUND scenarios")
 
+    # Configure LLM settings for the judge
+    from app.constants import LLMProvider
     settings = LLMSettings()
+    if llm_provider:
+        settings.primary_provider = LLMProvider(llm_provider)
+        settings.assistant_provider = LLMProvider(llm_provider)
+        settings.lite_provider = LLMProvider(llm_provider)
+    
+    if llm_primary_model:
+        settings.primary_model = llm_primary_model
+    if llm_assistant_model:
+        settings.assistant_model = llm_assistant_model
+    if llm_lite_model:
+        settings.lite_model = llm_lite_model
+    
+    if settings.primary_provider == LLMProvider.GEMINI:
+        settings.gemini_api_key = llm_api_key
+    elif settings.primary_provider == LLMProvider.OPENAI:
+        settings.openai_api_key = llm_api_key
+        if llm_endpoint:
+            settings.openai_endpoint = llm_endpoint
+    elif settings.primary_provider == LLMProvider.ANTHROPIC:
+        settings.anthropic_api_key = llm_api_key
+        if llm_endpoint:
+            settings.anthropic_endpoint = llm_endpoint
+    elif settings.primary_provider == LLMProvider.OLLAMA:
+        settings.ollama_api_key = llm_api_key
+        if llm_endpoint:
+            settings.ollama_endpoint = llm_endpoint
+    elif settings.primary_provider == LLMProvider.LLAMACPP:
+        settings.llamacpp_api_key = llm_api_key
+        if llm_endpoint:
+            settings.llamacpp_endpoint = llm_endpoint
+    elif settings.primary_provider == LLMProvider.G8EL:
+        settings.g8el_api_key = llm_api_key
+        if llm_endpoint:
+            settings.g8el_endpoint = llm_endpoint
+
     provider = get_llm_provider(settings)
-    judge = EvalJudge(provider=provider, model=model)
+    judge = EvalJudge(provider=provider, model=judge_model)
 
     try:
-        print("[evals] Bringing up fleet...")
-        fleet.up(nodes=nodes, device_token=device_token)
+        if not fleet_was_running:
+            print("[evals] Bringing up fleet...")
+            fleet.up(nodes=nodes, device_token=device_token)
 
-        print("[evals] Waiting for operators to bind...")
-        await fleet.wait_bound(timeout=60, device_token=device_token)
+            print("[evals] Waiting for operators to bind...")
+            await fleet.wait_bound(timeout=60)
+        else:
+            print("[evals] Using existing running fleet")
 
         print(f"[evals] Running {len(operator_bound_scenarios)} scenarios...")
         rows = []
@@ -231,8 +299,9 @@ async def run_full_eval(
         print(f"\nArtifacts persisted to: {artifacts['run_dir']}")
 
     finally:
-        print("[evals] Tearing down fleet...")
-        fleet.down()
+        if not fleet_was_running:
+            print("[evals] Tearing down fleet...")
+            fleet.down()
         print("[evals] Done.")
 
 
@@ -241,8 +310,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="g8e evals runner")
     parser.add_argument(
         "--device-token",
-        required=True,
-        help="Device link token for operator authentication",
+        required=False,
+        help="Device link token for operator authentication (optional if fleet is running)",
     )
     parser.add_argument(
         "--g8ed-url",
@@ -270,10 +339,42 @@ def main() -> None:
         default=1,
         help="Number of scenarios to run in parallel (default: 1)",
     )
+    parser.add_argument(
+        "-p", "--llm-provider",
+        help="LLM provider (openai, anthropic, gemini, ollama, llamacpp, g8el)",
+    )
+    parser.add_argument(
+        "-m", "--primary-model",
+        help="Primary LLM model",
+    )
+    parser.add_argument(
+        "-a", "--assistant-model",
+        help="Assistant LLM model",
+    )
+    parser.add_argument(
+        "-l", "--lite-model",
+        help="Lite LLM model",
+    )
+    parser.add_argument(
+        "-e", "--llm-endpoint-url",
+        help="LLM provider endpoint URL",
+    )
+    parser.add_argument(
+        "-k", "--llm-api-key",
+        help="LLM provider API key",
+    )
+    parser.add_argument(
+        "--judge-model",
+        default="gemini-2.5-pro",
+        help="Eval judge model name (default: gemini-2.5-pro)",
+    )
 
     args = parser.parse_args()
 
     if args.dry_run:
+        if not args.device_token:
+            print("[evals] Error: --device-token is required for --dry-run")
+            sys.exit(1)
         asyncio.run(run_dry_run(args.device_token, args.g8ed_url))
     elif args.gold_set:
         gold_set_path = Path(args.gold_set)
@@ -286,6 +387,13 @@ def main() -> None:
             args.g8ed_url,
             args.nodes,
             args.parallel,
+            args.judge_model,
+            args.llm_provider,
+            args.primary_model,
+            args.assistant_model,
+            args.lite_model,
+            args.llm_endpoint_url,
+            args.llm_api_key,
         ))
     else:
         print("[evals] Must specify --dry-run or --gold-set")

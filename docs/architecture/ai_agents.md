@@ -50,8 +50,8 @@ To prevent hallucinations and ensure safety, agents never write shell commands d
     - **Pragma**: Focuses on idiomatic conventions for the target OS/shell.
     - **Nemesis**: The "immune system" — produces plausible-but-flawed commands or honestly abstains.
 3. **Consensus & Tie-breaking**: Candidates are clustered by exact match. A winner is selected via ranked vote.
-4. **Auditor Review**: The **Auditor** judges the winning command against the intent. It can approve (`ok`), provide a `revised` command, or `swap` to a better dissenting cluster.
-5. **Warden Analysis**: The **Warden** (running on the Engine) performs a pre-execution risk assessment (Command, File, and Error risk) using specialized sub-agents. Warden stakes reputation on accurate classification.
+4. **Warden Analysis**: The **Warden** (running on the Engine) performs a pre-execution risk assessment (Command, File, and Error risk) using specialized sub-agents. The Warden validates the command safety profile *before* the Auditor performs the final commitment. Warden stakes reputation on accurate classification.
+5. **Auditor Review**: Only once the Warden has cleared the command does the **Auditor** judge the winning command against the intent. It can approve (`ok`), provide a `revised` command, or `swap` to a better dissenting cluster. The Auditor performs the final consistency check and Merkle commitment to the reputation ledger.
 6. **Two-Strike Circuit Breaker**: If Warden blocks a HIGH-risk command:
     - **First Strike**: Assistant model generates contextual feedback; Sage can propose a safer alternative.
     - **Second Strike**: If blocked again, an `AI_AGENT_CONFLICT_DETECTED` event triggers, halting the loop and surfacing an "Agent Conflict" dialog for human intervention.

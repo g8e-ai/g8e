@@ -11,6 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import TYPE_CHECKING, Any
 from pydantic import Field
 from app.models.base import G8eBaseModel
 from app.constants import (
@@ -18,8 +19,12 @@ from app.constants import (
     TieBreakReason,
     TribunalMember,
     AuditorReason,
+    RiskLevel,
 )
 
+
+if TYPE_CHECKING:
+    from app.models.tool_results import CommandRiskAnalysis
 
 class TribunalError(Exception):
     """Base class for all Tribunal terminal-state failures.
@@ -185,6 +190,22 @@ class TribunalDisabledError(TribunalError):
         )
 
 
+class TribunalWardenBlockedError(TribunalError):
+    """Raised when the Warden blocks a command produced by the Tribunal.
+
+    This error indicates that the command was classified as HIGH risk and
+    the Warden blocked it. This can be either a first strike (contextual
+    feedback generated) or a second strike (agent conflict).
+    """
+
+    def __init__(self, request: str, error_message: str, risk_level: RiskLevel) -> None:
+        self.risk_level = risk_level
+        super().__init__(
+            request=request,
+            user_message=error_message,
+        )
+
+
 class TribunalMemberResult(G8eBaseModel):
     """The structured output of a single Tribunal member."""
     reasoning: str = Field(description="The logical basis for the member's verdict.")
@@ -340,6 +361,10 @@ class CommandGenerationResult(G8eBaseModel):
         description="Revised command produced by the auditor when auditor_passed=False",
     )
     auditor_reason: AuditorReason | None = Field(default=None, description="The auditor's stated reason.")
+    warden_risk_analysis: "CommandRiskAnalysis | None" = Field(
+        default=None,
+        description="Warden-classified risk analysis from the audit stage."
+    )
     correlation_id: str | None = Field(
         default=None,
         description="Correlation ID linking this Tribunal session to subsequent approval requests",
@@ -462,6 +487,19 @@ class TribunalSessionGenerationFailedPayload(G8eBaseModel):
     pass_errors: list[str]
 
 
+class TribunalWardenBlockedPayload(G8eBaseModel):
+    """SSE payload for TRIBUNAL_SESSION_WARDEN_BLOCKED.
+
+    Emitted when the Warden blocks a command produced by the Tribunal.
+    """
+    request: str
+    command: str
+    risk_level: RiskLevel
+    error: str
+    is_conflict: bool = False
+    correlation_id: str | None = Field(default=None, description="Correlation ID for the Tribunal session")
+
+
 class TribunalAuditorFailedPayload(G8eBaseModel):
     """SSE payload for TRIBUNAL_SESSION_AUDITOR_FAILED.
 
@@ -536,4 +574,12 @@ class TribunalSessionCompletedPayload(G8eBaseModel):
     outcome: CommandGenerationOutcome
     vote_score: float
     correlation_id: str | None = Field(default=None, description="Correlation ID for the Tribunal session")
+
+
+def rebuild_models():
+    from app.models.tool_results import CommandRiskAnalysis
+    CommandGenerationResult.model_rebuild()
+    TribunalWardenBlockedPayload.model_rebuild()
+
+rebuild_models()
 

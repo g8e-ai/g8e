@@ -12,8 +12,8 @@ The mechanism has seven players, two distinct stake types, and one objective. Un
 | **Sage** | Planner | Reputation `r_s` | Natural-language request `R` + guidelines `G` |
 | **Honest Tribunal** (×4) | Validators | Per-lens reputation `r_{t,i}` | Each emits candidate command `c_i` |
 | **Nemesis** | Calibrated adversary | Reputation `r_n` | Emits flawed-but-plausible `c_n` or abstains |
-| **Auditor** | Machine-domain validator | Reputation `r_a`, bonded 2–3× any `r_{t,i}` | Verifies consistency, grounding, and protocol adherence |
 | **Warden** | Risk assessor | Reputation `r_w` | Classifies command/file/error risk (LOW/MEDIUM/HIGH) |
+| **Auditor** | Machine-domain validator | Reputation `r_a`, bonded 2–3× any `r_{t,i}` | Verifies consistency, grounding, and protocol adherence |
 | **User** | Human-domain validator | Time `τ` | Verifies intent fidelity and accepts consequences |
 
 Reputation is a cross-chain EMA scalar `[0.0, 1.0]` maintained in the `reputation_state` collection. Time is non-fungible and unilaterally priced by the user's revealed preference.
@@ -48,7 +48,7 @@ Auditor and User are not arranged hierarchically — Auditor judges, User approv
 
 This partition resolves the failure mode common to "fully autonomous agent" architectures: systems that are technically correct and contextually wrong, where the human only learns of the mismatch after execution. By requiring both validators and assigning each the class of judgment they alone can provide, the mechanism never asks the human to verify what the machine could verify, and never asks the machine to verify what only the human can.
 
-This also reframes the user's experience economically. The user's time stake is not a tax on their attention — it is **payment for a service only they can provide**. The mechanism respects user time precisely because it only requests input the AI layer cannot generate. Every component upstream (Triage's information-gain questions, Sage's intent compression, Tribunal's parallel candidate generation, Auditor's procedural verification) exists to minimize what reaches the user, so that what does reach them is exclusively the human-domain judgment they alone are qualified to make.
+This also reframes the user's experience economically. The user's time stake is not a tax on their attention — it is **payment for a service only they can provide**. The mechanism respects user time precisely because it only requests input the AI layer cannot generate. Every component upstream (Triage's information-gain questions, Sage's intent compression, Tribunal's parallel candidate generation, Warden's risk assessment, Auditor's procedural verification) exists to minimize what reaches the user, so that what does reach them is exclusively the human-domain judgment they alone are qualified to make.
 
 
 
@@ -63,7 +63,7 @@ This also reframes the user's experience economically. The user's time stake is 
 **Sage** stakes on one-shot sufficiency:
 
 ```
-π_s = ρ · 𝟙[Round_1_consensus ∧ Auditor_ok] − σ · graduated_loss(verdict)
+π_s = ρ · 𝟙[Round_1_consensus ∧ Warden_ok ∧ Auditor_ok] − σ · graduated_loss(verdict)
 ```
 
 with graduated_loss escalating: `R2_converges < Auditor_revises < Auditor_swaps < round_fails`. Sage is rewarded for intent *quality*, not for showing work. This compresses the ledger and reduces `τ_total`.
@@ -81,8 +81,6 @@ with graduated_loss escalating: `R2_converges < Auditor_revises < Auditor_swaps 
 
 Dominant strategy: honest calibration. A Nemesis that always attacks bleeds out on false alarms; one that never attacks bleeds out on misses. The realized attack rate becomes a learned signal of actual flaw density in the honest four's output.
 
-**Auditor** handles the machine-domain validation: consistency, grounding, procedural correctness. Auditor stakes on downstream truth — execution outcomes and forward-hook hit rate. Auditor produces a `ReputationCommitment` (Merkle root over the `reputation_state` snapshot) for every verdict, binding the scoreboard to the execution ledger. The 2–3× bonding asymmetry makes capture economically unattractive. Peer-Auditor re-judgment provides Byzantine fault tolerance.
-
 **Warden** stakes on accurate risk assessment via the Two-Strike Circuit Breaker:
 
 | Scenario | Outcome | Warden Payoff |
@@ -97,7 +95,9 @@ Dominant strategy: honest calibration. A Nemesis that always attacks bleeds out 
 | Allow MEDIUM risk, failure | Moderate miss | +0.35 reputation |
 | Allow HIGH risk, failure | Correctly flagged (approval failed) | +0.75 reputation |
 
-Warden uses ground truth (execution outcomes) as its oracle — not another agent's judgment. This creates direct accountability: Warden loses reputation for blocking safe operations and gains reputation for correctly identifying dangerous ones.
+Warden uses ground truth (execution outcomes) as its oracle — not another agent's judgment. This creates direct accountability: Warden loses reputation for blocking safe operations and gains reputation for correctly identifying dangerous ones. The Warden validates the command safety profile *before* the Auditor performs the final commitment.
+
+**Auditor** handles the machine-domain validation: consistency, grounding, procedural correctness. Only once the Warden has cleared the command does the Auditor perform the final consistency check and Merkle commitment. Auditor stakes on downstream truth — execution outcomes and forward-hook hit rate. Auditor produces a `ReputationCommitment` (Merkle root over the `reputation_state` snapshot) for every verdict, binding the scoreboard to the execution ledger. The 2–3× bonding asymmetry makes capture economically unattractive. Peer-Auditor re-judgment provides Byzantine fault tolerance.
 
 **User** stakes time and provides human-domain validation. The user's payoff is `-U_user` from above. Crucially, the user has no explicit knowledge of the staking mechanism; their participation is a *revealed-preference bond*. Tight messages and answered questions reduce `τ_total`; vague messages and ignored questions extend it. The user does not need to understand the mechanism to play it correctly — the gradient teaches them. This is robust to users of any sophistication, including users who would refuse to engage with an explicit staking UI. The mechanism's promise to the user is precise: *we will only ask you for what only you can provide, and we will use everything else in the system to minimize that ask.*
 

@@ -43,7 +43,9 @@ T = TypeVar("T", bound=G8eBaseModel)
 
 def _load_security_constraints() -> dict:
     """Load security constraints from shared model."""
-    shared_models_path = Path(__file__).parent.parent.parent.parent.parent / "shared" / "models" / "security_constraints.json"
+    from app.constants.paths import PATHS
+    shared_models_dir = PATHS["infra"]["shared_models_dir"]
+    shared_models_path = Path(shared_models_dir) / "security_constraints.json"
     try:
         with open(shared_models_path, "r") as f:
             constraints = json.load(f)

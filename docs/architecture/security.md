@@ -76,7 +76,7 @@ Host Filesystem / AWS / Target System
 | **g8ee → LLM (AI)** | Sentinel ingress scrubbing — a redundant layer of protection for all user messages and terminal output before they are transmitted to any model provider; raw output, credentials, and PII are replaced with safe placeholders |
 | **g8ed → g8eo** | WebSocket over mTLS (TLS 1.3), per-operator client certificate issued during device registration or bootstrap, platform CA fetched from hub at operator startup |
 | **Operator → Host** | Sentinel pre-execution threat blocking (46 MITRE-mapped detectors), egress data scrubbing (stdout/stderr), and command allowlist/denylist enforcement. |
-| **Engine → User** | Warden risk assessment (Command, File, Error risk) presented for Human-in-the-Loop approval before command dispatch to Operator. |
+| **Engine → User** | Warden risk assessment and Auditor consistency check presented for Human-in-the-Loop approval before command dispatch to Operator. |
 | **Data at Rest (g8es)** | SQLite at `0600` filesystem permissions (4 tables: documents, kv_store, sse_events, blobs); session fields encrypted at application layer by g8ed before persistence; **bootstrap secrets (`internal_auth_token`, `session_encryption_key`, `auditor_hmac_key`) persisted on the `g8es-ssl` volume and mirrored into the `platform_settings` document for consistency** |
 | **Data at Rest (LFAA Vaults)** | AES-256-GCM field-level encryption (content, stdout, stderr); DEK envelope encryption; KEK derived on-demand from operator API key via HKDF-SHA256 |
 

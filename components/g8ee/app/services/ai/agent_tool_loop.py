@@ -52,7 +52,12 @@ from app.models.grounding import GroundingMetadata
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.reputation import StakeResolutionPayload
-from app.models.tool_results import CommandExecutionResult, ToolResult, SearchWebResult
+from app.models.tool_results import (
+    CommandExecutionResult,
+    ToolResult,
+    SearchWebResult,
+    CommandRiskAnalysis,
+)
 from app.models.settings import G8eeUserSettings
 
 from app.models.agents.tribunal import (
@@ -167,6 +172,8 @@ class TribunalInvoker:
             settings=request_settings,
             reputation_data_service=tool_executor.reputation_data_service,
             auditor_hmac_key=tool_executor.auditor_hmac_key,
+            ai_response_analyzer=tool_executor.ai_response_analyzer,
+            investigation_state=investigation.current_state,
             whitelisting_enabled=whitelisting_enabled,
             blacklisting_enabled=blacklisting_enabled,
             whitelisted_commands=whitelisted_commands,
@@ -186,6 +193,7 @@ class TribunalInvoker:
             expected_output_lines=sage_request.expected_output_lines,
             timeout_seconds=sage_request.timeout_seconds,
             correlation_id=gen_result.correlation_id,
+            risk_analysis=gen_result.warden_risk_analysis, # Pass risk analysis to executor
         )
         return executor_args, gen_result
 

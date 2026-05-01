@@ -282,6 +282,7 @@ class EventType(str, Enum):
     TRIBUNAL_SESSION_SYSTEM_ERROR         = "g8e.v1.ai.tribunal.session.system.error"
     TRIBUNAL_SESSION_GENERATION_FAILED    = "g8e.v1.ai.tribunal.session.generation.failed"
     TRIBUNAL_SESSION_AUDITOR_FAILED       = "g8e.v1.ai.tribunal.session.auditor.failed"
+    TRIBUNAL_SESSION_WARDEN_BLOCKED       = "g8e.v1.ai.tribunal.session.warden_blocked"
 
     TRIBUNAL_VOTING_STARTED = "g8e.v1.ai.tribunal.voting.started"
     TRIBUNAL_VOTING_FAILED = "g8e.v1.ai.tribunal.voting.failed"

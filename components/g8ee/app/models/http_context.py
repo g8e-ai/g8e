@@ -12,7 +12,7 @@
 # limitations under the License.
 
 import json
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
 from fastapi import Request
 
@@ -26,9 +26,6 @@ from app.utils.ids import generate_execution_id
 from app.utils.timestamp import now
 
 from .base import Field, G8eBaseModel, UTCDatetime, field_validator, model_validator
-
-if TYPE_CHECKING:
-    pass
 
 
 class BoundOperator(G8eBaseModel):

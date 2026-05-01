@@ -154,11 +154,11 @@ The entrypoint.sh script includes the following llama.cpp server flags for optim
 - `--flash-attn on`: Enables Flash Attention for significantly faster prefill and generation on compatible CPUs/GPUs
 - `--cache-reuse 256`: Enables KV cache reuse up to 256 tokens for Tribunal pipeline efficiency
 - `--keep -1`: Keeps the KV cache between requests (default is to clear after each request)
-- `--parallel 6`: Configures 6 parallel processing slots for Tribunal (5 members + 1 auditor)
+- `--parallel 6`: Configures 6 parallel processing slots for the Tribunal pipeline (5 parallel members, plus sequential slots for Warden and Auditor).
 
 ### Prefix Cache Optimization
 
-The KV cache reuse flags are critical for Tribunal pipeline performance. The Tribunal generator emits 5 parallel members plus 1 auditor per round; without sufficient parallel slots and cache reuse, the static-prefix-first template ordering is defeated.
+The KV cache reuse flags are critical for Tribunal pipeline performance. The Tribunal generator emits 5 parallel members followed by Warden and Auditor passes; without sufficient parallel slots and cache reuse, the static-prefix-first template ordering is defeated.
 
 These flags work in conjunction with the static-prefix-first template ordering documented in `docs/architecture/agent_personas.md`. The entrypoint.sh is pre-configured with these optimizations.
 

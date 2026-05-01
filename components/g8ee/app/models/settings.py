@@ -14,7 +14,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from app.constants import (
     CACHE_TTL_DEFAULT,
@@ -40,8 +40,6 @@ from app.constants.paths import PATHS
 from pydantic import field_validator
 from app.models.base import ConfigDict, Field, G8eBaseModel, G8eIdentifiableModel
 
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 

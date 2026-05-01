@@ -20,7 +20,6 @@ uses these types instead of any provider-specific SDK types.
 
 from __future__ import annotations
 
-import base64
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -29,371 +28,73 @@ from app.constants import (
     LLM_DEFAULT_MAX_OUTPUT_TOKENS,
     ThinkingLevel,
 )
-from app.models.base import ConfigDict, G8eBaseModel
 
-
-@dataclass(frozen=True)
-class ThoughtSignature:
-    """Opaque encrypted context blob from the provider thinking API.
-
-    Canonical form inside the application is always a base64-encoded string.
-    The SDK returns raw bytes at the inbound provider boundary; from_sdk()
-    normalises any inbound representation to this canonical form.
-
-    Rules for thought-signatures:
-    - Must be passed back on every toolCall Part (400 if omitted).
-    - Must NOT be merged: a Part with a signature cannot be combined with
-      a Part that lacks one, and two signed Parts cannot be merged.
-    - value is the base64 string to embed verbatim in outbound API requests.
-    """
-
-    value: str
-
-    @classmethod
-    def from_sdk(cls, raw) -> ThoughtSignature | None:
-        """Normalise an inbound SDK thought_signature to ThoughtSignature.
-
-        Accepts bytes, bytearray, or str. Returns None when raw is None or
-        falsy so callers can use a simple ``if sig:`` guard.
-        """
-        if not raw:
-            return None
-        if isinstance(raw, (bytes, bytearray)):
-            return cls(value=base64.b64encode(raw).decode("utf-8"))
-        if isinstance(raw, str):
-            return cls(value=raw)
-        return cls(value=base64.b64encode(bytes(raw)).decode("utf-8"))
-
-    def __str__(self) -> str:
-        return self.value
-
-
-@dataclass
-class ToolCall:
-    name: str
-    args: dict[str, Any]
-    id: str | None = None
-
-
-@dataclass
-class ToolResponse:
-    name: str
-    response: dict[str, Any]
-    id: str | None = None
-
-
-@dataclass
-class InlineData:
-    mime_type: str
-    data: bytes
-
-
-@dataclass
-class Part:
-    text: str | None = None
-    tool_call: ToolCall | None = None
-    tool_response: ToolResponse | None = None
-    thought: bool = False
-    inline_data: InlineData | None = None
-    thought_signature: ThoughtSignature | None = None
-
-    @classmethod
-    def from_text(cls, text: str) -> Part:
-        return cls(text=text)
-
-    @classmethod
-    def from_bytes(cls, data: bytes, mime_type: str) -> Part:
-        return cls(inline_data=InlineData(mime_type=mime_type, data=data))
-
-    @classmethod
-    def from_tool_response(cls, name: str, response: dict[str, Any], id: str | None = None) -> Part:
-        return cls(tool_response=ToolResponse(name=name, response=response, id=id))
-
-
-@dataclass
-class Content:
-    role: str
-    parts: list[Part] = field(default_factory=list)
-
-
-class Role(str, Enum):
-    USER = "user"
-    ASSISTANT = "assistant"
-    SYSTEM = "system"
-    MODEL = "model"  # Provider-specific but often mapped to ASSISTANT
-    TOOL = "tool"
-
-
-class Type(Enum):
-    STRING = "STRING"
-    INTEGER = "INTEGER"
-    NUMBER = "NUMBER"
-    BOOLEAN = "BOOLEAN"
-    ARRAY = "ARRAY"
-    OBJECT = "OBJECT"
-
-
-@dataclass
-class Schema:
-    type: Type
-    description: str | None = None
-    properties: dict[str, Schema] | None = None
-    required: list[str] | None = None
-    items: Schema | None = None
-    enum: list[str] | None = None
-
-
-_JSON_TYPE_MAP: dict[str, Type] = {
-    "string": Type.STRING,
-    "integer": Type.INTEGER,
-    "number": Type.NUMBER,
-    "boolean": Type.BOOLEAN,
-    "array": Type.ARRAY,
-    "object": Type.OBJECT,
-}
-
-
-def _resolve_ref(ref: str, defs: dict) -> dict:
-    name = ref.rsplit("/", maxsplit=1)[-1]
-    return defs.get(name, {})
-
-
-def _json_schema_to_schema(node: dict, defs: dict) -> Schema:
-    if "$ref" in node:
-        node = _resolve_ref(node["$ref"], defs)
-
-    if "anyOf" in node:
-        non_null = [n for n in node["anyOf"] if n.get("type") != "null" or "$ref" in n]
-        if not non_null:
-            non_null = node["anyOf"]
-        if len(non_null) == 1:
-            resolved = dict(non_null[0])
-            if "description" not in resolved and "description" in node:
-                resolved["description"] = node["description"]
-            return _json_schema_to_schema(resolved, defs)
-        for candidate in non_null:
-            if "$ref" in candidate:
-                resolved = dict(_resolve_ref(candidate["$ref"], defs))
-                if "description" not in resolved and "description" in node:
-                    resolved["description"] = node["description"]
-                return _json_schema_to_schema(resolved, defs)
-        resolved = dict(non_null[0])
-        if "description" not in resolved and "description" in node:
-            resolved["description"] = node["description"]
-        return _json_schema_to_schema(resolved, defs)
-
-    raw_type = node.get("type", "string")
-    schema_type = _JSON_TYPE_MAP.get(raw_type, Type.STRING)
-    description = node.get("description")
-    enum = node.get("enum")
-
-    properties: dict[str, Schema] | None = None
-    required: list[str] | None = None
-    items: Schema | None = None
-
-    if schema_type == Type.OBJECT and "properties" in node:
-        properties = {
-            k: _json_schema_to_schema(v, defs)
-            for k, v in node["properties"].items()
-        }
-        req = node.get("required")
-        if req:
-            required = req
-
-    if schema_type == Type.ARRAY and "items" in node:
-        items = _json_schema_to_schema(node["items"], defs)
-
-    return Schema(
-        type=schema_type,
-        description=description,
-        properties=properties,
-        required=required,
-        items=items,
-        enum=enum,
-    )
-
-
-def schema_from_model(model_cls: type, required_override: list[str] | None = None) -> Schema:
-    """Derive a types.Schema from a G8eBaseModel subclass.
-
-    Uses model_json_schema() as the source of truth. Field descriptions come
-    from Field(description=...) on the model — no inline redeclaration needed.
-
-    Args:
-        model_cls: A G8eBaseModel subclass.
-        required_override: If provided, overrides the required field list. Use
-            when the model has required fields that should be optional for the LLM,
-            or vice versa.
-    """
-    json_schema = model_cls.model_json_schema()
-    defs = json_schema.get("$defs", {})
-    properties_raw = json_schema.get("properties", {})
-    model_required = json_schema.get("required", [])
-
-    properties = {
-        k: _json_schema_to_schema(v, defs)
-        for k, v in properties_raw.items()
-    }
-    required = required_override if required_override is not None else model_required
-
-    return Schema(
-        type=Type.OBJECT,
-        properties=properties,
-        required=required if required else None,
-    )
-
-
-class ToolDeclaration(G8eBaseModel):
-    """Provider-agnostic function/tool schema.
-
-    ``parameters`` is either:
-    - A ``Schema`` dataclass (canonical in-memory form for tool schemas derived
-      from Pydantic models via ``schema_from_model``), or
-    - A plain JSON-schema ``dict[str, Any]`` (used when callers pre-build a
-      JSON Schema fragment directly, e.g. in tests).
-
-    Providers consume the union via ``schema_to_dict`` before making wire calls.
-    """
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    name: str
-    description: str
-    parameters: dict[str, Any] | Schema
-
-
-class ToolGroup(G8eBaseModel):
-    tools: list[ToolDeclaration] = []
-    google_search: bool = False
-
-
-@dataclass
-class UsageMetadata:
-    prompt_token_count: int = 0
-    candidates_token_count: int = 0
-    total_token_count: int = 0
-    thinking_token_count: int = 0
-
-
-@dataclass
-class SdkGroundingWebSource:
-    uri: str = ""
-    title: str = ""
-
-
-@dataclass
-class SdkGroundingChunk:
-    web: SdkGroundingWebSource | None
-
-
-@dataclass
-class SdkGroundingSegment:
-    start_index: int = 0
-    end_index: int = 0
-    text: str = ""
-
-
-@dataclass
-class SdkGroundingSupport:
-    segment: SdkGroundingSegment = field(default_factory=SdkGroundingSegment)
-    grounding_chunk_indices: list[int] = field(default_factory=list)
-
-
-@dataclass
-class SdkSearchEntryPoint:
-    rendered_content: str = ""
-
-
-@dataclass
-class SdkGroundingRawData:
-    """Typed representation of raw SDK grounding metadata extracted at the provider boundary.
-
-    Populated by the respective provider and attached to GenerateContentResponse.grounding_raw.
-    Consumed exclusively by GroundingService — never accessed outside the grounding boundary.
-    """
-    web_search_queries: list[str] = field(default_factory=list)
-    grounding_chunks: list[SdkGroundingChunk] = field(default_factory=list)
-    grounding_supports: list[SdkGroundingSupport] = field(default_factory=list)
-    search_entry_point: SdkSearchEntryPoint | None = None
-
-
-@dataclass
-class Candidate:
-    content: Content
-    finish_reason: str
-
-
-@dataclass
-class GenerateContentResponse:
-    candidates: list[Candidate] = field(default_factory=list)
-    usage_metadata: UsageMetadata = field(default_factory=UsageMetadata)
-    grounding_raw: SdkGroundingRawData = field(default_factory=SdkGroundingRawData)
-
-    @property
-    def text(self) -> str | None:
-        """Convenience: extract first text part from first candidate."""
-        if self.candidates:
-            for part in self.candidates[0].content.parts:
-                if part.text and not part.thought:
-                    return part.text
-        return None
-
-    @property
-    def tool_calls(self) -> list[ToolCall]:
-        """Convenience: extract all tool calls from first candidate."""
-        calls = []
-        if self.candidates:
-            for part in self.candidates[0].content.parts:
-                if part.tool_call:
-                    calls.append(part.tool_call)
-        return calls
-
-
-@dataclass
-class StreamChunkFromModel:
-    text: str | None = None
-    tool_calls: list[ToolCall] = field(default_factory=list)
-    thought: bool = False
-    usage_metadata: UsageMetadata = field(default_factory=UsageMetadata)
-    finish_reason: str | None = None
-    thought_signature: ThoughtSignature | None = None
-
-
-class ResponseJsonSchema(G8eBaseModel):
-    json_schema_dict: dict[str, Any]
-    name: str = "response"
-    strict: bool = False
-
-    def flatten_for_ollama(self) -> dict[str, Any]:
-        return self.json_schema_dict
-
-    def flatten_for_openai(self) -> dict[str, Any]:
-        return {"name": self.name, "schema": self.json_schema_dict, "strict": self.strict}
-
-
-class ResponseFormat(G8eBaseModel):
-    json_schema: ResponseJsonSchema
-
-    @classmethod
-    def from_pydantic_schema(cls, json_schema: dict[str, Any], name: str = "response") -> ResponseFormat:
-        return cls(json_schema=ResponseJsonSchema(json_schema_dict=json_schema, name=name))
-
-    def flatten_for_ollama(self) -> dict[str, Any]:
-        return self.json_schema.flatten_for_ollama()
-
-    def flatten_for_openai(self) -> dict[str, Any]:
-        return {"type": "json_schema", "json_schema": self.json_schema.flatten_for_openai()}
-
-
-@dataclass
-class ToolCallingConfig:
-    mode: str = "AUTO"
-    allowed_tool_names: list[str] = field(default_factory=list)
-
-
-@dataclass
-class ToolConfig:
-    tool_calling_config: ToolCallingConfig = field(default_factory=ToolCallingConfig)
+# Import pure dataclasses/enums from separate module
+from app.llm.llm_dataclasses import (
+    Candidate,
+    Content,
+    GenerateContentResponse,
+    InlineData,
+    Part,
+    ResponseFormat,
+    ResponseJsonSchema,
+    Role,
+    Schema,
+    SdkGroundingChunk,
+    SdkGroundingRawData,
+    SdkGroundingSegment,
+    SdkGroundingSupport,
+    SdkGroundingWebSource,
+    SdkSearchEntryPoint,
+    StreamChunkFromModel,
+    ThoughtSignature,
+    ToolCall,
+    ToolCallingConfig,
+    ToolConfig,
+    ToolDeclaration,
+    ToolGroup,
+    ToolResponse,
+    Type,
+    UsageMetadata,
+)
+
+# Import schema generation from dedicated module
+from app.llm.llm_schema import schema_from_model
+
+# Re-export for backwards compatibility
+__all__ = [
+    "ThoughtSignature",
+    "ToolCall",
+    "ToolResponse",
+    "InlineData",
+    "Part",
+    "Content",
+    "Candidate",
+    "GenerateContentResponse",
+    "UsageMetadata",
+    "SdkGroundingWebSource",
+    "SdkGroundingChunk",
+    "SdkGroundingSegment",
+    "SdkGroundingSupport",
+    "SdkSearchEntryPoint",
+    "SdkGroundingRawData",
+    "StreamChunkFromModel",
+    "ToolCallingConfig",
+    "ToolConfig",
+    "ThinkingConfig",
+    "Role",
+    "Type",
+    "Schema",
+    "schema_from_model",
+    "ToolDeclaration",
+    "ToolGroup",
+    "ResponseJsonSchema",
+    "ResponseFormat",
+    "PrimaryLLMSettings",
+    "AssistantLLMSettings",
+    "LiteLLMSettings",
+    "GenerateContentConfig",
+]
 
 
 @dataclass

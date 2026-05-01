@@ -401,6 +401,7 @@ services:
       - SSH_AUTH_SOCK=${SSH_AUTH_SOCK:+/run/host-ssh-agent.sock}
     volumes:
       - ./components/g8ep/scripts:/app/components/g8ep/scripts
+      - ./components/g8ee:/app/components/g8ee
       - ./shared:/app/shared
       - ./scripts:/app/scripts
       - g8es-ssl:/g8es:ro

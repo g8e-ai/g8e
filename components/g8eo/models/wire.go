@@ -142,6 +142,7 @@ type FileDiffEntry struct {
 }
 
 type FetchFileDiffResultPayload struct {
+	PayloadType       string          `json:"payload_type"`
 	Success           bool            `json:"success"`
 	ExecutionID       string          `json:"execution_id"`
 	Diffs             []FileDiffEntry `json:"diffs,omitempty"`
@@ -171,6 +172,7 @@ type PortCheckResultPayload struct {
 }
 
 type LFAAErrorPayload struct {
+	PayloadType       string `json:"payload_type"`
 	Success           bool   `json:"success"`
 	Error             string `json:"error"`
 	ExecutionID       string `json:"execution_id"`
@@ -196,6 +198,7 @@ type FetchLogsResultPayload struct {
 }
 
 type FetchHistoryResultPayload struct {
+	PayloadType       string           `json:"payload_type"`
 	Success           bool             `json:"success"`
 	ExecutionID       string           `json:"execution_id"`
 	OperatorSessionID string           `json:"operator_session_id,omitempty"`
@@ -247,6 +250,7 @@ type FileHistoryEntry struct {
 }
 
 type FetchFileHistoryResultPayload struct {
+	PayloadType string             `json:"payload_type"`
 	Success     bool               `json:"success"`
 	ExecutionID string             `json:"execution_id"`
 	FilePath    string             `json:"file_path,omitempty"`
@@ -255,6 +259,7 @@ type FetchFileHistoryResultPayload struct {
 }
 
 type RestoreFileResultPayload struct {
+	PayloadType string `json:"payload_type"`
 	Success     bool   `json:"success"`
 	ExecutionID string `json:"execution_id"`
 	FilePath    string `json:"file_path,omitempty"`

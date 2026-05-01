@@ -47,12 +47,12 @@ func (ps *PortService) HandlePortCheckRequest(ctx context.Context, msg PubSubCom
 	var p models.PortCheckRequestPayload
 	if err := json.Unmarshal(msg.Payload, &p); err != nil {
 		ps.logger.Error("Failed to decode port check payload", "error", err)
-		publishLFAAErrorTo(ctx, ps.client, ps.config, ps.logger, msg, constants.Event.Operator.PortCheck.Failed, "invalid request payload")
+		publishLFAAErrorTo(ctx, ps.client, ps.config, ps.logger, msg, constants.Event.Operator.PortCheck.Failed, "invalid request payload", "port_check_error")
 		return
 	}
 	if p.Port <= 0 || p.Port > 65535 {
 		ps.logger.Warn("Port check request with invalid port", "port", p.Port)
-		publishLFAAErrorTo(ctx, ps.client, ps.config, ps.logger, msg, constants.Event.Operator.PortCheck.Failed, "port must be between 1 and 65535")
+		publishLFAAErrorTo(ctx, ps.client, ps.config, ps.logger, msg, constants.Event.Operator.PortCheck.Failed, "port must be between 1 and 65535", "port_check_error")
 		return
 	}
 
