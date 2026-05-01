@@ -19,6 +19,7 @@ from app.constants.events import EventType
 from app.models.command_request_payloads import FileEditRequestPayload
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
+from app.models.pubsub_messages import FileEditResultPayload
 from app.models.tool_results import CommandInternalResult
 from app.models.operators import OperatorDocument
 from app.services.operator.file_service import OperatorFileService
@@ -31,13 +32,21 @@ async def test_execute_file_edit_read_returns_content():
     command_service = build_command_service()
     file_service = command_service._file_service
     
-    # Mock execution_service.execute to return a successful read result
+    # Mock execution_service.execute to return a successful read result with FileEditResultPayload envelope
     mock_content = "test file content"
     internal_result = CommandInternalResult(
         status=ExecutionStatus.COMPLETED,
-        output=mock_content
+        output=""
     )
-    file_service.execution_service.execute = AsyncMock(return_value=(internal_result, None))
+    mock_envelope = MagicMock()
+    mock_envelope.payload = FileEditResultPayload(
+        execution_id="exec-123",
+        operation="read",
+        file_path="/etc/test",
+        status=ExecutionStatus.COMPLETED,
+        content=mock_content
+    )
+    file_service.execution_service.execute = AsyncMock(return_value=(internal_result, mock_envelope))
     
     # Mock operator resolution
     mock_operator = MagicMock(spec=OperatorDocument)
@@ -81,13 +90,21 @@ async def test_execute_file_edit_read_broadcasts_content():
     command_service = build_command_service()
     file_service = command_service._file_service
     
-    # Mock execution_service.execute
+    # Mock execution_service.execute with FileEditResultPayload envelope
     mock_content = "test file content"
     internal_result = CommandInternalResult(
         status=ExecutionStatus.COMPLETED,
-        output=mock_content
+        output=""
     )
-    file_service.execution_service.execute = AsyncMock(return_value=(internal_result, None))
+    mock_envelope = MagicMock()
+    mock_envelope.payload = FileEditResultPayload(
+        execution_id="exec-123",
+        operation="read",
+        file_path="/etc/test",
+        status=ExecutionStatus.COMPLETED,
+        content=mock_content
+    )
+    file_service.execution_service.execute = AsyncMock(return_value=(internal_result, mock_envelope))
     
     # Mock operator resolution
     mock_operator = MagicMock(spec=OperatorDocument)

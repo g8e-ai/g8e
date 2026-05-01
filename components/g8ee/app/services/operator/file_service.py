@@ -261,16 +261,18 @@ class OperatorFileService:
                 task_id=AITaskId.FILE_EDIT,
             )
 
-            internal_result, _envelope = await self.execution_service.execute(
+            internal_result, envelope = await self.execution_service.execute(
                 g8e_message=g8e_message,
                 g8e_context=g8e_context,
                 timeout_seconds=60,
             )
 
-            # Fix: Ensure content is extracted for READ operations
-            content = getattr(args, "content", None) or getattr(args, "new_content", None)
-            if operation == FileOperation.READ and internal_result and internal_result.status == ExecutionStatus.COMPLETED:
-                content = internal_result.output
+            # Extract content for READ operations from envelope payload
+            content = None
+            if operation == FileOperation.READ and envelope:
+                from app.models.pubsub_messages import FileEditResultPayload
+                if isinstance(envelope.payload, FileEditResultPayload):
+                    content = envelope.payload.content
 
             # Notify completion/failure
             completion_event_type = (

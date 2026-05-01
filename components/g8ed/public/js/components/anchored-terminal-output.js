@@ -489,23 +489,68 @@ export class TerminalOutputMixin {
         });
     }
 
+    _getOrCreateSystemMessagesGroup() {
+        const existing = this.outputContainer?.querySelector('.anchored-terminal__system-messages-group');
+        if (existing) return existing;
+
+        const group = document.createElement('div');
+        group.className = 'anchored-terminal__system-messages-group collapsed';
+
+        const header = document.createElement('div');
+        header.className = 'anchored-terminal__system-messages-header';
+
+        const toggle = document.createElement('span');
+        toggle.className = 'anchored-terminal__system-messages-toggle';
+        toggle.textContent = '+';
+
+        const title = document.createElement('span');
+        title.className = 'anchored-terminal__system-messages-title';
+        title.textContent = 'System Events';
+
+        const count = document.createElement('span');
+        count.className = 'anchored-terminal__system-messages-count';
+        count.textContent = '(0)';
+
+        header.appendChild(toggle);
+        header.appendChild(title);
+        header.appendChild(count);
+
+        header.addEventListener('click', () => {
+            const isCollapsed = group.classList.toggle('collapsed');
+            toggle.textContent = isCollapsed ? '+' : '–';
+        });
+
+        const content = document.createElement('div');
+        content.className = 'anchored-terminal__system-messages-content';
+
+        group.appendChild(header);
+        group.appendChild(content);
+        this.outputContainer.appendChild(group);
+
+        return group;
+    }
+
     appendSystemMessage(text) {
         if (!this.outputContainer) return;
 
         this._removeWelcome();
 
-        const entry = document.createElement('div');
-        entry.className = 'anchored-terminal__entry';
+        const group = this._getOrCreateSystemMessagesGroup();
+        const content = group.querySelector('.anchored-terminal__system-messages-content');
+        const countEl = group.querySelector('.anchored-terminal__system-messages-count');
 
         const msg = document.createElement('div');
-        msg.className = 'anchored-terminal__cmd-output system-message';
+        msg.className = 'anchored-terminal__system-message';
         msg.textContent = `[${this.formatTimestamp()}] ${text}`;
 
-        entry.appendChild(msg);
-        this.outputContainer.appendChild(entry);
+        content.appendChild(msg);
+
+        const count = content.children.length;
+        countEl.textContent = `(${count})`;
+
         this.scrollToBottom();
 
-        return entry;
+        return msg;
     }
 
     sealStreamingResponse(webSessionId) {

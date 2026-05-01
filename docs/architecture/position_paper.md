@@ -1,10 +1,13 @@
 # AI-Powered, Human-Driven Infrastructure
 
 *Danny Barbour · [github.com/g8e-ai/g8e](https://github.com/g8e-ai/g8e)*
+*Available for short-term engagements: agent governance review, threat modeling, eval pipeline design. 1–4 week scopes.*
 
 ---
 
 **TL;DR.** I propose an architecture for AI agent systems: AI personas and humans as first-class co-validators in a Byzantine consensus protocol, with the User's time as their stake, a stateless reasoning Engine, and a sovereign single-binary Operator that runs on every managed host with tamper-evident local audit. The Engine is replaceable. The Operator is the system of record. The User holds the only signature only a human can produce. This is AI-powered, human-driven infrastructure.
+
+![alt text](../../components/g8ed/public/media/fixed-by-g8e.png)
 
 ---
 
@@ -62,23 +65,23 @@ graph TD
     subgraph Engine [The Engine]
         T[Triage] --> S[Sage]
         S --> Tr[Tribunal]
-        Tr --> Au[Auditor]
-        Au --> W[Warden]
+        Tr --> W[Warden]
+        W --> Au[Auditor]
     end
     subgraph Operator [The Operator]
         Ex[Exec]
         Ex --> Ad[Audit Vault]
         Ad --> G[Git Ledger]
     end
-    U[User] -- signature --> W
-    W -- co-validated command --> Ex
+    U[User] -- signature --> Au
+    Au -- co-validated command --> Ex
 ```
 
 The Engine is replaceable. The Operator is the system of record. This inversion is the architectural payload of the proposal: the AI layer can be swapped, audited, or revoked without losing history, because history lives on the host that owns the infrastructure being operated, not in the cloud where the AI runs.
 
 Communication is outbound-only from the Operator to the Engine over mTLS WebSocket. The Operator initiates every connection. No inbound port is required on managed hosts. Stolen credentials cannot be replayed from a different machine, because system fingerprint binding ties session credentials to the host they were issued on.
 
-## 4. The Engine: time-bonded heterogeneous consensus
+### 4. The Engine: time-bonded heterogeneous consensus
 
 The Engine implements a consensus mechanism in which AI personas are validators with reputation stakes and the User is a co-validator whose stake is time. The full mechanism design is treated formally in a companion document; what follows is the architectural sketch.
 
@@ -118,9 +121,15 @@ $$ S = \begin{cases} R_{hit} & \text{if } c_{nemesis} \text{ identifies a flaw c
 
 The realized attack rate becomes a learned signal of actual flaw density in the honest four's output — adversarial pressure as continuous quality measurement.
 
+### The Warden
+
+The Engine runs the Warden, a defensive coordinator that performs pre-execution risk assessment. The Warden classifies command risk (low/medium/high), file operation risk (factoring in Git state — operations that lose history are higher risk than reversible ones), and analyzes failures for auto-fix safety. The Warden validates the safety of a command *before* the Auditor cryptographically commits to the results.
+
+The Warden fails closed. Ambiguous risk is classified high. The Warden cannot lower a classification produced by deterministic pattern filters — `rm -rf /` is high regardless of AI judgment. The User is presented with the highest classification any layer produced.
+
 ### The Auditor and the User
 
-A primary-tier Auditor reviews the winning candidate against the planner's articulated intent and the Tribunal's grounding. The Auditor approves, swaps to a dissenting cluster's candidate, or revises minor flaws. The verdict is cryptographically committed to the reputation ledger.
+Only once the Warden has cleared the command does the Auditor perform the final consistency check and Merkle commitment. A primary-tier Auditor reviews the winning candidate against the planner's articulated intent and the Tribunal's grounding. The Auditor approves, swaps to a dissenting cluster's candidate, or revises minor flaws. The verdict is cryptographically committed to the reputation ledger.
 
 The Auditor handles only machine-domain validation: consistency, grounding, procedural correctness. Its competency does not extend to user-domain judgments. Attempting to expand it there would force the Auditor to score against ground truth it cannot access, breaking the proper-scoring-rule structure that makes its stake meaningful.
 
@@ -178,12 +187,6 @@ $$ P(t) = \begin{cases} P_{\text{base}} \cup P_{\text{intent}} & t \in [t_{\text
 
 The result: no human and no AI agent ever needs to hold privileged AWS credentials at rest. Privileges are attached just-in-time, scoped to the intent, and revoked on completion. A compromise of any layer — the User's session, the Engine's reasoning state, the Operator's binary — cannot exfiltrate persistent credentials, because no persistent credentials exist.
 
-### The Warden
-
-The Engine runs the Warden, a defensive coordinator that performs pre-execution risk assessment. The Warden classifies command risk (low/medium/high), file operation risk (factoring in Git state — operations that lose history are higher risk than reversible ones), and analyzes failures for auto-fix safety. The Warden's classifications populate the User's approval prompt with concrete risk indicators, making the User's co-validation more efficient.
-
-The Warden fails closed. Ambiguous risk is classified high. The Warden cannot lower a classification produced by deterministic pattern filters — `rm -rf /` is high regardless of AI judgment. The User is presented with the highest classification any layer produced.
-
 ## 6. A worked example
 
 To make this stop reading abstract, here is what actually happens when a User says: *"Clean up the old logs on the production database server, but be careful — we had an incident last month where someone deleted the wrong directory and we lost three days of audit data."*
@@ -196,9 +199,11 @@ To make this stop reading abstract, here is what actually happens when a User sa
 
 Round 1 votes: Concord, Variance, and Pragma cluster on the manifest-first version. Axiom dissents. Nemesis votes for its own candidate. The cluster reaches three votes; consensus is achieved.
 
-**The Auditor** reviews. It sees Sage's intent, the winning candidate, the dissenting clusters with their persona signatures, and pulls cross-conversation memory: *"This User had an incident last month involving wrong-directory deletion."* The Auditor verifies the manifest-first design matches the intent's caution and grounds the verdict in the precedent. The Nemesis attack is logged as a confirmed flaw caught — Nemesis's stake increases. The verdict is cryptographically committed to the reputation ledger.
+**The Warden** (running on the Engine) performs a pre-execution risk assessment. It classifies the risk: command risk medium (mass deletion), file operation risk medium-high (operations on a directory containing audit-relevant files, even with the exclusion), error risk classified as escalate-on-failure. The Warden validates the command's safety profile before allowing it to proceed to the Auditor.
 
-**The Operator receives the verdict over mTLS WebSocket.** The **Warden** (running on the Engine) has already classified the risk: command risk medium (mass deletion), file operation risk medium-high (operations on a directory containing audit-relevant files, even with the exclusion), error risk classified as escalate-on-failure. The Operator prepares the JIT IAM scope: it attaches the `Log-Management` intent policy to its role, granting read access to `/var/log/db/` and write access for the manifest path.
+**The Auditor** reviews the winning candidate once the Warden has cleared it. It sees Sage's intent, the winning candidate, the dissenting clusters with their persona signatures, and pulls cross-conversation memory: *"This User had an incident last month involving wrong-directory deletion."* The Auditor verifies the manifest-first design matches the intent's caution and grounds the verdict in the precedent. The Nemesis attack is logged as a confirmed flaw caught — Nemesis's stake increases. The verdict is cryptographically committed to the reputation ledger.
+
+**The Operator receives the verdict over mTLS WebSocket.** The Operator prepares the JIT IAM scope: it attaches the `Log-Management` intent policy to its role, granting read access to `/var/log/db/` and write access for the manifest path.
 
 **The Operator presents to the User**: the proposed command, the manifest path, the Auditor's grounding (*"matches your stated caution; cross-references prior incident"*), the Warden's risk classifications, and an expandable view of the Nemesis dissent (*"a candidate without manifest-first was rejected — here's why"*).
 
@@ -267,3 +272,5 @@ The implementation is open source. The threat model came from production. The id
 - *Mechanism Design for Time-Bonded Heterogeneous Consensus* — formal payoffs, equilibrium claims
 - *Operator Architecture Reference* — implementation specification
 - *The Vortex Principle: Information-Theoretic Foundations of Honest Consensus*
+
+Available for short-term engagements: agent governance review, threat modeling, eval pipeline design. 1–4 week scopes. [danny@g8e.ai](mailto:danny@g8e.ai)

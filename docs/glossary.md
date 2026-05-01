@@ -441,13 +441,25 @@ A heterogeneous multi-model architecture in g8ee for refining command syntax. Im
 
 2. **Voting** — Candidates are normalized (stripped markdown fences and surrounding whitespace) and grouped by exact value. Each member contributes exactly 1 vote per candidate. The highest vote count wins, with deterministic tie-breaking (shortest command → non-Nemesis cluster → alphabetical).
 
-3. **Verification** — A separate convergent verifier persona (The Auditor) evaluates the winner against the original intent and reports either "ok" or a short revised command.
+3. **Safety Analysis** — A defensive coordination agent (The Warden) performs pre-execution risk assessment (LOW/MEDIUM/HIGH) for the command, file operations, and errors. It enforces the Two-Strike Circuit Breaker, generating contextual feedback on blocks to guide the reasoning agent toward safer alternatives.
 
-4. **Approval** — The refined command is presented to the user for explicit approval.
+4. **Verification** — A separate convergent verifier persona (The Auditor) evaluates the winner against the original intent once cleared by the Warden. The Auditor performs the final consistency check and Merkle commitment.
 
-Failure modes (missing model, provider error, no consensus, verifier failure) halt the execution and return an error to the AI — there is no fallback to the original reasoning agent because it never proposes a command directly.
+5. **Approval** — The refined command is presented to the user for explicit approval.
+
+Failure modes (missing model, provider error, no consensus, Warden block, Auditor failure) halt the execution and return an error to the AI — there is no fallback to the original reasoning agent because it never proposes a command directly.
 
 Configuration via platform settings: `llm_command_gen_passes` (default: 5), `llm_command_gen_verifier` (default: true), `llm_command_gen_enabled` (default: true).
+
+## Vortex Principle
+
+A load-bearing safety property in g8e's mechanism design where AI agents operate in a sealed, tiered information environment. Each agent (Triage, Sage, Tribunal members, Auditor) has a quarantined view of the pipeline to prevent collusion and ensure honest participation. This structure ensures that no agent can coordinate to game the consensus or shape output to fit downstream expectations.
+
+---
+
+## Warden
+
+A defensive coordination agent in g8ee that performs pre-execution risk assessment. It classifies the risk of commands (LOW/MEDIUM/HIGH), file operations, and errors before they proceed to the Auditor and subsequent human approval. The Warden enforces the Two-Strike Circuit Breaker, generating contextual feedback on blocks to guide the reasoning agent toward safer alternatives.
 
 ---
 

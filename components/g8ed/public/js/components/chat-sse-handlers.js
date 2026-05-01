@@ -74,6 +74,31 @@ export const ChatSSEHandlersMixin = {
             this.handleNetworkPortCheckFailed(data);
         });
 
+        // Filesystem tool handlers for native lifecycle events
+        this.eventBus.on(EventType.OPERATOR_FILESYSTEM_LIST_STARTED, (data) => {
+            this.handleFilesystemListStarted(data);
+        });
+
+        this.eventBus.on(EventType.OPERATOR_FILESYSTEM_LIST_COMPLETED, (data) => {
+            this.handleFilesystemListCompleted(data);
+        });
+
+        this.eventBus.on(EventType.OPERATOR_FILESYSTEM_LIST_FAILED, (data) => {
+            this.handleFilesystemListFailed(data);
+        });
+
+        this.eventBus.on(EventType.OPERATOR_FILESYSTEM_READ_STARTED, (data) => {
+            this.handleFilesystemReadStarted(data);
+        });
+
+        this.eventBus.on(EventType.OPERATOR_FILESYSTEM_READ_COMPLETED, (data) => {
+            this.handleFilesystemReadCompleted(data);
+        });
+
+        this.eventBus.on(EventType.OPERATOR_FILESYSTEM_READ_FAILED, (data) => {
+            this.handleFilesystemReadFailed(data);
+        });
+
         // Universal tool handlers for native lifecycle events
         this.eventBus.on(EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED, (data) => {
             this.handleUniversalToolStarted(data, 'web-search', data.display_label || 'Searching web', data.display_icon, data.category);
@@ -468,32 +493,32 @@ export const ChatSSEHandlersMixin = {
         if (!this.anchoredTerminal) return;
 
         // 1. Clear processing indicators ("Reviewing results")
-        if (this._processingIndicators) {
-            const processingIndicatorId = this._processingIndicators.get(webSessionId);
-            if (processingIndicatorId) {
-                this.anchoredTerminal.completeActivityIndicator(processingIndicatorId);
-                this._processingIndicators.delete(webSessionId);
-            }
+        const processingIndicatorId = this._processingIndicators.get(webSessionId);
+        if (processingIndicatorId) {
+            this.anchoredTerminal.completeActivityIndicator(processingIndicatorId);
+            this._processingIndicators.delete(webSessionId);
         }
 
         // 2. Clear universal tool indicators ("Checking constraints", etc.)
-        if (this._universalToolIndicators) {
-            for (const [execId, indicatorId] of this._universalToolIndicators.entries()) {
-                this.anchoredTerminal.completeActivityIndicator(indicatorId);
-            }
-            this._universalToolIndicators.clear();
+        for (const [execId, indicatorId] of this._universalToolIndicators.entries()) {
+            this.anchoredTerminal.completeActivityIndicator(indicatorId);
         }
+        this._universalToolIndicators.clear();
 
         // 3. Clear port check indicators
-        if (this._portCheckIndicators) {
-            for (const [execId, indicatorId] of this._portCheckIndicators.entries()) {
-                this.anchoredTerminal.completeActivityIndicator(indicatorId);
-            }
-            this._portCheckIndicators.clear();
+        for (const [execId, indicatorId] of this._portCheckIndicators.entries()) {
+            this.anchoredTerminal.completeActivityIndicator(indicatorId);
         }
+        this._portCheckIndicators.clear();
 
-        // 4. Clear search web indicators
-        this._searchWebIndicators?.clear();
+        // 4. Clear filesystem indicators
+        for (const [execId, indicatorId] of this._filesystemIndicators.entries()) {
+            this.anchoredTerminal.completeActivityIndicator(indicatorId);
+        }
+        this._filesystemIndicators.clear();
+
+        // 5. Clear search web indicators
+        this._searchWebIndicators.clear();
     },
     handleIterationStarted(data) {
         if (!data.web_session_id) {
@@ -528,9 +553,6 @@ export const ChatSSEHandlersMixin = {
         if (!this.anchoredTerminal) return;
 
         // Reset auto-scroll exactly once per session on first chunk
-        if (!this._hasResetAutoScrollForSession) {
-            this._hasResetAutoScrollForSession = new Set();
-        }
         if (!this._hasResetAutoScrollForSession.has(data.web_session_id)) {
             this.anchoredTerminal.resetAutoScroll();
             this._hasResetAutoScrollForSession.add(data.web_session_id);
@@ -546,7 +568,6 @@ export const ChatSSEHandlersMixin = {
         const executionId = data.execution_id;
         if (!executionId) return;
         const indicatorId = `port-check-${executionId}`;
-        if (!this._portCheckIndicators) this._portCheckIndicators = new Map();
         this._portCheckIndicators.set(executionId, indicatorId);
         const port = data.port;
         if (port === undefined || port === null) {
@@ -564,7 +585,7 @@ export const ChatSSEHandlersMixin = {
 
     handleNetworkPortCheckCompleted(data) {
         if (!this.shouldProcessEvent(data)) return;
-        if (!this.anchoredTerminal || !this._portCheckIndicators) return;
+        if (!this.anchoredTerminal) return;
         const indicatorId = this._portCheckIndicators.get(data.execution_id);
         if (!indicatorId) return;
         this.anchoredTerminal.completeActivityIndicator(indicatorId);
@@ -573,11 +594,83 @@ export const ChatSSEHandlersMixin = {
 
     handleNetworkPortCheckFailed(data) {
         if (!this.shouldProcessEvent(data)) return;
-        if (!this.anchoredTerminal || !this._portCheckIndicators) return;
+        if (!this.anchoredTerminal) return;
         const indicatorId = this._portCheckIndicators.get(data.execution_id);
         if (!indicatorId) return;
         this.anchoredTerminal.completeActivityIndicator(indicatorId);
         this._portCheckIndicators.delete(data.execution_id);
+    },
+
+    handleFilesystemListStarted(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        const webSessionId = data.web_session_id;
+        if (!webSessionId || !this.anchoredTerminal) return;
+        const executionId = data.execution_id;
+        if (!executionId) return;
+        const indicatorId = `fs-list-${executionId}`;
+        this._filesystemIndicators.set(executionId, indicatorId);
+        const path = data.command?.replace(/^ls\s+/, '') || 'directory';
+        this.anchoredTerminal.appendActivityIndicator({
+            id: indicatorId,
+            icon: 'folder',
+            label: 'Listing directory',
+            detail: path,
+            category: ToolDisplayCategory.FILE,
+        });
+    },
+
+    handleFilesystemListCompleted(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        if (!this.anchoredTerminal) return;
+        const indicatorId = this._filesystemIndicators.get(data.execution_id);
+        if (!indicatorId) return;
+        this.anchoredTerminal.completeActivityIndicator(indicatorId);
+        this._filesystemIndicators.delete(data.execution_id);
+    },
+
+    handleFilesystemListFailed(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        if (!this.anchoredTerminal) return;
+        const indicatorId = this._filesystemIndicators.get(data.execution_id);
+        if (!indicatorId) return;
+        this.anchoredTerminal.completeActivityIndicator(indicatorId);
+        this._filesystemIndicators.delete(data.execution_id);
+    },
+
+    handleFilesystemReadStarted(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        const webSessionId = data.web_session_id;
+        if (!webSessionId || !this.anchoredTerminal) return;
+        const executionId = data.execution_id;
+        if (!executionId) return;
+        const indicatorId = `fs-read-${executionId}`;
+        this._filesystemIndicators.set(executionId, indicatorId);
+        const path = data.command?.replace(/^cat\s+/, '') || 'file';
+        this.anchoredTerminal.appendActivityIndicator({
+            id: indicatorId,
+            icon: 'description',
+            label: 'Reading file',
+            detail: path,
+            category: ToolDisplayCategory.FILE,
+        });
+    },
+
+    handleFilesystemReadCompleted(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        if (!this.anchoredTerminal) return;
+        const indicatorId = this._filesystemIndicators.get(data.execution_id);
+        if (!indicatorId) return;
+        this.anchoredTerminal.completeActivityIndicator(indicatorId);
+        this._filesystemIndicators.delete(data.execution_id);
+    },
+
+    handleFilesystemReadFailed(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        if (!this.anchoredTerminal) return;
+        const indicatorId = this._filesystemIndicators.get(data.execution_id);
+        if (!indicatorId) return;
+        this.anchoredTerminal.completeActivityIndicator(indicatorId);
+        this._filesystemIndicators.delete(data.execution_id);
     },
 
     handleTurnComplete(data) {
@@ -597,7 +690,6 @@ export const ChatSSEHandlersMixin = {
         const turnNumber = data.turn || 0;
         if (turnNumber > 0 && this.anchoredTerminal) {
             const processingIndicatorId = `processing-${webSessionId}-${turnNumber}`;
-            if (!this._processingIndicators) this._processingIndicators = new Map();
             this._processingIndicators.set(webSessionId, processingIndicatorId);
 
             this.anchoredTerminal.appendActivityIndicator({
@@ -629,7 +721,6 @@ export const ChatSSEHandlersMixin = {
         const correlationId = data.correlation_id;
         const widgetId = correlationId || `tribunal-${data.web_session_id}-${Date.now()}`;
 
-        if (!this._tribunalWidgetIds) this._tribunalWidgetIds = new Map();
         // Use correlation_id as primary key if available, otherwise web_session_id
         const key = correlationId || data.web_session_id;
         this._tribunalWidgetIds.set(key, widgetId);
@@ -649,13 +740,12 @@ export const ChatSSEHandlersMixin = {
             this.anchoredTerminal?.sealStreamingResponse(webSessionId);
             this.streamingActive = false;
             this.anchoredTerminal?.clearActivityIndicators();
-            this._portCheckIndicators?.clear();
-            this._hasResetAutoScrollForSession?.delete(webSessionId);
+            this._portCheckIndicators.clear();
+            this._hasResetAutoScrollForSession.delete(webSessionId);
         }
     },
 
     _getTribunalWidgetId(data) {
-        if (!this._tribunalWidgetIds) return null;
         // 1. Try correlation_id (deterministic match)
         if (data.correlation_id) {
             const id = this._tribunalWidgetIds.get(data.correlation_id);
@@ -762,7 +852,7 @@ export const ChatSSEHandlersMixin = {
         this.anchoredTerminal?.hideWaitingIndicator();
         this._clearPendingActivityIndicators(webSessionId);
         this.anchoredTerminal?.clearActivityIndicators();
-        this._hasResetAutoScrollForSession?.delete(webSessionId);
+        this._hasResetAutoScrollForSession.delete(webSessionId);
 
         if (this.anchoredTerminal && data.content) {
             if (!this.markdownRenderer) {
@@ -887,7 +977,6 @@ export const ChatSSEHandlersMixin = {
         if (!executionId) return;
 
         const indicatorId = `${toolName}-${executionId}`;
-        if (!this._universalToolIndicators) this._universalToolIndicators = new Map();
         this._universalToolIndicators.set(executionId, indicatorId);
 
         this.anchoredTerminal.appendActivityIndicator({
@@ -900,7 +989,7 @@ export const ChatSSEHandlersMixin = {
 
     handleUniversalToolCompleted(data) {
         if (!this.shouldProcessEvent(data)) return;
-        if (!this.anchoredTerminal || !this._universalToolIndicators) return;
+        if (!this.anchoredTerminal) return;
 
         const indicatorId = this._universalToolIndicators.get(data.execution_id);
         if (!indicatorId) return;
@@ -911,7 +1000,7 @@ export const ChatSSEHandlersMixin = {
 
     handleUniversalToolFailed(data) {
         if (!this.shouldProcessEvent(data)) return;
-        if (!this.anchoredTerminal || !this._universalToolIndicators) return;
+        if (!this.anchoredTerminal) return;
 
         const indicatorId = this._universalToolIndicators.get(data.execution_id);
         if (!indicatorId) return;

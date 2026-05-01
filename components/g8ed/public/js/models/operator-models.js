@@ -159,6 +159,7 @@ export class OperatorStatusUpdatedEvent extends FrontendBaseModel {
     static fields = {
         operator_id:         { type: F.string, required: true },
         status:              { type: F.string, required: true },
+        name:                { type: F.string, default: null },
         web_session_id:      { type: F.string, default: null },
         hostname:            { type: F.string, default: null },
         system_fingerprint:  { type: F.string, default: null },

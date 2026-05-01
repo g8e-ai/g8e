@@ -405,24 +405,50 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
     });
 
     describe('appendSystemMessage', () => {
-        it('appends a system message entry', () => {
+        it('creates a collapsible system messages group', () => {
             terminal.appendSystemMessage('Operator connected');
 
-            const entry = terminal.outputContainer.querySelector('.anchored-terminal__entry');
-            expect(entry).not.toBeNull();
+            const group = terminal.outputContainer.querySelector('.anchored-terminal__system-messages-group');
+            expect(group).not.toBeNull();
         });
 
-        it('includes the message text', () => {
+        it('includes the message text in system message element', () => {
             terminal.appendSystemMessage('Hello system');
 
-            const msg = terminal.outputContainer.querySelector('.system-message');
+            const msg = terminal.outputContainer.querySelector('.anchored-terminal__system-message');
+            expect(msg).not.toBeNull();
             expect(msg.textContent).toContain('Hello system');
         });
 
-        it('returns the created entry element', () => {
+        it('returns the created system message element', () => {
             const el = terminal.appendSystemMessage('test');
 
             expect(el).not.toBeNull();
+            expect(el.className).toContain('anchored-terminal__system-message');
+        });
+
+        it('groups multiple messages in the same container', () => {
+            terminal.appendSystemMessage('Message 1');
+            terminal.appendSystemMessage('Message 2');
+
+            const group = terminal.outputContainer.querySelector('.anchored-terminal__system-messages-group');
+            const messages = group.querySelectorAll('.anchored-terminal__system-message');
+            expect(messages.length).toBe(2);
+        });
+
+        it('updates the message count in the header', () => {
+            terminal.appendSystemMessage('Message 1');
+            terminal.appendSystemMessage('Message 2');
+
+            const count = terminal.outputContainer.querySelector('.anchored-terminal__system-messages-count');
+            expect(count.textContent).toBe('(2)');
+        });
+
+        it('is collapsed by default', () => {
+            terminal.appendSystemMessage('Message 1');
+
+            const group = terminal.outputContainer.querySelector('.anchored-terminal__system-messages-group');
+            expect(group.classList.contains('collapsed')).toBe(true);
         });
     });
 

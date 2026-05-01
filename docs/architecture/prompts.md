@@ -54,6 +54,7 @@ Located in `components/g8ee/app/prompts_data/`, these `.txt` files provide the d
 The Tribunal uses a different prompt strategy located in `prompts_data/tribunal/`.
 - **Generator**: Round 1 and Round 2 templates for member candidates.
 - **Persona-specific R2**: `axiom`, `concord`, `variance`, `pragma`, and `nemesis` have unique Round 2 overrides to sharpen their specific lens during peer review.
+- **Warden**: A specialized defensive prompt for risk assessment (command, file, error risk) and circuit breaker enforcement.
 - **Auditor**: A high-reasoning prompt that evaluates candidate clusters against the original intent.
 
 ---

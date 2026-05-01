@@ -20,8 +20,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-import app.llm.llm_types as types
 from pydantic import ConfigDict, Field
+
+from app.llm.llm_types import Content, PrimaryLLMSettings, Part, ToolCall
 
 from app.constants import (
     OperatorType,
@@ -39,6 +40,7 @@ from app.models.command_request_payloads import TargetedOperatorBase
 from app.models.tool_results import (
     TokenUsage,
     ToolResult,
+    CommandRiskAnalysis,
 )
 
 
@@ -111,6 +113,7 @@ class ExecutorCommandArgs(TargetedOperatorBase):
     expected_output_lines: int = Field(default=10, description="Approximate number of stdout lines expected (used for UI sizing).")
     correlation_id: str | None = Field(default=None, description="Tribunal correlation ID linking this command to the originating Tribunal session")
     timeout_seconds: int = Field(default=300, description="Maximum seconds to wait for command completion before timing out.")
+    risk_analysis: CommandRiskAnalysis | None = Field(default=None, description="Risk analysis from Warden (if available)")
 
 class OperatorContext(G8eBaseModel):
     """Typed system context extracted from a single OperatorDocument model."""
@@ -173,8 +176,8 @@ class AgentInputs(G8eBaseModel):
     max_tokens: int | None = None
     conversation_history: list[ConversationHistoryMessage] = Field(default_factory=list)
     system_instructions: str = ""
-    contents: list[types.Content] = Field(default_factory=list)
-    generation_config: types.PrimaryLLMSettings | None = None
+    contents: list[Content] = Field(default_factory=list)
+    generation_config: PrimaryLLMSettings | None = None
     user_memories: list[InvestigationMemory] = Field(default_factory=list)
     case_memories: list[InvestigationMemory] = Field(default_factory=list)
     triage_result: TriageResult | None = None
@@ -251,8 +254,8 @@ class StreamChunkFromModel(G8eBaseModel):
 @dataclass
 class TurnResult:
     """Result produced by _process_provider_turn for a single LLM stream turn."""
-    model_response_parts: list[types.Part]
-    pending_tool_calls: list[types.ToolCall]
+    model_response_parts: list[Part]
+    pending_tool_calls: list[ToolCall]
     finish_reason: str | None
     input_tokens: int
     output_tokens: int
@@ -266,4 +269,10 @@ class ToolCallResponse:
     flattened_response: dict[str, Any]
     grounding: GroundingMetadata | None
     tool_call_id: str | None = None
+
+
+AgentInputs.model_rebuild()
+AgentStreamState.model_rebuild()
+StreamChunkData.model_rebuild()
+StreamChunkFromModel.model_rebuild()
 

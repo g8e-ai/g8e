@@ -152,6 +152,7 @@ class CommandErrorType(str, Enum):
     FS_READ_FAILED = "fs.read.failed"
     USER_CANCELLED = "user.cancelled"
     RISK_ANALYSIS_BLOCKED = "risk.analysis.blocked"
+    AGENT_CONFLICT = "agent.conflict"  # Two-Strike Circuit Breaker: warden blocked twice
     APPROVAL_DENIED = "approval.denied"
     OPERATION_TIMEOUT = "operation.timeout"
     INVALID_INTENT = "invalid.intent"

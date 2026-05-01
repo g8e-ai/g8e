@@ -37,6 +37,7 @@ from app.constants import (
     TieBreakReason,
     EventType,
     AuditorReason,
+    RiskLevel,
 )
 from app.llm.prompts import (
     build_command_constraints_message,
@@ -71,14 +72,24 @@ from app.models.agents.tribunal import (
     TribunalConsensusFailedPayload,
     TribunalDissentRecordedPayload,
     TribunalSessionCompletedPayload,
+    TribunalWardenBlockedError,
+    TribunalWardenBlockedPayload,
     VoteBreakdown,
 )
 from app.models.events import SessionEvent
 from app.models.model_configs import get_model_config
-from app.services.infra.g8ed_event_service import EventService
+from app.services.protocols import (
+    AIResponseAnalyzerProtocol,
+    EventServiceProtocol,
+)
 from app.utils.agent_persona_loader import get_agent_persona
 from app.utils.json_utils import extract_json_from_text
 from app.utils.ids import generate_tribunal_correlation_id
+from app.models.tool_results import (
+    CommandRiskAnalysis,
+    CommandRiskContext,
+    ErrorAnalysisContext,
+)
 
 from app.utils.command import normalise_command
 from app.services.ai.voter import (
@@ -113,7 +124,7 @@ class TribunalEmitter:
 
     def __init__(
         self,
-        event_service: EventService,
+        event_service: EventServiceProtocol,
         g8e_context: G8eHttpContext,
         correlation_id: str | None = None,
     ):
@@ -515,23 +526,104 @@ async def _run_audit_stage(
     reputation_data_service: ReputationDataService,
     auditor_hmac_key: str,
     investigation_id: str,
+    settings: G8eeUserSettings,
+    ai_response_analyzer: AIResponseAnalyzerProtocol | None = None,
+    investigation_state: Any | None = None,
+    investigation_context: str = "",
     tied_candidates: list[CandidateCommand] | None = None,
     whitelisting_enabled: bool = False,
     blacklisting_enabled: bool = False,
-) -> tuple[str | None, CommandGenerationOutcome, bool, str | None, AuditorReason, str | None]:
-    """Stage 3: optionally audit the vote winner and determine outcome.
-
-    On `auditor_passed=True` the auditor's verdict step also writes a
-    Merkle commitment over the reputation scoreboard (GDD §14.4
-    Artifact B). The returned `commitment_id` is the row id. Commitment
-    failures (DB write error, etc.) emit `REPUTATION_COMMITMENT_FAILED`
-    and are logged but non-fatal — the verdict still stands. The
-    reputation dependencies are mandatory and have no "disabled" mode;
-    operating without them is a configuration error surfaced at the
-    ``generate_command`` call site.
+) -> tuple[str | None, CommandGenerationOutcome, bool, str | None, AuditorReason, str | None, CommandRiskAnalysis | None]:
+    """Stage 3: Warden risk analysis and optionally audit the vote winner.
+    
+    Warden (risk analysis) now happens BEFORE Auditor (reputation commitment)
+    per USER request. If Warden blocks the command, the session fails and
+    Auditor/Reputation steps are skipped.
     """
+    if not vote_winner:
+        return vote_winner, CommandGenerationOutcome.CONSENSUS_FAILED, False, None, AuditorReason.OK, None, None
+
+    # 1. Warden Risk Analysis (BEFORE Auditor)
+    risk_analysis: CommandRiskAnalysis | None = None
+    if ai_response_analyzer:
+        justification_parts = [request.strip()] if request else []
+        if guidelines and guidelines.strip():
+            justification_parts.append(f"Guidelines: {guidelines.strip()}")
+        justification = " | ".join(justification_parts) if justification_parts else "(no justification provided)"
+
+        risk_analysis = await ai_response_analyzer.analyze_command_risk(
+            command=vote_winner,
+            justification=justification,
+            context=CommandRiskContext(
+                working_directory=operator_context.working_directory if operator_context else "",
+                investigation_context=investigation_context,
+            ),
+            settings=settings,
+        )
+
+        if risk_analysis and risk_analysis.risk_level == RiskLevel.HIGH:
+            # Two-Strike Circuit Breaker logic moved from OperatorCommandService
+            block_count = investigation_state.warden_block_count if investigation_state else 0
+            correlation_id = getattr(emitter, "correlation_id", None) or ""
+
+            if block_count >= 1:
+                # SECOND STRIKE: Agent Conflict
+                logger.warning("[WARDEN-CIRCUIT-BREAKER] Second warden block detected for investigation=%s - triggering AGENT_CONFLICT", investigation_id)
+                if investigation_state:
+                    investigation_state.warden_block_count = 0
+
+                await emitter.emit(
+                    EventType.AI_AGENT_CONFLICT_DETECTED,
+                    TribunalWardenBlockedPayload(
+                        request=request,
+                        command=vote_winner,
+                        risk_level=risk_analysis.risk_level,
+                        error="AGENT CONFLICT: Warden blocked Sage's command twice. The AI agents cannot agree on a safe approach. Human intervention required.",
+                        is_conflict=True,
+                    )
+                )
+                raise TribunalWardenBlockedError(
+                    request=request,
+                    error_message="Agent Conflict: Warden blocked Sage's command twice. The AI agents cannot agree on a safe approach.",
+                    risk_level=risk_analysis.risk_level,
+                )
+
+            # FIRST STRIKE: Contextual feedback
+            logger.info("[WARDEN-CIRCUIT-BREAKER] First warden block for investigation=%s - generating contextual feedback", investigation_id)
+            if investigation_state:
+                investigation_state.warden_block_count = block_count + 1
+
+            error_analysis = await ai_response_analyzer.analyze_error_and_suggest_fix(
+                command=vote_winner,
+                exit_code=None,
+                stdout="",
+                stderr=f"WARDEN BLOCK: Command classified as HIGH risk. Justification: {justification}",
+                context=ErrorAnalysisContext(retry_count=0, working_directory=operator_context.working_directory if operator_context else ""),
+                settings=settings,
+            )
+
+            feedback_msg = error_analysis.user_message if error_analysis and error_analysis.user_message else "Command blocked as high risk. Propose a safer alternative."
+            if error_analysis and error_analysis.suggested_fix:
+                feedback_msg += f" Suggestion: {error_analysis.suggested_fix}"
+
+            await emitter.emit(
+                EventType.TRIBUNAL_SESSION_WARDEN_BLOCKED,
+                TribunalWardenBlockedPayload(
+                    request=request,
+                    command=vote_winner,
+                    risk_level=risk_analysis.risk_level,
+                    error=f"WARDEN BLOCK: {feedback_msg}",
+                    is_conflict=False,
+                )
+            )
+            raise TribunalWardenBlockedError(
+                request=request,
+                error_message=f"Risk analysis blocked command: {feedback_msg}",
+                risk_level=risk_analysis.risk_level,
+            )
+
     if not auditor_enabled:
-        return vote_winner, CommandGenerationOutcome.CONSENSUS, True, None, AuditorReason.OK, None
+        return vote_winner, CommandGenerationOutcome.CONSENSUS, True, None, AuditorReason.OK, None, risk_analysis
 
     if vote_breakdown.consensus_strength == 1.0:
         mode = "unanimous"
@@ -608,7 +700,7 @@ async def _run_audit_stage(
                 "Verdict cannot proceed without cryptographic binding to reputation scoreboard."
             ) from exc
 
-    return final_command, outcome, auditor_passed, auditor_revision, auditor_reason, commitment_id
+    return final_command, outcome, auditor_passed, auditor_revision, auditor_reason, commitment_id, risk_analysis
 
 async def _build_and_emit_result(
     request: str,
@@ -628,6 +720,7 @@ async def _build_and_emit_result(
     operator_context: OperatorContext | None = None,
     correlation_id: str | None = None,
     reputation_commitment_id: str | None = None,
+    warden_risk_analysis: CommandRiskAnalysis | None = None,
     round_2_candidates: list[CandidateCommand] | None = None,
     round_2_vote_breakdown: VoteBreakdown | None = None,
 ) -> CommandGenerationResult:
@@ -661,6 +754,7 @@ async def _build_and_emit_result(
         auditor_passed=auditor_passed,
         auditor_revision=auditor_revision,
         auditor_reason=auditor_reason,
+        warden_risk_analysis=warden_risk_analysis,
         correlation_id=correlation_id,
         reputation_commitment_id=reputation_commitment_id,
         round_2_candidates=round_2_candidates,
@@ -682,7 +776,7 @@ async def generate_command(
     request: str,
     guidelines: str,
     operator_context: OperatorContext | None,
-    g8ed_event_service: EventService,
+    g8ed_event_service: EventServiceProtocol,
     web_session_id: str,
     user_id: str,
     case_id: str,
@@ -690,6 +784,9 @@ async def generate_command(
     settings: G8eeUserSettings,
     reputation_data_service: ReputationDataService,
     auditor_hmac_key: str,
+    ai_response_analyzer: AIResponseAnalyzerProtocol | None = None,
+    investigation_state: Any | None = None,
+    investigation_context: str = "",
     whitelisting_enabled: bool = False,
     blacklisting_enabled: bool = False,
     whitelisted_commands: list[WhitelistedCommand] | None = None,
@@ -922,7 +1019,7 @@ async def generate_command(
         # Auditor failure is non-fatal if consensus was reached, but here we can't even start it
         auditor_provider = None
 
-    final_command, outcome, auditor_passed, auditor_revision, auditor_reason, commitment_id = await _run_audit_stage(
+    final_command, outcome, auditor_passed, auditor_revision, auditor_reason, reputation_commitment_id, warden_risk_analysis = await _run_audit_stage(
         provider=auditor_provider or generation_provider,
         model=auditor_model if auditor_provider else generation_model,
         request=request,
@@ -937,6 +1034,10 @@ async def generate_command(
         reputation_data_service=reputation_data_service,
         auditor_hmac_key=auditor_hmac_key,
         investigation_id=investigation_id,
+        settings=settings,
+        ai_response_analyzer=ai_response_analyzer,
+        investigation_state=investigation_state,
+        investigation_context=investigation_context,
         whitelisting_enabled=whitelisting_enabled,
         blacklisting_enabled=blacklisting_enabled,
     )
@@ -958,7 +1059,8 @@ async def generate_command(
         blacklisting_enabled=blacklisting_enabled,
         operator_context=operator_context,
         correlation_id=correlation_id,
-        reputation_commitment_id=commitment_id,
+        reputation_commitment_id=reputation_commitment_id,
+        warden_risk_analysis=warden_risk_analysis,
         round_2_candidates=round_2_candidates,
         round_2_vote_breakdown=round_2_vote_breakdown,
     )

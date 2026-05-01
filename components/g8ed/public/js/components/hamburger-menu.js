@@ -87,11 +87,16 @@ export class HamburgerMenu {
     }
 
     _updateThemeToggleLabel(button, theme) {
-        const text = button.querySelector('span');
-        if (!text) return;
+        const icon = button.querySelector('.material-symbols-outlined');
+        const text = button.querySelector('span:not(.material-symbols-outlined)');
+        if (!text || !icon) return;
+        
         const active = theme || (window.ThemeManager ? window.ThemeManager.getTheme() : null);
         if (!active) return;
-        text.textContent = active === window.ThemeManager.getDefaultTheme() ? 'Go Light' : 'Go Dark';
+        
+        const isDefault = active === window.ThemeManager.getDefaultTheme();
+        text.textContent = isDefault ? 'Go Light' : 'Go Dark';
+        icon.textContent = isDefault ? 'light_mode' : 'dark_mode';
     }
 
     _highlightActivePage() {

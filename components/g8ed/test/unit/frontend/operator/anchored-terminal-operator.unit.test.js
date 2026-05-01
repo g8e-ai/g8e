@@ -81,13 +81,17 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
     describe('bindEventBusListeners', () => {
         it('binds OPERATOR_STATUS_UPDATED_BOUND listener', () => {
             const ctx = createMixinContext({ setOperatorBound: vi.fn() });
-            
+
             ctx.bindEventBusListeners();
-            
-            const testOperator = { operator_id: 'op_123', name: 'test-op' };
-            ctx.eventBus.emit(EventType.OPERATOR_STATUS_UPDATED_BOUND, { operator: testOperator });
-            
-            expect(ctx.setOperatorBound).toHaveBeenCalledWith(testOperator);
+
+            const testData = { operator_id: 'op_123', name: 'test-op', metrics: {} };
+            ctx.eventBus.emit(EventType.OPERATOR_STATUS_UPDATED_BOUND, testData);
+
+            expect(ctx.setOperatorBound).toHaveBeenCalledWith({
+                operator_id: testData.operator_id,
+                name: testData.name,
+                latest_heartbeat_snapshot: testData.metrics
+            });
         });
 
         it('does not call setOperatorBound when operator data is missing', () => {

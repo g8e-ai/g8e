@@ -896,7 +896,7 @@ func TestPubSubCommandService_PublishLFAAError(t *testing.T) {
 			Timestamp: time.Now().UTC(),
 		}
 
-		publishLFAAErrorTo(context.Background(), f.DB, f.Cfg, f.Logger, msg, constants.Event.Operator.FetchHistory.Failed, "test error message")
+		publishLFAAErrorTo(context.Background(), f.DB, f.Cfg, f.Logger, msg, constants.Event.Operator.FetchHistory.Failed, "test error message", "fetch_history_error")
 
 		published := f.DB.LastPublished()
 		require.NotNil(t, published, "expected LFAA error to be published")
@@ -927,7 +927,7 @@ func TestPubSubCommandService_PublishFetchLogsFailure(t *testing.T) {
 			Timestamp: time.Now().UTC(),
 		}
 
-		publishLFAAErrorTo(context.Background(), f.DB, f.Cfg, f.Logger, msg, constants.Event.Operator.FetchLogs.Failed, "execution not found")
+		publishLFAAErrorTo(context.Background(), f.DB, f.Cfg, f.Logger, msg, constants.Event.Operator.FetchLogs.Failed, "execution not found", "fetch_logs_error")
 
 		published := f.DB.LastPublished()
 		require.NotNil(t, published, "expected fetch logs failure to be published")

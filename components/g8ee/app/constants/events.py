@@ -260,6 +260,10 @@ class EventType(str, Enum):
     AI_AGENT_CONTINUE_APPROVAL_GRANTED = "g8e.v1.ai.agent.continue.approval.granted"
     AI_AGENT_CONTINUE_APPROVAL_REJECTED = "g8e.v1.ai.agent.continue.approval.rejected"
 
+    # ai.agent.conflict (Two-Strike Circuit Breaker - warden vs sage disagreement)
+    AI_AGENT_CONFLICT_DETECTED = "g8e.v1.ai.agent.conflict.detected"
+    AI_AGENT_CONFLICT_RESOLVED = "g8e.v1.ai.agent.conflict.resolved"
+
     # ai.triage (Dash interrogator - GDD §2)
     AI_TRIAGE_CLARIFICATION_QUESTIONS = "g8e.v1.ai.triage.clarification.questions"
     AI_TRIAGE_CLARIFICATION_ANSWERED = "g8e.v1.ai.triage.clarification.answered"
@@ -278,6 +282,7 @@ class EventType(str, Enum):
     TRIBUNAL_SESSION_SYSTEM_ERROR         = "g8e.v1.ai.tribunal.session.system.error"
     TRIBUNAL_SESSION_GENERATION_FAILED    = "g8e.v1.ai.tribunal.session.generation.failed"
     TRIBUNAL_SESSION_AUDITOR_FAILED       = "g8e.v1.ai.tribunal.session.auditor.failed"
+    TRIBUNAL_SESSION_WARDEN_BLOCKED       = "g8e.v1.ai.tribunal.session.warden_blocked"
 
     TRIBUNAL_VOTING_STARTED = "g8e.v1.ai.tribunal.voting.started"
     TRIBUNAL_VOTING_FAILED = "g8e.v1.ai.tribunal.voting.failed"

@@ -54,7 +54,7 @@ RUN set -ex; \
         { echo "apk add failed, retrying in 5s... ($i/3)"; sleep 5; }; \
     done
 
-RUN pip install --no-cache-dir requests aiohttp awscli
+RUN pip install --no-cache-dir requests aiohttp awscli pydantic fastapi uvicorn python-multipart python-dotenv email-validator cryptography openai ollama google-genai google-cloud-discoveryengine anthropic aiofiles httpx
 
 WORKDIR /app
 

@@ -43,7 +43,9 @@ T = TypeVar("T", bound=G8eBaseModel)
 
 def _load_security_constraints() -> dict:
     """Load security constraints from shared model."""
-    shared_models_path = Path(__file__).parent.parent.parent.parent.parent / "shared" / "models" / "security_constraints.json"
+    from app.constants.paths import PATHS
+    shared_models_dir = PATHS["infra"]["shared_models_dir"]
+    shared_models_path = Path(shared_models_dir) / "security_constraints.json"
     try:
         with open(shared_models_path, "r") as f:
             constraints = json.load(f)
@@ -63,6 +65,7 @@ def _build_warden_command_risk_template(
     command: str,
     justification: str,
     working_dir: str,
+    investigation_context: str = "",
 ) -> str:
     """Build the Warden command risk analysis template using centralized XML formatting.
 
@@ -73,6 +76,8 @@ def _build_warden_command_risk_template(
     parts.append(AgentPersona.format_xml_tag("command", command))
     parts.append(AgentPersona.format_xml_tag("justification", justification))
     parts.append(AgentPersona.format_xml_tag("working_directory", working_dir))
+    if investigation_context:
+        parts.append(AgentPersona.format_xml_tag("investigation_context", investigation_context))
 
     output_format = """Respond with ONLY a JSON object matching this exact schema, with no prose, no markdown fences, and no additional fields:
 {{"risk_level": "LOW"}}  OR  {{"risk_level": "MEDIUM"}}  OR  {{"risk_level": "HIGH"}}"""
@@ -236,6 +241,7 @@ class AIResponseAnalyzer:
         analysis_start_time = time.time()
         context = context or CommandRiskContext()
         working_dir = context.working_directory
+        investigation_context = context.investigation_context
         resolved_settings = settings
 
         prompt_build_start = time.time()
@@ -243,7 +249,8 @@ class AIResponseAnalyzer:
         template = _build_warden_command_risk_template(
             command=command,
             justification=justification,
-            working_dir=working_dir
+            working_dir=working_dir,
+            investigation_context=investigation_context,
         )
         prompt = f"{command_risk_persona.get_system_prompt()}\n\n{template}"
         prompt_build_duration_ms = (time.time() - prompt_build_start) * 1000

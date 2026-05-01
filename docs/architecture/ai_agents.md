@@ -50,9 +50,12 @@ To prevent hallucinations and ensure safety, agents never write shell commands d
     - **Pragma**: Focuses on idiomatic conventions for the target OS/shell.
     - **Nemesis**: The "immune system" — produces plausible-but-flawed commands or honestly abstains.
 3. **Consensus & Tie-breaking**: Candidates are clustered by exact match. A winner is selected via ranked vote.
-4. **Auditor Review**: The **Auditor** judges the winning command against the intent. It can approve (`ok`), provide a `revised` command, or `swap` to a better dissenting cluster.
-5. **Warden Analysis**: The **Warden** (running on the Engine) performs a pre-execution risk assessment (Command, File, and Error risk) using specialized sub-agents.
-6. **Human Approval**: The user reviews the command and risk assessment before execution on the Operator.
+4. **Warden Analysis**: The **Warden** (running on the Engine) performs a pre-execution risk assessment (Command, File, and Error risk) using specialized sub-agents. The Warden validates the command safety profile *before* the Auditor performs the final commitment. Warden stakes reputation on accurate classification.
+5. **Auditor Review**: Only once the Warden has cleared the command does the **Auditor** judge the winning command against the intent. It can approve (`ok`), provide a `revised` command, or `swap` to a better dissenting cluster. The Auditor performs the final consistency check and Merkle commitment to the reputation ledger.
+6. **Two-Strike Circuit Breaker**: If Warden blocks a HIGH-risk command:
+    - **First Strike**: Assistant model generates contextual feedback; Sage can propose a safer alternative.
+    - **Second Strike**: If blocked again, an `AI_AGENT_CONFLICT_DETECTED` event triggers, halting the loop and surfacing an "Agent Conflict" dialog for human intervention.
+7. **Human Approval**: The user reviews the command and risk assessment before execution on the Operator.
 
 ## Security & Governance
 
@@ -67,6 +70,24 @@ Agents stake reputation on their contributions. Reputation influences tie-breaki
 - **Tier 1 (Catastrophic)**: 50–100% stake loss for approving destructive or harmful commands.
 - **Tier 2 (Faults)**: 5–20% stake loss for unparseable commands or contradictions.
 - **Tier 3 (Liveness)**: 0.1–1% stake loss for missed submissions or thin intent.
+
+### Two-Strike Circuit Breaker with Contextual Backpressure
+The Warden-Sage interaction implements a circuit breaker to prevent infinite loops when agents disagree:
+
+**Problem**: Without backpressure, Sage could endlessly propose variations of a HIGH-risk command, each blocked by Warden, wasting tokens and user time.
+
+**Solution**: Two-strike escalation with contextual feedback:
+
+| Strike | Action | Result |
+|---|---|---|
+| **First** | Warden blocks command | Assistant model generates contextual feedback explaining the risk and suggesting safer alternatives. Sage receives this feedback and can revise. |
+| **Second** | Warden blocks revised command | `AI_AGENT_CONFLICT_DETECTED` event published; ReAct loop halts; "Agent Conflict" approval dialog surfaces to user. |
+| **Success** | Command executes | Warden block count resets to 0 for fresh start on next turn. |
+
+**Benefits**:
+- **Token Efficiency**: Contextual backpressure prevents hallucination loops.
+- **User Trust**: Surfacing "Agent Disagreement" proves governance works.
+- **Psychological Safety**: Users see the system self-correcting rather than spinning silently.
 
 ### Memory & Learning (Codex)
 Learning happens asynchronously via **Codex** after a turn completes:

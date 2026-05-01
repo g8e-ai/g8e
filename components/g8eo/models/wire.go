@@ -62,6 +62,7 @@ func (r *G8eMessage) Marshal() ([]byte, error) {
 }
 
 type CancellationResultPayload struct {
+	PayloadType       string                    `json:"payload_type"`
 	ExecutionID       string                    `json:"execution_id"`
 	Status            constants.ExecutionStatus `json:"status"`
 	OperatorID        string                    `json:"operator_id"`
@@ -71,6 +72,7 @@ type CancellationResultPayload struct {
 }
 
 type FileEditResultPayload struct {
+	PayloadType       string                    `json:"payload_type"`
 	ExecutionID       string                    `json:"execution_id"`
 	Operation         FileEditOperation         `json:"operation"`
 	FilePath          string                    `json:"file_path"`
@@ -92,6 +94,7 @@ type FileEditResultPayload struct {
 }
 
 type FsListResultPayload struct {
+	PayloadType       string                    `json:"payload_type"`
 	ExecutionID       string                    `json:"execution_id"`
 	Path              string                    `json:"path"`
 	Status            constants.ExecutionStatus `json:"status"`
@@ -111,6 +114,7 @@ type FsListResultPayload struct {
 }
 
 type ExecutionStatusPayload struct {
+	PayloadType       string                    `json:"payload_type"`
 	ExecutionID       string                    `json:"execution_id"`
 	Command           string                    `json:"command"`
 	Status            constants.ExecutionStatus `json:"status"`
@@ -138,6 +142,7 @@ type FileDiffEntry struct {
 }
 
 type FetchFileDiffResultPayload struct {
+	PayloadType       string          `json:"payload_type"`
 	Success           bool            `json:"success"`
 	ExecutionID       string          `json:"execution_id"`
 	Diffs             []FileDiffEntry `json:"diffs,omitempty"`
@@ -156,6 +161,7 @@ type PortCheckEntry struct {
 }
 
 type PortCheckResultPayload struct {
+	PayloadType       string                    `json:"payload_type"`
 	ExecutionID       string                    `json:"execution_id"`
 	Status            constants.ExecutionStatus `json:"status"`
 	OperatorID        string                    `json:"operator_id"`
@@ -166,6 +172,7 @@ type PortCheckResultPayload struct {
 }
 
 type LFAAErrorPayload struct {
+	PayloadType       string `json:"payload_type"`
 	Success           bool   `json:"success"`
 	Error             string `json:"error"`
 	ExecutionID       string `json:"execution_id"`
@@ -174,6 +181,7 @@ type LFAAErrorPayload struct {
 }
 
 type FetchLogsResultPayload struct {
+	PayloadType       string `json:"payload_type"`
 	ExecutionID       string `json:"execution_id"`
 	Command           string `json:"command"`
 	ExitCode          *int   `json:"exit_code,omitempty"`
@@ -190,6 +198,7 @@ type FetchLogsResultPayload struct {
 }
 
 type FetchHistoryResultPayload struct {
+	PayloadType       string           `json:"payload_type"`
 	Success           bool             `json:"success"`
 	ExecutionID       string           `json:"execution_id"`
 	OperatorSessionID string           `json:"operator_session_id,omitempty"`
@@ -241,6 +250,7 @@ type FileHistoryEntry struct {
 }
 
 type FetchFileHistoryResultPayload struct {
+	PayloadType string             `json:"payload_type"`
 	Success     bool               `json:"success"`
 	ExecutionID string             `json:"execution_id"`
 	FilePath    string             `json:"file_path,omitempty"`
@@ -249,6 +259,7 @@ type FetchFileHistoryResultPayload struct {
 }
 
 type RestoreFileResultPayload struct {
+	PayloadType string `json:"payload_type"`
 	Success     bool   `json:"success"`
 	ExecutionID string `json:"execution_id"`
 	FilePath    string `json:"file_path,omitempty"`
@@ -257,10 +268,11 @@ type RestoreFileResultPayload struct {
 }
 
 type FsReadResultPayload struct {
+	PayloadType       string                    `json:"payload_type"`
 	ExecutionID       string                    `json:"execution_id"`
 	Path              string                    `json:"path"`
 	Status            constants.ExecutionStatus `json:"status"`
-	Content           string                    `json:"content,omitempty"`
+	Content           string                    `json:"content"`
 	SizeBytes         int                       `json:"size_bytes"`
 	Truncated         bool                      `json:"truncated"`
 	DurationSeconds   float64                   `json:"duration_seconds"`

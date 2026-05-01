@@ -84,6 +84,7 @@ func (hh *HistoryHandler) HandleFetchHistory(requestJSON []byte) (*models.FetchH
 	}
 
 	result := &models.FetchHistoryResultPayload{
+		PayloadType:       "fetch_history_success",
 		Success:           true,
 		OperatorSessionID: request.OperatorSessionID,
 		Events:            make([]models.AuditEvent, 0, len(events)),
@@ -167,9 +168,10 @@ func (hh *HistoryHandler) HandleFetchFileHistory(requestJSON []byte) (*models.Fe
 	}
 
 	result := &models.FetchFileHistoryResultPayload{
-		Success:  true,
-		FilePath: request.FilePath,
-		History:  make([]models.FileHistoryEntry, 0, len(history)),
+		PayloadType: "fetch_file_history_success",
+		Success:     true,
+		FilePath:    request.FilePath,
+		History:     make([]models.FileHistoryEntry, 0, len(history)),
 	}
 
 	for _, entry := range history {
@@ -209,9 +211,10 @@ func (hh *HistoryHandler) HandleRestoreFile(requestJSON []byte) (*models.Restore
 	}
 
 	return &models.RestoreFileResultPayload{
-		Success:    true,
-		FilePath:   request.FilePath,
-		CommitHash: request.CommitHash,
+		PayloadType: "restore_file_success",
+		Success:     true,
+		FilePath:    request.FilePath,
+		CommitHash:  request.CommitHash,
 	}, nil
 }
 
@@ -224,13 +227,13 @@ func (hh *HistoryHandler) IsEnabled() bool {
 }
 
 func (hh *HistoryHandler) fetchHistoryError(message string) *models.FetchHistoryResultPayload {
-	return &models.FetchHistoryResultPayload{Success: false, Error: message}
+	return &models.FetchHistoryResultPayload{PayloadType: "fetch_history_error", Success: false, Error: message}
 }
 
 func (hh *HistoryHandler) fetchFileHistoryError(message string) *models.FetchFileHistoryResultPayload {
-	return &models.FetchFileHistoryResultPayload{Success: false, Error: message}
+	return &models.FetchFileHistoryResultPayload{PayloadType: "fetch_file_history_error", Success: false, Error: message}
 }
 
 func (hh *HistoryHandler) restoreFileError(message string) *models.RestoreFileResultPayload {
-	return &models.RestoreFileResultPayload{Success: false, Error: message}
+	return &models.RestoreFileResultPayload{PayloadType: "restore_file_error", Success: false, Error: message}
 }

@@ -52,7 +52,12 @@ from app.models.grounding import GroundingMetadata
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.reputation import StakeResolutionPayload
-from app.models.tool_results import CommandExecutionResult, ToolResult, SearchWebResult
+from app.models.tool_results import (
+    CommandExecutionResult,
+    ToolResult,
+    SearchWebResult,
+    CommandRiskAnalysis,
+)
 from app.models.settings import G8eeUserSettings
 
 from app.models.agents.tribunal import (
@@ -155,6 +160,9 @@ class TribunalInvoker:
             len(whitelisted_commands), len(blacklisted_commands),
         )
 
+        investigation_context_parts = [p for p in [investigation.case_title, investigation.case_description] if p]
+        investigation_context = " | ".join(investigation_context_parts)
+
         gen_result = await generate_command(
             request=request,
             guidelines=guidelines,
@@ -167,6 +175,9 @@ class TribunalInvoker:
             settings=request_settings,
             reputation_data_service=tool_executor.reputation_data_service,
             auditor_hmac_key=tool_executor.auditor_hmac_key,
+            ai_response_analyzer=tool_executor.ai_response_analyzer,
+            investigation_state=investigation.current_state,
+            investigation_context=investigation_context,
             whitelisting_enabled=whitelisting_enabled,
             blacklisting_enabled=blacklisting_enabled,
             whitelisted_commands=whitelisted_commands,
@@ -186,6 +197,7 @@ class TribunalInvoker:
             expected_output_lines=sage_request.expected_output_lines,
             timeout_seconds=sage_request.timeout_seconds,
             correlation_id=gen_result.correlation_id,
+            risk_analysis=gen_result.warden_risk_analysis, # Pass risk analysis to executor
         )
         return executor_args, gen_result
 
@@ -382,15 +394,22 @@ async def orchestrate_tool_execution(
         and tool_name == OperatorToolName.RUN_COMMANDS
         and isinstance(result, CommandExecutionResult)
     ):
+        # Reset warden block count on successful command (new turn starts fresh)
+        if result.success and investigation and investigation.current_state:
+            investigation.current_state.warden_block_count = 0
+            logger.info("[WARDEN-CIRCUIT-BREAKER] Reset warden block count for investigation=%s after successful command", investigation.id)
+
         # Schedule fire-and-forget reputation resolution
         async def _resolve_and_emit():
             try:
+                warden_blocked = result.error_type == CommandErrorType.RISK_ANALYSIS_BLOCKED
                 res = await tool_executor.reputation_service.resolve_stakes(
                     tribunal_command_id=gen_result.correlation_id,
                     investigation_id=investigation.id,
                     gen_result=gen_result,
                     execution_result=result,
                     warden_risk=result.warden_risk,
+                    warden_blocked=warden_blocked,
                 )
 
                 for outcome in res.resolutions:

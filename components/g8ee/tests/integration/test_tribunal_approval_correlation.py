@@ -72,7 +72,7 @@ class TestTribunalApprovalCorrelation:
                 consensus_strength=1.0
             ), None)
             # Mock audit to pass
-            mock_audit.return_value = ("ls -la", CommandGenerationOutcome.VERIFIED, True, None, "ok", None)
+            mock_audit.return_value = ("ls -la", CommandGenerationOutcome.VERIFIED, True, None, "ok", None, None)
 
             # Generate command via Tribunal
             gen_result = await generate_command(
@@ -135,7 +135,7 @@ class TestTribunalApprovalCorrelation:
                 winner_supporters=["axiom"],
                 consensus_strength=1.0
             ), None)
-            mock_audit.return_value = ("ls", CommandGenerationOutcome.VERIFIED, True, None, "ok", None)
+            mock_audit.return_value = ("ls", CommandGenerationOutcome.VERIFIED, True, None, "ok", None, None)
 
             # Generate command via Tribunal
             await generate_command(

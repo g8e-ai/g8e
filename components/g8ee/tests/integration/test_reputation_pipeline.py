@@ -150,7 +150,8 @@ class TestReputationPipelineIntegration:
             investigation_id="rep-test-inv",
             gen_result=gen_result,
             execution_result=exec_result,
-            warden_risk=None
+            warden_risk=None,
+            warden_blocked=False
         )
 
         # Verify SSE events

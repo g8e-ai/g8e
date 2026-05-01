@@ -37,7 +37,8 @@ The `g8eEngine` runs the core agentic loop:
 Every gated operation is verified through multiple layers:
 - **Sentinel**: Scrubs sensitive data (PII, secrets) from inputs and outputs.
 - **Tribunal**: An ensemble of five independent agents that translates intent into hardened shell commands.
-- **Auditor**: A high-reasoning agent that verifies the Tribunal's output against the original intent.
+- **Warden**: A defensive coordinator that performs pre-execution risk assessment and enforces the Two-Strike Circuit Breaker.
+- **Auditor**: A high-reasoning agent that performs the final consistency check and Merkle commitment once the Warden has cleared the command.
 - **Approval Pipeline**: State-changing operations trigger an `OPERATOR_COMMAND_APPROVAL_REQUESTED` event, halting execution until a human approves via the UI.
 
 ### 5. Streaming & Delivery
@@ -96,13 +97,13 @@ The Tribunal is a five-member panel that converts Sage's intent into executable 
 - **Pragma**: Focuses on **Convention** (idiomatic tool usage for the target OS/shell).
 - **Nemesis**: The **Adversary**—produces plausible-but-flawed commands to ensure the Auditor is vigilant.
 
-The Tribunal uses a ranked-vote system to select a winner, which is then verified by the **Auditor** agent against the original intent.
+The Tribunal uses a ranked-vote system to select a winner. The **Warden** then performs a safety analysis; only once cleared does the **Auditor** perform the final consistency check and Merkle commitment.
 
 ### LFAA (Local-First Audit Architecture)
 `OperatorLFAAService` ensures every action taken by the AI is recorded on the target system. This provides an immutable audit trail that persists even if the control plane is compromised or inaccessible.
 
 ### Warden (Defensive Coordination)
-The `warden` agent coordinates defensive analysis, classifying the risk of commands, errors, and file operations before they are presented for approval.
+The `warden` agent coordinates defensive analysis, classifying the risk of commands, errors, and file operations. The Warden validates the safety of a command *before* the Auditor cryptographically commits to the results.
 
 ### LLM Interface (`LLMProvider`)
 g8ee abstracts LLM providers through a unified interface (`app/llm/provider.py`). This allows the platform to switch between Gemini, Anthropic, OpenAI, and Ollama with zero changes to orchestration logic.

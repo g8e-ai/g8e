@@ -76,6 +76,8 @@ Tools follow a strict request/response pattern to ensure UI responsiveness and a
 Multi-model consensus sessions emit discrete events for each stage:
 - `TRIBUNAL_SESSION_STARTED`: Initialization of the consensus group.
 - `TRIBUNAL_VOTING_STARTED`: Collection of command candidates.
+- `TRIBUNAL_VOTING_WARDEN_STARTED`: The Warden begins defensive analysis.
+- `TRIBUNAL_SESSION_WARDEN_BLOCKED`: The Warden has blocked the command (circuit breaker).
 - `TRIBUNAL_VOTING_AUDIT_STARTED`: The dissent-aware Auditor begins evaluating the winner.
 - `TRIBUNAL_SESSION_COMPLETED`: Final validated command is ready for dispatch.
 

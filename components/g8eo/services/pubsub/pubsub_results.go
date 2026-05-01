@@ -87,6 +87,7 @@ func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, resu
 	}
 
 	payload := models.ExecutionResultsPayload{
+		PayloadType:       "execution_result",
 		ExecutionID:       result.ExecutionID,
 		Command:           result.Command,
 		Status:            result.Status,
@@ -130,6 +131,7 @@ func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, resu
 func (rr *PubSubResultsService) PublishCancellationResult(ctx context.Context, result *models.ExecutionResultsPayload, originalMsg PubSubCommandMessage) error {
 	eventType := constants.Event.Operator.Command.Cancelled
 	payload := models.CancellationResultPayload{
+		PayloadType:       "cancellation_result",
 		ExecutionID:       result.ExecutionID,
 		Status:            result.Status,
 		OperatorID:        rr.config.OperatorID,
@@ -166,6 +168,7 @@ func (rr *PubSubResultsService) PublishFileEditResult(ctx context.Context, resul
 	}
 
 	payload := models.FileEditResultPayload{
+		PayloadType:       "file_edit_result",
 		ExecutionID:       result.ExecutionID,
 		Operation:         result.Operation,
 		FilePath:          result.FilePath,
@@ -219,6 +222,7 @@ func (rr *PubSubResultsService) PublishFsListResult(ctx context.Context, result 
 	}
 
 	payload := models.FsListResultPayload{
+		PayloadType:       "fs_list_result",
 		ExecutionID:       result.ExecutionID,
 		Path:              result.Path,
 		Status:            result.Status,
@@ -273,6 +277,7 @@ type ExecutionStatusUpdate struct {
 // Incremental output has already been sentinel.Sentinel-scrubbed before this is called.
 func (rr *PubSubResultsService) PublishExecutionStatus(ctx context.Context, status *ExecutionStatusUpdate) error {
 	payload := models.ExecutionStatusPayload{
+		PayloadType:       "execution_status",
 		ExecutionID:       status.ExecutionID,
 		Command:           status.Command,
 		Status:            status.Status,
