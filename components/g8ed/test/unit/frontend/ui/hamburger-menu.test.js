@@ -193,7 +193,11 @@ describe('HamburgerMenu [UNIT - Frontend Component]', () => {
             themeText = new MockElement('span');
             themeText.textContent = '';
             themeToggle.children.push(themeText);
-            themeToggle.querySelector = (selector) => selector === 'span' ? themeText : null;
+            themeToggle.querySelector = (selector) => {
+                if (selector === 'span:not(.material-symbols-outlined)') return themeText;
+                if (selector === '.material-symbols-outlined') return new MockElement('span');
+                return null;
+            };
             mockDocument.registerElement('hamburger-theme-toggle', themeToggle);
         });
 

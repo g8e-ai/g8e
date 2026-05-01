@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Warden Reputation Staking:** Warden now stakes reputation on accurate risk assessment. Ground truth (execution outcomes) grades Warden's decisions — not another agent's opinion. Warden earns reputation for correctly identifying dangerous commands and loses reputation for blocking safe operations (over-caution) or allowing dangerous ones (under-caution).
+- **Two-Strike Circuit Breaker:** Implemented contextual backpressure for Warden-Sage disagreements. First strike generates Assistant model feedback; second strike triggers `AI_AGENT_CONFLICT_DETECTED` event and surfaces "Agent Conflict" dialog to user.
+- **New Event Types:** `AI_AGENT_CONFLICT_DETECTED`, `AI_AGENT_CONFLICT_RESOLVED` for agent disagreement handling.
+- **New Error Type:** `AGENT_CONFLICT` for circuit breaker triggers.
+
+### Changed
+- **Warden Personas:** Updated `warden_command_risk` and `warden_file_risk` personas to reflect reputation accountability and staking behavior.
+- **Investigation State:** Added `warden_block_count` field to `InvestigationCurrentState` for circuit breaker tracking.
+
+### Fixed
+- **`payload_type` discriminator — all remaining Go payloads:** Added `payload_type` field and correct discriminator values to `LFAAErrorPayload`, `FetchHistoryResultPayload`, `FetchFileHistoryResultPayload`, `RestoreFileResultPayload`, and `FetchFileDiffResultPayload` in g8eo. Without this, Python's Pydantic discriminated union (`G8eoResultPayload`) could not parse these payloads, causing silent parse failures and execution timeouts.
+- **`publishLFAAErrorTo` signature:** Added required `payloadType` parameter so each error call site stamps the correct discriminator (e.g. `fetch_logs_error`, `fetch_history_error`, `fetch_file_diff_error`). Updated all call sites across `history_service.go`, `file_ops_service.go`, `port_service.go`, and corresponding tests.
+- **`FetchFileDiffResultPayload` — split discriminator:** Go now emits `fetch_file_diff_by_id_success` when returning a single diff by ID, and `fetch_file_diff_by_session_success` when returning a list by session, matching the Python union members.
+- **`FetchHistoryResultPayload` — success/error split:** Go now emits `fetch_history_success` or `fetch_history_error` at the construction site in `history_handler.go`, matching the Python union.
+- **`FetchHistorySuccessPayload.session` → `web_session`:** Renamed Python field from `session` to `web_session` and made it optional (`| None`) to match the Go wire key (`web_session`) and optionality (`*AuditWebSession`).
+- **`FsReadResultPayload.size` → `size_bytes`:** Renamed Python field to match the Go wire key (`size_bytes`); previously the field was always zero because Go never sent a `size` key.
+- **`agent.conflict` in shared `status.json`:** Added missing `CommandErrorType` entry to keep the shared JSON in sync with the Python enum (fixes `TestCommandErrorTypeMatchesSharedJSON`).
+
 ## [0.1.6] - 2026-04-29
 
 ### Added

@@ -140,6 +140,7 @@ class CommandInternalResult(G8eBaseModel):
 class CommandRiskContext(G8eBaseModel):
     working_directory: str = Field(default="", description="Working directory for the command")
     git_status: str = Field(default="", description="Git repository status")
+    investigation_context: str = Field(default="", description="Brief description of the active investigation (e.g. case title and description) to help Warden reason about expected command scope")
 
 
 class ErrorAnalysisContext(G8eBaseModel):

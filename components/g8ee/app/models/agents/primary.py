@@ -16,7 +16,7 @@ from app.models.base import G8eBaseModel
 from app.constants.prompts import AgentMode
 from app.models.attachments import AttachmentMetadata
 from app.models.investigations import ConversationHistoryMessage
-from app.llm.llm_types import ToolCall
+from app.llm.llm_dataclasses import ToolCall
 
 
 class PrimaryRequest(G8eBaseModel):

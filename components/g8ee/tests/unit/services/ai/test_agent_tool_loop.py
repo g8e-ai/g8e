@@ -20,6 +20,7 @@ Tests:
 - TribunalInvoker.run raises TribunalError when Tribunal fails
 - TribunalInvoker.run preserves target_operators, expected_output_lines, timeout_seconds (regression test)
 - TribunalInvoker.run correctly propagates operator context defaults when empty operator_documents
+- AIToolService.ai_response_analyzer delegates to operator_command_service execution service (regression)
 
 Run with:
     ./g8e test g8ee -- tests/unit/services/ai/test_agent_tool_loop.py
@@ -57,6 +58,7 @@ def mock_tool_executor():
     tool_executor.blacklist_validator = MagicMock(spec=CommandBlacklistValidator)
     tool_executor.reputation_data_service = MagicMock()
     tool_executor.auditor_hmac_key = "test-hmac-key"
+    tool_executor.ai_response_analyzer = MagicMock()
     return tool_executor
 
 
@@ -79,6 +81,9 @@ def mock_investigation():
     investigation = MagicMock(spec=EnrichedInvestigationContext)
     investigation.id = "inv-001"
     investigation.operator_documents = []
+    investigation.current_state = MagicMock()
+    investigation.case_title = ""
+    investigation.case_description = ""
     return investigation
 
 
@@ -402,3 +407,31 @@ class TestTribunalInvokerRun:
             assert reconstructed.target_operators == mock_sage_request.target_operators
             assert reconstructed.expected_output_lines == mock_sage_request.expected_output_lines
             assert reconstructed.timeout_seconds == mock_sage_request.timeout_seconds
+
+
+class TestAIToolServiceAiResponseAnalyzer:
+    """Regression tests for AIToolService.ai_response_analyzer.
+
+    Bug: AIToolService had no ai_response_analyzer property, causing
+    AttributeError when TribunalInvoker.run accessed tool_executor.ai_response_analyzer.
+    """
+
+    def test_ai_response_analyzer_delegates_to_execution_service(self):
+        """AIToolService.ai_response_analyzer returns the analyzer from the wired execution service."""
+        from tests.fakes.tool_helpers import create_tool_service_fake
+
+        fake_analyzer = MagicMock()
+        tool_service = create_tool_service_fake()
+        tool_service.operator_command_service._execution_service._ai_response_analyzer = fake_analyzer
+
+        result = tool_service.ai_response_analyzer
+
+        assert result is fake_analyzer
+
+    def test_ai_response_analyzer_attribute_exists_on_real_tool_service(self):
+        """AIToolService exposes ai_response_analyzer (regression: AttributeError in TribunalInvoker.run)."""
+        from tests.fakes.tool_helpers import create_tool_service_fake
+
+        tool_service = create_tool_service_fake()
+
+        assert hasattr(tool_service, "ai_response_analyzer")

@@ -111,6 +111,15 @@ _AUDIT_STAGE_REPUTATION_KWARGS = {
 }
 
 
+_MOCK_USER_SETTINGS = G8eeUserSettings(
+    llm=LLMSettings(
+        assistant_model="test-assistant",
+        primary_model="test-primary",
+        lite_model="test-lite"
+    )
+)
+
+
 def _make_mock_provider(generate_content_lite_side_effect=None, generate_content_lite_return=None):
     """Create a mock LLM provider that supports async context manager protocol."""
     mock_provider = MagicMock()
@@ -1265,13 +1274,14 @@ class TestRunVerificationStage:
         )
         emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
-        final_cmd, outcome, passed, revision, auditor_reason, commitment_id = await _run_audit_stage(
+        final_cmd, outcome, passed, revision, auditor_reason, commitment_id, risk_analysis = await _run_audit_stage(
             provider=MagicMock(), model="test-model", request="list files", guidelines="",
             vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=None,
             operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
             auditor_enabled=False,
             emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+            settings=_MOCK_USER_SETTINGS,
             **_AUDIT_STAGE_REPUTATION_KWARGS,
         )
 
@@ -1298,13 +1308,14 @@ class TestRunVerificationStage:
         emitter = TribunalEmitter(None, _make_mock_g8e_context())
         emitter.correlation_id = "tribunal_test_command"
 
-        final_cmd, outcome, passed, revision, auditor_reason, commitment_id = await _run_audit_stage(
+        final_cmd, outcome, passed, revision, auditor_reason, commitment_id, risk_analysis = await _run_audit_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",
             vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=None,
             operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
             auditor_enabled=True,
             emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+            settings=_MOCK_USER_SETTINGS,
             **_AUDIT_STAGE_REPUTATION_KWARGS,
         )
 
@@ -1330,13 +1341,14 @@ class TestRunVerificationStage:
         mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
         emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
-        final_cmd, outcome, passed, revision, auditor_reason, commitment_id = await _run_audit_stage(
+        final_cmd, outcome, passed, revision, auditor_reason, commitment_id, risk_analysis = await _run_audit_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",
             vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=None,
             operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
             auditor_enabled=True,
             emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+            settings=_MOCK_USER_SETTINGS,
             **_AUDIT_STAGE_REPUTATION_KWARGS,
         )
 
@@ -1368,13 +1380,14 @@ class TestRunVerificationStage:
         emitter = TribunalEmitter(None, _make_mock_g8e_context())
         emitter.correlation_id = "tribunal_test_command"
 
-        final_cmd, outcome, passed, revision, auditor_reason, commitment_id = await _run_audit_stage(
+        final_cmd, outcome, passed, revision, auditor_reason, commitment_id, risk_analysis = await _run_audit_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",
             vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=tied_candidates,
             operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
             auditor_enabled=True,
             emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+            settings=_MOCK_USER_SETTINGS,
             **_AUDIT_STAGE_REPUTATION_KWARGS,
         )
 
@@ -1405,13 +1418,14 @@ class TestRunVerificationStage:
         mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
         emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
-        final_cmd, outcome, passed, revision, auditor_reason, commitment_id = await _run_audit_stage(
+        final_cmd, outcome, passed, revision, auditor_reason, commitment_id, risk_analysis = await _run_audit_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",
             vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=tied_candidates,
             operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
             auditor_enabled=True,
             emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+            settings=_MOCK_USER_SETTINGS,
             **_AUDIT_STAGE_REPUTATION_KWARGS,
         )
 
@@ -1445,13 +1459,14 @@ class TestRunVerificationStage:
         emitter = TribunalEmitter(None, _make_mock_g8e_context())
         emitter.correlation_id = "tribunal_test_command"
 
-        final_cmd, outcome, passed, revision, auditor_reason, commitment_id = await _run_audit_stage(
+        final_cmd, outcome, passed, revision, auditor_reason, commitment_id, risk_analysis = await _run_audit_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",
             vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=tied_candidates,
             operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
             auditor_enabled=True,
             emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+            settings=_MOCK_USER_SETTINGS,
             **_AUDIT_STAGE_REPUTATION_KWARGS,
         )
 
@@ -1489,13 +1504,14 @@ class TestRunVerificationStage:
         emitter = TribunalEmitter(None, _make_mock_g8e_context())
         emitter.correlation_id = "tribunal_test_command"
 
-        final_cmd, outcome, passed, revision, auditor_reason, commitment_id = await _run_audit_stage(
+        final_cmd, outcome, passed, revision, auditor_reason, commitment_id, risk_analysis = await _run_audit_stage(
             provider=mock_provider, model="test-model", request="list files", guidelines="",
             vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=None,
             operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
             auditor_enabled=True,
             emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
+            settings=_MOCK_USER_SETTINGS,
             **_AUDIT_STAGE_REPUTATION_KWARGS,
         )
 
@@ -1530,6 +1546,7 @@ class TestRunVerificationStage:
                 auditor_enabled=True,
                 emitter=emitter,
                 command_constraints_message="No whitelist or blacklist constraints are active.",
+                settings=_MOCK_USER_SETTINGS,
                 **_AUDIT_STAGE_REPUTATION_KWARGS,
             )
 

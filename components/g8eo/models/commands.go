@@ -40,6 +40,7 @@ type ExecutionRequestPayload struct {
 }
 
 type ExecutionResultsPayload struct {
+	PayloadType       string                    `json:"payload_type"`
 	ExecutionID       string                    `json:"execution_id"`
 	CaseID            string                    `json:"case_id"`
 	TaskID            *string                   `json:"task_id,omitempty"`

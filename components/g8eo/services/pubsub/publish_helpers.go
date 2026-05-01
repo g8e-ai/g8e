@@ -92,6 +92,9 @@ func publishLFAATypedResponseTo(
 }
 
 // publishLFAAErrorTo builds an error G8eMessage and publishes it to the results channel.
+// payloadType must be set to the discriminator value expected by the Python consumer
+// (e.g. "fetch_logs_error", "fetch_history_error"). It is required — callers must provide
+// the correct value matching the G8eoResultPayload union member on the Python side.
 func publishLFAAErrorTo(
 	ctx context.Context,
 	client PubSubClient,
@@ -99,9 +102,11 @@ func publishLFAAErrorTo(
 	logger *slog.Logger,
 	msg PubSubCommandMessage,
 	eventType, errorMsg string,
+	payloadType string,
 ) {
 	executionID := executionIDFromMessage(msg)
 	payload := models.LFAAErrorPayload{
+		PayloadType:       payloadType,
 		Success:           false,
 		Error:             errorMsg,
 		ExecutionID:       executionID,

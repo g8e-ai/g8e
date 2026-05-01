@@ -335,7 +335,8 @@
     "port.check.failed": "port.check.failed",
     "approval.timeout": "approval.timeout",
     "permission.error": "permission.error",
-    "configuration.error": "configuration.error"
+    "configuration.error": "configuration.error",
+    "agent.conflict": "agent.conflict"
   },
 
   "file.operation": {

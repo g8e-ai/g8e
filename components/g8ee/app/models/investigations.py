@@ -267,6 +267,7 @@ class InvestigationCurrentState(G8eBaseModel):
     next_deadline: UTCDatetime | None = Field(default=None, description="Next deadline")
     escalation_risk: EscalationRisk = Field(default=EscalationRisk.LOW, description="Escalation risk level")
     collaboration_status: dict[ComponentName, ComponentStatus] = Field(default_factory=dict, description="Component collaboration status")
+    warden_block_count: int = Field(default=0, ge=0, description="Count of warden blocks in current turn (Two-Strike Circuit Breaker)")
 
 
 class ConversationUpdateOperation(G8eBaseModel):

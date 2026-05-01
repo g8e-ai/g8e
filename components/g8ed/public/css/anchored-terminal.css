@@ -680,6 +680,76 @@
     font-size: 0.75rem;
 }
 
+/* Collapsible system messages container */
+.anchored-terminal__system-messages-group {
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    border-radius: 0.25rem;
+    margin: 8px 0;
+    overflow: hidden;
+}
+
+.anchored-terminal__system-messages-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: rgba(var(--bg-secondary-rgb, 100, 100, 100), 0.3);
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.2s ease;
+}
+
+.anchored-terminal__system-messages-header:hover {
+    background: rgba(var(--bg-secondary-rgb, 100, 100, 100), 0.5);
+}
+
+.anchored-terminal__system-messages-toggle {
+    font-family: monospace;
+    font-size: 14px;
+    font-weight: bold;
+    color: var(--text-secondary);
+    min-width: 16px;
+    text-align: center;
+}
+
+.anchored-terminal__system-messages-title {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.anchored-terminal__system-messages-count {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    margin-left: auto;
+}
+
+.anchored-terminal__system-messages-content {
+    max-height: 200px;
+    overflow-y: auto;
+    transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease;
+}
+
+.anchored-terminal__system-messages-group.collapsed .anchored-terminal__system-messages-content {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    opacity: 0;
+    overflow: hidden;
+}
+
+.anchored-terminal__system-message {
+    color: var(--text-secondary);
+    font-style: italic;
+    font-size: 0.75rem;
+    padding: 4px 12px;
+    border-bottom: 1px solid rgba(var(--border-color-rgb, 255, 255, 255), 0.05);
+}
+
+.anchored-terminal__system-message:last-child {
+    border-bottom: none;
+}
+
 /* Approval request styling in terminal */
 .anchored-terminal__approval {
     background: rgba(var(--accent-green-rgb), 0.08);

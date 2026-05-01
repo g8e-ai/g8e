@@ -22,6 +22,12 @@ governance architecture for trustless environments
 
 ---
 
+## Setup Walkthrough
+
+https://www.youtube.com/watch?v=tY7A6BHatF8
+
+![alt text](components/g8ed/public/media/fixed-by-g8e.png)
+
 ## What this is
 
 g8e is a platform for running AI agents against production infrastructure without giving up sovereignty, auditability, or sleep. A stateless reasoning **Engine** runs Byzantine consensus over heterogeneous LLM personas. A sovereign **Operator** binary runs on every managed host, enforces FIDO2 approval at the execution boundary, and owns the local-first audit ledger.
@@ -69,16 +75,16 @@ flowchart TD
         R2 --> Consensus
     end
 
-    Consensus -- "Winner Selected" --> Auditor
+    Consensus -- "Winner Selected" --> Warden
 
-    subgraph Phase_4 [Phase 4: Judgment]
-        Auditor[Auditor<br>Approves, Swaps, or Revises]
-        Auditor --> Challenge[Challenge Window]
+    subgraph Phase_4 [Phase 4: Safety]
+        Warden[Warden<br>Pre-Execution Risk Assessment]
+        Warden -- "Cleared" --> Auditor
     end
 
-    subgraph Phase_5 [Phase 5: Execution]
-        Challenge --> Warden[Warden<br>Pre-Execution Risk Assessment]
-        Warden --> Human{Human Approval}
+    subgraph Phase_5 [Phase 5: Judgment]
+        Auditor[Auditor<br>Final Consistency & Commitment]
+        Auditor --> Human{Human Approval}
         Human -- "Approved" --> Operator[Operator<br>Executes via LFAA]
         Operator -- "Results" --> Sage
     end
@@ -89,8 +95,8 @@ flowchart TD
 1. **Triage** classifies the request. Trivial questions go to **Dash** (fast-path responder). Anything that may state-change is enriched with operator context and routed to **Sage**.
 2. **Sage** writes an intent document — goals, constraints, success criteria — and hands it to the Tribunal.
 3. **The Tribunal** is five blind validators (Axiom, Concord, Variance, Pragma, Nemesis), each generating a candidate command independently with no visibility into the others. Two of five must converge for a winner. If not, an anonymized peer-review round runs.
-4. **The Auditor** reviews the winner with full memory access and may approve, swap, or revise. The Auditor is bonded 2–3× heavier than any Tribunal member and is itself peer-reviewed across conversations.
-5. **Warden** (running on the Engine) scans the approved command for risk — MITRE ATT&CK pattern matches, file/error blast radius, and destructive idioms.
+4. **Warden** (running on the Engine) performs a pre-execution risk assessment. It validates the command safety profile for blast radius, destructive idioms, and risk before allowing it to proceed.
+5. **The Auditor** performs the final consistency check and Merkle commitment once the Warden has cleared the command. The Auditor is bonded 2–3× heavier than any Tribunal member and is itself peer-reviewed across conversations.
 6. **You** review the command and the risk assessment, and sign with a passkey, or you don't.
 7. **The Operator** receives the signed command over the outbound WebSocket, runs it in an isolated process group, captures the result into the local audit vault, and snapshots state into a git-backed ledger.
 
@@ -295,6 +301,13 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 | [Developer Guide](docs/developer.md) | Setup, code quality rules, project structure |
 | [Testing Guide](docs/testing.md) | Test infrastructure, component guidelines, CI |
 | [Glossary](docs/glossary.md) | Platform terminology |
+
+
+---
+
+## Engagements
+
+For commercial engagements, partnerships, or short-term contracts: danny@g8e.ai
 
 ---
 

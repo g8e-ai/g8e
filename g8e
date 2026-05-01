@@ -1085,6 +1085,36 @@ case "$TOP" in
             echo "[g8e] evals compose file not found: $EVALS_COMPOSE" >&2
             exit 1
         fi
+        
+        # Collect LLM flags that might appear before or after the subcommand
+        eval_llm_args=()
+        filtered_eval_args=()
+        i=1
+        _eval_args=("${@:2}")
+        while [[ $i -le ${#_eval_args[@]} ]]; do
+            arg="${_eval_args[$((i-1))]}"
+            case "$arg" in
+                -p|--llm-provider)
+                    eval_llm_args+=("-p" "${_eval_args[$i]}"); ((i+=2)) ;;
+                -m|--primary-model)
+                    eval_llm_args+=("-m" "${_eval_args[$i]}"); ((i+=2)) ;;
+                -a|--assistant-model)
+                    eval_llm_args+=("-a" "${_eval_args[$i]}"); ((i+=2)) ;;
+                -l|--lite-model)
+                    eval_llm_args+=("-l" "${_eval_args[$i]}"); ((i+=2)) ;;
+                -e|--llm-endpoint-url)
+                    eval_llm_args+=("-e" "${_eval_args[$i]}"); ((i+=2)) ;;
+                -k|--llm-api-key)
+                    eval_llm_args+=("-k" "${_eval_args[$i]}"); ((i+=2)) ;;
+                *)
+                    filtered_eval_args+=("$arg"); ((i++)) ;;
+            esac
+        done
+        
+        # Reset SUB and subsequent args based on filtered list
+        SUB="${filtered_eval_args[0]:-}"
+        REMAINING_ARGS=("${filtered_eval_args[@]:1}")
+
         case "$SUB" in
             -h|--help|"")
                 help_file="$SCRIPT_DIR/docs/g8e-help.md"
@@ -1097,34 +1127,36 @@ case "$TOP" in
                 [[ -z "$SUB" ]] && exit 1 || exit 0
                 ;;
             run)
-        if [[ "$#" -eq 0 ]]; then
-            echo "Usage: ./g8e evals run --gold-set <path> [-d|--device-token <token>]" >&2
-            exit 1
-        fi
-        
-        # Extract device token if provided via global arg or command arg
-        local run_args=()
-        local gold_set=""
-        while [[ "$#" -gt 0 ]]; do
-            case "$1" in
-                -d|--device-token) _device_token="$2"; shift 2 ;;
-                --gold-set) gold_set="$2"; run_args+=("--gold-set" "$2"); shift 2 ;;
-                --dry-run) run_args+=("--dry-run"); shift 1 ;;
-                *) run_args+=("$1"); shift 1 ;;
-            esac
-        done
-        
-        if [[ -z "$_device_token" ]]; then
-            _device_token="$DEVICE_TOKEN"
-        fi
-        
-        if [[ -z "$_device_token" ]]; then
-            echo "Error: Must provide --device-token" >&2
-            exit 1
-        fi
-        
-        docker exec -i g8ep /bin/bash -c "cd /app/components/g8ee && python -m app.evals.runner.cli --device-token $_device_token ${run_args[*]}"
-        ;;
+                _args=("${REMAINING_ARGS[@]}")
+                if [[ ${#_args[@]} -eq 0 ]]; then
+                    echo "Usage: ./g8e evals run --gold-set <path>" >&2
+                    exit 1
+                fi
+                
+                run_args=("${eval_llm_args[@]}")
+                gold_set=""
+                set -- "${_args[@]}"
+                while [[ "$#" -gt 0 ]]; do
+                    case "$1" in
+                        -d|--device-token) run_args+=("--device-token" "$2"); shift 2 ;;
+                        --gold-set)
+                            gold_set="$2"
+                            if [[ "$gold_set" != /* ]]; then
+                                gold_set="$SCRIPT_DIR/$gold_set"
+                            fi
+                            gold_set="/app/components/g8ee${gold_set#$SCRIPT_DIR/components/g8ee}"
+                            run_args+=("--gold-set" "$gold_set")
+                            shift 2
+                            ;;
+                        --dry-run) run_args+=("--dry-run"); shift 1 ;;
+                        *) run_args+=("$1"); shift 1 ;;
+                    esac
+                done
+                
+                _banner "evals run"
+                _ensure_g8ep "evals run"
+                docker exec -i -e "G8E_SHARED_DIR=/app/shared" -e "PYTHONPATH=/app/components/g8ee:/app/shared" "$CONTAINER" python -m app.evals.runner.cli "${run_args[@]}"
+                ;;
     up)
                 _banner "evals up"
                 _nodes=3

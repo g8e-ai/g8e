@@ -1,7 +1,7 @@
 {
   "_comment": "Canonical outbound result payload shapes published by g8eo to the results:{operator_id}:{operator_session_id} pub/sub channel. These payloads are embedded in the `payload` field of the g8eo ResultMessage envelope (see envelope.json). Consumers: g8ee (Python, processes results), g8ed (JS, forwards to frontend via SSE).",
 
-  "_comment.wire_format": "g8eo wraps each payload in a ResultMessage (see envelope.json). The `payload` field is a raw JSON blob. g8ee and g8ed read `event_type` from the envelope to select the correct payload deserializer.",
+  "_comment.wire_format": "g8eo wraps each payload in a ResultMessage (see envelope.json). The `payload` field is a raw JSON blob. Each payload includes a `payload_type` field which g8ee uses as the Pydantic discriminator to select the correct model class. This is required — without it the Python discriminated union cannot reliably distinguish payload shapes (e.g. fs_read_result vs fs_list_result when content is absent).",
 
   "_comment.field_naming": "FIELD NAMING: Wire format models use 'operator_id' instead of 'id' for clarity in cross-component contexts where the entity type may not be immediately obvious. This maps directly to OperatorDocument.core_identity.id (see operator_document.json _comment.field_naming for the full convention).",
 
@@ -9,6 +9,12 @@
     "_description": "Payload for event_type: g8e.v1.operator.command.completed | g8e.v1.operator.command.failed. Final result of a command execution.",
     "_event_types": ["g8e.v1.operator.command.completed", "g8e.v1.operator.command.failed"],
     "fields": {
+      "payload_type": {
+        "type": "string",
+        "required": true,
+        "value": "execution_result",
+        "description": "Discriminator field for g8ee Pydantic union parsing. Always \"execution_result\"."
+      },
       "execution_id": {
         "type": "string",
         "required": true,
@@ -97,6 +103,12 @@
     "_description": "Payload for event_type: g8e.v1.operator.command.status.updated.queued | g8e.v1.operator.command.status.updated.running. Intermediate progress update for a long-running command.",
     "_event_types": ["g8e.v1.operator.command.status.updated.queued", "g8e.v1.operator.command.status.updated.running"],
     "fields": {
+      "payload_type": {
+        "type": "string",
+        "required": true,
+        "value": "execution_status",
+        "description": "Discriminator field for g8ee Pydantic union parsing. Always \"execution_status\"."
+      },
       "execution_id": {
         "type": "string",
         "required": true,
@@ -158,6 +170,12 @@
     "_description": "Payload for event_type: g8e.v1.operator.command.cancelled.",
     "_event_types": ["g8e.v1.operator.command.cancelled"],
     "fields": {
+      "payload_type": {
+        "type": "string",
+        "required": true,
+        "value": "cancellation_result",
+        "description": "Discriminator field for g8ee Pydantic union parsing. Always \"cancellation_result\"."
+      },
       "execution_id": {
         "type": "string",
         "required": true,
@@ -191,6 +209,12 @@
     "_description": "Payload for event_type: g8e.v1.operator.file.edit.completed | g8e.v1.operator.file.edit.failed. Result of a file operation.",
     "_event_types": ["g8e.v1.operator.file.edit.completed", "g8e.v1.operator.file.edit.failed"],
     "fields": {
+      "payload_type": {
+        "type": "string",
+        "required": true,
+        "value": "file_edit_result",
+        "description": "Discriminator field for g8ee Pydantic union parsing. Always \"file_edit_result\"."
+      },
       "execution_id": {
         "type": "string",
         "required": true,
@@ -280,6 +304,12 @@
     "_description": "Payload for event_type: g8e.v1.operator.filesystem.list.completed | g8e.v1.operator.filesystem.list.failed.",
     "_event_types": ["g8e.v1.operator.filesystem.list.completed", "g8e.v1.operator.filesystem.list.failed"],
     "fields": {
+      "payload_type": {
+        "type": "string",
+        "required": true,
+        "value": "fs_list_result",
+        "description": "Discriminator field for g8ee Pydantic union parsing. Always \"fs_list_result\"."
+      },
       "execution_id": {
         "type": "string",
         "required": true
@@ -349,6 +379,12 @@
     "_description": "Payload for event_type: g8e.v1.operator.logs.fetch.completed. Contains stored execution output retrieved from the operator local vault. Failure events (g8e.v1.operator.logs.fetch.failed) use the unified lfaa_error envelope.",
     "_event_types": ["g8e.v1.operator.logs.fetch.completed"],
     "fields": {
+      "payload_type": {
+        "type": "string",
+        "required": true,
+        "value": "fetch_logs_result",
+        "description": "Discriminator field for g8ee Pydantic union parsing. Always \"fetch_logs_result\"."
+      },
       "execution_id": {
         "type": "string",
         "required": true,
@@ -449,6 +485,12 @@
     "_description": "Payload for event_type: g8e.v1.operator.network.port.check.completed | g8e.v1.operator.network.port.check.failed.",
     "_event_types": ["g8e.v1.operator.network.port.check.completed", "g8e.v1.operator.network.port.check.failed"],
     "fields": {
+      "payload_type": {
+        "type": "string",
+        "required": true,
+        "value": "port_check_result",
+        "description": "Discriminator field for g8ee Pydantic union parsing. Always \"port_check_result\"."
+      },
       "execution_id": { "type": "string", "required": true },
       "status": { "type": "string", "required": true },
       "operator_id": { "type": "string", "required": true },
@@ -581,10 +623,16 @@
     "_description": "Payload for event_type: g8e.v1.operator.filesystem.read.completed | g8e.v1.operator.filesystem.read.failed. Result of reading a file.",
     "_event_types": ["g8e.v1.operator.filesystem.read.completed", "g8e.v1.operator.filesystem.read.failed"],
     "fields": {
+      "payload_type": {
+        "type": "string",
+        "required": true,
+        "value": "fs_read_result",
+        "description": "Discriminator field for g8ee Pydantic union parsing. Always \"fs_read_result\"."
+      },
       "execution_id": { "type": "string", "required": true, "description": "Unique execution identifier matching the originating request" },
       "path": { "type": "string", "required": true, "description": "Absolute path of the file read" },
       "status": { "type": "string", "required": true, "values": ["completed", "failed"], "description": "Operation status" },
-      "content": { "type": "string", "required": false, "description": "File content. Absent on failure." },
+      "content": { "type": "string", "required": true, "description": "File content. Always present — empty string for empty files or on failure. Never omitted." },
       "size_bytes": { "type": "integer", "required": true, "description": "Size of content returned in bytes" },
       "truncated": { "type": "boolean", "required": true, "description": "Whether content was truncated due to max_size limit" },
       "duration_seconds": { "type": "number", "required": true, "description": "Wall-clock read duration in seconds" },

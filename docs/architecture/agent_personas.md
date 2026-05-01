@@ -45,7 +45,7 @@ The canonical truth for agent personas resides in **Python models** located in `
 - **Model Tier**: `primary`
 - **Purpose**: Senior reasoning agent for complex investigations. Drives multi-step tool loops and articulates intent to the Tribunal.
 - **Intent Articulation**: Sage describes the *goal* and *semantics* of a command without naming shell tools or syntax, allowing the Tribunal to translate.
-- **Staking**: Stakes on one-shot sufficiency. Win if Round 1 passes AND Auditor rules `ok`.
+- **Staking**: Stakes on one-shot sufficiency. Win if Round 1 passes AND Warden clears it AND Auditor rules `ok`.
 
 ### 3. Dash (Fast-Path Responder)
 - **Icon**: `bolt`
@@ -65,23 +65,27 @@ A five-member panel that translates Sage's intent into an executable command thr
 
 **Common Contract**: Every member emits exactly a shell command string. Disagreement is ideological, not statistical.
 
-### 5. Auditor
-- **Icon**: `fact_check`
-- **Role**: `auditor`
-- **Model Tier**: `primary`
-- **Purpose**: Final judge of Tribunal candidates. Operates in `unanimous`, `majority`, or `tied` modes.
-- **Reputation**: The only agent that reads `reputation_state` (cross-chain memory) and writes `reputation_commitment` via Merkle roots.
-- **Output**: `ok`, `revised:<command>`, or `swap:<cluster_id>`.
-
-### 6. Warden (Defensive Coordination)
+### 5. Warden (Defensive Coordination)
 - **Icon**: `shield`
 - **Role**: `defender`
 - **Model Tier**: `lite`
-- **Purpose**: Orchestrates specialized risk analysis sub-agents to produce a consolidated safety verdict for the Operator.
+- **Purpose**: Orchestrates specialized risk analysis sub-agents to produce a consolidated safety verdict for the Operator. The Warden validates the safety of a command *before* the Auditor cryptographically commits. Stakes reputation on accurate risk assessment.
 - **Sub-Agents**:
     - `warden_command_risk`: Classifies command blast radius (LOW/MEDIUM/HIGH).
     - `warden_file_risk`: Evaluates file operation sensitivity and git-reversibility.
     - `warden_error`: Analyzes failures for `AUTO_FIXABLE` or `ESCALATE`.
+- **Staking**: Warden stakes reputation on accurate risk classification. It earns reputation for correctly identifying dangerous commands and loses reputation for blocking safe operations (over-caution) or allowing dangerous ones (under-caution).
+- **Two-Strike Circuit Breaker**: When Warden blocks a command:
+    - **First Strike**: Assistant model generates contextual feedback explaining why the command was blocked and suggesting safer alternatives. Sage receives this feedback and can propose a revised command.
+    - **Second Strike**: If Warden blocks Sage's revised command, the system triggers an `AI_AGENT_CONFLICT_DETECTED` event, halts the ReAct loop, and surfaces an "Agent Conflict" dialog to the user for human intervention.
+
+### 6. Auditor
+- **Icon**: `fact_check`
+- **Role**: `auditor`
+- **Model Tier**: `primary`
+- **Purpose**: Final judge of Tribunal candidates. Operates in `unanimous`, `majority`, or `tied` modes. Only once the Warden has cleared the command does the Auditor perform the final consistency check and Merkle commitment.
+- **Reputation**: The only agent that reads `reputation_state` (cross-chain memory) and writes `reputation_commitment` via Merkle roots.
+- **Output**: `ok`, `revised:<command>`, or `swap:<cluster_id>`.
 
 ### 7. Specialists
 - **Scribe** (`title`): Generates concise 3-7 word case titles.

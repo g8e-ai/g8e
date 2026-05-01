@@ -193,7 +193,7 @@ func TestPublishLFAA_StampsAPIKeyFromConfig(t *testing.T) {
 		cfg.APIKey = "g8e_err_key"
 
 		publishLFAAErrorTo(ctx, client, cfg, logger, cmdMsg,
-			constants.Event.Operator.PortCheck.Failed, "boom")
+			constants.Event.Operator.PortCheck.Failed, "boom", "port_check_error")
 
 		published := client.LastPublished()
 		require.NotNil(t, published)

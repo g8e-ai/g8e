@@ -24,7 +24,13 @@ export class TerminalOperatorMixin {
         if (this._eventsBound || !this.eventBus) return;
 
         this.eventBus.on(EventType.OPERATOR_STATUS_UPDATED_BOUND, (data) => {
-            if (data?.operator) this.setOperatorBound(data.operator);
+            if (data?.operator_id) {
+                this.setOperatorBound({
+                    operator_id: data.operator_id,
+                    name: data.name,
+                    latest_heartbeat_snapshot: data.metrics
+                });
+            }
         });
 
         const unboundStatuses = [

@@ -385,12 +385,12 @@ func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg PubSubCom
 	var p models.FsReadRequestPayload
 	if err := json.Unmarshal(msg.Payload, &p); err != nil {
 		fs.logger.Error("Failed to decode fs read payload", "error", err)
-		fs.publishLFAAError(ctx, msg, constants.Event.Operator.FsRead.Failed, "invalid request payload")
+		fs.publishLFAAError(ctx, msg, constants.Event.Operator.FsRead.Failed, "invalid request payload", "fs_read_error")
 		return
 	}
 	if p.Path == "" {
 		fs.logger.Warn("Fs read request without path")
-		fs.publishLFAAError(ctx, msg, constants.Event.Operator.FsRead.Failed, "missing path in request")
+		fs.publishLFAAError(ctx, msg, constants.Event.Operator.FsRead.Failed, "missing path in request", "fs_read_error")
 		return
 	}
 
@@ -413,6 +413,7 @@ func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg PubSubCom
 		errMsg := err.Error()
 		errType := "read_error"
 		payload := models.FsReadResultPayload{
+			PayloadType:       "fs_read_result",
 			ExecutionID:       requestID,
 			Path:              p.Path,
 			Status:            constants.ExecutionStatusFailed,
@@ -435,6 +436,7 @@ func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg PubSubCom
 		errMsg := err.Error()
 		errType := "read_error"
 		payload := models.FsReadResultPayload{
+			PayloadType:       "fs_read_result",
 			ExecutionID:       requestID,
 			Path:              p.Path,
 			Status:            constants.ExecutionStatusFailed,
@@ -463,6 +465,7 @@ func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg PubSubCom
 		errMsg := err.Error()
 		errType := "read_error"
 		payload := models.FsReadResultPayload{
+			PayloadType:       "fs_read_result",
 			ExecutionID:       requestID,
 			Path:              p.Path,
 			Status:            constants.ExecutionStatusFailed,
@@ -486,6 +489,7 @@ func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg PubSubCom
 	}
 
 	payload := models.FsReadResultPayload{
+		PayloadType:       "fs_read_result",
 		ExecutionID:       requestID,
 		Path:              p.Path,
 		Status:            constants.ExecutionStatusCompleted,
@@ -503,8 +507,8 @@ func (fs *FileOpsService) publishLFAATypedResponse(ctx context.Context, msg PubS
 	publishLFAATypedResponseTo(ctx, fs.client, fs.config, fs.logger, msg, eventType, payload)
 }
 
-func (fs *FileOpsService) publishLFAAError(ctx context.Context, msg PubSubCommandMessage, eventType, errorMsg string) {
-	publishLFAAErrorTo(ctx, fs.client, fs.config, fs.logger, msg, eventType, errorMsg)
+func (fs *FileOpsService) publishLFAAError(ctx context.Context, msg PubSubCommandMessage, eventType, errorMsg, payloadType string) {
+	publishLFAAErrorTo(ctx, fs.client, fs.config, fs.logger, msg, eventType, errorMsg, payloadType)
 }
 
 // payloadToFileEditRequest is a package-level helper shared by FileOpsService and tests.
