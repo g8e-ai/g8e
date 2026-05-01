@@ -22,6 +22,12 @@ governance architecture for trustless environments
 
 ---
 
+## Setup Walkthrough
+
+https://www.youtube.com/watch?v=tY7A6BHatF8
+
+![alt text](components/g8ed/public/media/fixed-by-g8e.png)
+
 ## What this is
 
 g8e is a platform for running AI agents against production infrastructure without giving up sovereignty, auditability, or sleep. A stateless reasoning **Engine** runs Byzantine consensus over heterogeneous LLM personas. A sovereign **Operator** binary runs on every managed host, enforces FIDO2 approval at the execution boundary, and owns the local-first audit ledger.
