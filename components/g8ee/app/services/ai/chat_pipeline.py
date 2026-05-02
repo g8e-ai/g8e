@@ -66,7 +66,8 @@ from .request_builder import AIRequestBuilder
 from .triage import TriageAgent
 from ..data.agent_activity_data_service import AgentActivityDataService
 from app.models.agents.triage import TriageRequest
-from app.models.g8ed_client import ChatErrorPayload
+from app.models.g8ed_client import ChatErrorPayload, TriageClarificationQuestionsPayload
+from app.utils.interrogation import extract_interrogation_questions
 
 logger = logging.getLogger(__name__)
 
@@ -339,6 +340,27 @@ class ChatPipelineService:
         )
         if persisted:
             logger.info("[SSE-CHAT] Final AI response persisted to database")
+            # Detect and publish clarifying questions
+            questions = extract_interrogation_questions(state.response_text)
+            if questions:
+                logger.info("[SSE-CHAT] Detected %d clarifying questions, publishing event", len(questions))
+                await self.g8ed_event_service.publish_investigation_event(
+                    investigation_id=g8e_context.investigation_id,
+                    event_type=EventType.AI_TRIAGE_CLARIFICATION_QUESTIONS,
+                    payload=TriageClarificationQuestionsPayload(
+                        questions=questions,
+                        complexity=inputs.triage_result.complexity if inputs.triage_result else "unknown",
+                        complexity_confidence=str(inputs.triage_result.complexity_confidence) if inputs.triage_result else "0",
+                        intent=inputs.triage_result.intent_summary if inputs.triage_result else "unknown",
+                        intent_confidence=str(inputs.triage_result.intent_confidence) if inputs.triage_result else "0",
+                        intent_summary=inputs.triage_result.intent_summary if inputs.triage_result else "unknown",
+                        request_posture=inputs.triage_result.request_posture if inputs.triage_result else "unknown",
+                        posture_confidence=str(inputs.triage_result.posture_confidence) if inputs.triage_result else "0",
+                    ),
+                    web_session_id=g8e_context.web_session_id,
+                    case_id=g8e_context.case_id,
+                    user_id=g8e_context.user_id,
+                )
         else:
             logger.info("[SSE-CHAT] Skipping final AI response persistence (empty response_text)")
 

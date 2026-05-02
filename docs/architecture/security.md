@@ -727,13 +727,15 @@ After execution, the `ReputationService` resolves stakes for all participating m
 
 ### Command Allowlist, Denylist, and Auto-Approve
 
-Three independent operator-level controls are available as additional constraints — all **disabled by default** and configured via user settings. They have distinct semantics and **must not be conflated**:
+Three independent operator-level controls are available as additional constraints. Whitelisting is **disabled by default**, while blacklisting and auto-approve are **enabled by default** to ensure a secure yet efficient operating baseline. They have distinct semantics and **must not be conflated**:
 
 - **Allowlist (whitelist) — HARD ALLOW-LIST.** Restricts the AI to pre-approved commands with validated parameters. When enabled, any command not on the list is rejected at L1 safety validation regardless of human approval.
   - **JSON Mode (default)**: Uses a rich JSON whitelist (`config/whitelist.json`) where each command defines permitted options, regex-validated parameters, and a `max_execution_time`.
   - **CSV Mode (override)**: If a user specifies a comma-separated list of commands (e.g., `uptime,df,free`) in their settings, this entirely replaces the JSON whitelist. Only the base commands in the CSV are permitted, and arguments are validated using basic shell safety checks.
-- **Denylist (blacklist) — HARD BLOCK-LIST.** Blocks specific commands, binaries, substrings, and regex patterns across four enforcement layers: forbidden commands, forbidden binaries, forbidden substrings, forbidden regex patterns. When enabled, a command matching any layer is rejected before the approval prompt — it never reaches the user for consideration.
-- **Auto-Approve — SKIP-APPROVAL LIST.** When enabled, commands whose base verb appears in `auto_approved_commands` bypass the human approval prompt (the human has rubber-stamped them in advance as benign). Auto-approve is **independent** of whitelisting: it does not widen the whitelist and does not bypass the blacklist or hard-coded forbidden patterns. A command must still pass every L1 hard gate before auto-approve can apply.
+- **Denylist (blacklist) — HARD BLOCK-LIST.** Blocks specific commands, binaries, substrings, and regex patterns across four enforcement layers. **This is enabled by default** as a recommended boundary for system safety. When enabled, a command matching any layer is rejected before the approval prompt — it never reaches the user for consideration.
+- **Auto-Approve — SKIP-APPROVAL LIST.** **This is enabled by default** to work in harmony with the built-in reputation staking system. When enabled, commands whose base verb appears in `auto_approved_commands` bypass the human approval prompt (the human has rubber-stamped them in advance as benign). This provides peak signal and peak efficiency by allowing a team of heterogeneous agent personas to stake their reputation on the command along with the built-in reputation engine. 
+
+Auto-approve is **independent** of whitelisting: it does not widen the whitelist and does not bypass the blacklist or hard-coded forbidden patterns. A command must still pass every L1 hard gate before auto-approve can apply.
 
 #### Configuration
 
@@ -758,9 +760,9 @@ Command validation is configured per-user via the `command_validation` field in 
 ```
 
 - `enable_whitelisting` (bool, default: `false`) — When enabled, only commands in the whitelist are permitted (hard allow-list).
-- `enable_blacklisting` (bool, default: `false`) — When enabled, commands matching blacklist patterns are blocked (hard block-list).
+- `enable_blacklisting` (bool, default: `true`) — When enabled, commands matching blacklist patterns are blocked (hard block-list). Recommended for system safety.
 - `whitelisted_commands` (string, default: `""`) — Optional comma-separated list of allowed base commands (e.g. `uptime,df,free`).
-- `enable_auto_approve` (bool, default: `false`) — When enabled, commands whose base verb is in `auto_approved_commands` skip the human approval prompt. Independent of whitelisting; does **not** widen the whitelist and does **not** bypass the blacklist or hard-coded forbidden patterns.
+- `enable_auto_approve` (bool, default: `true`) — When enabled, commands whose base verb is in `auto_approved_commands` skip the human approval prompt. Works in harmony with reputation staking for peak efficiency.
 - `auto_approved_commands` (string, default: `""`) — Comma-separated list of base commands the human has rubber-stamped as benign (e.g. `uptime,df,free`). Only consulted when `enable_auto_approve` is `true`.
 
 **Whitelist Mode Semantics:**

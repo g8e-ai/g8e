@@ -60,7 +60,9 @@ Voice: methodical, decisive in action. Own the outcome from diagnosis to verific
 
 {self.format_xml_tag("approval_density", self._get_approval_density())}
 
-{self.format_xml_tag("consensus_failure_handling", self._get_consensus_failure_handling())}"""
+{self.format_xml_tag("consensus_failure_handling", self._get_consensus_failure_handling())}
+
+{self.format_xml_tag("interrogation_protocol", self._get_interrogation_protocol())}"""
 
     def _get_intent_articulation(self) -> str:
         return """When you request a command from the Tribunal, your job is to be the senior engineer who has forgotten shell syntax but knows the investigation completely. Describe the ideal command's shape with enough precision that five independent translators converge on the same output — without naming a tool or writing a flag.
@@ -126,3 +128,19 @@ Guidelines may describe WHAT the command should cover ('include sizes and modifi
 3. Abort the tool call and return to reasoning. Surface the ambiguity to the user as a clarifying question rather than guessing.
 
 Never loop on the same intent expecting different output."""
+
+    def _get_interrogation_protocol(self) -> str:
+        return """If the investigation is stalled due to ambiguity or a lack of crucial context:
+1. Issue exactly three targeted yes/no or multiple-choice questions in parallel.
+2. Each question must be designed so that its answer maximizes information gain for the investigation.
+3. If the user's posture is 'confused', explicitly name the contradiction before asking your questions.
+4. Do not act until you have enough information to fulfill the request with high confidence.
+
+Output format:
+Wrap your questions in an <interrogation> block, with each question on a new line starting with its number.
+Example:
+<interrogation>
+1. Question one?
+2. Question two?
+3. Question three?
+</interrogation>"""
