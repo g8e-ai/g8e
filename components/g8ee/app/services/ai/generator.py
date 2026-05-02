@@ -471,8 +471,6 @@ async def _run_voting_stage(
             logger.info("[TRIBUNAL-TELEMETRY] Candidate breakdown for consensus failure:")
             for member, cmd in vote_breakdown.candidates_by_member.items():
                 logger.info("[TRIBUNAL-TELEMETRY]   %s: %s", member, cmd[:200] + "..." if len(cmd) > 200 else cmd)
-        elif vote_breakdown.tie_break_reason == TieBreakReason.AUDITOR_DISAMBIGUATION:
-            logger.info("[TRIBUNAL] Voting tied; auditor disambiguation required")
         else:
             logger.warning("[TRIBUNAL] Consensus failed: no agreement among members")
             logger.info("[TRIBUNAL-TELEMETRY] Candidate breakdown for consensus failure:")
@@ -627,8 +625,6 @@ async def _run_audit_stage(
 
     if vote_breakdown.consensus_strength == 1.0:
         mode = "unanimous"
-    elif vote_breakdown.tie_break_reason == TieBreakReason.AUDITOR_DISAMBIGUATION:
-        mode = "tied"
     else:
         mode = "majority"
 
@@ -905,9 +901,7 @@ async def generate_command(
     round_2_vote_breakdown = None
     rounds_executed = 1
 
-    if (vote_winner is None and
-        vote_breakdown.tie_break_reason != TieBreakReason.AUDITOR_DISAMBIGUATION and
-        settings.llm.llm_command_gen_rounds == 2):
+    if vote_winner is None and settings.llm.llm_command_gen_rounds == 2:
 
         logger.info("[TRIBUNAL] Consensus strength too low (%.2f < %d), initiating Round 2 peer review",
                     vote_breakdown.consensus_strength, TRIBUNAL_MIN_CONSENSUS)
@@ -987,7 +981,7 @@ async def generate_command(
             ),
         )
 
-    if vote_winner is None and vote_breakdown.tie_break_reason != TieBreakReason.AUDITOR_DISAMBIGUATION:
+    if vote_winner is None:
         await _build_and_emit_result(
             request=request,
             guidelines=guidelines,

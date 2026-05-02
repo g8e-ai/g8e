@@ -20,15 +20,15 @@ g8e_root = Path(__file__).parent.parent.parent
 agents_json_path = g8e_root / "shared" / "constants" / "agents.json"
 personas_dir = g8e_root / "components" / "g8ee" / "app" / "models" / "personas"
 
-def extract_persona_from_file(file_path: Path) -> dict:
-    """Extract persona data from a Python persona file without importing."""
+def extract_persona_from_file(file_path: Path, class_name: str) -> dict:
+    """Extract persona data from a specific class in a Python persona file without importing."""
     content = file_path.read_text()
     
     # Find the class definition
     tree = ast.parse(content)
     
     for node in ast.walk(tree):
-        if isinstance(node, ast.ClassDef):
+        if isinstance(node, ast.ClassDef) and node.name == class_name:
             # Find __init__ method
             for item in node.body:
                 if isinstance(item, ast.FunctionDef) and item.name == '__init__':
@@ -56,35 +56,37 @@ def extract_persona_from_file(file_path: Path) -> dict:
                                 return persona_data
     return {}
 
-def reconstruct_identity(persona_id: str, file_path: Path) -> str:
-    """Reconstruct identity field from the persona file by finding the _get_identity method."""
+def extract_identity_from_class(file_path: Path, class_name: str) -> str:
+    """Extract identity field from a specific class in a persona file."""
     content = file_path.read_text()
     
-    # Find _get_identity method and extract its return string
+    # Find the class and its _get_identity method
     tree = ast.parse(content)
     
     for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef) and node.name == '_get_identity':
-            # Find the return statement
-            for stmt in ast.walk(node):
-                if isinstance(stmt, ast.Return) and stmt.value:
-                    if isinstance(stmt.value, ast.JoinedStr):  # f-string
-                        parts = []
-                        for value in stmt.value.values:
-                            if isinstance(value, ast.Constant):
-                                parts.append(value.value)
-                            elif isinstance(value, ast.FormattedValue):
-                                # Handle method calls in f-strings - this is complex
-                                # For now, return a placeholder
-                                pass
-                        return ''.join(parts)
-                    elif isinstance(stmt.value, ast.Constant):
-                        return stmt.value.value
-    
-    # If we can't parse it, read from the existing agents.json
-    with open(agents_json_path) as f:
-        data = json.load(f)
-        return data.get("agent.metadata", {}).get(persona_id, {}).get("identity", "")
+        if isinstance(node, ast.ClassDef) and node.name == class_name:
+            # Find _get_identity method
+            for item in node.body:
+                if isinstance(item, ast.FunctionDef) and item.name == '_get_identity':
+                    # Find the return statement
+                    for stmt in ast.walk(item):
+                        if isinstance(stmt, ast.Return) and stmt.value:
+                            if isinstance(stmt.value, ast.Constant):
+                                return stmt.value.value
+                            elif isinstance(stmt.value, ast.JoinedStr):
+                                # Handle f-strings by just taking the constant parts for now
+                                # This is a fallback if method calls are present
+                                parts = []
+                                for value in stmt.value.values:
+                                    if isinstance(value, ast.Constant):
+                                        parts.append(value.value)
+                                    elif isinstance(value, ast.FormattedValue):
+                                        # If it's a method call like {self.format_xml_tag(...)}
+                                        # we can't easily resolve it here without execution.
+                                        # For now, just placeholder or skip.
+                                        parts.append(f"{{...}}")
+                                return ''.join(parts)
+    return ""
 
 def sync_personas():
     with open(agents_json_path, "r") as f:
@@ -92,64 +94,64 @@ def sync_personas():
     
     # Get list of persona files
     persona_files = {
-        'triage': personas_dir / 'triage.py',
-        'sage': personas_dir / 'sage.py',
-        'dash': personas_dir / 'dash.py',
-        'auditor': personas_dir / 'auditor.py',
-        'axiom': personas_dir / 'axiom.py',
-        'concord': personas_dir / 'concord.py',
-        'variance': personas_dir / 'variance.py',
-        'pragma': personas_dir / 'pragma.py',
-        'nemesis': personas_dir / 'nemesis.py',
-        'scribe': personas_dir / 'scribe.py',
-        'codex': personas_dir / 'codex.py',
-        'judge': personas_dir / 'judge.py',
-        'tribunal': personas_dir / 'tribunal.py',
-        'warden': personas_dir / 'warden.py',
+        'triage': (personas_dir / 'triage.py', 'TriagePersona'),
+        'sage': (personas_dir / 'sage.py', 'SagePersona'),
+        'dash': (personas_dir / 'dash.py', 'DashPersona'),
+        'auditor': (personas_dir / 'auditor.py', 'AuditorPersona'),
+        'axiom': (personas_dir / 'axiom.py', 'AxiomPersona'),
+        'concord': (personas_dir / 'concord.py', 'ConcordPersona'),
+        'variance': (personas_dir / 'variance.py', 'VariancePersona'),
+        'pragma': (personas_dir / 'pragma.py', 'PragmaPersona'),
+        'nemesis': (personas_dir / 'nemesis.py', 'NemesisPersona'),
+        'scribe': (personas_dir / 'scribe.py', 'ScribePersona'),
+        'codex': (personas_dir / 'codex.py', 'CodexPersona'),
+        'judge': (personas_dir / 'judge.py', 'JudgePersona'),
+        'tribunal': (personas_dir / 'tribunal.py', 'TribunalPersona'),
+        'warden': (personas_dir / 'warden.py', 'WardenPersona'),
+        'warden_command_risk': (personas_dir / 'warden.py', 'WardenCommandRiskPersona'),
+        'warden_error': (personas_dir / 'warden.py', 'WardenErrorPersona'),
+        'warden_file_risk': (personas_dir / 'warden.py', 'WardenFileRiskPersona'),
     }
-    
-    # Also add warden sub-agents
-    persona_files['warden_command_risk'] = personas_dir / 'warden.py'
-    persona_files['warden_error'] = personas_dir / 'warden.py'
-    persona_files['warden_file_risk'] = personas_dir / 'warden.py'
     
     new_metadata = {}
     existing_metadata = data.get("agent.metadata", {})
     
-    for agent_id, file_path in persona_files.items():
+    for agent_id, (file_path, class_name) in persona_files.items():
         if not file_path.exists():
             print(f"Warning: {file_path} does not exist, skipping {agent_id}")
             continue
         
         # Extract basic persona data
-        persona_data = extract_persona_from_file(file_path)
+        persona_data = extract_persona_from_file(file_path, class_name)
         
         if not persona_data:
-            print(f"Warning: Could not extract data from {file_path}, skipping {agent_id}")
-            continue
-        
-        # For warden sub-agents, they're all in warden.py - handle specially
-        if agent_id.startswith('warden_'):
-            # Map to the correct class in warden.py
-            class_map = {
-                'warden_command_risk': 'WardenCommandRiskPersona',
-                'warden_error': 'WardenErrorPersona',
-                'warden_file_risk': 'WardenFileRiskPersona',
-            }
-            # Use existing metadata for these since they're complex
+            # Fallback to existing if we can't extract (e.g. documentation-only)
             if agent_id in existing_metadata:
-                new_metadata[agent_id] = existing_metadata[agent_id]
-            continue
+                persona_data = existing_metadata[agent_id].copy()
+            else:
+                print(f"Warning: Could not extract data from {file_path}, skipping {agent_id}")
+                continue
         
-        # Reconstruct identity from existing agents.json since parsing is complex
-        if agent_id in existing_metadata:
+        # Extract identity from the specific class
+        identity = extract_identity_from_class(file_path, class_name)
+        
+        if identity:
+            # If we found a string, use it. 
+            # If it has placeholders {...}, it's an f-string we couldn't fully resolve.
+            if "{...}" in identity and agent_id in existing_metadata:
+                # Keep existing identity if f-string resolution failed
+                # This preserves the manual updates I made to agents.json earlier
+                persona_data['identity'] = existing_metadata[agent_id].get('identity', '')
+            else:
+                persona_data['identity'] = identity
+        elif agent_id in existing_metadata:
             persona_data['identity'] = existing_metadata[agent_id].get('identity', '')
-            persona_data['purpose'] = existing_metadata[agent_id].get('purpose', persona_data.get('purpose', ''))
-            persona_data['autonomy'] = existing_metadata[agent_id].get('autonomy', persona_data.get('autonomy', ''))
-        
-        # Add output_contract if it exists in existing data
-        if agent_id in existing_metadata and 'output_contract' in existing_metadata[agent_id]:
-            persona_data['output_contract'] = existing_metadata[agent_id]['output_contract']
+
+        # Preserve other fields from existing metadata if not in extracted data
+        if agent_id in existing_metadata:
+            for key, value in existing_metadata[agent_id].items():
+                if key not in persona_data or persona_data[key] is None:
+                    persona_data[key] = value
         
         new_metadata[agent_id] = persona_data
     

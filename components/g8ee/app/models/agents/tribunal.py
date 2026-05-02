@@ -312,8 +312,6 @@ class ConsensusConfidence:
                 return "majority_with_intervention"
 
         if vote_breakdown.tie_broken:
-            if vote_breakdown.tie_break_reason == TieBreakReason.AUDITOR_DISAMBIGUATION:
-                return "tied_auditor_resolved"
             return "tied_resolved"
 
         return "consensus_failed"

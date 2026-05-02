@@ -107,7 +107,7 @@ The consensus round is run by a five-member Tribunal of LLM-instantiated persona
 - **Pragma** (convention): pressure for idiomatic OS-specific tools
 - **Nemesis** (calibrated adversary): proposes flawed-but-plausible commands to stress the Auditor
 
-Each member emits a candidate command independently with no visibility into the others. Candidates are clustered by exact match and votes are tallied. A winner requires ≥2 of 5 supporting votes (Plurality Consensus). If consensus is not reached, or if a tie cannot be resolved by deterministic laddering, members enter **Round 2: Anonymized Peer Review**.
+Each member emits a candidate command independently with no visibility into the others. Candidates are clustered by exact match and votes are tallied. A winner requires ≥2 of 5 supporting votes (Plurality Consensus). If consensus is not reached, or if a tie cannot be resolved by deterministic laddering, members enter **Round 2: Anonymized Peer Review**. If Round 2 fails to reach consensus, a circuit breaker error surfaces the deadlock back to Sage.
 
 In Round 2, the five members are presented with the anonymized command clusters from Round 1 and their support counts. They are invited to either converge on an existing cluster or hold their position. This allows the Tribunal to reach consensus on subtle syntax variations without sacrificing the independence of their initial reasoning.
 
@@ -118,7 +118,6 @@ $$ \text{Consensus}(c) \iff |\{ p \in \text{Tribunal} : p(I) = c \}| \geq 2 $$
 If multiple clusters share the same maximum vote count ($\geq 2$), a **Deterministic Tie-Breaker Ladder** is applied:
 1. **Shortest Command**: Prefer the cluster with the shortest command string (compositional pressure).
 2. **Nemesis Exclusion**: Prefer a cluster that does not include the Nemesis persona.
-3. **Alphabetical**: Fallback to alphabetical sorting of the command strings.
 
 The Nemesis is the most novel element. Rather than relying on an external red team, I embed a calibrated adversary inside the consensus pool, scored on a proper scoring rule: attacks on flawed consensus that the Auditor confirms earn large gains; abstentions on clean consensus earn small gains; false alarms and misses lose stake. The dominant strategy is honest calibration. 
 
@@ -136,7 +135,7 @@ The Warden fails closed. Ambiguous risk is classified high. The Warden cannot lo
 
 ### The Auditor and the User
 
-Only once the Warden has cleared the command does the Auditor perform the final consistency check and Merkle commitment. A primary-tier Auditor reviews the winning candidate against the planner's articulated intent and the Tribunal's grounding. The Auditor approves, swaps to a dissenting cluster's candidate, or revises minor flaws. The verdict is cryptographically committed to the reputation ledger.
+Only once the Warden has cleared the command does the Auditor perform the final consistency check and Merkle commitment. A primary-tier Auditor reviews the winning candidate against the planner's articulated intent and the Tribunal's grounding. The Auditor approves or rejects. The Auditor cannot modify the command or swap to a dissenting cluster after the Warden has cleared it. The verdict is cryptographically committed to the reputation ledger.
 
 The Auditor handles only machine-domain validation: consistency, grounding, procedural correctness. Its competency does not extend to user-domain judgments. Attempting to expand it there would force the Auditor to score against ground truth it cannot access, breaking the proper-scoring-rule structure that makes its stake meaningful.
 
@@ -269,7 +268,7 @@ The User's time is the dominant stake. The Engine is replaceable. The Operator i
 
 I do not propose this as one option among many. I propose it as the shape infrastructure will take, because it is the only shape that survives the constraints infrastructure places on agentic systems.
 
-The implementation is open source. The threat model came from production. The ideas are free; the code is public. **If you are building infrastructure that AI agents will operate, build it on something like this. If you have a better proposal, ship it and prove me wrong.**
+The implementation is open source. The threat model came from production. The ideas are free; the code is public. **If you are building infrastructure that AI agents will operate, build it on something like this. If you have a better proposal, reach out and let's discuss.**
 
 ---
 

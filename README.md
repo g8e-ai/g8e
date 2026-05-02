@@ -78,6 +78,7 @@ flowchart TD
         Tribunal --> Consensus[Uniform Voting & Consensus Check]
         Consensus -- "Low Consensus" --> R2[Round 2: Anonymized Peer Review]
         R2 --> Consensus
+        Consensus -- "Deadlock" --> Sage
     end
 
     Consensus -- "Winner Selected" --> Warden
@@ -99,7 +100,7 @@ flowchart TD
 
 1. **Triage** classifies the request. Trivial questions go to **Dash** (fast-path responder). Anything that may state-change is enriched with operator context and routed to **Sage**.
 2. **Sage** writes an intent document — goals, constraints, success criteria — and hands it to the Tribunal.
-3. **The Tribunal** is five blind validators (Axiom, Concord, Variance, Pragma, Nemesis), each generating a candidate command independently with no visibility into the others. A winner requires ≥2 of 5 supporting votes. If consensus fails or a tie is unresolved by deterministic laddering (Shortest → Non-Nemesis → Alphabetical), an anonymized peer-review round runs.
+3. **The Tribunal** is five blind validators (Axiom, Concord, Variance, Pragma, Nemesis), each generating a candidate command independently with no visibility into the others. A winner requires ≥2 of 5 supporting votes. If consensus fails or a tie is unresolved by deterministic laddering (Shortest → Non-Nemesis), an anonymized peer-review round runs. If Round 2 also fails to reach consensus, a circuit breaker error is triggered and surfaced back to Sage.
 4. **Warden** (running on the Engine) performs a pre-execution risk assessment. It coordinates specialized sub-agents (`warden_command_risk`, `warden_file_risk`, `warden_error`) to validate the command safety profile for blast radius, destructive idioms, and risk before allowing it to proceed. The Warden stakes reputation on accurate classification.
 5. **The Auditor** performs the final consistency check and Merkle commitment once the Warden has cleared the command. The Auditor is bonded 2–3× heavier than any Tribunal member and is itself peer-reviewed across conversations.
 6. **You** review the command and the risk assessment, and sign with a passkey, or you don't.
@@ -185,7 +186,7 @@ Five LLM personas generate candidate commands in parallel, blind to each other:
 | **Pragma** | Convention | Idiomatic, OS-specific, least-surprise |
 | **Nemesis** | Calibrated adversary | Proposes flawed-but-plausible commands to stress the Auditor |
 
-A winner requires ≥2 of 5 supporting votes (Plurality Consensus). If consensus is not reached, or if a tie cannot be resolved by deterministic laddering (Shortest → Non-Nemesis → Alphabetical), anonymized peer review runs and members may converge or hold.
+A winner requires ≥2 of 5 supporting votes (Plurality Consensus). If consensus is not reached, or if a tie cannot be resolved by deterministic laddering (Shortest → Non-Nemesis), anonymized peer review runs and members may converge or hold. If the tie remains unresolved after Round 2, a circuit breaker halts the loop and surfaces the deadlock to Sage.
 
 **The Vortex Principle** is the load-bearing safety property: each agent operates in a sealed information environment, believing it is playing a smaller game than it actually is. Triage doesn't know Sage exists. Sage doesn't know the Tribunal exists. The Tribunal doesn't know one of its members is Nemesis or that the Auditor has cross-conversation memory. Only the Auditor has full visibility, and the Auditor is bonded most heavily and peer-reviewed.
 
