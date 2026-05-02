@@ -1057,10 +1057,11 @@ The following sections are read from the `settings` map inside the settings docu
 
 The Tribunal implements a multi-stage pipeline for producing safe, valid shell commands:
 
-1.  **Generation**: N independent parallel passes (default 5) using distinct Tribunal personas (Axiom, Concord, Variance, etc.).
-2.  **Voting**: Uniform per-member voting over normalised candidates to reach consensus, with deterministic tie-breaking (shortest command → non-Nemesis cluster → alphabetical).
-3.  **Auditor Verification**: The Auditor evaluates the winner and can suggest a safer revision or swap to a dissenting cluster.
-4.  **Safety Enforcement**: Final structural and security validation before returning the command.
+1.  **Round 1 Generation**: N independent parallel passes (default 5) using distinct Tribunal personas (Axiom, Concord, Variance, etc.) in information quarantine.
+2.  **Round 1 Voting**: Uniform per-member voting over normalised candidates. A winner requires ≥2 supporting votes.
+3.  **Round 2 Peer Review (Conditional)**: If no consensus is reached in Round 1, members are presented with anonymized R1 clusters and invited to converge or hold their position.
+4.  **Auditor Verification**: The Auditor evaluates the winning candidate (from R1 or R2) and can suggest a safer revision or swap to a dissenting cluster.
+5.  **Safety Enforcement**: Final structural and security validation before returning the command.
 
 **Enhanced Normalization & Syntax Validation:**
 Tribunal uses robust normalization to extract commands from LLM responses, handling markdown fences, common conversational prefixes (e.g., "Command:"), and trailing explanatory text. It validates shell syntax using `shlex` to ensure balanced quotes and escapes, preventing malformed commands from reaching execution.

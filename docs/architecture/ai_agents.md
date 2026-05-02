@@ -49,10 +49,11 @@ To prevent hallucinations and ensure safety, agents never write shell commands d
     - **Variance**: Focuses on robust edge-case handling (spaces, symlinks, locales).
     - **Pragma**: Focuses on idiomatic conventions for the target OS/shell.
     - **Nemesis**: The "immune system" — produces plausible-but-flawed commands or honestly abstains.
-3. **Consensus & Tie-breaking**: Candidates are clustered by exact match. A winner is selected via ranked vote.
-4. **Warden Analysis**: The **Warden** (running on the Engine) performs a pre-execution risk assessment (Command, File, and Error risk) using specialized sub-agents. The Warden validates the command safety profile *before* the Auditor performs the final commitment. Warden stakes reputation on accurate classification.
-5. **Auditor Review**: Only once the Warden has cleared the command does the **Auditor** judge the winning command against the intent. It can approve (`ok`), provide a `revised` command, or `swap` to a better dissenting cluster. The Auditor performs the final consistency check and Merkle commitment to the reputation ledger.
-6. **Two-Strike Circuit Breaker**: If Warden blocks a HIGH-risk command:
+3. **Consensus & Tie-breaking (Round 1)**: Candidates are clustered by exact match. A winner requires ≥2 supporting votes. If consensus fails or a tie is unresolved by deterministic laddering (Shortest → Non-Nemesis → Alphabetical), the system enters Round 2.
+4. **Round 2 Peer Review (Conditional)**: Members are presented with anonymized command clusters from Round 1 and invited to either converge or hold their position.
+5. **Warden Analysis**: The **Warden** (running on the Engine) performs a pre-execution risk assessment (Command, File, and Error risk) using specialized sub-agents. The Warden validates the command safety profile *before* the Auditor performs the final commitment. Warden stakes reputation on accurate classification.
+6. **Auditor Review**: Only once the Warden has cleared the command does the **Auditor** judge the winning command (from Round 1 or 2) against the intent. It can approve (`ok`), provide a `revised` command, or `swap` to a better dissenting cluster. The Auditor performs the final consistency check and Merkle commitment to the reputation ledger.
+7. **Two-Strike Circuit Breaker**: If Warden blocks a HIGH-risk command:
     - **First Strike**: Assistant model generates contextual feedback; Sage can propose a safer alternative.
     - **Second Strike**: If blocked again, an `AI_AGENT_CONFLICT_DETECTED` event triggers, halting the loop and surfacing an "Agent Conflict" dialog for human intervention.
 7. **Human Approval**: The user reviews the command and risk assessment before execution on the Operator.

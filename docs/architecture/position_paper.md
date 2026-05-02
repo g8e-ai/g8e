@@ -107,11 +107,18 @@ The consensus round is run by a five-member Tribunal of LLM-instantiated persona
 - **Pragma** (convention): pressure for idiomatic OS-specific tools
 - **Nemesis** (calibrated adversary): proposes flawed-but-plausible commands to stress the Auditor
 
-Each member emits a candidate command independently with no visibility into the others. Candidates are clustered by exact match and votes are tallied. A winner requires ≥2 of 5 supporting votes. If consensus is weak, members enter Round 2 with anonymized peer review and may converge or hold.
+Each member emits a candidate command independently with no visibility into the others. Candidates are clustered by exact match and votes are tallied. A winner requires ≥2 of 5 supporting votes (Plurality Consensus). If consensus is not reached, or if a tie cannot be resolved by deterministic laddering, members enter **Round 2: Anonymized Peer Review**.
 
-This is governed by the **Plurality Consensus Rule**:
+In Round 2, the five members are presented with the anonymized command clusters from Round 1 and their support counts. They are invited to either converge on an existing cluster or hold their position. This allows the Tribunal to reach consensus on subtle syntax variations without sacrificing the independence of their initial reasoning.
+
+The voting is governed by the **Plurality Consensus Rule**:
 
 $$ \text{Consensus}(c) \iff |\{ p \in \text{Tribunal} : p(I) = c \}| \geq 2 $$
+
+If multiple clusters share the same maximum vote count ($\geq 2$), a **Deterministic Tie-Breaker Ladder** is applied:
+1. **Shortest Command**: Prefer the cluster with the shortest command string (compositional pressure).
+2. **Nemesis Exclusion**: Prefer a cluster that does not include the Nemesis persona.
+3. **Alphabetical**: Fallback to alphabetical sorting of the command strings.
 
 The Nemesis is the most novel element. Rather than relying on an external red team, I embed a calibrated adversary inside the consensus pool, scored on a proper scoring rule: attacks on flawed consensus that the Auditor confirms earn large gains; abstentions on clean consensus earn small gains; false alarms and misses lose stake. The dominant strategy is honest calibration. 
 
@@ -123,7 +130,7 @@ The realized attack rate becomes a learned signal of actual flaw density in the 
 
 ### The Warden
 
-The Engine runs the Warden, a defensive coordinator that performs pre-execution risk assessment. The Warden classifies command risk (low/medium/high), file operation risk (factoring in Git state — operations that lose history are higher risk than reversible ones), and analyzes failures for auto-fix safety. The Warden validates the safety of a command *before* the Auditor cryptographically commits to the results.
+**The Warden** performs a pre-execution risk assessment. It coordinates specialized sub-agents (`warden_command_risk`, `warden_file_risk`, `warden_error`) to classify command risk (low/medium/high), file operation risk (factoring in Git state — operations that lose history are higher risk than reversible ones), and analyze failures for auto-fix safety. The Warden validates the safety of a command *before* the Auditor cryptographically commits to the results.
 
 The Warden fails closed. Ambiguous risk is classified high. The Warden cannot lower a classification produced by deterministic pattern filters — `rm -rf /` is high regardless of AI judgment. The User is presented with the highest classification any layer produced.
 

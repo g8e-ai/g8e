@@ -23,7 +23,6 @@
     "sage": "sage",
     "dash": "dash"
   },
-  "_naming_note": "GDD \u00a714.1 Naming Collision: The GDD's 'Dash' (triage interrogator) maps to the 'triage' agent here. The 'dash' agent here is the fast-path responder. Do not rename to match GDD; follow this mapping.",
   "tribunal.members": {
     "axiom": "axiom",
     "concord": "concord",
@@ -49,11 +48,8 @@
   },
   "tribunal.tie_break_reason": {
     "shortest": "shortest",
-    "longest": "longest",
-    "fewest_operations": "fewest_operations",
     "excluded_nemesis": "excluded_nemesis",
-    "alphabetical": "alphabetical",
-    "auditor_disambiguation": "auditor_disambiguation"
+    "alphabetical": "alphabetical"
   },
   "agent.metadata": {
     "triage": {

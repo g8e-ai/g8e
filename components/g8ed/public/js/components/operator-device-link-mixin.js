@@ -104,8 +104,8 @@ export const OperatorDeviceLinkMixin = {
         const rawExpiresInHours = parseInt(expirySelect?.value, 10);
         const expiresInHours = Number.isNaN(rawExpiresInHours) ? 48 : rawExpiresInHours;
 
-        if (Number.isNaN(maxUses) || maxUses < 1 || maxUses > 100) {
-            this._showDeviceLinkError(errorDiv, errorText, 'Max uses must be between 1 and 100');
+        if (Number.isNaN(maxUses) || maxUses < 1 || maxUses > 10000) {
+            this._showDeviceLinkError(errorDiv, errorText, 'Max uses must be between 1 and 10,000');
             return;
         }
 
