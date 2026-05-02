@@ -106,13 +106,24 @@ class CommandValidationSettings(G8eBaseModel):
       whitelisted_commands empty to use JSON mode, or populate it to use CSV mode.
 
     - ``enable_blacklisting``: HARD BLOCK-LIST. Commands matching blacklist
-      entries are blocked at L1 safety validation.
+      entries are blocked at L1 safety validation. **This is enabled by default**
+      as a recommended boundary to ensure maximum safety and system integrity.
 
     - ``enable_auto_approve`` / ``auto_approved_commands``: SKIP-APPROVAL list.
       When enabled, commands whose base verb is listed bypass the human
-      approval gate (rubber-stamped). This does NOT permit blacklisted or
-      forbidden commands, and does NOT widen the whitelist when whitelisting
-      is enabled — the command must still pass all hard gates first.
+      approval gate (rubber-stamped). **This is enabled by default** to work in
+      harmony with the built-in reputation staking system, providing peak signal
+      and operational efficiency for low-risk commands.
+
+      A team of heterogeneous agent personas stake their reputation on every
+      command alongside the built-in reputation engine. This multi-layered
+      staking, combined with the auto-approve and blacklist boundaries,
+      creates an ideal operating mode for peak efficiency without compromising
+      safety.
+
+      This does NOT permit blacklisted or forbidden commands, and does NOT
+      widen the whitelist when whitelisting is enabled — the command must still
+      pass all hard gates first.
 
       Two auto-approve sources are unioned at request time:
 
