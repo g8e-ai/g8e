@@ -145,9 +145,11 @@ export class SetupPage {
         const text = document.getElementById('setup-status-msg');
         const icons = { success: 'check_circle', error: 'error', info: 'info', loading: 'sync' };
         bar.className = `setup-status visible ${type}`;
-        icon.textContent = icons[type] || 'info';
-        if (type === 'loading') icon.classList.add('spin');
-        else icon.classList.remove('spin');
+        if (icon) {
+            icon.textContent = icons[type] || 'info';
+            if (type === 'loading') icon.classList.add('spin');
+            else icon.classList.remove('spin');
+        }
         text.textContent = msg;
     }
 
@@ -192,8 +194,8 @@ export class SetupPage {
 
         if (backBtn) backBtn.style.display = this._step > 1 ? '' : 'none';
         if (nextBtn) {
-            const show = this._step === 1 && this._isProviderStepReady();
-            nextBtn.style.display = show ? '' : 'none';
+            // Ensure Next button is always shown on Step 1 so users can see validation errors
+            nextBtn.style.display = '';
         }
     }
 
@@ -265,7 +267,7 @@ export class SetupPage {
         });
 
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && this._step === 1 && this._isProviderStepReady()) {
+            if (e.key === 'Enter' && this._step === 1) {
                 const activeEl = document.activeElement;
                 if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'SELECT')) {
                     e.preventDefault();
@@ -667,7 +669,10 @@ export class SetupPage {
                 if (!inp) return;
                 const hidden = inp.type === 'password';
                 inp.type = hidden ? 'text' : 'password';
-                this.querySelector('.material-symbols-outlined').textContent = hidden ? 'visibility_off' : 'visibility';
+                const icon = this.querySelector('.material-symbols-outlined');
+                if (icon) {
+                    icon.textContent = hidden ? 'visibility_off' : 'visibility';
+                }
             });
         });
     }
@@ -693,21 +698,17 @@ export class SetupPage {
         }[this._searchProvider] || 'None';
 
         const rows = [
-            { icon: 'psychology',     label: 'Providers',       value: providerLabels },
-            { icon: 'model_training', label: 'Primary Model',   value: primaryModelDisplay },
-            { icon: 'assistant',      label: 'Assistant Model', value: assistantModelDisplay },
-            { icon: 'bolt',           label: 'Lite Model',      value: liteModelDisplay },
-            { icon: 'travel_explore', label: 'Web Search',      value: searchProviderLabel },
+            { label: 'Providers',       value: providerLabels },
+            { label: 'Primary Model',   value: primaryModelDisplay },
+            { label: 'Assistant Model', value: assistantModelDisplay },
+            { label: 'Lite Model',      value: liteModelDisplay },
+            { label: 'Web Search',      value: searchProviderLabel },
         ];
 
         const container = document.getElementById('wizard-summary');
         container.replaceChildren(...rows.map(r => {
             const row = document.createElement('div');
             row.className = 'wizard-summary-row';
-
-            const icon = document.createElement('span');
-            icon.className = 'material-symbols-outlined wizard-summary-icon';
-            icon.textContent = r.icon;
 
             const label = document.createElement('span');
             label.className = 'wizard-summary-label';
@@ -717,7 +718,7 @@ export class SetupPage {
             value.className = 'wizard-summary-value';
             value.textContent = r.value;
 
-            row.append(icon, label, value);
+            row.append(label, value);
             return row;
         }));
     }

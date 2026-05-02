@@ -16,7 +16,7 @@ The framework is split into two primary locations:
 
 ### 1. Fleet Assets (`components/g8ee/evals/`)
 This directory contains the infrastructure definition for the evaluation fleet:
-- **`docker-compose.evals.yml`**: Defines a fleet of 3 static nodes (`eval-node-01`, `02`, `03`).
+- **`docker-compose.evals.yml`**: Defines a dynamically scalable fleet of nodes (e.g., `evals-eval-node-1`).
 - **`containers/eval-node/`**: Contains the `Dockerfile` and `entrypoint.sh` for the operator environment.
 - **`gold_sets/`**: JSON scenario definitions (Accuracy, Benchmark, Privacy).
 
@@ -86,7 +86,7 @@ Results are aggregated into a `FullReport` and persisted to `reports/evals/` in 
    ```
 3. **View logs for a specific node**
    ```bash
-   ./g8e evals logs eval-node-01
+   ./g8e evals logs evals-eval-node-1
    ```
 4. **Run a gold set**
    ```bash

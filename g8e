@@ -1175,7 +1175,7 @@ case "$TOP" in
                     exit 1
                 fi
                 echo "  Bringing up $_nodes eval nodes..."
-                DEVICE_TOKEN="$_device_token" COMPOSE_PROJECT_NAME=evals docker compose -f "$EVALS_COMPOSE" up -d --build --scale eval-node-01=1 --scale eval-node-02=1 --scale eval-node-03=1
+                DEVICE_TOKEN="$_device_token" COMPOSE_PROJECT_NAME=evals docker compose -f "$EVALS_COMPOSE" up -d --build --scale eval-node="$_nodes"
                 echo ""
                 echo "  Eval fleet is up. Check status with: ./g8e evals status"
                 exit 0 ;;
@@ -1198,9 +1198,14 @@ case "$TOP" in
                 fi
                 docker logs -f "${3}"
                 exit 0 ;;
+            list)
+                _banner "evals list"
+                _ensure_g8ep "evals list"
+                docker exec -i -e "G8E_SHARED_DIR=/app/shared" -e "PYTHONPATH=/app/components/g8ee:/app/shared" "$CONTAINER" python -m app.evals.runner.cli list
+                ;;
             *)
                 echo "[g8e] unknown evals subcommand: '$SUB'" >&2
-                echo "  Valid: up, down, status, logs" >&2
+                echo "  Valid: run, list, up, down, status, logs" >&2
                 exit 1 ;;
         esac ;;
 

@@ -24,12 +24,55 @@ from .client import G8edClient
 from .fleet import FleetManager
 from .metrics import EvalRow, FullReport
 from .reporter import compute_summaries, persist_report, render_text_table
-from .scorer import score_benchmark_scenario
+from .scorer import (
+    score_accuracy_scenario_llm,
+    score_benchmark_scenario,
+    score_privacy_scenario,
+)
 
 # components/g8ee/ — anchors for sibling resources (evals fleet, reports/).
 _G8EE_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 _COMPOSE_FILE = _G8EE_ROOT / "evals" / "docker-compose.evals.yml"
 _REPORTS_DIR = _G8EE_ROOT / "reports" / "evals"
+_GOLD_SETS_DIR = _G8EE_ROOT / "evals" / "gold_sets"
+
+
+def get_available_gold_sets() -> dict[str, Path]:
+    """Auto-discover available gold sets from the gold_sets directory.
+    
+    Returns:
+        Dict mapping short names (e.g., 'benchmark') to full paths.
+    """
+    gold_sets = {}
+    if _GOLD_SETS_DIR.exists():
+        for json_file in _GOLD_SETS_DIR.glob("*.json"):
+            name = json_file.stem  # e.g., 'benchmark' from 'benchmark.json'
+            gold_sets[name] = json_file
+    return gold_sets
+
+
+def resolve_gold_set_path(gold_set_arg: str | None) -> Path | None:
+    """Resolve a gold set argument to a full path.
+    
+    Args:
+        gold_set_arg: Either a short name ('benchmark') or full path.
+        
+    Returns:
+        Path to the gold set file, or None if not found.
+    """
+    if not gold_set_arg:
+        return None
+    
+    path = Path(gold_set_arg)
+    if path.exists():
+        return path.resolve()
+    
+    # Try as a short name
+    gold_sets = get_available_gold_sets()
+    if gold_set_arg in gold_sets:
+        return gold_sets[gold_set_arg]
+    
+    return None
 
 
 async def run_dry_run(device_token: str, g8ed_url: str = "https://g8e.local") -> None:
@@ -79,6 +122,7 @@ async def run_scenario(
     g8ed_url: str,
     fleet: FleetManager,
     node_id: str,
+    judge: EvalJudge,
 ) -> EvalRow:
     """Run a single scenario against an eval node.
 
@@ -88,6 +132,7 @@ async def run_scenario(
         g8ed_url: g8ed API base URL
         fleet: FleetManager instance
         node_id: Container name to use
+        judge: EvalJudge instance for accuracy scoring
 
     Returns:
         EvalRow with results
@@ -95,6 +140,7 @@ async def run_scenario(
     start_time = datetime.now(UTC)
     scenario_id = scenario["id"]
     user_query = scenario["user_query"]
+    dimension = scenario.get("dimension", "accuracy")
 
     try:
         async with G8edClient(g8ed_url) as client:
@@ -114,7 +160,10 @@ async def run_scenario(
                 if event.get("type") == "text_chunk":
                     response_text += event.get("data", "")
                 elif event.get("type") == "tool_call":
-                    tool_calls.append(event)
+                    # Tool calls from g8ed might have slightly different shape than SDK
+                    # Extract data from the event
+                    tool_data = event.get("data", {})
+                    tool_calls.append(tool_data)
                 elif event.get("type") == "approval_required":
                     approval_events.append(event)
                     approval_id = event.get("approval_id")
@@ -123,10 +172,11 @@ async def run_scenario(
 
         latency_ms = (datetime.now(UTC) - start_time).total_seconds() * 1000
 
+        # Select scoring path based on scenario content
         if scenario.get("expected_payload"):
             passed, failures = score_benchmark_scenario(scenario, tool_calls)
             return EvalRow(
-                dimension=scenario.get("dimension", "accuracy"),
+                dimension=dimension,
                 suite="evals_runner",
                 scenario_id=scenario_id,
                 category=scenario.get("category", ""),
@@ -136,8 +186,38 @@ async def run_scenario(
                 error="; ".join(failures) if failures else None,
                 details={"tool_calls": tool_calls, "failures": failures},
             )
+        
+        if scenario.get("secret"):
+            passed, details = score_privacy_scenario(scenario, response_text, []) # egress_events empty for now
+            return EvalRow(
+                dimension="privacy",
+                suite="evals_runner",
+                scenario_id=scenario_id,
+                category=scenario.get("category", ""),
+                passed=passed,
+                score=None,
+                latency_ms=latency_ms,
+                details=details,
+            )
+
+        if scenario.get("expected_behavior") or scenario.get("required_concepts"):
+            passed, score, reasoning = await score_accuracy_scenario_llm(
+                scenario, response_text, tool_calls, judge
+            )
+            return EvalRow(
+                dimension="accuracy",
+                suite="evals_runner",
+                scenario_id=scenario_id,
+                category=scenario.get("category", ""),
+                passed=passed,
+                score=score,
+                latency_ms=latency_ms,
+                error=reasoning if not passed else None,
+                details={"reasoning": reasoning},
+            )
+
         return EvalRow(
-            dimension=scenario.get("dimension", "accuracy"),
+            dimension=dimension,
             suite="evals_runner",
             scenario_id=scenario_id,
             category=scenario.get("category", ""),
@@ -271,7 +351,7 @@ async def run_full_eval(
         rows = []
 
         for i, scenario in enumerate(operator_bound_scenarios):
-            node_id = f"eval-node-{(i % nodes) + 1:02d}"
+            node_id = f"evals-eval-node-{(i % nodes) + 1}"
             print(f"[evals] [{i+1}/{len(operator_bound_scenarios)}] Running {scenario['id']} on {node_id}")
 
             row = await run_scenario(scenario, device_token, g8ed_url, fleet, node_id, judge)
@@ -308,96 +388,112 @@ async def run_full_eval(
 def main() -> None:
     """CLI entrypoint."""
     parser = argparse.ArgumentParser(description="g8e evals runner")
-    parser.add_argument(
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # 'run' subcommand
+    run_parser = subparsers.add_parser("run", help="Run evals against a gold set")
+    run_parser.add_argument(
         "--device-token",
         required=False,
         help="Device link token for operator authentication (optional if fleet is running)",
     )
-    parser.add_argument(
+    run_parser.add_argument(
         "--g8ed-url",
         default="https://g8e.local",
         help="g8ed API base URL (default: https://g8e.local)",
     )
-    parser.add_argument(
+    run_parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Run one canned chat and tear down (for testing)",
     )
-    parser.add_argument(
+    run_parser.add_argument(
         "--gold-set",
-        help="Path to gold set JSON file (e.g., gold_sets/benchmark.json)",
+        default="benchmark",
+        help="Gold set name or path (e.g., 'benchmark', 'accuracy', 'privacy', or full path). Default: 'benchmark'",
     )
-    parser.add_argument(
+    run_parser.add_argument(
         "--nodes",
         type=int,
         default=3,
         help="Number of eval nodes to use (default: 3)",
     )
-    parser.add_argument(
+    run_parser.add_argument(
         "--parallel",
         type=int,
         default=1,
         help="Number of scenarios to run in parallel (default: 1)",
     )
-    parser.add_argument(
+    run_parser.add_argument(
         "-p", "--llm-provider",
         help="LLM provider (openai, anthropic, gemini, ollama, llamacpp, g8el)",
     )
-    parser.add_argument(
+    run_parser.add_argument(
         "-m", "--primary-model",
         help="Primary LLM model",
     )
-    parser.add_argument(
+    run_parser.add_argument(
         "-a", "--assistant-model",
         help="Assistant LLM model",
     )
-    parser.add_argument(
+    run_parser.add_argument(
         "-l", "--lite-model",
         help="Lite LLM model",
     )
-    parser.add_argument(
+    run_parser.add_argument(
         "-e", "--llm-endpoint-url",
         help="LLM provider endpoint URL",
     )
-    parser.add_argument(
+    run_parser.add_argument(
         "-k", "--llm-api-key",
         help="LLM provider API key",
     )
-    parser.add_argument(
+    run_parser.add_argument(
         "--judge-model",
         default="gemini-2.5-pro",
         help="Eval judge model name (default: gemini-2.5-pro)",
     )
 
+    # 'list' subcommand
+    list_parser = subparsers.add_parser("list", help="List available gold sets")
+
     args = parser.parse_args()
 
-    if args.dry_run:
-        if not args.device_token:
-            print("[evals] Error: --device-token is required for --dry-run")
-            sys.exit(1)
-        asyncio.run(run_dry_run(args.device_token, args.g8ed_url))
-    elif args.gold_set:
-        gold_set_path = Path(args.gold_set)
-        if not gold_set_path.exists():
-            print(f"[evals] Gold set file not found: {args.gold_set}")
-            sys.exit(1)
-        asyncio.run(run_full_eval(
-            args.device_token,
-            str(gold_set_path),
-            args.g8ed_url,
-            args.nodes,
-            args.parallel,
-            args.judge_model,
-            args.llm_provider,
-            args.primary_model,
-            args.assistant_model,
-            args.lite_model,
-            args.llm_endpoint_url,
-            args.llm_api_key,
-        ))
-    else:
-        print("[evals] Must specify --dry-run or --gold-set")
-        sys.exit(1)
+    if args.command == "list":
+        gold_sets = get_available_gold_sets()
+        print("[evals] Available gold sets:")
+        for name, path in sorted(gold_sets.items()):
+            print(f"  {name}: {path}")
+        sys.exit(0)
+
+    if args.command == "run":
+        if args.dry_run:
+            if not args.device_token:
+                print("[evals] Error: --device-token is required for --dry-run")
+                sys.exit(1)
+            asyncio.run(run_dry_run(args.device_token, args.g8ed_url))
+        else:
+            gold_set_path = resolve_gold_set_path(args.gold_set)
+            if not gold_set_path:
+                print(f"[evals] Gold set not found: {args.gold_set}")
+                print("[evals] Available gold sets:")
+                for name, path in sorted(get_available_gold_sets().items()):
+                    print(f"  {name}: {path}")
+                sys.exit(1)
+            asyncio.run(run_full_eval(
+                args.device_token,
+                str(gold_set_path),
+                args.g8ed_url,
+                args.nodes,
+                args.parallel,
+                args.judge_model,
+                args.llm_provider,
+                args.primary_model,
+                args.assistant_model,
+                args.lite_model,
+                args.llm_endpoint_url,
+                args.llm_api_key,
+            ))
 
 
 if __name__ == "__main__":
