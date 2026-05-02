@@ -127,9 +127,9 @@ class CommandValidationSettings(G8eBaseModel):
         "",
         description="Comma-separated list of whitelisted commands (e.g., uptime,df,free). When non-empty, this REPLACES the JSON whitelist entirely and uses only basic character-level validation. The JSON whitelist's per-command safe_options and validation regexes are NOT applied in CSV mode. Leave empty to use JSON whitelist with rich validation.",
     )
-    enable_blacklisting: bool = Field(False)
+    enable_blacklisting: bool = Field(True)
     enable_auto_approve: bool = Field(
-        False,
+        True,
         description="If true, commands listed in auto_approved_commands bypass human approval. Independent of whitelisting.",
     )
     auto_approved_commands: str = Field(

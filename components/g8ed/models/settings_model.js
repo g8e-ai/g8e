@@ -517,7 +517,7 @@ export const USER_SETTINGS = Object.freeze([
         type: 'toggle',
         secret: false,
         placeholder: '',
-        default: false,
+        default: true,
     }),
     Object.freeze({
         key: 'blacklisted_commands_csv',
@@ -544,7 +544,7 @@ export const USER_SETTINGS = Object.freeze([
         type: 'toggle',
         secret: false,
         placeholder: '',
-        default: false,
+        default: true,
     }),
     Object.freeze({
         key: 'auto_approved_commands_csv',
