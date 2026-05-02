@@ -321,8 +321,11 @@ class TestExecuteCommandTargetSystems:
         g8e_context = self._make_g8e_context()
         args = ExecutorCommandArgs(command="ls", request="test")
 
-        from app.models.settings import G8eeUserSettings, LLMSettings
-        request_settings = G8eeUserSettings(llm=LLMSettings())
+        from app.models.settings import CommandValidationSettings, G8eeUserSettings, LLMSettings
+        request_settings = G8eeUserSettings(
+            llm=LLMSettings(),
+            command_validation=CommandValidationSettings(enable_auto_approve=False),
+        )
         await service.execute_command(args, g8e_context, investigation, request_settings)
 
         assert len(approval_service.command_approval_calls) == 1
@@ -363,8 +366,11 @@ class TestExecuteCommandTargetSystems:
             target_operators=["op-1", "op-2"],
         )
 
-        from app.models.settings import G8eeUserSettings, LLMSettings
-        request_settings = G8eeUserSettings(llm=LLMSettings())
+        from app.models.settings import CommandValidationSettings, G8eeUserSettings, LLMSettings
+        request_settings = G8eeUserSettings(
+            llm=LLMSettings(),
+            command_validation=CommandValidationSettings(enable_auto_approve=False),
+        )
         await service.execute_command(args, g8e_context, investigation, request_settings)
 
         assert len(approval_service.command_approval_calls) == 1
@@ -405,8 +411,11 @@ class TestExecuteCommandTargetSystems:
             target_operators=["all"],
         )
 
-        from app.models.settings import G8eeUserSettings, LLMSettings
-        request_settings = G8eeUserSettings(llm=LLMSettings())
+        from app.models.settings import CommandValidationSettings, G8eeUserSettings, LLMSettings
+        request_settings = G8eeUserSettings(
+            llm=LLMSettings(),
+            command_validation=CommandValidationSettings(enable_auto_approve=False),
+        )
         result = await service.execute_command(args, g8e_context, investigation, request_settings)
 
         # One approval covered the entire batch, with a single batch_id.
@@ -506,6 +515,7 @@ class TestExecuteCommandTargetSystems:
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
             command_validation=CommandValidationSettings(
+                enable_auto_approve=False,
                 enable_whitelisting=True,
                 whitelisted_commands="uptime,df,free",
             ),
@@ -767,8 +777,11 @@ class TestExecuteCommandTargetSystems:
         g8e_context = self._make_g8e_context()
         args = ExecutorCommandArgs(command="df -h", request="disk check")
 
-        from app.models.settings import G8eeUserSettings, LLMSettings
-        request_settings = G8eeUserSettings(llm=LLMSettings())
+        from app.models.settings import CommandValidationSettings, G8eeUserSettings, LLMSettings
+        request_settings = G8eeUserSettings(
+            llm=LLMSettings(),
+            command_validation=CommandValidationSettings(enable_auto_approve=False),
+        )
         await service.execute_command(args, g8e_context, investigation, request_settings)
 
         assert len(approval_service.command_approval_calls) == 1
