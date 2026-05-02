@@ -710,13 +710,13 @@ Stage 2: Weighted Majority Voting (`voter.py`)
   Deterministic tie-breaking ladder:
     1. Shortest command wins (compositional pressure)
     2. Non-Nemesis cluster wins over Nemesis-including cluster
-    3. Alphabetical (final deterministic fallback)
+  If Round 2 Peer Review fails to reach consensus, trigger Circuit Breaker (Deadlock)
   │
   ▼
 Stage 3: Auditor Verification (Optional)
   Enabled via `llm_command_gen_verifier=true`.
-  Uses the primary model to review the winning candidate or disambiguate ties.
-  Auditor can: Approve (OK), Revise (REVISED), or Swap (SWAP to different cluster).
+  Uses the primary model to review the winning candidate.
+  Auditor can: Approve (OK) or Reject (REJECT).
   │
   ▼
 Final command presented to human for approval

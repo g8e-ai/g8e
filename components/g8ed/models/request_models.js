@@ -376,7 +376,7 @@ export class G8EPOperatorRelaunchRequest extends G8eBaseModel {
 export class CreateDeviceLinkRequest extends G8eBaseModel {
     static fields = {
         name:              { type: F.string,  default: null },
-        max_uses:          { type: F.number,  default: 1, min: 1 },
+        max_uses:          { type: F.number,  default: 1, min: 1, max: 10000 },
         expires_in_hours:  { type: F.number,  default: 24, min: 1 },
     };
 }

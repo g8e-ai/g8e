@@ -256,13 +256,13 @@ describe('OperatorDeviceLinkMixin [UNIT - jsdom]', () => {
 
         it('shows error if max uses is out of range (above max)', async () => {
             const ctx = createMixinContext();
-            elements['#device-link-max-uses'].value = '101';
+            elements['#device-link-max-uses'].value = '10001';
 
             const spy = vi.spyOn(ctx, '_showDeviceLinkError');
 
             await ctx._createDeviceLink(overlay);
 
-            const expectedMsg = 'Max uses must be between 1 and 100';
+            const expectedMsg = 'Max uses must be between 1 and 10,000';
             expect(spy).toHaveBeenCalledWith(
                 elements['#device-link-create-error'],
                 elements['#device-link-create-error-text'],
@@ -281,7 +281,7 @@ describe('OperatorDeviceLinkMixin [UNIT - jsdom]', () => {
 
             await ctx._createDeviceLink(overlay);
 
-            const expectedMsg = 'Max uses must be between 1 and 100';
+            const expectedMsg = 'Max uses must be between 1 and 10,000';
             expect(spy).toHaveBeenCalledWith(
                 elements['#device-link-create-error'],
                 elements['#device-link-create-error-text'],
@@ -299,7 +299,7 @@ describe('OperatorDeviceLinkMixin [UNIT - jsdom]', () => {
 
             await ctx._createDeviceLink(overlay);
 
-            const expectedMsg = 'Max uses must be between 1 and 100';
+            const expectedMsg = 'Max uses must be between 1 and 10,000';
             expect(spy).toHaveBeenCalledWith(
                 elements['#device-link-create-error'],
                 elements['#device-link-create-error-text'],

@@ -58,8 +58,15 @@ from app.llm.llm_dataclasses import (
     UsageMetadata,
 )
 
-# Import schema generation from dedicated module
-from app.llm.llm_schema import schema_from_model
+# Import schema generation from dedicated module (lazy wrapper to break circular import)
+def schema_from_model(model_cls: type, required_override: list[str] | None = None) -> Schema:
+    """Derive a Schema from a G8eBaseModel subclass.
+
+    This is a lazy wrapper around app.llm.llm_schema.schema_from_model to break
+    circular imports between llm_types -> llm_schema -> models -> agent -> llm_types.
+    """
+    from app.llm.llm_schema import schema_from_model as _schema_from_model
+    return _schema_from_model(model_cls, required_override)
 
 # Re-export for backwards compatibility
 __all__ = [

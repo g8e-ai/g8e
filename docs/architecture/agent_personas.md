@@ -76,7 +76,7 @@ A five-member panel that translates Sage's intent into an executable command thr
     - `warden_error`: Analyzes failures for `AUTO_FIXABLE` or `ESCALATE`.
 - **Staking**: Warden stakes reputation on accurate risk classification. It earns reputation for correctly identifying dangerous commands and loses reputation for blocking safe operations (over-caution) or allowing dangerous ones (under-caution).
 - **Two-Strike Circuit Breaker**: When Warden blocks a command:
-    - **First Strike**: Assistant model generates contextual feedback explaining why the command was blocked and suggesting safer alternatives. Sage receives this feedback and can propose a revised command.
+    - **First Strike**: An assistant-tier model generates contextual feedback explaining why the command was blocked and suggesting safer alternatives. Sage receives this feedback and can propose a revised command.
     - **Second Strike**: If Warden blocks Sage's revised command, the system triggers an `AI_AGENT_CONFLICT_DETECTED` event, halts the ReAct loop, and surfaces an "Agent Conflict" dialog to the user for human intervention.
 
 ### 6. Auditor
@@ -85,7 +85,7 @@ A five-member panel that translates Sage's intent into an executable command thr
 - **Model Tier**: `primary`
 - **Purpose**: Final judge of Tribunal candidates. Operates in `unanimous`, `majority`, or `tied` modes. Only once the Warden has cleared the command does the Auditor perform the final consistency check and Merkle commitment.
 - **Reputation**: The only agent that reads `reputation_state` (cross-chain memory) and writes `reputation_commitment` via Merkle roots.
-- **Output**: `ok`, `revised:<command>`, or `swap:<cluster_id>`.
+- **Output**: `ok` or `reject`.
 
 ### 7. Specialists
 - **Scribe** (`title`): Generates concise 3-7 word case titles.

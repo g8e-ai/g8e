@@ -103,9 +103,6 @@ class TieBreakReason(StrEnum):
     held the highest vote count and one of the deterministic tie-break
     rules resolved it.
     """
-    SHORTEST                = _AGENTS["tribunal.tie_break_reason"]["shortest"]
-    LONGEST                 = _AGENTS["tribunal.tie_break_reason"]["longest"]
-    FEWEST_OPERATIONS       = _AGENTS["tribunal.tie_break_reason"]["fewest_operations"]
-    EXCLUDED_NEMESIS        = _AGENTS["tribunal.tie_break_reason"]["excluded_nemesis"]
-    ALPHABETICAL            = _AGENTS["tribunal.tie_break_reason"]["alphabetical"]
-    AUDITOR_DISAMBIGUATION = _AGENTS["tribunal.tie_break_reason"]["auditor_disambiguation"]
+    SHORTEST         = _AGENTS["tribunal.tie_break_reason"]["shortest"]
+    EXCLUDED_NEMESIS = _AGENTS["tribunal.tie_break_reason"]["excluded_nemesis"]
+    ALPHABETICAL     = _AGENTS["tribunal.tie_break_reason"]["alphabetical"]

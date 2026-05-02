@@ -1436,47 +1436,6 @@ class TestRunVerificationStage:
         assert auditor_reason == AuditorReason.REVISED_FROM_DISSENT
 
     @pytest.mark.asyncio
-    async def test_tied_mode_auditor_disambiguation(self):
-        """Auditor must disambiguate in tied mode (cannot return ok)."""
-        from app.models.agents.tribunal import CandidateCommand, VoteBreakdown
-        vote_breakdown = VoteBreakdown(
-            candidates_by_member={},
-            candidates_by_command={"ls -la": ["axiom"], "ls -l": ["concord"]},
-            winner="ls -la",
-            winner_supporters=["axiom"],
-            dissenters_by_command={"ls -l": ["concord"]},
-            consensus_strength=0.5,
-            tie_broken=True,
-            tie_break_reason=None,
-        )
-        tied_candidates = [
-            CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
-            CandidateCommand(command="ls -l", pass_index=1, member=TribunalMember.CONCORD),
-        ]
-        mock_response = MagicMock()
-        mock_response.text = '{"status": "swap", "swap_to_cluster": "cluster_a"}'
-        mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
-        emitter = TribunalEmitter(None, _make_mock_g8e_context())
-        emitter.correlation_id = "tribunal_test_command"
-
-        final_cmd, outcome, passed, revision, auditor_reason, commitment_id, risk_analysis = await _run_audit_stage(
-            provider=mock_provider, model="test-model", request="list files", guidelines="",
-            vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=tied_candidates,
-            operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-            auditor_enabled=True,
-            emitter=emitter,
-            command_constraints_message="No whitelist or blacklist constraints are active.",
-            settings=_MOCK_USER_SETTINGS,
-            **_AUDIT_STAGE_REPUTATION_KWARGS,
-        )
-
-        assert final_cmd == "ls -la"
-        assert outcome == CommandGenerationOutcome.VERIFIED
-        assert passed is True
-        assert revision is None
-        assert auditor_reason == AuditorReason.SWAPPED_TO_DISSENTER
-
-    @pytest.mark.asyncio
     async def test_malformed_auditor_response_retries_once(self):
         """Auditor returns malformed JSON, retries once, then succeeds."""
         from app.models.agents.tribunal import VoteBreakdown
