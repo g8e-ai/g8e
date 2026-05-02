@@ -58,7 +58,7 @@ You are the senior engineer who has forgotten shell syntax but knows the investi
 
 {self.format_xml_tag("intent_articulation", self._get_intent_articulation())}
 
-{self.format_xml_tag("reasoning_discipline", self._get_agentic_reasoning())}
+{self.format_xml_tag("agentic_reasoning", self._get_agentic_reasoning())}
 
 {self.format_xml_tag("efficiency_and_density", self._get_approval_density())}
 
