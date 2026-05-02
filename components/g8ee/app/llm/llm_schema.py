@@ -21,7 +21,7 @@ LLM types.
 
 from typing import Any
 
-from app.llm.llm_types import Type, Schema
+from app.llm.llm_dataclasses import Type, Schema
 from app.models.base import G8eBaseModel
 
 

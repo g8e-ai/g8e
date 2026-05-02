@@ -66,9 +66,9 @@ This also reframes the user's experience economically. The user's time stake is 
 π_s = ρ · 𝟙[Round_1_consensus ∧ Warden_ok ∧ Auditor_ok] − σ · graduated_loss(verdict)
 ```
 
-with graduated_loss escalating: `R2_converges < Auditor_revises < Auditor_swaps < round_fails`. Sage is rewarded for intent *quality*, not for showing work. This compresses the ledger and reduces `τ_total`.
+with graduated_loss escalating: `R2_converges < round_fails`. Sage is rewarded for intent *quality*, not for showing work. This compresses the ledger and reduces `τ_total`.
 
-**Honest Tribunal members** stake per-lens. Auditor annotates the winning command with which dimensions (composition, safety, edge-cases, convention) were load-bearing; a member's reward is proportional to their lens's contribution to the winner. In Round 2, members are scored on "held correctly under attack" vs. "absorbed correctly upon dissent" — diversity is rewarded, but so is convergence under evidence.
+**Honest Tribunal members** stake per-lens. Auditor annotates the winning command with which dimensions (composition, safety, edge-cases, convention) were load-bearing; a member's reward is proportional to their lens's contribution to the winner. In Round 2 (Anonymized Peer Review), members are scored on "held correctly under attack" vs. "absorbed correctly upon dissent" — diversity is rewarded, but so is convergence under evidence.
 
 **Nemesis** plays a proper scoring rule on calibration:
 

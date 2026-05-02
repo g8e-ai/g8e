@@ -27,6 +27,7 @@ import { _DOCUMENT_IDS } from './shared.js';
 export const DEVICE_LINK_TTL_SECONDS = 3600;
 export const DEVICE_LINK_TTL_MIN_SECONDS = 60;
 export const DEVICE_LINK_TTL_MAX_SECONDS = 604800;
+export const DEVICE_LINK_MAX_USES = 10000;
 export const SESSION_AUTH_LISTEN_TTL_MS = 60_000;
 
 // ---------------------------------------------------------------------------

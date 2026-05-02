@@ -28,9 +28,7 @@ class FleetManager:
         cmd = [
             "docker", "compose", "-f", str(self.compose_file),
             "up", "-d",
-            "--scale", "eval-node-01=1",
-            "--scale", "eval-node-02=1",
-            "--scale", "eval-node-03=1",
+            "--scale", f"eval-node={nodes}",
         ]
         subprocess.run(cmd, env=env, check=True)
 
@@ -53,16 +51,16 @@ class FleetManager:
         """Restart a specific eval node.
 
         Args:
-            node_id: Container name (e.g., eval-node-01)
+            node_id: Container name (e.g., evals-eval-node-1)
         """
-        cmd = ["docker", "compose", "-f", str(self.compose_file), "restart", node_id]
+        cmd = ["docker", "restart", node_id]
         subprocess.run(cmd, env=self._env, check=True)
 
     def logs(self, node_id: str, tail: int = 200) -> str:
         """Get logs for a specific node.
 
         Args:
-            node_id: Container name (e.g., eval-node-01)
+            node_id: Container name (e.g., evals-eval-node-1)
             tail: Number of lines from the end of logs
 
         Returns:

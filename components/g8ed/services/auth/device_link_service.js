@@ -35,7 +35,7 @@ import { logger } from '../../utils/logger.js';
 import { OperatorStatus, OperatorType } from '../../constants/operator.js';
 import { DeviceLinkStatus } from '../../constants/auth.js';
 import { KVKey } from '../../constants/kv_keys.js';
-import { TokenFormat, DeviceLinkError, DEVICE_LINK_TTL_SECONDS, DEVICE_LINK_TTL_MIN_SECONDS, DEVICE_LINK_TTL_MAX_SECONDS, LOCK_TTL_MS, LOCK_RETRY_DELAY_MS, LOCK_MAX_RETRIES } from '../../constants/auth.js';
+import { TokenFormat, DeviceLinkError, DEVICE_LINK_TTL_SECONDS, DEVICE_LINK_TTL_MIN_SECONDS, DEVICE_LINK_TTL_MAX_SECONDS, DEVICE_LINK_MAX_USES, LOCK_TTL_MS, LOCK_RETRY_DELAY_MS, LOCK_MAX_RETRIES } from '../../constants/auth.js';
 import { G8eHttpContext } from '../../models/request_models.js';
 
 export function isValidTokenFormat(token) {
@@ -157,7 +157,7 @@ class DeviceLinkService {
         if (max_uses === undefined || max_uses === null) {
             return { success: false, error: DeviceLinkError.MAX_USES_INVALID };
         }
-        if (max_uses < 1 || max_uses > 100) {
+        if (max_uses < 1 || max_uses > DEVICE_LINK_MAX_USES) {
             return { success: false, error: DeviceLinkError.MAX_USES_INVALID };
         }
 

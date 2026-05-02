@@ -199,7 +199,7 @@ describe('DeviceLinkService', () => {
             const result = await service.createLink({
                 user_id: mockG8eContext.user_id,
                 organization_id: mockG8eContext.organization_id,
-                max_uses: 101
+                max_uses: 10001
             });
 
             expect(result.success).toBe(false);
