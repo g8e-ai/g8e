@@ -1,7 +1,6 @@
 # AI-Powered, Human-Driven Infrastructure
 
 *Danny Barbour · [github.com/g8e-ai/g8e](https://github.com/g8e-ai/g8e)*
-*Available for short-term engagements: agent governance review, threat modeling, eval pipeline design. 1–4 week scopes.*
 
 ---
 
@@ -279,4 +278,4 @@ The implementation is open source. The threat model came from production. The id
 - *Operator Architecture Reference* — implementation specification
 - *The Vortex Principle: Information-Theoretic Foundations of Honest Consensus*
 
-Available for short-term engagements: agent governance review, threat modeling, eval pipeline design. 1–4 week scopes. [danny@g8e.ai](mailto:danny@g8e.ai)
+I want to join your team. Contact me at [danny@g8e.ai](mailto:danny@g8e.ai)
