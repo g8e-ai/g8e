@@ -129,6 +129,7 @@ class FakeExecutionService:
         self.resolve_calls.append({
             "operator_documents": operator_documents,
             "target_operator": target_operator,
+            "target_operators": [target_operator] if target_operator else ["all"],
             "tool_name": tool_name,
         })
         if self._resolve_error:

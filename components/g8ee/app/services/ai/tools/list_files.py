@@ -54,7 +54,7 @@ async def handle(
     request_settings: G8eeUserSettings,
     execution_id: str,
 ) -> ToolResult:
-    args = convert_args_to_payload(tool_args, FsListRequestPayload, execution_id)
+    args = convert_args_to_payload(tool_args, FsListRequestPayload, execution_id, investigation)
     logger.info(
         "[LIST_DIRECTORY] Path: %s max_depth: %s max_entries: %s",
         args.path, args.max_depth, args.max_entries,

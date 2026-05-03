@@ -59,7 +59,8 @@ async def test_execute_file_edit_read_returns_content():
         file_path="/etc/test",
         operation=FileOperation.READ,
         justification="Reading test file",
-        execution_id="exec-123"
+        execution_id="exec-123",
+        target_operators=["all"]
     )
     g8e_context = G8eHttpContext(
         case_id="case-123",
@@ -117,7 +118,8 @@ async def test_execute_file_edit_read_broadcasts_content():
         file_path="/etc/test",
         operation=FileOperation.READ,
         justification="Reading test file",
-        execution_id="exec-123"
+        execution_id="exec-123",
+        target_operators=["all"]
     )
     g8e_context = G8eHttpContext(
         case_id="case-123",

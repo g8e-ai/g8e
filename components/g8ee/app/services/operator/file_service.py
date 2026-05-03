@@ -138,10 +138,11 @@ class OperatorFileService:
 
             # 2. Resolve operator
             operator_documents = investigation.operator_documents if investigation else []
+            target_anchor = args.target_operators[0] if args.target_operators else "all"
             try:
                 resolved_operator = self.execution_service.resolve_target_operator(
                     operator_documents=operator_documents,
-                    target_operator=args.target_operator,
+                    target_operator=target_anchor,
                     tool_name="file_edit_on_operator",
                 )
             except Exception as e:
@@ -324,10 +325,11 @@ class OperatorFileService:
 
             # 1. Resolve operator
             operator_documents = investigation.operator_documents if investigation else []
+            target_anchor = args.target_operators[0] if args.target_operators else "all"
             try:
                 resolved_operator = self.execution_service.resolve_target_operator(
                     operator_documents=operator_documents,
-                    target_operator=args.target_operator,
+                    target_operator=target_anchor,
                     tool_name="fetch_file_history",
                 )
             except Exception as e:
@@ -436,10 +438,11 @@ class OperatorFileService:
 
             # 1. Resolve operator
             operator_documents = investigation.operator_documents if investigation else []
+            target_anchor = args.target_operators[0] if args.target_operators else "all"
             try:
                 resolved_operator = self.execution_service.resolve_target_operator(
                     operator_documents=operator_documents,
-                    target_operator=args.target_operator,
+                    target_operator=target_anchor,
                     tool_name="fetch_file_diff",
                 )
             except Exception as e:

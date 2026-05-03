@@ -90,14 +90,14 @@ def _make_args(
     port: int = 443,
     host: str = "google.com",
     protocol: str = "tcp",
-    target_operator: str | None = None,
+    target_operators: list[str] | None = None,
     execution_id: str | None = None,
 ) -> CheckPortRequestPayload:
     return CheckPortRequestPayload(
         port=port,
         host=host,
         protocol=protocol,
-        target_operator=target_operator,
+        target_operators=target_operators or ["all"],
         execution_id=execution_id or "test-exec-id",
     )
 
@@ -291,7 +291,7 @@ class TestOperatorResolution:
         )
         investigation = _make_investigation()
         result = await service.execute_port_check(
-            _make_args(target_operator="bad"), investigation, _make_context(),
+            _make_args(target_operators=["bad"]), investigation, _make_context(),
         )
         assert result.success is False
         assert result.error_type == CommandErrorType.OPERATOR_RESOLUTION_ERROR
@@ -317,13 +317,13 @@ class TestOperatorResolution:
         execution._envelope = _make_success_envelope()
 
         await service.execute_port_check(
-            _make_args(target_operator="op-1"), investigation, _make_context(),
+            _make_args(target_operators=["op-1"]), investigation, _make_context(),
         )
 
         assert len(execution.resolve_calls) == 1
         call = execution.resolve_calls[0]
         assert call["operator_documents"] == [op]
-        assert call["target_operator"] == "op-1"
+        assert call["target_operators"] == ["op-1"]
 
     @pytest.mark.asyncio
     async def test_resolve_called_with_none_target_for_single_operator(self, task_tracker):
@@ -334,10 +334,10 @@ class TestOperatorResolution:
         execution._envelope = _make_success_envelope()
 
         await service.execute_port_check(
-            _make_args(target_operator=None), investigation, _make_context(),
+            _make_args(target_operators=["all"]), investigation, _make_context(),
         )
 
-        assert execution.resolve_calls[0]["target_operator"] is None
+        assert execution.resolve_calls[0]["target_operators"] == ["all"]
 
 # ---------------------------------------------------------------------------
 # Pubsub not ready

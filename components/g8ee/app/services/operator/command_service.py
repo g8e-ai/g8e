@@ -157,6 +157,7 @@ class OperatorCommandService:
 
     def _init_logic(self, settings: G8eePlatformSettings) -> None:
         self._cv = settings.command_validation
+        self._be = settings.batch_execution
         logger.info(
             "OperatorCommandService initialized with PLATFORM DEFAULTS (per-user overrides apply) - whitelisting: %s, blacklisting: %s, auto-approve: %s",
             "ENABLED" if self._cv.enable_whitelisting else "DISABLED",
@@ -422,8 +423,8 @@ class OperatorCommandService:
             )
 
         # 5. Fan-out dispatch — one execution_id per operator, bounded concurrency.
-        max_concurrency = self._cv.max_batch_concurrency
-        fail_fast = self._cv.batch_fail_fast
+        max_concurrency = self._be.max_concurrency
+        fail_fast = self._be.fail_fast
         semaphore = asyncio.Semaphore(max_concurrency)
         cancel_event = asyncio.Event()
 

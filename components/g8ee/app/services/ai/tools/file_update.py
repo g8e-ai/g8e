@@ -58,6 +58,7 @@ async def handle(
         tool_args,
         FileEditRequestPayload,
         execution_id,
+        investigation,
         operation=FileOperation.REPLACE,
     )
     logger.info("[FILE_UPDATE] File path: %s", args.file_path)

@@ -97,10 +97,12 @@ class OperatorPortService:
             return PortCheckToolResult(success=False, error=error_msg, error_type=CommandErrorType.VALIDATION_ERROR)
 
         operator_documents = investigation.operator_documents if investigation else []
+        # Extract first target from target_operators for now (full batch support in Phase 4)
+        target_anchor = args.target_operators[0] if args.target_operators else "all"
         try:
             resolved_operator = self.execution_service.resolve_target_operator(
                 operator_documents=operator_documents,
-                target_operator=args.target_operator,
+                target_operator=target_anchor,
                 tool_name="check_port",
             )
         except (ValidationError, BusinessLogicError, ValueError) as e:
@@ -146,6 +148,7 @@ class OperatorPortService:
                     host=host,
                     port=port,
                     protocol=protocol.value,
+                    target_operators=[operator_id],
                 ),
             )
 

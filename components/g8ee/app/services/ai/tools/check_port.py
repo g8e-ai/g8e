@@ -54,7 +54,7 @@ async def handle(
     request_settings: G8eeUserSettings,
     execution_id: str,
 ) -> ToolResult:
-    args = convert_args_to_payload(tool_args, CheckPortRequestPayload, execution_id)
+    args = convert_args_to_payload(tool_args, CheckPortRequestPayload, execution_id, investigation)
     logger.info(
         "[CHECK_PORT_STATUS] Host: %s Port: %s Protocol: %s",
         args.host, args.port, args.protocol,
