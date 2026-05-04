@@ -11,9 +11,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from enum import Enum
+from enum import StrEnum
 
-class CloudIntent(str, Enum):
+class CloudIntent(StrEnum):
     # Generated from shared/constants/intents.json
     ACM_DISCOVERY = "acm_discovery"
     APIGATEWAY_DISCOVERY = "apigateway_discovery"

@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import base64
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any
 
 
@@ -213,7 +213,7 @@ class ToolConfig:
     tool_calling_config: ToolCallingConfig = field(default_factory=ToolCallingConfig)
 
 
-class Role(str, Enum):
+class Role(StrEnum):
     USER = "user"
     ASSISTANT = "assistant"
     SYSTEM = "system"

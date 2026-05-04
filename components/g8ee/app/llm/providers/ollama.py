@@ -9,7 +9,6 @@ from app.constants import (
     LLM_OLLAMA_DEFAULT_NUM_CTX,
     ThinkingLevel,
 )
-from app.errors import OllamaEmptyResponseError
 from app.llm.thinking import translate_for_ollama
 from app.models.model_configs import get_model_config
 from app.llm.llm_types import (
@@ -26,9 +25,9 @@ from app.llm.llm_types import (
     ToolGroup,
 )
 
-from ..provider import LLMProvider
-from ..utils import schema_to_dict
-from ._capability import translate_capability_error
+from app.llm.provider import LLMProvider
+from app.llm.utils import schema_to_dict
+from app.llm.providers._capability import translate_capability_error
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +116,8 @@ def _raise_on_empty_content(
     thinking_len = len(thinking) if thinking else 0
     tool_calls = getattr(message, "tool_calls", None) if message else None
     tool_calls_count = len(tool_calls) if tool_calls else 0
+
+    from app.errors import OllamaEmptyResponseError
 
     ctx_overflow_suspected = (
         prompt_eval_count is not None

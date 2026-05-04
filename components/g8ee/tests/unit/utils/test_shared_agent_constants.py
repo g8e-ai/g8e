@@ -12,12 +12,13 @@
 # limitations under the License.
 
 """
-Contract test: g8ee Agent-related enums must exactly match the canonical values 
+Contract test: g8ee Agent-related enums must exactly match the canonical values
 in shared/constants/agents.json and shared/models/agents/*.json.
 """
 
 import json
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -38,7 +39,7 @@ _SHARED_MODELS_DIR = Path(__file__).parent.parent.parent.parent.parent.parent / 
 def _load_model_json(filename: str) -> dict:
     """Load a shared model JSON file."""
     path = _SHARED_MODELS_DIR / filename
-    with open(path) as f:
+    with path.open() as f:
         return json.load(f)
 
 class TestAgentConstantsMatchSharedJSON:
@@ -81,8 +82,8 @@ class TestAuditorReason:
 class TestAgentMetadataPersonaFields:
     """Verifies all agents have first-class persona fields."""
 
-    REQUIRED_PERSONA_FIELDS = {"role", "model_tier", "tools", "identity", "purpose", "autonomy"}
-    ALL_AGENT_KEYS = {"triage", "sage", "dash", "tribunal", "auditor", "scribe", "axiom", "concord", "variance", "pragma", "nemesis", "codex", "judge", "warden", "warden_command_risk", "warden_error", "warden_file_risk"}
+    REQUIRED_PERSONA_FIELDS: ClassVar[set[str]] = {"role", "model_tier", "tools", "identity", "purpose", "autonomy"}
+    ALL_AGENT_KEYS: ClassVar[set[str]] = {"triage", "sage", "dash", "tribunal", "auditor", "scribe", "axiom", "concord", "variance", "pragma", "nemesis", "codex", "judge", "warden", "warden_command_risk", "warden_error", "warden_file_risk"}
 
     def test_all_agents_have_persona_fields(self):
         metadata = _AGENTS["agent.metadata"]
@@ -93,11 +94,13 @@ class TestAgentMetadataPersonaFields:
 
     def test_role_is_nonempty_string(self):
         for key, agent in _AGENTS["agent.metadata"].items():
-            assert isinstance(agent["role"], str) and agent["role"], f"Agent '{key}' role must be a non-empty string"
+            assert isinstance(agent["role"], str), f"Agent '{key}' role must be a string"
+            assert agent["role"], f"Agent '{key}' role must be a non-empty string"
 
     def test_model_tier_is_nonempty_string(self):
         for key, agent in _AGENTS["agent.metadata"].items():
-            assert isinstance(agent["model_tier"], str) and agent["model_tier"], f"Agent '{key}' model_tier must be a non-empty string"
+            assert isinstance(agent["model_tier"], str), f"Agent '{key}' model_tier must be a string"
+            assert agent["model_tier"], f"Agent '{key}' model_tier must be a non-empty string"
 
     def test_model_tier_is_valid_value(self):
         """model_tier must be one of the three tiers resolve_model() understands.
@@ -162,15 +165,18 @@ class TestAgentMetadataPersonaFields:
 
     def test_identity_is_nonempty_string(self):
         for key, agent in _AGENTS["agent.metadata"].items():
-            assert isinstance(agent["identity"], str) and agent["identity"], f"Agent '{key}' identity must be a non-empty string"
+            assert isinstance(agent["identity"], str), f"Agent '{key}' identity must be a string"
+            assert agent["identity"], f"Agent '{key}' identity must be a non-empty string"
 
     def test_purpose_is_nonempty_string(self):
         for key, agent in _AGENTS["agent.metadata"].items():
-            assert isinstance(agent["purpose"], str) and agent["purpose"], f"Agent '{key}' purpose must be a non-empty string"
+            assert isinstance(agent["purpose"], str), f"Agent '{key}' purpose must be a string"
+            assert agent["purpose"], f"Agent '{key}' purpose must be a non-empty string"
 
     def test_autonomy_is_nonempty_string(self):
         for key, agent in _AGENTS["agent.metadata"].items():
-            assert isinstance(agent["autonomy"], str) and agent["autonomy"], f"Agent '{key}' autonomy must be a non-empty string"
+            assert isinstance(agent["autonomy"], str), f"Agent '{key}' autonomy must be a string"
+            assert agent["autonomy"], f"Agent '{key}' autonomy must be a non-empty string"
 
 
 class TestSharedModelJSONEnumsMatchG8ee:

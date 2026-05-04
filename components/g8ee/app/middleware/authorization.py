@@ -156,8 +156,8 @@ class AuthorizationMiddleware(BaseHTTPMiddleware):
 
         try:
             case = await db_service.get_case(case_id)
-        except ResourceNotFoundError:
-            raise AuthorizationError("Case not found or access denied", component=ComponentName.G8EE)
+        except ResourceNotFoundError as err:
+            raise AuthorizationError("Case not found or access denied", component=ComponentName.G8EE) from err
 
         if case is None:
             raise AuthorizationError("Case not found or access denied", component=ComponentName.G8EE)

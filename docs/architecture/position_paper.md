@@ -84,17 +84,17 @@ Communication is outbound-only from the Operator to the Engine over mTLS WebSock
 
 The Engine implements a consensus mechanism in which AI personas are validators with reputation stakes and the User is a co-validator whose stake is time. The full mechanism design is treated formally in a companion document; what follows is the architectural sketch.
 
-### The Vortex Principle
+### The Information Isolation Principle
 
-The Engine's consensus is built on **tiered information quarantine**, which I call the Vortex Principle. Each agent operates in a sealed information environment, believing it is playing a smaller game than it is actually in. The interrogator does not know the planner exists. The planner does not know the auditor has cross-conversation memory. The validator panel does not know which member among them is the calibrated adversary. Only one role — the Auditor — has full visibility, and the Auditor is bonded most heavily and subject to peer review.
+The Engine's consensus is built on **tiered information quarantine**, which I call the Information Isolation Principle. Each agent operates in a sealed information environment, believing it is playing a smaller game than it is actually in. The interrogator does not know the planner exists. The planner does not know the auditor has cross-conversation memory. The validator panel does not know which member among them is the calibrated adversary. Only one role — the Auditor — has full visibility, and the Auditor is bonded most heavily and subject to peer review.
 
-The mathematical invariant of the Vortex is the **Independence of Validators**:
+The mathematical invariant of the Information Isolation Principle is the **Independence of Validators**:
 
 $$ \forall p_i, p_j \in \text{Tribunal}, i \neq j: I(X_i ; X_j | \mathcal{V}) \approx 0 $$
 
-Where $I$ is mutual information between the information states $X$ of two personas given the Vortex structure $\mathcal{V}$.
+Where $I$ is mutual information between the information states $X$ of two personas given the isolation structure $\mathcal{V}$.
 
-The Vortex is load-bearing. Each quarantined view eliminates the deviation strategies that would otherwise be profitable. Agents cannot coordinate to game the consensus because they cannot identify their counterparties. Agents cannot shape their output to fit a known downstream expectation because they cannot see the downstream. The information-theoretic structure is what makes the consensus produce honest votes. Collapsing any quarantine layer creates a profitable deviation. The Vortex is not a UX choice. It is the safety mechanism.
+The Information Isolation Principle is load-bearing. Each quarantined view eliminates the deviation strategies that would otherwise be profitable. Agents cannot coordinate to game the consensus because they cannot identify their counterparties. Agents cannot shape their output to fit a known downstream expectation because they cannot see the downstream. The information-theoretic structure is what makes the consensus produce honest votes. Collapsing any quarantine layer creates a profitable deviation. Information Isolation is not a UX choice. It is the safety mechanism.
 
 ### The Tribunal
 
@@ -276,6 +276,6 @@ The implementation is open source. The threat model came from production. The id
 *Companion documents:*
 - *Mechanism Design for Time-Bonded Heterogeneous Consensus* — formal payoffs, equilibrium claims
 - *Operator Architecture Reference* — implementation specification
-- *The Vortex Principle: Information-Theoretic Foundations of Honest Consensus*
+- *The Information Isolation Principle: Information-Theoretic Foundations of Honest Consensus*
 
 I want to join your team. Contact me at [danny@g8e.ai](mailto:danny@g8e.ai)

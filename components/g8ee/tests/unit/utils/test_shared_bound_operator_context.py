@@ -20,6 +20,7 @@ and g8ee's BoundOperator parsing logic.
 """
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -29,7 +30,7 @@ pytestmark = pytest.mark.unit
 
 
 def _load_bound_operator_context_json() -> dict:
-    with open("/app/shared/models/wire/bound_operator_context.json") as f:
+    with Path("/app/shared/models/wire/bound_operator_context.json").open() as f:
         return json.load(f)
 
 
@@ -69,7 +70,7 @@ class TestBoundOperatorFieldsMatchSharedJSON:
     def test_all_json_fields_exist_in_g8ee_model(self):
         """All fields in shared JSON must exist in g8ee BoundOperator model."""
         wire = _load_bound_operator_context_json()["bound_operator_context"]["fields"]
-        for field_name in wire.keys():
+        for field_name in wire:
             assert field_name in BoundOperator.model_fields, (
                 f"shared/models/wire/bound_operator_context.json defines field '{field_name}' "
                 f"but g8ee BoundOperator model does not have this field"

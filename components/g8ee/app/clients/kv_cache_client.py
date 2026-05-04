@@ -119,7 +119,7 @@ class KVCacheClient:
                 details={"path": path},
                 component="kv_cache_client",
                 cause=e,
-            )
+            ) from e
 
     async def connect(self) -> bool:
         """Verify connectivity to the g8es KV service."""

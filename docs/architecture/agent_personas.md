@@ -92,9 +92,9 @@ A five-member panel that translates Sage's intent into an executable command thr
 - **Codex** (`neurology`): Async extraction of durable user preferences and scrubbed investigation summaries.
 - **Judge** (`gavel`): Post-hoc performance grading against gold-standard rubrics.
 
-## The Vortex Principle (Information Quarantine)
+## The Information Isolation Principle (Information Quarantine)
 
-GDD §3 defines the Vortex: agents operate in a sealed information environment to prevent collapsing diversity and honesty.
+GDD §3 defines Information Isolation: agents operate in a sealed information environment to prevent collapsing diversity and honesty.
 
 | Role | Information Visible |
 |---|---|

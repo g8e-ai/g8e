@@ -210,6 +210,7 @@ class TestCommandExecutionTools:
             "timeout_seconds": 30,
             "guidelines": "List files in directory",
             "justification": "Need to list files",
+            "target_operators": ["all"],
         }
 
         # Execute tool call
@@ -248,6 +249,7 @@ class TestCommandExecutionTools:
         tool_args = {
             "command": "invalid_command_syntax",
             "justification": "Test error handling",
+            "target_operators": ["all"],
         }
 
         # Execute tool call and verify ValidationError is raised
@@ -272,6 +274,7 @@ class TestCommandExecutionTools:
         tool_args = {
             "command": "sudo ls -la",
             "justification": "Test security validation",
+            "target_operators": ["all"],
         }
 
         # Execute tool call and verify security violation
@@ -321,6 +324,7 @@ class TestFileOperationTools:
             "mode": "0644",
             "create_directories": True,
             "justification": "Need to create test file",
+            "target_operators": ["all"],
         }
 
         # Execute tool call
@@ -367,6 +371,7 @@ class TestFileOperationTools:
             "mode": "0644",
             "backup": True,
             "justification": "Need to update test file",
+            "target_operators": ["all"],
         }
 
         # Execute tool call
@@ -412,6 +417,7 @@ class TestFileOperationTools:
             "justification": "Test file reading for unit test",
             "start_line": 1,
             "end_line": 1000,
+            "target_operators": ["all"],
         }
 
         # Execute tool call
@@ -458,6 +464,7 @@ class TestFileOperationTools:
             "new_content": "new content",
             "justification": "Test file update for unit test",
             "backup": True,
+            "target_operators": ["all"],
         }
 
         # Execute tool call
@@ -520,6 +527,7 @@ class TestFileSystemTools:
             "path": "/home/user",
             "max_depth": 1,
             "max_entries": 100,
+            "target_operators": ["all"],
         }
 
         # Execute tool call
@@ -565,6 +573,7 @@ class TestFileSystemTools:
             "justification": "Test file content reading for unit test",
             "start_line": 1,
             "end_line": 500,
+            "target_operators": ["all"],
         }
 
         # Execute tool call
@@ -612,7 +621,7 @@ class TestFileSystemTools:
         tool_args = {
             "file_path": "/tmp/test.txt",
             "limit": 10,
-            "target_operator": "op-123",
+            "target_operators": ["op-123"],
         }
 
         # Execute tool call
@@ -660,6 +669,7 @@ class TestFileSystemTools:
             "old_content": "old content to restore from",
             "new_content": "restored content",
             "justification": "Test file restoration for unit test",
+            "target_operators": ["all"],
         }
 
         # Execute tool call
@@ -717,7 +727,7 @@ class TestFileSystemTools:
             "timestamp_from": "2026-01-01T00:00:00Z",
             "timestamp_to": "2026-01-02T00:00:00Z",
             "context_lines": 3,
-            "target_operator": "op-123",
+            "target_operators": ["op-123"],
         }
 
         # Execute tool call
@@ -742,7 +752,7 @@ class TestFileSystemTools:
         assert "execution_id" not in call_args
         args = call_args["args"]
         assert args.file_path == "/tmp/test.txt"
-        assert args.target_operator == "op-123"
+        assert args.target_operators == ["op-123"]
         assert args.execution_id == "test-execution-id"
 
 
@@ -776,6 +786,7 @@ class TestNetworkSearchTools:
             "port": 443,
             "protocol": "tcp",
             "timeout_seconds": 5,
+            "target_operators": ["all"],
         }
 
         # Execute tool call
@@ -1038,7 +1049,8 @@ class TestToolIntegration:
         tool_args = {
             "command": "echo 'Hello, World! 🌍'",
             "timeout_seconds": 30,
-            "justification": "Test complex payload handling"
+            "justification": "Test complex payload handling",
+            "target_operators": ["all"],
         }
 
         # Execute tool call through proper interface

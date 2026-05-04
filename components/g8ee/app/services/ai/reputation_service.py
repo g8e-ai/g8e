@@ -25,8 +25,8 @@ The slashing classifier is intentionally side-effect-free so it can be
 tested exhaustively against the §14.5 table. The writer is the only side
 effect carrier and is invoked from the call site in `agent_tool_loop.py`.
 
-Vortex (GDD §3) is preserved: this module reads `reputation_state` (sole
-post-execution writer) but is not visible to any persona prompt builder.
+Information Isolation (GDD §3) is preserved: this module reads `reputation_state`
+(sole post-execution writer) but is not visible to any persona prompt builder.
 """
 
 from __future__ import annotations

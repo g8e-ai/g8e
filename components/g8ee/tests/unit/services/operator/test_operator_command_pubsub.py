@@ -78,25 +78,25 @@ class TestStartPubSubListeners:
     async def test_sets_pubsub_ready_flag(self, command_service):
         """Test sets _pubsub_ready to True."""
         await command_service.start_pubsub_listeners()
-        assert command_service._pubsub_service._pubsub_ready is True
+        assert command_service._pubsub_service._pubsub_ready is True  # noqa: SLF001
 
     async def test_no_handlers_registered_at_startup(self, command_service, heartbeat_service):
         """Test no channel handlers are registered at startup — only at register_operator_session."""
         await command_service.start_pubsub_listeners()
-        command_service._pubsub_service.pubsub_client.on_channel_message.assert_not_called()
-        heartbeat_service._pubsub_client.on_channel_message.assert_not_called()
+        command_service._pubsub_service.pubsub_client.on_channel_message.assert_not_called()  # noqa: SLF001
+        heartbeat_service._pubsub_client.on_channel_message.assert_not_called()  # noqa: SLF001
 
     async def test_idempotent_when_called_twice(self, command_service):
         """Test second call is a no-op."""
         await command_service.start_pubsub_listeners()
         await command_service.start_pubsub_listeners()
-        assert command_service._pubsub_service.pubsub_client.ensure_connected.call_count == 1
+        assert command_service._pubsub_service.pubsub_client.ensure_connected.call_count == 1  # noqa: SLF001
 
     async def test_no_channel_subscriptions_at_startup(self, command_service, heartbeat_service):
         """Test no operator channels are subscribed at startup."""
         await command_service.start_pubsub_listeners()
-        command_service._pubsub_service.pubsub_client.subscribe.assert_not_called()
-        heartbeat_service._pubsub_client.subscribe.assert_not_called()
+        command_service._pubsub_service.pubsub_client.subscribe.assert_not_called()  # noqa: SLF001
+        heartbeat_service._pubsub_client.subscribe.assert_not_called()  # noqa: SLF001
 
 
 class TestStopPubSubListeners:
@@ -106,24 +106,24 @@ class TestStopPubSubListeners:
         """Test sets _pubsub_ready to False on stop."""
         await command_service.start_pubsub_listeners()
         await command_service.stop_pubsub_listeners()
-        assert command_service._pubsub_service._pubsub_ready is False
+        assert command_service._pubsub_service._pubsub_ready is False  # noqa: SLF001
 
     async def test_unsubscribes_all_active_sessions(self, command_service):
         """Test unsubscribes every registered results channel session on stop."""
         await command_service.start_pubsub_listeners()
-        await command_service._pubsub_service.register_operator_session("op-1", "sess-1")
-        await command_service._pubsub_service.register_operator_session("op-2", "sess-2")
+        await command_service._pubsub_service.register_operator_session("op-1", "sess-1")  # noqa: SLF001
+        await command_service._pubsub_service.register_operator_session("op-2", "sess-2")  # noqa: SLF001
 
         await command_service.stop_pubsub_listeners()
 
-        assert command_service._pubsub_service.pubsub_client.unsubscribe.call_count == 2
-        assert len(command_service._pubsub_service._active_operator_sessions_set) == 0
+        assert command_service._pubsub_service.pubsub_client.unsubscribe.call_count == 2  # noqa: SLF001
+        assert len(command_service._pubsub_service._active_operator_sessions_set) == 0  # noqa: SLF001
 
     async def test_handles_no_active_sessions(self, command_service):
         """Test stop is safe when no sessions are registered."""
-        command_service._pubsub_service._pubsub_ready = True
+        command_service._pubsub_service._pubsub_ready = True  # noqa: SLF001
         await command_service.stop_pubsub_listeners()
-        assert command_service._pubsub_service._pubsub_ready is False
+        assert command_service._pubsub_service._pubsub_ready is False  # noqa: SLF001
 
 
 class TestRegisterOperatorSession:
@@ -131,42 +131,42 @@ class TestRegisterOperatorSession:
 
     async def test_subscribes_exact_channels(self, command_service, heartbeat_service):
         """Test subscribes to the exact results channel for the operator session."""
-        await command_service._pubsub_service.register_operator_session("op-abc", "sess-xyz")
+        await command_service._pubsub_service.register_operator_session("op-abc", "sess-xyz")  # noqa: SLF001
 
-        command_service._pubsub_service.pubsub_client.subscribe.assert_called_once_with(
+        command_service._pubsub_service.pubsub_client.subscribe.assert_called_once_with(  # noqa: SLF001
             PubSubChannel.results("op-abc", "sess-xyz")
         )
-        heartbeat_service._pubsub_client.subscribe.assert_not_called()
+        heartbeat_service._pubsub_client.subscribe.assert_not_called()  # noqa: SLF001
 
     async def test_registers_per_channel_handlers(self, command_service, heartbeat_service):
         """Test registers on_channel_message handler for the results channel only."""
-        await command_service._pubsub_service.register_operator_session("op-abc", "sess-xyz")
+        await command_service._pubsub_service.register_operator_session("op-abc", "sess-xyz")  # noqa: SLF001
 
-        command_service._pubsub_service.pubsub_client.on_channel_message.assert_called_once_with(
-            PubSubChannel.results("op-abc", "sess-xyz"), command_service._pubsub_service._dispatch_results_message
+        command_service._pubsub_service.pubsub_client.on_channel_message.assert_called_once_with(  # noqa: SLF001
+            PubSubChannel.results("op-abc", "sess-xyz"), command_service._pubsub_service._dispatch_results_message  # noqa: SLF001
         )
-        heartbeat_service._pubsub_client.on_channel_message.assert_not_called()
+        heartbeat_service._pubsub_client.on_channel_message.assert_not_called()  # noqa: SLF001
 
     async def test_tracks_active_session(self, command_service):
         """Test adds session to _active_operator_sessions."""
-        await command_service._pubsub_service.register_operator_session("op-abc", "sess-xyz")
-        assert ("op-abc", "sess-xyz") in command_service._pubsub_service._active_operator_sessions_set
+        await command_service._pubsub_service.register_operator_session("op-abc", "sess-xyz")  # noqa: SLF001
+        assert ("op-abc", "sess-xyz") in command_service._pubsub_service._active_operator_sessions_set  # noqa: SLF001
 
     async def test_idempotent_for_same_session(self, command_service):
         """Test second registration of same session is a no-op."""
-        await command_service._pubsub_service.register_operator_session("op-abc", "sess-xyz")
-        await command_service._pubsub_service.register_operator_session("op-abc", "sess-xyz")
-        assert command_service._pubsub_service.pubsub_client.subscribe.call_count == 1
+        await command_service._pubsub_service.register_operator_session("op-abc", "sess-xyz")  # noqa: SLF001
+        await command_service._pubsub_service.register_operator_session("op-abc", "sess-xyz")  # noqa: SLF001
+        assert command_service._pubsub_service.pubsub_client.subscribe.call_count == 1  # noqa: SLF001
 
     async def test_multiple_sessions_subscribed_independently(self, command_service):
         """Test different operator sessions each get their own channels."""
-        await command_service._pubsub_service.register_operator_session("op-1", "sess-1")
-        await command_service._pubsub_service.register_operator_session("op-2", "sess-2")
+        await command_service._pubsub_service.register_operator_session("op-1", "sess-1")  # noqa: SLF001
+        await command_service._pubsub_service.register_operator_session("op-2", "sess-2")  # noqa: SLF001
 
-        subscribe_calls = [str(c) for c in command_service._pubsub_service.pubsub_client.subscribe.call_args_list]
+        subscribe_calls = [str(c) for c in command_service._pubsub_service.pubsub_client.subscribe.call_args_list]  # noqa: SLF001
         assert any("op-1" in c for c in subscribe_calls)
         assert any("op-2" in c for c in subscribe_calls)
-        assert len(command_service._pubsub_service._active_operator_sessions_set) == 2
+        assert len(command_service._pubsub_service._active_operator_sessions_set) == 2  # noqa: SLF001
 
 
 class TestDeregisterOperatorSession:
@@ -174,29 +174,29 @@ class TestDeregisterOperatorSession:
 
     async def test_unsubscribes_exact_channels(self, command_service, heartbeat_service):
         """Test unsubscribes the exact results channel for the operator session."""
-        await command_service._pubsub_service.register_operator_session("op-abc", "sess-xyz")
-        await command_service._pubsub_service.deregister_operator_session("op-abc", "sess-xyz")
+        await command_service._pubsub_service.register_operator_session("op-abc", "sess-xyz")  # noqa: SLF001
+        await command_service._pubsub_service.deregister_operator_session("op-abc", "sess-xyz")  # noqa: SLF001
 
-        command_service._pubsub_service.pubsub_client.unsubscribe.assert_called_once_with(
+        command_service._pubsub_service.pubsub_client.unsubscribe.assert_called_once_with(  # noqa: SLF001
             PubSubChannel.results("op-abc", "sess-xyz")
         )
-        heartbeat_service._pubsub_client.unsubscribe.assert_not_called()
+        heartbeat_service._pubsub_client.unsubscribe.assert_not_called()  # noqa: SLF001
 
     async def test_deregisters_per_channel_handlers(self, command_service, heartbeat_service):
         """Test removes the results channel on_channel_message handler on deregister."""
-        await command_service._pubsub_service.register_operator_session("op-abc", "sess-xyz")
-        await command_service._pubsub_service.deregister_operator_session("op-abc", "sess-xyz")
+        await command_service._pubsub_service.register_operator_session("op-abc", "sess-xyz")  # noqa: SLF001
+        await command_service._pubsub_service.deregister_operator_session("op-abc", "sess-xyz")  # noqa: SLF001
 
-        command_service._pubsub_service.pubsub_client.off_channel_message.assert_called_once_with(
-            PubSubChannel.results("op-abc", "sess-xyz"), command_service._pubsub_service._dispatch_results_message
+        command_service._pubsub_service.pubsub_client.off_channel_message.assert_called_once_with(  # noqa: SLF001
+            PubSubChannel.results("op-abc", "sess-xyz"), command_service._pubsub_service._dispatch_results_message  # noqa: SLF001
         )
-        heartbeat_service._pubsub_client.off_channel_message.assert_not_called()
+        heartbeat_service._pubsub_client.off_channel_message.assert_not_called()  # noqa: SLF001
 
     async def test_removes_from_active_sessions(self, command_service):
         """Test removes session from _active_operator_sessions."""
-        await command_service._pubsub_service.register_operator_session("op-abc", "sess-xyz")
-        await command_service._pubsub_service.deregister_operator_session("op-abc", "sess-xyz")
-        assert ("op-abc", "sess-xyz") not in command_service._pubsub_service._active_operator_sessions_set
+        await command_service._pubsub_service.register_operator_session("op-abc", "sess-xyz")  # noqa: SLF001
+        await command_service._pubsub_service.deregister_operator_session("op-abc", "sess-xyz")  # noqa: SLF001
+        assert ("op-abc", "sess-xyz") not in command_service._pubsub_service._active_operator_sessions_set  # noqa: SLF001
 
 
 class TestDispatchResultsMessage:
@@ -204,19 +204,19 @@ class TestDispatchResultsMessage:
 
     async def test_routes_to_result_handler(self, command_service):
         """Test dispatches parsed message to _handle_pubsub_result_message."""
-        with patch.object(command_service._pubsub_service, "_handle_pubsub_result_message", new=AsyncMock()) as mock_handle:
+        with patch.object(command_service._pubsub_service, "_handle_pubsub_result_message", new=AsyncMock()) as mock_handle:  # noqa: SLF001
             data = json.dumps({"event_type": EventType.OPERATOR_COMMAND_COMPLETED, "payload": {}})
-            await command_service._pubsub_service._dispatch_results_message(PubSubChannel.results("op-1", "sess-1"), data)
+            await command_service._pubsub_service._dispatch_results_message(PubSubChannel.results("op-1", "sess-1"), data)  # noqa: SLF001
             mock_handle.assert_called_once_with(
                 "op-1", "sess-1", {"event_type": EventType.OPERATOR_COMMAND_COMPLETED, "payload": {}}
             )
 
     async def test_ignores_invalid_channel_format(self, command_service):
         """Test silently ignores channels that cannot be parsed."""
-        command_service._pubsub_service._handle_pubsub_result_message = AsyncMock()
-        await command_service._pubsub_service._dispatch_results_message("bad-channel", "{}")
+        command_service._pubsub_service._handle_pubsub_result_message = AsyncMock()  # noqa: SLF001
+        await command_service._pubsub_service._dispatch_results_message("bad-channel", "{}")  # noqa: SLF001
 
-        command_service._pubsub_service._handle_pubsub_result_message.assert_not_called()
+        command_service._pubsub_service._handle_pubsub_result_message.assert_not_called()  # noqa: SLF001
 
     async def test_propagates_downstream_handler_errors(self, command_service):
         """Unexpected exceptions from the downstream handler must propagate.
@@ -226,21 +226,21 @@ class TestDispatchResultsMessage:
         real bugs and are caught upstream by PubSubClient._safe_dispatch so
         they surface in logs with a traceback instead of being silently eaten.
         """
-        command_service._pubsub_service._handle_pubsub_result_message = AsyncMock(
+        command_service._pubsub_service._handle_pubsub_result_message = AsyncMock(  # noqa: SLF001
             side_effect=Exception("boom")
         )
         with pytest.raises(Exception, match="boom"):
-            await command_service._pubsub_service._dispatch_results_message(
+            await command_service._pubsub_service._dispatch_results_message(  # noqa: SLF001
                 PubSubChannel.results("op-1", "sess-1"), json.dumps({"event_type": "x"})
             )
 
     async def test_swallows_non_json_payload(self, command_service):
         """Non-JSON string payloads are logged and dropped, never raised."""
-        command_service._pubsub_service._handle_pubsub_result_message = AsyncMock()
-        await command_service._pubsub_service._dispatch_results_message(
+        command_service._pubsub_service._handle_pubsub_result_message = AsyncMock()  # noqa: SLF001
+        await command_service._pubsub_service._dispatch_results_message(  # noqa: SLF001
             PubSubChannel.results("op-1", "sess-1"), "not-json-at-all"
         )
-        command_service._pubsub_service._handle_pubsub_result_message.assert_not_called()
+        command_service._pubsub_service._handle_pubsub_result_message.assert_not_called()  # noqa: SLF001
 
 
 class TestHandlePubSubResultMessage:
@@ -259,9 +259,9 @@ class TestHandlePubSubResultMessage:
             },
         }
 
-        future = command_service._pubsub_service.register_future("exec-789")
+        future = command_service._pubsub_service.register_future("exec-789")  # noqa: SLF001
 
-        await command_service._pubsub_service._handle_pubsub_result_message("op-123", "session-456", data)
+        await command_service._pubsub_service._handle_pubsub_result_message("op-123", "session-456", data)  # noqa: SLF001
 
         assert future.done()
         envelope = future.result()
@@ -269,9 +269,9 @@ class TestHandlePubSubResultMessage:
 
     async def test_ignores_missing_event_type(self, command_service):
         """Test ignores messages without event_type."""
-        future = command_service._pubsub_service.register_future("exec-missing")
+        future = command_service._pubsub_service.register_future("exec-missing")  # noqa: SLF001
 
-        await command_service._pubsub_service._handle_pubsub_result_message(
+        await command_service._pubsub_service._handle_pubsub_result_message(  # noqa: SLF001
             "op-123", "session-456", {"payload": {"payload_type": "execution_result", "execution_id": "exec-missing"}}
         )
 
@@ -290,9 +290,9 @@ class TestHandlePubSubResultMessage:
             },
         }
 
-        future = command_service._pubsub_service.register_future("exec-001")
+        future = command_service._pubsub_service.register_future("exec-001")  # noqa: SLF001
 
-        await command_service._pubsub_service._handle_pubsub_result_message("op-123", "session-456", data)
+        await command_service._pubsub_service._handle_pubsub_result_message("op-123", "session-456", data)  # noqa: SLF001
 
         assert future.done()
         envelope = future.result()
@@ -313,9 +313,9 @@ class TestHandlePubSubResultMessage:
             },
         }
 
-        future = command_service._pubsub_service.register_future("exec-002")
+        future = command_service._pubsub_service.register_future("exec-002")  # noqa: SLF001
 
-        await command_service._pubsub_service._handle_pubsub_result_message("op-123", "session-456", data)
+        await command_service._pubsub_service._handle_pubsub_result_message("op-123", "session-456", data)  # noqa: SLF001
 
         assert future.done()
         envelope = future.result()
@@ -325,9 +325,9 @@ class TestHandlePubSubResultMessage:
 
     async def test_sets_operator_ids_from_channel(self, command_service):
         """Test operator_id and operator_session_id come from the channel name."""
-        future = command_service._pubsub_service.register_future("exec-003")
+        future = command_service._pubsub_service.register_future("exec-003")  # noqa: SLF001
 
-        await command_service._pubsub_service._handle_pubsub_result_message(
+        await command_service._pubsub_service._handle_pubsub_result_message(  # noqa: SLF001
             "my-operator", "my-session",
             {
                 "event_type": EventType.OPERATOR_COMMAND_COMPLETED,
@@ -347,7 +347,7 @@ class TestHandlePubSubResultMessage:
     async def test_handles_exception_gracefully(self, command_service):
         """Test does not raise on processing errors."""
         # Using invalid data to trigger parsing error
-        await command_service._pubsub_service._handle_pubsub_result_message(
+        await command_service._pubsub_service._handle_pubsub_result_message(  # noqa: SLF001
             "op-123", "session-456",
             {"event_type": EventType.OPERATOR_COMMAND_COMPLETED, "payload": "not-a-dict"}
         )

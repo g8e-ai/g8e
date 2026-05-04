@@ -20,6 +20,7 @@ would be hidden by mocking create_all_services in test_main_lifespan.py.
 
 import os
 import tempfile
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -80,7 +81,7 @@ class TestServiceFactorySmoke:
             assert hasattr(services, "ssh_inventory_service")
 
         finally:
-            os.unlink(ssh_config_path)
+            Path(ssh_config_path).unlink()
             if "G8E_SSH_CONFIG_PATH" in os.environ:
                 del os.environ["G8E_SSH_CONFIG_PATH"]
 
@@ -107,6 +108,6 @@ class TestServiceFactorySmoke:
             assert services.web_search_provider is web_search_provider
 
         finally:
-            os.unlink(ssh_config_path)
+            Path(ssh_config_path).unlink()
             if "G8E_SSH_CONFIG_PATH" in os.environ:
                 del os.environ["G8E_SSH_CONFIG_PATH"]

@@ -13,6 +13,7 @@
 
 import base64
 import logging
+import re
 from typing import Any
 
 import httpx
@@ -88,7 +89,6 @@ class SupervisorService:
                 xml = response.text
                 if "<fault>" in xml:
                     # Very basic fault parsing
-                    import re
                     code_match = re.search(r"<int>([^<]+)</int>", xml)
                     string_match = re.search(r"<string>([^<]+)</string>", xml)
 
@@ -109,8 +109,8 @@ class SupervisorService:
                 return xml
 
             except httpx.RequestError as exc:
-                logger.error(f"[SUPERVISOR] Request error: {exc}", extra={"method": method})
-                raise Exception(f"Failed to communicate with Supervisor: {exc!s}")
+                logger.error("[SUPERVISOR] Request error: %s", exc, extra={"method": method})
+                raise Exception(f"Failed to communicate with Supervisor: {exc!s}") from exc
 
     async def start_process(self, name: str, wait: bool = False) -> bool:
         """Starts a supervised process."""
@@ -119,15 +119,15 @@ class SupervisorService:
             return True
         except Exception as e:
             if "ALREADY_STARTED" in str(e):
-                logger.info(f"[SUPERVISOR] Process {name} already running, restarting")
+                logger.info("[SUPERVISOR] Process %s already running, restarting", name)
                 await self.stop_process(name, wait=True)
                 await self.xmlrpc_call("supervisor.startProcess", [name, wait])
                 return True
             if "NOT_RUNNING" in str(e):
-                logger.info(f"[SUPERVISOR] Process {name} not running (may be FATAL), attempting start")
+                logger.info("[SUPERVISOR] Process %s not running (may be FATAL), attempting start", name)
                 await self.xmlrpc_call("supervisor.startProcess", [name, wait])
                 return True
-            logger.error(f"[SUPERVISOR] Failed to start process {name}: {e!s}")
+            logger.error("[SUPERVISOR] Failed to start process %s: %s", name, e)
             raise
 
     async def stop_process(self, name: str, wait: bool = True) -> bool:
@@ -136,5 +136,5 @@ class SupervisorService:
             await self.xmlrpc_call("supervisor.stopProcess", [name, wait])
             return True
         except Exception as e:
-            logger.warning(f"[SUPERVISOR] Failed to stop process {name} (non-fatal): {e!s}")
+            logger.warning("[SUPERVISOR] Failed to stop process %s (non-fatal): %s", name, e)
             return False

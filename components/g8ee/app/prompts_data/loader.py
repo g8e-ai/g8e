@@ -24,8 +24,8 @@ import logging
 from functools import lru_cache
 from pathlib import Path
 
-from ..constants import AGENT_MODE_PROMPT_FILES, AgentMode, PromptFile, PromptSection
-from ..errors import ResourceNotFoundError
+from app.constants import AGENT_MODE_PROMPT_FILES, AgentMode, PromptFile, PromptSection
+from app.errors import ResourceNotFoundError
 
 logger = logging.getLogger(__name__)
 

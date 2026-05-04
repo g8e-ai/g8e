@@ -34,9 +34,9 @@ from app.llm.llm_types import (
     ToolGroup,
 )
 
-from ..provider import LLMProvider
-from ..utils import schema_to_dict
-from ._capability import translate_capability_error
+from app.llm.provider import LLMProvider
+from app.llm.utils import schema_to_dict
+from app.llm.providers._capability import translate_capability_error
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +113,7 @@ class OpenAIProvider(LLMProvider):
             api_key=api_key or "not-needed",
             max_retries=0,
         )
-        logger.info(f"OpenAI provider initialized: {endpoint} -> {base_url}")
+        logger.info("OpenAI provider initialized: %s -> %s", endpoint, base_url)
 
     @property
     def service_name(self) -> str:

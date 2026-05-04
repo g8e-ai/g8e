@@ -13,7 +13,7 @@
 
 """Unit tests for the shared structured-response parser."""
 
-from enum import Enum
+from enum import StrEnum
 
 import pytest
 from pydantic import ValidationError
@@ -24,7 +24,7 @@ from app.models.base import G8eBaseModel
 pytestmark = [pytest.mark.unit]
 
 
-class Level(str, Enum):
+class Level(StrEnum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"

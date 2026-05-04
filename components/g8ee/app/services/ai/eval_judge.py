@@ -38,6 +38,7 @@ from app.llm.provider import LLMProvider as LLMProviderBase
 from app.models.settings import EvalJudgeSettings
 from app.utils.agent_persona_loader import get_agent_persona
 from app.errors import OllamaEmptyResponseError
+from app.models.model_configs import get_model_config
 
 logger = logging.getLogger(__name__)
 
@@ -194,8 +195,6 @@ class EvalJudge:
             interaction_trace=interaction_trace
         )
         prompt = f"{persona.get_system_prompt()}{template}"
-
-        from app.models.model_configs import get_model_config
 
         model_config = get_model_config(self._model)
         settings = LiteLLMSettings(

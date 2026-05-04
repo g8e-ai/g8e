@@ -56,15 +56,15 @@ from app.models.agent_activity import AgentActivityMetadata
 from app.llm.prompts import build_modular_system_prompt
 from app.llm.utils import resolve_model, ModelOverrideResolver
 
-from ..infra.g8ed_event_service import EventService
+from app.services.infra.g8ed_event_service import EventService
 from .agent import g8eEngine
-from ..investigation.investigation_service import extract_all_operators_context, InvestigationService
-from ..investigation.memory_data_service import MemoryDataService
+from app.services.investigation.investigation_service import extract_all_operators_context, InvestigationService
+from app.services.investigation.memory_data_service import MemoryDataService
 from .memory_generation_service import MemoryGenerationService
 from .chat_task_manager import BackgroundTaskManager as BackgroundTaskManager
 from .request_builder import AIRequestBuilder
 from .triage import TriageAgent
-from ..data.agent_activity_data_service import AgentActivityDataService
+from app.services.data.agent_activity_data_service import AgentActivityDataService
 from app.models.agents.triage import TriageRequest
 from app.models.g8ed_client import ChatErrorPayload, TriageClarificationQuestionsPayload
 from app.utils.interrogation import extract_interrogation_questions
@@ -444,7 +444,7 @@ class ChatPipelineService:
                 }
             )
         except Exception as e:
-            logger.warning(f"Failed to record agent activity metadata: {e}", exc_info=True)
+            logger.warning("Failed to record agent activity metadata: %s", e, exc_info=True)
 
     def _dispatch_memory_update(
         self,

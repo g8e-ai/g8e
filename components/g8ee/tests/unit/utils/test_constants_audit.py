@@ -20,20 +20,42 @@ Verifies:
 - investigations.py model uses EventType enum, not raw strings
 """
 
+import inspect
 import json
+from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
+import app.services.cache.cache_aside as cache_aside_module
+import app.services.operator.execution_service as execution_service_module
 from app.constants import (
+    CommandErrorType,
+    ComponentName,
     EventType,
     ExecutionStatus,
     InvestigationStatus,
+    Priority,
 )
+from app.models.base import G8eBaseModel
+from app.models.cache import CacheOperationResult
+from app.models.investigations import InvestigationCreateRequest, InvestigationModel
 from app.models.operators import (
     BatchCommandBroadcastEvent,
+    CancelCommandResult,
     CommandExecutingBroadcastEvent,
     CommandFailedBroadcastEvent,
+    DirectCommandResult,
 )
+from app.models import (
+    CancelCommandResult as CancelCommandResultAlias,
+    DirectCommandResult as DirectCommandResultAlias,
+)
+from app.services.investigation.investigation_data_service import InvestigationDataService
+from app.services.operator import cloud_command_validator
+from app.services.operator.cloud_command_validator import is_cloud_only_command
+from app.services.operator.execution_service import OperatorExecutionService
+from tests.fakes.builder import create_mock_cache_aside_service
 from tests.fakes.factories import create_investigation_data
 
 pytestmark = [pytest.mark.unit]
@@ -42,12 +64,12 @@ _SHARED_ROOT = "/app/shared/constants"
 
 
 def _load_events():
-    with open(_SHARED_ROOT + "/events.json") as f:
+    with Path(_SHARED_ROOT + "/events.json").open() as f:
         return json.load(f)
 
 
 def _load_kv_keys():
-    with open(_SHARED_ROOT + "/kv_keys.json") as f:
+    with Path(_SHARED_ROOT + "/kv_keys.json").open() as f:
         return json.load(f)
 
 
@@ -58,20 +80,14 @@ def _load_kv_keys():
 
 class TestCacheVersionNotRedefinedLocally:
     def test_cache_aside_does_not_redefine_cache_prefix(self):
-        import inspect
-
-        import app.services.cache.cache_aside as cache_aside_module
-
         source = inspect.getsource(cache_aside_module)
         assert 'CACHE_PREFIX = "g8e"' not in source, (
             "cache_aside.py must not define CACHE_PREFIX locally — import it from constants"
         )
 
     def test_cache_aside_key_matches_constants_cache_prefix(self):
-        from tests.fakes.builder import create_mock_cache_aside_service
-
         svc = create_mock_cache_aside_service()
-        key = svc._make_key("operators", "op-abc")
+        key = svc._make_key("operators", "op-abc")  # noqa: SLF001
         kv_keys = _load_kv_keys()
         expected_prefix = kv_keys["cache.prefix"]
         assert key.startswith(expected_prefix + ":"), (
@@ -108,7 +124,6 @@ class TestInvestigationModelUpdateStatusUsesEnum:
         assert entry.event_type == "g8e.v1.app.investigation.status.updated.closed"
 
     def test_update_status_actor_is_recorded(self):
-        from app.constants import ComponentName
         inv = self._make_investigation()
         inv.update_status(InvestigationStatus.CLOSED, actor=ComponentName.G8EE, summary="Done")
 
@@ -122,18 +137,10 @@ class TestInvestigationModelUpdateStatusUsesEnum:
 
 class TestInvestigationServiceHistoryEventTypes:
     def _make_service(self):
-        from app.services.investigation.investigation_data_service import InvestigationDataService
-        from tests.fakes.builder import create_mock_cache_aside_service
-
         cache_aside_service = create_mock_cache_aside_service()
         return InvestigationDataService(cache=cache_aside_service)
 
     async def test_create_investigation_uses_investigation_created_enum(self):
-        from unittest.mock import AsyncMock, patch
-
-        from app.constants import Priority
-        from app.models.investigations import InvestigationCreateRequest, InvestigationModel
-
         service = self._make_service()
 
         captured = []
@@ -154,7 +161,6 @@ class TestInvestigationServiceHistoryEventTypes:
         )
 
         with patch.object(InvestigationModel, "add_history_entry", capturing_add):
-            from app.models.cache import CacheOperationResult
             service.cache.create_document = AsyncMock(return_value=CacheOperationResult(success=True, document_id="inv-001"))
 
             await service.create_investigation(request)
@@ -173,23 +179,15 @@ class TestInvestigationServiceHistoryEventTypes:
 
 class TestBroadcastEventModelsAreTyped:
     def test_command_failed_broadcast_event_is_pydantic_model(self):
-        from app.models.base import G8eBaseModel
-
         assert issubclass(CommandFailedBroadcastEvent, G8eBaseModel)
 
     def test_command_executing_broadcast_event_is_pydantic_model(self):
-        from app.models.base import G8eBaseModel
-
         assert issubclass(CommandExecutingBroadcastEvent, G8eBaseModel)
 
     def test_batch_command_broadcast_event_is_pydantic_model(self):
-        from app.models.base import G8eBaseModel
-
         assert issubclass(BatchCommandBroadcastEvent, G8eBaseModel)
 
     def test_command_failed_broadcast_event_construction(self):
-        from app.constants import CommandErrorType
-
         event = CommandFailedBroadcastEvent(
             command="ls -la",
             execution_id="exec-123",
@@ -267,8 +265,6 @@ class TestBroadcastEventTypedFields:
     """Verify broadcast event models use enum types, not raw strings."""
 
     def test_command_failed_error_type_is_command_error_type(self):
-        from app.models.operators import CommandFailedBroadcastEvent
-
         hints = CommandFailedBroadcastEvent.model_fields
         field = hints["error_type"]
         annotation = str(field.annotation)
@@ -277,9 +273,6 @@ class TestBroadcastEventTypedFields:
         )
 
     def test_command_failed_error_type_accepts_enum_value(self):
-        from app.constants import CommandErrorType
-        from app.models.operators import CommandFailedBroadcastEvent
-
         event = CommandFailedBroadcastEvent(
             command="ls",
             error_type=CommandErrorType.VALIDATION_ERROR,
@@ -287,8 +280,6 @@ class TestBroadcastEventTypedFields:
         assert event.error_type == CommandErrorType.VALIDATION_ERROR
 
     def test_batch_command_status_is_execution_status(self):
-        from app.models.operators import BatchCommandBroadcastEvent
-
         hints = BatchCommandBroadcastEvent.model_fields
         field = hints["status"]
         annotation = str(field.annotation)
@@ -297,9 +288,6 @@ class TestBroadcastEventTypedFields:
         )
 
     def test_batch_command_status_accepts_enum_value(self):
-        from app.constants import ExecutionStatus
-        from app.models.operators import BatchCommandBroadcastEvent
-
         event = BatchCommandBroadcastEvent(
             command="ls",
             execution_id="exec-1",
@@ -317,28 +305,18 @@ class TestTypedCommandOperationResults:
     """Verify cancel_command and send_command_to_operator return typed models."""
 
     def test_cancel_command_result_is_g8e_base_model(self):
-        from app.models.base import G8eBaseModel
-        from app.models.operators import CancelCommandResult
-
         assert issubclass(CancelCommandResult, G8eBaseModel)
 
     def test_cancel_command_result_exported_from_models_init(self):
-        from app.models import CancelCommandResult
-        assert CancelCommandResult is not None
+        assert CancelCommandResultAlias is not None
 
     def test_direct_command_result_is_g8e_base_model(self):
-        from app.models.base import G8eBaseModel
-        from app.models.operators import DirectCommandResult
-
         assert issubclass(DirectCommandResult, G8eBaseModel)
 
     def test_direct_command_result_exported_from_models_init(self):
-        from app.models import DirectCommandResult
-        assert DirectCommandResult is not None
+        assert DirectCommandResultAlias is not None
 
     def test_cancel_command_result_fields(self):
-        from app.models.operators import CancelCommandResult
-
         result = CancelCommandResult(execution_id="exec-1", status="cancel_requested", message="sent")
         assert result.execution_id == "exec-1"
         assert result.status == "cancel_requested"
@@ -346,8 +324,6 @@ class TestTypedCommandOperationResults:
         assert result.error is None
 
     def test_direct_command_result_fields(self):
-        from app.models.operators import DirectCommandResult
-
         result = DirectCommandResult(execution_id="exec-1", status="executing", message="Command sent to operator")
         assert result.execution_id == "exec-1"
         assert result.status == "executing"
@@ -355,9 +331,6 @@ class TestTypedCommandOperationResults:
 
     def test_cancel_command_returns_typed_model(self):
         """cancel_command return type annotation is CancelCommandResult."""
-        from app.models.operators import CancelCommandResult
-        from app.services.operator.execution_service import OperatorExecutionService
-
         hints = OperatorExecutionService.cancel_command.__annotations__
         assert hints.get("return") is CancelCommandResult, (
             f"cancel_command should return CancelCommandResult, got: {hints.get('return')}"
@@ -365,9 +338,6 @@ class TestTypedCommandOperationResults:
 
     def test_send_command_to_operator_returns_typed_model(self):
         """send_command_to_operator return type annotation is DirectCommandResult."""
-        from app.models.operators import DirectCommandResult
-        from app.services.operator.execution_service import OperatorExecutionService
-
         hints = OperatorExecutionService.send_command_to_operator.__annotations__
         assert hints.get("return") is DirectCommandResult, (
             f"send_command_to_operator should return DirectCommandResult, got: {hints.get('return')}"
@@ -383,24 +353,20 @@ class TestCloudCommandValidatorModule:
     """Verify cloud command helpers live in their own module."""
 
     def test_cloud_command_validator_module_exists(self):
-        from app.services.operator import cloud_command_validator
         assert cloud_command_validator is not None
 
     def test_is_cloud_only_command_importable(self):
-        from app.services.operator.cloud_command_validator import is_cloud_only_command
         assert callable(is_cloud_only_command)
 
 
     def test_execution_service_does_not_define_patterns(self):
         """Verify CLOUD_ONLY_COMMAND_PATTERNS lives in cloud_command_validator, not execution_service."""
-        import app.services.operator.execution_service as mod
-        assert not hasattr(mod, "CLOUD_ONLY_COMMAND_PATTERNS"), (
+        assert not hasattr(execution_service_module, "CLOUD_ONLY_COMMAND_PATTERNS"), (
             "CLOUD_ONLY_COMMAND_PATTERNS should be in cloud_command_validator, not execution_service"
         )
 
     def test_execution_service_does_not_define_helpers(self):
         """Verify helper functions live in cloud_command_validator, not execution_service module scope."""
-        import app.services.operator.execution_service as mod
-        assert not hasattr(mod, "is_cloud_only_command"), (
+        assert not hasattr(execution_service_module, "is_cloud_only_command"), (
             "is_cloud_only_command should be in cloud_command_validator, not execution_service module scope"
         )

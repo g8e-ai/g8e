@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from enum import Enum
+from enum import StrEnum
 
 HTTP_ACCEL_BUFFERING_HEADER = "X-Accel-Buffering"
 HTTP_ACCEPT_HEADER = "Accept"
@@ -55,7 +55,7 @@ OPERATOR_SESSION_ID_HEADER = "X-G8E-WebSession-ID"
 EXECUTION_ID_HEADER = "X-G8E-Execution-ID"
 COMPONENT_NAME_HEADER = "X-G8E-Source-Component"
 
-class G8eHeaders(str, Enum):
+class G8eHeaders(StrEnum):
     WEB_SESSION_ID = WEB_SESSION_ID_HEADER
     USER_ID = USER_ID_HEADER
     ORGANIZATION_ID = ORGANIZATION_ID_HEADER

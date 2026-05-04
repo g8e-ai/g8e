@@ -98,11 +98,11 @@ class OperatorPortService:
 
         operator_documents = investigation.operator_documents if investigation else []
         try:
-            resolved_operator = self.execution_service.resolve_target_operator(
+            resolved_operators = self.execution_service.resolve_operators(
                 operator_documents=operator_documents,
-                target_operator=args.target_operator,
-                tool_name="check_port",
+                target_operators=args.target_operators,
             )
+            resolved_operator = resolved_operators[0]
         except (ValidationError, BusinessLogicError, ValueError) as e:
             logger.error("[PORT_CHECK] Operator resolution failed: %s", e, exc_info=True)
             return PortCheckToolResult(
@@ -146,6 +146,7 @@ class OperatorPortService:
                     host=host,
                     port=port,
                     protocol=protocol.value,
+                    target_operators=[operator_id],
                 ),
             )
 

@@ -70,18 +70,18 @@ class AgentActivityDataService:
                 data=metadata.model_dump(mode="json"),
             )
 
-            logger.info(f"Agent activity metadata recorded: {metadata.id}")
+            logger.info("Agent activity metadata recorded: %s", metadata.id)
             return metadata
 
         except Exception as e:
-            logger.error(f"Failed to record agent activity metadata {metadata.id}: {e}", exc_info=True)
+            logger.error("Failed to record agent activity metadata %s: %s", metadata.id, e, exc_info=True)
             raise DatabaseError(
                 message=f"Failed to record agent activity metadata: {e}",
                 code=ErrorCode.DB_WRITE_ERROR,
                 details={"activity_id": metadata.id},
                 cause=e,
                 component=ComponentName.G8EE
-            )
+            ) from e
 
     async def get_activity(self, activity_id: str) -> AgentActivityMetadata | None:
         """Retrieve a single activity metadata record by ID.
@@ -95,7 +95,7 @@ class AgentActivityDataService:
         if not activity_id:
             raise ValidationError("Activity ID is required")
 
-        logger.info(f"Retrieving agent activity metadata: {activity_id}")
+        logger.info("Retrieving agent activity metadata: %s", activity_id)
 
         try:
             doc_data = await self.cache.get_document_with_cache(
@@ -109,14 +109,14 @@ class AgentActivityDataService:
             return AgentActivityMetadata.model_validate(doc_data)
 
         except Exception as e:
-            logger.error(f"Failed to retrieve agent activity metadata {activity_id}: {e}", exc_info=True)
+            logger.error("Failed to retrieve agent activity metadata %s: %s", activity_id, e, exc_info=True)
             raise DatabaseError(
                 message=f"Failed to retrieve agent activity metadata: {e}",
                 code=ErrorCode.DB_QUERY_ERROR,
                 details={"activity_id": activity_id},
                 cause=e,
                 component=ComponentName.G8EE
-            )
+            ) from e
 
     async def query_activities(
         self,
@@ -164,7 +164,7 @@ class AgentActivityDataService:
             return [AgentActivityMetadata.model_validate(data) for data in results]
 
         except Exception as e:
-            logger.error(f"Failed to query agent activity metadata: {e}", exc_info=True)
+            logger.error("Failed to query agent activity metadata: %s", e, exc_info=True)
             raise DatabaseError(
                 message=f"Failed to query agent activity metadata: {e}",
                 code=ErrorCode.DB_QUERY_ERROR,
@@ -175,7 +175,7 @@ class AgentActivityDataService:
                 },
                 cause=e,
                 component=ComponentName.G8EE
-            )
+            ) from e
 
     async def delete_activity(self, activity_id: str) -> None:
         """Delete an agent activity metadata record.
@@ -186,7 +186,7 @@ class AgentActivityDataService:
         if not activity_id:
             raise ValidationError("Activity ID is required")
 
-        logger.info(f"Deleting agent activity metadata: {activity_id}")
+        logger.info("Deleting agent activity metadata: %s", activity_id)
 
         try:
             result = await self.cache.delete_document(
@@ -200,14 +200,14 @@ class AgentActivityDataService:
                     details={"activity_id": activity_id},
                     component=ComponentName.G8EE
                 )
-            logger.info(f"Agent activity metadata deleted: {activity_id}")
+            logger.info("Agent activity metadata deleted: %s", activity_id)
 
         except Exception as e:
-            logger.error(f"Failed to delete agent activity metadata {activity_id}: {e}", exc_info=True)
+            logger.error("Failed to delete agent activity metadata %s: %s", activity_id, e, exc_info=True)
             raise DatabaseError(
                 message=f"Failed to delete agent activity metadata: {e}",
                 code=ErrorCode.DB_WRITE_ERROR,
                 details={"activity_id": activity_id},
                 cause=e,
                 component=ComponentName.G8EE
-            )
+            ) from e

@@ -24,6 +24,7 @@ from app.constants import (
 )
 from app.utils.ids import generate_execution_id
 from app.utils.timestamp import now
+from app.logging import get_logger
 
 from .base import Field, G8eBaseModel, UTCDatetime, field_validator, model_validator
 
@@ -116,8 +117,6 @@ class G8eHttpContext(G8eBaseModel):
     @classmethod
     async def from_request(cls, request: Request) -> "G8eHttpContext":
         """Extract and validate G8eHttpContext from FastAPI Request headers."""
-        from app.errors import AuthenticationError
-        from app.logging import get_logger
         logger = get_logger(__name__)
 
         logger.info(
@@ -148,6 +147,7 @@ class G8eHttpContext(G8eBaseModel):
                     "source_component": raw_source_component,
                 }
             )
+            from app.errors import AuthenticationError
             raise AuthenticationError(
                 f"{G8eHeaders.WEB_SESSION_ID} header is required for all internal requests",
                 component=ComponentName.G8EE,
@@ -163,6 +163,7 @@ class G8eHttpContext(G8eBaseModel):
                     "source_component": raw_source_component,
                 }
             )
+            from app.errors import AuthenticationError
             raise AuthenticationError(
                 f"{G8eHeaders.USER_ID} header is required for all internal requests",
                 component=ComponentName.G8EE,
@@ -174,6 +175,7 @@ class G8eHttpContext(G8eBaseModel):
                 G8eHeaders.SOURCE_COMPONENT,
                 extra={"endpoint": request.url.path}
             )
+            from app.errors import AuthenticationError
             raise AuthenticationError(
                 f"{G8eHeaders.SOURCE_COMPONENT} header is required for all internal requests",
                 component=ComponentName.G8EE,
@@ -181,16 +183,17 @@ class G8eHttpContext(G8eBaseModel):
 
         try:
             source_component = ComponentName(raw_source_component)
-        except ValueError:
+        except ValueError as err:
             logger.error(
                 "SECURITY VIOLATION: Invalid %s header value",
                 G8eHeaders.SOURCE_COMPONENT,
                 extra={"endpoint": request.url.path, "value": raw_source_component}
             )
+            from app.errors import AuthenticationError
             raise AuthenticationError(
                 f"{G8eHeaders.SOURCE_COMPONENT} header contains an unrecognised component name",
                 component=ComponentName.G8EE,
-            )
+            ) from err
 
         new_case = request.headers.get(G8eHeaders.NEW_CASE.lower(), "").lower() == "true"
 
@@ -210,6 +213,7 @@ class G8eHttpContext(G8eBaseModel):
                 G8eHeaders.CASE_ID,
                 extra={"endpoint": request.url.path}
             )
+            from app.errors import AuthenticationError
             raise AuthenticationError(
                 f"{G8eHeaders.CASE_ID} header is required for all internal requests",
                 component=ComponentName.G8EE,
@@ -233,6 +237,7 @@ class G8eHttpContext(G8eBaseModel):
                 G8eHeaders.INVESTIGATION_ID,
                 extra={"endpoint": request.url.path}
             )
+            from app.errors import AuthenticationError
             raise AuthenticationError(
                 f"{G8eHeaders.INVESTIGATION_ID} header is required for all internal requests",
                 component=ComponentName.G8EE,

@@ -64,9 +64,9 @@ class CertificateService:
                     serial = rev.get("serial")
                     if serial:
                         self._revoked_serials.add(serial.upper())
-                logger.info(f"[CERT-SERVICE] Loaded {len(self._revoked_serials)} revocations from persistence")
+                logger.info("[CERT-SERVICE] Loaded %s revocations from persistence", len(self._revoked_serials))
             except Exception as e:
-                logger.error(f"[CERT-SERVICE] Failed to load revocations from persistence: {e}")
+                logger.error("[CERT-SERVICE] Failed to load revocations from persistence: %s", e)
 
         # 2. Load CA
         paths = [
@@ -93,13 +93,13 @@ class CertificateService:
                 if not isinstance(self.ca_key, ec.EllipticCurvePrivateKey):
                     raise ValueError("CA key is not an EC key")
 
-                logger.info(f"[CERT-SERVICE] CA certificate loaded from {found_cert_path}")
+                logger.info("[CERT-SERVICE] CA certificate loaded from %s", found_cert_path)
                 self.initialized = True
             except Exception as e:
-                logger.error(f"[CERT-SERVICE] Failed to load CA certificate or key: {e!s}")
-                raise RuntimeError(f"Failed to load CA: {e!s}")
+                logger.error("[CERT-SERVICE] Failed to load CA certificate or key: %s", e)
+                raise RuntimeError(f"Failed to load CA: {e!s}") from e
         else:
-            logger.error(f"[CERT-SERVICE] CA certificate or key not found in {self.ssl_dir}")
+            logger.error("[CERT-SERVICE] CA certificate or key not found in %s", self.ssl_dir)
             # In a production environment, this should probably be a hard error.
             # For now we log and let it fail on first use if not found.
 
@@ -116,7 +116,7 @@ class CertificateService:
         if not self.ca_cert or not self.ca_key:
             raise RuntimeError("CertificateService not initialized with CA")
 
-        logger.info(f"[CERT-SERVICE] Generating certificate for operator {operator_id}")
+        logger.info("[CERT-SERVICE] Generating certificate for operator %s", operator_id)
 
         # Generate private key
         private_key = ec.generate_private_key(ec.SECP384R1())
@@ -184,7 +184,7 @@ class CertificateService:
     async def revoke_certificate(self, serial: str, reason: str, operator_id: str | None = None) -> bool:
         """Revoke a certificate by serial number."""
         serial_upper = serial.upper()
-        logger.info(f"[CERT-SERVICE] Revoking certificate {serial_upper} (reason: {reason}, operator_id: {operator_id})")
+        logger.info("[CERT-SERVICE] Revoking certificate %s (reason: %s, operator_id: %s)", serial_upper, reason, operator_id)
 
         # 1. Persist to DB
         if self.data_service:

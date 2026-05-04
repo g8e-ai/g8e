@@ -43,6 +43,7 @@ class SessionAuthListener:
         self.session_service = session_service
         self.operator_data_service = operator_data_service
         self._active_listeners = {}
+        self._background_tasks: set[asyncio.Task] = set()
 
     async def listen(self, operator_session_id: str, operator_id: str, user_id: str, organization_id: str | None):
         """
@@ -101,10 +102,10 @@ class SessionAuthListener:
                 }
 
                 await self.pubsub_client.publish(response_channel, response)
-                logger.info(f"[SESSION-AUTH-LISTENER] Auth response published for {operator_id}")
+                logger.info("[SESSION-AUTH-LISTENER] Auth response published for %s", operator_id)
 
             except Exception as e:
-                logger.error(f"[SESSION-AUTH-LISTENER] Failed to handle session auth request: {e}")
+                logger.error("[SESSION-AUTH-LISTENER] Failed to handle session auth request: %s", e)
                 await self.pubsub_client.publish(response_channel, {
                     "success": False,
                     "error": "Internal error"
@@ -116,10 +117,12 @@ class SessionAuthListener:
         self.pubsub_client.on_channel_message(auth_channel, message_handler)
         await self.pubsub_client.subscribe(auth_channel)
 
-        logger.info(f"[SESSION-AUTH-LISTENER] Listening for session auth on {auth_channel}")
+        logger.info("[SESSION-AUTH-LISTENER] Listening for session auth on %s", auth_channel)
 
         # Auto cleanup after timeout
-        asyncio.create_task(self._auto_cleanup(auth_channel, SESSION_AUTH_LISTEN_TTL_SECONDS))
+        _t = asyncio.create_task(self._auto_cleanup(auth_channel, SESSION_AUTH_LISTEN_TTL_SECONDS))
+        self._background_tasks.add(_t)
+        _t.add_done_callback(self._background_tasks.discard)
 
     async def _auto_cleanup(self, auth_channel: str, delay: int):
         await asyncio.sleep(delay)

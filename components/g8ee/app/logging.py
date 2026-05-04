@@ -221,7 +221,7 @@ def setup_logging(settings: G8eePlatformSettings, component_name: str):
         logging.getLogger("aiohttp").setLevel(logging.WARNING)
         logging.getLogger("openai").setLevel(logging.WARNING)
 
-        logger.info(f"Logging configured with level {settings.log_level}")
+        logger.info("Logging configured with level %s", settings.log_level)
 
         if HAS_UVICORN and AccessFormatter is not None:
             uvicorn_access_logger = logging.getLogger("uvicorn.access")
@@ -236,7 +236,7 @@ def setup_logging(settings: G8eePlatformSettings, component_name: str):
             uvicorn_access_logger.addHandler(uvicorn_access_handler)
             uvicorn_access_logger.setLevel(log_level)
             uvicorn_access_logger.propagate = False
-            logger.info(f"Uvicorn access logging configured with level {settings.log_level}")
+            logger.info("Uvicorn access logging configured with level %s", settings.log_level)
         else:
             logger.info("Uvicorn not available - skipping uvicorn access logging configuration")
 

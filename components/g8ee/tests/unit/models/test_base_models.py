@@ -14,7 +14,7 @@
 import re
 import time
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 
 import pytest
 
@@ -33,7 +33,7 @@ pytestmark = [pytest.mark.unit]
 _ISO_Z_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$")
 
 
-class _Status(str, Enum):
+class _Status(StrEnum):
     ACTIVE = "active"
     INACTIVE = "inactive"
 

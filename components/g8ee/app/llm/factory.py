@@ -48,6 +48,7 @@ from .providers.gemini import GeminiProvider
 from .providers.anthropic import AnthropicProvider
 from .providers.llama_cpp import LlamaCppProvider
 from .providers.g8el import G8elProvider
+from .providers.ollama import OllamaProvider, _normalize_ollama_host
 
 logger = logging.getLogger(__name__)
 
@@ -111,15 +112,12 @@ def _get_provider_cache_key(settings: LLMSettings, is_assistant: bool = False, i
         key_parts.append(settings.anthropic_endpoint or "")
         key_parts.append(settings.anthropic_api_key or "")
     elif provider_value == LLMProvider.OLLAMA.value:
-        from .providers.ollama import _normalize_ollama_host
         key_parts.append(_normalize_ollama_host(settings.ollama_endpoint or ""))
         key_parts.append(settings.ollama_api_key or "")
     elif provider_value == LLMProvider.LLAMACPP.value:
-        from .providers.ollama import _normalize_ollama_host
         key_parts.append(_normalize_ollama_host(settings.llamacpp_endpoint or ""))
         key_parts.append(settings.llamacpp_api_key or "")
     elif provider_value == LLMProvider.G8EL.value:
-        from .providers.ollama import _normalize_ollama_host
         key_parts.append(_normalize_ollama_host(settings.g8el_endpoint or ""))
         key_parts.append(settings.g8el_api_key or "")
 
@@ -158,8 +156,6 @@ def get_llm_provider(settings: LLMSettings, is_assistant: bool = False, is_lite:
 
     Provider instances are cached and reused to avoid repeated initialization.
     """
-    from app.errors import ConfigurationError
-
     cache_key = _get_provider_cache_key(settings, is_assistant, is_lite)
     if cache_key in _provider_cache:
         return _provider_cache[cache_key]
@@ -172,7 +168,6 @@ def get_llm_provider(settings: LLMSettings, is_assistant: bool = False, is_lite:
         provider_type = settings.primary_provider
 
     if provider_type == LLMProvider.OLLAMA:
-        from .providers.ollama import OllamaProvider
         provider = OllamaProvider(
             endpoint=settings.ollama_endpoint,
             api_key=settings.ollama_api_key,
@@ -200,6 +195,7 @@ def get_llm_provider(settings: LLMSettings, is_assistant: bool = False, is_lite:
             api_key=settings.g8el_api_key,
         )
     else:
+        from app.errors import ConfigurationError
         raise ConfigurationError(f"Unsupported LLM provider: {provider_type}")
 
     provider._is_cached_singleton = True

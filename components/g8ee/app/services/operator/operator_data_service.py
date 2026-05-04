@@ -44,6 +44,7 @@ from app.models.cache import ArrayUnion
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.protocols import OperatorDataServiceProtocol
 from app.utils.keyed_lock import KeyedAsyncLock
+from app.utils.ledger_hash import genesis_hash
 from app.utils.timestamp import now
 
 from app.clients.http_client import HTTPClient
@@ -225,7 +226,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
         )
 
         if result.success:
-            logger.info(f"Updated Operator {operator_id} heartbeat")
+            logger.info("Updated Operator %s heartbeat", operator_id)
             return True
 
         raise ExternalServiceError(f"Failed to update Operator {operator_id} heartbeat: {result.error}", service_name="operator_service")
@@ -252,7 +253,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
         )
 
         if result.success:
-            logger.info(f"Appended command result to Operator {operator_id}")
+            logger.info("Appended command result to Operator %s", operator_id)
             return True
 
         raise ExternalServiceError(f"Failed to append command result to Operator {operator_id}: {result.error}", service_name="operator_service")
@@ -265,8 +266,6 @@ class OperatorDataService(OperatorDataServiceProtocol):
         metadata: ConversationMessageMetadata,
     ) -> bool:
         """Add activity entry to operator log."""
-
-        from app.utils.ledger_hash import genesis_hash
 
         activity_entry = ConversationHistoryMessage(
             sender=sender,
@@ -285,7 +284,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
         )
 
         if result.success:
-            logger.info(f"Added activity to Operator {operator_id}")
+            logger.info("Added activity to Operator %s", operator_id)
             return True
 
         raise ExternalServiceError(f"Failed to add activity to Operator {operator_id}: {result.error}", service_name="operator_service")
@@ -327,7 +326,7 @@ class OperatorDataService(OperatorDataServiceProtocol):
         )
 
         if result.success:
-            logger.info(f"Updated Operator {operator_id} status to {status}")
+            logger.info("Updated Operator %s status to %s", operator_id, status)
             return True
 
         raise ExternalServiceError(f"Failed to update Operator {operator_id} status: {result.error}", service_name="operator_service")

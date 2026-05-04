@@ -26,8 +26,7 @@ from app.models.operators import (
 )
 from app.models.pubsub_messages import G8eoHeartbeatPayload
 from app.security.request_timestamp import RequestValidationResult, validate_timestamp
-
-from ..protocols import OperatorDataServiceProtocol, EventServiceProtocol
+from app.services.protocols import OperatorDataServiceProtocol, EventServiceProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +43,18 @@ class HeartbeatSnapshotService:
         self._pubsub_client: PubSubClient | None = None
         self._active_sessions: set[tuple[str, str]] = set()
         self._ready = False
+
+    @property
+    def is_ready(self) -> bool:
+        return self._ready
+
+    @property
+    def pubsub_client(self) -> "PubSubClient | None":
+        return self._pubsub_client
+
+    @property
+    def active_sessions(self) -> set[tuple[str, str]]:
+        return self._active_sessions
 
     @property
     def operator_data_service(self) -> OperatorDataServiceProtocol:
@@ -90,6 +101,42 @@ class HeartbeatSnapshotService:
         self._active_sessions.clear()
         self._ready = False
         logger.info("[HEARTBEAT] Heartbeat pattern subscription stopped")
+
+    async def on_ws_disconnect(self) -> None:
+        await self._on_ws_disconnect()
+
+    async def on_heartbeat_message(self, channel: str, data: str | dict[str, object]) -> None:
+        await self._on_heartbeat_message(channel, data)
+
+    async def on_pattern_heartbeat_message(self, pattern: str, channel: str, data: str | dict[str, object]) -> None:
+        await self._on_pattern_heartbeat_message(pattern, channel, data)
+
+    async def push_heartbeat_sse(
+        self,
+        envelope: "HeartbeatSSEEnvelope",
+        payload: "G8eoHeartbeatPayload",
+        operator: "OperatorDocument",
+    ) -> None:
+        await self._push_heartbeat_sse(envelope, payload, operator)
+
+    def validate_heartbeat_timestamp(self, payload: "G8eoHeartbeatPayload") -> "RequestValidationResult":
+        return self._validate_heartbeat_timestamp(payload)
+
+    def validate_operator_identity(
+        self,
+        channel_operator_id: str,
+        payload: "G8eoHeartbeatPayload",
+        operator_session_id: str,
+    ) -> bool:
+        return self._validate_operator_identity(channel_operator_id, payload, operator_session_id)
+
+    async def get_and_validate_operator(
+        self,
+        operator_id: str,
+        operator_session_id: str,
+        payload: "G8eoHeartbeatPayload",
+    ) -> "OperatorDocument | None":
+        return await self._get_and_validate_operator(operator_id, operator_session_id, payload)
 
     async def _on_ws_disconnect(self) -> None:
         self._ready = False

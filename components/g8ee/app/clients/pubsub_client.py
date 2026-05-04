@@ -88,6 +88,7 @@ class PubSubClient:
 
         self._closing = False
         self._reconnect_task: asyncio.Task | None = None
+        self._background_tasks: set[asyncio.Task] = set()
 
     async def _get_http_ws_session(self) -> aiohttp.ClientSession:
         """Carrier session for WebSocket pub/sub."""
@@ -162,9 +163,13 @@ class PubSubClient:
                                 gen_handlers = self._message_handlers.copy()
 
                             for handler in handlers:
-                                asyncio.create_task(self._safe_dispatch(handler, channel, data))
+                                task = asyncio.create_task(self._safe_dispatch(handler, channel, data))
+                                self._background_tasks.add(task)
+                                task.add_done_callback(self._background_tasks.discard)
                             for handler in gen_handlers:
-                                asyncio.create_task(self._safe_dispatch(handler, channel, data))
+                                task = asyncio.create_task(self._safe_dispatch(handler, channel, data))
+                                self._background_tasks.add(task)
+                                task.add_done_callback(self._background_tasks.discard)
 
                         elif event_type == PubSubWireEventType.PMESSAGE:
                             pattern = event.get(PubSubField.PATTERN, "")
@@ -178,7 +183,9 @@ class PubSubClient:
                                 p_handlers = self._pmessage_handlers.get(pattern, []).copy()
 
                             for handler in p_handlers:
-                                asyncio.create_task(self._safe_dispatch(handler, pattern, channel, data))
+                                task = asyncio.create_task(self._safe_dispatch(handler, pattern, channel, data))
+                                self._background_tasks.add(task)
+                                task.add_done_callback(self._background_tasks.discard)
 
                         elif event_type == PubSubWireEventType.SUBSCRIBED:
                             # The broker always uses the 'channel' key even for pattern acks
@@ -240,7 +247,9 @@ class PubSubClient:
             handlers = self._disconnect_handlers.copy()
 
         for handler in handlers:
-            asyncio.create_task(self._safe_dispatch(handler))
+            task = asyncio.create_task(self._safe_dispatch(handler))
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
 
         # Schedule reconnection if there are active subscriptions
         async with self._lock:
@@ -273,7 +282,7 @@ class PubSubClient:
             await self._ensure_ws()
             return True
         except Exception as e:
-            logger.error(f"[PUBSUB-CLIENT] Connection failed: {e}")
+            logger.error("[PUBSUB-CLIENT] Connection failed: %s", e)
             return False
 
     async def close(self):

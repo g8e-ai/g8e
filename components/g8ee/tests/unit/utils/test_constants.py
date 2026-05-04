@@ -23,6 +23,7 @@ These are pure unit tests — no external infrastructure required.
 """
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -58,6 +59,7 @@ from app.constants import (
     HeartbeatType,
     InfrastructureStatus,
     InvestigationStatus,
+    KVKey,
     NetworkProtocol,
     OperatorChannel,
     OperatorStatus,
@@ -86,6 +88,11 @@ from app.models.agent import (
     AgentInputs,
     OperatorContext,
 )
+from app.models.settings import G8eeUserSettings, LLMSettings
+from tests.fakes.factories import (
+    build_enriched_context,
+    build_g8e_http_context,
+)
 
 pytestmark = [pytest.mark.unit]
 
@@ -93,7 +100,7 @@ _SHARED_DIR = "/app/shared/constants"
 
 
 def _load(filename: str) -> dict:
-    with open(_SHARED_DIR + "/" + filename) as f:
+    with Path(_SHARED_DIR + "/" + filename).open() as f:
         return json.load(f)
 
 
@@ -653,11 +660,6 @@ class TestCacheVersionMatchesSharedJSON:
         assert kv_keys["cache.prefix"] == CACHE_PREFIX
 
 
-@pytest.fixture(scope="module")
-def senders():
-    return _load("senders.json")
-
-
 class TestMessageTypeMatchesSharedJSON:
     @pytest.fixture(scope="class")
     def ev(self):
@@ -747,10 +749,13 @@ class TestEventTypeSourceMatchesSharedJSON:
     def test_ai_assistant(self, senders):
         assert senders["message"]["sender"]["ai"]["assistant"] == EventType.EVENT_SOURCE_AI_ASSISTANT
 
+    def test_ai_triage(self, senders):
+        assert senders["message"]["sender"]["ai"]["triage"] == EventType.EVENT_SOURCE_AI_TRIAGE
+
     def test_system(self, senders):
         assert senders["message"]["sender"]["system"] == EventType.EVENT_SOURCE_SYSTEM
 
-    def test_all_members_covered(self, senders):
+    def test_sender_members_covered(self, senders):
         def count_leaves(obj):
             if isinstance(obj, str):
                 return 1
@@ -758,8 +763,8 @@ class TestEventTypeSourceMatchesSharedJSON:
                 return sum(count_leaves(v) for k, v in obj.items() if not k.startswith("_"))
             return 0
         json_leaf_count = count_leaves(senders["message"]["sender"])
-        enum_count = len(EventType)
-        assert enum_count == json_leaf_count
+        event_source_count = len([e for e in EventType if e.name.startswith("EVENT_SOURCE_")])
+        assert event_source_count == json_leaf_count
 
 
     def test_text(self, msg):
@@ -794,7 +799,7 @@ class TestEventTypeSourceMatchesSharedJSON:
         # retry is not explicitly in events.json at the same level
         pass
 
-    def test_all_members_covered(self, msg):
+    def test_event_type_members_covered(self, msg):
         # This test was checking internal g8ee enum vs shared json structure
         # which has diverged.
         pass
@@ -1110,122 +1115,99 @@ class TestKVKeySchemaMatchesSharedJSON:
         assert kv_keys["session.type"]["operator"] == "operator"
 
     def test_doc_key_schema(self, kv_keys):
-        from app.constants import KVKey
         key = KVKey.doc("operators", "op-1")
         assert key == f"{CACHE_PREFIX}:cache:doc:operators:op-1"
 
     def test_query_key_schema(self, kv_keys):
-        from app.constants import KVKey
         key = KVKey.query("operators", "deadbeef")
         assert key == f"{CACHE_PREFIX}:cache:query:operators:deadbeef"
 
     def test_session_key_schema(self, kv_keys):
-        from app.constants import KVKey, SessionType
         key = KVKey.session(SessionType.WEB, "sess-abc")
         assert key == f"{CACHE_PREFIX}:session:{SessionType.WEB}:sess-abc"
 
     def test_session_operator_bind_key_schema(self, kv_keys):
-        from app.constants import KVKey
         key = KVKey.session_operator_bind("op-sess-1")
         assert key == f"{CACHE_PREFIX}:session:operator:op-sess-1:bind"
 
     def test_session_web_bind_key_schema(self, kv_keys):
-        from app.constants import KVKey
         key = KVKey.session_web_bind("web-sess-1")
         assert key == f"{CACHE_PREFIX}:session:web:web-sess-1:bind"
 
     def test_operator_first_deployed_key_schema(self, kv_keys):
-        from app.constants import KVKey
         key = KVKey.operator_first_deployed("op-1")
         assert key == f"{CACHE_PREFIX}:operator:op-1:first.deployed"
 
     def test_operator_tracked_status_key_schema(self, kv_keys):
-        from app.constants import KVKey
         key = KVKey.operator_tracked_status("op-1")
         assert key == f"{CACHE_PREFIX}:operator:op-1:tracked.status"
 
     def test_user_operators_key_schema(self, kv_keys):
-        from app.constants import KVKey
         key = KVKey.user_operators("user-1")
         assert key == f"{CACHE_PREFIX}:user:user-1:operators"
 
     def test_user_web_sessions_key_schema(self, kv_keys):
-        from app.constants import KVKey
         key = KVKey.user_web_sessions("user-1")
         assert key == f"{CACHE_PREFIX}:user:user-1:web_sessions"
 
     def test_user_memories_key_schema(self, kv_keys):
-        from app.constants import KVKey
         key = KVKey.user_memories("user-1")
         assert key == f"{CACHE_PREFIX}:user:user-1:memories"
 
     def test_attachment_key_schema(self, kv_keys):
-        from app.constants import KVKey
         key = KVKey.attachment("inv-1", "att-2")
         assert key == f"{CACHE_PREFIX}:investigation:inv-1:attachment:att-2"
 
     def test_attachment_index_key_schema(self, kv_keys):
-        from app.constants import KVKey
         key = KVKey.attachment_index("inv-1")
         assert key == f"{CACHE_PREFIX}:investigation:inv-1:attachment.index"
 
     def test_nonce_key_schema(self, kv_keys):
-        from app.constants import KVKey
         key = KVKey.nonce("abc123")
         assert key == f"{CACHE_PREFIX}:auth:nonce:abc123"
 
     def test_download_token_key_schema(self, kv_keys):
-        from app.constants import KVKey
         key = KVKey.download_token("tok-abc")
         assert key == f"{CACHE_PREFIX}:auth:token:download:tok-abc"
 
     def test_device_link_key_schema(self, kv_keys):
-        from app.constants import KVKey
         key = KVKey.device_link("dlk_token123")
         assert key == f"{CACHE_PREFIX}:auth:token:device:dlk_token123"
 
     def test_device_link_uses_key_schema(self, kv_keys):
-        from app.constants import KVKey
         key = KVKey.device_link_uses("tok-1")
         assert key == f"{CACHE_PREFIX}:auth:token:device:tok-1:uses"
 
     def test_device_link_fingerprints_key_schema(self, kv_keys):
-        from app.constants import KVKey
         key = KVKey.device_link_fingerprints("tok-1")
         assert key == f"{CACHE_PREFIX}:auth:token:device:tok-1:fingerprints"
 
     def test_device_link_registration_lock_key_schema(self, kv_keys):
-        from app.constants import KVKey
         key = KVKey.device_link_registration_lock("tok-1")
         assert key == f"{CACHE_PREFIX}:auth:token:device:tok-1:reg.lock"
 
     def test_device_link_list_key_schema(self, kv_keys):
-        from app.constants import KVKey
         key = KVKey.device_link_list("user-1")
         assert key == f"{CACHE_PREFIX}:auth:device.list:user-1"
 
     def test_login_failed_key_schema(self, kv_keys):
-        from app.constants import KVKey
         key = KVKey.login_failed("user@example.com")
         assert key == f"{CACHE_PREFIX}:auth:login:user@example.com:failed"
 
     def test_login_lock_key_schema(self, kv_keys):
-        from app.constants import KVKey
         key = KVKey.login_lock("user@example.com")
         assert key == f"{CACHE_PREFIX}:auth:login:user@example.com:lock"
 
     def test_login_ip_accounts_key_schema(self, kv_keys):
-        from app.constants import KVKey
         key = KVKey.login_ip_accounts("192.168.1.1")
         assert key == f"{CACHE_PREFIX}:auth:login:ip:192.168.1.1:accounts"
 
     def test_pending_exec_key_schema(self, kv_keys):
-        from app.constants import KVKey
         key = KVKey.pending_cmd("exec-1")
         assert key == f"{CACHE_PREFIX}:execution:exec-1:pending.cmd"
 
 
-class TestEventTypeMatchesSharedJSON:
+class TestEventTypeMatchesSharedJSONExtended:
     @pytest.fixture(scope="class")
     def ev(self):
         return _load("events.json")
@@ -1668,14 +1650,6 @@ class TestAttachmentTypeMatchesSharedJSON:
             f"AttachmentType has {enum_count} members but shared JSON has {len(json_keys)} keys: {json_keys}"
         )
 
-
-
-
-from app.models.settings import G8eeUserSettings, LLMSettings
-from tests.fakes.factories import (
-    build_enriched_context,
-    build_g8e_http_context,
-)
 
 
 class TestAgentModeValidation:

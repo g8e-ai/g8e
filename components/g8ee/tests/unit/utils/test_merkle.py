@@ -79,7 +79,6 @@ class TestMerkleRoot:
         a = leaf_bytes("axiom", 0.5)
         b = leaf_bytes("concord", 0.5)
         c = leaf_bytes("variance", 0.5)
-        # Tree: ((a,b), (c,c))
         ab = hashlib.sha256(a + b).digest()
         cc = hashlib.sha256(c + c).digest()
         expected = hashlib.sha256(ab + cc).hexdigest()

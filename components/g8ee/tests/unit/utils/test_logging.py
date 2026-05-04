@@ -86,7 +86,7 @@ class TestRedactEmail:
 
     def test_local_part_first_last_preserved(self):
         result = redact_email("alice@example.com")
-        local, domain = result.split("@")
+        local, _domain = result.split("@")
         assert local[0] == "a"
         assert local[-1] == "e"
         assert all(c == "*" for c in local[1:-1])

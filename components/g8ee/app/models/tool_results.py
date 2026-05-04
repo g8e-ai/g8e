@@ -38,6 +38,24 @@ from app.models.ssh_inventory import SshHost
 from app.models.whitelist import WhitelistedCommand
 
 
+class BatchExecutionMeta(G8eBaseModel):
+    """Mixin for batch execution metadata shared across all tool result types."""
+    batch_execution: bool = False
+    batch_id: str | None = None
+    operators_used: int = 0
+    successful_count: int = 0
+    failed_count: int = 0
+
+
+class PerOperatorResultBase(G8eBaseModel):
+    """Base class for per-operator result entries."""
+    execution_id: str
+    operator_id: str
+    hostname: str
+    success: bool
+    error: str | None = None
+
+
 class FsListEntry(G8eBaseModel):
     """A single directory entry returned by an fs_list operation.
 
@@ -178,7 +196,15 @@ class FileOperationRiskAnalysis(G8eBaseModel):
 
 
 
-class FileEditResult(G8eBaseModel):
+class PerOperatorFileEditResult(PerOperatorResultBase):
+    """Per-operator result for file edit operations."""
+    success: bool
+    content: str | None = None
+    backup_path: str | None = None
+    stderr: str | None = None
+
+
+class FileEditResult(BatchExecutionMeta):
     """Result returned by FileEditMixin._execute_file_edit."""
     success: bool = True
     error: str | None = None
@@ -193,9 +219,18 @@ class FileEditResult(G8eBaseModel):
     approved: bool | None = None
     blocking_issues: list[str] | None = None
     risk_analysis: FileOperationRiskAnalysis | None = None
+    per_operator_results: list[PerOperatorFileEditResult] | None = None
 
 
-class PortCheckToolResult(G8eBaseModel):
+class PerOperatorPortCheckResult(PerOperatorResultBase):
+    """Per-operator result for port check operations."""
+    is_open: bool | None = None
+    latency_ms: float | None = None
+    error_type: str | None = None
+    protocol: NetworkProtocol | None = None
+
+
+class PortCheckToolResult(BatchExecutionMeta):
     """Result returned by PortOperationsMixin._execute_port_check."""
     success: bool = True
     error: str | None = None
@@ -205,9 +240,17 @@ class PortCheckToolResult(G8eBaseModel):
     protocol: NetworkProtocol | None = None
     is_open: bool | None = None
     latency_ms: float | None = None
+    per_operator_results: list[PerOperatorPortCheckResult] | None = None
 
 
-class FsListToolResult(G8eBaseModel):
+class PerOperatorFsListResult(PerOperatorResultBase):
+    """Per-operator result for filesystem list operations."""
+    entries: list[FsListEntry] = Field(default_factory=list)
+    total_count: int = 0
+    truncated: bool = False
+
+
+class FsListToolResult(BatchExecutionMeta):
     """Result returned by FilesystemMixin._execute_fs_list."""
     success: bool = True
     error: str | None = None
@@ -216,9 +259,18 @@ class FsListToolResult(G8eBaseModel):
     entries: list[FsListEntry] = Field(default_factory=list)
     total_count: int = 0
     truncated: bool = False
+    per_operator_results: list[PerOperatorFsListResult] | None = None
 
 
-class FsReadToolResult(G8eBaseModel):
+class PerOperatorFsReadResult(PerOperatorResultBase):
+    """Per-operator result for filesystem read operations."""
+    content: str | None = None
+    size: int = 0
+    encoding: str | None = None
+    line_count: int | None = None
+
+
+class FsReadToolResult(BatchExecutionMeta):
     """Result returned by FilesystemMixin._execute_file_read."""
     success: bool = True
     error: str | None = None
@@ -227,6 +279,7 @@ class FsReadToolResult(G8eBaseModel):
     content: str | None = None
     size: int = 0
     truncated: bool = False
+    per_operator_results: list[PerOperatorFsReadResult] | None = None
 
 
 class FetchLogsToolResult(G8eBaseModel):
@@ -285,13 +338,19 @@ class FetchHistoryToolResult(G8eBaseModel):
     offset: int = 0
 
 
-class FetchFileHistoryToolResult(G8eBaseModel):
+class PerOperatorFileHistoryResult(PerOperatorResultBase):
+    """Per-operator result for file history operations."""
+    entries: list[FileHistoryEntry] = Field(default_factory=list)
+
+
+class FetchFileHistoryToolResult(BatchExecutionMeta):
     """Result returned by AuditHistoryMixin._execute_fetch_file_history."""
     success: bool = True
     error: str | None = None
     error_type: CommandErrorType | None = None
     file_path: str | None = None
     history: list[FileHistoryEntry] = Field(default_factory=list)
+    per_operator_results: list[PerOperatorFileHistoryResult] | None = None
 
 
 class RestoreFileToolResult(G8eBaseModel):
@@ -304,7 +363,12 @@ class RestoreFileToolResult(G8eBaseModel):
     message: str | None = None
 
 
-class FetchFileDiffToolResult(G8eBaseModel):
+class PerOperatorFileDiffResult(PerOperatorResultBase):
+    """Per-operator result for file diff operations."""
+    entries: list[FileDiffEntry] = Field(default_factory=list)
+
+
+class FetchFileDiffToolResult(BatchExecutionMeta):
     """Result returned by LedgerMirrorMixin._execute_fetch_file_diff."""
     success: bool = True
     error: str | None = None
@@ -313,6 +377,7 @@ class FetchFileDiffToolResult(G8eBaseModel):
     diffs: list[FileDiffEntry] = Field(default_factory=list)
     total: int = 0
     operator_session_id: str | None = None
+    per_operator_results: list[PerOperatorFileDiffResult] | None = None
 
 
 class IamIntentResult(G8eBaseModel):
@@ -426,7 +491,7 @@ class SshInventoryToolResult(G8eBaseModel):
     total_count: int = 0
 
 
-class CommandExecutionResult(G8eBaseModel):
+class CommandExecutionResult(BatchExecutionMeta):
     """Typed result returned by _execute_g8eo_command through the entire call chain.
 
     Replaces all Dict[str, Any] returns from command_executor -> tool_executor -> agent.
@@ -445,10 +510,6 @@ class CommandExecutionResult(G8eBaseModel):
     exit_code: int | None = Field(default=None)
     execution_status: ExecutionStatus | None = Field(default=None)
 
-    batch_execution: bool = Field(default=False)
-    operators_used: int = Field(default=0)
-    successful_count: int = Field(default=0)
-    failed_count: int = Field(default=0)
     execution_results: list[CommandInternalResult] | None = Field(default=None)
 
     execution_result: CommandInternalResult | None = Field(default=None)
@@ -458,10 +519,6 @@ class CommandExecutionResult(G8eBaseModel):
     feedback_reason: str | None = Field(default=None)
     execution_id: str | None = Field(default=None)
     approval_id: str | None = Field(default=None)
-    batch_id: str | None = Field(
-        default=None,
-        description="Batch correlation ID when this result represents a multi-operator fan-out; matches the batch_id on per-operator events.",
-    )
     available_operators: int | None = Field(default=None)
     warden_risk: RiskLevel | None = Field(
         default=None,

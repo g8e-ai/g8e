@@ -41,7 +41,7 @@ class CertificateDataService:
             )
             return rows
         except Exception as e:
-            logger.error(f"[CERT-DATA] Failed to query revocations: {e}")
+            logger.error("[CERT-DATA] Failed to query revocations: %s", e)
             return []
 
     async def revoke_certificate(self, serial: str, reason: str, operator_id: str | None = None) -> bool:

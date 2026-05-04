@@ -166,6 +166,7 @@ class SettingsService:
         settings.command_validation = platform_settings.command_validation
         settings.search = platform_settings.search
         settings.reputation = platform_settings.reputation
+        settings.batch_execution = platform_settings.batch_execution
 
         # Auth: bootstrap value wins when present; platform DB fills gaps.
         # Iterating AuthSettings.model_fields makes this structural — newly
@@ -233,6 +234,7 @@ class SettingsService:
                 search=self._build_search_settings(platform_doc.settings),
                 eval_judge=platform_doc.settings.eval_judge,
                 command_validation=platform_doc.settings.command_validation,
+                batch_execution=platform_doc.settings.batch_execution,
             )
 
         user_doc = UserSettingsDocument.model_validate(user_doc_dict)
@@ -243,6 +245,7 @@ class SettingsService:
             search=self._build_search_settings(data),
             eval_judge=data.eval_judge,
             command_validation=data.command_validation,
+            batch_execution=data.batch_execution,
         )
 
     def _build_search_settings(self, settings: G8eePlatformSettings | G8eeUserSettings) -> SearchSettings:

@@ -91,7 +91,7 @@ class TestReputationPipelineIntegration:
         tool_call = ToolCall(
             id="call_123",
             name=OperatorToolName.RUN_COMMANDS,
-            args={"request": "ls"}
+            args={"request": "ls", "target_operators": ["all"]}
         )
 
         # Setup results
@@ -176,7 +176,7 @@ class TestReputationPipelineIntegration:
             user_id="slash-user",
             sentinel_mode=False
         )
-        tool_call = ToolCall(id="call_456", name=OperatorToolName.RUN_COMMANDS, args={"request": "rm"})
+        tool_call = ToolCall(id="call_456", name=OperatorToolName.RUN_COMMANDS, args={"request": "rm", "target_operators": ["all"]})
 
         gen_result = CommandGenerationResult(
             correlation_id="tribunal_456",

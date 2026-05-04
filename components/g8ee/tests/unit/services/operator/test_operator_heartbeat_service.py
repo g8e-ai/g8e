@@ -33,12 +33,12 @@ pytestmark = [pytest.mark.unit]
 
 
 def _make_payload(**kwargs) -> G8eoHeartbeatPayload:
-    defaults = dict(
-        event_type=EventType.OPERATOR_HEARTBEAT_SENT,
-        operator_id="op-222",
-        operator_session_id="op-session-111",
-        timestamp=now().isoformat(),
-    )
+    defaults = {
+        "event_type": EventType.OPERATOR_HEARTBEAT_SENT,
+        "operator_id": "op-222",
+        "operator_session_id": "op-session-111",
+        "timestamp": now().isoformat(),
+    }
     defaults.update(kwargs)
     return G8eoHeartbeatPayload(**defaults)
 
@@ -83,7 +83,7 @@ class TestSetPubsubClient:
     async def test_assigns_client_when_valid(self, service):
         client = _make_mock_pubsub_client()
         service.set_pubsub_client(client)
-        assert service._pubsub_client is client
+        assert service.pubsub_client is client
 
 
 class TestHeartbeatServiceLifecycle:
@@ -104,7 +104,7 @@ class TestHeartbeatServiceLifecycle:
         await service.start()
 
         client.ensure_connected.assert_called_once()
-        assert service._ready is True
+        assert service.is_ready is True
 
     async def test_start_is_idempotent_when_already_ready(self, service):
         client = _make_mock_pubsub_client()
@@ -119,23 +119,26 @@ class TestHeartbeatServiceLifecycle:
     async def test_stop_punsubscribes_pattern_and_clears_ready(self, service):
         client = _make_mock_pubsub_client()
         service.set_pubsub_client(client)
-        service._active_sessions = {("op-1", "sess-1"), ("op-2", "sess-2")}
-        service._ready = True
+        await service.register_operator_session("op-1", "sess-1")
+        await service.register_operator_session("op-2", "sess-2")
+        await service.start()
 
         await service.stop()
 
-        assert service._ready is False
+        assert service.is_ready is False
         client.punsubscribe.assert_called_once()
         # The pattern subscription is shared across all operators; sessions
         # are tracked in-memory only and are cleared on stop.
-        assert service._active_sessions == set()
+        assert service.active_sessions == set()
 
     async def test_stop_with_no_active_sessions_clears_ready(self, service):
-        service._ready = True
+        client = _make_mock_pubsub_client()
+        service.set_pubsub_client(client)
+        await service.start()
 
         await service.stop()
 
-        assert service._ready is False
+        assert service.is_ready is False
 
     async def test_start_pattern_subscribes_to_heartbeats(self, service):
         client = _make_mock_pubsub_client()
@@ -165,7 +168,7 @@ class TestRegisterDeregisterSession:
     async def test_register_does_not_require_client(self, service):
         # No pubsub client is needed; register is pure in-memory bookkeeping.
         await service.register_operator_session("op-1", "sess-1")
-        assert ("op-1", "sess-1") in service._active_sessions
+        assert ("op-1", "sess-1") in service.active_sessions
 
     async def test_register_does_not_open_per_session_subscription(self, service):
         client = _make_mock_pubsub_client()
@@ -175,13 +178,13 @@ class TestRegisterDeregisterSession:
 
         client.on_channel_message.assert_not_called()
         client.subscribe.assert_not_called()
-        assert ("op-1", "sess-1") in service._active_sessions
+        assert ("op-1", "sess-1") in service.active_sessions
 
     async def test_register_is_idempotent_for_same_session(self, service):
         await service.register_operator_session("op-1", "sess-1")
         await service.register_operator_session("op-1", "sess-1")
 
-        assert service._active_sessions == {("op-1", "sess-1")}
+        assert service.active_sessions == {("op-1", "sess-1")}
 
     async def test_deregister_removes_session_without_pubsub_calls(self, service):
         client = _make_mock_pubsub_client()
@@ -190,29 +193,29 @@ class TestRegisterDeregisterSession:
 
         await service.deregister_operator_session("op-1", "sess-1")
 
-        assert ("op-1", "sess-1") not in service._active_sessions
+        assert ("op-1", "sess-1") not in service.active_sessions
         client.unsubscribe.assert_not_called()
         client.off_channel_message.assert_not_called()
 
     async def test_deregister_without_client_does_not_raise(self, service):
-        service._active_sessions = {("op-1", "sess-1")}
+        await service.register_operator_session("op-1", "sess-1")
 
         await service.deregister_operator_session("op-1", "sess-1")
 
-        assert ("op-1", "sess-1") not in service._active_sessions
+        assert ("op-1", "sess-1") not in service.active_sessions
 
     async def test_deregister_nonexistent_session_is_noop(self, service):
         await service.deregister_operator_session("op-999", "sess-999")
-        assert service._active_sessions == set()
+        assert service.active_sessions == set()
 
 
 class TestOnHeartbeatMessage:
     """_on_heartbeat_message — channel routing, data parsing, session auto-register, exception guard."""
 
     @pytest.fixture
-    def service(self):
+    async def service(self):
         svc = _make_service()
-        svc._active_sessions = {("op-222", "op-session-111")}
+        await svc.register_operator_session("op-222", "op-session-111")
         return svc
 
     async def test_on_heartbeat_message_parses_dict_data_and_calls_process(self, service):
@@ -220,7 +223,7 @@ class TestOnHeartbeatMessage:
         data = payload.model_dump()
 
         with patch.object(service, "process_heartbeat_message", new=AsyncMock(return_value=True)) as mock_proc:
-            await service._on_heartbeat_message(PubSubChannel.heartbeat("op-222", "op-session-111"), data)
+            await service.on_heartbeat_message(PubSubChannel.heartbeat("op-222", "op-session-111"), data)
 
         mock_proc.assert_called_once()
         call_args = mock_proc.call_args
@@ -231,7 +234,7 @@ class TestOnHeartbeatMessage:
         data = json.dumps(_make_payload().model_dump(mode="json"))
 
         with patch.object(service, "process_heartbeat_message", new=AsyncMock(return_value=True)) as mock_proc:
-            await service._on_heartbeat_message(PubSubChannel.heartbeat("op-222", "op-session-111"), data)
+            await service.on_heartbeat_message(PubSubChannel.heartbeat("op-222", "op-session-111"), data)
 
         mock_proc.assert_called_once()
 
@@ -240,28 +243,26 @@ class TestOnHeartbeatMessage:
         The handler must record the (operator, session) pair so subsequent
         bookkeeping (e.g. liveness queries) sees it as active.
         """
-        service._active_sessions = set()
         data = _make_payload().model_dump()
 
         with patch.object(service, "process_heartbeat_message", new=AsyncMock(return_value=True)):
-            await service._on_heartbeat_message(PubSubChannel.heartbeat("op-222", "op-session-111"), data)
+            await service.on_heartbeat_message(PubSubChannel.heartbeat("op-new", "op-session-new"), data)
 
-        assert ("op-222", "op-session-111") in service._active_sessions
+        assert ("op-new", "op-session-new") in service.active_sessions
 
     async def test_on_pattern_heartbeat_message_dispatches_by_channel(self, service):
-        service._active_sessions = set()
         channel = PubSubChannel.heartbeat("op-333", "op-session-444")
         data = _make_payload(operator_id="op-333", operator_session_id="op-session-444").model_dump()
 
         with patch.object(service, "process_heartbeat_message", new=AsyncMock(return_value=True)) as mock_proc:
-            await service._on_pattern_heartbeat_message("heartbeat:*", channel, data)
+            await service.on_pattern_heartbeat_message("heartbeat:*", channel, data)
 
         mock_proc.assert_called_once()
-        assert ("op-333", "op-session-444") in service._active_sessions
+        assert ("op-333", "op-session-444") in service.active_sessions
 
     async def test_on_heartbeat_message_swallows_exceptions_silently(self, service):
         with patch.object(service, "process_heartbeat_message", new=AsyncMock(side_effect=RuntimeError("boom"))):
-            await service._on_heartbeat_message(PubSubChannel.heartbeat("op-222", "op-session-111"), _make_payload().model_dump())
+            await service.on_heartbeat_message(PubSubChannel.heartbeat("op-222", "op-session-111"), _make_payload().model_dump())
 
 
 class TestHeartbeatSnapshotServiceIdentity:
@@ -273,15 +274,15 @@ class TestHeartbeatSnapshotServiceIdentity:
 
     async def test_validate_matching_operator_id(self, service):
         payload = G8eoHeartbeatPayload(operator_id="op-222")
-        assert service._validate_operator_identity("op-222", payload, "sess-111") is True
+        assert service.validate_operator_identity("op-222", payload, "sess-111") is True
 
     async def test_validate_mismatched_operator_id_rejected(self, service):
         payload = G8eoHeartbeatPayload(operator_id="op-EVIL")
-        assert service._validate_operator_identity("op-222", payload, "sess-111") is False
+        assert service.validate_operator_identity("op-222", payload, "sess-111") is False
 
     async def test_validate_no_payload_id_passes(self, service):
         payload = G8eoHeartbeatPayload(operator_id=None)
-        assert service._validate_operator_identity("op-222", payload, "sess-111") is True
+        assert service.validate_operator_identity("op-222", payload, "sess-111") is True
 
 
 class TestHeartbeatSnapshotServiceOperatorValidation:
@@ -301,7 +302,7 @@ class TestHeartbeatSnapshotServiceOperatorValidation:
         operator = OperatorDocument(id="op-222", status=OperatorStatus.ACTIVE, user_id="user-1", bound_web_session_id="ws-1")
         mock_operator_data_service.get_operator.return_value = operator
 
-        result = await service._get_and_validate_operator("op-222", "sess-111", _make_payload())
+        result = await service.get_and_validate_operator("op-222", "sess-111", _make_payload())
 
         assert result is operator
         mock_operator_data_service.get_operator.assert_called_once_with("op-222")
@@ -309,7 +310,7 @@ class TestHeartbeatSnapshotServiceOperatorValidation:
     async def test_cache_miss_returns_none(self, service, mock_operator_data_service):
         mock_operator_data_service.get_operator.return_value = None
 
-        result = await service._get_and_validate_operator("op-unknown", "sess-111", _make_payload())
+        result = await service.get_and_validate_operator("op-unknown", "sess-111", _make_payload())
 
         assert result is None
 
@@ -324,7 +325,7 @@ class TestHeartbeatSnapshotServiceOperatorValidation:
             operator = OperatorDocument(id="op-222", status=status, user_id="user-1", bound_web_session_id="ws-1")
             mock_operator_data_service.get_operator.return_value = operator
 
-            result = await service._get_and_validate_operator("op-222", "sess-111", _make_payload())
+            result = await service.get_and_validate_operator("op-222", "sess-111", _make_payload())
 
             assert result is not None, f"Status {status} should not gate heartbeat acceptance"
 
@@ -500,7 +501,7 @@ class TestPushHeartbeatSSE:
         )
         payload = _make_payload()
 
-        await service._push_heartbeat_sse(envelope, payload, operator)
+        await service.push_heartbeat_sse(envelope, payload, operator)
 
         mock_event_service.publish.assert_called()
         first_call = mock_event_service.publish.call_args_list[0]
@@ -524,7 +525,7 @@ class TestPushHeartbeatSSE:
             metrics=HeartbeatSnapshot(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
         )
 
-        await service._push_heartbeat_sse(envelope, _make_payload(), operator)
+        await service.push_heartbeat_sse(envelope, _make_payload(), operator)
 
         mock_event_service.publish.assert_called_once()
         event = mock_event_service.publish.call_args.args[0]
@@ -547,7 +548,7 @@ class TestPushHeartbeatSSE:
             metrics=HeartbeatSnapshot(timestamp=now(), heartbeat_type=HeartbeatType.AUTOMATIC),
         )
 
-        await service._push_heartbeat_sse(
+        await service.push_heartbeat_sse(
             envelope, _make_payload(investigation_id="inv-42"), operator
         )
 
@@ -568,7 +569,7 @@ class TestPushHeartbeatSSE:
         )
         mock_event_service.publish.side_effect = Exception("network down")
 
-        await service._push_heartbeat_sse(envelope, _make_payload(), operator)
+        await service._push_heartbeat_sse(envelope, _make_payload(), operator)  # noqa: SLF001
 
     async def test_sse_exception_is_logged_with_traceback(
         self, service, mock_event_service, caplog
@@ -592,7 +593,7 @@ class TestPushHeartbeatSSE:
         )
 
         with caplog.at_level(logging.WARNING):
-            await service._push_heartbeat_sse(envelope, _make_payload(), operator)
+            await service.push_heartbeat_sse(envelope, _make_payload(), operator)
 
         sse_records = [r for r in caplog.records if "SSE push failed" in r.getMessage()]
         assert sse_records, "expected warning log for swallowed SSE failure"
@@ -612,18 +613,18 @@ class TestValidateHeartbeatTimestamp:
         return _make_service()
 
     async def test_valid_timestamp_returns_valid(self, service):
-        result = service._validate_heartbeat_timestamp(_make_payload(timestamp=now().isoformat()))
+        result = service.validate_heartbeat_timestamp(_make_payload(timestamp=now().isoformat()))
         assert result.is_valid is True
 
     async def test_stale_timestamp_returns_invalid(self, service):
-        result = service._validate_heartbeat_timestamp(
+        result = service.validate_heartbeat_timestamp(
             _make_payload(timestamp="2000-01-01T00:00:00+00:00")
         )
         assert result.is_valid is False
         assert result.error is not None
 
     async def test_missing_timestamp_returns_invalid(self, service):
-        result = service._validate_heartbeat_timestamp(_make_payload(timestamp=None))
+        result = service.validate_heartbeat_timestamp(_make_payload(timestamp=None))
         assert result.is_valid is False
 
 
@@ -632,27 +633,30 @@ class TestWsDisconnectHandler:
 
     @pytest.fixture
     def service(self):
-        return _make_service()
+        svc = _make_service()
+        svc.set_pubsub_client(_make_mock_pubsub_client())
+        return svc
 
     async def test_disconnect_resets_ready_flag(self, service):
-        service._ready = True
-        service._active_sessions = {("op-1", "sess-1")}
+        await service.start()
+        await service.register_operator_session("op-1", "sess-1")
 
-        await service._on_ws_disconnect()
+        await service.on_ws_disconnect()
 
-        assert service._ready is False
+        assert service.is_ready is False
 
     async def test_disconnect_preserves_active_sessions(self, service):
         """Disconnect should preserve active sessions for observability across
         reconnect — the shared heartbeat:* pattern subscription is restored
         independently by the pubsub client's reconnect logic."""
-        service._ready = True
-        service._active_sessions = {("op-1", "sess-1"), ("op-2", "sess-2")}
+        await service.start()
+        await service.register_operator_session("op-1", "sess-1")
+        await service.register_operator_session("op-2", "sess-2")
 
-        await service._on_ws_disconnect()
+        await service.on_ws_disconnect()
 
-        assert service._ready is False
-        assert service._active_sessions == {("op-1", "sess-1"), ("op-2", "sess-2")}
+        assert service.is_ready is False
+        assert service.active_sessions == {("op-1", "sess-1"), ("op-2", "sess-2")}
 
     async def test_disconnect_handler_registered_on_set_pubsub_client(self, service):
         client = _make_mock_pubsub_client()
@@ -660,19 +664,19 @@ class TestWsDisconnectHandler:
 
         service.set_pubsub_client(client)
 
-        client.on_disconnect.assert_called_once_with(service._on_ws_disconnect)
+        client.on_disconnect.assert_called_once_with(service._on_ws_disconnect)  # noqa: SLF001
 
     async def test_start_resets_ready_after_disconnect(self, service):
         client = _make_mock_pubsub_client()
         service.set_pubsub_client(client)
         await service.start()
-        assert service._ready is True
+        assert service.is_ready is True
 
-        await service._on_ws_disconnect()
-        assert service._ready is False
+        await service.on_ws_disconnect()
+        assert service.is_ready is False
 
         await service.start()
-        assert service._ready is True
+        assert service.is_ready is True
 
     async def test_start_re_psubscribes_pattern_after_disconnect(self, service):
         """After disconnect, start() must re-issue the heartbeat:* pattern
@@ -687,14 +691,14 @@ class TestWsDisconnectHandler:
         await service.start()
         assert client.psubscribe.call_count == 1
 
-        await service._on_ws_disconnect()
-        assert service._ready is False
-        assert service._active_sessions == {("op-1", "sess-1"), ("op-2", "sess-2")}
+        await service.on_ws_disconnect()
+        assert service.is_ready is False
+        assert service.active_sessions == {("op-1", "sess-1"), ("op-2", "sess-2")}
 
         await service.start()
 
         assert client.psubscribe.call_count == 2
-        assert service._ready is True
+        assert service.is_ready is True
 
 
 class TestG8eoHeartbeatPayloadApiKey:
@@ -721,9 +725,9 @@ class TestHeartbeatServiceConstruction:
             operator_data_service=MagicMock(),
             event_service=MagicMock(),
         )
-        assert svc._ready is False
-        assert svc._pubsub_client is None
-        assert len(svc._active_sessions) == 0
+        assert svc.is_ready is False
+        assert svc._pubsub_client is None  # noqa: SLF001
+        assert len(svc.active_sessions) == 0
 
     async def test_distinct_instances_are_independent(self):
         svc1 = _make_service()

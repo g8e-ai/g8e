@@ -485,8 +485,10 @@ class TestG8eeSettingsOverlayIntegration:
                     "enable_blacklisting": True,
                     "enable_auto_approve": True,
                     "auto_approved_commands": "uptime,df",
-                    "max_batch_concurrency": 5,
-                    "batch_fail_fast": True,
+                },
+                "batch_execution": {
+                    "max_concurrency": 5,
+                    "fail_fast": True,
                 },
             },
             "created_at": "2026-01-01T00:00:00Z",
@@ -512,8 +514,9 @@ class TestG8eeSettingsOverlayIntegration:
         assert cv.enable_blacklisting is True
         assert cv.enable_auto_approve is True
         assert cv.auto_approved_commands == "uptime,df"
-        assert cv.max_batch_concurrency == 5
-        assert cv.batch_fail_fast is True
+        be = settings.batch_execution
+        assert be.max_concurrency == 5
+        assert be.fail_fast is True
 
     async def test_user_overlay_auto_approve_overrides_platform(self, settings_service, cache_service):
         """User-level command_validation must override platform-level values.

@@ -36,13 +36,14 @@ from google.api_core.exceptions import GoogleAPICallError, ResourceExhausted, Se
 from google.auth.api_key import Credentials as ApiKeyCredentials
 from google.cloud import discoveryengine_v1 as discoveryengine
 
+from app.constants.settings import GroundingSource
 from app.constants import (
     WEB_SEARCH_CLIENT_MAX_RETRIES,
     WEB_SEARCH_CLIENT_RETRY_BACKOFF,
     WEB_SEARCH_CLIENT_TIMEOUT,
 )
 from app.errors import NetworkError
-from app.models.grounding import GroundingMetadata, GroundingSourceInfo
+from app.models.grounding import GroundingChunk, GroundingMetadata, GroundingSourceInfo
 from app.models.tool_results import SearchWebResult, WebSearchResultItem
 
 logger = logging.getLogger(__name__)
@@ -302,9 +303,6 @@ class WebSearchProvider:
         the search result items. grounding_supports is intentionally left empty
         because the search_web tool does not produce segment-level text mappings.
         """
-        from app.constants.settings import GroundingSource
-        from app.models.grounding import GroundingChunk
-
         if not result.success or not result.results:
             return GroundingMetadata(
                 grounding_used=False,
@@ -423,7 +421,7 @@ class WebSearchProvider:
                         message=f"Web search API call failed: {e}",
                         details={"query": query, "attempt": attempt + 1},
                         cause=e,
-                    )
+                    ) from e
                 logger.warning(
                     "[WEB_SEARCH] Retryable API error on attempt %d/%d: %s",
                     attempt + 1, WEB_SEARCH_CLIENT_MAX_RETRIES + 1, e,

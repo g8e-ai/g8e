@@ -578,7 +578,7 @@ class HTTPClient:
                     }
                 )
 
-                raise error
+                raise error from e
 
             except (aiohttp.ClientError, OSError) as e:
                 if self._should_retry(method, 0, retry_count, e):
@@ -627,7 +627,7 @@ class HTTPClient:
                     }
                 )
 
-                raise error
+                raise error from e
 
             except NetworkError:
                 raise
@@ -659,7 +659,7 @@ class HTTPClient:
                     }
                 )
 
-                raise error
+                raise error from e
 
     async def post(
         self,

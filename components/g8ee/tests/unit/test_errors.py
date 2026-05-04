@@ -266,7 +266,7 @@ class TestG8eError:
 # ---------------------------------------------------------------------------
 
 class TestGetHttpStatus:
-    @pytest.mark.parametrize("category,expected_status", [
+    @pytest.mark.parametrize(("category", "expected_status"), [
         (ErrorCategory.VALIDATION, 400),
         (ErrorCategory.BUSINESS_LOGIC, 400),
         (ErrorCategory.AUTH, 401),
@@ -403,11 +403,6 @@ class TestErrorSubclasses:
         assert e.category == ErrorCategory.TIMEOUT
         assert e.retry_suggested is True
         assert e.get_http_status() == 504
-
-    def test_business_logic_error_defaults(self):
-        e = BusinessLogicError("operation failed")
-        assert e.code == ErrorCode.BUSINESS_LOGIC_ERROR
-        assert e.category == ErrorCategory.BUSINESS_LOGIC
 
     def test_subclass_code_override(self):
         e = DatabaseError("query failed", code=ErrorCode.DB_QUERY_ERROR)

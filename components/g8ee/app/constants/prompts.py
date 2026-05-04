@@ -11,14 +11,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from enum import Enum
+from enum import StrEnum
 
-class AgentMode(str, Enum):
+class AgentMode(StrEnum):
     OPERATOR_BOUND = "g8e.bound"
     OPERATOR_NOT_BOUND = "g8e.not.bound"
     CLOUD_OPERATOR_BOUND = "cloud.g8e.bound"
 
-class PromptSection(str, Enum):
+class PromptSection(StrEnum):
     IDENTITY = "identity"
     SAFETY = "safety"
     LOYALTY = "loyalty"
@@ -36,14 +36,14 @@ class PromptSection(str, Enum):
     AGENT_PERSONA = "agent_persona"
 
 
-class InvestigationContextLabel(str, Enum):
+class InvestigationContextLabel(StrEnum):
     CASE = "Case"
     DESCRIPTION = "Description"
     STATUS = "Status"
     PRIORITY = "Priority"
     SEVERITY = "Severity"
 
-class PromptFile(str, Enum):
+class PromptFile(StrEnum):
     # Core
     CORE_IDENTITY = "core/identity.txt"
     CORE_SAFETY = "core/safety.txt"

@@ -25,10 +25,12 @@ Covers:
 """
 
 import json
+from unittest.mock import patch
 
 import pytest
 
 from app.constants import CommandCategory, Platform
+from app.errors import ConfigurationError
 from app.utils.csv_commands import parse_command_csv
 from app.utils.whitelist_validator import (
     _COMMON_SAFE_PATTERNS,
@@ -144,25 +146,25 @@ class TestIsSafeValue:
     """_is_safe_value must reject unsafe chars regardless of leading dash."""
 
     def test_empty_string_is_unsafe(self, validator):
-        assert validator._is_safe_value("") is False
+        assert validator._is_safe_value("") is False  # noqa: SLF001
 
     def test_bare_dash_is_unsafe(self, validator):
-        assert validator._is_safe_value("-") is False
+        assert validator._is_safe_value("-") is False  # noqa: SLF001
 
     def test_double_dash_is_unsafe(self, validator):
-        assert validator._is_safe_value("--") is False
+        assert validator._is_safe_value("--") is False  # noqa: SLF001
 
     def test_plain_flag_is_safe(self, validator):
-        assert validator._is_safe_value("-c") is True
+        assert validator._is_safe_value("-c") is True  # noqa: SLF001
 
     def test_long_flag_is_safe(self, validator):
-        assert validator._is_safe_value("--count") is True
+        assert validator._is_safe_value("--count") is True  # noqa: SLF001
 
     def test_alphanumeric_value_is_safe(self, validator):
-        assert validator._is_safe_value("google.com") is True
+        assert validator._is_safe_value("google.com") is True  # noqa: SLF001
 
     def test_numeric_value_is_safe(self, validator):
-        assert validator._is_safe_value("4") is True
+        assert validator._is_safe_value("4") is True  # noqa: SLF001
 
     @pytest.mark.parametrize("unsafe", [
         "-c;rm -rf /",
@@ -178,13 +180,13 @@ class TestIsSafeValue:
     ])
     def test_dash_prefixed_with_unsafe_chars_is_rejected(self, validator, unsafe):
         """Regression: previously returned True for any dash-prefixed value."""
-        assert validator._is_safe_value(unsafe) is False
+        assert validator._is_safe_value(unsafe) is False  # noqa: SLF001
 
     @pytest.mark.parametrize("unsafe_char", [
         ";", "&", "`", "$", "(", ")", "{", "}", "<", ">", "\\",
     ])
     def test_unsafe_chars_rejected(self, validator, unsafe_char):
-        assert validator._is_safe_value(f"val{unsafe_char}") is False
+        assert validator._is_safe_value(f"val{unsafe_char}") is False  # noqa: SLF001
 
 
 # ---------------------------------------------------------------------------
@@ -195,22 +197,22 @@ class TestMatchesSafeOption:
     """_matches_safe_option handles exact flags and parameterized patterns."""
 
     def test_exact_flag_match(self, validator):
-        assert validator._matches_safe_option("-4", ["-4"], "-4") is True
+        assert validator._matches_safe_option("-4", ["-4"], "-4") is True  # noqa: SLF001
 
     def test_exact_flag_no_match(self, validator):
-        assert validator._matches_safe_option("-6", ["-6"], "-4") is False
+        assert validator._matches_safe_option("-6", ["-6"], "-4") is False  # noqa: SLF001
 
     def test_space_separated_param_match(self, validator):
-        assert validator._matches_safe_option("-c", ["-c", "4"], "-c <count>") is True
+        assert validator._matches_safe_option("-c", ["-c", "4"], "-c <count>") is True  # noqa: SLF001
 
     def test_space_separated_param_no_match(self, validator):
-        assert validator._matches_safe_option("-W", ["-W", "5"], "-c <count>") is False
+        assert validator._matches_safe_option("-W", ["-W", "5"], "-c <count>") is False  # noqa: SLF001
 
     def test_equals_param_match(self, validator):
-        assert validator._matches_safe_option("--color=auto", ["--color=auto"], "--color=<mode>") is True
+        assert validator._matches_safe_option("--color=auto", ["--color=auto"], "--color=<mode>") is True  # noqa: SLF001
 
     def test_equals_param_no_match(self, validator):
-        assert validator._matches_safe_option("--other=auto", ["--other=auto"], "--color=<mode>") is False
+        assert validator._matches_safe_option("--other=auto", ["--other=auto"], "--color=<mode>") is False  # noqa: SLF001
 
 
 # ---------------------------------------------------------------------------
@@ -219,13 +221,13 @@ class TestMatchesSafeOption:
 
 class TestExtractParameterName:
     def test_extracts_name_from_angle_brackets(self, validator):
-        assert validator._extract_parameter_name("-c <count>") == "count"
+        assert validator._extract_parameter_name("-c <count>") == "count"  # noqa: SLF001
 
     def test_extracts_name_from_equals_form(self, validator):
-        assert validator._extract_parameter_name("--max-depth=<depth>") == "depth"
+        assert validator._extract_parameter_name("--max-depth=<depth>") == "depth"  # noqa: SLF001
 
     def test_returns_none_when_no_brackets(self, validator):
-        assert validator._extract_parameter_name("-4") is None
+        assert validator._extract_parameter_name("-4") is None  # noqa: SLF001
 
 
 # ---------------------------------------------------------------------------
@@ -340,33 +342,24 @@ class TestValidateCommandArgumentViolation:
 
 class TestLoadWhitelistErrors:
     def test_missing_file_raises_configuration_error(self, tmp_path):
-        from app.errors import ConfigurationError
         with pytest.raises(ConfigurationError):
             CommandWhitelistValidator(whitelist_path=str(tmp_path / "nonexistent.json"))
 
     def test_invalid_json_raises_configuration_error(self, tmp_path):
-        from app.errors import ConfigurationError
         bad = tmp_path / "bad.json"
         bad.write_text("{not valid json")
         with pytest.raises(ConfigurationError):
             CommandWhitelistValidator(whitelist_path=str(bad))
 
     def test_missing_enforcement_policy_raises_configuration_error(self, tmp_path):
-        from app.errors import ConfigurationError
         p = tmp_path / "no_policy.json"
         p.write_text(json.dumps({"commands": {}}))
         with pytest.raises(ConfigurationError, match="enforcement_policy"):
             CommandWhitelistValidator(whitelist_path=str(p))
 
     def test_default_path_missing_raises_configuration_error(self, monkeypatch):
-        # Force it to look for a nonexistent default path
-        # Use a fresh instance to avoid global state issues
-        from unittest.mock import patch
-
-        from app.errors import ConfigurationError
-        with patch("app.utils.whitelist_validator.Path.exists", return_value=False):
-            with pytest.raises(ConfigurationError, match="Required whitelist configuration not found"):
-                CommandWhitelistValidator(whitelist_path=None)
+        with patch("app.utils.whitelist_validator.Path.exists", return_value=False), pytest.raises(ConfigurationError, match="Required whitelist configuration not found"):
+            CommandWhitelistValidator(whitelist_path=None)
 
 
 # ---------------------------------------------------------------------------
@@ -428,7 +421,7 @@ class TestSingletonGetter:
 
 class TestConvenienceFunctions:
     def test_validate_command_against_whitelist_delegates(self, monkeypatch, whitelist_path):
-        import app.utils.whitelist_validator as wv_module
+        import app.utils.whitelist_validator as wv_module  # noqa: PLC0415
         fresh = CommandWhitelistValidator(whitelist_path=whitelist_path)
         monkeypatch.setattr(wv_module, "_validator_instance", fresh)
         result = validate_command_against_whitelist("")
@@ -555,7 +548,6 @@ class TestEnabledField:
 
     def test_enabled_false_loads_empty_index(self, tmp_path):
         whitelist_path = tmp_path / "whitelist.json"
-        import json
         data = {
             "enabled": False,
             "enforcement_policy": {
@@ -585,7 +577,6 @@ class TestEnabledField:
 
     def test_enabled_true_loads_commands(self, tmp_path):
         whitelist_path = tmp_path / "whitelist.json"
-        import json
         data = {
             "enabled": True,
             "enforcement_policy": {
@@ -614,7 +605,6 @@ class TestEnabledField:
 
     def test_enabled_defaults_to_true(self, tmp_path):
         whitelist_path = tmp_path / "whitelist.json"
-        import json
         data = {
             "enforcement_policy": {
                 "description": "test policy",

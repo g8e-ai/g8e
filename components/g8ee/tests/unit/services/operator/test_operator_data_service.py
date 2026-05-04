@@ -18,7 +18,8 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.clients.http_client import HTTPClient
-from app.constants import OperatorStatus
+from app.constants import EventType, OperatorStatus
+from app.models.investigations import ConversationMessageMetadata
 from app.errors import ExternalServiceError, ValidationError
 from app.models.cache import CacheOperationResult
 from app.models.operators import (
@@ -26,6 +27,8 @@ from app.models.operators import (
     OperatorDocument,
 )
 from app.services.operator.operator_data_service import OperatorDataService
+from app.services.protocols import OperatorDataServiceProtocol
+from tests.fakes.factories import build_operator_heartbeat
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 
@@ -71,7 +74,6 @@ class TestOperatorDataService:
 
     async def test_update_operator_heartbeat_success(self, service, mock_cache):
         operator_id = "op-123"
-        from tests.fakes.factories import build_operator_heartbeat
         hb = build_operator_heartbeat()
         mock_cache.update_document.return_value = CacheOperationResult(success=True)
 
@@ -86,7 +88,6 @@ class TestOperatorDataService:
 
     async def test_update_operator_heartbeat_failure_raises_external_service_error(self, service, mock_cache):
         operator_id = "op-123"
-        from tests.fakes.factories import build_operator_heartbeat
         hb = build_operator_heartbeat()
         mock_cache.update_document.return_value = CacheOperationResult(success=False, error="db error")
 
@@ -111,8 +112,6 @@ class TestOperatorDataService:
 
     async def test_add_operator_activity(self, service, mock_cache):
         operator_id = "op-123"
-        from app.constants import EventType
-        from app.models.investigations import ConversationMessageMetadata
         mock_cache.append_to_array.return_value = CacheOperationResult(success=True)
 
         success = await service.add_operator_activity(
@@ -162,8 +161,6 @@ class TestOperatorDataService:
         A protocol-conformance check would have caught the gap where the
         protocol declared a method the implementation lacked (or vice versa).
         """
-        from app.services.protocols import OperatorDataServiceProtocol
-
         assert isinstance(service, OperatorDataServiceProtocol)
         assert hasattr(service, "update_operator_status")
 

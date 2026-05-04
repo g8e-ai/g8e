@@ -135,8 +135,10 @@ class TribunalInvoker:
         """
         request = (sage_request.request or "").strip()
         guidelines = (sage_request.guidelines or "").strip()
+        # Use first target operator as context anchor for Tribunal
+        target_anchor = sage_request.target_operators[0] if sage_request.target_operators else None
         op_context = extract_operator_context_by_target(
-            investigation, sage_request.target_operator,
+            investigation, target_anchor,
         )
 
         logger.info(
@@ -192,7 +194,6 @@ class TribunalInvoker:
             command=gen_result.final_command,
             request=request,
             guidelines=guidelines,
-            target_operator=sage_request.target_operator,
             target_operators=sage_request.target_operators,
             expected_output_lines=sage_request.expected_output_lines,
             timeout_seconds=sage_request.timeout_seconds,
@@ -337,8 +338,8 @@ async def orchestrate_tool_execution(
 
             if request:
                 logger.info(
-                    "[TRIBUNAL-INVOKE] run_commands_with_operator detected: request_len=%d guidelines_len=%d target_operator=%s",
-                    len(request), len(sage_request.guidelines or ""), sage_request.target_operator,
+                    "[TRIBUNAL-INVOKE] run_commands_with_operator detected: request_len=%d guidelines_len=%d target_operators=%s",
+                    len(request), len(sage_request.guidelines or ""), sage_request.target_operators,
                 )
                 logger.info(
                     "[TRIBUNAL-INVOKE] Request settings: llm_command_gen_enabled=%s llm_command_gen_auditor=%s llm_command_gen_passes=%d assistant_model=%s eval_judge_model=%s",

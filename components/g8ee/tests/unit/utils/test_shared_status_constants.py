@@ -20,6 +20,7 @@ and a typo or omission silently breaks cross-component compatibility.
 """
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -34,7 +35,7 @@ pytestmark = pytest.mark.unit
 
 
 def _load_status_json() -> dict:
-    with open("/app/shared/constants/status.json") as f:
+    with Path("/app/shared/constants/status.json").open() as f:
         return json.load(f)
 
 

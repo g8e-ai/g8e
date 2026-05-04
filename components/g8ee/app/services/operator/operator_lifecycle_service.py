@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import logging
+import secrets
 from typing import TYPE_CHECKING
 
 from app.constants.status import (
@@ -56,6 +57,10 @@ class OperatorLifecycleService:
         # Access the underlying cache for direct document updates
         self._cache: CacheAsideService = operator_data_service.cache  # type: ignore
 
+    @property
+    def api_key_service(self) -> "ApiKeyService | None":
+        return self._api_key_service
+
     def set_api_key_service(self, api_key_service: ApiKeyService) -> None:
         """Inject ApiKeyService after construction.
 
@@ -81,7 +86,7 @@ class OperatorLifecycleService:
         """
         operator = await self.operator_data_service.get_operator(operator_id)
         if not operator:
-            logger.warning(f"[OPERATOR-LIFECYCLE] Cannot claim non-existent operator {operator_id}")
+            logger.warning("[OPERATOR-LIFECYCLE] Cannot claim non-existent operator %s", operator_id)
             return False
 
         now_timestamp = now()
@@ -119,10 +124,10 @@ class OperatorLifecycleService:
                 additional_updates=update_data
             )
         except Exception as e:
-            logger.error(f"[OPERATOR-LIFECYCLE] Atomic claim failed for operator {operator_id}: {e}")
+            logger.error("[OPERATOR-LIFECYCLE] Atomic claim failed for operator %s: %s", operator_id, e)
             return False
 
-        logger.info(f"[OPERATOR-LIFECYCLE] Operator slot claimed {operator_id}", extra={
+        logger.info("[OPERATOR-LIFECYCLE] Operator slot claimed %s", operator_id, extra={
             "operator_id": operator_id,
             "operator_session_id": operator_session_id,
         })
@@ -171,10 +176,10 @@ class OperatorLifecycleService:
                 additional_updates=update_data
             )
         except Exception as e:
-            logger.error(f"[OPERATOR-LIFECYCLE] Atomic termination failed for operator {operator_id}: {e}")
-            raise ValidationError(f"Failed to terminate operator {operator_id}: {e}")
+            logger.error("[OPERATOR-LIFECYCLE] Atomic termination failed for operator %s: %s", operator_id, e)
+            raise ValidationError(f"Failed to terminate operator {operator_id}: {e}") from e
 
-        logger.info(f"[OPERATOR-LIFECYCLE] Operator terminated {operator_id}", extra={
+        logger.info("[OPERATOR-LIFECYCLE] Operator terminated %s", operator_id, extra={
             "operator_id": operator_id,
             "actor": actor.value,
         })
@@ -224,20 +229,20 @@ class OperatorLifecycleService:
             ])
 
             if not operators:
-                logger.info(f"[OPERATOR-LIFECYCLE] No g8ep operator slot found for user {user_id}")
+                logger.info("[OPERATOR-LIFECYCLE] No g8ep operator slot found for user %s", user_id)
                 return
 
             operator = operators[0]
 
             # If already active/bound — nothing to do
             if operator.status in [OperatorStatus.ACTIVE, OperatorStatus.BOUND]:
-                logger.info(f"[OPERATOR-LIFECYCLE] g8ep operator already active for user {user_id}", extra={
+                logger.info("[OPERATOR-LIFECYCLE] g8ep operator already active for user %s", user_id, extra={
                     "operator_id": operator.id
                 })
                 return
 
             if not operator.api_key:
-                logger.warning(f"[OPERATOR-LIFECYCLE] g8ep operator slot has no API key for user {user_id}", extra={
+                logger.warning("[OPERATOR-LIFECYCLE] g8ep operator slot has no API key for user %s", user_id, extra={
                     "operator_id": operator.id
                 })
                 return
@@ -245,7 +250,7 @@ class OperatorLifecycleService:
             await self.launch_g8ep_operator(operator.api_key)
 
         except Exception as e:
-            logger.warning(f"[OPERATOR-LIFECYCLE] g8ep operator activation failed (non-fatal): {e!s}", extra={
+            logger.warning("[OPERATOR-LIFECYCLE] g8ep operator activation failed (non-fatal): %s", e, extra={
                 "user_id": user_id
             })
 
@@ -279,14 +284,14 @@ class OperatorLifecycleService:
         ])
 
         if not operators:
-            logger.warning(f"[OPERATOR-LIFECYCLE] Relaunch requested but no g8ep operator slot found for user {user_id}")
+            logger.warning("[OPERATOR-LIFECYCLE] Relaunch requested but no g8ep operator slot found for user %s", user_id)
             return {"success": False, "error": "No g8ep operator slot found for user"}
 
         operator = operators[0]
         operator_id = operator.id
         old_api_key = operator.api_key
 
-        logger.info(f"[OPERATOR-LIFECYCLE] Relaunching g8ep operator for user {user_id}", extra={
+        logger.info("[OPERATOR-LIFECYCLE] Relaunching g8ep operator for user %s", user_id, extra={
             "operator_id": operator_id
         })
 
@@ -297,7 +302,6 @@ class OperatorLifecycleService:
         #    operator doc or the platform_settings mirror. This keeps `api_keys`
         #    the single source of truth and eliminates the phantom-key class of
         #    bugs where g8ep boots with a key that was never registered.
-        import secrets
         operator_suffix = operator_id.split("-")[-1][:8]
         random_token = secrets.token_hex(32)
         new_api_key = f"g8e_{operator_suffix}_{random_token}"
@@ -334,7 +338,7 @@ class OperatorLifecycleService:
         )
 
         if not reset_result.success:
-            logger.error(f"[OPERATOR-LIFECYCLE] Failed to reset operator {operator_id}: {reset_result.error}")
+            logger.error("[OPERATOR-LIFECYCLE] Failed to reset operator %s: %s", operator_id, reset_result.error)
             return {"success": False, "error": reset_result.error}
 
         # 4. Start supervised process (key is already mirrored by rotate_operator_key)

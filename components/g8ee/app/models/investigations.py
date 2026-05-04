@@ -30,6 +30,7 @@ from app.constants import (
     Severity,
 )
 from app.utils.timestamp import now
+from app.utils.ledger_hash import compute_entry_hash, genesis_hash
 
 from .base import G8eBaseModel, G8eIdentifiableModel, UTCDatetime
 from .grounding import GroundingMetadata
@@ -200,7 +201,6 @@ class ConversationHistoryMessage(G8eIdentifiableModel):
     def _seal_entry_hash(self) -> ConversationHistoryMessage:
         """Auto-compute entry_hash if not provided."""
         if self.entry_hash is None:
-            from app.utils.ledger_hash import compute_entry_hash
             payload = self.model_dump(mode="json", exclude={"entry_hash"})
             object.__setattr__(self, "entry_hash", compute_entry_hash(payload, self.prev_hash))
         return self
@@ -293,7 +293,6 @@ class InvestigationHistoryEntry(G8eBaseModel):
     def _seal_entry_hash(self) -> InvestigationHistoryEntry:
         """Auto-compute entry_hash if not provided."""
         if self.entry_hash is None:
-            from app.utils.ledger_hash import compute_entry_hash
             payload = self.model_dump(mode="json", exclude={"entry_hash"})
             object.__setattr__(self, "entry_hash", compute_entry_hash(payload, self.prev_hash))
         return self
@@ -373,8 +372,8 @@ class InvestigationModel(G8eIdentifiableModel):
         if isinstance(v, int):
             try:
                 return Priority(v)
-            except ValueError:
-                raise ValueError(f"Invalid priority integer: {v}")
+            except ValueError as err:
+                raise ValueError(f"Invalid priority integer: {v}") from err
         if isinstance(v, str):
             try:
                 return Priority(int(v))
@@ -382,8 +381,8 @@ class InvestigationModel(G8eIdentifiableModel):
                 pass
             try:
                 return Priority(v)
-            except ValueError:
-                raise ValueError(f"Invalid priority: {v}")
+            except ValueError as err:
+                raise ValueError(f"Invalid priority: {v}") from err
         raise ValueError(f"Priority must be string, int, or Priority enum, got {type(v)}")
 
     @field_validator("severity", mode="before")
@@ -394,8 +393,8 @@ class InvestigationModel(G8eIdentifiableModel):
         if isinstance(v, int):
             try:
                 return Severity(v)
-            except ValueError:
-                raise ValueError(f"Invalid severity integer: {v}")
+            except ValueError as err:
+                raise ValueError(f"Invalid severity integer: {v}") from err
         if isinstance(v, str):
             try:
                 return Severity(int(v))
@@ -403,8 +402,8 @@ class InvestigationModel(G8eIdentifiableModel):
                 pass
             try:
                 return Severity(v)
-            except ValueError:
-                raise ValueError(f"Invalid severity: {v}")
+            except ValueError as err:
+                raise ValueError(f"Invalid severity: {v}") from err
         raise ValueError(f"Severity must be string, int, or Severity enum, got {type(v)}")
 
     def add_history_entry(
@@ -416,7 +415,6 @@ class InvestigationModel(G8eIdentifiableModel):
         investigation_attempt: G8eBaseModel | None = None,
         details: ConversationMessageMetadata | None = None
     ) -> None:
-        from app.utils.ledger_hash import genesis_hash
 
         if attempt_number is None:
             attempt_number = (self.current_state.active_attempt if self.current_state else 1)
@@ -533,7 +531,6 @@ class EnrichedInvestigationContext(InvestigationModel):
     @property
     def g8e_context(self) -> G8eHttpContext:
         """Create a G8eHttpContext from this investigation context for agent compatibility."""
-        from app.constants import ComponentName
 
         return G8eHttpContext(
             web_session_id=self.web_session_id,

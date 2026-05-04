@@ -50,6 +50,7 @@ from app.models.tool_results import (
     FileOperationRiskAnalysis,
 )
 from app.utils.timestamp import now
+from app.utils.ledger_hash import compute_entry_hash
 
 from .base import G8eBaseModel, G8eIdentifiableModel, UTCDatetime
 
@@ -96,7 +97,6 @@ class OperatorHistoryEntry(G8eBaseModel):
     def _seal_entry_hash(self) -> OperatorHistoryEntry:
         """Auto-compute entry_hash if not provided."""
         if self.entry_hash is None:
-            from app.utils.ledger_hash import compute_entry_hash
             payload = self.model_dump(mode="json", exclude={"entry_hash"})
             object.__setattr__(self, "entry_hash", compute_entry_hash(payload, self.prev_hash))
         return self

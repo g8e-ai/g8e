@@ -54,7 +54,7 @@ class LLMProvider(ABC):
         primary_llm_settings: PrimaryLLMSettings,
     ) -> GenerateContentResponse:
         """Generate a complete response from the primary LLM."""
-        ...
+        raise NotImplementedError("LLMProvider.generate_content_primary must be implemented by subclasses")
 
     @abstractmethod
     async def generate_content_stream_assistant(
@@ -74,7 +74,7 @@ class LLMProvider(ABC):
         assistant_llm_settings: AssistantLLMSettings,
     ) -> GenerateContentResponse:
         """Generate a complete response from the assistant LLM."""
-        ...
+        raise NotImplementedError("LLMProvider.generate_content_assistant must be implemented by subclasses")
 
     @abstractmethod
     async def generate_content_stream_lite(
@@ -94,7 +94,7 @@ class LLMProvider(ABC):
         lite_llm_settings: LiteLLMSettings,
     ) -> GenerateContentResponse:
         """Generate a complete response from the lite LLM."""
-        ...
+        raise NotImplementedError("LLMProvider.generate_content_lite must be implemented by subclasses")
 
     async def close(self):
         """Clean up provider resources (e.g., close HTTP clients).

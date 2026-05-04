@@ -46,9 +46,30 @@ from app.models.command_request_payloads import (
 )
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
-from app.models.tool_results import FileEditResult, FileOperationRiskAnalysis, FetchFileHistoryToolResult, FetchFileDiffToolResult
-from app.models.operators import FileEditApprovalRequest, CommandFailedBroadcastEvent, FileEditBroadcastEvent, CommandExecutingBroadcastEvent, CommandResultBroadcastEvent
-from app.models.pubsub_messages import G8eMessage
+from app.models.tool_results import (
+    FileEditResult,
+    FileOperationRiskAnalysis,
+    FileOperationRiskContext,
+    FetchFileHistoryToolResult,
+    FetchFileDiffToolResult,
+)
+from app.models.operators import (
+    FileEditApprovalRequest,
+    CommandFailedBroadcastEvent,
+    FileEditBroadcastEvent,
+    CommandExecutingBroadcastEvent,
+    CommandResultBroadcastEvent,
+)
+from app.models.settings import G8eeUserSettings, LLMSettings
+from app.models.pubsub_messages import (
+    FetchFileDiffByIdSuccessPayload,
+    FetchFileDiffBySessionSuccessPayload,
+    FetchFileDiffErrorPayload,
+    FetchFileHistorySuccessPayload,
+    FetchFileHistoryErrorPayload,
+    FileEditResultPayload,
+    G8eMessage,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -139,11 +160,11 @@ class OperatorFileService:
             # 2. Resolve operator
             operator_documents = investigation.operator_documents if investigation else []
             try:
-                resolved_operator = self.execution_service.resolve_target_operator(
+                resolved_operators = self.execution_service.resolve_operators(
                     operator_documents=operator_documents,
-                    target_operator=args.target_operator,
-                    tool_name="file_edit_on_operator",
+                    target_operators=args.target_operators,
                 )
+                resolved_operator = resolved_operators[0]
             except Exception as e:
                 logger.error("[FILE-ERROR] Operator resolution failed: %s", e, exc_info=True)
                 return FileEditResult(
@@ -161,8 +182,6 @@ class OperatorFileService:
             risk_analysis: FileOperationRiskAnalysis | None = None
             if op_name in (FileOperation.WRITE, FileOperation.REPLACE, "write", "replace"):
                 try:
-                    from app.models.tool_results import FileOperationRiskContext
-                    from app.models.settings import G8eeUserSettings, LLMSettings
                     risk_analysis = await self.ai_response_analyzer.analyze_file_operation_risk(
                         operation=operation,
                         file_path=file_path,
@@ -270,7 +289,6 @@ class OperatorFileService:
             # Extract content for READ operations from envelope payload
             content = None
             if operation == FileOperation.READ and envelope:
-                from app.models.pubsub_messages import FileEditResultPayload
                 if isinstance(envelope.payload, FileEditResultPayload):
                     content = envelope.payload.content
 
@@ -325,11 +343,11 @@ class OperatorFileService:
             # 1. Resolve operator
             operator_documents = investigation.operator_documents if investigation else []
             try:
-                resolved_operator = self.execution_service.resolve_target_operator(
+                resolved_operators = self.execution_service.resolve_operators(
                     operator_documents=operator_documents,
-                    target_operator=args.target_operator,
-                    tool_name="fetch_file_history",
+                    target_operators=args.target_operators,
                 )
+                resolved_operator = resolved_operators[0]
             except Exception as e:
                 logger.error("[FILE-ERROR] Operator resolution failed: %s", e, exc_info=True)
                 return FetchFileHistoryToolResult(
@@ -396,7 +414,7 @@ class OperatorFileService:
                 task_id=AITaskId.FETCH_FILE_HISTORY,
             )
 
-            from app.models.pubsub_messages import FetchFileHistorySuccessPayload, FetchFileHistoryErrorPayload
+
 
             if envelope and isinstance(envelope.payload, FetchFileHistorySuccessPayload):
                 return FetchFileHistoryToolResult(
@@ -437,11 +455,11 @@ class OperatorFileService:
             # 1. Resolve operator
             operator_documents = investigation.operator_documents if investigation else []
             try:
-                resolved_operator = self.execution_service.resolve_target_operator(
+                resolved_operators = self.execution_service.resolve_operators(
                     operator_documents=operator_documents,
-                    target_operator=args.target_operator,
-                    tool_name="fetch_file_diff",
+                    target_operators=args.target_operators,
                 )
+                resolved_operator = resolved_operators[0]
             except Exception as e:
                 logger.error("[FILE-ERROR] Operator resolution failed: %s", e, exc_info=True)
                 return FetchFileDiffToolResult(
@@ -506,12 +524,6 @@ class OperatorFileService:
                 ),
                 g8e_context,
                 task_id=AITaskId.FETCH_FILE_DIFF,
-            )
-
-            from app.models.pubsub_messages import (
-                FetchFileDiffByIdSuccessPayload,
-                FetchFileDiffBySessionSuccessPayload,
-                FetchFileDiffErrorPayload,
             )
 
             if envelope and isinstance(envelope.payload, FetchFileDiffByIdSuccessPayload):

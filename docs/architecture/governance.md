@@ -4,7 +4,7 @@
 
 Agentic AI safety is conventionally framed as an alignment problem (will the model do what we want?) or a control problem (can we stop it when it doesn't?). We frame it instead as a **consensus problem**: given a population of LLM-instantiated personas with different lenses, a calibrated adversary among them, and a human user with finite attention, how do we converge on an executable command that is safe, audited, and minimally costly to all participants?
 
-The mechanism has seven players, two distinct stake types, and one objective. Under the Vortex Principle, honest play is the dominant strategy for every player. The objective is the user's time.
+The mechanism has seven players, two distinct stake types, and one objective. Under the Information Isolation Principle, honest play is the dominant strategy for every player. The objective is the user's time.
 
 | Player | Role | Stake | Capability |
 |---|---|---|---|
@@ -112,7 +112,7 @@ Reputation slashes are applied based on failure severity:
 ## What's load-bearing, what isn't
 
 **Load-bearing:**
-- Vortex quarantine (eliminates collusion strategies)
+- Information isolation quarantine (eliminates collusion strategies)
 - Auditor–User co-validation partition (machine-domain and human-domain judgments are non-substitutable)
 - Auditor bonding asymmetry (makes capture uneconomic)
 - User-time-as-stake (couples mechanism to actual user welfare)
@@ -127,9 +127,9 @@ Reputation slashes are applied based on failure severity:
 
 ## The equilibrium claim
 
-**Under the Vortex Principle (tiered information quarantine), the joint strategy profile (honest, honest, honest, honest, honest, truthful) is a Bayes-Nash equilibrium of the staged game.**
+**Under the Information Isolation Principle (tiered information quarantine), the joint strategy profile (honest, honest, honest, honest, honest, truthful) is a Bayes-Nash equilibrium of the staged game.**
 
-The Vortex is load-bearing. Each player's quarantined view eliminates profitable deviations:
+Information Isolation is load-bearing. Each player's quarantined view eliminates profitable deviations:
 
 - **Triage** can't shape questions to fit a downstream plan — it doesn't know Sage exists.
 - **Sage** can't hide reasoning failures — it doesn't know Auditor has cross-conversation memory.

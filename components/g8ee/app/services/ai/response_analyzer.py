@@ -35,6 +35,7 @@ from app.models.tool_results import (
 )
 from app.services.ai.generation_config_builder import AIGenerationConfigBuilder
 from app.utils.agent_persona_loader import get_agent_persona, AgentPersona
+from app.constants.paths import PATHS
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,6 @@ T = TypeVar("T", bound=G8eBaseModel)
 
 def _load_security_constraints() -> dict:
     """Load security constraints from shared model."""
-    from app.constants.paths import PATHS
     shared_models_dir = PATHS["infra"]["shared_models_dir"]
     shared_models_path = Path(shared_models_dir) / "security_constraints.json"
     try:

@@ -53,7 +53,7 @@ class TestJsonSerial:
             _json_serial(object())
 
     def test_naive_datetime_serialized(self):
-        dt = datetime(2026, 1, 1, 0, 0, 0)
+        dt = datetime(2026, 1, 1, 0, 0, 0)  # noqa: DTZ001
         result = _json_serial(dt)
         assert "2026-01-01" in str(result)
 

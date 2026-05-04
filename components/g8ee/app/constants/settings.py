@@ -12,15 +12,15 @@
 # limitations under the License.
 
 import json
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 
 from app.constants.shared import _AGENTS, _STATUS
+from app.constants.paths import PATHS
 
 
 def _load_security_constraints() -> dict:
     """Load security constraints from shared model."""
-    from app.constants.paths import PATHS
     shared_models_dir = PATHS["infra"]["shared_models_dir"]
     shared_models_path = Path(shared_models_dir) / "security_constraints.json"
     try:
@@ -34,8 +34,9 @@ def _load_security_constraints() -> dict:
 _SECURITY_CONSTRAINTS = _load_security_constraints()
 
 
-class LLMProvider(str, Enum):
-    __str__ = lambda self: self.value
+class LLMProvider(StrEnum):
+    def __str__(self) -> str:
+        return self.value
     OPENAI            = "openai"
     OLLAMA            = "ollama"
     GEMINI            = "gemini"
@@ -44,7 +45,7 @@ class LLMProvider(str, Enum):
     G8EL              = "g8el"
 
 
-class ThinkingLevel(str, Enum):
+class ThinkingLevel(StrEnum):
     """Canonical internal vocabulary for model "thinking" / "reasoning" effort.
 
     Each provider maps these to its native concept at the LLM boundary
@@ -61,7 +62,8 @@ class ThinkingLevel(str, Enum):
     single source of truth for what a model accepts. An empty list means the
     model has no notion of thinking at all.
     """
-    __str__ = lambda self: self.value
+    def __str__(self) -> str:
+        return self.value
     OFF     = "off"
     MINIMAL = "minimal"
     LOW     = "low"
@@ -80,33 +82,37 @@ THINKING_LEVEL_PRIORITY_ASC: tuple["ThinkingLevel", ...] = (
 )
 
 
-class ThinkingDialect(str, Enum):
+class ThinkingDialect(StrEnum):
     """Wire dialect a self-hosted (Ollama) model expects for reasoning toggling.
 
     Cloud providers (Gemini/OpenAI/Anthropic) do not need this — their
     translation is fixed. Ollama hosts a heterogeneous zoo of model families
     where the same internal ThinkingLevel maps to different on-the-wire knobs.
     """
-    __str__ = lambda self: self.value
+    def __str__(self) -> str:
+        return self.value
     NONE          = "none"           # Model has no reasoning mode (Llama, Gemma, ...)
     NATIVE_TOGGLE = "native_toggle"  # Ollama `think=True/False` flag (Qwen3, GLM, Nemotron, ...)
 
-class TimestampErrorCode(str, Enum):
-    __str__ = lambda self: self.value
+class TimestampErrorCode(StrEnum):
+    def __str__(self) -> str:
+        return self.value
     MISSING_TIMESTAMP = "TIMESTAMP_MISSING"
     INVALID_FORMAT    = "TIMESTAMP_INVALID"
     OUTSIDE_WINDOW    = "TIMESTAMP_WINDOW_EXCEEDED"
 
 
-class NonceErrorCode(str, Enum):
-    __str__ = lambda self: self.value
+class NonceErrorCode(StrEnum):
+    def __str__(self) -> str:
+        return self.value
     REPLAY_DETECTED  = "NONCE_REPLAY"
     MISSING_REQUIRED = "NONCE_REQUIRED"
     CHECK_FAILED     = "NONCE_CHECK_FAILED"
 
 
-class EntityType(str, Enum):
-    __str__ = lambda self: self.value
+class EntityType(StrEnum):
+    def __str__(self) -> str:
+        return self.value
     USER          = "user"
     API_KEY       = "api.key"
     CASE          = "case"
@@ -118,59 +124,66 @@ class EntityType(str, Enum):
     COMPONENT     = "component"
 
 
-class GeminiRole(str, Enum):
-    __str__ = lambda self: self.value
+class GeminiRole(StrEnum):
+    def __str__(self) -> str:
+        return self.value
     USER  = "user"
     MODEL = "model"
 
 
-class AnthropicRole(str, Enum):
-    __str__ = lambda self: self.value
+class AnthropicRole(StrEnum):
+    def __str__(self) -> str:
+        return self.value
     USER      = "user"
     ASSISTANT = "assistant"
 
 
-class AnthropicStopReason(str, Enum):
-    __str__ = lambda self: self.value
+class AnthropicStopReason(StrEnum):
+    def __str__(self) -> str:
+        return self.value
     END_TURN       = "end_turn"
     TOOL_USE       = "tool_use"
     MAX_TOKENS     = "max_tokens"
     STOP_SEQUENCE  = "stop_sequence"
 
 
-class AttachmentType(str, Enum):
+class AttachmentType(StrEnum):
     """Attachment types for user-uploaded files.
 
     These values must match the shared constants in shared/constants/status.json.
     """
-    __str__ = lambda self: self.value
+    def __str__(self) -> str:
+        return self.value
     PDF   = _STATUS["attachment.type"]["pdf"]
     IMAGE = _STATUS["attachment.type"]["image"]
     TEXT  = _STATUS["attachment.type"]["text"]
     OTHER = _STATUS["attachment.type"]["other"]
 
 
-class GroundingSource(str, Enum):
+class GroundingSource(StrEnum):
     """Identifies the origin of grounding context fed to the AI.
 
     ATTACHMENT       — user-uploaded file (PDF, image, text) injected as LLM Parts.
     WEB_SEARCH       — explicit search_web tool call result (provider-agnostic).
     PROVIDER_NATIVE  — native provider grounding (e.g. Gemini Search grounding metadata).
     """
-    __str__ = lambda self: self.value
+    def __str__(self) -> str:
+        return self.value
     ATTACHMENT      = "attachment"
     WEB_SEARCH      = "web_search"
     PROVIDER_NATIVE = "provider_native"
 
 
-class ChatSessionStatus(str, Enum):
-    __str__ = lambda self: self.value
+class ChatSessionStatus(StrEnum):
+    def __str__(self) -> str:
+        return self.value
     ACTIVE   = "active"
     INACTIVE = "inactive"
 
 
-class ErrorAnalysisCategory(str, Enum):
-    __str__ = lambda self: self.value
+class ErrorAnalysisCategory(StrEnum):
+    def __str__(self) -> str:
+        return self.value
     DEPENDENCY    = "dependency"
     PERMISSION    = "permission"
     SYNTAX        = "syntax"
@@ -180,7 +193,7 @@ class ErrorAnalysisCategory(str, Enum):
     UNKNOWN       = "None"
 
 
-class CommandGenerationOutcome(str, Enum):
+class CommandGenerationOutcome(StrEnum):
     """Terminal outcomes the Tribunal pipeline can produce.
 
     Only successful outcomes are enumerated. Sage never proposes a command,
@@ -192,15 +205,17 @@ class CommandGenerationOutcome(str, Enum):
     These values are emitted in Tribunal SSE payloads and must match
     the shared constants in shared/constants/agents.json.
     """
-    __str__ = lambda self: self.value
+    def __str__(self) -> str:
+        return self.value
     CONSENSUS           = _AGENTS["tribunal.outcome"]["consensus"]
     VERIFIED            = _AGENTS["tribunal.outcome"]["verified"]
     VERIFICATION_FAILED = _AGENTS["tribunal.outcome"]["verification_failed"]
     CONSENSUS_FAILED    = _AGENTS["tribunal.outcome"]["consensus_failed"]
 
 
-class ToolDisplayCategory(str, Enum):
-    __str__ = lambda self: self.value
+class ToolDisplayCategory(StrEnum):
+    def __str__(self) -> str:
+        return self.value
     EXECUTION = "execution"
     FILE      = "file"
     SEARCH    = "search"
@@ -208,35 +223,40 @@ class ToolDisplayCategory(str, Enum):
     GENERAL   = "general"
 
 
-class ToolCallStatus(str, Enum):
-    __str__ = lambda self: self.value
+class ToolCallStatus(StrEnum):
+    def __str__(self) -> str:
+        return self.value
     STARTED   = "started"
     COMPLETED = "completed"
 
 
-class ThinkingActionType(str, Enum):
-    __str__ = lambda self: self.value
+class ThinkingActionType(StrEnum):
+    def __str__(self) -> str:
+        return self.value
     START  = "start"
     UPDATE = "update"
     END    = "end"
 
 
-class BatchWriteOpType(str, Enum):
-    __str__ = lambda self: self.value
+class BatchWriteOpType(StrEnum):
+    def __str__(self) -> str:
+        return self.value
     SET    = "set"
     UPDATE = "update"
     DELETE = "delete"
 
 
-class CircuitBreakerState(str, Enum):
-    __str__ = lambda self: self.value
+class CircuitBreakerState(StrEnum):
+    def __str__(self) -> str:
+        return self.value
     CLOSED    = "CLOSED"
     OPEN      = "OPEN"
     HALF_OPEN = "HALF_OPEN"
 
 
-class SuspiciousPatternType(str, Enum):
-    __str__ = lambda self: self.value
+class SuspiciousPatternType(StrEnum):
+    def __str__(self) -> str:
+        return self.value
     INSTRUCTION_OVERRIDE  = "instruction_override"
     FAKE_INSTRUCTIONS     = "fake_instructions"
     ROLE_HIJACK           = "role_hijack"
@@ -256,8 +276,9 @@ class SuspiciousPatternType(str, Enum):
     OUTPUT_FORMAT_EVASION = "output_format_evasion"
 
 
-class ScrubType(str, Enum):
-    __str__ = lambda self: self.value
+class ScrubType(StrEnum):
+    def __str__(self) -> str:
+        return self.value
     JWT                = "jwt"
     SG_API_KEY         = "sg_api_key"
     GITHUB_TOKEN       = "github_token"
@@ -286,24 +307,27 @@ class ScrubType(str, Enum):
     BEARER_TOKEN       = "bearer_token"
 
 
-class TriageRole(str, Enum):
-    __str__ = lambda self: self.value
+class TriageRole(StrEnum):
+    def __str__(self) -> str:
+        return self.value
     USER      = "user"
     ASSISTANT = "assistant"
     UNKNOWN   = "?"
 
 
-class ResponseType(str, Enum):
-    __str__ = lambda self: self.value
+class ResponseType(StrEnum):
+    def __str__(self) -> str:
+        return self.value
     ERROR_RESPONSE = "error.response"
 
 
-class ApprovalErrorType(str, Enum):
+class ApprovalErrorType(StrEnum):
     """Approval error types emitted in SSE payloads.
 
     These values must match the shared constants in shared/constants/status.json.
     """
-    __str__ = lambda self: self.value
+    def __str__(self) -> str:
+        return self.value
     APPROVAL_PUBLISH_FAILURE    = _STATUS["approval.error.type"]["approval.publish.failure"]
     APPROVAL_EXCEPTION          = _STATUS["approval.error.type"]["approval.exception"]
     APPROVAL_TIMEOUT            = _STATUS["approval.error.type"]["approval.timeout"]
@@ -589,7 +613,7 @@ HTTP_METHOD_PUT                     = "PUT"
 HTTP_METHOD_DELETE                  = "DELETE"
 HTTP_METHOD_OPTIONS                 = "OPTIONS"
 
-class StreamChunkFromModelType(str, Enum):
+class StreamChunkFromModelType(StrEnum):
     """Types of chunks emitted by the agent streaming pipeline."""
     __str__ = lambda self: self.value
 

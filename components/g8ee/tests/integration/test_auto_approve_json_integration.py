@@ -159,7 +159,7 @@ class TestAutoApproveJsonIntegration:
         )
 
         result = await service.execute_command(
-            ExecutorCommandArgs(command="uptime", request="health check"),
+            ExecutorCommandArgs(command="uptime", request="health check", target_operators=["all"]),
             _make_g8e_context(),
             _make_investigation(),
             request_settings,
@@ -191,7 +191,7 @@ class TestAutoApproveJsonIntegration:
         )
 
         result = await service.execute_command(
-            ExecutorCommandArgs(command="uptime", request="health check"),
+            ExecutorCommandArgs(command="uptime", request="health check", target_operators=["all"]),
             _make_g8e_context(),
             _make_investigation(),
             request_settings,
@@ -219,7 +219,7 @@ class TestAutoApproveJsonIntegration:
         )
 
         await service.execute_command(
-            ExecutorCommandArgs(command="cat /etc/hosts", request="inspect"),
+            ExecutorCommandArgs(command="cat /etc/hosts", request="inspect", target_operators=["all"]),
             _make_g8e_context(),
             _make_investigation(),
             request_settings,

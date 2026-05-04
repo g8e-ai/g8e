@@ -97,7 +97,7 @@ class OperatorSessionService:
         if not result.success:
             raise Exception(f"Failed to persist operator session: {result.error}")
 
-        logger.info(f"[OPERATOR-SESSION-SERVICE] Operator session created: {session_id}")
+        logger.info("[OPERATOR-SESSION-SERVICE] Operator session created: %s", session_id)
         return session
 
     async def validate_session(self, session_id: str) -> OperatorSessionDocument | None:
@@ -117,12 +117,12 @@ class OperatorSessionService:
         check_time = now()
 
         if session.absolute_expires_at and check_time > session.absolute_expires_at:
-            logger.warning(f"[OPERATOR-SESSION-SERVICE] Session {session_id} absolute timeout")
+            logger.warning("[OPERATOR-SESSION-SERVICE] Session %s absolute timeout", session_id)
             await self.end_session(session_id, reason=SessionEndReason.TIMEOUT_ABSOLUTE)
             return None
 
         if session.idle_expires_at and check_time > session.idle_expires_at:
-            logger.warning(f"[OPERATOR-SESSION-SERVICE] Session {session_id} idle timeout")
+            logger.warning("[OPERATOR-SESSION-SERVICE] Session %s idle timeout", session_id)
             await self.end_session(session_id, reason=SessionEndReason.TIMEOUT_IDLE)
             return None
 
@@ -159,6 +159,6 @@ class OperatorSessionService:
         )
 
         if result.success:
-            logger.info(f"[OPERATOR-SESSION-SERVICE] Operator session ended: {session_id} (reason: {reason})")
+            logger.info("[OPERATOR-SESSION-SERVICE] Operator session ended: %s (reason: %s)", session_id, reason)
 
         return result.success

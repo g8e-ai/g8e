@@ -13,7 +13,7 @@
 
 """Unit tests for OperatorLifecycleService."""
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -43,7 +43,6 @@ class TestOperatorLifecycleService:
 
     @pytest.fixture
     def mock_settings_service(self):
-        from unittest.mock import MagicMock
         mock = MagicMock()
         mock.update_g8ep_operator_api_key = AsyncMock(return_value=None)
         return mock
@@ -51,8 +50,6 @@ class TestOperatorLifecycleService:
     @pytest.fixture
     def lifecycle_service(self, operator_data_service, mock_supervisor_service, mock_settings_service):
         service = OperatorLifecycleService(operator_data_service, mock_supervisor_service, mock_settings_service)
-        # Wire api_key_service for tests that need it
-        from unittest.mock import MagicMock
         mock_api_key_service = MagicMock()
         mock_api_key_service.rotate_operator_key = AsyncMock(return_value={"success": True, "api_key": "new-key"})
         service.set_api_key_service(mock_api_key_service)
@@ -228,7 +225,7 @@ class TestOperatorLifecycleService:
         await lifecycle_service.update_operator_status(operator_id, OperatorStatus.ACTIVE)
 
         # Verify status update does NOT set heartbeat timestamp (only set on actual heartbeat ingestion)
-        args, kwargs = mock_cache.update_document.call_args_list[0]
+        _, kwargs = mock_cache.update_document.call_args_list[0]
         assert kwargs["data"]["status"] == OperatorStatus.ACTIVE
 
     async def test_update_operator_status_not_found_returns_false(self, lifecycle_service, mock_cache):
@@ -313,6 +310,6 @@ class TestOperatorLifecycleService:
         # Verify status reset (1 update for reset)
         assert mock_cache.update_document.call_count == 1
         # Verify API key rotation via api_key_service (new implementation)
-        lifecycle_service._api_key_service.rotate_operator_key.assert_called_once()
+        lifecycle_service.api_key_service.rotate_operator_key.assert_called_once()
         # Verify start called
         mock_supervisor_service.start_process.assert_called_once_with("operator", wait=False)
