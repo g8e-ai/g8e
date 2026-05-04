@@ -22,6 +22,8 @@ Following g8ee testing patterns:
 
 import pytest
 
+from app.utils.version import VersionInfo, get_version, get_version_info
+
 pytestmark = pytest.mark.unit
 
 
@@ -30,7 +32,6 @@ class TestVersionUtility:
 
     def test_get_version_returns_string(self):
         """Test get_version returns a non-empty string."""
-        from app.utils.version import get_version
         get_version.cache_clear()
 
         result = get_version()
@@ -40,7 +41,6 @@ class TestVersionUtility:
 
     def test_get_version_starts_with_v(self):
         """Test get_version returns a semver string starting with v."""
-        from app.utils.version import get_version
         get_version.cache_clear()
 
         result = get_version()
@@ -49,7 +49,6 @@ class TestVersionUtility:
 
     def test_get_version_caching(self):
         """Test get_version uses lru_cache for performance."""
-        from app.utils.version import get_version
         get_version.cache_clear()
 
         result1 = get_version()
@@ -62,7 +61,6 @@ class TestVersionUtility:
 
     def test_get_version_info_returns_version_info(self):
         """Test get_version_info returns a VersionInfo model."""
-        from app.utils.version import VersionInfo, get_version_info
         get_version_info.cache_clear()
 
         result = get_version_info()
@@ -72,7 +70,6 @@ class TestVersionUtility:
 
     def test_get_version_info_caching(self):
         """Test get_version_info uses lru_cache."""
-        from app.utils.version import get_version_info
         get_version_info.cache_clear()
 
         result1 = get_version_info()
@@ -85,7 +82,6 @@ class TestVersionUtility:
 
     def test_version_info_consistency(self):
         """Test version_info.version matches get_version()."""
-        from app.utils.version import get_version, get_version_info
         get_version.cache_clear()
         get_version_info.cache_clear()
 

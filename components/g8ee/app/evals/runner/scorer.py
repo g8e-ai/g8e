@@ -10,7 +10,10 @@ Consolidates three scoring paths:
 """
 
 import re
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.services.ai.eval_judge import EvalJudge
 
 
 def score_benchmark_scenario(

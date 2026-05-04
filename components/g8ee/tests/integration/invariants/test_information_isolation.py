@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-# GDD §3 Vortex Invariant: Reputation data is highly sensitive and its
+# GDD §3 Information Isolation Invariant: Reputation data is highly sensitive and its
 # visibility must be strictly controlled to prevent persona prompt leakage.
 # Only the Auditor (reading) and ReputationService (writing) should touch
 # the reputation_data_service.
@@ -97,8 +97,8 @@ def check_file_for_violations(file_path: Path) -> list[str]:
 
 
 @pytest.mark.integration
-def test_reputation_vortex_invariant():
-    """Vortex Invariant: Only allow-listed services may touch reputation data or models."""
+def test_reputation_information_isolation_invariant():
+    """Information Isolation Invariant: Only allow-listed services may touch reputation data or models."""
     all_violations = {}
 
     for py_file in get_all_python_files(PROJECT_ROOT):
@@ -112,7 +112,7 @@ def test_reputation_vortex_invariant():
             all_violations[relative_path] = file_violations
 
     if all_violations:
-        msg = "GDD §3 Vortex Invariant violation! The following files touch reputation data or models but are not in the allow-list:\n"
+        msg = "GDD §3 Information Isolation Invariant violation! The following files touch reputation data or models but are not in the allow-list:\n"
         for path, issues in all_violations.items():
             msg += f"  - {path}: {', '.join(issues)}\n"
         msg += "\nReputation state must only be visible to the Auditor and ReputationService to preserve the information quarantine."

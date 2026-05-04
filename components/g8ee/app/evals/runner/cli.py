@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from app.constants import LLMProvider
 from app.llm.factory import get_llm_provider
 from app.models.settings import LLMSettings
 from app.services.ai.eval_judge import EvalJudge
@@ -297,7 +298,6 @@ async def run_full_eval(
     print(f"[evals] Found {len(operator_bound_scenarios)} OPERATOR_BOUND scenarios")
 
     # Configure LLM settings for the judge
-    from app.constants import LLMProvider
     settings = LLMSettings()
     if llm_provider:
         settings.primary_provider = LLMProvider(llm_provider)

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import secrets
 from typing import TYPE_CHECKING
 
 from app.constants import DB_COLLECTION_API_KEYS
@@ -55,7 +56,6 @@ class ApiKeyService:
         For operator keys, use format: g8e_{8hex}_{64hex} (e.g., g8e_1a2b3c4d_...64hex...).
         For regular keys, use format: g8e_{64hex}.
         """
-        import secrets
         return f"{prefix}{secrets.token_hex(32)}"
 
     async def validate_key(self, api_key: str) -> tuple[bool, ApiKeyDocument | None, str | None]:
@@ -116,11 +116,11 @@ class ApiKeyService:
                     extra={"doc_id": doc_id[:8] + "...", "user_id": user_id}
                 )
                 return True
-            logger.error(f"[API-KEY-SERVICE] Failed to issue API key: {result.error}")
+            logger.error("[API-KEY-SERVICE] Failed to issue API key: %s", result.error)
             return False
 
         except Exception as e:
-            logger.error(f"[API-KEY-SERVICE] Failed to issue API key: {e}")
+            logger.error("[API-KEY-SERVICE] Failed to issue API key: %s", e)
             return False
 
     async def revoke_key(self, api_key: str) -> bool:
@@ -148,7 +148,7 @@ class ApiKeyService:
             )
             return True
         except Exception as e:
-            logger.error(f"[API-KEY-SERVICE] Failed to revoke API key: {e}")
+            logger.error("[API-KEY-SERVICE] Failed to revoke API key: %s", e)
             return False
 
     async def issue_operator_key(
@@ -281,4 +281,4 @@ class ApiKeyService:
                 merge=True
             )
         except Exception as e:
-            logger.warning(f"[API-KEY-SERVICE] Failed to record usage: {e}")
+            logger.warning("[API-KEY-SERVICE] Failed to record usage: %s", e)

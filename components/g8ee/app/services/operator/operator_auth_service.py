@@ -14,6 +14,8 @@
 from __future__ import annotations
 
 import logging
+import uuid
+import secrets
 from typing import Any
 
 from app.constants import DB_COLLECTION_USERS, DEFAULT_OPERATOR_CONFIG, OperatorStatus
@@ -23,6 +25,9 @@ from app.services.operator.operator_session_service import OperatorSessionServic
 from app.services.operator.operator_data_service import OperatorDataService
 from app.services.protocols import OperatorLifecycleServiceProtocol
 from app.services.cache.cache_aside import CacheAsideService
+from app.constants.kv_keys import KVKey
+from app.models.operators import OperatorDocument
+from app.utils.timestamp import now
 
 logger = logging.getLogger(__name__)
 
@@ -138,23 +143,18 @@ class OperatorAuthService:
 
             # 1c. If still no operator, create a new slot on-demand
             if not operator:
-                import uuid
-                import secrets
                 operator_id = str(uuid.uuid4())
                 operator_suffix = operator_id.rsplit("-", maxsplit=1)[-1][:8]
                 api_key = f"g8e_{operator_suffix}_{secrets.token_hex(32)}"
                 
                 # Use atomic KV counter for slot number to prevent race conditions
                 # during concurrent device-link registration
-                from app.constants.kv_keys import KVKey
                 slot_counter_key = KVKey.operator_slot_counter(user_id)
                 
                 # Atomically increment to get next slot number
                 # KV incr initializes to 0 if key doesn't exist, then increments
                 slot_number = await self._cache.kv.incr(slot_counter_key, amount=1)
 
-                from app.models.operators import OperatorDocument
-                from app.utils.timestamp import now
                 operator_doc = OperatorDocument(
                     id=operator_id,
                     user_id=user_id,
@@ -193,11 +193,10 @@ class OperatorAuthService:
         # 3. Resolve api_key from operator document (device-link path)
         api_key = operator.api_key
         if not api_key:
-            logger.error(f"[OPERATOR-AUTH] Operator {operator_id} has no api_key on slot - slot creation bug")
+            logger.error("[OPERATOR-AUTH] Operator %s has no api_key on slot - slot creation bug", operator_id)
             return {"success": False, "error": "Operator slot missing api_key - configuration error"}
 
         # 4. Create session
-        from app.constants import DB_COLLECTION_USERS
         user_data = await self._cache.get_document_with_cache(DB_COLLECTION_USERS, user_id)
         session_data = {
             "user_id": user_id,

@@ -58,6 +58,7 @@ async def handle(
         tool_args,
         FileEditRequestPayload,
         execution_id,
+        investigation,
         operation=FileOperation.WRITE,
         create_if_missing=True,
     )

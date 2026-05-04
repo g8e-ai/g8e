@@ -14,32 +14,32 @@
 import pytest
 from pydantic import ValidationError as PydanticValidationError
 
-from app.models.settings import CommandValidationSettings, LLMSettings
+from app.models.settings import BatchExecutionSettings, CommandValidationSettings, LLMSettings
 
 pytestmark = [pytest.mark.unit]
 
 
-class TestCommandValidationSettingsBounds:
+class TestBatchExecutionSettingsBounds:
 
-    def test_default_max_batch_concurrency(self):
-        cv = CommandValidationSettings()
-        assert cv.max_batch_concurrency == 10
-        assert cv.batch_fail_fast is False
+    def test_default_max_concurrency(self):
+        be = BatchExecutionSettings()
+        assert be.max_concurrency == 10
+        assert be.fail_fast is False
 
     def test_accepts_valid_concurrency(self):
-        cv = CommandValidationSettings(max_batch_concurrency=32)
-        assert cv.max_batch_concurrency == 32
+        be = BatchExecutionSettings(max_concurrency=32)
+        assert be.max_concurrency == 32
 
     def test_rejects_zero_or_negative_concurrency(self):
         with pytest.raises(PydanticValidationError):
-            CommandValidationSettings(max_batch_concurrency=0)
+            BatchExecutionSettings(max_concurrency=0)
         with pytest.raises(PydanticValidationError):
-            CommandValidationSettings(max_batch_concurrency=-1)
+            BatchExecutionSettings(max_concurrency=-1)
 
     def test_rejects_absurdly_large_concurrency(self):
         # Guards against a misconfiguration that would fan out to every operator at once.
         with pytest.raises(PydanticValidationError):
-            CommandValidationSettings(max_batch_concurrency=10000)
+            BatchExecutionSettings(max_concurrency=10000)
 
 
 class TestLLMSettingsResolvedAssistantModel:

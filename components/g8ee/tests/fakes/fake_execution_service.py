@@ -97,6 +97,14 @@ class FakeExecutionService:
         return CommandInternalResult(exit_code=self._exit_code, output=self._output, status=ExecutionStatus.COMPLETED)
 
     @property
+    def envelope(self) -> "G8eoResultEnvelope | None":
+        return self._envelope
+
+    @envelope.setter
+    def envelope(self, value: "G8eoResultEnvelope | None") -> None:
+        self._envelope = value
+
+    @property
     def g8ed_event_service(self):
         return self._g8ed_event_service
 
@@ -120,30 +128,17 @@ class FakeExecutionService:
     def approval_service(self):
         return None
 
-    def resolve_target_operator(
-        self,
-        operator_documents: list[OperatorDocument],
-        target_operator: str | None,
-        tool_name: str | None = None,
-    ) -> OperatorDocument:
-        self.resolve_calls.append({
-            "operator_documents": operator_documents,
-            "target_operator": target_operator,
-            "tool_name": tool_name,
-        })
-        if self._resolve_error:
-            raise self._resolve_error
-        if target_operator and operator_documents:
-            for op in operator_documents:
-                if op.id == target_operator:
-                    return op
-        return operator_documents[0] if operator_documents else self._resolved_operator
-
-    def resolve_multiple_operators(
+    def resolve_operators(
         self,
         operator_documents: list[OperatorDocument],
         target_operators: list[str],
     ) -> list[OperatorDocument]:
+        self.resolve_calls.append({
+            "operator_documents": operator_documents,
+            "target_operators": target_operators,
+        })
+        if self._resolve_error:
+            raise self._resolve_error
         if not operator_documents:
             return [self._resolved_operator]
         if "all" in target_operators:

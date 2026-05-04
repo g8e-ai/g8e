@@ -26,11 +26,10 @@ pytestmark = [pytest.mark.unit]
 
 
 def _write_json(data: dict) -> str:
-    f = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
-    json.dump(data, f)
-    f.flush()
-    f.close()
-    return f.name
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        json.dump(data, f)
+        f.flush()
+        return f.name
 
 
 def _minimal_blacklist(**overrides) -> dict:

@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Protocol, runtime_checkable, TYPE_CHECKING, Any
 
 from app.constants import (
@@ -23,6 +24,7 @@ from app.constants import (
     FileOperation,
     OperatorStatus,
 )
+from app.constants.status import OperatorHistoryEventType, OperatorType
 from app.models.base import G8eBaseModel
 from app.models.cache import (
     BatchWriteOperation,
@@ -98,6 +100,7 @@ from app.llm import llm_types as types
 if TYPE_CHECKING:
     from app.clients.pubsub_client import PubSubClient
     from app.clients.http_client import HTTPClient
+    from app.services.cache.cache_aside import CacheAsideService
 
 @runtime_checkable
 class SettingsServiceProtocol(Protocol):
@@ -105,15 +108,15 @@ class SettingsServiceProtocol(Protocol):
 
     async def get_platform_settings(self) -> G8eePlatformSettings:
         """Retrieve platform-level settings from g8es with cache-aside."""
-        ...
+        pass
 
     async def get_user_settings(self, user_id: str) -> G8eeUserSettings:
         """Retrieve settings for a specific user, overlaid on platform settings."""
-        ...
+        pass
 
     def get_local_settings(self) -> G8eePlatformSettings:
         """Retrieve local bootstrap settings (bootstrap)."""
-        ...
+        pass
 
 
 @runtime_checkable
@@ -122,7 +125,7 @@ class EventServiceProtocol(Protocol):
 
     async def publish(self, event: SessionEvent | BackgroundEvent) -> str:
         """Publish a session or background event."""
-        ...
+        pass
 
     async def publish_command_event(
         self,
@@ -133,7 +136,7 @@ class EventServiceProtocol(Protocol):
         task_id: str,
     ) -> None:
         """Publish a command-related event."""
-        ...
+        pass
 
     async def publish_investigation_event(
         self,
@@ -145,7 +148,7 @@ class EventServiceProtocol(Protocol):
         user_id: str,
     ) -> None:
         """Publish an investigation-related event."""
-        ...
+        pass
 
 
 @runtime_checkable
@@ -154,39 +157,39 @@ class KVServiceProtocol(Protocol):
 
     async def get(self, key: str) -> str | None:
         """Retrieve a string value by key."""
-        ...
+        pass
 
     async def set(self, key: str, value: str, ex: int | None) -> bool:
         """Set a string value with optional expiration (seconds)."""
-        ...
+        pass
 
     async def delete(self, *keys: str) -> int:
         """Delete one or more keys."""
-        ...
+        pass
 
     async def get_json(self, key: str) -> object | None:
         """Retrieve and parse a JSON value by key."""
-        ...
+        pass
 
     async def set_json(self, key: str, value: object, ex: int | None = None) -> bool:
         """Serialize and set a JSON value with optional expiration."""
-        ...
+        pass
 
     async def keys(self, pattern: str = "*") -> list[str]:
         """List keys matching a pattern."""
-        ...
+        pass
 
     async def delete_pattern(self, pattern: str) -> int:
         """Delete all keys matching a pattern."""
-        ...
+        pass
 
     async def lrange(self, key: str, start: int, stop: int) -> list[object]:
         """Retrieve a range of elements from a list."""
-        ...
+        pass
 
     def is_healthy(self) -> bool:
         """Check if the service is healthy."""
-        ...
+        pass
 
 
 @runtime_checkable
@@ -201,12 +204,12 @@ class DocumentServiceProtocol(Protocol):
     @property
     def kv(self) -> KVServiceProtocol:
         """Access the underlying KV service for direct cache operations."""
-        ...
+        pass
 
     @property
     def db(self) -> DocumentServiceProtocol:
         """Access the underlying document service (for internal use)."""
-        ...
+        pass
 
     async def create_document(
         self,
@@ -216,7 +219,7 @@ class DocumentServiceProtocol(Protocol):
         ttl: int | None = None,
     ) -> CacheOperationResult:
         """Create a new document in a collection with optional cache TTL."""
-        ...
+        pass
 
     async def update_document(
         self,
@@ -227,15 +230,15 @@ class DocumentServiceProtocol(Protocol):
         ttl: int | None = None,
     ) -> CacheOperationResult:
         """Update or replace an existing document with optional cache TTL."""
-        ...
+        pass
 
     async def delete_document(self, collection: str, document_id: str) -> CacheOperationResult:
         """Delete a document from a collection and invalidate cache."""
-        ...
+        pass
 
     async def get_document(self, collection: str, document_id: str) -> DocumentResult:
         """Retrieve a document by ID (checks cache first)."""
-        ...
+        pass
 
     async def query_collection(
         self,
@@ -247,7 +250,7 @@ class DocumentServiceProtocol(Protocol):
         ttl: int | None = 300,
     ) -> QueryResult:
         """Query a collection with filters, ordering, and optional result caching."""
-        ...
+        pass
 
     async def update_with_array_union(
         self,
@@ -258,15 +261,15 @@ class DocumentServiceProtocol(Protocol):
         additional_updates: dict[str, object],
     ) -> CacheOperationResult:
         """Atomically append items to an array field with cache invalidation."""
-        ...
+        pass
 
     async def batch_write(self, operations: list[BatchWriteOperation]) -> CacheOperationResult:
         """Perform multiple write operations in batch with cache invalidation."""
-        ...
+        pass
 
     async def close(self) -> None:
         """Close the underlying database and cache connections."""
-        ...
+        pass
 
 
 @runtime_checkable
@@ -278,7 +281,7 @@ class OperatorDataServiceProtocol(Protocol):
 
     async def get_operator(self, operator_id: str) -> OperatorDocument | None:
         """Retrieve operator metadata."""
-        ...
+        pass
 
     async def query_operators(
         self,
@@ -287,15 +290,15 @@ class OperatorDataServiceProtocol(Protocol):
         bypass_cache: bool = False,
     ) -> list[OperatorDocument]:
         """Query operator documents. ``bypass_cache=True`` skips the query cache."""
-        ...
+        pass
 
     async def create_operator(self, operator: OperatorDocument) -> bool:
         """Create a new operator document."""
-        ...
+        pass
 
     async def update_operator(self, operator: OperatorDocument) -> bool:
         """Update an existing operator document."""
-        ...
+        pass
 
     async def add_history_entry(
         self,
@@ -307,7 +310,7 @@ class OperatorDataServiceProtocol(Protocol):
         additional_updates: dict[str, object] | None = None,
     ) -> OperatorDocument:
         """Atomic status + history update under a keyed lock."""
-        ...
+        pass
 
     async def update_operator_status(
         self,
@@ -320,7 +323,7 @@ class OperatorDataServiceProtocol(Protocol):
         plain status write without the audit-trail semantics of
         ``add_history_entry``.
         """
-        ...
+        pass
 
     async def update_document(
         self,
@@ -330,7 +333,7 @@ class OperatorDataServiceProtocol(Protocol):
         merge: bool = True,
     ) -> CacheOperationResult:
         """Update a document."""
-        ...
+        pass
 
     async def update_operator_heartbeat(
         self,
@@ -344,11 +347,11 @@ class OperatorDataServiceProtocol(Protocol):
         investigation_id/case_id are None when the heartbeat arrives outside an
         investigation context; callers MUST NOT coerce absence to sentinel strings.
         """
-        ...
+        pass
 
     async def append_command_result(self, operator_id: str, command_result: CommandResultRecord) -> bool:
         """Append a command result to operator history."""
-        ...
+        pass
 
     async def add_operator_activity(
         self,
@@ -358,7 +361,7 @@ class OperatorDataServiceProtocol(Protocol):
         metadata: ConversationMessageMetadata,
     ) -> bool:
         """Log operator-specific activity message."""
-        ...
+        pass
 
     async def add_operator_approval(
         self,
@@ -367,7 +370,7 @@ class OperatorDataServiceProtocol(Protocol):
         metadata: ConversationMessageMetadata,
     ) -> bool:
         """Log an approval lifecycle event in the operator activity log."""
-        ...
+        pass
 
 
 @runtime_checkable
@@ -376,11 +379,11 @@ class SupervisorServiceProtocol(Protocol):
 
     async def start_process(self, name: str, wait: bool = False) -> bool:
         """Starts a supervised process."""
-        ...
+        pass
 
     async def stop_process(self, name: str, wait: bool = True) -> bool:
         """Stops a supervised process."""
-        ...
+        pass
 
 
 @runtime_checkable
@@ -395,7 +398,7 @@ class OperatorLifecycleServiceProtocol(Protocol):
         operator_type: OperatorType | str | None = None,
     ) -> bool:
         """Claim an operator slot for an active session."""
-        ...
+        pass
 
     async def terminate_operator(
         self,
@@ -405,7 +408,7 @@ class OperatorLifecycleServiceProtocol(Protocol):
         details: dict[str, object] | None = None,
     ) -> OperatorDocument:
         """Mark an operator TERMINATED."""
-        ...
+        pass
 
     async def update_operator_status(
         self,
@@ -413,45 +416,58 @@ class OperatorLifecycleServiceProtocol(Protocol):
         status: OperatorStatus,
     ) -> bool:
         """Update operator status."""
-        ...
+        pass
 
     async def activate_g8ep_operator(self, user_id: str) -> None:
         """Orchestrates g8ep operator activation after login."""
-        ...
+        pass
 
     async def launch_g8ep_operator(self, api_key: str) -> None:
         """Starts the g8ep operator process via XML-RPC."""
-        ...
+        pass
 
     async def relaunch_g8ep_operator(self, user_id: str) -> dict[str, object]:
         """Kills running operator, resets slot, and relaunches."""
-        ...
+        pass
 
 
 @runtime_checkable
 class MemoryDataServiceProtocol(Protocol):
-    async def create_memory(self, investigation: InvestigationModel) -> InvestigationMemory: ...
-    async def save_memory(self, memory: InvestigationMemory, is_new: bool) -> None: ...
-    async def get_memory(self, investigation_id: str) -> InvestigationMemory | None: ...
-    async def get_user_memories(self, user_id: str) -> list[InvestigationMemory]: ...
-    async def get_case_memories(self, case_id: str, user_id: str) -> list[InvestigationMemory]: ...
+    async def create_memory(self, investigation: InvestigationModel) -> InvestigationMemory:
+        pass
+    async def save_memory(self, memory: InvestigationMemory, is_new: bool) -> None:
+        pass
+    async def get_memory(self, investigation_id: str) -> InvestigationMemory | None:
+        pass
+    async def get_user_memories(self, user_id: str) -> list[InvestigationMemory]:
+        pass
+    async def get_case_memories(self, case_id: str, user_id: str) -> list[InvestigationMemory]:
+        pass
 
 @runtime_checkable
 class InvestigationDataServiceProtocol(Protocol):
-    async def create_investigation(self, request: InvestigationCreateRequest) -> InvestigationModel: ...
-    async def get_investigation(self, investigation_id: str) -> InvestigationModel | None: ...
-    async def update_investigation_raw(self, investigation_id: str, updates: dict[str, object], merge: bool = True) -> None: ...
-    async def query_investigations(self, request: InvestigationQueryRequest) -> list[InvestigationModel]: ...
-    async def get_case_investigations(self, case_id: str, user_id: str | None) -> list[InvestigationModel]: ...
-    async def delete_investigation(self, investigation_id: str) -> None: ...
-    async def get_chat_messages(self, investigation_id: str) -> list[ConversationHistoryMessage]: ...
+    async def create_investigation(self, request: InvestigationCreateRequest) -> InvestigationModel:
+        pass
+    async def get_investigation(self, investigation_id: str) -> InvestigationModel | None:
+        pass
+    async def update_investigation_raw(self, investigation_id: str, updates: dict[str, object], merge: bool = True) -> None:
+        pass
+    async def query_investigations(self, request: InvestigationQueryRequest) -> list[InvestigationModel]:
+        pass
+    async def get_case_investigations(self, case_id: str, user_id: str | None) -> list[InvestigationModel]:
+        pass
+    async def delete_investigation(self, investigation_id: str) -> None:
+        pass
+    async def get_chat_messages(self, investigation_id: str) -> list[ConversationHistoryMessage]:
+        pass
     async def add_chat_message(
         self,
         investigation_id: str | None,
         sender: str,
         content: str,
         metadata: ConversationMessageMetadata,
-    ) -> bool: ...
+    ) -> bool:
+        pass
     async def add_history_entry(
         self,
         investigation_id: str,
@@ -459,14 +475,16 @@ class InvestigationDataServiceProtocol(Protocol):
         actor: ComponentName,
         summary: str,
         details: ConversationMessageMetadata,
-    ) -> InvestigationModel: ...
+    ) -> InvestigationModel:
+        pass
     async def add_approval_record(
         self,
         investigation_id: str,
         event_type: EventType,
         metadata: ConversationMessageMetadata,
         actor: ComponentName = ComponentName.G8EE,
-    ) -> InvestigationModel: ...
+    ) -> InvestigationModel:
+        pass
     async def add_command_execution_result(
         self,
         investigation_id: str,
@@ -475,7 +493,8 @@ class InvestigationDataServiceProtocol(Protocol):
         result: CommandInternalResult,
         operator_id: str,
         operator_session_id: str,
-    ) -> InvestigationModel: ...
+    ) -> InvestigationModel:
+        pass
     async def add_file_operation_result(
         self,
         investigation_id: str,
@@ -485,9 +504,12 @@ class InvestigationDataServiceProtocol(Protocol):
         file_path: str,
         result: FileEditResult,
         operation: FileOperation,
-    ) -> InvestigationModel: ...
-    async def get_command_execution_history(self, investigation_id: str) -> list[InvestigationHistoryEntry]: ...
-    async def get_operator_actions_for_ai_context(self, investigation_id: str) -> str: ...
+    ) -> InvestigationModel:
+        pass
+    async def get_command_execution_history(self, investigation_id: str) -> list[InvestigationHistoryEntry]:
+        pass
+    async def get_operator_actions_for_ai_context(self, investigation_id: str) -> str:
+        pass
 
 @runtime_checkable
 class InvestigationServiceProtocol(Protocol):
@@ -499,93 +521,137 @@ class InvestigationServiceProtocol(Protocol):
     """
 
     @property
-    def investigation_data_service(self) -> InvestigationDataServiceProtocol: ...
-    async def get_investigation(self, investigation_id: str) -> InvestigationModel | None: ...
-    async def get_chat_messages(self, investigation_id: str) -> list[ConversationHistoryMessage]: ...
-    async def get_investigation_context(self, case_id: str | None = None, investigation_id: str | None = None, user_id: str | None = None) -> EnrichedInvestigationContext: ...
-    async def get_enriched_investigation_context(self, investigation: EnrichedInvestigationContext, user_id: str, g8e_context: G8eHttpContext) -> EnrichedInvestigationContext: ...
-    async def update_investigation(self, investigation_id: str, request: InvestigationUpdateRequest, actor: ComponentName = ComponentName.G8EE) -> InvestigationModel: ...
+    def investigation_data_service(self) -> InvestigationDataServiceProtocol:
+        pass
+    async def get_investigation(self, investigation_id: str) -> InvestigationModel | None:
+        pass
+    async def get_chat_messages(self, investigation_id: str) -> list[ConversationHistoryMessage]:
+        pass
+    async def get_investigation_context(self, case_id: str | None = None, investigation_id: str | None = None, user_id: str | None = None) -> EnrichedInvestigationContext:
+        pass
+    async def get_enriched_investigation_context(self, investigation: EnrichedInvestigationContext, user_id: str, g8e_context: G8eHttpContext) -> EnrichedInvestigationContext:
+        pass
+    async def update_investigation(self, investigation_id: str, request: InvestigationUpdateRequest, actor: ComponentName = ComponentName.G8EE) -> InvestigationModel:
+        pass
 
 
 @runtime_checkable
 class G8edClientProtocol(Protocol):
-    async def push_sse_event(self, event: SessionEvent | BackgroundEvent) -> SSEPushResponse: ...
-    async def grant_intent(self, operator_id: str, intent: str, context: G8eHttpContext) -> IntentOperationResult: ...
-    async def revoke_intent(self, operator_id: str, intent: str, context: G8eHttpContext) -> IntentOperationResult: ...
+    async def push_sse_event(self, event: SessionEvent | BackgroundEvent) -> SSEPushResponse:
+        pass
+    async def grant_intent(self, operator_id: str, intent: str, context: G8eHttpContext) -> IntentOperationResult:
+        pass
+    async def revoke_intent(self, operator_id: str, intent: str, context: G8eHttpContext) -> IntentOperationResult:
+        pass
 
 @runtime_checkable
 class AIResponseAnalyzerProtocol(Protocol):
-    async def analyze_command_risk(self, command: str, justification: str, context: CommandRiskContext, settings: G8eeUserSettings) -> CommandRiskAnalysis: ...
-    async def analyze_error_and_suggest_fix(self, command: str, exit_code: int | None, stdout: str, stderr: str, context: ErrorAnalysisContext, settings: G8eeUserSettings) -> ErrorAnalysisResult: ...
-    async def analyze_file_operation_risk(self, operation: FileOperation, file_path: str, content: str | None, context: FileOperationRiskContext, settings: G8eeUserSettings) -> FileOperationRiskAnalysis: ...
+    async def analyze_command_risk(self, command: str, justification: str, context: CommandRiskContext, settings: G8eeUserSettings) -> CommandRiskAnalysis:
+        pass
+    async def analyze_error_and_suggest_fix(self, command: str, exit_code: int | None, stdout: str, stderr: str, context: ErrorAnalysisContext, settings: G8eeUserSettings) -> ErrorAnalysisResult:
+        pass
+    async def analyze_file_operation_risk(self, operation: FileOperation, file_path: str, content: str | None, context: FileOperationRiskContext, settings: G8eeUserSettings) -> FileOperationRiskAnalysis:
+        pass
 
 @runtime_checkable
 class PubSubServiceProtocol(Protocol):
     pubsub_client: PubSubClient | None
     @property
-    def is_ready(self) -> bool: ...
-    def set_pubsub_client(self, client: PubSubClient) -> None: ...
-    def register_future(self, execution_id: str) -> asyncio.Future[G8eoResultEnvelope]: ...
-    def release_future(self, execution_id: str) -> None: ...
-    async def start(self) -> None: ...
-    async def stop(self) -> None: ...
-    async def register_operator_session(self, operator_id: str, operator_session_id: str) -> None: ...
-    async def deregister_operator_session(self, operator_id: str, operator_session_id: str) -> None: ...
-    async def publish_command(self, operator_id: str, operator_session_id: str, command_data: G8eMessage) -> int: ...
+    def is_ready(self) -> bool:
+        pass
+    def set_pubsub_client(self, client: PubSubClient) -> None:
+        pass
+    def register_future(self, execution_id: str) -> asyncio.Future[G8eoResultEnvelope]:
+        pass
+    def release_future(self, execution_id: str) -> None:
+        pass
+    async def start(self) -> None:
+        pass
+    async def stop(self) -> None:
+        pass
+    async def register_operator_session(self, operator_id: str, operator_session_id: str) -> None:
+        pass
+    async def deregister_operator_session(self, operator_id: str, operator_session_id: str) -> None:
+        pass
+    async def publish_command(self, operator_id: str, operator_session_id: str, command_data: G8eMessage) -> int:
+        pass
 
 @runtime_checkable
 class HeartbeatSnapshotStaleMonitorServiceProtocol(Protocol):
     async def start(self) -> None:
-        ...
+        pass
 
     async def stop(self) -> None:
-        ...
+        pass
 
     async def tick(self) -> None:
-        ...
+        pass
 
 
 @runtime_checkable
 class HeartbeatSnapshotServiceProtocol(Protocol):
     @property
-    def operator_data_service(self) -> OperatorDataServiceProtocol: ...
+    def operator_data_service(self) -> OperatorDataServiceProtocol:
+        pass
     @property
-    def event_service(self) -> EventServiceProtocol: ...
-    async def start(self) -> None: ...
-    async def stop(self) -> None: ...
-    async def register_operator_session(self, operator_id: str, operator_session_id: str) -> None: ...
-    async def deregister_operator_session(self, operator_id: str, operator_session_id: str) -> None: ...
-    def set_pubsub_client(self, client: PubSubClient) -> None: ...
+    def event_service(self) -> EventServiceProtocol:
+        pass
+    async def start(self) -> None:
+        pass
+    async def stop(self) -> None:
+        pass
+    async def register_operator_session(self, operator_id: str, operator_session_id: str) -> None:
+        pass
+    async def deregister_operator_session(self, operator_id: str, operator_session_id: str) -> None:
+        pass
+    def set_pubsub_client(self, client: PubSubClient) -> None:
+        pass
 
 @runtime_checkable
 class ApprovalServiceProtocol(Protocol):
     @property
-    def operator_data_service(self) -> OperatorDataServiceProtocol: ...
+    def operator_data_service(self) -> OperatorDataServiceProtocol:
+        pass
     @property
-    def investigation_data_service(self) -> InvestigationDataServiceProtocol: ...
-    async def request_command_approval(self, request: CommandApprovalRequest) -> ApprovalResult: ...
-    async def request_file_edit_approval(self, request: FileEditApprovalRequest) -> ApprovalResult: ...
-    async def request_intent_approval(self, request: IntentApprovalRequest) -> ApprovalResult: ...
-    async def request_agent_continue_approval(self, request: AgentContinueApprovalRequest) -> ApprovalResult: ...
-    async def request_stream_approval(self, request: StreamApprovalRequest) -> ApprovalResult: ...
-    async def handle_approval_response(self, response: OperatorApprovalResponse) -> None: ...
-    def get_pending_approvals(self) -> dict[str, PendingApproval]: ...
-    def mark_pending_approvals_as_feedback(self, investigation_id: str, user_message: str, user_id: str) -> int: ...
+    def investigation_data_service(self) -> InvestigationDataServiceProtocol:
+        pass
+    async def request_command_approval(self, request: CommandApprovalRequest) -> ApprovalResult:
+        pass
+    async def request_file_edit_approval(self, request: FileEditApprovalRequest) -> ApprovalResult:
+        pass
+    async def request_intent_approval(self, request: IntentApprovalRequest) -> ApprovalResult:
+        pass
+    async def request_agent_continue_approval(self, request: AgentContinueApprovalRequest) -> ApprovalResult:
+        pass
+    async def request_stream_approval(self, request: StreamApprovalRequest) -> ApprovalResult:
+        pass
+    async def handle_approval_response(self, response: OperatorApprovalResponse) -> None:
+        pass
+    def get_pending_approvals(self) -> dict[str, PendingApproval]:
+        pass
+    def mark_pending_approvals_as_feedback(self, investigation_id: str, user_message: str, user_id: str) -> int:
+        pass
 
 @runtime_checkable
 class ExecutionServiceProtocol(Protocol):
     @property
-    def g8ed_event_service(self) -> EventServiceProtocol: ...
+    def g8ed_event_service(self) -> EventServiceProtocol:
+        pass
     @property
-    def ai_response_analyzer(self) -> AIResponseAnalyzerProtocol: ...
+    def ai_response_analyzer(self) -> AIResponseAnalyzerProtocol:
+        pass
     @property
-    def operator_data_service(self) -> OperatorDataServiceProtocol: ...
+    def operator_data_service(self) -> OperatorDataServiceProtocol:
+        pass
     @property
-    def investigation_service(self) -> InvestigationServiceProtocol: ...
+    def investigation_service(self) -> InvestigationServiceProtocol:
+        pass
     @property
-    def pubsub_service(self) -> PubSubServiceProtocol: ...
+    def pubsub_service(self) -> PubSubServiceProtocol:
+        pass
     @property
-    def approval_service(self) -> ApprovalServiceProtocol: ...
+    def approval_service(self) -> ApprovalServiceProtocol:
+        pass
     whitelist_validator: CommandWhitelistValidator
     blacklist_validator: CommandBlacklistValidator
     async def execute(
@@ -593,99 +659,135 @@ class ExecutionServiceProtocol(Protocol):
         g8e_message: G8eMessage,
         g8e_context: G8eHttpContext,
         timeout_seconds: int = 60,
-    ) -> tuple[CommandInternalResult, G8eoResultEnvelope | None]: ...
-    def resolve_target_operator(self, operator_documents: list[OperatorDocument], target_operator: str | None, tool_name: str | None = None) -> OperatorDocument: ...
-    def resolve_multiple_operators(self, operator_documents: list[OperatorDocument], target_operators: list[str]) -> list[OperatorDocument]: ...
-    def build_target_systems_list(self, operator_documents: list[OperatorDocument]) -> list[TargetSystem]: ...
+    ) -> tuple[CommandInternalResult, G8eoResultEnvelope | None]:
+        pass
+    def resolve_operators(
+        self,
+        operator_documents: list[OperatorDocument],
+        target_operators: list[str],
+    ) -> list[OperatorDocument]:
+        pass
+
+    def build_target_systems_list(self, operator_documents: list[OperatorDocument]) -> list[TargetSystem]:
+        pass
+
     async def send_command_to_operator(
         self,
         command_payload: DirectCommandRequest,
         g8e_context: G8eHttpContext,
-    ) -> DirectCommandResult: ...
+    ) -> DirectCommandResult:
+        pass
 
 @runtime_checkable
 class LFAAServiceProtocol(Protocol):
     async def send_audit_event(
         self,
         g8e_message: G8eMessage,
-    ) -> bool: ...
+    ) -> bool:
+        pass
 
     async def send_direct_exec_audit_event(
         self,
         command: str,
         execution_id: str,
         g8e_context: G8eHttpContext,
-    ) -> bool: ...
+    ) -> bool:
+        pass
 
 @runtime_checkable
 class FileServiceProtocol(Protocol):
     @property
-    def pubsub_service(self) -> PubSubServiceProtocol: ...
+    def pubsub_service(self) -> PubSubServiceProtocol:
+        pass
     @property
-    def approval_service(self) -> ApprovalServiceProtocol: ...
+    def approval_service(self) -> ApprovalServiceProtocol:
+        pass
     @property
-    def g8ed_event_service(self) -> EventServiceProtocol: ...
+    def g8ed_event_service(self) -> EventServiceProtocol:
+        pass
     @property
-    def execution_service(self) -> ExecutionServiceProtocol: ...
+    def execution_service(self) -> ExecutionServiceProtocol:
+        pass
     @property
-    def ai_response_analyzer(self) -> AIResponseAnalyzerProtocol: ...
+    def ai_response_analyzer(self) -> AIResponseAnalyzerProtocol:
+        pass
     @property
-    def investigation_service(self) -> InvestigationServiceProtocol: ...
-    async def execute_file_edit(self, args: FileEditRequestPayload, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FileEditResult: ...
-    async def execute_fetch_file_history(self, args: FetchFileHistoryRequestPayload, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FetchFileHistoryToolResult: ...
-    async def execute_fetch_file_diff(self, args: FetchFileDiffRequestPayload, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FetchFileDiffToolResult: ...
+    def investigation_service(self) -> InvestigationServiceProtocol:
+        pass
+    async def execute_file_edit(self, args: FileEditRequestPayload, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FileEditResult:
+        pass
+    async def execute_fetch_file_history(self, args: FetchFileHistoryRequestPayload, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FetchFileHistoryToolResult:
+        pass
+    async def execute_fetch_file_diff(self, args: FetchFileDiffRequestPayload, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FetchFileDiffToolResult:
+        pass
 
 @runtime_checkable
 class FilesystemServiceProtocol(Protocol):
     @property
-    def pubsub_service(self) -> PubSubServiceProtocol: ...
+    def pubsub_service(self) -> PubSubServiceProtocol:
+        pass
     @property
-    def execution_service(self) -> ExecutionServiceProtocol: ...
+    def execution_service(self) -> ExecutionServiceProtocol:
+        pass
     @property
-    def investigation_service(self) -> InvestigationServiceProtocol: ...
-    async def execute_fs_list(self, args: FsListRequestPayload, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> FsListToolResult: ...
-    async def execute_file_read(self, args: FsReadRequestPayload, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> FsReadToolResult: ...
+    def investigation_service(self) -> InvestigationServiceProtocol:
+        pass
+    async def execute_fs_list(self, args: FsListRequestPayload, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> FsListToolResult:
+        pass
+    async def execute_file_read(self, args: FsReadRequestPayload, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> FsReadToolResult:
+        pass
 
 @runtime_checkable
 class IntentServiceProtocol(Protocol):
     @property
-    def approval_service(self) -> ApprovalServiceProtocol: ...
+    def approval_service(self) -> ApprovalServiceProtocol:
+        pass
     @property
-    def execution_service(self) -> ExecutionServiceProtocol: ...
+    def execution_service(self) -> ExecutionServiceProtocol:
+        pass
     @property
-    def g8ed_event_service(self) -> EventServiceProtocol: ...
+    def g8ed_event_service(self) -> EventServiceProtocol:
+        pass
     @property
-    def investigation_service(self) -> InvestigationServiceProtocol: ...
+    def investigation_service(self) -> InvestigationServiceProtocol:
+        pass
     @property
-    def g8ed_client(self) -> G8edClientProtocol: ...
+    def g8ed_client(self) -> G8edClientProtocol:
+        pass
     async def execute_intent_permission_request(
         self,
         *,
         args: GrantIntentArgs,
         g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
-    ) -> IntentPermissionResult: ...
+    ) -> IntentPermissionResult:
+        pass
     async def execute_intent_revocation(
         self,
         *,
         args: RevokeIntentArgs,
         g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext
-    ) -> IntentPermissionResult: ...
-    def _resolve_intent_dependencies(self, requested_intents: list[str]) -> list[str]: ...
+    ) -> IntentPermissionResult:
+        pass
+    def _resolve_intent_dependencies(self, requested_intents: list[str]) -> list[str]:
+        pass
 
 @runtime_checkable
 class PortServiceProtocol(Protocol):
-    async def execute_port_check(self, args: CheckPortRequestPayload, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> PortCheckToolResult: ...
+    async def execute_port_check(self, args: CheckPortRequestPayload, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> PortCheckToolResult:
+        pass
 
 @runtime_checkable
 class ResultHandlerServiceProtocol(Protocol):
-    async def handle(self, envelope: G8eoResultEnvelope) -> None: ...
+    async def handle(self, envelope: G8eoResultEnvelope) -> None:
+        pass
 
 @runtime_checkable
 class ToolExecutorProtocol(Protocol):
     """Protocol for AI tool registration and execution."""
-    def get_tools(self, agent_mode: AgentMode, model_to_use: str | None) -> list[types.ToolGroup]: ...
+    def get_tools(self, agent_mode: AgentMode, model_to_use: str | None) -> list[types.ToolGroup]:
+        pass
     async def execute_tool_call(
         self,
         tool_name: str,
@@ -694,33 +796,44 @@ class ToolExecutorProtocol(Protocol):
         g8e_context: G8eHttpContext,
         request_settings: G8eeUserSettings,
         execution_id: str,
-    ) -> ToolResult: ...
+    ) -> ToolResult:
+        pass
     @property
-    def web_search_provider(self) -> Any: ...
+    def web_search_provider(self) -> Any:
+        pass
 
 @runtime_checkable
 class HTTPServiceProtocol(Protocol):
     """Protocol for HTTP service managing client lifecycle and connections."""
 
     @property
-    def is_ready(self) -> bool: ...
+    def is_ready(self) -> bool:
+        pass
 
-    def set_http_client(self, client: HTTPClient, service_name: str) -> None: ...
+    def set_http_client(self, client: HTTPClient, service_name: str) -> None:
+        pass
 
-    def get_client(self, service_name: str) -> HTTPClient | None: ...
+    def get_client(self, service_name: str) -> HTTPClient | None:
+        pass
 
-    async def start(self) -> None: ...
+    async def start(self) -> None:
+        pass
 
-    async def stop(self) -> None: ...
+    async def stop(self) -> None:
+        pass
 
     async def register_service_client(
         self,
         service_name: str,
         client: HTTPClient
-    ) -> None: ...
+    ) -> None:
+        pass
 
-    async def deregister_service_client(self, service_name: str) -> None: ...
+    async def deregister_service_client(self, service_name: str) -> None:
+        pass
 
-    def list_active_clients(self) -> list[str]: ...
+    def list_active_clients(self) -> list[str]:
+        pass
 
-    def get_client_status(self) -> dict[str, HTTPClientStatus]: ...
+    def get_client_status(self) -> dict[str, HTTPClientStatus]:
+        pass

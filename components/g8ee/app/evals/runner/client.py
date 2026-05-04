@@ -6,7 +6,9 @@
 from __future__ import annotations
 
 import ssl
+import uuid
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 
 import aiohttp
 import json
@@ -52,7 +54,6 @@ class G8edClient:
         # But wait, there is no explicit create. If we just return a fake ID, the backend might handle it
         # or we could make a dummy request to list investigations.
         # Wait, the backend lazy creates it. Let's just return a placeholder ID.
-        import uuid
         return {"id": str(uuid.uuid4())}
 
     async def send_chat_message(
@@ -66,7 +67,6 @@ class G8edClient:
             investigation_id: Investigation ID
             message: User message
         """
-        from datetime import datetime, UTC
         url = f"{self.base_url}{PUBLIC_API_PATHS['chat_send']}"
         headers = {"X-Request-Timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"}
         payload = {
@@ -91,7 +91,6 @@ class G8edClient:
                     if data == "[DONE]":
                         break
                     try:
-                        import json
                         yield json.loads(data)
                     except json.JSONDecodeError:
                         continue
@@ -105,7 +104,6 @@ class G8edClient:
         Returns:
             Approval response data
         """
-        from datetime import datetime, UTC
         url = f"{self.base_url}{PUBLIC_API_PATHS['operator_approval_respond']}"
         headers = {"X-Request-Timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"}
         payload = {

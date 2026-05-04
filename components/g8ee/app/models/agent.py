@@ -90,7 +90,6 @@ class SageOperatorRequest(TargetedOperatorBase):
             "describe the command, not its output."
         ),
     )
-    target_operators: list[str] | None = Field(default=None, description=_TARGET_OPERATORS_DESCRIPTION)
     expected_output_lines: int = Field(default=10, description="Approximate number of stdout lines expected (used for UI sizing).")
     timeout_seconds: int = Field(default=300, description="Maximum seconds to wait for command completion before timing out.")
 
@@ -109,7 +108,6 @@ class ExecutorCommandArgs(TargetedOperatorBase):
     command: str = Field(..., description="Shell command produced by the Tribunal (required).")
     request: str = Field(default="", description="Caller's natural-language request passed to the Tribunal (shown to the user as justification).")
     guidelines: str = Field(default="", description="Caller's optional guidelines on command shape passed to the Tribunal.")
-    target_operators: list[str] | None = Field(default=None, description=_TARGET_OPERATORS_DESCRIPTION)
     expected_output_lines: int = Field(default=10, description="Approximate number of stdout lines expected (used for UI sizing).")
     correlation_id: str | None = Field(default=None, description="Tribunal correlation ID linking this command to the originating Tribunal session")
     timeout_seconds: int = Field(default=300, description="Maximum seconds to wait for command completion before timing out.")

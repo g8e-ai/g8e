@@ -26,7 +26,7 @@ persistent backing store, pod-restart safe).
 import logging
 from collections.abc import Callable
 
-from app.errors import ResourceNotFoundError
+from app.errors import ExternalServiceError, ResourceNotFoundError, ValidationError
 from app.services.protocols import (
     EventServiceProtocol,
     InvestigationDataServiceProtocol,
@@ -104,8 +104,6 @@ class OperatorApprovalService:
         return self._pending_approvals
 
     async def handle_approval_response(self, response: OperatorApprovalResponse) -> None:
-        from app.errors import ExternalServiceError, ValidationError
-
         if not response.approval_id:
             raise ValidationError("approval_id must be provided", component="g8ee")
 

@@ -11,7 +11,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import TYPE_CHECKING, Any
 from pydantic import Field
 from app.models.base import G8eBaseModel
 from app.constants import (
@@ -21,10 +20,7 @@ from app.constants import (
     AuditorReason,
     RiskLevel,
 )
-
-
-if TYPE_CHECKING:
-    from app.models.tool_results import CommandRiskAnalysis
+from app.models.tool_results import CommandRiskAnalysis
 
 class TribunalError(Exception):
     """Base class for all Tribunal terminal-state failures.
@@ -575,7 +571,6 @@ class TribunalSessionCompletedPayload(G8eBaseModel):
 
 
 def rebuild_models():
-    from app.models.tool_results import CommandRiskAnalysis
     CommandGenerationResult.model_rebuild()
     TribunalWardenBlockedPayload.model_rebuild()
 

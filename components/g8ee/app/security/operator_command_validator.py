@@ -181,7 +181,7 @@ class OperatorCommandValidator:
                     "operator_id": operator_id,
                     "error": str(e)
                 })
-                raise AuthenticationError(f"WebSession validation failed: {e!s}", component="g8ee")
+                raise AuthenticationError(f"WebSession validation failed: {e!s}", component="g8ee") from e
 
         logger.info("WebSession validated successfully", extra={
             "operator_id": operator_id,

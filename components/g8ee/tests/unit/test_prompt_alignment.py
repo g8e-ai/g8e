@@ -41,6 +41,7 @@ tool files, or an enum value with no tool description file).
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -51,6 +52,7 @@ from app.utils.agent_persona_loader import (
     get_agent_persona,
     get_tribunal_member,
 )
+from tests.unit.services.ai.test_tool_registry_invariants import _PENDING_RESTORATION
 
 pytestmark = pytest.mark.unit
 
@@ -143,7 +145,7 @@ class TestTribunalPersonaOutputContract:
 
     @pytest.mark.parametrize(
         "member_id",
-        ("axiom", "concord", "variance", "pragma", "nemesis"),
+        ["axiom", "concord", "variance", "pragma", "nemesis"],
     )
     def test_member_persona_enforces_shell_only_output(self, member_id: str) -> None:
         persona = get_tribunal_member(member_id)
@@ -169,13 +171,10 @@ class TestOutputContractIsExplicitField:
     """
 
     def test_no_persona_embeds_output_contract_in_identity(self) -> None:
-        import json
-        from pathlib import Path
-
         agents_json_path = (
             Path(__file__).parent.parent.parent.parent.parent / "shared" / "constants" / "agents.json"
         )
-        with open(agents_json_path) as f:
+        with agents_json_path.open() as f:
             agents_data = json.load(f)
 
         offenders: list[str] = []
@@ -232,9 +231,11 @@ class TestModeToolsFilesAreRulesOnly:
         offenders: list[str] = []
         for path in self._mode_tools_files():
             text = path.read_text(encoding="utf-8")
-            for tag in self._TOOL_DESCRIPTION_TAGS:
-                if tag in text:
-                    offenders.append(f"{path.relative_to(_PROMPTS_DATA_DIR)}: {tag}")
+            offenders.extend(
+                f"{path.relative_to(_PROMPTS_DATA_DIR)}: {tag}"
+                for tag in self._TOOL_DESCRIPTION_TAGS
+                if tag in text
+            )
         assert not offenders, (
             "Mode tools.txt files must not embed per-tool description tags "
             "(those live in prompts_data/tools/<name>.txt). Offenders: "
@@ -245,11 +246,10 @@ class TestModeToolsFilesAreRulesOnly:
         offenders: list[str] = []
         for path in self._mode_tools_files():
             text = path.read_text(encoding="utf-8")
-            for match in self._PARAM_BULLET_RE.finditer(text):
-                offenders.append(
-                    f"{path.relative_to(_PROMPTS_DATA_DIR)}: "
-                    f"'{match.group(0).strip()}'"
-                )
+            offenders.extend(
+                f"{path.relative_to(_PROMPTS_DATA_DIR)}: '{match.group(0).strip()}'"
+                for match in self._PARAM_BULLET_RE.finditer(text)
+            )
         assert not offenders, (
             "Mode tools.txt files must not carry parameter-bullet specs "
             "(those live in prompts_data/tools/<name>.txt). Offenders: "
@@ -265,9 +265,6 @@ class TestEveryActiveToolHasADescriptionFile:
     quality regression."""
 
     def _pending_restoration(self) -> frozenset[str]:
-        from tests.unit.services.ai.test_tool_registry_invariants import (
-            _PENDING_RESTORATION,
-        )
         return _PENDING_RESTORATION
 
     def test_tools_directory_exists(self) -> None:
@@ -295,10 +292,11 @@ class TestEveryActiveToolHasADescriptionFile:
         or removed without cleaning up its description — a stale artifact
         that confuses future readers."""
         enum_values = {member.value for member in OperatorToolName.__members__.values()}
-        orphans: list[str] = []
-        for path in sorted(_TOOLS_DIR.glob("*.txt")):
-            if path.stem not in enum_values:
-                orphans.append(path.name)
+        orphans = [
+            path.name
+            for path in sorted(_TOOLS_DIR.glob("*.txt"))
+            if path.stem not in enum_values
+        ]
         assert not orphans, (
             f"Orphan tool description files in prompts_data/tools/ with no "
             f"matching OperatorToolName: {orphans}. Remove the file or add "
@@ -321,10 +319,11 @@ class TestAgenticReasoningLivesOnSage:
         )
 
     def test_agentic_reasoning_not_in_any_mode_prompt_file(self) -> None:
-        leaked: list[str] = []
-        for path in sorted(_MODES_DIR.rglob("*.txt")):
-            if "<agentic_reasoning>" in path.read_text(encoding="utf-8"):
-                leaked.append(str(path.relative_to(_PROMPTS_DATA_DIR)))
+        leaked = [
+            str(path.relative_to(_PROMPTS_DATA_DIR))
+            for path in sorted(_MODES_DIR.rglob("*.txt"))
+            if "<agentic_reasoning>" in path.read_text(encoding="utf-8")
+        ]
         assert not leaked, (
             "agentic_reasoning block leaked back into mode prompt files: "
             f"{leaked}. It must live only on Sage's identity in agents.json."

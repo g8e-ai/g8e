@@ -92,7 +92,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
             document_id=investigation.id,
             data=investigation.model_dump(),
         )
-        logger.info(f"Created investigation {investigation.id} for case {request.case_id}")
+        logger.info("Created investigation %s for case %s", investigation.id, request.case_id)
         return investigation
 
     async def get_investigation(self, investigation_id: str) -> InvestigationModel | None:
@@ -179,7 +179,7 @@ class InvestigationDataService(InvestigationDataServiceProtocol):
         key = self.cache._make_key(self.collection, investigation_id)
         await self.cache.kv.delete(key)
         await self.cache.invalidate_query_cache(self.collection)
-        logger.info(f"Deleted investigation {investigation_id}")
+        logger.info("Deleted investigation %s", investigation_id)
 
     async def add_chat_message(
         self,

@@ -31,7 +31,7 @@ Tests:
 - tool_name extracted from .tool_name fallback attribute
 - ToolCallResult.result carries through the raw handler result
 - Target operator resolution: by operator_id, hostname, index, fallback
-- No target_operator defaults to first operator
+- target_operators=['all'] defaults to first operator for Tribunal context
 
 Run with:
     ./g8e test g8ee -- tests/unit/services/ai/test_agent_orchestrate_tool_execution.py
@@ -204,7 +204,7 @@ class TestExecutionIdGeneration:
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files", "target_operators": ["all"]}),
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
@@ -221,7 +221,7 @@ class TestExecutionIdGeneration:
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             for _ in range(3):
                 result = await orchestrate_tool_execution(
-                    ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "show current user"}),
+                    ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "show current user", "target_operators": ["all"]}),
                     tool_executor=mock_tool_executor,
                     investigation=sample_investigation,
                     g8e_context=sample_g8e_context,
@@ -259,7 +259,7 @@ class TestExecutionIdGeneration:
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "show user id"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "show user id", "target_operators": ["all"]}),
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
@@ -284,7 +284,7 @@ class TestOperatorToolDetection:
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files", "target_operators": ["all"]}),
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
@@ -367,7 +367,7 @@ class TestToolArgsInjection:
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "show disk usage"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "show disk usage", "target_operators": ["all"]}),
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
@@ -425,7 +425,7 @@ class TestToolArgsInjection:
             await orchestrate_tool_execution(
                 ToolCall(
                     name=OperatorToolName.RUN_COMMANDS,
-                    args={"request": "echo hello", "guidelines": "prefer minimal output"},
+                    args={"request": "echo hello", "guidelines": "prefer minimal output", "target_operators": ["all"]},
                 ),
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
@@ -452,7 +452,7 @@ class TestToolCallResultStructure:
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files", "target_operators": ["all"]}),
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
@@ -467,7 +467,7 @@ class TestToolCallResultStructure:
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files", "target_operators": ["all"]}),
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
@@ -483,7 +483,7 @@ class TestToolCallResultStructure:
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "show working directory"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "show working directory", "target_operators": ["all"]}),
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
@@ -500,7 +500,7 @@ class TestToolCallResultStructure:
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "echo hello"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "echo hello", "target_operators": ["all"]}),
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
@@ -516,7 +516,7 @@ class TestToolCallResultStructure:
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files", "target_operators": ["all"]}),
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
@@ -532,7 +532,7 @@ class TestToolCallResultStructure:
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "run a bad command"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "run a bad command", "target_operators": ["all"]}),
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
@@ -548,7 +548,7 @@ class TestToolCallResultStructure:
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "show user id"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "show user id", "target_operators": ["all"]}),
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
@@ -580,7 +580,7 @@ class TestToolCallResultStructure:
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "echo test"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "echo test", "target_operators": ["all"]}),
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
@@ -619,7 +619,7 @@ class TestTribunalResultSurfaced:
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files", "target_operators": ["all"]}),
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
@@ -636,7 +636,7 @@ class TestTribunalResultSurfaced:
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=lambda request, **kwargs: _refining_generate_command(request, refined="ls -lhR"))):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files recursively"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files recursively", "target_operators": ["all"]}),
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
@@ -689,7 +689,7 @@ class TestTribunalResultSurfaced:
         )
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=exc)):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files", "target_operators": ["all"]}),
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
@@ -705,7 +705,7 @@ class TestTribunalResultSurfaced:
 
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=_noop_generate_command)):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"target_operators": ["all"]}),
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
@@ -772,7 +772,7 @@ class TestTribunalRefinement:
             await orchestrate_tool_execution(
                 ToolCall(
                     name=OperatorToolName.RUN_COMMANDS,
-                    args={"request": "list files in long format", "guidelines": "favour -la flags"},
+                    args={"request": "list files in long format", "guidelines": "favour -la flags", "target_operators": ["all"]},
                 ),
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
@@ -819,7 +819,7 @@ class TestTribunalRefinement:
             await orchestrate_tool_execution(
                 ToolCall(
                     name=OperatorToolName.RUN_COMMANDS,
-                    args={"request": "check disk usage", "guidelines": "human-readable"},
+                    args={"request": "check disk usage", "guidelines": "human-readable", "target_operators": ["all"]},
                 ),
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
@@ -853,7 +853,7 @@ class TestTribunalRefinement:
             await orchestrate_tool_execution(
                 ToolCall(
                     name=OperatorToolName.RUN_COMMANDS,
-                    args={"request": "uptime", "guidelines": "show uptime"},
+                    args={"request": "uptime", "guidelines": "show uptime", "target_operators": ["all"]},
                 ),
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
@@ -890,7 +890,7 @@ class TestTribunalRefinement:
             await orchestrate_tool_execution(
                 ToolCall(
                     name=OperatorToolName.RUN_COMMANDS,
-                    args={"request": "list files", "guidelines": "detailed view"},
+                    args={"request": "list files", "guidelines": "detailed view", "target_operators": ["all"]},
                 ),
                 tool_executor=mock_tool_executor,
                 investigation=investigation,
@@ -923,7 +923,7 @@ class TestTribunalRefinement:
             await orchestrate_tool_execution(
                 ToolCall(
                     name=OperatorToolName.RUN_COMMANDS,
-                    args={},
+                    args={"target_operators": ["all"]},
                 ),
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
@@ -951,7 +951,7 @@ class TestTribunalSystemErrorHaltsExecution:
         )
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=exc)):
             result = await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "delete the filesystem root"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "delete the filesystem root", "target_operators": ["all"]}),
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
@@ -976,7 +976,7 @@ class TestTribunalSystemErrorHaltsExecution:
         )
         with patch.object(agent_tool_loop_module, "generate_command", new=AsyncMock(side_effect=exc)):
             await orchestrate_tool_execution(
-                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files"}),
+                ToolCall(name=OperatorToolName.RUN_COMMANDS, args={"request": "list files", "target_operators": ["all"]}),
                 tool_executor=mock_tool_executor,
                 investigation=sample_investigation,
                 g8e_context=sample_g8e_context,
@@ -1057,7 +1057,7 @@ class TestTargetOperatorResolution:
             await orchestrate_tool_execution(
                 ToolCall(
                     name=OperatorToolName.RUN_COMMANDS,
-                    args={"request": "list files", "target_operator": "op-linux"},
+                    args={"request": "list files", "target_operators": ["op-linux"]},
                 ),
                 tool_executor=mock_tool_executor,
                 investigation=self.multi_op_investigation,
@@ -1082,7 +1082,7 @@ class TestTargetOperatorResolution:
             await orchestrate_tool_execution(
                 ToolCall(
                     name=OperatorToolName.RUN_COMMANDS,
-                    args={"request": "list files", "target_operator": "op-ubuntu"},
+                    args={"request": "list files", "target_operators": ["op-ubuntu"]},
                 ),
                 tool_executor=mock_tool_executor,
                 investigation=self.multi_op_investigation,
@@ -1107,7 +1107,7 @@ class TestTargetOperatorResolution:
             await orchestrate_tool_execution(
                 ToolCall(
                     name=OperatorToolName.RUN_COMMANDS,
-                    args={"request": "list files", "target_operator": "ubuntu-host"},
+                    args={"request": "list files", "target_operators": ["ubuntu-host"]},
                 ),
                 tool_executor=mock_tool_executor,
                 investigation=self.multi_op_investigation,
@@ -1132,7 +1132,7 @@ class TestTargetOperatorResolution:
             await orchestrate_tool_execution(
                 ToolCall(
                     name=OperatorToolName.RUN_COMMANDS,
-                    args={"request": "list files", "target_operator": "1"},
+                    args={"request": "list files", "target_operators": ["1"]},
                 ),
                 tool_executor=mock_tool_executor,
                 investigation=self.multi_op_investigation,
@@ -1157,7 +1157,7 @@ class TestTargetOperatorResolution:
             await orchestrate_tool_execution(
                 ToolCall(
                     name=OperatorToolName.RUN_COMMANDS,
-                    args={"request": "list files", "target_operator": "nonexistent-operator"},
+                    args={"request": "list files", "target_operators": ["nonexistent-operator"]},
                 ),
                 tool_executor=mock_tool_executor,
                 investigation=self.multi_op_investigation,
@@ -1173,8 +1173,8 @@ class TestTargetOperatorResolution:
         assert op_ctx.operator_id == "op-linux"
         assert op_ctx.os == "linux"
 
-    async def test_no_target_operator_uses_first(self, mock_tool_executor, request_settings, mock_event_service):
-        """Test that no target_operator defaults to first operator (backward compatibility)."""
+    async def test_no_specific_target_uses_first(self, mock_tool_executor, request_settings, mock_event_service):
+        """Test that target_operators=['all'] defaults to first operator for Tribunal context."""
         _mock_executor_success(mock_tool_executor)
 
         mock_generate = AsyncMock(side_effect=_noop_generate_command)
@@ -1182,7 +1182,7 @@ class TestTargetOperatorResolution:
             await orchestrate_tool_execution(
                 ToolCall(
                     name=OperatorToolName.RUN_COMMANDS,
-                    args={"request": "list files"},  # No target_operator
+                    args={"request": "list files", "target_operators": ["all"]},
                 ),
                 tool_executor=mock_tool_executor,
                 investigation=self.multi_op_investigation,

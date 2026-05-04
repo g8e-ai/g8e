@@ -11,11 +11,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from enum import Enum
+from enum import StrEnum
 
 
-class LogLevel(str, Enum):
-    __str__ = lambda self: self.value
+class LogLevel(StrEnum):
+    def __str__(self) -> str:
+        return self.value
     DEBUG    = "DEBUG"
     INFO     = "INFO"
     WARNING  = "WARNING"
@@ -23,8 +24,9 @@ class LogLevel(str, Enum):
     CRITICAL = "CRITICAL"
 
 
-class AuthMethod(str, Enum):
-    __str__ = lambda self: self.value
+class AuthMethod(StrEnum):
+    def __str__(self) -> str:
+        return self.value
     PROXY    = "proxy"
     INTERNAL = "internal"
     TEST     = "test"

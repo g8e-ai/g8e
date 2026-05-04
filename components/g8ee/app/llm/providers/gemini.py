@@ -73,8 +73,8 @@ from app.models.base import G8eBaseModel, Field
 from app.models.model_configs import get_model_config
 from app.llm.thinking import translate_for_gemini
 
-from ..provider import LLMProvider
-from ._capability import translate_capability_error
+from app.llm.provider import LLMProvider
+from app.llm.providers._capability import translate_capability_error
 
 logger = logging.getLogger(__name__)
 

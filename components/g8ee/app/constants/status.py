@@ -12,7 +12,7 @@
 # limitations under the License.
 
 import json
-from enum import Enum
+from enum import IntEnum, StrEnum
 from app.constants.paths import PATHS
 
 _SHARED_DIR = PATHS["infra"]["shared_constants_dir"]
@@ -29,7 +29,7 @@ def _load(filename: str) -> dict:
 
 _STATUS = _load("status.json")
 
-class OperatorHistoryEventType(str, Enum):
+class OperatorHistoryEventType(StrEnum):
     CREATED = _STATUS["history.event.type"]["created"]
     SLOT_CREATED = _STATUS["history.event.type"]["slot.created"]
     SLOT_CONSUMED = _STATUS["history.event.type"]["slot.consumed"]
@@ -51,7 +51,7 @@ class OperatorHistoryEventType(str, Enum):
     RECONNECTED = _STATUS["history.event.type"]["reconnected"]
     REGISTERED = _STATUS["history.event.type"]["registered"]
 
-class OperatorStatus(str, Enum):
+class OperatorStatus(StrEnum):
     AVAILABLE = _STATUS["g8e.status"]["available"]
     UNAVAILABLE = _STATUS["g8e.status"]["unavailable"]
     OFFLINE = _STATUS["g8e.status"]["offline"]
@@ -61,7 +61,7 @@ class OperatorStatus(str, Enum):
     STOPPED = _STATUS["g8e.status"]["stopped"]
     TERMINATED = _STATUS["g8e.status"]["terminated"]
 
-class ExecutionStatus(str, Enum):
+class ExecutionStatus(StrEnum):
     PENDING = _STATUS["execution.status"]["pending"]
     EXECUTING = _STATUS["execution.status"]["executing"]
     COMPLETED = _STATUS["execution.status"]["completed"]
@@ -72,18 +72,18 @@ class ExecutionStatus(str, Enum):
     DENIED = _STATUS["execution.status"]["denied"]
     FEEDBACK = _STATUS["execution.status"]["feedback"]
 
-class ComponentName(str, Enum):
+class ComponentName(StrEnum):
     G8EE = "g8ee"
     G8EO = "g8eo"
     G8ED = "g8ed"
 
-class ComponentStatus(str, Enum):
+class ComponentStatus(StrEnum):
     ACTIVE = "active"
     INACTIVE = "inactive"
     MAINTENANCE = "maintenance"
     ERROR = "error"
 
-class AITaskId(str, Enum):
+class AITaskId(StrEnum):
     CHAT = "ai.chat"
     AGENT_CONTINUE = "ai.agent.continue"
     COMMAND = "ai.command"
@@ -100,20 +100,20 @@ class AITaskId(str, Enum):
     INTENT_GRANT = "ai.intent.grant"
     INTENT_REVOKE = "ai.intent.revoke"
 
-class ApiKeyStatus(str, Enum):
+class ApiKeyStatus(StrEnum):
     ACTIVE = "active"
     REVOKED = "revoked"
     EXPIRED = "expired"
     SUSPENDED = "suspended"
 
-class ApprovalType(str, Enum):
+class ApprovalType(StrEnum):
     COMMAND = _STATUS["approval.type"]["command"]
     FILE_EDIT = _STATUS["approval.type"]["file.edit"]
     INTENT = _STATUS["approval.type"]["intent"]
     AGENT_CONTINUE = _STATUS["approval.type"]["agent.continue"]
     STREAM = _STATUS["approval.type"]["stream"]
 
-class CaseStatus(str, Enum):
+class CaseStatus(StrEnum):
     NEW = "New"
     TRIAGE = "Triage"
     ESCALATED = "Escalated"
@@ -123,13 +123,13 @@ class CaseStatus(str, Enum):
     RESOLVED = "Resolved"
     CLOSED = "Closed"
 
-class CloudSubtype(str, Enum):
+class CloudSubtype(StrEnum):
     AWS = _STATUS["cloud.subtype"]["aws"]
     AZURE = _STATUS["cloud.subtype"]["azure"]
     GCP = _STATUS["cloud.subtype"]["gcp"]
     G8E_POD = _STATUS["cloud.subtype"]["g8ep"]
 
-class CommandErrorType(str, Enum):
+class CommandErrorType(StrEnum):
     VALIDATION_ERROR = "validation.error"
     SECURITY_ERROR = "security.error"
     SECURITY_VIOLATION = "security.violation"
@@ -169,23 +169,23 @@ class CommandErrorType(str, Enum):
     PERMISSION_ERROR = "permission.error"
     CONFIGURATION_ERROR = "configuration.error"
 
-class CommandCategory(str, Enum):
+class CommandCategory(StrEnum):
     CSV_WHITELIST = _STATUS["command.category"]["csv.whitelist"]
     NETWORK_DIAGNOSTICS = _STATUS["command.category"]["network.diagnostics"]
     SYSTEM_DIAGNOSTICS = _STATUS["command.category"]["system.diagnostics"]
 
-class ConversationStatus(str, Enum):
+class ConversationStatus(StrEnum):
     ACTIVE = "active"
     INACTIVE = "inactive"
     COMPLETED = "completed"
 
-class EscalationRisk(str, Enum):
+class EscalationRisk(StrEnum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
     CRITICAL = "critical"
 
-class FileOperation(str, Enum):
+class FileOperation(StrEnum):
     READ = "read"
     CREATE = "create"
     WRITE = "write"
@@ -195,33 +195,33 @@ class FileOperation(str, Enum):
     DELETE = "delete"
     PATCH = "patch"
 
-class HealthStatus(str, Enum):
+class HealthStatus(StrEnum):
     HEALTHY = "healthy"
     UNHEALTHY = "unhealthy"
 
-class HeartbeatType(str, Enum):
+class HeartbeatType(StrEnum):
     AUTOMATIC = "automatic"
     BOOTSTRAP = "bootstrap"
     REQUESTED = "requested"
 
-class InfrastructureStatus(str, Enum):
+class InfrastructureStatus(StrEnum):
     UNKNOWN = "unknown"
     HEALTHY = "healthy"
     STABLE = "stable"
     DEGRADED = "degraded"
     CRITICAL = "critical"
 
-class InvestigationStatus(str, Enum):
+class InvestigationStatus(StrEnum):
     OPEN = "Open"
     CLOSED = "Closed"
     ESCALATED = "Escalated"
     RESOLVED = "Resolved"
 
-class NetworkProtocol(str, Enum):
+class NetworkProtocol(StrEnum):
     TCP = "tcp"
     UDP = "udp"
 
-class OperatorToolName(str, Enum):
+class OperatorToolName(StrEnum):
     """Canonical names for every AI-facing tool dispatched through g8ee.
 
     Contract:
@@ -266,32 +266,32 @@ class OperatorToolName(str, Enum):
 # where they are derived from the single TOOL_SPECS declaration. Importers must
 # pull those frozensets from tool_registry directly.
 
-class OperatorType(str, Enum):
+class OperatorType(StrEnum):
     SYSTEM = _STATUS["g8e.type"]["system"]
     CLOUD = _STATUS["g8e.type"]["cloud"]
 
-class Platform(str, Enum):
+class Platform(StrEnum):
     LINUX = "linux"
     WINDOWS = "windows"
     DARWIN = "darwin"
 
-class Priority(int, Enum):
+class Priority(IntEnum):
     LOW = 1
     MEDIUM = 2
     HIGH = 3
     CRITICAL = 4
 
-class RiskLevel(str, Enum):
+class RiskLevel(StrEnum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
 
-class RiskThreshold(str, Enum):
+class RiskThreshold(StrEnum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
 
-class SessionEndReason(str, Enum):
+class SessionEndReason(StrEnum):
     LOGOUT = _STATUS["session.end.reason"]["user.logout"]
     INTEGRITY_FAILURE = _STATUS["session.end.reason"]["integrity.failure"]
     SESSION_REGENERATION = _STATUS["session.end.reason"]["session.regeneration"]
@@ -300,7 +300,7 @@ class SessionEndReason(str, Enum):
     TIMEOUT_ABSOLUTE = _STATUS["session.event.type"]["session.timeout.absolute"]
     TIMEOUT_IDLE = _STATUS["session.event.type"]["session.timeout.idle"]
 
-class SessionEventType(str, Enum):
+class SessionEventType(StrEnum):
     SESSION_CREATED = _STATUS["session.event.type"]["session.created"]
     SESSION_ENDED = _STATUS["session.event.type"]["session.ended"]
     SESSION_REGENERATED = _STATUS["session.event.type"]["session.regenerated"]
@@ -310,29 +310,29 @@ class SessionEventType(str, Enum):
     G8E_BOUND = _STATUS["session.event.type"]["g8e.bound"]
     G8E_UNBOUND = _STATUS["session.event.type"]["g8e.unbound"]
 
-class SessionType(str, Enum):
+class SessionType(StrEnum):
     WEB = "web"
     OPERATOR = "operator"
     CLI = "cli"
 
-class Severity(int, Enum):
+class Severity(IntEnum):
     LOW = 1
     MEDIUM = 2
     HIGH = 3
     CRITICAL = 4
 
-class TaskStatus(str, Enum):
+class TaskStatus(StrEnum):
     PENDING = "pending"
     IN_PROGRESS = "executing"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
 
-class VaultMode(str, Enum):
+class VaultMode(StrEnum):
     RAW = "raw"
     SCRUBBED = "scrubbed"
 
-class VersionStability(str, Enum):
+class VersionStability(StrEnum):
     STABLE = "stable"
     BETA = "beta"
     DEV = "dev"

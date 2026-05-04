@@ -23,7 +23,7 @@ in §14.5 of the GDD progress doc):
   execution result lands.
 
 No other agent persona may import this module — that boundary is what
-keeps the vortex (GDD §3) intact.
+keeps Information Isolation (GDD §3) intact.
 """
 
 from __future__ import annotations
@@ -83,7 +83,7 @@ class ReputationDataService:
                 details={"agent_id": agent_id},
                 cause=exc,
                 component=ComponentName.G8EE,
-            )
+            ) from exc
 
     async def list_states(self) -> list[ReputationState]:
         """Return every `reputation_state` row, ordered ASCII-ascending by ``agent_id``.
@@ -110,7 +110,7 @@ class ReputationDataService:
                 code=ErrorCode.DB_QUERY_ERROR,
                 cause=exc,
                 component=ComponentName.G8EE,
-            )
+            ) from exc
 
     async def upsert_state(self, state: ReputationState) -> ReputationState:
         """Create or merge a `reputation_state` row keyed on ``agent_id``."""
@@ -145,7 +145,7 @@ class ReputationDataService:
                 details={"agent_id": state.agent_id},
                 cause=exc,
                 component=ComponentName.G8EE,
-            )
+            ) from exc
 
     # ------------------------------------------------------------------
     # reputation_commitments
@@ -181,7 +181,7 @@ class ReputationDataService:
                 details={"commitment_id": commitment.id},
                 cause=exc,
                 component=ComponentName.G8EE,
-            )
+            ) from exc
 
     async def get_commitment(self, commitment_id: str) -> ReputationCommitment | None:
         if not commitment_id:
@@ -203,7 +203,7 @@ class ReputationDataService:
                 details={"commitment_id": commitment_id},
                 cause=exc,
                 component=ComponentName.G8EE,
-            )
+            ) from exc
 
     async def get_latest_commitment(self) -> ReputationCommitment | None:
         """Return the deployment's most recent commitment, or None at genesis.
@@ -228,7 +228,7 @@ class ReputationDataService:
                 code=ErrorCode.DB_QUERY_ERROR,
                 cause=exc,
                 component=ComponentName.G8EE,
-            )
+            ) from exc
 
     async def list_commitments_for_investigation(
         self,
@@ -261,4 +261,4 @@ class ReputationDataService:
                 details={"investigation_id": investigation_id},
                 cause=exc,
                 component=ComponentName.G8EE,
-            )
+            ) from exc

@@ -13,6 +13,7 @@
 
 import logging
 import re
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +21,7 @@ from app.constants import Platform, CommandCategory
 from app.errors import ConfigurationError
 from app.models.whitelist import CommandValidationResult, WhitelistedCommand
 from app.utils.config_loader import load_json_config
+from app.utils.csv_commands import parse_command_csv
 
 logger = logging.getLogger(__name__)
 
@@ -480,9 +482,6 @@ def parse_whitelisted_commands_csv(csv: str | None) -> list[str]:
     **Deprecated:** Use `app.utils.csv_commands.parse_command_csv` instead.
     This function is kept for backward compatibility and will be removed in a future release.
     """
-    import warnings
-    from app.utils.csv_commands import parse_command_csv
-
     warnings.warn(
         "parse_whitelisted_commands_csv is deprecated; use app.utils.csv_commands.parse_command_csv instead",
         DeprecationWarning,

@@ -31,11 +31,10 @@ pytestmark = [pytest.mark.unit]
 
 
 def _write_json(data: dict) -> str:
-    f = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
-    json.dump(data, f)
-    f.flush()
-    f.close()
-    return f.name
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        json.dump(data, f)
+        f.flush()
+        return f.name
 
 
 def _minimal_blacklist(**overrides) -> dict:
@@ -56,12 +55,12 @@ class TestCommandBlacklistValidatorConfigurationErrors:
             CommandBlacklistValidator(blacklist_path="/nonexistent/blacklist.json")
 
     def test_invalid_json_raises_configuration_error(self):
-        f = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
-        f.write("{not json")
-        f.flush()
-        f.close()
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            f.write("{not json")
+            f.flush()
+            fname = f.name
         with pytest.raises(ConfigurationError, match="Invalid JSON"):
-            CommandBlacklistValidator(blacklist_path=f.name)
+            CommandBlacklistValidator(blacklist_path=fname)
 
     def test_missing_required_sections_raises_configuration_error(self):
         path = _write_json({})

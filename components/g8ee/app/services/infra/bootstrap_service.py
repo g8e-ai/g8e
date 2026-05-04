@@ -94,7 +94,7 @@ class BootstrapService:
             self._logger.info("Internal auth token not found in g8es volume")
             return None
         except Exception as e:
-            self._logger.warning(f"Failed to read internal auth token: {e}")
+            self._logger.warning("Failed to read internal auth token: %s", e)
             return None
 
     def load_session_encryption_key(self) -> str | None:
@@ -111,7 +111,7 @@ class BootstrapService:
             self._logger.info("Session encryption key not found in g8es volume")
             return None
         except Exception as e:
-            self._logger.warning(f"Failed to read session encryption key: {e}")
+            self._logger.warning("Failed to read session encryption key: %s", e)
             return None
 
     def load_auditor_hmac_key(self) -> str | None:
@@ -134,7 +134,7 @@ class BootstrapService:
             self._logger.info("Auditor HMAC key not found in g8es volume")
             return None
         except Exception as e:
-            self._logger.warning(f"Failed to read auditor HMAC key: {e}")
+            self._logger.warning("Failed to read auditor HMAC key: %s", e)
             return None
 
     def load_ca_cert_path(self) -> str | None:
@@ -152,10 +152,10 @@ class BootstrapService:
             try:
                 if ca_path.exists():
                     self._cached_ca_path = str(ca_path)
-                    self._logger.info(f"Loaded CA cert path from g8es volume: {self._cached_ca_path}")
+                    self._logger.info("Loaded CA cert path from g8es volume: %s", self._cached_ca_path)
                     return self._cached_ca_path
             except Exception as e:
-                self._logger.warning(f"Failed to read CA cert at {ca_path}: {e}")
+                self._logger.warning("Failed to read CA cert at %s: %s", ca_path, e)
 
         self._logger.info("CA certificate not found in g8es volume")
         return None

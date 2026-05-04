@@ -58,6 +58,7 @@ async def handle(
         tool_args,
         FileEditRequestPayload,
         execution_id,
+        investigation,
         operation=FileOperation.WRITE,
     )
     logger.info("[FILE_WRITE] File path: %s", args.file_path)

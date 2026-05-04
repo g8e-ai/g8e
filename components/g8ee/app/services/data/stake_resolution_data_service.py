@@ -78,7 +78,7 @@ class StakeResolutionDataService:
                 details={"id": doc_id},
                 cause=exc,
                 component=ComponentName.G8EE,
-            )
+            ) from exc
 
     async def create(self, resolution: StakeResolution) -> StakeResolution:
         """Append a new `stake_resolution` row.
@@ -129,7 +129,7 @@ class StakeResolutionDataService:
                 details={"id": resolution.id},
                 cause=exc,
                 component=ComponentName.G8EE,
-            )
+            ) from exc
 
     async def list_for_tribunal_command(self, tribunal_command_id: str) -> list[StakeResolution]:
         if not tribunal_command_id:
@@ -157,4 +157,4 @@ class StakeResolutionDataService:
                 details={"tribunal_command_id": tribunal_command_id},
                 cause=exc,
                 component=ComponentName.G8EE,
-            )
+            ) from exc

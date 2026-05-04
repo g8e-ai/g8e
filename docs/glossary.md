@@ -451,7 +451,7 @@ Failure modes (missing model, provider error, no consensus, Warden block, Audito
 
 Configuration via platform settings: `llm_command_gen_passes` (default: 5), `llm_command_gen_verifier` (default: true), `llm_command_gen_enabled` (default: true).
 
-## Vortex Principle
+## Information Isolation Principle
 
 A load-bearing safety property in g8e's mechanism design where AI agents operate in a sealed, tiered information environment. Each agent (Triage, Sage, Tribunal members, Auditor) has a quarantined view of the pipeline to prevent collusion and ensure honest participation. This structure ensures that no agent can coordinate to game the consensus or shape output to fit downstream expectations.
 

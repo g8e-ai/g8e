@@ -71,6 +71,9 @@ from app.services.operator.operator_lifecycle_service import OperatorLifecycleSe
 from app.services.data.case_data_service import CaseDataService
 from app.services.operator.heartbeat_service import HeartbeatSnapshotService
 from app.models.settings import G8eePlatformSettings
+from app.utils.whitelist_validator import get_whitelist_validator, register_whitelist_validator
+from app.utils.blacklist_validator import get_blacklist_validator, register_blacklist_validator
+from app.utils.auto_approved_validator import get_auto_approved_validator, register_auto_approved_validator
 
 if TYPE_CHECKING:
     from app.clients.blob_client import BlobClient
@@ -174,11 +177,6 @@ class ServiceFactory:
         settings: G8eePlatformSettings, cache_aside_service: CacheAsideService
     ) -> CoreServices:
         """Create core services that other services depend on."""
-        from app.services.infra.internal_http_client import InternalHttpClient
-        from app.services.infra.http_service import HTTPService
-        from app.services.infra.g8ed_event_service import EventService
-        from app.services.infra.settings_service import SettingsService
-        from app.services.infra.supervisor_service import SupervisorService
 
         # Create HTTP service first to manage all HTTP clients
         http_service: HTTPService = HTTPService()
@@ -396,9 +394,6 @@ class ServiceFactory:
             settings=settings,
         )
 
-        from app.utils.whitelist_validator import get_whitelist_validator, register_whitelist_validator
-        from app.utils.blacklist_validator import get_blacklist_validator, register_blacklist_validator
-        from app.utils.auto_approved_validator import get_auto_approved_validator, register_auto_approved_validator
 
         whitelist_validator = get_whitelist_validator()
         blacklist_validator = get_blacklist_validator()

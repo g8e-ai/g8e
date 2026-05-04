@@ -136,7 +136,7 @@ class InternalHttpClient:
                 f"[HTTP-G8ED] HTTP request failed: {e}",
                 component=ComponentName.G8EE,
                 cause=e,
-            )
+            ) from e
 
         if not response.is_success:
             logger.error(
@@ -222,7 +222,7 @@ class InternalHttpClient:
                 f"[HTTP-G8ED] Failed to grant intent: {e}",
                 component=ComponentName.G8EE,
                 cause=e,
-            )
+            ) from e
 
     async def revoke_intent(
         self,
@@ -255,7 +255,7 @@ class InternalHttpClient:
                 f"[HTTP-G8ED] Failed to revoke intent: {e}",
                 component=ComponentName.G8EE,
                 cause=e,
-            )
+            ) from e
 
     async def generate_operator_link(
         self,
@@ -313,6 +313,6 @@ class InternalHttpClient:
                 f"[HTTP-G8ED] Failed to generate operator device link: {e}",
                 component=ComponentName.G8EE,
                 cause=e,
-            )
+            ) from e
 
 

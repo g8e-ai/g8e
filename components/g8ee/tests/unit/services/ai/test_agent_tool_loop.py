@@ -68,7 +68,6 @@ def mock_sage_request():
     return SageOperatorRequest(
         request="List all files in /tmp",
         guidelines="Use ls with detailed output",
-        target_operator="op-001",
         target_operators=["op-001", "op-002"],
         expected_output_lines=20,
         timeout_seconds=600,

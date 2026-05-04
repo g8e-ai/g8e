@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from enum import Enum
+from enum import StrEnum
 
 # Use absolute path for shared models in container
 _SHARED_DIR = "/app/shared/models"
@@ -20,7 +20,7 @@ _SHARED_DIR = "/app/shared/models"
 # eventually move these to a more central constants location if they are purely enums.
 # For now, we mirror the structure to break the circular dependency.
 
-class ErrorCategory(str, Enum):
+class ErrorCategory(StrEnum):
     NETWORK = "network"
     DATABASE = "database"
     PUBSUB = "pubsub"
@@ -39,14 +39,14 @@ class ErrorCategory(str, Enum):
     EXTERNAL_SERVICE = "external_service"
     TIMEOUT = "timeout"
 
-class ErrorSeverity(str, Enum):
+class ErrorSeverity(StrEnum):
     CRITICAL = "critical"
     HIGH = "high"
     MEDIUM = "medium"
     LOW = "low"
     INFO = "info"
 
-class ErrorCode(str, Enum):
+class ErrorCode(StrEnum):
     # Base Errors
     GENERIC_ERROR = "G8E-1000"
     UNEXPECTED_ERROR = "G8E-1001"

@@ -26,6 +26,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import logging
 from collections.abc import AsyncGenerator
+from httpx import HTTPStatusError as HttpxHTTPStatusError
+from httpx import TimeoutException as HttpxTimeout
 
 import app.llm.llm_types as types
 from app.constants import (
@@ -322,13 +324,7 @@ def should_retry_error(error: Exception) -> bool:
     if isinstance(error, (PermissionError, ValueError)):
         return False
 
-    try:
-        from httpx import TimeoutException as HttpxTimeout
-        if isinstance(error, HttpxTimeout):
-            return True
-    except ImportError:
-        pass
-    if isinstance(error, (TimeoutError, OSError)):
+    if isinstance(error, (HttpxTimeout, TimeoutError, OSError)):
         return True
     status_code = extract_status_code(error)
     if status_code and status_code in AGENT_RETRYABLE_STATUS_CODES:
@@ -340,13 +336,9 @@ def should_retry_error(error: Exception) -> bool:
 def extract_status_code(error: Exception) -> int | None:
     """Extract an HTTP status code from an exception, if present."""
     # Handle known library exceptions explicitly
-    try:
-        from httpx import HTTPStatusError
-        if isinstance(error, HTTPStatusError):
-            if hasattr(error, "response") and hasattr(error.response, "status_code"):
-                return error.response.status_code
-    except ImportError:
-        pass
+    if isinstance(error, HttpxHTTPStatusError):
+        if hasattr(error, "response") and hasattr(error.response, "status_code"):
+            return error.response.status_code
 
     # For other exceptions with status_code attribute
     status_code = getattr(error, "status_code", None)

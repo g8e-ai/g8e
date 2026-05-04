@@ -21,6 +21,7 @@ operator heartbeat TimeoutError fix).
 """
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -34,7 +35,7 @@ pytestmark = pytest.mark.unit
 
 
 def _load_pubsub_json() -> dict:
-    with open("/app/shared/constants/pubsub.json") as f:
+    with Path("/app/shared/constants/pubsub.json").open() as f:
         return json.load(f)
 
 

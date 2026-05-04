@@ -98,7 +98,7 @@ class AIRequestBuilder:
         should_scrub = sentinel_mode is True
 
         if conversation_history:
-            logger.info(f" [BUILD_CONTENTS] Converting {len(conversation_history)} messages")
+            logger.info(" [BUILD_CONTENTS] Converting %s messages", len(conversation_history))
 
             for msg in conversation_history:
                 content_text = msg.content
@@ -132,13 +132,13 @@ class AIRequestBuilder:
                         parts=[types.Part.from_text(text=content_text)],
                     ))
 
-            logger.info(f" [BUILD_CONTENTS] Built {len(contents)} Content objects from history")
+            logger.info(" [BUILD_CONTENTS] Built %s Content objects from history", len(contents))
 
         if attachments and contents:
             for i in range(len(contents) - 1, -1, -1):
                 if contents[i].role == types.Role.USER:
                     contents[i].parts.extend(attachments)
-                    logger.info(f" [BUILD_CONTENTS] Appended {len(attachments)} attachment(s) to last user message")
+                    logger.info(" [BUILD_CONTENTS] Appended %s attachment(s) to last user message", len(attachments))
                     break
 
         return contents

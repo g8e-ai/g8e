@@ -22,8 +22,7 @@ import logging
 from fastapi import APIRouter, Depends, Request
 
 from app.utils.timestamp import now_iso
-
-from ..dependencies import require_internal_origin
+from app.dependencies import require_internal_origin
 
 router = APIRouter(tags=["health"])
 logger = logging.getLogger(__name__)

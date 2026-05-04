@@ -315,5 +315,5 @@ class AIGenerationConfigBuilder:
             system_instructions="",
         )
 
-        logger.info(f" [BUILD_CONFIG] title model={model}")
+        logger.info(" [BUILD_CONFIG] title model=%s", model)
         return config

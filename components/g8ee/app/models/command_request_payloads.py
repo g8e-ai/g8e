@@ -47,13 +47,13 @@ __all__ = [
 
 
 class TargetedOperatorBase(G8eBaseModel):
-    """Base class for tool args that can be routed to a specific operator."""
-    target_operator: str | None = Field(
-        default=None,
+    """Base class for tool args that can be routed to specific operators."""
+    target_operators: list[str] = Field(
+        ...,
+        min_length=1,
         description=(
-            "Which Operator to execute on when multiple operators are bound. "
-            "Can be: operator_id, hostname, or index ('0', '1'). "
-            "Required when multiple operators are bound."
+            "List of operators to execute on. Each entry can be: operator_id, hostname, or index ('0', '1'). "
+            "Pass ['all'] to execute on all bound operators. Required."
         ),
     )
 

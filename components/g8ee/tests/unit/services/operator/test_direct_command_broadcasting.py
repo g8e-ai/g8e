@@ -48,6 +48,7 @@ def _build_execution_service() -> tuple[OperatorExecutionService, OperatorPubSub
     svc._operator_data_service = None
     svc._ai_response_analyzer = None
     svc._investigation_service = None
+    svc._background_tasks = set()
 
     return svc, pubsub_service, pubsub_client, event_service
 

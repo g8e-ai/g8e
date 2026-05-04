@@ -17,12 +17,19 @@ from typing import get_args
 
 import pytest
 
+from app.errors import ValidationError
 from app.models.pubsub_messages import (
     ExecutionResultsPayload,
+    FetchFileDiffByIdSuccessPayload,
+    FetchFileDiffBySessionSuccessPayload,
+    FetchFileHistorySuccessPayload,
+    FetchHistoryErrorPayload,
+    FetchHistorySuccessPayload,
     FsListResultPayload,
     FsReadResultPayload,
     G8eoResultPayload,
     PortCheckResultPayload,
+    RestoreFileSuccessPayload,
 )
 from app.services.operator.pubsub_service import parse_inbound_g8eo_payload
 
@@ -71,8 +78,6 @@ def test_discriminator_parsing_fs_list():
 
 def test_invalid_payload_type_raises_validation_error():
     """Verify that invalid payload_type raises ValidationError."""
-    from app.errors import ValidationError
-
     payload_raw = {
         "payload_type": "invalid_type",
         "execution_id": "exec-123",
@@ -145,7 +150,6 @@ def test_discriminator_parsing_fs_read_failed():
 
 def test_discriminator_parsing_fetch_history_success():
     """Verify that FetchHistorySuccessPayload parses correctly."""
-    from app.models.pubsub_messages import FetchHistorySuccessPayload
     payload_raw = {
         "payload_type": "fetch_history_success",
         "execution_id": "exec-hist-1",
@@ -163,7 +167,6 @@ def test_discriminator_parsing_fetch_history_success():
 
 def test_discriminator_parsing_fetch_history_error():
     """Verify that FetchHistoryErrorPayload parses correctly."""
-    from app.models.pubsub_messages import FetchHistoryErrorPayload
     payload_raw = {
         "payload_type": "fetch_history_error",
         "execution_id": "exec-hist-err",
@@ -176,7 +179,6 @@ def test_discriminator_parsing_fetch_history_error():
 
 def test_discriminator_parsing_fetch_file_history_success():
     """Verify that FetchFileHistorySuccessPayload parses correctly."""
-    from app.models.pubsub_messages import FetchFileHistorySuccessPayload
     payload_raw = {
         "payload_type": "fetch_file_history_success",
         "execution_id": "exec-fhist-1",
@@ -190,7 +192,6 @@ def test_discriminator_parsing_fetch_file_history_success():
 
 def test_discriminator_parsing_restore_file_success():
     """Verify that RestoreFileSuccessPayload parses correctly."""
-    from app.models.pubsub_messages import RestoreFileSuccessPayload
     payload_raw = {
         "payload_type": "restore_file_success",
         "execution_id": "exec-restore-1",
@@ -204,8 +205,6 @@ def test_discriminator_parsing_restore_file_success():
 
 def test_discriminator_parsing_fetch_file_diff_by_id():
     """Verify that FetchFileDiffByIdSuccessPayload parses correctly."""
-    from app.models.pubsub_messages import FetchFileDiffByIdSuccessPayload
-    from app.models.tool_results import FileDiffEntry
     payload_raw = {
         "payload_type": "fetch_file_diff_by_id_success",
         "execution_id": "exec-diff-1",
@@ -228,7 +227,6 @@ def test_discriminator_parsing_fetch_file_diff_by_id():
 
 def test_discriminator_parsing_fetch_file_diff_by_session():
     """Verify that FetchFileDiffBySessionSuccessPayload parses correctly."""
-    from app.models.pubsub_messages import FetchFileDiffBySessionSuccessPayload
     payload_raw = {
         "payload_type": "fetch_file_diff_by_session_success",
         "execution_id": "exec-diff-sess-1",
@@ -243,7 +241,6 @@ def test_discriminator_parsing_fetch_file_diff_by_session():
 
 def test_fs_read_result_size_bytes_field():
     """Regression: FsReadResultPayload must use size_bytes (not size) to match Go wire format."""
-    from app.models.pubsub_messages import FsReadResultPayload
     payload_raw = {
         "payload_type": "fs_read_result",
         "execution_id": "exec-size-1",

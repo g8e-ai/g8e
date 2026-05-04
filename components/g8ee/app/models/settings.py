@@ -147,16 +147,6 @@ class CommandValidationSettings(G8eBaseModel):
         "",
         description="Comma-separated list of base commands that skip human approval (e.g., uptime,df,free). Only used when enable_auto_approve is true. The human is rubber-stamping these as benign.",
     )
-    max_batch_concurrency: int = Field(
-        10,
-        ge=1,
-        le=64,
-        description="Maximum number of operators a single batched command may dispatch to concurrently.",
-    )
-    batch_fail_fast: bool = Field(
-        False,
-        description="If true, remaining per-operator executions are cancelled after the first failure in a batch.",
-    )
 
     @staticmethod
     def _validate_command_csv(v: str, field_label: str) -> str:
@@ -327,6 +317,24 @@ class LLMSettings(G8eBaseModel):
         }
         return endpoints.get(self.assistant_provider)
 
+class BatchExecutionSettings(G8eBaseModel):
+    """Batch execution configuration for operator tools.
+
+    These settings control how batched operations across multiple operators
+    are executed. They apply to all operator tools that support batch execution
+    (commands, port checks, filesystem operations, file operations).
+    """
+    max_concurrency: int = Field(
+        10,
+        ge=1,
+        le=64,
+        description="Maximum number of operators a single batched operation may dispatch to concurrently.",
+    )
+    fail_fast: bool = Field(
+        False,
+        description="If true, remaining per-operator executions are cancelled after the first failure in a batch.",
+    )
+
 class ReputationSettings(G8eBaseModel):
     """Phase 3 reputation-resolution configuration (GDD §14.5, §15 Phase 3).
 
@@ -373,6 +381,7 @@ class G8eePlatformSettings(G8eBaseModel):
     search: SearchSettings = Field(default_factory=SearchSettings)
     eval_judge: EvalJudgeSettings = Field(default_factory=EvalJudgeSettings)
     reputation: ReputationSettings = Field(default_factory=ReputationSettings)
+    batch_execution: BatchExecutionSettings = Field(default_factory=BatchExecutionSettings)
     g8ep_operator_api_key: str | None = Field(
         None,
         description="API key for the g8ep operator, persisted for fetch-key-and-run.sh retrieval",
@@ -400,6 +409,7 @@ class G8eeUserSettings(G8eBaseModel):
     search: SearchSettings = Field(default_factory=SearchSettings)
     eval_judge: EvalJudgeSettings = Field(default_factory=EvalJudgeSettings)
     command_validation: CommandValidationSettings = Field(default_factory=CommandValidationSettings)
+    batch_execution: BatchExecutionSettings = Field(default_factory=BatchExecutionSettings)
 
     @classmethod
     async def from_db(cls, settings_service: Any, user_id: str) -> G8eeUserSettings:

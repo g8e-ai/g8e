@@ -41,7 +41,7 @@ def _load_fixtures():
         / "test-fixtures"
         / "ledger-hash-fixtures.json"
     )
-    with open(fixtures_path, encoding="utf-8") as f:
+    with fixtures_path.open(encoding="utf-8") as f:
         return json.load(f)
 
 

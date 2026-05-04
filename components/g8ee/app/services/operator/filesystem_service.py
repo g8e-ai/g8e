@@ -36,7 +36,7 @@ from app.models.command_request_payloads import FsListRequestPayload, FsReadRequ
 from app.models.operators import CommandExecutingBroadcastEvent, CommandResultBroadcastEvent
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.tool_results import FsListToolResult, FsReadToolResult
-from app.models.pubsub_messages import G8eMessage
+from app.models.pubsub_messages import FsListResultPayload, FsReadResultPayload, G8eMessage
 
 logger = logging.getLogger(__name__)
 
@@ -79,11 +79,11 @@ class OperatorFilesystemService:
         """
         exec_id = args.execution_id
         operator_documents = investigation.operator_documents if investigation else []
-        resolved_operator = self.execution_service.resolve_target_operator(
+        resolved_operators = self.execution_service.resolve_operators(
             operator_documents=operator_documents,
-            target_operator=args.target_operator,
-            tool_name="list_files_and_directories_with_detailed_metadata",
+            target_operators=args.target_operators,
         )
+        resolved_operator = resolved_operators[0]
 
         g8e_message = G8eMessage(
             id=exec_id,
@@ -117,7 +117,6 @@ class OperatorFilesystemService:
         )
 
         # Extract typed payload data from envelope
-        from app.models.pubsub_messages import FsListResultPayload
         entries = []
         if envelope and isinstance(envelope.payload, FsListResultPayload):
             entries = envelope.payload.entries or []
@@ -168,11 +167,11 @@ class OperatorFilesystemService:
         """
         exec_id = args.execution_id
         operator_documents = investigation.operator_documents if investigation else []
-        resolved_operator = self.execution_service.resolve_target_operator(
+        resolved_operators = self.execution_service.resolve_operators(
             operator_documents=operator_documents,
-            target_operator=args.target_operator,
-            tool_name="file_read_on_operator",
+            target_operators=args.target_operators,
         )
+        resolved_operator = resolved_operators[0]
 
         g8e_message = G8eMessage(
             id=exec_id,
@@ -206,7 +205,6 @@ class OperatorFilesystemService:
         )
 
         # Extract typed payload data from envelope
-        from app.models.pubsub_messages import FsReadResultPayload
         content = None
         if envelope and isinstance(envelope.payload, FsReadResultPayload):
             content = envelope.payload.content

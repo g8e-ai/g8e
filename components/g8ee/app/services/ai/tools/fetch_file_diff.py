@@ -54,7 +54,7 @@ async def handle(
     request_settings: G8eeUserSettings,
     execution_id: str,
 ) -> ToolResult:
-    args = convert_args_to_payload(tool_args, FetchFileDiffRequestPayload, execution_id)
+    args = convert_args_to_payload(tool_args, FetchFileDiffRequestPayload, execution_id, investigation)
     logger.info("[FETCH_FILE_DIFF] File path: %s", args.file_path)
     result = await svc.operator_command_service.execute_fetch_file_diff(
         args=args, investigation=investigation, g8e_context=g8e_context,

@@ -25,6 +25,7 @@ Verifies that:
 """
 
 import json
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -33,6 +34,8 @@ from app.constants import (
     CLOUD_INTENT_DEPENDENCIES,
     CLOUD_INTENT_VERIFICATION_ACTIONS,
     CloudIntent,
+    CommandErrorType,
+    OperatorType,
 )
 from app.models.tool_args import GrantIntentArgs
 from app.models.tool_results import IntentPermissionResult
@@ -48,8 +51,7 @@ pytestmark = [pytest.mark.unit]
 # ---------------------------------------------------------------------------
 
 def _load_intents_json() -> dict:
-    shared_dir = "/app/shared/constants"
-    with open(shared_dir + "/intents.json") as f:
+    with Path("/app/shared/constants/intents.json").open() as f:
         return json.load(f)
 
 
@@ -220,8 +222,11 @@ class TestCloudIntentVerificationActions:
     def test_all_verification_actions_are_non_empty_strings(self):
         """Each verification action must be a non-empty string."""
         for name, action in CLOUD_INTENT_VERIFICATION_ACTIONS.items():
-            assert isinstance(action, str) and action.strip(), (
-                f"Verification action for '{name}' is empty or not a string"
+            assert isinstance(action, str), (
+                f"Verification action for '{name}' is not a string"
+            )
+            assert action.strip(), (
+                f"Verification action for '{name}' is empty"
             )
 
     def test_verification_actions_use_service_colon_action_format(self):
@@ -231,8 +236,11 @@ class TestCloudIntentVerificationActions:
                 f"Verification action for '{name}' does not use 'service:Action' format: '{action}'"
             )
             service, _, api_action = action.partition(":")
-            assert service and api_action, (
-                f"Verification action for '{name}' has an empty service or action part: '{action}'"
+            assert service, (
+                f"Verification action for '{name}' has an empty service part: '{action}'"
+            )
+            assert api_action, (
+                f"Verification action for '{name}' has an empty action part: '{action}'"
             )
 
     def test_spot_check_known_verification_actions(self):
@@ -276,21 +284,21 @@ class TestGetVerificationActionForIntent:
 
     def test_returns_correct_action_for_known_intent(self):
         service = _make_service()
-        assert service._intent_service._get_verification_action_for_intent("ec2_discovery") == "ec2:DescribeInstances"
-        assert service._intent_service._get_verification_action_for_intent("s3_read") == "s3:GetObject"
-        assert service._intent_service._get_verification_action_for_intent("lambda_invoke") == "lambda:InvokeFunction"
-        assert service._intent_service._get_verification_action_for_intent("cost_explorer") == "ce:GetCostAndUsage"
+        assert service._intent_service._get_verification_action_for_intent("ec2_discovery") == "ec2:DescribeInstances"  # noqa: SLF001
+        assert service._intent_service._get_verification_action_for_intent("s3_read") == "s3:GetObject"  # noqa: SLF001
+        assert service._intent_service._get_verification_action_for_intent("lambda_invoke") == "lambda:InvokeFunction"  # noqa: SLF001
+        assert service._intent_service._get_verification_action_for_intent("cost_explorer") == "ce:GetCostAndUsage"  # noqa: SLF001
 
     def test_returns_none_for_unknown_intent(self):
         service = _make_service()
-        assert service._intent_service._get_verification_action_for_intent("totally_fake_intent") is None
-        assert service._intent_service._get_verification_action_for_intent("") is None
+        assert service._intent_service._get_verification_action_for_intent("totally_fake_intent") is None  # noqa: SLF001
+        assert service._intent_service._get_verification_action_for_intent("") is None  # noqa: SLF001
 
     def test_returns_action_for_every_cloud_intent(self):
         """No CloudIntent member should produce None from this method."""
         service = _make_service()
         for value in CloudIntent._value2member_map_:
-            result = service._intent_service._get_verification_action_for_intent(value)
+            result = service._intent_service._get_verification_action_for_intent(value)  # noqa: SLF001
             assert result is not None, (
                 f"_get_verification_action_for_intent returned None for '{value}'"
             )
@@ -300,7 +308,7 @@ class TestGetVerificationActionForIntent:
         """Method must return exactly the value from CLOUD_INTENT_VERIFICATION_ACTIONS."""
         service = _make_service()
         for name, expected_action in CLOUD_INTENT_VERIFICATION_ACTIONS.items():
-            assert service._intent_service._get_verification_action_for_intent(name) == expected_action
+            assert service._intent_service._get_verification_action_for_intent(name) == expected_action  # noqa: SLF001
 
 
 # ---------------------------------------------------------------------------
@@ -311,7 +319,6 @@ class TestExecuteIntentPermissionRequestValidation:
     """Invalid-intent validation in execute_intent_permission_request uses CloudIntent enum."""
 
     def _make_cloud_investigation(self):
-        from app.constants import OperatorType
         op_doc = MagicMock()
         op_doc.operator_type = OperatorType.CLOUD
         op_doc.id = "op-cloud-1"
@@ -323,19 +330,18 @@ class TestExecuteIntentPermissionRequestValidation:
 
     async def test_rejects_unknown_intent_with_invalid_intent_error_type(self):
         service = _make_service()
-        result = await service._intent_service.execute_intent_permission_request(
+        result = await service._intent_service.execute_intent_permission_request(  # noqa: SLF001
             args=GrantIntentArgs(intent_name="totally_fake_service_intent", justification="Test"),
             g8e_context=_make_g8e_context(),
             investigation=self._make_cloud_investigation(),
         )
         assert isinstance(result, IntentPermissionResult)
         assert result.success is False
-        from app.constants import CommandErrorType
         assert result.error_type == CommandErrorType.INVALID_INTENT
 
     async def test_invalid_intent_error_names_the_bad_intent(self):
         service = _make_service()
-        result = await service._intent_service.execute_intent_permission_request(
+        result = await service._intent_service.execute_intent_permission_request(  # noqa: SLF001
             args=GrantIntentArgs(intent_name="bad_intent_name", justification="Test"),
             g8e_context=_make_g8e_context(),
             investigation=self._make_cloud_investigation(),
@@ -346,7 +352,7 @@ class TestExecuteIntentPermissionRequestValidation:
     async def test_invalid_intent_error_lists_valid_intents(self):
         """Error message must enumerate valid intents from CloudIntent, not a hard-coded set."""
         service = _make_service()
-        result = await service._intent_service.execute_intent_permission_request(
+        result = await service._intent_service.execute_intent_permission_request(  # noqa: SLF001
             args=GrantIntentArgs(intent_name="fake_intent", justification="Test"),
             g8e_context=_make_g8e_context(),
             investigation=self._make_cloud_investigation(),
@@ -357,21 +363,19 @@ class TestExecuteIntentPermissionRequestValidation:
 
     async def test_every_valid_cloud_intent_passes_validation(self):
         """No CloudIntent member should be rejected as invalid."""
-        from app.constants import CommandErrorType
-
         def _auto_deny(aid, pending):
             pending.resolve(approved=False, reason="test-deny")
 
         for value in CloudIntent._value2member_map_:
             service = _make_service()
-            service._approval_service._pending_approvals.clear()
-            service._approval_service.set_on_approval_requested(_auto_deny)
+            service._approval_service._pending_approvals.clear()  # noqa: SLF001
+            service._approval_service.set_on_approval_requested(_auto_deny)  # noqa: SLF001
 
-            service._approval_service.request_intent_approval = AsyncMock(
+            service._approval_service.request_intent_approval = AsyncMock(  # noqa: SLF001
                 return_value=MagicMock(approved=False, feedback=False, reason="test-deny", approval_id="app-123", error_type=None)
             )
 
-            result = await service._intent_service.execute_intent_permission_request(
+            result = await service._intent_service.execute_intent_permission_request(  # noqa: SLF001
                 args=GrantIntentArgs(intent_name=value, justification="Automated validation test"),
                 g8e_context=_make_g8e_context(),
                 investigation=self._make_cloud_investigation(),
@@ -380,12 +384,12 @@ class TestExecuteIntentPermissionRequestValidation:
                 f"Valid CloudIntent '{value}' was incorrectly rejected as invalid"
             )
 
-            service._approval_service._pending_approvals.clear()
-            service._approval_service.set_on_approval_requested(None)
+            service._approval_service._pending_approvals.clear()  # noqa: SLF001
+            service._approval_service.set_on_approval_requested(None)  # noqa: SLF001
 
     async def test_rejects_empty_intent_name(self):
         service = _make_service()
-        result = await service._intent_service.execute_intent_permission_request(
+        result = await service._intent_service.execute_intent_permission_request(  # noqa: SLF001
             args=GrantIntentArgs(intent_name="", justification="Test"),
             g8e_context=_make_g8e_context(),
             investigation=self._make_cloud_investigation(),
@@ -394,43 +398,39 @@ class TestExecuteIntentPermissionRequestValidation:
 
     async def test_rejects_missing_justification(self):
         service = _make_service()
-        result = await service._intent_service.execute_intent_permission_request(
+        result = await service._intent_service.execute_intent_permission_request(  # noqa: SLF001
             args=GrantIntentArgs(intent_name="ec2_discovery", justification=""),
             g8e_context=_make_g8e_context(),
             investigation=self._make_cloud_investigation(),
         )
         assert result.success is False
-        from app.constants import CommandErrorType
         assert result.error_type == CommandErrorType.VALIDATION_ERROR
 
     async def test_comma_separated_intents_all_validated(self):
         """Comma-separated intents: if any are invalid the whole request is rejected."""
         service = _make_service()
-        result = await service._intent_service.execute_intent_permission_request(
+        result = await service._intent_service.execute_intent_permission_request(  # noqa: SLF001
             args=GrantIntentArgs(intent_name="ec2_discovery,completely_fake_intent", justification="Multi-intent test"),
             g8e_context=_make_g8e_context(),
             investigation=self._make_cloud_investigation(),
         )
         assert result.success is False
-        from app.constants import CommandErrorType
         assert result.error_type == CommandErrorType.INVALID_INTENT
         assert result.error is not None
         assert "completely_fake_intent" in result.error
 
     async def test_dependency_intents_also_validated(self):
         """After dependency resolution, if a dep is somehow invalid it is caught."""
-        from app.constants import CLOUD_INTENT_DEPENDENCIES
         service = _make_service()
         original_deps = CLOUD_INTENT_DEPENDENCIES.copy()
         try:
             CLOUD_INTENT_DEPENDENCIES["ec2_management"] = ["ec2_discovery", "fake_dep_intent"]
-            result = await service._intent_service.execute_intent_permission_request(
+            result = await service._intent_service.execute_intent_permission_request(  # noqa: SLF001
                 args=GrantIntentArgs(intent_name="ec2_management", justification="Test with injected bad dep"),
                 g8e_context=_make_g8e_context(),
                 investigation=self._make_cloud_investigation(),
             )
             assert result.success is False
-            from app.constants import CommandErrorType
             assert result.error_type == CommandErrorType.INVALID_INTENT
             assert result.error is not None
             assert "fake_dep_intent" in result.error
@@ -440,7 +440,6 @@ class TestExecuteIntentPermissionRequestValidation:
 
     async def test_non_cloud_operator_rejected_before_intent_validation(self):
         """Standard (non-cloud) operators are rejected before intent name checks."""
-        from app.constants import OperatorType
         op_doc = MagicMock()
         op_doc.operator_type = OperatorType.SYSTEM
         op_doc.id = "op-sys-1"
@@ -450,11 +449,10 @@ class TestExecuteIntentPermissionRequestValidation:
         investigation.operator_documents = [op_doc]
 
         service = _make_service()
-        result = await service._intent_service.execute_intent_permission_request(
+        result = await service._intent_service.execute_intent_permission_request(  # noqa: SLF001
             args=GrantIntentArgs(intent_name="ec2_discovery", justification="Test"),
             g8e_context=_make_g8e_context(),
             investigation=investigation,
         )
         assert result.success is False
-        from app.constants import CommandErrorType
         assert result.error_type == CommandErrorType.CLOUD_OPERATOR_REQUIRED

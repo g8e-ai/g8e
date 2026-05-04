@@ -23,6 +23,7 @@ This module provides safe, reusable mock utilities that handle this
 cleanup automatically.
 """
 
+import contextlib
 from collections.abc import Callable, Coroutine
 from typing import Any
 
@@ -93,14 +94,11 @@ class SafeWaitForMock:
             An async function suitable for use with mock.patch(side_effect=...)
         """
 
-        async def _side_effect(coro: Coroutine, timeout: float) -> Any:
+        async def _side_effect(coro: Coroutine, timeout: float) -> Any:  # noqa: ASYNC109
             self._captured_coros.append(coro)
-            try:
-                # Always await to prevent coroutine leaks
+            result = None
+            with contextlib.suppress(Exception):
                 result = await coro
-            except Exception:
-                # If the coroutine raises, that's fine - it's been awaited
-                pass
 
             if self._side_effect:
                 return await self._side_effect(coro, timeout)
@@ -112,10 +110,8 @@ class SafeWaitForMock:
     def cleanup(self):
         """Close any captured coroutines that weren't awaited."""
         for coro in self._captured_coros:
-            try:
+            with contextlib.suppress(Exception):
                 coro.close()
-            except Exception:
-                pass
         self._captured_coros.clear()
 
 
