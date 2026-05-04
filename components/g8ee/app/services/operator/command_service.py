@@ -584,16 +584,10 @@ class OperatorCommandService:
         operator_documents: list[OperatorDocument],
         args: ExecutorCommandArgs,
     ) -> list[OperatorDocument]:
-        """Unified resolution for singular (`target_operator`) and batch (`target_operators`)."""
-        if args.target_operators:
-            return self._execution_service.resolve_multiple_operators(
-                operator_documents, args.target_operators
-            )
-        return [self._execution_service.resolve_target_operator(
-            operator_documents=operator_documents,
-            target_operator=args.target_operator or "",
-            tool_name="run_commands_with_operator",
-        )]
+        """Resolve target_operators to operator documents."""
+        return self._execution_service.resolve_operators(
+            operator_documents, args.target_operators
+        )
 
     def _assemble_result(
         self,

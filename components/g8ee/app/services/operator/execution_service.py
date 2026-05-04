@@ -164,85 +164,24 @@ class OperatorExecutionService(ExecutionServiceProtocol):
     # Operator resolution
     # -------------------------------------------------------------------------
 
-    def resolve_target_operator(
-        self,
-        operator_documents: list[OperatorDocument],
-        target_operator: str | None,
-        tool_name: str | None = None,
-    ) -> OperatorDocument:
-        if not operator_documents:
-            raise BusinessLogicError("No operators bound to this session", component="g8ee")
-
-        if len(operator_documents) == 1:
-            return operator_documents[0]
-
-        if not target_operator:
-            available = [
-                f"  [{i}] {op.current_hostname or (op.latest_heartbeat_snapshot.system_identity.hostname if op.latest_heartbeat_snapshot else 'None')} "
-                f"({op.id}) - {op.operator_type}"
-                for i, op in enumerate(operator_documents)
-            ]
-            error_msg = (
-                f"Multiple operators ({len(operator_documents)}) are bound to this session. "
-            )
-
-            if tool_name and "command" in tool_name.lower():
-                error_msg += (
-                    "You MUST specify either target_operator (single host: operator_id, hostname, or index) "
-                    "or target_operators (list of hosts for batch execution under one approval).\n"
-                )
-            else:
-                error_msg += (
-                    "This tool only supports single-target execution. "
-                    "You MUST specify target_operator (operator_id or hostname).\n"
-                    "Note: target_operators (batch execution) is only supported by run_commands_with_operator.\n"
-                )
-
-            error_msg += "Available operators:\n" + "\n".join(available)
-
-            raise ValidationError(
-                error_msg,
-                component="g8ee",
-            )
-
-        for op in operator_documents:
-            if op.id == target_operator:
-                return op
-
-        for op in operator_documents:
-            hostname = op.current_hostname or (op.latest_heartbeat_snapshot.system_identity.hostname if op.latest_heartbeat_snapshot else "")
-            if hostname and hostname.lower() == target_operator.lower():
-                return op
-
-        if target_operator.isdigit():
-            idx = int(target_operator)
-            if 0 <= idx < len(operator_documents):
-                return operator_documents[idx]
-            raise ValidationError(
-                f"Operator index {idx} out of range. Valid indices: 0-{len(operator_documents)-1}",
-                component="g8ee",
-            )
-
-        available = [
-            f"  [{i}] {op.current_hostname or (op.latest_heartbeat_snapshot.system_identity.hostname if op.latest_heartbeat_snapshot else 'None')} ({op.id})"
-            for i, op in enumerate(operator_documents)
-        ]
-        raise ValidationError(
-            f"Could not resolve target_operator '{target_operator}'. "
-            f"No match found by operator_id, hostname, or index.\n"
-            f"Available operators:\n" + "\n".join(available),
-            component="g8ee",
-        )
-
-    def resolve_multiple_operators(
+    def resolve_operators(
         self,
         operator_documents: list[OperatorDocument],
         target_operators: list[str],
     ) -> list[OperatorDocument]:
+        """Resolve target_operators to a list of OperatorDocument.
+
+        Supports sentinel values ('all', '*', 'fleet', 'every', 'everyone') for fleet-wide
+        execution, and resolves individual targets by operator_id, hostname, or index.
+        """
         if not operator_documents:
             raise BusinessLogicError("No operators bound to this session", component="g8ee")
         if not target_operators:
             raise ValidationError("target_operators list is empty", component="g8ee")
+
+        # Single operator case: bypass resolution
+        if len(operator_documents) == 1:
+            return operator_documents
 
         # Lenient "all" handling: any sentinel in the list expands to the full fleet.
         # This rescues LLMs that pass e.g. ['all', 'web-1'] or ['*'] and makes whole-fleet
@@ -255,16 +194,10 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         resolved_ids: set[str] = set()
 
         for target in target_operators:
-            try:
-                op = self.resolve_target_operator(
-                    operator_documents=operator_documents,
-                    target_operator=target,
-                )
-                if op.id and op.id not in resolved_ids:
-                    resolved.append(op)
-                    resolved_ids.add(op.id)
-            except (ValidationError, BusinessLogicError):
-                continue
+            op = self._resolve_single_operator(operator_documents, target)
+            if op and op.id and op.id not in resolved_ids:
+                resolved.append(op)
+                resolved_ids.add(op.id)
 
         if not resolved:
             raise ValidationError(
@@ -272,6 +205,35 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                 component="g8ee",
             )
         return resolved
+
+    def _resolve_single_operator(
+        self,
+        operator_documents: list[OperatorDocument],
+        target: str,
+    ) -> OperatorDocument | None:
+        """Resolve a single target string to an OperatorDocument.
+
+        Matches by operator_id, hostname (case-insensitive), or numeric index.
+        Returns None if no match found.
+        """
+        # Match by operator_id
+        for op in operator_documents:
+            if op.id == target:
+                return op
+
+        # Match by hostname (case-insensitive)
+        for op in operator_documents:
+            hostname = op.current_hostname or (op.latest_heartbeat_snapshot.system_identity.hostname if op.latest_heartbeat_snapshot else "")
+            if hostname and hostname.lower() == target.lower():
+                return op
+
+        # Match by index
+        if target.isdigit():
+            idx = int(target)
+            if 0 <= idx < len(operator_documents):
+                return operator_documents[idx]
+
+        return None
 
     def build_target_systems_list(self, operator_documents: list[OperatorDocument]) -> list[TargetSystem]:
         systems: list[TargetSystem] = []

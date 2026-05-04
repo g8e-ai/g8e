@@ -138,13 +138,12 @@ class OperatorFileService:
 
             # 2. Resolve operator
             operator_documents = investigation.operator_documents if investigation else []
-            target_anchor = args.target_operators[0] if args.target_operators else "all"
             try:
-                resolved_operator = self.execution_service.resolve_target_operator(
+                resolved_operators = self.execution_service.resolve_operators(
                     operator_documents=operator_documents,
-                    target_operator=target_anchor,
-                    tool_name="file_edit_on_operator",
+                    target_operators=args.target_operators,
                 )
+                resolved_operator = resolved_operators[0]
             except Exception as e:
                 logger.error("[FILE-ERROR] Operator resolution failed: %s", e, exc_info=True)
                 return FileEditResult(
@@ -325,13 +324,12 @@ class OperatorFileService:
 
             # 1. Resolve operator
             operator_documents = investigation.operator_documents if investigation else []
-            target_anchor = args.target_operators[0] if args.target_operators else "all"
             try:
-                resolved_operator = self.execution_service.resolve_target_operator(
+                resolved_operators = self.execution_service.resolve_operators(
                     operator_documents=operator_documents,
-                    target_operator=target_anchor,
-                    tool_name="fetch_file_history",
+                    target_operators=args.target_operators,
                 )
+                resolved_operator = resolved_operators[0]
             except Exception as e:
                 logger.error("[FILE-ERROR] Operator resolution failed: %s", e, exc_info=True)
                 return FetchFileHistoryToolResult(
@@ -438,13 +436,12 @@ class OperatorFileService:
 
             # 1. Resolve operator
             operator_documents = investigation.operator_documents if investigation else []
-            target_anchor = args.target_operators[0] if args.target_operators else "all"
             try:
-                resolved_operator = self.execution_service.resolve_target_operator(
+                resolved_operators = self.execution_service.resolve_operators(
                     operator_documents=operator_documents,
-                    target_operator=target_anchor,
-                    tool_name="fetch_file_diff",
+                    target_operators=args.target_operators,
                 )
+                resolved_operator = resolved_operators[0]
             except Exception as e:
                 logger.error("[FILE-ERROR] Operator resolution failed: %s", e, exc_info=True)
                 return FetchFileDiffToolResult(
