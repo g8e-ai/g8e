@@ -132,14 +132,12 @@ The default profile above is one of several `./g8e demo profile switch <name>` o
 | Profile | Scale | Purpose |
 |---------|-------|---------|
 | `default` (this doc) | 10 nodes | Broken web-app fleet — focused troubleshooting of nginx/Flask failures |
-| `fleet` | 10 nodes | Identical to `default` (canonical snapshot) |
-| `large-fleet` | 20–1000 nodes | Featherweight operator-only containers for platform scale testing |
-| `acme-corp` | 100–1000 devices | Simulated global mixed-enterprise fleet (POS, sensors, cameras, printers, controllers, gateways…) with ~5% broken devices across 9 realistic failure modes. See `demo/profiles/acme-corp/demo.md`. |
+| `fleet` | 20–1000 nodes | Featherweight operator-only containers for platform scale testing |
 
 Switch any time with:
 
 ```bash
 ./g8e demo profile list
-./g8e demo profile switch acme-corp
-./g8e demo up -n 100   # or -n 1000 for the full beast
+./g8e demo profile switch fleet
+./g8e demo up -n 100
 ```

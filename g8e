@@ -904,8 +904,10 @@ case "$TOP" in
             esac
         fi
         # Parse -d flag for device token shorthand, or use global DEVICE_TOKEN
+        # Parse -n flag for node count
         demo_args=("${@:3}")
         device_token=""
+        nodes=""
         i=0
         while [[ $i -lt ${#demo_args[@]} ]]; do
             arg="${demo_args[$i]}"
@@ -921,6 +923,21 @@ case "$TOP" in
             fi
             ((i++))
         done
+        i=0
+        while [[ $i -lt ${#demo_args[@]} ]]; do
+            arg="${demo_args[$i]}"
+            if [[ "$arg" == "-n" ]]; then
+                if [[ $((i + 1)) -lt ${#demo_args[@]} ]]; then
+                    nodes="${demo_args[$((i + 1))]}"
+                    unset demo_args[$i] demo_args[$((i + 1))]
+                    break
+                else
+                    echo "[g8e] -n flag requires a node count value" >&2
+                    exit 1
+                fi
+            fi
+            ((i++))
+        done
         # Use global DEVICE_TOKEN if -d not provided
         if [[ -z "$device_token" && -n "$DEVICE_TOKEN" ]]; then
             device_token="$DEVICE_TOKEN"
@@ -928,6 +945,10 @@ case "$TOP" in
         # Convert device_token to DEVICE_TOKEN for make
         if [[ -n "$device_token" ]]; then
             demo_args=("DEVICE_TOKEN=$device_token" "${demo_args[@]}")
+        fi
+        # Convert nodes to NODES for make (and N for compatibility)
+        if [[ -n "$nodes" ]]; then
+            demo_args=("NODES=$nodes" "N=$nodes" "${demo_args[@]}")
         fi
         case "$SUB" in
             -h|--help|"")

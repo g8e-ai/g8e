@@ -7,6 +7,7 @@
 COMPOSE := docker compose
 CONTAINER_PREFIX := web-node
 SSH_USER := appuser
+NODES ?= 10
 
 help:
 	@echo "Broken Web App Fleet Demo"
@@ -17,7 +18,7 @@ help:
 	@echo "  FLEET LIFECYCLE"
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 	@echo ""
-	@echo "  up               - Build and start all 10 web nodes"
+	@echo "  up               - Build and start all $(NODES) web nodes"
 	@echo "  down             - Stop all nodes"
 	@echo "  status           - Show container status"
 	@echo "  clean            - Remove everything (containers, images, volumes)"
@@ -70,16 +71,16 @@ up: build
 		TOKEN=$$(echo "$(filter-out $@,$(MAKECMDGOALS))" | sed 's/.*-d \([^ ]*\).*/\1/'); \
 	fi; \
 	if [ -n "$$TOKEN" ]; then \
-		echo "Starting 10 web nodes (operators auto-attach via DEVICE_TOKEN)..."; \
+		echo "Starting $(NODES) web nodes (operators auto-attach via DEVICE_TOKEN)..."; \
 		DEVICE_TOKEN="$$TOKEN" $(COMPOSE) up -d; \
 	else \
-		echo "Starting 10 web nodes (no DEVICE_TOKEN; operators will NOT auto-attach)..."; \
+		echo "Starting $(NODES) web nodes (no DEVICE_TOKEN; operators will NOT auto-attach)..."; \
 		echo "  Provide DEVICE_TOKEN to auto-attach operators: make up -d dlk_xxx"; \
 		$(COMPOSE) up -d; \
 	fi
 	@echo ""
 	@echo "========================================"
-	@echo "  Broken Web App Fleet - 10 Nodes"
+	@echo "  Broken Web App Fleet - $(NODES) Nodes"
 	@echo "========================================"
 	@echo ""
 	@echo "Node Profiles:"
@@ -117,7 +118,7 @@ status:
 	@echo "============"
 	@$(COMPOSE) ps --format "table {{.Name}}\t{{.Status}}"
 	@echo ""
-	@echo "Running: $$(docker ps -q -f name=$(CONTAINER_PREFIX) | wc -l) / 10"
+	@echo "Running: $$(docker ps -q -f name=$(CONTAINER_PREFIX) | wc -l) / $(NODES)"
 
 clean:
 	@echo "Cleaning up..."
@@ -135,7 +136,7 @@ shell:
 health:
 	@echo "Backend Health - All Nodes"
 	@echo "=========================="
-	@for i in $$(seq -f "%02g" 1 10); do \
+	@for i in $$(seq -f "%02g" 1 $(NODES)); do \
 		result=$$(docker exec $(CONTAINER_PREFIX)-$$i curl -s http://127.0.0.1:5000/health 2>/dev/null || echo '{"status":"unreachable"}'); \
 		status=$$(echo "$$result" | grep -o '"status":"[^"]*"' | cut -d'"' -f4); \
 		printf "node-%s: %s\n" "$$i" "$$status"; \
@@ -147,7 +148,7 @@ dashboard:
 nginx-check:
 	@echo "Nginx Status - All Nodes"
 	@echo "========================"
-	@for i in $$(seq -f "%02g" 1 10); do \
+	@for i in $$(seq -f "%02g" 1 $(NODES)); do \
 		if docker exec $(CONTAINER_PREFIX)-$$i pgrep nginx > /dev/null 2>&1; then \
 			http=$$(docker exec $(CONTAINER_PREFIX)-$$i curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8181/ 2>/dev/null || echo "000"); \
 			printf "node-%s: nginx running, HTTP %s\n" "$$i" "$$http"; \
@@ -167,8 +168,8 @@ deploy:
 		echo "       make deploy DEVICE_TOKEN=dlk_xxx"; \
 		exit 1; \
 	fi; \
-	echo "Deploying operators to all 10 nodes..."; \
-	for i in $$(seq -f "%02g" 1 10); do \
+	echo "Deploying operators to all $(NODES) nodes..."; \
+	for i in $$(seq -f "%02g" 1 $(NODES)); do \
 		echo "  Deploying to node-$$i..."; \
 		docker exec -e DEVICE_TOKEN="$$TOKEN" $(CONTAINER_PREFIX)-$$i sh -c '\
 			curl -fsSL --cacert /g8es/ca.crt -H "Authorization: Bearer $$DEVICE_TOKEN" \
@@ -216,7 +217,7 @@ operators:
 	@echo "Operator Status - All Nodes"
 	@echo "============================"
 	@running=0; \
-	for i in $$(seq -f "%02g" 1 10); do \
+	for i in $$(seq -f "%02g" 1 $(NODES)); do \
 		if docker exec $(CONTAINER_PREFIX)-$$i pgrep -f g8e.operator > /dev/null 2>&1; then \
 			echo "  node-$$i: running"; \
 			running=$$((running + 1)); \
@@ -225,13 +226,13 @@ operators:
 		fi; \
 	done; \
 	echo ""; \
-	echo "Operators: $$running / 10"
+	echo "Operators: $$running / $(NODES)"
 
 vanish:
 	@echo ""
 	@echo "Removing operators from all nodes..."
 	@echo ""
-	@for i in $$(seq -f "%02g" 1 10); do \
+	@for i in $$(seq -f "%02g" 1 $(NODES)); do \
 		docker exec $(CONTAINER_PREFIX)-$$i pkill -f g8e.operator 2>/dev/null || true; \
 		docker exec $(CONTAINER_PREFIX)-$$i rm -f /tmp/g8e.operator /home/appuser/g8e.operator /root/g8e.operator ./g8e.operator 2>/dev/null || true; \
 		echo "  node-$$i: cleaned"; \
