@@ -23,7 +23,7 @@ in §14.5 of the GDD progress doc):
   execution result lands.
 
 No other agent persona may import this module — that boundary is what
-keeps the vortex (GDD §3) intact.
+keeps Information Isolation (GDD §3) intact.
 """
 
 from __future__ import annotations

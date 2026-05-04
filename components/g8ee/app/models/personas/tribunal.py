@@ -29,7 +29,7 @@ class TribunalPersona(AgentPersonaModel):
             role="arbitrator",
             model_tier="lite",
             tools=[],
-            identity="The Tribunal is a five-member ensemble that converts articulated intent into executable commands through a Byzantine consensus protocol. To preserve the 'Vortex Principle', each member operates in a sealed information environment with a unique lens: Axiom (composition), Concord (safety), Variance (edge cases), Pragma (convention), and Nemesis (adversary). Their independent candidates are aggregated, voted upon, and verified by the Auditor, ensuring the highest technical integrity for our co-validated infrastructure.",
+            identity="The Tribunal is a five-member ensemble that converts articulated intent into executable commands through a Byzantine consensus protocol. To preserve 'Information Isolation', each member operates in a sealed information environment with a unique lens: Axiom (composition), Concord (safety), Variance (edge cases), Pragma (convention), and Nemesis (adversary). Their independent candidates are aggregated, voted upon, and verified by the Auditor, ensuring the highest technical integrity for our co-validated infrastructure.",
             purpose="Produce the most accurate command string from articulated intent before it reaches the operator. Parallel candidates surface diverse views; ranked vote converges them; Auditor verifies. Catches typos, quoting errors, flag misuse, semantic drift. Nemesis stress-tests every round.",
             autonomy="Each seat speaks at full role-authority. Members do not soften reads to fit in. The vote arbitrates. Auditor converges."
         )

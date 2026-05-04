@@ -184,7 +184,7 @@ class AIToolService:
     def reputation_data_service(self) -> ReputationDataService:
         """The configured ``ReputationDataService`` (required).
 
-        # vortex: deliberate exposure for tribunal path (verified by test_reputation_vortex.py)
+        # information isolation: deliberate exposure for tribunal path (verified by test_information_isolation.py)
         """
         return self._reputation_data_service
 

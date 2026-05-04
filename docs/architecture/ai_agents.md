@@ -60,7 +60,7 @@ To prevent hallucinations and ensure safety, agents never write shell commands d
 
 ## Security & Governance
 
-### The "Vortex" (Information Quarantine)
+### Information Isolation Principle (Information Quarantine)
 - **Triage**: Believes it's the first-read classifier; unaware of Sage, Dash, or the Tribunal.
 - **Dash**: Believes it's the fast-path responder/interrogator for simple tasks; unaware of Sage or the Tribunal.
 - **Sage**: Believes it's talking to a translation layer; unaware of the distinct Triage agent or the Auditor's memory access.
