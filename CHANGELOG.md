@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.8] - 2026-05-04
+
+### Added
+- **Batch Tool Execution:** Support for fan-out execution across multiple operators with configurable concurrency and fail-fast behavior.
+- **Improved Evals Suite:** Enhanced evaluation runner with support for accuracy and privacy gold sets, and improved fleet management for large-scale tests.
+- **Async Scribe & Codex:** Introduced async sub-agents for case titling and preference/memory extraction.
+- **Unified Batch Runner:** New `BatchRunner` service in `g8ee` for coordinating multi-operator operations.
+
+### Changed
+- **Information Isolation:** Formalized the "Information Isolation Principle" (formerly Vortex Principle) for enhanced multi-agent safety.
+- **Tribunal Consensus:** Refined consensus logic (Plurality Consensus) with deterministic tie-breaking and circuit breaker for deadlocks.
+- **Warden Reputation Staking:** Warden sub-agents now stake reputation on risk classifications.
+- **Setup UX:** Improvements to the onboarding wizard, ensuring validation visibility and cleaner summary view.
+- **Python Modernization:** Migrated to `StrEnum` for improved type safety and performance across `g8ee`.
+
+### Fixed
+- **Device Link Scalability:** Increased `DEVICE_LINK_MAX_USES` to 10,000 to support large fleet registrations.
+- **UI Robustness:** Improved error handling and icon rendering in the setup and status components.
+- **Import Optimizations:** Resolved various circular import issues and optimized imports in `g8ee`.
+
 ## [0.1.7] - 2026-05-01
 
 ### Added
