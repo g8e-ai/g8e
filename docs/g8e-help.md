@@ -53,6 +53,7 @@ Manage the local g8e stack lifecycle.
 - `./g8e platform reset`: Wipe all data volumes and rebuild from scratch.
 - `./g8e platform wipe`: Clear app data from the database while preserving settings and certs.
 - `./g8e platform clean`: Nuke all g8e Docker resources (containers, volumes, images).
+- `./g8e platform demo`: Start the platform and demo environment together.
 
 ### operator
 Build and deploy the `g8eo` operator binary.

@@ -378,7 +378,7 @@ case "$TOP" in
             logs)
                 _banner "platform logs"
                 exec bash "$SCRIPT_DIR/scripts/core/logs.sh" "${@:3}" ;;
-            status|start|stop|restart|rebuild|reset|wipe|clean)
+            status|start|stop|restart|rebuild|reset|wipe|clean|demo)
                 case "$SUB" in
                     start)   _banner "platform start";   exec bash "$SCRIPT_DIR/scripts/core/build.sh" $([[ "$DEV_MODE" == true ]] && echo "--dev") up      "${@:3}" ;;
                     stop)    _banner "platform stop";    exec bash "$SCRIPT_DIR/scripts/core/build.sh" down    "${@:3}" ;;
@@ -388,10 +388,18 @@ case "$TOP" in
                     reset)   _banner "platform reset";   exec bash "$SCRIPT_DIR/scripts/core/build.sh" reset   "${@:3}" ;;
                     wipe)    _banner "platform wipe";    exec bash "$SCRIPT_DIR/scripts/core/build.sh" wipe    "${@:3}" ;;
                     clean)   _banner "platform clean";   exec bash "$SCRIPT_DIR/scripts/core/build.sh" clean   "${@:3}" ;;
+                    demo)
+                        _banner "platform demo"
+                        echo "[g8e] Starting platform..."
+                        bash "$SCRIPT_DIR/scripts/core/build.sh" $([[ "$DEV_MODE" == true ]] && echo "--dev") up "${@:3}"
+                        echo "[g8e] Starting demo environment..."
+                        DEMO_DIR="$SCRIPT_DIR/demo"
+                        demo_args=("${@:3}")
+                        exec make -C "$DEMO_DIR" up "${demo_args[@]}" ;;
                 esac ;;
             *)
                 echo "[g8e] unknown platform subcommand: '$SUB'" >&2
-                echo "  Valid: setup, build, settings, update, status, start, stop, rebuild, reset, wipe, clean, logs" >&2
+                echo "  Valid: setup, build, settings, update, status, start, stop, rebuild, reset, wipe, clean, logs, demo" >&2
                 exit 1 ;;
         esac ;;
 
