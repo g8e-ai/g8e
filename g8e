@@ -820,7 +820,7 @@ case "$TOP" in
 
             # Helper to perform actions on demo/ while excluding profiles/
             _demo_items() {
-                find "$DEMO_DIR" -maxdepth 1 ! -name "profiles" ! -name "." ! -name ".."
+                find "$DEMO_DIR" -maxdepth 1 -mindepth 1 -name "profiles" -prune -o -print
             }
 
             case "$_PROF_CMD" in
@@ -852,9 +852,9 @@ case "$TOP" in
                     [[ -z "$_PROF_NAME" ]] && { echo "[g8e] usage: ./g8e demo profile switch <name>"; exit 1; }
                     _banner "demo profile switch $_PROF_NAME"
                     
-                    # Check if demo is running
-                    if docker ps --format '{{.Names}}' | grep -q "^web-node-"; then
-                        echo "[g8e] demo fleet is currently running. Stop it first: ./g8e demo down" >&2
+                    # Check if any containers in the demo project are running
+                    if docker ps --filter "label=com.docker.compose.project=demo" --format '{{.Names}}' | grep -q .; then
+                        echo "[g8e] demo containers are currently running. Stop them first: ./g8e demo down" >&2
                         exit 1
                     fi
 

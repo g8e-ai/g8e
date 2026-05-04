@@ -23,14 +23,14 @@ RUN useradd -m -s /bin/bash appuser && \
     cp /opt/demo-key.pub /home/appuser/.ssh/authorized_keys && \
     chown -R appuser:appuser /home/appuser/.ssh && \
     chmod 700 /home/appuser/.ssh && \
-    chmod 600 /home/appuser/.ssh/authorized_keys && \
-    echo "appuser ALL=(root) NOPASSWD: /home/appuser/g8e.operator" >> /etc/sudoers.d/appuser && \
-    chmod 440 /etc/sudoers.d/appuser
+    chmod 600 /home/appuser/.ssh/authorized_keys
 
 COPY app/ /opt/app/
 COPY nginx/ /etc/nginx/templates/
 COPY entrypoint.sh /opt/entrypoint.sh
-RUN chmod +x /opt/entrypoint.sh
+COPY sudoers-appuser /etc/sudoers.d/appuser
+RUN chmod +x /opt/entrypoint.sh && \
+    chmod 440 /etc/sudoers.d/appuser
 
 EXPOSE 22 8181 8443 5000
 
