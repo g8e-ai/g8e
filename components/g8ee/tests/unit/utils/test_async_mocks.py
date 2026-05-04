@@ -93,7 +93,7 @@ class TestSafeWaitForMock:
     async def test_custom_side_effect_called(self):
         call_count = 0
 
-        async def custom_side_effect(coro, timeout):
+        async def custom_side_effect(coro, timeout):  # noqa: ASYNC109
             nonlocal call_count
             call_count += 1
             return "custom_value"
@@ -110,7 +110,7 @@ class TestSafeWaitForMock:
 
     @pytest.mark.asyncio
     async def test_custom_side_effect_can_raise(self):
-        async def custom_side_effect(coro, timeout):
+        async def custom_side_effect(coro, timeout):  # noqa: ASYNC109
             raise TimeoutError
 
         mock_obj = SafeWaitForMock(side_effect=custom_side_effect)
@@ -135,11 +135,11 @@ class TestSafeWaitForMock:
         await side_effect(coro, 1.0)
 
         # The coroutine should be captured
-        assert len(mock_obj._captured_coros) == 1
+        assert len(mock_obj._captured_coros) == 1  # noqa: SLF001
 
         # Cleanup should close it
         mock_obj.cleanup()
-        assert len(mock_obj._captured_coros) == 0
+        assert len(mock_obj._captured_coros) == 0  # noqa: SLF001
 
 
 class TestAsyncMockContext:
@@ -179,10 +179,10 @@ class TestAsyncMockContext:
         side_effect = ctx.wait_for_mock.make_side_effect()
         await side_effect(test_coro(), 1.0)
 
-        assert len(ctx.wait_for_mock._captured_coros) == 1
+        assert len(ctx.wait_for_mock._captured_coros) == 1  # noqa: SLF001
 
         # Exit context should cleanup
         with ctx:
             pass
 
-        assert len(ctx.wait_for_mock._captured_coros) == 0
+        assert len(ctx.wait_for_mock._captured_coros) == 0  # noqa: SLF001

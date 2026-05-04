@@ -32,11 +32,10 @@ pytestmark = [pytest.mark.unit]
 
 
 def _write_json(data: dict) -> str:
-    f = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
-    json.dump(data, f)
-    f.flush()
-    f.close()
-    return f.name
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        json.dump(data, f)
+        f.flush()
+        return f.name
 
 
 def _minimal_auto_approved(**overrides) -> dict:
@@ -51,12 +50,12 @@ class TestCommandAutoApprovedValidatorConfigurationErrors:
             CommandAutoApprovedValidator(auto_approved_path="/nonexistent/auto.json")
 
     def test_invalid_json_raises_configuration_error(self):
-        f = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
-        f.write("{not json")
-        f.flush()
-        f.close()
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            f.write("{not json")
+            f.flush()
+            fname = f.name
         with pytest.raises(ConfigurationError, match="Invalid JSON"):
-            CommandAutoApprovedValidator(auto_approved_path=f.name)
+            CommandAutoApprovedValidator(auto_approved_path=fname)
 
     def test_missing_section_raises_configuration_error(self):
         path = _write_json({})
@@ -146,9 +145,9 @@ class TestDefaultJsonFileLoads:
 
     def test_default_singleton_loads(self):
         # Reset singleton to force a fresh load from the default path.
-        import app.utils.auto_approved_validator as module
+        import app.utils.auto_approved_validator as module  # noqa: PLC0415
 
-        module._validator = None
+        module._validator = None  # noqa: SLF001
         validator = get_auto_approved_validator()
         # Default config ships with sensible benign defaults.
         assert "uptime" in validator.get_auto_approved_command_names()

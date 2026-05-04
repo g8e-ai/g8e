@@ -20,6 +20,7 @@ and g8ee's SSEPushResponse parsing logic.
 """
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -29,7 +30,7 @@ pytestmark = pytest.mark.unit
 
 
 def _load_sse_push_response_json() -> dict:
-    with open("/app/shared/models/wire/sse_responses.json") as f:
+    with Path("/app/shared/models/wire/sse_responses.json").open() as f:
         return json.load(f)
 
 
@@ -82,7 +83,7 @@ class TestSSEPushResponseFieldsMatchSharedJSON:
     def test_all_json_fields_exist_in_g8ee_model(self):
         """All fields in shared JSON must exist in g8ee SSEPushResponse model."""
         wire = _load_sse_push_response_json()["sse_push_response"]["fields"]
-        for field_name in wire.keys():
+        for field_name in wire:
             assert field_name in SSEPushResponse.model_fields, (
                 f"shared/models/wire/sse_responses.json defines field '{field_name}' "
                 f"but g8ee SSEPushResponse model does not have this field"

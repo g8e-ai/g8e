@@ -16,6 +16,9 @@
 import pytest
 from pydantic import ValidationError
 
+from app.llm.prompts import PromptFile, build_tribunal_auditor_context
+from app.prompts_data.loader import load_prompt
+from app.services.ai.auditor_service import AuditorInput
 from app.utils.agent_persona_loader import (
     AgentPersona,
     get_agent_persona,
@@ -40,7 +43,8 @@ class TestGetAgentPersona:
         assert persona.tools == []
         assert persona.identity
         assert persona.purpose
-        assert isinstance(persona.autonomy, str) and persona.autonomy
+        assert isinstance(persona.autonomy, str)
+        assert persona.autonomy
 
     def test_get_tribunal_member_persona(self):
         """Test retrieving Tribunal member personas."""
@@ -204,22 +208,19 @@ class TestPipelineTemplateContract:
     def test_tribunal_prompt_template_renders_with_member_voice(self):
         """The shared TRIBUNAL_PROMPT_TEMPLATE must render cleanly using the
         kwargs command_generator._run_generation_pass supplies."""
-        from app.llm.prompts import PromptFile
-        from app.prompts_data.loader import load_prompt
-
         template = load_prompt(PromptFile.TRIBUNAL_GENERATOR)
 
-        kwargs = dict(
-            forbidden_patterns_message="FORBIDDEN",
-            command_constraints_message="CONSTRAINTS",
-            request="list processes",
-            guidelines="",
-            os="linux",
-            shell="bash",
-            user_context="root (uid=0)",
-            working_directory="/home/user",
-            operator_context="Hostname: host1\nOS: linux",
-        )
+        kwargs = {
+            "forbidden_patterns_message": "FORBIDDEN",
+            "command_constraints_message": "CONSTRAINTS",
+            "request": "list processes",
+            "guidelines": "",
+            "os": "linux",
+            "shell": "bash",
+            "user_context": "root (uid=0)",
+            "working_directory": "/home/user",
+            "operator_context": "Hostname: host1\nOS: linux",
+        }
         for member_id in ("axiom", "concord", "variance", "pragma", "nemesis"):
             formatted = template.format(**kwargs)
             for needle in ("FORBIDDEN", "CONSTRAINTS", "list processes", "linux", "bash"):
@@ -228,10 +229,6 @@ class TestPipelineTemplateContract:
     def test_auditor_template_renders_and_enforces_ok_contract(self):
         """TRIBUNAL_AUDITOR_TEMPLATE must carry the terse
         'ok / corrected-command' output contract that the pipeline parses."""
-        from app.llm.prompts import PromptFile, build_tribunal_auditor_context
-        from app.prompts_data.loader import load_prompt
-        from app.services.ai.auditor_service import AuditorInput
-
         template = load_prompt(PromptFile.TRIBUNAL_AUDITOR)
 
         auditor_input = AuditorInput(
@@ -274,12 +271,10 @@ class TestTribunalTemplatePrefixCacheOrdering:
     """
 
     def test_generator_template_static_prefix_precedes_dynamic_suffix(self):
-        from app.llm.prompts import PromptFile
-        from app.prompts_data.loader import load_prompt
-
         template = load_prompt(PromptFile.TRIBUNAL_GENERATOR)
-        # Each tag should appear at most once; we use the first occurrence.
-        idx = lambda tag: template.index(tag)
+
+        def idx(tag: str) -> int:
+            return template.index(tag)
         constraints = idx("<constraints>")
         system_ctx = idx("<system_context>")
         operator_ctx = idx("<operator_context>")
@@ -302,11 +297,10 @@ class TestTribunalTemplatePrefixCacheOrdering:
         )
 
     def test_auditor_template_static_prefix_precedes_dynamic_suffix(self):
-        from app.llm.prompts import PromptFile
-        from app.prompts_data.loader import load_prompt
-
         template = load_prompt(PromptFile.TRIBUNAL_AUDITOR)
-        idx = lambda tag: template.index(tag)
+
+        def idx(tag: str) -> int:
+            return template.index(tag)
         constraints = idx("<constraints>")
         os_block = idx("<os>")
         user_block = idx("<user>")
@@ -431,7 +425,8 @@ class TestAgentPersonaValidation:
             "autonomy": "You operate at the maximum level of agency this seat permits."
         }
         persona = AgentPersona.model_validate(data)
-        assert isinstance(persona.autonomy, str) and persona.autonomy
+        assert isinstance(persona.autonomy, str)
+        assert persona.autonomy
 
 
 class TestCentralizedXmlFormatting:

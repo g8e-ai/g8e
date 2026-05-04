@@ -253,5 +253,5 @@ def test_verify_chain_missing_hash_fields():
     }
 
     # Should fail verification since hash fields are required for chain integrity
-    valid, bad_index = verify_chain([entry], investigation_id, created_at)
+    valid, _bad_index = verify_chain([entry], investigation_id, created_at)
     assert valid is False
