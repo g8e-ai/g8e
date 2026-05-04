@@ -26,11 +26,13 @@ The rest of this paper develops that architecture, the mechanism design that mak
 
 ## 1. Two failure modes
 
+The AI infrastructure market in 2026 is organized around a spectrum: at one end, the *AI copilot* (you ask, it suggests, you act); at the other, the *autonomous SRE* (it detects, it remediates, it posts the post-mortem). The commercial pressure is to move every product toward the autonomous end as fast as possible. The framing is wrong. The failure modes are not a matter of where you sit on this spectrum. They are structural, they exist at both ends, and they get worse as you push further in either direction.
+
 Every production AI agent system in 2026 is one of two things, and both are broken.
 
 **The autonomous family** treats the AI as a sufficient agent. Given a goal, the model plans, acts, and reports. Human oversight is post-hoc if it exists at all. This family produces impressive demos. It has not produced reliable infrastructure, because a model can verify the *internal consistency* of its plan but cannot verify *contextual fidelity* — whether the plan matches what the User actually wanted in the User's actual environment, including the parts the User didn't articulate. Every catastrophic agent failure has the same shape: the agent did exactly what it understood the request to mean, the User meant something else, and nobody checked the gap.
 
-**The human-in-the-loop family** retrofits oversight by inserting an approval prompt before every state-changing action. This is the dominant pattern in commercial agent systems. It has produced the dominant failure mode: alert fatigue. When a human is asked to verify hundreds of agent decisions per day, they rubber-stamp. When the cost of careful verification is high (read the diff, understand the side effects) and the cost of approval is low (one click), the equilibrium is approval-without-verification. The human is nominally in the loop and substantively absent.
+**The human-in-the-loop family** retrofits oversight by inserting an approval prompt before every state-changing action. This is the dominant pattern in commercial agent systems. The current generation has rebranded this as "human-on-the-loop" — the agent runs, the human reviews after the fact. The rename does not fix the mechanism. Whether the prompt appears before or after, it has produced the same dominant failure mode: alert fatigue. When a human is asked to verify hundreds of agent decisions per day, they rubber-stamp. When the cost of careful verification is high (read the diff, understand the side effects) and the cost of approval is low (one click), the equilibrium is approval-without-verification. The human is nominally in the loop and substantively absent.
 
 Both families share a deeper error: they treat the human and the machine as substitutable validators on the same questions. The autonomous family says the machine can do the human's job. The human-in-the-loop family says the human can do the machine's job. Both are wrong. The human and the machine are good at different things, and any system that conflates their competencies will fail in characteristic ways depending on which side it favors.
 
@@ -62,7 +64,6 @@ There are three actors and two coupled systems.
 
 ```mermaid
 graph TD
-    U[User]
     subgraph Engine [The Engine]
         T[Triage] --> S[Sage]
         S --> Tr[Tribunal]
@@ -74,17 +75,17 @@ graph TD
         Ex --> Ad[Audit Vault]
         Ad --> G[Git Ledger]
     end
-    U[User] -- signature --> Au
-    Au -- co-validated command --> Ex
+    Au -- verdict --> Ex
+    U[User] -- approval --> Ex
 ```
 
 The Engine is replaceable. The Operator is the system of record. This inversion is the architectural payload of the proposal: the AI layer can be swapped, audited, or revoked without losing history, because history lives on the host that owns the infrastructure being operated, not in the cloud where the AI runs.
 
 ### The Satellite Agent: Sovereign Execution
 
-The **Operator** is a single-binary "Satellite Agent" (approx. 4MB) that delivers AI-powered remote execution anywhere in the world using only an outbound connection. It is designed for scale: a single conversation context can manage hundreds or thousands of devices across heterogeneous environments.
+The **Operator** is a single-binary "Satellite Agent" (approx. 4MB) that delivers AI-powered remote execution anywhere in the world using only an outbound connection. It requires no inbound port, no VPN, and no special network access — it reaches through NAT, private VPCs, and strict egress firewalls to report in from wherever it runs. A single conversation context can manage hundreds or thousands of devices across heterogeneous environments: different operating systems, different shells, different permission models, all addressed in the same session.
 
-This isn't just a worker; it's a sovereign agent that maintains **Contextual Continuity**. As the fleet grows, the system doesn't just manage more hosts—it builds a deeper understanding of the entire infrastructure. The memory system preserves history, allowing the **Auditor** to cross-reference past investigations across the entire fleet. Dynamic system prompts and real-time context injection (including hardware specs, OS state, and operator-specific constraints) ensure that every reasoning step is grounded in the precise reality of the target host.
+This isn't just a worker; it's a sovereign agent that builds context over time. With each operation, the platform develops a deeper understanding of the entire infrastructure. The memory system preserves history across sessions. The **Auditor** holds cross-conversation memory with full visibility into past operations across the entire fleet — so when a pattern surfaces on host 400 that was first seen on host 12 three weeks ago, the system already knows. Dynamic system prompts and real-time context injection — including hardware specs, OS version, shell environment, permission level, operator-specific constraints, and user-extracted preferences — ensure that every reasoning step is grounded in the precise reality of the specific target host, not a generic approximation of what that host might look like.
 
 Communication is outbound-only from the Operator to the Engine over mTLS WebSocket. The Operator initiates every connection. No inbound port is required on managed hosts. Stolen credentials cannot be replayed from a different machine, because system fingerprint binding ties session credentials to the host they were issued on.
 
@@ -130,7 +131,9 @@ The Nemesis is the most novel element. Rather than relying on an external red te
 
 The **Nemesis Scoring Rule** is defined as:
 
-$$ S = \begin{cases} R_{hit} & \text{if } c_{nemesis} \text{ identifies a flaw confirmed by Auditor} \\ R_{abstain} & \text{if } c_{nemesis} = \emptyset \text{ and Tribunal is clean} \\ -R_{miss} & \text{if } c_{nemesis} = \emptyset \text{ and Tribunal is flawed} \\ -R_{false} & \text{if } c_{nemesis} \text{ proposes a flaw rejected by Auditor} \end{cases} $$
+$$ S = \begin{cases} R_{trick} & \text{if } c_{nemesis} \text{ passes Warden and flaw is confirmed by Auditor} \\ R_{catch} & \text{if } c_{nemesis} \text{ identifies a real flaw caught by Warden} \\ R_{abstain} & \text{if } c_{nemesis} = \emptyset \text{ and Tribunal is clean} \\ -R_{miss} & \text{if } c_{nemesis} = \emptyset \text{ and Tribunal is flawed} \\ -R_{false} & \text{if } c_{nemesis} \text{ proposes a flaw and Tribunal is clean} \end{cases} $$
+
+Where $R_{trick} \gg R_{catch} > R_{abstain} > 0$. Tricking the Warden earns the largest reward because it reveals a gap in the risk assessment layer that only Auditor catches; the Warden-catch case still earns credit for correct adversarial calibration.
 
 The realized attack rate becomes a learned signal of actual flaw density in the honest four's output — adversarial pressure as continuous quality measurement.
 
@@ -237,11 +240,13 @@ If the Nemesis candidate had somehow won the consensus and bypassed the Warden's
 
 The Operator executes the command. Output is captured, scrubbed for any PII by Sentinel, and returned to the Engine. The full transaction — message, Triage Q&A, Sage intent, Tribunal candidates, Auditor verdict, Warden assessment, User approval, execution result — is written to the encrypted audit vault. The manifest file itself is committed to the Git ledger. The Operator then detaches the intent policy.
 
-Codex, asynchronously, extracts the preference: *"User has heightened sensitivity around log/audit operations. Prefer manifest-first patterns by default."* This becomes part of the Auditor's cross-conversation memory for the next investigation.
+Codex, asynchronously, extracts the preference: *"User has heightened sensitivity around log/audit operations. Prefer manifest-first patterns by default."* This becomes part of the Auditor's cross-conversation memory for the next operation.
 
 Total wall-clock from message to execution: roughly forty seconds. The User spent eight of those — five answering questions, three approving the verdict. The other thirty-two seconds were AI work the User never had to attend to. The User's time stake was respected; the User's signature was required. Both validators played their role.
 
 ## 7. Why this is the future of infrastructure
+
+The current generation of cloud-hosted agentic infrastructure platforms — tools that route every operation through vendor-managed model servers, hold authoritative state in vendor databases, treat the human as a supervisor reviewing AI outputs rather than a co-validator providing a structurally irreplaceable input, and require a service mesh to operate — cannot satisfy the constraints that real production infrastructure imposes. They are architecturally excluded from the most sensitive and most regulated environments.
 
 Most discussions of agentic AI proceed as if the question is whether agents will become more capable. They will. My claim is more specific: as agents become capable enough to act on real infrastructure, the architectures around them must change, and the architecture I propose is the one that survives the transition.
 
@@ -249,7 +254,7 @@ Infrastructure has properties consumer AI does not. State changes are persistent
 
 The autonomous-agent architecture fails on every infrastructure axis. It is unauditable, insovereign, uncompliant, insecure, and economically unviable at scale.
 
-The human-in-the-loop architecture fails on the human axis. It treats the human as a free resource and produces alert fatigue, which converges to autonomous behavior with the appearance of oversight.
+The human-in-the-loop architecture — and its successor, human-on-the-loop — fails on the human axis. Both treat the human as a free resource and produce alert fatigue, which converges to autonomous behavior with the appearance of oversight.
 
 The co-validated architecture is the only one I am aware of that simultaneously:
 

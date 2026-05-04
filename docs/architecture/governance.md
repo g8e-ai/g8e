@@ -22,7 +22,7 @@ Reputation is a cross-chain EMA scalar `[0.0, 1.0]` maintained in the `reputatio
 
 ## Objective
 
-The system minimizes one quantity: expected user disutility per resolved investigation.
+The system minimizes one quantity: expected user disutility per resolved operation.
 
 ```
 U_user = -τ_total - λ · 𝟙[execution_failure]
