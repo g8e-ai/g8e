@@ -66,15 +66,15 @@ class LifecycleEmitter:
 
     async def emit_started(self, operator_id: str, hostname: str, execution_id: str, batch_id: str) -> None:
         """Emitted when per-operator execution begins."""
-        ...
+        raise NotImplementedError("LifecycleEmitter.emit_started must be implemented by subclasses")
 
     async def emit_completed(self, operator_id: str, hostname: str, execution_id: str, batch_id: str, result: T) -> None:
         """Emitted when per-operator execution succeeds."""
-        ...
+        raise NotImplementedError("LifecycleEmitter.emit_completed must be implemented by subclasses")
 
     async def emit_failed(self, operator_id: str, hostname: str, execution_id: str, batch_id: str, error: str) -> None:
         """Emitted when per-operator execution fails."""
-        ...
+        raise NotImplementedError("LifecycleEmitter.emit_failed must be implemented by subclasses")
 
 
 class BatchRunner:
