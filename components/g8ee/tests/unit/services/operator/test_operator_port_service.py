@@ -28,7 +28,7 @@ from app.models.operators import (
     HeartbeatSystemIdentity,
     OperatorDocument,
 )
-from app.models.pubsub_messages import G8eoResultEnvelope, PortCheckResultPayload
+from app.models.pubsub_messages import ExecutionResultsPayload, G8eoResultEnvelope, PortCheckResultPayload
 from app.models.tool_results import CommandInternalResult
 from app.services.operator.port_service import OperatorPortService
 from tests.fakes.factories import (
@@ -71,7 +71,7 @@ def _make_service(
 ) -> tuple[OperatorPortService, FakePubSubService, FakeExecutionService]:
     pubsub = FakePubSubService()
     if pubsub_ready:
-        pubsub._ready = True
+        pubsub._ready = True  # noqa: SLF001
     operator = resolved_operator or _make_operator()
     event_service = FakeEventService()
     execution = FakeExecutionService(
@@ -151,11 +151,11 @@ class TestPortCheckSuccess:
 
     @pytest.mark.asyncio
     async def test_port_open(self, task_tracker):
-        service, pubsub, execution = _make_service()
+        service, _, execution = _make_service()
         investigation = _make_investigation()
         args = _make_args()
 
-        execution._envelope = _make_success_envelope(is_open=True)
+        execution.envelope = _make_success_envelope(is_open=True)
 
         result = await service.execute_port_check(args, investigation, _make_context())
 
@@ -168,11 +168,11 @@ class TestPortCheckSuccess:
 
     @pytest.mark.asyncio
     async def test_port_closed(self, task_tracker):
-        service, pubsub, execution = _make_service()
+        service, _, execution = _make_service()
         investigation = _make_investigation()
         args = _make_args()
 
-        execution._envelope = _make_success_envelope(is_open=False, latency_ms=None)
+        execution.envelope = _make_success_envelope(is_open=False, latency_ms=None)
 
         result = await service.execute_port_check(args, investigation, _make_context())
 
@@ -186,7 +186,7 @@ class TestPortCheckSuccess:
         investigation = _make_investigation()
         args = _make_args(port=8080, host="redis-server")
 
-        execution._envelope = _make_success_envelope(host="redis-server", port=8080)
+        execution.envelope = _make_success_envelope(host="redis-server", port=8080)
 
         await service.execute_port_check(args, investigation, _make_context())
 
@@ -203,7 +203,7 @@ class TestPortCheckSuccess:
         investigation = _make_investigation()
         args = _make_args()
 
-        execution._envelope = _make_success_envelope()
+        execution.envelope = _make_success_envelope()
 
         await service.execute_port_check(args, investigation, _make_context())
 
@@ -247,7 +247,7 @@ class TestPortValidation:
     async def test_port_1_accepted(self, task_tracker):
         service, _, execution = _make_service()
 
-        execution._envelope = _make_success_envelope(port=1)
+        execution.envelope = _make_success_envelope(port=1)
 
         result = await service.execute_port_check(
             _make_args(port=1), _make_investigation(), _make_context(),
@@ -258,7 +258,7 @@ class TestPortValidation:
     async def test_port_65535_accepted(self, task_tracker):
         service, _, execution = _make_service()
 
-        execution._envelope = _make_success_envelope(port=65535)
+        execution.envelope = _make_success_envelope(port=65535)
 
         result = await service.execute_port_check(
             _make_args(port=65535), _make_investigation(), _make_context(),
@@ -314,7 +314,7 @@ class TestOperatorResolution:
         service, _, execution = _make_service(resolved_operator=op)
         investigation = _make_investigation(operators=[op])
 
-        execution._envelope = _make_success_envelope()
+        execution.envelope = _make_success_envelope()
 
         await service.execute_port_check(
             _make_args(target_operators=["op-1"]), investigation, _make_context(),
@@ -331,7 +331,7 @@ class TestOperatorResolution:
         service, _, execution = _make_service(resolved_operator=op)
         investigation = _make_investigation(operators=[op])
 
-        execution._envelope = _make_success_envelope()
+        execution.envelope = _make_success_envelope()
 
         await service.execute_port_check(
             _make_args(target_operators=["all"]), investigation, _make_context(),
@@ -363,15 +363,14 @@ class TestTimeout:
 
     @pytest.mark.asyncio
     async def test_timeout_returns_error(self):
-        service, pubsub, execution = _make_service()
+        service, _, execution = _make_service()
         investigation = _make_investigation()
         args = _make_args()
 
         # Simulate timeout by having execution return no envelope
-        execution._envelope = None
+        execution.envelope = None
 
         async def _mock_execute(*args, **kwargs):
-            from app.constants.status import CommandErrorType, ExecutionStatus
             return CommandInternalResult(
                 execution_id="test",
                 status=ExecutionStatus.TIMEOUT,
@@ -395,10 +394,10 @@ class TestG8eoResultHandling:
 
     @pytest.mark.asyncio
     async def test_failed_event_type_returns_port_check_failed(self, task_tracker):
-        service, pubsub, execution = _make_service()
+        service, _, execution = _make_service()
         investigation = _make_investigation()
 
-        execution._envelope = _make_failed_envelope("Connection refused")
+        execution.envelope = _make_failed_envelope("Connection refused")
 
         result = await service.execute_port_check(_make_args(), investigation, _make_context())
 
@@ -408,10 +407,10 @@ class TestG8eoResultHandling:
 
     @pytest.mark.asyncio
     async def test_failed_event_with_no_error_msg_uses_default(self, task_tracker):
-        service, pubsub, execution = _make_service()
+        service, _, execution = _make_service()
         investigation = _make_investigation()
 
-        execution._envelope = G8eoResultEnvelope(
+        execution.envelope = G8eoResultEnvelope(
             event_type=EventType.OPERATOR_NETWORK_PORT_CHECK_FAILED,
             operator_id="op-1",
             operator_session_id="session-1",
@@ -425,10 +424,10 @@ class TestG8eoResultHandling:
 
     @pytest.mark.asyncio
     async def test_unexpected_payload_type_returns_error(self, task_tracker):
-        service, pubsub, execution = _make_service()
+        service, _, execution = _make_service()
         investigation = _make_investigation()
 
-        execution._envelope = "not_an_envelope"
+        execution.envelope = "not_an_envelope"
 
         result = await service.execute_port_check(_make_args(), investigation, _make_context())
 
@@ -438,11 +437,10 @@ class TestG8eoResultHandling:
 
     @pytest.mark.asyncio
     async def test_envelope_with_wrong_payload_type_returns_error(self, task_tracker):
-        service, pubsub, execution = _make_service()
+        service, _, execution = _make_service()
         investigation = _make_investigation()
 
-        from app.models.pubsub_messages import ExecutionResultsPayload
-        execution._envelope = G8eoResultEnvelope(
+        execution.envelope = G8eoResultEnvelope(
             event_type=EventType.OPERATOR_NETWORK_PORT_CHECK_COMPLETED,
             operator_id="op-1",
             operator_session_id="session-1",
@@ -465,7 +463,7 @@ class TestExceptionHandling:
 
     @pytest.mark.asyncio
     async def test_unexpected_exception_returns_execution_error(self):
-        service, pubsub, execution = _make_service()
+        service, _, execution = _make_service()
         investigation = _make_investigation()
 
         async def _explode(*args, **kwargs):
@@ -525,7 +523,7 @@ class TestProtocol:
 
         envelope = _make_success_envelope()
         envelope.payload.protocol = "udp"
-        execution._envelope = envelope
+        execution.envelope = envelope
 
         result = await service.execute_port_check(
             _make_args(protocol="udp"), investigation, _make_context(),

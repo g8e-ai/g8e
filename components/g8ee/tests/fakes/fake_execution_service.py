@@ -97,6 +97,14 @@ class FakeExecutionService:
         return CommandInternalResult(exit_code=self._exit_code, output=self._output, status=ExecutionStatus.COMPLETED)
 
     @property
+    def envelope(self) -> "G8eoResultEnvelope | None":
+        return self._envelope
+
+    @envelope.setter
+    def envelope(self, value: "G8eoResultEnvelope | None") -> None:
+        self._envelope = value
+
+    @property
     def g8ed_event_service(self):
         return self._g8ed_event_service
 
