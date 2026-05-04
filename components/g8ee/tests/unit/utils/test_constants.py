@@ -749,6 +749,9 @@ class TestEventTypeSourceMatchesSharedJSON:
     def test_ai_assistant(self, senders):
         assert senders["message"]["sender"]["ai"]["assistant"] == EventType.EVENT_SOURCE_AI_ASSISTANT
 
+    def test_ai_triage(self, senders):
+        assert senders["message"]["sender"]["ai"]["triage"] == EventType.EVENT_SOURCE_AI_TRIAGE
+
     def test_system(self, senders):
         assert senders["message"]["sender"]["system"] == EventType.EVENT_SOURCE_SYSTEM
 
@@ -760,8 +763,8 @@ class TestEventTypeSourceMatchesSharedJSON:
                 return sum(count_leaves(v) for k, v in obj.items() if not k.startswith("_"))
             return 0
         json_leaf_count = count_leaves(senders["message"]["sender"])
-        enum_count = len(EventType)
-        assert enum_count == json_leaf_count
+        event_source_count = len([e for e in EventType if e.name.startswith("EVENT_SOURCE_")])
+        assert event_source_count == json_leaf_count
 
 
     def test_text(self, msg):

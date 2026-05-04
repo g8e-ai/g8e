@@ -53,6 +53,8 @@ from app.models.pubsub_messages import G8eMessage, G8eoResultEnvelope, Execution
 from app.models.tool_results import CommandInternalResult
 from app.models.http_context import G8eHttpContext
 from app.models.settings import G8eePlatformSettings
+from app.security.operator_command_validator import OperatorCommandValidator
+from app.utils.validators import get_blacklist_validator, get_whitelist_validator
 
 logger = logging.getLogger(__name__)
 
@@ -77,9 +79,8 @@ class OperatorExecutionService(ExecutionServiceProtocol):
         self._operator_data_service = operator_data_service
         self._ai_response_analyzer = ai_response_analyzer
         self._investigation_service = investigation_service
+        self._background_tasks: set[asyncio.Task] = set()
 
-        from app.security.operator_command_validator import OperatorCommandValidator
-        from app.utils.validators import get_blacklist_validator, get_whitelist_validator
         self.command_validator = OperatorCommandValidator(operator_data_service)
         self.whitelist_validator = get_whitelist_validator()
         self.blacklist_validator = get_blacklist_validator()
@@ -429,7 +430,7 @@ class OperatorExecutionService(ExecutionServiceProtocol):
 
         # Launch background task to wait for result and broadcast it to g8ed
         # This allows the API to return immediately to the frontend terminal
-        asyncio.create_task(
+        _t = asyncio.create_task(
             self._wait_and_broadcast_direct_command_result(
                 execution_id=execution_id,
                 command=command,
@@ -440,6 +441,8 @@ class OperatorExecutionService(ExecutionServiceProtocol):
                 hostname=command_payload.hostname,
             )
         )
+        self._background_tasks.add(_t)
+        _t.add_done_callback(self._background_tasks.discard)
 
         return DirectCommandResult(execution_id=execution_id, status=ExecutionStatus.EXECUTING)
 

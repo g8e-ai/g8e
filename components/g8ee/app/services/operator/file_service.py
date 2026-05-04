@@ -46,9 +46,30 @@ from app.models.command_request_payloads import (
 )
 from app.models.http_context import G8eHttpContext
 from app.models.investigations import EnrichedInvestigationContext
-from app.models.tool_results import FileEditResult, FileOperationRiskAnalysis, FetchFileHistoryToolResult, FetchFileDiffToolResult
-from app.models.operators import FileEditApprovalRequest, CommandFailedBroadcastEvent, FileEditBroadcastEvent, CommandExecutingBroadcastEvent, CommandResultBroadcastEvent
-from app.models.pubsub_messages import G8eMessage
+from app.models.tool_results import (
+    FileEditResult,
+    FileOperationRiskAnalysis,
+    FileOperationRiskContext,
+    FetchFileHistoryToolResult,
+    FetchFileDiffToolResult,
+)
+from app.models.operators import (
+    FileEditApprovalRequest,
+    CommandFailedBroadcastEvent,
+    FileEditBroadcastEvent,
+    CommandExecutingBroadcastEvent,
+    CommandResultBroadcastEvent,
+)
+from app.models.settings import G8eeUserSettings, LLMSettings
+from app.models.pubsub_messages import (
+    FetchFileDiffByIdSuccessPayload,
+    FetchFileDiffBySessionSuccessPayload,
+    FetchFileDiffErrorPayload,
+    FetchFileHistorySuccessPayload,
+    FetchFileHistoryErrorPayload,
+    FileEditResultPayload,
+    G8eMessage,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -161,8 +182,6 @@ class OperatorFileService:
             risk_analysis: FileOperationRiskAnalysis | None = None
             if op_name in (FileOperation.WRITE, FileOperation.REPLACE, "write", "replace"):
                 try:
-                    from app.models.tool_results import FileOperationRiskContext
-                    from app.models.settings import G8eeUserSettings, LLMSettings
                     risk_analysis = await self.ai_response_analyzer.analyze_file_operation_risk(
                         operation=operation,
                         file_path=file_path,
@@ -270,7 +289,6 @@ class OperatorFileService:
             # Extract content for READ operations from envelope payload
             content = None
             if operation == FileOperation.READ and envelope:
-                from app.models.pubsub_messages import FileEditResultPayload
                 if isinstance(envelope.payload, FileEditResultPayload):
                     content = envelope.payload.content
 
@@ -396,7 +414,7 @@ class OperatorFileService:
                 task_id=AITaskId.FETCH_FILE_HISTORY,
             )
 
-            from app.models.pubsub_messages import FetchFileHistorySuccessPayload, FetchFileHistoryErrorPayload
+
 
             if envelope and isinstance(envelope.payload, FetchFileHistorySuccessPayload):
                 return FetchFileHistoryToolResult(
@@ -506,12 +524,6 @@ class OperatorFileService:
                 ),
                 g8e_context,
                 task_id=AITaskId.FETCH_FILE_DIFF,
-            )
-
-            from app.models.pubsub_messages import (
-                FetchFileDiffByIdSuccessPayload,
-                FetchFileDiffBySessionSuccessPayload,
-                FetchFileDiffErrorPayload,
             )
 
             if envelope and isinstance(envelope.payload, FetchFileDiffByIdSuccessPayload):

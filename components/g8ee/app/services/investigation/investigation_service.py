@@ -362,7 +362,7 @@ class InvestigationService:
         patch["history_trail"] = [e.model_dump(mode="json") for e in investigation.history_trail]
 
         await self.investigation_data_service.update_investigation_raw(investigation_id, patch)
-        logger.info(f"Updated investigation {investigation_id}")
+        logger.info("Updated investigation %s", investigation_id)
         return investigation
 
     async def persist_ai_message(

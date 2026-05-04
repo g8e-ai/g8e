@@ -33,12 +33,12 @@ pytestmark = [pytest.mark.unit]
 
 
 def _make_payload(**kwargs) -> G8eoHeartbeatPayload:
-    defaults = dict(
-        event_type=EventType.OPERATOR_HEARTBEAT_SENT,
-        operator_id="op-222",
-        operator_session_id="op-session-111",
-        timestamp=now().isoformat(),
-    )
+    defaults = {
+        "event_type": EventType.OPERATOR_HEARTBEAT_SENT,
+        "operator_id": "op-222",
+        "operator_session_id": "op-session-111",
+        "timestamp": now().isoformat(),
+    }
     defaults.update(kwargs)
     return G8eoHeartbeatPayload(**defaults)
 
@@ -569,7 +569,7 @@ class TestPushHeartbeatSSE:
         )
         mock_event_service.publish.side_effect = Exception("network down")
 
-        await service._push_heartbeat_sse(envelope, _make_payload(), operator)
+        await service._push_heartbeat_sse(envelope, _make_payload(), operator)  # noqa: SLF001
 
     async def test_sse_exception_is_logged_with_traceback(
         self, service, mock_event_service, caplog

@@ -24,7 +24,7 @@ from .chat_pipeline import ChatPipelineService
 from .chat_task_manager import BackgroundTaskManager
 from .generation_config_builder import AIGenerationConfigBuilder
 from .grounding import AttachmentGroundingProvider, GroundingService, WebSearchProvider
-from ..investigation.investigation_service import extract_all_operators_context, extract_system_context
+from app.services.investigation.investigation_service import extract_all_operators_context, extract_system_context
 from .request_builder import AIRequestBuilder
 from .response_analyzer import AIResponseAnalyzer
 from .title_generator import generate_case_title

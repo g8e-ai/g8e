@@ -26,8 +26,7 @@ from app.models.operators import (
 )
 from app.models.pubsub_messages import G8eoHeartbeatPayload
 from app.security.request_timestamp import RequestValidationResult, validate_timestamp
-
-from ..protocols import OperatorDataServiceProtocol, EventServiceProtocol
+from app.services.protocols import OperatorDataServiceProtocol, EventServiceProtocol
 
 logger = logging.getLogger(__name__)
 

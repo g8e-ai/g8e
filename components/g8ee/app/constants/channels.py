@@ -11,18 +11,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from enum import Enum
+from enum import StrEnum
 from typing import Final
 
 
-class PubSubAction(str, Enum):
+class PubSubAction(StrEnum):
     PUBLISH = "publish"
     SUBSCRIBE = "subscribe"
     PSUBSCRIBE = "psubscribe"
     UNSUBSCRIBE = "unsubscribe"
 
 
-class PubSubField(str, Enum):
+class PubSubField(StrEnum):
     ACTION = "action"
     CHANNEL = "channel"
     DATA = "data"
@@ -32,7 +32,7 @@ class PubSubField(str, Enum):
     SENDER = "sender"
 
 
-class PubSubWireEventType(str, Enum):
+class PubSubWireEventType(StrEnum):
     MESSAGE = "message"
     PMESSAGE = "pmessage"
     SUBSCRIBED = "subscribed"
@@ -41,7 +41,7 @@ class PubSubWireEventType(str, Enum):
 PubSubMessageType = PubSubWireEventType
 
 
-class PubSubChannel(str, Enum):
+class PubSubChannel(StrEnum):
     """Well-known, non-parameterized pub/sub channel names.
 
     Canonical values mirror `shared/constants/channels.json` -> `pubsub.prefixes`

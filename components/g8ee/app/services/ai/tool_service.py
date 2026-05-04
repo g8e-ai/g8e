@@ -55,14 +55,16 @@ from app.services.operator.command_service import OperatorCommandService
 from app.utils.auto_approved_validator import CommandAutoApprovedValidator
 from app.utils.blacklist_validator import CommandBlacklistValidator
 from app.utils.whitelist_validator import CommandWhitelistValidator
+from app.utils.validators import get_auto_approved_validator, get_blacklist_validator, get_whitelist_validator
 
 from .grounding.web_search_provider import WebSearchProvider
 from .ssh_inventory_service import SshInventoryService
-from ..data.reputation_data_service import ReputationDataService
+from app.services.data.reputation_data_service import ReputationDataService
 
 if TYPE_CHECKING:
     from .reputation_service import ReputationService
     from .chat_task_manager import BackgroundTaskManager
+    from app.services.operator.stream_executor import OperatorStreamExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -97,11 +99,6 @@ class AIToolService:
         self._ssh_inventory_service = ssh_inventory_service
         self._stream_executor = stream_executor
 
-        from app.utils.validators import (
-            get_auto_approved_validator,
-            get_blacklist_validator,
-            get_whitelist_validator,
-        )
         self._whitelist_validator = (
             whitelist_validator if whitelist_validator is not None else get_whitelist_validator()
         )

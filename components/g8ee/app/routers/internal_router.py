@@ -22,6 +22,9 @@ Note: g8eo Operator commands still use PubSub (external agent communication).
 
 import asyncio
 import logging
+import uuid
+import secrets
+from typing import TYPE_CHECKING
 from fastapi import APIRouter, Depends, Request, status
 
 from app.models.settings import G8eePlatformSettings, G8eeUserSettings
@@ -88,6 +91,7 @@ from app.models.triage_api import (
     TriageTimeoutRequest,
 )
 from app.models.investigations import (
+    ConversationMessageMetadata,
     InvestigationCreateRequest,
     InvestigationModel,
     InvestigationQueryRequest,
@@ -95,7 +99,7 @@ from app.models.investigations import (
 )
 from app.models.events import SessionEvent
 from app.models.http_context import G8eHttpContext
-from app.models.operators import OperatorStatusUpdatedPayload
+from app.models.operators import OperatorDocument, OperatorStatusUpdatedPayload
 from app.services.operator.session_auth_listener import SessionAuthListener
 from app.services.operator.operator_data_service import OperatorDataService
 from app.services.operator.heartbeat_service import HeartbeatSnapshotService
@@ -114,9 +118,13 @@ from app.services.cache.cache_aside import CacheAsideService
 from app.services.auth.api_key_service import ApiKeyService
 from app.services.auth.certificate_service import CertificateService
 from app.services.infra.settings_service import SettingsService
-from app.utils.timestamp import now_iso
+from app.utils.timestamp import now, now_iso
+from app.constants.message_sender import MessageSender
 
-from ..dependencies import (
+if TYPE_CHECKING:
+    from app.services.operator.operator_lifecycle_service import OperatorLifecycleService
+
+from app.dependencies import (
     get_g8ee_platform_settings,
     get_g8ee_approval_service,
     get_g8ee_attachment_service,
@@ -143,6 +151,7 @@ from ..dependencies import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["internal"])
+_background_tasks: set[asyncio.Task] = set()
 
 
 
@@ -280,7 +289,9 @@ async def internal_chat(
             )
             # Track background task for cleanup
             task_id = f"title_generation_{g8e_context.investigation_id}"
-            asyncio.create_task(chat_task_manager.track(task_id, task, auto_cancel_previous=False))
+            _t = asyncio.create_task(chat_task_manager.track(task_id, task, auto_cancel_previous=False))
+            _background_tasks.add(_t)
+            _t.add_done_callback(_background_tasks.discard)
 
         logger.info(
             "[INTERNAL-HTTP] New conversation created inline",
@@ -295,7 +306,7 @@ async def internal_chat(
             )
             resolved_attachments = await attachment_service.process_attachments(raw_attachments)
         except Exception as att_err:
-            logger.error(f"[INTERNAL-HTTP] Failed to retrieve attachments: {att_err}")
+            logger.error("[INTERNAL-HTTP] Failed to retrieve attachments: %s", att_err)
 
     # Validate investigation_id exists before proceeding (allow NEW_CASE_ID for new cases)
     if not g8e_context.investigation_id or g8e_context.investigation_id == "unknown":
@@ -327,7 +338,9 @@ async def internal_chat(
     )
     # Track the task - run_chat will also track it internally, but we track it here
     # to ensure it's in the registry before we return
-    asyncio.create_task(chat_task_manager.track(g8e_context.investigation_id, chat_task, auto_cancel_previous=False))
+    _t = asyncio.create_task(chat_task_manager.track(g8e_context.investigation_id, chat_task, auto_cancel_previous=False))
+    _background_tasks.add(_t)
+    _t.add_done_callback(_background_tasks.discard)
 
     return ChatStartedResponse(
         success=True,
@@ -345,8 +358,6 @@ async def internal_triage_answer(
     """
     Receive user answer to a triage clarifying question - internal cluster use only.
     """
-    from app.models.investigations import ConversationMessageMetadata
-    from app.constants.message_sender import MessageSender
 
     logger.info(
         "[INTERNAL-HTTP] Triage answer received",
@@ -381,8 +392,6 @@ async def internal_triage_skip(
     """
     Skip triage clarifying questions - internal cluster use only.
     """
-    from app.models.investigations import ConversationMessageMetadata
-    from app.constants.message_sender import MessageSender
 
     logger.info(
         "[INTERNAL-HTTP] Triage skip received",
@@ -412,8 +421,6 @@ async def internal_triage_timeout(
     """
     Record triage clarifying questions timeout - internal cluster use only.
     """
-    from app.models.investigations import ConversationMessageMetadata
-    from app.constants.message_sender import MessageSender
 
     logger.info(
         "[INTERNAL-HTTP] Triage timeout received",
@@ -814,7 +821,7 @@ async def listen_session_auth(
         )
         return {"success": True}
     except Exception as e:
-        logger.error(f"[INTERNAL-HTTP] Failed to start session auth listener: {e}")
+        logger.error("[INTERNAL-HTTP] Failed to start session auth listener: %s", e)
         return {"success": False, "error": "Failed to start session auth listener"}
 
 
@@ -834,10 +841,6 @@ async def create_operator_slot(
     architectural boundary: after auth, g8ed has no business writing to operators.
     SECURITY: Internal only - g8ed component.
     """
-    from app.models.operators import OperatorDocument
-    from app.utils.timestamp import now
-    import uuid
-    import secrets
 
     try:
         operator_id = str(uuid.uuid4())
@@ -942,7 +945,6 @@ async def update_operator_api_key(
     architectural boundary: after auth, g8ed has no business writing to operators.
     SECURITY: Internal only - g8ed component.
     """
-    from app.utils.timestamp import now
 
     try:
         operator = await operator_data_service.get_operator(request.operator_id)
@@ -1019,7 +1021,7 @@ async def generate_api_key(
             api_key=api_key
         )
     except Exception as e:
-        logger.error(f"[INTERNAL-HTTP] Failed to generate API key: {e!s}")
+        logger.error("[INTERNAL-HTTP] Failed to generate API key: %s", e)
         return ApiKeyGenerationResponse(
             success=False,
             error=str(e)
@@ -1044,7 +1046,7 @@ async def revoke_operator_certificate(
         )
         return OperatorCertificateRevokeResponse(success=success)
     except Exception as e:
-        logger.error(f"[INTERNAL-HTTP] Failed to revoke certificate: {e!s}")
+        logger.error("[INTERNAL-HTTP] Failed to revoke certificate: %s", e)
         return OperatorCertificateRevokeResponse(success=False, error=str(e))
 
 
@@ -1113,7 +1115,6 @@ async def bind_operators(
     architectural boundary: after auth, g8ed has no business writing to operators.
     SECURITY: Internal only - g8ed component.
     """
-    from app.utils.timestamp import now
 
     bound = []
     failed = []
@@ -1169,7 +1170,7 @@ async def bind_operators(
                         )
                     )
                 except Exception as e:
-                    logger.warning(f"[INTERNAL-HTTP] Failed to publish bind event for {operator_id}: {e}")
+                    logger.warning("[INTERNAL-HTTP] Failed to publish bind event for %s: %s", operator_id, e)
             else:
                 failed.append(operator_id)
                 errors.append({"operator_id": operator_id, "error": result.error or "Failed to update operator"})
@@ -1212,7 +1213,6 @@ async def unbind_operators(
     architectural boundary: after auth, g8ed has no business writing to operators.
     SECURITY: Internal only - g8ed component.
     """
-    from app.utils.timestamp import now
 
     unbound = []
     failed = []
@@ -1268,7 +1268,7 @@ async def unbind_operators(
                         )
                     )
                 except Exception as e:
-                    logger.warning(f"[INTERNAL-HTTP] Failed to publish unbind event for {operator_id}: {e}")
+                    logger.warning("[INTERNAL-HTTP] Failed to publish unbind event for %s: %s", operator_id, e)
             else:
                 failed.append(operator_id)
                 errors.append({"operator_id": operator_id, "error": result.error or "Failed to update operator"})
@@ -1369,7 +1369,7 @@ async def validate_operator_session(
             )
         return OperatorSessionValidateResponse(success=True, valid=False)
     except Exception as e:
-        logger.error(f"[INTERNAL-HTTP] Session validation failed: {e}")
+        logger.error("[INTERNAL-HTTP] Session validation failed: %s", e)
         return OperatorSessionValidateResponse(success=False, valid=False, error=str(e))
 
 
@@ -1395,7 +1395,7 @@ async def refresh_operator_session(
             )
         return OperatorSessionRefreshResponse(success=False, error="Session not found or expired")
     except Exception as e:
-        logger.error(f"[INTERNAL-HTTP] Session refresh failed: {e}")
+        logger.error("[INTERNAL-HTTP] Session refresh failed: %s", e)
         return OperatorSessionRefreshResponse(success=False, error=str(e))
 
 

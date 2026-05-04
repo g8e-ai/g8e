@@ -70,7 +70,7 @@ class HTTPService:
             raise ValidationError("service_name is required for HTTP client registration", component="g8ee")
 
         self._active_clients[service_name] = client
-        logger.info(f"[HTTP] HTTP client configured for service: {service_name}")
+        logger.info("[HTTP] HTTP client configured for service: %s", service_name)
 
     def get_client(self, service_name: str) -> HTTPClient | None:
         """Get an HTTP client by service name.
@@ -93,16 +93,16 @@ class HTTPService:
             logger.warning("[HTTP] No HTTP clients registered - service ready but no clients available")
 
         self._http_ready = True
-        logger.info(f"[HTTP] HTTP service ready with {len(self._active_clients)} registered clients")
+        logger.info("[HTTP] HTTP service ready with %s registered clients", len(self._active_clients))
 
     async def stop(self) -> None:
         """Stop the HTTP service and cleanup all registered clients."""
         for service_name, client in list(self._active_clients.items()):
             try:
                 await client.close()
-                logger.info(f"[HTTP] Closed HTTP client for service: {service_name}")
+                logger.info("[HTTP] Closed HTTP client for service: %s", service_name)
             except Exception as e:
-                logger.error(f"[HTTP] Error closing HTTP client for {service_name}: {e}", exc_info=True)
+                logger.error("[HTTP] Error closing HTTP client for %s: %s", service_name, e, exc_info=True)
 
         self._active_clients.clear()
         self._http_ready = False
@@ -116,15 +116,15 @@ class HTTPService:
             client: The HTTP client instance
         """
         if service_name in self._active_clients:
-            logger.warning(f"[HTTP] Overwriting existing HTTP client for service: {service_name}")
+            logger.warning("[HTTP] Overwriting existing HTTP client for service: %s", service_name)
             # Close the existing client before replacing
             try:
                 await self._active_clients[service_name].close()
             except Exception as e:
-                logger.error(f"[HTTP] Error closing existing client for {service_name}: {e}")
+                logger.error("[HTTP] Error closing existing client for %s: %s", service_name, e)
 
         self.set_http_client(client, service_name)
-        logger.info(f"[HTTP] Registered HTTP client for service: {service_name}")
+        logger.info("[HTTP] Registered HTTP client for service: %s", service_name)
 
     async def deregister_service_client(self, service_name: str) -> None:
         """Deregister and close an HTTP client for a service.
@@ -133,15 +133,15 @@ class HTTPService:
             service_name: The name of the service to deregister
         """
         if service_name not in self._active_clients:
-            logger.warning(f"[HTTP] No HTTP client found for service: {service_name}")
+            logger.warning("[HTTP] No HTTP client found for service: %s", service_name)
             return
 
         try:
             client = self._active_clients.pop(service_name)
             await client.close()
-            logger.info(f"[HTTP] Deregistered and closed HTTP client for service: {service_name}")
+            logger.info("[HTTP] Deregistered and closed HTTP client for service: %s", service_name)
         except Exception as e:
-            logger.error(f"[HTTP] Error deregistering HTTP client for {service_name}: {e}", exc_info=True)
+            logger.error("[HTTP] Error deregistering HTTP client for %s: %s", service_name, e, exc_info=True)
 
     def list_active_clients(self) -> list[str]:
         """List all currently active service client names.

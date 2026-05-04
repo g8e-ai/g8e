@@ -36,7 +36,7 @@ from app.models.command_request_payloads import FsListRequestPayload, FsReadRequ
 from app.models.operators import CommandExecutingBroadcastEvent, CommandResultBroadcastEvent
 from app.models.investigations import EnrichedInvestigationContext
 from app.models.tool_results import FsListToolResult, FsReadToolResult
-from app.models.pubsub_messages import G8eMessage
+from app.models.pubsub_messages import FsListResultPayload, FsReadResultPayload, G8eMessage
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +117,6 @@ class OperatorFilesystemService:
         )
 
         # Extract typed payload data from envelope
-        from app.models.pubsub_messages import FsListResultPayload
         entries = []
         if envelope and isinstance(envelope.payload, FsListResultPayload):
             entries = envelope.payload.entries or []
@@ -206,7 +205,6 @@ class OperatorFilesystemService:
         )
 
         # Extract typed payload data from envelope
-        from app.models.pubsub_messages import FsReadResultPayload
         content = None
         if envelope and isinstance(envelope.payload, FsReadResultPayload):
             content = envelope.payload.content

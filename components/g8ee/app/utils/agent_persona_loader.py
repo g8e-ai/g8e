@@ -19,7 +19,7 @@ The shared/constants/agents.json file is generated from these models and consume
 
 import logging
 from pydantic import BaseModel, ConfigDict, Field
-from ..models.personas import get_persona, list_persona_ids, AgentPersonaModel
+from app.models.personas import get_persona, list_persona_ids, AgentPersonaModel
 
 logger = logging.getLogger(__name__)
 

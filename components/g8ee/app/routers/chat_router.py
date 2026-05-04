@@ -29,10 +29,10 @@ from app.models.chat_api import ChatSessionDetailsResponse, ChatSessionResponse,
 from app.models.investigations import ConversationMessageMetadata
 from app.models.auth import AuthenticatedUser
 from app.models.triage_api import TriageAnswerRequest, TriageSkipRequest, TriageTimeoutRequest
-from ..dependencies import get_g8ee_case_data_service, get_g8ee_investigation_service, require_proxy_auth
-from ..services.investigation.investigation_service import InvestigationService
-from ..services.investigation.investigation_data_service import InvestigationDataService
-from ..services.data.case_data_service import CaseDataService
+from app.dependencies import get_g8ee_case_data_service, get_g8ee_investigation_service, require_proxy_auth
+from app.services.investigation.investigation_service import InvestigationService
+from app.services.investigation.investigation_data_service import InvestigationDataService
+from app.services.data.case_data_service import CaseDataService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

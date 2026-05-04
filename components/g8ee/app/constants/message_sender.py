@@ -20,10 +20,10 @@ history tracking and display.
 Canonical source: shared/constants/senders.json
 """
 
-from enum import Enum
+from enum import StrEnum
 
 
-class MessageSender(str, Enum):
+class MessageSender(StrEnum):
     """Message sender identifiers for DB persistence.
 
     These values identify who sent a message in the conversation history.

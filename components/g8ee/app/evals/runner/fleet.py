@@ -5,8 +5,10 @@
 
 from __future__ import annotations
 
-import subprocess
 import asyncio
+import ssl
+import subprocess
+import time
 from pathlib import Path
 
 
@@ -120,9 +122,7 @@ class FleetManager:
         Args:
             timeout: Maximum seconds to wait
         """
-        import time
         import aiohttp
-        import ssl
 
         ssl_context = ssl.create_default_context()
         ssl_context.check_hostname = False

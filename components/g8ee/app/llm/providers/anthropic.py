@@ -39,8 +39,8 @@ from app.llm.llm_types import (
 )
 from app.models.base import G8eBaseModel
 
-from ..provider import LLMProvider
-from ..utils import schema_to_dict
+from app.llm.provider import LLMProvider
+from app.llm.utils import schema_to_dict
 
 logger = logging.getLogger(__name__)
 

@@ -160,6 +160,7 @@ timeout_method = "signal"
         "PLR0913", # Too many arguments
         "PLR2004", # Magic value used in comparison
         "I001",    # Import sorting (handled by Ruff format)
+        "B008",    # FastAPI Depends() in defaults (idiomatic pattern)
     ]
 
     [tool.ruff.lint.per-file-ignores]

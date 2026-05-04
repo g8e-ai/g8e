@@ -11,9 +11,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from enum import Enum
+from enum import StrEnum
 
-class EventType(str, Enum):
+class EventType(StrEnum):
     # app.case
     CASE_CREATED = "g8e.v1.app.case.created"
     CASE_UPDATED = "g8e.v1.app.case.updated"
@@ -360,6 +360,7 @@ class EventType(str, Enum):
 
     EVENT_SOURCE_AI_PRIMARY = "g8e.v1.source.ai.primary"
     EVENT_SOURCE_AI_ASSISTANT = "g8e.v1.source.ai.assistant"
+    EVENT_SOURCE_AI_TRIAGE = "g8e.v1.source.ai.triage"
     EVENT_SOURCE_USER_CHAT = "g8e.v1.source.user.chat"
     EVENT_SOURCE_USER_TERMINAL = "g8e.v1.source.user.terminal"
     EVENT_SOURCE_SYSTEM = "g8e.v1.source.system"

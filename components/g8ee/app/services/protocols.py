@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Protocol, runtime_checkable, TYPE_CHECKING, Any
 
 from app.constants import (
@@ -23,6 +24,7 @@ from app.constants import (
     FileOperation,
     OperatorStatus,
 )
+from app.constants.status import OperatorHistoryEventType, OperatorType
 from app.models.base import G8eBaseModel
 from app.models.cache import (
     BatchWriteOperation,
@@ -98,6 +100,7 @@ from app.llm import llm_types as types
 if TYPE_CHECKING:
     from app.clients.pubsub_client import PubSubClient
     from app.clients.http_client import HTTPClient
+    from app.services.cache.cache_aside import CacheAsideService
 
 @runtime_checkable
 class SettingsServiceProtocol(Protocol):

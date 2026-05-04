@@ -37,7 +37,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 import app.llm.llm_types as types
 from app.constants.prompts import AgentMode
@@ -64,7 +64,7 @@ from app.services.ai.tools import (
 )
 
 
-class ToolScope(str, Enum):
+class ToolScope(StrEnum):
     """Classification that controls the bound-operator auth gate and Tribunal routing."""
     UNIVERSAL = "universal"
     OPERATOR_GATED = "operator_gated"

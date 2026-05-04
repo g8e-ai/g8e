@@ -27,6 +27,7 @@ from app.models.settings import G8eeUserSettings
 from app.models.agents.title_generator import CaseTitleResult
 from app.llm.llm_types import Content, Part, LiteLLMSettings
 from app.utils.agent_persona_loader import get_agent_persona
+from app.models.model_configs import get_model_config
 
 logger = logging.getLogger(__name__)
 
@@ -71,8 +72,6 @@ async def generate_case_title(
         prompt = f"{persona.get_system_prompt()}\n\n<message>\n{description}\n</message>\n\nTitle:"
 
         logger.info("[TITLE-GEN] Generating case title, description_length=%d, description=%s", len(description), description)
-
-        from app.models.model_configs import get_model_config
 
         model_config = get_model_config(model)
         max_output_tokens = model_config.max_output_tokens if model_config and model_config.max_output_tokens is not None else LLM_DEFAULT_MAX_OUTPUT_TOKENS

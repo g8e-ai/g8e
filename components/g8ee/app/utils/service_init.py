@@ -17,6 +17,8 @@ from app.errors import ConfigurationError
 from app.models.settings import G8eePlatformSettings
 from app.services.cache.cache_aside import CacheAsideService
 from app.llm.factory import set_settings
+from app.services.infra.settings_service import SettingsService
+from app.services.infra.bootstrap_service import BootstrapService
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +34,6 @@ async def initialize_g8e_service(
             raise ConfigurationError("cache_aside_service is required when use_db_config=True")
         logger.info("Loading configuration from g8es platform_settings for %s", service_name)
 
-        from app.services.infra.settings_service import SettingsService
-        from app.services.infra.bootstrap_service import BootstrapService
         bootstrap_service = BootstrapService()
         service = SettingsService(cache_aside_service=cache_aside_service, bootstrap_service=bootstrap_service)
         settings = await G8eePlatformSettings.from_db(service)
