@@ -52,6 +52,7 @@ import { createOperatorApiKeyRouter } from './routes/operator/operator_api_key_r
 
 import { cspNonce } from './middleware/csp_nonce.js';
 import { contextMiddleware } from './middleware/context.js';
+import { createCsrfProtection } from './middleware/csrf.js';
 
 import { 
     HTTP_CONTENT_TYPE_HEADER,
@@ -195,6 +196,7 @@ export function createG8edApp({
     app.use(express.json({ limit: bodyLimit }));
     app.use(express.urlencoded({ extended: true, limit: bodyLimit }));
     app.use(cookieParser());
+    app.use(createCsrfProtection({ isTest }));
 
     // Operator auth router (uses Bearer token auth, not web session)
     app.use(BasePaths.AUTH, createOperatorAuthRouter({ 

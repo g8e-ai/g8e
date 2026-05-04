@@ -6,7 +6,8 @@ RUN adduser -D -s /bin/bash appuser && \
     chmod 440 /etc/sudoers.d/appuser
 
 COPY entrypoint.sh /opt/entrypoint.sh
-RUN chmod +x /opt/entrypoint.sh
+COPY microservice.sh /opt/microservice.sh
+RUN chmod +x /opt/entrypoint.sh /opt/microservice.sh
 
 USER appuser
 WORKDIR /home/appuser

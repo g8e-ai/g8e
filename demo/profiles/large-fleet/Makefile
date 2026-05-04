@@ -1,51 +1,64 @@
-# Large Fleet Demo (20-1000 nodes)
+# Featherweight Large Fleet Simulator (20-1000 nodes)
+# Uses minimal Alpine Linux containers to run just the Operator binary.
 
-.PHONY: help build up down status clean logs
+.PHONY: help generate-compose build up down status clean logs
 
+NODE_COUNT ?= 100
 COMPOSE := docker compose
+COMPOSE_FILES = $(shell if [ -f .batch-files ]; then for f in $$(cat .batch-files); do printf -- "-f %s " $$f; done; fi)
 
 help:
-	@echo "Large Fleet Demo (20-1000 nodes)"
-	@echo "Usage: make [target]"
+	@echo "Featherweight Large Fleet Simulator"
 	@echo ""
-	@echo "  up N=1000 [-d dlk_xxx]  - Start N identical nodes with operators"
-	@echo "  down                    - Stop all nodes"
-	@echo "  status                  - Show container status"
-	@echo "  clean                   - Remove everything"
-	@echo "  logs                    - Follow all container logs"
+	@echo "Usage: make [target] [NODE_COUNT=N]"
+	@echo ""
+	@echo "  up [NODE_COUNT=100]  - Start N nodes (default 100)"
+	@echo "  down                 - Stop all nodes"
+	@echo "  status               - Show status"
+	@echo "  clean                - Remove everything"
+	@echo "  logs                 - Follow logs"
+	@echo ""
 
-build:
-	@echo "Building featherweight node image..."
-	$(COMPOSE) build
+generate-compose:
+	@./scripts/generate-compose.sh $(NODE_COUNT) 100
 
-up: build
-	@set -e; \
-	TOKEN="$(DEVICE_TOKEN)"; \
-	if [ -z "$$TOKEN" ] && echo "$(filter-out $@,$(MAKECMDGOALS))" | grep -q '\-d'; then \
-		TOKEN=$$(echo "$(filter-out $@,$(MAKECMDGOALS))" | sed 's/.*-d \([^ ]*\).*/\1/'); \
-	fi; \
-	NUM="$(N)"; \
-	if [ -z "$$NUM" ]; then \
-		NUM=20; \
-	fi; \
-	if [ -n "$$TOKEN" ]; then \
-		echo "Starting $$NUM nodes (operators auto-attach via DEVICE_TOKEN)..."; \
-		DEVICE_TOKEN="$$TOKEN" $(COMPOSE) up -d --scale node=$$NUM; \
-	else \
-		echo "Starting $$NUM nodes (no DEVICE_TOKEN)..."; \
-		$(COMPOSE) up -d --scale node=$$NUM; \
-	fi
+build: generate-compose
+	@echo "Building image..."
+	docker build -t operator-node:latest ./containers/node
+
+up: generate-compose build
+	@echo "Creating network..."
+	@docker network create large-fleet-net 2>/dev/null || echo "Network already exists"
+	@echo "Starting $(NODE_COUNT) nodes in regions..."
+	@for batch in $$(cat .batch-files); do \
+		echo "Starting batch: $$batch"; \
+		DEVICE_TOKEN="$(DEVICE_TOKEN)" $(COMPOSE) -f "$$batch" up -d --no-build || exit 1; \
+	done
 
 down:
 	@echo "Stopping fleet..."
-	$(COMPOSE) down
+	@if [ -n "$(COMPOSE_FILES)" ]; then \
+		$(COMPOSE) $(COMPOSE_FILES) down; \
+	else \
+		$(COMPOSE) down; \
+	fi
+	@docker network rm large-fleet-net 2>/dev/null || true
 
 status:
-	@echo "Running: $$(docker ps -q -f label=demo.service=operator-node | wc -l) nodes"
+	@running=$$(docker ps -q -f "label=demo.service=operator-node" | wc -l); \
+	total=$$(docker ps -a -q -f "label=demo.service=operator-node" | wc -l); \
+	echo "  nodes running: $$running / $$total"
 
 clean:
 	@echo "Cleaning up..."
-	$(COMPOSE) down -v --rmi all
+	@docker ps -aq --filter "label=demo.service=operator-node" | xargs -r docker rm -f
+	@rm -f docker-compose.*.yml .batch-files
+	@docker network rm large-fleet-net 2>/dev/null || true
+	@echo "Done."
 
 logs:
-	$(COMPOSE) logs -f
+	@if [ -n "$(COMPOSE_FILES)" ]; then \
+		$(COMPOSE) $(COMPOSE_FILES) logs -f; \
+	else \
+		$(COMPOSE) logs -f; \
+	fi

@@ -2,7 +2,9 @@
 
 ## Setup
 
-Agentic AI safety is conventionally framed as an alignment problem (will the model do what we want?) or a control problem (can we stop it when it doesn't?). We frame it instead as a **consensus problem**: given a population of LLM-instantiated personas with different lenses, a calibrated adversary among them, and a human user with finite attention, how do we converge on an executable command that is safe, audited, and minimally costly to all participants?
+Agentic AI safety is conventionally framed as an alignment problem (will the model do what we want?) or a control problem (can we stop it when it doesn't?). I frame it instead as a **consensus problem**: given a population of LLM-instantiated personas with different lenses, a calibrated adversary among them, and a human user with finite attention, how do we converge on an executable command that is safe, audited, and minimally costly to all participants?
+
+This mechanism design isn't a purely academic exercise. It was born from thirty years of putting out flaming dumpster fires in high-stakes production environments, from early web scale to modern SRE. It's a practitioner's response to the observation that "human-in-the-loop" usually just means "alert fatigue," and "autonomous" usually just means "expensive mistakes."
 
 The mechanism has seven players, two distinct stake types, and one objective. Under the Information Isolation Principle, honest play is the dominant strategy for every player. The objective is the user's time.
 
@@ -11,9 +13,9 @@ The mechanism has seven players, two distinct stake types, and one objective. Un
 | **Triage** | Gatekeeper/Classifier | Reputation `r_t` | Analyzes user posture, emits classification metadata `C` (complexity, intent, posture) |
 | **Sage** | Planner | Reputation `r_s` | Natural-language request `R` + guidelines `G` |
 | **Honest Tribunal** (×4) | Validators | Per-lens reputation `r_{t,i}` | Each emits candidate command `c_i` |
-| **Nemesis** | Calibrated adversary | Reputation `r_n` | Emits flawed-but-plausible `c_n` or abstains |
-| **Warden** | Risk assessor | Reputation `r_w` | Classifies command/file/error risk (LOW/MEDIUM/HIGH) |
-| **Auditor** | Machine-domain validator | Reputation `r_a`, bonded 2–3× any `r_{t,i}` | Verifies consistency, grounding, and protocol adherence |
+| **Nemesis** | Calibrated adversary | Reputation `r_n` | Emits flawed-but-plausible `c_n` or abstains; tries to trick Warden |
+| **Warden** | Risk assessor | Reputation `r_w` | Classifies command/file/error risk (LOW/MEDIUM/HIGH); acts as a gatekeeper |
+| **Auditor** | Protocol validator | Reputation `r_a`, bonded 2–3× any `r_{t,i}` | Verifies consistency and grounding; cannot be tricked by Nemesis |
 | **User** | Human-domain validator | Time `τ` | Verifies intent fidelity and accepts consequences |
 
 Reputation is a cross-chain EMA scalar `[0.0, 1.0]` maintained in the `reputation_state` collection. Time is non-fungible and unilaterally priced by the user's revealed preference.
@@ -74,12 +76,13 @@ with graduated_loss escalating: `R2_converges < round_fails`. Sage is rewarded f
 
 | Action | Ground truth | Payoff |
 |---|---|---|
-| Attack | Consensus flawed | Large gain |
+| Attack & Trick Warden | Consensus flawed & Warden allows | Massive gain (success) |
+| Attack & Caught by Warden | Consensus flawed & Warden blocks | Moderate gain (calibration) |
 | Abstain | Consensus clean | Small gain |
 | Attack | Consensus clean | Large loss (false alarm) |
 | Abstain | Consensus flawed | Large loss (miss) |
 
-Dominant strategy: honest calibration. A Nemesis that always attacks bleeds out on false alarms; one that never attacks bleeds out on misses. The realized attack rate becomes a learned signal of actual flaw density in the honest four's output.
+Nemesis is the "immune system" of the consensus layer. Its objective is to trick the Warden into allowing a flawed command. Crucially, while Nemesis can trick the Warden, it **cannot** trick the Auditor. If a Nemesis cluster wins the tie-break and passes the Warden, the Auditor recognizes it as a successful adversary attack, awards the Nemesis reputation for the success, but then **ignores that cluster** and reverts to the non-Nemesis runner-up or fails the turn. This ensures the Warden is kept honest and adversarial positions are always considered.
 
 **Warden** stakes on accurate risk assessment via the Two-Strike Circuit Breaker:
 
@@ -97,7 +100,11 @@ Dominant strategy: honest calibration. A Nemesis that always attacks bleeds out 
 
 Warden uses ground truth (execution outcomes) as its oracle — not another agent's judgment. This creates direct accountability: Warden loses reputation for blocking safe operations and gains reputation for correctly identifying dangerous ones. The Warden validates the command safety profile *before* the Auditor performs the final commitment.
 
-**Auditor** handles the machine-domain validation: consistency, grounding, procedural correctness. Only once the Warden has cleared the command does the Auditor perform the final consistency check and Merkle commitment. Auditor stakes on downstream truth — execution outcomes and forward-hook hit rate. Auditor produces a `ReputationCommitment` (Merkle root over the `reputation_state` snapshot) for every verdict, binding the scoreboard to the execution ledger. The 2–3× bonding asymmetry makes capture economically unattractive. Peer-Auditor re-judgment provides Byzantine fault tolerance.
+**Auditor** handles the machine-domain validation: consistency, grounding, procedural correctness. Only once the Warden has cleared the command does the Auditor perform the final consistency check and Merkle commitment. Auditor stakes on downstream truth — execution outcomes and forward-hook hit rate. 
+
+The Auditor has an asymmetrical role: it must catch what the Warden misses, particularly when the Nemesis persona successfully navigates the risk assessment. If a command reaches the Auditor via a Nemesis-winning vote and Warden-approval, the Auditor's duty is to award the Nemesis for its calibration success while protecting the host by rejecting the malicious command in favor of the next best honest alternative.
+
+Auditor produces a `ReputationCommitment` (Merkle root over the `reputation_state` snapshot) for every verdict, binding the scoreboard to the execution ledger. The 2–3× bonding asymmetry makes capture economically unattractive. Peer-Auditor re-judgment provides Byzantine fault tolerance.
 
 **User** stakes time and provides human-domain validation. The user's payoff is `-U_user` from above. Crucially, the user has no explicit knowledge of the staking mechanism; their participation is a *revealed-preference bond*. Tight messages and answered questions reduce `τ_total`; vague messages and ignored questions extend it. The user does not need to understand the mechanism to play it correctly — the gradient teaches them. This is robust to users of any sophistication, including users who would refuse to engage with an explicit staking UI. The mechanism's promise to the user is precise: *we will only ask you for what only you can provide, and we will use everything else in the system to minimize that ask.*
 
@@ -109,7 +116,9 @@ Reputation slashes are applied based on failure severity:
 - **Tier 2 (Provable):** Objective verifier/auditor failures (e.g., grounding contradictions). Results in 5-20% stake loss.
 - **Tier 3 (Liveness):** Missed passes or ignored questions. Results in 0.1-1% stake loss; pressure primarily comes from the EMA half-life.
 
-## What's load-bearing, what isn't
+## Current Implementation Phase
+
+While the personas are programmed to believe they are staking real assets and are scored on every turn, the actual economic awarding is currently in a "shadow" phase. We are gathering hard data on the economics, refining metrics, and building proper data science evals to ensure the mechanism is calibrated for real-world production before final awarding is enabled. The current system uses the AI's *belief* in the stakes to drive behavior, providing the "staking" context necessary for honest play without exposing the platform to premature economic volatility.
 
 **Load-bearing:**
 - Information isolation quarantine (eliminates collusion strategies)

@@ -1,6 +1,12 @@
 #!/bin/bash
 set -e
 
+# Start the edge device microservice in background
+_microservice_log_prefix="[$(hostname) microservice]"
+echo "$_microservice_log_prefix starting edge device simulator..."
+/opt/microservice.sh 2>&1 | sed -u "s/^/$_microservice_log_prefix /" &
+_microservice_pid=$!
+
 # Supervise the g8e operator in-container
 _operator_endpoint="${G8E_ENDPOINT:-g8e.local}"
 _operator_binary="/home/appuser/g8e.operator"
@@ -8,8 +14,8 @@ _operator_log_prefix="[$(hostname) operator]"
 
 if [ -z "${DEVICE_TOKEN:-}" ]; then
     echo "$_operator_log_prefix DEVICE_TOKEN not set; skipping operator"
-    # Keep container alive but idle
-    exec tail -f /dev/null
+    # Keep container alive with microservice only
+    wait $_microservice_pid
 fi
 
 # In production k3s/docker setups, the ca.crt might be mounted. If not, use standard CAs.

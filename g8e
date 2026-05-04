@@ -378,7 +378,7 @@ case "$TOP" in
             logs)
                 _banner "platform logs"
                 exec bash "$SCRIPT_DIR/scripts/core/logs.sh" "${@:3}" ;;
-            status|start|stop|restart|rebuild|reset|wipe|clean|demo)
+            status|start|stop|restart|rebuild|reset|wipe|clean)
                 case "$SUB" in
                     start)   _banner "platform start";   exec bash "$SCRIPT_DIR/scripts/core/build.sh" $([[ "$DEV_MODE" == true ]] && echo "--dev") up      "${@:3}" ;;
                     stop)    _banner "platform stop";    exec bash "$SCRIPT_DIR/scripts/core/build.sh" down    "${@:3}" ;;
@@ -388,14 +388,56 @@ case "$TOP" in
                     reset)   _banner "platform reset";   exec bash "$SCRIPT_DIR/scripts/core/build.sh" reset   "${@:3}" ;;
                     wipe)    _banner "platform wipe";    exec bash "$SCRIPT_DIR/scripts/core/build.sh" wipe    "${@:3}" ;;
                     clean)   _banner "platform clean";   exec bash "$SCRIPT_DIR/scripts/core/build.sh" clean   "${@:3}" ;;
-                    demo)
-                        _banner "platform demo"
+                esac ;;
+            demo)
+                _banner "platform demo"
+                demo_args=("${@:3}")
+                case "$SUB" in
+                    up|start|"")
                         echo "[g8e] Starting platform..."
-                        bash "$SCRIPT_DIR/scripts/core/build.sh" $([[ "$DEV_MODE" == true ]] && echo "--dev") up "${@:3}"
+                        # Parse -n flag before calling build.sh
+                        node_count=""
+                        platform_args=()
+                        i=0
+                        while [[ $i -lt ${#demo_args[@]} ]]; do
+                            arg="${demo_args[$i]}"
+                            if [[ "$arg" == "-n" ]]; then
+                                if [[ $((i + 1)) -lt ${#demo_args[@]} ]]; then
+                                    node_count="${demo_args[$((i + 1))]}"
+                                    ((i+=2))
+                                else
+                                    echo "[g8e] -n flag requires a node count value" >&2
+                                    exit 1
+                                fi
+                            else
+                                platform_args+=("$arg")
+                                ((i++))
+                            fi
+                        done
+                        bash "$SCRIPT_DIR/scripts/core/build.sh" $([[ "$DEV_MODE" == true ]] && echo "--dev") up "${platform_args[@]}"
                         echo "[g8e] Starting demo environment..."
                         DEMO_DIR="$SCRIPT_DIR/demo"
-                        demo_args=("${@:3}")
+                        if [[ -n "$node_count" ]]; then
+                            demo_args=("NODE_COUNT=$node_count" "${platform_args[@]}")
+                        else
+                            demo_args=("${platform_args[@]}")
+                        fi
                         exec make -C "$DEMO_DIR" up "${demo_args[@]}" ;;
+                    stop|down)
+                        _banner "platform demo down"
+                        echo "[g8e] Stopping demo environment..."
+                        DEMO_DIR="$SCRIPT_DIR/demo"
+                        make -C "$DEMO_DIR" down
+                        echo "[g8e] Stopping platform..."
+                        exec bash "$SCRIPT_DIR/scripts/core/build.sh" down ;;
+                    logs)
+                        _banner "platform demo logs"
+                        DEMO_DIR="$SCRIPT_DIR/demo"
+                        exec make -C "$DEMO_DIR" logs "${demo_args[@]}" ;;
+                    *)
+                        echo "[g8e] unknown platform demo subcommand: '$SUB'" >&2
+                        echo "  Valid: up, down, logs" >&2
+                        exit 1 ;;
                 esac ;;
             *)
                 echo "[g8e] unknown platform subcommand: '$SUB'" >&2
@@ -828,7 +870,7 @@ case "$TOP" in
 
             # Helper to perform actions on demo/ while excluding profiles/
             _demo_items() {
-                find "$DEMO_DIR" -maxdepth 1 ! -name "profiles" ! -name "." ! -name ".."
+                find "$DEMO_DIR" -maxdepth 1 ! -path "$DEMO_DIR" ! -path "$PROFILES_DIR" ! -name ".*"
             }
 
             case "$_PROF_CMD" in
@@ -861,7 +903,7 @@ case "$TOP" in
                     _banner "demo profile switch $_PROF_NAME"
                     
                     # Check if demo is running
-                    if docker ps --format '{{.Names}}' | grep -q "^web-node-"; then
+                    if docker ps --format '{{.Names}}' | grep -qE "^(web-node-|acme-)"; then
                         echo "[g8e] demo fleet is currently running. Stop it first: ./g8e demo down" >&2
                         exit 1
                     fi
@@ -912,8 +954,10 @@ case "$TOP" in
             esac
         fi
         # Parse -d flag for device token shorthand, or use global DEVICE_TOKEN
+        # Parse -n flag for node count
         demo_args=("${@:3}")
         device_token=""
+        node_count=""
         i=0
         while [[ $i -lt ${#demo_args[@]} ]]; do
             arg="${demo_args[$i]}"
@@ -921,13 +965,21 @@ case "$TOP" in
                 if [[ $((i + 1)) -lt ${#demo_args[@]} ]]; then
                     device_token="${demo_args[$((i + 1))]}"
                     unset demo_args[$i] demo_args[$((i + 1))]
-                    break
                 else
                     echo "[g8e] -d flag requires a token value" >&2
                     exit 1
                 fi
+            elif [[ "$arg" == "-n" ]]; then
+                if [[ $((i + 1)) -lt ${#demo_args[@]} ]]; then
+                    node_count="${demo_args[$((i + 1))]}"
+                    unset demo_args[$i] demo_args[$((i + 1))]
+                else
+                    echo "[g8e] -n flag requires a node count value" >&2
+                    exit 1
+                fi
+            else
+                ((i++))
             fi
-            ((i++))
         done
         # Use global DEVICE_TOKEN if -d not provided
         if [[ -z "$device_token" && -n "$DEVICE_TOKEN" ]]; then
@@ -936,6 +988,10 @@ case "$TOP" in
         # Convert device_token to DEVICE_TOKEN for make
         if [[ -n "$device_token" ]]; then
             demo_args=("DEVICE_TOKEN=$device_token" "${demo_args[@]}")
+        fi
+        # Convert node_count to NODE_COUNT for make
+        if [[ -n "$node_count" ]]; then
+            demo_args=("NODE_COUNT=$node_count" "${demo_args[@]}")
         fi
         case "$SUB" in
             -h|--help|"")

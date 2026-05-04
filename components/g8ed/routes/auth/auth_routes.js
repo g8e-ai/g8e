@@ -94,9 +94,14 @@ export function createAuthRouter({ services, authMiddleware }) {
                 throw new ValidationError('Invalid email format');
             }
 
-            // Sanitize name: trim and remove potential script tags (basic XSS protection for names)
+            // Sanitize name: trim and remove all HTML tags (XSS protection for names)
             if (name) {
-                name = name.trim().replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gim, "");
+                name = name.trim();
+                let prevName;
+                do {
+                    prevName = name;
+                    name = name.replace(/<[^<>]*>/gm, '');
+                } while (name !== prevName);
             } else if (isFirstRun) {
                 name = 'Super Admin';
             } else {
