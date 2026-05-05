@@ -45,7 +45,6 @@ from app.services.ai.chat_pipeline import ChatPipelineService
 from app.services.ai.chat_task_manager import BackgroundTaskManager
 from app.models.settings import G8eeUserSettings
 from app.models.http_context import G8eHttpContext
-import asyncio
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
