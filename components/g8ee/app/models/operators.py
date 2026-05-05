@@ -889,6 +889,7 @@ class CommandExecutingBroadcastEvent(G8eBaseModel):
     approval_id: str | None = None
     batch_id: str | None = None
     per_operator_execution_ids: list[str] = Field(default_factory=list)
+    port: int | None = Field(default=None, description="Port number for network port check operations")
     timestamp: UTCDatetime = Field(default_factory=now)
 
 

@@ -193,7 +193,9 @@ networks:
 
 x-edge-env: &edge-env
   DEVICE_TOKEN: ${DEVICE_TOKEN:-}
+  G8E_DEVICE_TOKEN: ${DEVICE_TOKEN:-}
   G8E_ENDPOINT: ${G8E_ENDPOINT:-g8e.local}
+  G8E_OPERATOR_ENDPOINT: ${G8E_ENDPOINT:-g8e.local}
 
 x-edge-device: &edge-device
   image: acme-edge-device:latest
@@ -310,6 +312,7 @@ for i in "${!DEVICES[@]}"; do
 done
 
 # Emit files per region, with batching if a region is too large
+total_batches=0
 for region in "americas" "europe" "apac" "mea"; do
     [[ -z "${REGION_DEVICES[$region]:-}" ]] && continue
     
@@ -317,10 +320,10 @@ for region in "americas" "europe" "apac" "mea"; do
     IFS=$'\n' read -d '' -ra region_list <<< "${REGION_DEVICES[$region]}" || true
     
     total_in_region=${#region_list[@]}
-    batch_num=1
+    region_batch_num=1
     device_idx=0
     
-    batch_file="$OUTPUT_DIR/docker-compose.${region}-${batch_num}.yml"
+    batch_file="$OUTPUT_DIR/docker-compose.${region}-${region_batch_num}.yml"
     _emit_header "$batch_file"
     
     for entry in "${region_list[@]}"; do
@@ -330,8 +333,8 @@ for region in "americas" "europe" "apac" "mea"; do
         # Start new batch within region if current one is full
         if (( device_idx > 0 && device_idx % BATCH_SIZE == 0 )); then
             _emit_footer "$batch_file"
-            batch_num=$((batch_num + 1))
-            batch_file="$OUTPUT_DIR/docker-compose.${region}-${batch_num}.yml"
+            region_batch_num=$((region_batch_num + 1))
+            batch_file="$OUTPUT_DIR/docker-compose.${region}-${region_batch_num}.yml"
             _emit_header "$batch_file"
         fi
         
@@ -347,6 +350,7 @@ for region in "americas" "europe" "apac" "mea"; do
     done
     
     _emit_footer "$batch_file"
+    total_batches=$((total_batches + region_batch_num))
 done
 
 # Create a list of all generated files for the Makefile
@@ -369,7 +373,7 @@ for entry in "${DEVICES[@]}"; do
 done
 
 {
-    echo "Generated $batch_num batch compose files"
+    echo "Generated $total_batches batch compose files"
     echo "  total devices: $total"
     echo "  healthy:       $healthy"
     echo "  broken:        $(( total - healthy )) (~${FAILURE_RATIO_PERCENT}%)"

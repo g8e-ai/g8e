@@ -76,7 +76,7 @@ while true; do
         --endpoint "$_operator_endpoint" \
         --working-dir /home/appuser \
         --log info \
-        --cloud false \
+        --cloud=false \
         -D "$DEVICE_TOKEN" 2>&1 \
         | sed -u "s/^/$_operator_prefix /"
 

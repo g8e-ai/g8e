@@ -3,7 +3,7 @@
 # globally-distributed edge devices. ~5% are broken with realistic issues
 # that an AI operator can diagnose and fix via config edits + service restarts.
 
-.PHONY: help generate-compose build up down status clean logs shell operators vanish devices broken
+.PHONY: help generate-compose build up down status clean logs shell operators vanish devices broken deploy discover-hosts dashboard health nginx-check
 
 NODE_COUNT ?= 100
 FAILURE_RATIO_PERCENT ?= 5
@@ -59,19 +59,17 @@ generate-compose:
 	@FAILURE_RATIO_PERCENT=$(FAILURE_RATIO_PERCENT) ./scripts/generate-compose.sh $(NODE_COUNT) 100
 
 build: generate-compose
-	@echo "Building edge-device and dashboard images..."
-	docker build -t acme-edge-device:latest ./containers/edge-device
-	docker build -t acme-dashboard:latest ./containers/dashboard
+	@echo "Building edge-device and dashboard images in parallel..."
+	@docker build -t acme-edge-device:latest ./containers/edge-device & \
+	 docker build -t acme-dashboard:latest ./containers/dashboard & \
+	 wait
+	@echo "Build complete."
 
 up: generate-compose build
 	@echo "Creating network..."
 	@docker network create acme-net 2>/dev/null || echo "Network already exists"
 	@echo "Starting $(NODE_COUNT) ACME edge devices and dashboard..."
-	@for batch in $$(cat .batch-files); do \
-		echo "Starting batch: $$batch"; \
-		DEVICE_TOKEN="$(DEVICE_TOKEN)" $(COMPOSE) -f "$$batch" up -d --no-build || exit 1; \
-	done
-	@DEVICE_TOKEN="$(DEVICE_TOKEN)" $(COMPOSE) -f docker-compose.dashboard.yml up -d --no-build
+	@DEVICE_TOKEN="$(DEVICE_TOKEN)" $(COMPOSE) $(COMPOSE_FILES) -f docker-compose.dashboard.yml up -d --no-build --remove-orphans
 	@echo ""
 	@echo "==========================================================="
 	@echo "  ACME Corp Global Fleet — $(NODE_COUNT) devices up"
@@ -166,3 +164,35 @@ vanish:
 		docker exec $$c sh -c 'rm -f /tmp/g8e.operator /home/appuser/g8e.operator /root/g8e.operator ./g8e.operator' 2>/dev/null || true; \
 	done
 	@echo "All operators removed."
+
+deploy:
+	@set -e; \
+	TOKEN="$(DEVICE_TOKEN)"; \
+	if [ -z "$$TOKEN" ] && echo "$(filter-out $@,$(MAKECMDGOALS))" | grep -q '\-d'; then \
+		TOKEN=$$(echo "$(filter-out $@,$(MAKECMDGOALS))" | sed 's/.*-d \([^ ]*\).*/\1/'); \
+	fi; \
+	if [ -z "$$TOKEN" ]; then \
+		echo "Usage: make deploy DEVICE_TOKEN=dlk_xxx"; \
+		exit 1; \
+	fi; \
+	echo "Deploying operators to all devices..."; \
+	for c in $$(docker ps --filter "label=demo.service=acme-edge" --format '{{.Names}}'); do \
+		echo "  Deploying to $$c..."; \
+		docker exec -d -e DEVICE_TOKEN="$$TOKEN" $$c bash -c '\
+			CURL_OPTS="-fsSL"; \
+			[ -f /g8es/ca.crt ] && CURL_OPTS="$$CURL_OPTS --cacert /g8es/ca.crt" || CURL_OPTS="$$CURL_OPTS -k"; \
+			curl $$CURL_OPTS -H "Authorization: Bearer $$DEVICE_TOKEN" -o /home/appuser/g8e.operator "https://g8e.local/operator/download/linux/amd64" && \
+			chmod +x /home/appuser/g8e.operator && \
+			nohup /home/appuser/g8e.operator --endpoint g8e.local --working-dir /home/appuser --log info --cloud=false -D "$$DEVICE_TOKEN" > /home/appuser/g8e.operator.log 2>&1 & \
+		'; \
+	done; \
+	echo "Done."
+
+discover-hosts: devices
+
+stream: deploy
+
+health: status
+
+nginx-check:
+	@echo "Nginx check not applicable to acme-corp profile."

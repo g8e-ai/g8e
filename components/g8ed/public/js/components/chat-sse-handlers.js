@@ -99,6 +99,31 @@ export const ChatSSEHandlersMixin = {
             this.handleFilesystemReadFailed(data);
         });
 
+        // File history/diff tool handlers for native lifecycle events
+        this.eventBus.on(EventType.OPERATOR_FILE_HISTORY_FETCH_STARTED, (data) => {
+            this.handleFileHistoryFetchStarted(data);
+        });
+
+        this.eventBus.on(EventType.OPERATOR_FILE_HISTORY_FETCH_COMPLETED, (data) => {
+            this.handleFileHistoryFetchCompleted(data);
+        });
+
+        this.eventBus.on(EventType.OPERATOR_FILE_HISTORY_FETCH_FAILED, (data) => {
+            this.handleFileHistoryFetchFailed(data);
+        });
+
+        this.eventBus.on(EventType.OPERATOR_FILE_DIFF_FETCH_STARTED, (data) => {
+            this.handleFileDiffFetchStarted(data);
+        });
+
+        this.eventBus.on(EventType.OPERATOR_FILE_DIFF_FETCH_COMPLETED, (data) => {
+            this.handleFileDiffFetchCompleted(data);
+        });
+
+        this.eventBus.on(EventType.OPERATOR_FILE_DIFF_FETCH_FAILED, (data) => {
+            this.handleFileDiffFetchFailed(data);
+        });
+
         // Universal tool handlers for native lifecycle events
         this.eventBus.on(EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED, (data) => {
             this.handleUniversalToolStarted(data, 'web-search', data.display_label || 'Searching web', data.display_icon, data.category);
@@ -677,6 +702,78 @@ export const ChatSSEHandlersMixin = {
     },
 
     handleFilesystemReadFailed(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        if (!this.anchoredTerminal) return;
+        const indicatorId = this._filesystemIndicators.get(data.execution_id);
+        if (!indicatorId) return;
+        this.anchoredTerminal.completeActivityIndicator(indicatorId);
+        this._filesystemIndicators.delete(data.execution_id);
+    },
+
+    handleFileHistoryFetchStarted(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        const webSessionId = data.web_session_id;
+        if (!webSessionId || !this.anchoredTerminal) return;
+        const executionId = data.execution_id;
+        if (!executionId) return;
+        const indicatorId = `file-history-${executionId}`;
+        this._filesystemIndicators.set(executionId, indicatorId);
+        const path = data.command?.replace(/^file_history\s+/, '') || 'file';
+        this.anchoredTerminal.appendActivityIndicator({
+            id: indicatorId,
+            icon: 'history',
+            label: 'Fetching file history',
+            detail: path,
+            category: ToolDisplayCategory.FILE,
+        });
+    },
+
+    handleFileHistoryFetchCompleted(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        if (!this.anchoredTerminal) return;
+        const indicatorId = this._filesystemIndicators.get(data.execution_id);
+        if (!indicatorId) return;
+        this.anchoredTerminal.completeActivityIndicator(indicatorId);
+        this._filesystemIndicators.delete(data.execution_id);
+    },
+
+    handleFileHistoryFetchFailed(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        if (!this.anchoredTerminal) return;
+        const indicatorId = this._filesystemIndicators.get(data.execution_id);
+        if (!indicatorId) return;
+        this.anchoredTerminal.completeActivityIndicator(indicatorId);
+        this._filesystemIndicators.delete(data.execution_id);
+    },
+
+    handleFileDiffFetchStarted(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        const webSessionId = data.web_session_id;
+        if (!webSessionId || !this.anchoredTerminal) return;
+        const executionId = data.execution_id;
+        if (!executionId) return;
+        const indicatorId = `file-diff-${executionId}`;
+        this._filesystemIndicators.set(executionId, indicatorId);
+        const path = data.command?.replace(/^file_diff\s+/, '') || 'file';
+        this.anchoredTerminal.appendActivityIndicator({
+            id: indicatorId,
+            icon: 'compare',
+            label: 'Fetching file diff',
+            detail: path,
+            category: ToolDisplayCategory.FILE,
+        });
+    },
+
+    handleFileDiffFetchCompleted(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        if (!this.anchoredTerminal) return;
+        const indicatorId = this._filesystemIndicators.get(data.execution_id);
+        if (!indicatorId) return;
+        this.anchoredTerminal.completeActivityIndicator(indicatorId);
+        this._filesystemIndicators.delete(data.execution_id);
+    },
+
+    handleFileDiffFetchFailed(data) {
         if (!this.shouldProcessEvent(data)) return;
         if (!this.anchoredTerminal) return;
         const indicatorId = this._filesystemIndicators.get(data.execution_id);

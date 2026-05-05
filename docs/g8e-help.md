@@ -40,8 +40,8 @@ The AI reasoning engine uses specialized agents with distinct roles:
 - **Dash**: Fast-path responder for simple, single-step requests (e.g., status checks, greetings).
 - **Sage**: Senior reasoning agent for complex, multi-step investigations and command orchestration.
 - **Tribunal**: 5-member ensemble (Axiom, Concord, Variance, Pragma, Nemesis) that translates Sage's intent into hardened shell commands through Byzantine consensus.
-- **Auditor**: Final quality gate that verifies Tribunal output against Sage's intent with dissent awareness.
 - **Warden**: Defensive coordinator that performs pre-execution risk assessment on commands, files, and errors.
+- **Auditor**: Final quality gate that verifies Tribunal output against Sage's intent with dissent awareness.
 
 ## The Request Lifecycle
 
