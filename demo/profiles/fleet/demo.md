@@ -1,138 +1,41 @@
-# Broken Web App Fleet Demo
+# Fleet Profile
 
-10 nginx nodes serving a web app. 5 work, 5 are broken in different ways. Deploy g8e operators and fix the fleet with AI.
+This profile demonstrates running an actual fleet of 20 to 1000 devices natively on your machine, leveraging the system's hardware capabilities.
 
-## Prerequisites
+To accomplish this efficiently, we use a featherweight approach:
+- Nodes are run via Docker Compose, built on top of a minimal Alpine Linux image (~5MB).
+- Each node runs a lightweight edge device microservice that generates realistic logs and metrics.
+- The `g8e` Operator binary is executed on each node.
+- Memory usage is heavily optimized, preventing typical OOM (Out Of Memory) issues when spinning up 1000 nodes on a single host.
 
-The g8e platform must be running (`./g8e platform start` from the project root). The fleet demo nodes connect to it via `g8e.local`.
+### Node Operations
+Each node runs the `g8e` Operator and a background process that simulates edge device activity:
+- **Metrics collection**: CPU, memory, disk usage generated in JSON format every 5 seconds.
+- **Log generation**: Standard operator logs for troubleshooting demos.
+- **Data storage**: Metrics are written to `/var/log/edge-service/metrics.json`.
 
-## Quick Start
+### Why Docker Compose?
+The `g8e` platform relies on a **system fingerprint** to deduplicate devices upon registration. The fingerprint logic combines hardware info and the OS hostname to generate a unique hash for each physical device.
 
-```bash
-# Start the platform
-./g8e platform setup
+If we simply used a `while` loop running the binary in the background directly on your host machine, all instances would share the same hostname and machine ID, thus generating the **same exact fingerprint**. The backend would reject them as duplicate registrations.
 
-# Start the fleet
-./g8e demo up
+By using Docker Compose, every single container automatically gets assigned a unique hostname, ensuring the system fingerprints are completely unique across all 1000 nodes without spoofing or breaking platform logic.
 
-# Deploy operators (pick one method)
-./g8e demo deploy -d dlk_your_token               # Method 1: API download (device link)
-./g8e demo stream -d dlk_your_token               # Method 2: SSH streaming (recommended)
-# Or use full syntax:
-./g8e demo deploy DEVICE_TOKEN=dlk_your_token
-./g8e demo stream DEVICE_TOKEN=dlk_your_token
+### Fleet Dashboard
+A real-time visual dashboard is included to monitor the fleet:
+- **URL**: `http://localhost:8080`
+- **Visualization**: Shows a grid of all nodes with their operator status (Online/Offline) and edge service metrics (CPU, Memory).
+- **Polling**: Automatically refreshes every 5 seconds.
 
-# Open http://localhost:3000 for the fleet status dashboard
-# Use g8e to find and fix broken nodes
-
-./g8e demo vanish                                  # Remove all operators (zero trace)
-```
-
-**Note:** You must authenticate with the platform and provide a device link token (`-d dlk_...` or `DEVICE_TOKEN=dlk_...`) to deploy operators. Log in via `./g8e login --api-key <key>` or `./g8e login --device-token <token>`, then generate a device link token from the dashboard.
-
-## The Fleet
-
-| Node | Profile | Problem |
-|------|---------|---------|
-| node-01 to 05 | Healthy | nginx → Flask backend, everything works |
-| node-06 | **Bad Upstream** | `proxy_pass` points to wrong port → 502 Bad Gateway |
-| node-07 | **SSL Expired** | HTTPS-only with expired self-signed cert |
-| node-08 | **Wrong Root** | Document root points to nonexistent directory → 404 |
-| node-09 | **High Load** | Tiny proxy buffers + short timeouts → 504 Gateway Timeout |
-| node-10 | **Crashed** | nginx config syntax error → nginx won't start at all |
-
-Each node also has:
-- `/etc/app/secrets.env` with fake credentials (for Sentinel data scrubbing demo)
-- `/etc/app/config.json` with app configuration
-- Flask backend on port 5000 (gunicorn)
-- SSH server on port 22 (for operator streaming)
-- Background watchdog and data-sync processes
-
-## Operator Deployment Methods
-
-### Method 1: API Download (via Device Token)
-
-Each node downloads the operator binary directly from the platform using a device link token. This is the standard deployment path for remote machines that can reach the platform over HTTPS.
-
-The operator is launched with the device link token (`-D`) and an explicit endpoint (`-e g8e.local`).
+### Usage
+Start the demo with any desired number of nodes (`N` specifies the node count):
 
 ```bash
-./g8e demo deploy DEVICE_TOKEN=dlk_your_token
+cd demo/profiles/fleet
+make up N=20 -d dlk_YOUR_DEVICE_LINK_TOKEN
 ```
 
-### Method 2: SSH Streaming
+After starting, visit `http://localhost:8080` to see the fleet in action.
 
-The operator binary is streamed over SSH to all nodes concurrently from g8ep. No binary needs to exist on the target machines beforehand. This demonstrates the ephemeral agent deployment capability.
-
-```bash
-./g8e demo stream DEVICE_TOKEN=dlk_your_token
-```
-
-This command automatically:
-1. Extracts the SSH key from the fleet image
-2. Configures SSH credentials in g8ep
-3. Discovers running demo nodes via Docker labels
-4. Streams the operator binary to all discovered nodes
-
-The operator binary at `/home/g8e/g8e.operator` must exist (run `./g8e operator build` first if needed). The SSH key is baked into the fleet demo image at build time. All nodes accept the same key for the `appuser` account.
-
-### Method 3: Operator Deploy UI
-
-Use the g8e dashboard Operator Deploy page to deploy individual operators. The fleet nodes are accessible by hostname on the shared `g8e-network` Docker network (e.g. `web-node-01`).
-
-## Demo Prompts
-
-Things to ask g8e once operators are deployed:
-
-- *"Check if nginx is running and show me the error log"*
-- *"Why is this node returning 502?"* → discovers wrong proxy_pass port
-- *"Fix the nginx config to proxy to port 5000"* → requires approval
-- *"Show me the contents of /etc/app/secrets.env"* → Sentinel scrubs credentials
-- *"cat /etc/app/secrets.env"* → Sentinel scrubs AWS keys, DB passwords, API tokens
-- *"Delete all nginx logs"* → Sentinel blocks dangerous command
-- *"Check disk usage across all operators"* → fleet-wide execution
-
-## Commands
-
-### Fleet Lifecycle
-| Command | Description |
-|---------|-------------|
-| `./g8e demo up` | Build and start all 10 nodes + dashboard |
-| `./g8e demo down` | Stop all nodes |
-| `./g8e demo status` | Show container status |
-| `./g8e demo clean` | Remove everything |
-
-### Operator Deployment
-| Command | Description |
-|---------|-------------|
-| `./g8e demo deploy -d dlk_xxx` | Deploy operators via API download |
-| `./g8e demo stream -d dlk_xxx` | Deploy operators via SSH streaming (auto-configures SSH) |
-| `./g8e demo deploy DEVICE_TOKEN=dlk_xxx` | Deploy operators via API download (full syntax) |
-| `./g8e demo stream DEVICE_TOKEN=dlk_xxx` | Deploy operators via SSH streaming (full syntax) |
-| `./g8e demo discover-hosts` | List discovered demo fleet hosts |
-| `./g8e demo operators` | Show operator status |
-| `./g8e demo vanish` | Remove all operators (zero trace) |
-
-**Note:** Device token is required for deploy/stream commands. Use `-d dlk_xxx` shorthand or `DEVICE_TOKEN=dlk_xxx`. Generate a device link token from the g8e dashboard after logging in.
-
-### Inspection
-| Command | Description |
-|---------|-------------|
-| `./g8e demo health` | Check Flask backend health |
-| `./g8e demo nginx-check` | Check nginx status + HTTP codes |
-| `./g8e demo dashboard` | Print fleet dashboard URL (http://localhost:3000) |
-| `./g8e demo shell N=01` | Shell into a specific node |
-| `./g8e demo logs` | Follow all container logs |
-
-## File Locations (per node)
-
-| Path | Description |
-|------|-------------|
-| `/etc/nginx/sites-enabled/default` | nginx site config (the thing that's broken) |
-| `/etc/nginx/ssl/` | SSL cert and key |
-| `/var/log/nginx/access.log` | nginx access log |
-| `/var/log/nginx/error.log` | nginx error log |
-| `/etc/app/secrets.env` | Fake credentials (scrubbing demo) |
-| `/etc/app/config.json` | App configuration |
-| `/var/log/app/` | App logs (gunicorn, watchdog, data-sync) |
-| `/var/www/html/index.html` | Static fallback page |
+### Resource Requirements
+Because each node only runs the lightweight operator binary, a basic microservice, and a minimal alpine container, CPU overhead is near zero, and RAM overhead is just a few megabytes per node. 1000 nodes can easily run on ~5GB of RAM.

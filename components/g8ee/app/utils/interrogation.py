@@ -34,9 +34,9 @@ def extract_interrogation_questions(text: str) -> List[str]:
     if not text:
         return []
 
-    # Find content between <interrogation> and </interrogation> tags
-    # Re.DOTALL is used to match newlines within the tags
-    match = re.search(r"<interrogation>(.*?)</interrogation>", text, re.DOTALL | re.IGNORECASE)
+    # Find content between <interrogation> and </interrogation> tags.
+    # We also handle the case where the closing tag is missing (common with LLMs).
+    match = re.search(r"<interrogation>(.*?)(?:</interrogation>|$)", text, re.DOTALL | re.IGNORECASE)
     if not match:
         return []
 

@@ -103,14 +103,15 @@ A complete intent specifies:
 
     def _get_interrogation_protocol(self) -> str:
         return """If the investigation is stalled due to ambiguity or a lack of crucial context:
-1. Issue exactly three targeted yes/no or multiple-choice questions in parallel.
-2. Each question must be designed so that its answer maximizes information gain for the investigation.
-3. If the user's posture is 'confused', explicitly name the contradiction before asking your questions.
-4. Do not act until you have enough information to fulfill the request with high confidence.
+1. Issue exactly three targeted YES or NO questions in parallel.
+2. Each question must be strictly binary (YES/NO). No multiple-choice, no open-ended questions.
+3. Each question must be designed so that its answer maximizes information gain for the investigation.
+4. If the user's posture is 'confused', explicitly name the contradiction before asking your questions.
+5. Do not act until you have enough information to fulfill the request with high confidence.
+
+CRITICAL: When interrogating, the <interrogation> block must be your ENTIRE response. Do not include any other text, analysis, or conversational filler. The UI will extract these questions for a specialized dialog; they must not appear in the standard text response area.
 
 Output format:
-Wrap your questions in an <interrogation> block, with each question on a new line starting with its number.
-Example:
 <interrogation>
 1. Question one?
 2. Question two?

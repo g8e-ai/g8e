@@ -342,3 +342,28 @@ async def test_analyze_file_operation_risk_fallback_on_exception(analyzer, fake_
     assert result.risk_level == RiskLevel.HIGH
     assert result.safe_to_proceed is False
     assert "Risk analysis failed" in result.blocking_issues[0]
+
+
+@pytest.mark.asyncio
+async def test_analyze_file_operation_risk_system_file_with_backup(analyzer, fake_provider, mock_settings):
+    """Verify that safe_to_proceed is True for HIGH risk system files if a backup is available."""
+    fake_provider.add_response("""{
+            "risk_level": "HIGH",
+            "is_system_file": true,
+            "safe_to_proceed": true,
+            "blocking_issues": [],
+            "approval_prompt": "Proceed with backup?"
+        }""")
+
+    with patch("app.services.ai.response_analyzer.get_llm_provider", return_value=fake_provider):
+        result = await analyzer.analyze_file_operation_risk(
+            operation="edit",
+            file_path="/etc/nginx/nginx.conf",
+            content="modified content",
+            context=FileOperationRiskContext(backup_available=True),
+            settings=mock_settings
+        )
+
+    assert result.is_system_file is True
+    assert result.risk_level == RiskLevel.HIGH
+    assert result.safe_to_proceed is True

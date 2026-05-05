@@ -11,6 +11,8 @@ g8ee unifies extended reasoning across four LLM providers (Anthropic, Gemini, Op
 
 **Provider heterogeneity is a leaky abstraction problem.** Without a canonical layer, every agent would need to know that "high reasoning" on Anthropic means a 16K token budget, on OpenAI it means `reasoning.effort="high"`, and on Ollama it means `think=True`. This makes agents brittle to provider changes and impossible to reason about.
 
+**Deep Grounding over Local Data.** g8e doesn't just send a prompt; it injects a high-fidelity "world view" (state, history, user preferences, fleet context) that remains local to the host. The thinking levels are the volume knobs for how intensely a model should reason over this deep context. Higher thinking levels are assigned to the **ReAct loop**'s primary reasoner (Sage), ensuring that when a complex investigation is underway, the model is given the computational headroom to synthesize thousands of lines of local context without losing the "machine-domain" thread.
+
 **The abstraction boundary is intentional.** The agent layer speaks in terms of reasoning intensity (OFF through HIGH). The provider layer translates that intensity into whatever wire format the provider expects. This separation allows:
 - **Provider Agnosticism**: Adding new providers without touching agent code.
 - **Model Flexibility**: Swapping models within a provider without changing agent intent.
@@ -83,6 +85,26 @@ The adapter (e.g., `app/llm/providers/anthropic.py`) applies the translation to 
 4. **Register**: Add the config to `MODEL_REGISTRY.configs` and (for Ollama) `_OLLAMA_CONFIGS`.
 
 Translators and the request builder pick up the new entry automatically—no provider-adapter code changes are needed for standard additions.
+
+## Thinking in the ReAct Loop
+
+The intensity of reasoning is coupled to the agent's role in the **ReAct (Reasoning + Acting)** loop:
+
+- **Surface Triage (`OFF`)**: Triage agents operate on raw input with zero thinking to maximize speed. They don't need to "reason"; they need to "classify" against the incoming posture.
+- **Deep Investigation (`HIGH`)**: **Sage** operates at `HIGH` intensity. This is necessary because Sage is processing the `OperatorContext`—a dense bundle of real-time system state, local audit history, and fleet-wide precedents. `HIGH` thinking ensures the model can maintain long-range coherence over this deep grounding while navigating multi-turn tool loops.
+- **Consensus Validation (`MEDIUM/HIGH`)**: The **Tribunal** uses elevated thinking to translate intent into shell syntax, ensuring that edge cases (spaces, nulls, locales) are considered before a vote is cast.
+
+## The Sovereignty Partition
+
+Crucially, **Thinking Levels do not compromise Local-First Audit Architecture (LFAA).**
+
+While we increase the "thinking" intensity, the data being thought about follows the **Scrubbing Protocol**:
+1. **Local Context Enrichment**: The Operator assembles the deep context on-host.
+2. **Sentinel Scrubbing**: Sensitive PII/secrets are redacted before the context reaches the Engine.
+3. **Reasoning Engine**: The Engine applies the Thinking Level to the scrubbed context.
+4. **Local Audit**: The model's "thinking process" (where exposed by the provider) is returned to the host and stored in the encrypted Audit Vault.
+
+This ensures that the "Deep Context" is used to drive high-accuracy reasoning without ever exposing the raw, unredacted state to the LLM provider's infrastructure.
 
 ## Testing Discipline
 

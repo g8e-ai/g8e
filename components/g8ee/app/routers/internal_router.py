@@ -353,6 +353,9 @@ async def internal_chat(
 async def internal_triage_answer(
     request: TriageAnswerRequest,
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
+    chat_pipeline: ChatPipelineService = Depends(get_g8ee_chat_pipeline),
+    chat_task_manager: BackgroundTaskManager = Depends(get_g8ee_chat_task_manager),
+    user_settings: G8eeUserSettings = Depends(get_g8ee_user_settings),
     g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
 ):
     """
@@ -369,17 +372,41 @@ async def internal_triage_answer(
         }
     )
 
+    investigation = await investigation_service.get_investigation(request.investigation_id)
+    if not investigation:
+        raise ResourceNotFoundError("Investigation not found", resource_id=request.investigation_id, resource_type="investigation", component="g8ee")
+
     # Store answer as user.chat message with structured metadata
+    answer_text = f"Answered clarifying question {request.question_index}: {'Yes' if request.answer else 'No'}"
     await investigation_service.investigation_data_service.add_chat_message(
         investigation_id=request.investigation_id,
         sender=MessageSender.USER_CHAT,
-        content=f"Answered clarifying question {request.question_index}: {'Yes' if request.answer else 'No'}",
+        content=answer_text,
         metadata=ConversationMessageMetadata(
             event_type=EventType.AI_TRIAGE_CLARIFICATION_ANSWERED,
             question_index=request.question_index,
             answer=request.answer
         )
     )
+
+    # Trigger AI response by calling run_chat. 
+    # ChatPipeline.run_chat internally tracks the task via ChatTaskManager,
+    # which will cancel any existing active task for this investigation_id.
+    await chat_pipeline.run_chat(
+        message=answer_text,
+        g8e_context=g8e_context,
+        attachments=[],
+        sentinel_mode=investigation.sentinel_mode,
+        llm_primary_provider=None,
+        llm_assistant_provider=None,
+        llm_lite_provider=None,
+        llm_primary_model=user_settings.llm.primary_model,
+        llm_assistant_model=user_settings.llm.resolved_assistant_model,
+        llm_lite_model=user_settings.llm.resolved_lite_model,
+        _task_manager=chat_task_manager,
+        user_settings=user_settings,
+    )
+
     return {"success": True}
 
 
@@ -387,6 +414,9 @@ async def internal_triage_answer(
 async def internal_triage_skip(
     request: TriageSkipRequest,
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
+    chat_pipeline: ChatPipelineService = Depends(get_g8ee_chat_pipeline),
+    chat_task_manager: BackgroundTaskManager = Depends(get_g8ee_chat_task_manager),
+    user_settings: G8eeUserSettings = Depends(get_g8ee_user_settings),
     g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
 ):
     """
@@ -401,14 +431,38 @@ async def internal_triage_skip(
         }
     )
 
+    investigation = await investigation_service.get_investigation(request.investigation_id)
+    if not investigation:
+        raise ResourceNotFoundError("Investigation not found", resource_id=request.investigation_id, resource_type="investigation", component="g8ee")
+
+    skip_text = "Skipped clarifying questions"
     await investigation_service.investigation_data_service.add_chat_message(
         investigation_id=request.investigation_id,
         sender=MessageSender.USER_CHAT,
-        content="Skipped clarifying questions",
+        content=skip_text,
         metadata=ConversationMessageMetadata(
             event_type=EventType.AI_TRIAGE_CLARIFICATION_SKIPPED
         )
     )
+
+    # Trigger AI response by calling run_chat.
+    # ChatPipeline.run_chat internally tracks the task via ChatTaskManager,
+    # which will cancel any existing active task for this investigation_id.
+    await chat_pipeline.run_chat(
+        message=skip_text,
+        g8e_context=g8e_context,
+        attachments=[],
+        sentinel_mode=investigation.sentinel_mode,
+        llm_primary_provider=None,
+        llm_assistant_provider=None,
+        llm_lite_provider=None,
+        llm_primary_model=user_settings.llm.primary_model,
+        llm_assistant_model=user_settings.llm.resolved_assistant_model,
+        llm_lite_model=user_settings.llm.resolved_lite_model,
+        _task_manager=chat_task_manager,
+        user_settings=user_settings,
+    )
+
     return {"success": True}
 
 

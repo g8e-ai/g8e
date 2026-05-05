@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>g8e Fleet Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .node-card { transition: all 0.2s ease-in-out; }
+        .node-card:hover { transform: translateY(-2px); }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+    <div class="min-h-screen">
+        <!-- Header -->
+        <header class="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-10">
+            <div class="max-w-7xl mx-auto flex justify-between items-center">
+                <div class="flex items-center space-x-3">
+                    <div class="bg-indigo-600 p-2 rounded-lg">
+                        <i data-lucide="layout-dashboard" class="text-white w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold text-slate-900 tracking-tight">Fleet Dashboard</h1>
+                        <p class="text-xs text-slate-500 font-medium uppercase tracking-wider">Edge Service Monitor</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div id="status-badge" class="flex items-center space-x-2 bg-slate-100 px-3 py-1.5 rounded-full">
+                        <span class="relative flex h-2 w-2">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                        </span>
+                        <span class="text-sm font-semibold text-slate-600">Live</span>
+                    </div>
+                    <div class="text-sm text-slate-500 font-medium" id="node-count">0 Nodes</div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto p-6">
+            <!-- Stats Overview -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <p class="text-sm text-slate-500 font-medium mb-1">Total Nodes</p>
+                    <p class="text-2xl font-bold" id="stat-total">-</p>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <p class="text-sm text-slate-500 font-medium mb-1">Operators Online</p>
+                    <p class="text-2xl font-bold text-green-600" id="stat-online">-</p>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <p class="text-sm text-slate-500 font-medium mb-1">Avg CPU Usage</p>
+                    <p class="text-2xl font-bold text-indigo-600" id="stat-cpu">-</p>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <p class="text-sm text-slate-500 font-medium mb-1">Avg Memory</p>
+                    <p class="text-2xl font-bold text-indigo-600" id="stat-mem">-</p>
+                </div>
+            </div>
+
+            <!-- Nodes Grid -->
+            <div id="nodes-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <!-- Loading State -->
+                <div class="col-span-full flex flex-col items-center justify-center py-20 text-slate-400">
+                    <div class="animate-spin mb-4">
+                        <i data-lucide="refresh-cw" class="w-8 h-8"></i>
+                    </div>
+                    <p class="text-lg font-medium">Loading fleet data...</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        async function fetchNodes() {
+            try {
+                const response = await fetch('/api/nodes');
+                const nodes = await response.json();
+                updateDashboard(nodes);
+            } catch (error) {
+                console.error('Failed to fetch nodes:', error);
+            }
+        }
+
+        function updateDashboard(nodes) {
+            const grid = document.getElementById('nodes-grid');
+            const totalEl = document.getElementById('stat-total');
+            const onlineEl = document.getElementById('stat-online');
+            const cpuEl = document.getElementById('stat-cpu');
+            const memEl = document.getElementById('stat-mem');
+            const countEl = document.getElementById('node-count');
+
+            if (!nodes || nodes.length === 0) {
+                grid.innerHTML = `
+                    <div class="col-span-full flex flex-col items-center justify-center py-20 text-slate-400 bg-white rounded-xl border-2 border-dashed border-slate-200">
+                        <i data-lucide="alert-circle" class="w-12 h-12 mb-4"></i>
+                        <p class="text-lg font-medium">No fleet nodes detected</p>
+                        <p class="text-sm">Start nodes with 'make up N=20'</p>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+
+            let onlineCount = 0;
+            let totalCpu = 0;
+            let totalMem = 0;
+            let metricsCount = 0;
+
+            grid.innerHTML = nodes.map(node => {
+                const isOnline = node.operator_online && node.status === 'running';
+                if (isOnline) onlineCount++;
+                
+                const m = node.metrics || {};
+                if (m.cpu_usage_percent) {
+                    totalCpu += m.cpu_usage_percent;
+                    totalMem += m.memory_usage_mb;
+                    metricsCount++;
+                }
+
+                const cpu = m.cpu_usage_percent || 0;
+                const mem = m.memory_usage_mb || 0;
+                const status = m.status || 'unknown';
+
+                return `
+                    <div class="node-card bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md">
+                        <div class="flex justify-between items-start mb-4">
+                            <div class="flex items-center space-x-2">
+                                <div class="p-1.5 rounded-lg ${isOnline ? 'bg-green-50' : 'bg-slate-100'}">
+                                    <i data-lucide="cpu" class="w-4 h-4 ${isOnline ? 'text-green-600' : 'text-slate-400'}"></i>
+                                </div>
+                                <h3 class="font-bold text-slate-800 text-sm truncate w-32" title="${node.name}">${node.name}</h3>
+                            </div>
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${isOnline ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}">
+                                ${isOnline ? 'Online' : 'Offline'}
+                            </span>
+                        </div>
+                        
+                        <div class="space-y-3">
+                            <div>
+                                <div class="flex justify-between text-[10px] font-bold text-slate-500 uppercase mb-1">
+                                    <span>CPU Usage</span>
+                                    <span>${cpu}%</span>
+                                </div>
+                                <div class="w-full bg-slate-100 rounded-full h-1.5">
+                                    <div class="bg-indigo-500 h-1.5 rounded-full" style="width: ${cpu}%"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="flex justify-between items-center text-xs">
+                                <span class="text-slate-500 font-medium">Memory</span>
+                                <span class="text-slate-900 font-bold">${mem.toFixed(0)} MB</span>
+                            </div>
+
+                            <div class="flex justify-between items-center text-xs pt-2 border-t border-slate-50">
+                                <span class="text-slate-500 font-medium">Edge Service</span>
+                                <span class="font-bold ${status === 'healthy' ? 'text-green-600' : 'text-amber-500'} capitalize">${status}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            totalEl.textContent = nodes.length;
+            onlineEl.textContent = onlineCount;
+            cpuEl.textContent = metricsCount > 0 ? `${(totalCpu / metricsCount).toFixed(1)}%` : '0%';
+            memEl.textContent = metricsCount > 0 ? `${(totalMem / metricsCount).toFixed(0)} MB` : '0 MB';
+            countEl.textContent = `${nodes.length} Nodes`;
+
+            lucide.createIcons();
+        }
+
+        // Poll every 5 seconds
+        setInterval(fetchNodes, 5000);
+        fetchNodes();
+    </script>
+</body>
+</html>

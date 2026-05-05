@@ -25,6 +25,7 @@ export class TerminalExecutionMixin {
         this.pendingApprovals = new Map();
         this.activeExecutions = new Map();
         this.approvalResultsContainers = new Map();
+        this.batchResultsContainers = new Map();
         this.executionResultsContainers = new Map();
     }
 
@@ -126,6 +127,11 @@ export class TerminalExecutionMixin {
         const labelEl = container.querySelector('.anchored-terminal__results-toggle-label');
         if (labelEl) {
             labelEl.textContent = 'Executing';
+        }
+
+        const countEl = container.querySelector('.anchored-terminal__results-count');
+        if (countEl) {
+            countEl.style.display = 'none';
         }
 
         this.scrollToBottom();
@@ -537,48 +543,71 @@ export class TerminalExecutionMixin {
         `;
     }
 
-    async _createResultsContainer(containerId, approvalEl, isApproval = false) {
+    async _createResultsContainer(containerId, approvalEl, isApproval = false, isBatch = false) {
         if (!this.outputContainer) return null;
 
-        const containersMap = isApproval ? this.approvalResultsContainers : this.executionResultsContainers;
+        let containersMap;
+        if (isApproval) {
+            containersMap = this.approvalResultsContainers;
+        } else if (isBatch) {
+            containersMap = this.batchResultsContainers;
+        } else {
+            containersMap = this.executionResultsContainers;
+        }
 
         if (containersMap.has(containerId)) {
-            return containersMap.get(containerId);
-        }
-
-        const container = document.createElement('div');
-        container.className = 'anchored-terminal__results-group';
-        container.setAttribute('data-execution-id', containerId);
-
-        const toggle = document.createElement('div');
-        toggle.className = 'anchored-terminal__results-toggle';
-        toggle.style.display = 'none';
-        await templateLoader.renderTo(toggle, 'results-toggle', {});
-
-        toggle.addEventListener('click', () => {
-            container.classList.toggle('collapsed');
-        });
-
-        const body = document.createElement('div');
-        body.className = 'anchored-terminal__results-body';
-
-        container.appendChild(toggle);
-        container.appendChild(body);
-
-        const parentGroup = approvalEl?.closest('.anchored-terminal__agent-message-group');
-        if (parentGroup) {
-            const contentEl = parentGroup.querySelector('.anchored-terminal__agent-message-content');
-            if (contentEl) {
-                contentEl.appendChild(container);
-            } else {
-                parentGroup.appendChild(container);
+            const existing = containersMap.get(containerId);
+            if (existing instanceof Promise) {
+                return await existing;
             }
-        } else {
-            this.outputContainer.appendChild(container);
+            return existing;
         }
 
-        containersMap.set(containerId, container);
-        return container;
+        // Use a promise as a lock to prevent concurrent creation of the same container
+        let resolvePromise;
+        const lockPromise = new Promise(resolve => { resolvePromise = resolve; });
+        containersMap.set(containerId, lockPromise);
+
+        try {
+            const container = document.createElement('div');
+            container.className = 'anchored-terminal__results-group';
+            container.setAttribute('data-execution-id', containerId);
+
+            const toggle = document.createElement('div');
+            toggle.className = 'anchored-terminal__results-toggle';
+            toggle.style.display = 'none';
+            await templateLoader.renderTo(toggle, 'results-toggle', {});
+
+            toggle.addEventListener('click', () => {
+                container.classList.toggle('collapsed');
+            });
+
+            const body = document.createElement('div');
+            body.className = 'anchored-terminal__results-body';
+
+            container.appendChild(toggle);
+            container.appendChild(body);
+
+            const parentGroup = approvalEl?.closest('.anchored-terminal__agent-message-group');
+            if (parentGroup) {
+                const contentEl = parentGroup.querySelector('.anchored-terminal__agent-message-content');
+                if (contentEl) {
+                    contentEl.appendChild(container);
+                } else {
+                    parentGroup.appendChild(container);
+                }
+            } else {
+                this.outputContainer.appendChild(container);
+            }
+
+            containersMap.set(containerId, container);
+            resolvePromise(container);
+            return container;
+        } catch (error) {
+            containersMap.delete(containerId);
+            resolvePromise(null);
+            throw error;
+        }
     }
 
     async _appendResultToContainer(container, resultData) {
@@ -633,6 +662,7 @@ export class TerminalExecutionMixin {
         const currentCount = body.querySelectorAll('.anchored-terminal__result-entry').length;
         if (countEl) {
             countEl.textContent = currentCount;
+            countEl.style.display = '';
         }
 
         const toggle = container.querySelector('.anchored-terminal__results-toggle');
@@ -654,6 +684,7 @@ export class TerminalExecutionMixin {
         const executionResult = data.execution_result || {};
         const execId = data.execution_id;
         const approvalId = data.approval_id;
+        const batchId = data.batch_id;
 
         const isFinal = eventType === EventType.OPERATOR_COMMAND_COMPLETED
             || eventType === EventType.OPERATOR_COMMAND_FAILED
@@ -687,9 +718,14 @@ export class TerminalExecutionMixin {
                     this.hideExecutingIndicator(existing.indicatorId);
                 }
 
-                const existingContainer =
+                let existingContainer =
                     (approvalId ? this.approvalResultsContainers.get(approvalId) : null) ||
+                    (batchId ? this.batchResultsContainers.get(batchId) : null) ||
                     (execId ? this.executionResultsContainers.get(execId) : null);
+
+                if (!existingContainer && batchId) {
+                    existingContainer = await this._createResultsContainer(batchId, null, false, true);
+                }
 
                 if (existingContainer) {
                     const body = existingContainer.querySelector('.anchored-terminal__results-body');
@@ -716,18 +752,27 @@ export class TerminalExecutionMixin {
                 resultsContainer = this.approvalResultsContainers.get(approvalId);
             }
 
+            if (!resultsContainer && batchId) {
+                resultsContainer = this.batchResultsContainers.get(batchId);
+            }
+
             if (!resultsContainer && execId) {
                 resultsContainer = this.executionResultsContainers.get(execId);
             }
 
+            if (resultsContainer instanceof Promise) {
+                resultsContainer = await resultsContainer;
+            }
+
             if (!resultsContainer) {
-                const containerId = approvalId || execId;
+                const containerId = approvalId || batchId || execId;
                 if (!containerId) {
-                    console.error('[TERMINAL] Final command event missing both approval_id and execution_id — backend contract violation', data);
+                    console.error('[TERMINAL] Final command event missing approval_id, batch_id and execution_id — backend contract violation', data);
                     return;
                 }
                 const isApproval = !!approvalId;
-                resultsContainer = await this._createResultsContainer(containerId, null, isApproval);
+                const isBatch = !!batchId;
+                resultsContainer = await this._createResultsContainer(containerId, null, isApproval, isBatch);
             }
 
             if (resultsContainer) {
@@ -790,12 +835,16 @@ export class TerminalExecutionMixin {
 
         const output = this._extractOutputFromContent(content, command);
 
-        const containerId = data.execution_id;
+        const executionId = data.execution_id;
+        const batchId = data.batch_id;
+        const containerId = batchId || executionId;
+        
         if (!containerId) {
-            console.error('[TERMINAL] restoreCommandExecution called with no execution_id — cannot restore result', data);
+            console.error('[TERMINAL] restoreCommandExecution called with no execution_id or batch_id — cannot restore result', data);
             return;
         }
-        const container = await this._createResultsContainer(containerId, null, false);
+        const isBatch = !!batchId;
+        const container = await this._createResultsContainer(containerId, null, false, isBatch);
         if (container) {
             await this._appendResultToContainer(container, {
                 command,
@@ -943,24 +992,31 @@ export class TerminalExecutionMixin {
         }
     }
 
-    async restoreCommandResult(executionId, data) {
+    async restoreCommandResult(containerId, data) {
         if (!data) return;
 
-        const container = executionId ? this.executionResultsContainers.get(executionId) : null;
+        let resultsContainer =
+            (this.approvalResultsContainers.get(containerId)) ||
+            (this.batchResultsContainers.get(containerId)) ||
+            (this.executionResultsContainers.get(containerId));
 
-        if (container) {
+        if (resultsContainer instanceof Promise) {
+            resultsContainer = await resultsContainer;
+        }
+
+        if (resultsContainer) {
             const command = data.command;
             const content = data.content;
             const output = this._extractOutputFromContent(content, command);
 
-            await this._appendResultToContainer(container, {
+            await this._appendResultToContainer(resultsContainer, {
                 command,
                 stdout: output !== '(No output)' ? output : '',
                 stderr: '',
-                exitCode: data.exit_code,
+                exit_code: data.exit_code,
                 status: data.status || 'completed',
                 timestamp: data.timestamp,
-                operatorId: data.operator_id,
+                operator_id: data.operator_id,
                 hostname: data.hostname
             });
         } else {

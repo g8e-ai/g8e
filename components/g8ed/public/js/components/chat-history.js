@@ -162,6 +162,7 @@ export const ChatHistoryMixin = {
 
         await this.anchoredTerminal.restoreCommandExecution({
             execution_id: metadata.execution_id,
+            batch_id: metadata.batch_id,
             command: metadata.command,
             content: msgInstance.content,
             status: metadata.status || 'completed',

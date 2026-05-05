@@ -15,23 +15,24 @@
 
     <div class="operator-bind-all-operators-container">
         <div class="operator-bind-all-operators-header">
-            <input type="checkbox" id="operator-select-all-operators" class="operator-select-all-checkbox" checked>
-            <label for="operator-select-all-operators">Select All</label>
+            <div class="operator-select-all-wrapper">
+                <input type="checkbox" id="operator-select-all-operators" class="operator-select-all-checkbox" checked>
+                <label for="operator-select-all-operators">Select All</label>
+            </div>
+            <div class="operator-bind-all-actions">
+                <button class="operator-bind-all-action-btn cancel-btn" id="operator-bind-all-cancel-btn">
+                    <span class="material-symbols-outlined">cancel</span>
+                    <span>Cancel</span>
+                </button>
+                <button class="operator-bind-all-action-btn confirm-btn" id="operator-bind-all-confirm-btn">
+                    <span class="material-symbols-outlined">link</span>
+                    <span>Bind All</span>
+                </button>
+            </div>
         </div>
         <div class="operator-bind-all-operators-list" id="operator-bind-all-operators-list">
             <!-- Operator items inserted here -->
         </div>
-    </div>
-
-    <div class="operator-bind-all-actions">
-        <button class="operator-bind-all-action-btn cancel-btn" id="operator-bind-all-cancel-btn">
-            <span class="material-symbols-outlined">cancel</span>
-            <span>Cancel</span>
-        </button>
-        <button class="operator-bind-all-action-btn confirm-btn" id="operator-bind-all-confirm-btn">
-            <span class="material-symbols-outlined">link</span>
-            <span>Bind All</span>
-        </button>
     </div>
 
     <div class="operator-bind-all-processing initially-hidden" id="operator-bind-all-processing">

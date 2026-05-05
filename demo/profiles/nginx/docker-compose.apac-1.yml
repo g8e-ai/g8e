@@ -1,0 +1,610 @@
+# ACME Corp Global Fleet Demo (GENERATED - do not edit by hand)
+#
+# Batch of devices. See docker-compose.yml for full fleet configuration.
+# Regenerate via `make generate-compose` or `./scripts/generate-compose.sh`.
+
+networks:
+  acme-net:
+    external: true
+
+x-edge-env: &edge-env
+  DEVICE_TOKEN: ${DEVICE_TOKEN:-}
+  G8E_ENDPOINT: ${G8E_ENDPOINT:-g8e.local}
+
+x-edge-device: &edge-device
+  image: acme-edge-device:latest
+  networks:
+    - acme-net
+  # Simulate internet connectivity to the g8e platform via public endpoints.
+  # This keeps the "simulated company" isolated on its own network.
+  extra_hosts:
+    - "g8e.local:host-gateway"
+    - "g8ed:host-gateway"
+    - "g8es:host-gateway"
+  labels:
+    - "demo.service=acme-edge"
+  volumes:
+    - g8es-ssl:/g8es:ro
+  restart: unless-stopped
+
+services:
+  pos-store-tok-001:
+    <<: *edge-device
+    container_name: acme-pos-store-tok-001
+    hostname: pos-store-tok-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: pos-store-tok-001
+      DEVICE_FUNCTION: pos
+      DEVICE_SITE: store
+      DEVICE_LOCATION: tok
+      DEVICE_PROFILE: healthy
+
+  pos-store-sin-001:
+    <<: *edge-device
+    container_name: acme-pos-store-sin-001
+    hostname: pos-store-sin-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: pos-store-sin-001
+      DEVICE_FUNCTION: pos
+      DEVICE_SITE: store
+      DEVICE_LOCATION: sin
+      DEVICE_PROFILE: healthy
+
+  pos-store-syd-001:
+    <<: *edge-device
+    container_name: acme-pos-store-syd-001
+    hostname: pos-store-syd-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: pos-store-syd-001
+      DEVICE_FUNCTION: pos
+      DEVICE_SITE: store
+      DEVICE_LOCATION: syd
+      DEVICE_PROFILE: healthy
+
+  pos-store-hkg-001:
+    <<: *edge-device
+    container_name: acme-pos-store-hkg-001
+    hostname: pos-store-hkg-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: pos-store-hkg-001
+      DEVICE_FUNCTION: pos
+      DEVICE_SITE: store
+      DEVICE_LOCATION: hkg
+      DEVICE_PROFILE: wrong_config
+
+  pos-store-sha-001:
+    <<: *edge-device
+    container_name: acme-pos-store-sha-001
+    hostname: pos-store-sha-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: pos-store-sha-001
+      DEVICE_FUNCTION: pos
+      DEVICE_SITE: store
+      DEVICE_LOCATION: sha
+      DEVICE_PROFILE: healthy
+
+  pos-store-mum-001:
+    <<: *edge-device
+    container_name: acme-pos-store-mum-001
+    hostname: pos-store-mum-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: pos-store-mum-001
+      DEVICE_FUNCTION: pos
+      DEVICE_SITE: store
+      DEVICE_LOCATION: mum
+      DEVICE_PROFILE: healthy
+
+  pos-store-del-001:
+    <<: *edge-device
+    container_name: acme-pos-store-del-001
+    hostname: pos-store-del-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: pos-store-del-001
+      DEVICE_FUNCTION: pos
+      DEVICE_SITE: store
+      DEVICE_LOCATION: del
+      DEVICE_PROFILE: healthy
+
+  pos-store-bkk-001:
+    <<: *edge-device
+    container_name: acme-pos-store-bkk-001
+    hostname: pos-store-bkk-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: pos-store-bkk-001
+      DEVICE_FUNCTION: pos
+      DEVICE_SITE: store
+      DEVICE_LOCATION: bkk
+      DEVICE_PROFILE: healthy
+
+  kiosk-airport-tok-001:
+    <<: *edge-device
+    container_name: acme-kiosk-airport-tok-001
+    hostname: kiosk-airport-tok-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: kiosk-airport-tok-001
+      DEVICE_FUNCTION: kiosk
+      DEVICE_SITE: airport
+      DEVICE_LOCATION: tok
+      DEVICE_PROFILE: healthy
+
+  kiosk-airport-sin-001:
+    <<: *edge-device
+    container_name: acme-kiosk-airport-sin-001
+    hostname: kiosk-airport-sin-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: kiosk-airport-sin-001
+      DEVICE_FUNCTION: kiosk
+      DEVICE_SITE: airport
+      DEVICE_LOCATION: sin
+      DEVICE_PROFILE: healthy
+
+  kiosk-airport-syd-001:
+    <<: *edge-device
+    container_name: acme-kiosk-airport-syd-001
+    hostname: kiosk-airport-syd-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: kiosk-airport-syd-001
+      DEVICE_FUNCTION: kiosk
+      DEVICE_SITE: airport
+      DEVICE_LOCATION: syd
+      DEVICE_PROFILE: healthy
+
+  kiosk-airport-hkg-001:
+    <<: *edge-device
+    container_name: acme-kiosk-airport-hkg-001
+    hostname: kiosk-airport-hkg-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: kiosk-airport-hkg-001
+      DEVICE_FUNCTION: kiosk
+      DEVICE_SITE: airport
+      DEVICE_LOCATION: hkg
+      DEVICE_PROFILE: healthy
+
+  kiosk-airport-sha-001:
+    <<: *edge-device
+    container_name: acme-kiosk-airport-sha-001
+    hostname: kiosk-airport-sha-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: kiosk-airport-sha-001
+      DEVICE_FUNCTION: kiosk
+      DEVICE_SITE: airport
+      DEVICE_LOCATION: sha
+      DEVICE_PROFILE: healthy
+
+  kiosk-airport-mum-001:
+    <<: *edge-device
+    container_name: acme-kiosk-airport-mum-001
+    hostname: kiosk-airport-mum-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: kiosk-airport-mum-001
+      DEVICE_FUNCTION: kiosk
+      DEVICE_SITE: airport
+      DEVICE_LOCATION: mum
+      DEVICE_PROFILE: healthy
+
+  kiosk-airport-del-001:
+    <<: *edge-device
+    container_name: acme-kiosk-airport-del-001
+    hostname: kiosk-airport-del-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: kiosk-airport-del-001
+      DEVICE_FUNCTION: kiosk
+      DEVICE_SITE: airport
+      DEVICE_LOCATION: del
+      DEVICE_PROFILE: healthy
+
+  kiosk-airport-bkk-001:
+    <<: *edge-device
+    container_name: acme-kiosk-airport-bkk-001
+    hostname: kiosk-airport-bkk-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: kiosk-airport-bkk-001
+      DEVICE_FUNCTION: kiosk
+      DEVICE_SITE: airport
+      DEVICE_LOCATION: bkk
+      DEVICE_PROFILE: healthy
+
+  scanner-warehouse-tok-001:
+    <<: *edge-device
+    container_name: acme-scanner-warehouse-tok-001
+    hostname: scanner-warehouse-tok-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: scanner-warehouse-tok-001
+      DEVICE_FUNCTION: scanner
+      DEVICE_SITE: warehouse
+      DEVICE_LOCATION: tok
+      DEVICE_PROFILE: healthy
+
+  scanner-warehouse-sin-001:
+    <<: *edge-device
+    container_name: acme-scanner-warehouse-sin-001
+    hostname: scanner-warehouse-sin-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: scanner-warehouse-sin-001
+      DEVICE_FUNCTION: scanner
+      DEVICE_SITE: warehouse
+      DEVICE_LOCATION: sin
+      DEVICE_PROFILE: healthy
+
+  scanner-warehouse-syd-001:
+    <<: *edge-device
+    container_name: acme-scanner-warehouse-syd-001
+    hostname: scanner-warehouse-syd-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: scanner-warehouse-syd-001
+      DEVICE_FUNCTION: scanner
+      DEVICE_SITE: warehouse
+      DEVICE_LOCATION: syd
+      DEVICE_PROFILE: healthy
+
+  scanner-warehouse-hkg-001:
+    <<: *edge-device
+    container_name: acme-scanner-warehouse-hkg-001
+    hostname: scanner-warehouse-hkg-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: scanner-warehouse-hkg-001
+      DEVICE_FUNCTION: scanner
+      DEVICE_SITE: warehouse
+      DEVICE_LOCATION: hkg
+      DEVICE_PROFILE: stuck_loop
+
+  scanner-warehouse-sha-001:
+    <<: *edge-device
+    container_name: acme-scanner-warehouse-sha-001
+    hostname: scanner-warehouse-sha-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: scanner-warehouse-sha-001
+      DEVICE_FUNCTION: scanner
+      DEVICE_SITE: warehouse
+      DEVICE_LOCATION: sha
+      DEVICE_PROFILE: healthy
+
+  scanner-warehouse-mum-001:
+    <<: *edge-device
+    container_name: acme-scanner-warehouse-mum-001
+    hostname: scanner-warehouse-mum-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: scanner-warehouse-mum-001
+      DEVICE_FUNCTION: scanner
+      DEVICE_SITE: warehouse
+      DEVICE_LOCATION: mum
+      DEVICE_PROFILE: healthy
+
+  camera-hq-del-001:
+    <<: *edge-device
+    container_name: acme-camera-hq-del-001
+    hostname: camera-hq-del-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: camera-hq-del-001
+      DEVICE_FUNCTION: camera
+      DEVICE_SITE: hq
+      DEVICE_LOCATION: del
+      DEVICE_PROFILE: healthy
+
+  camera-hq-bkk-001:
+    <<: *edge-device
+    container_name: acme-camera-hq-bkk-001
+    hostname: camera-hq-bkk-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: camera-hq-bkk-001
+      DEVICE_FUNCTION: camera
+      DEVICE_SITE: hq
+      DEVICE_LOCATION: bkk
+      DEVICE_PROFILE: healthy
+
+  printer-office-tok-001:
+    <<: *edge-device
+    container_name: acme-printer-office-tok-001
+    hostname: printer-office-tok-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: printer-office-tok-001
+      DEVICE_FUNCTION: printer
+      DEVICE_SITE: office
+      DEVICE_LOCATION: tok
+      DEVICE_PROFILE: healthy
+
+  printer-office-sin-001:
+    <<: *edge-device
+    container_name: acme-printer-office-sin-001
+    hostname: printer-office-sin-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: printer-office-sin-001
+      DEVICE_FUNCTION: printer
+      DEVICE_SITE: office
+      DEVICE_LOCATION: sin
+      DEVICE_PROFILE: healthy
+
+  printer-office-syd-001:
+    <<: *edge-device
+    container_name: acme-printer-office-syd-001
+    hostname: printer-office-syd-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: printer-office-syd-001
+      DEVICE_FUNCTION: printer
+      DEVICE_SITE: office
+      DEVICE_LOCATION: syd
+      DEVICE_PROFILE: healthy
+
+  printer-office-hkg-001:
+    <<: *edge-device
+    container_name: acme-printer-office-hkg-001
+    hostname: printer-office-hkg-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: printer-office-hkg-001
+      DEVICE_FUNCTION: printer
+      DEVICE_SITE: office
+      DEVICE_LOCATION: hkg
+      DEVICE_PROFILE: healthy
+
+  printer-office-sha-001:
+    <<: *edge-device
+    container_name: acme-printer-office-sha-001
+    hostname: printer-office-sha-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: printer-office-sha-001
+      DEVICE_FUNCTION: printer
+      DEVICE_SITE: office
+      DEVICE_LOCATION: sha
+      DEVICE_PROFILE: healthy
+
+  printer-office-mum-001:
+    <<: *edge-device
+    container_name: acme-printer-office-mum-001
+    hostname: printer-office-mum-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: printer-office-mum-001
+      DEVICE_FUNCTION: printer
+      DEVICE_SITE: office
+      DEVICE_LOCATION: mum
+      DEVICE_PROFILE: healthy
+
+  printer-office-del-001:
+    <<: *edge-device
+    container_name: acme-printer-office-del-001
+    hostname: printer-office-del-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: printer-office-del-001
+      DEVICE_FUNCTION: printer
+      DEVICE_SITE: office
+      DEVICE_LOCATION: del
+      DEVICE_PROFILE: healthy
+
+  printer-office-bkk-001:
+    <<: *edge-device
+    container_name: acme-printer-office-bkk-001
+    hostname: printer-office-bkk-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: printer-office-bkk-001
+      DEVICE_FUNCTION: printer
+      DEVICE_SITE: office
+      DEVICE_LOCATION: bkk
+      DEVICE_PROFILE: healthy
+
+  badge-office-tok-001:
+    <<: *edge-device
+    container_name: acme-badge-office-tok-001
+    hostname: badge-office-tok-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: badge-office-tok-001
+      DEVICE_FUNCTION: badge
+      DEVICE_SITE: office
+      DEVICE_LOCATION: tok
+      DEVICE_PROFILE: healthy
+
+  badge-office-sin-001:
+    <<: *edge-device
+    container_name: acme-badge-office-sin-001
+    hostname: badge-office-sin-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: badge-office-sin-001
+      DEVICE_FUNCTION: badge
+      DEVICE_SITE: office
+      DEVICE_LOCATION: sin
+      DEVICE_PROFILE: healthy
+
+  sensor-factory-syd-001:
+    <<: *edge-device
+    container_name: acme-sensor-factory-syd-001
+    hostname: sensor-factory-syd-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: sensor-factory-syd-001
+      DEVICE_FUNCTION: sensor
+      DEVICE_SITE: factory
+      DEVICE_LOCATION: syd
+      DEVICE_PROFILE: healthy
+
+  sensor-factory-hkg-001:
+    <<: *edge-device
+    container_name: acme-sensor-factory-hkg-001
+    hostname: sensor-factory-hkg-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: sensor-factory-hkg-001
+      DEVICE_FUNCTION: sensor
+      DEVICE_SITE: factory
+      DEVICE_LOCATION: hkg
+      DEVICE_PROFILE: high_error_rate
+
+  sensor-factory-sha-001:
+    <<: *edge-device
+    container_name: acme-sensor-factory-sha-001
+    hostname: sensor-factory-sha-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: sensor-factory-sha-001
+      DEVICE_FUNCTION: sensor
+      DEVICE_SITE: factory
+      DEVICE_LOCATION: sha
+      DEVICE_PROFILE: healthy
+
+  sensor-factory-mum-001:
+    <<: *edge-device
+    container_name: acme-sensor-factory-mum-001
+    hostname: sensor-factory-mum-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: sensor-factory-mum-001
+      DEVICE_FUNCTION: sensor
+      DEVICE_SITE: factory
+      DEVICE_LOCATION: mum
+      DEVICE_PROFILE: healthy
+
+  sensor-factory-del-001:
+    <<: *edge-device
+    container_name: acme-sensor-factory-del-001
+    hostname: sensor-factory-del-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: sensor-factory-del-001
+      DEVICE_FUNCTION: sensor
+      DEVICE_SITE: factory
+      DEVICE_LOCATION: del
+      DEVICE_PROFILE: healthy
+
+  sensor-factory-bkk-001:
+    <<: *edge-device
+    container_name: acme-sensor-factory-bkk-001
+    hostname: sensor-factory-bkk-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: sensor-factory-bkk-001
+      DEVICE_FUNCTION: sensor
+      DEVICE_SITE: factory
+      DEVICE_LOCATION: bkk
+      DEVICE_PROFILE: healthy
+
+  sensor-warehouse-tok-001:
+    <<: *edge-device
+    container_name: acme-sensor-warehouse-tok-001
+    hostname: sensor-warehouse-tok-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: sensor-warehouse-tok-001
+      DEVICE_FUNCTION: sensor
+      DEVICE_SITE: warehouse
+      DEVICE_LOCATION: tok
+      DEVICE_PROFILE: healthy
+
+  sensor-warehouse-sin-001:
+    <<: *edge-device
+    container_name: acme-sensor-warehouse-sin-001
+    hostname: sensor-warehouse-sin-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: sensor-warehouse-sin-001
+      DEVICE_FUNCTION: sensor
+      DEVICE_SITE: warehouse
+      DEVICE_LOCATION: sin
+      DEVICE_PROFILE: healthy
+
+  controller-factory-syd-001:
+    <<: *edge-device
+    container_name: acme-controller-factory-syd-001
+    hostname: controller-factory-syd-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: controller-factory-syd-001
+      DEVICE_FUNCTION: controller
+      DEVICE_SITE: factory
+      DEVICE_LOCATION: syd
+      DEVICE_PROFILE: healthy
+
+  controller-factory-hkg-001:
+    <<: *edge-device
+    container_name: acme-controller-factory-hkg-001
+    hostname: controller-factory-hkg-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: controller-factory-hkg-001
+      DEVICE_FUNCTION: controller
+      DEVICE_SITE: factory
+      DEVICE_LOCATION: hkg
+      DEVICE_PROFILE: healthy
+
+  controller-factory-sha-001:
+    <<: *edge-device
+    container_name: acme-controller-factory-sha-001
+    hostname: controller-factory-sha-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: controller-factory-sha-001
+      DEVICE_FUNCTION: controller
+      DEVICE_SITE: factory
+      DEVICE_LOCATION: sha
+      DEVICE_PROFILE: healthy
+
+  controller-factory-mum-001:
+    <<: *edge-device
+    container_name: acme-controller-factory-mum-001
+    hostname: controller-factory-mum-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: controller-factory-mum-001
+      DEVICE_FUNCTION: controller
+      DEVICE_SITE: factory
+      DEVICE_LOCATION: mum
+      DEVICE_PROFILE: healthy
+
+  controller-factory-del-001:
+    <<: *edge-device
+    container_name: acme-controller-factory-del-001
+    hostname: controller-factory-del-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: controller-factory-del-001
+      DEVICE_FUNCTION: controller
+      DEVICE_SITE: factory
+      DEVICE_LOCATION: del
+      DEVICE_PROFILE: healthy
+
+  controller-factory-bkk-001:
+    <<: *edge-device
+    container_name: acme-controller-factory-bkk-001
+    hostname: controller-factory-bkk-001
+    environment:
+      <<: *edge-env
+      DEVICE_NAME: controller-factory-bkk-001
+      DEVICE_FUNCTION: controller
+      DEVICE_SITE: factory
+      DEVICE_LOCATION: bkk
+      DEVICE_PROFILE: healthy
+
+
+volumes:
+  g8es-ssl:
+    external: true

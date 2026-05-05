@@ -71,6 +71,11 @@ defaults:
     values:
       layout: default
   - scope:
+      path: "docs/posts"
+    values:
+      layout: default
+      parent: Blog
+  - scope:
       path: ""
     values:
       layout: default
@@ -98,3 +103,8 @@ nav:
       - Developer Guide: docs/developer.md
       - Testing Guide: docs/testing.md
       - Glossary: docs/glossary.md
+  - Blog:
+    - Blog Index: docs/posts/index.md
+    - Posts:
+      - 5-5-26: docs/posts/5-5-26.md
+

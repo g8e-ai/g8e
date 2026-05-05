@@ -29,10 +29,22 @@ from app.models.chat_api import ChatSessionDetailsResponse, ChatSessionResponse,
 from app.models.investigations import ConversationMessageMetadata
 from app.models.auth import AuthenticatedUser
 from app.models.triage_api import TriageAnswerRequest, TriageSkipRequest, TriageTimeoutRequest
-from app.dependencies import get_g8ee_case_data_service, get_g8ee_investigation_service, require_proxy_auth
+from app.dependencies import (
+    get_g8ee_case_data_service,
+    get_g8ee_investigation_service,
+    require_proxy_auth,
+    get_g8ee_chat_pipeline,
+    get_g8ee_chat_task_manager,
+    get_g8ee_user_settings,
+    get_g8e_http_context,
+)
 from app.services.investigation.investigation_service import InvestigationService
 from app.services.investigation.investigation_data_service import InvestigationDataService
 from app.services.data.case_data_service import CaseDataService
+from app.services.ai.chat_pipeline import ChatPipelineService
+from app.services.ai.chat_task_manager import BackgroundTaskManager
+from app.models.settings import G8eeUserSettings
+from app.models.http_context import G8eHttpContext
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -46,6 +58,10 @@ def _is_chat_session_active(status: InvestigationStatus) -> bool:
 async def answer_triage_question(
     request: TriageAnswerRequest,
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
+    chat_pipeline: ChatPipelineService = Depends(get_g8ee_chat_pipeline),
+    chat_task_manager: BackgroundTaskManager = Depends(get_g8ee_chat_task_manager),
+    user_settings: G8eeUserSettings = Depends(get_g8ee_user_settings),
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
     user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ) -> dict[str, bool]:
     """
@@ -56,16 +72,36 @@ async def answer_triage_question(
         raise ResourceNotFoundError("Investigation not found", resource_id=request.investigation_id, resource_type="investigation", component="g8ee")
 
     # Store answer as user.chat message with structured metadata
+    answer_text = f"Answered clarifying question {request.question_index}: {'Yes' if request.answer else 'No'}"
     await investigation_service.investigation_data_service.add_chat_message(
         investigation_id=request.investigation_id,
         sender=MessageSender.USER_CHAT,
-        content=f"Answered clarifying question {request.question_index}: {'Yes' if request.answer else 'No'}",
+        content=answer_text,
         metadata=ConversationMessageMetadata(
             event_type=EventType.AI_TRIAGE_CLARIFICATION_ANSWERED,
             question_index=request.question_index,
             answer=request.answer
         )
     )
+
+    # Trigger AI response by calling run_chat. 
+    # ChatPipeline.run_chat internally tracks the task via ChatTaskManager,
+    # which will cancel any existing active task for this investigation_id.
+    await chat_pipeline.run_chat(
+        message=answer_text,
+        g8e_context=g8e_context,
+        attachments=[],
+        sentinel_mode=investigation.sentinel_mode,
+        llm_primary_provider=None,
+        llm_assistant_provider=None,
+        llm_lite_provider=None,
+        llm_primary_model=user_settings.llm.primary_model,
+        llm_assistant_model=user_settings.llm.resolved_assistant_model,
+        llm_lite_model=user_settings.llm.resolved_lite_model,
+        _task_manager=chat_task_manager,
+        user_settings=user_settings,
+    )
+
     return {"success": True}
 
 
@@ -73,6 +109,10 @@ async def answer_triage_question(
 async def skip_triage_questions(
     request: TriageSkipRequest,
     investigation_service: InvestigationService = Depends(get_g8ee_investigation_service),
+    chat_pipeline: ChatPipelineService = Depends(get_g8ee_chat_pipeline),
+    chat_task_manager: BackgroundTaskManager = Depends(get_g8ee_chat_task_manager),
+    user_settings: G8eeUserSettings = Depends(get_g8ee_user_settings),
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
     user_info: AuthenticatedUser = Depends(require_proxy_auth)
 ) -> dict[str, bool]:
     """
@@ -82,14 +122,34 @@ async def skip_triage_questions(
     if not investigation or investigation.user_id != user_info.uid:
         raise ResourceNotFoundError("Investigation not found", resource_id=request.investigation_id, resource_type="investigation", component="g8ee")
 
+    skip_text = "Skipped clarifying questions"
     await investigation_service.investigation_data_service.add_chat_message(
         investigation_id=request.investigation_id,
         sender=MessageSender.USER_CHAT,
-        content="Skipped clarifying questions",
+        content=skip_text,
         metadata=ConversationMessageMetadata(
             event_type=EventType.AI_TRIAGE_CLARIFICATION_SKIPPED
         )
     )
+
+    # Trigger AI response by calling run_chat.
+    # ChatPipeline.run_chat internally tracks the task via ChatTaskManager,
+    # which will cancel any existing active task for this investigation_id.
+    await chat_pipeline.run_chat(
+        message=skip_text,
+        g8e_context=g8e_context,
+        attachments=[],
+        sentinel_mode=investigation.sentinel_mode,
+        llm_primary_provider=None,
+        llm_assistant_provider=None,
+        llm_lite_provider=None,
+        llm_primary_model=user_settings.llm.primary_model,
+        llm_assistant_model=user_settings.llm.resolved_assistant_model,
+        llm_lite_model=user_settings.llm.resolved_lite_model,
+        _task_manager=chat_task_manager,
+        user_settings=user_settings,
+    )
+
     return {"success": True}
 
 

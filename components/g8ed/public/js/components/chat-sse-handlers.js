@@ -99,6 +99,31 @@ export const ChatSSEHandlersMixin = {
             this.handleFilesystemReadFailed(data);
         });
 
+        // File history/diff tool handlers for native lifecycle events
+        this.eventBus.on(EventType.OPERATOR_FILE_HISTORY_FETCH_STARTED, (data) => {
+            this.handleFileHistoryFetchStarted(data);
+        });
+
+        this.eventBus.on(EventType.OPERATOR_FILE_HISTORY_FETCH_COMPLETED, (data) => {
+            this.handleFileHistoryFetchCompleted(data);
+        });
+
+        this.eventBus.on(EventType.OPERATOR_FILE_HISTORY_FETCH_FAILED, (data) => {
+            this.handleFileHistoryFetchFailed(data);
+        });
+
+        this.eventBus.on(EventType.OPERATOR_FILE_DIFF_FETCH_STARTED, (data) => {
+            this.handleFileDiffFetchStarted(data);
+        });
+
+        this.eventBus.on(EventType.OPERATOR_FILE_DIFF_FETCH_COMPLETED, (data) => {
+            this.handleFileDiffFetchCompleted(data);
+        });
+
+        this.eventBus.on(EventType.OPERATOR_FILE_DIFF_FETCH_FAILED, (data) => {
+            this.handleFileDiffFetchFailed(data);
+        });
+
         // Universal tool handlers for native lifecycle events
         this.eventBus.on(EventType.LLM_TOOL_G8E_WEB_SEARCH_REQUESTED, (data) => {
             this.handleUniversalToolStarted(data, 'web-search', data.display_label || 'Searching web', data.display_icon, data.category);
@@ -341,6 +366,10 @@ export const ChatSSEHandlersMixin = {
             this.handleTribunalVotingCompleted(data);
         });
 
+        this.eventBus.on(EventType.TRIBUNAL_VOTING_ROUND_2_CONSENSUS_REACHED, (data) => {
+            this.handleTribunalVotingCompleted(data);
+        });
+
         this.eventBus.on(EventType.TRIBUNAL_VOTING_AUDIT_STARTED, (data) => {
             this.handleTribunalAuditorStarted(data);
         });
@@ -349,8 +378,16 @@ export const ChatSSEHandlersMixin = {
             this.handleTribunalAuditorCompleted(data);
         });
 
+        this.eventBus.on(EventType.TRIBUNAL_VOTING_ROUND_COMPLETED, (data) => {
+            this.handleTribunalCompleted(data);
+        });
+
         this.eventBus.on(EventType.TRIBUNAL_SESSION_COMPLETED, (data) => {
             this.handleTribunalCompleted(data);
+        });
+
+        this.eventBus.on(EventType.TRIBUNAL_VOTING_CONSENSUS_NOT_REACHED, (data) => {
+            this.handleTribunalConsensusNotReached(data);
         });
 
         const TRIBUNAL_TERMINAL_FAILURE_EVENTS = [
@@ -359,7 +396,11 @@ export const ChatSSEHandlersMixin = {
             EventType.TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE,
             EventType.TRIBUNAL_SESSION_SYSTEM_ERROR,
             EventType.TRIBUNAL_SESSION_GENERATION_FAILED,
-            EventType.TRIBUNAL_SESSION_VERIFIER_FAILED,
+            EventType.TRIBUNAL_SESSION_AUDITOR_FAILED,
+            EventType.TRIBUNAL_SESSION_WARDEN_BLOCKED,
+            EventType.AI_AGENT_CONFLICT_DETECTED,
+            EventType.TRIBUNAL_VOTING_CONSENSUS_FAILED,
+            EventType.TRIBUNAL_VOTING_ROUND_2_CONSENSUS_FAILED,
         ];
         for (const failureEvent of TRIBUNAL_TERMINAL_FAILURE_EVENTS) {
             this.eventBus.on(failureEvent, (data) => {
@@ -673,6 +714,78 @@ export const ChatSSEHandlersMixin = {
         this._filesystemIndicators.delete(data.execution_id);
     },
 
+    handleFileHistoryFetchStarted(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        const webSessionId = data.web_session_id;
+        if (!webSessionId || !this.anchoredTerminal) return;
+        const executionId = data.execution_id;
+        if (!executionId) return;
+        const indicatorId = `file-history-${executionId}`;
+        this._filesystemIndicators.set(executionId, indicatorId);
+        const path = data.command?.replace(/^file_history\s+/, '') || 'file';
+        this.anchoredTerminal.appendActivityIndicator({
+            id: indicatorId,
+            icon: 'history',
+            label: 'Fetching file history',
+            detail: path,
+            category: ToolDisplayCategory.FILE,
+        });
+    },
+
+    handleFileHistoryFetchCompleted(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        if (!this.anchoredTerminal) return;
+        const indicatorId = this._filesystemIndicators.get(data.execution_id);
+        if (!indicatorId) return;
+        this.anchoredTerminal.completeActivityIndicator(indicatorId);
+        this._filesystemIndicators.delete(data.execution_id);
+    },
+
+    handleFileHistoryFetchFailed(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        if (!this.anchoredTerminal) return;
+        const indicatorId = this._filesystemIndicators.get(data.execution_id);
+        if (!indicatorId) return;
+        this.anchoredTerminal.completeActivityIndicator(indicatorId);
+        this._filesystemIndicators.delete(data.execution_id);
+    },
+
+    handleFileDiffFetchStarted(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        const webSessionId = data.web_session_id;
+        if (!webSessionId || !this.anchoredTerminal) return;
+        const executionId = data.execution_id;
+        if (!executionId) return;
+        const indicatorId = `file-diff-${executionId}`;
+        this._filesystemIndicators.set(executionId, indicatorId);
+        const path = data.command?.replace(/^file_diff\s+/, '') || 'file';
+        this.anchoredTerminal.appendActivityIndicator({
+            id: indicatorId,
+            icon: 'compare',
+            label: 'Fetching file diff',
+            detail: path,
+            category: ToolDisplayCategory.FILE,
+        });
+    },
+
+    handleFileDiffFetchCompleted(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        if (!this.anchoredTerminal) return;
+        const indicatorId = this._filesystemIndicators.get(data.execution_id);
+        if (!indicatorId) return;
+        this.anchoredTerminal.completeActivityIndicator(indicatorId);
+        this._filesystemIndicators.delete(data.execution_id);
+    },
+
+    handleFileDiffFetchFailed(data) {
+        if (!this.shouldProcessEvent(data)) return;
+        if (!this.anchoredTerminal) return;
+        const indicatorId = this._filesystemIndicators.get(data.execution_id);
+        if (!indicatorId) return;
+        this.anchoredTerminal.completeActivityIndicator(indicatorId);
+        this._filesystemIndicators.delete(data.execution_id);
+    },
+
     handleTurnComplete(data) {
         if (!this.shouldProcessEvent(data)) return;
         const webSessionId = data.web_session_id;
@@ -780,6 +893,15 @@ export const ChatSSEHandlersMixin = {
         if (!widgetId) return;
 
         this.anchoredTerminal.updateTribunalStatus(widgetId, 'Verifying command\u2026');
+    },
+
+    handleTribunalConsensusNotReached(data) {
+        if (!this.anchoredTerminal) return;
+
+        const widgetId = this._getTribunalWidgetId(data);
+        if (!widgetId) return;
+
+        this.anchoredTerminal.updateTribunalStatus(widgetId, 'Low consensus; initiating peer review\u2026');
     },
 
     handleTribunalAuditorStarted(data) {

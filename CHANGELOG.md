@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.9] - 2026-05-05
+
+### Added
+- **Demo Profiles**: Added Acme Corp demo profile and enhanced flexibility for the fleet demo.
+- **Documentation**: Added a new blog post and updated platform documentation, including README and PR templates.
+
+### Changed
+- **Tribunal Pipeline**: 2 rounds of tribunal votes are now non-optional for enhanced security. Improved tribunal logging and event plumbing.
+- **Warden Prompts**: Enhanced Warden prompts for more rigorous risk assessment.
+- **UI/UX Enhancements**: Improved the model selection drawer, removed the animation in operator cards, improved read-only tools UX, optimized terminal results sizing and alignment, and moved the "bind all" button to the top.
+
+### Fixed
+- **UI Adjustments**: Fixed hamburger menu width.
+- **Interrogation**: Fixed bugs related to interrogation response.
+- **Demo Infrastructure**: Fixed node count logic and resolved issues with demo profiles.
+
 ## [0.1.8] - 2026-05-04
 
 ### Added

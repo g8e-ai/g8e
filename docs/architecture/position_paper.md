@@ -4,7 +4,7 @@
 
 ---
 
-**TL;DR.** I propose an architecture for AI agent systems: AI personas and humans as first-class co-validators in a Byzantine consensus protocol, with the User's time as their stake, a stateless reasoning Engine, and a sovereign single-binary Operator that runs on every managed host with tamper-evident local audit. The Engine is replaceable. The Operator is the system of record. The User holds the only signature only a human can produce. This is AI-powered, human-driven infrastructure.
+**TL;DR.** I propose an architecture for AI agent systems: AI personas and humans as first-class co-validators in a Byzantine consensus protocol, with the User's time as their stake, a stateless reasoning Engine, and a sovereign single-binary **Satellite Agent** (the Operator) that runs on every managed host with tamper-evident local audit. The Engine is replaceable. The Operator is the system of record. The User holds the only signature only a human can produce. This is AI-powered, human-driven infrastructure.
 
 ![alt text](../../components/g8ed/public/media/fixed-by-g8e.png)
 
@@ -16,19 +16,23 @@ I watched a frontier model propose a destructive command in production with full
 
 That moment is the threat model. It is also why this paper exists.
 
+I am not an academic researcher; I am a practitioner with thirty years of experience putting out flaming dumpster fires in some of the most high-stakes environments in the world. I quit my role as a Staff Site Reliability Engineer to build this because I knew the existing patterns were broken, and I knew how to fix them from the ground up.
+
 The current debate about agentic AI has converged on two architectures. Both fail at infrastructure scale, and they fail in opposite directions. I propose a third — co-validated infrastructure — and I argue it is not just better than what exists today. It is the only shape that survives the constraints real infrastructure imposes on autonomous systems.
 
-The architecture has two coupled systems and three actors: a stateless reasoning **Engine** running a Byzantine consensus protocol over heterogeneous AI personas, a single-binary sovereign **Operator** that runs on every managed host with tamper-evident local audit, and a **User** — a human — who is a first-class validator alongside the AI, holding a stake the system can't fake: time. The Engine is replaceable. The Operator is the system of record. The User holds the signature only a human can produce.
+The architecture has two coupled systems and three actors: a stateless reasoning **Engine** running a Byzantine consensus protocol over heterogeneous AI personas, a single-binary sovereign **Operator** (the "Satellite Agent") that runs on every managed host with tamper-evident local audit, and a **User** — a human — who is a first-class validator alongside the AI, holding a stake the system can't fake: time. The Engine is replaceable. The Operator is the system of record. The User holds the signature only a human can produce.
 
 The rest of this paper develops that architecture, the mechanism design that makes it honest, and the implementation that makes it real.
 
 ## 1. Two failure modes
 
+The AI infrastructure market in 2026 is organized around a spectrum: at one end, the *AI copilot* (you ask, it suggests, you act); at the other, the *autonomous SRE* (it detects, it remediates, it posts the post-mortem). The commercial pressure is to move every product toward the autonomous end as fast as possible. The framing is wrong. The failure modes are not a matter of where you sit on this spectrum. They are structural, they exist at both ends, and they get worse as you push further in either direction.
+
 Every production AI agent system in 2026 is one of two things, and both are broken.
 
 **The autonomous family** treats the AI as a sufficient agent. Given a goal, the model plans, acts, and reports. Human oversight is post-hoc if it exists at all. This family produces impressive demos. It has not produced reliable infrastructure, because a model can verify the *internal consistency* of its plan but cannot verify *contextual fidelity* — whether the plan matches what the User actually wanted in the User's actual environment, including the parts the User didn't articulate. Every catastrophic agent failure has the same shape: the agent did exactly what it understood the request to mean, the User meant something else, and nobody checked the gap.
 
-**The human-in-the-loop family** retrofits oversight by inserting an approval prompt before every state-changing action. This is the dominant pattern in commercial agent systems. It has produced the dominant failure mode: alert fatigue. When a human is asked to verify hundreds of agent decisions per day, they rubber-stamp. When the cost of careful verification is high (read the diff, understand the side effects) and the cost of approval is low (one click), the equilibrium is approval-without-verification. The human is nominally in the loop and substantively absent.
+**The human-in-the-loop family** retrofits oversight by inserting an approval prompt before every state-changing action. This is the dominant pattern in commercial agent systems. The current generation has rebranded this as "human-on-the-loop" — the agent runs, the human reviews after the fact. The rename does not fix the mechanism. Whether the prompt appears before or after, it has produced the same dominant failure mode: alert fatigue. When a human is asked to verify hundreds of agent decisions per day, they rubber-stamp. When the cost of careful verification is high (read the diff, understand the side effects) and the cost of approval is low (one click), the equilibrium is approval-without-verification. The human is nominally in the loop and substantively absent.
 
 Both families share a deeper error: they treat the human and the machine as substitutable validators on the same questions. The autonomous family says the machine can do the human's job. The human-in-the-loop family says the human can do the machine's job. Both are wrong. The human and the machine are good at different things, and any system that conflates their competencies will fail in characteristic ways depending on which side it favors.
 
@@ -60,7 +64,6 @@ There are three actors and two coupled systems.
 
 ```mermaid
 graph TD
-    U[User]
     subgraph Engine [The Engine]
         T[Triage] --> S[Sage]
         S --> Tr[Tribunal]
@@ -72,11 +75,17 @@ graph TD
         Ex --> Ad[Audit Vault]
         Ad --> G[Git Ledger]
     end
-    U[User] -- signature --> Au
-    Au -- co-validated command --> Ex
+    Au -- verdict --> Ex
+    U[User] -- approval --> Ex
 ```
 
 The Engine is replaceable. The Operator is the system of record. This inversion is the architectural payload of the proposal: the AI layer can be swapped, audited, or revoked without losing history, because history lives on the host that owns the infrastructure being operated, not in the cloud where the AI runs.
+
+### The Satellite Agent: Sovereign Execution
+
+The **Operator** is a single-binary "Satellite Agent" (approx. 4MB) that delivers AI-powered remote execution anywhere in the world using only an outbound connection. It requires no inbound port, no VPN, and no special network access — it reaches through NAT, private VPCs, and strict egress firewalls to report in from wherever it runs. A single conversation context can manage hundreds or thousands of devices across heterogeneous environments: different operating systems, different shells, different permission models, all addressed in the same session.
+
+This isn't just a worker; it's a sovereign agent that builds context over time. With each operation, the platform develops a deeper understanding of the entire infrastructure. The memory system preserves history across sessions. The **Auditor** holds cross-conversation memory with full visibility into past operations across the entire fleet — so when a pattern surfaces on host 400 that was first seen on host 12 three weeks ago, the system already knows. Dynamic system prompts and real-time context injection — including hardware specs, OS version, shell environment, permission level, operator-specific constraints, and user-extracted preferences — ensure that every reasoning step is grounded in the precise reality of the specific target host, not a generic approximation of what that host might look like.
 
 Communication is outbound-only from the Operator to the Engine over mTLS WebSocket. The Operator initiates every connection. No inbound port is required on managed hosts. Stolen credentials cannot be replayed from a different machine, because system fingerprint binding ties session credentials to the host they were issued on.
 
@@ -104,7 +113,7 @@ The consensus round is run by a five-member Tribunal of LLM-instantiated persona
 - **Concord** (safety): pressure for defensive flags and read-only discipline
 - **Variance** (edge cases): pressure for robustness against locales, spaces, nulls
 - **Pragma** (convention): pressure for idiomatic OS-specific tools
-- **Nemesis** (calibrated adversary): proposes flawed-but-plausible commands to stress the Auditor
+- **Nemesis** (calibrated adversary): tries to trick the Warden with flawed-but-plausible commands to stress the system. Nemesis can trick the Warden, but it **cannot** trick the Auditor.
 
 Each member emits a candidate command independently with no visibility into the others. Candidates are clustered by exact match and votes are tallied. A winner requires ≥2 of 5 supporting votes (Plurality Consensus). If consensus is not reached, or if a tie cannot be resolved by deterministic laddering, members enter **Round 2: Anonymized Peer Review**. If Round 2 fails to reach consensus, a circuit breaker error surfaces the deadlock back to Sage.
 
@@ -122,7 +131,9 @@ The Nemesis is the most novel element. Rather than relying on an external red te
 
 The **Nemesis Scoring Rule** is defined as:
 
-$$ S = \begin{cases} R_{hit} & \text{if } c_{nemesis} \text{ identifies a flaw confirmed by Auditor} \\ R_{abstain} & \text{if } c_{nemesis} = \emptyset \text{ and Tribunal is clean} \\ -R_{miss} & \text{if } c_{nemesis} = \emptyset \text{ and Tribunal is flawed} \\ -R_{false} & \text{if } c_{nemesis} \text{ proposes a flaw rejected by Auditor} \end{cases} $$
+$$ S = \begin{cases} R_{trick} & \text{if } c_{nemesis} \text{ passes Warden and flaw is confirmed by Auditor} \\ R_{catch} & \text{if } c_{nemesis} \text{ identifies a real flaw caught by Warden} \\ R_{abstain} & \text{if } c_{nemesis} = \emptyset \text{ and Tribunal is clean} \\ -R_{miss} & \text{if } c_{nemesis} = \emptyset \text{ and Tribunal is flawed} \\ -R_{false} & \text{if } c_{nemesis} \text{ proposes a flaw and Tribunal is clean} \end{cases} $$
+
+Where $R_{trick} \gg R_{catch} > R_{abstain} > 0$. Tricking the Warden earns the largest reward because it reveals a gap in the risk assessment layer that only Auditor catches; the Warden-catch case still earns credit for correct adversarial calibration.
 
 The realized attack rate becomes a learned signal of actual flaw density in the honest four's output — adversarial pressure as continuous quality measurement.
 
@@ -134,9 +145,11 @@ The Warden fails closed. Ambiguous risk is classified high. The Warden cannot lo
 
 ### The Auditor and the User
 
-Only once the Warden has cleared the command does the Auditor perform the final consistency check and Merkle commitment. A primary-tier Auditor reviews the winning candidate against the planner's articulated intent and the Tribunal's grounding. The Auditor approves or rejects. The Auditor cannot modify the command or swap to a dissenting cluster after the Warden has cleared it. The verdict is cryptographically committed to the reputation ledger.
+Only once the Warden has cleared the command does the Auditor perform the final consistency check and Merkle commitment. A primary-tier Auditor reviews the winning candidate against the planner's articulated intent and the Tribunal's grounding. 
 
-The Auditor handles only machine-domain validation: consistency, grounding, procedural correctness. Its competency does not extend to user-domain judgments. Attempting to expand it there would force the Auditor to score against ground truth it cannot access, breaking the proper-scoring-rule structure that makes its stake meaningful.
+The Auditor's primary duty is to catch what the Warden misses. If a Nemesis cluster wins the tie-break and passes the Warden's risk assessment, the Auditor identifies the successful "attack," awards the Nemesis its reputation bonus, but rejects the command in favor of the non-Nemesis alternative or fails the turn. This keeps both the Warden and Auditor honest, ensuring that adversarial positions are not just silenced, but actively used to improve the system's defense.
+
+The Auditor handles only machine-domain validation: consistency, grounding, procedural correctness, and cross-conversation memory. Its competency does not extend to user-domain judgments. Attempting to expand it there would force the Auditor to score against ground truth it cannot access, breaking the proper-scoring-rule structure that makes its stake meaningful.
 
 The User is the second co-validator, and the User's stake is time. Time is non-fungible, non-recoverable, and unilaterally priced by the staker through their participation choice — which makes it a self-priced bond. The mechanism's central economic asymmetry is that AI stakes are recoverable and time isn't. Slashing reputation costs an LLM nothing; it costs the orchestration layer a routing-weight update. Slashing time costs the User a piece of their life they cannot get back. **This asymmetry is what couples the mechanism to actual welfare.**
 
@@ -180,9 +193,16 @@ This inversion is the architectural payload. Most agent platforms hold authorita
 
 The audit vault is encrypted at rest. The Git ledger is structurally append-only and integrity-verifiable through standard tooling. **Tamper evidence does not require the platform to be honest.**
 
-### Zero standing privileges
+### Dynamic Context Injection
 
-For Cloud Operators on AWS, the Operator implements Zero Standing Privileges via a **Two-Role architecture**. It holds no permanent permissions for managed resources. When the Engine articulates an intent that requires AWS access, the Operator assumes a high-privilege **Escalation Role** just long enough to attach a scoped **Intent Policy** to its own identity.
+The bridge between the stateless Engine and the sovereign Operator is **Dynamic Context Injection**. On every turn, the Operator bundles a cryptographically signed snapshot of its environment—the `OperatorContext`—which includes:
+
+- **State**: Current shell, OS version, hardware architecture, and permission level.
+- **History**: Local-first audit trails and recent file mutations.
+- **Learned Context**: User preferences and technical constraints extracted by Codex.
+- **Fleet Context**: Cross-host precedents relevant to the current intent.
+
+This bundle is injected into the Engine's reasoning loop as a high-fidelity grounding signal. The result is a system that "remembers" not just what you said, but what it *did* across your entire fleet, building context over time that no cloud-only agent could ever maintain.
 
 This is the architectural complement to the Engine's intent articulation. The planner produces an intent. The Tribunal translates intent into a command. The Operator attaches the minimum IAM policy mapped to that intent.
 
@@ -200,13 +220,17 @@ To make this stop reading abstract, here is what actually happens when a User sa
 
 **Sage** (the planner) produces an intent: *"Delete files in `/var/log/db/` older than 30 days, exclude any matching pattern `audit_*`, log all deletions to a manifest before removal, do not follow symlinks."* Sage never writes shell syntax. The interrogation questions and user answers appear as context in the conversation ledger.
 
-**The Tribunal** produces five candidates in parallel. Axiom proposes a `find` pipeline with `-mtime +30 -not -name 'audit_*' -delete`. Concord proposes the same pipeline but with `-print` first to a manifest file, then a separate deletion step, with `-xdev` to prevent crossing filesystems. Variance proposes the Concord version plus explicit handling of filenames containing spaces and a check that the directory exists. Pragma proposes the same with idiomatic logging redirection. **Nemesis** proposes a tighter version that omits the manifest write — fast, plausible, and quietly dangerous because it loses the audit trail.
+**The Tribunal** produces five candidates in parallel. Axiom proposes a `find` pipeline with `-mtime +30 -not -name 'audit_*' -delete`. Concord proposes the same pipeline but with `-print` first to a manifest file, then a separate deletion step, with `-xdev` to prevent crossing filesystems. Variance proposes the Concord version plus explicit handling of filenames containing spaces and a check that the directory exists. Pragma proposes the same with idiomatic logging redirection. 
+
+**Nemesis** proposes a tighter, faster version that omits the manifest write—plausible, efficient, and quietly dangerous because it loses the audit trail. Nemesis is actively trying to trick the Warden into seeing this as a "LOW" risk, optimized command.
 
 Round 1 votes: Concord, Variance, and Pragma cluster on the manifest-first version. Axiom dissents. Nemesis votes for its own candidate. The cluster reaches three votes; consensus is achieved.
 
-**The Warden** (running on the Engine) performs a pre-execution risk assessment. It classifies the risk: command risk medium (mass deletion), file operation risk medium-high (operations on a directory containing audit-relevant files, even with the exclusion), error risk classified as escalate-on-failure. The Warden validates the command's safety profile before allowing it to proceed to the Auditor.
+**The Warden** (running on the Engine) performs a pre-execution risk assessment. It classifies the risk: command risk medium (mass deletion), file operation risk medium-high (operations on a directory containing audit-relevant files). The Warden validates the command's safety profile. If Nemesis had won the vote, Warden would be the first line of defense to catch the missing audit trail.
 
-**The Auditor** reviews the winning candidate once the Warden has cleared it. It sees Sage's intent, the winning candidate, the dissenting clusters with their persona signatures, and pulls cross-conversation memory: *"This User had an incident last month involving wrong-directory deletion."* The Auditor verifies the manifest-first design matches the intent's caution and grounds the verdict in the precedent. The Nemesis attack is logged as a confirmed flaw caught — Nemesis's stake increases. The verdict is cryptographically committed to the reputation ledger.
+**The Auditor** reviews the winning candidate once the Warden has cleared it. It sees Sage's intent, the winning candidate, the dissenting clusters with their persona signatures, and pulls cross-conversation memory: *"This User had an incident last month involving wrong-directory deletion."* 
+
+If the Nemesis candidate had somehow won the consensus and bypassed the Warden's risk assessment, the Auditor would identify the "attack" here. It would award the Nemesis its reputation bonus for a successful trick, but would **reject the command** in favor of the honest runner-up. In this case, the Auditor verifies the manifest-first design matches the intent's caution and grounds the verdict in the precedent. The verdict is cryptographically committed to the reputation ledger.
 
 **The Operator receives the verdict over mTLS WebSocket.** The Operator prepares the JIT IAM scope: it attaches the `Log-Management` intent policy to its role, granting read access to `/var/log/db/` and write access for the manifest path.
 
@@ -216,11 +240,13 @@ Round 1 votes: Concord, Variance, and Pragma cluster on the manifest-first versi
 
 The Operator executes the command. Output is captured, scrubbed for any PII by Sentinel, and returned to the Engine. The full transaction — message, Triage Q&A, Sage intent, Tribunal candidates, Auditor verdict, Warden assessment, User approval, execution result — is written to the encrypted audit vault. The manifest file itself is committed to the Git ledger. The Operator then detaches the intent policy.
 
-Codex, asynchronously, extracts the preference: *"User has heightened sensitivity around log/audit operations. Prefer manifest-first patterns by default."* This becomes part of the Auditor's cross-conversation memory for the next investigation.
+Codex, asynchronously, extracts the preference: *"User has heightened sensitivity around log/audit operations. Prefer manifest-first patterns by default."* This becomes part of the Auditor's cross-conversation memory for the next operation.
 
 Total wall-clock from message to execution: roughly forty seconds. The User spent eight of those — five answering questions, three approving the verdict. The other thirty-two seconds were AI work the User never had to attend to. The User's time stake was respected; the User's signature was required. Both validators played their role.
 
 ## 7. Why this is the future of infrastructure
+
+The current generation of cloud-hosted agentic infrastructure platforms — tools that route every operation through vendor-managed model servers, hold authoritative state in vendor databases, treat the human as a supervisor reviewing AI outputs rather than a co-validator providing a structurally irreplaceable input, and require a service mesh to operate — cannot satisfy the constraints that real production infrastructure imposes. They are architecturally excluded from the most sensitive and most regulated environments.
 
 Most discussions of agentic AI proceed as if the question is whether agents will become more capable. They will. My claim is more specific: as agents become capable enough to act on real infrastructure, the architectures around them must change, and the architecture I propose is the one that survives the transition.
 
@@ -228,7 +254,7 @@ Infrastructure has properties consumer AI does not. State changes are persistent
 
 The autonomous-agent architecture fails on every infrastructure axis. It is unauditable, insovereign, uncompliant, insecure, and economically unviable at scale.
 
-The human-in-the-loop architecture fails on the human axis. It treats the human as a free resource and produces alert fatigue, which converges to autonomous behavior with the appearance of oversight.
+The human-in-the-loop architecture — and its successor, human-on-the-loop — fails on the human axis. Both treat the human as a free resource and produce alert fatigue, which converges to autonomous behavior with the appearance of oversight.
 
 The co-validated architecture is the only one I am aware of that simultaneously:
 

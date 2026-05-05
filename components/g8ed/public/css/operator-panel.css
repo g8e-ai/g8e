@@ -1540,7 +1540,7 @@
   border: 1px solid var(--border-color);
   border-radius: 8px;
   overflow: hidden;
-  padding: 14px 14px 52px;
+  padding: 1rem;
   color: var(--text-primary);
 }
 
@@ -1705,36 +1705,6 @@
 .op-sys-value .ip-visibility-toggle:hover {
   color: var(--text-primary);
 }
-
-/* EKG trace strip pinned to bottom of the card */
-.op-card-ekg {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 42px;
-  overflow: hidden;
-  border-top: 1px solid rgba(var(--text-rgb), 0.06);
-  pointer-events: none;
-}
-.op-ekg-svg {
-  position: absolute;
-  left: 0;
-  top: 0;
-}
-.op-ekg-line {
-  animation: op-ekg-scroll 2.1s linear infinite;
-  will-change: transform;
-}
-.op-ekg-line.slow    { animation-duration: 3.8s; }
-.op-ekg-line.fast    { animation-duration: 1.3s; }
-.op-ekg-line.stopped { animation: none; opacity: 0.35; }
-
-.op-ekg-path { opacity: 0.9; }
-.op-ekg-path.healthy { stroke: var(--accent-green); }
-.op-ekg-path.loaded  { stroke: var(--accent-amber); }
-.op-ekg-path.crit    { stroke: var(--accent-red); }
-.op-ekg-path.muted   { stroke: var(--text-muted); opacity: 0.5; }
 
 @keyframes op-ekg-scroll {
   from { transform: translateX(0); }
@@ -2341,7 +2311,7 @@
 .operator-counter {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 0.5rem;
 }
 
 .operator-counter-btn {
@@ -2367,7 +2337,7 @@
 }
 
 .operator-counter-input {
-  width: 52px;
+  width: 36px;
   height: 24px;
   padding: 0 4px;
   background: var(--bg-secondary);

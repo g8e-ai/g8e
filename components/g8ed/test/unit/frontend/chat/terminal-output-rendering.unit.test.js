@@ -1091,8 +1091,8 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             expect(status.textContent).toBe('All generation passes failed \u2014 no candidate produced');
         });
 
-        it('shows verifier-failed label for TRIBUNAL_SESSION_VERIFIER_FAILED', () => {
-            terminal.failTribunal({ id: WIDGET_ID, eventType: EventType.TRIBUNAL_SESSION_VERIFIER_FAILED });
+        it('shows auditor-failed label for TRIBUNAL_SESSION_AUDITOR_FAILED', () => {
+            terminal.failTribunal({ id: WIDGET_ID, eventType: EventType.TRIBUNAL_SESSION_AUDITOR_FAILED });
 
             const status = document.getElementById(WIDGET_ID).querySelector('.tribunal__status');
             expect(status.textContent).toBe('Auditor rejected the candidate \u2014 no trusted command');

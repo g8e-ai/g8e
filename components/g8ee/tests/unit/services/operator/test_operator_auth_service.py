@@ -205,25 +205,25 @@ class TestOperatorAuthService:
         # Setup
         user_id = "user-456"
         token = "dlk_test_token"
-        
+
         # Link has capacity
         mock_cache.kv.get_json.return_value = {"max_uses": 5, "uses": 0}
-        
+
         # No existing AVAILABLE operators
         mock_operator_data_service.query_operators.return_value = []
-        
+
         # KV counter returns incremented value (atomic incr initializes to 0 then returns 1)
         mock_cache.kv.incr.return_value = 1
-        
+
         mock_operator_data_service.create_operator.return_value = None
         mock_api_key_service.issue_key.return_value = None
-        
+
         mock_cache.get_document_with_cache.return_value = {"id": user_id}
-        
+
         session_mock = MagicMock()
         session_mock.id = "session-789"
         mock_session_service.create_operator_session.return_value = session_mock
-        
+
         mock_lifecycle_service.claim_operator_slot.return_value = True
         mock_certificate_service.generate_operator_certificate.return_value = {"cert": "C", "key": "K"}
 
@@ -245,7 +245,7 @@ class TestOperatorAuthService:
         mock_operator_data_service.create_operator.assert_called_once()
         mock_api_key_service.issue_key.assert_called_once()
         mock_lifecycle_service.claim_operator_slot.assert_called_once()
-        
+
         # Verify KV operations for atomic slot counter
         # incr called once: for slot counter only (device link usage tracking is handled by g8ed)
         assert mock_cache.kv.incr.call_count == 1
@@ -254,25 +254,25 @@ class TestOperatorAuthService:
         # Test that concurrent requests get unique slot numbers via atomic KV increment
         user_id = "user-456"
         token = "dlk_test_token"
-        
+
         # Link has capacity
         mock_cache.kv.get_json.return_value = {"max_uses": 5, "uses": 0}
-        
+
         # No existing operators
         mock_operator_data_service.query_operators.return_value = []
-        
+
         # KV counter returns incremented value
         mock_cache.kv.incr.return_value = 3  # Increment to 3
-        
+
         mock_operator_data_service.create_operator.return_value = None
         mock_api_key_service.issue_key.return_value = None
-        
+
         mock_cache.get_document_with_cache.return_value = {"id": user_id}
-        
+
         session_mock = MagicMock()
         session_mock.id = "session-789"
         mock_session_service.create_operator_session.return_value = session_mock
-        
+
         mock_lifecycle_service.claim_operator_slot.return_value = True
         mock_certificate_service.generate_operator_certificate.return_value = {"cert": "C", "key": "K"}
 
@@ -291,7 +291,7 @@ class TestOperatorAuthService:
         assert result["success"] is True
         assert result["user_id"] == user_id
         mock_operator_data_service.create_operator.assert_called_once()
-        
+
         # Verify atomic increment was called once (slot counter only)
         # Device link usage tracking is handled by g8ed
         assert mock_cache.kv.incr.call_count == 1

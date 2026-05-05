@@ -291,11 +291,6 @@ export const OperatorListMixin = {
             const healthClass = computeHealthClass(operator, cpuClass, memClass, diskClass, latencyClass);
 
             const statusPillText = (statusDisplay || '').toString().toUpperCase();
-            const ekgColorClass = healthClass;
-            const ekgSpeedClass = healthClass === 'crit' ? 'fast'
-                : healthClass === 'loaded' ? 'slow'
-                : healthClass === 'muted' ? 'stopped'
-                : 'normal';
 
             item.classList.add(statusClass);
 
@@ -393,8 +388,7 @@ export const OperatorListMixin = {
                 memClass,
                 diskClass,
                 latencyClass,
-                ekgColorClass,
-                ekgSpeedClass
+                statusPillText
             });
 
             const toggleBtn = item.querySelector('.operator-toggle-btn');

@@ -160,6 +160,7 @@ class OperatorPortService:
                     command=f"port_check {host}:{port} ({protocol})",
                     execution_id=exec_id,
                     operator_session_id=operator_session_id,
+                    port=port,
                 ),
                 g8e_context,
                 task_id=AITaskId.PORT_CHECK,

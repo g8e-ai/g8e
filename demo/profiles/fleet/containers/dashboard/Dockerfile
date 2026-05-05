@@ -1,15 +1,15 @@
-FROM node:22-alpine
-
-LABEL description="Fleet Status Dashboard"
+FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY package.json ./
-RUN npm install
+RUN pip install --no-cache-dir fastapi uvicorn docker
 
-COPY server.js ./
-COPY public/ ./public/
+# Install docker CLI to be able to use it if needed, 
+# but we'll use the docker-py library.
+RUN apt-get update && apt-get install -y curl && \
+    curl -fsSL https://get.docker.com | sh && \
+    rm -rf /var/lib/apt/lists/*
 
-EXPOSE 3000
+COPY . .
 
-CMD ["npx", "nodemon", "-w", "server.js", "-x", "node server.js"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]

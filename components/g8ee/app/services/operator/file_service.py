@@ -186,7 +186,7 @@ class OperatorFileService:
                         operation=operation,
                         file_path=file_path,
                         content=args.content or args.new_content,
-                        context=FileOperationRiskContext(),
+                        context=FileOperationRiskContext(backup_available=args.create_backup),
                         settings=G8eeUserSettings(llm=LLMSettings()),
                     )
                     if risk_analysis and not risk_analysis.safe_to_proceed:

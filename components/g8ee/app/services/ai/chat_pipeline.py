@@ -341,26 +341,11 @@ class ChatPipelineService:
         if persisted:
             logger.info("[SSE-CHAT] Final AI response persisted to database")
             # Detect and publish clarifying questions
-            questions = extract_interrogation_questions(state.response_text)
-            if questions:
-                logger.info("[SSE-CHAT] Detected %d clarifying questions, publishing event", len(questions))
-                await self.g8ed_event_service.publish_investigation_event(
-                    investigation_id=g8e_context.investigation_id,
-                    event_type=EventType.AI_TRIAGE_CLARIFICATION_QUESTIONS,
-                    payload=TriageClarificationQuestionsPayload(
-                        questions=questions,
-                        complexity=inputs.triage_result.complexity if inputs.triage_result else "unknown",
-                        complexity_confidence=str(inputs.triage_result.complexity_confidence) if inputs.triage_result else "0",
-                        intent=inputs.triage_result.intent_summary if inputs.triage_result else "unknown",
-                        intent_confidence=str(inputs.triage_result.intent_confidence) if inputs.triage_result else "0",
-                        intent_summary=inputs.triage_result.intent_summary if inputs.triage_result else "unknown",
-                        request_posture=inputs.triage_result.request_posture if inputs.triage_result else "unknown",
-                        posture_confidence=str(inputs.triage_result.posture_confidence) if inputs.triage_result else "0",
-                    ),
-                    web_session_id=g8e_context.web_session_id,
-                    case_id=g8e_context.case_id,
-                    user_id=g8e_context.user_id,
-                )
+            await self._detect_and_publish_interrogation(
+                text=state.response_text,
+                g8e_context=g8e_context,
+                inputs=inputs
+            )
         else:
             logger.info("[SSE-CHAT] Skipping final AI response persistence (empty response_text)")
 
@@ -371,6 +356,36 @@ class ChatPipelineService:
                 user_settings=user_settings,
                 task_manager=task_manager,
             )
+
+    async def _detect_and_publish_interrogation(
+        self,
+        text: str,
+        g8e_context: G8eHttpContext,
+        inputs: AgentInputs,
+    ) -> None:
+        """Extract clarifying questions from text and publish to frontend if found."""
+        questions = extract_interrogation_questions(text)
+        if not questions:
+            return
+
+        logger.info("[SSE-CHAT] Detected %d clarifying questions, publishing event", len(questions))
+        await self.g8ed_event_service.publish_investigation_event(
+            investigation_id=g8e_context.investigation_id,
+            event_type=EventType.AI_TRIAGE_CLARIFICATION_QUESTIONS,
+            payload=TriageClarificationQuestionsPayload(
+                questions=questions,
+                complexity=inputs.triage_result.complexity if inputs.triage_result else "unknown",
+                complexity_confidence=str(inputs.triage_result.complexity_confidence) if inputs.triage_result else "0",
+                intent=inputs.triage_result.intent_summary if inputs.triage_result else "unknown",
+                intent_confidence=str(inputs.triage_result.intent_confidence) if inputs.triage_result else "0",
+                intent_summary=inputs.triage_result.intent_summary if inputs.triage_result else "unknown",
+                request_posture=inputs.triage_result.request_posture if inputs.triage_result else "unknown",
+                posture_confidence=str(inputs.triage_result.posture_confidence) if inputs.triage_result else "0",
+            ),
+            web_session_id=g8e_context.web_session_id,
+            case_id=g8e_context.case_id,
+            user_id=g8e_context.user_id,
+        )
 
     async def _record_agent_activity_metadata(
         self,
@@ -668,6 +683,12 @@ class ChatPipelineService:
                     investigation_id=inputs.investigation_id,
                     text=text,
                     sender=inputs.message_sender,
+                )
+                # Detect and publish clarifying questions from intermediate turns
+                await self._detect_and_publish_interrogation(
+                    text=text,
+                    g8e_context=g8e_context,
+                    inputs=inputs
                 )
 
             await self.g8e_agent.run_with_sse(

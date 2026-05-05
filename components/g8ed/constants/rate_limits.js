@@ -112,8 +112,8 @@ export const ConsoleRateLimit = Object.freeze({
 // Device Link (public register endpoint)
 // ---------------------------------------------------------------------------
 export const DeviceLinkRateLimit = Object.freeze({
-    WINDOW_MS: 5 * 60 * 1000,
-    MAX: 30,
+    WINDOW_MS: 60 * 1000,
+    MAX: 1000,
 });
 
 // ---------------------------------------------------------------------------
