@@ -461,6 +461,7 @@ async def _run_voting_stage(
     request: str,
     emitter: TribunalEmitter,
     total_members: int,
+    is_final: bool = True,
 ) -> tuple[str | None, float, VoteBreakdown, list[CandidateCommand] | None]:
     """Stage 2: compute weighted majority vote and emit consensus event."""
     vote_winner, vote_score, vote_breakdown, tied_candidates = weighted_vote(candidates, total_members)
@@ -477,8 +478,9 @@ async def _run_voting_stage(
             for member, cmd in vote_breakdown.candidates_by_member.items():
                 logger.info("[TRIBUNAL-TELEMETRY]   %s: %s", member, cmd[:200] + "..." if len(cmd) > 200 else cmd)
 
+        event_type = EventType.TRIBUNAL_VOTING_CONSENSUS_FAILED if is_final else EventType.TRIBUNAL_VOTING_CONSENSUS_NOT_REACHED
         await emitter.emit(
-            EventType.TRIBUNAL_VOTING_CONSENSUS_FAILED,
+            event_type,
             TribunalConsensusFailedPayload(
                 request=request,
                 vote_breakdown=vote_breakdown,
@@ -544,6 +546,7 @@ async def _run_audit_stage(
     # 1. Warden Risk Analysis (BEFORE Auditor)
     risk_analysis: CommandRiskAnalysis | None = None
     if ai_response_analyzer:
+        logger.info("[TRIBUNAL-WARDEN] Starting risk analysis for command: %r", vote_winner[:200] + "..." if len(vote_winner) > 200 else vote_winner)
         justification_parts = [request.strip()] if request else []
         if guidelines and guidelines.strip():
             justification_parts.append(f"Guidelines: {guidelines.strip()}")
@@ -559,6 +562,10 @@ async def _run_audit_stage(
             settings=settings,
         )
 
+        if risk_analysis:
+            logger.info("[TRIBUNAL-WARDEN] Risk analysis complete: level=%s score=%.2f reason=%s", 
+                        risk_analysis.risk_level, risk_analysis.risk_score, risk_analysis.reason)
+
         if risk_analysis and risk_analysis.risk_level == RiskLevel.HIGH:
             # Two-Strike Circuit Breaker logic moved from OperatorCommandService
             block_count = investigation_state.warden_block_count if investigation_state else 0
@@ -567,6 +574,7 @@ async def _run_audit_stage(
             if block_count >= 1:
                 # SECOND STRIKE: Agent Conflict
                 logger.warning("[WARDEN-CIRCUIT-BREAKER] Second warden block detected for investigation=%s - triggering AGENT_CONFLICT", investigation_id)
+                logger.warning("[TRIBUNAL-WARDEN] Blocking command due to repeated HIGH risk detection: %r", vote_winner)
                 if investigation_state:
                     investigation_state.warden_block_count = 0
 
@@ -588,6 +596,7 @@ async def _run_audit_stage(
 
             # FIRST STRIKE: Contextual feedback
             logger.info("[WARDEN-CIRCUIT-BREAKER] First warden block for investigation=%s - generating contextual feedback", investigation_id)
+            logger.info("[TRIBUNAL-WARDEN] Blocking command due to HIGH risk detection: %r", vote_winner)
             if investigation_state:
                 investigation_state.warden_block_count = block_count + 1
 
@@ -603,6 +612,8 @@ async def _run_audit_stage(
             feedback_msg = error_analysis.user_message if error_analysis and error_analysis.user_message else "Command blocked as high risk. Propose a safer alternative."
             if error_analysis and error_analysis.suggested_fix:
                 feedback_msg += f" Suggestion: {error_analysis.suggested_fix}"
+
+            logger.info("[TRIBUNAL-WARDEN] Feedback for Sage: %s", feedback_msg)
 
             await emitter.emit(
                 EventType.TRIBUNAL_SESSION_WARDEN_BLOCKED,
@@ -653,6 +664,7 @@ async def _run_audit_stage(
     commitment_id: str | None = None
     if auditor_passed:
         correlation_id = getattr(emitter, "correlation_id", None) or ""
+        logger.info("[TRIBUNAL-AUDITOR] Command verified successfully, creating reputation commitment for correlation_id=%s", correlation_id)
         try:
             commitment = await commit_reputation(
                 reputation_data_service=reputation_data_service,
@@ -661,6 +673,7 @@ async def _run_audit_stage(
                 hmac_key=auditor_hmac_key,
             )
             commitment_id = commitment.id
+            logger.info("[TRIBUNAL-AUDITOR] Reputation commitment created: id=%s merkle_root=%s", commitment.id, commitment.merkle_root[:16])
             await emitter.emit(
                 EventType.REPUTATION_COMMITMENT_CREATED,
                 ReputationCommitmentCreatedPayload(
@@ -892,16 +905,18 @@ async def generate_command(
         round_num=1,
     )
 
+    # Run Round 1 voting
     vote_winner, vote_score, vote_breakdown, tied_candidates = await _run_voting_stage(
         candidates=candidates, request=request, emitter=emitter, total_members=num_passes,
+        is_final=False,
     )
 
-    # Round 2: anonymized peer review if consensus is low and multi-round is enabled
+    # Round 2: anonymized peer review if consensus is low
     round_2_candidates = None
     round_2_vote_breakdown = None
     rounds_executed = 1
 
-    if vote_winner is None and settings.llm.llm_command_gen_rounds == 2:
+    if vote_winner is None:
 
         logger.info("[TRIBUNAL] Consensus strength too low (%.2f < %d), initiating Round 2 peer review",
                     vote_breakdown.consensus_strength, TRIBUNAL_MIN_CONSENSUS)

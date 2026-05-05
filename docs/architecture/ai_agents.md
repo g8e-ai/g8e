@@ -5,7 +5,7 @@ parent: Architecture
 
 # AI Agent Architecture
 
-The g8e platform utilizes a specialized multi-agent system designed for autonomous technical investigations. The architecture prioritizes safety, cryptographic auditability, and human-in-the-loop control while maintaining high reasoning performance.
+The g8e platform utilizes a specialized multi-agent system designed for autonomous infrastructure management. The architecture prioritizes safety, cryptographic auditability, and human-in-the-loop control while maintaining high reasoning performance at fleet scale.
 
 ## Core Principles
 
@@ -20,7 +20,7 @@ Every user message triggers a structured pipeline that routes the request based 
 
 ### 1. Triage (The Gatekeeper)
 Incoming messages are first processed by the **Triage Agent** (using a `lite` model tier). It performs three critical classifications:
-- **Complexity**: Routes `simple` requests (status checks, basic lookups) to **Dash** and `complex` requests (investigations, multi-step actions) to **Sage**.
+- **Complexity**: Routes `simple` requests (status checks, basic lookups) to **Dash** and `complex` requests (fleet operations, multi-step maintenance) to **Sage**.
 - **Intent**: Categorizes the goal as `information`, `action`, or `unknown`.
 - **Posture**: Identifies the user's state (`normal`, `escalated`, `adversarial`, `confused`) to calibrate downstream agent behavior (Warning Protocol, Denial Memory).
 
@@ -28,31 +28,31 @@ Incoming messages are first processed by the **Triage Agent** (using a `lite` mo
 
 ### 2. Context Enrichment
 Before an agent receives the task, the system assembles a comprehensive "world view":
-- **Investigation Context**: Case metadata, status, and priority.
+- **Fleet Context**: Operation metadata, status, and priority.
 - **Operator Context**: Real-time system metadata (OS, shell, architecture, permissions) extracted from `OperatorDocument` heartbeats.
 - **Learned Context**: Durable user preferences and technical background extracted by **Codex**.
 - **Triage Context**: The posture and intent summary produced by the Triage agent.
 
 ### 3. Reasoning Agents
 - **Dash (Fast-path)**: A direct responder for `simple` tasks. It prioritizes speed and minimal ceremony. It can call single tools but escalates to Sage if the plan exceeds a single turn.
-- **Sage (Primary Reasoner)**: The senior investigator for `complex` tasks. It operates in a **ReAct loop**, planning investigations, proposing tool calls, and interpreting results.
+- **Sage (Primary Reasoner)**: The senior reasoner for `complex` tasks. It operates in a **ReAct loop**, planning operations, proposing tool calls, and interpreting results.
 
 ## The Tribunal: Command Translation
 
-To prevent hallucinations and ensure safety, agents never write shell commands directly. Instead, they articulate **Investigative Intent** using the `SageOperatorRequest` model.
+To prevent hallucinations and ensure safety, agents never write shell commands directly. Instead, they articulate **Operational Intent** using the `SageOperatorRequest` model.
 
 ### Execution Protocol
-1. **Intent Articulation**: Sage (or Dash) describes the goal, information targets, and constraints in natural language.
+1. **Intent Articulation**: Sage (or Dash) describes the goal, targets, and constraints in natural language.
 2. **Tribunal Generation (Round 1)**: Five independent members produce a candidate command:
     - **Axiom**: Focuses on optimal composition and pipelines.
     - **Concord**: Focuses on defensive safety and read-only preferences.
     - **Variance**: Focuses on robust edge-case handling (spaces, symlinks, locales).
     - **Pragma**: Focuses on idiomatic conventions for the target OS/shell.
-    - **Nemesis**: The "immune system" — produces plausible-but-flawed commands or honestly abstains.
+    - **Nemesis**: The "immune system" — produces plausible-but-flawed commands to trick the Warden.
 3. **Consensus & Tie-breaking (Round 1)**: Candidates are clustered by exact match. A winner requires ≥2 supporting votes. If consensus fails or a tie is unresolved by deterministic laddering (Shortest → Non-Nemesis), the system enters Round 2.
 4. **Round 2 Peer Review (Conditional)**: Members are presented with anonymized command clusters from Round 1 and invited to either converge or hold their position. If Round 2 also fails to reach consensus, a circuit breaker error halts the loop and surfaces back to Sage.
-5. **Warden Analysis**: The **Warden** (running on the Engine) performs a pre-execution risk assessment (Command, File, and Error risk) using specialized sub-agents. The Warden validates the command safety profile *before* the Auditor performs the final commitment. Warden stakes reputation on accurate classification.
-6. **Auditor Review**: Only once the Warden has cleared the command does the **Auditor** judge the winning command against the intent. It can only approve (`ok`) or reject (`reject`). The Auditor cannot modify the command or swap to a dissenting cluster after the Warden has cleared it. The Auditor performs the final consistency check and Merkle commitment to the reputation ledger.
+5. **Warden Analysis**: The **Warden** (running on the Engine) performs a pre-execution risk assessment (Command, File, and Error risk) using specialized sub-agents. The Warden validates the command safety profile *before* the Auditor performs the final commitment. Warden stakes reputation on accurate classification. The Nemesis actively tries to trick the Warden into allowing a flawed command.
+6. **Auditor Review**: Only once the Warden has cleared the command does the **Auditor** judge the winning command against the intent. It can only approve (`ok`) or reject (`reject`). The Auditor is the final line of defense; if the Nemesis successfully tricks the Warden, the Auditor identifies the attack, awards the Nemesis, but rejects the command. The Auditor performs the final consistency check and Merkle commitment to the reputation ledger.
 7. **Two-Strike Circuit Breaker**: If Warden blocks a HIGH-risk command:
     - **First Strike**: An assistant-tier model generates contextual feedback; Sage can propose a safer alternative.
     - **Second Strike**: If blocked again, an `AI_AGENT_CONFLICT_DETECTED` event triggers, halting the loop and surfacing an "Agent Conflict" dialog for human intervention.
@@ -93,7 +93,7 @@ The Warden-Sage interaction implements a circuit breaker to prevent infinite loo
 ### Memory & Learning (Codex)
 Learning happens asynchronously via **Codex** after a turn completes:
 - **Preference Extraction**: Updates user communication style and technical depth.
-- **Investigation Summaries**: Maintains scrubbed (redacted) high-level progress logs.
+- **Operational Summaries**: Maintains scrubbed (redacted) high-level progress logs.
 
 ### Local-First Audit Architecture (LFAA)
 - **Audit Vault**: All activity is persisted in an encrypted, tamper-evident SQLite database on the target host.

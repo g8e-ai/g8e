@@ -36,7 +36,9 @@ from app.models.agent import (
     StreamChunkFromModel,
 )
 from app.models.base import G8eBaseModel
+from app.utils.timestamp import now
 from app.models.g8ed_client import (
+    AiProcessingStoppedPayload,
     AIToolLifecyclePayload,
     ChatCitationsReadyPayload,
     ChatErrorPayload,
@@ -342,9 +344,13 @@ async def deliver_via_sse(
 
     except asyncio.CancelledError:
         logger.info("[SSE] Cancelled for investigation %s", investigation_id)
+        # Emit STOPPED event instead of FAILED when processing is cancelled
         await _publish(
-            EventType.LLM_CHAT_ITERATION_FAILED,
-            ChatErrorPayload(error="AI processing stopped"),
+            EventType.LLM_CHAT_ITERATION_STOPPED,
+            AiProcessingStoppedPayload(
+                reason="AI processing stopped",
+                timestamp=now(),
+            ),
         )
         raise
 

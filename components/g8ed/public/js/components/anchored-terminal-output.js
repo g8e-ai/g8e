@@ -814,8 +814,15 @@ export class TerminalOutputMixin {
                 return 'System error — all passes failed (auth/network/config)';
             case EventType.TRIBUNAL_SESSION_GENERATION_FAILED:
                 return 'All generation passes failed — no candidate produced';
-            case EventType.TRIBUNAL_SESSION_VERIFIER_FAILED:
+            case EventType.TRIBUNAL_SESSION_AUDITOR_FAILED:
                 return 'Auditor rejected the candidate — no trusted command';
+            case EventType.TRIBUNAL_SESSION_WARDEN_BLOCKED:
+                return 'Command blocked by Warden risk analysis';
+            case EventType.AI_AGENT_CONFLICT_DETECTED:
+                return 'Agent Conflict — multiple Warden blocks; human required';
+            case EventType.TRIBUNAL_VOTING_CONSENSUS_FAILED:
+            case EventType.TRIBUNAL_VOTING_ROUND_2_CONSENSUS_FAILED:
+                return 'Consensus failed — no two members agreed';
             default:
                 return 'Tribunal halted — no command produced';
         }

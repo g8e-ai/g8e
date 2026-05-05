@@ -84,6 +84,10 @@ def weighted_vote(candidates: list[CandidateCommand], total_members: int) -> tup
     # Find candidates with max votes (potential tie)
     top_candidates = [cmd for cmd, count in vote_counts.items() if count == max_votes]
 
+    logger.info("[TRIBUNAL-VOTING] Voting breakdown: %d candidates, %d unique commands, max_votes=%d", len(candidates), len(candidates_by_command), max_votes)
+    for cmd, members in candidates_by_command.items():
+        logger.info("[TRIBUNAL-VOTING]   Command: %r | Votes: %d | Members: %s", cmd, len(members), members)
+
     if len(top_candidates) == 1:
         winner = top_candidates[0]
         dissenters = {cmd: members for cmd, members in candidates_by_command.items() if cmd != winner}

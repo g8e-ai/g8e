@@ -10,6 +10,32 @@ governance architecture for trustless environments
 
 </div>
 
+## What this is
+
+g8e is the deployment layer for production AI agents.
+
+It sits between any AI agent — yours, a vendor's, an open-source one — and the infrastructure it's about to change. A stateless reasoning **Engine** runs Byzantine consensus over heterogeneous LLM personas to produce a candidate command. A sovereign single-binary **Operator** runs on every managed host, enforces FIDO2 co-validation at the execution boundary, executes approved commands in isolation, and owns a tamper-evident local audit ledger. The Engine is replaceable. The Operator is the system of record. You hold the only signature only a human can produce.
+
+The architecture is built so that the parts that have to be replaceable are replaceable, the parts that have to be sovereign are sovereign, and the parts that have to be auditable are auditable by the party that owns the infrastructure — not by the party that owns the model. Apache 2.0. Self-hosted. No telemetry. Air-gap capable. It runs on your hardware, on your network, under your signature.
+
+If you are building an agentic product that has to pass enterprise procurement, federal procurement, HIPAA review, or any other governance regime that asks "what did the AI actually do and who said it could," this is the substrate. Not a feature you add later. The thing the rest is built on.
+
+## Why
+
+Every production AI agent system in 2026 is one of two shapes, and both are broken.
+
+**Autonomous agents** plan, act, and report. They produce technically correct, contextually wrong outcomes — doing exactly what they understood the request to mean while missing what you actually meant. Nothing in the system is structurally positioned to catch the gap.
+
+**Human-in-the-loop systems** retrofit oversight with approval prompts. When verification is costly and approval is cheap, humans rubber-stamp. Oversight is nominal; behavior converges to autonomous.
+
+Both fail because they treat humans and machines as substitutable validators on the same questions. They are not. g8e splits the work: machine-domain checks (internal consistency, falsifiability, pattern-match safety, cross-conversation grounding) go to the AI layer; human-domain checks (intent fidelity in your environment, contextual stakes, real-world consequences) go to you. Both signatures are required for every state change.
+
+This architecture is missing from the market for a structural reason. Every property the deployment layer has to have — local-first audit, model-agnostic reasoning, no telemetry, sovereign per-host execution, open license — is hostile to the business model of the parties best positioned to build it. A vendor whose revenue depends on cloud lock-in cannot ship a sovereign operator. A vendor whose revenue depends on model lock-in cannot ship a model-agnostic engine. A vendor whose revenue depends on telemetry cannot ship a tamper-evident audit ledger that lives on the customer's host. The deployment layer has to be sovereign, replaceable, and auditable by the customer — which means it cannot come from a company whose P&L depends on the opposite.
+
+It has to be built independently, in the open, by parties whose incentives are aligned with the customer's instead of the vendor's. That is what this is.
+
+The full thesis: [position_paper.md](docs/architecture/position_paper.md).
+
 ---
 
 - 4MB statically-compiled Go Operator on every managed host
@@ -19,32 +45,6 @@ governance architecture for trustless environments
 - Local-first audit; the host is the system of record, not the cloud
 - Model-agnostic — swap providers without losing history
 - Apache 2.0 · Self-hosted · Air-gap capable · No SaaS, no telemetry
-
----
-
-## Setup Walkthrough
-
-https://www.youtube.com/watch?v=tY7A6BHatF8
-
-![alt text](components/g8ed/public/media/fixed-by-g8e.png)
-
-## What this is
-
-g8e is a platform for running AI agents against production infrastructure without giving up sovereignty, auditability, or sleep. A stateless reasoning **Engine** runs Byzantine consensus over heterogeneous LLM personas. A sovereign **Operator** binary runs on every managed host, enforces FIDO2 approval at the execution boundary, and owns the local-first audit ledger.
-
-The Engine is replaceable. The Operator is the system of record. You hold the only signature only a human can produce.
-
-## Why
-
-Every production AI agent system in 2026 is one of two shapes, and both are broken.
-
-**Autonomous agents** plan, act, and report. They produce technically correct, contextually wrong outcomes — doing exactly what they understood the request to mean while missing what you actually meant. Nothing in the system is structurally positioned to catch the gap.
-
-**Human-in-the-loop** systems retrofit oversight with approval prompts. When verification is costly and approval is cheap, humans rubber-stamp. The oversight is nominal; the behavior converges to autonomous.
-
-Both fail because they treat humans and machines as substitutable validators on the same questions. They are not. g8e splits the work: machine-domain checks (internal consistency, falsifiability, pattern-match safety, cross-conversation grounding) go to the AI layer; human-domain checks (intent fidelity in your environment, contextual stakes, real-world consequences) go to you. Both signatures are required for every state change.
-
-The full thesis: [position_paper.md](docs/architecture/position_paper.md).
 
 ---
 
@@ -101,8 +101,8 @@ flowchart TD
 1. **Triage** classifies the request. Trivial questions go to **Dash** (fast-path responder). Anything that may state-change is enriched with operator context and routed to **Sage**.
 2. **Sage** writes an intent document — goals, constraints, success criteria — and hands it to the Tribunal.
 3. **The Tribunal** is five blind validators (Axiom, Concord, Variance, Pragma, Nemesis), each generating a candidate command independently with no visibility into the others. A winner requires ≥2 of 5 supporting votes. If consensus fails or a tie is unresolved by deterministic laddering (Shortest → Non-Nemesis), an anonymized peer-review round runs. If Round 2 also fails to reach consensus, a circuit breaker error is triggered and surfaced back to Sage.
-4. **Warden** (running on the Engine) performs a pre-execution risk assessment. It coordinates specialized sub-agents (`warden_command_risk`, `warden_file_risk`, `warden_error`) to validate the command safety profile for blast radius, destructive idioms, and risk before allowing it to proceed. The Warden stakes reputation on accurate classification.
-5. **The Auditor** performs the final consistency check and Merkle commitment once the Warden has cleared the command. The Auditor is bonded 2–3× heavier than any Tribunal member and is itself peer-reviewed across conversations.
+4. **Warden** (running on the Engine) performs a pre-execution risk assessment. It coordinates specialized sub-agents (`warden_command_risk`, `warden_file_risk`, `warden_error`) to validate the command safety profile for blast radius, destructive idioms, and risk. The **Nemesis** actively tries to trick the Warden into allowing flawed commands.
+5. **The Auditor** performs the final consistency check and Merkle commitment once the Warden has cleared the command. The Auditor is the only persona that cannot be tricked by the Nemesis; if a Nemesis command passes the Warden, the Auditor identifies the "attack," awards the Nemesis, but rejects the command.
 6. **You** review the command and the risk assessment, and sign with a passkey, or you don't.
 7. **The Operator** receives the signed command over the outbound WebSocket, runs it in an isolated process group, captures the result into the local audit vault, and snapshots state into a git-backed ledger.
 8. **Codex** (async) extracts durable user preferences and scrubbed investigation summaries from the conversation history to build long-term memory.
@@ -184,7 +184,7 @@ Five LLM personas generate candidate commands in parallel, blind to each other:
 | **Concord** | Safety | Defensive flags, read-only discipline |
 | **Variance** | Edge cases | Locales, spaces, nulls, boundary conditions |
 | **Pragma** | Convention | Idiomatic, OS-specific, least-surprise |
-| **Nemesis** | Calibrated adversary | Proposes flawed-but-plausible commands to stress the Auditor |
+| **Nemesis** | Calibrated adversary | Tries to trick the Warden with flawed-but-plausible commands to stress the system. |
 
 A winner requires ≥2 of 5 supporting votes (Plurality Consensus). If consensus is not reached, or if a tie cannot be resolved by deterministic laddering (Shortest → Non-Nemesis), anonymized peer review runs and members may converge or hold. If the tie remains unresolved after Round 2, a circuit breaker halts the loop and surfaces the deadlock to Sage.
 
@@ -198,21 +198,20 @@ Reputation staking, slashing tiers, and the full mechanism design: [governance.m
 
 ## The Operator
 
-A statically compiled Go binary, ~4MB, no dependencies. One command installs it on a host:
+The **Operator** is a 4MB sovereign "Satellite Agent" designed for global-scale fleet management. It delivers remote execution anywhere in the world using only an outbound connection, managing hundreds or thousands of devices within a single conversation context. A single command installs it on any host:
 
 ```bash
 curl -fsSL http://<hub>/g8e | sh -s -- <device-link-token>
 ```
 
-It pulls the platform CA, fetches the binary, registers itself with the Hub via system fingerprint, runs as the Operator, and self-deletes when the session ends. No root, no package manager, no inbound ports.
-
 What happens on every state change:
 
-1. **Receives** the signed command via outbound mTLS WebSocket.
-2. **Pre-screens** with the Sentinel — 46 MITRE ATT&CK detectors, 28 scrubbing patterns applied twice (egress on host, ingress on engine).
-3. **Executes** in an isolated process group with closed stdin.
-4. **Captures** output into a Raw Vault (encrypted, host-only) and a Scrubbed Vault (AI-accessible).
-5. **Snapshots** the audit state into a local git-backed ledger.
+1. **Context Injection**: Bundles a signed snapshot of host state (OS, shell, hardware, history) into the reasoning loop.
+2. **Receives** the signed command via outbound mTLS WebSocket.
+3. **Pre-screens** with the Sentinel — 46 MITRE ATT&CK detectors, 28 scrubbing patterns.
+4. **Executes** in an isolated process group with closed stdin.
+5. **Captures** output into a Raw Vault (host-only) and a Scrubbed Vault (AI-accessible).
+6. **Snapshots** state into a local git-backed ledger for immutable audit.
 
 System fingerprint binding ties the Operator's mTLS cert to the host it was issued on. A stolen API key is useless from a different machine.
 
@@ -268,6 +267,15 @@ curl -fsSL http://<host>/g8e | sh -s -- <device-link-token>
 ./g8e operator build       # Compile Operator for all architectures
 ./g8e test <component>     # Run component tests (g8ee, g8ed, g8eo)
 ```
+
+
+## Setup Walkthrough
+
+https://www.youtube.com/watch?v=tY7A6BHatF8
+
+
+![alt text](components/g8ed/public/media/fixed-by-g8e.png)
+
 
 ---
 

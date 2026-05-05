@@ -517,10 +517,17 @@
 .operator-bind-all-operators-header {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 8px;
     font-size: 12px;
     font-weight: 600;
     color: var(--text-primary);
+}
+
+.operator-select-all-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .operator-select-all-checkbox {
@@ -739,10 +746,19 @@
     color: var(--text-primary);
 }
 
-.operator-unbind-all-operators-container {
+.operator-unbind-all-operators-header {
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
     gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.operator-unbind-all-label {
+    display: flex;
+    align-items: center;
 }
 
 .operator-unbind-all-operators-list {

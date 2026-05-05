@@ -61,7 +61,7 @@ A five-member panel that translates Sage's intent into an executable command thr
 - **Concord** (`verified_user`): The Guardian. Focuses on safety and defensive discipline.
 - **Variance** (`call_split`): The Exhaustive. Focuses on robustness against edge cases (spaces, null input, symlinks).
 - **Pragma** (`menu_book`): The Conventional. Focuses on idiomatic patterns for the target system.
-- **Nemesis** (`gpp_maybe`): The Adversary. Injects plausible-but-subtle flaws to stress-test the ensemble.
+- **Nemesis** (`gpp_maybe`): The Adversary. Injects plausible-but-subtle flaws to trick the Warden. If it succeeds in tricking Warden, it is awarded by Auditor, but the command is rejected.
 
 **Common Contract**: Every member emits exactly a shell command string. Disagreement is ideological, not statistical.
 
@@ -83,7 +83,7 @@ A five-member panel that translates Sage's intent into an executable command thr
 - **Icon**: `fact_check`
 - **Role**: `auditor`
 - **Model Tier**: `primary`
-- **Purpose**: Final judge of Tribunal candidates. Operates in `unanimous`, `majority`, or `tied` modes. Only once the Warden has cleared the command does the Auditor perform the final consistency check and Merkle commitment.
+- **Purpose**: Final judge of Tribunal candidates. Operates in `unanimous`, `majority`, or `tied` modes. Only once the Warden has cleared the command does the Auditor perform the final consistency check and Merkle commitment. The Auditor is the only persona that cannot be tricked by the Nemesis; it awards Nemesis for successful "Warden tricks" but rejects the flawed command.
 - **Reputation**: The only agent that reads `reputation_state` (cross-chain memory) and writes `reputation_commitment` via Merkle roots.
 - **Output**: `ok` or `reject`.
 
