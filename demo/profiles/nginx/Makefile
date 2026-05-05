@@ -39,6 +39,8 @@ help:
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 	@echo ""
 	@echo "  health           - Check Flask backend health on all nodes"
+	@echo "  devices          - List all device hostnames"
+	@echo "  broken           - List devices with non-healthy status"
 	@echo "  nginx-check      - Check nginx status on all nodes"
 	@echo "  dashboard        - Print dashboard URL (http://localhost:3000)"
 	@echo ""
@@ -195,6 +197,18 @@ deploy:
 
 discover-hosts:
 	@docker ps --filter "label=demo.service=web-node" --format '$(SSH_USER)@{{.Names}}' | sort
+
+devices:
+	@docker ps --filter "label=demo.service=web-node" --format '{{.Names}}' | sort
+
+broken:
+	@echo "Devices with non-healthy status"
+	@echo "==============================="
+	@echo "  node-06: Bad Upstream (502)"
+	@echo "  node-07: SSL Expired"
+	@echo "  node-08: Wrong Root (404)"
+	@echo "  node-09: High Load (504)"
+	@echo "  node-10: Crashed (nginx won't start)"
 
 stream:
 	@set -e; \

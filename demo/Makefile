@@ -1,261 +1,56 @@
-# Broken Web App Fleet Demo - 10 Nginx Nodes
-# Each node runs nginx proxying to a Flask backend.
-# 5 healthy, 5 broken in different ways. Deploy operators and fix with g8e.
+# g8e Demo Dispatcher
+# Delegates to the active demo profile in profiles/
 
-.PHONY: help build up down status clean deploy setup-ssh discover-hosts stream vanish shell logs health nginx-check operators dashboard
+PROFILES_DIR := profiles
+ACTIVE_PROFILE_FILE := $(PROFILES_DIR)/.active
+ACTIVE_PROFILE := $(shell cat $(ACTIVE_PROFILE_FILE) 2>/dev/null || echo "acme-corp")
+PROFILE_PATH := $(PROFILES_DIR)/$(ACTIVE_PROFILE)
 
-COMPOSE := docker compose
-CONTAINER_PREFIX := web-node
-SSH_USER := appuser
+.PHONY: all help switch list
+
+# Standard demo targets to delegate
+TARGETS := build up down status clean logs shell deploy discover-hosts stream vanish health nginx-check operators dashboard devices broken
 
 help:
-	@echo "Broken Web App Fleet Demo"
+	@echo "g8e Demo System"
+	@echo "Active Profile: $(ACTIVE_PROFILE)"
 	@echo ""
-	@echo "Usage: make [target]"
+	@echo "Commands:"
+	@echo "  list            - List available demo profiles"
+	@echo "  switch P=<name> - Switch to a different profile"
 	@echo ""
-	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-	@echo "  FLEET LIFECYCLE"
-	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-	@echo ""
-	@echo "  up               - Build and start all web nodes (default 10)"
-	@echo "  up N=20          - Build and start 20 web nodes (5 healthy, 5 broken, 10 extra healthy)"
-	@echo "  down             - Stop all nodes"
-	@echo "  status           - Show container status"
-	@echo "  clean            - Remove everything (containers, images, volumes)"
-	@echo ""
-	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-	@echo "  OPERATOR DEPLOYMENT"
-	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-	@echo ""
-	@echo "  deploy -d dlk_xxx           - Deploy operators via remote pubsub start"
-	@echo "  stream -d dlk_xxx           - Deploy operators via SSH streaming (runs in g8ep)"
-	@echo "                            - Also supports: DEVICE_TOKEN=dlk_xxx"
-	@echo "  discover-hosts            - List discovered demo fleet hosts"
-	@echo "  vanish                    - Remove all operators (zero trace)"
-	@echo "  operators                 - Show operator status on all nodes"
-	@echo ""
-	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-	@echo "  FLEET INSPECTION"
-	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-	@echo ""
-	@echo "  health           - Check Flask backend health on all nodes"
-	@echo "  nginx-check      - Check nginx status on all nodes"
-	@echo "  dashboard        - Print dashboard URL (http://localhost:3000)"
-	@echo ""
-	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-	@echo "  DEBUG"
-	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-	@echo ""
-	@echo "  shell N=01       - Shell into specific node"
-	@echo "  logs             - Follow all container logs"
-	@echo ""
-	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-	@echo "  NODE PROFILES"
-	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-	@echo ""
-	@echo "  node-01 to 05: Healthy (nginx -> Flask, working)"
-	@echo "  node-06:       Bad Upstream (proxy_pass wrong port -> 502)"
-	@echo "  node-07:       SSL Expired (HTTPS with bad cert)"
-	@echo "  node-08:       Wrong Root (document root missing -> 404)"
-	@echo "  node-09:       High Load (tiny buffers -> 504 timeouts)"
-	@echo "  node-10:       Crashed (nginx config syntax error, won't start)"
+	@echo "Forwarded Commands (to $(ACTIVE_PROFILE)):"
+	@$(MAKE) -C $(PROFILE_PATH) help --no-print-directory | grep -E '^  [a-z]' || echo "  (no help available for this profile)"
 
-build:
-	@echo "Building web node image..."
-	$(COMPOSE) build
-
-up: build
-	@set -e; \
-	TOKEN="$(DEVICE_TOKEN)"; \
-	if [ -z "$$TOKEN" ] && echo "$(filter-out $@,$(MAKECMDGOALS))" | grep -q '\-d'; then \
-		TOKEN=$$(echo "$(filter-out $@,$(MAKECMDGOALS))" | sed 's/.*-d \([^ ]*\).*/\1/'); \
-	fi; \
-	NUM="${NODES}"; \
-	if [ -z "$$NUM" ]; then NUM="${N}"; fi; \
-	if [ -z "$$NUM" ]; then NUM=10; fi; \
-	EXTRA=0; \
-	if [ "$$NUM" -gt 10 ]; then \
-		EXTRA=$$((NUM - 10)); \
-	fi; \
-	if [ -n "$$TOKEN" ]; then \
-		echo "Starting $$NUM web nodes (operators auto-attach via DEVICE_TOKEN)..."; \
-		DEVICE_TOKEN="$$TOKEN" $(COMPOSE) up -d --scale node=$$EXTRA; \
-	else \
-		echo "Starting $$NUM web nodes (no DEVICE_TOKEN; operators will NOT auto-attach)..."; \
-		echo "  Provide DEVICE_TOKEN to auto-attach operators: make up -d dlk_xxx"; \
-		$(COMPOSE) up -d --scale node=$$EXTRA; \
-	fi
-	@echo ""
-	@echo "========================================"
-	@echo "  Broken Web App Fleet - $$NUM Nodes"
-	@echo "========================================"
-	@echo ""
-	@echo "Node Profiles:"
-	@echo "  node-01 to 05: Healthy"
-	@echo "  node-06: Bad Upstream (502)"
-	@echo "  node-07: SSL Expired"
-	@echo "  node-08: Wrong Root (404)"
-	@echo "  node-09: High Load (504)"
-	@echo "  node-10: Crashed (nginx won't start)"
-	@if [ "$$EXTRA" -gt 0 ]; then \
-		echo "  node-1 to $$EXTRA: Extra Healthy nodes (scaled)"; \
-	fi
-	@echo ""
-	@echo "Operator logs stream to: docker logs -f web-node-<NN>"
-	@echo "Dashboard:               http://localhost:3000"
-	@echo ""
-	@echo "Deploy operators:"
-	@echo "  ./g8e demo deploy -d dlk_xxx"
-	@echo "  ./g8e demo stream -d dlk_xxx"
-	@echo ""
-	@echo "========================================"
-
-setup-ssh:
-	@docker cp $(CONTAINER_PREFIX)-01:/opt/demo-key ./.demo-key 2>/dev/null && chmod 600 ./.demo-key
-	@# SECURITY NOTE: StrictHostKeyChecking accept-new is used for demo convenience only.
-	@# In production, use proper host key verification to prevent MITM attacks.
-	@# Write SSH key to temp location to avoid modifying user's SSH config
-	@cat ./.demo-key | docker exec -i -u g8e g8ep sh -c 'cat > /tmp/demo-ssh-key'
-	@docker exec -u g8e g8ep chmod 600 /tmp/demo-ssh-key
-	@rm -f ./.demo-key
-
-down:
-	@echo "Stopping fleet..."
-	$(COMPOSE) down
-
-status:
-	@echo "Fleet Status"
-	@echo "============"
-	@$(COMPOSE) ps --format "table {{.Name}}\t{{.Status}}"
-	@echo ""
-	@echo "Running: $$(docker ps -q -f label=demo.service=web-node | wc -l)"
-
-clean:
-	@echo "Cleaning up..."
-	$(COMPOSE) down -v --rmi all
-	@echo "Done."
-
-logs:
-	$(COMPOSE) logs -f
-
-shell:
-	@test -n "$(N)" || (echo "Usage: make shell N=01" && exit 1)
-	@docker exec -it $(CONTAINER_PREFIX)-$(N) bash
-
-health:
-	@echo "Backend Health - All Nodes"
-	@echo "=========================="
-	@for node in $$(docker ps --filter "label=demo.service=web-node" --format '{{.Names}}' | sort); do \
-		result=$$(docker exec $$node curl -s http://127.0.0.1:5000/health 2>/dev/null || echo '{"status":"unreachable"}'); \
-		status=$$(echo "$$result" | grep -o '"status":"[^"]*"' | cut -d'"' -f4); \
-		printf "%s: %s\n" "$$node" "$$status"; \
-	done
-
-dashboard:
-	@echo "Fleet dashboard: http://localhost:3000"
-
-nginx-check:
-	@echo "Nginx Status - All Nodes"
-	@echo "========================"
-	@for node in $$(docker ps --filter "label=demo.service=web-node" --format '{{.Names}}' | sort); do \
-		if docker exec $$node pgrep nginx > /dev/null 2>&1; then \
-			http=$$(docker exec $$node curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8181/ 2>/dev/null || echo "000"); \
-			printf "%s: nginx running, HTTP %s\n" "$$node" "$$http"; \
+list:
+	@echo "Available Profiles:"
+	@for d in $(PROFILES_DIR)/*/; do \
+		p=$$(basename $$d); \
+		if [ "$$p" = "$(ACTIVE_PROFILE)" ]; then \
+			echo "  * $$p (active)"; \
 		else \
-			printf "%s: nginx NOT running\n" "$$node"; \
+			echo "    $$p"; \
 		fi; \
 	done
 
-deploy:
-	@set -e; \
-	TOKEN="$(DEVICE_TOKEN)"; \
-	if [ -z "$$TOKEN" ] && echo "$(filter-out $@,$(MAKECMDGOALS))" | grep -q '\-d'; then \
-		TOKEN=$$(echo "$(filter-out $@,$(MAKECMDGOALS))" | sed 's/.*-d \([^ ]*\).*/\1/'); \
-	fi; \
-	if [ -z "$$TOKEN" ]; then \
-		echo "Usage: make deploy -d dlk_xxx"; \
-		echo "       make deploy DEVICE_TOKEN=dlk_xxx"; \
+switch:
+	@if [ -z "$(P)" ]; then \
+		echo "Usage: make switch P=<profile-name>"; \
 		exit 1; \
-	fi; \
-	echo "Deploying operators to all discovered nodes (remote start via pubsub)..."; \
-	for node in $$(docker ps --filter "label=demo.service=web-node" --format '{{.Names}}' | sort); do \
-		echo "  Deploying to $$node..."; \
-		docker exec $$node sh -c "\
-			curl -fsSL --cacert /g8es/ca.crt -H \"Authorization: Bearer $$TOKEN\" \
-				-o g8e.operator \"https://g8e.local/operator/download/linux/amd64\" && \
-			curl -fsSL --cacert /g8es/ca.crt -H \"Authorization: Bearer $$TOKEN\" \
-				-o g8e.operator.sha256 \"https://g8e.local/operator/download/linux/amd64/sha256\" && \
-			sha256sum -c g8e.operator.sha256 && \
-			chmod +x g8e.operator && \
-			nohup sudo ./g8e.operator --endpoint g8e.local --working-dir /home/appuser --log info -D "$$TOKEN" < /dev/null > g8e.operator.log 2>&1 & \
-			PID=\$$!; \
-			echo \"    operator started (pid: \$$PID)\"" || true; \
-	done; \
-	echo "Done."
-
-discover-hosts:
-	@docker ps --filter "label=demo.service=web-node" --format '$(SSH_USER)@{{.Names}}' | sort
-
-stream:
-	@set -e; \
-	TOKEN="$(DEVICE_TOKEN)"; \
-	if [ -z "$$TOKEN" ] && echo "$(filter-out $@,$(MAKECMDGOALS))" | grep -q '\-d'; then \
-		TOKEN=$$(echo "$(filter-out $@,$(MAKECMDGOALS))" | sed 's/.*-d \([^ ]*\).*/\1/'); \
-	fi; \
-	if [ -z "$$TOKEN" ]; then \
-		echo "Usage: make stream -d dlk_xxx"; \
-		echo "       make stream DEVICE_TOKEN=dlk_xxx"; \
+	fi
+	@if [ ! -d "$(PROFILES_DIR)/$(P)" ]; then \
+		echo "Profile '$(P)' not found in $(PROFILES_DIR)"; \
 		exit 1; \
-	fi; \
-	echo "Streaming operators via SSH (runs inside g8ep container)..."; \
-	echo "Configuring SSH in g8ep..."; \
-	$(MAKE) -s setup-ssh; \
-	echo "Discovering demo fleet hosts..."; \
-	HOSTS=$$(docker ps --filter "label=demo.service=web-node" --format '{{.Names}}' | sort | tr '\n' ' '); \
-	if [ -z "$$HOSTS" ]; then \
-		echo "No demo nodes found. Starting fleet..."; \
-		$(MAKE) -s up; \
-		HOSTS=$$(docker ps --filter "label=demo.service=web-node" --format '{{.Names}}' | sort | tr '\n' ' '); \
-	fi; \
-	echo "  Streaming to: $$HOSTS"; \
-	docker exec g8ep /home/g8e/g8e.operator stream \
-		--endpoint g8e.local \
-		--binary-dir /home/g8e \
-		--device-token "$$TOKEN" \
-		--ssh-identity-file /tmp/demo-ssh-key \
-		--ssh-user $(SSH_USER) \
-		$$HOSTS
+	fi
+	@echo "$(P)" > $(ACTIVE_PROFILE_FILE)
+	@echo "Switched to profile: $(P)"
 
-operators:
-	@echo ""
-	@echo "Operator Status - All Nodes"
-	@echo "============================"
-	@running=0; \
-	total=0; \
-	for node in $$(docker ps --filter "label=demo.service=web-node" --format '{{.Names}}' | sort); do \
-		total=$$((total + 1)); \
-		if docker exec $$node pgrep -f g8e.operator > /dev/null 2>&1; then \
-			echo "  $$node: running"; \
-			running=$$((running + 1)); \
-		else \
-			echo "  $$node: not deployed"; \
-		fi; \
-	done; \
-	echo ""; \
-	echo "Operators: $$running / $$total"
-
-vanish:
-	@echo ""
-	@echo "Removing operators from all nodes..."
-	@echo ""
-	@for node in $$(docker ps --filter "label=demo.service=web-node" --format '{{.Names}}' | sort); do \
-		PID=$$(docker exec $$node pgrep -f 'g8e\.operator' 2>/dev/null); \
-		if [ -n "$$PID" ]; then \
-			docker exec $$node kill $$PID 2>/dev/null || true; \
-		fi; \
-		docker exec $$node rm -f /tmp/g8e.operator /home/appuser/g8e.operator /root/g8e.operator ./g8e.operator 2>/dev/null || true; \
-		echo "  $$node: cleaned"; \
-	done
-	@echo ""
-	@echo "All operators removed."
-	@echo ""
+# Delegate all other targets to the active profile
+# Use --no-print-directory to keep output clean
+# Filter out MAKEFLAGS that might cause sub-make to fail
+$(TARGETS):
+	@if [ ! -d "$(PROFILE_PATH)" ]; then \
+		echo "Error: Active profile directory $(PROFILE_PATH) not found."; \
+		exit 1; \
+	fi
+	@$(MAKE) -C $(PROFILE_PATH) --no-print-directory $@ $(filter-out $@,$(MAKECMDGOALS))

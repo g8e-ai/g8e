@@ -12,6 +12,8 @@ help:
 	@echo "  down                    - Stop all nodes and dashboard"
 	@echo "  status                  - Show container status"
 	@echo "  dashboard               - Show dashboard URL"
+	@echo "  devices                 - List all device hostnames"
+	@echo "  broken                  - List devices with non-healthy status"
 	@echo "  clean                   - Remove everything"
 	@echo "  logs                    - Follow all container logs"
 	@echo ""
@@ -121,3 +123,10 @@ operators:
 
 discover-hosts:
 	@docker ps --filter "label=demo.service=operator-node" --format '{{.Names}}' | sort
+
+devices: discover-hosts
+
+broken:
+	@echo "Devices with non-healthy status"
+	@echo "==============================="
+	@echo "  (All fleet nodes are currently configured as healthy)"

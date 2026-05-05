@@ -1,0 +1,6 @@
+g8e.operator
+g8e.operator.sha256
+.demo-key
+docker-compose.yml
+docker-compose.*.yml
+.batch-files

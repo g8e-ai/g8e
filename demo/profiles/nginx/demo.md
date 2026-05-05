@@ -127,17 +127,18 @@ Try these prompts to see the pipeline in action:
 
 ## Alternative Demo Profiles
 
-The default profile above is one of several `./g8e demo profile switch <name>` options:
+The nginx profile above is one of several `./g8e demo profile switch <name>` options:
 
 | Profile | Scale | Purpose |
 |---------|-------|---------|
-| `default` (this doc) | 10+ nodes | Broken web-app fleet (5 healthy, 5 broken, plus N extra healthy) |
-| `fleet` | 20–1000 nodes | Featherweight operator-only containers for platform scale testing |
+| `nginx` (this doc) | 10+ nodes | Broken web-app fleet (5 healthy, 5 broken, plus N extra healthy) |
+| `fleet` | 20–1000 nodes | Scale testing with featherweight operator-only containers |
 
 Switch any time with:
 
 ```bash
 ./g8e demo profile list
 ./g8e demo profile switch fleet
+./g8e demo profile switch nginx
 ./g8e demo up -n 100
 ```

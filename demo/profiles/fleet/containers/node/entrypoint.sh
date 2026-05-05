@@ -40,6 +40,22 @@ while [ ! -x "$_operator_binary" ]; do
     fi
 done
 
+# Start a background task to generate fake metrics for the dashboard
+(
+    mkdir -p /var/log/edge-service
+    while true; do
+        cat <<EOF > /var/log/edge-service/metrics.json
+{
+    "cpu_usage": $((RANDOM % 20 + 5)),
+    "mem_usage": $((RANDOM % 30 + 10)),
+    "disk_usage": $((RANDOM % 10 + 2)),
+    "uptime_seconds": $SECONDS
+}
+EOF
+        sleep 5
+    done
+) &
+
 # Supervised restart loop
 while true; do
     echo "$_operator_log_prefix starting..."

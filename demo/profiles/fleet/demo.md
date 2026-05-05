@@ -8,15 +8,11 @@ To accomplish this efficiently, we use a featherweight approach:
 - The `g8e` Operator binary is executed on each node.
 - Memory usage is heavily optimized, preventing typical OOM (Out Of Memory) issues when spinning up 1000 nodes on a single host.
 
-### Edge Device Microservice
-Each node runs a background microservice that simulates edge device operations:
-- **Health checks**: Periodic system health verification
-- **Request processing**: Simulated workload with latency tracking
-- **Metrics collection**: CPU, memory, disk usage in JSON format
-- **Log generation**: INFO, WARN, and ERROR level logs for troubleshooting demos
-- **Data sync**: Simulated data synchronization to central storage
-
-Logs are written to `/var/log/edge-service/service.log` and metrics to `/var/log/edge-service/metrics.json`.
+### Node Operations
+Each node runs the `g8e` Operator and a background process that simulates edge device activity:
+- **Metrics collection**: CPU, memory, disk usage generated in JSON format every 5 seconds.
+- **Log generation**: Standard operator logs for troubleshooting demos.
+- **Data storage**: Metrics are written to `/var/log/edge-service/metrics.json`.
 
 ### Why Docker Compose?
 The `g8e` platform relies on a **system fingerprint** to deduplicate devices upon registration. The fingerprint logic combines hardware info and the OS hostname to generate a unique hash for each physical device.

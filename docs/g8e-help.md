@@ -161,12 +161,21 @@ Configure LLM providers and model selection.
 - `restart`: Restart inference engine to apply settings
 
 ### demo
-Manage the "broken fleet" simulation.
-- `up [-n <count>]|down|status|clean|health`: Manage demo infrastructure (default: 10 nodes)
-- `profile list|create|switch|delete`: Manage demo scenarios
-- `shell <node>`: Drop into specific simulation node
-- `deploy|discover-hosts|stream|vanish`: Fleet operations
-- `dashboard`: Access standalone demo status dashboard
+Manage the "broken fleet" simulation for AI operator training and evaluation.
+- `up [-n <count>] [-d <token>]`: Build and start N devices (default: 10). Pass a `DEVICE_TOKEN` to auto-attach operators.
+- `down`: Stop all simulation nodes and dashboards.
+- `status`: View container status, node counts, and dashboard availability.
+- `clean`: Forcefully remove all demo containers, images, and networks.
+- `health`: Run diagnostic checks (e.g., Flask/Nginx status) across the active fleet.
+- `profile [list|switch P=<name>]`: Manage demo scenarios. Profiles include `acme-corp` (1000-node regional fleet), `nginx` (broken web apps), and `fleet`.
+- `shell <node>`: Drop into a specific simulation node's shell for manual verification.
+- `devices`: List all discovered device hostnames in the active profile.
+- `broken`: List devices currently in a non-healthy state (e.g., SSL expired, 502 Bad Upstream).
+- `operators`: Show the status of g8e operator processes across the fleet.
+- `deploy -d <token>`: Push and launch operators to all nodes via pubsub.
+- `stream -d <token>`: Inject operators via SSH streaming (requires `g8ep` access).
+- `vanish`: Zero-trace removal of all operator processes and binaries from the fleet.
+- `dashboard`: Access the standalone, profile-specific status dashboard (e.g., ACME Global Monitor).
 
 ### evals
 Real-operator evaluation fleet management.
