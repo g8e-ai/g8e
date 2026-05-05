@@ -864,7 +864,6 @@
 
 .anchored-terminal__agent-message-group--execution .anchored-terminal__results-group {
     margin: 0;
-    width: 100%;
     align-self: stretch;
     border-top: 1px solid rgba(var(--accent-green-rgb), 0.15);
     border-radius: 0;
@@ -1722,7 +1721,6 @@
     font-weight: 500;
     color: var(--text-secondary);
     transition: background 0.2s ease;
-    max-width: 100vw;
 }
 
 .anchored-terminal__results-toggle:hover {

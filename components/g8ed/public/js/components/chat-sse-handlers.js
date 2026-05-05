@@ -341,12 +341,20 @@ export const ChatSSEHandlersMixin = {
             this.handleTribunalVotingCompleted(data);
         });
 
+        this.eventBus.on(EventType.TRIBUNAL_VOTING_ROUND_2_CONSENSUS_REACHED, (data) => {
+            this.handleTribunalVotingCompleted(data);
+        });
+
         this.eventBus.on(EventType.TRIBUNAL_VOTING_AUDIT_STARTED, (data) => {
             this.handleTribunalAuditorStarted(data);
         });
 
         this.eventBus.on(EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED, (data) => {
             this.handleTribunalAuditorCompleted(data);
+        });
+
+        this.eventBus.on(EventType.TRIBUNAL_VOTING_ROUND_COMPLETED, (data) => {
+            this.handleTribunalCompleted(data);
         });
 
         this.eventBus.on(EventType.TRIBUNAL_SESSION_COMPLETED, (data) => {
@@ -359,7 +367,11 @@ export const ChatSSEHandlersMixin = {
             EventType.TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE,
             EventType.TRIBUNAL_SESSION_SYSTEM_ERROR,
             EventType.TRIBUNAL_SESSION_GENERATION_FAILED,
-            EventType.TRIBUNAL_SESSION_VERIFIER_FAILED,
+            EventType.TRIBUNAL_SESSION_AUDITOR_FAILED,
+            EventType.TRIBUNAL_SESSION_WARDEN_BLOCKED,
+            EventType.AI_AGENT_CONFLICT_DETECTED,
+            EventType.TRIBUNAL_VOTING_CONSENSUS_FAILED,
+            EventType.TRIBUNAL_VOTING_ROUND_2_CONSENSUS_FAILED,
         ];
         for (const failureEvent of TRIBUNAL_TERMINAL_FAILURE_EVENTS) {
             this.eventBus.on(failureEvent, (data) => {
