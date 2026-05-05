@@ -40,7 +40,6 @@ export class LlmModelManager {
         this.defaultLiteModel = '';
 
         this.drawerElement = null;
-        this.drawerTextElement = null;
         this.primaryMenuElement = null;
         this.assistantMenuElement = null;
         this.liteMenuElement = null;
@@ -70,7 +69,6 @@ export class LlmModelManager {
 
     setupDOMElements() {
         this.drawerElement = document.getElementById('llm-model-drawer');
-        this.drawerTextElement = document.getElementById('llm-model-drawer-text');
         this.primaryMenuElement = document.getElementById('llm-primary-model-menu');
         this.assistantMenuElement = document.getElementById('llm-assistant-model-menu');
         this.liteMenuElement = document.getElementById('llm-lite-model-menu');
@@ -189,7 +187,6 @@ export class LlmModelManager {
         }
 
         this._populateDropdowns();
-        this._updateDrawerText();
     }
 
     _populateDropdowns() {
@@ -277,18 +274,8 @@ export class LlmModelManager {
         // Update selected state in UI
         this._updateSelectedState(role, modelId);
 
-        // Update drawer text to show currently selected models
-        this._updateDrawerText();
-
         // Close drawer
         this._closeDrawer();
-    }
-
-    _updateDrawerText() {
-        if (!this.drawerTextElement) return;
-
-        const primaryLabel = this._getModelLabel('primary', this.selectedPrimaryModel);
-        this.drawerTextElement.textContent = primaryLabel;
     }
 
     _getModelLabel(role, modelId) {
@@ -344,8 +331,6 @@ export class LlmModelManager {
     _syncDropdowns() {
         // Re-populate to update selected state
         this._populateDropdowns();
-        // Update drawer text to reflect current selections
-        this._updateDrawerText();
     }
 
     getPrimaryModel() {
@@ -374,7 +359,6 @@ export class LlmModelManager {
 
     destroy() {
         this.drawerElement = null;
-        this.drawerTextElement = null;
         this.primaryMenuElement = null;
         this.assistantMenuElement = null;
         this.liteMenuElement = null;

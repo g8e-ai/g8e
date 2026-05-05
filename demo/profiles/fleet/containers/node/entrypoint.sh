@@ -1,6 +1,20 @@
 #!/bin/bash
 set -e
 
+# Set hostname based on container name if not already set properly
+if [ -S /var/run/docker.sock ]; then
+    # Get container ID from cgroup
+    CONTAINER_ID=$(cat /proc/self/cgroup | head -n 1 | cut -d'/' -f3)
+    if [ -n "$CONTAINER_ID" ]; then
+        # Query Docker API for container name
+        CONTAINER_NAME=$(curl -s --unix-socket /var/run/docker.sock "http://localhost/containers/${CONTAINER_ID}/json" | python3 -c "import sys, json; print(json.load(sys.stdin)['Name'][1:])" 2>/dev/null)
+        if [ -n "$CONTAINER_NAME" ]; then
+            # Set the system hostname to match
+            hostname "$CONTAINER_NAME"
+        fi
+    fi
+fi
+
 # Supervise the g8e operator in-container
 _operator_endpoint="${G8E_ENDPOINT:-g8e.local}"
 _operator_binary="/home/appuser/g8e.operator"

@@ -273,7 +273,7 @@ _emit_device() {
   ${name}:
     <<: *edge-device
     container_name: acme-${name}
-    hostname: ${name}
+    hostname: acme-${name}
     environment:
       <<: *edge-env
       DEVICE_NAME: ${name}

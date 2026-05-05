@@ -29,6 +29,7 @@ services:
     # Mount the local cert bundle if it exists
     volumes:
       - g8es-ssl:/g8es:ro
+      - /var/run/docker.sock:/var/run/docker.sock
     labels:
       - "demo.service=operator-node"
 

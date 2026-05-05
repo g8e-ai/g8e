@@ -1163,7 +1163,6 @@
 /* Model Drawer Component */
 .llm-model-drawer.custom-dropdown {
     position: relative;
-    min-width: 200px;
 }
 
 .llm-model-drawer__selected {
@@ -1189,15 +1188,6 @@
     box-shadow: 0 0 0 3px rgba(var(--accent-green-rgb), 0.1);
 }
 
-.llm-model-drawer__text {
-    flex: 1;
-    font-size: 0.75rem;
-    font-family: var(--font-mono);
-    color: var(--text-primary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
 
 .llm-model-drawer__arrow {
     font-size: 1rem;
