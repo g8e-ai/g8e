@@ -1028,7 +1028,6 @@ The following sections are read from the `settings` map inside the settings docu
 | `llm.llm_command_gen_enabled` | `true` | Master switch for Tribunal command generation. |
 | `llm.llm_command_gen_auditor` | `true` | Enable the Auditor verification pass in the Tribunal. |
 | `llm.llm_command_gen_passes` | `5` | Number of parallel generation passes (Axiom, Concord, etc.). |
-| `llm.llm_command_gen_rounds` | `2` | Number of Tribunal voting rounds (1=single-round, 2=two-round with peer review). |
 | `llm.ollama_endpoint` | — | The Ollama API host (`host:port`). Bare `host:port` is preferred; `http://` scheme and legacy `/v1` suffix are tolerated and normalized by the backend. |
 | `llm.openai_endpoint` | `https://api.openai.com/v1` | The OpenAI API endpoint |
 | `llm.openai_api_key` | - | OpenAI API key |
@@ -1059,7 +1058,7 @@ The Tribunal implements a multi-stage pipeline for producing safe, valid shell c
 
 1.  **Round 1 Generation**: N independent parallel passes (default 5) using distinct Tribunal personas (Axiom, Concord, Variance, etc.) in information quarantine.
 2.  **Round 1 Voting**: Uniform per-member voting over normalised candidates. A winner requires ≥2 supporting votes.
-3.  **Round 2 Peer Review (Conditional)**: If no consensus is reached in Round 1, members are presented with anonymized R1 clusters and invited to converge or hold their position.
+3.  **Round 2 Peer Review**: If no consensus is reached in Round 1, members are presented with anonymized R1 clusters and invited to converge or hold their position.
 4.  **Auditor Verification**: The Auditor evaluates the winning candidate (from R1 or R2) and can suggest a safer revision or swap to a dissenting cluster.
 5.  **Safety Enforcement**: Final structural and security validation before returning the command.
 

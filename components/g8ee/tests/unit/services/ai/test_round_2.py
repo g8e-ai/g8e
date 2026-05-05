@@ -39,7 +39,6 @@ async def test_generate_command_round_2_triggered():
         lite_provider=LLMProvider.OLLAMA,
         lite_model="gemma3:1b",
         llm_command_gen_passes=3,
-        llm_command_gen_rounds=2,
     )
     settings = G8eeUserSettings(llm=llm)
 
@@ -87,3 +86,7 @@ async def test_generate_command_round_2_triggered():
         emitted_event_types = [call[0][0].event_type for call in mock_event_service.publish.call_args_list]
         assert EventType.TRIBUNAL_VOTING_ROUND_2_STARTED in emitted_event_types
         assert EventType.TRIBUNAL_VOTING_ROUND_2_CONSENSUS_REACHED in emitted_event_types
+
+        # Regression Test: Ensure TRIBUNAL_VOTING_CONSENSUS_NOT_REACHED is emitted instead of FAILED
+        assert EventType.TRIBUNAL_VOTING_CONSENSUS_NOT_REACHED in emitted_event_types
+        assert EventType.TRIBUNAL_VOTING_CONSENSUS_FAILED not in emitted_event_types

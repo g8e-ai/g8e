@@ -2311,7 +2311,7 @@
 .operator-counter {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 0.5rem;
 }
 
 .operator-counter-btn {
@@ -2337,7 +2337,7 @@
 }
 
 .operator-counter-input {
-  width: 52px;
+  width: 36px;
   height: 24px;
   padding: 0 4px;
   background: var(--bg-secondary);

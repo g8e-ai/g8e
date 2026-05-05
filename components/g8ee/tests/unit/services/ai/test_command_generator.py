@@ -2588,7 +2588,6 @@ class TestTribunalEmitter:
             lite_provider=LLMProvider.OLLAMA,
             lite_model="gemma3:1b",
             llm_command_gen_passes=3,
-            llm_command_gen_rounds=2,
             llm_command_gen_auditor=False,
         )
         settings = G8eeUserSettings(llm=llm)

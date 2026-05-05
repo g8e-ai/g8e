@@ -461,6 +461,7 @@ async def _run_voting_stage(
     request: str,
     emitter: TribunalEmitter,
     total_members: int,
+    is_final: bool = True,
 ) -> tuple[str | None, float, VoteBreakdown, list[CandidateCommand] | None]:
     """Stage 2: compute weighted majority vote and emit consensus event."""
     vote_winner, vote_score, vote_breakdown, tied_candidates = weighted_vote(candidates, total_members)
@@ -477,8 +478,9 @@ async def _run_voting_stage(
             for member, cmd in vote_breakdown.candidates_by_member.items():
                 logger.info("[TRIBUNAL-TELEMETRY]   %s: %s", member, cmd[:200] + "..." if len(cmd) > 200 else cmd)
 
+        event_type = EventType.TRIBUNAL_VOTING_CONSENSUS_FAILED if is_final else EventType.TRIBUNAL_VOTING_CONSENSUS_NOT_REACHED
         await emitter.emit(
-            EventType.TRIBUNAL_VOTING_CONSENSUS_FAILED,
+            event_type,
             TribunalConsensusFailedPayload(
                 request=request,
                 vote_breakdown=vote_breakdown,
@@ -903,16 +905,18 @@ async def generate_command(
         round_num=1,
     )
 
+    # Run Round 1 voting
     vote_winner, vote_score, vote_breakdown, tied_candidates = await _run_voting_stage(
         candidates=candidates, request=request, emitter=emitter, total_members=num_passes,
+        is_final=False,
     )
 
-    # Round 2: anonymized peer review if consensus is low and multi-round is enabled
+    # Round 2: anonymized peer review if consensus is low
     round_2_candidates = None
     round_2_vote_breakdown = None
     rounds_executed = 1
 
-    if vote_winner is None and settings.llm.llm_command_gen_rounds == 2:
+    if vote_winner is None:
 
         logger.info("[TRIBUNAL] Consensus strength too low (%.2f < %d), initiating Round 2 peer review",
                     vote_breakdown.consensus_strength, TRIBUNAL_MIN_CONSENSUS)

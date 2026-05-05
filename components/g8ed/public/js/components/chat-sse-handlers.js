@@ -386,6 +386,10 @@ export const ChatSSEHandlersMixin = {
             this.handleTribunalCompleted(data);
         });
 
+        this.eventBus.on(EventType.TRIBUNAL_VOTING_CONSENSUS_NOT_REACHED, (data) => {
+            this.handleTribunalConsensusNotReached(data);
+        });
+
         const TRIBUNAL_TERMINAL_FAILURE_EVENTS = [
             EventType.TRIBUNAL_SESSION_DISABLED,
             EventType.TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED,
@@ -889,6 +893,15 @@ export const ChatSSEHandlersMixin = {
         if (!widgetId) return;
 
         this.anchoredTerminal.updateTribunalStatus(widgetId, 'Verifying command\u2026');
+    },
+
+    handleTribunalConsensusNotReached(data) {
+        if (!this.anchoredTerminal) return;
+
+        const widgetId = this._getTribunalWidgetId(data);
+        if (!widgetId) return;
+
+        this.anchoredTerminal.updateTribunalStatus(widgetId, 'Low consensus; initiating peer review\u2026');
     },
 
     handleTribunalAuditorStarted(data) {
