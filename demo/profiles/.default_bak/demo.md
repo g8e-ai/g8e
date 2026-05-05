@@ -93,7 +93,7 @@ Try these prompts to see the pipeline in action:
 ### Fleet Lifecycle
 | Command | Description |
 |---------|-------------|
-| `./g8e demo up` | Build and start nodes + dashboard |
+| `./g8e demo up [-n N]` | Build and start nodes (default 10) |
 | `./g8e demo down` | Stop all nodes |
 | `./g8e demo status` | Show container status |
 | `./g8e demo clean` | Remove all demo resources |
@@ -131,7 +131,7 @@ The default profile above is one of several `./g8e demo profile switch <name>` o
 
 | Profile | Scale | Purpose |
 |---------|-------|---------|
-| `default` (this doc) | 10 nodes | Broken web-app fleet — focused troubleshooting of nginx/Flask failures |
+| `default` (this doc) | 10+ nodes | Broken web-app fleet (5 healthy, 5 broken, plus N extra healthy) |
 | `fleet` | 20–1000 nodes | Featherweight operator-only containers for platform scale testing |
 
 Switch any time with:

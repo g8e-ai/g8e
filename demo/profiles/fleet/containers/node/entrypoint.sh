@@ -1,9 +1,6 @@
 #!/bin/bash
 set -e
 
-# Start the edge device microservice in the background
-python3 /opt/edge-service.py > /dev/null 2>&1 &
-
 # Supervise the g8e operator in-container
 _operator_endpoint="${G8E_ENDPOINT:-g8e.local}"
 _operator_binary="/home/appuser/g8e.operator"

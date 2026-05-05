@@ -25,13 +25,21 @@ If we simply used a `while` loop running the binary in the background directly o
 
 By using Docker Compose, every single container automatically gets assigned a unique hostname, ensuring the system fingerprints are completely unique across all 1000 nodes without spoofing or breaking platform logic.
 
+### Fleet Dashboard
+A real-time visual dashboard is included to monitor the fleet:
+- **URL**: `http://localhost:8080`
+- **Visualization**: Shows a grid of all nodes with their operator status (Online/Offline) and edge service metrics (CPU, Memory).
+- **Polling**: Automatically refreshes every 5 seconds.
+
 ### Usage
 Start the demo with any desired number of nodes (`N` specifies the node count):
 
 ```bash
 cd demo/profiles/fleet
-make up N=1000 -d dlk_YOUR_DEVICE_LINK_TOKEN
+make up N=20 -d dlk_YOUR_DEVICE_LINK_TOKEN
 ```
+
+After starting, visit `http://localhost:8080` to see the fleet in action.
 
 ### Resource Requirements
 Because each node only runs the lightweight operator binary, a basic microservice, and a minimal alpine container, CPU overhead is near zero, and RAM overhead is just a few megabytes per node. 1000 nodes can easily run on ~5GB of RAM.

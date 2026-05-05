@@ -133,6 +133,12 @@ services:
       NODE_ID: node-10
       NODE_PROFILE: crashed
 
+  node:
+    <<: *web-node
+    environment:
+      <<: *operator-env
+      NODE_PROFILE: healthy
+
   dashboard:
     build:
       context: ./containers/dashboard

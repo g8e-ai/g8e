@@ -1,14 +1,10 @@
 FROM alpine:latest
 
-RUN apk add --no-cache curl ca-certificates sudo bash python3
+RUN apk add --no-cache curl ca-certificates sudo bash
 RUN adduser -D -s /bin/bash appuser && \
     echo "appuser ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/appuser && \
     chmod 440 /etc/sudoers.d/appuser
 
-RUN mkdir -p /var/log/edge-service && \
-    chown appuser:appuser /var/log/edge-service
-
-COPY edge-service.py /opt/edge-service.py
 COPY entrypoint.sh /opt/entrypoint.sh
 RUN chmod +x /opt/entrypoint.sh
 

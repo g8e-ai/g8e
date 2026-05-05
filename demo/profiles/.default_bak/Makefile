@@ -17,7 +17,8 @@ help:
 	@echo "  FLEET LIFECYCLE"
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 	@echo ""
-	@echo "  up               - Build and start all 10 web nodes"
+	@echo "  up               - Build and start all web nodes (default 10)"
+	@echo "  up N=20          - Build and start 20 web nodes (5 healthy, 5 broken, 10 extra healthy)"
 	@echo "  down             - Stop all nodes"
 	@echo "  status           - Show container status"
 	@echo "  clean            - Remove everything (containers, images, volumes)"
@@ -69,22 +70,24 @@ up: build
 	if [ -z "$$TOKEN" ] && echo "$(filter-out $@,$(MAKECMDGOALS))" | grep -q '\-d'; then \
 		TOKEN=$$(echo "$(filter-out $@,$(MAKECMDGOALS))" | sed 's/.*-d \([^ ]*\).*/\1/'); \
 	fi; \
-	if [ "$(NODES)" -gt 10 ]; then \
-		echo "Warning: The default profile only supports 10 specialized nodes."; \
-		echo "         Use './g8e demo profile switch fleet' for up to 1000 nodes."; \
-		echo "         Falling back to 10 nodes for this profile."; \
+	NUM="${NODES}"; \
+	if [ -z "$$NUM" ]; then NUM="${N}"; fi; \
+	if [ -z "$$NUM" ]; then NUM=10; fi; \
+	EXTRA=0; \
+	if [ "$$NUM" -gt 10 ]; then \
+		EXTRA=$$((NUM - 10)); \
 	fi; \
 	if [ -n "$$TOKEN" ]; then \
-		echo "Starting 10 web nodes (operators auto-attach via DEVICE_TOKEN)..."; \
-		DEVICE_TOKEN="$$TOKEN" $(COMPOSE) up -d; \
+		echo "Starting $$NUM web nodes (operators auto-attach via DEVICE_TOKEN)..."; \
+		DEVICE_TOKEN="$$TOKEN" $(COMPOSE) up -d --scale node=$$EXTRA; \
 	else \
-		echo "Starting 10 web nodes (no DEVICE_TOKEN; operators will NOT auto-attach)..."; \
+		echo "Starting $$NUM web nodes (no DEVICE_TOKEN; operators will NOT auto-attach)..."; \
 		echo "  Provide DEVICE_TOKEN to auto-attach operators: make up -d dlk_xxx"; \
-		$(COMPOSE) up -d; \
+		$(COMPOSE) up -d --scale node=$$EXTRA; \
 	fi
 	@echo ""
 	@echo "========================================"
-	@echo "  Broken Web App Fleet - 10 Nodes"
+	@echo "  Broken Web App Fleet - $$NUM Nodes"
 	@echo "========================================"
 	@echo ""
 	@echo "Node Profiles:"
@@ -94,6 +97,9 @@ up: build
 	@echo "  node-08: Wrong Root (404)"
 	@echo "  node-09: High Load (504)"
 	@echo "  node-10: Crashed (nginx won't start)"
+	@if [ "$$EXTRA" -gt 0 ]; then \
+		echo "  node-1 to $$EXTRA: Extra Healthy nodes (scaled)"; \
+	fi
 	@echo ""
 	@echo "Operator logs stream to: docker logs -f web-node-<NN>"
 	@echo "Dashboard:               http://localhost:3000"
@@ -122,7 +128,7 @@ status:
 	@echo "============"
 	@$(COMPOSE) ps --format "table {{.Name}}\t{{.Status}}"
 	@echo ""
-	@echo "Running: $$(docker ps -q -f name=$(CONTAINER_PREFIX) | wc -l) / 10"
+	@echo "Running: $$(docker ps -q -f label=demo.service=web-node | wc -l)"
 
 clean:
 	@echo "Cleaning up..."
@@ -139,10 +145,10 @@ shell:
 health:
 	@echo "Backend Health - All Nodes"
 	@echo "=========================="
-	@for i in $$(seq -f "%02g" 1 10); do \
-		result=$$(docker exec $(CONTAINER_PREFIX)-$$i curl -s http://127.0.0.1:5000/health 2>/dev/null || echo '{"status":"unreachable"}'); \
+	@for node in $$(docker ps --filter "label=demo.service=web-node" --format '{{.Names}}' | sort); do \
+		result=$$(docker exec $$node curl -s http://127.0.0.1:5000/health 2>/dev/null || echo '{"status":"unreachable"}'); \
 		status=$$(echo "$$result" | grep -o '"status":"[^"]*"' | cut -d'"' -f4); \
-		printf "node-%s: %s\n" "$$i" "$$status"; \
+		printf "%s: %s\n" "$$node" "$$status"; \
 	done
 
 dashboard:
@@ -151,12 +157,12 @@ dashboard:
 nginx-check:
 	@echo "Nginx Status - All Nodes"
 	@echo "========================"
-	@for i in $$(seq -f "%02g" 1 10); do \
-		if docker exec $(CONTAINER_PREFIX)-$$i pgrep nginx > /dev/null 2>&1; then \
-			http=$$(docker exec $(CONTAINER_PREFIX)-$$i curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8181/ 2>/dev/null || echo "000"); \
-			printf "node-%s: nginx running, HTTP %s\n" "$$i" "$$http"; \
+	@for node in $$(docker ps --filter "label=demo.service=web-node" --format '{{.Names}}' | sort); do \
+		if docker exec $$node pgrep nginx > /dev/null 2>&1; then \
+			http=$$(docker exec $$node curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8181/ 2>/dev/null || echo "000"); \
+			printf "%s: nginx running, HTTP %s\n" "$$node" "$$http"; \
 		else \
-			printf "node-%s: nginx NOT running\n" "$$i"; \
+			printf "%s: nginx NOT running\n" "$$node"; \
 		fi; \
 	done
 
@@ -171,10 +177,10 @@ deploy:
 		echo "       make deploy DEVICE_TOKEN=dlk_xxx"; \
 		exit 1; \
 	fi; \
-	echo "Deploying operators to all 10 nodes (remote start via pubsub)..."; \
-	for i in $$(seq -f "%02g" 1 10); do \
-		echo "  Deploying to node-$$i..."; \
-		docker exec $(CONTAINER_PREFIX)-$$i sh -c "\
+	echo "Deploying operators to all discovered nodes (remote start via pubsub)..."; \
+	for node in $$(docker ps --filter "label=demo.service=web-node" --format '{{.Names}}' | sort); do \
+		echo "  Deploying to $$node..."; \
+		docker exec $$node sh -c "\
 			curl -fsSL --cacert /g8es/ca.crt -H \"Authorization: Bearer $$TOKEN\" \
 				-o g8e.operator \"https://g8e.local/operator/download/linux/amd64\" && \
 			curl -fsSL --cacert /g8es/ca.crt -H \"Authorization: Bearer $$TOKEN\" \
@@ -225,28 +231,30 @@ operators:
 	@echo "Operator Status - All Nodes"
 	@echo "============================"
 	@running=0; \
-	for i in $$(seq -f "%02g" 1 10); do \
-		if docker exec $(CONTAINER_PREFIX)-$$i pgrep -f g8e.operator > /dev/null 2>&1; then \
-			echo "  node-$$i: running"; \
+	total=0; \
+	for node in $$(docker ps --filter "label=demo.service=web-node" --format '{{.Names}}' | sort); do \
+		total=$$((total + 1)); \
+		if docker exec $$node pgrep -f g8e.operator > /dev/null 2>&1; then \
+			echo "  $$node: running"; \
 			running=$$((running + 1)); \
 		else \
-			echo "  node-$$i: not deployed"; \
+			echo "  $$node: not deployed"; \
 		fi; \
 	done; \
 	echo ""; \
-	echo "Operators: $$running / 10"
+	echo "Operators: $$running / $$total"
 
 vanish:
 	@echo ""
 	@echo "Removing operators from all nodes..."
 	@echo ""
-	@for i in $$(seq -f "%02g" 1 10); do \
-		PID=$$(docker exec $(CONTAINER_PREFIX)-$$i pgrep -f 'g8e\.operator' 2>/dev/null); \
+	@for node in $$(docker ps --filter "label=demo.service=web-node" --format '{{.Names}}' | sort); do \
+		PID=$$(docker exec $$node pgrep -f 'g8e\.operator' 2>/dev/null); \
 		if [ -n "$$PID" ]; then \
-			docker exec $(CONTAINER_PREFIX)-$$i kill $$PID 2>/dev/null || true; \
+			docker exec $$node kill $$PID 2>/dev/null || true; \
 		fi; \
-		docker exec $(CONTAINER_PREFIX)-$$i rm -f /tmp/g8e.operator /home/appuser/g8e.operator /root/g8e.operator ./g8e.operator 2>/dev/null || true; \
-		echo "  node-$$i: cleaned"; \
+		docker exec $$node rm -f /tmp/g8e.operator /home/appuser/g8e.operator /root/g8e.operator ./g8e.operator 2>/dev/null || true; \
+		echo "  $$node: cleaned"; \
 	done
 	@echo ""
 	@echo "All operators removed."

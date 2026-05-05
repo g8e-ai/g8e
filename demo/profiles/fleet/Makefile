@@ -1,6 +1,6 @@
 # Fleet Demo (20-1000 nodes)
 
-.PHONY: help build up down status clean logs deploy vanish operators discover-hosts
+.PHONY: help build up down status clean logs deploy vanish operators discover-hosts dashboard
 
 COMPOSE := docker compose
 
@@ -8,9 +8,10 @@ help:
 	@echo "Fleet Demo (20-1000 nodes)"
 	@echo "Usage: make [target]"
 	@echo ""
-	@echo "  up N=1000 [-d dlk_xxx]  - Start N identical nodes with operators"
-	@echo "  down                    - Stop all nodes"
+	@echo "  up N=20 [-d dlk_xxx]    - Start N identical nodes with operators and dashboard"
+	@echo "  down                    - Stop all nodes and dashboard"
 	@echo "  status                  - Show container status"
+	@echo "  dashboard               - Show dashboard URL"
 	@echo "  clean                   - Remove everything"
 	@echo "  logs                    - Follow all container logs"
 	@echo ""
@@ -20,7 +21,7 @@ help:
 	@echo "  discover-hosts          - List all node names"
 
 build:
-	@echo "Building featherweight node image..."
+	@echo "Building featherweight node and dashboard images..."
 	$(COMPOSE) build
 
 up: build
@@ -37,12 +38,17 @@ up: build
 		NUM=20; \
 	fi; \
 	if [ -n "$$TOKEN" ]; then \
-		echo "Starting $$NUM nodes (operators auto-attach via DEVICE_TOKEN)..."; \
-		DEVICE_TOKEN="$$TOKEN" $(COMPOSE) up -d --scale node=$$NUM; \
+		echo "Starting $$NUM nodes and dashboard (operators auto-attach via DEVICE_TOKEN)..."; \
+		DEVICE_TOKEN="$$TOKEN" $(COMPOSE) up -d --scale node=$$NUM dashboard; \
 	else \
-		echo "Starting $$NUM nodes (no DEVICE_TOKEN)..."; \
-		$(COMPOSE) up -d --scale node=$$NUM; \
-	fi
+		echo "Starting $$NUM nodes and dashboard (no DEVICE_TOKEN)..."; \
+		$(COMPOSE) up -d --scale node=$$NUM dashboard; \
+	fi; \
+	echo ""; \
+	echo "Dashboard: http://localhost:8080"
+
+dashboard:
+	@echo "Dashboard is available at: http://localhost:8080"
 
 down:
 	@echo "Stopping fleet..."

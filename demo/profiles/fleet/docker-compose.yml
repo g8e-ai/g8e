@@ -32,6 +32,20 @@ services:
     labels:
       - "demo.service=operator-node"
 
+  dashboard:
+    build:
+      context: ./containers/dashboard
+      dockerfile: Dockerfile
+    networks:
+      - fleet-net
+      - g8e-network
+    ports:
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    labels:
+      - "demo.service=fleet-dashboard"
+
 volumes:
   g8es-ssl:
     external: true
