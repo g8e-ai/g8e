@@ -64,8 +64,24 @@ build:
 	$(COMPOSE) build
 
 up: build
-	@echo "Starting 10 web nodes..."
-	$(COMPOSE) up -d
+	@set -e; \
+	TOKEN="$(DEVICE_TOKEN)"; \
+	if [ -z "$$TOKEN" ] && echo "$(filter-out $@,$(MAKECMDGOALS))" | grep -q '\-d'; then \
+		TOKEN=$$(echo "$(filter-out $@,$(MAKECMDGOALS))" | sed 's/.*-d \([^ ]*\).*/\1/'); \
+	fi; \
+	if [ "$(NODES)" -gt 10 ]; then \
+		echo "Warning: The default profile only supports 10 specialized nodes."; \
+		echo "         Use './g8e demo profile switch fleet' for up to 1000 nodes."; \
+		echo "         Falling back to 10 nodes for this profile."; \
+	fi; \
+	if [ -n "$$TOKEN" ]; then \
+		echo "Starting 10 web nodes (operators auto-attach via DEVICE_TOKEN)..."; \
+		DEVICE_TOKEN="$$TOKEN" $(COMPOSE) up -d; \
+	else \
+		echo "Starting 10 web nodes (no DEVICE_TOKEN; operators will NOT auto-attach)..."; \
+		echo "  Provide DEVICE_TOKEN to auto-attach operators: make up -d dlk_xxx"; \
+		$(COMPOSE) up -d; \
+	fi
 	@echo ""
 	@echo "========================================"
 	@echo "  Broken Web App Fleet - 10 Nodes"
