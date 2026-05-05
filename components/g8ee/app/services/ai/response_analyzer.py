@@ -109,20 +109,18 @@ def _build_warden_error_template(
 Working Directory: {working_dir}"""
     parts.append(AgentPersona.format_xml_tag("context", context))
 
-    auto_fixable_errors = """- Missing dependencies (ModuleNotFoundError, command not found): pip install / npm install / apt install
+    auto_fixable_errors = """- Missing dependencies or commands: suggested install command
 - Syntax errors in commands (wrong flags, typos): corrected command
-- Missing directories (No such file or directory for expected paths): mkdir -p
-- Port conflicts (Address already in use): kill process on port or use different port"""
+- Missing directories: suggested mkdir command
+- Port conflicts: suggest killing process or using different port"""
     parts.append(AgentPersona.format_xml_tag("auto_fixable_errors", auto_fixable_errors))
 
-    escalate_to_human = """- SSH authentication failures (exit code 255, "Permission denied (publickey...)"): MUST escalate, cannot auto-fix
-- Permission denied errors (cannot auto-fix): escalate to user with specific manual steps
-- Invalid API keys or credentials: MUST escalate
-- System-level failures: kernel errors, hardware issues
-- Data corruption: file system errors, database corruption
-- Ambiguous errors: multiple possible root causes
-- Retry limit exceeded: same error after 2+ attempts (retry_count >= 2 MUST escalate)
-- Configuration issues requiring human access: environment setup, server-side config"""
+    escalate_to_human = """- Authentication or permission failures requiring manual intervention
+- Invalid API keys or credentials
+- Critical system or hardware failures
+- Data corruption or ambiguous errors
+- Retry limit exceeded (retry_count >= 2)
+- Configuration issues requiring human access"""
     parts.append(AgentPersona.format_xml_tag("escalate_to_human", escalate_to_human))
 
     parts.append("Based on the information above, analyze the failure and fill in ALL response fields.")
@@ -151,21 +149,21 @@ def _build_warden_file_risk_template(
 Backup Available: {backup_available}"""
     parts.append(AgentPersona.format_xml_tag("context", context))
 
-    high_risk_paths = ", ".join(SYSTEM_PATH_PREFIXES)
-    high_risk_files = ", ".join(HIGH_RISK_SYSTEM_FILES.get("files", []))
-    high_risk_patterns = ", ".join(HIGH_RISK_SYSTEM_FILES.get("patterns", []))
+    high_risk_paths = "As defined in system security policy"
+    high_risk_files = "As defined in system security policy"
+    high_risk_patterns = "As defined in system security policy"
     system_file_patterns = f"""HIGH risk paths: {high_risk_paths}
 HIGH risk files: {high_risk_files}, {high_risk_patterns}"""
     parts.append(AgentPersona.format_xml_tag("system_file_patterns", system_file_patterns))
 
-    risk_levels = """LOW: Build artifacts, temp files (/tmp), generated output
-MEDIUM: Project source files, config files (package.json, requirements.txt)
-HIGH: System files, irreversible deletes, dirty git + destructive operation"""
+    risk_levels = """LOW: Temporary files or artifacts
+MEDIUM: Project source files or local configuration
+HIGH: Global configuration or irreversible system changes"""
     parts.append(AgentPersona.format_xml_tag("risk_levels", risk_levels))
 
-    blocking_conditions = """- System file path without explicit override
-- Delete operation with no backup available
-- Dirty git state combined with a destructive operation"""
+    blocking_conditions = """- Unauthorized system file access
+- Destructive operation with no backup available
+- Operation violating system integrity policy"""
     parts.append(AgentPersona.format_xml_tag("blocking_conditions", blocking_conditions))
 
     parts.append("Based on the information above, assess the risk and fill in ALL response fields. You MUST set is_system_file to true or false (never omit it). You MUST set safe_to_proceed to false for any HIGH risk system file operation.")
@@ -397,7 +395,9 @@ class AIResponseAnalyzer:
         def post_process(analysis: FileOperationRiskAnalysis) -> None:
             analysis.is_system_file = any(file_path.startswith(p) for p in SYSTEM_PATH_PREFIXES)
 
-            if analysis.risk_level == RiskLevel.HIGH and analysis.is_system_file:
+            # System files are blocked if HIGH risk, UNLESS a backup is available.
+            # This follows Warden's discipline: "A sed -i on a config file is MEDIUM if a .bak was just created."
+            if analysis.risk_level == RiskLevel.HIGH and analysis.is_system_file and not backup_available:
                 analysis.safe_to_proceed = False
 
             total_duration_ms = (time.time() - analysis_start_time) * 1000

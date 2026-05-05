@@ -914,14 +914,17 @@ case "$TOP" in
             if [[ "$arg" == "-d" ]]; then
                 if [[ $((i + 1)) -lt ${#demo_args[@]} ]]; then
                     device_token="${demo_args[$((i + 1))]}"
-                    unset demo_args[$i] demo_args[$((i + 1))]
-                    break
+                    unset "demo_args[$i]" "demo_args[$((i + 1))]"
+                    # Re-index to avoid holes
+                    demo_args=("${demo_args[@]}")
+                    i=0
+                    continue
                 else
                     echo "[g8e] -d flag requires a token value" >&2
                     exit 1
                 fi
             fi
-            ((i++))
+            i=$((i + 1))
         done
         i=0
         while [[ $i -lt ${#demo_args[@]} ]]; do
@@ -929,14 +932,17 @@ case "$TOP" in
             if [[ "$arg" == "-n" ]]; then
                 if [[ $((i + 1)) -lt ${#demo_args[@]} ]]; then
                     nodes="${demo_args[$((i + 1))]}"
-                    unset demo_args[$i] demo_args[$((i + 1))]
-                    break
+                    unset "demo_args[$i]" "demo_args[$((i + 1))]"
+                    # Re-index to avoid holes
+                    demo_args=("${demo_args[@]}")
+                    i=0
+                    continue
                 else
                     echo "[g8e] -n flag requires a node count value" >&2
                     exit 1
                 fi
             fi
-            ((i++))
+            i=$((i + 1))
         done
         # Use global DEVICE_TOKEN if -d not provided
         if [[ -z "$device_token" && -n "$DEVICE_TOKEN" ]]; then
