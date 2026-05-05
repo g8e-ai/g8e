@@ -23,6 +23,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Interrogation**: Fixed bugs related to interrogation response.
 - **Demo Infrastructure**: Fixed node count logic and resolved issues with demo profiles.
 
+## [0.1.9] - 2026-05-05
+
+### Added
+- **Acme Corp Demo:** Added new `acme-corp` demo profile demonstrating edge device registration and management.
+- **Blog Post:** Added new blog post covering platform updates and vision (`5-5-26.md`).
+- **Nginx Demo Profile:** Reorganized and enhanced the Nginx demo profile with regional deployments.
+
+### Changed
+- **Warden Prompts & Pathing:** Improved Warden sub-agent prompts and corrected file pathing behavior.
+- **Read-Only Tools UX:** Enhanced the user experience for read-only tools and terminal results alignment.
+- **Tribunal Logging:** Improved logging detail and clarity for the Tribunal consensus pipeline.
+- **Tribunal Voting:** Enforced a mandatory two-round minimum for Tribunal voting to ensure rigorous consensus.
+- **Model Selection:** Refined the model selection drawer UI.
+- **Operator Card:** Removed unnecessary animations from the operator card for better performance.
+- **PR Template:** Updated the pull request template for better contributor guidelines.
+- **Documentation:** General improvements to platform documentation, position paper, and `g8e-help`.
+
+### Fixed
+- **Interrogation Plumbing:** Fixed response handling and plumbing for the device interrogation flow.
+- **Hamburger Menu:** Corrected the width and layout of the dashboard hamburger menu.
+- **Fleet Demo:** Fixed configuration and deployment issues in the fleet demo profile.
+- **Node Count & Bind All:** Fixed node counting logic for demos and moved the "Bind All" button to the top of the operator list.
+
 ## [0.1.8] - 2026-05-04
 
 ### Added
