@@ -10,6 +10,32 @@ governance architecture for trustless environments
 
 </div>
 
+## What this is
+
+g8e is the deployment layer for production AI agents.
+
+It sits between any AI agent — yours, a vendor's, an open-source one — and the infrastructure it's about to change. A stateless reasoning **Engine** runs Byzantine consensus over heterogeneous LLM personas to produce a candidate command. A sovereign single-binary **Operator** runs on every managed host, enforces FIDO2 co-validation at the execution boundary, executes approved commands in isolation, and owns a tamper-evident local audit ledger. The Engine is replaceable. The Operator is the system of record. You hold the only signature only a human can produce.
+
+The architecture is built so that the parts that have to be replaceable are replaceable, the parts that have to be sovereign are sovereign, and the parts that have to be auditable are auditable by the party that owns the infrastructure — not by the party that owns the model. Apache 2.0. Self-hosted. No telemetry. Air-gap capable. It runs on your hardware, on your network, under your signature.
+
+If you are building an agentic product that has to pass enterprise procurement, federal procurement, HIPAA review, or any other governance regime that asks "what did the AI actually do and who said it could," this is the substrate. Not a feature you add later. The thing the rest is built on.
+
+## Why
+
+Every production AI agent system in 2026 is one of two shapes, and both are broken.
+
+**Autonomous agents** plan, act, and report. They produce technically correct, contextually wrong outcomes — doing exactly what they understood the request to mean while missing what you actually meant. Nothing in the system is structurally positioned to catch the gap.
+
+**Human-in-the-loop systems** retrofit oversight with approval prompts. When verification is costly and approval is cheap, humans rubber-stamp. Oversight is nominal; behavior converges to autonomous.
+
+Both fail because they treat humans and machines as substitutable validators on the same questions. They are not. g8e splits the work: machine-domain checks (internal consistency, falsifiability, pattern-match safety, cross-conversation grounding) go to the AI layer; human-domain checks (intent fidelity in your environment, contextual stakes, real-world consequences) go to you. Both signatures are required for every state change.
+
+This architecture is missing from the market for a structural reason. Every property the deployment layer has to have — local-first audit, model-agnostic reasoning, no telemetry, sovereign per-host execution, open license — is hostile to the business model of the parties best positioned to build it. A vendor whose revenue depends on cloud lock-in cannot ship a sovereign operator. A vendor whose revenue depends on model lock-in cannot ship a model-agnostic engine. A vendor whose revenue depends on telemetry cannot ship a tamper-evident audit ledger that lives on the customer's host. The deployment layer has to be sovereign, replaceable, and auditable by the customer — which means it cannot come from a company whose P&L depends on the opposite.
+
+It has to be built independently, in the open, by parties whose incentives are aligned with the customer's instead of the vendor's. That is what this is.
+
+The full thesis: [position_paper.md](docs/architecture/position_paper.md).
+
 ---
 
 - 4MB statically-compiled Go Operator on every managed host
@@ -19,37 +45,6 @@ governance architecture for trustless environments
 - Local-first audit; the host is the system of record, not the cloud
 - Model-agnostic — swap providers without losing history
 - Apache 2.0 · Self-hosted · Air-gap capable · No SaaS, no telemetry
-
----
-
-## Setup Walkthrough
-
-https://www.youtube.com/watch?v=tY7A6BHatF8
-
-![alt text](components/g8ed/public/media/fixed-by-g8e.png)
-
-## What this is
-
-g8e is a platform for running AI agents against production infrastructure without giving up sovereignty, auditability, or sleep. It is built by a practitioner with thirty years of experience putting out flaming dumpster fires in high-stakes environments, designed to solve the structural failures of modern autonomous systems.
-
-The architecture consists of:
-- A stateless reasoning **Engine** that runs Byzantine consensus over heterogeneous LLM personas.
-- A sovereign **Satellite Agent** (the Operator) binary that runs on every managed host, manages fleet-wide context, and owns the local-first audit ledger.
-- A **User** (you) who provides the only signature a human can produce, coupled to the execution boundary via FIDO2/WebAuthn.
-
-The Engine is replaceable. The Operator is the system of record. The User holds the truth.
-
-## Why
-
-Every production AI agent system in 2026 is one of two shapes, and both are broken.
-
-**Autonomous agents** plan, act, and report. They produce technically correct, contextually wrong outcomes — doing exactly what they understood the request to mean while missing what you actually meant. Nothing in the system is structurally positioned to catch the gap.
-
-**Human-in-the-loop** systems retrofit oversight with approval prompts. When verification is costly and approval is cheap, humans rubber-stamp. The oversight is nominal; the behavior converges to autonomous alert fatigue.
-
-Both fail because they treat humans and machines as substitutable validators on the same questions. They are not. g8e splits the work: machine-domain checks (internal consistency, falsifiability, pattern-match safety, cross-conversation grounding) go to the AI layer; human-domain checks (intent fidelity in your environment, contextual stakes, real-world consequences) go to you. Both signatures are required for every state change.
-
-The full thesis: [position_paper.md](docs/architecture/position_paper.md).
 
 ---
 
@@ -272,6 +267,15 @@ curl -fsSL http://<host>/g8e | sh -s -- <device-link-token>
 ./g8e operator build       # Compile Operator for all architectures
 ./g8e test <component>     # Run component tests (g8ee, g8ed, g8eo)
 ```
+
+
+## Setup Walkthrough
+
+https://www.youtube.com/watch?v=tY7A6BHatF8
+
+
+![alt text](components/g8ed/public/media/fixed-by-g8e.png)
+
 
 ---
 
