@@ -512,12 +512,145 @@ async def _run_voting_stage(
 
     return vote_winner, vote_score, vote_breakdown, tied_candidates
 
+async def _run_warden_stage(
+    request: str,
+    guidelines: str,
+    vote_winner: str,
+    operator_context: OperatorContext | None,
+    emitter: TribunalEmitter,
+    settings: G8eeUserSettings,
+    investigation_id: str,
+    ai_response_analyzer: AIResponseAnalyzerProtocol | None,
+    investigation_state: Any | None,
+    investigation_context: str = "",
+) -> CommandRiskAnalysis | None:
+    """Stage 3a: Warden risk analysis on the consensus winner.
+
+    Runs Warden command-risk analysis before the Auditor sees the command.
+    Returns the analysis (or None if no analyzer is configured or the
+    analyzer returned no result).
+
+    Raises:
+        TribunalWardenBlockedError: When Warden classifies the command as
+            HIGH risk. The Two-Strike Circuit Breaker decides the variant:
+            on the first strike for an investigation, emits
+            ``TRIBUNAL_SESSION_WARDEN_BLOCKED`` with contextual feedback so
+            Sage can propose a safer alternative; on the second strike,
+            emits ``AI_AGENT_CONFLICT_DETECTED`` signalling that the AI
+            agents cannot agree on a safe approach and human intervention
+            is required.
+    """
+    if not ai_response_analyzer:
+        return None
+
+    logger.info(
+        "[TRIBUNAL-WARDEN] Starting risk analysis for command: %r",
+        vote_winner[:200] + "..." if len(vote_winner) > 200 else vote_winner,
+    )
+
+    justification_parts = [request.strip()] if request else []
+    if guidelines and guidelines.strip():
+        justification_parts.append(f"Guidelines: {guidelines.strip()}")
+    justification = " | ".join(justification_parts) if justification_parts else "(no justification provided)"
+
+    risk_analysis = await ai_response_analyzer.analyze_command_risk(
+        command=vote_winner,
+        justification=justification,
+        context=CommandRiskContext(
+            working_directory=operator_context.working_directory if operator_context else "",
+            investigation_context=investigation_context,
+        ),
+        settings=settings,
+    )
+
+    if risk_analysis is None:
+        return None
+
+    logger.info("[TRIBUNAL-WARDEN] Risk analysis complete: level=%s", risk_analysis.risk_level)
+
+    if risk_analysis.risk_level != RiskLevel.HIGH:
+        return risk_analysis
+
+    block_count = investigation_state.warden_block_count if investigation_state else 0
+
+    if block_count >= 1:
+        logger.warning(
+            "[WARDEN-CIRCUIT-BREAKER] Second warden block detected for investigation=%s - triggering AGENT_CONFLICT",
+            investigation_id,
+        )
+        logger.warning("[TRIBUNAL-WARDEN] Blocking command due to repeated HIGH risk detection: %r", vote_winner)
+        if investigation_state:
+            investigation_state.warden_block_count = 0
+
+        await emitter.emit(
+            EventType.AI_AGENT_CONFLICT_DETECTED,
+            TribunalWardenBlockedPayload(
+                request=request,
+                command=vote_winner,
+                risk_level=risk_analysis.risk_level,
+                error="AGENT CONFLICT: Warden blocked Sage's command twice. The AI agents cannot agree on a safe approach. Human intervention required.",
+                is_conflict=True,
+            ),
+        )
+        raise TribunalWardenBlockedError(
+            request=request,
+            error_message="Agent Conflict: Warden blocked Sage's command twice. The AI agents cannot agree on a safe approach.",
+            risk_level=risk_analysis.risk_level,
+        )
+
+    logger.info(
+        "[WARDEN-CIRCUIT-BREAKER] First warden block for investigation=%s - generating contextual feedback",
+        investigation_id,
+    )
+    logger.info("[TRIBUNAL-WARDEN] Blocking command due to HIGH risk detection: %r", vote_winner)
+    if investigation_state:
+        investigation_state.warden_block_count = block_count + 1
+
+    error_analysis = await ai_response_analyzer.analyze_error_and_suggest_fix(
+        command=vote_winner,
+        exit_code=None,
+        stdout="",
+        stderr=f"WARDEN BLOCK: Command classified as HIGH risk. Justification: {justification}",
+        context=ErrorAnalysisContext(
+            retry_count=0,
+            working_directory=operator_context.working_directory if operator_context else "",
+        ),
+        settings=settings,
+    )
+
+    feedback_msg = (
+        error_analysis.user_message
+        if error_analysis and error_analysis.user_message
+        else "Command blocked as high risk. Propose a safer alternative."
+    )
+    if error_analysis and error_analysis.suggested_fix:
+        feedback_msg += f" Suggestion: {error_analysis.suggested_fix}"
+
+    logger.info("[TRIBUNAL-WARDEN] Feedback for Sage: %s", feedback_msg)
+
+    await emitter.emit(
+        EventType.TRIBUNAL_SESSION_WARDEN_BLOCKED,
+        TribunalWardenBlockedPayload(
+            request=request,
+            command=vote_winner,
+            risk_level=risk_analysis.risk_level,
+            error=f"WARDEN BLOCK: {feedback_msg}",
+            is_conflict=False,
+        ),
+    )
+    raise TribunalWardenBlockedError(
+        request=request,
+        error_message=f"Risk analysis blocked command: {feedback_msg}",
+        risk_level=risk_analysis.risk_level,
+    )
+
+
 async def _run_audit_stage(
     provider: LLMProvider,
     model: str,
     request: str,
     guidelines: str,
-    vote_winner: str | None,
+    vote_winner: str,
     vote_breakdown: VoteBreakdown,
     operator_context: OperatorContext | None,
     auditor_enabled: bool,
@@ -526,112 +659,18 @@ async def _run_audit_stage(
     reputation_data_service: ReputationDataService,
     auditor_hmac_key: str,
     investigation_id: str,
-    settings: G8eeUserSettings,
-    ai_response_analyzer: AIResponseAnalyzerProtocol | None = None,
-    investigation_state: Any | None = None,
-    investigation_context: str = "",
     tied_candidates: list[CandidateCommand] | None = None,
     whitelisting_enabled: bool = False,
     blacklisting_enabled: bool = False,
-) -> tuple[str | None, CommandGenerationOutcome, bool, str | None, AuditorReason, str | None, CommandRiskAnalysis | None]:
-    """Stage 3: Warden risk analysis and optionally audit the vote winner.
-    
-    Warden (risk analysis) now happens BEFORE Auditor (reputation commitment)
-    per USER request. If Warden blocks the command, the session fails and
-    Auditor/Reputation steps are skipped.
+) -> tuple[str | None, CommandGenerationOutcome, bool, str | None, AuditorReason, str | None]:
+    """Stage 3b: Auditor verification + reputation commitment of the consensus winner.
+
+    Runs the Auditor against the vote winner. On a verified verdict, binds
+    the outcome to the reputation scoreboard via a cryptographic commitment
+    -- a commitment failure is fatal and aborts the verdict.
     """
-    if not vote_winner:
-        return vote_winner, CommandGenerationOutcome.CONSENSUS_FAILED, False, None, AuditorReason.OK, None, None
-
-    # 1. Warden Risk Analysis (BEFORE Auditor)
-    risk_analysis: CommandRiskAnalysis | None = None
-    if ai_response_analyzer:
-        logger.info("[TRIBUNAL-WARDEN] Starting risk analysis for command: %r", vote_winner[:200] + "..." if len(vote_winner) > 200 else vote_winner)
-        justification_parts = [request.strip()] if request else []
-        if guidelines and guidelines.strip():
-            justification_parts.append(f"Guidelines: {guidelines.strip()}")
-        justification = " | ".join(justification_parts) if justification_parts else "(no justification provided)"
-
-        risk_analysis = await ai_response_analyzer.analyze_command_risk(
-            command=vote_winner,
-            justification=justification,
-            context=CommandRiskContext(
-                working_directory=operator_context.working_directory if operator_context else "",
-                investigation_context=investigation_context,
-            ),
-            settings=settings,
-        )
-
-        if risk_analysis:
-            logger.info("[TRIBUNAL-WARDEN] Risk analysis complete: level=%s", risk_analysis.risk_level)
-
-        if risk_analysis and risk_analysis.risk_level == RiskLevel.HIGH:
-            # Two-Strike Circuit Breaker logic moved from OperatorCommandService
-            block_count = investigation_state.warden_block_count if investigation_state else 0
-            correlation_id = getattr(emitter, "correlation_id", None) or ""
-
-            if block_count >= 1:
-                # SECOND STRIKE: Agent Conflict
-                logger.warning("[WARDEN-CIRCUIT-BREAKER] Second warden block detected for investigation=%s - triggering AGENT_CONFLICT", investigation_id)
-                logger.warning("[TRIBUNAL-WARDEN] Blocking command due to repeated HIGH risk detection: %r", vote_winner)
-                if investigation_state:
-                    investigation_state.warden_block_count = 0
-
-                await emitter.emit(
-                    EventType.AI_AGENT_CONFLICT_DETECTED,
-                    TribunalWardenBlockedPayload(
-                        request=request,
-                        command=vote_winner,
-                        risk_level=risk_analysis.risk_level,
-                        error="AGENT CONFLICT: Warden blocked Sage's command twice. The AI agents cannot agree on a safe approach. Human intervention required.",
-                        is_conflict=True,
-                    )
-                )
-                raise TribunalWardenBlockedError(
-                    request=request,
-                    error_message="Agent Conflict: Warden blocked Sage's command twice. The AI agents cannot agree on a safe approach.",
-                    risk_level=risk_analysis.risk_level,
-                )
-
-            # FIRST STRIKE: Contextual feedback
-            logger.info("[WARDEN-CIRCUIT-BREAKER] First warden block for investigation=%s - generating contextual feedback", investigation_id)
-            logger.info("[TRIBUNAL-WARDEN] Blocking command due to HIGH risk detection: %r", vote_winner)
-            if investigation_state:
-                investigation_state.warden_block_count = block_count + 1
-
-            error_analysis = await ai_response_analyzer.analyze_error_and_suggest_fix(
-                command=vote_winner,
-                exit_code=None,
-                stdout="",
-                stderr=f"WARDEN BLOCK: Command classified as HIGH risk. Justification: {justification}",
-                context=ErrorAnalysisContext(retry_count=0, working_directory=operator_context.working_directory if operator_context else ""),
-                settings=settings,
-            )
-
-            feedback_msg = error_analysis.user_message if error_analysis and error_analysis.user_message else "Command blocked as high risk. Propose a safer alternative."
-            if error_analysis and error_analysis.suggested_fix:
-                feedback_msg += f" Suggestion: {error_analysis.suggested_fix}"
-
-            logger.info("[TRIBUNAL-WARDEN] Feedback for Sage: %s", feedback_msg)
-
-            await emitter.emit(
-                EventType.TRIBUNAL_SESSION_WARDEN_BLOCKED,
-                TribunalWardenBlockedPayload(
-                    request=request,
-                    command=vote_winner,
-                    risk_level=risk_analysis.risk_level,
-                    error=f"WARDEN BLOCK: {feedback_msg}",
-                    is_conflict=False,
-                )
-            )
-            raise TribunalWardenBlockedError(
-                request=request,
-                error_message=f"Risk analysis blocked command: {feedback_msg}",
-                risk_level=risk_analysis.risk_level,
-            )
-
     if not auditor_enabled:
-        return vote_winner, CommandGenerationOutcome.CONSENSUS, True, None, AuditorReason.OK, None, risk_analysis
+        return vote_winner, CommandGenerationOutcome.CONSENSUS, True, None, AuditorReason.OK, None
 
     if vote_breakdown.consensus_strength == 1.0:
         mode = "unanimous"
@@ -702,13 +741,12 @@ async def _run_audit_stage(
                 ),
                 correlation_id=correlation_id or None,
             )
-            # Commitment failure is fatal - verdict cannot proceed without cryptographic binding
             raise RuntimeError(
                 f"Reputation commitment failed for tribunal_command_id={correlation_id}: {exc}. "
                 "Verdict cannot proceed without cryptographic binding to reputation scoreboard."
             ) from exc
 
-    return final_command, outcome, auditor_passed, auditor_revision, auditor_reason, commitment_id, risk_analysis
+    return final_command, outcome, auditor_passed, auditor_revision, auditor_reason, commitment_id
 
 async def _build_and_emit_result(
     request: str,
@@ -1027,7 +1065,20 @@ async def generate_command(
         # Auditor failure is non-fatal if consensus was reached, but here we can't even start it
         auditor_provider = None
 
-    final_command, outcome, auditor_passed, auditor_revision, auditor_reason, reputation_commitment_id, warden_risk_analysis = await _run_audit_stage(
+    warden_risk_analysis = await _run_warden_stage(
+        request=request,
+        guidelines=guidelines,
+        vote_winner=vote_winner,
+        operator_context=operator_context,
+        emitter=emitter,
+        settings=settings,
+        investigation_id=investigation_id,
+        ai_response_analyzer=ai_response_analyzer,
+        investigation_state=investigation_state,
+        investigation_context=investigation_context,
+    )
+
+    final_command, outcome, auditor_passed, auditor_revision, auditor_reason, reputation_commitment_id = await _run_audit_stage(
         provider=auditor_provider or generation_provider,
         model=auditor_model if auditor_provider else generation_model,
         request=request,
@@ -1042,10 +1093,6 @@ async def generate_command(
         reputation_data_service=reputation_data_service,
         auditor_hmac_key=auditor_hmac_key,
         investigation_id=investigation_id,
-        settings=settings,
-        ai_response_analyzer=ai_response_analyzer,
-        investigation_state=investigation_state,
-        investigation_context=investigation_context,
         whitelisting_enabled=whitelisting_enabled,
         blacklisting_enabled=blacklisting_enabled,
     )
