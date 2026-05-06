@@ -80,6 +80,7 @@ class PromptFile(StrEnum):
     TOOL_SEARCH_WEB = "tools/g8e_web_search.txt"
     TOOL_CHECK_PORT = "tools/check_port_status.txt"
     TOOL_LIST_FILES = "tools/list_files_and_directories_with_detailed_metadata.txt"
+    TOOL_RECURSIVE_GREP = "tools/recursive_grep_search.txt"
     TOOL_GRANT_INTENT = "tools/grant_intent_permission.txt"
     TOOL_REVOKE_INTENT = "tools/revoke_intent_permission.txt"
     TOOL_FETCH_FILE_HISTORY = "tools/fetch_file_history.txt"

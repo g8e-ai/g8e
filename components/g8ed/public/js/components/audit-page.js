@@ -105,13 +105,22 @@ export class AuditPage {
 
         for (const event of sorted) {
             const eventType    = escHtml(event.event_type || '--');
-            const details      = escHtml(event.summary || event.details || event.content || '--');
+            const category     = escHtml(event.category || 'other');
+            const details      = escHtml(event.summary || event.details?.full_content || event.content || '--');
             const operatorName = escHtml(event.operator_name || event.operator_id?.slice(0, 8) || '--');
             const actor        = escHtml(event.actor || 'system');
+            
+            // Map category to CSS class
+            const categoryClass = `category-${category}`;
 
             html += `<tr>
                 <td class="audit-cell-time">${this.formatTimestamp(event.timestamp)}</td>
-                <td><span class="event-type-label">${eventType}</span></td>
+                <td>
+                    <div class="event-type-wrapper">
+                        <span class="category-badge ${categoryClass}">${category}</span>
+                        <span class="event-type-label" title="${eventType}">${eventType}</span>
+                    </div>
+                </td>
                 <td><span class="actor-label">${actor}</span></td>
                 <td class="audit-cell-details" title="${details}">${details}</td>
                 <td class="audit-cell-operator">${operatorName}</td>
@@ -131,14 +140,14 @@ export class AuditPage {
         let fileEditCount = 0;
 
         for (const event of events) {
-            const type = event.event_type || '';
-            if (type.includes('.chat.')) {
+            const category = event.category || '';
+            if (category === 'chat') {
                 chatCount++;
-            } else if (type.includes('.approval.')) {
+            } else if (category === 'approval') {
                 approvalCount++;
-            } else if (type.includes('.command.')) {
+            } else if (category === 'command') {
                 commandCount++;
-            } else if (type.includes('.file.edit.')) {
+            } else if (category === 'file_edit') {
                 fileEditCount++;
             }
         }

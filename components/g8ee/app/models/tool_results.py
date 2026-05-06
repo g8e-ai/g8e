@@ -75,6 +75,15 @@ class FsListEntry(G8eBaseModel):
     nlink: int | None = None
 
 
+class FsGrepMatch(G8eBaseModel):
+    """A single grep match record."""
+    path: str
+    line_number: int
+    content: str
+    before: list[str] = Field(default_factory=list)
+    after: list[str] = Field(default_factory=list)
+
+
 class AuditFileMutation(G8eBaseModel):
     """A single file mutation record embedded in an AuditEvent.
 
@@ -280,6 +289,26 @@ class FsReadToolResult(BatchExecutionMeta):
     size: int = 0
     truncated: bool = False
     per_operator_results: list[PerOperatorFsReadResult] | None = None
+
+
+class PerOperatorFsGrepResult(PerOperatorResultBase):
+    """Per-operator result for filesystem grep operations."""
+    matches: list[FsGrepMatch] = Field(default_factory=list)
+    total_matches: int = 0
+    truncated: bool = False
+
+
+class FsGrepToolResult(BatchExecutionMeta):
+    """Result returned by FilesystemMixin._execute_fs_grep."""
+    success: bool = True
+    error: str | None = None
+    error_type: CommandErrorType | None = None
+    path: str | None = None
+    pattern: str | None = None
+    matches: list[FsGrepMatch] = Field(default_factory=list)
+    total_matches: int = 0
+    truncated: bool = False
+    per_operator_results: list[PerOperatorFsGrepResult] | None = None
 
 
 class FetchLogsToolResult(G8eBaseModel):
@@ -547,6 +576,7 @@ ToolResult = Union[
     FileEditResult,
     PortCheckToolResult,
     FsListToolResult,
+    FsGrepToolResult,
     FsReadToolResult,
     FetchLogsToolResult,
     FetchHistoryToolResult,

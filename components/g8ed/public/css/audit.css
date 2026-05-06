@@ -249,116 +249,53 @@ body[data-theme="light"] .audit-table tr:hover {
     background: #f9fafb;
 }
 
-/* Event Badges - Dark Theme Default */
-.event-badge {
+/* Category Badges */
+.category-badge {
     display: inline-block;
     padding: 0.125rem 0.5rem;
+    font-size: 0.625rem;
+    font-weight: 700;
+    border-radius: 9999px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.25rem;
+}
+
+.category-chat { background: rgba(56, 139, 253, 0.2); color: #58a6ff; }
+.category-command { background: rgba(163, 113, 247, 0.2); color: #a371f7; }
+.category-approval { background: rgba(46, 160, 67, 0.2); color: #3fb950; }
+.category-file_edit { background: rgba(219, 39, 119, 0.2); color: #db2777; }
+.category-system { background: rgba(139, 148, 158, 0.2); color: #8b949e; }
+.category-other { background: rgba(139, 148, 158, 0.1); color: #6e7681; }
+
+body[data-theme="light"] .category-chat { background: #dbeafe; color: #1d4ed8; }
+body[data-theme="light"] .category-command { background: #f3e8ff; color: #7c3aed; }
+body[data-theme="light"] .category-approval { background: #dcfce7; color: #166534; }
+body[data-theme="light"] .category-file_edit { background: #fce7f3; color: #be185d; }
+body[data-theme="light"] .category-system { background: #f3f4f6; color: #4b5563; }
+
+.event-type-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.event-type-label {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    color: #6e7681;
+}
+
+.actor-label {
     font-size: 0.75rem;
     font-weight: 500;
-    border-radius: 0.25rem;
-    background: #30363d;
-    color: #c9d1d9;
 }
 
-.event-badge.chat {
-    background: rgba(56, 139, 253, 0.2);
-    color: #58a6ff;
-}
-
-.event-badge.approved {
-    background: rgba(46, 160, 67, 0.2);
-    color: #3fb950;
-}
-
-.event-badge.denied {
-    background: rgba(248, 81, 73, 0.2);
-    color: #f85149;
-}
-
-.event-badge.pending {
-    background: rgba(210, 153, 34, 0.2);
-    color: #d29922;
-}
-
-.event-badge.command {
-    background: rgba(163, 113, 247, 0.2);
-    color: #a371f7;
-}
-
-.event-badge.file_edit {
-    background: rgba(219, 39, 119, 0.2);
-    color: #db2777;
-}
-
-.event-badge.system {
-    background: #30363d;
-    color: #8b949e;
-}
-
-body[data-theme="light"] .event-badge {
-    background: #e5e7eb;
-    color: #374151;
-}
-
-body[data-theme="light"] .event-badge.chat {
-    background: #dbeafe;
-    color: #1d4ed8;
-}
-
-body[data-theme="light"] .event-badge.approved {
-    background: #dcfce7;
-    color: #166534;
-}
-
-body[data-theme="light"] .event-badge.denied {
-    background: #fee2e2;
-    color: #991b1b;
-}
-
-body[data-theme="light"] .event-badge.pending {
-    background: #fef3c7;
-    color: #92400e;
-}
-
-body[data-theme="light"] .event-badge.command {
-    background: #f3e8ff;
-    color: #7c3aed;
-}
-
-body[data-theme="light"] .event-badge.file_edit {
-    background: #fce7f3;
-    color: #be185d;
-}
-
-body[data-theme="light"] .event-badge.system {
-    background: #e5e7eb;
-    color: #374151;
-}
-
-/* Actor Badges */
-.actor-badge {
-    font-size: 0.75rem;
-    color: #8b949e;
-}
-
-.actor-badge.user {
-    color: #58a6ff;
-}
-
-.actor-badge.ai {
-    color: #a371f7;
-}
-
-body[data-theme="light"] .actor-badge {
-    color: #6b7280;
-}
-
-body[data-theme="light"] .actor-badge.user {
-    color: #2563eb;
-}
-
-body[data-theme="light"] .actor-badge.ai {
-    color: #7c3aed;
+.audit-table td.audit-cell-details {
+    max-width: 30rem;
+    white-space: normal;
+    word-break: break-word;
+    font-size: 0.8125rem;
 }
 
 /* Transparency Table - Dark Theme Default */

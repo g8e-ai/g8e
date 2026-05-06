@@ -50,7 +50,7 @@ export function createAuditRouter({
             const filters = [
                 { field: 'user_id', operator: '==', value: req.userId }
             ];
-            const investigations = await services.investigationService.queryInvestigations(filters, 100);
+            const investigations = await services.investigationService.queryInvestigations(filters, 1000);
 
             const investigationsArray = Array.isArray(investigations) ? investigations : [];
 
@@ -97,7 +97,7 @@ export function createAuditRouter({
             const filters = [
                 { field: 'user_id', operator: '==', value: req.userId }
             ];
-            const investigations = await services.investigationService.queryInvestigations(filters, 100);
+            const investigations = await services.investigationService.queryInvestigations(filters, 1000);
 
             const investigationsArray = Array.isArray(investigations) ? investigations : [];
 

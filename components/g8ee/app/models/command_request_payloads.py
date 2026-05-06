@@ -39,6 +39,7 @@ __all__ = [
     "FetchLogsRequestPayload",
     "FileEditRequestPayload",
     "FsListRequestPayload",
+    "FsGrepRequestPayload",
     "FsReadRequestPayload",
     "G8eCommandPayload",
     "RestoreFileRequestPayload",
@@ -101,6 +102,16 @@ class FsListRequestPayload(TargetedOperatorBase):
     execution_id: str = Field(..., description="Unique execution identifier")
     max_depth: int | None = Field(default=None, description="Recursion depth. 0 = current directory only. Max 3.")
     max_entries: int | None = Field(default=None, description="Maximum number of entries to return. Max 500.")
+
+
+class FsGrepRequestPayload(TargetedOperatorBase):
+    """Payload for EventType.OPERATOR_FILESYSTEM_GREP_REQUESTED."""
+    payload_type: Literal["fs_grep"] = Field(default="fs_grep", description="Payload type discriminator")
+    path: str = Field(..., description="Directory path to search. Can be absolute or relative.")
+    pattern: str = Field(..., description="Regular expression pattern to search for.")
+    execution_id: str = Field(..., description="Unique execution identifier")
+    includes: list[str] | None = Field(default=None, description="Glob patterns to filter files.")
+    max_matches: int | None = Field(default=100, description="Maximum number of matches to return. Max 500.")
 
 
 class FsReadRequestPayload(TargetedOperatorBase):
@@ -179,6 +190,7 @@ G8eCommandPayload = Union[
     CommandCancelRequestPayload,
     FileEditRequestPayload,
     FsListRequestPayload,
+    FsGrepRequestPayload,
     FsReadRequestPayload,
     FetchLogsRequestPayload,
     FetchHistoryRequestPayload,

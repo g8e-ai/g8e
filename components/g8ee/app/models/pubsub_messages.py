@@ -26,7 +26,7 @@ from uuid import uuid4
 from app.constants import ComponentName, EventType, ExecutionStatus, HeartbeatType
 
 from .base import G8eBaseModel, UTCDatetime
-from .tool_results import AuditEvent, AuditSessionMetadata, FileDiffEntry, FileHistoryEntry, FsListEntry
+from .tool_results import AuditEvent, AuditSessionMetadata, FileDiffEntry, FileHistoryEntry, FsListEntry, FsGrepMatch
 
 from app.utils.timestamp import now, parse_iso
 
@@ -37,6 +37,7 @@ from app.models.command_request_payloads import (
     CheckPortRequestPayload,
     FileEditRequestPayload,
     FsListRequestPayload,
+    FsGrepRequestPayload,
     FsReadRequestPayload,
     FetchLogsRequestPayload,
     FetchHistoryRequestPayload,
@@ -145,6 +146,25 @@ class FsListResultPayload(G8eBaseModel):
     truncated: bool = Field(default=False, description="True if results were capped at max_entries")
     duration_seconds: float = Field(0.0)
     entries: list[FsListEntry] = Field(default_factory=list, description="Directory entries")
+    stdout_size: int = Field(0)
+    stderr_size: int = Field(0)
+    stdout_hash: str | None = Field(None)
+    stderr_hash: str | None = Field(None)
+    stored_locally: bool = Field(False)
+    error_message: str | None = Field(None)
+    error_type: str | None = Field(None)
+
+
+class FsGrepResultPayload(G8eBaseModel):
+    """Typed payload for operator.fs.grep.completed / operator.fs.grep.failed."""
+    payload_type: Literal["fs_grep_result"] = Field(default="fs_grep_result", description="Payload type discriminator")
+    execution_id: str = Field(..., description="Unique execution identifier")
+    path: str | None = Field(default=None, description="Resolved absolute path that was searched")
+    status: ExecutionStatus = Field(..., description="Operation status")
+    total_matches: int = Field(default=0, description="Total number of matches found before truncation")
+    truncated: bool = Field(default=False, description="True if results were capped at max_matches")
+    duration_seconds: float = Field(0.0)
+    matches: list[FsGrepMatch] = Field(default_factory=list, description="Grep matches")
     stdout_size: int = Field(0)
     stderr_size: int = Field(0)
     stdout_hash: str | None = Field(None)
@@ -458,6 +478,7 @@ G8eoResultPayload = Union[
     CancellationResultPayload,
     FileEditResultPayload,
     FsListResultPayload,
+    FsGrepResultPayload,
     FsReadResultPayload,
     FetchLogsResultPayload,
     FetchLogsErrorPayload,
@@ -484,6 +505,7 @@ G8eOutboundPayload = Union[
     CheckPortRequestPayload,
     FileEditRequestPayload,
     FsListRequestPayload,
+    FsGrepRequestPayload,
     FsReadRequestPayload,
     FetchLogsRequestPayload,
     FetchHistoryRequestPayload,

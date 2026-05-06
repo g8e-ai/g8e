@@ -265,7 +265,7 @@
                                 <div class="command-item">
                                     <span class="command-label">List recent executions</span>
                                     <div class="command-row">
-                                        <code class="command-code">sqlite3 ~/.g8e/audit.db "SELECT execution_id, command, exit_code, created_at FROM executions ORDER BY created_at DESC LIMIT 20;"</code>
+                                        <code class="command-code">sqlite3 /home/bob/.g8e/audit.db "SELECT execution_id, command, exit_code, created_at FROM executions ORDER BY created_at DESC LIMIT 20;"</code>
                                         <button class="copy-btn" title="Copy to clipboard">
                                             <span class="material-symbols-outlined">content_copy</span>
                                         </button>
@@ -274,7 +274,7 @@
                                 <div class="command-item">
                                     <span class="command-label">Search commands by pattern</span>
                                     <div class="command-row">
-                                        <code class="command-code">sqlite3 ~/.g8e/audit.db "SELECT * FROM executions WHERE command LIKE '%kubectl%';"</code>
+                                        <code class="command-code">sqlite3 /home/bob/.g8e/audit.db "SELECT * FROM executions WHERE command LIKE '%kubectl%';"</code>
                                         <button class="copy-btn" title="Copy to clipboard">
                                             <span class="material-symbols-outlined">content_copy</span>
                                         </button>
@@ -283,7 +283,7 @@
                                 <div class="command-item">
                                     <span class="command-label">Export to CSV</span>
                                     <div class="command-row">
-                                        <code class="command-code">sqlite3 -header -csv ~/.g8e/audit.db "SELECT * FROM executions;" > audit_export.csv</code>
+                                        <code class="command-code">sqlite3 -header -csv /home/bob/.g8e/audit.db "SELECT * FROM executions;" > audit_export.csv</code>
                                         <button class="copy-btn" title="Copy to clipboard">
                                             <span class="material-symbols-outlined">content_copy</span>
                                         </button>
@@ -292,7 +292,7 @@
                                 <div class="command-item">
                                     <span class="command-label">View database schema</span>
                                     <div class="command-row">
-                                        <code class="command-code">sqlite3 ~/.g8e/audit.db ".schema"</code>
+                                        <code class="command-code">sqlite3 /home/bob/.g8e/audit.db ".schema"</code>
                                         <button class="copy-btn" title="Copy to clipboard">
                                             <span class="material-symbols-outlined">content_copy</span>
                                         </button>
@@ -312,7 +312,7 @@
                                 <div class="command-item">
                                     <span class="command-label">View commit history</span>
                                     <div class="command-row">
-                                        <code class="command-code">cd ~/.g8e/audit-trail && git log --oneline -20</code>
+                                        <code class="command-code">cd /home/bob/.g8e/audit-trail && git log --oneline -20</code>
                                         <button class="copy-btn" title="Copy to clipboard">
                                             <span class="material-symbols-outlined">content_copy</span>
                                         </button>
@@ -321,7 +321,7 @@
                                 <div class="command-item">
                                     <span class="command-label">View full commit details</span>
                                     <div class="command-row">
-                                        <code class="command-code">cd ~/.g8e/audit-trail && git log -5 --stat</code>
+                                        <code class="command-code">cd /home/bob/.g8e/audit-trail && git log -5 --stat</code>
                                         <button class="copy-btn" title="Copy to clipboard">
                                             <span class="material-symbols-outlined">content_copy</span>
                                         </button>
@@ -330,7 +330,7 @@
                                 <div class="command-item">
                                     <span class="command-label">Search commits by message</span>
                                     <div class="command-row">
-                                        <code class="command-code">cd ~/.g8e/audit-trail && git log --grep="kubectl" --oneline</code>
+                                        <code class="command-code">cd /home/bob/.g8e/audit-trail && git log --grep="kubectl" --oneline</code>
                                         <button class="copy-btn" title="Copy to clipboard">
                                             <span class="material-symbols-outlined">content_copy</span>
                                         </button>
@@ -339,7 +339,7 @@
                                 <div class="command-item">
                                     <span class="command-label">Verify commit signatures</span>
                                     <div class="command-row">
-                                        <code class="command-code">cd ~/.g8e/audit-trail && git log --show-signature -1</code>
+                                        <code class="command-code">cd /home/bob/.g8e/audit-trail && git log --show-signature -1</code>
                                         <button class="copy-btn" title="Copy to clipboard">
                                             <span class="material-symbols-outlined">content_copy</span>
                                         </button>
@@ -348,7 +348,7 @@
                                 <div class="command-item">
                                     <span class="command-label">Diff between two points in time</span>
                                     <div class="command-row">
-                                        <code class="command-code">cd ~/.g8e/audit-trail && git diff HEAD~10 HEAD -- .</code>
+                                        <code class="command-code">cd /home/bob/.g8e/audit-trail && git diff HEAD~10 HEAD -- .</code>
                                         <button class="copy-btn" title="Copy to clipboard">
                                             <span class="material-symbols-outlined">content_copy</span>
                                         </button>

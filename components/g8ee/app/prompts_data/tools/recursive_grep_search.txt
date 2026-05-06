@@ -1,0 +1,4 @@
+Search for a pattern recursively within a directory on the operator host.
+Returns matching lines with their line numbers and optional context.
+Use this for read-only context gathering when you need to find specific strings or patterns across many files.
+This tool is safe for automated execution as it is read-only.
