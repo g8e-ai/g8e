@@ -63,12 +63,13 @@ async def detailed_health_check(
 ):
     """Detailed health check endpoint that verifies all services are available."""
     state = cast(G8eeAppState, request.app.state)
+    services = getattr(state, "services", None)
     clients_status = {
-        "cache_aside_service": "up" if hasattr(state, "cache_aside_service") and state.cache_aside_service else "down",
+        "cache_aside_service": "up" if services and getattr(services, "cache_aside_service", None) else "down",
         "g8es_kv": "up" if hasattr(state, "pubsub_client") and state.pubsub_client else "down",
         "internal_http_client": "up" if hasattr(state, "internal_http_client") and state.internal_http_client else "down",
-        "operator_command_service": "up" if hasattr(state, "operator_command_service") and state.operator_command_service else "down",
-        "chat_pipeline": "up" if hasattr(state, "chat_pipeline") and state.chat_pipeline else "down"
+        "operator_command_service": "up" if services and getattr(services, "operator_command_service", None) else "down",
+        "chat_pipeline": "up" if services and getattr(services, "chat_pipeline", None) else "down"
     }
 
     return {

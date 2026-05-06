@@ -76,7 +76,7 @@ from app.services.ai.generator import (
     generate_command,
 )
 from app.services.ai.tribunal.stages.generation import _run_generation_pass
-from app.services.ai.tribunal.stages.auditor import _run_audit_stage
+from app.services.ai.tribunal.stages.auditor import TribunalAuditor
 from app.services.ai.tribunal.stages.warden import _run_warden_stage
 from app.services.ai.tribunal.utils import _is_system_error
 from app.models.model_configs import get_model_config
@@ -232,8 +232,12 @@ class TestRoleImportRegression:
             consensus_strength=1.0,
         )
 
-        from app.services.ai.tribunal.stages.auditor import _run_audit_stage
-        final_cmd, outcome, auditor_passed, auditor_revision, auditor_reason, commitment_id = await _run_audit_stage(
+        from app.services.ai.tribunal.stages.auditor import TribunalAuditor
+        auditor = TribunalAuditor(
+            emitter=emitter,
+            **_REPUTATION_KWARGS,
+        )
+        audit_result = await auditor.run(
             provider=mock_provider,
             model="test-model",
             request="list files",
@@ -242,9 +246,16 @@ class TestRoleImportRegression:
             vote_breakdown=vote_breakdown,
             operator_context=_make_mock_operator_context(os="linux"),
             auditor_enabled=True,
-            emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
-            **_AUDIT_STAGE_REPUTATION_KWARGS,
+            investigation_id="inv-test",
+        )
+        final_cmd, outcome, auditor_passed, auditor_revision, auditor_reason, commitment_id = (
+            audit_result.final_command,
+            audit_result.outcome,
+            audit_result.passed,
+            audit_result.revision,
+            audit_result.reason,
+            audit_result.reputation_commitment_id,
         )
 
         assert auditor_passed is True
@@ -698,9 +709,13 @@ class TestTribunalAuditorFailedError:
             consensus_strength=1.0,
         )
 
-        from app.services.ai.tribunal.stages.auditor import _run_audit_stage
+        from app.services.ai.tribunal.stages.auditor import TribunalAuditor
+        auditor = TribunalAuditor(
+            emitter=emitter,
+            **_REPUTATION_KWARGS,
+        )
         with pytest.raises(TribunalAuditorFailedError) as exc_info:
-            await _run_audit_stage(
+            await auditor.run(
                 provider=mock_provider,
                 model="test-model",
                 request="list files",
@@ -709,9 +724,8 @@ class TestTribunalAuditorFailedError:
                 vote_breakdown=vote_breakdown,
                 operator_context=_make_mock_operator_context(os="linux"),
                 auditor_enabled=True,
-                emitter=emitter,
                 command_constraints_message="No whitelist or blacklist constraints are active",
-                **_AUDIT_STAGE_REPUTATION_KWARGS,
+                investigation_id="inv-test",
             )
 
         assert exc_info.value.reason == AuditorReason.EMPTY_RESPONSE
@@ -737,9 +751,13 @@ class TestTribunalAuditorFailedError:
             consensus_strength=1.0,
         )
 
-        from app.services.ai.tribunal.stages.auditor import _run_audit_stage
+        from app.services.ai.tribunal.stages.auditor import TribunalAuditor
+        auditor = TribunalAuditor(
+            emitter=emitter,
+            **_REPUTATION_KWARGS,
+        )
         with pytest.raises(TribunalAuditorFailedError) as exc_info:
-            await _run_audit_stage(
+            await auditor.run(
                 provider=mock_provider,
                 model="test-model",
                 request="list files",
@@ -748,9 +766,8 @@ class TestTribunalAuditorFailedError:
                 vote_breakdown=vote_breakdown,
                 operator_context=_make_mock_operator_context(os="linux"),
                 auditor_enabled=True,
-                emitter=emitter,
                 command_constraints_message="No whitelist or blacklist constraints are active",
-                **_AUDIT_STAGE_REPUTATION_KWARGS,
+                investigation_id="inv-test",
             )
 
         assert exc_info.value.reason == AuditorReason.NO_VALID_REVISION
@@ -774,9 +791,13 @@ class TestTribunalAuditorFailedError:
             consensus_strength=1.0,
         )
 
-        from app.services.ai.tribunal.stages.auditor import _run_audit_stage
+        from app.services.ai.tribunal.stages.auditor import TribunalAuditor
+        auditor = TribunalAuditor(
+            emitter=emitter,
+            **_REPUTATION_KWARGS,
+        )
         with pytest.raises(TribunalAuditorFailedError) as exc_info:
-            await _run_audit_stage(
+            await auditor.run(
                 provider=mock_provider,
                 model="test-model",
                 request="list files",
@@ -785,9 +806,8 @@ class TestTribunalAuditorFailedError:
                 vote_breakdown=vote_breakdown,
                 operator_context=_make_mock_operator_context(os="linux"),
                 auditor_enabled=True,
-                emitter=emitter,
                 command_constraints_message="No whitelist or blacklist constraints are active",
-                **_AUDIT_STAGE_REPUTATION_KWARGS,
+                investigation_id="inv-test",
             )
 
         assert exc_info.value.reason == AuditorReason.AUDITOR_ERROR
@@ -795,7 +815,7 @@ class TestTribunalAuditorFailedError:
         assert exc_info.value.request == "list files"
 
 class TestRunAuditStageWardenRiskAnalysis:
-    """_run_audit_stage exercises Warden risk analysis before the Auditor.
+    """TribunalAuditor exercises Warden risk analysis before the Auditor.
 
     Regression coverage for the Warden command-risk path: ``CommandRiskAnalysis``
     only carries ``risk_level``. Touching any other attribute on the analysis

@@ -131,6 +131,9 @@ from app.models.state import G8eeAppState
 
 @dataclass(frozen=True)
 class AllServices:
+    db_service: DBService
+    kv_service: KVService
+    blob_service: BlobService
     cache_aside_service: CacheAsideService
     attachment_service: AttachmentService
     response_analyzer: AIResponseAnalyzer | AIResponseAnalyzerProtocol
@@ -342,8 +345,11 @@ class ServiceFactory:
     def create_all_services(
         settings: G8eePlatformSettings,
         cache_aside_service: CacheAsideService,
+        db_service: DBService,
+        kv_service: KVService,
+        blob_service: BlobService,
         pubsub_client: PubSubClient | None = None,
-        blob_service: BlobClient | None = None,
+        blob_service_client: BlobClient | None = None,
         web_search_provider: WebSearchProvider | None = None,
     ) -> AllServices:
         """Create all g8ee services in proper dependency order.
@@ -369,7 +375,7 @@ class ServiceFactory:
         )
 
         attachment_service = AttachmentService(
-            blob_service=blob_service,  # type: ignore[arg-type]
+            blob_service=blob_service_client,  # type: ignore[arg-type]
             settings=settings,
         )
         response_analyzer = AIResponseAnalyzer()
@@ -458,6 +464,9 @@ class ServiceFactory:
         )
 
         all_services = AllServices(
+            db_service=db_service,
+            kv_service=kv_service,
+            blob_service=blob_service,
             cache_aside_service=cache_aside_service,
             attachment_service=attachment_service,
             response_analyzer=response_analyzer,
@@ -502,20 +511,10 @@ class ServiceFactory:
 
     @staticmethod
     def bind_to_app_state(app: object, services: AllServices) -> None:
-        """Assign every service in *services* to ``app.state``.
-
-        Also creates the legacy alias ``memory_service`` that some dependency
-        getters expect.
+        """Assign the services container to ``app.state``.
         """
         state = cast(G8eeAppState, app.state)
         state.services = services
-
-        for field in fields(services):
-            name = field.name
-            svc = getattr(services, name)
-            setattr(state, name, svc)
-
-        state.memory_service = services.memory_data_service
 
     @staticmethod
     async def start_services(services: AllServices) -> None:

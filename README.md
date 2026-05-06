@@ -12,7 +12,7 @@ governance architecture for trustless environments
 
 ## What this is
 
-g8e is a host-authoritative governance substrate for agentic AI — Byzantine consensus with an adversarial co-validator, sovereign execution, and chain-of-custody audit.
+g8e is an agentic AI platform built on mutual adversarial assumption. Every actor — Engine, Operator, User — assumes the others may be compromised and verifies accordingly. No trusted component, no privileged path, no implicit consent.The architecture is a host-authoritative governance substrate: Byzantine consensus with an adversarial co-validator, sovereign execution on customer hardware, and chain-of-custody audit. BFT applied to the agentic stack.
 
 Self-hosted. Air-gap capable. Apache 2.0. Built for environments where nominal oversight is a failure state and the owner must own the ledger.
 

@@ -141,8 +141,8 @@ async def lifespan(app: FastAPI):
     all_services = None
     try:
         # -- Phase 0: Bootstrap settings --
-        state.settings_service = SettingsService()
-        initial_settings = state.settings_service.get_local_settings()
+        settings_service = SettingsService()
+        initial_settings = settings_service.get_local_settings()
         settings = await initialize_g8e_service(
             "g8ee", settings=initial_settings,
             cache_aside_service=None, use_db_config=False,
@@ -161,21 +161,21 @@ async def lifespan(app: FastAPI):
         logger.info("g8es transport clients connected (db, kv, pubsub, blob)")
 
         # -- Phase 2: Handler services (sole users of each client) --
-        state.db_service = DBService(state.db_client)
-        state.kv_service = KVService(state.kv_cache_client)
-        state.blob_service = BlobService(state.blob_client)
+        db_service = DBService(state.db_client)
+        kv_service = KVService(state.kv_cache_client)
+        blob_service = BlobService(state.blob_client)
 
         # -- Phase 3: CacheAsideService (orchestrator over DB + KV) --
-        state.cache_aside_service = CacheAsideService(
-            kv=state.kv_service,
-            db=state.db_service,
+        cache_aside_service = CacheAsideService(
+            kv=kv_service,
+            db=db_service,
             component_name=ComponentName.G8EE,
             default_ttl=settings.listen.default_ttl,
         )
-        state.settings_service._cache_aside = state.cache_aside_service
+        settings_service._cache_aside = cache_aside_service
 
         # -- Phase 4: Platform settings from g8es --
-        settings = await state.settings_service.get_platform_settings()
+        settings = await settings_service.get_platform_settings()
         state.settings = settings
         set_settings(settings)
         logger.info("Platform settings merged: port=%s", settings.port)
@@ -183,9 +183,12 @@ async def lifespan(app: FastAPI):
         # -- Phase 5: All domain services (single factory call) --
         all_services = ServiceFactory.create_all_services(
             settings,
-            state.cache_aside_service,
+            cache_aside_service,
+            db_service=db_service,
+            kv_service=kv_service,
+            blob_service=blob_service,
             pubsub_client=state.pubsub_client,
-            blob_service=state.blob_service,
+            blob_service_client=state.blob_client,
         )
         ServiceFactory.bind_to_app_state(app, all_services)
         logger.info("All domain services created and bound to app state")
@@ -193,7 +196,7 @@ async def lifespan(app: FastAPI):
         # -- Phase 5b: Reconcile g8ep operator API key mirror (split-brain guard) --
         await reconcile_g8ep_operator_key(
             api_key_service=all_services.api_key_service,
-            settings_service=state.settings_service,
+            settings_service=all_services.settings_service,
         )
 
         # -- Phase 6: Lifecycle start --
@@ -221,7 +224,8 @@ async def lifespan(app: FastAPI):
             getattr(state, "internal_http_client", None), "g8ed HTTP client",
         )
 
-        db_service = getattr(state, "db_service", None)
+        services = getattr(state, "services", None)
+        db_service = getattr(services, "db_service", None) if services else None
         if db_service is not None:
             try:
                 await db_service.close()

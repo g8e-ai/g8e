@@ -202,6 +202,16 @@ class TribunalWardenBlockedError(TribunalError):
         )
 
 
+class TribunalAuditResult(G8eBaseModel):
+    """Result of the auditor stage, including side effects like reputation."""
+    final_command: str | None
+    outcome: CommandGenerationOutcome
+    passed: bool
+    revision: str | None
+    reason: AuditorReason
+    reputation_commitment_id: str | None
+
+
 class TribunalMemberResult(G8eBaseModel):
     """The structured output of a single Tribunal member."""
     reasoning: str = Field(description="The logical basis for the member's verdict.")

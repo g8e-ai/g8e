@@ -43,7 +43,6 @@ class G8eeAppState(Protocol):
     """Protocol for g8ee FastAPI app.state to ensure type safety."""
 
     # Settings and bootstrap
-    settings_service: SettingsService
     settings: G8eePlatformSettings
 
     # Core transport clients
@@ -53,22 +52,5 @@ class G8eeAppState(Protocol):
     blob_client: BlobClient
     internal_http_client: InternalHttpClient
 
-    # Handler services
-    db_service: DBService
-    kv_service: KVService
-    blob_service: BlobService
-    cache_aside_service: CacheAsideService
-
-    # Domain services (Commonly accessed directly on state)
-    investigation_service: InvestigationService
-    investigation_data_service: InvestigationDataService
-    memory_data_service: MemoryDataService
-    chat_pipeline: ChatPipelineService
-    grounding_service: GroundingService
-    operator_command_service: OperatorCommandService
-
     # Domain services container (The "typed state container")
     services: AllServices
-
-    # Legacy / specific accessors
-    memory_service: object  # Alias for services.memory_data_service

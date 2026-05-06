@@ -80,6 +80,10 @@ class G8eHttpContext(G8eBaseModel):
     source_component: ComponentName = Field(
         description="Component that created this context"
     )
+    is_operator_auth_relay: bool = Field(
+        default=False,
+        description="INTERNAL ONLY: Set to true by from_request for exempted operator auth paths"
+    )
 
     @field_validator("bound_operators", mode="before")
     @classmethod
@@ -96,12 +100,12 @@ class G8eHttpContext(G8eBaseModel):
 
     @model_validator(mode="after")
     def validate_web_session_or_operator_auth(self):
-        """Ensure either web session context (web_session_id + user_id) or operator auth (null values with G8ED source)."""
-        # If either web_session_id or user_id is null, this must be operator auth relay from g8ed
+        """Ensure either web session context (web_session_id + user_id) or operator auth (null values with G8ED source + exempt path)."""
+        # If either web_session_id or user_id is null, this must be operator auth relay from g8ed on an exempt path
         if self.web_session_id is None or self.user_id is None:
-            if self.source_component != ComponentName.G8ED:
+            if not self.is_operator_auth_relay or self.source_component != ComponentName.G8ED:
                 raise ValueError(
-                    "web_session_id and user_id are required unless source_component is G8ED (operator auth relay)"
+                    "web_session_id and user_id are required unless source_component is G8ED and path is exempted (operator auth relay)"
                 )
         return self
 
@@ -119,9 +123,22 @@ class G8eHttpContext(G8eBaseModel):
         """Extract and validate G8eHttpContext from FastAPI Request headers."""
         logger = get_logger(__name__)
 
+        # Authoritative list of paths that G8ED is allowed to call without web_session_id/user_id.
+        # These are strictly limited to operator authentication and session management.
+        exempt_paths = {
+            "/api/internal/operators/register-operator-session",
+            "/api/internal/operators/deregister-operator-session",
+            "/api/internal/operators/authenticate",
+            "/api/internal/operators/validate-session",
+            "/api/internal/operators/refresh-session",
+            "/api/internal/operators/device-link/register",
+            "/api/internal/operators/listen-session-auth",
+        }
+        is_exempt_path = request.url.path in exempt_paths
+
         logger.info(
             "[G8eHTTP-CONTEXT] Starting header validation",
-            extra={"endpoint": request.url.path, "method": request.method}
+            extra={"endpoint": request.url.path, "method": request.method, "is_exempt_path": is_exempt_path}
         )
 
         web_session_id = request.headers.get(G8eHeaders.WEB_SESSION_ID.lower())
@@ -139,13 +156,14 @@ class G8eHttpContext(G8eBaseModel):
         )
 
         if not web_session_id:
-            if raw_source_component != ComponentName.G8ED:
+            if raw_source_component != ComponentName.G8ED or not is_exempt_path:
                 logger.error(
                     "SECURITY VIOLATION: Missing required %s header",
                     G8eHeaders.WEB_SESSION_ID,
                     extra={
                         "endpoint": request.url.path,
                         "source_component": raw_source_component,
+                        "is_exempt_path": is_exempt_path,
                     }
                 )
                 from app.errors import AuthenticationError
@@ -155,12 +173,12 @@ class G8eHttpContext(G8eBaseModel):
                 )
             else:
                 logger.info(
-                    "[G8eHTTP-CONTEXT] web_session_id is null; allowed for G8ED source (operator auth relay)",
+                    "[G8eHTTP-CONTEXT] web_session_id is null; allowed for G8ED source on exempt path",
                     extra={"endpoint": request.url.path}
                 )
 
         if not user_id:
-            if raw_source_component != ComponentName.G8ED:
+            if raw_source_component != ComponentName.G8ED or not is_exempt_path:
                 logger.error(
                     "SECURITY VIOLATION: Missing required %s header",
                     G8eHeaders.USER_ID,
@@ -168,6 +186,7 @@ class G8eHttpContext(G8eBaseModel):
                         "endpoint": request.url.path,
                         "web_session_id": web_session_id[:12] + "..." if web_session_id else None,
                         "source_component": raw_source_component,
+                        "is_exempt_path": is_exempt_path,
                     }
                 )
                 from app.errors import AuthenticationError
@@ -177,7 +196,7 @@ class G8eHttpContext(G8eBaseModel):
                 )
             else:
                 logger.info(
-                    "[G8eHTTP-CONTEXT] user_id is null; allowed for G8ED source (operator auth relay)",
+                    "[G8eHTTP-CONTEXT] user_id is null; allowed for G8ED source on exempt path",
                     extra={"endpoint": request.url.path}
                 )
 
@@ -266,6 +285,7 @@ class G8eHttpContext(G8eBaseModel):
             "task_id": request.headers.get(G8eHeaders.TASK_ID.lower()),
             "bound_operators": request.headers.get(G8eHeaders.BOUND_OPERATORS.lower(), "[]"),
             "source_component": source_component,
+            "is_operator_auth_relay": is_exempt_path,
         }
         execution_id = request.headers.get(G8eHeaders.EXECUTION_ID.lower())
         if execution_id:

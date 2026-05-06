@@ -212,7 +212,7 @@ class TestLifespanShutdown:
             mock_app.state.pubsub_client.close.assert_called_once()
             mock_app.state.kv_cache_client.close.assert_called_once()
             mock_app.state.blob_client.close.assert_called_once()
-            mock_app.state.db_service.close.assert_called_once()
+            mock_app.state.services.db_service.close.assert_called_once()
         finally:
             for p in patches:
                 p.stop()

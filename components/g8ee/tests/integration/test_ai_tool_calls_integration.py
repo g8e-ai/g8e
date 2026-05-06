@@ -1066,6 +1066,7 @@ class TestToolIntegration:
             OperatorToolName.FILE_READ,
             OperatorToolName.FILE_UPDATE,
             OperatorToolName.LIST_FILES,
+            OperatorToolName.RECURSIVE_GREP,
             OperatorToolName.FETCH_FILE_HISTORY,
             OperatorToolName.FETCH_FILE_DIFF,
             OperatorToolName.CHECK_PORT,

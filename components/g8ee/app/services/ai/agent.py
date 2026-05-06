@@ -328,10 +328,15 @@ class g8eEngine:
                 )
 
                 turn_result_out: list[TurnResult] = []
-                # Buffer chunks to allow interrogation gate to filter TOOL_CALL chunks
-                chunks_buffer: list[StreamChunkFromModel] = []
+                # Buffer ONLY tool call chunks to allow interrogation gate to filter them.
+                # Text and thinking chunks are yielded immediately to drive the 'streaming_started'
+                # flag and provide better UI responsiveness.
+                tool_chunks_buffer: list[StreamChunkFromModel] = []
                 async for chunk in process_provider_turn(stream_response, model_name, turn_result_out):
-                    chunks_buffer.append(chunk)
+                    if chunk.type == StreamChunkFromModelType.TOOL_CALL:
+                        tool_chunks_buffer.append(chunk)
+                    else:
+                        yield chunk
 
                 turn_result = turn_result_out[0]
 
@@ -355,13 +360,6 @@ class g8eEngine:
                         part.text for part in consolidated if hasattr(part, "text") and part.text
                     )
                 
-                # Also extract text from buffered chunks for more reliable detection
-                for chunk in chunks_buffer:
-                    if chunk.type == StreamChunkFromModelType.TEXT and chunk.data:
-                        text = getattr(chunk.data, 'content', None)
-                        if text:
-                            response_text += text
-                
                 if extract_interrogation_questions(response_text):
                     interrogation_detected = True
                     logger.info(
@@ -374,11 +372,10 @@ class g8eEngine:
                     # Also update local reference for the immediate check below
                     turn_result.pending_tool_calls = []
 
-                # Yield chunks, filtering out TOOL_CALL if interrogation detected
-                for chunk in chunks_buffer:
-                    if interrogation_detected and chunk.type == StreamChunkFromModelType.TOOL_CALL:
-                        continue
-                    yield chunk
+                # Yield tool call chunks if interrogation NOT detected
+                if not interrogation_detected:
+                    for chunk in tool_chunks_buffer:
+                        yield chunk
 
                 if not turn_result.pending_tool_calls:
                     logger.info(

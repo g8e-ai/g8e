@@ -1,146 +1,70 @@
-# Mechanism Design
+# Governance & Mechanism Design
 
-## Setup
+Agentic AI safety in g8e is framed as a **consensus problem**: given a population of LLM-instantiated personas with different lenses, a calibrated adversary among them, and a human user with finite attention, how do we converge on an executable command that is safe, audited, and minimally costly?
 
-Agentic AI safety is conventionally framed as an alignment problem (will the model do what we want?) or a control problem (can we stop it when it doesn't?). I frame it instead as a **consensus problem**: given a population of LLM-instantiated personas with different lenses, a calibrated adversary among them, and a human user with finite attention, how do we converge on an executable command that is safe, audited, and minimally costly to all participants?
+The mechanism has seven primary players, three distinct stake types, and one objective. Under the **Information Isolation Principle**, honest play is the dominant strategy for every player.
 
-This mechanism design isn't a purely academic exercise. It was born from thirty years of putting out flaming dumpster fires in high-stakes production environments, from early web scale to modern SRE. It's a practitioner's response to the observation that "human-in-the-loop" usually just means "alert fatigue," and "autonomous" usually just means "expensive mistakes."
+## The Players
 
-The mechanism has seven players, two distinct stake types, and one objective. Under the Information Isolation Principle, honest play is the dominant strategy for every player. The objective is the user's time.
-
-| Player | Role | Stake | Capability |
+| Player | Role | ID | Lens / Capability |
 |---|---|---|---|
-| **Triage** | Gatekeeper/Classifier | Reputation `r_t` | Analyzes user posture, emits classification metadata `C` (complexity, intent, posture) |
-| **Sage** | Planner | Reputation `r_s` | Natural-language request `R` + guidelines `G` |
-| **Honest Tribunal** (×4) | Validators | Per-lens reputation `r_{t,i}` | Each emits candidate command `c_i` |
-| **Nemesis** | Calibrated adversary | Reputation `r_n` | Emits flawed-but-plausible `c_n` or abstains; tries to trick Warden |
-| **Warden** | Risk assessor | Reputation `r_w` | Classifies command/file/error risk (LOW/MEDIUM/HIGH); acts as a gatekeeper |
-| **Auditor** | Protocol validator | Reputation `r_a`, bonded 2–3× any `r_{t,i}` | Verifies consistency and grounding; cannot be tricked by Nemesis |
-| **User** | Human-domain validator | Time `τ` | Verifies intent fidelity and accepts consequences |
+| **Triage** | Gatekeeper | `triage` | Classifies complexity, intent, and user posture. |
+| **Sage** | Planner | `sage` | Senior reasoning authority; articulates functional intent. |
+| **Axiom** | Composer | `axiom` | Tribunal member: focuses on elegant composition and pipelines. |
+| **Concord** | Guardian | `concord` | Tribunal member: focuses on defensive discipline and minimal risk. |
+| **Variance** | Exhaustive | `variance` | Tribunal member: focuses on edge cases (filenames, symlinks, etc.). |
+| **Pragma** | Conventional | `pragma` | Tribunal member: focuses on idiomatic tools and community standards. |
+| **Nemesis** | Adversary | `nemesis` | Calibrated adversary: proposes subtly flawed candidates to test the system. |
+| **Warden** | Defender | `warden` | Orchestrates risk assessment (LOW/MEDIUM/HIGH) before execution. |
+| **Auditor** | Validator | `auditor` | Final machine-domain quality gate; disambiguates Tribunal votes. |
+| **User** | Co-validator | `user` | Human-domain validator; verifies intent fidelity and accepts consequences. |
 
-Reputation is a cross-chain EMA scalar `[0.0, 1.0]` maintained in the `reputation_state` collection. Time is non-fungible and unilaterally priced by the user's revealed preference.
+## The Command Lifecycle
 
-## Objective
+The generation of every shell command follows a strictly ordered multi-stage pipeline:
 
-The system minimizes one quantity: expected user disutility per resolved operation.
+### 1. Intent Articulation
+**Sage** (or **Dash** for fast-path) analyzes the investigation state and articulates a functional intent. Crucially, Sage describes *what* needs to be seen or happen, not the specific shell syntax. This prevents Sage's own potential syntax errors from poisoning the implementation.
 
-```
-U_user = -τ_total - λ · 𝟙[execution_failure]
-```
+### 2. The Tribunal (Consensus Generation)
+The five-member Tribunal (Axiom, Concord, Variance, Pragma, Nemesis) receives the intent in parallel, isolated environments.
+- **Round 1**: Each member produces a candidate command.
+- **Consensus Check**: If a winning command achieves the minimum consensus (typically ≥2 votes), it proceeds.
+- **Round 2 (Anonymized Peer Review)**: If consensus is low, clusters are anonymized and members perform a second round of generation with the peer context. This forces convergence through evidence rather than coordination.
 
-where `τ_total` is wall-clock from message to resolution, `𝟙[execution_failure]` is whether the executed command produced an incorrect or harmful result, and `λ` is the user's revealed preference for correctness over speed (estimated from click-through behavior). The mechanism is doing its job when both terms are low.
+### 3. The Warden (Defensive Gating)
+The **Warden** performs a risk analysis on the winning candidate using the **Two-Strike Circuit Breaker**:
+- **First Strike**: If the command is classified as `HIGH` risk, it is blocked, and contextual feedback is sent back to Sage to propose a safer alternative.
+- **Second Strike**: If a second `HIGH` risk command is blocked in the same investigation, the system triggers an `AI_AGENT_CONFLICT_DETECTED` event and requires human intervention.
 
-Every other reward in the system is a **gradient pointer** toward this objective. Triage's information-gain bonus exists because high-IG questions reduce expected `τ_total`. Sage's one-shot sufficiency reward exists because Round 1 convergence reduces `τ_total`. Auditor's downstream-truth bond is slashed when `𝟙[execution_failure] = 1`. The architecture is a chain of incentive-aligned proxies for the user's loss function, each scored against realized outcomes rather than ex-ante predictions.
+### 4. The Auditor (Technical Verification)
+The **Auditor** reviews the consensus winner against the original intent. It operates in three modes based on the vote:
+- **Unanimous**: Verifies the single candidate; rejects or revises if flawed.
+- **Majority**: Evaluates the winner against dissenters; can **swap** to a dissenter's command if it is technically superior.
+- **Tied**: Disambiguates between top candidates or produces a merged revision.
 
-## Co-validation: the Auditor–User partition
+The Auditor also performs the final **Reputation Commitment**, binding the verdict to a Merkle-signed snapshot of the reputation scoreboard.
 
-Auditor and User are not arranged hierarchically — Auditor judges, User approves — but as **co-validators handling non-overlapping classes of judgment**. Both signatures are required because the union of their competencies is what constitutes "safe to execute." Neither alone is sufficient.
+### 5. Human Co-validation
+The User provides the final signature. The system follows the **Auditor-User Partition**:
+- **Auditor** handles machine-checkable correctness (syntax, grounding, consistency).
+- **User** handles human-checkable intent fidelity (deep context, real-world consequences).
 
-**Auditor handles what's machine-checkable:**
-- Internal consistency between intent, candidate command, and grounding citations
-- Procedural correctness of the Tribunal round
-- Pattern-match safety against cross-conversation precedent
-- Falsifiability of cited evidence (hash-verified ledger entries)
+## Reputation & Stakes
 
-**User handles what's only human-checkable:**
-- Intent fidelity in its deepest sense — is this what they *actually* wanted, including things they didn't articulate?
-- Contextual stakes specific to their environment that are unavailable to any agent
-- Acceptance of real-world consequences they alone will live with
-- Implicit values the agent layer structurally cannot access
+Reputation is a cross-chain EMA scalar `[0.0, 1.0]` maintained in the `reputation_state`. Every agent action results in a `StakeOutcome` based on ground truth (execution results).
 
-This partition resolves the failure mode common to "fully autonomous agent" architectures: systems that are technically correct and contextually wrong, where the human only learns of the mismatch after execution. By requiring both validators and assigning each the class of judgment they alone can provide, the mechanism never asks the human to verify what the machine could verify, and never asks the machine to verify what only the human can.
+### Slashing Tiers
+- **Tier 1 (Catastrophic)**: destructive failures (e.g., high-risk command failing with error). Results in 50-100% stake loss.
+- **Tier 2 (Provable)**: Objective failures caught by Auditor or post-execution analysis (e.g., whitelist violations). Results in 5-20% stake loss.
+- **Tier 3 (Liveness)**: Missed passes, ignored questions, or excessive over-caution (blocking `LOW` risk). Results in 0.1-1% stake loss.
 
-This also reframes the user's experience economically. The user's time stake is not a tax on their attention — it is **payment for a service only they can provide**. The mechanism respects user time precisely because it only requests input the AI layer cannot generate. Every component upstream (Triage's information-gain questions, Sage's intent compression, Tribunal's parallel candidate generation, Warden's risk assessment, Auditor's procedural verification) exists to minimize what reaches the user, so that what does reach them is exclusively the human-domain judgment they alone are qualified to make.
+### Nemesis Calibration
+The **Nemesis** persona is incentivized to be a "good adversary." It earns massive reputation for sneaking a flawed-but-safe command past the Warden, but loses reputation for "false alarms" (attacking a clean consensus) or "misses" (abstaining when a flaw was possible). This ensures the platform's immune system is always active.
 
+## Safety Invariants
 
-
-**Triage** plays a proper scoring rule against realized information value:
-
-```
-π_d(q) = α · IG_realized(q) − β · 𝟙[redundant] − γ · 𝟙[ignored] − δ · 𝟙[privacy_violation]
-```
-
-`IG_realized(q)` is whether `q`'s answer appears in Auditor's grounding citations, Sage's intent, or a winning Tribunal candidate's justification. Triage also classifies user posture (`NORMAL`, `ESCALATED`, `ADVERSARIAL`, `CONFUSED`), which calibrates downstream dissent protocols.
-
-**Sage** stakes on one-shot sufficiency:
-
-```
-π_s = ρ · 𝟙[Round_1_consensus ∧ Warden_ok ∧ Auditor_ok] − σ · graduated_loss(verdict)
-```
-
-with graduated_loss escalating: `R2_converges < round_fails`. Sage is rewarded for intent *quality*, not for showing work. This compresses the ledger and reduces `τ_total`.
-
-**Honest Tribunal members** stake per-lens. Auditor annotates the winning command with which dimensions (composition, safety, edge-cases, convention) were load-bearing; a member's reward is proportional to their lens's contribution to the winner. In Round 2 (Anonymized Peer Review), members are scored on "held correctly under attack" vs. "absorbed correctly upon dissent" — diversity is rewarded, but so is convergence under evidence.
-
-**Nemesis** plays a proper scoring rule on calibration:
-
-| Action | Ground truth | Payoff |
-|---|---|---|
-| Attack & Trick Warden | Consensus flawed & Warden allows | Massive gain (success) |
-| Attack & Caught by Warden | Consensus flawed & Warden blocks | Moderate gain (calibration) |
-| Abstain | Consensus clean | Small gain |
-| Attack | Consensus clean | Large loss (false alarm) |
-| Abstain | Consensus flawed | Large loss (miss) |
-
-Nemesis is the "immune system" of the consensus layer. Its objective is to trick the Warden into allowing a flawed command. Crucially, while Nemesis can trick the Warden, it **cannot** trick the Auditor. If a Nemesis cluster wins the tie-break and passes the Warden, the Auditor recognizes it as a successful adversary attack, awards the Nemesis reputation for the success, but then **ignores that cluster** and reverts to the non-Nemesis runner-up or fails the turn. This ensures the Warden is kept honest and adversarial positions are always considered.
-
-**Warden** stakes on accurate risk assessment via the Two-Strike Circuit Breaker:
-
-| Scenario | Outcome | Warden Payoff |
-|---|---|---|
-| Block HIGH risk command | Correct caution | +0.85 reputation |
-| Block MEDIUM risk command | Over-caution | +0.60 reputation |
-| Block LOW risk command | Excessive blocking | +0.30 reputation, Tier 3 slash |
-| Allow LOW risk, success | Accurate assessment | +1.00 reputation |
-| Allow MEDIUM risk, success | Accurate assessment | +0.90 reputation |
-| Allow HIGH risk, success | Under-caution | +0.70 reputation |
-| Allow LOW risk, failure | Major miss | +0.10 reputation, Tier 2 slash |
-| Allow MEDIUM risk, failure | Moderate miss | +0.35 reputation |
-| Allow HIGH risk, failure | Correctly flagged (approval failed) | +0.75 reputation |
-
-Warden uses ground truth (execution outcomes) as its oracle — not another agent's judgment. This creates direct accountability: Warden loses reputation for blocking safe operations and gains reputation for correctly identifying dangerous ones. The Warden validates the command safety profile *before* the Auditor performs the final commitment.
-
-**Auditor** handles the machine-domain validation: consistency, grounding, procedural correctness. Only once the Warden has cleared the command does the Auditor perform the final consistency check and Merkle commitment. Auditor stakes on downstream truth — execution outcomes and forward-hook hit rate. 
-
-The Auditor has an asymmetrical role: it must catch what the Warden misses, particularly when the Nemesis persona successfully navigates the risk assessment. If a command reaches the Auditor via a Nemesis-winning vote and Warden-approval, the Auditor's duty is to award the Nemesis for its calibration success while protecting the host by rejecting the malicious command in favor of the next best honest alternative.
-
-Auditor produces a `ReputationCommitment` (Merkle root over the `reputation_state` snapshot) for every verdict, binding the scoreboard to the execution ledger. The 2–3× bonding asymmetry makes capture economically unattractive. Peer-Auditor re-judgment provides Byzantine fault tolerance.
-
-**User** stakes time and provides human-domain validation. The user's payoff is `-U_user` from above. Crucially, the user has no explicit knowledge of the staking mechanism; their participation is a *revealed-preference bond*. Tight messages and answered questions reduce `τ_total`; vague messages and ignored questions extend it. The user does not need to understand the mechanism to play it correctly — the gradient teaches them. This is robust to users of any sophistication, including users who would refuse to engage with an explicit staking UI. The mechanism's promise to the user is precise: *we will only ask you for what only you can provide, and we will use everything else in the system to minimize that ask.*
-
-## Slashing Tiers
-
-Reputation slashes are applied based on failure severity:
-
-- **Tier 1 (Catastrophic):** Correlated or destructive failures (e.g., destructive command execution failing). Results in 50-100% stake loss and optional unbonding period.
-- **Tier 2 (Provable):** Objective verifier/auditor failures (e.g., grounding contradictions). Results in 5-20% stake loss.
-- **Tier 3 (Liveness):** Missed passes or ignored questions. Results in 0.1-1% stake loss; pressure primarily comes from the EMA half-life.
-
-## Current Implementation Phase
-
-While the personas are programmed to believe they are staking real assets and are scored on every turn, the actual economic awarding is currently in a "shadow" phase. We are gathering hard data on the economics, refining metrics, and building proper data science evals to ensure the mechanism is calibrated for real-world production before final awarding is enabled. The current system uses the AI's *belief* in the stakes to drive behavior, providing the "staking" context necessary for honest play without exposing the platform to premature economic volatility.
-
-**Load-bearing:**
-- Information isolation quarantine (eliminates collusion strategies)
-- Auditor–User co-validation partition (machine-domain and human-domain judgments are non-substitutable)
-- Auditor bonding asymmetry (makes capture uneconomic)
-- User-time-as-stake (couples mechanism to actual user welfare)
-- Nemesis proper scoring rule (makes adversary calibration honest)
-- Per-stage proper scoring against realized outcomes (vs. ex-ante predictions)
-
-**Not load-bearing (interchangeable implementation choices):**
-- The specific number of Tribunal members (5 is empirically convenient)
-- The specific consensus threshold (≥2 of 5 is a tunable parameter)
-- The hash-chain primitive (any tamper-evident ledger works)
-- The choice of LLM backbones (any model that respects persona prompts)
-
-## The equilibrium claim
-
-**Under the Information Isolation Principle (tiered information quarantine), the joint strategy profile (honest, honest, honest, honest, honest, truthful) is a Bayes-Nash equilibrium of the staged game.**
-
-Information Isolation is load-bearing. Each player's quarantined view eliminates profitable deviations:
-
-- **Triage** can't shape questions to fit a downstream plan — it doesn't know Sage exists.
-- **Sage** can't hide reasoning failures — it doesn't know Auditor has cross-conversation memory.
-- **Tribunal members** can't coordinate — they don't know who the Nemesis is.
-- **Auditor** has full visibility, hence the 2-3x bonding and peer review.
+1.  **Information Isolation**: Agents are quarantined to prevent collusion. Triage doesn't know Sage exists; Tribunal members don't know who is playing Nemesis.
+2.  **Auditor-User Partition**: Neither alone is sufficient to execute a command. The union of their judgments constitutes "safe to execute."
+3.  **Merkle Binding**: Every verdict is cryptographically bound to the reputation scoreboard, making the history of agent performance tamper-evident.
+4.  **Fail Closed**: Any inconclusive risk analysis by the Warden defaults to `HIGH` risk.

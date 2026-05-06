@@ -67,7 +67,7 @@ from app.utils.safety import validate_command_safety
 from app.models.model_configs import get_model_config
 
 from app.services.ai.tribunal.emitter import TribunalEmitter
-from app.services.ai.tribunal.stages.auditor import _run_audit_stage
+from app.services.ai.tribunal.stages.auditor import TribunalAuditor
 from app.services.ai.tribunal.stages.generation import (
     _anonymize_clusters,
     _run_generation_stage,
@@ -410,7 +410,12 @@ async def generate_command(
         investigation_context=investigation_context,
     )
 
-    final_command, outcome, auditor_passed, auditor_revision, auditor_reason, reputation_commitment_id = await _run_audit_stage(
+    auditor = TribunalAuditor(
+        emitter=emitter,
+        reputation_data_service=reputation_data_service,
+        auditor_hmac_key=auditor_hmac_key,
+    )
+    audit_result = await auditor.run(
         provider=auditor_provider or generation_provider,
         model=auditor_model if auditor_provider else generation_model,
         request=request,
@@ -420,10 +425,7 @@ async def generate_command(
         tied_candidates=tied_candidates,
         operator_context=operator_context,
         auditor_enabled=settings.llm.llm_command_gen_auditor,
-        emitter=emitter,
         command_constraints_message=command_constraints_message,
-        reputation_data_service=reputation_data_service,
-        auditor_hmac_key=auditor_hmac_key,
         investigation_id=investigation_id,
         whitelisting_enabled=whitelisting_enabled,
         blacklisting_enabled=blacklisting_enabled,
@@ -432,21 +434,21 @@ async def generate_command(
     return await _build_and_emit_result(
         request=request,
         guidelines=guidelines,
-        final_command=final_command,
-        outcome=outcome,
+        final_command=audit_result.final_command,
+        outcome=audit_result.outcome,
         candidates=candidates,
         vote_winner=vote_winner,
         vote_score=vote_score,
         vote_breakdown=vote_breakdown,
-        auditor_passed=auditor_passed,
-        auditor_revision=auditor_revision,
-        auditor_reason=auditor_reason,
+        auditor_passed=audit_result.passed,
+        auditor_revision=audit_result.revision,
+        auditor_reason=audit_result.reason,
         emitter=emitter,
         whitelisting_enabled=whitelisting_enabled,
         blacklisting_enabled=blacklisting_enabled,
         operator_context=operator_context,
         correlation_id=correlation_id,
-        reputation_commitment_id=reputation_commitment_id,
+        reputation_commitment_id=audit_result.reputation_commitment_id,
         warden_risk_analysis=warden_risk_analysis,
         round_2_candidates=round_2_candidates,
         round_2_vote_breakdown=round_2_vote_breakdown,

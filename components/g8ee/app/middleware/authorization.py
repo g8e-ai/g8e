@@ -116,7 +116,8 @@ class AuthorizationMiddleware(BaseHTTPMiddleware):
         investigation_id: str,
         authenticated_user_id: str
     ) -> None:
-        investigation_service = getattr(request.app.state, "investigation_service", None)
+        services = getattr(request.app.state, "services", None)
+        investigation_service = getattr(services, "investigation_service", None) if services else None
         if investigation_service is None:
             raise ServiceUnavailableError(
                 "investigation_service not initialised",
@@ -147,7 +148,8 @@ class AuthorizationMiddleware(BaseHTTPMiddleware):
         case_id: str,
         authenticated_user_id: str
     ) -> None:
-        db_service = getattr(request.app.state, "db_service", None)
+        services = getattr(request.app.state, "services", None)
+        db_service = getattr(services, "db_service", None) if services else None
         if db_service is None:
             raise ServiceUnavailableError(
                 "db_service not initialised",
