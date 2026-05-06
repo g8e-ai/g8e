@@ -29,6 +29,7 @@ func (p *ExecutionStatusPayload) SetExecutionID(id string)        { p.ExecutionI
 func (p *PortCheckResultPayload) SetExecutionID(id string)        { p.ExecutionID = id }
 func (p *FetchLogsResultPayload) SetExecutionID(id string)        { p.ExecutionID = id }
 func (p *FsReadResultPayload) SetExecutionID(id string)           { p.ExecutionID = id }
+func (p *FsGrepResultPayload) SetExecutionID(id string)           { p.ExecutionID = id }
 func (p *LFAAErrorPayload) SetExecutionID(id string)              { p.ExecutionID = id }
 func (p *FetchFileDiffResultPayload) SetExecutionID(id string)    { p.ExecutionID = id }
 func (p *FetchHistoryResultPayload) SetExecutionID(id string)     { p.ExecutionID = id }

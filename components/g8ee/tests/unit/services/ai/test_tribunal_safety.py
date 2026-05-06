@@ -155,9 +155,14 @@ class TestAuditorSafety:
                 consensus_strength=1.0,
             )
 
-            from app.services.ai.tribunal.stages.auditor import _run_audit_stage
+            from app.services.ai.tribunal.stages.auditor import TribunalAuditor
             with pytest.raises(TribunalAuditorFailedError) as exc_info:
-                await _run_audit_stage(
+                auditor = TribunalAuditor(
+                    emitter=emitter,
+                    reputation_data_service=MagicMock(),
+                    auditor_hmac_key="test-key",
+                )
+                await auditor.run(
                     provider=mock_provider,
                     model="test-model",
                     request="delete everything",
@@ -166,10 +171,7 @@ class TestAuditorSafety:
                     vote_breakdown=vote_breakdown,
                     operator_context=_make_mock_operator_context(),
                     auditor_enabled=True,
-                    emitter=emitter,
                     command_constraints_message="",
-                    reputation_data_service=MagicMock(),
-                    auditor_hmac_key="test-key",
                     investigation_id="inv-1",
                 )
 

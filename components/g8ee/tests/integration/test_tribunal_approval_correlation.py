@@ -21,7 +21,7 @@ End-to-end test covering the full Tribunal → approval → response flow to ens
 4. SSE boundary validation rejects events missing web_session_id
 """
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -59,11 +59,19 @@ class TestTribunalApprovalCorrelation:
         ]
 
         with patch("app.services.ai.generator._run_generation_stage", new_callable=AsyncMock) as mock_gen, \
-             patch("app.services.ai.generator._run_audit_stage", new_callable=AsyncMock) as mock_audit:
+             patch("app.services.ai.generator.TribunalAuditor") as mock_auditor_class:
 
             mock_gen.return_value = mock_candidates
-            # Mock audit to pass
-            mock_audit.return_value = ("ls -la", CommandGenerationOutcome.VERIFIED, True, None, "ok", None)
+            # Mock auditor to pass
+            mock_auditor = mock_auditor_class.return_value
+            mock_auditor.run = AsyncMock(return_value=MagicMock(
+                final_command="ls -la",
+                outcome=CommandGenerationOutcome.VERIFIED,
+                passed=True,
+                revision=None,
+                reason="ok",
+                reputation_commitment_id=None
+            ))
 
             # Generate command via Tribunal
             gen_result = await generate_command(
@@ -113,14 +121,22 @@ class TestTribunalApprovalCorrelation:
         event_svc = make_g8ed_event_service()
 
         with patch("app.services.ai.generator._run_generation_stage", new_callable=AsyncMock) as mock_gen, \
-             patch("app.services.ai.generator._run_audit_stage", new_callable=AsyncMock) as mock_audit:
+             patch("app.services.ai.generator.TribunalAuditor") as mock_auditor_class:
 
             mock_gen.return_value = [
                 CandidateCommand(command="ls", pass_index=0, member="axiom"),
                 CandidateCommand(command="ls", pass_index=1, member="concord"),
             ]
-            # Mock audit to pass
-            mock_audit.return_value = ("ls -la", CommandGenerationOutcome.VERIFIED, True, None, "ok", None)
+            # Mock auditor to pass
+            mock_auditor = mock_auditor_class.return_value
+            mock_auditor.run = AsyncMock(return_value=MagicMock(
+                final_command="ls -la",
+                outcome=CommandGenerationOutcome.VERIFIED,
+                passed=True,
+                revision=None,
+                reason="ok",
+                reputation_commitment_id=None
+            ))
 
             # Generate command via Tribunal
             await generate_command(

@@ -70,8 +70,10 @@ class TestServiceFactorySmoke:
             services = ServiceFactory.create_all_services(
                 settings=mock_settings,
                 cache_aside_service=mock_cache_aside,
-                pubsub_client=None,
+                db_service=MagicMock(),
+                kv_service=MagicMock(),
                 blob_service=None,
+                pubsub_client=None,
                 web_search_provider=None,
             )
 
@@ -99,8 +101,10 @@ class TestServiceFactorySmoke:
             services = ServiceFactory.create_all_services(
                 settings=mock_settings,
                 cache_aside_service=mock_cache_aside,
-                pubsub_client=None,
+                db_service=MagicMock(),
+                kv_service=MagicMock(),
                 blob_service=None,
+                pubsub_client=None,
                 web_search_provider=web_search_provider,
             )
 

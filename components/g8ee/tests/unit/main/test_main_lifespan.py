@@ -92,6 +92,7 @@ def _configure_factory(mocks):
     mock_services = MagicMock(spec=AllServices)
     mock_services.api_key_service = MagicMock()
     mock_services.cache_aside_service = MagicMock()
+    mock_services.settings_service = MagicMock()
     mock_services.operator_lifecycle_service = MagicMock()
     mock_services.operator_data_service = MagicMock()
     mock_services.heartbeat_service = MagicMock()
@@ -100,6 +101,8 @@ def _configure_factory(mocks):
     mock_services.certificate_service = MagicMock()
     mock_services.investigation_service = MagicMock()
     mock_services.approval_service = MagicMock()
+    mock_services.db_service = MagicMock()
+    mock_services.db_service.close = AsyncMock()
 
     factory.create_all_services.return_value = mock_services
     factory.bind_to_app_state = MagicMock()

@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.0] - 2026-05-06
+
+### Added
+- **Recursive Grep Tool:** Introduced `recursive_grep_search` for high-efficiency filesystem exploration across operator fleets.
+- **Interrogation Gate:** Implemented a new gate in the agent loop that detects `<interrogation>` blocks and suppresses pending tool calls to prioritize user input.
+- **Warden Risk Analysis:** Enhanced risk classification logic for Warden sub-agents with improved reputation staking and file-read security.
+- **LFAA Audit Enhancements:** Added direct SQLite querying support for the LFAA Audit Vault and corresponding CLI tools for forensic analysis.
+- **Tribunal Voting in Audit UI:** The Audit page now displays detailed Tribunal voting breakdowns, consensus strength, and dissent records.
+
+### Changed
+- **G8eHttpContext Refactor:** Centralized and enforced strict security header validation (`web_session_id`, `user_id`, `source_component`) for all internal service communication.
+- **Tribunal 2.0 Pipeline:** Completely refactored the Tribunal consensus pipeline into a modular, stage-based architecture (`generation`, `voting`, `warden`, `auditor`).
+- **Internal API Security:** Enforced strict component-identity verification and session-binding for internal component-to-component routing.
+- **Operator Lifecycle:** Hardened operator slot management with atomic state transitions and reliable relaunch/activation logic for `g8ep` slots.
+- **Consensus Enforcement:** Implemented mandatory two-round consensus logic for Tribunal sessions with low initial agreement.
+
+### Fixed
+- **Warden Risk Regression:** Resolved a regression where Warden risk levels were incorrectly calculated in certain agent turns.
+- **Interrogation Plumbing:** Fixed response handling and user interaction flow for the device interrogation pipeline.
+- **G8EO Execution ID:** Fixed a bug where `FsGrepResultPayload` was missing `ExecutionID` propagation, breaking correlation for recursive searches.
+- **Internal Routing Loops:** Resolved edge cases in internal API routing that could lead to authentication loops under high concurrency.
+- **Test Coverage & Stability:** Massive increase in unit and integration test coverage for `g8ee` and `g8eo`, with significant improvements to test reliability and parallelism.
+
 ## [0.1.9] - 2026-05-05
 
 ### Added
