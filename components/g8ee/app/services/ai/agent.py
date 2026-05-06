@@ -357,8 +357,10 @@ class g8eEngine:
                 
                 # Also extract text from buffered chunks for more reliable detection
                 for chunk in chunks_buffer:
-                    if chunk.type == StreamChunkFromModelType.TEXT and chunk.data and hasattr(chunk.data, 'text'):
-                        response_text += chunk.data.text or ""
+                    if chunk.type == StreamChunkFromModelType.TEXT and chunk.data:
+                        text = getattr(chunk.data, 'content', None)
+                        if text:
+                            response_text += text
                 
                 if extract_interrogation_questions(response_text):
                     interrogation_detected = True

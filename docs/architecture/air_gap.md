@@ -5,93 +5,85 @@ parent: Architecture
 
 # Air-Gap Architecture
 
-g8e supports fully air-gapped deployments with **zero runtime internet dependencies**. The platform achieves this by self-hosting all core infrastructure, vendoring critical dependencies, and providing a local inference server for LLMs.
+g8e is designed for high-security environments where internet connectivity is strictly prohibited. The platform supports fully air-gapped deployments with **zero runtime internet dependencies**, achieving this through self-hosted core infrastructure, vendored dependencies, and local LLM inference.
 
 ---
 
 ## Zero-Trust Privacy Principle
 
 The air-gap configuration is the "Canonical Truth" of g8e's privacy model. In this mode, the platform operates as a completely sealed unit:
-- **No Telemetry:** No outbound usage or health data is sent to Lateralus Labs.
-- **No CDNs:** All frontend assets (fonts, icons, JS libraries) are served from the local `g8ed` container.
-- **Local Persistence:** Data is stored in a local SQLite database managed by the `g8es` service.
-- **Local Intelligence:** LLM inference is handled by `g8el` or a local Ollama instance.
+
+- **No Telemetry:** Zero outbound usage, health, or error data is sent to Lateralus Labs.
+- **Local Assets:** All frontend assets (fonts, icons, JS libraries) are served locally from the `g8ed` container.
+- **Local Persistence:** All platform state is stored in a unified SQLite database managed by the `g8es` (Operator listen mode) service.
+- **Local Intelligence:** LLM inference is handled by the `g8el` component (a self-hosted `llama.cpp` server).
 
 ---
 
-## Runtime Backbone: g8es
+## The Platform Backbone: g8es (Listen Mode)
 
-In air-gapped environments, the standard cloud-backed `g8es` is replaced by the **Operator Listen Mode**. The `g8eo` binary is launched with the `--listen` flag, assuming the role of the platform's central nervous system.
+In an air-gapped deployment, the platform requires a local "Hub" for persistence and messaging. This is provided by running the `g8eo` (Operator) binary in **Listen Mode**, which the platform refers to as `g8es`.
 
-### Responsibilities
-- **Persistence:** Provides a high-performance SQLite-backed KV store for `g8ee` and `g8ed`.
-- **Messaging:** Acts as the Pub/Sub broker (WSS on port 9001) for all component communication.
-- **Security:** Serves as the internal Certificate Authority (CA), auto-generating self-signed TLS certificates for all inter-container traffic.
-- **Auth Proxy:** Handles internal authentication between services on port 9000.
+### Architecture & Ports
+The `g8es` backbone exposes two primary interfaces for internal component communication:
+
+| Port | Protocol | Purpose |
+|---|---|---|
+| **9000** | **HTTPS** | **Document Store & Vault:** Unified SQLite-backed API for `g8ee` and `g8ed`. |
+| **9001** | **WSS** | **Pub/Sub Broker:** Real-time messaging backbone for all platform events. |
+
+### Core Responsibilities
+- **Unified Persistence:** Replaces external databases with a single `g8e.db` SQLite file.
+- **Internal PKI:** Acts as the platform's Certificate Authority (CA), auto-generating TLS certificates for all inter-container traffic.
+- **Secret Management:** Provides an encrypted Vault for storing platform secrets (API keys, tokens) without external dependencies.
+- **Blob Storage:** Hosts local binaries (like the Operator itself) for deployment to other air-gapped nodes.
 
 ---
 
 ## Local Inference: g8el
 
-The `g8el` service provides a local `llama.cpp` inference server. It is the recommended LLM provider for air-gapped deployments.
+The `g8el` component provides a local `llama.cpp` inference server, enabling agentic operations without cloud LLM providers.
 
-- **Port:** `11444`
-- **Default Model:** `google_gemma-4-E2B-it-Q4_K_M.gguf`
-- **Air-Gap Requirement:** Model files must be pre-downloaded and placed in the `components/g8ee/models/` directory on the host, which is mapped to `/models` inside the container.
-- **Entrypoint Logic:** If the model file is missing at startup, the container will attempt to download it from HuggingFace. In an air-gapped environment, this will fail unless the model is pre-staged.
+- **Interface:** OpenAI-compatible HTTP API on port `11444`.
+- **Default Model:** `google_gemma-4-E2B-it-Q4_K_M.gguf` (2.6B parameter model).
+- **Thinking Support:** Inherits `LlamaCppProvider` logic, supporting local reasoning models when configured.
+- **Provisioning:** Model files must be pre-staged in `components/g8ee/models/` (mapped to `/models` in the container). If the file is missing, the container will attempt a download, which will fail in a true air-gap.
 
 ---
 
-## Build-Time Dependencies
+## Build-Time vs. Runtime
 
-While runtime has no dependencies, the build process (`docker build`) requires internet access or a local mirror.
-
-### Docker Base Images
-
-| Image | Component | Purpose |
+| Phase | Internet Requirement | Air-Gap Strategy |
 |---|---|---|
-| `golang:1.26-alpine3.23` | `g8es` (builder) | Compiling the Operator binary |
-| `alpine:3.23` | `g8es` (final) | Runtime environment for the backbone |
-| `node:22-alpine3.23` | `g8ed` | Frontend and Terminal backend |
-| `python:3.12-slim` | `g8ee` | AI Engine and reasoning logic |
-| `python:3.13-alpine` | `g8ep` | Node host and test runner |
-| `ghcr.io/ggml-org/llama.cpp:server` | `g8el` | Local LLM inference |
+| **Build** | Required (Default) | Use the `setup` workflow on a connected machine to cache all base images and vendor dependencies. |
+| **Runtime** | **None** | All services communicate exclusively over the internal `g8e-network`. |
 
-### Language Vendoring
-
-- **Go (g8eo):** 100% vendored in `components/g8eo/vendor/`. Builds use `-mod=vendor`.
-- **Node.js (g8ed):** `package-lock.json` is committed. The build uses `npm ci` for deterministic installs.
-- **Python (g8ee/g8ep):** Uses standard `pip` requirements. For air-gap builds, use a local PyPI mirror or pre-download wheels into the build context.
-
----
-
-## Vault & Secret Management
-
-Secrets in an air-gapped environment (API keys, session tokens, HMAC keys) are managed by the `g8eo` SecretManager and stored in the local Vault.
-
-### Offline Vault Operations
-The Operator provides a CLI for managing the encrypted vault without internet access:
-- **Rekey:** `g8e.operator --rekey-vault --old-key <old> -k <new>`
-- **Verify:** `g8e.operator --verify-vault -k <key>`
-- **Reset:** `g8e.operator --reset-vault` (Destructive)
+### Vendoring & Dependency Management
+- **Go (`g8eo`):** 100% vendored in `components/g8eo/vendor/`.
+- **Node.js (`g8ed`):** Locked via `package-lock.json`; all assets are bundled during the build.
+- **Python (`g8ee`):** Requirements are frozen. For air-gap builds, use the pre-staged Docker image strategy.
 
 ---
 
 ## Deployment Workflow
 
-### 1. Build & Stage
-On an internet-connected machine:
-1. Build all images: `./g8e platform setup`
-2. Download the default model: `google_gemma-4-E2B-it-Q4_K_M.gguf`
-3. Export images: `docker save g8es g8ee g8ed g8ep g8el | gzip > g8e-images.tar.gz`
+### 1. Preparation (Connected Environment)
+1. Build the platform: `./g8e platform setup`
+2. Download the required model file: `google_gemma-4-E2B-it-Q4_K_M.gguf`
+3. Export the platform images: `docker save g8es g8ee g8ed g8ep g8el | gzip > g8e-airgap.tar.gz`
 
-### 2. Transfer
-Move `g8e-images.tar.gz` and the model file to the air-gapped host via physical media or secure transfer.
+### 2. Implementation (Air-Gapped Host)
+1. Load the images: `docker load < g8e-airgap.tar.gz`
+2. Stage the model: Place the `.gguf` file in `components/g8ee/models/`.
+3. Configure the platform:
+   - Set `primary_provider` to `g8el`.
+   - Ensure `search.enabled` is `false`.
+4. Launch: `./g8e platform start`
 
-### 3. Deploy
-On the air-gapped host:
-1. Load images: `docker load < g8e-images.tar.gz`
-2. Place the model file in `components/g8ee/models/`
-3. Configure `LLMProvider.G8EL` as the primary provider in settings.
-4. Ensure `SearchSettings.enabled` is `false` (default).
-5. Start the platform: `./g8e platform start`
+---
+
+## Security Invariants
+
+1. **No External Dialing:** In air-gap mode, components are forbidden from initiating connections to any address outside the Docker network.
+2. **TLS Mandatory:** All internal traffic between `g8ed`, `g8ee`, and `g8es` is encrypted using the `g8es` internal CA.
+3. **Data Sovereignty:** All audit logs, chat history, and telemetry remain strictly on the host's filesystem.

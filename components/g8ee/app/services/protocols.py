@@ -108,15 +108,15 @@ class SettingsServiceProtocol(Protocol):
 
     async def get_platform_settings(self) -> G8eePlatformSettings:
         """Retrieve platform-level settings from g8es with cache-aside."""
-        ...
+        raise NotImplementedError
 
     async def get_user_settings(self, user_id: str) -> G8eeUserSettings:
         """Retrieve settings for a specific user, overlaid on platform settings."""
-        ...
+        raise NotImplementedError
 
     def get_local_settings(self) -> G8eePlatformSettings:
         """Retrieve local bootstrap settings (bootstrap)."""
-        ...
+        raise NotImplementedError
 
 
 @runtime_checkable
@@ -125,7 +125,7 @@ class EventServiceProtocol(Protocol):
 
     async def publish(self, event: SessionEvent | BackgroundEvent) -> str:
         """Publish a session or background event."""
-        ...
+        raise NotImplementedError
 
     async def publish_command_event(
         self,
@@ -136,7 +136,7 @@ class EventServiceProtocol(Protocol):
         task_id: str,
     ) -> None:
         """Publish a command-related event."""
-        ...
+        raise NotImplementedError
 
     async def publish_investigation_event(
         self,
@@ -148,7 +148,7 @@ class EventServiceProtocol(Protocol):
         user_id: str,
     ) -> None:
         """Publish an investigation-related event."""
-        ...
+        raise NotImplementedError
 
 
 @runtime_checkable
@@ -157,39 +157,39 @@ class KVServiceProtocol(Protocol):
 
     async def get(self, key: str) -> str | None:
         """Retrieve a string value by key."""
-        ...
+        raise NotImplementedError
 
     async def set(self, key: str, value: str, ex: int | None) -> bool:
         """Set a string value with optional expiration (seconds)."""
-        ...
+        raise NotImplementedError
 
     async def delete(self, *keys: str) -> int:
         """Delete one or more keys."""
-        ...
+        raise NotImplementedError
 
     async def get_json(self, key: str) -> object | None:
         """Retrieve and parse a JSON value by key."""
-        ...
+        raise NotImplementedError
 
     async def set_json(self, key: str, value: object, ex: int | None = None) -> bool:
         """Serialize and set a JSON value with optional expiration."""
-        ...
+        raise NotImplementedError
 
     async def keys(self, pattern: str = "*") -> list[str]:
         """List keys matching a pattern."""
-        ...
+        raise NotImplementedError
 
     async def delete_pattern(self, pattern: str) -> int:
         """Delete all keys matching a pattern."""
-        ...
+        raise NotImplementedError
 
     async def lrange(self, key: str, start: int, stop: int) -> list[object]:
         """Retrieve a range of elements from a list."""
-        ...
+        raise NotImplementedError
 
     def is_healthy(self) -> bool:
         """Check if the service is healthy."""
-        ...
+        raise NotImplementedError
 
 
 @runtime_checkable
@@ -204,12 +204,12 @@ class DocumentServiceProtocol(Protocol):
     @property
     def kv(self) -> KVServiceProtocol:
         """Access the underlying KV service for direct cache operations."""
-        ...
+        raise NotImplementedError
 
     @property
     def db(self) -> DocumentServiceProtocol:
         """Access the underlying document service (for internal use)."""
-        ...
+        raise NotImplementedError
 
     async def create_document(
         self,
@@ -219,7 +219,7 @@ class DocumentServiceProtocol(Protocol):
         ttl: int | None = None,
     ) -> CacheOperationResult:
         """Create a new document in a collection with optional cache TTL."""
-        ...
+        raise NotImplementedError
 
     async def update_document(
         self,
@@ -230,15 +230,15 @@ class DocumentServiceProtocol(Protocol):
         ttl: int | None = None,
     ) -> CacheOperationResult:
         """Update or replace an existing document with optional cache TTL."""
-        ...
+        raise NotImplementedError
 
     async def delete_document(self, collection: str, document_id: str) -> CacheOperationResult:
         """Delete a document from a collection and invalidate cache."""
-        ...
+        raise NotImplementedError
 
     async def get_document(self, collection: str, document_id: str) -> DocumentResult:
         """Retrieve a document by ID (checks cache first)."""
-        ...
+        raise NotImplementedError
 
     async def query_collection(
         self,
@@ -250,7 +250,7 @@ class DocumentServiceProtocol(Protocol):
         ttl: int | None = 300,
     ) -> QueryResult:
         """Query a collection with filters, ordering, and optional result caching."""
-        ...
+        raise NotImplementedError
 
     async def update_with_array_union(
         self,
@@ -261,15 +261,15 @@ class DocumentServiceProtocol(Protocol):
         additional_updates: dict[str, object],
     ) -> CacheOperationResult:
         """Atomically append items to an array field with cache invalidation."""
-        ...
+        raise NotImplementedError
 
     async def batch_write(self, operations: list[BatchWriteOperation]) -> CacheOperationResult:
         """Perform multiple write operations in batch with cache invalidation."""
-        ...
+        raise NotImplementedError
 
     async def close(self) -> None:
         """Close the underlying database and cache connections."""
-        ...
+        raise NotImplementedError
 
 
 @runtime_checkable
@@ -281,7 +281,7 @@ class OperatorDataServiceProtocol(Protocol):
 
     async def get_operator(self, operator_id: str) -> OperatorDocument | None:
         """Retrieve operator metadata."""
-        ...
+        raise NotImplementedError
 
     async def query_operators(
         self,
@@ -290,15 +290,15 @@ class OperatorDataServiceProtocol(Protocol):
         bypass_cache: bool = False,
     ) -> list[OperatorDocument]:
         """Query operator documents. ``bypass_cache=True`` skips the query cache."""
-        ...
+        raise NotImplementedError
 
     async def create_operator(self, operator: OperatorDocument) -> bool:
         """Create a new operator document."""
-        ...
+        raise NotImplementedError
 
     async def update_operator(self, operator: OperatorDocument) -> bool:
         """Update an existing operator document."""
-        ...
+        raise NotImplementedError
 
     async def add_history_entry(
         self,
@@ -310,7 +310,7 @@ class OperatorDataServiceProtocol(Protocol):
         additional_updates: dict[str, object] | None = None,
     ) -> OperatorDocument:
         """Atomic status + history update under a keyed lock."""
-        ...
+        raise NotImplementedError
 
     async def update_operator_status(
         self,
@@ -323,7 +323,7 @@ class OperatorDataServiceProtocol(Protocol):
         plain status write without the audit-trail semantics of
         ``add_history_entry``.
         """
-        ...
+        raise NotImplementedError
 
     async def update_document(
         self,
@@ -333,7 +333,7 @@ class OperatorDataServiceProtocol(Protocol):
         merge: bool = True,
     ) -> CacheOperationResult:
         """Update a document."""
-        ...
+        raise NotImplementedError
 
     async def update_operator_heartbeat(
         self,
@@ -347,11 +347,11 @@ class OperatorDataServiceProtocol(Protocol):
         investigation_id/case_id are None when the heartbeat arrives outside an
         investigation context; callers MUST NOT coerce absence to sentinel strings.
         """
-        ...
+        raise NotImplementedError
 
     async def append_command_result(self, operator_id: str, command_result: CommandResultRecord) -> bool:
         """Append a command result to operator history."""
-        ...
+        raise NotImplementedError
 
     async def add_operator_activity(
         self,
@@ -361,7 +361,7 @@ class OperatorDataServiceProtocol(Protocol):
         metadata: ConversationMessageMetadata,
     ) -> bool:
         """Log operator-specific activity message."""
-        ...
+        raise NotImplementedError
 
     async def add_operator_approval(
         self,
@@ -370,7 +370,7 @@ class OperatorDataServiceProtocol(Protocol):
         metadata: ConversationMessageMetadata,
     ) -> bool:
         """Log an approval lifecycle event in the operator activity log."""
-        ...
+        raise NotImplementedError
 
 
 @runtime_checkable
@@ -379,11 +379,11 @@ class SupervisorServiceProtocol(Protocol):
 
     async def start_process(self, name: str, wait: bool = False) -> bool:
         """Starts a supervised process."""
-        ...
+        raise NotImplementedError
 
     async def stop_process(self, name: str, wait: bool = True) -> bool:
         """Stops a supervised process."""
-        ...
+        raise NotImplementedError
 
 
 @runtime_checkable
@@ -398,7 +398,7 @@ class OperatorLifecycleServiceProtocol(Protocol):
         operator_type: OperatorType | str | None = None,
     ) -> bool:
         """Claim an operator slot for an active session."""
-        ...
+        raise NotImplementedError
 
     async def terminate_operator(
         self,
@@ -408,7 +408,7 @@ class OperatorLifecycleServiceProtocol(Protocol):
         details: dict[str, object] | None = None,
     ) -> OperatorDocument:
         """Mark an operator TERMINATED."""
-        ...
+        raise NotImplementedError
 
     async def update_operator_status(
         self,
@@ -416,50 +416,50 @@ class OperatorLifecycleServiceProtocol(Protocol):
         status: OperatorStatus,
     ) -> bool:
         """Update operator status."""
-        ...
+        raise NotImplementedError
 
     async def activate_g8ep_operator(self, user_id: str, web_session_id: str | None = None) -> None:
         """Orchestrates g8ep operator activation after login."""
-        ...
+        raise NotImplementedError
 
     async def launch_g8ep_operator(self, api_key: str) -> None:
         """Starts the g8ep operator process via XML-RPC."""
-        ...
+        raise NotImplementedError
 
     async def relaunch_g8ep_operator(self, user_id: str) -> dict[str, object]:
         """Kills running operator, resets slot, and relaunches."""
-        ...
+        raise NotImplementedError
 
 
 @runtime_checkable
 class MemoryDataServiceProtocol(Protocol):
     async def create_memory(self, investigation: InvestigationModel) -> InvestigationMemory:
-        ...
+        raise NotImplementedError
     async def save_memory(self, memory: InvestigationMemory, is_new: bool) -> None:
-        ...
+        raise NotImplementedError
     async def get_memory(self, investigation_id: str) -> InvestigationMemory | None:
-        ...
+        raise NotImplementedError
     async def get_user_memories(self, user_id: str) -> list[InvestigationMemory]:
-        ...
+        raise NotImplementedError
     async def get_case_memories(self, case_id: str, user_id: str) -> list[InvestigationMemory]:
-        ...
+        raise NotImplementedError
 
 @runtime_checkable
 class InvestigationDataServiceProtocol(Protocol):
     async def create_investigation(self, request: InvestigationCreateRequest) -> InvestigationModel:
-        ...
+        raise NotImplementedError
     async def get_investigation(self, investigation_id: str) -> InvestigationModel | None:
-        ...
+        raise NotImplementedError
     async def update_investigation_raw(self, investigation_id: str, updates: dict[str, object], merge: bool = True) -> None:
-        ...
+        raise NotImplementedError
     async def query_investigations(self, request: InvestigationQueryRequest) -> list[InvestigationModel]:
-        ...
+        raise NotImplementedError
     async def get_case_investigations(self, case_id: str, user_id: str | None) -> list[InvestigationModel]:
-        ...
+        raise NotImplementedError
     async def delete_investigation(self, investigation_id: str) -> None:
-        ...
+        raise NotImplementedError
     async def get_chat_messages(self, investigation_id: str) -> list[ConversationHistoryMessage]:
-        ...
+        raise NotImplementedError
     async def add_chat_message(
         self,
         investigation_id: str | None,
@@ -467,7 +467,7 @@ class InvestigationDataServiceProtocol(Protocol):
         content: str,
         metadata: ConversationMessageMetadata,
     ) -> bool:
-        ...
+        raise NotImplementedError
     async def add_history_entry(
         self,
         investigation_id: str,
@@ -476,7 +476,7 @@ class InvestigationDataServiceProtocol(Protocol):
         summary: str,
         details: ConversationMessageMetadata,
     ) -> InvestigationModel:
-        ...
+        raise NotImplementedError
     async def add_approval_record(
         self,
         investigation_id: str,
@@ -484,7 +484,7 @@ class InvestigationDataServiceProtocol(Protocol):
         metadata: ConversationMessageMetadata,
         actor: ComponentName = ComponentName.G8EE,
     ) -> InvestigationModel:
-        ...
+        raise NotImplementedError
     async def add_command_execution_result(
         self,
         investigation_id: str,
@@ -494,7 +494,7 @@ class InvestigationDataServiceProtocol(Protocol):
         operator_id: str,
         operator_session_id: str,
     ) -> InvestigationModel:
-        ...
+        raise NotImplementedError
     async def add_file_operation_result(
         self,
         investigation_id: str,
@@ -505,11 +505,11 @@ class InvestigationDataServiceProtocol(Protocol):
         result: FileEditResult,
         operation: FileOperation,
     ) -> InvestigationModel:
-        ...
+        raise NotImplementedError
     async def get_command_execution_history(self, investigation_id: str) -> list[InvestigationHistoryEntry]:
-        ...
+        raise NotImplementedError
     async def get_operator_actions_for_ai_context(self, investigation_id: str) -> str:
-        ...
+        raise NotImplementedError
 
 @runtime_checkable
 class InvestigationServiceProtocol(Protocol):
@@ -522,136 +522,136 @@ class InvestigationServiceProtocol(Protocol):
 
     @property
     def investigation_data_service(self) -> InvestigationDataServiceProtocol:
-        ...
+        raise NotImplementedError
     async def get_investigation(self, investigation_id: str) -> InvestigationModel | None:
-        ...
+        raise NotImplementedError
     async def get_chat_messages(self, investigation_id: str) -> list[ConversationHistoryMessage]:
-        ...
+        raise NotImplementedError
     async def get_investigation_context(self, case_id: str | None = None, investigation_id: str | None = None, user_id: str | None = None) -> EnrichedInvestigationContext:
-        ...
+        raise NotImplementedError
     async def get_enriched_investigation_context(self, investigation: EnrichedInvestigationContext, user_id: str, g8e_context: G8eHttpContext) -> EnrichedInvestigationContext:
-        ...
+        raise NotImplementedError
     async def update_investigation(self, investigation_id: str, request: InvestigationUpdateRequest, actor: ComponentName = ComponentName.G8EE) -> InvestigationModel:
-        ...
+        raise NotImplementedError
 
 
 @runtime_checkable
 class G8edClientProtocol(Protocol):
     async def push_sse_event(self, event: SessionEvent | BackgroundEvent) -> SSEPushResponse:
-        ...
+        raise NotImplementedError
     async def grant_intent(self, operator_id: str, intent: str, context: G8eHttpContext) -> IntentOperationResult:
-        ...
+        raise NotImplementedError
     async def revoke_intent(self, operator_id: str, intent: str, context: G8eHttpContext) -> IntentOperationResult:
-        ...
+        raise NotImplementedError
 
 @runtime_checkable
 class AIResponseAnalyzerProtocol(Protocol):
     async def analyze_command_risk(self, command: str, justification: str, context: CommandRiskContext, settings: G8eeUserSettings) -> CommandRiskAnalysis:
-        ...
+        raise NotImplementedError
     async def analyze_error_and_suggest_fix(self, command: str, exit_code: int | None, stdout: str, stderr: str, context: ErrorAnalysisContext, settings: G8eeUserSettings) -> ErrorAnalysisResult:
-        ...
+        raise NotImplementedError
     async def analyze_file_operation_risk(self, operation: FileOperation, file_path: str, content: str | None, context: FileOperationRiskContext, settings: G8eeUserSettings) -> FileOperationRiskAnalysis:
-        ...
+        raise NotImplementedError
 
 @runtime_checkable
 class PubSubServiceProtocol(Protocol):
     pubsub_client: PubSubClient | None
     @property
     def is_ready(self) -> bool:
-        ...
+        raise NotImplementedError
     def set_pubsub_client(self, client: PubSubClient) -> None:
-        ...
+        raise NotImplementedError
     def register_future(self, execution_id: str) -> asyncio.Future[G8eoResultEnvelope]:
-        ...
+        raise NotImplementedError
     def release_future(self, execution_id: str) -> None:
-        ...
+        raise NotImplementedError
     async def start(self) -> None:
-        ...
+        raise NotImplementedError
     async def stop(self) -> None:
-        ...
+        raise NotImplementedError
     async def register_operator_session(self, operator_id: str, operator_session_id: str) -> None:
-        ...
+        raise NotImplementedError
     async def deregister_operator_session(self, operator_id: str, operator_session_id: str) -> None:
-        ...
+        raise NotImplementedError
     async def publish_command(self, operator_id: str, operator_session_id: str, command_data: G8eMessage) -> int:
-        ...
+        raise NotImplementedError
 
 @runtime_checkable
 class HeartbeatSnapshotStaleMonitorServiceProtocol(Protocol):
     async def start(self) -> None:
-        ...
+        raise NotImplementedError
 
     async def stop(self) -> None:
-        ...
+        raise NotImplementedError
 
     async def tick(self) -> None:
-        ...
+        raise NotImplementedError
 
 
 @runtime_checkable
 class HeartbeatSnapshotServiceProtocol(Protocol):
     @property
     def operator_data_service(self) -> OperatorDataServiceProtocol:
-        ...
+        raise NotImplementedError
     @property
     def event_service(self) -> EventServiceProtocol:
-        ...
+        raise NotImplementedError
     async def start(self) -> None:
-        ...
+        raise NotImplementedError
     async def stop(self) -> None:
-        ...
+        raise NotImplementedError
     async def register_operator_session(self, operator_id: str, operator_session_id: str) -> None:
-        ...
+        raise NotImplementedError
     async def deregister_operator_session(self, operator_id: str, operator_session_id: str) -> None:
-        ...
+        raise NotImplementedError
     def set_pubsub_client(self, client: PubSubClient) -> None:
-        ...
+        raise NotImplementedError
 
 @runtime_checkable
 class ApprovalServiceProtocol(Protocol):
     @property
     def operator_data_service(self) -> OperatorDataServiceProtocol:
-        ...
+        raise NotImplementedError
     @property
     def investigation_data_service(self) -> InvestigationDataServiceProtocol:
-        ...
+        raise NotImplementedError
     async def request_command_approval(self, request: CommandApprovalRequest) -> ApprovalResult:
-        ...
+        raise NotImplementedError
     async def request_file_edit_approval(self, request: FileEditApprovalRequest) -> ApprovalResult:
-        ...
+        raise NotImplementedError
     async def request_intent_approval(self, request: IntentApprovalRequest) -> ApprovalResult:
-        ...
+        raise NotImplementedError
     async def request_agent_continue_approval(self, request: AgentContinueApprovalRequest) -> ApprovalResult:
-        ...
+        raise NotImplementedError
     async def request_stream_approval(self, request: StreamApprovalRequest) -> ApprovalResult:
-        ...
+        raise NotImplementedError
     async def handle_approval_response(self, response: OperatorApprovalResponse) -> None:
-        ...
+        raise NotImplementedError
     def get_pending_approvals(self) -> dict[str, PendingApproval]:
-        ...
+        raise NotImplementedError
     def mark_pending_approvals_as_feedback(self, investigation_id: str, user_message: str, user_id: str) -> int:
-        ...
+        raise NotImplementedError
 
 @runtime_checkable
 class ExecutionServiceProtocol(Protocol):
     @property
     def g8ed_event_service(self) -> EventServiceProtocol:
-        ...
+        raise NotImplementedError
     @property
     def ai_response_analyzer(self) -> AIResponseAnalyzerProtocol:
-        ...
+        raise NotImplementedError
     @property
     def operator_data_service(self) -> OperatorDataServiceProtocol:
-        ...
+        raise NotImplementedError
     @property
     def investigation_service(self) -> InvestigationServiceProtocol:
-        ...
+        raise NotImplementedError
     @property
     def pubsub_service(self) -> PubSubServiceProtocol:
-        ...
+        raise NotImplementedError
     @property
     def approval_service(self) -> ApprovalServiceProtocol:
-        ...
+        raise NotImplementedError
     whitelist_validator: CommandWhitelistValidator
     blacklist_validator: CommandBlacklistValidator
     async def execute(
@@ -660,23 +660,23 @@ class ExecutionServiceProtocol(Protocol):
         g8e_context: G8eHttpContext,
         timeout_seconds: int = 60,
     ) -> tuple[CommandInternalResult, G8eoResultEnvelope | None]:
-        ...
+        raise NotImplementedError
     def resolve_operators(
         self,
         operator_documents: list[OperatorDocument],
         target_operators: list[str],
     ) -> list[OperatorDocument]:
-        ...
+        raise NotImplementedError
 
     def build_target_systems_list(self, operator_documents: list[OperatorDocument]) -> list[TargetSystem]:
-        ...
+        raise NotImplementedError
 
     async def send_command_to_operator(
         self,
         command_payload: DirectCommandRequest,
         g8e_context: G8eHttpContext,
     ) -> DirectCommandResult:
-        ...
+        raise NotImplementedError
 
 @runtime_checkable
 class LFAAServiceProtocol(Protocol):
@@ -684,7 +684,7 @@ class LFAAServiceProtocol(Protocol):
         self,
         g8e_message: G8eMessage,
     ) -> bool:
-        ...
+        raise NotImplementedError
 
     async def send_direct_exec_audit_event(
         self,
@@ -692,68 +692,68 @@ class LFAAServiceProtocol(Protocol):
         execution_id: str,
         g8e_context: G8eHttpContext,
     ) -> bool:
-        ...
+        raise NotImplementedError
 
 @runtime_checkable
 class FileServiceProtocol(Protocol):
     @property
     def pubsub_service(self) -> PubSubServiceProtocol:
-        ...
+        raise NotImplementedError
     @property
     def approval_service(self) -> ApprovalServiceProtocol:
-        ...
+        raise NotImplementedError
     @property
     def g8ed_event_service(self) -> EventServiceProtocol:
-        ...
+        raise NotImplementedError
     @property
     def execution_service(self) -> ExecutionServiceProtocol:
-        ...
+        raise NotImplementedError
     @property
     def ai_response_analyzer(self) -> AIResponseAnalyzerProtocol:
-        ...
+        raise NotImplementedError
     @property
     def investigation_service(self) -> InvestigationServiceProtocol:
-        ...
+        raise NotImplementedError
     async def execute_file_edit(self, args: FileEditRequestPayload, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FileEditResult:
-        ...
+        raise NotImplementedError
     async def execute_fetch_file_history(self, args: FetchFileHistoryRequestPayload, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FetchFileHistoryToolResult:
-        ...
+        raise NotImplementedError
     async def execute_fetch_file_diff(self, args: FetchFileDiffRequestPayload, g8e_context: G8eHttpContext, investigation: EnrichedInvestigationContext) -> FetchFileDiffToolResult:
-        ...
+        raise NotImplementedError
 
 @runtime_checkable
 class FilesystemServiceProtocol(Protocol):
     @property
     def pubsub_service(self) -> PubSubServiceProtocol:
-        ...
+        raise NotImplementedError
     @property
     def execution_service(self) -> ExecutionServiceProtocol:
-        ...
+        raise NotImplementedError
     @property
     def investigation_service(self) -> InvestigationServiceProtocol:
-        ...
+        raise NotImplementedError
     async def execute_fs_list(self, args: FsListRequestPayload, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> FsListToolResult:
-        ...
+        raise NotImplementedError
     async def execute_file_read(self, args: FsReadRequestPayload, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> FsReadToolResult:
-        ...
+        raise NotImplementedError
 
 @runtime_checkable
 class IntentServiceProtocol(Protocol):
     @property
     def approval_service(self) -> ApprovalServiceProtocol:
-        ...
+        raise NotImplementedError
     @property
     def execution_service(self) -> ExecutionServiceProtocol:
-        ...
+        raise NotImplementedError
     @property
     def g8ed_event_service(self) -> EventServiceProtocol:
-        ...
+        raise NotImplementedError
     @property
     def investigation_service(self) -> InvestigationServiceProtocol:
-        ...
+        raise NotImplementedError
     @property
     def g8ed_client(self) -> G8edClientProtocol:
-        ...
+        raise NotImplementedError
     async def execute_intent_permission_request(
         self,
         *,
@@ -761,7 +761,7 @@ class IntentServiceProtocol(Protocol):
         g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext,
     ) -> IntentPermissionResult:
-        ...
+        raise NotImplementedError
     async def execute_intent_revocation(
         self,
         *,
@@ -769,25 +769,25 @@ class IntentServiceProtocol(Protocol):
         g8e_context: G8eHttpContext,
         investigation: EnrichedInvestigationContext
     ) -> IntentPermissionResult:
-        ...
+        raise NotImplementedError
     def _resolve_intent_dependencies(self, requested_intents: list[str]) -> list[str]:
-        ...
+        raise NotImplementedError
 
 @runtime_checkable
 class PortServiceProtocol(Protocol):
     async def execute_port_check(self, args: CheckPortRequestPayload, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> PortCheckToolResult:
-        ...
+        raise NotImplementedError
 
 @runtime_checkable
 class ResultHandlerServiceProtocol(Protocol):
     async def handle(self, envelope: G8eoResultEnvelope) -> None:
-        ...
+        raise NotImplementedError
 
 @runtime_checkable
 class ToolExecutorProtocol(Protocol):
     """Protocol for AI tool registration and execution."""
     def get_tools(self, agent_mode: AgentMode, model_to_use: str | None) -> list[types.ToolGroup]:
-        ...
+        raise NotImplementedError
     async def execute_tool_call(
         self,
         tool_name: str,
@@ -797,10 +797,10 @@ class ToolExecutorProtocol(Protocol):
         request_settings: G8eeUserSettings,
         execution_id: str,
     ) -> ToolResult:
-        ...
+        raise NotImplementedError
     @property
     def web_search_provider(self) -> Any:
-        ...
+        raise NotImplementedError
 
 @runtime_checkable
 class HTTPServiceProtocol(Protocol):
@@ -808,32 +808,32 @@ class HTTPServiceProtocol(Protocol):
 
     @property
     def is_ready(self) -> bool:
-        ...
+        raise NotImplementedError
 
     def set_http_client(self, client: HTTPClient, service_name: str) -> None:
-        ...
+        raise NotImplementedError
 
     def get_client(self, service_name: str) -> HTTPClient | None:
-        ...
+        raise NotImplementedError
 
     async def start(self) -> None:
-        ...
+        raise NotImplementedError
 
     async def stop(self) -> None:
-        ...
+        raise NotImplementedError
 
     async def register_service_client(
         self,
         service_name: str,
         client: HTTPClient
     ) -> None:
-        ...
+        raise NotImplementedError
 
     async def deregister_service_client(self, service_name: str) -> None:
-        ...
+        raise NotImplementedError
 
     def list_active_clients(self) -> list[str]:
-        ...
+        raise NotImplementedError
 
     def get_client_status(self) -> dict[str, HTTPClientStatus]:
-        ...
+        raise NotImplementedError

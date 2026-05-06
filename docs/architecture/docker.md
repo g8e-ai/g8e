@@ -5,73 +5,79 @@ parent: Architecture
 
 # Docker Architecture
 
-g8e is a multi-service platform running on Docker Compose. The architecture is designed for extreme security, isolation, and developer velocity through per-component environments.
+g8e is a multi-service platform orchestrated by Docker Compose. The architecture focuses on extreme security, isolation, and developer velocity through per-component environments and hardened runtimes.
 
 ## Core Design Principles
 
-- **Zero-Privilege by Default**: Services run as non-root with no capabilities unless explicitly required.
-- **Immutable Infrastructure**: Production services use read-only root filesystems and image-baked entrypoints.
-- **Minimal Attack Surface**: Only `g8ed` (frontend) and `g8el` (inference) expose ports; all other communication is internal-only.
+- **Zero-Privilege by Default**: Services run as non-root (UID 1001) with nearly all Linux capabilities dropped.
+- **Immutable Infrastructure**: Production services utilize `read_only` root filesystems and image-baked entrypoints.
+- **Minimal Attack Surface**: Only `g8ed` (ingress) and `g8el` (inference) expose ports to the host; all other traffic is internal-only.
 - **Isolated Lifecycles**: Core platform, inference, and test runners have independent scaling and restart policies.
+- **No Backwards Compatibility**: Data structures are strictly enforced; legacy or broken state is rejected rather than migrated.
 
 ## Service Map
 
 | Service | Symbol | Runtime | Purpose |
 |---------|--------|---------|---------|
-| **g8ed** | `g8ed` | Node.js | Web frontend, API gateway, and external entry point. |
-| **g8ee** | `g8ee` | Python | AI backend engine for agent logic and tool execution. |
-| **g8es** | `g8es` | Go | "The Operator" in listen mode. Persistence (SQLite) and Pub/Sub broker. |
+| **g8ed** | `g8ed` | Node.js 22 | Web frontend, API gateway, and external entry point. |
+| **g8ee** | `g8ee` | Python 3.12 | AI backend engine for agent logic and tool execution. |
+| **g8es** | `g8es` | Go 1.26 | Persistence (SQLite), Pub/Sub broker, and binary store. |
 | **g8el** | `g8el` | C++ | Local LLM inference server (llama.cpp). |
-| **g8ep** | `g8ep` | Python | "g8e node" sidecar. Management, CLI tooling, and build orchestration. |
+| **g8ep** | `g8ep` | Python 3.13 | "g8e node" sidecar. Management, CLI tooling, and build orchestration. |
 
 ## Container Lifecycle
 
 ### Production Flow
-1. **g8es** starts first, generating TLS certificates and the internal auth token.
-2. **g8ed** and **g8ee** depend on a healthy `g8es`. They mount the `g8es-ssl` volume to retrieve the CA cert and auth token.
-3. **g8ep** (the node) starts last, depending on a healthy frontend.
+1. **g8es** (Persistence) starts first. It generates the platform CA certificate and internal auth tokens.
+2. **g8ed** (Frontend) and **g8ee** (Backend) wait for `g8es` to be healthy. They mount the `g8es-ssl` volume to retrieve the CA cert for mTLS.
+3. **g8ep** (Node) starts last, depending on a healthy frontend.
 
 ### Development & Testing
-- **Test Runners**: Per-component containers (`g8ee-test-runner`, etc.) provide isolated environments for unit/integration tests without polluting production images.
-- **Hot Reload**: In development, `docker-compose.dev.yml` (or the `development` profile) mounts source code from the host into containers.
+- **Test Runners**: Per-component containers (`g8ee-test-runner`, `g8ed-test-runner`, `g8eo-test-runner`) provide isolated, parallel-buildable environments for unit/integration tests.
+- **Hot Reload**: The `development` profile mounts source code from the host into containers (e.g., `./components/g8ee/app` -> `/app/components/g8ee/app`).
+- **The g8e CLI**: All Docker operations are abstracted via the `./g8e` CLI (e.g., `./g8e platform setup`).
 
 ## Security Hardening
 
 ### Non-Root Execution
-All services run as user `g8e` (UID/GID 1001). This is enforced both in the `Dockerfile` and via the `user:` directive in `docker-compose.yml` to prevent image-level overrides.
+All services run as user `g8e` (UID/GID 1001). This is enforced in both Dockerfiles and `docker-compose.yml`.
 
 ### Filesystem Isolation
 - **Read-Only Root**: `g8ed`, `g8ee`, and `g8es` use `read_only: true`.
-- **Ephemeral Storage**: `/tmp` and `/var/tmp` are backed by `tmpfs` to prevent persistent side-effects.
-- **Volume Hardening**: Persistent volumes are mounted with `noexec,nosuid,nodev` to prevent binary execution or privilege escalation from data directories.
+- **Ephemeral Storage**: `/tmp` and `/var/tmp` are backed by `tmpfs` to prevent persistent side-effects or state leaks.
+- **Volume Hardening**: Persistent volumes (e.g., `g8es-data`, `g8ee-data`) are mounted with `noexec,nosuid,nodev`.
 
 ### Linux Capabilities & Privileges
 - **`cap_drop: ALL`**: Standard for all application services.
-- **`no-new-privileges: true`**: Prevents privilege escalation even if a vulnerability is found.
+- **`no-new-privileges: true`**: Prevents privilege escalation even if a container process is compromised.
 - **Exceptions**:
     - `g8es`: Adds `NET_BIND_SERVICE` for internal TLS.
-    - `g8ep`: Adds `NET_RAW, NET_ADMIN, SYS_PTRACE, SETUID, SETGID` for platform management and debugging.
+    - `g8ep`: Adds `NET_RAW, NET_ADMIN, SYS_PTRACE, SETUID, SETGID` for platform management, packet tracing, and debugging.
 
 ## Management Sidecar (`g8ep`)
 
-The `g8ep` container (the "node") is the only service with access to the Docker socket.
+The `g8ep` container (the "node") is the administrative hub of the platform.
 
 ### The Docker Socket
 - **Access**: `g8ep` mounts `/var/run/docker.sock` and uses `group_add` to gain host-level Docker permissions as a non-root user.
-- **Usage**: It orchestrates operator builds, image management, and platform-wide logging.
-- **Safety**: `g8ep` is internal-only. `g8ed` communicates with it via Supervisor XML-RPC over the internal network, ensuring the socket is never exposed to external requests.
+- **Usage**: It orchestrates operator builds (via `g8eo`), image management, and platform-wide logging.
+- **Safety**: `g8ep` is internal-only. `g8ed` communicates with it via Supervisor XML-RPC over the internal network.
+
+### SSH Integration
+`g8ep` facilitates SSH streaming by mounting the host's `${HOME}/.ssh/config` and known hosts, along with the SSH agent socket (if available).
 
 ## Network Architecture
 
 The platform uses a single Docker bridge network: `g8e-network`.
 
 - **Internal DNS**: Services communicate via their service names (e.g., `https://g8es:9000`).
-- **TLS Everywhere**: Internal communication between `g8ed`, `g8ee`, and `g8es` is secured via mTLS using certificates generated by `g8es` at runtime.
+- **mTLS Everywhere**: Internal communication is secured via mTLS using certificates generated by `g8es` at runtime.
 - **Sysctl Hardening**: `g8ed` and `g8ee` disable IPv4 redirects (`accept_redirects=0`, `send_redirects=0`) at the kernel level.
 
 ## Build Strategy
 
-The repository uses a single build context (the root) for all images.
+The repository uses the root directory as a single build context.
 
-- **Multi-Stage Builds**: Dockerfiles use builder stages to compile dependencies (Go, Node, Python) and copy only the necessary artifacts into the final runtime image.
-- **Artifact Baking**: While source code is often bind-mounted in development, `entrypoint.sh` and core binaries are baked into the images to ensure they remain functional in air-gapped or production environments.
+- **Multi-Stage Builds**: Dockerfiles use builder stages (e.g., `g8es-builder`) to compile dependencies and compress binaries (using UPX for `g8eo`).
+- **Binary Baking**: `g8es` bakes cross-compiled operator binaries for multiple architectures (`amd64`, `arm64`, `386`) into the image for distribution.
+- **Minimal Runtimes**: Final stages use minimal base images (Alpine 3.23 or Python 3.12-slim).

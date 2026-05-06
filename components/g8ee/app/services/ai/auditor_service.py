@@ -107,13 +107,19 @@ def parse_auditor_response(
 ) -> tuple[str, str | None, str | None]:
     """Parse and validate auditor JSON response with mode-specific rules."""
     data = extract_json_from_text(raw_text)
-    if not data:
-        raise ValueError("Auditor returned invalid JSON format")
+    if not isinstance(data, dict):
+        raise ValueError("Auditor returned invalid JSON format (expected dictionary)")
 
     try:
-        status = data.get("status", "").lower()
+        status_raw = data.get("status")
+        status = str(status_raw).lower() if status_raw is not None else ""
         revised_raw = data.get("revised_command")
         swap_to_cluster = data.get("swap_to_cluster")
+
+        # Convert revised_raw and swap_to_cluster to str | None explicitly if needed, 
+        # but pydantic/type-hints will handle it if they are already strings or None.
+        revised_cmd = str(revised_raw) if revised_raw is not None else None
+        swap_id = str(swap_to_cluster) if swap_to_cluster is not None else None
 
         # Mode-specific validation
         if mode == "unanimous":
@@ -136,11 +142,11 @@ def parse_auditor_response(
             if swap_to_cluster not in cluster_ids:
                 raise ValueError(f"invalid swap_to_cluster {swap_to_cluster!r}")
 
-        if status == "revised" and not revised_raw:
+        if status == "revised" and not revised_cmd:
             raise ValueError("Auditor returned status='revised' but no revised_command")
 
-        return status, revised_raw, swap_to_cluster
-    except (AttributeError) as exc:
+        return status, revised_cmd, swap_id
+    except (AttributeError, TypeError) as exc:
         raise ValueError(f"Auditor returned malformed JSON structure: {exc!s}") from exc
 
 def build_auditor_prompt(
@@ -200,6 +206,9 @@ async def call_auditor_llm(
         system_instructions=auditor_persona.get_system_prompt() or "",
         response_format=response_format,
     )
+
+    if settings is None:
+        raise ValueError(f"Failed to generate LiteLLM settings for model {model}")
 
     current_prompt = prompt
     if attempt > 0:
@@ -344,25 +353,33 @@ async def run_auditor(
 
             # Handle revised
             if status == "revised" and revised_raw:
-                revised = normalise_command(revised_raw)
+                revised_str = str(revised_raw)
+                revised = normalise_command(revised_str)
                 if not revised:
                     await fail_auditor(emitter, request, AuditorReason.NO_VALID_REVISION, "Empty revision", target_cmd)
 
             # RE-VALIDATE REVISION SAFETY (L1 Technical Bedrock)
-            safety_result = validate_command_safety(revised, whitelisting_enabled, blacklisting_enabled, operator_context)
-            if not safety_result.is_safe:
-                reason = AuditorReason.WHITELIST_VIOLATION if safety_result.error_type == CommandErrorType.WHITELIST_VIOLATION else AuditorReason.NO_VALID_REVISION
-                await fail_auditor(emitter, request, reason, f"Revision technical safety failure: {safety_result.error_message}", target_cmd)
+            # revised is defined if status == "revised" and normalise_command succeeded
+            if status == "revised":
+                # Ensure revised is bound for safety, though normalise_command check above handles it
+                revised_final = locals().get('revised')
+                if not revised_final:
+                     await fail_auditor(emitter, request, AuditorReason.NO_VALID_REVISION, "Missing revision variable", target_cmd)
+                
+                safety_result = validate_command_safety(revised_final, whitelisting_enabled, blacklisting_enabled, operator_context)
+                if not safety_result.is_safe:
+                    reason = AuditorReason.WHITELIST_VIOLATION if safety_result.error_type == CommandErrorType.WHITELIST_VIOLATION else AuditorReason.NO_VALID_REVISION
+                    await fail_auditor(emitter, request, reason, f"Revision technical safety failure: {safety_result.error_message}", target_cmd)
 
-            reason = AuditorReason.REVISED_FROM_DISSENT if mode in ("majority", "tied") else AuditorReason.REVISED
-            total_duration_ms = (time.time() - auditor_start_time) * 1000
-            logger.info("[TRIBUNAL-AUDITOR] Completed with status=revised total_duration_ms=%.2f", total_duration_ms)
-            await emitter.emit(
-                EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED,
-                TribunalAuditorCompletedPayload(passed=False, revision=revised, reason=reason),
-                correlation_id=correlation_id,
-            )
-            return False, revised, revised, reason, None, None
+                reason = AuditorReason.REVISED_FROM_DISSENT if mode in ("majority", "tied") else AuditorReason.REVISED
+                total_duration_ms = (time.time() - auditor_start_time) * 1000
+                logger.info("[TRIBUNAL-AUDITOR] Completed with status=revised total_duration_ms=%.2f", total_duration_ms)
+                await emitter.emit(
+                    EventType.TRIBUNAL_VOTING_AUDIT_COMPLETED,
+                    TribunalAuditorCompletedPayload(passed=False, revision=revised_final, reason=reason),
+                    correlation_id=correlation_id,
+                )
+                return False, revised_final, revised_final, reason, None, None
 
         except (ValueError, OllamaEmptyResponseError) as exc:
             last_error = exc

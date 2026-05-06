@@ -7,11 +7,21 @@ parent: Architecture
 
 ## Overview
 
-The g8e platform utilizes a centralized agent persona system to define and manage AI identities, roles, and behavioral constraints. This system ensures consistency across the Python (`g8ee`) and Node.js (`g8ed`) components while providing high-performance, validated persona loading.
+The g8e platform utilizes a centralized agent persona system to define AI identities, roles, and behavioral constraints. This system ensures consistency across Python (`g8ee`) and Node.js (`g8ed`) components while optimizing for prefix-cache performance.
+
+- **Triage** (classifier): The entry point. Decides if a request is `simple` or `complex` and assesses user posture.
+- **Sage** (reasoner): Senior reasoning authority for `complex` paths. Plans multi-step investigations.
+- **Dash** (responder): Fast-path responder for `simple` paths. Minimizes latency with surgical action.
+- **The Tribunal** (tribunal_member): Five-member ensemble (Axiom, Concord, Variance, Pragma, Nemesis) that translates intent into shell commands.
+- **Warden** (defender): Defensive coordinator (Command, File, and Error analyzers) for local risk assessment.
+- **Auditor** (auditor): Final judge and Merkle-root committer of Tribunal candidates.
+- **Specialists**: Scribe (summarizer), Codex (analyzer), and Judge (evaluator).
+
+---
 
 ## Authority & Registry
 
-The canonical truth for agent personas resides in **Python models** located in `@/components/g8ee/app/models/personas/`. These models enforce field presence and alignment via Pydantic.
+The canonical truth for agent personas resides in **Python models** located in `@/components/g8ee/app/models/personas/`. These models enforce field presence and alignment via Pydantic and provide structured system prompt generation.
 
 - **Authoritative Source**: `@/components/g8ee/app/models/personas/` (Python classes).
 - **Derivative JSON**: `@/shared/constants/agents.json` (Generated for Node.js/`g8ed` consumption).
@@ -26,87 +36,92 @@ The canonical truth for agent personas resides in **Python models** located in `
     - `identity`: Core personality and behavioral instructions.
     - `purpose`: Technical objectives and pipeline role.
     - `autonomy`: Directive prose affirming the agent's agency.
-    - `output_contract`: (Optional) Strict wire format definition (Required for Tribunal and Triage).
+    - `output_contract`: (Optional) Strict wire format definition.
 
-## Current Agents
+---
 
-### 1. Triage (The Gatekeeper/Classifier)
-- **Icon**: `manage_search`
-- **Role**: `classifier`
-- **Model Tier**: `lite`
-- **Purpose**: First-turn classification of complexity (`simple`/`complex`), intent, and user posture.
-- **Scope**: Per GDD §14.1, Triage is a classifier ONLY. It does NOT generate questions or interrogations — that responsibility belongs to the reasoning agents (Dash/Sage) per the Interrogation Protocol.
-- **Invariants**: First-turn messages CANNOT be `adversarial`. Security-sensitive requests are ALWAYS `complex`.
-- **Data Flow**: Routes `complex` turns to **Sage** and `simple` turns to **Dash**.
+## Core Pipeline Agents
+
+### 1. Triage (The Gatekeeper)
+- **Role**: `classifier` | **Tier**: `lite`
+- **Purpose**: First-turn classification of complexity, intent, and user posture.
+- **Complexity Calibration**: 
+    - `simple`: Routine inquiries, status checks, single-step tasks.
+    - `complex`: Multi-step investigations, ambiguity, or security-sensitive paths.
+- **Posture Analysis**: Gauges `normal`, `escalated`, `adversarial`, or `confused` mindset. 
+- **Invariants**: First-turn messages CANNOT be `adversarial`. Security overrides ALWAYS force `complex`.
+- **Constraint**: Classifier ONLY. Does not generate text or questions; interrogation is deferred to reasoning agents.
 
 ### 2. Sage (Reasoning Authority)
-- **Icon**: `psychology`
-- **Role**: `reasoner`
-- **Model Tier**: `primary`
-- **Purpose**: Senior reasoning agent for complex investigations. Drives multi-step tool loops and articulates intent to the Tribunal.
-- **Intent Articulation**: Sage describes the *goal* and *semantics* of a command without naming shell tools or syntax, allowing the Tribunal to translate.
-- **Staking**: Stakes on one-shot sufficiency. Win if Round 1 passes AND Warden clears it AND Auditor rules `ok`.
+- **Role**: `reasoner` | **Tier**: `primary`
+- **Purpose**: Architect of complex investigations. Drives multi-step tool loops.
+- **Intent Articulation**: Describes functional goals (e.g., "Determine if nginx errors started before the 14:20 deploy") without naming shell tools or syntax.
+- **Interrogation Protocol**: If ambiguity persists, issues exactly three binary (YES/NO) questions to the user.
+- **Approval Density**: Maximizes the value of every user interaction by proposing high-density intents to minimize approval cycles.
 
 ### 3. Dash (Fast-Path Responder)
-- **Icon**: `bolt`
-- **Role**: `responder`
-- **Model Tier**: `assistant`
+- **Role**: `responder` | **Tier**: `assistant` | **Interrogator**: `simple` turns
 - **Purpose**: Resolves straightforward requests with minimal latency.
-- **Operating Mode**: Surgical tool use ("one well-aimed call beats a chain"). Escalates multi-step or deeply ambiguous requests to **Sage**.
-- **Interrogation**: Dash owns interrogation for turns Triage classified as `simple`. When Dash emits an `<interrogation>` block, the agent loop's interrogation gate suppresses tool execution for that turn, deferring action until the user answers the clarifying questions.
+- **Operating Mode**: Surgical tool use ("one well-aimed call beats a chain"). 
+- **Escalation**: Hands off to **Sage** if multi-step planning or deep reasoning is required.
+- **Interrogation Protocol**: Owns interrogation for `simple` turns. Emits an `<interrogation>` block to suppress tool execution until the user responds.
+
+---
+
+## The Tribunal & Safety
 
 ### 4. The Tribunal
-A five-member panel that translates Sage's intent into an executable command through ideological consensus.
+A five-member ensemble translating Sage's intent into executable commands through ideological consensus.
 
-- **Axiom** (`call_merge`): The Composer. Focuses on composition and coherent pipelines.
+- **Axiom** (`call_merge`): The Composer. Focuses on elegant pipeline composition.
 - **Concord** (`verified_user`): The Guardian. Focuses on safety and defensive discipline.
-- **Variance** (`call_split`): The Exhaustive. Focuses on robustness against edge cases (spaces, null input, symlinks).
-- **Pragma** (`menu_book`): The Conventional. Focuses on idiomatic patterns for the target system.
-- **Nemesis** (`gpp_maybe`): The Adversary. Injects plausible-but-subtle flaws to trick the Warden. If it succeeds in tricking Warden, it is awarded by Auditor, but the command is rejected.
+- **Variance** (`call_split`): The Exhaustive. Focuses on edge cases (spaces, null input, symlinks).
+- **Pragma** (`menu_book`): The Conventional. Focuses on idiomatic patterns (e.g., `journalctl` vs `tail`).
+- **Nemesis** (`gpp_maybe`): The Adversary. Injects subtle flaws to test the system's immune system.
 
-**Common Contract**: Every member emits exactly a shell command string. Disagreement is ideological, not statistical.
+**Common Contract**: Members emit *only* a shell command string. No explanation or commentary is permitted.
 
 ### 5. Warden (Defensive Coordination)
-- **Icon**: `shield`
-- **Role**: `defender`
-- **Model Tier**: `lite`
-- **Purpose**: Orchestrates specialized risk analysis sub-agents to produce a consolidated safety verdict for the Operator. The Warden validates the safety of a command *before* the Auditor cryptographically commits. Stakes reputation on accurate risk assessment.
+- **Role**: `defender` | **Tier**: `lite`
+- **Purpose**: Local risk assessment performing pre-execution analysis.
 - **Sub-Agents**:
-    - `warden_command_risk`: Classifies command blast radius (LOW/MEDIUM/HIGH).
+    - `warden_command_risk`: Classifies blast radius (LOW/MEDIUM/HIGH).
     - `warden_file_risk`: Evaluates file operation sensitivity and git-reversibility.
     - `warden_error`: Analyzes failures for `AUTO_FIXABLE` or `ESCALATE`.
-- **Staking**: Warden stakes reputation on accurate risk classification. It earns reputation for correctly identifying dangerous commands and loses reputation for blocking safe operations (over-caution) or allowing dangerous ones (under-caution).
-- **Two-Strike Circuit Breaker**: When Warden blocks a command:
-    - **First Strike**: An assistant-tier model generates contextual feedback explaining why the command was blocked and suggesting safer alternatives. Sage receives this feedback and can propose a revised command.
-    - **Second Strike**: If Warden blocks Sage's revised command, the system triggers an `AI_AGENT_CONFLICT_DETECTED` event, halts the ReAct loop, and surfaces an "Agent Conflict" dialog to the user for human intervention.
+- **Stake Reputation**: Stakes reputation on accuracy. Over-caution (blocking safe tasks) or under-caution (allowing danger) costs reputation.
 
 ### 6. Auditor
-- **Icon**: `fact_check`
-- **Role**: `auditor`
-- **Model Tier**: `primary`
-- **Purpose**: Final judge of Tribunal candidates. Operates in `unanimous`, `majority`, or `tied` modes. Only once the Warden has cleared the command does the Auditor perform the final consistency check and Merkle commitment. The Auditor is the only persona that cannot be tricked by the Nemesis; it awards Nemesis for successful "Warden tricks" but rejects the flawed command.
-- **Reputation**: The only agent that reads `reputation_state` (cross-chain memory) and writes `reputation_commitment` via Merkle roots.
-- **Output**: `ok` or `reject`.
+- **Role**: `auditor` | **Tier**: `primary`
+- **Purpose**: Final judge of Tribunal candidates. 
+- **Responsibility**: Judges Tribunal candidates after Warden clearance. Awards Nemesis for successful "Warden tricks" but rejects the flawed command. 
+- **Reputation**: The only agent authorized to write `reputation_commitment` to the global Merkle-root scoreboard.
 
-### 7. Specialists
-- **Scribe** (`title`): Generates concise 3-7 word case titles.
-- **Codex** (`neurology`): Async extraction of durable user preferences and scrubbed investigation summaries.
-- **Judge** (`gavel`): Post-hoc performance grading against gold-standard rubrics.
+---
 
-## The Information Isolation Principle (Information Quarantine)
+## Specialty Agents
 
-GDD §3 defines Information Isolation: agents operate in a sealed information environment to prevent collapsing diversity and honesty.
+- **Scribe** (`summarizer`): Generates concise 3-7 word case titles.
+- **Codex** (`analyzer`): Async extraction of durable user preferences and scrubbed summaries.
+- **Judge** (`evaluator`): Dispassionate post-hoc grading against gold-standard rubrics.
 
-| Role | Information Visible |
-|---|---|
-| **Triage** | User message + brief history. Doesn't know Sage/Tribunal exist. |
-| **Sage** | User message + Triage classification. Doesn't know Triage is a separate agent. |
-| **Tribunal** | Intent from Sage + OS/Shell context. Doesn't know Nemesis is present. |
-| **Auditor** | Full visibility: User msg, Sage intent, Persona signatures, Reputation state. |
+---
+
+## The Information Isolation Principle
+
+Agents operate in a sealed environment to preserve diversity and technical honesty (GDD §3).
+
+| Role | Information Visible | Isolation Goal |
+|---|---|---|
+| **Triage** | User message + brief history | Prevent routing bias |
+| **Sage/Dash** | Triage result + history | Focus on reasoning/speed |
+| **Tribunal** | Sage's intent + OS context | Prevent ideological collision |
+| **Auditor** | Intent + Candidates + Reputation | Converge on technical truth |
+
+---
 
 ## Canonical Prompt Layout
 
-All system prompts are constructed via `@/components/g8ee/app/utils/agent_persona_loader.py` following this XML-tagged pattern:
+System prompts are constructed via `@/components/g8ee/app/models/personas/base.py` following this XML-tagged pattern:
 
 1. `<role>`: The behavioral category.
 2. `<output_contract>`: Strict wire format (if applicable).
@@ -114,7 +129,9 @@ All system prompts are constructed via `@/components/g8ee/app/utils/agent_person
 4. `<purpose>`: Technical objectives.
 5. `<autonomy>`: Agency directive.
 
-This structure ensures prefix-cache effectiveness in `llama.cpp` by placing shared doctrine (Safety, Loyalty, Dissent) before agent-specific identity.
+This structure optimizes prefix-cache effectiveness in `llama.cpp` by placing shared doctrine before agent-specific identity.
+
+---
 
 ## Reputation & Staking
 

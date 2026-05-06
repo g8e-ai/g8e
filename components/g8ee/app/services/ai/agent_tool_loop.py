@@ -169,9 +169,9 @@ class TribunalInvoker:
             guidelines=guidelines,
             operator_context=op_context,
             g8ed_event_service=g8ed_event_service,
-            web_session_id=g8e_context.web_session_id,
-            user_id=g8e_context.user_id,
-            case_id=g8e_context.case_id,
+            web_session_id=g8e_context.web_session_id or "",
+            user_id=g8e_context.user_id or "",
+            case_id=g8e_context.case_id or "",
             investigation_id=investigation.id,
             settings=request_settings,
             reputation_data_service=tool_executor.reputation_data_service,
@@ -444,7 +444,7 @@ async def orchestrate_tool_execution(
     )
 
     display_label, display_icon, display_detail, category = tool_display_metadata(
-        tool_name, command_display
+        tool_name, command_display or ""
     )
 
     return ToolCallResult(
@@ -456,7 +456,7 @@ async def orchestrate_tool_execution(
             is_operator_tool=is_operator_tool,
             display_label=display_label,
             display_icon=display_icon,
-            display_detail=display_detail,
+            display_detail=display_detail or "",
             category=category,
         ),
         result_info=StreamChunkData(

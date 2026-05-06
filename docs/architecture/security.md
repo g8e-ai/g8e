@@ -3,439 +3,114 @@ title: Security
 parent: Architecture
 ---
 
+---
+title: Security
+parent: Architecture
+---
+
 # Security Architecture
 
-g8e is a local-only, air-gapped, portable platform. It runs entirely via `docker-compose` on-premises — no cloud deployment, no SaaS backend, no external network dependency. This document is the deep-reference security guide for the platform, covering every enforcement layer in detail.
-
-For component-level overviews, see: [g8ee](../components/g8ee.md), [g8ed](../components/g8ed.md), [g8eo](../components/g8eo.md).
-
----
+g8e is a local-only, air-gapped platform designed for high-stakes environments. Security is not an "add-on" but the core constraint: the platform assumes the AI control plane is potentially adversarial or error-prone and enforces safety at the infrastructure level.
 
 ## Bedrock Principles
 
-### User Intent
-
-Every aspect of g8e security is designed around one foundational principle: the user makes informed decisions, and the platform exists to support that.
-
-g8e operates in full context mode. The platform continuously learns the user's environment, history, preferences, and intent through Operators — building a working relationship over time where every session makes the assistant more capable and more personalized. The Operators give the user a level of situational awareness that is impossible without them: real-time system state, historical context across sessions, and AI-powered analysis grounded in what is actually happening on the user's infrastructure.
-
-All of that capability exists in service of one outcome: the human is always the one making state-changing decisions. The AI is the robot on the user's shoulder — guiding, surfacing context, proposing actions — while the human traverses the environment and decides what happens next.
-
-Human control is a first-class architectural property. Every enforcement mechanism in this document — Human-in-the-Loop approval, binding, Sentinel scrubbing, session isolation, least privilege — exists to ensure that the platform's growing capability and context remains fully in service of the user's intent.
-
-### Additional Security Principles
-
-1. **Zero Trust** — No component, connection, or data item is implicitly trusted. Every request is authenticated, every payload validated, every data stream scrubbed. Trust is never inherited from network position.
-2. **Human-in-the-Loop** — The AI proposes; the human approves. No state-changing operation executes without explicit, informed user consent — enforced at the platform level, not bypassable by the AI or any API call.
-3. **Least Privilege** — Every actor has the minimum access required to perform its function. Cloud Operators for AWS start with zero AWS access. Permissions are granted Just-in-Time and revoked immediately after use.
-4. **Data Sovereignty** — Sensitive operational data stays on the Operator host by default. The platform is a stateless relay; it never stores raw command output. Only Sentinel-scrubbed metadata crosses component boundaries toward the AI.
-5. **Defense in Depth** — No single control is relied upon. Authentication is layered (passkeys + sessions + context binding). Data protection is layered through Sentinel's platform-wide coverage — egress scrubbing on the Operator ensures raw data never leaves the host, while redundant ingress scrubbing on the Engine adds a final protector for all Operator data before it crosses any network boundary toward a model provider.
+1.  **Human-in-the-Loop (HITL)**: The AI proposes; the human approves. No state-changing operation executes without explicit, informed user consent.
+2.  **Zero Trust**: No component or connection is implicitly trusted. Every request is authenticated, every payload validated, and every data stream scrubbed.
+3.  **Local-First Sovereignty**: Sensitive data stays on the Operator host. Only scrubbed metadata crosses component boundaries.
+4.  **Defense in Depth**: Multiple overlapping layers (Sentinel, Tribunal, mTLS, LFAA) ensure that a failure in one control does not compromise the system.
 
 ---
 
-### Technical Positioning
+## Technical Positioning
 
-g8e is often compared to existing access control and remote execution tools. Here is how it differs:
-
-- **vs. SSH**: SSH is a secure pipe; g8e is a governor. SSH has no concept of AI intent, multi-model consensus, or granular scrubbing. g8e uses the pipe to enforce a governance model that SSH cannot.
-- **vs. Teleport / Boundary**: These are fine-grained access control systems for **human** administrators. g8e is a governance system for **AI-powered automation** acting on behalf of humans. It assumes the AI control plane is potentially adversarial or error-prone.
-- **vs. Ansible / Terraform**: These are deterministic configuration tools. g8e is for non-deterministic, context-aware investigation and remediation where the AI must reason about real-time system state before proposing an action.
+- **vs. SSH**: SSH is a secure pipe; g8e is a **governor**. g8e uses the pipe to enforce a governance model (scrubbing, consensus) that SSH cannot.
+- **vs. Teleport / Boundary**: These manage **human** access. g8e manages **AI-powered automation** acting on behalf of humans.
+- **vs. Ansible / Terraform**: These are deterministic. g8e is for **non-deterministic** investigation where the AI reasons about real-time state before proposing actions.
 
 ---
 
-## Platform Architecture Overview
+## Platform Flow & Boundaries
 
-```
-Browser
-  │  HTTPS + Passkey Auth (FIDO2/WebAuthn) + Encrypted Session Cookie
-  ▼
-g8ed  (Node.js — web gateway, SSE relay, Operator panel)
-  │  Internal HTTP — X-Internal-Auth shared secret (constant-time comparison)
-  ▼
-g8ee   (Python/FastAPI — AI engine, Sentinel scrubbing, AI safety analysis)
-  │  HTTP + WebSocket pub/sub
-  ▼
-g8es (g8eo binary in --listen mode — document store, KV store, pub/sub broker)
-  │
-  │  WebSocket + mTLS + Certificate Pinning + Replay Protection
-  ▼
-g8eo   (Go binary — Operator daemon on target host)
-  │  Sentinel pre-execution, local SQLite vaults, Git Ledger (LFAA)
-  ▼
-Host Filesystem / AWS / Target System
+```mermaid
+graph TD
+    Browser[Browser / UI] -- "HTTPS + Passkey (FIDO2)" --> g8ed
+    g8ed -- "X-Internal-Auth (Shared Secret)" --> g8ee
+    g8ed -- "mTLS (TLS 1.3)" --> g8eo
+    g8ee -- "X-Internal-Auth" --> g8es
+    g8eo -- "Pub/Sub (WSS + mTLS)" --> g8es
+    g8eo -- "Local Exec" --> Host[Target System]
 ```
 
-### Security Boundaries
+### 1. Browser to Gateway (g8ed)
+- **Auth**: FIDO2/WebAuthn passkeys only. No passwords.
+- **Sessions**: `HttpOnly`, `Secure`, `SameSite=Lax` cookies. Session state stored in `g8es` KV.
+- **Context Binding**: Sessions are tied to IP and User-Agent; 4+ IP changes trigger a security flag.
 
-| Boundary | Mechanism |
-|---|---|
-| **Browser → g8ed** | HTTPS/TLS 1.3, FIDO2/WebAuthn passkeys, encrypted `HttpOnly` session cookie, `SameSite=lax` CSRF protection |
-| **g8ed → g8ee** | Internal Docker network only, `X-Internal-Auth` shared secret (constant-time comparison), never exposed externally |
-| **g8ee → g8es** | Internal Docker network, `X-Internal-Auth` token (strictly enforced by g8es/g8eo in `--listen` mode) |
-| **g8ed → g8es** | Internal Docker network, `X-Internal-Auth` token (strictly enforced by g8es/g8eo in `--listen` mode) |
-| **g8ee → LLM (AI)** | Sentinel ingress scrubbing — a redundant layer of protection for all user messages and terminal output before they are transmitted to any model provider; raw output, credentials, and PII are replaced with safe placeholders |
-| **g8ed → g8eo** | WebSocket over mTLS (TLS 1.3), per-operator client certificate issued during device registration or bootstrap, platform CA fetched from hub at operator startup |
-| **Operator → Host** | Sentinel pre-execution threat blocking (46 MITRE-mapped detectors), egress data scrubbing (stdout/stderr), and command allowlist/denylist enforcement. |
-| **Engine → User** | Warden risk assessment and Auditor consistency check presented for Human-in-the-Loop approval before command dispatch to Operator. |
-| **Data at Rest (g8es)** | SQLite at `0600` filesystem permissions (4 tables: documents, kv_store, sse_events, blobs); session fields encrypted at application layer by g8ed before persistence; **bootstrap secrets (`internal_auth_token`, `session_encryption_key`, `auditor_hmac_key`) persisted on the `g8es-ssl` volume and mirrored into the `platform_settings` document for consistency** |
-| **Data at Rest (LFAA Vaults)** | AES-256-GCM field-level encryption (content, stdout, stderr); DEK envelope encryption; KEK derived on-demand from operator API key via HKDF-SHA256 |
+### 2. Internal Services (g8ed, g8ee, g8es)
+- **Shared Secret**: Authenticated via `X-Internal-Auth` using `internal_auth_token`.
+- **Isolation**: Services communicate over a private Docker bridge network; only the gateway (443) is exposed to the host.
 
-### Network Isolation
-
-g8e runs on a private Docker bridge network. Only two ports are bound to the host: **443** (TLS gateway for browser and Operator WebSocket) and optionally **80** (HTTP redirect). All other inter-service communication is internal and unreachable from outside. g8eo Operators initiate outbound-only connections to port 443; they open no inbound ports.
+### 3. Gateway to Operator (g8eo)
+- **mTLS**: Every Operator presents a per-device client certificate issued during bootstrap.
+- **Outbound-Only**: Operators initiate connections to the gateway; they open no inbound ports.
+- **Fingerprinting**: Operators are bound to a permanent system fingerprint (Machine ID + CPU + Hostname) on first auth.
 
 ---
 
-### Configuration Security and Precedence
+## Protection Layers
 
-g8e uses a layered configuration model designed for zero-trust local deployments. Configuration flows through a strictly enforced precedence chain, ensuring that sensitive values (like API keys and secrets) can be provided via the environment at deployment time but are managed via the platform's own persistence layer at runtime.
+### Sentinel (Defense & Sovereignty)
+Sentinel is the primary guardian on the Operator host. It operates in two phases:
+1.  **Pre-Execution (Defense)**: Analyzes commands and file edits against a library of 40+ threat patterns (MITRE ATT&CK mapped). Blocks malicious or destructive actions before they hit the shell.
+2.  **Post-Execution (Sovereignty)**: Scrubs terminal output (stdout/stderr) for credentials, PII, and tokens before they leave the host. It preserves operational data (IPs, paths, ARNs) needed for troubleshooting.
 
-#### The Precedence Chain
-
-All components resolve configuration values in the following order (highest priority wins):
-
-1.  **User Settings (DB)**: Individual user overrides stored in g8es `user_settings` collection.
-2.  **Platform Settings (DB)**: Global platform values stored in g8es `platform_settings` collection.
-3.  **Environment Variables**: Canonical `G8E_*` variables provided at container runtime.
-4.  **Schema Defaults**: Hardcoded safe defaults defined in the component's configuration service.
-
-**Exception: Bootstrap Secrets**
-For critical bootstrap secrets (`internal_auth_token`, `session_encryption_key`, `auditor_hmac_key`), the **Shared SSL Volume** is the source of truth consumed by g8ed and g8ee at startup. g8es additionally mirrors the same values into the `platform_settings` document on startup so that the on-disk files and the cached DB document stay in sync (see `SecretManager.InitPlatformSettings` in `components/g8eo/services/listen/secret_manager.go`).
-
-#### Bootstrap Secrets Handling
-
-The platform handles three critical secrets that are required for component-to-component authentication, data protection, and reputation integrity:
-
-- **`internal_auth_token`**: Shared secret for `X-Internal-Auth` header authentication.
-- **`session_encryption_key`**: AES-256 key used to encrypt sensitive fields in web and operator sessions.
-- **`auditor_hmac_key`**: HMAC-SHA256 key used by the g8ee Auditor to sign reputation commitments.
-
-The `./g8e platform settings` command displays truncated versions of these active secrets (e.g., `f5037487...6c5f`) to confirm they are set and synchronized without exposing the full values.
-
-**1. Authoritative Runtime Source (The Volume)**
-The `g8es-ssl` volume is the authoritative source used by runtime consumers. It is mounted at `/g8es` on g8ed, g8ee, and g8ep (read-only), and at `/ssl` inside g8es itself. The secrets are stored as `0600` plain-text files on this volume.
-- `internal_auth_token` is stored at `/g8es/internal_auth_token`.
-- `session_encryption_key` is stored at `/g8es/session_encryption_key`.
-- `auditor_hmac_key` is stored at `/g8es/auditor_hmac_key`.
-
-**2. Generation and Synchronization**
-On every g8es startup, `SecretManager.InitPlatformSettings` reconciles the volume files with the `platform_settings` document in g8es:
-- If the `platform_settings` document does not exist and files are missing, g8es generates cryptographically secure 32-byte hex values, creates the document with both secrets, and writes the files.
-- If the document already exists, any file value (when present) takes precedence and is written back into the document; otherwise the document value is used to (re)populate the file.
-- After each successful write, g8es re-reads both files and aborts startup if their contents no longer match the DB document (`verifyDBMatchesFile`), closing the window where a partial write or concurrent writer could leave the two authorities silently disagreeing.
-- g8es then writes a tamper-evidence manifest at `/ssl/bootstrap_digest.json` (`writeDigestManifest`) containing the SHA-256 digest of each secret alongside a manifest version and UTC timestamp. The file is written atomically (`.tmp` + rename) with `0600` permissions.
-- The `platform_settings` cache-aside KV entry is warmed after any write so that the first authenticated request does not race the cold cache.
-
-**3. Automatic Discovery and Verification**
-g8ed and g8ee discover these tokens by reading the files from the shared volume at startup via their `BootstrapService` (`components/g8ed/services/platform/bootstrap_service.js`, `components/g8ee/app/services/infra/bootstrap_service.py`). Neither component reads the bootstrap secrets from the database.
-
-Before authenticating with a loaded secret, each consumer calls `verifyAgainstManifest` (g8ed) / `verify_against_manifest` (g8ee), which:
-- Reads `bootstrap_digest.json` from the same volume;
-- Computes SHA-256 of the value it just loaded;
-- Aborts startup with a `BootstrapSecretTamperError` if the digest disagrees with the manifest entry for that secret.
-
-A missing manifest is treated as a transitional warning (not an error) so that upgrade ordering is not a footgun; once a g8eo with manifest support has booted, every subsequent consumer start is fully verified. This closes the silent coupling between `SecretManager` (sole writer) and the consumer `BootstrapService`s (sole readers): a divergent volume file now surfaces as a clear startup abort instead of an opaque 401 during the first downstream API call.
-
-**4. Dual-Location Persistence**
-These secrets live in two places: the SSL volume files (read by g8ed/g8ee) and the `platform_settings` document (written and kept in sync by g8es). The volume file is the boot-time source of truth; the DB copy exists to make the secrets visible to the platform settings view and to survive restarts where only the DB is inspected. A full database wipe is still non-destructive to identity because the next g8es startup will repopulate the document from the surviving volume files.
-
-#### Bootstrap Seeding
-
-On the first start of a new deployment, the platform automatically **seeds** the persistent database with values found in the environment. This "Capture and Persist" strategy ensures that a deployment remains stable even if container environment variables are removed or modified after initialization.
-
-#### Enforcement
-
-- **Code Standard**: Direct reads from the host environment (e.g., `process.env` or `os.Getenv`) are strictly prohibited outside of the component's configuration service.
-- **Transport Security**: Bootstrap transport URLs (`G8E_INTERNAL_HTTP_URL`, `G8E_INTERNAL_PUBSUB_URL`) are read once at startup to reach the database; all other configuration is then loaded from the database.
-- **Sensitive Fields**: Sensitive fields in the database (API keys, session tokens) are application-layer encrypted before storage.
-
-All `X-G8E-*` identity headers are **injected by g8ed from the verified server-side session** — never accepted from the untrusted request body. User identity cannot be forged by a client.
-
-| Header | Purpose |
-|---|---|
-| `X-G8E-WebSession-ID` | Browser session identifier |
-| `X-G8E-User-ID` | Authenticated user identity |
-| `X-G8E-Organization-ID` | Multi-tenant isolation |
-| `X-G8E-Case-ID` | Active case correlation |
-| `X-G8E-Investigation-ID` | Active investigation correlation |
-| `X-G8E-Task-ID` | Active task correlation |
-| `X-G8E-Bound-Operators` | JSON array of all operators bound to the session |
-| `X-G8E-Request-ID` | Execution tracking identifier |
-| `X-G8E-New-Case` | Boolean signal for inline resource creation |
-| `X-G8E-Source-Component` | Source component name (validated against `ComponentName` enum) |
+### The Tribunal (Governance)
+Before a command reaches an Operator, it must pass through the `g8ee` Tribunal:
+- **Auditor**: Uses `auditor_hmac_key` to sign reputation commitments and ensure consistency.
+- **Warden**: Performs high-level risk assessment and presents the "Warden's Report" to the user for approval.
+- **Consensus**: In high-risk modes, multiple models must agree on the proposed action before it is dispatched.
 
 ---
 
-## SSL/CA Certificate Generation and Handling
+## Bootstrap & Secret Management
 
-### CA Private Key Protection
+The platform uses a "Capture and Persist" strategy for its core secrets, managed by the `g8eo` Secret Manager in `--listen` mode.
 
-The platform CA private key (`ca.key`) is the most sensitive asset in the platform. It is protected by the following:
+### Authoritative Secrets (The SSL Volume)
+Three critical secrets are generated on first boot and stored in the `g8es-ssl` volume (mounted at `/g8es`):
+- `internal_auth_token`: For `X-Internal-Auth` header validation.
+- `session_encryption_key`: For AES-256 encryption of sensitive session fields.
+- `auditor_hmac_key`: For signing Tribunal reputation commitments.
 
-- **Volume Isolation**: It is stored exclusively in the `g8es-ssl` Docker volume, which is separate from the application data volume.
-- **Service Access**: It is mounted into `g8ed` (for signing operator certificates) and `g8es` (for generating the CA) but is never exposed via any API.
-- **Read-Only Mounts**: On all other services, the `g8es-ssl` volume is mounted read-only.
-- **No Persistence in Hub**: The key is never stored in the SQLite database or the environment.
-
----
-
-g8e operates its own private CA. There is no dependency on any public CA.
-
-- **Algorithm:** ECDSA with P-384. **Protocol:** TLS 1.3 only on all external and Operator-facing endpoints.
-- **Generation:** CA and server certificates are generated at runtime by the g8es operator binary (`--listen --ssl-dir /ssl` mode) on first start. Stored in the dedicated `g8es-ssl` volume (`/ssl` inside g8es). Never baked into any Docker image.
-- **Distribution to services:** The `g8es-ssl` named Docker volume is mounted read-only at `/g8es` on g8ed, g8ee, and g8ep, and read-write at `/ssl` on g8es itself. Consumers read the CA from `/g8es/ca.crt` (or `/g8es/ca/ca.crt`). g8ed's `CertificateService` reads the CA cert and key from the same location to sign per-operator client certificates; per-operator client certs are written to `/g8es/certs/`.
-- **Volume isolation:** SSL certs live in a dedicated volume (`g8es-ssl`) separate from the SQLite DB volume (`g8es-data`). `platform reset` wipes the DB volume but never touches the SSL volume — SSL certs survive a full rebuild without needing to be re-trusted.
-- **CA trust for field operators:** The non-listen g8eo binary uses a **local-first** discovery strategy. When `--ca-url` is not set, it scans well-known volume mount paths (`/ssl/ca.crt`, `/g8es/ca.crt`, `/g8es/ssl/ca.crt`, `/data/ssl/ca.crt`) before attempting any network request. If no local file is found, it falls back to an HTTPS fetch from `http://<endpoint>/ca.crt` using the OS system trust store. The CA is never baked into the binary at compile time — there is no `//go:embed` and no `server_ca.crt` source file. This eliminates the circular dependency that caused x509 failures after a clean volume wipe: the operator always discovers the CA that g8es actually generated, not a stale one. Inside the Docker network, the `g8es-ssl` volume provides the CA at `/g8es/ca.crt` — no network fetch occurs.
-- **Per-operator client certificates:** Issued dynamically during Device registration or bootstrap and returned in the response.
-- **Validity:** CA — 10 years (3650 days); server certificate — 90 days. Both renewed automatically on restart if expired.
-- **CA private key:** Accessible only to the core authentication service; never exposed via any API.
-
-### CA Trust Bootstrap and the TLS Kill Switch
-
-The g8eo binary (field operator mode) loads the platform CA at startup using a two-stage strategy:
-
-1. **Local discovery** (preferred): When `--ca-url` is not set, the binary scans `/ssl/ca.crt`, `/g8es/ca.crt`, `/g8es/ssl/ca.crt`, and `/data/ssl/ca.crt` in order. The first path that exists and contains valid PEM is accepted immediately via `certs.SetCA` — no network request is made. This is the normal path for containerized operators (e.g., g8ep), where the `g8es-ssl` Docker volume provides the CA locally.
-2. **Remote fetch** (fallback): If no local file is found, the binary fetches from `http://<endpoint>/ca.crt` (or the URL given by `--ca-url`) via `certs.FetchAndSetCA`. This uses Go's default `http.Client` with the OS system trust store, a 15-second timeout, and a 64 KB body limit. The fetch is equivalent to a certificate pinning operation — not a sensitive data transfer. For remote deployments using the [deployment script](../components/g8ed.md#operator-deployment-script), the CA is pre-fetched over plain HTTP and passed to `curl --cacert` / `wget --ca-certificate` for the binary download — the operator binary then discovers it via local-first discovery or falls back to the standard HTTPS fetch.
-
-Once stored in the runtime CA store, all subsequent TLS connections are verified against it. Public CAs are not trusted.
-
-If both stages fail (no local file, hub unreachable, bad PEM, non-200 response), the operator exits immediately with `ExitConfigError`. If certificate verification fails at connection time, g8eo self-terminates with **exit code 7** (`ExitCertTrustFailure`). The connection is never downgraded, retried insecurely, or silently ignored.
-
-### Mutual TLS (mTLS)
-
-All Operator-to-g8ed connections require mutual TLS:
-- **Server side:** g8ed presents its server certificate (signed by the platform CA).
-- **Client side:** g8eo presents its per-operator client certificate (issued at claim time).
-
-An Operator cannot connect without a valid platform-issued certificate. g8ed cannot be impersonated by anything not signed by the pinned CA.
-
-### Workstation CA Trust
-
-Because g8e uses a locally generated CA, users must configure their workstation browser and operating system to trust it before using the HTTPS UI.
-
-#### Primary Method: Terminal One-Liner
-
-The recommended approach is a single curl command run from an elevated terminal on the user's machine. The platform serves a pipe-friendly trust script from `http://<host>/trust` that automatically detects the operating system and performs the full trust workflow: download the CA, remove any stale g8e certificates, and install the new CA into the system trust store.
-
-**macOS / Linux** (run in Terminal):
-```
-curl -fsSL http://<host>/trust | sudo sh
-```
-
-**Windows** (run in an elevated PowerShell terminal):
-```
-irm http://<host>/trust | iex
-```
-
-The `/trust` endpoint detects the caller's platform from the `User-Agent` header and returns the appropriate script — a POSIX shell script for macOS/Linux (which distinguishes between the two at runtime via `uname -s`), or a PowerShell script for Windows.
-
-#### Alternative: HTTP Onboarding Page
-
-The platform also exposes an HTTP onboarding portal on port 80 (`http://<host>`), which provides a browser-based UI for the same trust bootstrap. That page auto-selects the user's OS, presents a downloadable trust script or raw `.crt` as appropriate, and links trusted users forward to `https://<host>/setup`.
-
-| OS | Installation Method |
-|---|---|
-| **macOS** | Trust script (`.sh`) downloads the CA from g8ed, removes old g8e certs, and installs the new CA into the system keychain. The raw `.crt` remains available for manual trust flows. |
-| **Windows** | Trust script (`.bat`) self-elevates via UAC, downloads the CA from g8ed, removes old g8e certs, and installs the new CA via `certutil`. |
-| **Linux** | Trust script (`.sh`) downloads the CA from g8ed, removes old g8e certs, copies the new CA into the system trust store, and refreshes trusted certificates. |
-| **iOS** | Download the raw `.crt`, install the profile, then explicitly enable full trust in Certificate Trust Settings. |
-| **Android** | Download the raw `.crt`, open it from Downloads, and install it as a CA certificate. |
-
-The HTTP onboarding page is informational and bootstrap-only. Once the workstation trusts the CA, normal browser access moves to HTTPS on port 443. Operator traffic also depends on the same CA chain — browser HTTPS and Operator mTLS both anchor to the g8es-generated platform CA.
-
-### Certificate Revocation
-
-Revoked certificate serials are tracked in-memory by `CertificateService` for the lifetime of the g8ed process. Revocation is triggered automatically by API key refresh, Operator decommission, or manual security response. Revoked serials are also recorded in the Operator document for audit.
+### Tamper Evidence
+To prevent silent drift between the database and the volume:
+1. `g8eo` writes a `bootstrap_digest.json` manifest containing SHA-256 hashes of all secrets.
+2. `g8ed` and `g8ee` read the manifest at startup.
+3. If the on-disk secret does not match the manifest, the service **aborts startup** (BootstrapSecretTamperError).
 
 ---
 
-## Web Session Security
+## Local-First Audit Architecture (LFAA)
 
-Sessions are a critical security boundary — both web user sessions and Operator sessions are centrally managed by g8es.
+LFAA ensures that every action taken by the AI is recorded in a tamper-evident, append-only log on the Operator host.
 
-### Web Session Lifecycle
+### Audit Vault (Events)
+- **Storage**: Encrypted SQLite database (`g8e.db`).
+- **Encryption**: Sensitive fields (command raw, stdout, stderr) are encrypted at rest using **AES-256-GCM**.
+- **Keys**: KEK derived from the Operator's API key via HKDF-SHA256; DEK envelope encryption for every record.
 
-1. Created by g8ed on successful passkey verification.
-2. Session ID is cryptographically secure and globally unique (`session_{timestamp}_{uuid}`).
-3. Stored in g8es KV with TTL; subject to both idle timeout (8 hours, configurable) and absolute hard lifetime (24 hours, configurable).
-4. Transmitted to the browser as an encrypted, `HttpOnly`, `Secure`, `SameSite=lax` cookie.
-5. Sensitive session metadata (`api_key` field) is encrypted with AES-256-GCM using `SESSION_ENCRYPTION_KEY` before write to g8es.
-6. On every request, the session is validated against the stored g8es record and the client's context markers (IP, user-agent). IP changes are tracked; suspicious activity is flagged after 4+ IP changes.
-7. Revocation is immediate — invalidating a session in g8es takes effect on the next request.
-
-### Web Session Security Properties
-
-| Control | Value |
-|---|---|
-| Idle timeout | 8 hours (`SESSION_TTL_SECONDS`) |
-| Absolute timeout | 24 hours (`ABSOLUTE_SESSION_TIMEOUT_SECONDS`) |
-| Concurrent sessions | Tracked per user in g8es KV (unlimited active allowed) |
-| Cookie flags | `HttpOnly`, `Secure`, `SameSite=Lax` |
-| CSRF protection | `SameSite=Lax` — no additional tokens required |
-| `api_key` field | Encrypted with AES-256-GCM at application layer before g8es write |
-
-### `requireAuth` Middleware
-
-`requireAuth` (`middleware/authentication.js`) is the single session validation point. It extracts the session ID from the `web_session_id` HttpOnly cookie. In non-production environments, it also accepts `X-G8E-WebSession-ID` or `Authorization: Bearer` as fallbacks for testing. After validation it attaches `req.webSessionId`, `req.session`, and `req.userId`. Route handlers must use these exclusively — never re-extract the session ID or call `validateSession()` again.
-
-### `requireFirstRun` Middleware
-
-`requireFirstRun` (`middleware/authentication.js`) guards the unauthenticated setup-flow registration endpoints. It checks `platform_settings.setup_complete` on every request. If setup is already complete, it calls `next('route')`, causing Express to skip the setup-flow handler and fall through to the `requireAuth` handler registered on the same path (the add-passkey flow). This dual-handler pattern means the same endpoint serves two distinct flows without any branching inside the handler body — and without exposing an unauthenticated code path once the platform is initialized. If the settings check fails, the request is rejected with 500.
-
-### HTTP Security Headers
-
-Configured in `server.js` via Helmet:
-
-| Header | Value |
-|---|---|
-| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains; preload` |
-| `X-Content-Type-Options` | `nosniff` |
-| `X-Frame-Options` | `SAMEORIGIN` |
-| `Referrer-Policy` | `strict-origin-when-cross-origin` |
-| `Cross-Origin-Opener-Policy` | `same-origin` |
-| `Permissions-Policy` | Disables camera, microphone, geolocation |
-
-CSP is managed via nonce-based middleware (not Helmet's built-in CSP). XSS prevention: all user-provided content and AI-generated responses are sanitized using an allowlist-based library before DOM rendering; `eval()`, `document.write()`, and other dangerous JavaScript APIs are prohibited; only a safe subset of HTML attributes is permitted in rendered content.
-
-### Role-Based Access Control
-
-g8e enforces a **deny-by-default** model. Absence of an explicit grant is a denial.
-
-| Role | Access |
-|---|---|
-| **Standard User** | Own investigations, own Operators, own cases. No visibility into any other user's resources. |
-| **Administrator** | All standard capabilities, plus: console access, user management, platform-wide monitoring, system configuration. |
-| **Super-Administrator** | Full platform access including sensitive security operations and system-level maintenance. |
-
-Role escalation is not possible through any public-facing API. Roles are validated server-side on every request. Every API call involving a resource ID first verifies the authenticated user is the legitimate owner at the service layer, not the routing layer.
-
-### Rate Limiting
-
-Rate limiting is implemented via `express-rate-limit` in `middleware/rate-limit.js`. Multiple endpoint-specific limiters protect against brute force and DoS attacks.
-
-| Scope | Limit | Key |
-|---|---|---|
-| Global public API | 100 requests / min | IP |
-| Auth endpoints (user registration) | 20 requests / 5 min | IP |
-| Passkey auth endpoints | 10 requests / 5 min | IP |
-| Operator auth (per API key) | 20 requests / 5 min | API key prefix (16 chars) |
-| Operator auth (IP backstop) | 20 requests / 5 min | IP |
-| Chat endpoints | 30 messages / min | Web session ID |
-| SSE connections | 30 attempts / 5 min (failed only) | Web session ID |
-| General API | 60 requests / min | IP |
-| Operator refresh | 10 requests / min | IP |
-| Audit log endpoints | 60 requests / min | User ID (fallback to IP) |
-| Console endpoints | 60 requests / min | User ID (fallback to IP) |
-| Operator API | 100 requests / min | API key (fallback to IP) |
-| Device link register (public) | 10 requests / 5 min | IP |
-| Device link generate | 10 requests / 5 min | User ID (fallback to IP) |
-| Device link list | 30 requests / min | User ID (fallback to IP) |
-| Device link revoke | 20 requests / 5 min | User ID (fallback to IP) |
-| Settings API | 30 requests / min | User ID (fallback to IP) |
-
-**Auth-sensitive limiters** (passkey, user auth, operator auth, device link register) are exported at module scope for static analysis tools (e.g., CodeQL's `js/missing-rate-limiting`) to trace enforcement to the `express-rate-limit` call site.
+### Git Ledger (Versioning)
+- **Mechanism**: Every file mutation is mirrored into a hidden `.g8e/ledger` Git repository.
+- **Integrity**: Provides a verifiable history of file changes, allowing for diffing and rollback of AI-driven edits.
 
 ---
 
-## Operator Session Security
+## Network & Infrastructure
 
-### Operator Session Lifecycle
+- **Air-Gapped by Design**: The platform requires zero external connectivity to function.
+- **Port 443 Only**: The only inbound path to the platform is via the TLS gateway.
+- **CA Management**: `g8e` operates its own private CA (ECDSA P-384). All certificates are generated at runtime and survive `platform reset` via the dedicated SSL volume.
 
-- Created on successful bootstrap authentication.
-- Bound to both the Operator's API key and its permanent system fingerprint.
-- Scoped to specific pub/sub channels: `cmd:{operator_id}:{operator_session_id}` (inbound commands), `results:{operator_id}:{operator_session_id}` (outbound results), `heartbeat:{operator_id}:{operator_session_id}` (heartbeat telemetry).
-- The `api_key` field is encrypted with AES-256-GCM in the session document before persistence; other fields (including `operator_id`) are stored unencrypted so they can be used as lookup keys.
-- Strictly isolated from web sessions — a user's web session and their bound Operator's session are separate security principals, linked via g8es KV keys.
-- API key refresh terminates the old Operator immediately, creates a new slot, and requires full re-authentication.
-
-### Session Type Isolation
-
-Web user sessions and Operator sessions are strictly partitioned. Authentication rules, timeout policies, and revocation mechanisms differ between the two session types. A compromised web session does not grant access to Operator commands — the Operator's own session and API key are separate credentials.
-
-### Replay Protection
-
-Every Operator request carries:
-- `X-Request-Timestamp` — accepted within a ±5-minute window only.
-- `X-Request-Nonce` (optional) — unique per request; validated against the nonce cache (in-memory by default; g8es KV when configured, 10-minute TTL) to prevent replay of captured traffic.
-
-Requests outside the timestamp window or with a replayed nonce are rejected outright.
-
----
-
-## Operator Authentication Methods
-
-Operators (g8eo) authenticate via one of three methods. All result in the same bootstrap outcome: a per-operator mTLS client certificate issued to the binary.
-
-| Method | Use Case |
-|---|---|
-| **API Key** | Standard long-running Operator — pass `--key` or set `G8E_OPERATOR_API_KEY` |
-| **Device Link (single-use)** | One-off automated deployment — token format `dlk_`, single use, time-limited |
-| **Device Link (multi-use)** | Fleet deployment — configurable `max_uses` (1–100, required) and expiry (1 min–7 days) |
-
-### Bootstrap Sequence (all methods)
-
-1. Operator POSTs to `/api/auth/operator` with API key.
-2. g8ed verifies credentials and validates the system fingerprint binding (permanent after first use).
-3. g8ed returns the operator session ID, operator ID, user ID, API key, configuration, and the per-operator mTLS client certificate + private key.
-4. The Operator rebuilds its HTTP transport to use the mTLS certificate.
-5. The Operator connects to g8es pub/sub over WSS using the same mTLS client certificate.
-
-### System Fingerprint Binding
-
-On first authentication, the Operator's system fingerprint (machine ID, CPU count, hostname) is permanently bound to that Operator slot. Any subsequent connection with a mismatched fingerprint is rejected. This binding is immutable and cannot be changed through any API — it prevents a stolen API key from being used on a different machine.
-
-The machine ID component is resolved from the first available source in this order: `/etc/machine-id`, `/var/lib/dbus/machine-id`, `/proc/sys/kernel/random/boot_id`. The `boot_id` path is always present on any Linux kernel, including minimal Docker containers where no persistent machine-id file exists. On macOS the SystemConfiguration preferences plist is used instead.
-
-### Duplicate Session Prevention
-
-A second authentication attempt from the same system (matching fingerprint) is allowed as a restart. From a different system it is rejected until the existing session goes stale (no heartbeat for 60 seconds).
-
-### Device Link Security
-
-Device links are pre-signed, time-bounded authorization tokens that solve the bootstrap problem — how to authorize an Operator on a remote host without requiring the user to manually paste credentials — without leaving any long-lived credential exposed.
-
-**Authority Split:**
-- **g8ed** is authoritative for device link documents (usage tracking, exhaustion checking, claims management)
-- **g8ee** is authoritative for operator documents (slot management, lifecycle operations)
-
-**Device Link Properties:**
-- Tokens are cryptographically random with the `dlk_` prefix and a strict, verifiable format (`dlk_[A-Za-z0-9_-]{32}`).
-- Every token has both a `max_uses` ceiling and an absolute `expires_at` timestamp.
-- When a device link is created, g8ed automatically provisions the required operator slots upfront to fulfill the `max_uses` limit.
-- Slot provisioning during device registration is atomic — concurrent multi-system deployments cannot race at the database level.
-- Once consumed, the token is invalidated. Replaying a used token yields a rejection.
-- After a device link is consumed, the only credential that matters is the Operator's API key — and that key lives only in process memory, never on disk.
-- g8ep device links embed a `web_session_id` so `OPERATOR_STATUS_UPDATED` SSE events route to the correct browser tab.
-
-### API Key Auth Layer
-
-The API key path is the standard long-running operator authentication method, handled by `OperatorAuthService._authenticateViaApiKey` (`services/operator/operator_auth_service.js`).
-
-**Validation sequence:**
-
-1. **Header extraction** — API key extracted from `Authorization: Bearer <key>`. Missing or malformed header → 400.
-2. **Key validation** — `ApiKeyService.validateApiKey` performs a cache-aside lookup (g8es KV first, document store fallback). Checks: `g8e_` prefix format, `status === ACTIVE`, `expires_at` not in the past. Invalid → 401.
-3. **Download-only key rejection** — If the key has no `operator_id` binding (download-only key) → 403 with `DOWNLOAD_KEY_NOT_ALLOWED` code. Download keys (`G8E_DOWNLOAD_KEY`) fetch the binary; they cannot authenticate an operator process.
-4. **`last_used_at` update** — `ApiKeyService.updateLastUsed` called after successful validation (non-blocking; errors are logged and do not fail auth).
-5. **User existence check** — `UserService.getUser(user_id)` from key data → 404 if not found.
-6. **Operator ownership check** — `operator.user_id` must match the authenticated `user_id` → 403 if not.
-7. **Operator type immutability** — If the slot has an existing fingerprint + type, the requested type (system vs. cloud) must match → 403 with `OPERATOR_TYPE_MISMATCH` code. Operator type is permanent once set.
-8. **Active operator reconnect check** — If the operator is `ACTIVE` or `BOUND`: reconnection is permitted only if the fingerprint matches (same-system restart) or the operator is stale (no heartbeat for >60s). Otherwise → 409.
-9. **Fingerprint binding check** — If the operator is not active/bound: if a fingerprint is already stored and it does not match the incoming fingerprint → 403 with `FINGERPRINT_MISMATCH` code.
-10. **Slot claim vs. reconnect** — `is_claiming_slot = true` when no fingerprint has been stored yet (first-ever auth). First auth claims the slot via `OperatorDataService.claimOperatorSlot`. The per-operator mTLS client certificate is generated during slot creation and returned in the bootstrap response. Subsequent auths call `updateOperatorForReconnection`. If the operator was previously `BOUND`, its KV binding is refreshed to the new operator session ID.
-11. **Session creation and activation** — Operator session created, operator activated, `OPERATOR_STATUS_UPDATED` SSE broadcast to all active user web sessions.
-12. **Bootstrap response** — Returns `operator_session_id`, `operator_id`, `user_id`, `api_key` (echoed back for in-memory use), `config`, and the per-operator mTLS client certificate + private key.
-
-| Check | Failure code | HTTP |
-|---|---|---|
-| Missing `Authorization: Bearer` | `Missing api_key` | 400 |
-| Invalid/expired/inactive key | `Invalid API key` | 401 |
-| Download-only key | `DOWNLOAD_KEY_NOT_ALLOWED` | 403 |
-| User not found | `User not found` | 404 |
-| Missing fingerprint | `System fingerprint required` | 400 |
-| Wrong account | `Unauthorized` | 403 |
-| Type mismatch | `OPERATOR_TYPE_MISMATCH` | 403 |
-| Already active on different system | `Operator already active` | 409 |
 | Fingerprint mismatch (offline) | `FINGERPRINT_MISMATCH` | 403 |
 | Slot claim failure | `Failed to claim Operator slot` | 500 |
 

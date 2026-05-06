@@ -207,6 +207,9 @@ async def generate_command(
     correlation_id = generate_tribunal_correlation_id()
     emitter = TribunalEmitter(g8ed_event_service, g8e_context, correlation_id=correlation_id)
 
+    if settings.llm is None:
+        raise ConfigurationError("LLM settings are missing")
+
     if not settings.llm.llm_command_gen_enabled:
         await emitter.emit(
             EventType.TRIBUNAL_SESSION_DISABLED,
@@ -262,6 +265,11 @@ async def generate_command(
             request=request,
         ) from exc
 
+    if generation_provider is None:
+        lite_provider = settings.llm.lite_provider
+        provider_name = lite_provider.value if lite_provider else "not_configured"
+        raise ConfigurationError(f"Failed to initialize generation provider for {provider_name}")
+
     candidates = await _run_generation_stage(
         provider=generation_provider, model=generation_model, request=request, guidelines=guidelines,
         operator_context=operator_context, num_passes=num_passes, emitter=emitter,
@@ -278,7 +286,6 @@ async def generate_command(
     # Round 2: anonymized peer review if consensus is low
     round_2_candidates = None
     round_2_vote_breakdown = None
-    rounds_executed = 1
 
     if vote_winner is None:
 
@@ -298,7 +305,7 @@ async def generate_command(
         )
 
         # Anonymize R1 clusters for peer review context
-        r1_clusters, cluster_to_cmd, cluster_to_members = _anonymize_clusters(candidates)
+        r1_clusters, _, _ = _anonymize_clusters(candidates)
 
         await emitter.emit(
             EventType.TRIBUNAL_VOTING_ROUND_2_STARTED,
@@ -325,8 +332,6 @@ async def generate_command(
         vote_winner, vote_score, vote_breakdown, tied_candidates = await _run_voting_stage(
             candidates=round_2_candidates, request=request, emitter=emitter, total_members=num_passes,
         )
-
-        rounds_executed = 2
 
         if vote_winner is not None:
             await emitter.emit(
