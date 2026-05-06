@@ -21,12 +21,15 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/g8e-ai/g8e/components/g8eo/config"
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/models"
 	execution "github.com/g8e-ai/g8e/components/g8eo/services/execution"
 	"github.com/g8e-ai/g8e/components/g8eo/services/sentinel"
 	storage "github.com/g8e-ai/g8e/components/g8eo/services/storage"
+	commonv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
 )
 
 // PubSubCommandMessage is the inbound wire message received from g8es pub/sub.
@@ -345,9 +348,31 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 		"payload_size", len(payload))
 
 	var cmdMsg PubSubCommandMessage
-	if err := json.Unmarshal(payload, &cmdMsg); err != nil {
-		rs.logger.Error("Failed to parse command message", "error", err)
-		return
+
+	// Try to parse as UniversalEnvelope (protobuf) first
+	var env commonv1.UniversalEnvelope
+	if err := proto.Unmarshal(payload, &env); err == nil && env.Id != "" {
+		rs.logger.Info("Parsed request via Protobuf (UniversalEnvelope)")
+		taskID := env.TaskId
+		operatorID := env.OperatorId
+
+		cmdMsg = PubSubCommandMessage{
+			ID:                env.Id,
+			EventType:         env.EventType,
+			CaseID:            env.CaseId,
+			TaskID:            &taskID,
+			InvestigationID:   env.InvestigationId,
+			OperatorSessionID: env.OperatorSessionId,
+			OperatorID:        &operatorID,
+			Payload:           env.Payload,
+			Timestamp:         env.Timestamp.AsTime(),
+		}
+	} else {
+		// Fall back to manual JSON for backward compatibility
+		if err := json.Unmarshal(payload, &cmdMsg); err != nil {
+			rs.logger.Error("Failed to parse command message", "error", err)
+			return
+		}
 	}
 
 	rs.logger.Info("Processing request")

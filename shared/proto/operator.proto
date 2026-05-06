@@ -1,0 +1,91 @@
+syntax = "proto3";
+
+package g8e.operator.v1;
+
+option go_package = "github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1";
+
+// Payload for g8e.v1.operator.command.requested
+message CommandRequested {
+  // Shell command string to execute
+  string command = 1;
+  
+  // Unique execution identifier (correlation key)
+  string execution_id = 2;
+  
+  // Justification for running this command (High-level Sage request)
+  string justification = 3;
+  
+  // Vault scrubbing mode for output storage
+  string sentinel_mode = 4;
+  
+  // Execution timeout override in seconds
+  int32 timeout_seconds = 5;
+  
+  // Intent: The high-level goal (The "Why")
+  string intent = 6;
+
+  // Environment variables
+  map<string, string> environment = 7;
+
+  // Working directory override
+  string working_directory = 8;
+}
+
+message CommandCancelRequested {
+  string execution_id = 1;
+}
+
+message FileEditRequested {
+  string file_path = 1;
+  string operation = 2;
+  string execution_id = 3;
+  string justification = 4;
+  string content = 5;
+  string old_content = 6;
+  string new_content = 7;
+  string insert_content = 8;
+  int32 insert_position = 9;
+  int32 start_line = 10;
+  int32 end_line = 11;
+  string patch_content = 12;
+  bool create_backup = 13;
+  bool create_if_missing = 14;
+}
+
+message FsListRequested {
+  string path = 1;
+  string execution_id = 2;
+  int32 max_depth = 3;
+  int32 max_entries = 4;
+}
+
+// Result payload for g8e.v1.operator.command.completed or failed
+message CommandResult {
+  string execution_id = 1;
+  string status = 2; // e.g. "completed", "failed"
+  string output = 3;
+  string error = 4;
+  string stderr = 5;
+  int32 exit_code = 6;
+  float execution_time_seconds = 7;
+  
+  // Timestamp when execution started
+  int64 start_time_unix_ms = 8;
+  
+  // Timestamp when execution ended
+  int64 end_time_unix_ms = 9;
+}
+
+service OperatorService {
+  // Execute a shell command
+  rpc ExecuteCommand(CommandRequested) returns (CommandResult);
+  
+  // Cancel a running command
+  rpc CancelCommand(CommandCancelRequested) returns (CommandResult);
+  
+  // Edit a file
+  rpc EditFile(FileEditRequested) returns (CommandResult);
+  
+  // List directory contents
+  rpc ListFileSystem(FsListRequested) returns (CommandResult);
+}

@@ -23,6 +23,15 @@ RUN set -ex; \
             make \
             gcc \
             musl-dev \
+            protobuf \
+            protoc \
+            protobuf-dev \
+            python3 \
+            py3-pip \
+            npm \
+            nodejs \
+            gcompat \
+            libstdc++ \
         && break || \
         { echo "apk add failed, retrying in 5s... ($i/3)"; sleep 5; }; \
     done
@@ -45,3 +54,16 @@ COPY --chown=g8e:g8e components/g8eo/tools/ /app/components/g8eo/tools/
 
 RUN cd /app/components/g8eo/tools \
     && go build -mod=vendor -o /home/g8e/go/bin/gotestsum gotest.tools/gotestsum
+
+RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest \
+    && go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+
+USER root
+RUN pip3 install --no-cache-dir grpcio-tools --break-system-packages \
+    && npm install -g grpc-tools \
+    && curl -L https://github.com/grpc/grpc-web/releases/download/1.5.0/protoc-gen-grpc-web-1.5.0-linux-x86_64 -o /usr/local/bin/protoc-gen-grpc-web \
+    && chmod +x /usr/local/bin/protoc-gen-grpc-web \
+    && curl -L https://github.com/protocolbuffers/protobuf-javascript/releases/download/v3.21.4/protobuf-javascript-3.21.4-linux-x86_64.tar.gz -o /tmp/protobuf-javascript.tar.gz \
+    && tar -xvf /tmp/protobuf-javascript.tar.gz -C /usr/local/bin --strip-components=1 bin/protoc-gen-js \
+    && rm /tmp/protobuf-javascript.tar.gz
+USER g8e
