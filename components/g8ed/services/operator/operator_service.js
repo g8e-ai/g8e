@@ -120,7 +120,7 @@ class OperatorService {
         if (!data || data.length === 0) return null;
         const deployed = data.find(op => op.status === OperatorStatus.ACTIVE || op.status === OperatorStatus.BOUND);
         if (deployed) return deployed;
-        return data.find(op => op.status === OperatorStatus.AVAILABLE) || null;
+        return data.find(op => op.status === OperatorStatus.OFFLINE) || null;
     }
 
     async getOperatorWithSessionContext(operatorId) {

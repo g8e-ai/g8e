@@ -39,7 +39,6 @@ def operator_status_to_event_type(status: OperatorStatus) -> EventType:
     """Map an OperatorStatus value to its canonical OPERATOR_STATUS_UPDATED_* EventType."""
     mapping = {
         OperatorStatus.ACTIVE: EventType.OPERATOR_STATUS_UPDATED_ACTIVE,
-        OperatorStatus.AVAILABLE: EventType.OPERATOR_STATUS_UPDATED_AVAILABLE,
         OperatorStatus.UNAVAILABLE: EventType.OPERATOR_STATUS_UPDATED_UNAVAILABLE,
         OperatorStatus.BOUND: EventType.OPERATOR_STATUS_UPDATED_BOUND,
         OperatorStatus.OFFLINE: EventType.OPERATOR_STATUS_UPDATED_OFFLINE,

@@ -90,9 +90,9 @@ class OperatorLifecycleService:
             logger.warning("[OPERATOR-LIFECYCLE] Cannot claim non-existent operator %s", operator_id)
             return False
 
-        if operator.status != OperatorStatus.AVAILABLE:
+        if operator.status != OperatorStatus.OFFLINE:
             logger.warning(
-                "[OPERATOR-LIFECYCLE] Cannot claim operator %s: status is %s (expected AVAILABLE)",
+                "[OPERATOR-LIFECYCLE] Cannot claim operator %s: status is %s (expected OFFLINE)",
                 operator_id,
                 operator.status
             )
@@ -344,7 +344,7 @@ class OperatorLifecycleService:
         # 3. Reset operator slot with the new key
         update_data = {
             "api_key": new_api_key,
-            "status": OperatorStatus.AVAILABLE,
+            "status": OperatorStatus.OFFLINE,
             "updated_at": now(),
             "operator_session_id": None,
             "bound_web_session_id": None,

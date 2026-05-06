@@ -11,74 +11,35 @@ governance architecture for trustless environments
 </div>
 ## What this is
 
-g8e is an agentic AI platform built on mutual adversarial 
-assumption. Every actor — Engine, Operator, User — assumes the 
-others may be compromised and verifies accordingly. No trusted 
-component, no privileged path, no implicit consent.
+g8e is an agentic AI platform built on mutual adversarial assumption. Every actor — Engine, Operator, User — assumes the others may be compromised and verifies accordingly. No trusted component, no privileged path, no implicit consent.
 
-The architecture is a host-authoritative governance substrate: 
-Byzantine consensus with an adversarial co-validator, sovereign 
-execution on customer hardware, and chain-of-custody audit. BFT 
-applied to the agentic stack.
+The architecture is a host-authoritative governance substrate: Byzantine consensus with an adversarial co-validator, sovereign execution on customer hardware, and chain-of-custody audit. BFT applied to the agentic stack.
 
-Self-hosted. Air-gap capable. Apache 2.0. Built for environments 
-where nominal oversight is a failure state and the owner must 
-own the ledger.
+Self-hosted. Air-gap capable. Apache 2.0. Built for environments where nominal oversight is a failure state and the owner must own the ledger.
 
 ### Core Principles
 
-- **Data sovereignty.** The managed host is the authoritative system 
-of record. Every mutation and command output is anchored to a local, 
-git-backed ledger (LFAA) in native SQLite vaults — queryable with 
-standard SQL, mapped to MITRE ATT&CK for SIEM/SOC integration. Raw 
-data never leaves your infrastructure.
+- **Data sovereignty.** The managed host is the authoritative system of record. Every mutation and command output is anchored to a local, git-backed ledger (LFAA) in native SQLite vaults — queryable with standard SQL, mapped to MITRE ATT&CK for SIEM/SOC integration. Raw data never leaves your infrastructure.
 
-- **LLM sovereignty.** A stateless reasoning engine decouples intent 
-from execution. Context is ephemeral per request; providers never 
-retain session state. Swap between Anthropic, Gemini, OpenAI, Ollama, 
-or llama.cpp without losing continuity.
+- **LLM sovereignty.** A stateless reasoning engine decouples intent from execution. Context is ephemeral per request; providers never retain session state. Swap between Anthropic, Gemini, OpenAI, Ollama, or llama.cpp without losing continuity.
 
-- **Operator sovereignty.** The Operator is a protocol for verifiable 
-execution, not just a binary. Sentinel pre-execution analysis (46 
-threat detectors), hardware fingerprint binding, outbound-only mTLS, 
-and FIDO2-gated state changes. No bits move without an explicit, 
-hardware-bound human signature.
+- **Operator sovereignty.** The Operator is a protocol for verifiable execution, not just a binary. Sentinel pre-execution analysis (46 threat detectors), hardware fingerprint binding, outbound-only mTLS, and FIDO2-gated state changes. No bits move without an explicit, hardware-bound human signature.
 
-- **Consensus integrity.** The Tribunal generates candidates under 
-tiered information gating — agents cannot see each other's reasoning 
-or downstream plans. An adversarial co-validator (Nemesis) is scored 
-on a proper scoring rule alongside the honest panel. All eight core 
-agent personas (Axiom, Concord, Variance, Pragma, Nemesis, Sage, 
-Auditor, Warden) stake reputation on every turn; malfeasance or 
-incompetence triggers automated slashing across tiered severity 
-bands. Collusion is structurally unprofitable.
+- **Consensus integrity.** The Tribunal generates candidates under tiered information gating — agents cannot see each other's reasoning or downstream plans. An adversarial co-validator (Nemesis) is scored on a proper scoring rule alongside the honest panel. All eight core agent personas (Axiom, Concord, Variance, Pragma, Nemesis, Sage, Auditor, Warden) stake reputation on every turn; malfeasance or incompetence triggers automated slashing across tiered severity bands. Collusion is structurally unprofitable.
 
 ## Why
 
-The user's time is the only stake the system can't fake. Everything 
-upstream of human approval exists to spend it well.
+The user's time is the only stake the system can't fake. Everything upstream of human approval exists to spend it well.
 
-Two architectures dominate agentic AI in 2026, and both fail at 
-infrastructure scale.
+Two architectures dominate agentic AI in 2026, and both fail at infrastructure scale.
 
-**Autonomous agents** act without verifying contextual intent. They 
-do exactly what they understood the request to mean while missing 
-what the user actually meant. Every catastrophic agent failure has 
-the same shape.
+**Autonomous agents** act without verifying contextual intent. They do exactly what they understood the request to mean while missing what the user actually meant. Every catastrophic agent failure has the same shape.
 
-**Human-in-the-loop systems** retrofit oversight through approval 
-prompts. When verification is costly and approval is cheap, humans 
-rubber-stamp — autonomous behavior with the appearance of control.
+**Human-in-the-loop systems** retrofit oversight through approval prompts. When verification is costly and approval is cheap, humans rubber-stamp — autonomous behavior with the appearance of control.
 
-Both treat the actors in the system as trustworthy by default and 
-bolt verification on top. g8e inverts that: every actor assumes 
-the others may be compromised and verifies accordingly.
+Both treat the actors in the system as trustworthy by default and bolt verification on top. g8e inverts that: every actor assumes the others may be compromised and verifies accordingly.
 
-The machine handles what is machine-checkable — consistency, 
-grounding, falsifiability. The human handles what is only 
-human-checkable — intent fidelity, contextual stakes, acceptance 
-of consequences. Both signatures are required for every state 
-change. Neither is trusted on its face.
+The machine handles what is machine-checkable — consistency, grounding, falsifiability. The human handles what is only human-checkable — intent fidelity, contextual stakes, acceptance of consequences. Both signatures are required for every state change. Neither is trusted on its face.
 
 Full treatment: [position paper](docs/architecture/position_paper.md).
 

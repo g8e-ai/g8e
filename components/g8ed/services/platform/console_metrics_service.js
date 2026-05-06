@@ -156,7 +156,7 @@ class ConsoleMetricsService {
         const operators = await this._cache_aside.queryDocuments(Collections.OPERATORS, [], null, true);
 
         const statusDistribution = {
-            [OperatorStatus.AVAILABLE]: 0,
+            [OperatorStatus.OFFLINE]: 0,
             [OperatorStatus.ACTIVE]: 0,
             [OperatorStatus.BOUND]: 0,
             [OperatorStatus.OFFLINE]: 0,
@@ -222,7 +222,7 @@ class ConsoleMetricsService {
             typeDistribution,
             health: {
                 healthy: healthyCount,
-                unhealthy: operators.length - healthyCount - statusDistribution[OperatorStatus.AVAILABLE] - statusDistribution[OperatorStatus.TERMINATED],
+                unhealthy: operators.length - healthyCount - statusDistribution[OperatorStatus.OFFLINE] - statusDistribution[OperatorStatus.TERMINATED],
                 avgLatencyMs: latencyCount > 0 ? Math.round(totalLatency / latencyCount) : 0,
                 avgCpuPercent: metricsCount > 0 ? Math.round(avgCpu / metricsCount) : 0,
                 avgMemoryPercent: metricsCount > 0 ? Math.round(avgMemory / metricsCount) : 0

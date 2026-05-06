@@ -67,7 +67,7 @@ class TestOperatorLifecycleService:
             {
                 "id": operator_id,
                 "user_id": "user-test",
-                "status": OperatorStatus.AVAILABLE,
+                "status": OperatorStatus.OFFLINE,
                 "first_deployed": None,
                 "history_trail": [],
             },
@@ -243,7 +243,7 @@ class TestOperatorLifecycleService:
         mock_cache.query_documents.return_value = [{
             "id": operator_id,
             "user_id": user_id,
-            "status": OperatorStatus.AVAILABLE,
+            "status": OperatorStatus.OFFLINE,
             "cloud_subtype": CloudSubtype.G8E_POD,
             "api_key": api_key,
             "organization_id": "org-123",

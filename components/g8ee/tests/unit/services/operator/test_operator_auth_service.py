@@ -88,7 +88,7 @@ class TestOperatorAuthService:
         operator_doc = MagicMock(spec=OperatorDocument)
         operator_doc.id = operator_id
         operator_doc.user_id = user_id
-        operator_doc.status = OperatorStatus.AVAILABLE
+        operator_doc.status = OperatorStatus.OFFLINE
         operator_doc.operator_type = "system"
         operator_doc.bound_web_session_id = "web-session"
         mock_operator_data_service.get_operator.return_value = operator_doc
@@ -171,7 +171,7 @@ class TestOperatorAuthService:
         operator_doc.id = operator_id
         operator_doc.user_id = user_id
         operator_doc.api_key = api_key
-        operator_doc.status = OperatorStatus.AVAILABLE
+        operator_doc.status = OperatorStatus.OFFLINE
         operator_doc.bound_web_session_id = "web-123"
         mock_operator_data_service.get_operator.return_value = operator_doc
 
@@ -209,7 +209,7 @@ class TestOperatorAuthService:
         # Link has capacity
         mock_cache.kv.get_json.return_value = {"max_uses": 5, "uses": 0}
 
-        # No existing AVAILABLE operators
+        # No existing OFFLINE operators
         mock_operator_data_service.query_operators.return_value = []
 
         # KV counter returns incremented value (atomic incr initializes to 0 then returns 1)

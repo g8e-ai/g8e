@@ -108,7 +108,7 @@ describe('OperatorSlotService', () => {
             const existingOp = {
                 id: 'existing-op-1',
                 user_id: userId,
-                status: OperatorStatus.AVAILABLE,
+                status: OperatorStatus.OFFLINE,
                 api_key: 'key-existing'
             };
 
@@ -129,7 +129,7 @@ describe('OperatorSlotService', () => {
             const existingOp = {
                 id: 'existing-op-1',
                 user_id: userId,
-                status: OperatorStatus.AVAILABLE,
+                status: OperatorStatus.OFFLINE,
                 api_key: 'key-existing'
             };
             const newOpId = 'new-op-2';
@@ -151,7 +151,7 @@ describe('OperatorSlotService', () => {
             const organizationId = 'org-123';
             const liveOps = Array.from({ length: DEFAULT_OPERATOR_SLOTS }, (_, i) => ({
                 id: `op-${i}`,
-                status: OperatorStatus.AVAILABLE
+                status: OperatorStatus.OFFLINE
             }));
             const terminatedOp = {
                 id: 'op-terminated',
@@ -169,7 +169,7 @@ describe('OperatorSlotService', () => {
         it('should not create slots if already at or above default count', async () => {
             const existing = Array.from({ length: DEFAULT_OPERATOR_SLOTS }, (_, i) => ({
                 id: `op-${i}`,
-                status: OperatorStatus.AVAILABLE
+                status: OperatorStatus.OFFLINE
             }));
             mocks.operatorDataService.queryOperatorsFresh.mockResolvedValueOnce(existing);
 
@@ -198,7 +198,7 @@ describe('OperatorSlotService', () => {
         it('should not assign G8E_POD if an existing live operator already has is_g8ep', async () => {
             const existingG8eNode = {
                 id: 'op-drop',
-                status: OperatorStatus.AVAILABLE,
+                status: OperatorStatus.OFFLINE,
                 is_g8ep: true,
             };
             mocks.operatorDataService.queryOperatorsFresh.mockResolvedValueOnce([existingG8eNode]);
@@ -237,7 +237,7 @@ describe('OperatorSlotService', () => {
             const existingOpWithoutKey = {
                 id: 'existing-op-1',
                 user_id: userId,
-                status: OperatorStatus.AVAILABLE,
+                status: OperatorStatus.OFFLINE,
                 api_key: null
             };
 
@@ -265,7 +265,7 @@ describe('OperatorSlotService', () => {
             const existingOpWithKey = {
                 id: 'existing-op-1',
                 user_id: userId,
-                status: OperatorStatus.AVAILABLE,
+                status: OperatorStatus.OFFLINE,
                 api_key: 'existing-key'
             };
 

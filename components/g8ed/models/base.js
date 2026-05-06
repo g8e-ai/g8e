@@ -83,7 +83,7 @@ export const F = Object.freeze({
 //   static fields = {
 //       operator_id:  { type: F.string,  required: true },
 //       name:         { type: F.string,  required: true, minLength: 1 },
-//       status:       { type: F.string,  default: OperatorStatus.AVAILABLE },
+//       status:       { type: F.string,  default: OperatorStatus.OFFLINE },
 //       sentinel_mode:{ type: F.boolean, default: true },
 //       limit:        { type: F.number,  default: 20, min: 1, max: 100 },
 //       created_at:   { type: F.date,    default: () => now() },

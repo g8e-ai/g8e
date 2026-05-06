@@ -46,7 +46,7 @@ class TestOperatorSessionService:
             "user_data": {"name": "Test User"},
             "api_key": "g8e_test_key",
             "operator_id": "op-789",
-            "operator_status": "AVAILABLE",
+            "operator_status": "offline",
             "metadata": {"version": "1.0.0"}
         }
         request_context = {

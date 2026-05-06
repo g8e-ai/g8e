@@ -352,7 +352,7 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
             const testData = {
                 operators: [
                     { operator_id: 'op_1', status: OperatorStatus.BOUND, name: 'bound-op' },
-                    { operator_id: 'op_2', status: OperatorStatus.AVAILABLE, name: 'available-op' },
+                    { operator_id: 'op_2', status: OperatorStatus.OFFLINE, name: 'available-op' },
                 ],
             };
             
@@ -384,7 +384,7 @@ describe('TerminalOperatorMixin [UNIT - jsdom]', () => {
             
             const testData = {
                 operators: [
-                    { operator_id: 'op_1', status: OperatorStatus.AVAILABLE },
+                    { operator_id: 'op_1', status: OperatorStatus.OFFLINE },
                     { operator_id: 'op_2', status: OperatorStatus.ACTIVE },
                 ],
             };

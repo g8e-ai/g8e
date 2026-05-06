@@ -346,9 +346,9 @@ export const OperatorListMixin = {
             const operatorTypeClass = 'binary-operator';
             const operatorTypeTitle = 'Operator';
 
-            const isAvailable = operator.status === OperatorStatus.AVAILABLE;
-            const hostnameDisplay = isAvailable ? 'Available' : hostnameFull;
-            const hostnameClass = isAvailable ? 'text-accent-green' : '';
+            const isOffline = operator.status === OperatorStatus.OFFLINE;
+            const hostnameDisplay = isOffline ? 'Offline' : hostnameFull;
+            const hostnameClass = isOffline ? 'text-accent-red' : '';
 
             const template = templateLoader.cache.get('operator-item');
             item.innerHTML = templateLoader.replace(template, {

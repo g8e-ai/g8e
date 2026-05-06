@@ -33,7 +33,6 @@ export const DEFAULT_SLOT_COST = 1;
  * Canonical values from shared/constants/status.json g8e.status.
  */
 export const OperatorStatus = Object.freeze({
-    AVAILABLE:   _STATUS['g8e.status']['available'],
     UNAVAILABLE: _STATUS['g8e.status']['unavailable'],
     OFFLINE:     _STATUS['g8e.status']['offline'],
     BOUND:       _STATUS['g8e.status']['bound'],
@@ -124,7 +123,6 @@ export const CloudOperatorSubtype = Object.freeze({
 export function operatorStatusToEventType(status) {
     switch (status) {
         case OperatorStatus.ACTIVE:      return EventType.OPERATOR_STATUS_UPDATED_ACTIVE;
-        case OperatorStatus.AVAILABLE:   return EventType.OPERATOR_STATUS_UPDATED_AVAILABLE;
         case OperatorStatus.UNAVAILABLE: return EventType.OPERATOR_STATUS_UPDATED_UNAVAILABLE;
         case OperatorStatus.BOUND:       return EventType.OPERATOR_STATUS_UPDATED_BOUND;
         case OperatorStatus.OFFLINE:     return EventType.OPERATOR_STATUS_UPDATED_OFFLINE;

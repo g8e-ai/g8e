@@ -54,7 +54,7 @@ const CHANNELS = require(path.join(sharedDir, 'channels.json'));
 describe('g8ed Shared Definitions Contract', () => {
 
     describe('OperatorStatus matches shared/constants/status.json', () => {
-        it('AVAILABLE', () => expect(OperatorStatus.AVAILABLE).toBe(STATUS['g8e.status']['available']));
+        it('AVAILABLE', () => expect(OperatorStatus.OFFLINE).toBe(STATUS['g8e.status']['available']));
         it('UNAVAILABLE', () => expect(OperatorStatus.UNAVAILABLE).toBe(STATUS['g8e.status']['unavailable']));
         it('OFFLINE', () => expect(OperatorStatus.OFFLINE).toBe(STATUS['g8e.status']['offline']));
         it('BOUND', () => expect(OperatorStatus.BOUND).toBe(STATUS['g8e.status']['bound']));

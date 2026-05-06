@@ -52,7 +52,6 @@ class OperatorHistoryEventType(StrEnum):
     REGISTERED = _STATUS["history.event.type"]["registered"]
 
 class OperatorStatus(StrEnum):
-    AVAILABLE = _STATUS["g8e.status"]["available"]
     UNAVAILABLE = _STATUS["g8e.status"]["unavailable"]
     OFFLINE = _STATUS["g8e.status"]["offline"]
     BOUND = _STATUS["g8e.status"]["bound"]

@@ -133,9 +133,9 @@ class OperatorAuthService:
                 if operator:
                     operator_id = operator.id
 
-            # 1b. If no fingerprint match, try to find an existing AVAILABLE slot
+            # 1b. If no fingerprint match, try to find an existing OFFLINE slot
             if not operator:
-                available_slots = [op for op in all_user_operators if op.status == OperatorStatus.AVAILABLE]
+                available_slots = [op for op in all_user_operators if op.status == OperatorStatus.OFFLINE]
                 if available_slots:
                     # Pick a random slot to reduce collisions under high concurrency
                     operator = random.choice(available_slots)
@@ -162,7 +162,7 @@ class OperatorAuthService:
                     name=f"operator-{slot_number}",
                     slot_number=slot_number,
                     operator_type=operator_type,
-                    status=OperatorStatus.AVAILABLE,
+                    status=OperatorStatus.OFFLINE,
                     api_key=api_key,
                     created_at=now(),
                     updated_at=now(),

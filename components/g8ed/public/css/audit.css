@@ -6,6 +6,9 @@
 /* Page Layout */
 .audit-body {
     background: var(--bg-primary);
+    overflow-y: auto !important; /* Allow page scrolling */
+    height: auto !important; /* Allow page to expand */
+    min-height: 100dvh;
 }
 
 /* Main container - handles scrolling */

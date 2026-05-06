@@ -198,7 +198,7 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
         const raw = {
             id: 'op-123',
             user_id: 'user-456',
-            status: OperatorStatus.AVAILABLE,
+            status: OperatorStatus.OFFLINE,
             system_fingerprint: null,
             latest_heartbeat_snapshot: {
                 system_fingerprint: 'fp-abc123',
@@ -214,7 +214,7 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
         const doc = new OperatorDocument({
             id: 'op-123',
             user_id: 'user-456',
-            status: OperatorStatus.AVAILABLE,
+            status: OperatorStatus.OFFLINE,
             operator_cert: 'cert-data',
             api_key: 'secret-key',
             operator_api_key: 'operator-secret-key',
@@ -234,7 +234,7 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
         const doc = new OperatorDocument({
             id: 'op-123',
             user_id: 'user-456',
-            status: OperatorStatus.AVAILABLE,
+            status: OperatorStatus.OFFLINE,
             operator_cert: 'cert-data',
             operator_cert_key: 'key-data',
             operator_cert_serial: 'serial-123',
@@ -258,7 +258,7 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
         const doc = new OperatorDocument({
             id: 'op-123',
             user_id: 'user-456',
-            status: OperatorStatus.AVAILABLE,
+            status: OperatorStatus.OFFLINE,
             operator_cert: 'cert-data',
             api_key: 'secret-key',
             operator_api_key: 'operator-secret-key',
@@ -278,7 +278,7 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
         const doc = new OperatorDocument({
             id: 'op-123',
             user_id: 'user-456',
-            status: OperatorStatus.AVAILABLE,
+            status: OperatorStatus.OFFLINE,
             api_key: null,
         });
         const client = doc.forClient();
@@ -294,14 +294,14 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
         const raw = {
             id: 'op-123',
             user_id: 'user-456',
-            status: OperatorStatus.AVAILABLE,
+            status: OperatorStatus.OFFLINE,
         };
         const doc = OperatorDocument.fromDB(raw);
         expect(doc).toBeInstanceOf(OperatorDocument);
         expect(doc.id).toBe('op-123');
     });
 
-    it('forCreate() creates operator with AVAILABLE status', () => {
+    it('forCreate() creates operator with OFFLINE status', () => {
         const doc = OperatorDocument.forCreate({
             id: 'op-123',
             user_id: 'user-456',
@@ -317,7 +317,7 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
         });
         expect(doc.id).toBe('op-123');
         expect(doc.user_id).toBe('user-456');
-        expect(doc.status).toBe(OperatorStatus.AVAILABLE);
+        expect(doc.status).toBe(OperatorStatus.OFFLINE);
         expect(doc.component).toBe(SourceComponent.G8EO);
         expect(doc.name).toBe('Test Operator');
         expect(doc.operator_type).toBe(OperatorType.CLOUD);
@@ -341,7 +341,7 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
         expect(doc.is_slot).toBe(true);
         expect(doc.claimed).toBe(false);
         expect(doc.slot_number).toBe(1);
-        expect(doc.status).toBe(OperatorStatus.AVAILABLE);
+        expect(doc.status).toBe(OperatorStatus.OFFLINE);
     });
 
 
@@ -411,14 +411,14 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
             api_key: 'key-abc',
         });
         expect(doc.id).toBe('op-123');
-        expect(doc.status).toBe(OperatorStatus.AVAILABLE);
+        expect(doc.status).toBe(OperatorStatus.OFFLINE);
     });
 
     it('accepts valid slot_number as number', () => {
         const doc = OperatorDocument.parse({
             id: 'op-123',
             user_id: 'user-456',
-            status: OperatorStatus.AVAILABLE,
+            status: OperatorStatus.OFFLINE,
             slot_number: 1,
         });
         expect(doc.slot_number).toBe(1);
@@ -428,7 +428,7 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
         expect(() => OperatorDocument.parse({
             id: 'op-123',
             user_id: 'user-456',
-            status: OperatorStatus.AVAILABLE,
+            status: OperatorStatus.OFFLINE,
             slot_number: '1',
         })).toThrow('slot_number must be a number');
     });
@@ -437,7 +437,7 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
         const doc = OperatorDocument.parse({
             id: 'op-123',
             user_id: 'user-456',
-            status: OperatorStatus.AVAILABLE,
+            status: OperatorStatus.OFFLINE,
             fingerprint_details: { cpu: 'x86_64' },
         });
         expect(doc.fingerprint_details).toEqual({ cpu: 'x86_64' });
@@ -447,7 +447,7 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
         const doc = OperatorDocument.parse({
             id: 'op-123',
             user_id: 'user-456',
-            status: OperatorStatus.AVAILABLE,
+            status: OperatorStatus.OFFLINE,
             fingerprint_details: 'invalid',
         });
         expect(doc.fingerprint_details).toEqual({});

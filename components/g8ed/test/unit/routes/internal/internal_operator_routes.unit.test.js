@@ -161,7 +161,7 @@ describe('Internal Operator Routes [UNIT]', () => {
 
             mockOperatorService.resetOperator.mockResolvedValue({
                 success: true,
-                operator: { status: OperatorStatus.AVAILABLE }
+                operator: { status: OperatorStatus.OFFLINE }
             });
 
             await getRoute()(req, res);
@@ -169,7 +169,7 @@ describe('Internal Operator Routes [UNIT]', () => {
             expect(mockOperatorService.resetOperator).toHaveBeenCalledWith('op_123');
             expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
                 success: true,
-                status: OperatorStatus.AVAILABLE
+                status: OperatorStatus.OFFLINE
             }));
         });
     });
@@ -232,7 +232,7 @@ describe('Internal Operator Routes [UNIT]', () => {
             mockOperatorService.getUserOperators.mockResolvedValue(
                 new OperatorListUpdatedEvent({
                     type: 'operator.list.updated',
-                    operators: [new OperatorSlot({ operator_id: 'op_1', status: OperatorStatus.AVAILABLE })],
+                    operators: [new OperatorSlot({ operator_id: 'op_1', status: OperatorStatus.OFFLINE })],
                     total_count: 1,
                     active_count: 1
                 })

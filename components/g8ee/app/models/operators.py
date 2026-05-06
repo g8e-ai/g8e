@@ -126,7 +126,7 @@ class OperatorDocument(G8eIdentifiableModel):
     first_deployed: UTCDatetime | None = Field(default=None, description="When the operator was first deployed")
     name: str | None = Field(default=None, description="Human-readable operator name")
     organization_id: str | None = Field(default=None, description="Organization ID")
-    status: OperatorStatus = Field(default=OperatorStatus.AVAILABLE, description="Current Operator status")
+    status: OperatorStatus = Field(default=OperatorStatus.OFFLINE, description="Current Operator status")
     bound_web_session_id: str | None = Field(default=None, description="Bound web session ID")
     operator_session_id: str | None = Field(default=None, description="Current Operator session ID")
     claimed: bool = Field(default=False, description="True when the slot has been claimed by a running g8eo process")

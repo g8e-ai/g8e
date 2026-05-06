@@ -81,7 +81,7 @@ describe('ConsoleMetricsService [UNIT]', () => {
             const operators = [
                 { status: OperatorStatus.ACTIVE, latest_heartbeat_snapshot: { performance: { network_latency: 10, cpu_percent: 5, memory_percent: 20 } } },
                 { status: OperatorStatus.BOUND, latest_heartbeat_snapshot: { performance: { network_latency: 20, cpu_percent: 15, memory_percent: 30 } } },
-                { status: OperatorStatus.AVAILABLE },
+                { status: OperatorStatus.OFFLINE },
                 { status: OperatorStatus.OFFLINE }
             ];
             cacheAside.queryDocuments.mockResolvedValue(operators);
