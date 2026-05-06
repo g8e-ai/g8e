@@ -1,5 +1,8 @@
 # **AI-Powered, Human-Driven Infrastructure**
 
+Last Updated: 5-6-2026
+Version: v.0.2.0
+
 **A Byzantine Fault Tolerant Architecture for Agentic Automation**
 
 *Danny Barbour · [github.com/g8e-ai/g8e](https://github.com/g8e-ai/g8e)*

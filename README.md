@@ -47,10 +47,11 @@ hardware-bound human signature.
 - **Consensus integrity.** The Tribunal generates candidates under 
 tiered information gating — agents cannot see each other's reasoning 
 or downstream plans. An adversarial co-validator (Nemesis) is scored 
-on a proper scoring rule alongside the honest panel: endogenous 
-red-teaming, not external audit. Flaws caught and confirmed by the 
-Auditor compound the adversary's stake; collusion is structurally 
-unprofitable.
+on a proper scoring rule alongside the honest panel. All eight core 
+agent personas (Axiom, Concord, Variance, Pragma, Nemesis, Sage, 
+Auditor, Warden) stake reputation on every turn; malfeasance or 
+incompetence triggers automated slashing across tiered severity 
+bands. Collusion is structurally unprofitable.
 
 ## Why
 

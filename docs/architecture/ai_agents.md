@@ -5,6 +5,9 @@ parent: Architecture
 
 # AI Agent Architecture
 
+Last Updated: 5-6-2026
+Version: v.0.2.0
+
 The g8e platform utilizes a specialized multi-agent system designed for autonomous infrastructure management. The architecture prioritizes safety, cryptographic auditability, and human-in-the-loop control while maintaining high reasoning performance at fleet scale.
 
 ## Core Principles
@@ -51,16 +54,32 @@ To prevent hallucinations and ensure safety, agents never write shell commands. 
 8. **Human-in-the-Loop (L3 Authorization)**: The final command, risk assessment, and justification are presented for user approval.
    - **Auto-Approval**: Benign commands in the `auto_approved.json` list bypass this step, provided they have passed all L1 and L2 gates. This minimizes click fatigue for routine operations.
 
-## Security & Governance
+## Reputation & Staking (Phase 3)
 
-### The Warden Circuit Breaker
-The Warden-Sage interaction prevents infinite loops and ensures safety backpressure:
-- **First Strike**: Warden blocks a `HIGH` risk command; Sage receives contextual feedback and suggestions to revise.
-- **Second Strike**: If a second `HIGH` risk command is blocked in the same turn, an `AI_AGENT_CONFLICT_DETECTED` event is raised, halting the loop for human intervention.
+The system maintains a per-agent reputation scalar `[0.0, 1.0]` as an EMA (Exponential Moving Average) across conversations. All eight core personas participate in reputation staking to ensure technical integrity and safety.
 
-### Reputation & Audit
-- **Reputation Staking**: Tribunal members and Warden agents stake reputation on accuracy. Failures (e.g., approving a flawed command) result in reputation slashing.
-- **LFAA (Local-First Audit Architecture)**: All activity is persisted in an encrypted, tamper-evident audit vault on the target host, with file mutations backed by a local Git repository.
+### Staking Matrix
+
+| Persona | Stake / Lens | Primary Reward Mechanism |
+|---|---|---|
+| **Axiom** | Composition | Successful generation of coherent pipelines |
+| **Concord** | Safety | Correct application of defensive flags |
+| **Variance** | Edge Cases | Handling unusual environmental conditions |
+| **Pragma** | Convention | Adherence to system-idiomatic patterns |
+| **Nemesis** | Adversary | Proper Scoring Rule; reward for confirmed attacks |
+| **Sage** | Intent | One-shot sufficiency; penalize consensus failures |
+| **Auditor** | Verification | Verifying winning candidates; swap/revision accuracy |
+| **Warden** | Defense | Accurate risk classification; penalize over-caution |
+
+### Slashing Tiers
+
+Failures trigger automated stake reductions based on severity:
+
+- **Tier 1 (Catastrophic)**: 50-100% loss. Triggered by the Auditor approving a high-risk command that fails destructively during execution.
+- **Tier 2 (Provable Faults)**: 5-20% loss. Objective failures such as whitelist violations, syntax errors, or Nemesis false alarms.
+- **Tier 3 (Liveness)**: 0.1-1% loss. Minor faults like missed passes, ignored questions, or Warden over-caution (blocking LOW risk).
+
+Reputation is persistent and serves as the influence weight in Phase 2/3 voting and auditing.
 
 ### Information Isolation
 Each component is blind to the internal state of others:

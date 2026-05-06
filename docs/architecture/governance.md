@@ -1,5 +1,8 @@
 # Governance & Mechanism Design
 
+Last Updated: 5-6-2026
+Version: v.0.2.0
+
 Agentic AI safety in g8e is framed as a **consensus problem**: given a population of LLM-instantiated personas with different lenses, a calibrated adversary among them, and a human user with finite attention, how do we converge on an executable command that is safe, audited, and minimally costly?
 
 The mechanism operates through a strictly ordered 3-layer validation hierarchy where each layer provides a unique type of safety guarantee.
@@ -57,15 +60,26 @@ The final layer involves human authorization, governed by the **Auditor-User Par
 
 ## Reputation & Stakes
 
-Agent performance is tracked via an EMA scalar `[0.0, 1.0]` in the reputation state.
+Agent performance is tracked via an EMA scalar `[0.0, 1.0]` in the `reputation_state` collection. This scalar serves as the agent's influence weight in the governance mechanism. All eight core personas participate in staking to provide mutual backpressure and guarantee safety.
+
+### The Staking Matrix
+
+| Player | Staked Lens | Slashing Triggers |
+|---|---|---|
+| **Axiom** | Composition | Missed pass, Whitelist violation |
+| **Concord** | Safety | Missed pass, Whitelist violation |
+| **Variance** | Edge Cases | Missed pass, Whitelist violation |
+| **Pragma** | Convention | Missed pass, Whitelist violation |
+| **Nemesis** | Adversary | False alarm, Abstaining on real flaw |
+| **Sage** | Intent | Consensus failure, Heavy Auditor revision |
+| **Auditor** | Verification | Destructive approval failure, Auditor error |
+| **Warden** | Defense | Missed risk, Over-caution (blocking LOW) |
 
 ### Slashing Tiers
-*   **Tier 1 (Catastrophic)**: Destructive failures or high-risk errors caught after execution. (50-100% loss).
-*   **Tier 2 (Provable)**: Objective failures caught by Auditor or L1 (e.g., syntax errors, whitelist violations). (5-20% loss).
-*   **Tier 3 (Liveness)**: Over-caution (blocking `LOW` risk) or ignoring valid requests. (0.1-1% loss).
 
-### Nemesis Calibration
-The **Nemesis** is a "good adversary." It earns reputation for sneaking a flawed command past the Auditor, but loses reputation for "false alarms" or being identifiable by style. This ensures the platform's immune system remains sharp.
+- **Tier 1 (Catastrophic)**: 50-100% loss. destructive outcomes caught after execution (e.g. Auditor approved a HIGH-risk command that then failed).
+- **Tier 2 (Provable Faults)**: 5-20% loss. Objective verifier/auditor failures (e.g. syntax errors, Nemesis false alarms).
+- **Tier 3 (Liveness)**: 0.1-1% loss. Missed passes, ignored questions, or Warden over-caution.
 
 ## Core Safety Invariants
 

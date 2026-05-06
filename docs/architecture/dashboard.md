@@ -5,6 +5,9 @@ parent: Architecture
 
 # Terminal
 
+Last Updated: 5-6-2026
+Version: v.0.2.0
+
 The terminal is the primary UI surface in g8ed, served at `/chat`. It provides a unified interface for AI interaction, Operator management, command execution, and system diagnostics. All terminal components communicate exclusively through the EventBus — no component holds a direct reference to another, enabling loose coupling and testability.
 
 ## Architecture Principles

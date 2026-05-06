@@ -4,6 +4,9 @@ title: Developer
 
 # g8e Developer Guide
 
+Last Updated: 5-6-2026
+Version: v.0.2.0
+
 This document defines the deterministic execution constraints for all code generated for the g8e platform. The platform is an open-source, self-hosted AI governance layer designed for offline operation. The architecture is built around the Operator with Local Function Access & Audit (LFAA), which serves as the backend for the entire platform.
 
 I. Core Architectural Invariants

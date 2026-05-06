@@ -6,6 +6,9 @@ permalink: /docs/
 
 # g8e Documentation Index
 
+Last Updated: 5-6-2026
+Version: v.0.2.0
+
 g8e is a Zero-Trust AI platform for secure infrastructure operations. This index maps high-level concepts to their technical implementations.
 
 ## Platform Pillars

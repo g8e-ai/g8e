@@ -5,6 +5,9 @@ parent: Architecture
 
 # Agent Persona System
 
+Last Updated: 5-6-2026
+Version: v.0.2.0
+
 ## Overview
 
 The g8e platform utilizes a centralized agent persona system to define AI identities, roles, and behavioral constraints. This system ensures consistency across Python (`g8ee`) and Node.js (`g8ed`) components while optimizing for prefix-cache performance through a standardized XML-tagged prompt structure.

@@ -4,6 +4,9 @@ title: g8e CLI
 
 # g8e Platform CLI
 
+Last Updated: 5-6-2026
+Version: v.0.2.0
+
 The `g8e` command is the unified entry point for the g8e AI governance platform. It orchestrates the full lifecycle of a self-hosted, human-in-the-loop AI operations system.
 
 ## Core Principles

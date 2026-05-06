@@ -5,6 +5,9 @@ parent: Architecture
 
 # Thinking Levels
 
+Last Updated: 5-6-2026
+Version: v.0.2.0
+
 g8ee unifies extended reasoning across four LLM providers (Anthropic, Gemini, OpenAI, Ollama) behind a single abstraction. Each provider exposes "thinking" differently—Gemini uses `thinking_config`, OpenAI uses `reasoning_effort`, Anthropic uses token budgets, and Ollama uses a boolean flag. Rather than letting this provider-specific vocabulary leak into the agent layer, g8e defines a canonical vocabulary and a per-provider translation layer.
 
 ## Why This Abstraction Exists

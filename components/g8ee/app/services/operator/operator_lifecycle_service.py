@@ -280,13 +280,13 @@ class OperatorLifecycleService:
         """Starts the g8ep operator process via XML-RPC.
 
         Authority: g8ee (process owner for g8ep operator).
+        
+        Note: The API key is already written to platform_settings during slot creation
+        (create_operator_slot → issue_operator_key), so we only need to start the process.
         """
         logger.info("[OPERATOR-LIFECYCLE] Starting g8ep operator via XML-RPC")
 
-        # 1. Persist API key to platform_settings (authority: g8ee)
-        await self.settings_service.update_g8ep_operator_api_key(api_key)
-
-        # 2. Start supervised process
+        # Start supervised process
         await self.supervisor_service.start_process("operator", wait=False)
 
         logger.info("[OPERATOR-LIFECYCLE] g8ep operator service signaled")

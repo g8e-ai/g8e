@@ -5,6 +5,9 @@ has_children: true
 
 # Components
 
+Last Updated: 5-6-2026
+Version: v.0.2.0
+
 Technical reference for each platform component.
 
 - [**g8ed**](g8ed.md) — Dashboard & Gateway

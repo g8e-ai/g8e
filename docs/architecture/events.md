@@ -5,6 +5,9 @@ parent: Architecture
 
 # g8e Event Protocol Specification
 
+Last Updated: 5-6-2026
+Version: v.0.2.0
+
 The g8e platform uses a unified, hierarchical event protocol for all inter-component communication. This system ensures that AI agents, operators, and user interfaces remain synchronized in real-time across a distributed environment.
 
 ---

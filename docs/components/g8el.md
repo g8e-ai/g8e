@@ -5,6 +5,9 @@ parent: Components
 
 # g8el
 
+Last Updated: 5-6-2026
+Version: v.0.2.0
+
 g8el is the llama.cpp inference server component for g8e. It provides local LLM inference capabilities using the llama.cpp library, running as a Docker service that exposes an OpenAI-compatible API.
 
 ---

@@ -5,6 +5,9 @@ parent: Components
 
 # g8ed — g8e Terminal Backend
 
+Last Updated: 5-6-2026
+Version: v.0.2.0
+
 ## Overview
 
 g8ed is the primary entry point, authentication gateway, and orchestration backend for the g8e platform. It serves the web UI, manages secure sessions, relays AI interactions to g8ee, and controls the operator lifecycle.

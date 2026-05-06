@@ -5,6 +5,9 @@ parent: Architecture
 
 # Docker Architecture
 
+Last Updated: 5-6-2026
+Version: v.0.2.0
+
 g8e is a multi-service platform orchestrated by Docker Compose. The architecture focuses on extreme security, isolation, and developer velocity through per-component environments and hardened runtimes.
 
 ## Core Design Principles

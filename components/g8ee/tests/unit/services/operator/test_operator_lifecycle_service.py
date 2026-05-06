@@ -257,9 +257,9 @@ class TestOperatorLifecycleService:
 
         await lifecycle_service.activate_g8ep_operator(user_id)
 
-        # Verify API key persistence via settings service
-        mock_settings_service.update_g8ep_operator_api_key.assert_called_once_with(api_key)
-        # Verify supervisor call
+        # API key is written during slot creation (create_operator_slot → issue_operator_key),
+        # not during launch. Verify supervisor call only.
+        mock_settings_service.update_g8ep_operator_api_key.assert_not_called()
         mock_supervisor_service.start_process.assert_called_once_with("operator", wait=False)
 
     async def test_activate_g8ep_operator_already_active(self, lifecycle_service, mock_cache, mock_supervisor_service):

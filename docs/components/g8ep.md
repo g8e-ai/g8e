@@ -5,6 +5,9 @@ parent: Components
 
 # g8ep
 
+Last Updated: 5-6-2026
+Version: v.0.2.0
+
 g8ep is the always-on sidecar container for operator management, platform scripts, and security tooling.
 
 It runs as a managed service alongside `g8es`, `g8ee`, and `g8ed` in `docker-compose.yml`. Test running is handled by dedicated per-component test-runner containers; g8ep focuses on operator process supervision, Docker CLI access, network troubleshooting tools, and security scanning.
@@ -259,9 +262,15 @@ Source code changes never require a rebuild. Rebuild only when the image definit
 
 ```bash
 # Rebuild g8ep image
+
+Last Updated: 5-6-2026
+Version: v.0.2.0
 ./g8e platform rebuild g8ep
 
 # Clean g8ep image (full removal)
+
+Last Updated: 5-6-2026
+Version: v.0.2.0
 ./g8e platform clean --clean-g8ep
 ```
 
@@ -294,12 +303,21 @@ The binary is loaded into memory once, then fanned out across goroutines. Each g
 
 ```bash
 # Build operator binaries first
+
+Last Updated: 5-6-2026
+Version: v.0.2.0
 ./g8e operator build
 
 # Stream to hosts
+
+Last Updated: 5-6-2026
+Version: v.0.2.0
 ./g8e operator stream host1 host2 --endpoint 10.0.0.1 --device-token dlk_xxx
 
 # Stream from file
+
+Last Updated: 5-6-2026
+Version: v.0.2.0
 ./g8e operator stream --hosts /etc/g8e/fleet.txt --concurrency 100 --endpoint 10.0.0.1
 ```
 
