@@ -66,6 +66,7 @@ from app.services.ai.agent_turn import (
     process_provider_turn,
     should_retry_error,
 )
+from app.utils.interrogation import extract_interrogation_questions
 from app.services.ai.grounding.grounding_service import GroundingService
 from app.services.ai.tool_service import AIToolService
 from app.services.infra.g8ed_event_service import EventService
@@ -326,8 +327,10 @@ class g8eEngine:
                 )
 
                 turn_result_out: list[TurnResult] = []
+                # Buffer chunks to allow interrogation gate to filter TOOL_CALL chunks
+                chunks_buffer: list[StreamChunkFromModel] = []
                 async for chunk in process_provider_turn(stream_response, model_name, turn_result_out):
-                    yield chunk
+                    chunks_buffer.append(chunk)
 
                 turn_result = turn_result_out[0]
 
@@ -336,6 +339,43 @@ class g8eEngine:
                 total_tokens += turn_result.total_tokens
                 if turn_result.finish_reason:
                     final_finish_reason = turn_result.finish_reason
+
+                # Interrogation gate: if the model response contains clarifying questions,
+                # suppress tool execution and break the loop so user answers drive the next turn
+                interrogation_detected = False
+                
+                # Check for interrogation in both model_response_parts and buffered text chunks
+                response_text = ""
+                if turn_result.model_response_parts:
+                    consolidated = consolidate_model_parts(
+                        turn_result.model_response_parts, model_name=model_name
+                    )
+                    response_text = "".join(
+                        part.text for part in consolidated if hasattr(part, "text") and part.text
+                    )
+                
+                # Also extract text from buffered chunks for more reliable detection
+                for chunk in chunks_buffer:
+                    if chunk.type == StreamChunkFromModelType.TEXT and chunk.data and hasattr(chunk.data, 'text'):
+                        response_text += chunk.data.text or ""
+                
+                if extract_interrogation_questions(response_text):
+                    interrogation_detected = True
+                    logger.info(
+                        "[AGENT] Interrogation gate firing: turn=%d detected <interrogation> block, "
+                        "suppressing %d pending tool calls and deferring to user answers",
+                        loop_turn, len(turn_result.pending_tool_calls),
+                    )
+                    # Clear the list in place on the turn_result_out object
+                    turn_result_out[0].pending_tool_calls.clear()
+                    # Also update local reference for the immediate check below
+                    turn_result.pending_tool_calls = []
+
+                # Yield chunks, filtering out TOOL_CALL if interrogation detected
+                for chunk in chunks_buffer:
+                    if interrogation_detected and chunk.type == StreamChunkFromModelType.TOOL_CALL:
+                        continue
+                    yield chunk
 
                 if not turn_result.pending_tool_calls:
                     logger.info(

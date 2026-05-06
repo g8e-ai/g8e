@@ -53,6 +53,7 @@ The canonical truth for agent personas resides in **Python models** located in `
 - **Model Tier**: `assistant`
 - **Purpose**: Resolves straightforward requests with minimal latency.
 - **Operating Mode**: Surgical tool use ("one well-aimed call beats a chain"). Escalates multi-step or deeply ambiguous requests to **Sage**.
+- **Interrogation**: Dash owns interrogation for turns Triage classified as `simple`. When Dash emits an `<interrogation>` block, the agent loop's interrogation gate suppresses tool execution for that turn, deferring action until the user answers the clarifying questions.
 
 ### 4. The Tribunal
 A five-member panel that translates Sage's intent into an executable command through ideological consensus.
