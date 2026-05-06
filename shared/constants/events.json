@@ -88,6 +88,9 @@
         "updated": "g8e.v1.operator.panel.list.updated"
       }
     },
+    "context": {
+      "changed": "g8e.v1.operator.context.changed"
+    },
     "status": {
       "updated": {
         "active": "g8e.v1.operator.status.updated.active",
@@ -305,6 +308,10 @@
           "granted": "g8e.v1.ai.agent.continue.approval.granted",
           "rejected": "g8e.v1.ai.agent.continue.approval.rejected"
         }
+      },
+      "conflict": {
+        "detected": "g8e.v1.ai.agent.conflict.detected",
+        "resolved": "g8e.v1.ai.agent.conflict.resolved"
       }
     },
     "triage": {
@@ -325,6 +332,7 @@
         "system_error": "g8e.v1.ai.tribunal.session.system.error",
         "generation_failed": "g8e.v1.ai.tribunal.session.generation.failed",
         "auditor_failed": "g8e.v1.ai.tribunal.session.auditor.failed",
+        "verifier_failed": "g8e.v1.ai.tribunal.session.verifier.failed",
         "warden_blocked": "g8e.v1.ai.tribunal.session.warden_blocked"
       },
       "voting": {
@@ -449,7 +457,9 @@
           "stopped": "g8e.v1.ai.llm.chat.iteration.stopped",
           "retry": "g8e.v1.ai.llm.chat.iteration.retry",
           "thinking": {
-            "started": "g8e.v1.ai.llm.chat.iteration.thinking.started"
+            "started": "g8e.v1.ai.llm.chat.iteration.thinking.started",
+            "update": "g8e.v1.ai.llm.chat.iteration.thinking.update",
+            "end": "g8e.v1.ai.llm.chat.iteration.thinking.end"
           },
           "citations": {
             "received": "g8e.v1.ai.llm.chat.iteration.citations.received"
@@ -571,7 +581,8 @@
     },
     "ai": {
       "primary": "g8e.v1.source.ai.primary",
-      "assistant": "g8e.v1.source.ai.assistant"
+      "assistant": "g8e.v1.source.ai.assistant",
+      "triage": "g8e.v1.source.ai.triage"
     },
     "system": "g8e.v1.source.system"
   }

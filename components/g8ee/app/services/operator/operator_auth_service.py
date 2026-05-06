@@ -83,9 +83,10 @@ class OperatorAuthService:
         authorization_header: str | None,
         body: dict[str, Any],
         request_context: dict[str, Any] | None,
+        system_fingerprint: str | None = None,
     ) -> dict[str, Any]:
         """Authenticate operator process via api key (Bearer)."""
-        return await self._authenticate_via_api_key(authorization_header, body, request_context)
+        return await self._authenticate_via_api_key(authorization_header, body, request_context, system_fingerprint)
 
     async def register_device_link_operator(
         self,
@@ -251,6 +252,7 @@ class OperatorAuthService:
         authorization_header: str | None,
         body: dict[str, Any],
         request_context: dict[str, Any] | None,
+        system_fingerprint: str | None = None,
     ) -> dict[str, Any]:
         """Authenticate using an API key (Bearer)."""
         # Extract api_key from Bearer header
@@ -262,11 +264,11 @@ class OperatorAuthService:
             return {"success": False, "error": "Missing API key"}
 
         # Validate api_key
-        success, key_doc, error = await self._api_key_service.validate_key(api_key)
+        success, key_doc, error = await self._api_key_service.validate_key(api_key, system_fingerprint)
         if not success:
             return {"success": False, "error": error or "Invalid API key"}
 
-        await self._api_key_service.record_usage(api_key)
+        await self._api_key_service.record_usage(api_key, system_fingerprint)
 
         user_id = key_doc.user_id
         operator_id = key_doc.operator_id

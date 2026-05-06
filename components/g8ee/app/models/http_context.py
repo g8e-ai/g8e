@@ -80,6 +80,10 @@ class G8eHttpContext(G8eBaseModel):
     source_component: ComponentName = Field(
         description="Component that created this context"
     )
+    system_fingerprint: str | None = Field(
+        default=None,
+        description="System fingerprint of the caller"
+    )
     is_operator_auth_relay: bool = Field(
         default=False,
         description="INTERNAL ONLY: Set to true by from_request for exempted operator auth paths"
@@ -126,13 +130,13 @@ class G8eHttpContext(G8eBaseModel):
         # Authoritative list of paths that G8ED is allowed to call without web_session_id/user_id.
         # These are strictly limited to operator authentication and session management.
         exempt_paths = {
-            "/api/internal/operators/register-operator-session",
-            "/api/internal/operators/deregister-operator-session",
-            "/api/internal/operators/authenticate",
-            "/api/internal/operators/validate-session",
-            "/api/internal/operators/refresh-session",
-            "/api/internal/operators/device-link/register",
-            "/api/internal/operators/listen-session-auth",
+            InternalApiPaths.G8EE_OPERATORS_REGISTER_SESSION,
+            InternalApiPaths.G8EE_OPERATORS_DEREGISTER_SESSION,
+            InternalApiPaths.G8EE_OPERATORS_AUTHENTICATE,
+            InternalApiPaths.G8EE_OPERATORS_VALIDATE_SESSION,
+            InternalApiPaths.G8EE_OPERATORS_REFRESH_SESSION,
+            InternalApiPaths.G8EE_OPERATORS_DEVICE_LINK_REGISTER,
+            InternalApiPaths.G8EE_OPERATORS_LISTEN_SESSION_AUTH,
         }
         is_exempt_path = request.url.path in exempt_paths
 
@@ -283,6 +287,7 @@ class G8eHttpContext(G8eBaseModel):
             "case_id": case_id,
             "investigation_id": investigation_id,
             "task_id": request.headers.get(G8eHeaders.TASK_ID.lower()),
+            "system_fingerprint": request.headers.get(G8eHeaders.SYSTEM_FINGERPRINT.lower()),
             "bound_operators": request.headers.get(G8eHeaders.BOUND_OPERATORS.lower(), "[]"),
             "source_component": source_component,
             "is_operator_auth_relay": is_exempt_path,

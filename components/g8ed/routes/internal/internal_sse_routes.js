@@ -19,6 +19,7 @@
  */
 
 import express from 'express';
+import { InternalApiPaths } from '../../constants/api_paths.js';
 import { SSEPushRequest } from '../../models/request_models.js';
 import { ErrorResponse, SSEPushResponse } from '../../models/response_models.js';
 import { logger } from '../../utils/logger.js';
@@ -44,7 +45,8 @@ export function createInternalSSERouter({ services, authorizationMiddleware }) {
      * would race with g8ee's authoritative write and clobber denormalized
      * fields (current_hostname, heartbeat_history) that g8ee maintains.
      */
-    router.post('/push', requireInternalOrigin, async (req, res, next) => {
+    const pushPath = '/' + InternalApiPaths.g8ed.sse_push.split('/').pop();
+    router.post(pushPath, requireInternalOrigin, async (req, res, next) => {
         try {
             const pushReq = SSEPushRequest.parse(req.body);
 

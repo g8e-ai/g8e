@@ -58,7 +58,7 @@ class ApiKeyService:
         """
         return f"{prefix}{secrets.token_hex(32)}"
 
-    async def validate_key(self, api_key: str) -> tuple[bool, ApiKeyDocument | None, str | None]:
+    async def validate_key(self, api_key: str, system_fingerprint: str | None = None) -> tuple[bool, ApiKeyDocument | None, str | None]:
         """Validate a raw API key."""
         if not api_key:
             return False, None, "API key is required"
@@ -76,6 +76,18 @@ class ApiKeyService:
 
         if doc.expires_at and doc.expires_at < now():
             return False, doc, "API key has expired"
+
+        # Enforce fingerprint matching if established
+        if doc.system_fingerprint and system_fingerprint and doc.system_fingerprint != system_fingerprint:
+            logger.error(
+                "[API-KEY-SERVICE] Fingerprint mismatch",
+                extra={
+                    "doc_id": doc_id[:8] + "...",
+                    "expected": doc.system_fingerprint,
+                    "received": system_fingerprint
+                }
+            )
+            return False, doc, "Invalid system fingerprint"
 
         return True, doc, None
 
@@ -270,14 +282,32 @@ class ApiKeyService:
                 )
         return True
 
-    async def record_usage(self, api_key: str) -> None:
-        """Update the last used timestamp of a key."""
+    async def record_usage(self, api_key: str, system_fingerprint: str | None = None) -> None:
+        """Update the last used timestamp of a key and establish fingerprint if missing."""
         try:
             doc_id = self.make_doc_id(api_key)
+            data = await self.cache.get_document_with_cache(self.collection, doc_id)
+            if not data:
+                return
+
+            doc = ApiKeyDocument.model_validate(data)
+            updates = {"last_used_at": now()}
+
+            # Establish fingerprint if not already set (immutable thereafter)
+            if not doc.system_fingerprint and system_fingerprint:
+                updates["system_fingerprint"] = system_fingerprint
+                logger.info(
+                    "[API-KEY-SERVICE] Established system fingerprint for API key",
+                    extra={
+                        "doc_id": doc_id[:8] + "...",
+                        "system_fingerprint": system_fingerprint
+                    }
+                )
+
             await self.cache.update_document(
                 collection=self.collection,
                 document_id=doc_id,
-                data={"last_used_at": now()},
+                data=updates,
                 merge=True
             )
         except Exception as e:

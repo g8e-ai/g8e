@@ -17,7 +17,10 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
-from app.constants import ComponentName
+from app.constants import (
+    ComponentName,
+    InternalApiPaths,
+)
 from app.errors import AuthorizationError, ResourceNotFoundError, ServiceUnavailableError
 from app.models.http_context import G8eHttpContext
 
@@ -29,15 +32,15 @@ class AuthorizationMiddleware(BaseHTTPMiddleware):
     EXEMPT_PATHS = {
         "/health",
         "/health/details",
-        "/api/internal/health",
+        InternalApiPaths.G8EE_HEALTH,
         "/docs",
         "/openapi.json",
         "/redoc"
     }
 
     INTERNAL_PATHS = {
-        "/investigations",
-        "/chat"
+        InternalApiPaths.G8EE_INVESTIGATIONS,
+        InternalApiPaths.G8EE_CHAT
     }
 
     async def dispatch(self, request: Request, call_next) -> Response:

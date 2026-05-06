@@ -272,6 +272,7 @@ export const ApiKeyError = Object.freeze({
     DOWNLOAD_ONLY:         'Download-only API key',
     DOWNLOAD_ONLY_CODE:    'DOWNLOAD_KEY_NOT_ALLOWED',
     AUTH_FAILED:           'Authentication failed',
+    INVALID_FINGERPRINT:   'Invalid system fingerprint',
     NO_DOWNLOAD_PERMISSION: 'API key does not have download permission. Use a download API key or an operator-specific API key.',
     INTERNAL_ERROR:        'Internal server error',
 });

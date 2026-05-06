@@ -133,6 +133,11 @@ class InternalHttpClient{
         // Source component
         headers[G8eHeaders.SOURCE_COMPONENT] = context.source_component || SourceComponent.G8ED;
 
+        // System fingerprint
+        if (context.system_fingerprint) {
+            headers[G8eHeaders.SYSTEM_FINGERPRINT] = context.system_fingerprint;
+        }
+
         logger.info('[HTTP-INTERNAL] G8eContext headers built and validated from model', {
             web_session_id_tag: sessionIdTag(context.web_session_id),
             user_id: context.user_id,

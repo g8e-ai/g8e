@@ -116,7 +116,7 @@ class TestOperatorAuthService:
         assert result["api_key"] == api_key
         assert result["operator_cert"] == "CERT"
         mock_lifecycle_service.claim_operator_slot.assert_called_once()
-        mock_api_key_service.record_usage.assert_called_once_with(api_key)
+        mock_api_key_service.record_usage.assert_called_once_with(api_key, None)
 
     async def test_authenticate_via_api_key_missing_bearer(self, auth_service):
         result = await auth_service.authenticate_operator(

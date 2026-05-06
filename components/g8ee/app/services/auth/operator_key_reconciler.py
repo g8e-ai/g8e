@@ -54,7 +54,7 @@ async def reconcile_g8ep_operator_key(
         return
 
     try:
-        valid, _doc, reason = await api_key_service.validate_key(stored)
+        valid, _doc, reason = await api_key_service.validate_key(stored, system_fingerprint=None)
     except Exception as e:
         logger.warning(
             "[OPERATOR-KEY-RECONCILER] Validation lookup failed; skipping clear to avoid false-negative",

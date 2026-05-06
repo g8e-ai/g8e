@@ -1371,10 +1371,15 @@ async def authenticate_operator(
         "user_agent": http_request.headers.get("user-agent") if http_request else None,
     }
 
+    # Extract system_fingerprint from G8eHttpContext if available
+    g8e_context: G8eHttpContext = getattr(http_request.state, "g8e_context", None)
+    system_fingerprint = g8e_context.system_fingerprint if g8e_context else None
+
     result = await operator_auth_service.authenticate_operator(
         authorization_header=request.authorization,
         body=request.model_dump(),
-        request_context=request_context
+        request_context=request_context,
+        system_fingerprint=system_fingerprint
     )
 
     if result.get("success"):

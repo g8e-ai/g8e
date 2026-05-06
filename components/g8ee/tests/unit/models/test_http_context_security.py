@@ -44,6 +44,7 @@ async def test_g8ed_bypass_security_risk_reproduction():
         G8eHeaders.SOURCE_COMPONENT: ComponentName.G8ED,
         G8eHeaders.CASE_ID: "some-case",
         G8eHeaders.INVESTIGATION_ID: "some-inv",
+        G8eHeaders.SYSTEM_FINGERPRINT: "fp-test-123",
         # web_session_id and user_id are MISSING
     }
     
@@ -64,6 +65,7 @@ async def test_g8ed_allowed_on_exempt_path():
         G8eHeaders.SOURCE_COMPONENT: ComponentName.G8ED,
         G8eHeaders.CASE_ID: "some-case",
         G8eHeaders.INVESTIGATION_ID: "some-inv",
+        G8eHeaders.SYSTEM_FINGERPRINT: "fp-test-456",
     }
     
     request = create_mock_request(exempt_path, headers)

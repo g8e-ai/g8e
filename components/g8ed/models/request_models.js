@@ -44,6 +44,7 @@ export class G8eHttpContext extends G8eBaseModel {
         task_id:           { type: F.string,  default: null },
         bound_operators:   { type: F.array,   default: () => [] }, // Array of BoundOperatorContext
         execution_id:      { type: F.string,  default: null },
+        system_fingerprint: { type: F.string,  default: null },
         timestamp:         { type: F.date,    default: () => new Date() },
         source_component:  { type: F.string,  default: SourceComponent.G8ED },
         is_operator_auth_relay: { type: F.boolean, default: false },

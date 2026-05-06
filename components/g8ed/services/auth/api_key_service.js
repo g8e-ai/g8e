@@ -62,9 +62,11 @@ class ApiKeyService {
     /**
      * Validate a raw API key.
      * @param {string} apiKey
+     * @param {Object} [options]
+     * @param {string} [options.system_fingerprint] - Optional system fingerprint to validate against
      * @returns {Promise<{success: boolean, data?: ApiKeyDocument, error?: string}>}
      */
-    async validateKey(apiKey) {
+    async validateKey(apiKey, { system_fingerprint = null } = {}) {
         try {
             if (!apiKey) {
                 return { success: false, error: 'API key is required' };
@@ -97,6 +99,16 @@ class ApiKeyService {
                     expires_at: doc.expires_at
                 });
                 return { success: false, error: 'API key has expired' };
+            }
+
+            // Enforce fingerprint matching if established
+            if (doc.system_fingerprint && system_fingerprint && doc.system_fingerprint !== system_fingerprint) {
+                logger.error('[API-KEY-SERVICE] Fingerprint mismatch', {
+                    api_key_prefix: this._getLogPrefix(apiKey),
+                    expected: doc.system_fingerprint,
+                    received: system_fingerprint
+                });
+                return { success: false, error: ApiKeyError.INVALID_FINGERPRINT };
             }
 
             return { success: true, data: doc };
@@ -136,13 +148,30 @@ class ApiKeyService {
     }
 
     /**
-     * Update the last used timestamp of a key.
+     * Update the last used timestamp of a key and establish fingerprint if missing.
      * @param {string} apiKey
+     * @param {Object} [options]
+     * @param {string} [options.system_fingerprint] - Optional system fingerprint to establish
      */
-    async recordUsage(apiKey) {
+    async recordUsage(apiKey, { system_fingerprint = null } = {}) {
         try {
             const docId = this._data.makeDocId(apiKey);
-            await this._data.updateKey(docId, { last_used_at: now() });
+            const doc = await this._data.getKey(docId);
+            
+            if (!doc) return;
+
+            const updates = { last_used_at: now() };
+
+            // Establish fingerprint if not already set (immutable thereafter)
+            if (!doc.system_fingerprint && system_fingerprint) {
+                updates.system_fingerprint = system_fingerprint;
+                logger.info('[API-KEY-SERVICE] Established system fingerprint for API key', {
+                    api_key_prefix: this._getLogPrefix(apiKey),
+                    system_fingerprint
+                });
+            }
+
+            await this._data.updateKey(docId, updates);
         } catch (error) {
             logger.warn('[API-KEY-SERVICE] Failed to record usage', { error: error.message });
         }

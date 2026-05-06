@@ -155,6 +155,51 @@ describe('ApiKeyService [UNIT]', () => {
             expect(result.error).toBe('API key has expired');
         });
 
+        it('returns success if fingerprint matches established fingerprint', async () => {
+            const key = `${API_KEY_PREFIX}valid`;
+            const doc = ApiKeyDocument.parse({
+                user_id: 'u1',
+                client_name: 'test',
+                status: ApiKeyStatus.ACTIVE,
+                system_fingerprint: 'fp123'
+            });
+            apiKeyDataService.getKey.mockResolvedValue(doc);
+
+            const result = await service.validateKey(key, { system_fingerprint: 'fp123' });
+            expect(result.success).toBe(true);
+        });
+
+        it('returns error if fingerprint mismatches established fingerprint', async () => {
+            const key = `${API_KEY_PREFIX}valid`;
+            const doc = ApiKeyDocument.parse({
+                user_id: 'u1',
+                client_name: 'test',
+                status: ApiKeyStatus.ACTIVE,
+                system_fingerprint: 'fp123'
+            });
+            apiKeyDataService.getKey.mockResolvedValue(doc);
+
+            const result = await service.validateKey(key, { system_fingerprint: 'fp456' });
+            expect(result.success).toBe(false);
+            expect(result.error).toBe(ApiKeyError.INVALID_FINGERPRINT);
+        });
+
+        it('returns success if no fingerprint is provided but one is established (legacy fallback or diagnostics)', async () => {
+            // Note: Middleware should always provide it if available, but validateKey 
+            // only fails if BOTH are present and mismatch.
+            const key = `${API_KEY_PREFIX}valid`;
+            const doc = ApiKeyDocument.parse({
+                user_id: 'u1',
+                client_name: 'test',
+                status: ApiKeyStatus.ACTIVE,
+                system_fingerprint: 'fp123'
+            });
+            apiKeyDataService.getKey.mockResolvedValue(doc);
+
+            const result = await service.validateKey(key);
+            expect(result.success).toBe(true);
+        });
+
         it('returns internal error on data service failure', async () => {
             apiKeyDataService.getKey.mockRejectedValue(new Error('DB Fail'));
             const result = await service.validateKey(`${API_KEY_PREFIX}any`);
@@ -184,10 +229,32 @@ describe('ApiKeyService [UNIT]', () => {
 
     describe('recordUsage', () => {
         it('updates last_used_at timestamp', async () => {
+            apiKeyDataService.getKey.mockResolvedValue(ApiKeyDocument.parse({ user_id: 'u1', client_name: 'test' }));
             await service.recordUsage('key123');
             expect(apiKeyDataService.updateKey).toHaveBeenCalledWith('doc123', expect.objectContaining({
                 last_used_at: expect.any(Date)
             }));
+        });
+
+        it('establishes fingerprint if missing', async () => {
+            apiKeyDataService.getKey.mockResolvedValue(ApiKeyDocument.parse({ user_id: 'u1', client_name: 'test' }));
+            await service.recordUsage('key123', { system_fingerprint: 'fp123' });
+            expect(apiKeyDataService.updateKey).toHaveBeenCalledWith('doc123', expect.objectContaining({
+                system_fingerprint: 'fp123',
+                last_used_at: expect.any(Date)
+            }));
+        });
+
+        it('does not overwrite existing fingerprint', async () => {
+            apiKeyDataService.getKey.mockResolvedValue(ApiKeyDocument.parse({ 
+                user_id: 'u1', 
+                client_name: 'test',
+                system_fingerprint: 'fp123' 
+            }));
+            await service.recordUsage('key123', { system_fingerprint: 'fp456' });
+            expect(apiKeyDataService.updateKey).toHaveBeenCalledWith('doc123', {
+                last_used_at: expect.any(Date)
+            });
         });
 
         it('does not throw on failure (logged only)', async () => {

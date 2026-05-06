@@ -15,6 +15,7 @@ import { IntentRequest } from '../../models/request_models.js';
 import express from 'express';
 import { logger } from '../../utils/logger.js';
 import { DeviceLinkError } from '../../constants/auth.js';
+import { InternalApiPaths } from '../../constants/api_paths.js';
 import { OperatorDocument, OperatorWithSessionContext } from '../../models/operator_model.js';
 import { ErrorResponse, OperatorListResponse, OperatorSlotsResponse } from '../../models/response_models.js';
 
@@ -412,7 +413,8 @@ export function createInternalOperatorRouter({ services, authorizationMiddleware
     /**
      * POST /api/internal/operators/:operatorId/grant-intent
      */
-    router.post('/:operatorId/grant-intent', requireInternalOrigin, async (req, res, next) => {
+    const grantIntentPath = InternalApiPaths.g8ed.grant_intent.replace('{operator_id}', ':operatorId').split('/').pop();
+    router.post(`/:operatorId/${grantIntentPath}`, requireInternalOrigin, async (req, res, next) => {
         try {
             const { operatorId } = req.params;
             const { intent } = IntentRequest.parse(req.body);
@@ -450,7 +452,8 @@ export function createInternalOperatorRouter({ services, authorizationMiddleware
     /**
      * POST /api/internal/operators/:operatorId/revoke-intent
      */
-    router.post('/:operatorId/revoke-intent', requireInternalOrigin, async (req, res, next) => {
+    const revokeIntentPath = InternalApiPaths.g8ed.revoke_intent.replace('{operator_id}', ':operatorId').split('/').pop();
+    router.post(`/:operatorId/${revokeIntentPath}`, requireInternalOrigin, async (req, res, next) => {
         try {
             const { operatorId } = req.params;
             const { intent } = IntentRequest.parse(req.body);

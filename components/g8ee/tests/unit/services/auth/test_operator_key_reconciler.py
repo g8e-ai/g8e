@@ -53,7 +53,7 @@ class TestOperatorKeyReconciler:
 
         await reconcile_g8ep_operator_key(mock_api_key_service, mock_settings_service)
 
-        mock_api_key_service.validate_key.assert_called_once_with("g8e_valid_key_12345")
+        mock_api_key_service.validate_key.assert_called_once_with("g8e_valid_key_12345", system_fingerprint=None)
         mock_settings_service.clear_g8ep_operator_api_key.assert_not_called()
 
     async def test_reconcile_invalid_key_clears_mirror(self, mock_api_key_service, mock_settings_service):
@@ -63,7 +63,7 @@ class TestOperatorKeyReconciler:
 
         await reconcile_g8ep_operator_key(mock_api_key_service, mock_settings_service)
 
-        mock_api_key_service.validate_key.assert_called_once_with("g8e_invalid_key_12345")
+        mock_api_key_service.validate_key.assert_called_once_with("g8e_invalid_key_12345", system_fingerprint=None)
         mock_settings_service.clear_g8ep_operator_api_key.assert_called_once_with(expected="g8e_invalid_key_12345")
 
     async def test_reconcile_read_failure_skips(self, mock_api_key_service, mock_settings_service):
@@ -101,6 +101,7 @@ class TestOperatorKeyReconciler:
 
         await reconcile_g8ep_operator_key(mock_api_key_service, mock_settings_service)
 
+        mock_api_key_service.validate_key.assert_called_once_with("g8e_expired_key_12345", system_fingerprint=None)
         mock_settings_service.clear_g8ep_operator_api_key.assert_called_once_with(expected="g8e_expired_key_12345")
 
     async def test_reconcile_revoked_key_clears_mirror(self, mock_api_key_service, mock_settings_service):
@@ -110,4 +111,5 @@ class TestOperatorKeyReconciler:
 
         await reconcile_g8ep_operator_key(mock_api_key_service, mock_settings_service)
 
+        mock_api_key_service.validate_key.assert_called_once_with("g8e_revoked_key_12345", system_fingerprint=None)
         mock_settings_service.clear_g8ep_operator_api_key.assert_called_once_with(expected="g8e_revoked_key_12345")

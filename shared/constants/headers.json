@@ -14,6 +14,7 @@
 
   "x-g8e.service":          "X-G8E-Service",
   "x-g8e.client":           "X-G8E-Client",
+  "x-g8e.system-fingerprint": "X-G8E-System-Fingerprint",
   "x-g8e.operator-status":  "X-G8E-Operator-Status",
 
   "http.accept":                     "Accept",
