@@ -114,7 +114,6 @@ class OperatorSlotCreationRequest(G8eBaseModel):
     operator_type: str = Field(..., description="Operator type (CLOUD, SYSTEM)")
     cloud_subtype: str | None = Field(default=None, description="Cloud operator subtype")
     name_prefix: str = Field(default="operator", description="Name prefix")
-    is_g8e_node: bool = Field(default=False, description="Is g8e pod operator")
 
 
 class OperatorSlotCreationResponse(G8eBaseModel):

@@ -104,17 +104,7 @@ describe('G8eHttpContext [UNIT - PURE LOGIC]', () => {
         expect(ctx.case_id).toBeNull();
     });
 
-    it('throws when web_session_id is missing for non-operator-auth source', () => {
-        expect(() => G8eHttpContext.parse({ user_id: 'user-456', source_component: 'g8ee' }))
-            .toThrow('web_session_id and user_id are required unless source_component is g8ed');
-    });
-
-    it('throws when user_id is missing for non-operator-auth source', () => {
-        expect(() => G8eHttpContext.parse({ web_session_id: 'ws-123', source_component: 'g8ee' }))
-            .toThrow('web_session_id and user_id are required unless source_component is g8ed');
-    });
-
-    it('allows null web_session_id and user_id for operator-auth relay (source=g8ed)', () => {
+    it('allows null web_session_id and user_id (validation handled by g8ee at edge layer)', () => {
         const ctx = G8eHttpContext.parse({
             web_session_id: null,
             user_id: null,

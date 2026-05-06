@@ -18,6 +18,7 @@ import secrets
 from typing import TYPE_CHECKING
 
 from app.constants.status import (
+    CloudSubtype,
     ComponentName,
     OperatorHistoryEventType,
     OperatorStatus,
@@ -233,7 +234,7 @@ class OperatorLifecycleService:
             # Find the specific slot designated as the g8ep for this user
             operators = await self.operator_data_service.query_operators([
                 {"field": "user_id", "op": "==", "value": user_id},
-                {"field": "is_g8ep", "op": "==", "value": True}
+                {"field": "cloud_subtype", "op": "==", "value": CloudSubtype.G8E_POD}
             ])
 
             if not operators:
@@ -301,7 +302,7 @@ class OperatorLifecycleService:
         # Find the specific slot designated as the g8ep for this user
         operators = await self.operator_data_service.query_operators([
             {"field": "user_id", "op": "==", "value": user_id},
-            {"field": "is_g8ep", "op": "==", "value": True}
+            {"field": "cloud_subtype", "op": "==", "value": CloudSubtype.G8E_POD}
         ])
 
         if not operators:
@@ -333,7 +334,7 @@ class OperatorLifecycleService:
             user_id=operator.user_id,
             organization_id=operator.organization_id,
             operator_id=operator_id,
-            is_g8ep=True,
+            is_g8ep=operator.cloud_subtype == CloudSubtype.G8E_POD,
             settings_service=self.settings_service,
             permissions=["OPERATOR_BOOTSTRAP", "OPERATOR_HEARTBEAT", "OPERATOR_DOWNLOAD"],
         )

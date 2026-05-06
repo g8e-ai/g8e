@@ -41,6 +41,7 @@ export const AITaskId = Object.freeze({
     FETCH_FILE_DIFF:    _STATUS['ai.task.id']['fetch.file.diff'],
     INTENT_GRANT:       _STATUS['ai.task.id']['intent.grant'],
     INTENT_REVOKE:      _STATUS['ai.task.id']['intent.revoke'],
+    RECURSIVE_GREP:     _STATUS['ai.task.id']['recursive.grep'],
 });
 
 /**

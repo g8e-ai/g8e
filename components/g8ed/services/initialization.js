@@ -20,10 +20,11 @@
  * Initialization phases:
  *   1. g8es clients       — document store, KV, pub/sub transport layer
  *   2. Core platform       — DB service wrapper, models, cache-aside, session
- *   3. Auth services       — API keys, users, passkey auth
- *   4. Operator subsystem  — operator service, binary cache, operator cache
- *   5. Platform services   — SSE, attachments, device links, certificates, settings
- *   6. Configuration       — load global settings from g8es
+ *   3. Platform base      — InternalHttpClient (required by auth services)
+ *   4. Auth services       — API keys, users, passkey auth
+ *   5. Operator subsystem  — operator service, binary cache, operator cache
+ *   6. Platform services   — SSE, attachments, device links, certificates, settings
+ *   7. Configuration       — load global settings from g8es
  */
 
 import { G8esDocumentClient } from './clients/g8es_document_client.js';
@@ -211,9 +212,16 @@ async function _doInitialize() {
         });
         logger.info('[G8ED-INIT] Phase 2b complete: all settings resolved via SettingsService');
 
-        // --- Phase 3: Session + auth services ---
-        webSessionService = new WebSessionService({ 
-            cacheAsideService, 
+        // --- Phase 3: Platform services (moved up for dependency order) ---
+        internalHttpClientInstance = new InternalHttpClient({
+            bootstrapService: bootstrapSvc,
+            settingsService: settingsSvc
+        });
+        logger.info('[G8ED-INIT] Phase 3a complete: InternalHttpClient initialized');
+
+        // --- Phase 3b: Session + auth services ---
+        webSessionService = new WebSessionService({
+            cacheAsideService,
             bootstrapService: settingsSvc.getBootstrapService()
         });
         // auditService is required by CliSessionService; construct it here
@@ -224,37 +232,34 @@ async function _doInitialize() {
             bootstrapService: settingsSvc.getBootstrapService(),
             auditService
         });
-        apiKeyDataService = new ApiKeyDataService({ 
-            cacheAsideService 
+        apiKeyDataService = new ApiKeyDataService({
+            cacheAsideService
         });
-        apiKeyService = new ApiKeyService({ 
-            apiKeyDataService 
+        apiKeyService = new ApiKeyService({
+            apiKeyDataService,
+            internalHttpClient: internalHttpClientInstance
         });
-        userService = new UserService({ 
-            cacheAsideService, 
-            organizationService: organizationModel, 
-            apiKeyService: apiKeyService 
+        userService = new UserService({
+            cacheAsideService,
+            organizationService: organizationModel,
+            apiKeyService: apiKeyService
         });
-        passkeyAuthService = new PasskeyAuthService({ 
-            userService: userService, 
-            cacheAsideService, 
-            settingsService: settingsSvc 
+        passkeyAuthService = new PasskeyAuthService({
+            userService: userService,
+            cacheAsideService,
+            settingsService: settingsSvc
         });
-        loginSecurityService = new LoginSecurityService({ 
-            cacheAsideService 
+        loginSecurityService = new LoginSecurityService({
+            cacheAsideService
         });
-        downloadAuthService = new DownloadAuthService({ 
-            cacheAsideService, 
-            userService: userService, 
-            apiKeyService: apiKeyService 
+        downloadAuthService = new DownloadAuthService({
+            cacheAsideService,
+            userService: userService,
+            apiKeyService: apiKeyService
         });
-        logger.info('[G8ED-INIT] Phase 3 complete: auth services');
+        logger.info('[G8ED-INIT] Phase 3b complete: auth services');
 
-        // --- Phase 4: Platform services (moved up for dependency order) ---
-        internalHttpClientInstance = new InternalHttpClient({ 
-            bootstrapService: bootstrapSvc, 
-            settingsService: settingsSvc 
-        });
+        // --- Phase 4: Platform services ---
         sseService = new SSEService();
 
         await sseService.waitForReady();
@@ -365,11 +370,11 @@ async function _doInitialize() {
             sseService: sseService,
         });
 
-        logger.info('[G8ED-INIT] Phase 5 complete: platform services (SSE, attachments, device links, certificates, g8ep operator, console metrics, post-login, setup, audit, operator-bind)');
+        logger.info('[G8ED-INIT] Phase 6 complete: platform services (SSE, attachments, device links, certificates, g8ep operator, console metrics, post-login, setup, audit, operator-bind)');
 
-        // --- Phase 6: Configuration ---
+        // --- Phase 7: Configuration ---
         // All configuration is now available via settingsService
-        logger.info('[G8ED-INIT] Phase 6 complete: configuration loaded');
+        logger.info('[G8ED-INIT] Phase 7 complete: configuration loaded');
 
         initialized = true;
         logger.info('[G8ED-INIT] All services initialized successfully');

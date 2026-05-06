@@ -38,7 +38,7 @@
  */
 
 import { logger } from '../../utils/logger.js';
-import { OperatorStatus } from '../../constants/operator.js';
+import { OperatorStatus, CloudOperatorSubtype } from '../../constants/operator.js';
 import { OperatorDocument } from '../../models/operator_model.js';
 import {
     G8E_GATEWAY_CONTAINER_NAME,
@@ -62,7 +62,7 @@ class G8ENodeOperatorService {
     /**
      * Returns the specific g8ep operator slot for this user.
      *
-     * Queries for the operator with is_g8ep=true for the given user.
+     * Queries for the operator with cloud_subtype=g8ep for the given user.
      *
      * @param {string} user_id
      * @returns {Promise<{ operator: Object, alreadyActive: boolean }|null>}
@@ -73,7 +73,7 @@ class G8ENodeOperatorService {
         // Find the specific slot designated as the g8ep for this user
         const operators = await this._operatorService.queryOperators([
             { field: 'user_id', operator: '==', value: user_id },
-            { field: 'is_g8ep', operator: '==', value: true }
+            { field: 'cloud_subtype', operator: '==', value: CloudOperatorSubtype.G8E_POD }
         ]);
 
         const operatorData = operators && operators.length > 0 ? operators[0] : null;

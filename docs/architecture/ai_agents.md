@@ -42,11 +42,14 @@ To prevent hallucinations and ensure safety, agents never write shell commands. 
 
 ### Execution Protocol
 1. **Intent Articulation**: Sage describes the goal, targets, and constraints in natural language.
-2. **Tribunal Generation**: Five independent members (Axiom, Concord, Variance, Pragma, Nemesis) produce candidate commands based on their specific lens (Composition, Safety, Edge Cases, Convention, Adversarial).
-3. **Consensus & Voting**: Candidates are clustered and voted upon. A winner is selected based on frequency and deterministic tie-breaking.
-4. **Warden Risk Analysis**: The **Warden** performs a pre-execution assessment. If a command is classified as `HIGH` risk, it triggers the **Two-Strike Circuit Breaker**.
-5. **Auditor Verification**: The **Auditor** performs the final check of the winning command against the original intent. It can approve (`ok`), revise, or swap to a superior dissenter.
-6. **Human-in-the-Loop**: The final command, risk assessment, and justification are presented for user approval before execution on the Operator.
+2. **Technical Safety Validation (L1 Bedrock)**: Before generation, the system ensures the request doesn't violate hardcoded safety invariants (Forbidden Patterns).
+3. **Tribunal Generation (L2 Consensus)**: Five independent members (Axiom, Concord, Variance, Pragma, Nemesis) produce candidate commands based on their specific lens.
+4. **Consensus & Voting**: Candidates are clustered and voted upon. A winner is selected based on frequency and deterministic tie-breaking.
+5. **Warden Risk Analysis**: The **Warden** performs a pre-execution assessment. If a command is classified as `HIGH` risk, it triggers the **Two-Strike Circuit Breaker**.
+6. **Auditor Verification**: The **Auditor** performs the final check of the winning command against the original intent. It can approve (`ok`), revise, or swap to a superior dissenter.
+7. **Technical Re-validation**: Any revised or swapped command is re-validated against the L1 Bedrock (Forbidden, Blacklist, Whitelist).
+8. **Human-in-the-Loop (L3 Authorization)**: The final command, risk assessment, and justification are presented for user approval.
+   - **Auto-Approval**: Benign commands in the `auto_approved.json` list bypass this step, provided they have passed all L1 and L2 gates. This minimizes click fatigue for routine operations.
 
 ## Security & Governance
 

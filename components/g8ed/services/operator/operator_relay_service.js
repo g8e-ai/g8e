@@ -43,7 +43,15 @@ export class OperatorRelayService {
         const boundOperator = g8eContext.bound_operators?.[0];
         if (!boundOperator) throw new Error('No bound operator found in context for stop command');
         
-        return httpClient.stopOperator(boundOperator.operator_id, g8eContext);
+        return httpClient.request('g8ee', ApiPaths.g8ee.operatorsStop(), {
+            method: 'POST',
+            body: {
+                operator_id: boundOperator.operator_id,
+                operator_session_id: boundOperator.operator_session_id,
+                user_id: g8eContext.user_id
+            },
+            g8eContext
+        });
     }
 
     async deregisterOperatorSessionInG8ee(g8eContext) {
@@ -76,7 +84,11 @@ export class OperatorRelayService {
         const httpClient = this._getHttpClient();
         if (!httpClient) throw new Error('InternalHttpClient not initialized');
 
-        return httpClient.sendDirectCommand(commandData, g8eContext);
+        return httpClient.request('g8ee', ApiPaths.g8ee.operatorDirectCommand(), {
+            method: 'POST',
+            body: commandData,
+            g8eContext
+        });
     }
 
     async relayRegisterOperatorSessionToG8ee(g8eContext) {
@@ -87,10 +99,14 @@ export class OperatorRelayService {
         const boundOperator = g8eContext.bound_operators?.[0];
         if (!boundOperator) throw new Error('No bound operator found in context for registration');
 
-        return httpClient.registerOperatorSession({
-            operator_id: boundOperator.operator_id,
-            operator_session_id: boundOperator.operator_session_id,
-        }, g8eContext);
+        return httpClient.request('g8ee', ApiPaths.g8ee.operatorsRegisterSession(), {
+            method: 'POST',
+            body: {
+                operator_id: boundOperator.operator_id,
+                operator_session_id: boundOperator.operator_session_id,
+            },
+            g8eContext
+        });
     }
 
     async relayApprovalResponseToG8ee(approvalData, g8eContext) {
@@ -98,7 +114,11 @@ export class OperatorRelayService {
         const httpClient = this._getHttpClient();
         if (!httpClient) throw new Error('InternalHttpClient not initialized');
 
-        return httpClient.respondToApproval(approvalData, g8eContext);
+        return httpClient.request('g8ee', ApiPaths.g8ee.operatorApprovalRespond(), {
+            method: 'POST',
+            body: approvalData,
+            g8eContext
+        });
     }
 
     async relayPendingApprovalsFromG8ee(g8eContext) {
@@ -294,7 +314,11 @@ export class OperatorRelayService {
         const httpClient = this._getHttpClient();
         if (!httpClient) throw new Error('InternalHttpClient not initialized');
 
-        return httpClient.terminateOperator(operatorId, g8eContext);
+        return httpClient.request('g8ee', ApiPaths.g8ee.operatorsTerminate(), {
+            method: 'POST',
+            body: { operator_id: operatorId },
+            g8eContext
+        });
     }
 
     async relayListenSessionAuthToG8ee(params, g8eContext) {

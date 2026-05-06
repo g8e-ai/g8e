@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.constants import NEW_CASE_ID, ComponentName
+from app.constants import NEW_CASE_ID, ComponentName, CloudSubtype
 from app.errors import ResourceNotFoundError
 from app.models.agents.title_generator import CaseTitleResult
 from app.models.cases import CaseUpdateRequest
@@ -390,7 +390,6 @@ async def test_create_operator_slot_g8ep_persists_api_key(g8e_context):
         operator_type="cloud",
         cloud_subtype="g8ep",
         name_prefix="operator",
-        is_g8e_node=True,
     )
 
     mock_operator_data_service = MagicMock()
@@ -412,7 +411,7 @@ async def test_create_operator_slot_g8ep_persists_api_key(g8e_context):
     assert response.operator_id is not None
     mock_operator_data_service.create_operator.assert_called_once()
 
-    # Verify issue_operator_key was called with is_g8ep=True and settings_service
+    # Verify issue_operator_key was called with is_g8ep=True (derived from cloud_subtype) and settings_service
     mock_api_key_service.issue_operator_key.assert_called_once()
     call_args = mock_api_key_service.issue_operator_key.call_args
     assert call_args[1]["api_key"] == response.api_key

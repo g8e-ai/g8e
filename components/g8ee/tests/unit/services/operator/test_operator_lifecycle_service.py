@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.clients.http_client import HTTPClient
-from app.constants import ComponentName, OperatorStatus, OperatorType
+from app.constants import ComponentName, OperatorStatus, OperatorType, CloudSubtype
 from app.errors import ValidationError
 from app.models.cache import CacheOperationResult
 from app.services.infra.supervisor_service import SupervisorService
@@ -244,12 +244,12 @@ class TestOperatorLifecycleService:
             "id": operator_id,
             "user_id": user_id,
             "status": OperatorStatus.AVAILABLE,
-            "is_g8ep": True,
+            "cloud_subtype": CloudSubtype.G8E_POD,
             "api_key": api_key,
             "organization_id": "org-123",
             "name": "g8ep",
             "slot_number": 1,
-            "operator_type": OperatorType.SYSTEM,
+            "operator_type": OperatorType.CLOUD,
             "created_at": now().isoformat(),
             "updated_at": now().isoformat(),
         }]
@@ -268,11 +268,11 @@ class TestOperatorLifecycleService:
             "id": "op-g8ep",
             "user_id": user_id,
             "status": OperatorStatus.ACTIVE,
-            "is_g8ep": True,
+            "cloud_subtype": CloudSubtype.G8E_POD,
             "organization_id": "org-123",
             "name": "g8ep",
             "slot_number": 1,
-            "operator_type": OperatorType.SYSTEM,
+            "operator_type": OperatorType.CLOUD,
             "created_at": now().isoformat(),
             "updated_at": now().isoformat(),
         }]
@@ -290,11 +290,11 @@ class TestOperatorLifecycleService:
             "id": operator_id,
             "user_id": user_id,
             "status": OperatorStatus.ACTIVE,
-            "is_g8ep": True,
+            "cloud_subtype": CloudSubtype.G8E_POD,
             "organization_id": "org-123",
             "name": "g8ep",
             "slot_number": 1,
-            "operator_type": OperatorType.SYSTEM,
+            "operator_type": OperatorType.CLOUD,
             "created_at": now().isoformat(),
             "updated_at": now().isoformat(),
         }]

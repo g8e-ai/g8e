@@ -29,6 +29,7 @@ from fastapi import APIRouter, Depends, Request, status
 
 from app.models.settings import G8eePlatformSettings, G8eeUserSettings
 from app.constants import (
+    CloudSubtype,
     ComponentName,
     DB_COLLECTION_MEMORIES,
     EventType,
@@ -918,7 +919,6 @@ async def create_operator_slot(
             slot_number=request.slot_number,
             operator_type=request.operator_type,
             cloud_subtype=request.cloud_subtype,
-            is_g8ep=request.is_g8e_node,
             status=OperatorStatus.AVAILABLE,
             api_key=api_key,
             created_at=now(),
@@ -931,12 +931,13 @@ async def create_operator_slot(
         # g8ep operator, mirror to platform_settings in a single coordinated
         # call. The coordinator rolls back the api_keys entry if the mirror
         # write fails so we never leave authoritative-without-mirror state.
+        is_g8ep = request.cloud_subtype == CloudSubtype.G8E_POD
         key_issued = await api_key_service.issue_operator_key(
             api_key=api_key,
             user_id=request.user_id,
             organization_id=request.organization_id,
             operator_id=operator_id,
-            is_g8ep=request.is_g8e_node,
+            is_g8ep=is_g8ep,
             settings_service=settings_service,
             client_name="operator",
             permissions=["OPERATOR_BOOTSTRAP", "OPERATOR_HEARTBEAT", "OPERATOR_DOWNLOAD"],
@@ -953,7 +954,7 @@ async def create_operator_slot(
                 error="Failed to issue API key",
             )
 
-        if request.is_g8e_node:
+        if is_g8ep:
             logger.info(
                 "[INTERNAL-HTTP] g8ep operator API key persisted to platform_settings",
                 extra={"operator_id": operator_id, "user_id": request.user_id}
@@ -965,7 +966,7 @@ async def create_operator_slot(
                 "operator_id": operator_id,
                 "user_id": request.user_id,
                 "slot_number": request.slot_number,
-                "is_g8ep": request.is_g8e_node,
+                "is_g8ep": is_g8ep,
             }
         )
 

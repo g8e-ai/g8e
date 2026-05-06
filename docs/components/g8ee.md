@@ -565,15 +565,44 @@ g8ee implements an **MCP Client Adapter** that translates outbound tool calls in
 
 **Initialization:** `MCPGatewayService` is created on `app.state.mcp_gateway_service` during startup, after `AIToolService` and `OperatorDataService`.
 
-### Command Validation Policies
+### Command Validation Policies (The 3-Layer Safety Path)
 
-`OperatorCommandService` enforces three **independent** policies on every command, configured via `settings.command_validation`:
+g8e enforces a multi-layered validation hierarchy designed to maximize safety while minimizing click fatigue. This hierarchy ensures that every command is technically sound, aligned with intent, and approved by the appropriate authority.
 
-| Policy | Setting | JSON Config | Semantics | Where enforced |
-|--------|---------|-------------|-----------|----------------|
-| Whitelist (hard allow-list) | `enable_whitelisting` + `whitelisted_commands` | `config/whitelist.json` (`enabled` field) | Only listed commands may run at all. Non-listed commands are rejected at L1 safety validation. | `app/utils/safety.py::validate_command_safety` |
-| Blacklist (hard block-list) | `enable_blacklisting` | `config/blacklist.json` (`enabled` field) | Listed commands/patterns are rejected at L1 safety validation. **Enabled by default** as a recommended safety boundary. | `app/utils/safety.py::validate_command_safety` |
-| Auto-approve (skip-approval list) | `enable_auto_approve` + `config/auto_approved.json` (platform default) + `auto_approved_commands` (CSV override) | `config/auto_approved.json` (`enabled` field) | Listed base verbs bypass the human approval prompt. **Enabled by default** to work in harmony with reputation staking (agent personas + built-in engine) for peak signal and efficiency. | `OperatorCommandService.execute_command_internal` |
+#### Layer 1: Technical Bedrock (Hard Gates)
+The technical bedrock is the foundation of g8e safety. It is enforced by code models (Pydantic/validators) and is **always** active, regardless of agent consensus or auto-approval settings.
+
+| Policy | Setting | JSON Config | Semantics |
+|--------|---------|-------------|-----------|
+| **Forbidden Patterns** | — | `app/constants/settings.py` | Hardcoded list of blocked substrings (e.g., `sudo`, `su`, `rm -rf /`). Always active. |
+| **Blacklist** | `enable_blacklisting` | `config/blacklist.json` | Blocks specific dangerous commands, binaries, substrings, and arguments. **Enabled by default**. |
+| **Whitelist** | `enable_whitelisting` | `config/whitelist.json` | When enabled, only explicitly listed commands/arguments are permitted. Rejects everything else. |
+
+#### Layer 2: Consensus Mechanism (The Tribunal)
+Once a command passes Layer 1, it enters the **Consensus Layer**. This is the default mode of operation for g8e:
+- **Multi-Agent Generation**: Five independent personas (Axiom, Concord, Variance, Pragma, Nemesis) produce candidate commands.
+- **Ensemble Voting**: A winning command is selected based on frequency and deterministic tie-breaking.
+- **Auditor Verification**: The Auditor performs a final check against the original intent, ensuring the command is idiomatic and correct.
+- **Reputation Staking**: All agents stake their reputation on the verdict. Slashing occurs for any command that passes the Tribunal but violates L1 or produces catastrophic failures.
+
+#### Layer 3: Authorization (Approval Gate)
+The final layer determines if a human needs to click "Approve".
+
+| Policy | Setting | Semantics |
+|--------|---------|-----------|
+| **Human-in-the-Loop** | (Default) | Every command requires a user signature. The UI shows the command, justification, risk analysis, and Tribunal consensus. |
+| **Auto-Approve** | `enable_auto_approve` | Listed base verbs (e.g., `uptime`, `df`, `free`) bypass the human prompt. This is a **rubber-stamp** mechanism for benign, low-risk commands. |
+
+**Crucial Invariant:** Auto-approval **NEVER** bypasses Layer 1 (Hard Gates) or Layer 2 (Consensus). A command must be generated/verified by the Tribunal and pass all Hard Gates before it can be auto-approved.
+
+---
+
+### Minimizing Click Fatigue
+
+g8e is designed to operate at "peak signal" by default. We minimize click fatigue through two primary mechanisms:
+
+1.  **Consensus as Quality Control**: Because the Tribunal (L2) ensures high-quality command generation, users can trust the system's output more readily, allowing them to focus only on high-risk operations.
+2.  **Reputation-Backed Auto-Approval**: The `auto_approved.json` list contains benign diagnostic commands that have been "pre-vetted" by the platform. Combined with the reputation staking of the agents generating those commands, this allows for a high-efficiency operating mode where common lookups happen autonomously.
 
 **JSON `enabled` field semantics:** Each JSON config file has an `enabled` boolean field (defaults to `true`). When `enabled: false`, the validator loads an empty index regardless of the entries in the file — this is a file-level kill switch that allows platform operators to neutralize the entire JSON file without touching per-request settings. Enforcement requires **both** the JSON `enabled` field and the corresponding per-request setting to be `true`.
 
@@ -1093,14 +1122,10 @@ The `agent_tool_loop.py` extracts these constraints from `tool_executor._user_se
 | `enable_whitelisting` | `false` | Restrict commands to an allowlist |
 | `enable_blacklisting` | `true` | Block commands matching a denylist. Recommended for system safety. |
 | `whitelisted_commands` | — | CSV string of allowed commands (overrides default whitelist) |
-| `enable_auto_approve` | `true` | Skip approval for rubber-stamped commands. Works in harmony with reputation staking. |
-
-**Whitelist Mode Semantics:**
-- **JSON mode (default):** When `whitelisted_commands` is empty, the system uses a rich JSON whitelist (`config/whitelist.json`) with per-command `safe_options` and `validation` patterns.
-- **CSV mode (override):** When `whitelisted_commands` contains a comma-separated list (e.g., `uptime,df,free`), this list **entirely replaces** the JSON whitelist. Every argument must pass basic shell safety checks (`_is_safe_value`). Rich per-command patterns from the JSON whitelist are NOT used in this mode.
+| `enable_auto_approve` | `true` | Skip approval for rubber-stamped commands. Works in harmony with consensus and reputation staking. |
 
 **Auto-Approval Bypass Behavior:**
-When `enable_whitelisting` is true and a command successfully passes the whitelist validation (either JSON mode or CSV override mode), the command is **auto-approved**. It bypasses the human approval requirement and executes immediately.
+When `enable_auto_approve` is true and a command's base verb is in the auto-approve list (and it has passed all L1 Hard Gates and L2 Consensus), the command bypasses the human approval requirement and executes immediately.
 
 > **Note:** Command validation is configured per-user via user settings, not platform settings. Users can enable/disable whitelist and blacklist through the Settings UI or API. See [Security Architecture — Command Allowlist and Denylist](../architecture/security.md#command-allowlist-and-denylist) for details on how to configure these controls.
 
