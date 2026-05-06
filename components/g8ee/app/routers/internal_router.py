@@ -628,7 +628,10 @@ async def activate_g8ep_operator(
     Authority: g8ee (process owner for g8ep operator).
     """
     try:
-        await operator_lifecycle_service.activate_g8ep_operator(request.user_id)
+        await operator_lifecycle_service.activate_g8ep_operator(
+            user_id=request.user_id,
+            web_session_id=request.web_session_id
+        )
         return G8epOperatorActivationResponse(success=True)
     except Exception as e:
         logger.error(

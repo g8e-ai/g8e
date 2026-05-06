@@ -348,6 +348,7 @@ class G8epOperatorActivationRequest(G8eBaseModel):
     Aligned with shared/models/wire/internal_requests.json (g8ep_operator_activation)
     """
     user_id: str = Field(..., description="ID of the user whose g8ep operator should be activated")
+    web_session_id: str | None = Field(default=None, description="Web session ID to bind for feedback events")
 
 
 class G8epOperatorActivationResponse(G8eBaseModel):

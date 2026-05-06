@@ -29,7 +29,7 @@ Bootstrap responsibilities (this file):
     HTTP client is created and managed by ServiceFactory (HTTPService + InternalHttpClient).
 """
 import logging
-
+from typing import cast
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -76,6 +76,7 @@ from .constants import (
     ComponentName,
     G8eHeaders,
 )
+from .models.state import G8eeAppState
 from .db.blob_service import BlobService
 from .db.db_service import DBService
 from .db.kv_service import KVService
@@ -136,66 +137,67 @@ async def _close_client(client, label: str) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize application resources on startup and clean up on shutdown."""
-    services: dict[str, object] = {}
+    state = cast(G8eeAppState, app.state)
+    all_services = None
     try:
         # -- Phase 0: Bootstrap settings --
-        app.state.settings_service = SettingsService()
-        initial_settings = app.state.settings_service.get_local_settings()
+        state.settings_service = SettingsService()
+        initial_settings = state.settings_service.get_local_settings()
         settings = await initialize_g8e_service(
             "g8ee", settings=initial_settings,
             cache_aside_service=None, use_db_config=False,
         )
-        app.state.settings = settings
+        state.settings = settings
         setup_logging(settings, component_name="g8ee")
         logger.info("Bootstrap settings loaded")
 
         # -- Phase 1: Core g8es clients (db, kv, pubsub, blob) --
         (
-            app.state.db_client,
-            app.state.kv_cache_client,
-            app.state.pubsub_client,
-            app.state.blob_client,
+            state.db_client,
+            state.kv_cache_client,
+            state.pubsub_client,
+            state.blob_client,
         ) = await _connect_clients(settings)
         logger.info("g8es transport clients connected (db, kv, pubsub, blob)")
 
         # -- Phase 2: Handler services (sole users of each client) --
-        app.state.db_service = DBService(app.state.db_client)
-        app.state.kv_service = KVService(app.state.kv_cache_client)
-        app.state.blob_service = BlobService(app.state.blob_client)
+        state.db_service = DBService(state.db_client)
+        state.kv_service = KVService(state.kv_cache_client)
+        state.blob_service = BlobService(state.blob_client)
 
         # -- Phase 3: CacheAsideService (orchestrator over DB + KV) --
-        app.state.cache_aside_service = CacheAsideService(
-            kv=app.state.kv_service,
-            db=app.state.db_service,
+        state.cache_aside_service = CacheAsideService(
+            kv=state.kv_service,
+            db=state.db_service,
             component_name=ComponentName.G8EE,
             default_ttl=settings.listen.default_ttl,
         )
-        app.state.settings_service._cache_aside = app.state.cache_aside_service
+        state.settings_service._cache_aside = state.cache_aside_service
 
         # -- Phase 4: Platform settings from g8es --
-        settings = await app.state.settings_service.get_platform_settings()
-        app.state.settings = settings
+        settings = await state.settings_service.get_platform_settings()
+        state.settings = settings
         set_settings(settings)
         logger.info("Platform settings merged: port=%s", settings.port)
 
         # -- Phase 5: All domain services (single factory call) --
-        services = ServiceFactory.create_all_services(
+        all_services = ServiceFactory.create_all_services(
             settings,
-            app.state.cache_aside_service,
-            pubsub_client=app.state.pubsub_client,
-            blob_service=app.state.blob_service,
+            state.cache_aside_service,
+            pubsub_client=state.pubsub_client,
+            blob_service=state.blob_service,
         )
-        ServiceFactory.bind_to_app_state(app, services)
+        ServiceFactory.bind_to_app_state(app, all_services)
         logger.info("All domain services created and bound to app state")
 
         # -- Phase 5b: Reconcile g8ep operator API key mirror (split-brain guard) --
         await reconcile_g8ep_operator_key(
-            api_key_service=services.api_key_service,
-            settings_service=app.state.settings_service,
+            api_key_service=all_services.api_key_service,
+            settings_service=state.settings_service,
         )
 
         # -- Phase 6: Lifecycle start --
-        await ServiceFactory.start_services(services)
+        await ServiceFactory.start_services(all_services)
         logger.info("g8ee startup completed successfully")
 
         yield
@@ -209,16 +211,17 @@ async def lifespan(app: FastAPI):
 
         await clear_provider_cache()
 
-        await ServiceFactory.stop_services(services)
+        if all_services:
+            await ServiceFactory.stop_services(all_services)
 
-        await _close_client(getattr(app.state, "pubsub_client", None), "PubSub client")
-        await _close_client(getattr(app.state, "kv_cache_client", None), "KV cache client")
-        await _close_client(getattr(app.state, "blob_client", None), "Blob client")
+        await _close_client(getattr(state, "pubsub_client", None), "PubSub client")
+        await _close_client(getattr(state, "kv_cache_client", None), "KV cache client")
+        await _close_client(getattr(state, "blob_client", None), "Blob client")
         await _close_client(
-            getattr(app.state, "internal_http_client", None), "g8ed HTTP client",
+            getattr(state, "internal_http_client", None), "g8ed HTTP client",
         )
 
-        db_service = getattr(app.state, "db_service", None)
+        db_service = getattr(state, "db_service", None)
         if db_service is not None:
             try:
                 await db_service.close()

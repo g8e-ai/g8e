@@ -11,6 +11,7 @@ from app.evals.runner.cli import (
     run_scenario,
     run_full_eval
 )
+from app.evals.runner.metrics import EvalRow
 
 def test_get_available_gold_sets():
     with patch('app.evals.runner.cli._GOLD_SETS_DIR') as mock_dir:
@@ -154,13 +155,14 @@ async def test_run_scenario_accuracy():
 @pytest.mark.asyncio
 async def test_run_full_eval_no_device_token_fail():
     with patch('app.evals.runner.cli.FleetManager') as mock_fleet_cls, \
-         patch('sys.exit') as mock_exit:
+         patch('sys.exit', side_effect=SystemExit(1)) as mock_exit:
         mock_fleet = mock_fleet_cls.return_value
         mock_fleet.is_running.return_value = True
         mock_fleet.get_device_token.return_value = None
         
         from app.evals.runner.cli import run_full_eval
-        await run_full_eval(None, "/tmp/gold.json")
+        with pytest.raises(SystemExit):
+            await run_full_eval(None, "/tmp/gold.json")
         mock_exit.assert_called_with(1)
 
 def test_resolve_gold_set_path_exists():
@@ -171,22 +173,24 @@ def test_resolve_gold_set_path_exists():
 def test_main_run_gold_set_not_found():
     with patch('app.evals.runner.cli.argparse.ArgumentParser.parse_args') as mock_args, \
          patch('app.evals.runner.cli.resolve_gold_set_path', return_value=None), \
-         patch('sys.exit') as mock_exit:
+         patch('sys.exit', side_effect=SystemExit(1)) as mock_exit:
         mock_args.return_value = MagicMock(command="run", dry_run=False, gold_set="invalid")
         
         from app.evals.runner.cli import main
-        main()
+        with pytest.raises(SystemExit):
+            main()
         mock_exit.assert_called_with(1)
 
 @pytest.mark.asyncio
 async def test_run_full_eval_no_fleet_fail():
     with patch('app.evals.runner.cli.FleetManager') as mock_fleet_cls, \
-         patch('sys.exit') as mock_exit:
+         patch('sys.exit', side_effect=SystemExit(1)) as mock_exit:
         mock_fleet = mock_fleet_cls.return_value
         mock_fleet.is_running.return_value = False
         
         from app.evals.runner.cli import run_full_eval
-        await run_full_eval(None, "/tmp/gold.json")
+        with pytest.raises(SystemExit):
+            await run_full_eval(None, "/tmp/gold.json")
         mock_exit.assert_called_with(1)
 
 @pytest.mark.asyncio
@@ -198,11 +202,19 @@ async def test_run_full_eval_all_providers():
         with patch('app.evals.runner.cli.FleetManager'), \
              patch('app.evals.runner.cli.get_llm_provider'), \
              patch('app.evals.runner.cli.EvalJudge'), \
-             patch('app.evals.runner.cli.run_scenario', return_value=MagicMock(passed=True)), \
+             patch('app.evals.runner.cli.run_scenario', new_callable=AsyncMock) as mock_run_scenario, \
              patch('app.evals.runner.cli.persist_report'), \
              patch('app.evals.runner.cli.render_text_table'), \
              patch('json.load', return_value=gold_set_content), \
              patch('builtins.open', MagicMock()):
+            
+            mock_run_scenario.return_value = EvalRow(
+                dimension="accuracy",
+                suite="suite",
+                scenario_id="s1",
+                passed=True,
+                latency_ms=100.0
+            )
             
             from app.evals.runner.cli import run_full_eval
             await run_full_eval(
@@ -222,7 +234,7 @@ async def test_run_full_eval_with_provider_settings():
     with patch('app.evals.runner.cli.FleetManager') as mock_fleet_cls, \
          patch('app.evals.runner.cli.get_llm_provider'), \
          patch('app.evals.runner.cli.EvalJudge'), \
-         patch('app.evals.runner.cli.run_scenario') as mock_run_scenario, \
+         patch('app.evals.runner.cli.run_scenario', new_callable=AsyncMock) as mock_run_scenario, \
          patch('app.evals.runner.cli.persist_report'), \
          patch('app.evals.runner.cli.render_text_table'), \
          patch('json.load', return_value=gold_set_content), \
@@ -232,7 +244,13 @@ async def test_run_full_eval_with_provider_settings():
         mock_fleet.is_running.return_value = True
         mock_fleet.get_device_token.return_value = "token-from-fleet"
         
-        mock_run_scenario.return_value = MagicMock(passed=True, latency_ms=100)
+        mock_run_scenario.return_value = EvalRow(
+            dimension="accuracy",
+            suite="suite",
+            scenario_id="s1",
+            passed=True,
+            latency_ms=100.0
+        )
         
         await run_full_eval(
             None, "/tmp/gold.json", 
@@ -265,7 +283,7 @@ async def test_run_full_eval():
     with patch('app.evals.runner.cli.FleetManager') as mock_fleet_cls, \
          patch('app.evals.runner.cli.get_llm_provider'), \
          patch('app.evals.runner.cli.EvalJudge'), \
-         patch('app.evals.runner.cli.run_scenario') as mock_run_scenario, \
+         patch('app.evals.runner.cli.run_scenario', new_callable=AsyncMock) as mock_run_scenario, \
          patch('app.evals.runner.cli.persist_report'), \
          patch('app.evals.runner.cli.render_text_table'), \
          patch('builtins.open', MagicMock()) as mock_open:
@@ -280,7 +298,13 @@ async def test_run_full_eval():
         mock_open.return_value.__enter__.return_value.read.return_value = json.dumps(gold_set_content)
         # We also need to mock json.load because it's used in run_full_eval
         with patch('json.load', return_value=gold_set_content):
-            mock_run_scenario.return_value = MagicMock(passed=True, latency_ms=100)
+            mock_run_scenario.return_value = EvalRow(
+                dimension="accuracy",
+                suite="suite",
+                scenario_id="s1",
+                passed=True,
+                latency_ms=100.0
+            )
             
             await run_full_eval(device_token, "/tmp/gold.json")
             
@@ -310,6 +334,11 @@ def test_main_run_full():
         )
         mock_resolve.return_value = Path("/tmp/b.json")
         
+        def mock_run_se(coro):
+            coro.close()
+            return MagicMock()
+        mock_asyncio_run.side_effect = mock_run_se
+        
         from app.evals.runner.cli import main
         main()
         mock_asyncio_run.assert_called_once()
@@ -318,6 +347,11 @@ def test_main_run_dry_run():
     with patch('app.evals.runner.cli.argparse.ArgumentParser.parse_args') as mock_args, \
          patch('app.evals.runner.cli.asyncio.run') as mock_asyncio_run:
         mock_args.return_value = MagicMock(command="run", dry_run=True, device_token="token", g8ed_url="url")
+        
+        def mock_run_se(coro):
+            coro.close()
+            return MagicMock()
+        mock_asyncio_run.side_effect = mock_run_se
         
         from app.evals.runner.cli import main
         main()

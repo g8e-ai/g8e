@@ -139,35 +139,47 @@ class G8eHttpContext(G8eBaseModel):
         )
 
         if not web_session_id:
-            logger.error(
-                "SECURITY VIOLATION: Missing required %s header",
-                G8eHeaders.WEB_SESSION_ID,
-                extra={
-                    "endpoint": request.url.path,
-                    "source_component": raw_source_component,
-                }
-            )
-            from app.errors import AuthenticationError
-            raise AuthenticationError(
-                f"{G8eHeaders.WEB_SESSION_ID} header is required for all internal requests",
-                component=ComponentName.G8EE,
-            )
+            if raw_source_component != ComponentName.G8ED:
+                logger.error(
+                    "SECURITY VIOLATION: Missing required %s header",
+                    G8eHeaders.WEB_SESSION_ID,
+                    extra={
+                        "endpoint": request.url.path,
+                        "source_component": raw_source_component,
+                    }
+                )
+                from app.errors import AuthenticationError
+                raise AuthenticationError(
+                    f"{G8eHeaders.WEB_SESSION_ID} header is required for all internal requests",
+                    component=ComponentName.G8EE,
+                )
+            else:
+                logger.info(
+                    "[G8eHTTP-CONTEXT] web_session_id is null; allowed for G8ED source (operator auth relay)",
+                    extra={"endpoint": request.url.path}
+                )
 
         if not user_id:
-            logger.error(
-                "SECURITY VIOLATION: Missing required %s header",
-                G8eHeaders.USER_ID,
-                extra={
-                    "endpoint": request.url.path,
-                    "web_session_id": web_session_id[:12] + "...",
-                    "source_component": raw_source_component,
-                }
-            )
-            from app.errors import AuthenticationError
-            raise AuthenticationError(
-                f"{G8eHeaders.USER_ID} header is required for all internal requests",
-                component=ComponentName.G8EE,
-            )
+            if raw_source_component != ComponentName.G8ED:
+                logger.error(
+                    "SECURITY VIOLATION: Missing required %s header",
+                    G8eHeaders.USER_ID,
+                    extra={
+                        "endpoint": request.url.path,
+                        "web_session_id": web_session_id[:12] + "..." if web_session_id else None,
+                        "source_component": raw_source_component,
+                    }
+                )
+                from app.errors import AuthenticationError
+                raise AuthenticationError(
+                    f"{G8eHeaders.USER_ID} header is required for all internal requests",
+                    component=ComponentName.G8EE,
+                )
+            else:
+                logger.info(
+                    "[G8eHTTP-CONTEXT] user_id is null; allowed for G8ED source (operator auth relay)",
+                    extra={"endpoint": request.url.path}
+                )
 
         if not raw_source_component:
             logger.error(

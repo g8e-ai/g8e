@@ -206,7 +206,9 @@ class InternalHttpClient{
 
                 // Strip non-fetch keys before passing to fetch; serialize plain object body
                 const { g8eContext: _g8eContext, signal: _signal, headers: _headers, body: _body, ...fetchOptionsRaw } = options;
-                const serializedBody = _body !== undefined ? JSON.stringify(_body) : undefined;
+                const serializedBody = (_body !== undefined && typeof _body !== 'string')
+                    ? JSON.stringify(_body)
+                    : _body;
 
                 const fetchOptions = {
                     ...fetchOptionsRaw,
@@ -500,6 +502,94 @@ class InternalHttpClient{
     }
 
     /**
+     * Terminate an operator session via g8ee authority.
+     * @param {string} operatorId - Operator ID to terminate
+     * @param {Object} g8eContext - G8eHttpContext for the request
+     * @returns {Promise<{success: boolean, error?: string}>}
+     */
+    async terminateOperator(operatorId, g8eContext) {
+        logger.info('[HTTP-INTERNAL] Requesting operator termination', { operatorId });
+        
+        return this.request('g8ee', ApiPaths.g8ee.operatorsTerminate(), {
+            method: 'POST',
+            body: { operator_id: operatorId },
+            g8eContext
+        });
+    }
+
+    /**
+     * Stop all active AI processing for an operator via g8ee authority.
+     * @param {string} operatorId - Operator ID to stop
+     * @param {Object} g8eContext - G8eHttpContext for the request
+     * @returns {Promise<{success: boolean, error?: string}>}
+     */
+    async stopOperator(operatorId, g8eContext) {
+        logger.info('[HTTP-INTERNAL] Requesting operator stop', { operatorId });
+        
+        return this.request('g8ee', ApiPaths.g8ee.operatorsStop(), {
+            method: 'POST',
+            body: new StopOperatorRequest({ operator_id: operatorId }).forWire(),
+            g8eContext
+        });
+    }
+
+    /**
+     * Respond to a pending operator approval via g8ee authority.
+     * @param {Object} responseData - Approval response data
+     * @param {Object} g8eContext - G8eHttpContext for the request
+     * @returns {Promise<{success: boolean, error?: string}>}
+     */
+    async respondToApproval(responseData, g8eContext) {
+        logger.info('[HTTP-INTERNAL] Responding to operator approval', {
+            executionId: responseData.execution_id,
+            decision: responseData.decision
+        });
+        
+        return this.request('g8ee', ApiPaths.g8ee.operatorApprovalRespond(), {
+            method: 'POST',
+            body: new ApprovalRespondRequest(responseData).forWire(),
+            g8eContext
+        });
+    }
+
+    /**
+     * Send a direct command to an operator via g8ee authority.
+     * @param {Object} commandData - Command data
+     * @param {Object} g8eContext - G8eHttpContext for the request
+     * @returns {Promise<{success: boolean, error?: string}>}
+     */
+    async sendDirectCommand(commandData, g8eContext) {
+        logger.info('[HTTP-INTERNAL] Sending direct command to operator', {
+            operatorId: commandData.operator_id,
+            command: commandData.command
+        });
+        
+        return this.request('g8ee', ApiPaths.g8ee.operatorDirectCommand(), {
+            method: 'POST',
+            body: new DirectCommandRequest(commandData).forWire(),
+            g8eContext
+        });
+    }
+
+    /**
+     * Register a new operator session via g8ee authority.
+     * @param {Object} registrationData - Session registration data
+     * @param {Object} g8eContext - G8eHttpContext for the request
+     * @returns {Promise<{success: boolean, session_id?: string, error?: string}>}
+     */
+    async registerOperatorSession(registrationData, g8eContext) {
+        logger.info('[HTTP-INTERNAL] Registering operator session', {
+            operatorId: registrationData.operator_id
+        });
+        
+        return this.request('g8ee', ApiPaths.g8ee.operatorsRegisterSession(), {
+            method: 'POST',
+            body: new OperatorSessionRegistrationRequest(registrationData).forWire(),
+            g8eContext
+        });
+    }
+
+    /**
      * Check health of all internal services
      */
     async healthCheck() {
@@ -536,7 +626,10 @@ class InternalHttpClient{
         
         return this.request('g8ee', ApiPaths.g8ee.operatorsG8epActivate(), {
             method: 'POST',
-            body: { user_id },
+            body: { 
+                user_id,
+                web_session_id: g8eContext?.web_session_id
+            },
             g8eContext
         });
     }

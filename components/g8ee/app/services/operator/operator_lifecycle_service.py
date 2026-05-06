@@ -224,7 +224,7 @@ class OperatorLifecycleService:
 
         return result.success
 
-    async def activate_g8ep_operator(self, user_id: str) -> None:
+    async def activate_g8ep_operator(self, user_id: str, web_session_id: str | None = None) -> None:
         """Orchestrates g8ep operator activation after login.
         
         Authority: g8ee (process owner for g8ep operator).
@@ -254,6 +254,19 @@ class OperatorLifecycleService:
                     "operator_id": operator.id
                 })
                 return
+
+            # Bind the web_session_id to the operator slot BEFORE launch
+            if web_session_id:
+                logger.info("[OPERATOR-LIFECYCLE] Binding web session to g8ep operator slot", extra={
+                    "operator_id": operator.id,
+                    "web_session_id": web_session_id[:12] + "..."
+                })
+                await self._cache.update_document(
+                    collection=self.operator_data_service.collection,
+                    document_id=operator.id,
+                    data={"bound_web_session_id": web_session_id},
+                    merge=True,
+                )
 
             await self.launch_g8ep_operator(operator.api_key)
 

@@ -127,6 +127,8 @@ class OperatorServices:
     certificate_service: CertificateService
 
 
+from app.models.state import G8eeAppState
+
 @dataclass(frozen=True)
 class AllServices:
     cache_aside_service: CacheAsideService
@@ -505,12 +507,15 @@ class ServiceFactory:
         Also creates the legacy alias ``memory_service`` that some dependency
         getters expect.
         """
+        state = cast(G8eeAppState, app.state)
+        state.services = services
+
         for field in fields(services):
             name = field.name
             svc = getattr(services, name)
-            setattr(app.state, name, svc)
+            setattr(state, name, svc)
 
-        app.state.memory_service = services.memory_data_service
+        state.memory_service = services.memory_data_service
 
     @staticmethod
     async def start_services(services: AllServices) -> None:

@@ -12,41 +12,35 @@ governance architecture for trustless environments
 
 ## What this is
 
-g8e is the deployment layer for production AI agents.
+g8e is a host-authoritative governance substrate for agentic AI — Byzantine consensus with an adversarial co-validator, sovereign execution, and chain-of-custody audit.
 
-It sits between any AI agent — yours, a vendor's, an open-source one — and the infrastructure it's about to change. A stateless reasoning **Engine** runs Byzantine consensus over heterogeneous LLM personas to produce a candidate command. A sovereign single-binary **Operator** runs on every managed host, enforces FIDO2 co-validation at the execution boundary, executes approved commands in isolation, and owns a tamper-evident local audit ledger. The Engine is replaceable. The Operator is the system of record. You hold the only signature only a human can produce.
+Self-hosted. Air-gap capable. Apache 2.0. Built for environments where nominal oversight is a failure state and the owner must own the ledger.
 
-The architecture is built so that the parts that have to be replaceable are replaceable, the parts that have to be sovereign are sovereign, and the parts that have to be auditable are auditable by the party that owns the infrastructure — not by the party that owns the model. Apache 2.0. Self-hosted. No telemetry. Air-gap capable. It runs on your hardware, on your network, under your signature.
+### Core Principles
 
-If you are building an agentic product that has to pass enterprise procurement, federal procurement, HIPAA review, or any other governance regime that asks "what did the AI actually do and who said it could," this is the substrate. Not a feature you add later. The thing the rest is built on.
+- **Data sovereignty.** The managed host is the authoritative system of record. Every mutation and command output is anchored to a local, git-backed ledger (LFAA) in native SQLite vaults — queryable with standard SQL, mapped to MITRE ATT&CK for SIEM/SOC integration. Raw data never leaves your infrastructure.
+
+- **LLM sovereignty.** A stateless reasoning engine decouples intent from execution. Context is ephemeral per request; providers never retain session state. Swap between Anthropic, Gemini, OpenAI, Ollama, or llama.cpp without losing continuity.
+
+- **Operator sovereignty.** The Operator is a protocol for verifiable execution, not just a binary. Sentinel pre-execution analysis (46 threat detectors), hardware fingerprint binding, outbound-only mTLS, and FIDO2-gated state changes. No bits move without an explicit, hardware-bound human signature.
+
+- **Consensus integrity.** The Tribunal generates candidates under tiered information gating — agents cannot see each other's reasoning or downstream plans. An adversarial co-validator (Nemesis) is scored on a proper scoring rule alongside the honest panel: endogenous red-teaming, not external audit. Flaws caught and confirmed by the Auditor compound the adversary's stake; collusion is structurally unprofitable.
 
 ## Why
 
-Every production AI agent system in 2026 is one of two shapes, and both are broken.
+The user's time is the only stake the system can't fake. Everything upstream of human approval exists to spend it well.
 
-**Autonomous agents** plan, act, and report. They produce technically correct, contextually wrong outcomes — doing exactly what they understood the request to mean while missing what you actually meant. Nothing in the system is structurally positioned to catch the gap.
+Two architectures dominate agentic AI in 2026, and both fail at infrastructure scale.
 
-**Human-in-the-loop systems** retrofit oversight with approval prompts. When verification is costly and approval is cheap, humans rubber-stamp. Oversight is nominal; behavior converges to autonomous.
+**Autonomous agents** act without human verification of contextual intent. They do exactly what they understood the request to mean while missing what the user actually meant. Every catastrophic agent failure has the same shape.
 
-Both fail because they treat humans and machines as substitutable validators on the same questions. They are not. g8e splits the work: machine-domain checks (internal consistency, falsifiability, pattern-match safety, cross-conversation grounding) go to the AI layer; human-domain checks (intent fidelity in your environment, contextual stakes, real-world consequences) go to you. Both signatures are required for every state change.
+**Human-in-the-loop systems** retrofit oversight through approval prompts. When verification is costly and approval is cheap, humans rubber-stamp — autonomous behavior with the appearance of control.
 
-This architecture is missing from the market for a structural reason. Every property the deployment layer has to have — local-first audit, model-agnostic reasoning, no telemetry, sovereign per-host execution, open license — is hostile to the business model of the parties best positioned to build it. A vendor whose revenue depends on cloud lock-in cannot ship a sovereign operator. A vendor whose revenue depends on model lock-in cannot ship a model-agnostic engine. A vendor whose revenue depends on telemetry cannot ship a tamper-evident audit ledger that lives on the customer's host. The deployment layer has to be sovereign, replaceable, and auditable by the customer — which means it cannot come from a company whose P&L depends on the opposite.
+Both treat human and machine as substitutable validators on the same questions. They are not.
 
-It has to be built independently, in the open, by parties whose incentives are aligned with the customer's instead of the vendor's. That is what this is.
+g8e takes a third path: **co-validation**. The machine handles what is machine-checkable — consistency, grounding, falsifiability. The human handles what is only human-checkable — intent fidelity, contextual stakes, acceptance of consequences. Both signatures are required for every state change.
 
-The full thesis: [position_paper.md](docs/architecture/position_paper.md).
-
----
-
-- 4MB statically-compiled Go Operator on every managed host
-- FIDO2/WebAuthn at every state change — no passwords, by design
-- Byzantine consensus over five blind LLM personas, with a calibrated adversary
-- Outbound-only mTLS — no inbound ports on managed hosts
-- Local-first audit; the host is the system of record, not the cloud
-- Model-agnostic — swap providers without losing history
-- Apache 2.0 · Self-hosted · Air-gap capable · No SaaS, no telemetry
-
----
+Full treatment: [position paper](docs/architecture/position_paper.md).
 
 ## How a request flows
 

@@ -12,6 +12,7 @@
 # limitations under the License.
 
 import logging
+from typing import cast
 
 from fastapi import Depends, Request
 
@@ -19,6 +20,8 @@ from app.clients.kv_cache_client import KVCacheClient
 from app.clients.pubsub_client import PubSubClient
 from app.clients.blob_client import BlobClient
 from app.models.settings import G8eePlatformSettings, G8eeUserSettings
+from app.models.state import G8eeAppState
+from app.services.service_factory import AllServices
 from app.constants import (
     ComponentName,
     G8eHeaders,
@@ -76,8 +79,17 @@ async def require_internal_origin(request: Request) -> bool:
     return await validate_internal_origin(request)
 
 
+async def get_g8ee_all_services(request: Request) -> AllServices:
+    state = cast(G8eeAppState, request.app.state)
+    if not hasattr(state, "services") or not state.services:
+        logger.error("AllServices not found in app state")
+        raise ServiceUnavailableError("Services not available")
+    return state.services
+
+
 async def get_g8ee_settings_service(request: Request) -> SettingsServiceProtocol:
-    service = getattr(request.app.state, "settings_service", None)
+    state = cast(G8eeAppState, request.app.state)
+    service = state.settings_service
     if not service:
         logger.error("Settings service not found in app state")
         raise ServiceUnavailableError("Settings service not available")
@@ -86,7 +98,8 @@ async def get_g8ee_settings_service(request: Request) -> SettingsServiceProtocol
 
 async def get_g8ee_settings_service_write(request: Request) -> SettingsService:
     """Get SettingsService for write operations (e.g., updating platform settings)."""
-    service = getattr(request.app.state, "settings_service", None)
+    state = cast(G8eeAppState, request.app.state)
+    service = state.settings_service
     if not service:
         logger.error("Settings service not found in app state")
         raise ServiceUnavailableError("Settings service not available")
@@ -94,15 +107,17 @@ async def get_g8ee_settings_service_write(request: Request) -> SettingsService:
 
 
 async def get_g8ee_platform_settings(request: Request) -> G8eePlatformSettings:
-    if not hasattr(request.app.state, "settings"):
+    state = cast(G8eeAppState, request.app.state)
+    if not hasattr(state, "settings"):
         logger.error("Settings not found in app state - g8ee initialization may have failed")
         raise ConfigurationError("Settings not available")
 
-    return request.app.state.settings
+    return state.settings
 
 
 async def get_g8ee_pubsub_client(request: Request) -> PubSubClient:
-    client = getattr(request.app.state, "pubsub_client", None)
+    state = cast(G8eeAppState, request.app.state)
+    client = state.pubsub_client
     if not client:
         logger.error("PubSubClient not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("PubSubClient not available")
@@ -111,7 +126,8 @@ async def get_g8ee_pubsub_client(request: Request) -> PubSubClient:
 
 
 async def get_g8ee_kv_cache_client(request: Request) -> KVCacheClient:
-    client = getattr(request.app.state, "kv_cache_client", None)
+    state = cast(G8eeAppState, request.app.state)
+    client = state.kv_cache_client
     if not client:
         logger.error("KVCacheClient not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("KVCacheClient not available")
@@ -120,7 +136,8 @@ async def get_g8ee_kv_cache_client(request: Request) -> KVCacheClient:
 
 
 async def get_g8ee_blob_client(request: Request) -> BlobClient:
-    client = getattr(request.app.state, "blob_client", None)
+    state = cast(G8eeAppState, request.app.state)
+    client = state.blob_client
     if not client:
         logger.error("BlobClient not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("BlobClient not available")
@@ -129,7 +146,8 @@ async def get_g8ee_blob_client(request: Request) -> BlobClient:
 
 
 async def get_g8ee_cache_aside_service(request: Request) -> CacheAsideService:
-    service = getattr(request.app.state, "cache_aside_service", None)
+    state = cast(G8eeAppState, request.app.state)
+    service = state.cache_aside_service
     if not service:
         logger.error("Cache service not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("Cache service not available")
@@ -138,7 +156,8 @@ async def get_g8ee_cache_aside_service(request: Request) -> CacheAsideService:
 
 
 async def get_g8ee_case_data_service(request: Request) -> CaseDataService:
-    service = getattr(request.app.state, "case_data_service", None)
+    state = cast(G8eeAppState, request.app.state)
+    service = state.case_data_service
     if not service:
         logger.error("Case Data Service not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("Case Data Service not available")
@@ -146,7 +165,8 @@ async def get_g8ee_case_data_service(request: Request) -> CaseDataService:
 
 
 async def get_g8ee_investigation_data_service(request: Request) -> InvestigationDataService:
-    service = getattr(request.app.state, "investigation_data_service", None)
+    state = cast(G8eeAppState, request.app.state)
+    service = state.investigation_data_service
     if not service:
         logger.error("Investigation Data Service not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("Investigation Data Service not available")
@@ -155,7 +175,8 @@ async def get_g8ee_investigation_data_service(request: Request) -> Investigation
 
 
 async def get_g8ee_investigation_service(request: Request) -> InvestigationService:
-    service = getattr(request.app.state, "investigation_service", None)
+    state = cast(G8eeAppState, request.app.state)
+    service = state.investigation_service
     if not service:
         logger.error("Investigation Domain Service not found in app state")
         raise ServiceUnavailableError("Investigation Domain Service not available")
@@ -163,7 +184,8 @@ async def get_g8ee_investigation_service(request: Request) -> InvestigationServi
 
 
 async def get_g8ee_memory_service(request: Request) -> MemoryDataService:
-    service = getattr(request.app.state, "memory_service", None)
+    state = cast(G8eeAppState, request.app.state)
+    service = state.memory_service
     if not service:
         logger.error("Memory Data service not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("Memory service not available")
@@ -171,7 +193,8 @@ async def get_g8ee_memory_service(request: Request) -> MemoryDataService:
 
 
 async def get_g8ee_memory_generation_service(request: Request) -> MemoryGenerationService:
-    service = getattr(request.app.state, "memory_generation_service", None)
+    state = cast(G8eeAppState, request.app.state)
+    service = state.memory_generation_service
     if not service:
         logger.error("Memory generation service not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("Memory generation service not available")
@@ -179,7 +202,8 @@ async def get_g8ee_memory_generation_service(request: Request) -> MemoryGenerati
 
 
 async def get_g8ee_chat_pipeline(request: Request) -> ChatPipelineService:
-    service = getattr(request.app.state, "chat_pipeline", None)
+    state = cast(G8eeAppState, request.app.state)
+    service = state.chat_pipeline
     if not service:
         logger.error("Chat Pipeline not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("Chat Pipeline not available", component=ComponentName.G8EE)
@@ -192,7 +216,8 @@ async def get_g8ee_investigation_domain_service(request: Request) -> Investigati
 
 
 async def get_g8ee_grounding_service(request: Request) -> GroundingService:
-    service = getattr(request.app.state, "grounding_service", None)
+    state = cast(G8eeAppState, request.app.state)
+    service = state.grounding_service
     if not service:
         logger.error("Grounding service not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("Grounding service not available", component=ComponentName.G8EE)
@@ -201,11 +226,13 @@ async def get_g8ee_grounding_service(request: Request) -> GroundingService:
 
 
 async def get_g8eeweb_search_provider(request: Request) -> WebSearchProvider | None:
-    return getattr(request.app.state, "web_search_provider", None)
+    state = cast(G8eeAppState, request.app.state)
+    return getattr(state.services, "web_search_provider", None)
 
 
 async def get_g8ee_chat_task_manager(request: Request) -> BackgroundTaskManager:
-    service = getattr(request.app.state, "chat_task_manager", None)
+    state = cast(G8eeAppState, request.app.state)
+    service = state.services.chat_task_manager
     if not service:
         logger.error("Chat Task Manager not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("Chat Task Manager not available", component=ComponentName.G8EE)
@@ -214,7 +241,8 @@ async def get_g8ee_chat_task_manager(request: Request) -> BackgroundTaskManager:
 
 
 async def get_g8ee_operator_cache(request: Request) -> CacheAsideService:
-    service = getattr(request.app.state, "cache_aside_service", None)
+    state = cast(G8eeAppState, request.app.state)
+    service = state.cache_aside_service
     if not service:
         logger.error("Operator cache service not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("Operator cache service not available")
@@ -223,15 +251,17 @@ async def get_g8ee_operator_cache(request: Request) -> CacheAsideService:
 
 
 async def get_g8ee_approval_service(request: Request) -> OperatorApprovalService:
-    service = getattr(request.app.state, "approval_service", None)
+    state = cast(G8eeAppState, request.app.state)
+    service = state.services.approval_service
     if not service:
         logger.error("Operator Approval Service not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("Operator Approval Service not available")
-    return service
+    return cast(OperatorApprovalService, service)
 
 
 async def get_g8ee_operator_command_service(request: Request) -> OperatorCommandService:
-    service = getattr(request.app.state, "operator_command_service", None)
+    state = cast(G8eeAppState, request.app.state)
+    service = state.operator_command_service
     if not service:
         logger.error("Operator Command Service not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("Operator Command Service not available")
@@ -240,31 +270,35 @@ async def get_g8ee_operator_command_service(request: Request) -> OperatorCommand
 
 
 async def get_g8ee_heartbeat_service(request: Request) -> HeartbeatSnapshotService:
-    service = getattr(request.app.state, "heartbeat_service", None)
+    state = cast(G8eeAppState, request.app.state)
+    service = state.services.heartbeat_service
     if not service:
         logger.error("Heartbeat service not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("Heartbeat service not available")
-    return service
+    return cast(HeartbeatSnapshotService, service)
 
 
 async def get_g8ee_operator_data_service(request: Request) -> OperatorDataService:
-    service = getattr(request.app.state, "operator_data_service", None)
+    state = cast(G8eeAppState, request.app.state)
+    service = state.services.operator_data_service
     if not service:
         logger.error("Operator Data Service not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("Operator Data Service not available")
-    return service
+    return cast(OperatorDataService, service)
 
 
 async def get_g8ee_operator_lifecycle_service(request: Request) -> OperatorLifecycleService:
-    service = getattr(request.app.state, "operator_lifecycle_service", None)
+    state = cast(G8eeAppState, request.app.state)
+    service = state.services.operator_lifecycle_service
     if not service:
         logger.error("Operator Lifecycle Service not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("Operator Lifecycle Service not available")
-    return service
+    return cast(OperatorLifecycleService, service)
 
 
 async def get_g8ee_operator_session_service(request: Request) -> OperatorSessionService:
-    service = getattr(request.app.state, "operator_session_service", None)
+    state = cast(G8eeAppState, request.app.state)
+    service = state.services.operator_session_service
     if not service:
         logger.error("Operator Session Service not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("Operator Session Service not available")
@@ -272,7 +306,8 @@ async def get_g8ee_operator_session_service(request: Request) -> OperatorSession
 
 
 async def get_g8ee_operator_auth_service(request: Request) -> OperatorAuthService:
-    service = getattr(request.app.state, "operator_auth_service", None)
+    state = cast(G8eeAppState, request.app.state)
+    service = state.services.operator_auth_service
     if not service:
         logger.error("Operator Auth Service not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("Operator Auth Service not available")
@@ -280,7 +315,8 @@ async def get_g8ee_operator_auth_service(request: Request) -> OperatorAuthServic
 
 
 async def get_g8ee_session_auth_listener(request: Request) -> SessionAuthListener:
-    service = getattr(request.app.state, "session_auth_listener", None)
+    state = cast(G8eeAppState, request.app.state)
+    service = state.services.session_auth_listener
     if not service:
         logger.error("Session Auth Listener not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("Session Auth Listener not available")
@@ -288,7 +324,8 @@ async def get_g8ee_session_auth_listener(request: Request) -> SessionAuthListene
 
 
 async def get_g8ee_api_key_service(request: Request) -> ApiKeyService:
-    service = getattr(request.app.state, "api_key_service", None)
+    state = cast(G8eeAppState, request.app.state)
+    service = state.services.api_key_service
     if not service:
         logger.error("API Key Service not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("API Key Service not available")
@@ -296,7 +333,8 @@ async def get_g8ee_api_key_service(request: Request) -> ApiKeyService:
 
 
 async def get_g8ee_certificate_service(request: Request) -> CertificateService:
-    service = getattr(request.app.state, "certificate_service", None)
+    state = cast(G8eeAppState, request.app.state)
+    service = state.services.certificate_service
     if not service:
         logger.error("Certificate Service not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("Certificate Service not available")
@@ -304,7 +342,8 @@ async def get_g8ee_certificate_service(request: Request) -> CertificateService:
 
 
 async def get_g8ee_blob_service(request: Request) -> BlobService:
-    service = getattr(request.app.state, "blob_service", None)
+    state = cast(G8eeAppState, request.app.state)
+    service = state.blob_service
     if not service:
         logger.error("Blob Service not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("Blob Service not available")
@@ -312,7 +351,8 @@ async def get_g8ee_blob_service(request: Request) -> BlobService:
 
 
 async def get_g8ee_attachment_service(request: Request) -> AttachmentService:
-    service = getattr(request.app.state, "attachment_service", None)
+    state = cast(G8eeAppState, request.app.state)
+    service = state.services.attachment_service
     if not service:
         logger.error("Attachment Service not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("Attachment Service not available")
@@ -321,7 +361,8 @@ async def get_g8ee_attachment_service(request: Request) -> AttachmentService:
 
 
 async def get_g8ee_g8ed_http_client(request: Request) -> InternalHttpClient:
-    client = getattr(request.app.state, "internal_http_client", None)
+    state = cast(G8eeAppState, request.app.state)
+    client = state.internal_http_client
     if not client:
         logger.error("g8ed HTTP client not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("g8ed HTTP client not available")
@@ -330,12 +371,13 @@ async def get_g8ee_g8ed_http_client(request: Request) -> InternalHttpClient:
 
 
 async def get_g8ee_event_service(request: Request) -> EventService:
-    service = getattr(request.app.state, "g8ed_event_service", None)
+    state = cast(G8eeAppState, request.app.state)
+    service = state.services.g8ed_event_service
     if not service:
         logger.error("g8ed event service not found in app state - g8ee initialization may have failed")
         raise ServiceUnavailableError("g8ed event service not available")
 
-    return service
+    return cast(EventService, service)
 
 
 async def get_g8e_http_context(request: Request) -> G8eHttpContext:

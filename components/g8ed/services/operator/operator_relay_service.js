@@ -43,22 +43,7 @@ export class OperatorRelayService {
         const boundOperator = g8eContext.bound_operators?.[0];
         if (!boundOperator) throw new Error('No bound operator found in context for stop command');
         
-        logger.info('[OPERATOR-RELAY] Relaying stop command to g8ee', {
-            operator_id: boundOperator.operator_id,
-            operator_session_id_tag: sessionIdTag(boundOperator.operator_session_id)
-        });
-
-        const request = new StopOperatorRequest({
-            operator_id: boundOperator.operator_id,
-            operator_session_id: boundOperator.operator_session_id,
-            user_id: g8eContext.user_id,
-        });
-
-        return httpClient.request('g8ee', ApiPaths.g8ee.operatorsStop(), {
-            method: 'POST',
-            body: request.forWire(),
-            g8eContext
-        });
+        return httpClient.stopOperator(boundOperator.operator_id, g8eContext);
     }
 
     async deregisterOperatorSessionInG8ee(g8eContext) {
@@ -91,21 +76,7 @@ export class OperatorRelayService {
         const httpClient = this._getHttpClient();
         if (!httpClient) throw new Error('InternalHttpClient not initialized');
 
-        const boundOperator = g8eContext.bound_operators?.[0];
-        if (!boundOperator) throw new Error('No bound operator found in context for direct command');
-        
-        const directCommandRequest = DirectCommandRequest.parse(commandData);
-
-        logger.info('[OPERATOR-RELAY] Relaying direct command to operator via g8ee', {
-            executionId: directCommandRequest.execution_id,
-            operatorId: boundOperator.operator_id
-        });
-
-        return httpClient.request('g8ee', ApiPaths.g8ee.operatorDirectCommand(), {
-            method: 'POST',
-            body: directCommandRequest.forWire(),
-            g8eContext
-        });
+        return httpClient.sendDirectCommand(commandData, g8eContext);
     }
 
     async relayRegisterOperatorSessionToG8ee(g8eContext) {
@@ -116,21 +87,10 @@ export class OperatorRelayService {
         const boundOperator = g8eContext.bound_operators?.[0];
         if (!boundOperator) throw new Error('No bound operator found in context for registration');
 
-        logger.info('[OPERATOR-RELAY] Registering operator session in g8ee', {
-            operator_id: boundOperator.operator_id,
-            operator_session_id_tag: sessionIdTag(boundOperator.operator_session_id),
-        });
-
-        const request = new OperatorSessionRegistrationRequest({
+        return httpClient.registerOperatorSession({
             operator_id: boundOperator.operator_id,
             operator_session_id: boundOperator.operator_session_id,
-        });
-
-        return httpClient.request('g8ee', ApiPaths.g8ee.operatorsRegisterSession(), {
-            method: 'POST',
-            body: request.forWire(),
-            g8eContext,
-        });
+        }, g8eContext);
     }
 
     async relayApprovalResponseToG8ee(approvalData, g8eContext) {
@@ -138,17 +98,7 @@ export class OperatorRelayService {
         const httpClient = this._getHttpClient();
         if (!httpClient) throw new Error('InternalHttpClient not initialized');
 
-        logger.info('[OPERATOR-RELAY] Relaying operator approval response to g8ee', {
-            approvalId: approvalData.approval_id,
-            approved: approvalData.approved,
-            caseId: g8eContext.case_id
-        });
-
-        return httpClient.request('g8ee', ApiPaths.g8ee.operatorApprovalRespond(), {
-            method: 'POST',
-            body: approvalData,
-            g8eContext
-        });
+        return httpClient.respondToApproval(approvalData, g8eContext);
     }
 
     async relayPendingApprovalsFromG8ee(g8eContext) {
@@ -344,15 +294,7 @@ export class OperatorRelayService {
         const httpClient = this._getHttpClient();
         if (!httpClient) throw new Error('InternalHttpClient not initialized');
 
-        logger.info('[OPERATOR-RELAY] Terminating operator via g8ee', {
-            operator_id: operatorId,
-        });
-
-        return httpClient.request('g8ee', ApiPaths.g8ee.operatorsTerminate(), {
-            method: 'POST',
-            body: { operator_id: operatorId },
-            g8eContext
-        });
+        return httpClient.terminateOperator(operatorId, g8eContext);
     }
 
     async relayListenSessionAuthToG8ee(params, g8eContext) {

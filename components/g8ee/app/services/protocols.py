@@ -418,7 +418,7 @@ class OperatorLifecycleServiceProtocol(Protocol):
         """Update operator status."""
         pass
 
-    async def activate_g8ep_operator(self, user_id: str) -> None:
+    async def activate_g8ep_operator(self, user_id: str, web_session_id: str | None = None) -> None:
         """Orchestrates g8ep operator activation after login."""
         pass
 
