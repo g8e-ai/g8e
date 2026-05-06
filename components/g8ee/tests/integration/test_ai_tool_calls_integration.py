@@ -57,6 +57,7 @@ from app.models.tool_results import (
     FetchFileDiffToolResult,
     FetchFileHistoryToolResult,
     FileEditResult,
+    FsGrepToolResult,
     FsListToolResult,
     FsReadToolResult,
     IntentPermissionResult,
@@ -754,6 +755,61 @@ class TestFileSystemTools:
         assert args.file_path == "/tmp/test.txt"
         assert args.target_operators == ["op-123"]
         assert args.execution_id == "test-execution-id"
+
+    async def test_recursive_grep_tool_payload_processing(
+        self, tool_service, mock_operator_command_service, sample_g8e_context, sample_investigation, request_settings
+    ):
+        """Test recursive_grep_search tool processes payloads correctly."""
+        # Mock successful grep result
+        mock_result = FsGrepToolResult(
+            success=True,
+            path="/home/user",
+            pattern="test",
+            matches=[
+                {
+                    "path": "/home/user/file1.txt",
+                    "line_number": 10,
+                    "content": "test line content"
+                }
+            ],
+            total_matches=1,
+            truncated=False
+        )
+        mock_operator_command_service.execute_fs_grep.return_value = mock_result
+
+        # Test payload for recursive grep
+        tool_args = {
+            "path": "/home/user",
+            "pattern": "test",
+            "includes": ["*.txt"],
+            "max_matches": 100,
+            "target_operators": ["all"],
+        }
+
+        # Execute tool call
+        result = await tool_service.execute_tool_call(
+            tool_name=OperatorToolName.RECURSIVE_GREP,
+            tool_args=tool_args,
+            investigation=sample_investigation,
+            g8e_context=sample_g8e_context,
+            request_settings=request_settings,
+            execution_id="test-execution-id",
+        )
+
+        # Verify payload processing
+        assert isinstance(result, ToolResult)
+        assert result.success
+
+        # Verify command service was called with correct payload
+        mock_operator_command_service.execute_fs_grep.assert_called_once()
+        call_args = mock_operator_command_service.execute_fs_grep.call_args[1]
+
+        assert "args" in call_args
+        args = call_args["args"]
+        assert args.path == "/home/user"
+        assert args.pattern == "test"
+        assert args.includes == ["*.txt"]
+        assert args.max_matches == 100
 
 
 # ---------------------------------------------------------------------------

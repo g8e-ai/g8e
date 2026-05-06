@@ -143,6 +143,12 @@ export const EventType = Object.freeze({
     OPERATOR_FILESYSTEM_READ_COMPLETED: _EVENTS['operator']['filesystem']['read']['completed'],
     OPERATOR_FILESYSTEM_READ_FAILED:    _EVENTS['operator']['filesystem']['read']['failed'],
 
+    OPERATOR_FILESYSTEM_GREP_STARTED:   _EVENTS['operator']['filesystem']['grep']['started'],
+    OPERATOR_FILESYSTEM_GREP_REQUESTED: _EVENTS['operator']['filesystem']['grep']['requested'],
+    OPERATOR_FILESYSTEM_GREP_RECEIVED:  _EVENTS['operator']['filesystem']['grep']['received'],
+    OPERATOR_FILESYSTEM_GREP_COMPLETED: _EVENTS['operator']['filesystem']['grep']['completed'],
+    OPERATOR_FILESYSTEM_GREP_FAILED:    _EVENTS['operator']['filesystem']['grep']['failed'],
+
     OPERATOR_LOGS_FETCH_REQUESTED: _EVENTS['operator']['logs']['fetch']['requested'],
     OPERATOR_LOGS_FETCH_RECEIVED:  _EVENTS['operator']['logs']['fetch']['received'],
     OPERATOR_LOGS_FETCH_COMPLETED: _EVENTS['operator']['logs']['fetch']['completed'],

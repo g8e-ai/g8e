@@ -164,6 +164,69 @@ The Ledger is a Git repository located at `.g8e/data/ledger`.
 ### Vault Encryption
 The Audit Vault (`.g8e/data/g8e.db`) is encrypted using AES-256-GCM when an encryption vault is configured. Sensitive fields like `content_text`, `stdout`, and `stderr` are never stored in plain text.
 
+### Querying the LFAA Audit Vault
+
+The LFAA Audit Vault can be queried directly using SQLite commands for forensic analysis and audit review.
+
+**Database Location:**
+- Container: `/opt/g8e/.g8e/data/g8e.db`
+- Host (after copy): Copy from container via `docker cp g8es:/opt/g8e/.g8e/data/g8e.db /tmp/g8e.db`
+
+**Schema Tables:**
+- `sessions` — Web session records (id, title, created_at, user_identity)
+- `events` — Event logs (id, web_session_id, timestamp, type, content_text, command_raw, command_exit_code, command_stdout, command_stderr, execution_duration_ms, stored_locally, stdout_truncated, stderr_truncated, encrypted)
+- `file_mutation_log` — File mutation records (id, event_id, filepath, operation, ledger_hash_before, ledger_hash_after, diff_stat)
+
+**Common Queries:**
+
+```sql
+-- List all sessions
+SELECT id, title, created_at, user_identity FROM sessions ORDER BY created_at DESC LIMIT 50;
+
+-- Get session details
+SELECT id, title, created_at, user_identity FROM sessions WHERE id = 'SESSION_ID';
+
+-- Count events by type for a session
+SELECT type, COUNT(*) as cnt FROM events WHERE web_session_id = 'SESSION_ID' GROUP BY type;
+
+-- List events for a session
+SELECT id, web_session_id, timestamp, type, content_text, command_raw,
+command_exit_code, command_stdout, command_stderr, execution_duration_ms,
+stored_locally, stdout_truncated, stderr_truncated, encrypted
+FROM events WHERE web_session_id = 'SESSION_ID'
+ORDER BY timestamp DESC LIMIT 50;
+
+-- Filter events by type (USER_MSG, AI_MSG, CMD_EXEC, FILE_MUTATION)
+SELECT * FROM events WHERE web_session_id = 'SESSION_ID' AND type = 'CMD_EXEC'
+ORDER BY timestamp DESC LIMIT 50;
+
+-- List file mutations
+SELECT fml.id, fml.event_id, fml.filepath, fml.operation,
+fml.ledger_hash_before, fml.ledger_hash_after, fml.diff_stat,
+e.timestamp, e.web_session_id
+FROM file_mutation_log fml
+JOIN events e ON fml.event_id = e.id
+ORDER BY e.timestamp DESC LIMIT 50;
+
+-- Statistics
+SELECT COUNT(*) FROM sessions;
+SELECT COUNT(*) FROM events;
+SELECT COUNT(*) FROM file_mutation_log;
+SELECT type, COUNT(*) as cnt FROM events GROUP BY type ORDER BY cnt DESC;
+SELECT COUNT(*) FROM events WHERE encrypted = 1;
+SELECT MIN(timestamp), MAX(timestamp) FROM events;
+```
+
+**Python CLI Tool:**
+For structured queries with formatting, use the management script:
+```bash
+./g8e data audit --db-path /opt/g8e/.g8e/data/g8e.db sessions
+./g8e data audit --db-path /opt/g8e/.g8e/data/g8e.db events --session SESSION_ID
+./g8e data audit --db-path /opt/g8e/.g8e/data/g8e.db stats
+```
+
+See `scripts/data/manage-lfaa.py` for full CLI reference.
+
 ---
 
 ## Canonical Collections

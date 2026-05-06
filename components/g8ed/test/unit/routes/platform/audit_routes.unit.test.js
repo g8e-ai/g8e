@@ -132,7 +132,7 @@ describe('Audit Routes [UNIT]', () => {
                 expect.arrayContaining([
                     { field: 'user_id', operator: '==', value: 'user_123' }
                 ]),
-                100
+                1000
             );
             expect(res.json).toHaveBeenCalledWith(expect.any(Object));
             const responseData = res.json.mock.calls[0][0];
@@ -176,7 +176,7 @@ describe('Audit Routes [UNIT]', () => {
                 expect.arrayContaining([
                     { field: 'user_id', operator: '==', value: 'user_123' }
                 ]),
-                100
+                1000
             );
             expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/json');
             expect(res.setHeader).toHaveBeenCalledWith('Content-Disposition', expect.stringContaining('.json"'));

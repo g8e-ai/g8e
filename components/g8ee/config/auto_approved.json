@@ -20,6 +20,7 @@
         {"value": "head", "reason": "Display file start; read-only operation"},
         {"value": "tail", "reason": "Display file end; read-only operation"},
         {"value": "grep", "reason": "Search text; read-only operation"},
+        {"value": "fs_grep", "reason": "Recursive regex search; read-only context gathering"},
         {"value": "sort", "reason": "Sort lines; read-only operation"},
         {"value": "uniq", "reason": "Filter duplicates; read-only operation"},
         {"value": "cut", "reason": "Extract columns; read-only operation"},

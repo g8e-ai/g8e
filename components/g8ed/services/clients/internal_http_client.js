@@ -455,12 +455,13 @@ class InternalHttpClient{
      * @param {string} prefix - Key prefix (default: 'g8e_')
      * @returns {Promise<{success: boolean, api_key?: string, error?: string}>}
      */
-    async generateApiKey(prefix = 'g8e_') {
+    async generateApiKey(prefix = 'g8e_', g8eContext = null) {
         logger.info('[HTTP-INTERNAL] Requesting API key generation', { prefix });
         
         return this.request('g8ee', ApiPaths.g8ee.auth_generate_key(), {
             method: 'POST',
             body: { prefix },
+            g8eContext
         });
     }
 
@@ -530,12 +531,13 @@ class InternalHttpClient{
      * @param {string} user_id - User ID to activate operator for
      * @returns {Promise<{success: boolean, error?: string}>}
      */
-    async activateG8EPOperator(user_id) {
+    async activateG8EPOperator(user_id, g8eContext = null) {
         logger.info('[HTTP-INTERNAL] Requesting g8ep operator activation', { user_id });
         
         return this.request('g8ee', ApiPaths.g8ee.operatorsG8epActivate(), {
             method: 'POST',
             body: { user_id },
+            g8eContext
         });
     }
 
@@ -544,12 +546,13 @@ class InternalHttpClient{
      * @param {string} user_id - User ID to relaunch operator for
      * @returns {Promise<{success: boolean, operator_id?: string, error?: string}>}
      */
-    async relaunchG8EPOperator(user_id) {
+    async relaunchG8EPOperator(user_id, g8eContext = null) {
         logger.info('[HTTP-INTERNAL] Requesting g8ep operator relaunch', { user_id });
         
         return this.request('g8ee', ApiPaths.g8ee.operatorsG8epRelaunch(), {
             method: 'POST',
             body: { user_id },
+            g8eContext
         });
     }
 }

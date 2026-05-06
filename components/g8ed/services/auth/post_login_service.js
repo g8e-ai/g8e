@@ -16,6 +16,8 @@ import { SESSION_COOKIE_NAME, COOKIE_SAME_SITE, SESSION_TTL_SECONDS } from '../.
 import { getCookieDomain } from '../../utils/security.js';
 import { EventType } from '../../constants/events.js';
 import { OperatorSlotInitializationFailedEvent, OperatorG8EPActivationFailedEvent } from '../../models/sse_models.js';
+import { G8eHttpContext } from '../../models/request_models.js';
+import { SentinelId } from '../../constants/document_ids.js';
 
 export class PostLoginService {
     /**
@@ -42,10 +44,21 @@ export class PostLoginService {
         try {
             const existing = await this.userService.getUserG8eKey(user.id);
             let downloadApiKey = existing;
+
+            // Generate G8eHttpContext for the internal calls
+            const g8eContext = G8eHttpContext.parse({
+                user_id: user.id,
+                organization_id: user.organization_id || user.id,
+                case_id: SentinelId.UNKNOWN,
+                investigation_id: SentinelId.UNKNOWN,
+                source_component: 'g8ed'
+            });
+
             if (!downloadApiKey) {
                 const keyResult = await this.userService.createUserG8eKey(
                     user.id,
-                    user.organization_id || user.id
+                    user.organization_id || user.id,
+                    g8eContext
                 );
                 downloadApiKey = keyResult.success ? keyResult.api_key : null;
             }
@@ -99,6 +112,15 @@ export class PostLoginService {
     }
 
     async _initializeSlotsAndActivateG8eNode(user, session, context) {
+        const g8eContext = G8eHttpContext.parse({
+            user_id: user.id,
+            web_session_id: session.id,
+            organization_id: user.organization_id || user.id,
+            case_id: SentinelId.UNKNOWN,
+            investigation_id: SentinelId.UNKNOWN,
+            source_component: 'g8ed'
+        });
+
         await this.operatorService.initializeOperatorSlots(
             user.id,
             user.organization_id || user.id,
@@ -108,7 +130,8 @@ export class PostLoginService {
         await this.g8eNodeOperatorService.activateG8ENodeOperatorForUser(
             user.id,
             user.organization_id || null,
-            session.id
+            session.id,
+            g8eContext
         );
     }
 

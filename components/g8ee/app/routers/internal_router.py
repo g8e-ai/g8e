@@ -36,6 +36,7 @@ from app.constants import (
     Priority,
     InternalApiPaths,
 )
+from app.constants.collections import SENTINEL_ID_UNKNOWN
 from app.errors import ResourceNotFoundError, ServiceUnavailableError
 from app.models import CaseCreateRequest, CaseEventPayload, CaseUpdateRequest
 from app.models.cases import CaseCreatedPayload
@@ -84,6 +85,7 @@ from app.models.internal_api import (
     StopAIRequest,
     StopAIResponse,
     StopOperatorRequest,
+    UserSettingsUpdateResponse,
 )
 from app.models.triage_api import (
     TriageAnswerRequest,
@@ -309,7 +311,7 @@ async def internal_chat(
             logger.error("[INTERNAL-HTTP] Failed to retrieve attachments: %s", att_err)
 
     # Validate investigation_id exists before proceeding (allow NEW_CASE_ID for new cases)
-    if not g8e_context.investigation_id or g8e_context.investigation_id == "unknown":
+    if not g8e_context.investigation_id or g8e_context.investigation_id == SENTINEL_ID_UNKNOWN:
         logger.error(
             "[INTERNAL-HTTP] Cannot start chat - investigation_id is missing or unknown",
             extra={"case_id": g8e_context.case_id, "web_session_id": g8e_context.web_session_id[:8] + "..."}

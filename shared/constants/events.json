@@ -200,6 +200,13 @@
         "received": "g8e.v1.operator.filesystem.read.received",
         "completed": "g8e.v1.operator.filesystem.read.completed",
         "failed": "g8e.v1.operator.filesystem.read.failed"
+      },
+      "grep": {
+        "started": "g8e.v1.operator.filesystem.grep.started",
+        "requested": "g8e.v1.operator.filesystem.grep.requested",
+        "received": "g8e.v1.operator.filesystem.grep.received",
+        "completed": "g8e.v1.operator.filesystem.grep.completed",
+        "failed": "g8e.v1.operator.filesystem.grep.failed"
       }
     },
     "logs": {

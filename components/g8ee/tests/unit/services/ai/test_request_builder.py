@@ -167,6 +167,24 @@ class TestBuildContentsFromHistory:
         assert contents[0].parts[1].text == "att"
         assert len(contents[1].parts) == 1  # AI message untouched
 
+    def test_skips_unknown_sender_types(self, builder):
+        history = [
+            ConversationHistoryMessage(sender=MessageSender.SYSTEM, content="system alert", prev_hash="0" * 64),
+            ConversationHistoryMessage(sender=MessageSender.AI_TRIAGE, content="triage note", prev_hash="1" * 64),
+        ]
+        assert builder.build_contents_from_history(history) == []
+
+    def test_attachments_not_appended_if_no_user_message(self, builder):
+        history = [
+            ConversationHistoryMessage(sender=MessageSender.AI_PRIMARY, content="ai only", prev_hash="0" * 64),
+        ]
+        att_parts = [types.Part.from_text(text="att")]
+        contents = builder.build_contents_from_history(history, attachments=att_parts)
+        
+        assert len(contents) == 1
+        assert len(contents[0].parts) == 1
+        assert contents[0].parts[0].text == "ai only"
+
 
 class TestGetGenerationConfig:
     """Tests for get_generation_config logic."""

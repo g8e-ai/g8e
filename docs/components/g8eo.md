@@ -82,6 +82,8 @@ g8eo implements the **Local-First Audit Architecture (LFAA)**, maintaining four 
 | **Audit Vault** | Append-only event timeline (LFAA). | Platform / Audit |
 | **Ledger** | Git-backed cryptographic version history for all modified files. | Platform / Audit |
 
+The LFAA Audit Vault (`.g8e/data/g8e.db`) can be queried directly using SQLite for forensic analysis and audit review. See [Storage Architecture - Querying the LFAA Audit Vault](../architecture/storage.md#querying-the-lfaa-audit-vault) for raw SQL queries and the Python CLI tool reference.
+
 *Note: The Ledger requires a functional `git` binary and is automatically disabled if git is unavailable or `--no-git` is passed.*
 
 ---

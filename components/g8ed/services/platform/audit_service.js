@@ -21,6 +21,7 @@ export const AuditEventCategory = {
     COMMAND: 'command',
     APPROVAL: 'approval',
     FILE_EDIT: 'file_edit',
+    FILESYSTEM: 'filesystem',
     SYSTEM: 'system',
     OTHER: 'other'
 };
@@ -51,6 +52,10 @@ export class AuditService {
 
         if (et.includes('.file.edit.')) {
             return AuditEventCategory.FILE_EDIT;
+        }
+
+        if (et.includes('.filesystem.')) {
+            return AuditEventCategory.FILESYSTEM;
         }
 
         if (et.includes('.platform.') || et.includes('.system.')) {

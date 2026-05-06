@@ -96,6 +96,8 @@ Every state change is recorded in an append-only `history_trail` using SHA-256 c
 - The `entry_hash` seals the current record's integrity.
 - This ledger is stored on the host in `.g8e/data/g8e.db`.
 
+The LFAA Audit Vault can be queried directly using SQLite for forensic analysis. See [Storage Architecture](storage.md#querying-the-lfaa-audit-vault) for raw SQL queries and the Python CLI tool reference.
+
 ### 2. System Fingerprinting
 Operators generate a stable hardware fingerprint (machine-id, CPU count, OS) at startup.
 - **Invariant**: Once an API key is used, it is permanently bound to that fingerprint.

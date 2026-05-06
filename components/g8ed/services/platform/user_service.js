@@ -63,11 +63,11 @@ class UserService {
         logger.info('[USER-SERVICE] Initialized with injected dependencies');
     }
 
-    async _generateApiKey() {
-        if (this._apiKeyService) {
-            return await this._apiKeyService.generateRawKey();
+    async _generateApiKey(g8eContext = null) {
+        if (!this._apiKeyService) {
+            throw new G8eKeyError('ApiKeyService is required for key generation - g8ee must be reachable');
         }
-        return `${API_KEY_PREFIX}${crypto.randomBytes(32).toString('hex')}`;
+        return await this._apiKeyService.generateRawKey(API_KEY_PREFIX, g8eContext);
     }
 
     /**
@@ -389,7 +389,7 @@ class UserService {
      * @param {string} organizationId
      * @returns {Promise<{success: boolean, api_key?: string, error?: string}>}
      */
-    async createUserG8eKey(userId, organizationId) {
+    async createUserG8eKey(userId, organizationId, g8eContext = null) {
         try {
             if (!this._apiKeyService) {
                 throw new Error('apiKeyService is required');
@@ -408,7 +408,7 @@ class UserService {
                 return { success: false, error: 'User already has a download API key' };
             }
 
-            const downloadApiKey = await this._generateApiKey();
+            const downloadApiKey = await this._generateApiKey(g8eContext);
             const ts = now();
 
             const storeResult = await this._apiKeyService.issueKey(downloadApiKey, {
@@ -456,7 +456,7 @@ class UserService {
      * @param {string} organizationId
      * @returns {Promise<{success: boolean, api_key?: string, error?: string}>}
      */
-    async refreshUserG8eKey(userId, organizationId) {
+    async refreshUserG8eKey(userId, organizationId, g8eContext = null) {
         try {
             if (!this._apiKeyService) {
                 throw new G8eKeyError('apiKeyService is required');
@@ -485,7 +485,7 @@ class UserService {
             }
 
             // Generate and issue new key
-            const downloadApiKey = await this._generateApiKey();
+            const downloadApiKey = await this._generateApiKey(g8eContext);
 
             const storeResult = await this._apiKeyService.issueKey(downloadApiKey, {
                 user_id: userId,

@@ -128,11 +128,12 @@ class G8ENodeOperatorService {
      * Delegates to g8ee via InternalHttpClient.
      *
      * @param {string} user_id
+     * @param {G8eHttpContext} g8eContext - REQUIRED G8eHttpContext
      * @returns {Promise<{ success: boolean, operator_id?: string, error?: string }>}
      */
-    async relaunchG8ENodeOperatorForUser(user_id) {
+    async relaunchG8ENodeOperatorForUser(user_id, g8eContext = null) {
         logger.info('[G8EP-OPERATOR] Relaunching g8ep operator via g8ee', { user_id });
-        return this._internalHttpClient.relaunchG8EPOperator(user_id);
+        return this._internalHttpClient.relaunchG8EPOperator(user_id, g8eContext);
     }
 
     /**
@@ -144,11 +145,12 @@ class G8ENodeOperatorService {
      * @param {string} user_id
      * @param {string|null} organization_id
      * @param {string} web_session_id
+     * @param {G8eHttpContext} g8eContext - G8eHttpContext
      */
-    async activateG8ENodeOperatorForUser(user_id, organization_id, web_session_id) {
+    async activateG8ENodeOperatorForUser(user_id, organization_id, web_session_id, g8eContext = null) {
         logger.info('[G8EP-OPERATOR] Activating g8ep operator via g8ee', { user_id });
         try {
-            await this._internalHttpClient.activateG8EPOperator(user_id);
+            await this._internalHttpClient.activateG8EPOperator(user_id, g8eContext);
         } catch (err) {
             logger.warn('[G8EP-OPERATOR] g8ep operator activation failed (non-fatal)', {
                 user_id,

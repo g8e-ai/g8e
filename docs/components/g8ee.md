@@ -473,6 +473,7 @@ Consumers (auth gate, Tribunal routing, prompt assembly) all derive from this on
 | `file_update_on_operator` | Yes | Gated | Surgical find-and-replace within files |
 | `file_read_on_operator` | No | Gated | Read file content (with optional line ranges) |
 | `list_files_and_directories_with_detailed_metadata` | No | Gated | Directory listing with metadata |
+| `recursive_grep_search` | No | Gated | Recursive regex search for context gathering |
 | `fetch_file_history` | No | Gated | Retrieve file edit history and commit information |
 | `fetch_file_diff` | No | Gated | Retrieve specific file diffs and change details |
 | `check_port_status` | No | Gated | Check TCP/UDP port reachability |

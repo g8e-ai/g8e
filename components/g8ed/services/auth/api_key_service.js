@@ -39,23 +39,23 @@ class ApiKeyService {
     /**
      * Generate a new raw API key via g8ee authority.
      * @param {string} prefix - Key prefix
+     * @param {G8eHttpContext} g8eContext - REQUIRED G8eHttpContext
      * @returns {Promise<string>}
      */
-    async generateRawKey(prefix = API_KEY_PREFIX) {
+    async generateRawKey(prefix = API_KEY_PREFIX, g8eContext = null) {
         if (!this._internalHttp) {
-            logger.warn('[API-KEY-SERVICE] InternalHttpClient not available, falling back to local generation');
-            return `${prefix}${crypto.randomBytes(32).toString('hex')}`;
+            throw new Error('InternalHttpClient is required for key generation - g8ee must be reachable');
         }
 
         try {
-            const response = await this._internalHttp.generateApiKey(prefix);
+            const response = await this._internalHttp.generateApiKey(prefix, g8eContext);
             if (response.success && response.api_key) {
                 return response.api_key;
             }
             throw new Error(response.error || 'Failed to generate API key via g8ee');
         } catch (error) {
-            logger.error('[API-KEY-SERVICE] g8ee key generation failed, falling back to local', { error: error.message });
-            return `${prefix}${crypto.randomBytes(32).toString('hex')}`;
+            logger.error('[API-KEY-SERVICE] g8ee key generation failed', { error: error.message });
+            throw new Error(`g8ee unreachable: ${error.message}. Ensure g8ee is running and accessible.`);
         }
     }
 
@@ -162,14 +162,6 @@ class ApiKeyService {
             logger.error('[API-KEY-SERVICE] Failed to revoke key', { error: error.message });
             return { success: false };
         }
-    }
-
-    /**
-     * Legacy compatibility for storeApiKey (matches previous signature).
-     * @deprecated Use issueKey instead.
-     */
-    async storeApiKey(apiKey, keyData) {
-        return this.issueKey(apiKey, keyData);
     }
 
     _getLogPrefix(apiKey) {

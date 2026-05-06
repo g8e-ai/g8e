@@ -92,24 +92,26 @@ describe('G8ENodeOperatorService [UNIT]', () => {
     });
 
     describe('relaunchG8ENodeOperatorForUser', () => {
-        it('delegates to internalHttpClient.relaunchG8EPOperator', async () => {
+        it('delegates to internalHttpClient.relaunchG8EPOperator with context', async () => {
             const mockResult = { success: true, operator_id: 'op_123' };
             internalHttpClient.relaunchG8EPOperator.mockResolvedValue(mockResult);
+            const context = { case_id: 'test' };
 
-            const result = await service.relaunchG8ENodeOperatorForUser('user_123');
+            const result = await service.relaunchG8ENodeOperatorForUser('user_123', context);
 
             expect(result).toEqual(mockResult);
-            expect(internalHttpClient.relaunchG8EPOperator).toHaveBeenCalledWith('user_123');
+            expect(internalHttpClient.relaunchG8EPOperator).toHaveBeenCalledWith('user_123', context);
         });
     });
 
     describe('activateG8ENodeOperatorForUser', () => {
-        it('delegates to internalHttpClient.activateG8EPOperator', async () => {
+        it('delegates to internalHttpClient.activateG8EPOperator with context', async () => {
             internalHttpClient.activateG8EPOperator.mockResolvedValue({ success: true });
+            const context = { case_id: 'test' };
 
-            await service.activateG8ENodeOperatorForUser('user_123', null, 'sess_1');
+            await service.activateG8ENodeOperatorForUser('user_123', null, 'sess_1', context);
 
-            expect(internalHttpClient.activateG8EPOperator).toHaveBeenCalledWith('user_123');
+            expect(internalHttpClient.activateG8EPOperator).toHaveBeenCalledWith('user_123', context);
         });
 
         it('does not throw when activation fails', async () => {

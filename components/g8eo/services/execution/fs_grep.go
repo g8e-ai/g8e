@@ -116,6 +116,33 @@ func (s *FsGrepService) ExecuteFsGrep(ctx context.Context, req *models.FsGrepReq
 		default:
 		}
 
+		// Security: Check for symlinks and enforce boundary constraints
+		info, err := d.Info()
+		if err == nil && info.Mode()&os.ModeSymlink != 0 {
+			// Resolve symlink target
+			target, err := filepath.EvalSymlinks(path)
+			if err != nil {
+				// Skip symlinks we can't resolve
+				return nil
+			}
+
+			// Check if resolved target is within the base directory
+			rel, err := filepath.Rel(absPath, target)
+			if err != nil {
+				// Skip symlinks we can't resolve relative path
+				return nil
+			}
+
+			// If the relative path starts with "..", it points outside the base directory
+			if strings.HasPrefix(rel, "..") {
+				s.logger.Warn("Skipping symlink that points outside search boundary",
+					"symlink", path,
+					"target", target,
+					"base", absPath)
+				return nil
+			}
+		}
+
 		if d.IsDir() {
 			// Skip hidden directories (like .git)
 			if d.Name() != "." && strings.HasPrefix(d.Name(), ".") {

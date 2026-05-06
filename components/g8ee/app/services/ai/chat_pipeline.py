@@ -323,9 +323,11 @@ class ChatPipelineService:
         otherwise it is fired as a detached asyncio task with a done-callback
         that surfaces failures at WARNING level.
         """
+        from app.constants.collections import SENTINEL_ID_UNKNOWN
+
         logger.info(
             "[SSE-CHAT] _persist_ai_response started: investigation_id=%s response_len=%d",
-            getattr(g8e_context, "investigation_id", "unknown") if g8e_context else "None",
+            getattr(g8e_context, "investigation_id", SENTINEL_ID_UNKNOWN) if g8e_context else "None",
             len(state.response_text),
         )
 
@@ -543,12 +545,14 @@ class ChatPipelineService:
         Optionally registers the current asyncio task with ChatTaskManager so it
         can be cancelled via the stop endpoint.
         """
+        from app.constants.collections import SENTINEL_ID_UNKNOWN
+
         logger.info(
             "[SSE-CHAT] run_chat started: new_case=%s case_id=%s investigation_id=%s web_session_id=%s",
-            getattr(g8e_context, "new_case", "unknown") if g8e_context else "None",
-            getattr(g8e_context, "case_id", "unknown") if g8e_context else "None",
-            getattr(g8e_context, "investigation_id", "unknown") if g8e_context else "None",
-            getattr(g8e_context, "web_session_id", "unknown") if g8e_context else "None",
+            getattr(g8e_context, "new_case", SENTINEL_ID_UNKNOWN) if g8e_context else "None",
+            getattr(g8e_context, "case_id", SENTINEL_ID_UNKNOWN) if g8e_context else "None",
+            getattr(g8e_context, "investigation_id", SENTINEL_ID_UNKNOWN) if g8e_context else "None",
+            getattr(g8e_context, "web_session_id", SENTINEL_ID_UNKNOWN) if g8e_context else "None",
         )
 
         investigation_id = g8e_context.investigation_id if g8e_context else ""

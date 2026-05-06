@@ -217,6 +217,7 @@
     "fetch.file.history": "ai.fetch.file.history",
     "restore.file": "ai.restore.file",
     "fetch.file.diff": "ai.fetch.file.diff",
+    "recursive.grep": "ai.recursive_grep",
     "intent.grant": "ai.intent.grant",
     "intent.revoke": "ai.intent.revoke"
   },
@@ -537,6 +538,7 @@
     "query.investigation.context": "query_investigation_context",
     "get.command.constraints": "get_command_constraints",
     "list.ssh.inventory": "list_ssh_inventory",
+    "recursive.grep": "recursive_grep_search",
     "stream.operator": "stream_operator_to_ssh_fleet"
   },
 

@@ -13,6 +13,8 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { PostLoginService } from '@g8ed/services/auth/post_login_service.js';
+import { G8eHttpContext } from '@g8ed/models/request_models.js';
+import { SentinelId } from '@g8ed/constants/document_ids.js';
 
 vi.mock('@g8ed/utils/logger.js', () => ({
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }
@@ -152,7 +154,14 @@ describe('PostLoginService [UNIT]', () => {
 
             expect(service.userService.createUserG8eKey).toHaveBeenCalledWith(
                 USER_ID,
-                ORG_ID
+                ORG_ID,
+                expect.objectContaining({
+                    user_id: USER_ID,
+                    organization_id: ORG_ID,
+                    case_id: SentinelId.UNKNOWN,
+                    investigation_id: SentinelId.UNKNOWN,
+                    source_component: 'g8ed'
+                })
             );
         });
 
@@ -171,7 +180,14 @@ describe('PostLoginService [UNIT]', () => {
 
             expect(service.userService.createUserG8eKey).toHaveBeenCalledWith(
                 USER_ID,
-                USER_ID
+                USER_ID,
+                expect.objectContaining({
+                    user_id: USER_ID,
+                    organization_id: USER_ID,
+                    case_id: SentinelId.UNKNOWN,
+                    investigation_id: SentinelId.UNKNOWN,
+                    source_component: 'g8ed'
+                })
             );
         });
 
@@ -210,7 +226,15 @@ describe('PostLoginService [UNIT]', () => {
 
             await vi.waitFor(() =>
                 expect(service.g8eNodeOperatorService.activateG8ENodeOperatorForUser)
-                    .toHaveBeenCalledWith(USER_ID, ORG_ID, SESSION_ID)
+                    .toHaveBeenCalledWith(USER_ID, ORG_ID, SESSION_ID,
+                        expect.objectContaining({
+                            user_id: USER_ID,
+                            organization_id: ORG_ID,
+                            web_session_id: SESSION_ID,
+                            case_id: SentinelId.UNKNOWN,
+                            investigation_id: SentinelId.UNKNOWN,
+                            source_component: 'g8ed'
+                        }))
             );
         });
 
@@ -230,7 +254,15 @@ describe('PostLoginService [UNIT]', () => {
 
             await vi.waitFor(() => {
                 expect(service.g8eNodeOperatorService.activateG8ENodeOperatorForUser)
-                    .toHaveBeenCalledWith(USER_ID, null, SESSION_ID);
+                    .toHaveBeenCalledWith(USER_ID, null, SESSION_ID,
+                        expect.objectContaining({
+                            user_id: USER_ID,
+                            organization_id: USER_ID,
+                            web_session_id: SESSION_ID,
+                            case_id: SentinelId.UNKNOWN,
+                            investigation_id: SentinelId.UNKNOWN,
+                            source_component: 'g8ed'
+                        }));
                 expect(service.operatorService.initializeOperatorSlots)
                     .toHaveBeenCalledWith(USER_ID, USER_ID, SESSION_ID);
             });
@@ -312,7 +344,15 @@ describe('PostLoginService [UNIT]', () => {
 
             await vi.waitFor(() =>
                 expect(service.g8eNodeOperatorService.activateG8ENodeOperatorForUser)
-                    .toHaveBeenCalledWith(USER_ID, ORG_ID, SESSION_ID)
+                    .toHaveBeenCalledWith(USER_ID, ORG_ID, SESSION_ID,
+                        expect.objectContaining({
+                            user_id: USER_ID,
+                            organization_id: ORG_ID,
+                            web_session_id: SESSION_ID,
+                            case_id: SentinelId.UNKNOWN,
+                            investigation_id: SentinelId.UNKNOWN,
+                            source_component: 'g8ed'
+                        }))
             );
         });
 
@@ -332,7 +372,15 @@ describe('PostLoginService [UNIT]', () => {
 
             await vi.waitFor(() =>
                 expect(service.g8eNodeOperatorService.activateG8ENodeOperatorForUser)
-                    .toHaveBeenCalledWith(USER_ID, null, SESSION_ID)
+                    .toHaveBeenCalledWith(USER_ID, null, SESSION_ID,
+                        expect.objectContaining({
+                            user_id: USER_ID,
+                            organization_id: USER_ID,
+                            web_session_id: SESSION_ID,
+                            case_id: SentinelId.UNKNOWN,
+                            investigation_id: SentinelId.UNKNOWN,
+                            source_component: 'g8ed'
+                        }))
             );
         });
 

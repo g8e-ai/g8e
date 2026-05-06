@@ -159,8 +159,9 @@ class g8eEngine:
                     llm_provider=llm_provider,
                     g8ed_event_service=g8ed_event_service,
                 ):
-                    if chunk.type == StreamChunkFromModelType.TEXT:
-                        streaming_started = True
+                    # Mark streaming as started as soon as we receive any chunk
+                    # This prevents retries after streaming has begun
+                    streaming_started = True
                     yield chunk
 
                 return

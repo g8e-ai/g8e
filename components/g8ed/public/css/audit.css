@@ -265,6 +265,7 @@ body[data-theme="light"] .audit-table tr:hover {
 .category-command { background: rgba(163, 113, 247, 0.2); color: #a371f7; }
 .category-approval { background: rgba(46, 160, 67, 0.2); color: #3fb950; }
 .category-file_edit { background: rgba(219, 39, 119, 0.2); color: #db2777; }
+.category-filesystem { background: rgba(14, 165, 233, 0.2); color: #22d3ee; }
 .category-tribunal { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
 .category-system { background: rgba(139, 148, 158, 0.2); color: #8b949e; }
 .category-other { background: rgba(139, 148, 158, 0.1); color: #6e7681; }
@@ -273,6 +274,7 @@ body[data-theme="light"] .category-chat { background: #dbeafe; color: #1d4ed8; }
 body[data-theme="light"] .category-command { background: #f3e8ff; color: #7c3aed; }
 body[data-theme="light"] .category-approval { background: #dcfce7; color: #166534; }
 body[data-theme="light"] .category-file_edit { background: #fce7f3; color: #be185d; }
+body[data-theme="light"] .category-filesystem { background: #cffafe; color: #0891b2; }
 body[data-theme="light"] .category-tribunal { background: #fef3c7; color: #d97706; }
 body[data-theme="light"] .category-system { background: #f3f4f6; color: #4b5563; }
 
@@ -629,7 +631,7 @@ body[data-theme="light"] .audit-filter-label {
 
 @media (min-width: 768px) {
     .audit-stats-grid {
-        grid-template-columns: repeat(6, 1fr);
+        grid-template-columns: repeat(8, 1fr);
     }
 }
 

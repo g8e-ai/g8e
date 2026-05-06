@@ -16,6 +16,7 @@ import { ApiKeyService } from '@g8ed/services/auth/api_key_service.js';
 import { ApiKeyDocument } from '@g8ed/models/auth_models.js';
 import { ApiKeyStatus, ApiKeyError } from '@g8ed/constants/auth.js';
 import { API_KEY_PREFIX } from '@g8ed/constants/operator_defaults.js';
+import { G8eHttpContext } from '@g8ed/models/request_models.js';
 
 describe('ApiKeyService [UNIT]', () => {
     let apiKeyDataService;
@@ -39,10 +40,43 @@ describe('ApiKeyService [UNIT]', () => {
     });
 
     describe('generateRawKey', () => {
-        it('generates a prefixed key with random bytes', async () => {
-            const key = await service.generateRawKey();
-            expect(key.startsWith(API_KEY_PREFIX)).toBe(true);
-            expect(key.length).toBeGreaterThan(API_KEY_PREFIX.length + 32);
+        it('delegates to internalHttpClient.generateApiKey when available', async () => {
+            const mockKey = `${API_KEY_PREFIX}${'a'.repeat(64)}`;
+            const mockInternalHttpClient = {
+                generateApiKey: vi.fn().mockResolvedValue({ success: true, api_key: mockKey })
+            };
+            const serviceWithHttp = new ApiKeyService({ apiKeyDataService, internalHttpClient: mockInternalHttpClient });
+            const context = G8eHttpContext.parse({ user_id: 'u1', organization_id: 'o1', case_id: 'test', investigation_id: 'inv', source_component: 'g8ed' });
+
+            const key = await serviceWithHttp.generateRawKey(API_KEY_PREFIX, context);
+
+            expect(key).toBe(mockKey);
+            expect(mockInternalHttpClient.generateApiKey).toHaveBeenCalledWith(API_KEY_PREFIX, context);
+        });
+
+        it('throws error when internalHttpClient is not provided', async () => {
+            const context = G8eHttpContext.parse({ user_id: 'u1', organization_id: 'o1', case_id: 'test', investigation_id: 'inv', source_component: 'g8ed' });
+            await expect(service.generateRawKey(API_KEY_PREFIX, context)).rejects.toThrow('InternalHttpClient is required for key generation - g8ee must be reachable');
+        });
+
+        it('throws error when generateApiKey returns failure', async () => {
+            const mockInternalHttpClient = {
+                generateApiKey: vi.fn().mockResolvedValue({ success: false, error: 'g8ee unavailable' })
+            };
+            const serviceWithHttp = new ApiKeyService({ apiKeyDataService, internalHttpClient: mockInternalHttpClient });
+            const context = G8eHttpContext.parse({ user_id: 'u1', organization_id: 'o1', case_id: 'test', investigation_id: 'inv', source_component: 'g8ed' });
+
+            await expect(serviceWithHttp.generateRawKey(API_KEY_PREFIX, context)).rejects.toThrow('g8ee unreachable');
+        });
+
+        it('throws error when generateApiKey throws', async () => {
+            const mockInternalHttpClient = {
+                generateApiKey: vi.fn().mockRejectedValue(new Error('Network error'))
+            };
+            const serviceWithHttp = new ApiKeyService({ apiKeyDataService, internalHttpClient: mockInternalHttpClient });
+            const context = G8eHttpContext.parse({ user_id: 'u1', organization_id: 'o1', case_id: 'test', investigation_id: 'inv', source_component: 'g8ed' });
+
+            await expect(serviceWithHttp.generateRawKey(API_KEY_PREFIX, context)).rejects.toThrow('g8ee unreachable');
         });
     });
 
