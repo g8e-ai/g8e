@@ -67,19 +67,19 @@ from app.models.tool_results import (
     CommandRiskAnalysis,
     ErrorAnalysisResult,
 )
-from app.services.ai.auditor_service import (
-    _MAX_TOKENS_AUDITOR,
-    run_auditor,
-)
+from app.services.ai.auditor_service import run_auditor
 from app.services.ai.generator import (
-    _MAX_TOKENS_GENERATION,
     TribunalEmitter,
     _build_and_emit_result,
-    _is_system_error,
     _member_for_pass,
     _resolve_model,
     generate_command,
 )
+from app.services.ai.tribunal.stages.generation import _run_generation_pass
+from app.services.ai.tribunal.stages.auditor import _run_audit_stage
+from app.services.ai.tribunal.stages.warden import _run_warden_stage
+from app.services.ai.tribunal.utils import _is_system_error
+from app.models.model_configs import get_model_config
 from app.utils.agent_persona_loader import get_agent_persona
 
 _TEST_HMAC_KEY = "a" * 64
@@ -192,8 +192,8 @@ class TestRoleImportRegression:
         emitter = TribunalEmitter(None, _make_mock_g8e_context())
         pass_errors: list[str] = []
 
-        # Importing from generator.py which now imports from its submodules
-        from app.services.ai.generator import _run_generation_pass
+        # Importing from generation module
+        from app.services.ai.tribunal.stages.generation import _run_generation_pass
         result = await _run_generation_pass(
             provider=mock_provider,
             model="test-model",
@@ -849,24 +849,18 @@ class TestRunAuditStageWardenRiskAnalysis:
         analyzer = self._make_analyzer(RiskLevel.LOW)
         emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
-        final_cmd, outcome, passed, revision, auditor_reason, commitment_id, risk_analysis = await _run_audit_stage(
-            provider=MagicMock(), model="test-model", request="list files", guidelines="",
-            vote_winner="ls -la", vote_breakdown=self._make_breakdown(), tied_candidates=None,
+        risk_analysis = await _run_warden_stage(
+            request="list files", guidelines="",
+            vote_winner="ls -la",
             operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-            auditor_enabled=False,
             emitter=emitter,
-            command_constraints_message="No whitelist or blacklist constraints are active.",
             settings=_MOCK_USER_SETTINGS,
             ai_response_analyzer=analyzer,
-            **_AUDIT_STAGE_REPUTATION_KWARGS,
+            investigation_id="inv-test",
+            investigation_state=MagicMock(),
         )
 
         analyzer.analyze_command_risk.assert_awaited_once()
-        assert final_cmd == "ls -la"
-        assert outcome == CommandGenerationOutcome.CONSENSUS
-        assert passed is True
-        assert revision is None
-        assert auditor_reason == AuditorReason.OK
         assert risk_analysis is not None
         assert risk_analysis.risk_level == RiskLevel.LOW
 
@@ -892,17 +886,15 @@ class TestRunAuditStageWardenRiskAnalysis:
         investigation_state.warden_block_count = 0
 
         with pytest.raises(TribunalWardenBlockedError) as exc_info:
-            await _run_audit_stage(
-                provider=MagicMock(), model="test-model", request="purge logs", guidelines="",
-                vote_winner="rm -rf /var/log", vote_breakdown=self._make_breakdown(), tied_candidates=None,
+            await _run_warden_stage(
+                request="purge logs", guidelines="",
+                vote_winner="rm -rf /var/log",
                 operator_context=_make_mock_operator_context(os="linux", username="root", uid=0),
-                auditor_enabled=True,
                 emitter=emitter,
-                command_constraints_message="No whitelist or blacklist constraints are active.",
                 settings=_MOCK_USER_SETTINGS,
                 ai_response_analyzer=analyzer,
+                investigation_id="inv-test",
                 investigation_state=investigation_state,
-                **_AUDIT_STAGE_REPUTATION_KWARGS,
             )
 
         assert exc_info.value.risk_level == RiskLevel.HIGH
@@ -940,17 +932,15 @@ class TestRunAuditStageWardenRiskAnalysis:
         investigation_state.warden_block_count = 1
 
         with pytest.raises(TribunalWardenBlockedError) as exc_info:
-            await _run_audit_stage(
-                provider=MagicMock(), model="test-model", request="purge logs", guidelines="",
-                vote_winner="rm -rf /var/log", vote_breakdown=self._make_breakdown(), tied_candidates=None,
+            await _run_warden_stage(
+                request="purge logs", guidelines="",
+                vote_winner="rm -rf /var/log",
                 operator_context=_make_mock_operator_context(os="linux", username="root", uid=0),
-                auditor_enabled=True,
                 emitter=emitter,
-                command_constraints_message="No whitelist or blacklist constraints are active.",
                 settings=_MOCK_USER_SETTINGS,
                 ai_response_analyzer=analyzer,
+                investigation_id="inv-test",
                 investigation_state=investigation_state,
-                **_AUDIT_STAGE_REPUTATION_KWARGS,
             )
 
         assert exc_info.value.risk_level == RiskLevel.HIGH
@@ -1720,81 +1710,6 @@ class TestGenerateCommandAuditorFailure:
             for call in mock_event_service.publish.call_args_list
         ]
         assert emitted_types.count(EventType.TRIBUNAL_VOTING_PASS_COMPLETED) == 2
-
-
-class TestMaxTokensConstants:
-    """_MAX_TOKENS constants are used by generation passes and auditor."""
-
-    @pytest.mark.asyncio
-    async def test_generation_pass_uses_max_tokens(self):
-        mock_response = MagicMock()
-        mock_response.text = "ls -la"
-        mock_provider = MagicMock()
-        mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
-        emitter = TribunalEmitter(None, _make_mock_g8e_context())
-
-        await _run_generation_pass(
-            provider=mock_provider,
-            model="test-model",
-            request="list files",
-            guidelines="",
-            operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user"),
-            pass_index=0,
-            emitter=emitter,
-            pass_errors=[],
-            command_constraints_message="No whitelist or blacklist constraints are active.",
-        )
-
-        call_kwargs = mock_provider.generate_content_lite.call_args
-        settings = call_kwargs.kwargs.get("lite_llm_settings")
-        assert settings.max_output_tokens == _MAX_TOKENS_GENERATION
-
-    @pytest.mark.asyncio
-    async def test_auditor_uses_max_tokens(self):
-        from unittest.mock import patch
-        mock_response = MagicMock()
-        mock_response.text = '{"status": "ok"}'
-        mock_provider = MagicMock()
-        mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
-        emitter = TribunalEmitter(None, _make_mock_g8e_context())
-
-        # Mock get_model_config to return a config for auditor
-        with patch("app.models.model_configs.get_model_config") as mock_get_config:
-            mock_config = LLMModelConfig(
-                name="test-model",
-                max_output_tokens=_MAX_TOKENS_AUDITOR,
-                top_p=1.0,
-                top_k=None,
-                stop_sequences=None,
-            )
-            mock_get_config.return_value = mock_config
-
-            vote_breakdown = VoteBreakdown(
-                candidates_by_member={},
-                candidates_by_command={"ls -la": ["axiom"]},
-                winner="ls -la",
-                winner_supporters=["axiom"],
-                dissenters_by_command={},
-            )
-
-            await run_auditor(
-                provider=mock_provider,
-                model="test-model",
-                request="list files",
-                guidelines="",
-                mode="unanimous",
-                vote_winner="ls -la",
-                vote_breakdown=vote_breakdown,
-                tied_candidates=None,
-                operator_context=_make_mock_operator_context(os="linux"),
-                emitter=emitter,
-                command_constraints_message="No whitelist or blacklist constraints are active",
-                auditor_persona=get_agent_persona("auditor"),
-            )
-
-            call_kwargs = mock_provider.generate_content_lite.call_args
-            settings = call_kwargs.kwargs.get("lite_llm_settings")
-            assert settings.max_output_tokens == _MAX_TOKENS_AUDITOR
 
 
 class TestForbiddenPatternsMessage:

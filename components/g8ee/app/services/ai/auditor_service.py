@@ -61,8 +61,6 @@ from app.utils.command import normalise_command
 
 logger = logging.getLogger(__name__)
 
-_MAX_TOKENS_AUDITOR = 1024
-
 class TribunalAuditorResponse(G8eBaseModel):
     """Structured response for Tribunal audit."""
     status: str  # "ok", "revised", or "swap"
@@ -249,7 +247,7 @@ async def run_auditor(
         )
 
     settings = LiteLLMSettings(
-        max_output_tokens=_MAX_TOKENS_AUDITOR,
+        max_output_tokens=model_config.max_output_tokens,
         top_p_nucleus_sampling=model_config.top_p,
         top_k_filtering=model_config.top_k,
         stop_sequences=model_config.stop_sequences,

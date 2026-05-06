@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, ANY
 import pytest
 from app.constants import EventType, RiskLevel
 from app.models.settings import G8eeUserSettings, LLMSettings
@@ -62,4 +62,4 @@ class TestRunWardenStage:
             )
 
         assert investigation_state.warden_block_count == 1
-        emitter.emit.assert_called_with(EventType.TRIBUNAL_SESSION_WARDEN_BLOCKED, pytest.any)
+        emitter.emit.assert_called_with(EventType.TRIBUNAL_SESSION_WARDEN_BLOCKED, ANY)

@@ -13,7 +13,7 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
-from app.constants import Role
+from app.llm.llm_types import Role
 from app.models.agents.tribunal import (
     TribunalSystemError,
     TribunalGenerationFailedError,

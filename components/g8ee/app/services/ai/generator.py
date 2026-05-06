@@ -32,8 +32,8 @@ from app.constants import (
     DEFAULT_WORKING_DIRECTORY,
     EventType,
     AuditorReason,
-    TRIBUNAL_MIN_CONSENSUS,
 )
+from app.services.ai.voter import TRIBUNAL_MIN_CONSENSUS
 from app.llm.prompts import (
     build_command_constraints_message,
     build_tribunal_prompt_fields,

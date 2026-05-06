@@ -50,8 +50,6 @@ from app.services.ai.tribunal.utils import _is_system_error, _member_for_pass
 
 logger = logging.getLogger(__name__)
 
-_MAX_TOKENS_GENERATION = 4096
-
 class TribunalResponse(G8eBaseModel):
     """Structured response for Tribunal command generation."""
     command: str
@@ -118,7 +116,7 @@ async def _run_generation_pass(
         )
 
     settings = LiteLLMSettings(
-        max_output_tokens=_MAX_TOKENS_GENERATION,
+        max_output_tokens=model_config.max_output_tokens,
         top_p_nucleus_sampling=model_config.top_p,
         top_k_filtering=model_config.top_k,
         stop_sequences=model_config.stop_sequences,
