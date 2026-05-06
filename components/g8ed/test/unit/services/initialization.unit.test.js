@@ -102,7 +102,6 @@ describe('Initialization Service', () => {
                     bindOperatorsService: initialization.getBindOperatorsService(),
                     g8eNodeOperatorService: initialization.getG8ENodeOperatorService(),
                     postLoginService: initialization.getPostLoginService(),
-                    auditService: initialization.getAuditService(),
                     setupService: initialization.getSetupService(),
                     blobStorage: initialization.getG8esBlobClient(),
                     internalHttpClient: initialization.getInternalHttpClient(),
@@ -166,7 +165,6 @@ describe('Initialization Service', () => {
                 () => initialization.getG8ENodeOperatorService(),
                 () => initialization.getPostLoginService(),
                 () => initialization.getDeviceRegistrationService(),
-                () => initialization.getAuditService(),
                 () => initialization.getSetupService(),
                 () => initialization.getG8esBlobClient(),
                 () => initialization.getHealthCheckService()

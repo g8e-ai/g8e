@@ -60,7 +60,6 @@ import { BindOperatorsService } from './operator/operator_bind_service.js';
 import { ConsoleMetricsService } from './platform/console_metrics_service.js';
 import { PostLoginService } from './auth/post_login_service.js';
 import { SetupService } from './platform/setup_service.js';
-import { AuditService } from './platform/audit_service.js';
 import { HealthCheckService } from './platform/health_check_service.js';
 import { SourceComponent } from '../constants/ai.js';
 import { G8ES_INTERNAL_HTTP_URL, G8ES_INTERNAL_PUBSUB_URL } from '../constants/http_client.js';
@@ -89,7 +88,6 @@ let consoleMetricsService = null;
 let operatorDownloadService = null;
 let postLoginService = null;
 let setupService = null;
-let auditService = null;
 let internalHttpClientInstance = null;
 let bindOperatorsServiceInstance = null;
 let apiKeyDataService = null;
@@ -224,13 +222,9 @@ async function _doInitialize() {
             cacheAsideService,
             bootstrapService: settingsSvc.getBootstrapService()
         });
-        // auditService is required by CliSessionService; construct it here
-        // (moved up from Phase 6) before dependent services are wired.
-        auditService = new AuditService();
         cliSessionService = new CliSessionService({
             cacheAsideService,
-            bootstrapService: settingsSvc.getBootstrapService(),
-            auditService
+            bootstrapService: settingsSvc.getBootstrapService()
         });
         apiKeyDataService = new ApiKeyDataService({
             cacheAsideService
@@ -370,7 +364,7 @@ async function _doInitialize() {
             sseService: sseService,
         });
 
-        logger.info('[G8ED-INIT] Phase 6 complete: platform services (SSE, attachments, device links, certificates, g8ep operator, console metrics, post-login, setup, audit, operator-bind)');
+        logger.info('[G8ED-INIT] Phase 6 complete: platform services (SSE, attachments, device links, certificates, g8ep operator, console metrics, post-login, setup, operator-bind)');
 
         // --- Phase 7: Configuration ---
         // All configuration is now available via settingsService
@@ -538,11 +532,6 @@ export function getDeviceRegistrationService() {
     return deviceRegistrationService;
 }
 
-export function getAuditService() {
-    if (!auditService) throw new Error('AuditService not initialized. Call initializeServices() first.');
-    return auditService;
-}
-
 export function getSetupService() {
     if (!setupService) throw new Error('SetupService not initialized. Call initializeServices() first.');
     return setupService;
@@ -585,7 +574,6 @@ export function resetInitialization() {
     operatorServiceInstance = null;
     postLoginService = null;
     setupService = null;
-    auditService = null;
     internalHttpClientInstance = null;
     bindOperatorsServiceInstance = null;
     apiKeyDataService = null;

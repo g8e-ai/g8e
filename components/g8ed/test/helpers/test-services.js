@@ -106,7 +106,6 @@ export async function initializeTestServices() {
                 bindOperatorsService:   initModule.getBindOperatorsService(),
                 g8eNodeOperatorService: initModule.getG8ENodeOperatorService(),
                 postLoginService:       initModule.getPostLoginService(),
-                auditService:           initModule.getAuditService(),
                 setupService:           initModule.getSetupService(),
                 deviceRegistrationService: initModule.getDeviceRegistrationService(),
                 healthCheckService:     initModule.getHealthCheckService(),

@@ -70,7 +70,6 @@ export const BasePaths = Object.freeze({
     SSE:              '/sse',
     HEALTH:           '/health',
     METRICS:          '/api/metrics',
-    AUDIT:            '/api/audit',
     CONSOLE:          '/api/console',
     SETTINGS:         '/api/settings',
     SYSTEM:           '/api/system',
@@ -186,13 +185,6 @@ const SSE = {
     BASE:   BasePaths.SSE,
     EVENTS: 'events',
     HEALTH: 'health',
-};
-
-// --- AUDIT domain ---
-const Audit = {
-    BASE:     BasePaths.AUDIT,
-    EVENTS:   'events',
-    DOWNLOAD: 'download',
 };
 
 // --- HEALTH domain ---
@@ -360,11 +352,6 @@ export const OperatorApprovalPaths = Object.freeze({
 export const SSEPaths = Object.freeze({
     EVENTS: `/${SSE.EVENTS}`,
     HEALTH: `/${SSE.HEALTH}`,
-});
-
-export const AuditPaths = Object.freeze({
-    EVENTS:   `/${Audit.EVENTS}`,
-    DOWNLOAD: `/${Audit.DOWNLOAD}`,
 });
 
 export const HealthPaths = Object.freeze({
@@ -558,10 +545,6 @@ export const apiPaths = {
     sse: {
         events: () => `${SSE.BASE}/${SSE.EVENTS}`,
         health: () => `${SSE.BASE}/${SSE.HEALTH}`,
-    },
-    audit: {
-        events:   () => `${Audit.BASE}/${Audit.EVENTS}`,
-        download: () => `${Audit.BASE}/${Audit.DOWNLOAD}`,
     },
     health: {
         root:       () => `${Health.BASE}`,

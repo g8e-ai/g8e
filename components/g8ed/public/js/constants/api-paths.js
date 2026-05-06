@@ -33,7 +33,6 @@ const BASE = {
     CHAT:         '/api/chat',
     DEVICE_LINKS: '/api/device-links',
     SSE:          '/sse',
-    AUDIT:        '/api/audit',
     SETTINGS:     '/api/settings',
     SETUP:        '/api/setup',
     HEALTH:       '/health',
@@ -97,10 +96,6 @@ const Seg = {
     sse: {
         EVENTS: 'events',
         HEALTH: 'health',
-    },
-    audit: {
-        EVENTS:   'events',
-        DOWNLOAD: 'download',
     },
     setup: {
         CONFIG: 'config',
@@ -213,11 +208,7 @@ export const ApiPaths = {
         events: () => `${BASE.SSE}/${Seg.sse.EVENTS}`,
         health: () => `${BASE.SSE}/${Seg.sse.HEALTH}`,
     },
-    audit: {
-        events:   () => `${BASE.AUDIT}/${Seg.audit.EVENTS}`,
-        download: () => `${BASE.AUDIT}/${Seg.audit.DOWNLOAD}`,
-    },
-    health: {
+    health:{
         root:       () => `${BASE.HEALTH}`,
         live:       () => `${BASE.HEALTH}/${Seg.health.LIVE}`,
         store:      () => `${BASE.HEALTH}/${Seg.health.STORE}`,
