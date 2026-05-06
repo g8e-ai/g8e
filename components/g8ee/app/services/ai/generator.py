@@ -563,8 +563,7 @@ async def _run_audit_stage(
         )
 
         if risk_analysis:
-            logger.info("[TRIBUNAL-WARDEN] Risk analysis complete: level=%s score=%.2f reason=%s", 
-                        risk_analysis.risk_level, risk_analysis.risk_score, risk_analysis.reason)
+            logger.info("[TRIBUNAL-WARDEN] Risk analysis complete: level=%s", risk_analysis.risk_level)
 
         if risk_analysis and risk_analysis.risk_level == RiskLevel.HIGH:
             # Two-Strike Circuit Breaker logic moved from OperatorCommandService

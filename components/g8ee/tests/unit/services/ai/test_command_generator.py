@@ -1514,6 +1514,184 @@ class TestRunVerificationStage:
         assert exc_info.value.request == "list files"
 
 
+class TestRunAuditStageWardenRiskAnalysis:
+    """_run_audit_stage exercises Warden risk analysis before the Auditor.
+
+    Regression coverage for the Warden command-risk path: ``CommandRiskAnalysis``
+    only carries ``risk_level``. Touching any other attribute on the analysis
+    object inside ``_run_audit_stage`` is a bug. These tests cover both the
+    LOW-risk pass-through and the HIGH-risk Two-Strike Circuit Breaker paths
+    so any future drift between the model and the consumer fails fast.
+    """
+
+    @staticmethod
+    def _make_breakdown():
+        from app.models.agents.tribunal import VoteBreakdown
+        return VoteBreakdown(
+            candidates_by_member={},
+            candidates_by_command={"ls -la": ["axiom"]},
+            winner="ls -la",
+            winner_supporters=["axiom"],
+            dissenters_by_command={},
+            consensus_strength=1.0,
+        )
+
+    @staticmethod
+    def _make_analyzer(risk_level, error_user_message: str | None = None, error_suggested_fix: str | None = None):
+        from app.constants import ErrorAnalysisCategory
+        from app.models.tool_results import CommandRiskAnalysis, ErrorAnalysisResult
+        analyzer = MagicMock()
+        analyzer.analyze_command_risk = AsyncMock(
+            return_value=CommandRiskAnalysis(risk_level=risk_level)
+        )
+        analyzer.analyze_error_and_suggest_fix = AsyncMock(
+            return_value=ErrorAnalysisResult(
+                error_category=ErrorAnalysisCategory.UNKNOWN,
+                root_cause="HIGH-risk command",
+                can_auto_fix=False,
+                should_escalate=True,
+                reasoning="warden block",
+                user_message=error_user_message or "Use a safer alternative.",
+                suggested_fix=error_suggested_fix,
+            )
+        )
+        return analyzer
+
+    @pytest.mark.asyncio
+    async def test_low_risk_passes_through_without_attribute_error(self):
+        """LOW risk classification logs and proceeds to the auditor.
+
+        Regression: the post-analysis log statement must only reference
+        attributes that exist on ``CommandRiskAnalysis``. Before the fix it
+        accessed ``risk_score`` and ``reason``, both removed when the
+        Warden contract was simplified to ``risk_level`` only.
+        """
+        from app.constants import RiskLevel
+        analyzer = self._make_analyzer(RiskLevel.LOW)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
+
+        final_cmd, outcome, passed, revision, auditor_reason, commitment_id, risk_analysis = await _run_audit_stage(
+            provider=MagicMock(), model="test-model", request="list files", guidelines="",
+            vote_winner="ls -la", vote_breakdown=self._make_breakdown(), tied_candidates=None,
+            operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
+            auditor_enabled=False,
+            emitter=emitter,
+            command_constraints_message="No whitelist or blacklist constraints are active.",
+            settings=_MOCK_USER_SETTINGS,
+            ai_response_analyzer=analyzer,
+            **_AUDIT_STAGE_REPUTATION_KWARGS,
+        )
+
+        analyzer.analyze_command_risk.assert_awaited_once()
+        assert final_cmd == "ls -la"
+        assert outcome == CommandGenerationOutcome.CONSENSUS
+        assert passed is True
+        assert revision is None
+        assert auditor_reason == AuditorReason.OK
+        assert risk_analysis is not None
+        assert risk_analysis.risk_level == RiskLevel.LOW
+
+    @pytest.mark.asyncio
+    async def test_high_risk_first_strike_emits_warden_blocked_and_increments_counter(self):
+        """HIGH risk on a fresh investigation raises a first-strike block."""
+        from app.constants import EventType, RiskLevel
+        from app.models.agents.tribunal import (
+            TribunalWardenBlockedError,
+            TribunalWardenBlockedPayload,
+        )
+
+        analyzer = self._make_analyzer(
+            RiskLevel.HIGH,
+            error_user_message="Command blocked. Try a read-only listing.",
+            error_suggested_fix="ls -la /etc",
+        )
+        mock_event_service = MagicMock()
+        mock_event_service.publish = AsyncMock()
+        emitter = TribunalEmitter(mock_event_service, _make_mock_g8e_context(), correlation_id="corr-warden-1")
+
+        investigation_state = MagicMock()
+        investigation_state.warden_block_count = 0
+
+        with pytest.raises(TribunalWardenBlockedError) as exc_info:
+            await _run_audit_stage(
+                provider=MagicMock(), model="test-model", request="purge logs", guidelines="",
+                vote_winner="rm -rf /var/log", vote_breakdown=self._make_breakdown(), tied_candidates=None,
+                operator_context=_make_mock_operator_context(os="linux", username="root", uid=0),
+                auditor_enabled=True,
+                emitter=emitter,
+                command_constraints_message="No whitelist or blacklist constraints are active.",
+                settings=_MOCK_USER_SETTINGS,
+                ai_response_analyzer=analyzer,
+                investigation_state=investigation_state,
+                **_AUDIT_STAGE_REPUTATION_KWARGS,
+            )
+
+        assert exc_info.value.risk_level == RiskLevel.HIGH
+        assert investigation_state.warden_block_count == 1
+        analyzer.analyze_error_and_suggest_fix.assert_awaited_once()
+
+        emitted_types = [call.args[0].event_type for call in mock_event_service.publish.call_args_list]
+        assert EventType.TRIBUNAL_SESSION_WARDEN_BLOCKED in emitted_types
+        warden_payloads = [
+            call.args[0].payload
+            for call in mock_event_service.publish.call_args_list
+            if call.args[0].event_type == EventType.TRIBUNAL_SESSION_WARDEN_BLOCKED
+        ]
+        assert len(warden_payloads) == 1
+        payload = warden_payloads[0]
+        assert isinstance(payload, TribunalWardenBlockedPayload)
+        assert payload.risk_level == RiskLevel.HIGH
+        assert payload.is_conflict is False
+
+    @pytest.mark.asyncio
+    async def test_high_risk_second_strike_emits_agent_conflict_and_resets_counter(self):
+        """HIGH risk after a prior block raises an agent-conflict second strike."""
+        from app.constants import EventType, RiskLevel
+        from app.models.agents.tribunal import (
+            TribunalWardenBlockedError,
+            TribunalWardenBlockedPayload,
+        )
+
+        analyzer = self._make_analyzer(RiskLevel.HIGH)
+        mock_event_service = MagicMock()
+        mock_event_service.publish = AsyncMock()
+        emitter = TribunalEmitter(mock_event_service, _make_mock_g8e_context(), correlation_id="corr-warden-2")
+
+        investigation_state = MagicMock()
+        investigation_state.warden_block_count = 1
+
+        with pytest.raises(TribunalWardenBlockedError) as exc_info:
+            await _run_audit_stage(
+                provider=MagicMock(), model="test-model", request="purge logs", guidelines="",
+                vote_winner="rm -rf /var/log", vote_breakdown=self._make_breakdown(), tied_candidates=None,
+                operator_context=_make_mock_operator_context(os="linux", username="root", uid=0),
+                auditor_enabled=True,
+                emitter=emitter,
+                command_constraints_message="No whitelist or blacklist constraints are active.",
+                settings=_MOCK_USER_SETTINGS,
+                ai_response_analyzer=analyzer,
+                investigation_state=investigation_state,
+                **_AUDIT_STAGE_REPUTATION_KWARGS,
+            )
+
+        assert exc_info.value.risk_level == RiskLevel.HIGH
+        assert investigation_state.warden_block_count == 0
+        analyzer.analyze_error_and_suggest_fix.assert_not_awaited()
+
+        emitted_types = [call.args[0].event_type for call in mock_event_service.publish.call_args_list]
+        assert EventType.AI_AGENT_CONFLICT_DETECTED in emitted_types
+        conflict_payloads = [
+            call.args[0].payload
+            for call in mock_event_service.publish.call_args_list
+            if call.args[0].event_type == EventType.AI_AGENT_CONFLICT_DETECTED
+        ]
+        assert len(conflict_payloads) == 1
+        payload = conflict_payloads[0]
+        assert isinstance(payload, TribunalWardenBlockedPayload)
+        assert payload.risk_level == RiskLevel.HIGH
+        assert payload.is_conflict is True
+
+
 class TestBuildAndEmitResult:
     """_build_and_emit_result assembles the result model correctly."""
 
