@@ -81,7 +81,7 @@ async def _run_warden_stage(
         settings=settings,
     )
 
-    if risk_analysis is None:
+    if not risk_analysis:
         return None
 
     logger.info("[TRIBUNAL-WARDEN] Risk analysis complete: level=%s", risk_analysis.risk_level)

@@ -41,15 +41,11 @@ from app.llm.prompts import (
 from app.llm.factory import get_llm_provider
 from app.models.whitelist import WhitelistedCommand
 from app.models.agents.tribunal import (
-    AuditorClusterInfo,
     CandidateCommand,
     CommandGenerationResult,
-    TribunalAuditorFailedError,
-    TribunalAuditorFailedPayload,
     TribunalConsensusFailedError,
     TribunalConsensusFailedPayload,
     TribunalDisabledError,
-    TribunalGenerationFailedError,
     TribunalModelNotConfiguredError,
     TribunalProviderUnavailableError,
     TribunalSessionCompletedPayload,

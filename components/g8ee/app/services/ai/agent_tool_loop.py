@@ -56,7 +56,6 @@ from app.models.tool_results import (
     CommandExecutionResult,
     ToolResult,
     SearchWebResult,
-    CommandRiskAnalysis,
 )
 from app.models.settings import G8eeUserSettings
 

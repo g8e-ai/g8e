@@ -55,7 +55,6 @@ from app.models.tool_results import (
     FsReadToolResult,
     IntentPermissionResult,
     PortCheckToolResult,
-    CommandRiskContext,
 )
 from app.services.protocols import (
     AIResponseAnalyzerProtocol,

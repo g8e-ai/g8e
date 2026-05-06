@@ -12,7 +12,7 @@
 # limitations under the License.
 
 import logging
-from typing import Any, Awaitable, TypeVar
+from typing import Awaitable, TypeVar
 from uuid import uuid4
 
 T = TypeVar('T')
