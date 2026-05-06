@@ -49,6 +49,7 @@ from app.models.agents.tribunal import (
     TribunalAuditorFailedPayload,
     VoteBreakdown,
 )
+from app.utils.agent_persona_loader import AgentPersona, get_agent_persona
 from app.models.model_configs import get_model_config
 
 if TYPE_CHECKING:
@@ -160,7 +161,7 @@ async def run_auditor(
     operator_context: OperatorContext | None,
     emitter: TribunalEmitter,
     command_constraints_message: str,
-    auditor_persona: TribunalMember,
+    auditor_persona: AgentPersona,
     whitelisting_enabled: bool = False,
     blacklisting_enabled: bool = False,
 ) -> tuple[bool, str | None, str | None, AuditorReason, str | None, str | None]:
@@ -172,7 +173,7 @@ async def run_auditor(
 
     # 1. Add winner as cluster_a
     if not vote_winner:
-        raise ValueError("vote_winner is required - no fallback allowed")
+        raise ValueError("vote_winner is required")
     target_cmd = vote_winner
 
     cluster_to_cmd["cluster_a"] = target_cmd
@@ -247,11 +248,11 @@ async def run_auditor(
         )
 
     settings = LiteLLMSettings(
-        max_output_tokens=model_config.max_output_tokens,
+        max_output_tokens=model_config.max_output_tokens or 4096,
         top_p_nucleus_sampling=model_config.top_p,
         top_k_filtering=model_config.top_k,
         stop_sequences=model_config.stop_sequences,
-        system_instructions=auditor_persona.get_system_prompt(),
+        system_instructions=auditor_persona.get_system_prompt() or "",
         response_format=response_format,
     )
 
@@ -304,7 +305,7 @@ async def run_auditor(
                 )
                 return True, target_cmd, None, AuditorReason.OK, None, None
 
-            if status == "swap":
+            if status == "swap" and swap_to_cluster:
                 final_cmd = cluster_to_cmd[swap_to_cluster]
                 swap_to_member = cluster_to_members[swap_to_cluster][0] # Pick first member for telemetry
 
@@ -329,9 +330,10 @@ async def run_auditor(
                 return True, final_cmd, None, AuditorReason.SWAPPED_TO_DISSENTER, swap_to_cluster, swap_to_member
 
             # Handle revised
-            revised = normalise_command(revised_raw)
-            if not revised:
-                await fail_auditor(emitter, request, AuditorReason.NO_VALID_REVISION, "Empty revision", target_cmd)
+            if status == "revised" and revised_raw:
+                revised = normalise_command(revised_raw)
+                if not revised:
+                    await fail_auditor(emitter, request, AuditorReason.NO_VALID_REVISION, "Empty revision", target_cmd)
 
             # RE-VALIDATE REVISION SAFETY (L1 Technical Bedrock)
             safety_result = validate_command_safety(revised, whitelisting_enabled, blacklisting_enabled, operator_context)
