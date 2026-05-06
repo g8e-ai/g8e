@@ -137,6 +137,20 @@ class TestCaseDataService:
         with pytest.raises(DatabaseError, match="Failed to create case"):
             await service.create_case(request, "Title")
 
+    async def test_create_case_g8e_error(self, service, mock_cache):
+        from app.errors import G8eError
+        from app.constants import ErrorCategory
+        request = CaseCreateRequest(
+            user_id="user-123",
+            web_session_id="ws-123",
+            initial_message="Hello"
+        )
+        # Line 128: except G8eError: raise
+        mock_cache.create_document.side_effect = G8eError(message="G8e failure", code=ErrorCode.DB_WRITE_ERROR, category=ErrorCategory.DATABASE)
+
+        with pytest.raises(G8eError, match="G8e failure"):
+            await service.create_case(request, "Title")
+
     # --- get_case tests ---
 
     async def test_get_case_success(self, service, mock_cache):
@@ -223,6 +237,27 @@ class TestCaseDataService:
         with pytest.raises(DatabaseError, match="Failed to update case"):
             await service.update_case(case_id, CaseUpdateRequest(title="New"))
 
+    async def test_update_case_g8e_error(self, service, mock_cache):
+        from app.errors import G8eError
+        from app.constants import ErrorCategory
+        case_id = "case-123"
+        mock_cache.get_document_with_cache.return_value = {
+            "title": "Test Case",
+            "description": "Test description",
+            "user_id": "u1",
+            "status": CaseStatus.NEW,
+            "priority": Priority.MEDIUM,
+            "severity": Severity.LOW,
+            "source": "web",
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z",
+        }
+        # Line 226: except G8eError: raise
+        mock_cache.update_document.side_effect = G8eError(message="G8e update failure", code=ErrorCode.DB_WRITE_ERROR, category=ErrorCategory.DATABASE)
+        
+        with pytest.raises(G8eError, match="G8e update failure"):
+            await service.update_case(case_id, CaseUpdateRequest(title="New"))
+
     # --- delete_case tests ---
 
     async def test_delete_case_success(self, service, mock_cache):
@@ -297,7 +332,7 @@ class TestCaseDataService:
         payload = CaseEventPayload(
             updated_at="2026-01-01T01:00:00Z",
             case_id="case-123", 
-            status=CaseStatus.INVESTIGATE
+            status=CaseStatus.NEW
         )
         await service.publish_case_update_sse(
             case_id="case-123",
@@ -331,9 +366,9 @@ class TestCaseDataService:
         query = CaseHistoryQuery(case_id="case-123", start_time="2026-01-01T00:00:00Z", limit=10)
         mock_cache.query_documents.return_value = [
             {
-                "timestamp": "2026-01-01T01:00:00Z",
-                "event_type": "case_updated",
-                "source_component": "g8ee",
+                "timestamp": "2026-05-06T10:33:31Z",
+                "event_type": EventType.CASE_UPDATED,
+                "source_component": ComponentName.G8EE,
                 "summary": "Case updated",
                 "details": {}
             }
@@ -344,14 +379,35 @@ class TestCaseDataService:
         assert result[0].event_type == EventType.CASE_UPDATED
         mock_cache.query_documents.assert_called_once()
 
+    async def test_get_case_history_filters(self, service, mock_cache):
+        from app.models.db_queries import CaseHistoryQuery
+        # Lines 326, 330, 333: query.start_time, query.end_time, query.event_type
+        query = CaseHistoryQuery(
+            case_id="case-123",
+            start_time="2026-01-01T00:00:00Z",
+            end_time="2026-01-02T00:00:00Z",
+            event_type=EventType.CASE_UPDATED,
+            limit=5
+        )
+        mock_cache.query_documents.return_value = []
+
+        await service.get_case_history(query)
+        
+        # Verify filters were passed
+        args, kwargs = mock_cache.query_documents.call_args
+        filters = kwargs["field_filters"]
+        assert len(filters) == 4 # case_id, start_time, end_time, event_type
+        
     # --- get_case_tasks tests ---
 
-    async def test_get_case_tasks_success(self, service, mock_cache):
-        mock_cache.query_documents.return_value = [{"id": "task-1"}]
-        result = await service.get_case_tasks("case-123", TaskStatus.PENDING)
-        assert len(result) == 1
-        assert result[0]["id"] == "task-1"
-        mock_cache.query_documents.assert_called_once()
+    async def test_get_case_tasks_with_status(self, service, mock_cache):
+        # Line 353: if task_status: ...
+        mock_cache.query_documents.return_value = []
+        await service.get_case_tasks("case-123", TaskStatus.COMPLETED)
+        
+        args, kwargs = mock_cache.query_documents.call_args
+        filters = kwargs["field_filters"]
+        assert len(filters) == 2 # case_id, status
 
     async def test_get_case_tasks_empty_id(self, service):
         with pytest.raises(ValidationError, match="Case ID is required"):

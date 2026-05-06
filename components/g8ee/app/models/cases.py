@@ -13,7 +13,7 @@
 
 from typing import Any
 
-from pydantic import Field
+from pydantic import Field, computed_field
 
 from app.constants import CaseStatus, ComponentName, EventType, Priority, Severity
 
@@ -95,6 +95,26 @@ class CaseCreateRequest(G8eBaseModel):
     priority: Priority = Field(default=Priority.MEDIUM, description="Server default - not client controllable")
     severity: Severity = Field(default=Severity.MEDIUM, description="Server default - not client controllable")
     source: str = Field(default="g8e.ai", description="Server default - not client controllable")
+
+    @computed_field
+    @property
+    def generated_title(self) -> str:
+        """Derive a fallback title from the initial message if one isn't provided."""
+        if not self.initial_message:
+            return "Untitled Case"
+        
+        # Take first 100 chars, strip whitespace
+        title = self.initial_message[:100].strip()
+        if len(self.initial_message) > 100:
+            title += "..."
+        
+        return title or "Untitled Case"
+
+    @computed_field
+    @property
+    def generated_description(self) -> str:
+        """Derive a description from the initial message."""
+        return self.initial_message or "No description provided"
 
 
 class CaseUpdateRequest(G8eBaseModel):

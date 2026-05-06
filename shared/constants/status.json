@@ -75,7 +75,7 @@
     "triage": "Triage",
     "escalated": "Escalated",
     "waiting.for.customer": "WaitingForCustomer",
-    "investigate": "Investigate",
+    "in.progress": "InProgress",
     "human.review": "HumanReview",
     "resolved": "Resolved",
     "closed": "Closed"

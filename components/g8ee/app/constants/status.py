@@ -118,7 +118,7 @@ class CaseStatus(StrEnum):
     TRIAGE = "Triage"
     ESCALATED = "Escalated"
     WAITING_FOR_CUSTOMER = "WaitingForCustomer"
-    INVESTIGATE = "Investigate"
+    IN_PROGRESS = "InProgress"
     HUMAN_REVIEW = "HumanReview"
     RESOLVED = "Resolved"
     CLOSED = "Closed"

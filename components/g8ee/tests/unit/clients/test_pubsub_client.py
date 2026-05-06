@@ -541,3 +541,214 @@ class TestReconnectLoop:
             await connected_client._reconnect_loop()
 
         assert attempts == 1
+
+
+@pytest.mark.asyncio
+class TestPubSubClientCoverage:
+    """Additional tests to address uncovered lines in pubsub_client.py."""
+
+    async def test_ensure_ws_protocol_override(self, disconnected_client):
+        """Test forcing WSS when ws:// is provided."""
+        disconnected_client.pubsub_url = "ws://g8es:9001"
+        mock_session = MagicMock(spec=aiohttp.ClientSession)
+        mock_ws = AsyncMock(spec=aiohttp.ClientWebSocketResponse)
+        mock_ws.closed = False
+        
+        # mock_session.ws_connect is called and returned value is awaited
+        # so return_value must be an awaitable that returns a context manager
+        # OR just mock the whole call chain.
+        
+        mock_cm = MagicMock()
+        mock_cm.__aenter__ = AsyncMock(return_value=mock_ws)
+        mock_cm.__aexit__ = AsyncMock()
+        
+        # await ws_session.ws_connect(...) -> returns mock_cm
+        mock_session.ws_connect = AsyncMock(return_value=mock_cm)
+
+        with patch.object(disconnected_client, "_get_http_ws_session", return_value=mock_session), \
+             patch("app.clients.pubsub_client.resolve_pubsub_ssl_context"):
+            await disconnected_client._ensure_ws()
+
+        assert disconnected_client.pubsub_url == "ws://g8es:9001"
+        args, kwargs = mock_session.ws_connect.call_args
+        assert args[0].startswith("wss://")
+
+    async def test_ensure_ws_with_token(self, disconnected_client):
+        """Test token inclusion in URL and headers."""
+        disconnected_client._internal_auth_token = "secret-token"
+        mock_session = MagicMock(spec=aiohttp.ClientSession)
+        mock_ws = AsyncMock(spec=aiohttp.ClientWebSocketResponse)
+        mock_ws.closed = False
+        
+        mock_cm = MagicMock()
+        mock_cm.__aenter__ = AsyncMock(return_value=mock_ws)
+        mock_cm.__aexit__ = AsyncMock()
+        
+        mock_session.ws_connect = AsyncMock(return_value=mock_cm)
+
+        with patch.object(disconnected_client, "_get_http_ws_session", return_value=mock_session), \
+             patch("app.clients.pubsub_client.resolve_pubsub_ssl_context"):
+            await disconnected_client._ensure_ws()
+
+        args, kwargs = mock_session.ws_connect.call_args
+        assert "token=secret-token" in args[0]
+        assert kwargs["headers"]["X-Internal-Auth"] == "secret-token"
+
+    async def test_ws_reader_unknown_event_type(self, connected_client, task_tracker):
+        """Test logging of unknown wire event types."""
+        frame = MagicMock()
+        frame.type = aiohttp.WSMsgType.TEXT
+        frame.data = json.dumps({"type": "unknown_type"})
+        connected_client._ws.__aiter__ = MagicMock(return_value=async_iter([frame]))
+
+        with patch("app.clients.pubsub_client.logger") as mock_logger:
+            task = task_tracker.track(asyncio.create_task(connected_client._ws_reader()))
+            await task
+            mock_logger.warning.assert_any_call("[PUBSUB-CLIENT] Unknown wire event type '%s'", "unknown_type")
+
+    async def test_ws_reader_malformed_json(self, connected_client, task_tracker):
+        """Test logging of malformed JSON."""
+        frame = MagicMock()
+        frame.type = aiohttp.WSMsgType.TEXT
+        frame.data = "invalid json"
+        connected_client._ws.__aiter__ = MagicMock(return_value=async_iter([frame]))
+
+        with patch("app.clients.pubsub_client.logger") as mock_logger:
+            task = task_tracker.track(asyncio.create_task(connected_client._ws_reader()))
+            await task
+            mock_logger.error.assert_any_call("[PUBSUB-CLIENT] Malformed JSON from pub/sub: %r", "invalid json")
+
+    async def test_ws_reader_closed_type(self, connected_client, task_tracker):
+        """Test reader exit on CLOSED message type."""
+        frame = MagicMock()
+        frame.type = aiohttp.WSMsgType.CLOSED
+        connected_client._ws.__aiter__ = MagicMock(return_value=async_iter([frame]))
+
+        task = task_tracker.track(asyncio.create_task(connected_client._ws_reader()))
+        await task
+        assert connected_client._ws is None
+
+    async def test_subscribe_refcounting(self, connected_client, task_tracker):
+        """Test channel subscription refcounting."""
+        channel = "ref-channel"
+        
+        # First subscription
+        async def mock_ack():
+            await asyncio.sleep(0.01)
+            if channel in connected_client._pending_acks:
+                for ack in connected_client._pending_acks[channel]:
+                    ack.set()
+        
+        task = task_tracker.track(asyncio.create_task(mock_ack()))
+        await connected_client.subscribe(channel)
+        await task
+        assert connected_client._channel_refcounts[channel] == 1
+        
+        # Second subscription (should just increment refcount)
+        await connected_client.subscribe(channel)
+        assert connected_client._channel_refcounts[channel] == 2
+        assert connected_client._ws.send_json.call_count == 1 # Only one wire call
+
+        # Unsubscribe once
+        await connected_client.unsubscribe(channel)
+        assert connected_client._channel_refcounts[channel] == 1
+        assert channel in connected_client._subscribed_channels
+        
+        # Unsubscribe twice
+        await connected_client.unsubscribe(channel)
+        assert connected_client._channel_refcounts[channel] == 0
+        assert channel not in connected_client._subscribed_channels
+        assert connected_client._ws.send_json.call_count == 2 # One SUBSCRIBE, one UNSUBSCRIBE
+
+    async def test_publish_failure(self, connected_client):
+        """Test publish failure logging."""
+        connected_client._ws.send_json.side_effect = Exception("send failed")
+        with patch("app.clients.pubsub_client.logger") as mock_logger:
+            res = await connected_client.publish("chan", {"foo": "bar"})
+            assert res == 0
+            mock_logger.error.assert_any_call("[PUBSUB-CLIENT] publish failed for channel '%s': %s", "chan", ANY, exc_info=True)
+
+    async def test_close_clears_state(self, connected_client):
+        """Test close method clears internal state."""
+        connected_client._subscribed_channels.add("chan")
+        connected_client._channel_refcounts["chan"] = 1
+        await connected_client.close()
+        assert connected_client._closing is True
+        assert connected_client._ws is None
+        assert not connected_client._subscribed_channels
+        assert not connected_client._channel_refcounts
+
+    async def test_domain_methods(self, connected_client, task_tracker):
+        """Test high-level domain methods: publish_command, subscribe_heartbeats, etc."""
+        from app.models.pubsub_messages import G8eMessage
+        from app.constants import EventType
+        
+        op_id = "op-1"
+        sess_id = "sess-1"
+        
+        # publish_command
+        msg = G8eMessage(
+            id="msg-1",
+            source_component=ComponentName.G8EE,
+            event_type=EventType.OPERATOR_COMMAND_REQUESTED,
+            operator_id=op_id,
+            operator_session_id=sess_id,
+            case_id="case-1",
+            task_id="task-1",
+            investigation_id="inv-1",
+            web_session_id="web-1",
+        )
+        res = await connected_client.publish_command(op_id, sess_id, msg)
+        assert res == 1
+        
+        # subscribe_execution_results
+        async def mock_ack_results():
+            await asyncio.sleep(0.01)
+            channel = f"results:{op_id}:{sess_id}"
+            if channel in connected_client._pending_acks:
+                for ack in connected_client._pending_acks[channel]:
+                    ack.set()
+        
+        task_res = task_tracker.track(asyncio.create_task(mock_ack_results()))
+        callback_res = AsyncMock()
+        await connected_client.subscribe_execution_results(op_id, sess_id, callback_res)
+        await task_res
+        channel_res = f"results:{op_id}:{sess_id}"
+        assert channel_res in connected_client._subscribed_channels
+        assert callback_res in connected_client._channel_handlers[channel_res]
+
+        # unsubscribe_execution_results
+        await connected_client.unsubscribe_execution_results(op_id, sess_id, callback_res)
+        assert channel_res not in connected_client._subscribed_channels
+        assert channel_res not in connected_client._channel_handlers
+
+        # subscribe_heartbeats
+        async def mock_ack():
+            await asyncio.sleep(0.01)
+            channel = f"heartbeat:{op_id}:{sess_id}"
+            if channel in connected_client._pending_acks:
+                for ack in connected_client._pending_acks[channel]:
+                    ack.set()
+        
+        task = task_tracker.track(asyncio.create_task(mock_ack()))
+        callback = AsyncMock()
+        await connected_client.subscribe_heartbeats(op_id, sess_id, callback)
+        await task
+        channel = f"heartbeat:{op_id}:{sess_id}"
+        assert channel in connected_client._subscribed_channels
+        assert callback in connected_client._channel_handlers[channel]
+        
+        # check_operator_online
+        connected_client._ws.send_json.reset_mock()
+        
+        # We need to mock G8eMessage within check_operator_online because it requires many fields
+        with patch("app.clients.pubsub_client.G8eMessage") as mock_g8e_msg, \
+             patch.object(connected_client, "publish", return_value=1):
+            mock_g8e_msg.return_value.model_dump.return_value = {"id": "ping"}
+            is_online = await connected_client.check_operator_online(op_id, sess_id)
+            assert is_online is True
+
+        # unsubscribe_heartbeats
+        await connected_client.unsubscribe_heartbeats(op_id, sess_id, callback)
+        assert channel not in connected_client._subscribed_channels
+        assert channel not in connected_client._channel_handlers

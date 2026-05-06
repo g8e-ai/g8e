@@ -20,6 +20,7 @@ import pytest
 from app.clients.kv_cache_client import KVCacheClient, _encode_key
 from app.constants import ComponentName
 from app.errors import NetworkError
+from app.models.settings import ListenSettings
 
 pytestmark = pytest.mark.unit
 
@@ -88,6 +89,19 @@ class TestKVCacheClientInit:
         client = KVCacheClient()
         assert client.component_name is ComponentName.G8EE
 
+    def test_default_init(self):
+        with patch("app.clients.kv_cache_client.SettingsService"), \
+             patch("app.clients.kv_cache_client.ListenSettings") as mock_listen:
+            mock_listen.from_bootstrap.return_value = MagicMock(http_url="https://default-g8es:9000")
+            client = KVCacheClient()
+            assert client.http_url == "https://default-g8es:9000"
+
+    def test_init_with_listen_settings(self):
+        mock_listen = MagicMock(spec=ListenSettings)
+        mock_listen.http_url = "https://explicit-g8es:9000"
+        client = KVCacheClient(listen_settings=mock_listen)
+        assert client.http_url == "https://explicit-g8es:9000"
+
     def test_is_healthy_false_on_init(self):
         client = KVCacheClient()
         assert client.is_healthy() is False
@@ -109,7 +123,7 @@ class TestKVCacheClientRequest:
         with pytest.raises(NetworkError) as exc:
             await client._request("GET", "/fail")
         assert "bad request" in str(exc.value)
-        assert exc.value.details["http_status"] == 400
+        assert exc.value.error_detail.details["http_status"] == 400
 
     async def test_request_error_500_plain_text(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=500, text="Internal Server Error")
@@ -165,13 +179,35 @@ class TestKVCacheClientLifecycle:
         mock_session.close.assert_called_once()
         assert client.is_healthy() is False
 
+    async def test_close_already_closed(self, client, mock_session):
+        mock_session.closed = True
+        await client.close()
+        mock_session.close.assert_not_called()
+        assert client.is_healthy() is False
+
+    async def test_close_no_session(self, client):
+        client._session = None
+        await client.close()
+        assert client.is_healthy() is False
+
     async def test_ping(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"status": "ok"}')
         assert await client.ping() is True
 
 
 @pytest.mark.asyncio
-class TestKVCacheClientKVOperations:
+class TestKVCacheClientUnhealthyGuards:
+    async def test_get_returns_none_when_unhealthy(self, disconnected_client):
+        assert await disconnected_client.get("some:key") is None
+
+    async def test_set_returns_false_when_unhealthy(self, disconnected_client):
+        assert await disconnected_client.set("some:key", "value") is False
+
+    async def test_incr_returns_zero_when_unhealthy(self, disconnected_client):
+        assert await disconnected_client.incr("counter:key") == 0
+
+    async def test_decr_returns_zero_when_unhealthy(self, disconnected_client):
+        assert await disconnected_client.decr("counter:key") == 0
     async def test_get_success(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"value": "bar"}')
         assert await client.get("foo") == "bar"
@@ -237,8 +273,29 @@ class TestKVCacheClientKVOperations:
         assert await client.delete_pattern("prefix:*") == 5
 
 
+    async def test_delete_exception(self, client, mock_session):
+        mock_session.request.side_effect = Exception("error")
+        assert await client.delete("k1") == 0
+
+    async def test_expire_exception(self, client, mock_session):
+        mock_session.request.side_effect = Exception("error")
+        assert await client.expire("foo", 30) is False
+
+    async def test_keys_exception(self, client, mock_session):
+        mock_session.request.side_effect = Exception("error")
+        assert await client.keys() == []
+
+    async def test_delete_pattern_exception(self, client, mock_session):
+        mock_session.request.side_effect = Exception("error")
+        assert await client.delete_pattern("prefix:*") == 0
+
+
 @pytest.mark.asyncio
 class TestKVCacheClientJSONOperations:
+    async def test_get_json_not_found(self, client, mock_session):
+        mock_session.request.return_value = MockResponse(status=404, text="Not found")
+        assert await client.get_json("foo") is None
+
     async def test_get_json_success(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"value": "{\\"a\\": 1}"}')
         assert await client.get_json("foo") == {"a": 1}
@@ -295,8 +352,74 @@ class TestKVCacheClientHashOperations:
         assert "f2" in kwargs["json"]["value"]
 
 
+    async def test_hget_not_found(self, client, mock_session):
+        mock_session.request.return_value = MockResponse(status=404, text="Not found")
+        assert await client.hget("hkey", "f1") is None
+
+    async def test_hget_invalid_json(self, client, mock_session):
+        mock_session.request.return_value = MockResponse(status=200, text='{"value": "not json"}')
+        assert await client.hget("hkey", "f1") is None
+
+    async def test_hgetall_not_found(self, client, mock_session):
+        mock_session.request.return_value = MockResponse(status=404, text="Not found")
+        assert await client.hgetall("hkey") is None
+
+    async def test_hgetall_invalid_json(self, client, mock_session):
+        mock_session.request.return_value = MockResponse(status=200, text='{"value": "not json"}')
+        assert await client.hgetall("hkey") is None
+
+    async def test_hdel_not_found(self, client, mock_session):
+        mock_session.request.return_value = MockResponse(status=404, text="Not found")
+        assert await client.hdel("hkey", "f1") == 0
+
+    async def test_hdel_field_not_present(self, client, mock_session):
+        mock_session.request.return_value = MockResponse(status=200, text='{"value": "{\\"f1\\": \\"v1\\"}"}')
+        assert await client.hdel("hkey", "f2") == 0
+
+    async def test_hdel_invalid_json(self, client, mock_session):
+        mock_session.request.return_value = MockResponse(status=200, text='{"value": "not json"}')
+        assert await client.hdel("hkey", "f1") == 0
+
+
 @pytest.mark.asyncio
 class TestKVCacheClientListOperations:
+    async def test_rpush_new(self, client, mock_session):
+        mock_session.request.side_effect = [
+            MockResponse(status=404, text="Not found"),  # get
+            MockResponse(status=200, text='{"status": "ok"}'),  # set
+        ]
+        assert await client.rpush("lkey", "a") == 1
+
+    async def test_lpush_new(self, client, mock_session):
+        mock_session.request.side_effect = [
+            MockResponse(status=404, text="Not found"),  # get
+            MockResponse(status=200, text='{"status": "ok"}'),  # set
+        ]
+        assert await client.lpush("lkey", "a") == 1
+
+    async def test_lrange_not_found(self, client, mock_session):
+        mock_session.request.return_value = MockResponse(status=404, text="Not found")
+        assert await client.lrange("lkey", 0, -1) == []
+
+    async def test_lrange_invalid_json(self, client, mock_session):
+        mock_session.request.return_value = MockResponse(status=200, text='{"value": "not json"}')
+        assert await client.lrange("lkey", 0, -1) == []
+
+    async def test_llen_not_found(self, client, mock_session):
+        mock_session.request.return_value = MockResponse(status=404, text="Not found")
+        assert await client.llen("lkey") == 0
+
+    async def test_llen_invalid_json(self, client, mock_session):
+        mock_session.request.return_value = MockResponse(status=200, text='{"value": "not json"}')
+        assert await client.llen("lkey") == 0
+
+    async def test_ltrim_not_found(self, client, mock_session):
+        mock_session.request.return_value = MockResponse(status=404, text="Not found")
+        assert await client.ltrim("lkey", 0, -1) is True
+
+    async def test_ltrim_invalid_json(self, client, mock_session):
+        mock_session.request.return_value = MockResponse(status=200, text='{"value": "not json"}')
+        assert await client.ltrim("lkey", 0, -1) is True
     async def test_rpush(self, client, mock_session):
         mock_session.request.side_effect = [
             MockResponse(status=200, text='{"value": "[\\"a\\"]"}'),  # get

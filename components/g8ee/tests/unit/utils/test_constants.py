@@ -222,7 +222,7 @@ class TestCaseStatusMatchesSharedJSON:
         assert status["case.status"]["waiting.for.customer"] == CaseStatus.WAITING_FOR_CUSTOMER
 
     def test_investigate(self, status):
-        assert status["case.status"]["investigate"] == CaseStatus.INVESTIGATE
+        assert status["case.status"]["in.progress"] == CaseStatus.IN_PROGRESS
 
     def test_human_review(self, status):
         assert status["case.status"]["human.review"] == CaseStatus.HUMAN_REVIEW

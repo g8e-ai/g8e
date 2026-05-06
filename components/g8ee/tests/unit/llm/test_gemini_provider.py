@@ -37,6 +37,8 @@ from app.llm.llm_types import (
     UsageMetadata,
     ToolGroup,
     ToolDeclaration,
+    ToolConfig,
+    ToolCallingConfig,
     PrimaryLLMSettings,
     StreamChunkFromModel,
     AssistantLLMSettings,
@@ -522,7 +524,31 @@ class TestGeminiProvider:
             mock_retry.assert_called_once()
 
     @patch("google.genai.Client")
+    async def test_generate_content_stream_primary_tools(self, mock_client):
+        # Coverage for line 629-630 (tools check)
+        provider = GeminiProvider(api_key="key")
+        settings = PrimaryLLMSettings(
+            max_output_tokens=100,
+            tools=[ToolGroup(tools=[ToolDeclaration(name="t1", description="d1", parameters={})])]
+        )
+        
+        async def mock_stream(*args, **kwargs):
+            yield StreamChunkFromModel(text="hi")
+            
+        with patch.object(provider, "_stream_with_retry", side_effect=mock_stream) as mock_retry:
+            chunks = []
+            async for chunk in provider.generate_content_stream_primary("model", [], settings):
+                chunks.append(chunk)
+            
+            # Verify tools were passed to _build_genai_config via the retry call
+            args = mock_retry.call_args[0]
+            # config is the 3rd arg
+            config = args[2]
+            assert len(config.tools) == 1
+
+    @patch("google.genai.Client")
     async def test_generate_content_stream_assistant(self, mock_client):
+        # Coverage for line 683-698
         provider = GeminiProvider(api_key="key")
         settings = AssistantLLMSettings(max_output_tokens=100)
         async def mock_stream(*args, **kwargs):
@@ -532,9 +558,7 @@ class TestGeminiProvider:
             async for chunk in provider.generate_content_stream_assistant("model", [], settings):
                 chunks.append(chunk)
             assert len(chunks) == 1
-
-    @patch("google.genai.Client")
-    async def test_generate_content_stream_lite(self, mock_client):
+            assert chunks[0].text == "hi"
         provider = GeminiProvider(api_key="key")
         settings = LiteLLMSettings(max_output_tokens=100)
         async def mock_stream(*args, **kwargs):
@@ -544,6 +568,149 @@ class TestGeminiProvider:
             async for chunk in provider.generate_content_stream_lite("model", [], settings):
                 chunks.append(chunk)
             assert len(chunks) == 1
+    def test_content_to_genai_thought_only(self):
+        # Coverage for line 160: part.thought = True
+        # Part with no text/FC/Response is dropped at line 157
+        # Unless it has a thought_signature (line 154) or thought (line 149)
+        # But wait, line 149: elif p.thought and p.text is not None:
+        # So thought=True AND text=None hits line 154 (sig) or line 157 (continue)
+        # Line 159: if p.thought and part.thought is not True: part.thought = True
+        # To hit line 160, we need 'part' to be created (not continue) but part.thought not True.
+        # This happens if p.tool_call is set (line 137) AND p.thought is True.
+        content = Content(role=Role.MODEL, parts=[Part(tool_call=ToolCall(name="t1", args={}), thought=True)])
+        result = _content_to_genai(content)
+        assert result["parts"][0]["thought"] is True
+
+    def test_content_to_genai_role_tool(self):
+        # Coverage for line 170: role = Role.USER
+        content = Content(role=Role.TOOL, parts=[Part(text="res")])
+        result = _content_to_genai(content)
+        assert result["role"] == Role.USER
+
+    def test_tool_group_to_genai_empty(self):
+        # Coverage for line 203: funcs is empty
+        from app.llm.providers.gemini import _tool_group_to_genai
+        tg = ToolGroup(tools=[], google_search=True)
+        res = _tool_group_to_genai(tg)
+        assert len(res) == 1
+        assert res[0].google_search is not None
+
+    def test_grounding_raw_seg_none(self):
+        # Coverage for line 245: continue if raw_seg is None
+        mock_candidate = MagicMock()
+        gm = mock_candidate.grounding_metadata
+        mock_support = MagicMock()
+        mock_support.segment = None
+        gm.grounding_supports = [mock_support]
+        gm.grounding_chunks = []
+        gm.web_search_queries = []
+        gm.search_entry_point = None
+        
+        grounding = _grounding_from_sdk_candidate(mock_candidate)
+        assert len(grounding.grounding_supports) == 0
+
+    def test_parts_from_sdk_candidate_sig_only(self):
+        # Coverage for line 312-313
+        mock_cand = MagicMock()
+        mock_part = MagicMock()
+        mock_part.text = None
+        mock_part.thought = False
+        mock_part.function_call = None
+        mock_part.thought_signature = b"sig"
+        mock_cand.content.parts = [mock_part]
+        res = _parts_from_sdk_candidate(mock_cand)
+        assert len(res) == 1
+        assert res[0].thought_signature.value == "c2ln"
+
+    def test_build_genai_config_primary_tool_config(self):
+        # Coverage for line 404: tool_config
+        settings = PrimaryLLMSettings(
+            max_output_tokens=100,
+            tool_config=ToolConfig(
+                tool_calling_config=ToolCallingConfig(mode="ANY", allowed_tool_names=["t1"])
+            )
+        )
+        config = GeminiProvider._build_genai_config(settings, [], "model")
+        assert config.tool_config.function_calling_config.mode == "ANY"
+
+    def test_sdk_chunk_to_stream_thought_text(self):
+        # Coverage for line 505
+        mock_chunk = MagicMock()
+        mock_cand = MagicMock()
+        mock_part = MagicMock()
+        mock_part.text = "thought"
+        mock_part.thought = True
+        mock_part.function_call = None
+        mock_part.thought_signature = b"sig"
+        mock_cand.content.parts = [mock_part]
+        mock_cand.finish_reason = None
+        mock_chunk.candidates = [mock_cand]
+        mock_chunk.usage_metadata = None
+        chunks = GeminiProvider._sdk_chunk_to_stream_from_model_chunks(mock_chunk)
+        assert chunks[0].thought is True
+        assert chunks[0].text == "thought"
+
+    def test_sdk_chunk_to_stream_sig_only(self):
+        # Coverage for line 517-518
+        mock_chunk = MagicMock()
+        mock_cand = MagicMock()
+        mock_part = MagicMock()
+        mock_part.text = None
+        mock_part.thought = False
+        mock_part.function_call = None
+        mock_part.thought_signature = b"sig"
+        mock_cand.content.parts = [mock_part]
+        mock_cand.finish_reason = None
+        mock_chunk.candidates = [mock_cand]
+        mock_chunk.usage_metadata = None
+        chunks = GeminiProvider._sdk_chunk_to_stream_from_model_chunks(mock_chunk)
+        assert chunks[0].thought_signature.value == "c2ln"
+
+    def test_sdk_chunk_to_stream_usage_metadata(self):
+        # Coverage for line 521
+        mock_chunk = MagicMock()
+        mock_chunk.candidates = [MagicMock(content=None, finish_reason=None)]
+        mock_chunk.usage_metadata.prompt_token_count = 10
+        chunks = GeminiProvider._sdk_chunk_to_stream_from_model_chunks(mock_chunk)
+        # One chunk for candidate (empty), one for usage
+        assert any(c.usage_metadata and c.usage_metadata.prompt_token_count == 10 for c in chunks)
+        # Coverage for line 286: return if candidate.content is None
+        mock_candidate = MagicMock()
+        mock_candidate.content = None
+        assert _parts_from_sdk_candidate(mock_candidate) == []
+
+    def test_build_thinking_config_gemini3_none(self):
+        # Coverage for line 377: return if not tc
+        assert GeminiProvider._build_thinking_config_gemini3(None, "model", genai_types) == (None, None)
+
+    def test_build_genai_config_assistant_sampling(self):
+        # Coverage for lines 456, 458, 468, 470
+        settings = AssistantLLMSettings(
+            max_output_tokens=100,
+            top_p_nucleus_sampling=0.8,
+            top_k_filtering=20
+        )
+        config = GeminiProvider._build_genai_config(settings, None, "model")
+        assert config.top_p == 0.8
+        assert config.top_k == 20
+
+    def test_sdk_chunk_to_stream_text_normalization(self):
+        # Coverage for line 502: text normalization
+        mock_chunk = MagicMock()
+        mock_cand = MagicMock()
+        mock_part = MagicMock()
+        mock_part.text = "line1\\nline2"
+        mock_part.thought = False
+        mock_part.function_call = None
+        mock_part.thought_signature = None
+        mock_cand.content.parts = [mock_part]
+        mock_cand.finish_reason = None
+        mock_chunk.candidates = [mock_cand]
+        mock_chunk.usage_metadata = None
+        
+        chunks = GeminiProvider._sdk_chunk_to_stream_from_model_chunks(mock_chunk)
+        assert chunks[0].text == "line1\nline2"
+
     def test_build_genai_config_assistant_json(self):
         schema = ResponseJsonSchema(
             json_schema_dict={"type": "object", "properties": {"res": {"type": "string"}}}
@@ -559,7 +726,39 @@ class TestGeminiProvider:
         assert config.response_json_schema == schema.json_schema_dict
 
     @patch("google.genai.Client")
-    async def test_generate_content_primary_error(self, mock_client):
+    async def test_stream_with_retry_loop(self, mock_client):
+        # Coverage for line 605: yield chunk
+        provider = GeminiProvider(api_key="key")
+        mock_chunk = MagicMock()
+        mock_cand = MagicMock()
+        mock_cand.content.parts = [MagicMock(text="hi", thought=False, function_call=None, thought_signature=None)]
+        mock_cand.finish_reason = None
+        mock_chunk.candidates = [mock_cand]
+        mock_chunk.usage_metadata = None
+        
+        mock_iter = iter([mock_chunk])
+        with patch.object(provider, "_sync_stream", return_value=mock_iter):
+            chunks = []
+            async for chunk in provider._stream_with_retry("model", [], {}):
+                chunks.append(chunk)
+            assert len(chunks) == 1
+            assert chunks[0].text == "hi"
+
+    @patch("google.genai.Client")
+    async def test_generate_content_primary_tools(self, mock_client):
+        # Coverage for line 629-630
+        provider = GeminiProvider(api_key="key")
+        settings = PrimaryLLMSettings(
+            max_output_tokens=100,
+            tools=[ToolGroup(tools=[ToolDeclaration(name="t1", description="d1", parameters={})])]
+        )
+        with patch.object(provider, "_generate_with_retry", return_value=GenerateContentResponse()) as mock_retry:
+            await provider.generate_content_primary("model", [], settings)
+            # Verify tools were passed to _build_genai_config via the retry call
+            args = mock_retry.call_args[0]
+            # config is the 3rd arg
+            config = args[2]
+            assert len(config.tools) == 1
         provider = GeminiProvider(api_key="key")
         settings = PrimaryLLMSettings(max_output_tokens=100)
         with patch.object(provider, "_generate_with_retry", side_effect=Exception("api error")):
@@ -579,7 +778,10 @@ class TestGeminiProvider:
 
     def test_sdk_chunk_to_stream_finish_reason(self):
         mock_chunk = MagicMock()
-        mock_chunk.candidates = [MagicMock(finish_reason=MagicMock(name="STOP"), content=None)]
+        mock_cand = MagicMock()
+        mock_cand.finish_reason.name = "STOP"
+        mock_cand.content = None
+        mock_chunk.candidates = [mock_cand]
         mock_chunk.usage_metadata = None
         
         chunks = GeminiProvider._sdk_chunk_to_stream_from_model_chunks(mock_chunk)
