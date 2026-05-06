@@ -93,6 +93,14 @@ type FileEditResultPayload struct {
 	BackupPath        *string                   `json:"backup_path,omitempty"`
 }
 
+type FsGrepMatch struct {
+	Path       string   `json:"path"`
+	LineNumber int      `json:"line_number"`
+	Content    string   `json:"content"`
+	Before     []string `json:"before,omitempty"`
+	After      []string `json:"after,omitempty"`
+}
+
 type FsListResultPayload struct {
 	PayloadType       string                    `json:"payload_type"`
 	ExecutionID       string                    `json:"execution_id"`
@@ -104,6 +112,26 @@ type FsListResultPayload struct {
 	OperatorID        string                    `json:"operator_id"`
 	OperatorSessionID string                    `json:"operator_session_id"`
 	Entries           []FsListEntry             `json:"entries,omitempty"`
+	StdoutSize        int                       `json:"stdout_size"`
+	StderrSize        int                       `json:"stderr_size"`
+	StdoutHash        string                    `json:"stdout_hash,omitempty"`
+	StderrHash        string                    `json:"stderr_hash,omitempty"`
+	StoredLocally     bool                      `json:"stored_locally"`
+	ErrorMessage      *string                   `json:"error_message,omitempty"`
+	ErrorType         *string                   `json:"error_type,omitempty"`
+}
+
+type FsGrepResultPayload struct {
+	PayloadType       string                    `json:"payload_type"`
+	ExecutionID       string                    `json:"execution_id"`
+	Path              *string                   `json:"path,omitempty"`
+	Status            constants.ExecutionStatus `json:"status"`
+	TotalMatches      int                       `json:"total_matches"`
+	Truncated         bool                      `json:"truncated"`
+	DurationSeconds   float64                   `json:"duration_seconds"`
+	OperatorID        string                    `json:"operator_id"`
+	OperatorSessionID string                    `json:"operator_session_id"`
+	Matches           []FsGrepMatch             `json:"matches,omitempty"`
 	StdoutSize        int                       `json:"stdout_size"`
 	StderrSize        int                       `json:"stderr_size"`
 	StdoutHash        string                    `json:"stdout_hash,omitempty"`

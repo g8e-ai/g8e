@@ -465,6 +465,40 @@ class InternalHttpClient{
     }
 
     /**
+     * Revoke an operator certificate via g8ee authority.
+     * @param {string} serial - Certificate serial number
+     * @param {string} reason - Revocation reason
+     * @param {string} operatorId - Operator ID associated with the certificate
+     * @param {Object} g8eContext - G8eHttpContext for the request
+     * @returns {Promise<{success: boolean, error?: string}>}
+     */
+    async revokeCertificate(serial, reason, operatorId, g8eContext) {
+        logger.info('[HTTP-INTERNAL] Requesting certificate revocation', { serial, operatorId });
+        
+        return this.request('g8ee', ApiPaths.g8ee.authRevokeCert(), {
+            method: 'POST',
+            body: { serial, reason, operator_id: operatorId },
+            g8eContext
+        });
+    }
+
+    /**
+     * Sync user settings to g8ee.
+     * @param {Object} settings - Flat key/value settings
+     * @param {Object} g8eContext - G8eHttpContext for the request
+     * @returns {Promise<{success: boolean, error?: string}>}
+     */
+    async syncUserSettings(settings, g8eContext) {
+        logger.info('[HTTP-INTERNAL] Syncing user settings to g8ee');
+        
+        return this.request('g8ee', ApiPaths.g8ee.settingsUser(), {
+            method: 'PATCH',
+            body: settings,
+            g8eContext
+        });
+    }
+
+    /**
      * Check health of all internal services
      */
     async healthCheck() {

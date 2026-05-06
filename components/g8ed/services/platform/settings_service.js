@@ -306,10 +306,15 @@ class SettingsService {
         // Sync to g8ee if internalHttpClient is available
         if (this.internalHttpClient) {
             try {
-                await this.internalHttpClient.request('g8ee', ApiPaths.g8ee.settingsUser(), {
-                    method: 'PATCH',
-                    body: validation.valid,
+                // Ensure we have a valid G8eHttpContext for the sync
+                const g8eContext = new G8eHttpContext({
+                    source_component: 'g8ed',
+                    user_id: userId,
+                    organization_id: userId, // Default to user_id as org_id
+                    web_session_id: 'settings-sync-session'
                 });
+
+                await this.internalHttpClient.syncUserSettings(validation.valid, g8eContext);
                 logger.info('[SETTINGS-SERVICE] Synced user settings to g8ee', { userId });
             } catch (syncError) {
                 logger.warn('[SETTINGS-SERVICE] Failed to sync user settings to g8ee (non-critical)', {

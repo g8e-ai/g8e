@@ -1662,5 +1662,42 @@ async def health_check():
             InternalApiPaths.G8EE_CHAT_TRIAGE_ANSWER,
             InternalApiPaths.G8EE_CHAT_TRIAGE_SKIP,
             InternalApiPaths.G8EE_CHAT_TRIAGE_TIMEOUT,
+            InternalApiPaths.G8EE_SETTINGS_USER,
         ]
     }
+
+
+@router.patch(InternalApiPaths.G8EE_SETTINGS_USER, response_model=UserSettingsUpdateResponse)
+async def sync_user_settings(
+    request: dict,
+    g8e_context: G8eHttpContext = Depends(get_g8e_http_context),
+    cache_aside: CacheAsideService = Depends(get_g8ee_cache_aside_service),
+):
+    """
+    Sync user settings from g8ed - internal cluster use only.
+    
+    Invalidates the local cache for the user's settings so subsequent
+    requests will fetch the fresh settings from g8es.
+    """
+    user_id = g8e_context.user_id
+    if not user_id:
+        return UserSettingsUpdateResponse(success=False, error="user_id is required in context headers")
+
+    logger.info(
+        "[INTERNAL-HTTP] Syncing user settings (cache invalidation)",
+        extra={"user_id": user_id}
+    )
+
+    try:
+        user_doc_id = f"{USER_SETTINGS_DOC_PREFIX}{user_id}"
+        await cache_aside.invalidate_local_cache(
+            collection=DB_COLLECTION_SETTINGS,
+            document_id=user_doc_id
+        )
+        return UserSettingsUpdateResponse(success=True)
+    except Exception as e:
+        logger.error(
+            "[INTERNAL-HTTP] Failed to invalidate settings cache",
+            extra={"error": str(e), "user_id": user_id}
+        )
+        return UserSettingsUpdateResponse(success=False, error=str(e))

@@ -36,6 +36,7 @@ export class AuditPage {
         this.approvalCountEl  = null;
         this.commandCountEl   = null;
         this.fileEditCountEl  = null;
+        this.tribunalCountEl  = null;
         this.dateRangeEl      = null;
         this.fromDateInput    = null;
         this.toDateInput      = null;
@@ -60,6 +61,7 @@ export class AuditPage {
         this.approvalCountEl  = document.getElementById('approval-count');
         this.commandCountEl   = document.getElementById('command-count');
         this.fileEditCountEl  = document.getElementById('file-edit-count');
+        this.tribunalCountEl  = document.getElementById('tribunal-count');
         this.dateRangeEl      = document.getElementById('date-range');
         this.fromDateInput    = document.getElementById('from-date');
         this.toDateInput      = document.getElementById('to-date');
@@ -138,6 +140,7 @@ export class AuditPage {
         let approvalCount = 0;
         let commandCount = 0;
         let fileEditCount = 0;
+        let tribunalCount = 0;
 
         for (const event of events) {
             const category = event.category || '';
@@ -149,6 +152,8 @@ export class AuditPage {
                 commandCount++;
             } else if (category === 'file_edit') {
                 fileEditCount++;
+            } else if (category === 'tribunal') {
+                tribunalCount++;
             }
         }
 
@@ -156,6 +161,7 @@ export class AuditPage {
         if (this.approvalCountEl) this.approvalCountEl.textContent = approvalCount.toLocaleString();
         if (this.commandCountEl) this.commandCountEl.textContent = commandCount.toLocaleString();
         if (this.fileEditCountEl) this.fileEditCountEl.textContent = fileEditCount.toLocaleString();
+        if (this.tribunalCountEl) this.tribunalCountEl.textContent = tribunalCount.toLocaleString();
 
         if (events.length > 0) {
             const timestamps = events.map(e => new Date(e.timestamp)).filter(d => !isNaN(d));
@@ -241,6 +247,7 @@ export class AuditPage {
         this.approvalCountEl  = null;
         this.commandCountEl   = null;
         this.fileEditCountEl  = null;
+        this.tribunalCountEl  = null;
         this.dateRangeEl      = null;
         this.fromDateInput    = null;
         this.toDateInput      = null;

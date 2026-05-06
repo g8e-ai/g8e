@@ -86,6 +86,10 @@
                             <span class="audit-stat-label">File Edits</span>
                         </div>
                         <div class="audit-stat-card">
+                            <span class="audit-stat-value" id="tribunal-count">--</span>
+                            <span class="audit-stat-label">Tribunal</span>
+                        </div>
+                        <div class="audit-stat-card">
                             <span class="audit-stat-value audit-stat-value-small" id="date-range">--</span>
                             <span class="audit-stat-label">Date Range</span>
                         </div>
@@ -208,7 +212,35 @@
                                 <tr>
                                     <td>
                                         <div class="audit-data-category">
-                                            <span class="material-symbols-outlined audit-category-icon">link</span>
+                                            <span class="material-symbols-outlined audit-category-icon">how_to_vote</span>
+                                            <div>
+                                                <div class="audit-category-name">Tribunal Vote</div>
+                                                <div class="audit-category-desc">Consensus records and breakdown</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td><span class="audit-badge local">Local</span></td>
+                                    <td><span class="audit-badge never">No</span></td>
+                                    <td class="audit-protection-text">Individual agent votes and reasoning stored locally for audit</td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <div class="audit-data-category">
+                                            <span class="material-symbols-outlined audit-category-icon">analytics</span>
+                                            <div>
+                                                <div class="audit-category-name">Consensus Strength</div>
+                                                <div class="audit-category-desc">Ratio of agreement among agents</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td><span class="audit-badge local">Local</span></td>
+                                    <td><span class="audit-badge cloud">Yes</span></td>
+                                    <td class="audit-protection-text">Aggregated strength metric sent as metadata</td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <div class="audit-data-category">
+                                            <span class="material-symbols-outlined audit-category-icon">history</span>
                                             <div>
                                                 <div class="audit-category-name">WebSession ID</div>
                                                 <div class="audit-category-desc">Links events to conversation</div>

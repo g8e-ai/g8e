@@ -37,6 +37,7 @@ type FileOpsService struct {
 	logger      *slog.Logger
 	fileEdit    *execution.FileEditService
 	fsList      *execution.FsListService
+	fsGrep      *execution.FsGrepService
 	results     ResultsPublisher
 	sentinel    *sentinel.Sentinel
 	vaultWriter *VaultWriter
@@ -52,6 +53,7 @@ func NewFileOpsService(cfg *config.Config, logger *slog.Logger, fileEditSvc *exe
 		logger:   logger,
 		fileEdit: fileEditSvc,
 		fsList:   execution.NewFsListService(cfg.WorkDir, logger),
+		fsGrep:   execution.NewFsGrepService(cfg.WorkDir, logger),
 		client:   client,
 	}
 }
@@ -380,6 +382,96 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg PubSubCom
 	}
 }
 
+// HandleFsGrepRequest processes an inbound filesystem grep request.
+func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg PubSubCommandMessage) {
+	var p models.FsGrepRequestPayload
+	if err := json.Unmarshal(msg.Payload, &p); err != nil {
+		fs.logger.Error("Failed to decode fs grep payload", "error", err)
+		return
+	}
+	path := p.Path
+	if path == "" {
+		path = "."
+	}
+
+	fs.logger.Info("File system grep requested", "path", path, "pattern", p.Pattern)
+
+	fsGrepReq, err := payloadToFsGrepRequest(msg)
+	if err != nil {
+		fs.logger.Error("Failed to create fs grep request", "error", err)
+		return
+	}
+
+	result, err := fs.fsGrep.ExecuteFsGrep(ctx, fsGrepReq)
+	if err != nil {
+		result = &models.FsGrepResult{
+			ExecutionID:     fsGrepReq.ExecutionID,
+			CaseID:          fsGrepReq.CaseID,
+			TaskID:          fsGrepReq.TaskID,
+			InvestigationID: fsGrepReq.InvestigationID,
+			Path:            fsGrepReq.Path,
+			Pattern:         fsGrepReq.Pattern,
+			Status:          constants.ExecutionStatusFailed,
+			ErrorMessage:    system.StringPtr(err.Error()),
+			ErrorType:       system.StringPtr("execution_error"),
+		}
+	}
+
+	if fs.vaultWriter != nil {
+		commandStr := fmt.Sprintf("fs_grep: %s (pattern: %s)", path, p.Pattern)
+
+		var exitCode *int
+		if result.Status == constants.ExecutionStatusCompleted {
+			zero := 0
+			exitCode = &zero
+		} else {
+			one := 1
+			exitCode = &one
+		}
+
+		var stdout string
+		if result.Matches != nil {
+			if matchesJSON, jsonErr := json.Marshal(result.Matches); jsonErr == nil {
+				stdout = string(matchesJSON)
+			}
+		}
+
+		var stderr string
+		if result.ErrorMessage != nil {
+			stderr = *result.ErrorMessage
+		}
+
+		taskID := ""
+		if result.TaskID != nil {
+			taskID = *result.TaskID
+		}
+
+		fs.vaultWriter.WriteExecution(executionWriteParams{
+			id:              result.ExecutionID,
+			command:         commandStr,
+			exitCode:        exitCode,
+			durationMs:      int64(result.DurationSeconds * 1000),
+			stdout:          stdout,
+			stderr:          stderr,
+			stdoutSize:      len(stdout),
+			stderrSize:      len(stderr),
+			caseID:          result.CaseID,
+			taskID:          taskID,
+			investigationID: result.InvestigationID,
+		})
+		fs.logger.Info("FS grep stored locally",
+			"execution_id", result.ExecutionID,
+			"path", path,
+			"matches", result.TotalMatches)
+	}
+
+	if fs.results != nil {
+		if err := fs.results.PublishFsGrepResult(ctx, result, msg); err != nil {
+			fs.logger.Error("Failed to publish fs grep result", "error", err)
+		}
+	}
+}
+
 // HandleFsReadRequest processes an inbound filesystem read request.
 func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg PubSubCommandMessage) {
 	var p models.FsReadRequestPayload
@@ -600,5 +692,36 @@ func payloadToFsListRequest(msg PubSubCommandMessage) (*models.FsListRequest, er
 		MaxDepth:        p.MaxDepth,
 		MaxEntries:      maxEntries,
 		RequestedBy:     "g8e-system",
+	}, nil
+}
+
+// payloadToFsGrepRequest is a package-level helper shared by FileOpsService and tests.
+func payloadToFsGrepRequest(msg PubSubCommandMessage) (*models.FsGrepRequest, error) {
+	var p models.FsGrepRequestPayload
+	if err := json.Unmarshal(msg.Payload, &p); err != nil {
+		return nil, fmt.Errorf("failed to decode fs grep payload: %w", err)
+	}
+
+	path := p.Path
+	if path == "" {
+		path = "."
+	}
+
+	requestID := executionIDFromMessage(msg)
+
+	maxMatches := p.MaxMatches
+	if maxMatches <= 0 {
+		maxMatches = 100
+	}
+
+	return &models.FsGrepRequest{
+		ExecutionID:     requestID,
+		CaseID:          msg.CaseID,
+		TaskID:          msg.TaskID,
+		InvestigationID: msg.InvestigationID,
+		Path:            path,
+		Pattern:         p.Pattern,
+		Includes:        p.Includes,
+		MaxMatches:      maxMatches,
 	}, nil
 }

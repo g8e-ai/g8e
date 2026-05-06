@@ -157,6 +157,9 @@ func (m *MockResultsPublisher) PublishFileEditResult(ctx context.Context, result
 func (m *MockResultsPublisher) PublishFsListResult(ctx context.Context, result *models.FsListResult, originalMsg PubSubCommandMessage) error {
 	return nil
 }
+func (m *MockResultsPublisher) PublishFsGrepResult(ctx context.Context, result *models.FsGrepResult, originalMsg PubSubCommandMessage) error {
+	return nil
+}
 func (m *MockResultsPublisher) PublishExecutionStatus(ctx context.Context, status *ExecutionStatusUpdate) error {
 	return nil
 }

@@ -413,3 +413,9 @@ class DirectCommandRequest(G8eBaseModel):
     execution_id: str = Field(..., description="Execution ID for tracking")
     hostname: str | None = Field(default=None, description="Hostname of the target operator for result display")
     source: str = Field(default="anchored_terminal", description="Source of the command")
+
+
+class UserSettingsUpdateResponse(G8eBaseModel):
+    """Response model for user settings update sync."""
+    success: bool
+    error: str | None = None

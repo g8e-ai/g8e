@@ -32,11 +32,11 @@ from app.constants.events import (
     EventType,
 )
 from app.models.http_context import G8eHttpContext
-from app.models.command_request_payloads import FsListRequestPayload, FsReadRequestPayload
+from app.models.command_request_payloads import FsListRequestPayload, FsReadRequestPayload, FsGrepRequestPayload
 from app.models.operators import CommandExecutingBroadcastEvent, CommandResultBroadcastEvent
 from app.models.investigations import EnrichedInvestigationContext
-from app.models.tool_results import FsListToolResult, FsReadToolResult
-from app.models.pubsub_messages import FsListResultPayload, FsReadResultPayload, G8eMessage
+from app.models.tool_results import FsListToolResult, FsReadToolResult, FsGrepToolResult
+from app.models.pubsub_messages import FsListResultPayload, FsReadResultPayload, FsGrepResultPayload, G8eMessage
 
 logger = logging.getLogger(__name__)
 

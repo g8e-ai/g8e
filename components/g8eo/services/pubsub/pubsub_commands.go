@@ -157,6 +157,7 @@ func (rs *PubSubCommandService) buildHandlers() {
 		constants.Event.Operator.FileEdit.Requested:         rs.fileOps.HandleFileEditRequest,
 		constants.Event.Operator.FsList.Requested:           rs.fileOps.HandleFsListRequest,
 		constants.Event.Operator.FsRead.Requested:           rs.fileOps.HandleFsReadRequest,
+		constants.Event.Operator.FsGrep.Requested:           rs.fileOps.HandleFsGrepRequest,
 		constants.Event.Operator.PortCheck.Requested:        rs.ports.HandlePortCheckRequest,
 		constants.Event.Operator.FetchLogs.Requested:        rs.history.HandleFetchLogsRequest,
 		constants.Event.Operator.FetchHistory.Requested:     rs.history.HandleFetchHistoryRequest,

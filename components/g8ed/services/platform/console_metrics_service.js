@@ -431,7 +431,8 @@ class ConsoleMetricsService {
 
         try {
             const g8eeStart = Date.now();
-            const g8eeHealth = await this.internalHttpClient.request('g8ee', '/health', { method: 'GET' });
+            const healthResults = await this.internalHttpClient.healthCheck();
+            const g8eeHealth = healthResults.g8ee?.response;
             components.g8ee = {
                 name: 'g8ee',
                 status: g8eeHealth?.status === SystemHealth.HEALTHY ? SystemHealth.HEALTHY : SystemHealth.DEGRADED,

@@ -257,6 +257,59 @@ func (rr *PubSubResultsService) PublishFsListResult(ctx context.Context, result 
 	return nil
 }
 
+// PublishFsGrepResult publishes file system grep result via g8es pub/sub.
+func (rr *PubSubResultsService) PublishFsGrepResult(ctx context.Context, result *models.FsGrepResult, originalMsg PubSubCommandMessage) error {
+	eventType := constants.Event.Operator.FsGrep.Completed
+	if result.Status == constants.ExecutionStatusFailed {
+		eventType = constants.Event.Operator.FsGrep.Failed
+	}
+
+	var matchesJSON, errorStr string
+	if result.Matches != nil {
+		if b, err := json.Marshal(result.Matches); err == nil {
+			matchesJSON = string(b)
+		}
+	}
+	if result.ErrorMessage != nil {
+		errorStr = *result.ErrorMessage
+	}
+
+	payload := models.FsGrepResultPayload{
+		PayloadType:       "fs_grep_result",
+		ExecutionID:       result.ExecutionID,
+		Path:              &result.Path,
+		Status:            result.Status,
+		TotalMatches:      result.TotalMatches,
+		Truncated:         result.Truncated,
+		DurationSeconds:   result.DurationSeconds,
+		OperatorID:        rr.config.OperatorID,
+		OperatorSessionID: rr.config.OperatorSessionId,
+		Matches:           result.Matches,
+		StdoutSize:        len(matchesJSON),
+		StderrSize:        len(errorStr),
+		ErrorMessage:      result.ErrorMessage,
+		ErrorType:         result.ErrorType,
+	}
+	if rr.localStore != nil && rr.localStore.IsEnabled() {
+		payload.StdoutHash = rr.localStore.HashString(matchesJSON)
+		payload.StderrHash = rr.localStore.HashString(errorStr)
+		payload.StoredLocally = true
+		rr.logger.Info("Publishing fs grep result",
+			"execution_id", result.ExecutionID,
+			"path", result.Path,
+			"matches_count", result.TotalMatches)
+	}
+
+	if err := rr.publishResultEnvelope(ctx, eventType, result.CaseID, result.TaskID, result.InvestigationID, originalMsg, &payload); err != nil {
+		return fmt.Errorf("failed to publish fs grep result: %w", err)
+	}
+
+	rr.logger.Info("FS grep result transmitted",
+		"operator_session_id", rr.config.OperatorSessionId,
+		"matches", result.TotalMatches)
+	return nil
+}
+
 // ExecutionStatusUpdate represents a periodic status update during command execution
 type ExecutionStatusUpdate struct {
 	ExecutionID       string

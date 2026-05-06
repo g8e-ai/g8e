@@ -32,15 +32,6 @@ type FsGrepRequest struct {
 	MaxMatches int      `json:"max_matches"`
 }
 
-// FsGrepMatch represents a single grep match
-type FsGrepMatch struct {
-	Path       string   `json:"path"`
-	LineNumber int      `json:"line_number"`
-	Content    string   `json:"content"`
-	Before     []string `json:"before,omitempty"`
-	After      []string `json:"after,omitempty"`
-}
-
 // FsGrepResult represents the result of a grep operation
 type FsGrepResult struct {
 	ExecutionID     string                    `json:"execution_id"`
