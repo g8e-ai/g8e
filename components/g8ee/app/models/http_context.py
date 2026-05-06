@@ -21,6 +21,7 @@ from app.constants import (
     ComponentName,
     OperatorStatus,
     G8eHeaders,
+    InternalApiPaths,
 )
 from app.utils.ids import generate_execution_id
 from app.utils.timestamp import now

@@ -53,15 +53,17 @@ Because the Tribunal generates in strict parallel, the 5-node consensus resolves
 
 **Nemesis** acts as an endogenous red team, explicitly prompted to craft flawed-but-plausible commands to trick the Warden. If it succeeds but is caught by the final Auditor, it is rewarded. We replaced external audits with continuous, mathematically bounded adversarial pressure.
 
-## **5\. Co-Validation and Proof of Human Presence**
+## **5\. The Governance Gateway and Proof of Human Presence**
 
 The machine handles what is machine-checkable. The human handles what is strictly human-checkable: intent fidelity, contextual stakes, and the acceptance of irreversible real-world consequences.
 
 This is expressed by the **Co-Validation Identity**:
 
-![][image1]Neither signature is sufficient alone. Crucially, we do not allow the human signature to be automated. The industry standard for HITL is a CLI prompt. CLI prompts can be bypassed by a tired developer writing a wrapper script with \--auto-approve.
+![][image1]
 
-g8e permanently disables automatic function calling. We enforce explicit friction through **Proof of Human Presence**. The platform requires a real user, visually looking at the data in a web browser, to authorize a state change using a FIDO2 WebAuthn passkey. You cannot curl your way past the approval gate. The only signature the Operator will accept is mathematically bound to a physical hardware token or biometric scan tied to a specific human's deliberate intent.
+Neither signature is sufficient alone. Crucially, we do not allow the human signature to be automated. The industry standard for HITL is a CLI prompt. CLI prompts can be bypassed by a tired developer writing a wrapper script with \--auto-approve.
+
+g8e permanently disables automatic function calling. We enforce explicit friction through **Proof of Human Presence (PHP)**. The **Governance Gateway** is the only path to the human, enforced by FIDO2. It doesn't just show a UI; it validates that a hardware-bound signature was appended to the transaction envelope. The only signature the Operator will accept is mathematically bound to a physical hardware token or biometric scan tied to a specific human's deliberate intent.
 
 We enforce the friction because the friction is the security boundary.
 

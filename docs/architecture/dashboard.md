@@ -3,12 +3,12 @@ title: Terminal
 parent: Architecture
 ---
 
-# Terminal
+# Governance Gateway Terminal
 
 Last Updated: 5-6-2026
 Version: v.0.2.0
 
-The terminal is the primary UI surface in g8ed, served at `/chat`. It provides a unified interface for AI interaction, Operator management, command execution, and system diagnostics. All terminal components communicate exclusively through the EventBus — no component holds a direct reference to another, enabling loose coupling and testability.
+The terminal is the primary human-interactive surface of the Governance Gateway (g8ed), served at `/chat`. It provides a unified interface for AI interaction, Operator management, command execution, and system diagnostics. All terminal components communicate exclusively through the EventBus — no component holds a direct reference to another, enabling loose coupling and testability.
 
 ## Architecture Principles
 
@@ -105,15 +105,15 @@ The Cases Manager (`public/js/components/cases-manager.js`) manages conversation
 
 ## Safety and Governance
 
-### Approval Flow
+### Proof of Human Presence (PHP) Flow
 
-When the AI proposes a command, file edit, or permission escalation, the Terminal renders an interactive approval card. The user must explicitly approve or deny before execution. Risk analysis (HIGH/MEDIUM/LOW) is displayed as a badge with a tooltip explaining the score.
+When the AI proposes a command, file edit, or permission escalation, the Terminal renders an interactive Proof of Human Presence (PHP) card. The user must provide a hardware-bound signature (FIDO2) before execution. Risk analysis (HIGH/MEDIUM/LOW) is displayed as a badge with a tooltip explaining the score.
 
-**Why explicit approval?** The AI operates with elevated privileges on Operators. Human-in-the-loop approval prevents accidental or malicious execution of destructive commands. The risk badge provides context without forcing the user to read through raw command text.
+**Why Proof of Human Presence (PHP)?** The AI operates with elevated privileges on Operators. PHP ensures that only explicit, hardware-bound signatures can authorize state changes, preventing accidental or malicious execution of destructive commands. The risk badge provides context without forcing the user to read through raw command text.
 
 ### Tribunal
 
-The Tribunal is a multi-model verification system that cross-checks AI-proposed commands before requesting approval. It runs multiple generation passes, compares outputs, and only requests user approval if consensus is reached. Progress is displayed as a live widget in the Terminal.
+The Tribunal is a multi-model verification system that cross-checks AI-proposed commands before requesting a signature. It runs multiple generation passes, compares outputs, and only requests a human signature if consensus is reached. Progress is displayed as a live widget in the Terminal.
 
 **Why a Tribunal?** Single-model AI can hallucinate or produce unsafe commands. The Tribunal reduces this risk by requiring consensus across multiple independent models, similar to a human peer review process.
 

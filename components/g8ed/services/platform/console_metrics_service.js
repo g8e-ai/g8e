@@ -159,11 +159,9 @@ class ConsoleMetricsService {
             [OperatorStatus.OFFLINE]: 0,
             [OperatorStatus.ACTIVE]: 0,
             [OperatorStatus.BOUND]: 0,
-            [OperatorStatus.OFFLINE]: 0,
             [OperatorStatus.STALE]: 0,
             [OperatorStatus.STOPPED]: 0,
             [OperatorStatus.TERMINATED]: 0,
-            [OperatorStatus.UNAVAILABLE]: 0
         };
 
         const typeDistribution = {

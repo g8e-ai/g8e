@@ -26,7 +26,7 @@ The system utilizes specialized AI agents, each with a distinct lens and respons
 | **Warden** | Defender | `warden` | Orchestrates risk assessment (LOW/MEDIUM/HIGH) before execution. |
 | **Codex** | Memory | `codex` | Extracts durable user preferences and scrubbed summaries from history. |
 | **Judge** | Evaluator | `judge` | Dispassionate grader of agent performance against gold-standard rubrics. |
-| **User** | Co-validator | `user` | Human domain validator; verifies intent fidelity and accepts consequences. |
+| **User** | Co-validator | `user` | Human domain validator; provides hardware-bound signature (PHP) to verify intent and accept consequences. |
 
 ## The 3-Layer Governance Hierarchy
 
@@ -51,12 +51,12 @@ The Tribunal converts Sage's intent into a command using an ensemble of five ind
 4.  **The Auditor (Final Verification)**: The Auditor reviews the winner against the intent. It can swap to a superior dissenter candidate or produce a revised command if technical flaws are found.
 5.  **Merkle Commitment**: The final verdict is cryptographically bound to a Merkle-signed snapshot of the reputation scoreboard.
 
-### Layer 3: Authorization (Approval Gate)
+### Layer 3: Authorization (PHP Gate)
 The final layer involves human authorization, governed by the **Auditor-User Partition**.
 
-*   **Human-in-the-loop**: By default, the User must sign off on the final audited command.
-*   **Auto-Approval (Skip-Approval)**: To minimize click fatigue, benign diagnostic commands (e.g., `uptime`, `df`, `free`) can be rubber-stamped.
-*   **Safety Invariant**: Auto-approval **NEVER** bypasses Layer 1 or Layer 2. It only skips the Layer 3 human prompt for commands already verified as technically safe and low-risk.
+*   **Proof of Human Presence (PHP)**: By default, the User must provide a hardware-bound signature for the final audited command.
+*   **Auto-Signature (Skip-PHP)**: To minimize click fatigue, benign diagnostic commands (e.g., `uptime`, `df`, `free`) can be auto-signed.
+*   **Safety Invariant**: Auto-signature **NEVER** bypasses Layer 1 or Layer 2. It only skips the Layer 3 human signature requirement for commands already verified as technically safe and low-risk.
 
 ## Reputation & Stakes
 

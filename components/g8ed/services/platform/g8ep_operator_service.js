@@ -23,7 +23,7 @@
  *
  *   1. getG8ENodeOperatorForUser(user_id)
  *      → Queries operator slots. Returns the first operator that is already
- *        ACTIVE on the g8ep, or the first AVAILABLE slot to use. Returns
+ *        ACTIVE on the g8ep, or the slot to use. Returns
  *        null when no usable slot exists.
  *
  * Note: g8ep operator process management is now owned by g8ee.
@@ -122,7 +122,7 @@ class G8ENodeOperatorService {
 
     /**
      * Kills any running operator process in the g8ep container for this
-     * user, resets their operator slot to AVAILABLE, then relaunches using the
+     * user, resets their operator slot, then relaunches using the
      * fresh API key produced by the reset.
      *
      * Delegates to g8ee via InternalHttpClient.

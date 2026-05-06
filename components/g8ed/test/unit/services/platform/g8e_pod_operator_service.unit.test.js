@@ -15,7 +15,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import { G8ENodeOperatorService } from '@g8ed/services/platform/g8ep_operator_service.js';
-import { OperatorStatus } from '@g8ed/constants/operator.js';
+import { OperatorStatus, CloudOperatorSubtype } from '@g8ed/constants/operator.js';
 import pathConstants from '/app/shared/constants/paths.json';
 
 global.fetch = vi.fn();
@@ -79,7 +79,7 @@ describe('G8ENodeOperatorService [UNIT]', () => {
             expect(operatorService.queryOperators).toHaveBeenCalledWith(
                 expect.arrayContaining([
                     { field: 'user_id', operator: '==', value: 'user_123' },
-                    { field: 'is_g8ep', operator: '==', value: true },
+                    { field: 'cloud_subtype', operator: '==', value: CloudOperatorSubtype.G8E_POD },
                 ])
             );
         });

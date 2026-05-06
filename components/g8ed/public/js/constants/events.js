@@ -57,8 +57,6 @@ export const EventType = Object.freeze({
     OPERATOR_API_KEY_REFRESHED: 'g8e.v1.operator.api.key.refreshed',
     OPERATOR_DEVICE_REGISTERED: 'g8e.v1.operator.device.registered',
     OPERATOR_STATUS_UPDATED_ACTIVE: 'g8e.v1.operator.status.updated.active',
-    OPERATOR_STATUS_UPDATED_AVAILABLE: 'g8e.v1.operator.status.updated.available',
-    OPERATOR_STATUS_UPDATED_UNAVAILABLE: 'g8e.v1.operator.status.updated.unavailable',
     OPERATOR_STATUS_UPDATED_BOUND: 'g8e.v1.operator.status.updated.bound',
     OPERATOR_STATUS_UPDATED_OFFLINE: 'g8e.v1.operator.status.updated.offline',
     OPERATOR_STATUS_UPDATED_STALE: 'g8e.v1.operator.status.updated.stale',

@@ -8,7 +8,7 @@ parent: Architecture
 Last Updated: 5-6-2026
 Version: v.0.2.0
 
-The g8e platform uses a unified, hierarchical event protocol for all inter-component communication. This system ensures that AI agents, operators, and user interfaces remain synchronized in real-time across a distributed environment.
+The g8e platform uses a unified, hierarchical event protocol for all inter-component communication. This system ensures that AI agents, operators, and human-interactive surfaces remain synchronized in real-time across a distributed environment.
 
 ---
 
@@ -19,8 +19,8 @@ Events in g8e are state transitions and lifecycle signals that drive the system'
 ### 1. The Central Hub: `g8ed`
 `g8ed` (Node.js) serves as the central event router and composition root. It manages two primary transport layers:
 - **Internal HTTP Push**: Receives events from `g8ee` (Python) via standard POST requests.
-- **G8ES Pub/Sub**: A WebSocket-based backbone for communication with `g8eo` (Go) operators. `g8ed` acts as a proxy, translating Pub/Sub messages into SSE for the UI.
-- **Server-Sent Events (SSE)**: Pushes real-time updates to browser clients.
+- **G8ES Pub/Sub**: A WebSocket-based backbone for communication with `g8eo` (Go) operators. `g8ed` acts as a proxy, translating Pub/Sub messages into SSE for the Terminal.
+- **Server-Sent Events (SSE)**: Pushes real-time updates to human-interactive clients.
 
 ### 2. Event Producers
 - **`g8ee` (Python)**: The AI reasoning engine. Emits chat streams, tool requests, and Tribunal consensus results.
@@ -37,13 +37,13 @@ Events in g8e are state transitions and lifecycle signals that drive the system'
 
 ## The Routing Tuple
 
-To ensure events reach the correct context, every event carries a routing tuple that governs its delivery and UI placement.
+To ensure events reach the correct context, every event carries a routing tuple that governs its delivery and Terminal placement.
 
 | Field | Description | Required For |
 |-------|-------------|--------------|
 | `web_session_id` | Unique ID of the browser connection. | Point-to-point delivery (`SessionEvent`). |
 | `user_id` | Unique ID of the user. | User-wide fan-out (`BackgroundEvent`). |
-| `case_id` | Correlation ID for the active case. | UI grouping and audit log association. |
+| `case_id` | Correlation ID for the active case. | Contextual grouping and audit log association. |
 | `investigation_id` | Correlation ID for the active investigation. | Chat history and state recovery. |
 
 ---
@@ -51,12 +51,12 @@ To ensure events reach the correct context, every event carries a routing tuple 
 ## Event Classification
 
 ### Session Events
-Intended for a specific browser session (e.g., a specific tab). These are used when the triggering action originated from a known `web_session_id`.
-- **Examples**: AI streaming text, tool results, and command approval requests.
+Intended for a specific active session (e.g., a specific tab). These are used when the triggering action originated from a known `web_session_id`.
+- **Examples**: AI streaming text, tool results, and Proof of Human Presence (PHP) requests.
 - **Model**: `SessionEvent` in `g8ee`.
 
 ### Background Events
-System-initiated events with no specific browser session. `g8ed` fans these out to **every active SSE session** owned by the `user_id`.
+System-initiated events with no specific active session. `g8ed` fans these out to **every active SSE session** owned by the `user_id`.
 - **Examples**: Global notifications, operator status changes (e.g., `OPERATOR_STATUS_UPDATED_ACTIVE`).
 - **Model**: `BackgroundEvent` in `g8ee`.
 

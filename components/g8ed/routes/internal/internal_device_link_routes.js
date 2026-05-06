@@ -196,7 +196,7 @@ export function createInternalDeviceLinkRouter({ services, authorizationMiddlewa
      *
      * SECURITY: INTERNAL ONLY - cluster-only access
      */
-    const operatorLinkPath = InternalApiPaths.g8ed.create_operator_link.split('/').pop();
+    const operatorLinkPath = `/${InternalApiPaths.g8ed.create_operator_link.split('/').pop()}`;
     router.post(operatorLinkPath, requireInternalOrUserAuth, async (req, res, next) => {
         try {
             const generateReq = OperatorLinkRequest.parse(req.body);

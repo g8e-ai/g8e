@@ -244,8 +244,6 @@ class OperatorService {
         let operators;
         if (!allStatuses) {
             operators = await this.operatorDataService.queryListedOperators([{ field: 'user_id', operator: '==', value: userId }], { fresh });
-            // Also filter out UNAVAILABLE for user-visible stats
-            operators = operators.filter(op => op.status !== OperatorStatus.UNAVAILABLE);
         } else {
             operators = fresh
                 ? await this.operatorDataService.queryOperatorsFresh([{ field: 'user_id', operator: '==', value: userId }])

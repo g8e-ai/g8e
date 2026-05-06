@@ -140,9 +140,6 @@ def senders():
 
 
 class TestOperatorStatusMatchesSharedJSON:
-    def test_available(self, status):
-        assert status["g8e.status"]["available"] == OperatorStatus.AVAILABLE
-
     def test_unavailable(self, status):
         assert status["g8e.status"]["unavailable"] == OperatorStatus.UNAVAILABLE
 

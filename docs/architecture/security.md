@@ -12,7 +12,7 @@ g8e is a local-only, air-gapped platform designed for high-stakes environments. 
 
 ## Bedrock Principles
 
-1.  **Human-in-the-Loop (HITL)**: The AI proposes; the human approves. No state-changing operation executes without explicit, informed user consent.
+1.  **Proof of Human Presence (PHP)**: The AI proposes; the human signs. No state-changing operation executes without an explicit, hardware-bound signature appended to the transaction envelope.
 2.  **Zero Trust**: No component or connection is implicitly trusted. Every request is authenticated, every payload validated, and every data stream scrubbed.
 3.  **Local-First Sovereignty**: Sensitive data stays on the Operator host. Only scrubbed metadata crosses component boundaries.
 4.  **Defense in Depth**: Multiple overlapping layers (Sentinel, Tribunal, mTLS, LFAA) ensure that a failure in one control does not compromise the system.
@@ -31,16 +31,16 @@ g8e is a local-only, air-gapped platform designed for high-stakes environments. 
 
 ```mermaid
 graph TD
-    Browser[Browser / UI] -- "HTTPS + Passkey (FIDO2)" --> g8ed
-    g8ed -- "X-Internal-Auth (Shared Secret)" --> g8ee
+    User[User] -- "TLS 1.3 + PHP (FIDO2)" --> g8ed
+    g8ed[g8ed Governance Gateway] -- "X-Internal-Auth" --> g8ee
     g8ed -- "mTLS (TLS 1.3)" --> g8eo
     g8ee -- "X-Internal-Auth" --> g8es
-    g8eo -- "Pub/Sub (WSS + mTLS)" --> g8es
+    g8eo[g8eo Operator] -- "Pub/Sub (WSS + mTLS)" --> g8es
     g8eo -- "Local Exec" --> Host[Target System]
 ```
 
-### 1. Browser to Gateway (g8ed)
-- **Auth**: FIDO2/WebAuthn passkeys only. No passwords.
+### 1. User to Gateway (g8ed)
+- **Proof of Human Presence (PHP)**: FIDO2/WebAuthn hardware-bound signatures. No passwords.
 - **Sessions**: `HttpOnly`, `Secure`, `SameSite=Lax` cookies. Session state stored in `g8es` KV.
 - **Context Binding**: Sessions are tied to IP and User-Agent; 4+ IP changes trigger a security flag.
 
@@ -65,7 +65,7 @@ Sentinel is the primary guardian on the Operator host. It operates in two phases
 ### The Tribunal (Governance)
 Before a command reaches an Operator, it must pass through the `g8ee` Tribunal:
 - **Auditor**: Uses `auditor_hmac_key` to sign reputation commitments and ensure consistency.
-- **Warden**: Performs high-level risk assessment and presents the "Warden's Report" to the user for approval.
+- **Warden**: Performs high-level risk assessment and presents the "Warden's Report" for human co-validation and signature.
 - **Consensus**: In high-risk modes, multiple models must agree on the proposed action before it is dispatched.
 
 ---
@@ -106,5 +106,5 @@ LFAA ensures that every action taken by the AI is recorded in a tamper-evident, 
 ## Network & Infrastructure
 
 - **Air-Gapped by Design**: The platform requires zero external connectivity to function.
-- **Port 443 Only**: The only inbound path to the platform is via the TLS gateway.
+- **Port 443 Only**: The only inbound path to the platform is via the Governance Gateway.
 - **CA Management**: `g8e` operates its own private CA (ECDSA P-384). All certificates are generated at runtime and survive `platform reset` via the dedicated SSL volume.

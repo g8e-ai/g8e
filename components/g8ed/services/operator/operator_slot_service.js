@@ -52,6 +52,7 @@ export class OperatorSlotService {
                     slotNumber,
                     operatorType: OperatorType.CLOUD,
                     cloudSubtype: assignG8eNode ? CloudOperatorSubtype.G8E_POD : null,
+                    isG8eNode: assignG8eNode,
                     namePrefix: 'operator',
                     webSessionId,
                 });
@@ -186,7 +187,7 @@ export class OperatorSlotService {
 
     /**
      * Claim an operator slot for an active session.
-     * Authority for transitioning an AVAILABLE slot to ACTIVE.
+     * Authority for transitioning a slot to ACTIVE.
      */
     async claimSlot(id, { operator_session_id, bound_web_session_id, operator_type, status }) {
         const ts = now();

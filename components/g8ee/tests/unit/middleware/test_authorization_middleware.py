@@ -279,7 +279,7 @@ class TestAuthorizationMiddleware:
         assert response.status_code == 200
 
     async def test_case_ownership_match_via_path_param(self, middleware, mock_request, mock_call_next):
-        mock_request.url.path = "/investigations/case-789/details"
+        mock_request.url.path = "/cases/case-789/details"
         mock_request.query_params = {}
         mock_request.path_params = {"case_id": "case-789"}
         mock_request.state.g8e_context = build_g8e_http_context(

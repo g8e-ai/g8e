@@ -85,12 +85,12 @@ flowchart TD
 
     subgraph Phase_5 [Phase 5: Judgment]
         Auditor[Auditor<br>Final Consistency & Commitment]
-        Auditor --> Human{Human Approval}
-        Human -- "Approved" --> Operator[Operator<br>Executes via LFAA]
+        Auditor --> PHP{Proof of Human Presence}
+        PHP -- "Signed" --> Operator[Operator<br>Executes via LFAA]
         Operator -- "Results" --> Sage
     end
 
-    Human -- "Rejected" --> Sage
+    PHP -- "Rejected" --> Sage
 ```
 
 1. **Triage** classifies the request. Trivial questions go to **Dash** (fast-path responder). Anything that may state-change is enriched with operator context and routed to **Sage**.
@@ -98,7 +98,7 @@ flowchart TD
 3. **The Tribunal** is five blind validators (Axiom, Concord, Variance, Pragma, Nemesis), each generating a candidate command independently with no visibility into the others. A winner requires ≥2 of 5 supporting votes. If consensus fails or a tie is unresolved by deterministic laddering (Shortest → Non-Nemesis), an anonymized peer-review round runs. If Round 2 also fails to reach consensus, a circuit breaker error is triggered and surfaced back to Sage.
 4. **Warden** (running on the Engine) performs a pre-execution risk assessment. It coordinates specialized sub-agents (`warden_command_risk`, `warden_file_risk`, `warden_error`) to validate the command safety profile for blast radius, destructive idioms, and risk. The **Nemesis** actively tries to trick the Warden into allowing flawed commands.
 5. **The Auditor** performs the final consistency check and Merkle commitment once the Warden has cleared the command. The Auditor is the only persona that cannot be tricked by the Nemesis; if a Nemesis command passes the Warden, the Auditor identifies the "attack," awards the Nemesis, but rejects the command.
-6. **You** review the command and the risk assessment, and sign with a passkey, or you don't.
+6. **Proof of Human Presence (PHP)**: You review the command and risk assessment via the Governance Gateway and provide a hardware-bound signature using a FIDO2 passkey. The **Operator** will only execute if this signature is present in the transaction envelope.
 7. **The Operator** receives the signed command over the outbound WebSocket, runs it in an isolated process group, captures the result into the local audit vault, and snapshots state into a git-backed ledger.
 8. **Codex** (async) extracts durable user preferences and scrubbed investigation summaries from the conversation history to build long-term memory.
 
@@ -110,7 +110,7 @@ The point of steps 1–5 is to minimize what reaches step 6. Your time is the on
 
 ```mermaid
 flowchart LR
-    Browser([User Web Browser<br>Passkeys])
+    User([User<br>FIDO2 Passkeys])
 
     subgraph Exec_Plane [Execution Plane / Managed Host]
         direction TB
@@ -132,7 +132,7 @@ flowchart LR
 
     subgraph Hub [Control & Persistence Plane / Self-Hosted Hub]
         direction TB
-        g8ed[g8ed<br>Terminal & Gateway<br>Node.js]
+        g8ed[g8ed<br>Governance Gateway<br>Node.js]
         g8ee[g8ee<br>AI Engine & Scrubber<br>Python]
 
         subgraph Data_Layer [g8es Persistence Layer]
@@ -152,7 +152,7 @@ flowchart LR
 
     LLM((External LLM<br>Providers))
 
-    Browser -- "TLS 1.3" --> g8ed
+    User -- "TLS 1.3" --> g8ed
     g8eo -- "Outbound mTLS WebSocket" --> g8ed
     g8ee -. "Scrubbed metadata only" .-> LLM
 ```
@@ -161,11 +161,11 @@ flowchart LR
 |---|---|---|
 | **g8eo** | Go (~4MB static) | The Operator. Runs on every managed host. Executes commands. Owns the audit ledger. |
 | **g8ee** | Python / FastAPI | The Engine. Multi-provider LLM abstraction. Tribunal, Auditor, Warden. |
-| **g8ed** | Node.js | Terminal, FIDO2 auth, mTLS gateway, approval UI. |
+| **g8ed** | Node.js | Governance Gateway: FIDO2 auth, mTLS broker, ledger synchronization. |
 | **g8es** | Go | Document store, KV, pub/sub, blob store (SQLite-backed). |
 | **g8el** | llama-server | Optional local LLM for air-gapped deployments. |
 
-Browser to `g8ed` over TLS 1.3 with encrypted cookies. Operator to Hub via outbound-only mTLS WebSocket. No inbound ports on managed hosts. Every connection mutually authenticated; every state change requires a passkey signature.
+User to `g8ed` over TLS 1.3 with encrypted cookies. Operator to Gateway via outbound-only mTLS WebSocket. No inbound ports on managed hosts. Every connection mutually authenticated; every state change requires a hardware-bound passkey signature.
 
 ---
 
@@ -214,7 +214,7 @@ System fingerprint binding ties the Operator's mTLS cert to the host it was issu
 
 ## Security
 
-- **Auth** — FIDO2 / WebAuthn passkeys only. Passwords are unsupported by design.
+- **Auth** — Protocol-level Proof of Human Presence (PHP) via FIDO2 / WebAuthn passkeys. Hardware-bound signatures are required for all state changes. Passwords are unsupported by design.
 - **Transport** — TLS 1.3. Platform-generated ECDSA P-384 CA. Per-Operator mTLS client certs issued at claim time.
 - **Sentinel** — On-host defensive analysis: 46 MITRE-mapped detectors, 28 scrubbing patterns, and command allowlist/denylist enforcement.
 - **Warden** — Engine-side defensive coordination: command/error/file risk classifiers applied before human approval.

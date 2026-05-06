@@ -35,8 +35,6 @@ export class TerminalOperatorMixin {
 
         const unboundStatuses = [
             EventType.OPERATOR_STATUS_UPDATED_ACTIVE,
-            EventType.OPERATOR_STATUS_UPDATED_AVAILABLE,
-            EventType.OPERATOR_STATUS_UPDATED_UNAVAILABLE,
             EventType.OPERATOR_STATUS_UPDATED_OFFLINE,
             EventType.OPERATOR_STATUS_UPDATED_STALE,
             EventType.OPERATOR_STATUS_UPDATED_STOPPED,

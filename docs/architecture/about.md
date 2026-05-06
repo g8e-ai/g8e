@@ -30,7 +30,7 @@ g8e is designed to bridge that gap by providing a fully self-hosted, air-gap cap
 
 Every architectural decision in g8e is an expression of these eight core principles:
 
-1.  **AUTHORITY** — Every action is gated by FIDO2. Human judgment is the final, non-bypassable security layer. AI proposes, but humans always decide.
+1.  **AUTHORITY** — Every mutation is gated by a protocol-level Proof of Human Presence (PHP). Hardware-bound signatures (FIDO2) are the final, non-bypassable security layer. AI proposes, but humans must sign.
 2.  **TRUST** — Zero standing credentials. Privileges are earned per-action, mathematically bound to sessions, and expire automatically.
 3.  **STRUCTURE** — Safety is enforced at the binary and network layers, not via fragile LLM prompts. Prompt injection cannot bypass cryptographic execution constraints.
 4.  **SOVEREIGNTY** — You own your data. The remote host is the system of record; raw operational data never leaves the host, and AI only receives scrubbed context.

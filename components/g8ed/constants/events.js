@@ -75,7 +75,6 @@ export const EventType = Object.freeze({
     OPERATOR_DEVICE_REGISTERED:   _EVENTS['operator']['device']['registered'],
 
     OPERATOR_STATUS_UPDATED_ACTIVE:      _EVENTS['operator']['status']['updated']['active'],
-    OPERATOR_STATUS_UPDATED_UNAVAILABLE: _EVENTS['operator']['status']['updated']['unavailable'],
     OPERATOR_STATUS_UPDATED_BOUND:       _EVENTS['operator']['status']['updated']['bound'],
     OPERATOR_STATUS_UPDATED_OFFLINE:     _EVENTS['operator']['status']['updated']['offline'],
     OPERATOR_STATUS_UPDATED_STALE:       _EVENTS['operator']['status']['updated']['stale'],
