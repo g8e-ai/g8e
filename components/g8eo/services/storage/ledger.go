@@ -379,6 +379,29 @@ func (lms *LedgerService) gitOutput(args ...string) (string, error) {
 	return strings.TrimSpace(stdout.String()), nil
 }
 
+// GetStateMerkleRoot returns the current git commit hash as the state merkle root.
+// This provides a BFT-verifiable snapshot of the ledger state at a point in time.
+func (lms *LedgerService) GetStateMerkleRoot() (string, error) {
+	if !lms.gitReady() {
+		return "", nil
+	}
+
+	lms.mu.Lock()
+	defer lms.mu.Unlock()
+
+	ledgerDir := lms.auditVault.filesPath
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	cmd.Dir = ledgerDir
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("failed to get current git hash: %w, output: %s", err, string(output))
+	}
+
+	hash := strings.TrimSpace(string(output))
+	return hash, nil
+}
+
 // snapshotLedger creates a git commit and returns the commit hash.
 func (lms *LedgerService) snapshotLedger(message string) (string, error) {
 	if err := lms.gitExec("add", "-A"); err != nil {

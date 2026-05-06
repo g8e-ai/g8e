@@ -119,7 +119,7 @@ func TestPubSubCommandService_PayloadToExecutionRequest(t *testing.T) {
 			CaseID:          "case-789",
 			TaskID:          &taskID,
 			InvestigationID: invID,
-			Payload:         mustMarshalJSON(t, models.CommandRequestPayload{Command: "ls", ExecutionID: "exec-999"}),
+			Payload:         mustMarshalProtobufCommandRequested(t, "ls", "exec-999", "", "", 0),
 			Timestamp:       time.Now().UTC(),
 		}
 
@@ -139,7 +139,7 @@ func TestPubSubCommandService_PayloadToExecutionRequest(t *testing.T) {
 			ID:        "msg-123",
 			EventType: constants.Event.Operator.Command.Requested,
 			CaseID:    "case-789",
-			Payload:   mustMarshalJSON(t, models.CommandRequestPayload{}),
+			Payload:   mustMarshalProtobufCommandRequested(t, "", "", "", "", 0),
 			Timestamp: time.Now().UTC(),
 		}
 

@@ -14,14 +14,16 @@
 package listen
 
 import (
-	"encoding/json"
 	"log/slog"
 	"net/http"
 	"sync"
 
 	"github.com/gorilla/websocket"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
+	pubsubv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/pubsubv1"
 )
 
 // PubSubBroker manages WebSocket-based publish/subscribe channels.
@@ -92,23 +94,8 @@ var wsUpgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-// PubSubMessage is the wire format for pub/sub messages.
-type PubSubMessage struct {
-	Action  string          `json:"action"`
-	Channel string          `json:"channel,omitempty"`
-	Data    json.RawMessage `json:"data,omitempty"`
-}
-
-// PubSubEvent is sent to subscribers when a message is published.
-type PubSubEvent struct {
-	Type    string          `json:"type"`
-	Channel string          `json:"channel"`
-	Pattern string          `json:"pattern,omitempty"`
-	Data    json.RawMessage `json:"data"`
-}
-
 // Publish sends a message to all subscribers of a channel (exact + pattern matches).
-func (b *PubSubBroker) Publish(channel string, data json.RawMessage) int {
+func (b *PubSubBroker) Publish(channel string, data []byte) int {
 	// Snapshot targets and precomputed payloads under RLock, then release the
 	// broker lock before invoking trySend. trySend may block briefly on a
 	// per-subscriber mutex; doing that under the broker RLock would stall
@@ -121,16 +108,25 @@ func (b *PubSubBroker) Publish(channel string, data json.RawMessage) int {
 
 	b.mu.RLock()
 	if subs, ok := b.subscribers[channel]; ok {
-		event := PubSubEvent{Type: constants.PubSubEventMessage, Channel: channel, Data: data}
-		msg, _ := json.Marshal(event)
+		event := &pubsubv1.PubSubEvent{
+			Type:    constants.PubSubEventMessage,
+			Channel: channel,
+			Data:    data,
+		}
+		msg, _ := proto.Marshal(event)
 		for sub := range subs {
 			deliveries = append(deliveries, delivery{sub: sub, msg: msg})
 		}
 	}
 	for pattern, subs := range b.patterns {
 		if globMatch(pattern, channel) {
-			event := PubSubEvent{Type: constants.PubSubEventPMessage, Channel: channel, Pattern: pattern, Data: data}
-			msg, _ := json.Marshal(event)
+			event := &pubsubv1.PubSubEvent{
+				Type:    constants.PubSubEventPMessage,
+				Channel: channel,
+				Pattern: pattern,
+				Data:    data,
+			}
+			msg, _ := proto.Marshal(event)
 			for sub := range subs {
 				deliveries = append(deliveries, delivery{sub: sub, msg: msg})
 			}
@@ -184,7 +180,7 @@ func (h *pubSubSessionHandler) run() {
 			case <-h.sub.done:
 				return
 			case msg := <-h.sub.send:
-				if err := h.sub.ws.WriteMessage(websocket.TextMessage, msg); err != nil {
+				if err := h.sub.ws.WriteMessage(websocket.BinaryMessage, msg); err != nil {
 					return
 				}
 			}
@@ -198,18 +194,18 @@ func (h *pubSubSessionHandler) run() {
 			break
 		}
 
-		var msg PubSubMessage
-		if err := json.Unmarshal(raw, &msg); err != nil {
+		var msg pubsubv1.PubSubMessage
+		if err := proto.Unmarshal(raw, &msg); err != nil {
 			continue
 		}
 
-		h.handleAction(msg)
+		h.handleAction(&msg)
 	}
 
 	h.cleanup()
 }
 
-func (h *pubSubSessionHandler) handleAction(msg PubSubMessage) {
+func (h *pubSubSessionHandler) handleAction(msg *pubsubv1.PubSubMessage) {
 	switch msg.Action {
 	case constants.PubSubActionSubscribe:
 		h.broker.subscribe(msg.Channel, h.sub)
@@ -230,11 +226,11 @@ func (h *pubSubSessionHandler) cleanup() {
 }
 
 func (b *PubSubBroker) sendAck(sub *wsSubscriber, channel string) {
-	type ack struct {
-		Type    string `json:"type"`
-		Channel string `json:"channel"`
+	event := &pubsubv1.PubSubEvent{
+		Type:    constants.PubSubEventSubscribed,
+		Channel: channel,
 	}
-	msg, _ := json.Marshal(ack{Type: constants.PubSubEventSubscribed, Channel: channel})
+	msg, _ := proto.Marshal(event)
 	b.trySend(sub, msg)
 }
 

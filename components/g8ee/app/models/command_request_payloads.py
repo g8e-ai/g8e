@@ -27,6 +27,7 @@ from pydantic import Field
 
 from app.constants import FileOperation
 from app.models.base import G8eBaseModel
+from app.proto import operator_pb2
 
 __all__ = [
     "CheckPortRequestPayload",
@@ -68,11 +69,30 @@ class CommandRequestPayload(G8eBaseModel):
     sentinel_mode: str | None = Field(default=None, description="Vault scrubbing mode for output storage")
     timeout_seconds: int | None = Field(default=None, description="Execution timeout override in seconds")
 
+    def to_protobuf(self) -> operator_pb2.CommandRequested:
+        """Convert to protobuf CommandRequested message."""
+        proto = operator_pb2.CommandRequested()
+        proto.command = self.command
+        proto.execution_id = self.execution_id
+        if self.justification:
+            proto.justification = self.justification
+        if self.sentinel_mode:
+            proto.sentinel_mode = self.sentinel_mode
+        if self.timeout_seconds:
+            proto.timeout_seconds = self.timeout_seconds
+        return proto
+
 
 class CommandCancelRequestPayload(G8eBaseModel):
     """Payload for EventType.OPERATOR_COMMAND_CANCEL_REQUESTED."""
     payload_type: Literal["command_cancel"] = Field(default="command_cancel", description="Payload type discriminator")
     execution_id: str = Field(..., description="execution_id of the running command to cancel")
+
+    def to_protobuf(self) -> operator_pb2.CommandCancelRequested:
+        """Convert to protobuf CommandCancelRequested message."""
+        proto = operator_pb2.CommandCancelRequested()
+        proto.execution_id = self.execution_id
+        return proto
 
 
 class FileEditRequestPayload(TargetedOperatorBase):

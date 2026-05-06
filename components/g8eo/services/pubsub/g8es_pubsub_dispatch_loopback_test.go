@@ -45,9 +45,11 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/models"
 	execution "github.com/g8e-ai/g8e/components/g8eo/services/execution"
 	sentinelpkg "github.com/g8e-ai/g8e/components/g8eo/services/sentinel"
+	commonv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 // =============================================================================
@@ -106,6 +108,7 @@ func newTestG8eMessage(t *testing.T, cfg *config.Config, eventType, caseID strin
 
 // injectCmd publishes a models.G8eMessage on the cmd channel for cfg using an
 // injector client connected to the loopback broker.
+// It wraps the G8eMessage in a UniversalEnvelope for the protobuf-only transport.
 func injectCmd(t *testing.T, f *loopbackFixture, svc *PubSubCommandService, msg *models.G8eMessage) {
 	t.Helper()
 	cmdCh := constants.CmdChannel(svc.config.OperatorID, svc.config.OperatorSessionId)
@@ -116,8 +119,38 @@ func injectCmd(t *testing.T, f *loopbackFixture, svc *PubSubCommandService, msg 
 	raw, err := msg.Marshal()
 	require.NoError(t, err)
 
+	taskID := ""
+	if msg.TaskID != nil {
+		taskID = *msg.TaskID
+	}
+
+	envelope := &commonv1.UniversalEnvelope{
+		Id:                msg.ID,
+		EventType:         msg.EventType,
+		CaseId:            msg.CaseID,
+		TaskId:            taskID,
+		InvestigationId:   msg.InvestigationID,
+		OperatorSessionId: msg.OperatorSessionID,
+		OperatorId:        msg.OperatorID,
+		Payload:           raw,
+	}
+	envelopeBytes, err := proto.Marshal(envelope)
+	require.NoError(t, err)
+
 	injector := f.newClient(t)
-	require.NoError(t, injector.Publish(context.Background(), cmdCh, raw))
+	require.NoError(t, injector.Publish(context.Background(), cmdCh, envelopeBytes))
+}
+
+// injectCmdProtobuf publishes a protobuf UniversalEnvelope on the cmd channel.
+func injectCmdProtobuf(t *testing.T, f *loopbackFixture, svc *PubSubCommandService, envelopeBytes []byte) {
+	t.Helper()
+	cmdCh := constants.CmdChannel(svc.config.OperatorID, svc.config.OperatorSessionId)
+
+	// Confirm the service's subscription is registered before publishing.
+	f.subscribeAndWait(t, cmdCh)
+
+	injector := f.newClient(t)
+	require.NoError(t, injector.Publish(context.Background(), cmdCh, envelopeBytes))
 }
 
 // watchResults subscribes a client to the results channel for svc and waits for
@@ -171,20 +204,18 @@ func TestLoopback_CommandDispatch_ExecutionRequest_EchoCommand(t *testing.T) {
 	// Consume the automatic heartbeat published on connect.
 	_ = drainOne(t, hbSub)
 
-	payload := json.RawMessage(`{"command":"echo hello loopback","justification":"test"}`)
-	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.Command.Requested, "case-echo", payload)
-	cmdMsg.ID = "exec-loop-echo-1"
-	cmdMsg.InvestigationID = "inv-echo"
-	injectCmd(t, f, svc, cmdMsg)
+	cmdPayload := mustMarshalProtobufCommandRequested(t, "echo hello loopback", "exec-loop-echo-1", "test", "", 0)
+	envelopeBytes := mustMarshalUniversalEnvelope(t, "exec-loop-echo-1", constants.Event.Operator.Command.Requested, cmdPayload, "", svc.config.OperatorID, "case-echo", "inv-echo", svc.config.OperatorSessionId)
+	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
 	assert.Contains(t, string(msg), constants.Event.Operator.Command.Completed)
 	assert.Contains(t, string(msg), "case-echo")
 
-	var envelope models.G8eMessage
-	require.NoError(t, json.Unmarshal(msg, &envelope))
-	assert.Equal(t, "case-echo", envelope.CaseID)
-	assert.Equal(t, constants.Event.Operator.Command.Completed, envelope.EventType)
+	var resultEnvelope models.G8eMessage
+	require.NoError(t, json.Unmarshal(msg, &resultEnvelope))
+	assert.Equal(t, "case-echo", resultEnvelope.CaseID)
+	assert.Equal(t, constants.Event.Operator.Command.Completed, resultEnvelope.EventType)
 }
 
 func TestLoopback_CommandDispatch_ExecutionRequest_InvalidCommand(t *testing.T) {

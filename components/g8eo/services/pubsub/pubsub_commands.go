@@ -349,30 +349,39 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 
 	var cmdMsg PubSubCommandMessage
 
-	// Try to parse as UniversalEnvelope (protobuf) first
+	// Parse as UniversalEnvelope (protobuf) - protocol-first architecture
 	var env commonv1.UniversalEnvelope
-	if err := proto.Unmarshal(payload, &env); err == nil && env.Id != "" {
-		rs.logger.Info("Parsed request via Protobuf (UniversalEnvelope)")
-		taskID := env.TaskId
-		operatorID := env.OperatorId
+	if err := proto.Unmarshal(payload, &env); err != nil {
+		rs.logger.Error("Failed to parse command message as protobuf UniversalEnvelope", "error", err)
+		return
+	}
+	if env.Id == "" {
+		rs.logger.Error("Invalid UniversalEnvelope: missing id field")
+		return
+	}
 
-		cmdMsg = PubSubCommandMessage{
-			ID:                env.Id,
-			EventType:         env.EventType,
-			CaseID:            env.CaseId,
-			TaskID:            &taskID,
-			InvestigationID:   env.InvestigationId,
-			OperatorSessionID: env.OperatorSessionId,
-			OperatorID:        &operatorID,
-			Payload:           env.Payload,
-			Timestamp:         env.Timestamp.AsTime(),
-		}
-	} else {
-		// Fall back to manual JSON for backward compatibility
-		if err := json.Unmarshal(payload, &cmdMsg); err != nil {
-			rs.logger.Error("Failed to parse command message", "error", err)
-			return
-		}
+	rs.logger.Info("Parsed request via Protobuf (UniversalEnvelope)",
+		"state_merkle_root", env.StateMerkleRoot)
+	taskID := env.TaskId
+	operatorID := env.OperatorId
+
+	cmdMsg = PubSubCommandMessage{
+		ID:                env.Id,
+		EventType:         env.EventType,
+		CaseID:            env.CaseId,
+		TaskID:            &taskID,
+		InvestigationID:   env.InvestigationId,
+		OperatorSessionID: env.OperatorSessionId,
+		OperatorID:        &operatorID,
+		Payload:           env.Payload,
+		Timestamp:         env.Timestamp.AsTime(),
+	}
+
+	// Log state merkle root for BFT synchronization tracking
+	if env.StateMerkleRoot != "" {
+		rs.logger.Info("State Merkle Root received in UniversalEnvelope",
+			"merkle_root", env.StateMerkleRoot,
+			"execution_id", env.Id)
 	}
 
 	rs.logger.Info("Processing request")

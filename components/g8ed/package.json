@@ -24,6 +24,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
     "helmet": "^8.1.0",
+    "google-protobuf": "^3.21.4",
     "uuid": "^14.0.0",
     "winston": "^3.18.3",
     "ws": "^8.18.0"
