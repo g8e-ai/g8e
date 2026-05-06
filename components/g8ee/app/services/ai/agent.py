@@ -21,7 +21,7 @@ Concerns handled here:
 
 All other concerns live in dedicated modules:
   agent_turn.py          — thinking state machine, stream parsing, parts consolidation,
-                           finish reason normalization, retry classification
+                           interrogation gate, finish reason normalization, retry classification
   agent_tool_loop.py — tool call dispatch, sequential execution,
                            tool display metadata, grounding merge
   agent_sse.py           — SSE translation and g8ed event delivery
@@ -52,7 +52,6 @@ from app.models.agent import (
     StreamChunkFromModel,
     StreamChunkFromModelType,
     TokenUsage,
-    TurnResult,
 )
 from app.models.grounding import GroundingMetadata
 from app.models.operators import AgentContinueApprovalRequest
@@ -62,11 +61,11 @@ from app.services.ai.agent_tool_loop import (
 )
 from app.services.ai.agent_sse import deliver_via_sse
 from app.services.ai.agent_turn import (
+    GatedTurnResult,
     consolidate_model_parts,
-    process_provider_turn,
+    process_turn_with_gate,
     should_retry_error,
 )
-from app.utils.interrogation import extract_interrogation_questions
 from app.services.ai.grounding.grounding_service import GroundingService
 from app.services.ai.tool_service import AIToolService
 from app.services.infra.g8ed_event_service import EventService
@@ -327,18 +326,12 @@ class g8eEngine:
                     primary_llm_settings=generation_config,
                 )
 
-                turn_result_out: list[TurnResult] = []
-                # Buffer ONLY tool call chunks to allow interrogation gate to filter them.
-                # Text and thinking chunks are yielded immediately to drive the 'streaming_started'
-                # flag and provide better UI responsiveness.
-                tool_chunks_buffer: list[StreamChunkFromModel] = []
-                async for chunk in process_provider_turn(stream_response, model_name, turn_result_out):
-                    if chunk.type == StreamChunkFromModelType.TOOL_CALL:
-                        tool_chunks_buffer.append(chunk)
-                    else:
-                        yield chunk
+                gated_result_out: list[GatedTurnResult] = []
+                async for chunk in process_turn_with_gate(stream_response, model_name, gated_result_out):
+                    yield chunk
 
-                turn_result = turn_result_out[0]
+                gated = gated_result_out[0]
+                turn_result = gated.turn_result
 
                 total_input_tokens += turn_result.input_tokens
                 total_output_tokens += turn_result.output_tokens
@@ -346,36 +339,11 @@ class g8eEngine:
                 if turn_result.finish_reason:
                     final_finish_reason = turn_result.finish_reason
 
-                # Interrogation gate: if the model response contains clarifying questions,
-                # suppress tool execution and break the loop so user answers drive the next turn
-                interrogation_detected = False
-                
-                # Check for interrogation in both model_response_parts and buffered text chunks
-                response_text = ""
-                if turn_result.model_response_parts:
-                    consolidated = consolidate_model_parts(
-                        turn_result.model_response_parts, model_name=model_name
-                    )
-                    response_text = "".join(
-                        part.text for part in consolidated if hasattr(part, "text") and part.text
-                    )
-                
-                if extract_interrogation_questions(response_text):
-                    interrogation_detected = True
+                if gated.interrogation_detected:
                     logger.info(
-                        "[AGENT] Interrogation gate firing: turn=%d detected <interrogation> block, "
-                        "suppressing %d pending tool calls and deferring to user answers",
-                        loop_turn, len(turn_result.pending_tool_calls),
+                        "[AGENT] Interrogation gate fired at turn=%d, suppressing tool execution",
+                        loop_turn,
                     )
-                    # Clear the list in place on the turn_result_out object
-                    turn_result_out[0].pending_tool_calls.clear()
-                    # Also update local reference for the immediate check below
-                    turn_result.pending_tool_calls = []
-
-                # Yield tool call chunks if interrogation NOT detected
-                if not interrogation_detected:
-                    for chunk in tool_chunks_buffer:
-                        yield chunk
 
                 if not turn_result.pending_tool_calls:
                     logger.info(
