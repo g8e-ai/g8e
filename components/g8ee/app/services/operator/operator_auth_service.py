@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 import uuid
 import secrets
+import random
 from typing import Any
 
 from app.constants import DB_COLLECTION_USERS, DEFAULT_OPERATOR_CONFIG, OperatorStatus
@@ -134,11 +135,10 @@ class OperatorAuthService:
 
             # 1b. If no fingerprint match, try to find an existing AVAILABLE slot
             if not operator:
-                operator = next(
-                    (op for op in all_user_operators if op.status == OperatorStatus.AVAILABLE),
-                    None
-                )
-                if operator:
+                available_slots = [op for op in all_user_operators if op.status == OperatorStatus.AVAILABLE]
+                if available_slots:
+                    # Pick a random slot to reduce collisions under high concurrency
+                    operator = random.choice(available_slots)
                     operator_id = operator.id
 
             # 1c. If still no operator, create a new slot on-demand

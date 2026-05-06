@@ -27,10 +27,11 @@ from app.llm.prompts import (
     build_tribunal_generator_prompt,
     build_tribunal_prompt_fields,
 )
-from app.llm.llm_types import Content, Part, Role, LiteLLMSettings, ResponseFormat
+from app.llm.llm_types import Content, Part, Role, ResponseFormat
 from app.llm.provider import LLMProvider
 from app.models.agents.tribunal import (
     CandidateCommand,
+    AuditorClusterInfo,
     TribunalSystemError,
     TribunalGenerationFailedError,
     TribunalPassCompletedPayload,
@@ -41,10 +42,7 @@ from app.models.model_configs import get_model_config
 from app.utils.agent_persona_loader import get_agent_persona
 from app.utils.json_utils import extract_json_from_text
 from app.utils.command import normalise_command
-from app.services.ai.auditor_service import (
-    validate_command_safety,
-    AuditorClusterInfo,
-)
+from app.utils.safety import validate_command_safety
 from app.services.ai.tribunal.emitter import TribunalEmitter
 from app.services.ai.tribunal.utils import _is_system_error, _member_for_pass
 
@@ -115,12 +113,8 @@ async def _run_generation_pass(
             name="TribunalResponse"
         )
 
-    settings = LiteLLMSettings(
-        max_output_tokens=model_config.max_output_tokens,
-        top_p_nucleus_sampling=model_config.top_p,
-        top_k_filtering=model_config.top_k,
-        stop_sequences=model_config.stop_sequences,
-        system_instructions=member_persona.get_system_prompt(),
+    settings = model_config.to_litellm_settings(
+        system_instructions=member_persona.get_system_prompt() or "",
         response_format=response_format,
     )
 

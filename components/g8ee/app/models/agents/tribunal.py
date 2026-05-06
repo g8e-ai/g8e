@@ -217,6 +217,13 @@ class CandidateCommand(G8eBaseModel):
     reasoning: str | None = Field(default=None, description="The reasoning behind this candidate")
 
 
+class AuditorClusterInfo(G8eBaseModel):
+    """Internal model for passing cluster info to the auditor prompt."""
+    cluster_id: str
+    command: str
+    support_count: int
+
+
 class VoteBreakdown(G8eBaseModel):
     """Full attribution of a uniform Tribunal vote.
 

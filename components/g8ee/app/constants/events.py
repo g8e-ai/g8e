@@ -200,6 +200,13 @@ class EventType(StrEnum):
     OPERATOR_FILESYSTEM_READ_COMPLETED = "g8e.v1.operator.filesystem.read.completed"
     OPERATOR_FILESYSTEM_READ_FAILED = "g8e.v1.operator.filesystem.read.failed"
 
+    # g8e.filesystem.grep
+    OPERATOR_FILESYSTEM_GREP_STARTED = "g8e.v1.operator.filesystem.grep.started"
+    OPERATOR_FILESYSTEM_GREP_REQUESTED = "g8e.v1.operator.filesystem.grep.requested"
+    OPERATOR_FILESYSTEM_GREP_RECEIVED = "g8e.v1.operator.filesystem.grep.received"
+    OPERATOR_FILESYSTEM_GREP_COMPLETED = "g8e.v1.operator.filesystem.grep.completed"
+    OPERATOR_FILESYSTEM_GREP_FAILED = "g8e.v1.operator.filesystem.grep.failed"
+
     # g8e.logs
     OPERATOR_LOGS_FETCH_REQUESTED = "g8e.v1.operator.logs.fetch.requested"
     OPERATOR_LOGS_FETCH_RECEIVED = "g8e.v1.operator.logs.fetch.received"

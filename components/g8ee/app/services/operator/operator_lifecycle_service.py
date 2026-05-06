@@ -89,6 +89,14 @@ class OperatorLifecycleService:
             logger.warning("[OPERATOR-LIFECYCLE] Cannot claim non-existent operator %s", operator_id)
             return False
 
+        if operator.status != OperatorStatus.AVAILABLE:
+            logger.warning(
+                "[OPERATOR-LIFECYCLE] Cannot claim operator %s: status is %s (expected AVAILABLE)",
+                operator_id,
+                operator.status
+            )
+            return False
+
         now_timestamp = now()
         update_data: dict[str, object] = {
             "status": OperatorStatus.ACTIVE,

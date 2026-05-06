@@ -279,6 +279,7 @@ class LLMSettings(G8eBaseModel):
     llm_command_gen_enabled: bool = Field(default=True)
     llm_command_gen_auditor: bool = Field(default=True)
     llm_command_gen_passes: int = Field(default=5)
+    llm_parallel_tool_calls: bool = Field(default=True)
 
     @property
     def resolved_assistant_model(self) -> str | None:

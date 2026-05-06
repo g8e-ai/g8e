@@ -29,7 +29,6 @@ from app.constants import (
     DEFAULT_OS_NAME,
     DEFAULT_SHELL,
     DEFAULT_WORKING_DIRECTORY,
-    TribunalMember,
     EventType,
     AuditorReason,
 )
@@ -39,17 +38,18 @@ from app.llm.prompts import (
     build_tribunal_auditor_context,
     build_tribunal_prompt_fields,
 )
-from app.llm.llm_types import Content, Part, Role, LiteLLMSettings, ResponseFormat
+from app.llm.llm_types import Content, Part, Role, ResponseFormat
 from app.llm.provider import LLMProvider
 from app.models.agents.tribunal import (
     CandidateCommand,
+    AuditorClusterInfo,
     TribunalAuditorFailedError,
     TribunalAuditorStartedPayload,
     TribunalAuditorCompletedPayload,
     TribunalAuditorFailedPayload,
     VoteBreakdown,
 )
-from app.utils.agent_persona_loader import AgentPersona, get_agent_persona
+from app.utils.agent_persona_loader import AgentPersona
 from app.models.model_configs import get_model_config
 
 if TYPE_CHECKING:
@@ -68,19 +68,13 @@ class TribunalAuditorResponse(G8eBaseModel):
     revised_command: str | None = None
     swap_to_cluster: str | None = None
 
-class AuditorClusterInfo(G8eBaseModel):
-    """Internal model for passing cluster info to the auditor prompt."""
-    cluster_id: str
-    command: str
-    support_count: int
+# AuditorClusterInfo moved to app.models.agents.tribunal
 
 class AuditorInput(G8eBaseModel):
     """Internal model for the auditor prompt context."""
     winner: str | None
     mode: str  # "unanimous", "majority", "tied"
     clusters: list[AuditorClusterInfo]
-
-# Removed validate_command_safety - moved to app.utils.safety
 
 async def fail_auditor(
     emitter: TribunalEmitter,
@@ -149,6 +143,91 @@ def parse_auditor_response(
     except (AttributeError) as exc:
         raise ValueError(f"Auditor returned malformed JSON structure: {exc!s}") from exc
 
+def build_auditor_prompt(
+    request: str,
+    guidelines: str,
+    mode: str,
+    target_cmd: str,
+    clusters: list[AuditorClusterInfo],
+    operator_context: OperatorContext | None,
+    command_constraints_message: str,
+) -> str:
+    """Build the prompt for the Auditor."""
+    fields = build_tribunal_prompt_fields(
+        operator_context,
+        request=request,
+        guidelines=guidelines,
+        default_os=DEFAULT_OS_NAME,
+        default_shell=DEFAULT_SHELL,
+        default_working_directory=DEFAULT_WORKING_DIRECTORY,
+    )
+
+    clusters_data = [
+        {"cluster_id": c.cluster_id, "command": c.command, "support_count": c.support_count}
+        for c in clusters
+    ]
+
+    auditor_context = build_tribunal_auditor_context(mode, target_cmd, clusters_data)
+    return build_tribunal_auditor_prompt(
+        request=request,
+        guidelines=guidelines,
+        forbidden_patterns_message=fields["forbidden_patterns_message"],
+        command_constraints_message=command_constraints_message,
+        os=fields["os"],
+        user_context=fields["user_context"],
+        operator_context_str=fields["operator_context"],
+        auditor_context=auditor_context,
+    )
+
+async def call_auditor_llm(
+    provider: LLMProvider,
+    model: str,
+    prompt: str,
+    auditor_persona: AgentPersona,
+    attempt: int = 0,
+) -> str:
+    """Execute the LLM call for the Auditor."""
+    model_config = get_model_config(model)
+
+    response_format = None
+    if model_config.supports_structured_output:
+        response_format = ResponseFormat.from_pydantic_schema(
+            TribunalAuditorResponse.model_json_schema(),
+            name="TribunalAuditorResponse"
+        )
+
+    settings = model_config.to_litellm_settings(
+        system_instructions=auditor_persona.get_system_prompt() or "",
+        response_format=response_format,
+    )
+
+    current_prompt = prompt
+    if attempt > 0:
+        current_prompt += "\n\nIMPORTANT: Your previous response was not valid JSON. Respond with ONLY a valid JSON object. No Markdown fences, no prose, no preamble."
+
+    response = await provider.generate_content_lite(
+        model=model,
+        contents=[Content(role=Role.USER, parts=[Part.from_text(current_prompt)])],
+        lite_llm_settings=settings,
+    )
+
+    raw_text = (response.text or "").strip()
+    if not raw_text:
+        raise OllamaEmptyResponseError(
+            "Provider returned empty response",
+            model=model,
+            channel="lite",
+            done_reason=None,
+            prompt_eval_count=None,
+            eval_count=None,
+            num_ctx=0,
+            num_predict=0,
+            thinking_len=0,
+            tool_calls_count=0,
+            ctx_overflow_suspected=False,
+        )
+    return raw_text
+
 async def run_auditor(
     provider: LLMProvider,
     model: str,
@@ -165,7 +244,7 @@ async def run_auditor(
     whitelisting_enabled: bool = False,
     blacklisting_enabled: bool = False,
 ) -> tuple[bool, str | None, str | None, AuditorReason, str | None, str | None]:
-    """Run the dissent-aware Auditor."""
+    """Run the dissent-aware Auditor (Deprecated: Use stage orchestrator instead)."""
     # Prepare cluster info and mapping
     clusters: list[AuditorClusterInfo] = []
     cluster_to_cmd: dict[str, str] = {}
@@ -208,52 +287,14 @@ async def run_auditor(
     )
 
     auditor_start_time = time.time()
-
-    prompt_build_start = time.time()
-    fields = build_tribunal_prompt_fields(
-        operator_context,
+    prompt = build_auditor_prompt(
         request=request,
         guidelines=guidelines,
-        default_os=DEFAULT_OS_NAME,
-        default_shell=DEFAULT_SHELL,
-        default_working_directory=DEFAULT_WORKING_DIRECTORY,
-    )
-
-    # Prepare clusters for the prompt context function
-    clusters_data = [
-        {"cluster_id": c.cluster_id, "command": c.command, "support_count": c.support_count}
-        for c in clusters
-    ]
-
-    auditor_context = build_tribunal_auditor_context(mode, target_cmd, clusters_data)
-    prompt = build_tribunal_auditor_prompt(
-        request=request,
-        guidelines=guidelines,
-        forbidden_patterns_message=fields["forbidden_patterns_message"],
+        mode=mode,
+        target_cmd=target_cmd,
+        clusters=clusters,
+        operator_context=operator_context,
         command_constraints_message=command_constraints_message,
-        os=fields["os"],
-        user_context=fields["user_context"],
-        operator_context_str=fields["operator_context"],
-        auditor_context=auditor_context,
-    )
-    prompt_build_duration_ms = (time.time() - prompt_build_start) * 1000
-    logger.info("[TRIBUNAL-AUDITOR] mode=%s winner=%r clusters=%d prompt_build_duration_ms=%.2f", mode, target_cmd, len(clusters), prompt_build_duration_ms)
-    model_config = get_model_config(model)
-
-    response_format = None
-    if model_config.supports_structured_output:
-        response_format = ResponseFormat.from_pydantic_schema(
-            TribunalAuditorResponse.model_json_schema(),
-            name="TribunalAuditorResponse"
-        )
-
-    settings = LiteLLMSettings(
-        max_output_tokens=model_config.max_output_tokens or 4096,
-        top_p_nucleus_sampling=model_config.top_p,
-        top_k_filtering=model_config.top_k,
-        stop_sequences=model_config.stop_sequences,
-        system_instructions=auditor_persona.get_system_prompt() or "",
-        response_format=response_format,
     )
 
     max_attempts = 2
@@ -261,36 +302,8 @@ async def run_auditor(
     raw_text = None
 
     for attempt in range(max_attempts):
-        current_prompt = prompt
-        if attempt > 0:
-            current_prompt += "\n\nIMPORTANT: Your previous response was not valid JSON. Respond with ONLY a valid JSON object. No Markdown fences, no prose, no preamble."
-            logger.info("[TRIBUNAL-AUDITOR] Retry attempt %d for mode=%s", attempt + 1, mode)
-
         try:
-            llm_call_start = time.time()
-            response = await provider.generate_content_lite(
-                model=model,
-                contents=[Content(role=Role.USER, parts=[Part.from_text(current_prompt)])],
-                lite_llm_settings=settings,
-            )
-            llm_call_duration_ms = (time.time() - llm_call_start) * 1000
-            logger.info("[TRIBUNAL-AUDITOR] LLM call attempt %d duration_ms=%.2f", attempt + 1, llm_call_duration_ms)
-            raw_text = (response.text or "").strip()
-            if not raw_text:
-                raise OllamaEmptyResponseError(
-                    "Provider returned empty response",
-                    model=model,
-                    channel="lite",
-                    done_reason=None,
-                    prompt_eval_count=None,
-                    eval_count=None,
-                    num_ctx=0,
-                    num_predict=0,
-                    thinking_len=0,
-                    tool_calls_count=0,
-                    ctx_overflow_suspected=False,
-                )
-
+            raw_text = await call_auditor_llm(provider, model, prompt, auditor_persona, attempt)
             status, revised_raw, swap_to_cluster = parse_auditor_response(
                 raw_text, mode, list(cluster_to_cmd.keys())
             )

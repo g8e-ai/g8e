@@ -97,6 +97,7 @@ class AITaskId(StrEnum):
     FETCH_FILE_HISTORY = "ai.fetch.file.history"
     RESTORE_FILE = "ai.restore.file"
     FETCH_FILE_DIFF = "ai.fetch.file.diff"
+    RECURSIVE_GREP = "ai.recursive_grep"
     INTENT_GRANT = "ai.intent.grant"
     INTENT_REVOKE = "ai.intent.revoke"
 
@@ -260,6 +261,7 @@ class OperatorToolName(StrEnum):
     QUERY_INVESTIGATION_CONTEXT = "query_investigation_context"
     GET_COMMAND_CONSTRAINTS = "get_command_constraints"
     SSH_INVENTORY = "list_ssh_inventory"
+    RECURSIVE_GREP = "recursive_grep_search"
     STREAM_OPERATOR = "stream_operator_to_ssh_fleet"
 
 # OPERATOR_TOOLS and AI_UNIVERSAL_TOOLS moved to app.services.ai.tool_registry

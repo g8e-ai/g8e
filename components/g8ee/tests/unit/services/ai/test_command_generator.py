@@ -67,7 +67,7 @@ from app.models.tool_results import (
     CommandRiskAnalysis,
     ErrorAnalysisResult,
 )
-from app.services.ai.auditor_service import run_auditor
+from app.services.ai.auditor_service import AuditorClusterInfo
 from app.services.ai.generator import (
     TribunalEmitter,
     _build_and_emit_result,
@@ -232,19 +232,19 @@ class TestRoleImportRegression:
             consensus_strength=1.0,
         )
 
-        auditor_passed, final_cmd, auditor_revision, auditor_reason, swap_to_cluster, swap_to_member = await run_auditor(
+        from app.services.ai.tribunal.stages.auditor import _run_audit_stage
+        final_cmd, outcome, auditor_passed, auditor_revision, auditor_reason, commitment_id = await _run_audit_stage(
             provider=mock_provider,
             model="test-model",
             request="list files",
             guidelines="",
-            mode="unanimous",
             vote_winner="ls -la",
             vote_breakdown=vote_breakdown,
-            tied_candidates=None,
             operator_context=_make_mock_operator_context(os="linux"),
+            auditor_enabled=True,
             emitter=emitter,
             command_constraints_message="No whitelist or blacklist constraints are active.",
-            auditor_persona=get_agent_persona("auditor"),
+            **_AUDIT_STAGE_REPUTATION_KWARGS,
         )
 
         assert auditor_passed is True
@@ -698,21 +698,21 @@ class TestTribunalAuditorFailedError:
             consensus_strength=1.0,
         )
 
+        from app.services.ai.tribunal.stages.auditor import _run_audit_stage
         with pytest.raises(TribunalAuditorFailedError) as exc_info:
-            await run_auditor(
-            provider=mock_provider,
-            model="test-model",
-            request="list files",
-            guidelines="",
-            mode="unanimous",
-            vote_winner="ls -la",
-            vote_breakdown=vote_breakdown,
-            tied_candidates=None,
-            operator_context=_make_mock_operator_context(os="linux"),
-            emitter=emitter,
-            command_constraints_message="No whitelist or blacklist constraints are active",
-            auditor_persona=get_agent_persona("auditor"),
-        )
+            await _run_audit_stage(
+                provider=mock_provider,
+                model="test-model",
+                request="list files",
+                guidelines="",
+                vote_winner="ls -la",
+                vote_breakdown=vote_breakdown,
+                operator_context=_make_mock_operator_context(os="linux"),
+                auditor_enabled=True,
+                emitter=emitter,
+                command_constraints_message="No whitelist or blacklist constraints are active",
+                **_AUDIT_STAGE_REPUTATION_KWARGS,
+            )
 
         assert exc_info.value.reason == AuditorReason.EMPTY_RESPONSE
         assert exc_info.value.request == "list files"
@@ -737,21 +737,21 @@ class TestTribunalAuditorFailedError:
             consensus_strength=1.0,
         )
 
+        from app.services.ai.tribunal.stages.auditor import _run_audit_stage
         with pytest.raises(TribunalAuditorFailedError) as exc_info:
-            await run_auditor(
-            provider=mock_provider,
-            model="test-model",
-            request="list files",
-            guidelines="",
-            mode="unanimous",
-            vote_winner="ls -la",
-            vote_breakdown=vote_breakdown,
-            tied_candidates=None,
-            operator_context=_make_mock_operator_context(os="linux"),
-            emitter=emitter,
-            command_constraints_message="No whitelist or blacklist constraints are active",
-            auditor_persona=get_agent_persona("auditor"),
-        )
+            await _run_audit_stage(
+                provider=mock_provider,
+                model="test-model",
+                request="list files",
+                guidelines="",
+                vote_winner="ls -la",
+                vote_breakdown=vote_breakdown,
+                operator_context=_make_mock_operator_context(os="linux"),
+                auditor_enabled=True,
+                emitter=emitter,
+                command_constraints_message="No whitelist or blacklist constraints are active",
+                **_AUDIT_STAGE_REPUTATION_KWARGS,
+            )
 
         assert exc_info.value.reason == AuditorReason.NO_VALID_REVISION
         assert exc_info.value.request == "list files"
@@ -774,21 +774,21 @@ class TestTribunalAuditorFailedError:
             consensus_strength=1.0,
         )
 
+        from app.services.ai.tribunal.stages.auditor import _run_audit_stage
         with pytest.raises(TribunalAuditorFailedError) as exc_info:
-            await run_auditor(
-            provider=mock_provider,
-            model="test-model",
-            request="list files",
-            guidelines="",
-            mode="unanimous",
-            vote_winner="ls -la",
-            vote_breakdown=vote_breakdown,
-            tied_candidates=None,
-            operator_context=_make_mock_operator_context(os="linux"),
-            emitter=emitter,
-            command_constraints_message="No whitelist or blacklist constraints are active",
-            auditor_persona=get_agent_persona("auditor"),
-        )
+            await _run_audit_stage(
+                provider=mock_provider,
+                model="test-model",
+                request="list files",
+                guidelines="",
+                vote_winner="ls -la",
+                vote_breakdown=vote_breakdown,
+                operator_context=_make_mock_operator_context(os="linux"),
+                auditor_enabled=True,
+                emitter=emitter,
+                command_constraints_message="No whitelist or blacklist constraints are active",
+                **_AUDIT_STAGE_REPUTATION_KWARGS,
+            )
 
         assert exc_info.value.reason == AuditorReason.AUDITOR_ERROR
         assert "timeout" in exc_info.value.error

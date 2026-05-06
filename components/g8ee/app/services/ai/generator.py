@@ -41,20 +41,23 @@ from app.llm.prompts import (
 from app.llm.factory import get_llm_provider
 from app.models.whitelist import WhitelistedCommand
 from app.models.agents.tribunal import (
+    AuditorClusterInfo,
     CandidateCommand,
     CommandGenerationResult,
+    TribunalAuditorFailedError,
+    TribunalAuditorFailedPayload,
+    TribunalConsensusFailedError,
+    TribunalConsensusFailedPayload,
     TribunalDisabledError,
-    TribunalProviderUnavailableError,
     TribunalGenerationFailedError,
     TribunalModelNotConfiguredError,
-    TribunalConsensusFailedError,
-    TribunalSessionStartedPayload,
+    TribunalProviderUnavailableError,
+    TribunalSessionCompletedPayload,
     TribunalSessionDisabledPayload,
     TribunalSessionModelNotConfiguredPayload,
     TribunalSessionProviderUnavailablePayload,
+    TribunalSessionStartedPayload,
     TribunalVotingCompletedPayload,
-    TribunalConsensusFailedPayload,
-    TribunalSessionCompletedPayload,
     VoteBreakdown,
 )
 from app.services.protocols import (
@@ -64,21 +67,21 @@ from app.services.protocols import (
 from app.utils.ids import generate_tribunal_correlation_id
 from app.models.tool_results import CommandRiskAnalysis
 from app.services.data.reputation_data_service import ReputationDataService
-from app.services.ai.auditor_service import validate_command_safety
+from app.utils.safety import validate_command_safety
+from app.models.model_configs import get_model_config
 
-# Re-exports for backward compatibility or direct use if needed
 from app.services.ai.tribunal.emitter import TribunalEmitter
+from app.services.ai.tribunal.stages.auditor import _run_audit_stage
+from app.services.ai.tribunal.stages.generation import (
+    _anonymize_clusters,
+    _run_generation_stage,
+)
+from app.services.ai.tribunal.stages.voting import _run_voting_stage
+from app.services.ai.tribunal.stages.warden import _run_warden_stage
 from app.services.ai.tribunal.utils import (
     _member_for_pass,
     _resolve_model,
 )
-from app.services.ai.tribunal.stages.generation import (
-    _run_generation_stage,
-    _anonymize_clusters,
-)
-from app.services.ai.tribunal.stages.voting import _run_voting_stage
-from app.services.ai.tribunal.stages.warden import _run_warden_stage
-from app.services.ai.tribunal.stages.auditor import _run_audit_stage
 
 logger = logging.getLogger(__name__)
 
@@ -207,12 +210,6 @@ async def generate_command(
     )
     correlation_id = generate_tribunal_correlation_id()
     emitter = TribunalEmitter(g8ed_event_service, g8e_context, correlation_id=correlation_id)
-
-    if not request:
-        raise TribunalGenerationFailedError(
-            pass_errors=["Empty request submitted; cannot generate command"],
-            request=request,
-        )
 
     if not settings.llm.llm_command_gen_enabled:
         await emitter.emit(

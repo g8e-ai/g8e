@@ -466,7 +466,9 @@ describe('DeviceLinkService', () => {
 
             mockCache._seedKV(KVKey.deviceLink(validToken), linkData.forKV());
             mockCache.kvSet.mockResolvedValue(null);
+            mockCache.kvSadd.mockResolvedValue(1); // Ensure SADD returns 1 to proceed
             mockOperatorService.queryListedOperators.mockResolvedValue([]);
+            mockDeviceRegistration.registerDevice.mockResolvedValue({ success: true, operator_id: 'op-1' });
 
             const setTimeoutMock = vi.fn((fn, delay) => {
                 fn();
@@ -749,7 +751,9 @@ describe('DeviceLinkService', () => {
 
             mockCache._seedKV(KVKey.deviceLink(validToken), linkData.forKV());
             mockCache.kvSet.mockResolvedValue(null);
+            mockCache.kvSadd.mockResolvedValue(1);
             mockOperatorService.queryListedOperators.mockResolvedValue([]);
+            mockDeviceRegistration.registerDevice.mockResolvedValue({ success: true, operator_id: 'op-1' });
 
             const setTimeoutMock = vi.fn((fn, delay) => {
                 fn();

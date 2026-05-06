@@ -481,71 +481,123 @@ async def execute_turn_tool_calls(
     g8ed_event_service: EventService,
 ) -> AsyncGenerator[StreamChunkFromModel]:
     """
-    Execute all tool calls from one turn sequentially.
+    Execute all tool calls from one turn.
+
+    If parallel execution is enabled in settings, tool calls are dispatched
+    concurrently. Otherwise, they are executed sequentially.
 
     Yields TOOL_CALL and TOOL_RESULT StreamChunkFromModel chunks for
     each call. On completion appends the list of ToolCallResponse records
     to result_out (always exactly one item — a list of responses for the turn).
     """
-    responses: list[ToolCallResponse] = []
     num_calls = len(pending_tool_calls)
-    logger.info("[SEQ_EXEC] Executing %d tool call(s) sequentially", num_calls)
+    use_parallel = request_settings.llm.llm_parallel_tool_calls
 
-    for i, fc in enumerate(pending_tool_calls):
-        try:
-            tool_result = await orchestrate_tool_execution(
-                tool_call=fc,
-                tool_executor=tool_executor,
-                investigation=investigation,
-                g8e_context=g8e_context,
-                g8ed_event_service=g8ed_event_service,
-                request_settings=request_settings,
-            )
-        except asyncio.CancelledError:
-            logger.info(
-                "[SEQ_EXEC] Tool execution cancelled at call %d of %d",
-                i, num_calls
-            )
-            raise
-        except Exception as exc:
-            logger.error("[SEQ_EXEC] Function call %d (%s) failed: %s", i, fc.name, exc)
-            _exc_result = CommandExecutionResult(
-                success=False,
-                error=str(exc),
-            )
-            tool_result = ToolCallResult(
-                tool_name=fc.name or "",
-                call_info=StreamChunkData(
-                    tool_name=fc.name,
-                    execution_id=None,
-                    command="",
-                    is_operator_tool=False,
-                ),
-                result_info=StreamChunkData(
-                    execution_id=None,
-                    success=False,
-                    result=_exc_result,
-                    error_type=CommandErrorType.EXECUTION_ERROR,
-                ),
-                result=_exc_result,
-            )
-
-        if (
-            fc.name == OperatorToolName.G8E_SEARCH_WEB
-            and isinstance(tool_result.result, SearchWebResult)
-            and tool_executor.web_search_provider is not None
+    if use_parallel:
+        logger.info("[PARALLEL_EXEC] Executing %d tool call(s) in parallel", num_calls)
+        async for chunk in _execute_parallel(
+            pending_tool_calls,
+            tool_executor,
+            investigation,
+            g8e_context,
+            result_out,
+            request_settings,
+            g8ed_event_service,
         ):
-            g8e_web_search_grounding = tool_executor.web_search_provider.build_g8e_web_search_grounding(
-                tool_result.result
+            yield chunk
+    else:
+        logger.info("[SEQ_EXEC] Executing %d tool call(s) sequentially", num_calls)
+        async for chunk in _execute_sequential(
+            pending_tool_calls,
+            tool_executor,
+            investigation,
+            g8e_context,
+            result_out,
+            request_settings,
+            g8ed_event_service,
+        ):
+            yield chunk
+
+
+async def _process_single_tool_call(
+    idx: int,
+    fc: ToolCall,
+    tool_executor: AIToolService,
+    investigation: EnrichedInvestigationContext,
+    g8e_context: G8eHttpContext,
+    request_settings: G8eeUserSettings,
+    g8ed_event_service: EventService,
+) -> ToolCallResult:
+    """Helper to execute a single tool call with error handling."""
+    try:
+        tool_result = await orchestrate_tool_execution(
+            tool_call=fc,
+            tool_executor=tool_executor,
+            investigation=investigation,
+            g8e_context=g8e_context,
+            g8ed_event_service=g8ed_event_service,
+            request_settings=request_settings,
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        logger.error("[TOOL_EXEC] Function call %d (%s) failed: %s", idx, fc.name, exc)
+        _exc_result = CommandExecutionResult(
+            success=False,
+            error=str(exc),
+        )
+        tool_result = ToolCallResult(
+            tool_name=fc.name or "",
+            call_info=StreamChunkData(
+                tool_name=fc.name,
+                execution_id=None,
+                command="",
+                is_operator_tool=False,
+            ),
+            result_info=StreamChunkData(
+                execution_id=None,
+                success=False,
+                result=_exc_result,
+                error_type=CommandErrorType.EXECUTION_ERROR,
+            ),
+            result=_exc_result,
+        )
+
+    if (
+        fc.name == OperatorToolName.G8E_SEARCH_WEB
+        and isinstance(tool_result.result, SearchWebResult)
+        and tool_executor.web_search_provider is not None
+    ):
+        g8e_web_search_grounding = tool_executor.web_search_provider.build_g8e_web_search_grounding(
+            tool_result.result
+        )
+        if g8e_web_search_grounding.grounding_used:
+            tool_result = ToolCallResult(
+                tool_name=tool_result.tool_name,
+                call_info=tool_result.call_info,
+                result_info=tool_result.result_info,
+                result=tool_result.result,
+                grounding=g8e_web_search_grounding,
             )
-            if g8e_web_search_grounding.grounding_used:
-                tool_result = ToolCallResult(
-                    tool_name=tool_result.tool_name,
-                    call_info=tool_result.call_info,
-                    result_info=tool_result.result_info,
-                    result=tool_result.result,
-                    grounding=g8e_web_search_grounding,
-                )
+
+    return tool_result
+
+
+async def _execute_sequential(
+    pending_tool_calls: list[ToolCall],
+    tool_executor: AIToolService,
+    investigation: EnrichedInvestigationContext,
+    g8e_context: G8eHttpContext,
+    result_out: list[list[ToolCallResponse]],
+    request_settings: G8eeUserSettings,
+    g8ed_event_service: EventService,
+) -> AsyncGenerator[StreamChunkFromModel]:
+    """Execute tool calls one by one."""
+    responses: list[ToolCallResponse] = []
+    for i, fc in enumerate(pending_tool_calls):
+        tool_result = await _process_single_tool_call(
+            i, fc, tool_executor, investigation, g8e_context, request_settings, g8ed_event_service
+        )
 
         yield StreamChunkFromModel(
             type=StreamChunkFromModelType.TOOL_CALL,
@@ -557,13 +609,6 @@ async def execute_turn_tool_calls(
         )
 
         flattened = tool_result.result.model_dump(mode="json")
-        logger.info(
-            "[FUNCTION_RESPONSE] %s: success=%s output_len=%d exit_code=%s",
-            tool_result.tool_name,
-            flattened.get("success"),
-            len(flattened.get("output", "")),
-            flattened.get("exit_code"),
-        )
         responses.append(ToolCallResponse(
             tool_name=tool_result.tool_name,
             flattened_response=flattened,
@@ -571,5 +616,47 @@ async def execute_turn_tool_calls(
             tool_call_id=fc.id,
         ))
 
-    logger.info("[SEQ_EXEC] Completed %d tool call(s)", num_calls)
+    result_out.append(responses)
+
+
+async def _execute_parallel(
+    pending_tool_calls: list[ToolCall],
+    tool_executor: AIToolService,
+    investigation: EnrichedInvestigationContext,
+    g8e_context: G8eHttpContext,
+    result_out: list[list[ToolCallResponse]],
+    request_settings: G8eeUserSettings,
+    g8ed_event_service: EventService,
+) -> AsyncGenerator[StreamChunkFromModel]:
+    """Execute tool calls concurrently using asyncio.gather."""
+    tasks = [
+        _process_single_tool_call(
+            i, fc, tool_executor, investigation, g8e_context, request_settings, g8ed_event_service
+        )
+        for i, fc in enumerate(pending_tool_calls)
+    ]
+
+    # Execute all tool calls in parallel
+    results: list[ToolCallResult] = await asyncio.gather(*tasks)
+
+    responses: list[ToolCallResponse] = []
+    for fc, tool_result in zip(pending_tool_calls, results):
+        # Yield status chunks for UI
+        yield StreamChunkFromModel(
+            type=StreamChunkFromModelType.TOOL_CALL,
+            data=tool_result.call_info,
+        )
+        yield StreamChunkFromModel(
+            type=StreamChunkFromModelType.TOOL_RESULT,
+            data=tool_result.result_info,
+        )
+
+        flattened = tool_result.result.model_dump(mode="json")
+        responses.append(ToolCallResponse(
+            tool_name=tool_result.tool_name,
+            flattened_response=flattened,
+            grounding=tool_result.grounding,
+            tool_call_id=fc.id,
+        ))
+
     result_out.append(responses)

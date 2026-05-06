@@ -54,25 +54,16 @@ class TestTribunalApprovalCorrelation:
 
         from app.constants import TribunalMember
         mock_candidates = [
-            CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM)
+            CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
+            CandidateCommand(command="ls -la", pass_index=1, member=TribunalMember.CONCORD),
         ]
 
         with patch("app.services.ai.generator._run_generation_stage", new_callable=AsyncMock) as mock_gen, \
-             patch("app.services.ai.generator._run_audit_stage", new_callable=AsyncMock) as mock_audit, \
-             patch("app.services.ai.generator.weighted_vote") as mock_vote:
+             patch("app.services.ai.generator._run_audit_stage", new_callable=AsyncMock) as mock_audit:
 
             mock_gen.return_value = mock_candidates
-            # Mock vote to succeed despite only 1 candidate
-            from app.models.agents.tribunal import VoteBreakdown
-            mock_vote.return_value = ("ls -la", 1.0, VoteBreakdown(
-                candidates_by_member={"axiom": "ls -la"},
-                candidates_by_command={"ls -la": ["axiom"]},
-                winner="ls -la",
-                winner_supporters=["axiom"],
-                consensus_strength=1.0
-            ), None)
             # Mock audit to pass
-            mock_audit.return_value = ("ls -la", CommandGenerationOutcome.VERIFIED, True, None, "ok", None, None)
+            mock_audit.return_value = ("ls -la", CommandGenerationOutcome.VERIFIED, True, None, "ok", None)
 
             # Generate command via Tribunal
             gen_result = await generate_command(
@@ -122,20 +113,14 @@ class TestTribunalApprovalCorrelation:
         event_svc = make_g8ed_event_service()
 
         with patch("app.services.ai.generator._run_generation_stage", new_callable=AsyncMock) as mock_gen, \
-             patch("app.services.ai.generator._run_audit_stage", new_callable=AsyncMock) as mock_audit, \
-             patch("app.services.ai.generator.weighted_vote") as mock_vote:
+             patch("app.services.ai.generator._run_audit_stage", new_callable=AsyncMock) as mock_audit:
 
-            mock_gen.return_value = [CandidateCommand(command="ls", pass_index=0, member="axiom")]
-            # Mock vote to succeed despite only 1 candidate
-            from app.models.agents.tribunal import VoteBreakdown
-            mock_vote.return_value = ("ls", 1.0, VoteBreakdown(
-                candidates_by_member={"axiom": "ls"},
-                candidates_by_command={"ls": ["axiom"]},
-                winner="ls",
-                winner_supporters=["axiom"],
-                consensus_strength=1.0
-            ), None)
-            mock_audit.return_value = ("ls", CommandGenerationOutcome.VERIFIED, True, None, "ok", None, None)
+            mock_gen.return_value = [
+                CandidateCommand(command="ls", pass_index=0, member="axiom"),
+                CandidateCommand(command="ls", pass_index=1, member="concord"),
+            ]
+            # Mock audit to pass
+            mock_audit.return_value = ("ls -la", CommandGenerationOutcome.VERIFIED, True, None, "ok", None)
 
             # Generate command via Tribunal
             await generate_command(
