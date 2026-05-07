@@ -198,8 +198,8 @@ func (hs *HeartbeatService) buildProtoHeartbeat(h *models.Heartbeat) *operatorv1
 		},
 		UserDetails: &operatorv1.UserDetails{
 			Username: h.UserDetails.Username,
-			Uid:      int32(h.UserDetails.UID),
-			Gid:      int32(h.UserDetails.GID),
+			Uid:      h.UserDetails.UID,
+			Gid:      h.UserDetails.GID,
 			Home:     h.UserDetails.Home,
 			Name:     h.UserDetails.Name,
 			Shell:    h.UserDetails.Shell,

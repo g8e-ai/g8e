@@ -244,6 +244,28 @@ func TestGetUserDetails(t *testing.T) {
 
 	assert.NotEmpty(t, details.Username)
 	assert.Equal(t, "/bin/bash", details.Shell)
+	assert.GreaterOrEqual(t, details.UID, int32(0))
+	assert.GreaterOrEqual(t, details.GID, int32(0))
+}
+
+func TestParseUserID_EnforcesInt32Bounds(t *testing.T) {
+	cases := []struct {
+		name     string
+		value    string
+		expected int32
+	}{
+		{name: "zero", value: "0", expected: 0},
+		{name: "max_int32", value: "2147483647", expected: 2147483647},
+		{name: "above_max_int32", value: "2147483648", expected: 0},
+		{name: "negative", value: "-1", expected: 0},
+		{name: "malformed", value: "not-a-number", expected: 0},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, parseUserID(tc.value))
+		})
+	}
 }
 
 func TestGetUserDetails_ShellEmpty_DefaultsToSh(t *testing.T) {
