@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
-	"github.com/g8e-ai/g8e/components/g8eo/models"
 	sentinel "github.com/g8e-ai/g8e/components/g8eo/services/sentinel"
 	storage "github.com/g8e-ai/g8e/components/g8eo/services/storage"
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
@@ -214,21 +213,14 @@ func TestPubSubCommandService_DispatchCommand_UnknownType_NoOp(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// handleCommandPayload — round-trip from raw JSON bytes
+// handleCommandPayload — round-trip from raw UniversalEnvelope bytes
 // ---------------------------------------------------------------------------
 
-func TestPubSubCommandService_HandleCommandPayload_ValidJSON(t *testing.T) {
+func TestPubSubCommandService_HandleCommandPayload_ValidUniversalEnvelope(t *testing.T) {
 	f := newPubsubFixture(t)
 
-	msg := PubSubCommandMessage{
-		ID:        "hcp-1",
-		EventType: constants.Event.Operator.HeartbeatRequested,
-		CaseID:    "case-1",
-		Payload:   mustMarshalJSON(t, models.HeartbeatRequestPayload{}),
-		Timestamp: time.Now().UTC(),
-	}
-	data, err := json.Marshal(msg)
-	require.NoError(t, err)
+	payload := testutil.MustMarshalProtobufHeartbeatRequested(t)
+	data := testutil.MustMarshalUniversalEnvelope(t, "hcp-1", constants.Event.Operator.HeartbeatRequested, payload, "", f.Cfg.OperatorID, "case-1", "", f.Cfg.OperatorSessionId)
 
 	assert.NotPanics(t, func() {
 		f.Svc.handleCommandPayload(data)

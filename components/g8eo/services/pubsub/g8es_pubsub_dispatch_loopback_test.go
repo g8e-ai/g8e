@@ -32,11 +32,9 @@ package pubsub
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -44,6 +42,8 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/models"
 	execution "github.com/g8e-ai/g8e/components/g8eo/services/execution"
 	sentinelpkg "github.com/g8e-ai/g8e/components/g8eo/services/sentinel"
+	commonv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
+	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -135,6 +135,13 @@ func startService(t *testing.T, svc *PubSubCommandService) {
 	})
 }
 
+func assertLoopbackEnvelope(t *testing.T, data []byte, eventType string) *commonv1.UniversalEnvelope {
+	t.Helper()
+	env := testutil.MustUnmarshalUniversalEnvelope(t, data)
+	assert.Equal(t, eventType, env.EventType)
+	return env
+}
+
 // =============================================================================
 // CommandService — HandleExecutionRequest end-to-end
 // =============================================================================
@@ -156,13 +163,13 @@ func TestLoopback_CommandDispatch_ExecutionRequest_EchoCommand(t *testing.T) {
 	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
-	assert.Contains(t, string(msg), constants.Event.Operator.Command.Completed)
-	assert.Contains(t, string(msg), "case-echo")
+	resultEnvelope := assertLoopbackEnvelope(t, msg, constants.Event.Operator.Command.Completed)
+	assert.Equal(t, "case-echo", resultEnvelope.CaseId)
 
-	var resultEnvelope models.G8eMessage
-	require.NoError(t, json.Unmarshal(msg, &resultEnvelope))
-	assert.Equal(t, "case-echo", resultEnvelope.CaseID)
-	assert.Equal(t, constants.Event.Operator.Command.Completed, resultEnvelope.EventType)
+	var result operatorv1.CommandResult
+	testutil.MustUnmarshalPayload(t, resultEnvelope.Payload, &result)
+	assert.Equal(t, string(constants.ExecutionStatusCompleted), result.Status)
+	assert.Contains(t, result.Output, "hello loopback")
 }
 
 func TestLoopback_CommandDispatch_ExecutionRequest_InvalidCommand(t *testing.T) {
@@ -175,14 +182,18 @@ func TestLoopback_CommandDispatch_ExecutionRequest_InvalidCommand(t *testing.T) 
 	startService(t, svc)
 	_ = drainOne(t, hbSub)
 
-	cmdPayload := testutil.MustMarshalProtobufCommandRequested(t, "__no_such_exec_xyzzy__", "exec-loop-fail-1", "test", "", 0)
+	cmdPayload := testutil.MustMarshalProtobufCommandRequested(t, "missingcmdxyzzy", "exec-loop-fail-1", "test", "", 0)
 	envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, "exec-loop-fail-1", constants.Event.Operator.Command.Requested, cmdPayload, "", svc.config.OperatorID, "case-fail", "", svc.config.OperatorSessionId)
 	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
 	// Non-existent command completes with failed status.
-	assert.Contains(t, string(msg), constants.Event.Operator.Command.Failed)
-	assert.Contains(t, string(msg), "case-fail")
+	resultEnvelope := assertLoopbackEnvelope(t, msg, constants.Event.Operator.Command.Failed)
+	assert.Equal(t, "case-fail", resultEnvelope.CaseId)
+
+	var result operatorv1.CommandResult
+	testutil.MustUnmarshalPayload(t, resultEnvelope.Payload, &result)
+	assert.Equal(t, string(constants.ExecutionStatusFailed), result.Status)
 }
 
 func TestLoopback_CommandDispatch_ExecutionRequest_StdoutContent(t *testing.T) {
@@ -201,8 +212,11 @@ func TestLoopback_CommandDispatch_ExecutionRequest_StdoutContent(t *testing.T) {
 	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
-	assert.Contains(t, string(msg), constants.Event.Operator.Command.Completed)
-	assert.Contains(t, string(msg), sentinel)
+	resultEnvelope := assertLoopbackEnvelope(t, msg, constants.Event.Operator.Command.Completed)
+
+	var result operatorv1.CommandResult
+	testutil.MustUnmarshalPayload(t, resultEnvelope.Payload, &result)
+	assert.Contains(t, result.Output, sentinel)
 }
 
 func TestLoopback_CommandDispatch_ExecutionRequest_TaskIDThreaded(t *testing.T) {
@@ -221,13 +235,9 @@ func TestLoopback_CommandDispatch_ExecutionRequest_TaskIDThreaded(t *testing.T) 
 	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
-	assert.Contains(t, string(msg), constants.Event.Operator.Command.Completed)
-
-	var envelope models.G8eMessage
-	require.NoError(t, json.Unmarshal(msg, &envelope))
-	require.NotNil(t, envelope.TaskID)
-	assert.Equal(t, taskID, *envelope.TaskID)
-	assert.Equal(t, "inv-task", envelope.InvestigationID)
+	envelope := assertLoopbackEnvelope(t, msg, constants.Event.Operator.Command.Completed)
+	assert.Equal(t, taskID, envelope.TaskId)
+	assert.Equal(t, "inv-task", envelope.InvestigationId)
 }
 
 // =============================================================================
@@ -259,6 +269,7 @@ func TestLoopback_CommandDispatch_CancelRequest_RunningCommand(t *testing.T) {
 
 	// Expect either a cancellation result or a completed result (race window).
 	msg := drainOne(t, resultsSub)
+	env := testutil.MustUnmarshalUniversalEnvelope(t, msg)
 	validEvents := []string{
 		constants.Event.Operator.Command.Cancelled,
 		constants.Event.Operator.Command.Completed,
@@ -266,12 +277,12 @@ func TestLoopback_CommandDispatch_CancelRequest_RunningCommand(t *testing.T) {
 	}
 	found := false
 	for _, ev := range validEvents {
-		if strings.Contains(string(msg), ev) {
+		if env.EventType == ev {
 			found = true
 			break
 		}
 	}
-	assert.True(t, found, "expected a command result event, got: %s", string(msg))
+	assert.True(t, found, "expected a command result event, got: %s", env.EventType)
 }
 
 func TestLoopback_CommandDispatch_CancelRequest_NotFound(t *testing.T) {
@@ -290,8 +301,7 @@ func TestLoopback_CommandDispatch_CancelRequest_NotFound(t *testing.T) {
 	injectCmdProtobuf(t, f, svc, cancelEnvelopeBytes)
 
 	msg := drainOne(t, resultsSub)
-	assert.Contains(t, string(msg), constants.Event.Operator.Command.Cancelled,
-		"cancel of unknown execution should publish a cancelled/failed result")
+	assertLoopbackEnvelope(t, msg, constants.Event.Operator.Command.Cancelled)
 }
 
 // =============================================================================
@@ -322,8 +332,12 @@ func TestLoopback_CommandDispatch_FileEdit_WriteAndRead(t *testing.T) {
 	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
-	assert.Contains(t, string(msg), constants.Event.Operator.FileEdit.Completed)
-	assert.Contains(t, string(msg), "case-file-write")
+	resultEnvelope := assertLoopbackEnvelope(t, msg, constants.Event.Operator.FileEdit.Completed)
+	assert.Equal(t, "case-file-write", resultEnvelope.CaseId)
+
+	var result operatorv1.FileEditResult
+	testutil.MustUnmarshalPayload(t, resultEnvelope.Payload, &result)
+	assert.Equal(t, string(constants.ExecutionStatusCompleted), result.Status)
 
 	data, err := os.ReadFile(targetPath)
 	require.NoError(t, err)
@@ -358,7 +372,7 @@ func TestLoopback_CommandDispatch_FileEdit_SentinelBlocked(t *testing.T) {
 	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
-	assert.Contains(t, string(msg), constants.Event.Operator.FileEdit.Failed, "sentinel must block writes to /etc/passwd, got: %s", string(msg))
+	assertLoopbackEnvelope(t, msg, constants.Event.Operator.FileEdit.Failed)
 	_, statErr := os.Stat(targetPath)
 	assert.True(t, os.IsNotExist(statErr), "sentinel-blocked write must not create the file")
 }
@@ -420,9 +434,10 @@ func TestLoopback_CommandDispatch_FileEdit_NilResultNoPanic(t *testing.T) {
 
 	msg := drainOne(t, resultsSub)
 	// Must receive either a completed or failed result — never a panic or silence.
-	hasResult := strings.Contains(string(msg), constants.Event.Operator.FileEdit.Completed) ||
-		strings.Contains(string(msg), constants.Event.Operator.FileEdit.Failed)
-	assert.True(t, hasResult, "expected a file edit result event, got: %s", string(msg))
+	env := testutil.MustUnmarshalUniversalEnvelope(t, msg)
+	hasResult := env.EventType == constants.Event.Operator.FileEdit.Completed ||
+		env.EventType == constants.Event.Operator.FileEdit.Failed
+	assert.True(t, hasResult, "expected a file edit result event, got: %s", env.EventType)
 }
 
 // =============================================================================
@@ -444,8 +459,12 @@ func TestLoopback_CommandDispatch_FsList_WorkDir(t *testing.T) {
 	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
-	assert.Contains(t, string(msg), constants.Event.Operator.FsList.Completed)
-	assert.Contains(t, string(msg), "case-fslist")
+	resultEnvelope := assertLoopbackEnvelope(t, msg, constants.Event.Operator.FsList.Completed)
+	assert.Equal(t, "case-fslist", resultEnvelope.CaseId)
+
+	var result operatorv1.FsListResult
+	testutil.MustUnmarshalPayload(t, resultEnvelope.Payload, &result)
+	assert.Equal(t, string(constants.ExecutionStatusCompleted), result.Status)
 }
 
 func TestLoopback_CommandDispatch_FsList_NonExistentPath(t *testing.T) {
@@ -463,7 +482,7 @@ func TestLoopback_CommandDispatch_FsList_NonExistentPath(t *testing.T) {
 	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
-	assert.Contains(t, string(msg), constants.Event.Operator.FsList.Failed)
+	assertLoopbackEnvelope(t, msg, constants.Event.Operator.FsList.Failed)
 }
 
 // =============================================================================
@@ -491,8 +510,11 @@ func TestLoopback_CommandDispatch_FsRead_ExistingFile(t *testing.T) {
 	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
-	assert.Contains(t, string(msg), constants.Event.Operator.FsRead.Completed)
-	assert.Contains(t, string(msg), content)
+	resultEnvelope := assertLoopbackEnvelope(t, msg, constants.Event.Operator.FsRead.Completed)
+
+	var result operatorv1.FsReadResult
+	testutil.MustUnmarshalPayload(t, resultEnvelope.Payload, &result)
+	assert.Contains(t, result.Content, content)
 }
 
 func TestLoopback_CommandDispatch_FsRead_MissingFile(t *testing.T) {
@@ -510,7 +532,7 @@ func TestLoopback_CommandDispatch_FsRead_MissingFile(t *testing.T) {
 	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
-	assert.Contains(t, string(msg), constants.Event.Operator.FsRead.Failed)
+	assertLoopbackEnvelope(t, msg, constants.Event.Operator.FsRead.Failed)
 }
 
 // =============================================================================
@@ -546,7 +568,8 @@ func TestLoopback_CommandDispatch_FanOut_MultipleResultSubscribers(t *testing.T)
 
 	for i, sub := range subs {
 		msg := drainOne(t, sub)
-		assert.Contains(t, string(msg), constants.Event.Operator.Command.Completed,
+		env := testutil.MustUnmarshalUniversalEnvelope(t, msg)
+		assert.Equal(t, constants.Event.Operator.Command.Completed, env.EventType,
 			"subscriber %d did not receive the result", i)
 	}
 }
@@ -571,15 +594,15 @@ func TestLoopback_CommandDispatch_HeartbeatRequested_CaseIDThreaded(t *testing.T
 	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, hbSub)
-	assert.Contains(t, string(msg), constants.Event.Operator.Heartbeat)
-	assert.Contains(t, string(msg), "case-hb-req")
-	assert.Contains(t, string(msg), "inv-hb-req")
+	env := assertLoopbackEnvelope(t, msg, constants.Event.Operator.Heartbeat)
+	assert.Equal(t, "case-hb-req", env.CaseId)
+	assert.Equal(t, "inv-hb-req", env.InvestigationId)
 
-	var hb models.Heartbeat
-	require.NoError(t, json.Unmarshal(msg, &hb))
-	assert.Equal(t, models.HeartbeatTypeRequested, hb.HeartbeatType)
-	assert.Equal(t, "case-hb-req", hb.CaseID)
-	assert.Equal(t, "inv-hb-req", hb.InvestigationID)
+	var hb operatorv1.HeartbeatResult
+	testutil.MustUnmarshalPayload(t, env.Payload, &hb)
+	assert.Equal(t, string(models.HeartbeatTypeRequested), hb.Status)
+	assert.Equal(t, "case-hb-req", hb.CaseId)
+	assert.Equal(t, "inv-hb-req", hb.InvestigationId)
 }
 
 // =============================================================================

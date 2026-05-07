@@ -18,7 +18,6 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
-	"github.com/g8e-ai/g8e/components/g8eo/models"
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 	"github.com/stretchr/testify/assert"
 )
@@ -39,37 +38,31 @@ func TestLoopback_CommandDispatch_HistoryAndAudit(t *testing.T) {
 	tests := []struct {
 		name      string
 		eventType string
-		payload   interface{}
 		expected  string
 	}{
 		{
 			name:      "FetchLogs",
 			eventType: constants.Event.Operator.FetchLogs.Requested,
-			payload:   models.FetchLogsRequestPayload{ExecutionID: "exec-1"},
 			expected:  constants.Event.Operator.FetchLogs.Failed,
 		},
 		{
 			name:      "FetchHistory",
 			eventType: constants.Event.Operator.FetchHistory.Requested,
-			payload:   models.FetchHistoryRequestPayload{},
 			expected:  constants.Event.Operator.FetchHistory.Failed,
 		},
 		{
 			name:      "FetchFileHistory",
 			eventType: constants.Event.Operator.FetchFileHistory.Requested,
-			payload:   models.FetchFileHistoryRequestPayload{FilePath: "test.txt"},
 			expected:  constants.Event.Operator.FetchFileHistory.Failed,
 		},
 		{
 			name:      "FetchFileDiff",
 			eventType: constants.Event.Operator.FetchFileDiff.Requested,
-			payload:   models.FetchFileDiffRequestPayload{FilePath: "test.txt"},
 			expected:  constants.Event.Operator.FetchFileDiff.Failed,
 		},
 		{
 			name:      "RestoreFile",
 			eventType: constants.Event.Operator.RestoreFile.Requested,
-			payload:   models.RestoreFileRequestPayload{FilePath: "test.txt", CommitHash: "abc"},
 			expected:  constants.Event.Operator.RestoreFile.Failed,
 		},
 	}
@@ -94,7 +87,8 @@ func TestLoopback_CommandDispatch_HistoryAndAudit(t *testing.T) {
 			injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 			msg := drainOne(t, resultsSub)
-			assert.Contains(t, string(msg), tt.expected, "expected event type %s in result", tt.expected)
+			envelope := testutil.MustUnmarshalUniversalEnvelope(t, msg)
+			assert.Equal(t, tt.expected, envelope.EventType)
 		})
 	}
 

@@ -66,7 +66,7 @@ func TestBuildHeartbeat_EnvelopeFields(t *testing.T) {
 	hb := hs.Build(models.HeartbeatTypeAutomatic)
 
 	assert.Equal(t, constants.Event.Operator.Heartbeat, hb.EventType)
-	assert.Equal(t, commonv1.Component_COMPONENT_G8EO, hb.SourceComponent)
+	assert.Equal(t, constants.Status.ComponentName.G8EO, hb.SourceComponent)
 	assert.Equal(t, cfg.OperatorID, hb.OperatorID)
 	assert.Equal(t, cfg.OperatorSessionId, hb.OperatorSessionID)
 	assert.NotEmpty(t, hb.Timestamp)
@@ -230,7 +230,7 @@ func TestHandleHeartbeatRequest_UsesHeartbeatTypeRequested(t *testing.T) {
 		EventType:       constants.Event.Operator.HeartbeatRequested,
 		CaseID:          "case-hb-test",
 		InvestigationID: "inv-hb-test",
-		Payload:         mustMarshalJSON(t, models.HeartbeatRequestPayload{}),
+		Payload:         testutil.MustMarshalProtobufHeartbeatRequested(t),
 		Timestamp:       time.Now().UTC(),
 	}
 
@@ -307,7 +307,7 @@ func TestHandleHeartbeatRequest_EmptyInvestigationIDIsValid(t *testing.T) {
 		EventType:       constants.Event.Operator.HeartbeatRequested,
 		CaseID:          "case-y",
 		InvestigationID: "",
-		Payload:         mustMarshalJSON(t, models.HeartbeatRequestPayload{}),
+		Payload:         testutil.MustMarshalProtobufHeartbeatRequested(t),
 		Timestamp:       time.Now().UTC(),
 	}
 
@@ -327,7 +327,7 @@ func TestHandleHeartbeatRequest_NoResultsServiceDoesNotPanic(t *testing.T) {
 		ID:        "msg-hbreq-noResults",
 		EventType: constants.Event.Operator.HeartbeatRequested,
 		CaseID:    "case-z",
-		Payload:   mustMarshalJSON(t, models.HeartbeatRequestPayload{}),
+		Payload:   testutil.MustMarshalProtobufHeartbeatRequested(t),
 		Timestamp: time.Now().UTC(),
 	}
 

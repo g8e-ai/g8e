@@ -15,12 +15,12 @@ package pubsub
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
 	storage "github.com/g8e-ai/g8e/components/g8eo/services/storage"
+	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -68,9 +68,14 @@ func TestHistoryService_PublishFetchLogsResultFromRaw_PublishesOnResultsChannel(
 
 	published := db.LastPublished()
 	require.NotNil(t, published)
-	assert.Contains(t, string(published.Data), constants.Event.Operator.FetchLogs.Completed)
-	assert.Contains(t, string(published.Data), "raw-exec-001")
-	assert.Contains(t, string(published.Data), constants.Status.VaultMode.Raw)
+
+	envelope := testutil.MustUnmarshalUniversalEnvelope(t, published.Data)
+	assert.Equal(t, constants.Event.Operator.FetchLogs.Completed, envelope.EventType)
+
+	var result operatorv1.FetchLogsResult
+	testutil.MustUnmarshalPayload(t, envelope.Payload, &result)
+	assert.Equal(t, "raw-exec-001", result.ExecutionId)
+	assert.Equal(t, constants.Status.VaultMode.Raw, result.SentinelMode)
 }
 
 // ---------------------------------------------------------------------------
@@ -115,9 +120,14 @@ func TestHistoryService_PublishFetchLogsResult_PublishesOnResultsChannel(t *test
 
 	published := db.LastPublished()
 	require.NotNil(t, published)
-	assert.Contains(t, string(published.Data), constants.Event.Operator.FetchLogs.Completed)
-	assert.Contains(t, string(published.Data), "scrubbed-exec-001")
-	assert.Contains(t, string(published.Data), constants.Status.VaultMode.Scrubbed)
+
+	envelope := testutil.MustUnmarshalUniversalEnvelope(t, published.Data)
+	assert.Equal(t, constants.Event.Operator.FetchLogs.Completed, envelope.EventType)
+
+	var result operatorv1.FetchLogsResult
+	testutil.MustUnmarshalPayload(t, envelope.Payload, &result)
+	assert.Equal(t, "scrubbed-exec-001", result.ExecutionId)
+	assert.Equal(t, constants.Status.VaultMode.Scrubbed, result.SentinelMode)
 }
 
 // ---------------------------------------------------------------------------
@@ -164,16 +174,12 @@ func TestHistoryService_PublishFetchLogsPayload_ThreadsMessageIDs(t *testing.T) 
 	published := db.LastPublished()
 	require.NotNil(t, published)
 
-	var envelope map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(published.Data, &envelope))
-
-	var investigationID string
-	require.NoError(t, json.Unmarshal(envelope["investigation_id"], &investigationID))
-	assert.Equal(t, "inv-3", investigationID)
-
-	var operatorSessionID string
-	require.NoError(t, json.Unmarshal(envelope["operator_session_id"], &operatorSessionID))
-	assert.Equal(t, "sess-xyz", operatorSessionID)
+	envelope := testutil.MustUnmarshalUniversalEnvelope(t, published.Data)
+	assert.Equal(t, constants.Event.Operator.FetchLogs.Completed, envelope.EventType)
+	assert.Equal(t, "case-3", envelope.CaseId)
+	assert.Equal(t, "inv-3", envelope.InvestigationId)
+	assert.Equal(t, "sess-xyz", envelope.OperatorSessionId)
+	assert.Equal(t, taskID, envelope.TaskId)
 }
 
 // ---------------------------------------------------------------------------
@@ -245,7 +251,9 @@ func TestHistoryService_PublishFetchLogsResultFromRaw_FallsBackToScrubbedWhenNot
 
 	published := db.LastPublished()
 	require.NotNil(t, published)
-	assert.Contains(t, string(published.Data), constants.Event.Operator.FetchLogs.Failed)
+
+	envelope := testutil.MustUnmarshalUniversalEnvelope(t, published.Data)
+	assert.Equal(t, constants.Event.Operator.FetchLogs.Failed, envelope.EventType)
 }
 
 // ---------------------------------------------------------------------------
@@ -266,6 +274,8 @@ func TestHistoryService_HandleFetchLogsRequest_DefaultVaultModeIsRaw(t *testing.
 
 	published := db.LastPublished()
 	require.NotNil(t, published)
-	assert.Contains(t, string(published.Data), constants.Event.Operator.FetchLogs.Failed,
+
+	envelope := testutil.MustUnmarshalUniversalEnvelope(t, published.Data)
+	assert.Equal(t, constants.Event.Operator.FetchLogs.Failed, envelope.EventType,
 		"should fail because raw vault is nil, not scrubbed vault")
 }
