@@ -15,7 +15,6 @@ package testutil
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -23,22 +22,10 @@ import (
 
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/httpclient"
+	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/pubsubv1"
 	"github.com/gorilla/websocket"
+	"google.golang.org/protobuf/proto"
 )
-
-// pubsubEvent is the wire format for g8es pub/sub WebSocket messages
-type pubsubEvent struct {
-	Type    string          `json:"type"`
-	Channel string          `json:"channel"`
-	Data    json.RawMessage `json:"data"`
-}
-
-// pubsubAction is sent to subscribe/publish via WebSocket
-type pubsubAction struct {
-	Action  string          `json:"action"`
-	Channel string          `json:"channel"`
-	Data    json.RawMessage `json:"data,omitempty"`
-}
 
 // TestPubSubAvailable checks if the g8ed pub/sub gateway is reachable.
 // Fatally fails the test when g8ed is unavailable — all callers are integration
@@ -57,7 +44,7 @@ func TestPubSubAvailable(t *testing.T) {
 	ws.Close()
 }
 
-// SubscribeToChannel subscribes to a g8es pub/sub channel and returns a channel for receiving raw JSON payloads.
+// SubscribeToChannel subscribes to a g8es pub/sub channel and returns a channel for receiving raw bytes from the Data field.
 // baseURL is accepted for API compatibility but ignored — subscriptions always go to the
 // g8es pub/sub endpoint at GetTestG8esDirectURL() using the TLS-aware dialer.
 // The subscription runs until the test ends (via t.Cleanup).
@@ -75,9 +62,14 @@ func SubscribeToChannel(t *testing.T, _ string, channel string) <-chan []byte {
 		t.Fatalf("Failed to connect to g8es pub/sub at %s: %v", wsURL, err)
 	}
 
-	subMsg := pubsubAction{Action: constants.PubSubActionSubscribe, Channel: channel}
-	subJSON, _ := json.Marshal(subMsg)
-	if err := ws.WriteMessage(websocket.TextMessage, subJSON); err != nil {
+	subMsg := &pubsubv1.PubSubMessage{Action: constants.PubSubActionSubscribe, Channel: channel}
+	subBytes, err := proto.Marshal(subMsg)
+	if err != nil {
+		ws.Close()
+		t.Fatalf("Failed to marshal subscribe message: %v", err)
+	}
+
+	if err := ws.WriteMessage(websocket.BinaryMessage, subBytes); err != nil {
 		ws.Close()
 		t.Fatalf("Failed to subscribe to channel %s: %v", channel, err)
 	}
@@ -97,8 +89,8 @@ func SubscribeToChannel(t *testing.T, _ string, channel string) <-chan []byte {
 			if err != nil {
 				return
 			}
-			var event pubsubEvent
-			if err := json.Unmarshal(raw, &event); err != nil {
+			var event pubsubv1.PubSubEvent
+			if err := proto.Unmarshal(raw, &event); err != nil {
 				continue
 			}
 			if event.Type != constants.PubSubEventMessage && event.Type != constants.PubSubEventPMessage {
@@ -134,17 +126,13 @@ func PublishTestMessage(t *testing.T, _ string, channel string, message string) 
 	}
 	defer ws.Close()
 
-	var dataField json.RawMessage
-	if json.Valid([]byte(message)) {
-		dataField = json.RawMessage(message)
-	} else {
-		quoted, _ := json.Marshal(message)
-		dataField = json.RawMessage(quoted)
+	pubMsg := &pubsubv1.PubSubMessage{Action: constants.PubSubActionPublish, Channel: channel, Data: []byte(message)}
+	pubBytes, err := proto.Marshal(pubMsg)
+	if err != nil {
+		t.Fatalf("Failed to marshal publish message: %v", err)
 	}
 
-	pubMsg := pubsubAction{Action: constants.PubSubActionPublish, Channel: channel, Data: dataField}
-	pubJSON, _ := json.Marshal(pubMsg)
-	if err := ws.WriteMessage(websocket.TextMessage, pubJSON); err != nil {
+	if err := ws.WriteMessage(websocket.BinaryMessage, pubBytes); err != nil {
 		t.Fatalf("Failed to publish test message to channel %s: %v", channel, err)
 	}
 }

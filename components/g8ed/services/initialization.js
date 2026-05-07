@@ -20,10 +20,11 @@
  * Initialization phases:
  *   1. g8es clients       — document store, KV, pub/sub transport layer
  *   2. Core platform       — DB service wrapper, models, cache-aside, session
- *   3. Auth services       — API keys, users, passkey auth
- *   4. Operator subsystem  — operator service, binary cache, operator cache
- *   5. Platform services   — SSE, attachments, device links, certificates, settings
- *   6. Configuration       — load global settings from g8es
+ *   3. Platform base      — InternalHttpClient (required by auth services)
+ *   4. Auth services       — API keys, users, passkey auth
+ *   5. Operator subsystem  — operator service, binary cache, operator cache
+ *   6. Platform services   — SSE, attachments, device links, certificates, settings
+ *   7. Configuration       — load global settings from g8es
  */
 
 import { G8esDocumentClient } from './clients/g8es_document_client.js';
@@ -54,12 +55,10 @@ import { DeviceLinkService } from './auth/device_link_service.js';
 import { OrganizationModel } from '../models/organization_model.js';
 import { BootstrapService } from './platform/bootstrap_service.js';
 import { SettingsService } from './platform/settings_service.js';
-import { G8ENodeOperatorService } from './platform/g8ep_operator_service.js';
 import { BindOperatorsService } from './operator/operator_bind_service.js';
 import { ConsoleMetricsService } from './platform/console_metrics_service.js';
 import { PostLoginService } from './auth/post_login_service.js';
 import { SetupService } from './platform/setup_service.js';
-import { AuditService } from './platform/audit_service.js';
 import { HealthCheckService } from './platform/health_check_service.js';
 import { SourceComponent } from '../constants/ai.js';
 import { G8ES_INTERNAL_HTTP_URL, G8ES_INTERNAL_PUBSUB_URL } from '../constants/http_client.js';
@@ -83,12 +82,10 @@ let certificateService = null;
 let deviceLinkService = null;
 let deviceRegistrationService = null;
 let settingsService = null;
-let g8eNodeOperatorService = null;
 let consoleMetricsService = null;
 let operatorDownloadService = null;
 let postLoginService = null;
 let setupService = null;
-let auditService = null;
 let internalHttpClientInstance = null;
 let bindOperatorsServiceInstance = null;
 let apiKeyDataService = null;
@@ -211,50 +208,50 @@ async function _doInitialize() {
         });
         logger.info('[G8ED-INIT] Phase 2b complete: all settings resolved via SettingsService');
 
-        // --- Phase 3: Session + auth services ---
-        webSessionService = new WebSessionService({ 
-            cacheAsideService, 
+        // --- Phase 3: Platform services (moved up for dependency order) ---
+        internalHttpClientInstance = new InternalHttpClient({
+            bootstrapService: bootstrapSvc,
+            settingsService: settingsSvc
+        });
+        logger.info('[G8ED-INIT] Phase 3a complete: InternalHttpClient initialized');
+
+        // --- Phase 3b: Session + auth services ---
+        webSessionService = new WebSessionService({
+            cacheAsideService,
             bootstrapService: settingsSvc.getBootstrapService()
         });
-        // auditService is required by CliSessionService; construct it here
-        // (moved up from Phase 6) before dependent services are wired.
-        auditService = new AuditService();
         cliSessionService = new CliSessionService({
             cacheAsideService,
-            bootstrapService: settingsSvc.getBootstrapService(),
-            auditService
+            bootstrapService: settingsSvc.getBootstrapService()
         });
-        apiKeyDataService = new ApiKeyDataService({ 
-            cacheAsideService 
+        apiKeyDataService = new ApiKeyDataService({
+            cacheAsideService
         });
-        apiKeyService = new ApiKeyService({ 
-            apiKeyDataService 
+        apiKeyService = new ApiKeyService({
+            apiKeyDataService,
+            internalHttpClient: internalHttpClientInstance
         });
-        userService = new UserService({ 
-            cacheAsideService, 
-            organizationService: organizationModel, 
-            apiKeyService: apiKeyService 
+        userService = new UserService({
+            cacheAsideService,
+            organizationService: organizationModel,
+            apiKeyService: apiKeyService
         });
-        passkeyAuthService = new PasskeyAuthService({ 
-            userService: userService, 
-            cacheAsideService, 
-            settingsService: settingsSvc 
+        passkeyAuthService = new PasskeyAuthService({
+            userService: userService,
+            cacheAsideService,
+            settingsService: settingsSvc
         });
-        loginSecurityService = new LoginSecurityService({ 
-            cacheAsideService 
+        loginSecurityService = new LoginSecurityService({
+            cacheAsideService
         });
-        downloadAuthService = new DownloadAuthService({ 
-            cacheAsideService, 
-            userService: userService, 
-            apiKeyService: apiKeyService 
+        downloadAuthService = new DownloadAuthService({
+            cacheAsideService,
+            userService: userService,
+            apiKeyService: apiKeyService
         });
-        logger.info('[G8ED-INIT] Phase 3 complete: auth services');
+        logger.info('[G8ED-INIT] Phase 3b complete: auth services');
 
-        // --- Phase 4: Platform services (moved up for dependency order) ---
-        internalHttpClientInstance = new InternalHttpClient({ 
-            bootstrapService: bootstrapSvc, 
-            settingsService: settingsSvc 
-        });
+        // --- Phase 4: Platform services ---
         sseService = new SSEService();
 
         await sseService.waitForReady();
@@ -317,14 +314,8 @@ async function _doInitialize() {
             internalHttpClient: internalHttpClientInstance 
         });
         healthCheckService = new HealthCheckService({ 
-            cacheAsideService, 
+            cacheAsideService,
             webSessionService: webSessionService 
-        });
-        
-        g8eNodeOperatorService = new G8ENodeOperatorService({ 
-            settingsService: settingsSvc, 
-            operatorService: operatorServiceInstance,
-            internalHttpClient: internalHttpClientInstance
         });
 
         postLoginService = new PostLoginService({
@@ -332,7 +323,6 @@ async function _doInitialize() {
             apiKeyService: apiKeyService,
             userService: userService,
             operatorService: operatorServiceInstance,
-            g8eNodeOperatorService: g8eNodeOperatorService,
             sseService: sseService,
             consoleMetricsService: consoleMetricsService,
         });
@@ -365,11 +355,11 @@ async function _doInitialize() {
             sseService: sseService,
         });
 
-        logger.info('[G8ED-INIT] Phase 5 complete: platform services (SSE, attachments, device links, certificates, g8ep operator, console metrics, post-login, setup, audit, operator-bind)');
+        logger.info('[G8ED-INIT] Phase 6 complete: platform services (SSE, attachments, device links, certificates, console metrics, post-login, setup, operator-bind)');
 
-        // --- Phase 6: Configuration ---
+        // --- Phase 7: Configuration ---
         // All configuration is now available via settingsService
-        logger.info('[G8ED-INIT] Phase 6 complete: configuration loaded');
+        logger.info('[G8ED-INIT] Phase 7 complete: configuration loaded');
 
         initialized = true;
         logger.info('[G8ED-INIT] All services initialized successfully');
@@ -518,11 +508,6 @@ export function getBindOperatorsService() {
     return bindOperatorsServiceInstance;
 }
 
-export function getG8ENodeOperatorService() {
-    if (!g8eNodeOperatorService) throw new Error('G8ENodeOperatorService not initialized. Call initializeServices() first.');
-    return g8eNodeOperatorService;
-}
-
 export function getPostLoginService() {
     if (!postLoginService) throw new Error('PostLoginService not initialized. Call initializeServices() first.');
     return postLoginService;
@@ -531,11 +516,6 @@ export function getPostLoginService() {
 export function getDeviceRegistrationService() {
     if (!deviceRegistrationService) throw new Error('DeviceRegistrationService not initialized. Call initializeServices() first.');
     return deviceRegistrationService;
-}
-
-export function getAuditService() {
-    if (!auditService) throw new Error('AuditService not initialized. Call initializeServices() first.');
-    return auditService;
 }
 
 export function getSetupService() {
@@ -568,7 +548,6 @@ export function resetInitialization() {
     deviceLinkService = null;
     deviceRegistrationService = null;
     settingsService = null;
-    g8eNodeOperatorService = null;
     consoleMetricsService = null;
     operatorDownloadService = null;
     organizationModel = null;
@@ -580,7 +559,6 @@ export function resetInitialization() {
     operatorServiceInstance = null;
     postLoginService = null;
     setupService = null;
-    auditService = null;
     internalHttpClientInstance = null;
     bindOperatorsServiceInstance = null;
     apiKeyDataService = null;

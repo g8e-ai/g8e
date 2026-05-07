@@ -23,6 +23,7 @@ import (
 
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/models"
+	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -39,7 +40,7 @@ func TestPubSubCommandService_HandleCommandData_HeartbeatRequest(t *testing.T) {
 		ID:        "gw-hb-1",
 		EventType: constants.Event.Operator.HeartbeatRequested,
 		CaseID:    "case-1",
-		Payload:   mustMarshalJSON(t, models.HeartbeatRequestPayload{}),
+		Payload:   testutil.MustMarshalProtobufHeartbeatRequested(t),
 		Timestamp: time.Now().UTC(),
 	}
 

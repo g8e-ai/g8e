@@ -12,8 +12,6 @@
 // limitations under the License.
 
 export const OperatorStatus = Object.freeze({
-    AVAILABLE:   'available',
-    UNAVAILABLE: 'unavailable',
     OFFLINE:     'offline',
     BOUND:       'bound',
     STALE:       'stale',

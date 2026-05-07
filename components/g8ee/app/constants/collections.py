@@ -31,6 +31,7 @@ _DOCUMENT_IDS: dict[str, object] = _load("document_ids.json")
 
 _c: dict[str, str] = _COLLECTIONS["collections"]
 _d: dict[str, str] = _DOCUMENT_IDS["document_ids"]
+_s: dict[str, str] = _DOCUMENT_IDS["sentinel_id"]
 
 DB_COLLECTION_SETTINGS          = _c["settings"] # one 'settings' collection for both 'platform_settings' and user-specific settings documents
 DB_COLLECTION_USERS             = _c["users"]
@@ -54,3 +55,6 @@ DB_COLLECTION_STAKE_RESOLUTIONS       = _c["stake_resolutions"]
 # Document IDs for settings collection
 PLATFORM_SETTINGS_DOC = _d["platform_settings"]
 USER_SETTINGS_DOC_PREFIX = _d["user_settings_prefix"]
+
+# Sentinel ID values
+SENTINEL_ID_UNKNOWN = _s["unknown"]

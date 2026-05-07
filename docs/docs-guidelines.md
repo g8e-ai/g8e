@@ -4,6 +4,9 @@ title: Docs Guidelines
 
 # g8e Documentation Guidelines
 
+Last Updated: 2026-05-07
+Version: v0.2.0
+
 Internal authoring standards for g8e documentation. All contributors must follow these guidelines when creating or updating docs.
 
 ---
@@ -46,7 +49,6 @@ docs/
 ├── glossary.md           # All platform terminology, alphabetical
 ├── docs-guidelines.md    # This file
 ├── architecture/         # Cross-component internals: storage, security, AI control plane
-├── components/           # Per-component reference: g8eo, g8ee, g8ed, g8es, g8el, g8ep
 └── reference/            # External reference material (e.g. MCP protocol spec) and core platform principles
 ```
 
@@ -68,12 +70,7 @@ docs/
 | Heartbeat end-to-end flow | `docs/components/g8ed.md` | `g8eo.md`, `g8ee.md` |
 | Shared constants and models (`shared/`) | `docs/developer.md` | `testing.md` |
 | Universal code quality rules | `docs/developer.md` | do not restate in component docs |
-| Component `#### Tests` code-quality rules (assertion discipline, model usage, anti-patterns) | `docs/developer.md` per-component section | cross-link to `testing.md` for infra |
-| Testing principles, test-runner containers, CI workflows | `docs/testing.md` | do not restate in component docs or `developer.md` |
-| Test infrastructure, fixtures, mocks, helpers, how to run tests | `docs/testing.md` per-component section | `developer.md` `#### Tests` subsections cross-link here |
-| AI agents cross-component architecture (transport, pipeline) | `docs/architecture/ai_agents.md` | `docs/components/g8ee.md` |
 | g8ee component internals (workflow modes, tools, LLM config, Sentinel, LFAA) | `docs/components/g8ee.md` | `docs/architecture/ai_agents.md` |
-| g8ep container definition, volume mounts, SSH deployment | `docs/components/g8ep.md` | |
 | Coverage goals per g8eo package | `docs/components/g8eo.md` | do not restate in `testing.md` |
 
 ---
@@ -84,6 +81,9 @@ Every document must follow this structure:
 
 ```
 # Title
+
+Last Updated: 2026-05-07
+Version: v0.2.0
 
 One or two sentence summary of what this document covers and who it is for.
 

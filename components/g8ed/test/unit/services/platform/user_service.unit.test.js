@@ -55,16 +55,17 @@ describe('UserService [UNIT]', () => {
     });
 
     describe('_generateApiKey', () => {
-        it('delegates to apiKeyService.generateRawKey', async () => {
-            const key = await service._generateApiKey();
+        it('delegates to apiKeyService.generateRawKey with context', async () => {
+            const context = { case_id: 'test' };
+            const key = await service._generateApiKey(context);
             expect(key).toBe('g8e_generated');
-            expect(apiKeyService.generateRawKey).toHaveBeenCalled();
+            expect(apiKeyService.generateRawKey).toHaveBeenCalledWith(expect.anything(), context);
         });
 
-        it('falls back to local generation if apiKeyService is missing', async () => {
+        it('throws G8eKeyError if apiKeyService is missing', async () => {
             const serviceNoKeySvc = new UserService({ cacheAsideService: cacheAside, organizationService });
-            const key = await serviceNoKeySvc._generateApiKey();
-            expect(key.startsWith(API_KEY_PREFIX)).toBe(true);
+            await expect(serviceNoKeySvc._generateApiKey()).rejects.toThrow(G8eKeyError);
+            await expect(serviceNoKeySvc._generateApiKey()).rejects.toThrow('ApiKeyService is required for key generation - g8ee must be reachable');
         });
     });
 

@@ -80,7 +80,7 @@ describe('ApiKeyAuth Middleware', () => {
 
         it('should return 401 if API key validation fails', async () => {
             req.headers.authorization = `${BEARER_PREFIX}invalid-key`;
-            apiKeyService.validateKey.mockResolvedValue({ success: false, error: 'Invalid' });
+            apiKeyService.validateKey.mockResolvedValue({ success: false, error: ApiKeyError.INVALID });
 
             await middleware.requireApiKey(req, res, next);
 
@@ -134,7 +134,7 @@ describe('ApiKeyAuth Middleware', () => {
             expect(req.userId).toBe('user-1');
             expect(req.user).toBe(user);
             expect(req.apiKeyData).toBe(keyData);
-            expect(apiKeyService.recordUsage).toHaveBeenCalledWith('valid-key');
+            expect(apiKeyService.recordUsage).toHaveBeenCalledWith('valid-key', { system_fingerprint: undefined });
             expect(next).toHaveBeenCalled();
         });
 

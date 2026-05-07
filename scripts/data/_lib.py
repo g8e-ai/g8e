@@ -196,7 +196,7 @@ def g8ed_request(method: str, url: str, body: Dict | None = None) -> Dict:
         'Accept': 'application/json',
     }
     # g8ed internal endpoints accept either an operator session OR the
-    # platform internal auth token. Running inside g8ep (trusted container)
+    # platform internal auth token. Running inside g8ee (trusted container)
     # we forward the mounted internal token for bootstrap flows before
     # any user is authenticated.
     internal_token = get_internal_auth_token()

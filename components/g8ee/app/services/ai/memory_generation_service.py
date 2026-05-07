@@ -232,7 +232,8 @@ class MemoryGenerationService:
             f"The conversation may introduce NEW TOPICS including equipment, systems, logs, and locations.\n"
             f"You MUST ADD these new concepts to the technical background and other relevant fields.\n"
             f"Do NOT ignore new equipment types, locations, or technical terms mentioned in the conversation.\n"
-            f"MERGE existing knowledge with NEW conversation details - both should be present in the updated memory."
+            f"MERGE existing knowledge with NEW conversation details - both should be present in the updated memory.\n"
+            f"PRESERVE all original technical roles, certifications, and expertise (e.g., 'Hardware engineer', 'Skyline firmware') while ADDING new ones."
         )
         contents.append(types.Content(
             role=Role.USER,

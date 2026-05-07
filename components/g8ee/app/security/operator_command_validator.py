@@ -225,7 +225,7 @@ class OperatorCommandValidator:
         operator_session_id: str,
         web_session_id: str | None,
         operator_id: str,
-        investigation_id: str = "unknown"
+        investigation_id: str
     ) -> BindingValidationResult:
         """
         CRITICAL BINDING ENFORCEMENT: Validate that operator_session_id is properly bound to web_session_id.

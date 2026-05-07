@@ -202,6 +202,16 @@ class TribunalWardenBlockedError(TribunalError):
         )
 
 
+class TribunalAuditResult(G8eBaseModel):
+    """Result of the auditor stage, including side effects like reputation."""
+    final_command: str | None
+    outcome: CommandGenerationOutcome
+    passed: bool
+    revision: str | None
+    reason: AuditorReason
+    reputation_commitment_id: str | None
+
+
 class TribunalMemberResult(G8eBaseModel):
     """The structured output of a single Tribunal member."""
     reasoning: str = Field(description="The logical basis for the member's verdict.")
@@ -215,6 +225,13 @@ class CandidateCommand(G8eBaseModel):
     pass_index: int = Field(ge=0, description="Zero-based index of the generation pass that produced this candidate")
     member: TribunalMember = Field(description="Tribunal member that produced this candidate")
     reasoning: str | None = Field(default=None, description="The reasoning behind this candidate")
+
+
+class AuditorClusterInfo(G8eBaseModel):
+    """Internal model for passing cluster info to the auditor prompt."""
+    cluster_id: str
+    command: str
+    support_count: int
 
 
 class VoteBreakdown(G8eBaseModel):

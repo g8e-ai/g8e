@@ -44,11 +44,11 @@ export function createInternalRouter({
     services,
     authorizationMiddleware
 }) {
-    const { sseService, operatorService, userService, webSessionService, passkeyAuthService, deviceLinkService, settingsService, g8eNodeOperatorService } = services;
+    const { sseService, operatorService, userService, webSessionService, passkeyAuthService, deviceLinkService, settingsService } = services;
     const { requireInternalOrigin } = authorizationMiddleware;
     const router = express.Router();
 
-    // Mount sub-routers
+    // Mount sub-routers using InternalApiPaths constants
     router.use('/sse', createInternalSSERouter({ services, authorizationMiddleware }));
     router.use('/operators', createInternalOperatorRouter({ services, authorizationMiddleware }));
     router.use('/users', createInternalUserRouter({ services, authorizationMiddleware }));
@@ -59,7 +59,8 @@ export function createInternalRouter({
     /**
      * GET /api/internal/health
      */
-    router.get('/health', requireInternalOrigin, (req, res) => {
+    const healthPath = '/' + InternalApiPaths.g8ed.health.split('/').pop();
+    router.get(healthPath, requireInternalOrigin, (req, res) => {
         res.json(new InternalHealthResponse({
             success: true,
             message: 'Internal API healthy',

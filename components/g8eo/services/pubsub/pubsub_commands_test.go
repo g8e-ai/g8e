@@ -23,6 +23,7 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/models"
 	execution "github.com/g8e-ai/g8e/components/g8eo/services/execution"
 	storage "github.com/g8e-ai/g8e/components/g8eo/services/storage"
+	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -119,7 +120,7 @@ func TestPubSubCommandService_PayloadToExecutionRequest(t *testing.T) {
 			CaseID:          "case-789",
 			TaskID:          &taskID,
 			InvestigationID: invID,
-			Payload:         mustMarshalJSON(t, models.CommandRequestPayload{Command: "ls", ExecutionID: "exec-999"}),
+			Payload:         testutil.MustMarshalProtobufCommandRequested(t, "ls", "exec-999", "", "", 0),
 			Timestamp:       time.Now().UTC(),
 		}
 
@@ -139,7 +140,7 @@ func TestPubSubCommandService_PayloadToExecutionRequest(t *testing.T) {
 			ID:        "msg-123",
 			EventType: constants.Event.Operator.Command.Requested,
 			CaseID:    "case-789",
-			Payload:   mustMarshalJSON(t, models.CommandRequestPayload{}),
+			Payload:   testutil.MustMarshalProtobufCommandRequested(t, "", "", "", "", 0),
 			Timestamp: time.Now().UTC(),
 		}
 
@@ -161,7 +162,7 @@ func TestPubSubCommandService_PayloadToFileEditRequest(t *testing.T) {
 			EventType: constants.Event.Operator.FileEdit.Requested,
 			CaseID:    "case-789",
 			TaskID:    &taskID,
-			Payload: mustMarshalJSON(t, models.FileEditRequestPayload{
+			Payload: testutil.MustMarshalProtobufFileEditRequested(t, testutil.FileEditRequestFields{
 				FilePath:        "/tmp/test.txt",
 				Operation:       "write",
 				Content:         "test content",
@@ -190,7 +191,7 @@ func TestPubSubCommandService_PayloadToFileEditRequest(t *testing.T) {
 			ID:        "msg-123",
 			EventType: constants.Event.Operator.FileEdit.Requested,
 			CaseID:    "case-789",
-			Payload: mustMarshalJSON(t, models.FileEditRequestPayload{
+			Payload: testutil.MustMarshalProtobufFileEditRequested(t, testutil.FileEditRequestFields{
 				FilePath:   "/tmp/test.txt",
 				Operation:  "replace",
 				OldContent: "old text",
@@ -213,7 +214,7 @@ func TestPubSubCommandService_PayloadToFileEditRequest(t *testing.T) {
 			ID:        "msg-123",
 			EventType: constants.Event.Operator.FileEdit.Requested,
 			CaseID:    "case-789",
-			Payload:   mustMarshalJSON(t, models.FileEditRequestPayload{Operation: "write"}),
+			Payload:   testutil.MustMarshalProtobufFileEditRequested(t, testutil.FileEditRequestFields{Operation: "write"}),
 			Timestamp: time.Now().UTC(),
 		}
 
@@ -227,7 +228,7 @@ func TestPubSubCommandService_PayloadToFileEditRequest(t *testing.T) {
 			ID:        "msg-123",
 			EventType: constants.Event.Operator.FileEdit.Requested,
 			CaseID:    "case-789",
-			Payload:   mustMarshalJSON(t, models.FileEditRequestPayload{FilePath: "/tmp/test.txt"}),
+			Payload:   testutil.MustMarshalProtobufFileEditRequested(t, testutil.FileEditRequestFields{FilePath: "/tmp/test.txt"}),
 			Timestamp: time.Now().UTC(),
 		}
 
@@ -284,7 +285,7 @@ func TestPubSubCommandService_HandleHeartbeatRequest(t *testing.T) {
 		EventType:       constants.Event.Operator.HeartbeatRequested,
 		CaseID:          "case-456",
 		InvestigationID: "inv-123",
-		Payload:         mustMarshalJSON(t, models.HeartbeatRequestPayload{}),
+		Payload:         testutil.MustMarshalProtobufHeartbeatRequested(t),
 		Timestamp:       time.Now().UTC(),
 	}
 
@@ -331,20 +332,12 @@ func TestPubSubCommandService_HandleCommandMessage(t *testing.T) {
 	f := newPubsubFixture(t)
 
 	t.Run("handles unknown event type", func(t *testing.T) {
-		msg := PubSubCommandMessage{
-			ID:        "msg-123",
-			EventType: "unknown.event.type",
-			CaseID:    "case-456",
-			Payload:   json.RawMessage(`{}`),
-			Timestamp: time.Now().UTC(),
-		}
-		msgJSON, err := json.Marshal(msg)
-		require.NoError(t, err)
-		f.Svc.handleCommandPayload(msgJSON)
+		envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, "msg-123", "unknown.event.type", []byte{}, "", "op1", "case-456", "inv-789", "sess1")
+		f.Svc.handleCommandPayload(envelopeBytes)
 	})
 
-	t.Run("handles invalid JSON", func(t *testing.T) {
-		f.Svc.handleCommandPayload([]byte("invalid json {"))
+	t.Run("handles invalid protobuf", func(t *testing.T) {
+		f.Svc.handleCommandPayload([]byte("not a protobuf message"))
 	})
 }
 
@@ -427,7 +420,7 @@ func TestPubSubCommandService_HandleCommandExecutionRequest(t *testing.T) {
 			ID:        "msg-123",
 			EventType: constants.Event.Operator.Command.Requested,
 			CaseID:    "case-456",
-			Payload:   json.RawMessage(`{}`),
+			Payload:   testutil.MustMarshalProtobufCommandRequested(t, "", "", "", "", 0),
 			Timestamp: time.Now().UTC(),
 		}
 
@@ -449,7 +442,7 @@ func TestPubSubCommandService_HandleFileEditRequest(t *testing.T) {
 			ID:        "msg-123",
 			EventType: constants.Event.Operator.FileEdit.Requested,
 			CaseID:    "case-456",
-			Payload: mustMarshalJSON(t, models.FileEditRequestPayload{
+			Payload: testutil.MustMarshalProtobufFileEditRequested(t, testutil.FileEditRequestFields{
 				FilePath:  "/tmp/test.txt",
 				Operation: "write",
 				Content:   "test content",
@@ -469,16 +462,15 @@ func TestPubSubCommandService_HandleFileEditRequest(t *testing.T) {
 
 func TestPubSubCommandService_PayloadToFileEditRequestExtended(t *testing.T) {
 	t.Run("extracts insert operation fields", func(t *testing.T) {
-		insertPos := 5
 		msg := PubSubCommandMessage{
 			ID:        "msg-123",
 			EventType: constants.Event.Operator.FileEdit.Requested,
 			CaseID:    "case-789",
-			Payload: mustMarshalJSON(t, models.FileEditRequestPayload{
+			Payload: testutil.MustMarshalProtobufFileEditRequested(t, testutil.FileEditRequestFields{
 				FilePath:       "/tmp/test.txt",
 				Operation:      "insert",
 				InsertContent:  "new line",
-				InsertPosition: &insertPos,
+				InsertPosition: 5,
 			}),
 			Timestamp: time.Now().UTC(),
 		}
@@ -493,16 +485,15 @@ func TestPubSubCommandService_PayloadToFileEditRequestExtended(t *testing.T) {
 	})
 
 	t.Run("extracts delete operation fields", func(t *testing.T) {
-		startLine, endLine := 10, 20
 		msg := PubSubCommandMessage{
 			ID:        "msg-123",
 			EventType: constants.Event.Operator.FileEdit.Requested,
 			CaseID:    "case-789",
-			Payload: mustMarshalJSON(t, models.FileEditRequestPayload{
+			Payload: testutil.MustMarshalProtobufFileEditRequested(t, testutil.FileEditRequestFields{
 				FilePath:  "/tmp/test.txt",
 				Operation: "delete_lines",
-				StartLine: &startLine,
-				EndLine:   &endLine,
+				StartLine: 10,
+				EndLine:   20,
 			}),
 			Timestamp: time.Now().UTC(),
 		}
@@ -521,7 +512,7 @@ func TestPubSubCommandService_PayloadToFileEditRequestExtended(t *testing.T) {
 			ID:        "msg-123",
 			EventType: constants.Event.Operator.FileEdit.Requested,
 			CaseID:    "case-789",
-			Payload: mustMarshalJSON(t, models.FileEditRequestPayload{
+			Payload: testutil.MustMarshalProtobufFileEditRequested(t, testutil.FileEditRequestFields{
 				FilePath:     "/tmp/test.txt",
 				Operation:    "patch",
 				PatchContent: "--- a/file\n+++ b/file\n",
@@ -552,8 +543,8 @@ func TestPubSubCommandService_HandleAuditUserMsgRequest(t *testing.T) {
 			ID:                "lfaa-user-msg-1",
 			EventType:         constants.Event.Operator.Audit.UserMsg,
 			CaseID:            "case-123",
-			OperatorSessionID: "test-web-session-123",
-			Payload:           mustMarshalJSON(t, models.AuditMsgRequestPayload{Content: "Hello, this is a user message"}),
+			OperatorSessionID: f.Cfg.OperatorSessionId,
+			Payload:           testutil.MustMarshalProtobufAuditMsgRequested(t, "Hello, this is a user message"),
 			Timestamp:         time.Now().UTC(),
 		}
 
@@ -573,7 +564,7 @@ func TestPubSubCommandService_HandleAuditUserMsgRequest(t *testing.T) {
 			ID:                "lfaa-user-msg-2",
 			EventType:         constants.Event.Operator.Audit.UserMsg,
 			OperatorSessionID: "test-web-session-123",
-			Payload:           mustMarshalJSON(t, models.AuditMsgRequestPayload{Content: "This should not be recorded"}),
+			Payload:           testutil.MustMarshalJSON(t, models.AuditMsgRequestPayload{Content: "This should not be recorded"}),
 			Timestamp:         time.Now().UTC(),
 		}
 
@@ -591,8 +582,8 @@ func TestPubSubCommandService_HandleAuditUserMsgRequest(t *testing.T) {
 		msg := PubSubCommandMessage{
 			ID:                "lfaa-user-msg-3",
 			EventType:         constants.Event.Operator.Audit.UserMsg,
-			OperatorSessionID: "test-web-session-123",
-			Payload:           mustMarshalJSON(t, models.AuditMsgRequestPayload{Content: ""}),
+			OperatorSessionID: f.Cfg.OperatorSessionId,
+			Payload:           testutil.MustMarshalProtobufAuditMsgRequested(t, ""),
 			Timestamp:         time.Now().UTC(),
 		}
 
@@ -618,13 +609,8 @@ func TestPubSubCommandService_PayloadToFsListRequest(t *testing.T) {
 			CaseID:          "case-789",
 			TaskID:          &taskID,
 			InvestigationID: invID,
-			Payload: mustMarshalJSON(t, models.FsListRequestPayload{
-				Path:        "/tmp",
-				ExecutionID: "exec-999",
-				MaxDepth:    2,
-				MaxEntries:  50,
-			}),
-			Timestamp: time.Now().UTC(),
+			Payload:         testutil.MustMarshalProtobufFsListRequested(t, "/tmp", "exec-999", 50, 2),
+			Timestamp:       time.Now().UTC(),
 		}
 
 		req, err := payloadToFsListRequest(msg)
@@ -644,7 +630,7 @@ func TestPubSubCommandService_PayloadToFsListRequest(t *testing.T) {
 			ID:        "msg-123",
 			EventType: constants.Event.Operator.FsList.Requested,
 			CaseID:    "case-789",
-			Payload:   mustMarshalJSON(t, models.FsListRequestPayload{}),
+			Payload:   testutil.MustMarshalProtobufFsListRequested(t, "", "", 0, 0),
 			Timestamp: time.Now().UTC(),
 		}
 
@@ -661,7 +647,7 @@ func TestPubSubCommandService_PayloadToFsListRequest(t *testing.T) {
 			ID:        "msg-789",
 			EventType: constants.Event.Operator.FsList.Requested,
 			CaseID:    "case-789",
-			Payload:   mustMarshalJSON(t, models.FsListRequestPayload{Path: "/home"}),
+			Payload:   testutil.MustMarshalProtobufFsListRequested(t, "/home", "", 0, 0),
 			Timestamp: time.Now().UTC(),
 		}
 
@@ -684,7 +670,7 @@ func TestPubSubCommandService_HandleFsListRequest(t *testing.T) {
 			ID:        "msg-123",
 			EventType: constants.Event.Operator.FsList.Requested,
 			CaseID:    "case-456",
-			Payload:   mustMarshalJSON(t, models.FsListRequestPayload{Path: "/tmp"}),
+			Payload:   testutil.MustMarshalProtobufFsListRequested(t, "/tmp", "", 0, 0),
 			Timestamp: time.Now().UTC(),
 		}
 
@@ -700,7 +686,7 @@ func TestPubSubCommandService_HandleFsListRequest(t *testing.T) {
 			ID:        "msg-123",
 			EventType: constants.Event.Operator.FsList.Requested,
 			CaseID:    "case-456",
-			Payload:   mustMarshalJSON(t, models.FsListRequestPayload{}),
+			Payload:   testutil.MustMarshalProtobufFsListRequested(t, "", "", 0, 0),
 			Timestamp: time.Now().UTC(),
 		}
 
@@ -722,7 +708,7 @@ func TestPubSubCommandService_HandleFetchLogsRequest(t *testing.T) {
 			ID:        "msg-123",
 			EventType: constants.Event.Operator.FetchLogs.Requested,
 			CaseID:    "case-456",
-			Payload:   mustMarshalJSON(t, models.FetchLogsRequestPayload{}),
+			Payload:   testutil.MustMarshalProtobufFetchLogsRequested(t, ""),
 			Timestamp: time.Now().UTC(),
 		}
 
@@ -738,7 +724,7 @@ func TestPubSubCommandService_HandleFetchLogsRequest(t *testing.T) {
 			ID:        "msg-123",
 			EventType: constants.Event.Operator.FetchLogs.Requested,
 			CaseID:    "case-456",
-			Payload:   mustMarshalJSON(t, models.FetchLogsRequestPayload{ExecutionID: "exec-123"}),
+			Payload:   testutil.MustMarshalProtobufFetchLogsRequested(t, "exec-123"),
 			Timestamp: time.Now().UTC(),
 		}
 
@@ -754,10 +740,7 @@ func TestPubSubCommandService_HandleFetchLogsRequest(t *testing.T) {
 			ID:        "msg-123",
 			EventType: constants.Event.Operator.FetchLogs.Requested,
 			CaseID:    "case-456",
-			Payload: mustMarshalJSON(t, models.FetchLogsRequestPayload{
-				ExecutionID:  "exec-123",
-				SentinelMode: constants.Status.VaultMode.Scrubbed,
-			}),
+			Payload:   testutil.MustMarshalProtobufFetchLogsRequested(t, "exec-123"),
 			Timestamp: time.Now().UTC(),
 		}
 
@@ -801,7 +784,7 @@ func TestPubSubCommandService_HandleFetchFileHistoryRequest(t *testing.T) {
 			ID:        "msg-123",
 			EventType: constants.Event.Operator.FetchFileHistory.Requested,
 			CaseID:    "case-456",
-			Payload:   mustMarshalJSON(t, models.FetchFileHistoryRequestPayload{FilePath: "/tmp/test.txt"}),
+			Payload:   testutil.MustMarshalJSON(t, models.FetchFileHistoryRequestPayload{FilePath: "/tmp/test.txt"}),
 			Timestamp: time.Now().UTC(),
 		}
 
@@ -823,57 +806,12 @@ func TestPubSubCommandService_HandleRestoreFileRequest(t *testing.T) {
 			ID:        "msg-123",
 			EventType: constants.Event.Operator.RestoreFile.Requested,
 			CaseID:    "case-456",
-			Payload:   mustMarshalJSON(t, models.RestoreFileRequestPayload{FilePath: "/tmp/test.txt", CommitHash: "abc123"}),
+			Payload:   testutil.MustMarshalJSON(t, models.RestoreFileRequestPayload{FilePath: "/tmp/test.txt", CommitHash: "abc123"}),
 			Timestamp: time.Now().UTC(),
 		}
 
 		assert.NotPanics(t, func() {
 			f.Svc.history.HandleRestoreFileRequest(context.Background(), msg)
-		})
-	})
-}
-
-// ---------------------------------------------------------------------------
-// publishLFAAResponse
-// ---------------------------------------------------------------------------
-
-func TestPubSubCommandService_PublishLFAAResponse(t *testing.T) {
-	t.Run("publishes valid LFAA response", func(t *testing.T) {
-		f := newPubsubFixture(t)
-
-		taskID := "task-123"
-		invID := "inv-456"
-		msg := PubSubCommandMessage{
-			ID:                "msg-123",
-			EventType:         constants.Event.Operator.FetchHistory.Requested,
-			CaseID:            "case-789",
-			TaskID:            &taskID,
-			InvestigationID:   invID,
-			OperatorSessionID: "web-123",
-			Payload:           json.RawMessage(`{}`),
-			Timestamp:         time.Now().UTC(),
-		}
-
-		publishLFAAResponseTo(context.Background(), f.DB, f.Cfg, f.Logger, msg, constants.Event.Operator.FetchHistory.Completed, []byte(`{"success": true, "events": []}`))
-
-		published := f.DB.LastPublished()
-		require.NotNil(t, published, "expected LFAA response to be published")
-		assert.Contains(t, string(published.Data), constants.Event.Operator.FetchHistory.Completed)
-	})
-
-	t.Run("handles invalid response JSON gracefully", func(t *testing.T) {
-		f := newPubsubFixture(t)
-
-		msg := PubSubCommandMessage{
-			ID:        "msg-123",
-			EventType: constants.Event.Operator.FetchHistory.Requested,
-			CaseID:    "case-789",
-			Payload:   json.RawMessage(`{}`),
-			Timestamp: time.Now().UTC(),
-		}
-
-		assert.NotPanics(t, func() {
-			publishLFAAResponseTo(context.Background(), f.DB, f.Cfg, f.Logger, msg, constants.Event.Operator.FetchHistory.Completed, []byte(`{invalid json}`))
 		})
 	})
 }
@@ -896,7 +834,7 @@ func TestPubSubCommandService_PublishLFAAError(t *testing.T) {
 			Timestamp: time.Now().UTC(),
 		}
 
-		publishLFAAErrorTo(context.Background(), f.DB, f.Cfg, f.Logger, msg, constants.Event.Operator.FetchHistory.Failed, "test error message", "fetch_history_error")
+		publishLFAAErrorTo(context.Background(), f.DB, f.Cfg, f.Logger, msg, constants.Event.Operator.FetchHistory.Failed, "test error message")
 
 		published := f.DB.LastPublished()
 		require.NotNil(t, published, "expected LFAA error to be published")
@@ -923,18 +861,22 @@ func TestPubSubCommandService_PublishFetchLogsFailure(t *testing.T) {
 			ID:        "msg-123",
 			EventType: constants.Event.Operator.FetchLogs.Requested,
 			CaseID:    "case-789",
-			Payload:   mustMarshalJSON(t, models.FetchLogsRequestPayload{ExecutionID: "exec-123"}),
+			Payload:   testutil.MustMarshalProtobufFetchLogsRequested(t, "exec-123"),
 			Timestamp: time.Now().UTC(),
 		}
 
-		publishLFAAErrorTo(context.Background(), f.DB, f.Cfg, f.Logger, msg, constants.Event.Operator.FetchLogs.Failed, "execution not found", "fetch_logs_error")
+		publishLFAAErrorTo(context.Background(), f.DB, f.Cfg, f.Logger, msg, constants.Event.Operator.FetchLogs.Failed, "execution not found")
 
 		published := f.DB.LastPublished()
 		require.NotNil(t, published, "expected fetch logs failure to be published")
 		assert.Contains(t, string(published.Data), constants.Event.Operator.FetchLogs.Failed)
 		assert.Contains(t, string(published.Data), "execution not found")
 		assert.Contains(t, string(published.Data), "exec-123")
-		assert.Contains(t, string(published.Data), `"success":false`)
+
+		env := testutil.MustUnmarshalUniversalEnvelope(t, published.Data)
+		var result operatorv1.CommandResult
+		testutil.MustUnmarshalPayload(t, env.Payload, &result)
+		assert.Equal(t, protoExecutionStatus(constants.ExecutionStatusFailed), result.Status)
 	})
 }
 
@@ -975,7 +917,7 @@ func TestPubSubCommandService_HandleShutdownRequest(t *testing.T) {
 		msg := PubSubCommandMessage{
 			ID:        "shutdown-1",
 			EventType: constants.Event.Operator.ShutdownRequested,
-			Payload:   mustMarshalJSON(t, models.ShutdownRequestPayload{Reason: "remote control"}),
+			Payload:   testutil.MustMarshalProtobufShutdownRequested(t, "remote control"),
 		}
 
 		f.Svc.handleShutdownRequest(msg)
@@ -1082,7 +1024,7 @@ func TestPubSubCommandService_HandleAuditAIMsgRequest(t *testing.T) {
 			EventType:         constants.Event.Operator.Audit.AIMsg,
 			CaseID:            "case-456",
 			OperatorSessionID: "test-web-session-456",
-			Payload:           mustMarshalJSON(t, models.AuditMsgRequestPayload{Content: "This is the AI response to your query"}),
+			Payload:           testutil.MustMarshalProtobufAuditMsgRequested(t, "This is the AI response to your query"),
 			Timestamp:         time.Now().UTC(),
 		}
 
@@ -1102,7 +1044,7 @@ func TestPubSubCommandService_HandleAuditAIMsgRequest(t *testing.T) {
 			ID:                "lfaa-ai-msg-2",
 			EventType:         constants.Event.Operator.Audit.AIMsg,
 			OperatorSessionID: "",
-			Payload:           mustMarshalJSON(t, models.AuditMsgRequestPayload{Content: "AI response without session"}),
+			Payload:           testutil.MustMarshalProtobufAuditMsgRequested(t, "AI response without session"),
 			Timestamp:         time.Now().UTC(),
 		}
 
@@ -1130,12 +1072,8 @@ func TestPubSubCommandService_HandleAuditDirectCmdRequest(t *testing.T) {
 			EventType:         constants.Event.Operator.Audit.DirectCmd,
 			CaseID:            "case-direct-1",
 			OperatorSessionID: operatorSessionID,
-			Payload: mustMarshalJSON(t, models.AuditDirectCmdRequestPayload{
-				Command:           "ls -la /var/log",
-				ExecutionID:       "exec-direct-1",
-				OperatorSessionID: operatorSessionID,
-			}),
-			Timestamp: time.Now().UTC(),
+			Payload:           testutil.MustMarshalProtobufDirectCommandAuditRequested(t, "ls -la /var/log", "exec-direct-1", operatorSessionID, ""),
+			Timestamp:         time.Now().UTC(),
 		}
 
 		f.Svc.audit.HandleDirectCmdRequest(context.Background(), msg)
@@ -1155,11 +1093,8 @@ func TestPubSubCommandService_HandleAuditDirectCmdRequest(t *testing.T) {
 			ID:                "lfaa-direct-cmd-2",
 			EventType:         constants.Event.Operator.Audit.DirectCmd,
 			OperatorSessionID: "web-session-direct-2",
-			Payload: mustMarshalJSON(t, models.AuditDirectCmdRequestPayload{
-				Command:     "df -h",
-				ExecutionID: "exec-direct-2",
-			}),
-			Timestamp: time.Now().UTC(),
+			Payload:           testutil.MustMarshalProtobufDirectCommandAuditRequested(t, "df -h", "exec-direct-2", "", ""),
+			Timestamp:         time.Now().UTC(),
 		}
 
 		assert.NotPanics(t, func() {
@@ -1177,7 +1112,7 @@ func TestPubSubCommandService_HandleAuditDirectCmdRequest(t *testing.T) {
 			ID:                "lfaa-direct-cmd-3",
 			EventType:         constants.Event.Operator.Audit.DirectCmd,
 			OperatorSessionID: "web-session-direct-3",
-			Payload:           mustMarshalJSON(t, models.AuditDirectCmdRequestPayload{Command: ""}),
+			Payload:           testutil.MustMarshalProtobufDirectCommandAuditRequested(t, "", "", "", ""),
 			Timestamp:         time.Now().UTC(),
 		}
 
@@ -1200,23 +1135,14 @@ func TestPubSubCommandService_HandleAuditDirectCmdResultRequest(t *testing.T) {
 		err := avs.CreateSession(f.Cfg.OperatorSessionId, "Direct CMD Result OperatorSession", "test-user")
 		require.NoError(t, err)
 
-		exitCode := 0
+		exitCodeVal := int32(0)
 		msg := PubSubCommandMessage{
 			ID:                "lfaa-direct-result-1",
 			EventType:         constants.Event.Operator.Audit.DirectCmdResult,
 			CaseID:            "case-result-1",
 			OperatorSessionID: "web-session-result-1",
-			Payload: mustMarshalJSON(t, models.AuditDirectCmdResultPayload{
-				Command:              "ls -la /var/log",
-				ExecutionID:          "exec-result-1",
-				ExitCode:             &exitCode,
-				Status:               "completed",
-				Output:               "total 48\ndrwxr-xr-x 2 root root",
-				Stderr:               "",
-				ExecutionTimeSeconds: 0.12,
-				OperatorSessionID:    "web-session-result-1",
-			}),
-			Timestamp: time.Now().UTC(),
+			Payload:           testutil.MustMarshalProtobufDirectCommandResultAuditRequested(t, "ls -la /var/log", "exec-result-1", "total 48\ndrwxr-xr-x 2 root root", "", exitCodeVal, 0.12),
+			Timestamp:         time.Now().UTC(),
 		}
 
 		f.Svc.audit.HandleDirectCmdResultRequest(context.Background(), msg)
@@ -1239,20 +1165,13 @@ func TestPubSubCommandService_HandleAuditDirectCmdResultRequest(t *testing.T) {
 		err := avs.CreateSession(f.Cfg.OperatorSessionId, "Failed CMD Result OperatorSession", "test-user")
 		require.NoError(t, err)
 
-		exitCode := 1
+		exitCodeVal := int32(1)
 		msg := PubSubCommandMessage{
 			ID:                "lfaa-direct-result-2",
 			EventType:         constants.Event.Operator.Audit.DirectCmdResult,
 			OperatorSessionID: "web-session-result-2",
-			Payload: mustMarshalJSON(t, models.AuditDirectCmdResultPayload{
-				Command:     "cat /nonexistent",
-				ExecutionID: "exec-result-2",
-				ExitCode:    &exitCode,
-				Status:      "failed",
-				Output:      "",
-				Stderr:      "cat: /nonexistent: No such file or directory",
-			}),
-			Timestamp: time.Now().UTC(),
+			Payload:           testutil.MustMarshalProtobufDirectCommandResultAuditRequested(t, "cat /nonexistent", "exec-result-2", "", "cat: /nonexistent: No such file or directory", exitCodeVal, 0.05),
+			Timestamp:         time.Now().UTC(),
 		}
 
 		f.Svc.audit.HandleDirectCmdResultRequest(context.Background(), msg)
@@ -1270,18 +1189,13 @@ func TestPubSubCommandService_HandleAuditDirectCmdResultRequest(t *testing.T) {
 	t.Run("skips recording when audit vault is nil", func(t *testing.T) {
 		f := newPubsubFixture(t)
 
-		exitCode := 0
+		exitCodeVal := int32(0)
 		msg := PubSubCommandMessage{
 			ID:                "lfaa-direct-result-3",
 			EventType:         constants.Event.Operator.Audit.DirectCmdResult,
 			OperatorSessionID: "web-session-result-3",
-			Payload: mustMarshalJSON(t, models.AuditDirectCmdResultPayload{
-				Command:  "hostname",
-				ExitCode: &exitCode,
-				Status:   "completed",
-				Output:   "myhost",
-			}),
-			Timestamp: time.Now().UTC(),
+			Payload:           testutil.MustMarshalProtobufDirectCommandResultAuditRequested(t, "hostname", "exec-result-3", "myhost", "", exitCodeVal, 0.01),
+			Timestamp:         time.Now().UTC(),
 		}
 
 		assert.NotPanics(t, func() {
@@ -1299,7 +1213,7 @@ func TestPubSubCommandService_HandleAuditDirectCmdResultRequest(t *testing.T) {
 			ID:                "lfaa-direct-result-4",
 			EventType:         constants.Event.Operator.Audit.DirectCmdResult,
 			OperatorSessionID: "web-session-result-4",
-			Payload:           mustMarshalJSON(t, models.AuditDirectCmdResultPayload{Command: ""}),
+			Payload:           testutil.MustMarshalProtobufDirectCommandResultAuditRequested(t, "", "", "", "", 0, 0),
 			Timestamp:         time.Now().UTC(),
 		}
 

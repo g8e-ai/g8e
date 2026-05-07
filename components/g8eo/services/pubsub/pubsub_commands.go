@@ -18,15 +18,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/g8e-ai/g8e/components/g8eo/config"
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
-	"github.com/g8e-ai/g8e/components/g8eo/models"
 	execution "github.com/g8e-ai/g8e/components/g8eo/services/execution"
 	"github.com/g8e-ai/g8e/components/g8eo/services/sentinel"
 	storage "github.com/g8e-ai/g8e/components/g8eo/services/storage"
+	commonv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
+	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
 )
 
 // PubSubCommandMessage is the inbound wire message received from g8es pub/sub.
@@ -34,10 +40,10 @@ type PubSubCommandMessage struct {
 	ID                string          `json:"id"`
 	EventType         string          `json:"event_type"`
 	CaseID            string          `json:"case_id"`
-	TaskID            *string         `json:"task_id,omitempty"`
+	TaskID            *string         `json:"task_id"`
 	InvestigationID   string          `json:"investigation_id"`
 	OperatorSessionID string          `json:"operator_session_id"`
-	OperatorID        *string         `json:"operator_id,omitempty"`
+	OperatorID        *string         `json:"operator_id"`
 	Payload           json.RawMessage `json:"payload"`
 	Timestamp         time.Time       `json:"timestamp"`
 }
@@ -68,6 +74,14 @@ type PubSubCommandService struct {
 	mu      sync.RWMutex
 
 	reconnectBaseDelay time.Duration
+
+	// auditorHMACKey is the shared Tribunal signing key used for L2
+	// governance verification. Loaded once at startup from
+	// <SSLDir>/auditor_hmac_key. When absent the dispatcher logs a
+	// warning and accepts envelopes without L2 enforcement (deployment
+	// bootstrap phase). When present, all inbound envelopes are
+	// strictly verified and rejected on signature mismatch.
+	auditorHMACKey string
 }
 
 // CommandServiceConfig holds all dependencies for PubSubCommandService.
@@ -143,6 +157,27 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 
 	rs.buildHandlers()
 
+	// Load L2 Tribunal HMAC key for governance verification
+	auditorHMACKeyPath := filepath.Join(c.Config.SSLDir, "auditor_hmac_key")
+	keyBytes, err := os.ReadFile(auditorHMACKeyPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			c.Logger.Warn("L2 Tribunal HMAC key not found - L2 governance enforcement disabled (deployment bootstrap)",
+				"path", auditorHMACKeyPath,
+				"action", "commands will be accepted without L2 signature verification")
+			rs.auditorHMACKey = ""
+		} else {
+			c.Logger.Error("Failed to read L2 Tribunal HMAC key",
+				"path", auditorHMACKeyPath,
+				"error", err)
+			return nil, fmt.Errorf("failed to read auditor_hmac_key: %w", err)
+		}
+	} else {
+		rs.auditorHMACKey = strings.TrimSpace(string(keyBytes))
+		c.Logger.Info("L2 Tribunal HMAC key loaded - L2 governance enforcement enabled",
+			"path", auditorHMACKeyPath)
+	}
+
 	c.Logger.Info("g8e connectivity initialized",
 		"config_operator_id", c.Config.OperatorID,
 		"config_operator_session_id", c.Config.OperatorSessionId)
@@ -157,6 +192,7 @@ func (rs *PubSubCommandService) buildHandlers() {
 		constants.Event.Operator.FileEdit.Requested:         rs.fileOps.HandleFileEditRequest,
 		constants.Event.Operator.FsList.Requested:           rs.fileOps.HandleFsListRequest,
 		constants.Event.Operator.FsRead.Requested:           rs.fileOps.HandleFsReadRequest,
+		constants.Event.Operator.FsGrep.Requested:           rs.fileOps.HandleFsGrepRequest,
 		constants.Event.Operator.PortCheck.Requested:        rs.ports.HandlePortCheckRequest,
 		constants.Event.Operator.FetchLogs.Requested:        rs.history.HandleFetchLogsRequest,
 		constants.Event.Operator.FetchHistory.Requested:     rs.history.HandleFetchHistoryRequest,
@@ -344,12 +380,98 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 		"payload_size", len(payload))
 
 	var cmdMsg PubSubCommandMessage
-	if err := json.Unmarshal(payload, &cmdMsg); err != nil {
-		rs.logger.Error("Failed to parse command message", "error", err)
+
+	// Parse as UniversalEnvelope (protobuf) - protocol-first architecture
+	var env commonv1.UniversalEnvelope
+	if err := proto.Unmarshal(payload, &env); err != nil {
+		rs.logger.Error("Failed to parse command message as protobuf UniversalEnvelope", "error", err)
+		return
+	}
+	if env.Id == "" {
+		rs.logger.Error("Invalid UniversalEnvelope: missing id field")
 		return
 	}
 
+	rs.logger.Info("Parsed request via Protobuf (UniversalEnvelope)",
+		"state_merkle_root", env.StateMerkleRoot)
+	taskID := env.TaskId
+	operatorID := env.OperatorId
+
+	cmdMsg = PubSubCommandMessage{
+		ID:                env.Id,
+		EventType:         env.EventType,
+		CaseID:            env.CaseId,
+		TaskID:            &taskID,
+		InvestigationID:   env.InvestigationId,
+		OperatorSessionID: env.OperatorSessionId,
+		OperatorID:        &operatorID,
+		Payload:           env.Payload,
+		Timestamp:         env.Timestamp.AsTime(),
+	}
+
+	// BFT Verification: Verify state merkle root if present
+	if env.StateMerkleRoot != "" {
+		if rs.commands.ledger != nil {
+			currentRoot, err := rs.commands.ledger.GetStateMerkleRoot()
+			if err != nil {
+				rs.logger.Warn("Failed to get current state merkle root for BFT verification", "error", err)
+				// Continue without verification - non-fatal error
+			} else if currentRoot == "" {
+				rs.logger.Info("Ledger not available for BFT verification, accepting command without verification")
+			} else if env.StateMerkleRoot != currentRoot {
+				rs.logger.Error("BFT verification failed: State merkle root mismatch - command based on stale state",
+					"expected_root", currentRoot,
+					"received_root", env.StateMerkleRoot,
+					"execution_id", env.Id)
+				// Reject the command - it was generated based on stale state
+				return
+			} else {
+				rs.logger.Info("BFT verification passed: State merkle root matches",
+					"merkle_root", env.StateMerkleRoot,
+					"execution_id", env.Id)
+			}
+		} else {
+			rs.logger.Info("Ledger service not configured, skipping BFT verification")
+		}
+	}
+
 	rs.logger.Info("Processing request")
+
+	// L1 Governance: Enforce forbidden patterns via reflection (Protocol-First architecture)
+	payloadMsg, err := unmarshalPayload(env.EventType, env.Payload)
+	if err == nil {
+		violations := validateL1Governance(payloadMsg)
+		if len(violations) > 0 {
+			rs.logger.Error("L1 Governance violation: command rejected",
+				"event_type", env.EventType,
+				"violations", violations,
+				"execution_id", env.Id)
+
+			// We reject the command here. In a production system, we would also
+			// publish a failure result to the gateway, but for now we follow
+			// the central enforcement rule.
+			return
+		}
+		rs.logger.Info("L1 Governance validation passed", "event_type", env.EventType)
+	} else {
+		// Log warning but continue; not all events may have proto-message definitions yet
+		rs.logger.Warn("Skipping L1 Governance validation: failed to unmarshal payload", "error", err)
+	}
+
+	// L2 Governance: Verify Tribunal signature
+	if rs.auditorHMACKey != "" {
+		if err := VerifyL2Governance(&env, rs.auditorHMACKey); err != nil {
+			rs.logger.Error("L2 Governance verification failed: command rejected",
+				"event_type", env.EventType,
+				"error", err,
+				"execution_id", env.Id)
+			return
+		}
+		rs.logger.Info("L2 Governance verification passed", "event_type", env.EventType)
+	} else {
+		rs.logger.Debug("L2 Governance verification skipped: auditor HMAC key not configured", "event_type", env.EventType)
+	}
+
 	rs.dispatchCommand(cmdMsg)
 }
 
@@ -363,10 +485,10 @@ func (rs *PubSubCommandService) dispatchCommand(cmdMsg PubSubCommandMessage) {
 }
 
 func (rs *PubSubCommandService) handleShutdownRequest(msg PubSubCommandMessage) {
-	rs.logger.Info("Shutdown command received")
-	var sp models.ShutdownRequestPayload
-	if err := json.Unmarshal(msg.Payload, &sp); err != nil {
-		rs.logger.Warn("Failed to decode shutdown payload", "error", err)
+	rs.logger.Info("Shutdown command received (via Protobuf)")
+	var sp operatorv1.ShutdownRequested
+	if err := proto.Unmarshal(msg.Payload, &sp); err != nil {
+		rs.logger.Warn("Failed to decode shutdown payload as protobuf ShutdownRequested", "error", err)
 	}
 	reason := sp.Reason
 	if reason == "" {

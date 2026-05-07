@@ -15,14 +15,17 @@ package pubsub
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
+
 	"github.com/g8e-ai/g8e/components/g8eo/config"
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
-	"github.com/g8e-ai/g8e/components/g8eo/models"
 	storage "github.com/g8e-ai/g8e/components/g8eo/services/storage"
+	commonv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
+	operatorv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
 )
 
 func (rr *PubSubResultsService) resultsChannel(operatorSessionID string) string {
@@ -47,7 +50,7 @@ func NewPubSubResultsService(cfg *config.Config, logger *slog.Logger, client Pub
 	}, nil
 }
 
-// publishResultEnvelope builds a G8eMessage for a typed result payload,
+// publishResultEnvelope builds a UniversalEnvelope for a typed result payload,
 // stamps the envelope metadata copied from the originating command, and
 // publishes it on the results channel. All result-publishing paths that carry
 // an originalMsg (command-completed, command-cancelled, file-edit, fs-list)
@@ -59,143 +62,91 @@ func (rr *PubSubResultsService) publishResultEnvelope(
 	taskID *string,
 	investigationID string,
 	originalMsg PubSubCommandMessage,
-	payload interface{},
+	payload proto.Message,
 ) error {
-	msg, err := models.NewG8eMessage(
-		eventType, caseID,
-		rr.config.OperatorID, rr.config.OperatorSessionId, rr.config.SystemFingerprint,
-		payload,
-	)
+	env, err := BuildUniversalEnvelope(rr.config, eventType, payload, "")
 	if err != nil {
-		return fmt.Errorf("failed to build %s message: %w", eventType, err)
+		return fmt.Errorf("failed to build %s envelope: %w", eventType, err)
 	}
 
-	msg.APIKey = rr.config.APIKey
-	msg.TaskID = taskID
-	msg.InvestigationID = investigationID
-	msg.OperatorSessionID = originalMsg.OperatorSessionID
+	// Override envelope metadata from original message if not present in payload
+	if env.CaseId == "" {
+		env.CaseId = caseID
+	}
+	if env.TaskId == "" && taskID != nil {
+		env.TaskId = *taskID
+	}
+	if env.InvestigationId == "" {
+		env.InvestigationId = investigationID
+	}
+	env.OperatorSessionId = originalMsg.OperatorSessionID
 
-	return rr.publish(ctx, msg)
+	return rr.publish(ctx, env)
 }
 
 // PublishExecutionResult publishes command execution result via g8es pub/sub
 // Stdout/stderr have already been sentinel.Sentinel-scrubbed by pubsub_commands.go before this is called.
-func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, result *models.ExecutionResultsPayload, originalMsg PubSubCommandMessage) error {
+func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error {
+	// If it's already a proto.Message, we just publish it.
+	// We assume the caller has already populated it correctly.
+
+	// Determine event type based on status field via reflection if needed,
+	// or assume the caller knows. But ResultsPublisher methods are specific.
 	eventType := constants.Event.Operator.Command.Completed
-	if result.Status == constants.ExecutionStatusFailed || result.Status == constants.ExecutionStatusTimeout {
-		eventType = constants.Event.Operator.Command.Failed
+
+	reflectMsg := result.ProtoReflect()
+	statusFd := reflectMsg.Descriptor().Fields().ByName("status")
+	if statusFd != nil {
+		status := reflectMsg.Get(statusFd).Enum()
+		if status == protoreflect.EnumNumber(operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED) || status == protoreflect.EnumNumber(operatorv1.ExecutionStatus_EXECUTION_STATUS_TIMEOUT) {
+			eventType = constants.Event.Operator.Command.Failed
+		}
 	}
 
-	payload := models.ExecutionResultsPayload{
-		PayloadType:       "execution_result",
-		ExecutionID:       result.ExecutionID,
-		Command:           result.Command,
-		Status:            result.Status,
-		DurationSeconds:   result.DurationSeconds,
-		OperatorID:        rr.config.OperatorID,
-		OperatorSessionID: rr.config.OperatorSessionId,
-		Stdout:            result.Stdout,
-		Stderr:            result.Stderr,
-		StdoutSize:        len(result.Stdout),
-		StderrSize:        len(result.Stderr),
-		ReturnCode:        result.ReturnCode,
-		ErrorMessage:      result.ErrorMessage,
-		ErrorType:         result.ErrorType,
-	}
-	if rr.localStore != nil && rr.localStore.IsEnabled() {
-		payload.StdoutHash = rr.localStore.HashString(result.Stdout)
-		payload.StderrHash = rr.localStore.HashString(result.Stderr)
-		payload.StoredLocally = true
-		rr.logger.Info("Publishing sentinel.Sentinel-scrubbed output",
-			"execution_id", result.ExecutionID,
-			"stdout_size", len(result.Stdout),
-			"stderr_size", len(result.Stderr))
-	}
+	caseID := ""
+	taskID := originalMsg.TaskID
+	investigationID := originalMsg.InvestigationID
 
-	if err := rr.publishResultEnvelope(ctx, eventType, result.CaseID, result.TaskID, result.InvestigationID, originalMsg, &payload); err != nil {
+	// Try to get CaseID from original message if not in result
+	caseID = originalMsg.CaseID
+
+	if err := rr.publishResultEnvelope(ctx, eventType, caseID, taskID, investigationID, originalMsg, result); err != nil {
 		return fmt.Errorf("failed to publish result: %w", err)
 	}
 
-	logArgs := []any{
+	rr.logger.Info("Result transmitted to g8e (Protocol-First)",
 		"operator_session_id", rr.config.OperatorSessionId,
-		"status", result.Status,
-	}
-	if result.ReturnCode != nil {
-		logArgs = append(logArgs, "return_code", *result.ReturnCode)
-	}
-	rr.logger.Info("Result transmitted to g8e", logArgs...)
+		"event_type", eventType)
 	return nil
 }
 
 // PublishCancellationResult publishes command cancellation result via g8es pub/sub
-func (rr *PubSubResultsService) PublishCancellationResult(ctx context.Context, result *models.ExecutionResultsPayload, originalMsg PubSubCommandMessage) error {
+func (rr *PubSubResultsService) PublishCancellationResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error {
 	eventType := constants.Event.Operator.Command.Cancelled
-	payload := models.CancellationResultPayload{
-		PayloadType:       "cancellation_result",
-		ExecutionID:       result.ExecutionID,
-		Status:            result.Status,
-		OperatorID:        rr.config.OperatorID,
-		OperatorSessionID: rr.config.OperatorSessionId,
-		ErrorMessage:      result.ErrorMessage,
-		ErrorType:         result.ErrorType,
-	}
 
-	if err := rr.publishResultEnvelope(ctx, eventType, result.CaseID, result.TaskID, result.InvestigationID, originalMsg, &payload); err != nil {
+	if err := rr.publishResultEnvelope(ctx, eventType, originalMsg.CaseID, originalMsg.TaskID, originalMsg.InvestigationID, originalMsg, result); err != nil {
 		return fmt.Errorf("failed to publish cancellation result: %w", err)
 	}
 
 	rr.logger.Info("Cancellation result transmitted to g8e",
-		"operator_session_id", rr.config.OperatorSessionId,
-		"execution_id", result.ExecutionID,
-		"status", result.Status)
+		"operator_session_id", rr.config.OperatorSessionId)
 	return nil
 }
 
 // PublishFileEditResult publishes file edit result via g8es pub/sub.
-// Content has already been sentinel.Sentinel-scrubbed before this is called.
-func (rr *PubSubResultsService) PublishFileEditResult(ctx context.Context, result *models.FileEditResult, originalMsg PubSubCommandMessage) error {
+func (rr *PubSubResultsService) PublishFileEditResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error {
 	eventType := constants.Event.Operator.FileEdit.Completed
-	if result.Status == constants.ExecutionStatusFailed {
-		eventType = constants.Event.Operator.FileEdit.Failed
+
+	reflectMsg := result.ProtoReflect()
+	statusFd := reflectMsg.Descriptor().Fields().ByName("status")
+	if statusFd != nil {
+		status := reflectMsg.Get(statusFd).Enum()
+		if status == protoreflect.EnumNumber(operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED) {
+			eventType = constants.Event.Operator.FileEdit.Failed
+		}
 	}
 
-	var contentStr, errorStr string
-	if result.Content != nil {
-		contentStr = *result.Content
-	}
-	if result.ErrorMessage != nil {
-		errorStr = *result.ErrorMessage
-	}
-
-	payload := models.FileEditResultPayload{
-		PayloadType:       "file_edit_result",
-		ExecutionID:       result.ExecutionID,
-		Operation:         result.Operation,
-		FilePath:          result.FilePath,
-		Status:            result.Status,
-		DurationSeconds:   result.DurationSeconds,
-		OperatorID:        rr.config.OperatorID,
-		OperatorSessionID: rr.config.OperatorSessionId,
-		Content:           result.Content,
-		StdoutSize:        len(contentStr),
-		StderrSize:        len(errorStr),
-		ErrorMessage:      result.ErrorMessage,
-		ErrorType:         result.ErrorType,
-		BytesWritten:      result.BytesWritten,
-		LinesChanged:      result.LinesChanged,
-		BackupPath:        result.BackupPath,
-	}
-	if rr.localStore != nil && rr.localStore.IsEnabled() {
-		payload.StdoutHash = rr.localStore.HashString(contentStr)
-		payload.StderrHash = rr.localStore.HashString(errorStr)
-		payload.StoredLocally = true
-		rr.logger.Info("Publishing sentinel.Sentinel-scrubbed file edit result",
-			"execution_id", result.ExecutionID,
-			"operation", result.Operation,
-			"content_size", len(contentStr))
-	}
-
-	if err := rr.publishResultEnvelope(ctx, eventType, result.CaseID, result.TaskID, result.InvestigationID, originalMsg, &payload); err != nil {
+	if err := rr.publishResultEnvelope(ctx, eventType, originalMsg.CaseID, originalMsg.TaskID, originalMsg.InvestigationID, originalMsg, result); err != nil {
 		return fmt.Errorf("failed to publish file edit result: %w", err)
 	}
 
@@ -204,179 +155,168 @@ func (rr *PubSubResultsService) PublishFileEditResult(ctx context.Context, resul
 }
 
 // PublishFsListResult publishes file system list result via g8es pub/sub.
-// Entries have already been sentinel.Sentinel-scrubbed before this is called.
-func (rr *PubSubResultsService) PublishFsListResult(ctx context.Context, result *models.FsListResult, originalMsg PubSubCommandMessage) error {
+func (rr *PubSubResultsService) PublishFsListResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error {
 	eventType := constants.Event.Operator.FsList.Completed
-	if result.Status == constants.ExecutionStatusFailed {
-		eventType = constants.Event.Operator.FsList.Failed
-	}
 
-	var entriesJSON, errorStr string
-	if result.Entries != nil {
-		if b, err := json.Marshal(result.Entries); err == nil {
-			entriesJSON = string(b)
+	reflectMsg := result.ProtoReflect()
+	statusFd := reflectMsg.Descriptor().Fields().ByName("status")
+	if statusFd != nil {
+		status := reflectMsg.Get(statusFd).Enum()
+		if status == protoreflect.EnumNumber(operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED) {
+			eventType = constants.Event.Operator.FsList.Failed
 		}
 	}
-	if result.ErrorMessage != nil {
-		errorStr = *result.ErrorMessage
-	}
 
-	payload := models.FsListResultPayload{
-		PayloadType:       "fs_list_result",
-		ExecutionID:       result.ExecutionID,
-		Path:              result.Path,
-		Status:            result.Status,
-		TotalCount:        result.TotalCount,
-		Truncated:         result.Truncated,
-		DurationSeconds:   result.DurationSeconds,
-		OperatorID:        rr.config.OperatorID,
-		OperatorSessionID: rr.config.OperatorSessionId,
-		Entries:           result.Entries,
-		StdoutSize:        len(entriesJSON),
-		StderrSize:        len(errorStr),
-		ErrorMessage:      result.ErrorMessage,
-		ErrorType:         result.ErrorType,
-	}
-	if rr.localStore != nil && rr.localStore.IsEnabled() {
-		payload.StdoutHash = rr.localStore.HashString(entriesJSON)
-		payload.StderrHash = rr.localStore.HashString(errorStr)
-		payload.StoredLocally = true
-		rr.logger.Info("Publishing fs list result",
-			"execution_id", result.ExecutionID,
-			"path", result.Path,
-			"entries_count", result.TotalCount)
-	}
-
-	if err := rr.publishResultEnvelope(ctx, eventType, result.CaseID, result.TaskID, result.InvestigationID, originalMsg, &payload); err != nil {
+	if err := rr.publishResultEnvelope(ctx, eventType, originalMsg.CaseID, originalMsg.TaskID, originalMsg.InvestigationID, originalMsg, result); err != nil {
 		return fmt.Errorf("failed to publish fs list result: %w", err)
 	}
 
-	rr.logger.Info("FS list result transmitted",
-		"operator_session_id", rr.config.OperatorSessionId,
-		"entries", result.TotalCount)
+	rr.logger.Info("FS list result transmitted", "operator_session_id", rr.config.OperatorSessionId)
 	return nil
 }
 
-// ExecutionStatusUpdate represents a periodic status update during command execution
-type ExecutionStatusUpdate struct {
-	ExecutionID       string
-	CaseID            string
-	TaskID            *string
-	InvestigationID   string
-	OperatorSessionID string
-	Command           string
-	Status            constants.ExecutionStatus
-	ProcessAlive      bool
-	NewOutput         string // New stdout since last update
-	NewStderr         string // New stderr since last update
-	ElapsedSeconds    float64
-	Message           string // Human-readable status message
+// PublishFsGrepResult publishes file system grep result via g8es pub/sub.
+func (rr *PubSubResultsService) PublishFsGrepResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error {
+	eventType := constants.Event.Operator.FsGrep.Completed
+
+	reflectMsg := result.ProtoReflect()
+	statusFd := reflectMsg.Descriptor().Fields().ByName("status")
+	if statusFd != nil {
+		status := reflectMsg.Get(statusFd).Enum()
+		if status == protoreflect.EnumNumber(operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED) {
+			eventType = constants.Event.Operator.FsGrep.Failed
+		}
+	}
+
+	if err := rr.publishResultEnvelope(ctx, eventType, originalMsg.CaseID, originalMsg.TaskID, originalMsg.InvestigationID, originalMsg, result); err != nil {
+		return fmt.Errorf("failed to publish fs grep result: %w", err)
+	}
+
+	rr.logger.Info("FS grep result transmitted", "operator_session_id", rr.config.OperatorSessionId)
+	return nil
 }
 
 // PublishExecutionStatus publishes periodic status updates during command execution.
-// Incremental output has already been sentinel.Sentinel-scrubbed before this is called.
-func (rr *PubSubResultsService) PublishExecutionStatus(ctx context.Context, status *ExecutionStatusUpdate) error {
-	payload := models.ExecutionStatusPayload{
-		PayloadType:       "execution_status",
-		ExecutionID:       status.ExecutionID,
-		Command:           status.Command,
-		Status:            status.Status,
-		ProcessAlive:      status.ProcessAlive,
-		ElapsedSeconds:    status.ElapsedSeconds,
-		OperatorID:        rr.config.OperatorID,
-		OperatorSessionID: rr.config.OperatorSessionId,
-		NewOutput:         status.NewOutput,
-		NewStderr:         status.NewStderr,
-		Message:           status.Message,
-		StoredLocally:     rr.localStore != nil && rr.localStore.IsEnabled(),
+func (rr *PubSubResultsService) PublishExecutionStatus(ctx context.Context, status proto.Message) error {
+	reflectMsg := status.ProtoReflect()
+
+	// Extract fields via reflection for envelope routing
+	var caseID string
+	var taskID *string
+	var investigationID string
+	var operatorSessionID string
+	var executionStatus protoreflect.EnumNumber
+
+	if fd := reflectMsg.Descriptor().Fields().ByName("case_id"); fd != nil {
+		caseID = reflectMsg.Get(fd).String()
+	}
+	if fd := reflectMsg.Descriptor().Fields().ByName("task_id"); fd != nil {
+		val := reflectMsg.Get(fd).String()
+		taskID = &val
+	}
+	if fd := reflectMsg.Descriptor().Fields().ByName("investigation_id"); fd != nil {
+		investigationID = reflectMsg.Get(fd).String()
+	}
+	if fd := reflectMsg.Descriptor().Fields().ByName("operator_session_id"); fd != nil {
+		operatorSessionID = reflectMsg.Get(fd).String()
+	}
+	if fd := reflectMsg.Descriptor().Fields().ByName("status"); fd != nil {
+		executionStatus = reflectMsg.Get(fd).Enum()
 	}
 
 	eventType := constants.Event.Operator.Command.StatusUpdated.Running
-	switch status.Status {
-	case constants.ExecutionStatusPending:
+	switch executionStatus {
+	case protoreflect.EnumNumber(operatorv1.ExecutionStatus_EXECUTION_STATUS_UNSPECIFIED):
 		eventType = constants.Event.Operator.Command.StatusUpdated.Queued
-	case constants.ExecutionStatusCompleted:
+	case protoreflect.EnumNumber(operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED):
 		eventType = constants.Event.Operator.Command.StatusUpdated.Completed
-	case constants.ExecutionStatusFailed, constants.ExecutionStatusTimeout:
+	case protoreflect.EnumNumber(operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED), protoreflect.EnumNumber(operatorv1.ExecutionStatus_EXECUTION_STATUS_TIMEOUT):
 		eventType = constants.Event.Operator.Command.StatusUpdated.Failed
-	case constants.ExecutionStatusCancelled:
+	case protoreflect.EnumNumber(operatorv1.ExecutionStatus_EXECUTION_STATUS_CANCELLED):
 		eventType = constants.Event.Operator.Command.StatusUpdated.Cancelled
 	}
 
-	msg, err := models.NewG8eMessage(
-		eventType, status.CaseID,
-		rr.config.OperatorID, rr.config.OperatorSessionId, rr.config.SystemFingerprint,
-		payload,
-	)
+	env, err := BuildUniversalEnvelope(rr.config, eventType, status, "")
 	if err != nil {
-		return fmt.Errorf("failed to build status message: %w", err)
+		return fmt.Errorf("failed to build status envelope: %w", err)
 	}
-	msg.APIKey = rr.config.APIKey
-	msg.TaskID = status.TaskID
-	msg.InvestigationID = status.InvestigationID
-	msg.OperatorSessionID = status.OperatorSessionID
 
-	if err := rr.publish(ctx, msg); err != nil {
+	// Override envelope metadata from payload if present
+	if caseID != "" {
+		env.CaseId = caseID
+	}
+	if taskID != nil {
+		env.TaskId = *taskID
+	}
+	if investigationID != "" {
+		env.InvestigationId = investigationID
+	}
+	if operatorSessionID != "" {
+		env.OperatorSessionId = operatorSessionID
+	}
+
+	if err := rr.publish(ctx, env); err != nil {
 		return fmt.Errorf("failed to publish status update: %w", err)
 	}
 
-	rr.logger.Info("Execution status update transmitted",
-		"execution_id", status.ExecutionID,
-		"elapsed", fmt.Sprintf("%.1fs", status.ElapsedSeconds),
-		"process_alive", status.ProcessAlive)
+	rr.logger.Info("Execution status update transmitted (Protocol-First)",
+		"event_type", eventType)
 	return nil
 }
 
-// PublishResult publishes a pre-built ResultMessage to the g8es pub/sub results channel.
-func (rr *PubSubResultsService) PublishResult(ctx context.Context, result *models.G8eMessage) error {
-	if result.OperatorSessionID == "" {
-		result.OperatorSessionID = rr.config.OperatorSessionId
-	}
-	if result.OperatorID == "" {
-		result.OperatorID = rr.config.OperatorID
-	}
-	return rr.publish(ctx, result)
-}
+// PublishHeartbeat publishes heartbeat to dedicated g8es pub/sub heartbeat channel.
+// It wraps the heartbeat in a UniversalEnvelope for consistency with other results.
+func (rr *PubSubResultsService) PublishHeartbeat(ctx context.Context, heartbeat proto.Message) error {
+	rr.logger.Info("[HEARTBEAT] Publishing heartbeat to g8es pub/sub (Protocol-First)")
 
-// PublishHeartbeat publishes heartbeat to dedicated g8es pub/sub heartbeat channel
-func (rr *PubSubResultsService) PublishHeartbeat(ctx context.Context, heartbeat *models.Heartbeat) error {
-	rr.logger.Info("[HEARTBEAT] Publishing heartbeat to g8es pub/sub",
-		"operator_id", heartbeat.OperatorID,
-		"operator_session_id", heartbeat.OperatorSessionID,
-		"heartbeat_type", heartbeat.HeartbeatType,
-		"hostname", heartbeat.SystemIdentity.Hostname,
-		"cpu_percent", heartbeat.PerformanceMetrics.CPUPercent,
-		"memory_percent", heartbeat.PerformanceMetrics.MemoryPercent,
-		"disk_percent", heartbeat.PerformanceMetrics.DiskPercent,
-		"network_latency", heartbeat.PerformanceMetrics.NetworkLatency)
-
-	data, err := json.Marshal(heartbeat)
+	// Build the envelope
+	env, err := BuildUniversalEnvelope(rr.config, constants.Event.Operator.Heartbeat, heartbeat, "")
 	if err != nil {
-		rr.logger.Error("[HEARTBEAT] Failed to marshal heartbeat", "error", err)
-		return fmt.Errorf("failed to marshal heartbeat: %w", err)
+		return fmt.Errorf("failed to build heartbeat envelope: %w", err)
 	}
-	channelName := constants.HeartbeatChannel(rr.config.OperatorID, heartbeat.OperatorSessionID)
-	rr.logger.Info("[HEARTBEAT] Publishing to channel", "channel", channelName)
+
+	// Ensure operatorSessionID is correct in the envelope
+	reflectMsg := heartbeat.ProtoReflect()
+	if fd := reflectMsg.Descriptor().Fields().ByName("operator_session_id"); fd != nil {
+		val := reflectMsg.Get(fd).String()
+		if val != "" {
+			env.OperatorSessionId = val
+		}
+	}
+
+	data, err := proto.Marshal(env)
+	if err != nil {
+		return fmt.Errorf("failed to marshal heartbeat envelope: %w", err)
+	}
+
+	channelName := constants.HeartbeatChannel(rr.config.OperatorID, env.OperatorSessionId)
 	if err := rr.client.Publish(ctx, channelName, data); err != nil {
-		rr.logger.Error("[HEARTBEAT] Failed to publish to g8es pub/sub", "error", err, "channel", channelName)
 		return fmt.Errorf("failed to send heartbeat: %w", err)
 	}
-	rr.logger.Info("[HEARTBEAT] Heartbeat transmitted successfully",
-		"operator_session_id", heartbeat.OperatorSessionID,
-		"channel", channelName)
 	return nil
 }
 
-// publish marshals a ResultMessage and publishes it to the results channel.
-func (rr *PubSubResultsService) publish(ctx context.Context, msg *models.G8eMessage) error {
-	data, err := msg.Marshal()
-	if err != nil {
-		return fmt.Errorf("failed to marshal result message: %w", err)
+// PublishResult publishes a pre-built UniversalEnvelope to the g8es pub/sub results channel.
+func (rr *PubSubResultsService) PublishResult(ctx context.Context, env *commonv1.UniversalEnvelope) error {
+	if env.OperatorSessionId == "" {
+		env.OperatorSessionId = rr.config.OperatorSessionId
 	}
-	channel := rr.resultsChannel(msg.OperatorSessionID)
-	rr.logger.Info("Publishing result",
+	if env.OperatorId == "" {
+		env.OperatorId = rr.config.OperatorID
+	}
+	return rr.publish(ctx, env)
+}
+
+// publish marshals a UniversalEnvelope and publishes it to the results channel.
+func (rr *PubSubResultsService) publish(ctx context.Context, env *commonv1.UniversalEnvelope) error {
+	data, err := proto.Marshal(env)
+	if err != nil {
+		return fmt.Errorf("failed to marshal result envelope: %w", err)
+	}
+	channel := rr.resultsChannel(env.OperatorSessionId)
+	rr.logger.Info("Publishing result (Protocol-First)",
 		"channel", channel,
-		"event_type", msg.EventType,
-		"message_id", msg.ID)
+		"event_type", env.EventType,
+		"message_id", env.Id)
 	return rr.client.Publish(ctx, channel, data)
 }

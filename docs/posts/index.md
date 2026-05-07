@@ -8,6 +8,9 @@ parent: ''
 
 # g8e Blog
 
+Last Updated: 2026-05-07
+Version: v0.2.0
+
 Welcome to the g8e blog.
 
 ## Posts

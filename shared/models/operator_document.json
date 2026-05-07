@@ -176,12 +176,6 @@
         "values": ["aws", "gcp", "azure"],
         "description": "Cloud provider. Only set when operator_type is cloud. See status.json cloud.subtype."
       },
-      "is_g8ep": {
-        "type": "boolean",
-        "required": true,
-        "default": false,
-        "description": "True when this slot is the platform-managed g8ep operator (slot 1). Always pinned at the top of the operator list. Restart via POST /api/operators/g8ep/reauth."
-      },
       "slot_cost": {
         "type": "integer",
         "required": true,
@@ -245,7 +239,7 @@
       "latest_heartbeat_snapshot": {
         "type": "object",
         "required": false,
-        "description": "Most recent heartbeat metrics snapshot. Shape matches HeartbeatSnapshot (shared/models/wire/heartbeat.json#operator_heartbeat): nested objects for system_identity, performance, network, uptime, etc. Strictly enforced across the wire."
+        "description": "Most recent heartbeat metrics snapshot. Shape matches HeartbeatSnapshot (defined in shared/proto/operator.proto): nested objects for system_identity, performance, network, uptime, etc. Strictly enforced across the wire."
       }
     },
 

@@ -16,18 +16,21 @@ package pubsub
 import (
 	"context"
 
-	"github.com/g8e-ai/g8e/components/g8eo/models"
+	"google.golang.org/protobuf/proto"
+
+	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
 )
 
 // ResultsPublisher is the transport-agnostic interface for publishing results
 // from the g8eo Operator back to AI Agent Services (g8ee).
 // Implemented by PubSubResultsService (g8es pub/sub via g8ed proxy).
 type ResultsPublisher interface {
-	PublishExecutionResult(ctx context.Context, result *models.ExecutionResultsPayload, originalMsg PubSubCommandMessage) error
-	PublishCancellationResult(ctx context.Context, result *models.ExecutionResultsPayload, originalMsg PubSubCommandMessage) error
-	PublishFileEditResult(ctx context.Context, result *models.FileEditResult, originalMsg PubSubCommandMessage) error
-	PublishFsListResult(ctx context.Context, result *models.FsListResult, originalMsg PubSubCommandMessage) error
-	PublishExecutionStatus(ctx context.Context, status *ExecutionStatusUpdate) error
-	PublishResult(ctx context.Context, result *models.G8eMessage) error
-	PublishHeartbeat(ctx context.Context, heartbeat *models.Heartbeat) error
+	PublishExecutionResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error
+	PublishCancellationResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error
+	PublishFileEditResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error
+	PublishFsListResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error
+	PublishFsGrepResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error
+	PublishExecutionStatus(ctx context.Context, status proto.Message) error
+	PublishResult(ctx context.Context, env *commonv1.UniversalEnvelope) error
+	PublishHeartbeat(ctx context.Context, heartbeat proto.Message) error
 }

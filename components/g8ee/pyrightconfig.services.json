@@ -6,8 +6,8 @@
   "venvPath": "/opt",
   "venv": "venv",
   "extraPaths": [
-    "/app/components/g8ee",
-    "/app/shared",
-    "/app"
+    ".",
+    "../../shared",
+    "../.."
   ]
 }

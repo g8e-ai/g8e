@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import { G8eHeaders } from '../constants/headers.js';
 import { ErrorResponse } from '../models/response_models.js';
 import { logger } from '../utils/logger.js';
 import { BEARER_PREFIX, API_KEY_LOG_PREFIX_LENGTH, ApiKeyError } from '../constants/auth.js';
@@ -53,7 +54,11 @@ export function createApiKeyMiddleware({ apiKeyService, userService }) {
                 }).forWire());
             }
 
-            const validation = await apiKeyService.validateKey(apiKey);
+            const systemFingerprint = req.headers[G8eHeaders.SYSTEM_FINGERPRINT.toLowerCase()];
+
+            const validation = await apiKeyService.validateKey(apiKey, { 
+                system_fingerprint: systemFingerprint 
+            });
 
             if (!validation.success) {
                 logger.warn('[API-KEY-AUTH] API key validation failed', {
@@ -61,10 +66,11 @@ export function createApiKeyMiddleware({ apiKeyService, userService }) {
                     method: req.method,
                     ip: req.ip,
                     error: validation.error,
-                    api_key_prefix: apiKey.substring(0, API_KEY_LOG_PREFIX_LENGTH) + '...'
+                    api_key_prefix: apiKey.substring(0, API_KEY_LOG_PREFIX_LENGTH) + '...',
+                    system_fingerprint: systemFingerprint
                 });
                 return res.status(401).json(new ErrorResponse({
-                    error: ApiKeyError.INVALID
+                    error: validation.error || ApiKeyError.INVALID
                 }).forWire());
             }
 
@@ -102,10 +108,13 @@ export function createApiKeyMiddleware({ apiKeyService, userService }) {
                 user_id: userId,
                 path: req.path,
                 method: req.method,
-                api_key_prefix: apiKey.substring(0, API_KEY_LOG_PREFIX_LENGTH) + '...'
+                api_key_prefix: apiKey.substring(0, API_KEY_LOG_PREFIX_LENGTH) + '...',
+                system_fingerprint: systemFingerprint
             });
 
-            apiKeyService.recordUsage(apiKey).catch(err => {
+            apiKeyService.recordUsage(apiKey, { 
+                system_fingerprint: systemFingerprint 
+            }).catch(err => {
                 logger.warn('[API-KEY-AUTH] Failed to update last_used_at', { error: err.message });
             });
 

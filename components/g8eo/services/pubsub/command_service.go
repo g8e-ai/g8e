@@ -15,7 +15,6 @@ package pubsub
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"time"
@@ -28,6 +27,8 @@ import (
 	storage "github.com/g8e-ai/g8e/components/g8eo/services/storage"
 	"github.com/g8e-ai/g8e/components/g8eo/services/system"
 	vault "github.com/g8e-ai/g8e/components/g8eo/services/vault"
+	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
+	"google.golang.org/protobuf/proto"
 )
 
 // sentinelVerdict carries the outcome of a pre-execution sentinel analysis.
@@ -108,23 +109,25 @@ func (cs *CommandService) SetSentinel(s *sentinel.Sentinel) {
 
 // HandleExecutionRequest processes an inbound command execution request.
 func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSubCommandMessage) {
-	var p models.CommandRequestPayload
-	if err := json.Unmarshal(msg.Payload, &p); err != nil {
-		cs.logger.Error("Failed to decode command payload", "error", err)
+	var protoCmd operatorv1.CommandRequested
+	if err := proto.Unmarshal(msg.Payload, &protoCmd); err != nil {
+		cs.logger.Error("Failed to decode command payload as protobuf CommandRequested", "error", err)
 		return
 	}
-	command := p.Command
-	if command == "" {
-		cs.logger.Warn("Command execution request without command payload")
+	if protoCmd.Command == "" {
+		cs.logger.Error("Invalid CommandRequested: missing command field")
 		return
 	}
 
-	justification := p.Justification
+	cs.logger.Info("Parsed command payload via Protobuf (CommandRequested)")
+
+	command := protoCmd.Command
+	justification := protoCmd.Justification
 	if justification == "" {
 		justification = "No justification provided"
 	}
 
-	vaultMode := p.SentinelMode
+	vaultMode := protoCmd.SentinelMode
 	if vaultMode == "" {
 		vaultMode = constants.Status.VaultMode.Raw
 	}
@@ -147,7 +150,14 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 			}
 		}
 		if cs.results != nil {
-			if err := cs.results.PublishExecutionResult(ctx, verdict.blockedResult, msg); err != nil {
+			protoResult := &operatorv1.CommandResult{
+				ExecutionId: verdict.blockedResult.ExecutionID,
+				Status:      protoExecutionStatus(verdict.blockedResult.Status),
+				Error:       *verdict.blockedResult.ErrorMessage,
+				Stderr:      verdict.blockedResult.Stderr,
+				ExitCode:    int32(*verdict.blockedResult.ReturnCode),
+			}
+			if err := cs.results.PublishExecutionResult(ctx, protoResult, msg); err != nil {
 				cs.logger.Error("Failed to publish blocked result", "error", err)
 			}
 		}
@@ -259,7 +269,27 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 	}
 
 	if cs.results != nil {
-		if err := cs.results.PublishExecutionResult(ctx, result, msg); err != nil {
+		protoResult := &operatorv1.CommandResult{
+			ExecutionId:          result.ExecutionID,
+			Status:               protoExecutionStatus(result.Status),
+			Output:               result.Stdout,
+			Stderr:               result.Stderr,
+			ExecutionTimeSeconds: float32(result.DurationSeconds),
+		}
+		if result.ReturnCode != nil {
+			protoResult.ExitCode = int32(*result.ReturnCode)
+		}
+		if result.ErrorMessage != nil {
+			protoResult.Error = *result.ErrorMessage
+		}
+		if result.StartTime != nil {
+			protoResult.StartTimeUnixMs = result.StartTime.UnixMilli()
+		}
+		if result.EndTime != nil {
+			protoResult.EndTimeUnixMs = result.EndTime.UnixMilli()
+		}
+
+		if err := cs.results.PublishExecutionResult(ctx, protoResult, msg); err != nil {
 			cs.logger.Error("Failed to publish execution result", "error", err)
 		}
 	}
@@ -348,17 +378,13 @@ func (cs *CommandService) runStatusTicker(
 			elapsed := time.Since(startTime).Seconds()
 
 			if cs.results != nil {
-				statusUpdate := &ExecutionStatusUpdate{
-					ExecutionID:       execReq.ExecutionID,
-					CaseID:            execReq.CaseID,
-					TaskID:            execReq.TaskID,
-					InvestigationID:   execReq.InvestigationID,
-					OperatorSessionID: msg.OperatorSessionID,
-					Command:           command,
-					Status:            constants.ExecutionStatusExecuting,
-					ProcessAlive:      true,
-					ElapsedSeconds:    elapsed,
-					Message:           fmt.Sprintf("Command still executing (%.0fs elapsed)", elapsed),
+				statusUpdate := &operatorv1.ExecutionStatusUpdate{
+					ExecutionId:    execReq.ExecutionID,
+					Command:        command,
+					Status:         protoExecutionStatus(constants.ExecutionStatusExecuting),
+					ProcessAlive:   true,
+					ElapsedSeconds: float32(elapsed),
+					Message:        fmt.Sprintf("Command still executing (%.0fs elapsed)", elapsed),
 				}
 				if err := cs.results.PublishExecutionStatus(ctx, statusUpdate); err != nil {
 					cs.logger.Warn("Failed to publish status update", "error", err)
@@ -379,16 +405,18 @@ func (cs *CommandService) runStatusTicker(
 
 // HandleCancelRequest processes an inbound command cancellation request.
 func (cs *CommandService) HandleCancelRequest(ctx context.Context, msg PubSubCommandMessage) {
-	var p models.CommandCancelRequestPayload
-	if err := json.Unmarshal(msg.Payload, &p); err != nil {
-		cs.logger.Error("Failed to decode cancel payload", "error", err)
+	var protoCancel operatorv1.CommandCancelRequested
+	if err := proto.Unmarshal(msg.Payload, &protoCancel); err != nil {
+		cs.logger.Error("Failed to decode cancel payload as protobuf CommandCancelRequested", "error", err)
 		return
 	}
-	executionID := p.ExecutionID
-	if executionID == "" {
-		cs.logger.Warn("Cancel request without execution_id")
+	if protoCancel.ExecutionId == "" {
+		cs.logger.Error("Invalid CommandCancelRequested: missing execution_id field")
 		return
 	}
+
+	cs.logger.Info("Parsed cancel payload via Protobuf (CommandCancelRequested)")
+	executionID := protoCancel.ExecutionId
 
 	cs.logger.Info("Command cancellation requested by user", "execution_id", executionID)
 
@@ -420,7 +448,18 @@ func (cs *CommandService) HandleCancelRequest(ctx context.Context, msg PubSubCom
 	}
 
 	if cs.results != nil {
-		if err := cs.results.PublishCancellationResult(ctx, result, msg); err != nil {
+		protoResult := &operatorv1.CommandResult{
+			ExecutionId: executionID,
+			Status:      protoExecutionStatus(result.Status),
+		}
+		if result.ErrorMessage != nil {
+			protoResult.Error = *result.ErrorMessage
+		}
+		if result.StartTime != nil {
+			protoResult.StartTimeUnixMs = result.StartTime.UnixMilli()
+		}
+
+		if err := cs.results.PublishCancellationResult(ctx, protoResult, msg); err != nil {
 			cs.logger.Error("Failed to publish cancellation result", "error", err)
 		}
 	}
@@ -428,19 +467,22 @@ func (cs *CommandService) HandleCancelRequest(ctx context.Context, msg PubSubCom
 
 // payloadToExecutionRequest is a package-level helper shared by CommandService and tests.
 func payloadToExecutionRequest(msg PubSubCommandMessage) (*models.ExecutionRequestPayload, error) {
-	var p models.CommandRequestPayload
-	if err := json.Unmarshal(msg.Payload, &p); err != nil {
-		return nil, fmt.Errorf("failed to decode command payload: %w", err)
+	var protoCmd operatorv1.CommandRequested
+	if err := proto.Unmarshal(msg.Payload, &protoCmd); err != nil {
+		return nil, fmt.Errorf("failed to decode command payload as protobuf CommandRequested: %w", err)
 	}
-	if p.Command == "" {
-		return nil, fmt.Errorf("missing command in payload")
+	if protoCmd.Command == "" {
+		return nil, fmt.Errorf("missing command in protobuf CommandRequested")
 	}
 
 	executionID := executionIDFromMessage(msg)
+	if protoCmd.ExecutionId != "" {
+		executionID = protoCmd.ExecutionId
+	}
 
 	timeoutSeconds := 300
-	if p.TimeoutSeconds > 0 {
-		timeoutSeconds = p.TimeoutSeconds
+	if protoCmd.TimeoutSeconds > 0 {
+		timeoutSeconds = int(protoCmd.TimeoutSeconds)
 	}
 
 	return &models.ExecutionRequestPayload{
@@ -448,8 +490,10 @@ func payloadToExecutionRequest(msg PubSubCommandMessage) (*models.ExecutionReque
 		CaseID:          msg.CaseID,
 		TaskID:          msg.TaskID,
 		InvestigationID: msg.InvestigationID,
-		Command:         p.Command,
+		Command:         protoCmd.Command,
 		TimeoutSeconds:  timeoutSeconds,
 		RequestedBy:     "g8e-system",
+		Justification:   protoCmd.Justification,
+		SentinelMode:    protoCmd.SentinelMode,
 	}, nil
 }

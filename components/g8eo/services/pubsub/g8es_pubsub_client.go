@@ -16,18 +16,19 @@ package pubsub
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"sync"
 	"time"
+
+	"google.golang.org/protobuf/proto"
 
 	"github.com/gorilla/websocket"
 
 	"github.com/g8e-ai/g8e/components/g8eo/certs"
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/httpclient"
-	listen "github.com/g8e-ai/g8e/components/g8eo/services/listen"
+	pubsubv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/pubsubv1"
 )
 
 // PubSubClient is the interface implemented by both G8esPubSubClient and MockG8esPubSubClient.
@@ -130,13 +131,13 @@ func (c *G8esPubSubClient) Subscribe(ctx context.Context, channel string) (<-cha
 		return nil, fmt.Errorf("failed to connect to g8es pub/sub (http_status=%d): %w", statusCode, err)
 	}
 
-	subMsg := listen.PubSubMessage{
+	subMsg := pubsubv1.PubSubMessage{
 		Action:  constants.PubSubActionSubscribe,
 		Channel: channel,
 	}
-	subJSON, _ := json.Marshal(subMsg)
+	subBytes, _ := proto.Marshal(&subMsg)
 	_ = ws.SetWriteDeadline(time.Now().Add(pubSubWriteTimeout))
-	if err := ws.WriteMessage(websocket.TextMessage, subJSON); err != nil {
+	if err := ws.WriteMessage(websocket.BinaryMessage, subBytes); err != nil {
 		ws.Close()
 		return nil, fmt.Errorf("failed to subscribe to channel %s: %w", channel, err)
 	}
@@ -144,7 +145,7 @@ func (c *G8esPubSubClient) Subscribe(ctx context.Context, channel string) (<-cha
 	// Block until the broker confirms the subscription is registered. Frames
 	// that arrive before the ACK (e.g. stale messages from a previous session)
 	// are buffered and replayed into the output channel once the goroutine starts.
-	var pending []json.RawMessage
+	var pending [][]byte
 	if err := c.waitForSubscribedACK(ctx, ws, channel, &pending); err != nil {
 		ws.Close()
 		return nil, fmt.Errorf("subscription ACK not received for channel %s: %w", channel, err)
@@ -154,7 +155,7 @@ func (c *G8esPubSubClient) Subscribe(ctx context.Context, channel string) (<-cha
 
 	// Drain any messages that arrived before the ACK into the output channel.
 	for _, raw := range pending {
-		out <- []byte(raw)
+		out <- raw
 	}
 
 	go func() {
@@ -181,8 +182,8 @@ func (c *G8esPubSubClient) Subscribe(ctx context.Context, channel string) (<-cha
 				return
 			}
 
-			var event listen.PubSubEvent
-			if err := json.Unmarshal(raw, &event); err != nil {
+			var event pubsubv1.PubSubEvent
+			if err := proto.Unmarshal(raw, &event); err != nil {
 				c.logger.Warn("Failed to parse pub/sub event", "error", err)
 				continue
 			}
@@ -192,7 +193,7 @@ func (c *G8esPubSubClient) Subscribe(ctx context.Context, channel string) (<-cha
 			}
 
 			select {
-			case out <- []byte(event.Data):
+			case out <- event.Data:
 			case <-ctx.Done():
 				return
 			}
@@ -206,7 +207,7 @@ func (c *G8esPubSubClient) Subscribe(ctx context.Context, channel string) (<-cha
 // frame. Any data-bearing message frames received before the ACK are appended to pending so
 // the caller can replay them. Returns an error if the context is cancelled or the connection
 // closes before the ACK arrives.
-func (c *G8esPubSubClient) waitForSubscribedACK(ctx context.Context, ws *websocket.Conn, channel string, pending *[]json.RawMessage) error {
+func (c *G8esPubSubClient) waitForSubscribedACK(ctx context.Context, ws *websocket.Conn, channel string, pending *[][]byte) error {
 	const ackTimeout = 5 * time.Second
 	ws.SetReadDeadline(time.Now().Add(ackTimeout))
 	defer ws.SetReadDeadline(time.Time{})
@@ -232,8 +233,8 @@ func (c *G8esPubSubClient) waitForSubscribedACK(ctx context.Context, ws *websock
 			return fmt.Errorf("connection error while waiting for subscribed ACK: %w", err)
 		}
 
-		var event listen.PubSubEvent
-		if err := json.Unmarshal(raw, &event); err != nil {
+		var event pubsubv1.PubSubEvent
+		if err := proto.Unmarshal(raw, &event); err != nil {
 			continue
 		}
 
@@ -287,25 +288,25 @@ func (c *G8esPubSubClient) Publish(ctx context.Context, channel string, data []b
 		}
 	}
 
-	msg := listen.PubSubMessage{
+	msg := pubsubv1.PubSubMessage{
 		Action:  constants.PubSubActionPublish,
 		Channel: channel,
-		Data:    json.RawMessage(data),
+		Data:    data,
 	}
-	msgJSON, err := json.Marshal(msg)
+	msgBytes, err := proto.Marshal(&msg)
 	if err != nil {
 		return fmt.Errorf("failed to marshal publish payload: %w", err)
 	}
 
 	_ = c.pubWs.SetWriteDeadline(time.Now().Add(pubSubWriteTimeout))
-	if err := c.pubWs.WriteMessage(websocket.TextMessage, msgJSON); err != nil {
+	if err := c.pubWs.WriteMessage(websocket.BinaryMessage, msgBytes); err != nil {
 		c.pubWs.Close()
 		c.pubWs = nil
 		if err := c.connectPubWs(); err != nil {
 			return fmt.Errorf("failed to reconnect publish WebSocket: %w", err)
 		}
 		_ = c.pubWs.SetWriteDeadline(time.Now().Add(pubSubWriteTimeout))
-		if err := c.pubWs.WriteMessage(websocket.TextMessage, msgJSON); err != nil {
+		if err := c.pubWs.WriteMessage(websocket.BinaryMessage, msgBytes); err != nil {
 			c.pubWs.Close()
 			c.pubWs = nil
 			return fmt.Errorf("failed to publish to g8es after reconnect: %w", err)

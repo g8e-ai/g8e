@@ -102,7 +102,11 @@ async def test_stream_executor_internal_flow(
     executor = tool_service.stream_executor
 
     # Mock internal dependencies
-    executor._internal_http_client.post = AsyncMock(return_value={"token": "dlk_test_token"})
+    from app.models.g8ed_client import OperatorLinkResponse
+    executor._internal_http_client.generate_operator_link = AsyncMock(return_value=OperatorLinkResponse(
+        success=True,
+        token="dlk_test_token"
+    ))
     executor._approval_service.request_stream_approval = AsyncMock(return_value=ApprovalResult(
         approved=True,
         approval_id="app-123"
@@ -130,9 +134,12 @@ async def test_stream_executor_internal_flow(
 
         # Verify flow
         assert result.success is True
-        executor._internal_http_client.post.assert_called_with(
-            "/api/internal/tokens/mint-device-link",
-            json={"user_id": sample_g8e_context.user_id}
+        executor._internal_http_client.generate_operator_link.assert_called_with(
+            user_id=sample_g8e_context.user_id,
+            operator_id="",
+            web_session_id=sample_g8e_context.web_session_id,
+            organization_id=sample_g8e_context.organization_id,
+            context=sample_g8e_context
         )
         executor._approval_service.request_stream_approval.assert_called_once()
         mock_exec.assert_called_once()

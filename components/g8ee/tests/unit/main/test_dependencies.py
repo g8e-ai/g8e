@@ -119,12 +119,12 @@ class TestGetG8eeKVClient:
 class TestGetG8eeCacheService:
     async def test_returns_service_from_app_state(self, mock_request):
         mock_cache = MagicMock()
-        mock_request.app.state.cache_aside_service = mock_cache
+        mock_request.app.state.services.cache_aside_service = mock_cache
         result = await get_g8ee_cache_aside_service(mock_request)
         assert result == mock_cache
 
     async def test_missing_raises_service_unavailable(self, mock_request):
-        mock_request.app.state.cache_aside_service = None
+        mock_request.app.state.services.cache_aside_service = None
         with pytest.raises(ServiceUnavailableError, match="Cache service not available"):
             await get_g8ee_cache_aside_service(mock_request)
 
@@ -132,12 +132,12 @@ class TestGetG8eeCacheService:
 class TestGetCaseDataService:
     async def test_returns_service_from_app_state(self, mock_request):
         mock_service = MagicMock()
-        mock_request.app.state.case_data_service = mock_service
+        mock_request.app.state.services.case_data_service = mock_service
         result = await get_g8ee_case_data_service(mock_request)
         assert result == mock_service
 
     async def test_missing_raises_service_unavailable(self, mock_request):
-        mock_request.app.state.case_data_service = None
+        mock_request.app.state.services.case_data_service = None
         with pytest.raises(ServiceUnavailableError, match="Case Data Service not available"):
             await get_g8ee_case_data_service(mock_request)
 
@@ -145,12 +145,12 @@ class TestGetCaseDataService:
 class TestGetInvestigationService:
     async def test_returns_service_from_app_state(self, mock_request):
         mock_service = MagicMock()
-        mock_request.app.state.investigation_service = mock_service
+        mock_request.app.state.services.investigation_service = mock_service
         result = await get_g8ee_investigation_service(mock_request)
         assert result == mock_service
 
     async def test_missing_raises_service_unavailable(self, mock_request):
-        mock_request.app.state.investigation_service = None
+        mock_request.app.state.services.investigation_service = None
         with pytest.raises(ServiceUnavailableError, match="Investigation Domain Service not available"):
             await get_g8ee_investigation_service(mock_request)
 
@@ -158,17 +158,17 @@ class TestGetInvestigationService:
 class TestGetG8eeChatPipeline:
     async def test_returns_service_from_app_state(self, mock_request):
         mock_service = MagicMock()
-        mock_request.app.state.chat_pipeline = mock_service
+        mock_request.app.state.services.chat_pipeline = mock_service
         result = await get_g8ee_chat_pipeline(mock_request)
         assert result == mock_service
 
     async def test_missing_raises_service_unavailable(self, mock_request):
-        mock_request.app.state.chat_pipeline = None
+        mock_request.app.state.services.chat_pipeline = None
         with pytest.raises(ServiceUnavailableError, match="Chat Pipeline not available"):
             await get_g8ee_chat_pipeline(mock_request)
 
     async def test_none_raises_service_unavailable(self, mock_request):
-        mock_request.app.state.chat_pipeline = None
+        mock_request.app.state.services.chat_pipeline = None
         with pytest.raises(ServiceUnavailableError, match="Chat Pipeline not available"):
             await get_g8ee_chat_pipeline(mock_request)
 
@@ -176,17 +176,17 @@ class TestGetG8eeChatPipeline:
 class TestGetG8eeChatTaskManager:
     async def test_returns_service_from_app_state(self, mock_request):
         mock_service = MagicMock()
-        mock_request.app.state.chat_task_manager = mock_service
+        mock_request.app.state.services.chat_task_manager = mock_service
         result = await get_g8ee_chat_task_manager(mock_request)
         assert result == mock_service
 
     async def test_missing_raises_service_unavailable(self, mock_request):
-        mock_request.app.state.chat_task_manager = None
+        mock_request.app.state.services.chat_task_manager = None
         with pytest.raises(ServiceUnavailableError, match="Chat Task Manager not available"):
             await get_g8ee_chat_task_manager(mock_request)
 
     async def test_none_raises_service_unavailable(self, mock_request):
-        mock_request.app.state.chat_task_manager = None
+        mock_request.app.state.services.chat_task_manager = None
         with pytest.raises(ServiceUnavailableError, match="Chat Task Manager not available"):
             await get_g8ee_chat_task_manager(mock_request)
 
@@ -194,17 +194,17 @@ class TestGetG8eeChatTaskManager:
 class TestGetOperatorCache:
     async def test_returns_service_from_app_state(self, mock_request):
         mock_service = MagicMock()
-        mock_request.app.state.cache_aside_service = mock_service
+        mock_request.app.state.services.cache_aside_service = mock_service
         result = await get_g8ee_operator_cache(mock_request)
         assert result == mock_service
 
     async def test_missing_raises_service_unavailable(self, mock_request):
-        mock_request.app.state.cache_aside_service = None
+        mock_request.app.state.services.cache_aside_service = None
         with pytest.raises(ServiceUnavailableError, match="Operator cache service not available"):
             await get_g8ee_operator_cache(mock_request)
 
     async def test_none_raises_service_unavailable(self, mock_request):
-        mock_request.app.state.cache_aside_service = None
+        mock_request.app.state.services.cache_aside_service = None
         with pytest.raises(ServiceUnavailableError, match="Operator cache service not available"):
             await get_g8ee_operator_cache(mock_request)
 
@@ -212,17 +212,17 @@ class TestGetOperatorCache:
 class TestGetOperatorCommandService:
     async def test_returns_service_from_app_state(self, mock_request):
         mock_service = MagicMock()
-        mock_request.app.state.operator_command_service = mock_service
+        mock_request.app.state.services.operator_command_service = mock_service
         result = await get_g8ee_operator_command_service(mock_request)
         assert result == mock_service
 
     async def test_missing_raises_service_unavailable(self, mock_request):
-        mock_request.app.state.operator_command_service = None
+        mock_request.app.state.services.operator_command_service = None
         with pytest.raises(ServiceUnavailableError, match="Operator Command Service not available"):
             await get_g8ee_operator_command_service(mock_request)
 
     async def test_none_raises_service_unavailable(self, mock_request):
-        mock_request.app.state.operator_command_service = None
+        mock_request.app.state.services.operator_command_service = None
         with pytest.raises(ServiceUnavailableError, match="Operator Command Service not available"):
             await get_g8ee_operator_command_service(mock_request)
 
@@ -230,17 +230,17 @@ class TestGetOperatorCommandService:
 class TestGetG8eeAttachmentService:
     async def test_returns_service_from_app_state(self, mock_request):
         mock_service = MagicMock()
-        mock_request.app.state.attachment_service = mock_service
+        mock_request.app.state.services.attachment_service = mock_service
         result = await get_g8ee_attachment_service(mock_request)
         assert result == mock_service
 
     async def test_missing_raises_service_unavailable(self, mock_request):
-        mock_request.app.state.attachment_service = None
+        mock_request.app.state.services.attachment_service = None
         with pytest.raises(ServiceUnavailableError, match="Attachment Service not available"):
             await get_g8ee_attachment_service(mock_request)
 
     async def test_none_raises_service_unavailable(self, mock_request):
-        mock_request.app.state.attachment_service = None
+        mock_request.app.state.services.attachment_service = None
         with pytest.raises(ServiceUnavailableError, match="Attachment Service not available"):
             await get_g8ee_attachment_service(mock_request)
 
@@ -518,17 +518,17 @@ class TestHealthCheckDependencies:
         request.app = MagicMock()
         request.app.state.settings = mock_settings
         request.app.state.pubsub_client = MagicMock()
-        request.app.state.cache_aside_service = MagicMock()
-        request.app.state.case_data_service = MagicMock()
-        request.app.state.investigation_service = MagicMock()
-        request.app.state.memory_service = MagicMock()
-        request.app.state.chat_pipeline = MagicMock()
-        request.app.state.attachment_service = MagicMock()
+        request.app.state.services.cache_aside_service = MagicMock()
+        request.app.state.services.case_data_service = MagicMock()
+        request.app.state.services.investigation_service = MagicMock()
+        request.app.state.services.memory_data_service = MagicMock()
+        request.app.state.services.chat_pipeline = MagicMock()
+        request.app.state.services.attachment_service = MagicMock()
         return request
 
     async def test_all_healthy_returns_healthy_result(self, healthy_request):
         # Set up all needed attributes in the mock request
-        healthy_request.app.state.investigation_data_service = MagicMock()
+        healthy_request.app.state.services.investigation_data_service = MagicMock()
 
         health = await health_check_dependencies(healthy_request)
 
@@ -544,8 +544,8 @@ class TestHealthCheckDependencies:
         assert health.unhealthy_dependencies is None
 
     async def test_missing_services_reported_as_unhealthy(self, healthy_request):
-        healthy_request.app.state.cache_aside_service = None
-        healthy_request.app.state.investigation_service = None
+        healthy_request.app.state.services.cache_aside_service = None
+        healthy_request.app.state.services.investigation_service = None
 
         health = await health_check_dependencies(healthy_request)
 

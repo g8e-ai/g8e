@@ -25,9 +25,9 @@ import { FrontendBaseModel, F } from './base.js';
 // HeartbeatSnapshot
 // ---------------------------------------------------------------------------
 
-// Canonical shape: shared/models/wire/heartbeat.json#operator_heartbeat.
+// Canonical shape: defined in shared/proto/operator.proto (HeartbeatSnapshot message).
 // This is the same instance the backend persists as latest_heartbeat_snapshot
-// AND the envelope payload in shared/models/wire/heartbeat_sse.json#envelope.metrics.
+// AND the envelope payload in the SSE envelope.
 // Frontend parses, persists, and consumes exactly one shape — no flat projection.
 
 export class HeartbeatSystemIdentity extends FrontendBaseModel {
@@ -127,7 +127,6 @@ export class OperatorSlot extends FrontendBaseModel {
         status_display: { type: F.string,  default: null },
         status_class:   { type: F.string,  default: 'inactive' },
         bound_web_session_id: { type: F.string, default: null },
-        is_g8ep:        { type: F.boolean, default: false },
         first_deployed: { type: F.date,    default: null },
         claimed_at:     { type: F.date,    default: null },
         latest_heartbeat_snapshot: { type: F.object, default: null },
@@ -170,7 +169,7 @@ export class OperatorStatusUpdatedEvent extends FrontendBaseModel {
     };
 }
 
-// Canonical wire shape: shared/models/wire/heartbeat_sse.json#envelope.
+// Canonical wire shape: defined in shared/proto/operator.proto (HeartbeatSSEEnvelope message).
 // Producer: g8ee HeartbeatSSEEnvelope (components/g8ee/app/models/operators.py).
 export class HeartbeatSSEEnvelope extends FrontendBaseModel {
     static fields = {

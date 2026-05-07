@@ -23,12 +23,15 @@
  */
 
 import { readFileSync, existsSync } from 'fs';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { PubSubMessage, PubSubEvent } = require('../../shared/proto/pubsub_pb.cjs');
+
 import WebSocket from 'ws';
 import { logger } from '../../utils/logger.js';
 import { PUBSUB_RECONNECT_DELAY_MS, G8ES_PUBSUB_PATH } from '../../constants/http_client.js';
 import { PubSubAction, PubSubMessageType } from '../../constants/channels.js';
 import { HTTP_INTERNAL_AUTH_HEADER } from '../../constants/headers.js';
-import { PubSubSubscribeMessage, PubSubPublishMessage, PubSubInboundMessage, PubSubInboundPMessage } from '../../models/pubsub_models.js';
 
 class G8esPubSubClient {
     /**
@@ -86,19 +89,24 @@ class G8esPubSubClient {
 
         this._ws.on('message', (raw) => {
             try {
-                const parsed = JSON.parse(raw.toString());
-                if (parsed.type === PubSubMessageType.MESSAGE) {
-                    const msg = PubSubInboundMessage.parse(parsed);
+                const event = PubSubEvent.deserializeBinary(raw);
+                const type = event.getType();
+                const channel = event.getChannel();
+                const pattern = event.getPattern();
+                const data = event.getData();
+
+                if (type === PubSubMessageType.MESSAGE) {
                     for (const handler of this._messageHandlers) {
-                        handler(msg.channel, msg.data);
+                        handler(channel, data);
                     }
-                } else if (parsed.type === PubSubMessageType.PMESSAGE) {
-                    const msg = PubSubInboundPMessage.parse(parsed);
+                } else if (type === PubSubMessageType.PMESSAGE) {
                     for (const handler of this._pmessageHandlers) {
-                        handler(msg.pattern, msg.channel, msg.data);
+                        handler(pattern, channel, data);
                     }
                 }
-            } catch {}
+            } catch (error) {
+                logger.error(`[G8ES-CLIENT] Failed to parse inbound protobuf message: ${error.message}`);
+            }
         });
 
         this._ws.on('close', () => {
@@ -117,7 +125,7 @@ class G8esPubSubClient {
         }
         const send = () => {
             if (this._ws && this._ws.readyState === WebSocket.OPEN) {
-                this._ws.send(JSON.stringify(msg.forWire()));
+                this._ws.send(msg.serializeBinary());
             }
         };
         if (this._ws.readyState === WebSocket.OPEN) {
@@ -132,23 +140,36 @@ class G8esPubSubClient {
     // =========================================================================
 
     subscribe(channel) {
-        this._wsSend(new PubSubSubscribeMessage({ action: PubSubAction.SUBSCRIBE, channel }));
+        const msg = new PubSubMessage();
+        msg.setAction(PubSubAction.SUBSCRIBE);
+        msg.setChannel(channel);
+        this._wsSend(msg);
     }
 
     psubscribe(pattern) {
-        this._wsSend(new PubSubSubscribeMessage({ action: PubSubAction.PSUBSCRIBE, channel: pattern }));
+        const msg = new PubSubMessage();
+        msg.setAction(PubSubAction.PSUBSCRIBE);
+        msg.setChannel(pattern);
+        this._wsSend(msg);
     }
 
     unsubscribe(channel) {
-        this._wsSend(new PubSubSubscribeMessage({ action: PubSubAction.UNSUBSCRIBE, channel }));
+        const msg = new PubSubMessage();
+        msg.setAction(PubSubAction.UNSUBSCRIBE);
+        msg.setChannel(channel);
+        this._wsSend(msg);
     }
 
     async publish(channel, data) {
-        if (data === null || typeof data !== 'object' || Array.isArray(data)) {
-            throw new Error(`G8esPubSubClient.publish: data must be a plain object, got ${typeof data}`);
+        if (!Buffer.isBuffer(data) && !(data instanceof Uint8Array)) {
+            throw new Error(`G8esPubSubClient.publish: data must be a Buffer or Uint8Array, got ${typeof data}`);
         }
         try {
-            this._wsSend(new PubSubPublishMessage({ action: PubSubAction.PUBLISH, channel, data }));
+            const msg = new PubSubMessage();
+            msg.setAction(PubSubAction.PUBLISH);
+            msg.setChannel(channel);
+            msg.setData(data);
+            this._wsSend(msg);
             return 1;
         } catch (error) {
             logger.error(`[G8ES-PUBSUB] publish failed: ${error.message}`);

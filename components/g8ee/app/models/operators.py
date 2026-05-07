@@ -126,7 +126,7 @@ class OperatorDocument(G8eIdentifiableModel):
     first_deployed: UTCDatetime | None = Field(default=None, description="When the operator was first deployed")
     name: str | None = Field(default=None, description="Human-readable operator name")
     organization_id: str | None = Field(default=None, description="Organization ID")
-    status: OperatorStatus = Field(default=OperatorStatus.AVAILABLE, description="Current Operator status")
+    status: OperatorStatus = Field(default=OperatorStatus.OFFLINE, description="Current Operator status")
     bound_web_session_id: str | None = Field(default=None, description="Bound web session ID")
     operator_session_id: str | None = Field(default=None, description="Current Operator session ID")
     claimed: bool = Field(default=False, description="True when the slot has been claimed by a running g8eo process")
@@ -403,7 +403,7 @@ class HeartbeatSnapshot(G8eBaseModel):
     def from_wire(cls, payload: G8eoHeartbeatPayload) -> HeartbeatSnapshot:
         """Create HeartbeatSnapshot from the typed g8eo wire payload.
 
-        Canonical wire shape: shared/models/wire/heartbeat.json.
+        Canonical shape defined in shared/proto/operator.proto (HeartbeatSnapshot message).
         Validation happens once at the pub/sub boundary in heartbeat_service.py
         before this is called.
         """
@@ -807,10 +807,9 @@ class TruncatedOutput(G8eBaseModel):
 class HeartbeatSSEEnvelope(G8eBaseModel):
     """Wire envelope for OPERATOR_HEARTBEAT_RECEIVED SSE events.
 
-    Canonical shape: shared/models/wire/heartbeat_sse.json#envelope. Authorship
-    boundary: g8ee owns `operator_id` and `status` (the authoritative value from
+    Authorship boundary: g8ee owns `operator_id` and `status` (the authoritative value from
     OperatorDocument); `metrics` carries the g8eo-authored HeartbeatSnapshot
-    snapshot verbatim (shared/models/wire/heartbeat.json#operator_heartbeat) —
+    snapshot verbatim (defined in shared/proto/operator.proto) —
     the same instance persisted as `latest_heartbeat_snapshot` on the operator
     document. There is no flat projection: wire, persistence, and browser
     all see the identical nested shape. Callers must never mutate fields

@@ -159,14 +159,15 @@ export class AuthAuditEntry extends G8eIdentifiableModel {
 
 export class ApiKeyDocument extends G8eIdentifiableModel {
     static fields = {
-        user_id:         { type: F.string,  required: true },
-        organization_id: { type: F.string,  default: null },
-        operator_id:     { type: F.string,  default: null },
-        client_name:     { type: F.string,  required: true },
-        permissions:     { type: F.array,   default: () => [] },
-        status:          { type: F.string,  default: () => ApiKeyStatus.ACTIVE },
-        last_used_at:    { type: F.date,    default: null },
-        expires_at:      { type: F.date,    default: null },
+        user_id:            { type: F.string,  required: true },
+        organization_id:    { type: F.string,  default: null },
+        operator_id:        { type: F.string,  default: null },
+        client_name:        { type: F.string,  required: true },
+        permissions:        { type: F.array,   default: () => [] },
+        status:             { type: F.string,  default: () => ApiKeyStatus.ACTIVE },
+        system_fingerprint: { type: F.string,  default: null },
+        last_used_at:       { type: F.date,    default: null },
+        expires_at:         { type: F.date,    default: null },
     };
 }
 

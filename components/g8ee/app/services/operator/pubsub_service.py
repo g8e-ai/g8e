@@ -38,6 +38,7 @@ from app.models.pubsub_messages import (
     G8eoResultPayloadAdapter,
     G8eMessage,
 )
+from app.utils.envelope_builder import decode_g8eo_result_envelope
 
 logger = logging.getLogger(__name__)
 
@@ -177,20 +178,35 @@ class OperatorPubSubService:
             extra={"operator_id": operator_id, "operator_session_id": operator_session_id},
         )
 
-    async def _dispatch_results_message(self, channel: str, data: str | dict[str, object]) -> None:
+    async def _dispatch_results_message(self, channel: str, data: str | bytes | dict[str, object]) -> None:
         try:
             _prefix, operator_id, operator_session_id = OperatorChannel.parse(channel)
         except ValueError:
             logger.warning("[PUBSUB] Failed to parse results channel: %s", channel)
             return
-        if isinstance(data, dict):
-            raw = data
-        else:
+
+        # Enforce Protobuf-First Protocol
+        # We only accept bytes which are decoded as UniversalEnvelope protobufs.
+        if isinstance(data, bytes):
             try:
-                raw = json.loads(str(data))
-            except json.JSONDecodeError:
-                logger.warning("[PUBSUB] Non-JSON payload on results channel %s", channel)
+                raw = decode_g8eo_result_envelope(data)
+                logger.debug("[PUBSUB] Decoded protobuf UniversalEnvelope from g8eo")
+            except ValueError as e:
+                logger.warning("[PUBSUB] Failed to decode protobuf envelope: %s", e)
                 return
+        elif isinstance(data, str):
+            # Some pub/sub clients might return strings for bytes - try to decode if it looks like it could be protobuf
+            try:
+                data_bytes = data.encode('utf-8')
+                raw = decode_g8eo_result_envelope(data_bytes)
+                logger.debug("[PUBSUB] Decoded protobuf UniversalEnvelope from string data")
+            except (ValueError, UnicodeDecodeError) as e:
+                logger.warning("[PUBSUB] Received string data that is not a valid protobuf envelope: %s", e)
+                return
+        else:
+            logger.warning("[PUBSUB] Received unsupported data type: %s. Expected bytes (protobuf).", type(data))
+            return
+
         await self._handle_pubsub_result_message(operator_id, operator_session_id, raw)
 
     async def _handle_pubsub_result_message(

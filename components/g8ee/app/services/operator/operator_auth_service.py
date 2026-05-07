@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 import uuid
 import secrets
+import random
 from typing import Any
 
 from app.constants import DB_COLLECTION_USERS, DEFAULT_OPERATOR_CONFIG, OperatorStatus
@@ -82,9 +83,10 @@ class OperatorAuthService:
         authorization_header: str | None,
         body: dict[str, Any],
         request_context: dict[str, Any] | None,
+        system_fingerprint: str | None = None,
     ) -> dict[str, Any]:
         """Authenticate operator process via api key (Bearer)."""
-        return await self._authenticate_via_api_key(authorization_header, body, request_context)
+        return await self._authenticate_via_api_key(authorization_header, body, request_context, system_fingerprint)
 
     async def register_device_link_operator(
         self,
@@ -132,13 +134,12 @@ class OperatorAuthService:
                 if operator:
                     operator_id = operator.id
 
-            # 1b. If no fingerprint match, try to find an existing AVAILABLE slot
+            # 1b. If no fingerprint match, try to find an existing OFFLINE slot
             if not operator:
-                operator = next(
-                    (op for op in all_user_operators if op.status == OperatorStatus.AVAILABLE),
-                    None
-                )
-                if operator:
+                available_slots = [op for op in all_user_operators if op.status == OperatorStatus.OFFLINE]
+                if available_slots:
+                    # Pick a random slot to reduce collisions under high concurrency
+                    operator = random.choice(available_slots)
                     operator_id = operator.id
 
             # 1c. If still no operator, create a new slot on-demand
@@ -162,7 +163,7 @@ class OperatorAuthService:
                     name=f"operator-{slot_number}",
                     slot_number=slot_number,
                     operator_type=operator_type,
-                    status=OperatorStatus.AVAILABLE,
+                    status=OperatorStatus.OFFLINE,
                     api_key=api_key,
                     created_at=now(),
                     updated_at=now(),
@@ -251,6 +252,7 @@ class OperatorAuthService:
         authorization_header: str | None,
         body: dict[str, Any],
         request_context: dict[str, Any] | None,
+        system_fingerprint: str | None = None,
     ) -> dict[str, Any]:
         """Authenticate using an API key (Bearer)."""
         # Extract api_key from Bearer header
@@ -262,11 +264,11 @@ class OperatorAuthService:
             return {"success": False, "error": "Missing API key"}
 
         # Validate api_key
-        success, key_doc, error = await self._api_key_service.validate_key(api_key)
+        success, key_doc, error = await self._api_key_service.validate_key(api_key, system_fingerprint)
         if not success:
             return {"success": False, "error": error or "Invalid API key"}
 
-        await self._api_key_service.record_usage(api_key)
+        await self._api_key_service.record_usage(api_key, system_fingerprint)
 
         user_id = key_doc.user_id
         operator_id = key_doc.operator_id

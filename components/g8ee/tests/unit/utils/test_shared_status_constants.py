@@ -125,10 +125,6 @@ class TestCloudSubtypeMatchesSharedJSON:
         status = _load_status_json()["cloud.subtype"]
         assert CloudSubtype.GCP.value == status["gcp"]
 
-    def test_g8ep_matches(self):
-        status = _load_status_json()["cloud.subtype"]
-        assert CloudSubtype.G8E_POD.value == status["g8ep"]
-
     def test_all_json_cloud_subtypes_have_enum_members(self):
         status = _load_status_json()["cloud.subtype"]
         for key, value in status.items():

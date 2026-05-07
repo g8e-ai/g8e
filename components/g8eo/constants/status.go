@@ -71,10 +71,9 @@ type operatorTypeValues struct {
 
 // cloudSubtypeValues mirrors shared/constants/status.json cloud.subtype.
 type cloudSubtypeValues struct {
-	AWS     string
-	GCP     string
-	Azure   string
-	G8eNode string
+	AWS   string
+	GCP   string
+	Azure string
 }
 
 // vaultModeValues mirrors shared/constants/status.json vault.mode.
@@ -168,10 +167,9 @@ var Status = statusValues{
 		Cloud:  "cloud",
 	},
 	CloudSubtype: cloudSubtypeValues{
-		AWS:     "aws",
-		GCP:     "gcp",
-		Azure:   "azure",
-		G8eNode: "g8ep",
+		AWS:   "aws",
+		GCP:   "gcp",
+		Azure: "azure",
 	},
 	VaultMode: vaultModeValues{
 		Raw:      "raw",

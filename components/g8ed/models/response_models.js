@@ -370,40 +370,13 @@ export class SimpleSuccessResponse extends G8eBaseModel {
 // count of active SSE connections the event was fanned out to. Zero is a
 // legitimate outcome for a BackgroundEvent when the user has no connected
 // sessions and MUST NOT be surfaced as an error.
-// Aligned with shared/models/wire/sse_responses.json (sse_push_response)
+// Internal g8ee-g8ed SSE push response contract.
 
 export class SSEPushResponse extends G8eBaseModel {
     static fields = {
         success:   { type: F.boolean, required: true },
         delivered: { type: F.number,  default: 0, min: 0 },
         error:     { type: F.string,  default: null },
-    };
-}
-
-// ---------------------------------------------------------------------------
-// G8EPOperatorActivationResponse
-//
-// Aligned with shared/models/wire/operator_management_responses.json (g8ep_operator_activation_response)
-// ---------------------------------------------------------------------------
-
-export class G8EPOperatorActivationResponse extends G8eBaseModel {
-    static fields = {
-        success: { type: F.boolean, required: true },
-        error:   { type: F.string,  default: null },
-    };
-}
-
-// ---------------------------------------------------------------------------
-// G8EPOperatorRelaunchResponse
-//
-// Aligned with shared/models/wire/operator_management_responses.json (g8ep_operator_relaunch_response)
-// ---------------------------------------------------------------------------
-
-export class G8EPOperatorRelaunchResponse extends G8eBaseModel {
-    static fields = {
-        success:     { type: F.boolean, required: true },
-        operator_id: { type: F.string,  default: null },
-        error:       { type: F.string,  default: null },
     };
 }
 

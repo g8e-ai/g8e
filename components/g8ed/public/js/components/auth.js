@@ -538,7 +538,7 @@ export class AuthManager {
             actions.appendChild(this.createActionLink('/console', 'Console', null, 'console-link'));
         }
 
-        actions.appendChild(this.createActionLink('/audit', 'Audit Log', null, 'audit-log-link'));
+        actions.appendChild(this.createActionLink('/audit-log', 'Audit Log', null, 'audit-log-link'));
 
         const logoutBtn = document.createElement('button');
         logoutBtn.type = 'button';

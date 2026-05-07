@@ -4,6 +4,9 @@ title: g8e CLI
 
 # g8e Platform CLI
 
+Last Updated: 2026-05-07
+Version: v0.2.0
+
 The `g8e` command is the unified entry point for the g8e AI governance platform. It orchestrates the full lifecycle of a self-hosted, human-in-the-loop AI operations system.
 
 ## Core Principles
@@ -29,8 +32,6 @@ The platform is composed of specialized components, each with a single responsib
 | **g8ee** | Python | Reasoning Engine. Orchestrates AI agents (Triage, Sage, Dash, Tribunal) and enforces governance. |
 | **g8es** | Go | Platform Persistence & Pub/Sub. SQLite-based blob store, KV cache, and event bus. |
 | **g8eo** | Go | Remote Operator. Execution agent deployed to target hosts with LFAA audit trails. |
-| **g8el** | C | Local Inference. Optional llama.cpp-based local model server for air-gapped deployments. |
-| **g8ep** | N/A | Operational Pod. Container where CLI commands execute and investigations run. |
 
 ### Agent Terminology
 

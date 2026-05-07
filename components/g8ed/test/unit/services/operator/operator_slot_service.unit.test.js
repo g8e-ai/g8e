@@ -13,7 +13,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OperatorSlotService } from '@g8ed/services/operator/operator_slot_service.js';
-import { OperatorStatus, OperatorType, CloudOperatorSubtype, DEFAULT_OPERATOR_SLOTS } from '@g8ed/constants/operator.js';
+import { OperatorStatus, OperatorType, DEFAULT_OPERATOR_SLOTS, CloudOperatorSubtype } from '@g8ed/constants/operator.js';
 import { OperatorDocument, CertInfo, OperatorSlotCreationResponse } from '@g8ed/models/operator_model.js';
 import { OperatorRefreshKeyResponse } from '@g8ed/models/response_models.js';
 import { SourceComponent } from '@g8ed/constants/ai.js';
@@ -108,7 +108,7 @@ describe('OperatorSlotService', () => {
             const existingOp = {
                 id: 'existing-op-1',
                 user_id: userId,
-                status: OperatorStatus.AVAILABLE,
+                status: OperatorStatus.OFFLINE,
                 api_key: 'key-existing'
             };
 
@@ -129,7 +129,7 @@ describe('OperatorSlotService', () => {
             const existingOp = {
                 id: 'existing-op-1',
                 user_id: userId,
-                status: OperatorStatus.AVAILABLE,
+                status: OperatorStatus.OFFLINE,
                 api_key: 'key-existing'
             };
             const newOpId = 'new-op-2';
@@ -151,7 +151,7 @@ describe('OperatorSlotService', () => {
             const organizationId = 'org-123';
             const liveOps = Array.from({ length: DEFAULT_OPERATOR_SLOTS }, (_, i) => ({
                 id: `op-${i}`,
-                status: OperatorStatus.AVAILABLE
+                status: OperatorStatus.OFFLINE
             }));
             const terminatedOp = {
                 id: 'op-terminated',
@@ -169,7 +169,7 @@ describe('OperatorSlotService', () => {
         it('should not create slots if already at or above default count', async () => {
             const existing = Array.from({ length: DEFAULT_OPERATOR_SLOTS }, (_, i) => ({
                 id: `op-${i}`,
-                status: OperatorStatus.AVAILABLE
+                status: OperatorStatus.OFFLINE
             }));
             mocks.operatorDataService.queryOperatorsFresh.mockResolvedValueOnce(existing);
 
@@ -178,7 +178,7 @@ describe('OperatorSlotService', () => {
             expect(mocks.operatorDataService.createOperator).not.toHaveBeenCalled();
         });
 
-        it('should assign G8E_POD subtype to the first created slot when no g8ep exists', async () => {
+        it('should create standard operator slots only', async () => {
             mocks.operatorDataService.queryOperatorsFresh.mockResolvedValueOnce([]);
 
             const calls = [];
@@ -189,46 +189,9 @@ describe('OperatorSlotService', () => {
 
             await service.initializeOperatorSlots('u-1', 'org-1');
 
-            expect(calls[0].cloudSubtype).toBe(CloudOperatorSubtype.G8E_POD);
-            expect(calls[0].isG8eNode).toBe(true);
-            expect(calls[1].cloudSubtype).toBeNull();
-            expect(calls[1].isG8eNode).toBe(false);
-        });
-
-        it('should not assign G8E_POD if an existing live operator already has is_g8ep', async () => {
-            const existingG8eNode = {
-                id: 'op-drop',
-                status: OperatorStatus.AVAILABLE,
-                is_g8ep: true,
-            };
-            mocks.operatorDataService.queryOperatorsFresh.mockResolvedValueOnce([existingG8eNode]);
-
-            const calls = [];
-            vi.spyOn(service, 'createOperatorSlot').mockImplementation(async (args) => {
-                calls.push(args);
-                return { success: true, operator_id: `op-${args.slotNumber}` };
-            });
-
-            await service.initializeOperatorSlots('u-1', 'org-1');
-
-            const g8eNodeCalls = calls.filter(c => c.isG8eNode === true);
-            expect(g8eNodeCalls).toHaveLength(0);
-        });
-
-        it('should assign G8E_POD to exactly one slot per user', async () => {
-            mocks.operatorDataService.queryOperatorsFresh.mockResolvedValueOnce([]);
-
-            const calls = [];
-            vi.spyOn(service, 'createOperatorSlot').mockImplementation(async (args) => {
-                calls.push(args);
-                return { success: true, operator_id: `op-${args.slotNumber}` };
-            });
-
-            await service.initializeOperatorSlots('u-1', 'org-1');
-
-            const g8eNodeCalls = calls.filter(c => c.isG8eNode === true);
-            expect(g8eNodeCalls).toHaveLength(1);
-            expect(g8eNodeCalls[0].cloudSubtype).toBe(CloudOperatorSubtype.G8E_POD);
+            expect(calls).toHaveLength(DEFAULT_OPERATOR_SLOTS);
+            expect(calls.every(c => c.cloudSubtype === undefined)).toBe(true);
+            expect(calls.every(c => c.isG8eNode === undefined)).toBe(true);
         });
 
         it('should issue API keys for existing slots without keys', async () => {
@@ -237,7 +200,7 @@ describe('OperatorSlotService', () => {
             const existingOpWithoutKey = {
                 id: 'existing-op-1',
                 user_id: userId,
-                status: OperatorStatus.AVAILABLE,
+                status: OperatorStatus.OFFLINE,
                 api_key: null
             };
 
@@ -265,7 +228,7 @@ describe('OperatorSlotService', () => {
             const existingOpWithKey = {
                 id: 'existing-op-1',
                 user_id: userId,
-                status: OperatorStatus.AVAILABLE,
+                status: OperatorStatus.OFFLINE,
                 api_key: 'existing-key'
             };
 
@@ -376,9 +339,8 @@ describe('OperatorSlotService', () => {
                 organizationId: 'org-1',
                 slotNumber: 1,
                 operatorType: OperatorType.CLOUD,
-                cloudSubtype: CloudOperatorSubtype.G8E_POD,
+                cloudSubtype: CloudOperatorSubtype.AWS,
                 namePrefix: 'op',
-                isG8eNode: true,
                 webSessionId: 'web-sess-123'
             };
 

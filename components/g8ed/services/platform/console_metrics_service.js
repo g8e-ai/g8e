@@ -156,14 +156,12 @@ class ConsoleMetricsService {
         const operators = await this._cache_aside.queryDocuments(Collections.OPERATORS, [], null, true);
 
         const statusDistribution = {
-            [OperatorStatus.AVAILABLE]: 0,
+            [OperatorStatus.OFFLINE]: 0,
             [OperatorStatus.ACTIVE]: 0,
             [OperatorStatus.BOUND]: 0,
-            [OperatorStatus.OFFLINE]: 0,
             [OperatorStatus.STALE]: 0,
             [OperatorStatus.STOPPED]: 0,
             [OperatorStatus.TERMINATED]: 0,
-            [OperatorStatus.UNAVAILABLE]: 0
         };
 
         const typeDistribution = {
@@ -196,7 +194,7 @@ class ConsoleMetricsService {
                 }
 
                 // latest_heartbeat_snapshot is the canonical HeartbeatSnapshot shape
-                // (shared/models/wire/heartbeat.json#operator_heartbeat) — persisted
+                // (defined in shared/proto/operator.proto) — persisted
                 // and SSE envelope both carry the same nested shape.
                 const perf = heartbeat.performance || {};
 
@@ -222,7 +220,7 @@ class ConsoleMetricsService {
             typeDistribution,
             health: {
                 healthy: healthyCount,
-                unhealthy: operators.length - healthyCount - statusDistribution[OperatorStatus.AVAILABLE] - statusDistribution[OperatorStatus.TERMINATED],
+                unhealthy: operators.length - healthyCount - statusDistribution[OperatorStatus.OFFLINE] - statusDistribution[OperatorStatus.TERMINATED],
                 avgLatencyMs: latencyCount > 0 ? Math.round(totalLatency / latencyCount) : 0,
                 avgCpuPercent: metricsCount > 0 ? Math.round(avgCpu / metricsCount) : 0,
                 avgMemoryPercent: metricsCount > 0 ? Math.round(avgMemory / metricsCount) : 0
@@ -431,7 +429,8 @@ class ConsoleMetricsService {
 
         try {
             const g8eeStart = Date.now();
-            const g8eeHealth = await this.internalHttpClient.request('g8ee', '/health', { method: 'GET' });
+            const healthResults = await this.internalHttpClient.healthCheck();
+            const g8eeHealth = healthResults.g8ee?.response;
             components.g8ee = {
                 name: 'g8ee',
                 status: g8eeHealth?.status === SystemHealth.HEALTHY ? SystemHealth.HEALTHY : SystemHealth.DEGRADED,

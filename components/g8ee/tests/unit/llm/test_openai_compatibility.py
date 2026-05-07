@@ -15,7 +15,6 @@ from unittest.mock import patch
 
 import pytest
 
-from app.llm.providers.g8el import G8elProvider
 from app.llm.providers.llama_cpp import LlamaCppProvider
 from app.llm.providers.open_ai import OpenAIProvider
 
@@ -33,9 +32,3 @@ class TestOpenAICompatibility:
             assert provider.service_name == "llamacpp"
             assert isinstance(provider, OpenAIProvider)
 
-    def test_g8el_provider_identity(self):
-        with patch("app.llm.providers.open_ai.AsyncOpenAI"):
-            provider = G8elProvider(endpoint="http://test", api_key="test")
-            assert provider.service_name == "g8el"
-            assert isinstance(provider, LlamaCppProvider)
-            assert isinstance(provider, OpenAIProvider)

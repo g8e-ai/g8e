@@ -14,6 +14,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createInternalSSERouter } from '@g8ed/routes/internal/internal_sse_routes.js';
 import { EventType } from '@g8ed/constants/events.js';
+import { InternalApiPaths } from '@g8ed/constants/api_paths.js';
+
+const PUSH_PATH = '/' + InternalApiPaths.g8ed.sse_push.split('/').pop();
 
 describe('Internal SSE Routes [UNIT]', () => {
     let router;
@@ -53,11 +56,12 @@ describe('Internal SSE Routes [UNIT]', () => {
         return res;
     };
 
+    const getRoute = () => {
+        const layer = router.stack.find(s => s.route?.path === PUSH_PATH);
+        return layer.route.stack[layer.route.stack.length - 1].handle;
+    };
+
     describe('POST /push', () => {
-        const getRoute = () => {
-            const layer = router.stack.find(s => s.route?.path === '/push');
-            return layer.route.stack[layer.route.stack.length - 1].handle;
-        };
 
         it('should successfully push an event to a web session', async () => {
             const event = { type: EventType.LLM_CHAT_ITERATION_TEXT_RECEIVED, text: 'hello' };
@@ -260,11 +264,6 @@ describe('Internal SSE Routes [UNIT]', () => {
             }));
         });
     });
-
-    const getRoute = () => {
-        const layer = router.stack.find(s => s.route?.path === '/push');
-        return layer.route.stack[layer.route.stack.length - 1].handle;
-    };
 
     describe('citations payload pass-through', () => {
 

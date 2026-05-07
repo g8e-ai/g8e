@@ -27,8 +27,7 @@
   "cloud.subtype": {
     "aws": "aws",
     "gcp": "gcp",
-    "azure": "azure",
-    "g8ep": "g8ep"
+    "azure": "azure"
   },
 
   "execution.status": {
@@ -75,7 +74,7 @@
     "triage": "Triage",
     "escalated": "Escalated",
     "waiting.for.customer": "WaitingForCustomer",
-    "investigate": "Investigate",
+    "in.progress": "InProgress",
     "human.review": "HumanReview",
     "resolved": "Resolved",
     "closed": "Closed"
@@ -217,6 +216,7 @@
     "fetch.file.history": "ai.fetch.file.history",
     "restore.file": "ai.restore.file",
     "fetch.file.diff": "ai.fetch.file.diff",
+    "recursive.grep": "ai.recursive_grep",
     "intent.grant": "ai.intent.grant",
     "intent.revoke": "ai.intent.revoke"
   },
@@ -537,6 +537,7 @@
     "query.investigation.context": "query_investigation_context",
     "get.command.constraints": "get_command_constraints",
     "list.ssh.inventory": "list_ssh_inventory",
+    "recursive.grep": "recursive_grep_search",
     "stream.operator": "stream_operator_to_ssh_fleet"
   },
 
@@ -568,6 +569,9 @@
       "nemotron.3.30b": "nemotron-3-nano:30b",
       "llama.3.2.3b": "llama3.2:3b",
       "qwen3.5.2b": "qwen3.5:2b"
+    },
+    "llamacpp": {
+      "gemma4.e2b": "google_gemma-4-E2B-it-Q4_K_M.gguf"
     }
   }
 }

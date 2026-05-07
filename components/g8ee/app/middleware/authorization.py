@@ -14,10 +14,13 @@
 import logging
 
 from fastapi import Request
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 
-from app.constants import ComponentName
+from app.constants import (
+    ComponentName,
+    InternalApiPaths,
+)
 from app.errors import AuthorizationError, ResourceNotFoundError, ServiceUnavailableError
 from app.models.http_context import G8eHttpContext
 
@@ -29,7 +32,7 @@ class AuthorizationMiddleware(BaseHTTPMiddleware):
     EXEMPT_PATHS = {
         "/health",
         "/health/details",
-        "/api/internal/health",
+        InternalApiPaths.G8EE_HEALTH,
         "/docs",
         "/openapi.json",
         "/redoc"
@@ -37,19 +40,27 @@ class AuthorizationMiddleware(BaseHTTPMiddleware):
 
     INTERNAL_PATHS = {
         "/investigations",
-        "/chat"
+        "/chat",
     }
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         if request.url.path in self.EXEMPT_PATHS:
             return await call_next(request)
 
-        g8e_context = self._extract_g8e_context(request)
+        # Ensure g8e_context is set by the G8eHttpContextMiddleware
+        g8e_context: G8eHttpContext | None = getattr(request.state, "g8e_context", None)
+        
+        # If no context is present, we cannot perform authorization checks
+        # This middleware should run AFTER G8eHttpContextMiddleware
+        if not g8e_context:
+            return await call_next(request)
 
-        if g8e_context and self._is_user_scoped_path(request.url.path):
+        if self._is_user_scoped_path(request.url.path):
             query_params = dict(request.query_params)
             path_params = request.path_params if hasattr(request, "path_params") else {}
-
+            
+            path = request.url.path
+            
             user_id_in_request = (
                 query_params.get("user_id") or
                 path_params.get("user_id")
@@ -64,7 +75,6 @@ class AuthorizationMiddleware(BaseHTTPMiddleware):
                             "requested_user_id": user_id_in_request,
                             "path": request.url.path,
                             "method": request.method,
-                            "source_ip": request.client.host if request.client else "None"
                         }
                     )
                     raise AuthorizationError(
@@ -72,12 +82,20 @@ class AuthorizationMiddleware(BaseHTTPMiddleware):
                         component=ComponentName.G8EE
                     )
 
+            # Extract investigation_id and case_id from path or query
             investigation_id = (
                 query_params.get("investigation_id") or
                 path_params.get("investigation_id")
             )
+            if not investigation_id:
+                # Try to extract from path: /investigations/{id}
+                parts = path.split("/")
+                if "investigations" in parts:
+                    idx = parts.index("investigations")
+                    if len(parts) > idx + 1:
+                        investigation_id = parts[idx + 1]
 
-            if investigation_id:
+            if investigation_id and investigation_id != "new-case":
                 await self._validate_investigation_ownership(
                     request,
                     investigation_id,
@@ -88,27 +106,35 @@ class AuthorizationMiddleware(BaseHTTPMiddleware):
                 query_params.get("case_id") or
                 path_params.get("case_id")
             )
+            if not case_id:
+                # Try to extract from path: /cases/{id}
+                parts = path.split("/")
+                if "cases" in parts:
+                    idx = parts.index("cases")
+                    if len(parts) > idx + 1:
+                        case_id = parts[idx + 1]
 
-            if case_id:
+            if case_id and case_id != "new-case":
                 await self._validate_case_ownership(
                     request,
                     case_id,
                     g8e_context.user_id
                 )
 
-        response = await call_next(request)
-        return response
+        return await call_next(request)
+
+    def _is_user_scoped_path(self, path: str) -> bool:
+        # Check if the path starts with any of our internal paths
+        # InternalApiPaths.G8EE_INVESTIGATIONS is usually /api/internal/investigations
+        for internal_path in self.INTERNAL_PATHS:
+            if path.startswith(internal_path):
+                return True
+        return False
 
     def _extract_g8e_context(self, request: Request) -> G8eHttpContext | None:
         if hasattr(request.state, "g8e_context"):
             return request.state.g8e_context
         return None
-
-    def _is_user_scoped_path(self, path: str) -> bool:
-        for internal_path in self.INTERNAL_PATHS:
-            if path.startswith(internal_path):
-                return True
-        return False
 
     async def _validate_investigation_ownership(
         self,
@@ -116,7 +142,8 @@ class AuthorizationMiddleware(BaseHTTPMiddleware):
         investigation_id: str,
         authenticated_user_id: str
     ) -> None:
-        investigation_service = getattr(request.app.state, "investigation_service", None)
+        services = getattr(request.app.state, "services", None)
+        investigation_service = getattr(services, "investigation_service", None) if services else None
         if investigation_service is None:
             raise ServiceUnavailableError(
                 "investigation_service not initialised",
@@ -147,7 +174,8 @@ class AuthorizationMiddleware(BaseHTTPMiddleware):
         case_id: str,
         authenticated_user_id: str
     ) -> None:
-        db_service = getattr(request.app.state, "db_service", None)
+        services = getattr(request.app.state, "services", None)
+        db_service = getattr(services, "db_service", None) if services else None
         if db_service is None:
             raise ServiceUnavailableError(
                 "db_service not initialised",

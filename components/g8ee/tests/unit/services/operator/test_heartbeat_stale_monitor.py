@@ -57,7 +57,7 @@ def test_resolve_heartbeat_transition():
     assert resolve_heartbeat_transition(OperatorStatus.OFFLINE, True) is None
 
     # Ignored statuses
-    assert resolve_heartbeat_transition(OperatorStatus.AVAILABLE, True) is None
+    assert resolve_heartbeat_transition(OperatorStatus.OFFLINE, True) is None
     assert resolve_heartbeat_transition(OperatorStatus.TERMINATED, True) is None
     assert resolve_heartbeat_transition(OperatorStatus.STOPPED, True) is None
 
@@ -215,7 +215,7 @@ async def test_tick_ignores_non_monitored_statuses():
 
     old_ts = datetime.now(UTC) - timedelta(days=1)
     operators = [
-        make_operator(id="op-1", status=OperatorStatus.AVAILABLE, latest_heartbeat_snapshot=HeartbeatSnapshot(
+        make_operator(id="op-1", status=OperatorStatus.OFFLINE, latest_heartbeat_snapshot=HeartbeatSnapshot(
             timestamp=old_ts, system_identity=HeartbeatSystemIdentity(hostname="node-02")
         )),
         make_operator(id="op-2", status=OperatorStatus.TERMINATED, latest_heartbeat_snapshot=HeartbeatSnapshot(

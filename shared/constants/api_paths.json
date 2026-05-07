@@ -20,8 +20,6 @@
     "operators_authenticate": "/operators/authenticate",
     "operators_validate_session": "/operators/validate-session",
     "operators_refresh_session": "/operators/refresh-session",
-    "operators_g8ep_activate": "/operators/g8ep/activate",
-    "operators_g8ep_relaunch": "/operators/g8ep/relaunch",
     "operators_device_link_register": "/operators/device-link/register",
     "operators_update_api_key": "/operators/update-api-key",
     "operator_direct_command": "/operator/direct-command",
@@ -40,6 +38,23 @@
     "grant_intent": "/operators/{operator_id}/grant-intent",
     "revoke_intent": "/operators/{operator_id}/revoke-intent",
     "create_operator_link": "/device-links/operator-link",
-    "health": "/health"
+    "health": "/health",
+    "operators": "/operators",
+    "operators_user": "/operators/user/{user_id}",
+    "operators_user_reauth": "/operators/user/{user_id}/reauth",
+    "operators_user_init_slots": "/operators/user/{user_id}/initialize-slots",
+    "operators_status": "/operators/{operator_id}/status",
+    "operators_with_session": "/operators/{operator_id}/with-session-context",
+    "operators_refresh_key": "/operators/{operator_id}/refresh-key",
+    "operators_reset_cache": "/operators/{operator_id}/reset-cache",
+    "operators_terminate": "/operators/{operator_id}/terminate",
+    "users": "/users",
+    "users_stats": "/users/stats",
+    "users_email": "/users/email/{email}",
+    "users_passkeys": "/users/{user_id}/passkeys",
+    "session": "/session/{session_id}",
+    "device_links": "/device-links",
+    "device_links_user": "/device-links/user/{user_id}",
+    "settings": "/settings"
   }
 }

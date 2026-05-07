@@ -19,6 +19,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.constants import EventType, ExecutionStatus, PubSubChannel
+from app.proto import common_pb2, operator_pb2
 from app.services.operator.command_service import OperatorCommandService
 from app.services.operator.heartbeat_service import HeartbeatSnapshotService
 from tests.fakes.builder import build_command_service
@@ -202,14 +203,39 @@ class TestDeregisterOperatorSession:
 class TestDispatchResultsMessage:
     """Test _dispatch_results_message routing."""
 
-    async def test_routes_to_result_handler(self, command_service):
-        """Test dispatches parsed message to _handle_pubsub_result_message."""
+    async def test_routes_to_result_handler_protobuf(self, command_service):
+        """Test dispatches parsed protobuf message to _handle_pubsub_result_message."""
         with patch.object(command_service._pubsub_service, "_handle_pubsub_result_message", new=AsyncMock()) as mock_handle:  # noqa: SLF001
-            data = json.dumps({"event_type": EventType.OPERATOR_COMMAND_COMPLETED, "payload": {}})
-            await command_service._pubsub_service._dispatch_results_message(PubSubChannel.results("op-1", "sess-1"), data)  # noqa: SLF001
-            mock_handle.assert_called_once_with(
-                "op-1", "sess-1", {"event_type": EventType.OPERATOR_COMMAND_COMPLETED, "payload": {}}
-            )
+            # Build a valid protobuf envelope
+            envelope = common_pb2.UniversalEnvelope()
+            envelope.id = "test-id"
+            envelope.event_type = EventType.OPERATOR_COMMAND_COMPLETED
+            
+            result = operator_pb2.CommandResult()
+            result.execution_id = "exec-1"
+            result.status = operator_pb2.EXECUTION_STATUS_COMPLETED
+            envelope.payload = result.SerializeToString()
+            
+            data = envelope.SerializeToString()
+            
+            await command_service._pubsub_service._dispatch_results_message( PubSubChannel.results("op-1", "sess-1"), data)  # noqa: SLF001
+            
+            mock_handle.assert_called_once()
+            call_args = mock_handle.call_args[0]
+            assert call_args[0] == "op-1"
+            assert call_args[1] == "sess-1"
+            assert call_args[2]["event_type"] == EventType.OPERATOR_COMMAND_COMPLETED
+            assert call_args[2]["payload"]["execution_id"] == "exec-1"
+
+    async def test_rejects_json_payload(self, command_service):
+        """Test rejects legacy JSON payload."""
+        command_service._pubsub_service._handle_pubsub_result_message = AsyncMock()  # noqa: SLF001
+        data = json.dumps({"event_type": EventType.OPERATOR_COMMAND_COMPLETED, "payload": {}})
+        
+        await command_service._pubsub_service._dispatch_results_message(PubSubChannel.results("op-1", "sess-1"), data)  # noqa: SLF001
+        
+        # Should NOT call handler because it's not a valid protobuf envelope
+        command_service._pubsub_service._handle_pubsub_result_message.assert_not_called()
 
     async def test_ignores_invalid_channel_format(self, command_service):
         """Test silently ignores channels that cannot be parsed."""
@@ -219,28 +245,30 @@ class TestDispatchResultsMessage:
         command_service._pubsub_service._handle_pubsub_result_message.assert_not_called()  # noqa: SLF001
 
     async def test_propagates_downstream_handler_errors(self, command_service):
-        """Unexpected exceptions from the downstream handler must propagate.
-
-        The dispatcher only swallows parse failures (ValueError for channel
-        shape, JSONDecodeError for payload). Arbitrary handler errors indicate
-        real bugs and are caught upstream by PubSubClient._safe_dispatch so
-        they surface in logs with a traceback instead of being silently eaten.
-        """
+        """Unexpected exceptions from the downstream handler must propagate."""
         command_service._pubsub_service._handle_pubsub_result_message = AsyncMock(  # noqa: SLF001
             side_effect=Exception("boom")
         )
+        
+        # Build a valid protobuf envelope to reach the handler
+        envelope = common_pb2.UniversalEnvelope()
+        envelope.id = "test-id"
+        envelope.event_type = "test-event"
+        data = envelope.SerializeToString()
+        
         with pytest.raises(Exception, match="boom"):
             await command_service._pubsub_service._dispatch_results_message(  # noqa: SLF001
-                PubSubChannel.results("op-1", "sess-1"), json.dumps({"event_type": "x"})
+                PubSubChannel.results("op-1", "sess-1"), data
             )
 
-    async def test_swallows_non_json_payload(self, command_service):
-        """Non-JSON string payloads are logged and dropped, never raised."""
+    async def test_swallows_non_protobuf_payload(self, command_service):
+        """Non-protobuf payloads are logged and dropped, never raised."""
         command_service._pubsub_service._handle_pubsub_result_message = AsyncMock()  # noqa: SLF001
         await command_service._pubsub_service._dispatch_results_message(  # noqa: SLF001
-            PubSubChannel.results("op-1", "sess-1"), "not-json-at-all"
+            PubSubChannel.results("op-1", "sess-1"), b"not-protobuf-at-all"
         )
-        command_service._pubsub_service._handle_pubsub_result_message.assert_not_called()  # noqa: SLF001
+        command_service._pubsub_service._handle_pubsub_result_message.assert_not_called()
+  # noqa: SLF001
 
 
 class TestHandlePubSubResultMessage:

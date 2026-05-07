@@ -5,6 +5,9 @@ parent: Components
 
 # g8eo — g8e Operator
 
+Last Updated: 2026-05-07
+Version: v0.2.0
+
 g8eo is the Go-based reference implementation of the Operator for the g8e platform. It provides language-agnostic, secure, real-time command execution and file management for remote system operations.
 
 > For deep-reference security documentation — CA trust bootstrap, mTLS, fingerprint binding, replay protection, operator binding, Sentinel pre-execution threat detection, output scrubbing patterns, LFAA vault encryption, and the Ledger — see [architecture/security.md](../architecture/security.md).
@@ -81,6 +84,8 @@ g8eo implements the **Local-First Audit Architecture (LFAA)**, maintaining four 
 | **Raw Vault** | Unscrubbed full output for forensics. | Local User Only |
 | **Audit Vault** | Append-only event timeline (LFAA). | Platform / Audit |
 | **Ledger** | Git-backed cryptographic version history for all modified files. | Platform / Audit |
+
+The LFAA Audit Vault (`.g8e/data/g8e.db`) can be queried directly using SQLite for forensic analysis and audit review. See [Storage Architecture - Querying the LFAA Audit Vault](../architecture/storage.md#querying-the-lfaa-audit-vault) for raw SQL queries and the Python CLI tool reference.
 
 *Note: The Ledger requires a functional `git` binary and is automatically disabled if git is unavailable or `--no-git` is passed.*
 

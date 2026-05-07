@@ -15,7 +15,6 @@ package pubsub
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net"
@@ -23,7 +22,8 @@ import (
 
 	"github.com/g8e-ai/g8e/components/g8eo/config"
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
-	"github.com/g8e-ai/g8e/components/g8eo/models"
+	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
+	"google.golang.org/protobuf/proto"
 )
 
 // PortService owns port connectivity check handling.
@@ -44,57 +44,53 @@ func NewPortService(cfg *config.Config, logger *slog.Logger, client PubSubClient
 
 // HandlePortCheckRequest processes an inbound port check request.
 func (ps *PortService) HandlePortCheckRequest(ctx context.Context, msg PubSubCommandMessage) {
-	var p models.PortCheckRequestPayload
-	if err := json.Unmarshal(msg.Payload, &p); err != nil {
-		ps.logger.Error("Failed to decode port check payload", "error", err)
-		publishLFAAErrorTo(ctx, ps.client, ps.config, ps.logger, msg, constants.Event.Operator.PortCheck.Failed, "invalid request payload", "port_check_error")
-		return
-	}
-	if p.Port <= 0 || p.Port > 65535 {
-		ps.logger.Warn("Port check request with invalid port", "port", p.Port)
-		publishLFAAErrorTo(ctx, ps.client, ps.config, ps.logger, msg, constants.Event.Operator.PortCheck.Failed, "port must be between 1 and 65535", "port_check_error")
+	var protoPort operatorv1.CheckPortRequested
+	if err := proto.Unmarshal(msg.Payload, &protoPort); err != nil {
+		ps.logger.Error("Failed to decode port check payload as protobuf CheckPortRequested", "error", err)
+		publishLFAAErrorTo(ctx, ps.client, ps.config, ps.logger, msg, constants.Event.Operator.PortCheck.Failed, "invalid request payload")
 		return
 	}
 
-	host := p.Host
+	if protoPort.Port <= 0 || protoPort.Port > 65535 {
+		ps.logger.Warn("Port check request with invalid port", "port", protoPort.Port)
+		publishLFAAErrorTo(ctx, ps.client, ps.config, ps.logger, msg, constants.Event.Operator.PortCheck.Failed, "port must be between 1 and 65535")
+		return
+	}
+
+	host := protoPort.Host
 	if host == "" {
 		host = "localhost"
 	}
-	protocol := p.Protocol
+	protocol := protoPort.Protocol
 	if protocol == "" {
 		protocol = "tcp"
 	}
 
 	executionID := executionIDFromMessage(msg)
 
-	ps.logger.Info("Port check requested", "host", host, "port", p.Port, "protocol", protocol)
+	ps.logger.Info("Port check requested (via Protobuf)", "host", host, "port", protoPort.Port, "protocol", protocol)
 
 	start := time.Now()
-	address := net.JoinHostPort(host, fmt.Sprintf("%d", p.Port))
+	address := net.JoinHostPort(host, fmt.Sprintf("%d", protoPort.Port))
 	conn, dialErr := net.DialTimeout(protocol, address, 5*time.Second)
 	latencyMs := time.Since(start).Seconds() * 1000
 
-	entry := models.PortCheckEntry{
+	entry := &operatorv1.PortCheckEntry{
 		Host: host,
-		Port: p.Port,
+		Port: protoPort.Port,
 		Open: dialErr == nil,
 	}
 	if dialErr == nil {
 		conn.Close()
-		ms := latencyMs
-		entry.LatencyMs = &ms
+		entry.LatencyMs = float32(latencyMs)
 	} else {
-		errMsg := dialErr.Error()
-		entry.Error = &errMsg
+		entry.Error = dialErr.Error()
 	}
 
-	payload := models.PortCheckResultPayload{
-		PayloadType:       "port_check_result",
-		ExecutionID:       executionID,
-		Status:            constants.ExecutionStatusCompleted,
-		OperatorID:        ps.config.OperatorID,
-		OperatorSessionID: ps.config.OperatorSessionId,
-		Results:           []models.PortCheckEntry{entry},
+	payload := &operatorv1.PortCheckResult{
+		ExecutionId: executionID,
+		Status:      protoExecutionStatus(constants.ExecutionStatusCompleted),
+		Results:     []*operatorv1.PortCheckEntry{entry},
 	}
 	publishLFAATypedResponseTo(ctx, ps.client, ps.config, ps.logger, msg, constants.Event.Operator.PortCheck.Completed, payload)
 }

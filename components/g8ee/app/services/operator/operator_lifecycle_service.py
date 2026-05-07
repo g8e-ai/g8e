@@ -14,7 +14,6 @@
 from __future__ import annotations
 
 import logging
-import secrets
 from typing import TYPE_CHECKING
 
 from app.constants.status import (
@@ -25,13 +24,12 @@ from app.constants.status import (
 )
 from app.errors import ValidationError
 from app.models.operators import OperatorDocument
-from app.services.protocols import OperatorDataServiceProtocol, SupervisorServiceProtocol
+from app.services.protocols import OperatorDataServiceProtocol
 from app.utils.timestamp import now
 
 if TYPE_CHECKING:
     from app.services.auth.api_key_service import ApiKeyService
     from app.services.cache.cache_aside import CacheAsideService
-    from app.services.infra.settings_service import SettingsService
 
 logger = logging.getLogger(__name__)
 
@@ -47,12 +45,8 @@ class OperatorLifecycleService:
     def __init__(
         self,
         operator_data_service: OperatorDataServiceProtocol,
-        supervisor_service: SupervisorServiceProtocol,
-        settings_service: SettingsService,
     ):
         self.operator_data_service = operator_data_service
-        self.supervisor_service = supervisor_service
-        self.settings_service = settings_service
         self._api_key_service: ApiKeyService | None = None
         # Access the underlying cache for direct document updates
         self._cache: CacheAsideService = operator_data_service.cache  # type: ignore
@@ -82,12 +76,33 @@ class OperatorLifecycleService:
         This orchestrates the transition from AVAILABLE to ACTIVE status,
         sets session bindings, and records first deployment if applicable.
 
+        Allows re-claiming ACTIVE or STALE slots with a different session_id
+        to handle re-authentication race conditions.
+
         Authority: g8ee (single writer for the operator document).
         """
         operator = await self.operator_data_service.get_operator(operator_id)
         if not operator:
             logger.warning("[OPERATOR-LIFECYCLE] Cannot claim non-existent operator %s", operator_id)
             return False
+
+        # Determine if this is a re-claim (pre-empting stale session)
+        is_reclaim = operator.status in (OperatorStatus.ACTIVE, OperatorStatus.STALE)
+        if is_reclaim:
+            if operator.operator_session_id == operator_session_id:
+                logger.warning(
+                    "[OPERATOR-LIFECYCLE] Cannot claim operator %s: already claimed by same session %s",
+                    operator_id,
+                    operator_session_id
+                )
+                return False
+            logger.info(
+                "[OPERATOR-LIFECYCLE] Pre-empting stale session for operator %s: status=%s, old_session=%s, new_session=%s",
+                operator_id,
+                operator.status,
+                operator.operator_session_id,
+                operator_session_id
+            )
 
         now_timestamp = now()
         update_data: dict[str, object] = {
@@ -107,11 +122,14 @@ class OperatorLifecycleService:
             update_data["operator_type"] = operator_type
 
         # Perform the status update and history append atomically via data service
+        # Use atomic status check to prevent race conditions with heartbeat monitor
+        allowed_statuses = (OperatorStatus.OFFLINE, OperatorStatus.ACTIVE, OperatorStatus.STALE)
         history_summary = f"Operator slot claimed by session {operator_session_id}"
         history_details = {
             "operator_session_id": operator_session_id,
             "bound_web_session_id": bound_web_session_id,
             "operator_type": str(operator_type) if operator_type else None,
+            "is_reclaim": is_reclaim,
         }
 
         try:
@@ -121,8 +139,12 @@ class OperatorLifecycleService:
                 actor=ComponentName.G8EE,
                 summary=history_summary,
                 details=history_details,
-                additional_updates=update_data
+                additional_updates=update_data,
+                status_check=allowed_statuses,
             )
+        except ValidationError as e:
+            logger.warning("[OPERATOR-LIFECYCLE] Claim failed validation for operator %s: %s", operator_id, e)
+            return False
         except Exception as e:
             logger.error("[OPERATOR-LIFECYCLE] Atomic claim failed for operator %s: %s", operator_id, e)
             return False
@@ -130,6 +152,7 @@ class OperatorLifecycleService:
         logger.info("[OPERATOR-LIFECYCLE] Operator slot claimed %s", operator_id, extra={
             "operator_id": operator_id,
             "operator_session_id": operator_session_id,
+            "is_reclaim": is_reclaim,
         })
 
         return True
@@ -216,133 +239,3 @@ class OperatorLifecycleService:
 
         return result.success
 
-    async def activate_g8ep_operator(self, user_id: str) -> None:
-        """Orchestrates g8ep operator activation after login.
-        
-        Authority: g8ee (process owner for g8ep operator).
-        """
-        try:
-            # Find the specific slot designated as the g8ep for this user
-            operators = await self.operator_data_service.query_operators([
-                {"field": "user_id", "op": "==", "value": user_id},
-                {"field": "is_g8ep", "op": "==", "value": True}
-            ])
-
-            if not operators:
-                logger.info("[OPERATOR-LIFECYCLE] No g8ep operator slot found for user %s", user_id)
-                return
-
-            operator = operators[0]
-
-            # If already active/bound — nothing to do
-            if operator.status in [OperatorStatus.ACTIVE, OperatorStatus.BOUND]:
-                logger.info("[OPERATOR-LIFECYCLE] g8ep operator already active for user %s", user_id, extra={
-                    "operator_id": operator.id
-                })
-                return
-
-            if not operator.api_key:
-                logger.warning("[OPERATOR-LIFECYCLE] g8ep operator slot has no API key for user %s", user_id, extra={
-                    "operator_id": operator.id
-                })
-                return
-
-            await self.launch_g8ep_operator(operator.api_key)
-
-        except Exception as e:
-            logger.warning("[OPERATOR-LIFECYCLE] g8ep operator activation failed (non-fatal): %s", e, extra={
-                "user_id": user_id
-            })
-
-    async def launch_g8ep_operator(self, api_key: str) -> None:
-        """Starts the g8ep operator process via XML-RPC.
-
-        Authority: g8ee (process owner for g8ep operator).
-        """
-        logger.info("[OPERATOR-LIFECYCLE] Starting g8ep operator via XML-RPC")
-
-        # 1. Persist API key to platform_settings (authority: g8ee)
-        await self.settings_service.update_g8ep_operator_api_key(api_key)
-
-        # 2. Start supervised process
-        await self.supervisor_service.start_process("operator", wait=False)
-
-        logger.info("[OPERATOR-LIFECYCLE] g8ep operator service signaled")
-
-    async def relaunch_g8ep_operator(self, user_id: str) -> dict[str, object]:
-        """Kills running operator, resets slot, and relaunches.
-
-        Authority: g8ee (process owner for g8ep operator).
-        """
-        if self._api_key_service is None:
-            raise ValidationError("OperatorLifecycleService.api_key_service is not wired")
-
-        # Find the specific slot designated as the g8ep for this user
-        operators = await self.operator_data_service.query_operators([
-            {"field": "user_id", "op": "==", "value": user_id},
-            {"field": "is_g8ep", "op": "==", "value": True}
-        ])
-
-        if not operators:
-            logger.warning("[OPERATOR-LIFECYCLE] Relaunch requested but no g8ep operator slot found for user %s", user_id)
-            return {"success": False, "error": "No g8ep operator slot found for user"}
-
-        operator = operators[0]
-        operator_id = operator.id
-        old_api_key = operator.api_key
-
-        logger.info("[OPERATOR-LIFECYCLE] Relaunching g8ep operator for user %s", user_id, extra={
-            "operator_id": operator_id
-        })
-
-        # 1. Stop process
-        await self.supervisor_service.stop_process("operator", wait=True)
-
-        # 2. Generate new API key and register canonically BEFORE touching the
-        #    operator doc or the platform_settings mirror. This keeps `api_keys`
-        #    the single source of truth and eliminates the phantom-key class of
-        #    bugs where g8ep boots with a key that was never registered.
-        operator_suffix = operator_id.split("-")[-1][:8]
-        random_token = secrets.token_hex(32)
-        new_api_key = f"g8e_{operator_suffix}_{random_token}"
-
-        rotated = await self._api_key_service.rotate_operator_key(
-            old_api_key=old_api_key,
-            new_api_key=new_api_key,
-            user_id=operator.user_id,
-            organization_id=operator.organization_id,
-            operator_id=operator_id,
-            is_g8ep=True,
-            settings_service=self.settings_service,
-            permissions=["OPERATOR_BOOTSTRAP", "OPERATOR_HEARTBEAT", "OPERATOR_DOWNLOAD"],
-        )
-        if not rotated:
-            return {"success": False, "error": "Failed to rotate operator API key"}
-
-        # 3. Reset operator slot with the new key
-        update_data = {
-            "api_key": new_api_key,
-            "status": OperatorStatus.AVAILABLE,
-            "updated_at": now(),
-            "operator_session_id": None,
-            "bound_web_session_id": None,
-            "claimed": False,
-            "claimed_at": None,
-        }
-
-        reset_result = await self._cache.update_document(
-            collection=self.operator_data_service.collection,
-            document_id=operator_id,
-            data=update_data,
-            merge=True,
-        )
-
-        if not reset_result.success:
-            logger.error("[OPERATOR-LIFECYCLE] Failed to reset operator %s: %s", operator_id, reset_result.error)
-            return {"success": False, "error": reset_result.error}
-
-        # 4. Start supervised process (key is already mirrored by rotate_operator_key)
-        await self.supervisor_service.start_process("operator", wait=False)
-        logger.info("[OPERATOR-LIFECYCLE] g8ep operator service signaled")
-
-        return {"success": True, "operator_id": operator_id}

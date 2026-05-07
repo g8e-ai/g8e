@@ -39,21 +39,15 @@ export class OperatorSlotService {
         const createdSlotIds = [];
 
         if (existingCount < DEFAULT_OPERATOR_SLOTS) {
-            const hasG8eNode = liveOperators.some(op => op.is_g8ep === true);
             const slotsToCreate = DEFAULT_OPERATOR_SLOTS - existingCount;
-            let g8eNodeAssigned = hasG8eNode;
             for (let i = 0; i < slotsToCreate; i++) {
                 const slotNumber = existingCount + i + 1;
-                const assignG8eNode = !g8eNodeAssigned;
-                if (assignG8eNode) g8eNodeAssigned = true;
                 const creationResponse = await this.createOperatorSlot({
                     userId,
                     organizationId,
                     slotNumber,
-                    operatorType: OperatorType.CLOUD,
-                    cloudSubtype: assignG8eNode ? CloudOperatorSubtype.G8E_POD : null,
+                    operatorType: OperatorType.SYSTEM,
                     namePrefix: 'operator',
-                    isG8eNode: assignG8eNode,
                     webSessionId,
                 });
                 if (creationResponse.success && creationResponse.operator_id) {
@@ -122,7 +116,6 @@ export class OperatorSlotService {
             operatorType: oldOperator.operator_type || OperatorType.SYSTEM,
             cloudSubtype: oldOperator.cloud_subtype || null,
             namePrefix: oldOperator.name ? oldOperator.name.split('-')[0] : 'operator',
-            isG8eNode: oldOperator.is_g8ep ?? false,
             webSessionId,
         });
 
@@ -149,7 +142,7 @@ export class OperatorSlotService {
     }
 
     async createOperatorSlot(params) {
-        const { userId, organizationId, slotNumber, operatorType, cloudSubtype, namePrefix, isG8eNode, webSessionId } = params;
+        const { userId, organizationId, slotNumber, operatorType, cloudSubtype, namePrefix, webSessionId } = params;
 
         // Use g8ee for operator slot creation to enforce architectural boundary
         // g8ed should not write to operators after auth
@@ -174,7 +167,6 @@ export class OperatorSlotService {
             operator_type: operatorType,
             cloud_subtype: cloudSubtype,
             name_prefix: namePrefix || 'operator',
-            is_g8e_node: isG8eNode || false,
         };
 
         const response = await this.operatorService.relayCreateOperatorSlotToG8ee(relayParams, g8eContext);
@@ -189,7 +181,7 @@ export class OperatorSlotService {
 
     /**
      * Claim an operator slot for an active session.
-     * Authority for transitioning an AVAILABLE slot to ACTIVE.
+     * Authority for transitioning a slot to ACTIVE.
      */
     async claimSlot(id, { operator_session_id, bound_web_session_id, operator_type, status }) {
         const ts = now();

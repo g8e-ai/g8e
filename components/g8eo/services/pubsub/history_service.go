@@ -15,16 +15,16 @@ package pubsub
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/g8e-ai/g8e/components/g8eo/config"
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
-	"github.com/g8e-ai/g8e/components/g8eo/models"
 	"github.com/g8e-ai/g8e/components/g8eo/services/sqliteutil"
 	storage "github.com/g8e-ai/g8e/components/g8eo/services/storage"
+	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
+	"google.golang.org/protobuf/proto"
 )
 
 // HistoryService owns log retrieval, execution history, file history, file restore,
@@ -48,25 +48,26 @@ func NewHistoryService(cfg *config.Config, logger *slog.Logger, client PubSubCli
 
 // HandleFetchLogsRequest processes a fetch logs request, routing to raw or scrubbed vault.
 func (hs *HistoryService) HandleFetchLogsRequest(ctx context.Context, msg PubSubCommandMessage) {
-	var flrp models.FetchLogsRequestPayload
-	if err := json.Unmarshal(msg.Payload, &flrp); err != nil {
-		hs.logger.Error("Failed to decode fetch logs payload", "error", err)
-		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, "invalid request payload", "fetch_logs_error")
-		return
-	}
-	executionID := flrp.ExecutionID
-	if executionID == "" {
-		hs.logger.Warn("Fetch logs request without execution_id")
-		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, "missing execution_id in request", "fetch_logs_error")
+	var protoFetch operatorv1.FetchLogsRequested
+	if err := proto.Unmarshal(msg.Payload, &protoFetch); err != nil {
+		hs.logger.Error("Failed to decode fetch logs payload as protobuf FetchLogsRequested", "error", err)
+		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, "invalid request payload")
 		return
 	}
 
-	vaultMode := flrp.SentinelMode
+	executionID := protoFetch.ExecutionId
+	if executionID == "" {
+		hs.logger.Warn("Fetch logs request without execution_id")
+		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, "missing execution_id in request")
+		return
+	}
+
+	vaultMode := protoFetch.SentinelMode
 	if vaultMode == "" {
 		vaultMode = constants.Status.VaultMode.Raw
 	}
 
-	hs.logger.Info("Fetch logs requested (Dual-Vault)",
+	hs.logger.Info("Fetch logs requested (Dual-Vault, via Protobuf)",
 		"execution_id", executionID,
 		"sentinel_mode", vaultMode)
 
@@ -87,13 +88,13 @@ func (hs *HistoryService) handleFetchFromRawVault(ctx context.Context, msg PubSu
 	record, err := hs.rawVault.GetRawExecution(executionID)
 	if err != nil {
 		hs.logger.Error("Failed to retrieve execution from raw vault", "error", err)
-		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, fmt.Sprintf("failed to retrieve execution: %v", err), "fetch_logs_error")
+		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, fmt.Sprintf("failed to retrieve execution: %v", err))
 		return
 	}
 
 	if record == nil {
 		hs.logger.Warn("Execution not found in raw vault", "execution_id", executionID)
-		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, "execution not found in raw vault", "fetch_logs_error")
+		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, "execution not found in raw vault")
 		return
 	}
 
@@ -103,20 +104,20 @@ func (hs *HistoryService) handleFetchFromRawVault(ctx context.Context, msg PubSu
 func (hs *HistoryService) handleFetchFromScrubbedVault(ctx context.Context, msg PubSubCommandMessage, executionID string) {
 	if hs.localStore == nil || !hs.localStore.IsEnabled() {
 		hs.logger.Warn("Scrubbed vault not available for fetch logs request")
-		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, "scrubbed vault is not enabled on this operator", "fetch_logs_error")
+		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, "scrubbed vault is not enabled on this operator")
 		return
 	}
 
 	record, err := hs.localStore.GetExecution(executionID)
 	if err != nil {
 		hs.logger.Error("Failed to retrieve execution from scrubbed vault", "error", err)
-		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, fmt.Sprintf("failed to retrieve execution: %v", err), "fetch_logs_error")
+		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, fmt.Sprintf("failed to retrieve execution: %v", err))
 		return
 	}
 
 	if record == nil {
 		hs.logger.Warn("Execution not found in scrubbed vault", "execution_id", executionID)
-		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, "execution not found in scrubbed vault", "fetch_logs_error")
+		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, "execution not found in scrubbed vault")
 		return
 	}
 
@@ -125,20 +126,17 @@ func (hs *HistoryService) handleFetchFromScrubbedVault(ctx context.Context, msg 
 
 func (hs *HistoryService) publishFetchLogsResultFromRaw(ctx context.Context, msg PubSubCommandMessage, record *storage.RawExecutionRecord) {
 	publishLFAATypedResponseTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Completed,
-		models.FetchLogsResultPayload{
-			PayloadType:       "fetch_logs_result",
-			ExecutionID:       record.ID,
-			Command:           record.Command,
-			ExitCode:          record.ExitCode,
-			DurationMs:        record.DurationMs,
-			Stdout:            string(record.StdoutCompressed),
-			Stderr:            string(record.StderrCompressed),
-			StdoutSize:        record.StdoutSize,
-			StderrSize:        record.StderrSize,
-			Timestamp:         record.TimestampUTC.Format(time.RFC3339Nano),
-			OperatorID:        hs.config.OperatorID,
-			OperatorSessionID: hs.config.OperatorSessionId,
-			SentinelMode:      constants.Status.VaultMode.Raw,
+		&operatorv1.FetchLogsResult{
+			ExecutionId:  record.ID,
+			Command:      record.Command,
+			ExitCode:     int32(*record.ExitCode),
+			DurationMs:   record.DurationMs,
+			Stdout:       string(record.StdoutCompressed),
+			Stderr:       string(record.StderrCompressed),
+			StdoutSize:   int32(record.StdoutSize),
+			StderrSize:   int32(record.StderrSize),
+			Timestamp:    record.TimestampUTC.Format(time.RFC3339Nano),
+			SentinelMode: constants.Status.VaultMode.Raw,
 		})
 	hs.logger.Info("Fetch logs result transmitted (Raw Vault)",
 		"execution_id", record.ID,
@@ -148,20 +146,17 @@ func (hs *HistoryService) publishFetchLogsResultFromRaw(ctx context.Context, msg
 
 func (hs *HistoryService) publishFetchLogsResult(ctx context.Context, msg PubSubCommandMessage, record *storage.ExecutionRecord) {
 	publishLFAATypedResponseTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Completed,
-		models.FetchLogsResultPayload{
-			PayloadType:       "fetch_logs_result",
-			ExecutionID:       record.ID,
-			Command:           record.Command,
-			ExitCode:          record.ExitCode,
-			DurationMs:        record.DurationMs,
-			Stdout:            string(record.StdoutCompressed),
-			Stderr:            string(record.StderrCompressed),
-			StdoutSize:        record.StdoutSize,
-			StderrSize:        record.StderrSize,
-			Timestamp:         record.TimestampUTC.Format(time.RFC3339Nano),
-			OperatorID:        hs.config.OperatorID,
-			OperatorSessionID: hs.config.OperatorSessionId,
-			SentinelMode:      constants.Status.VaultMode.Scrubbed,
+		&operatorv1.FetchLogsResult{
+			ExecutionId:  record.ID,
+			Command:      record.Command,
+			ExitCode:     int32(*record.ExitCode),
+			DurationMs:   record.DurationMs,
+			Stdout:       string(record.StdoutCompressed),
+			Stderr:       string(record.StderrCompressed),
+			StdoutSize:   int32(record.StdoutSize),
+			StderrSize:   int32(record.StderrSize),
+			Timestamp:    record.TimestampUTC.Format(time.RFC3339Nano),
+			SentinelMode: constants.Status.VaultMode.Scrubbed,
 		})
 	hs.logger.Info("Fetch logs result transmitted",
 		"execution_id", record.ID,
@@ -176,7 +171,7 @@ func (hs *HistoryService) HandleFetchHistoryRequest(ctx context.Context, msg Pub
 	if hs.historyHandler == nil || !hs.historyHandler.IsEnabled() {
 		hs.logger.Warn("History handler not available")
 		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchHistory.Failed,
-			"history handler not available on this operator", "fetch_history_error")
+			"history handler not available on this operator")
 		return
 	}
 
@@ -184,7 +179,7 @@ func (hs *HistoryService) HandleFetchHistoryRequest(ctx context.Context, msg Pub
 	if err != nil {
 		hs.logger.Error("History handler failed", "error", err)
 		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchHistory.Failed,
-			fmt.Sprintf("failed to fetch history: %v", err), "fetch_history_error")
+			fmt.Sprintf("failed to fetch history: %v", err))
 		return
 	}
 
@@ -193,18 +188,18 @@ func (hs *HistoryService) HandleFetchHistoryRequest(ctx context.Context, msg Pub
 
 // HandleFetchFileHistoryRequest processes a fetch file history request.
 func (hs *HistoryService) HandleFetchFileHistoryRequest(ctx context.Context, msg PubSubCommandMessage) {
-	var ffhp models.FetchFileHistoryRequestPayload
-	if err := json.Unmarshal(msg.Payload, &ffhp); err != nil {
-		hs.logger.Error("Failed to decode fetch file history payload", "error", err)
-		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchFileHistory.Failed, "invalid request payload", "fetch_file_history_error")
+	var protoFetch operatorv1.FetchFileHistoryRequested
+	if err := proto.Unmarshal(msg.Payload, &protoFetch); err != nil {
+		hs.logger.Error("Failed to decode fetch file history payload as protobuf FetchFileHistoryRequested", "error", err)
+		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchFileHistory.Failed, "invalid request payload")
 		return
 	}
-	hs.logger.Info("FETCH_FILE_HISTORY requested (LFAA)", "file_path", ffhp.FilePath)
+	hs.logger.Info("FETCH_FILE_HISTORY requested (LFAA, via Protobuf)", "file_path", protoFetch.FilePath)
 
 	if hs.historyHandler == nil || !hs.historyHandler.IsEnabled() {
 		hs.logger.Warn("History handler not available")
 		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchFileHistory.Failed,
-			"history handler not available on this operator", "fetch_file_history_error")
+			"history handler not available on this operator")
 		return
 	}
 
@@ -212,7 +207,7 @@ func (hs *HistoryService) HandleFetchFileHistoryRequest(ctx context.Context, msg
 	if err != nil {
 		hs.logger.Error("File history handler failed", "error", err)
 		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchFileHistory.Failed,
-			fmt.Sprintf("failed to fetch file history: %v", err), "fetch_file_history_error")
+			fmt.Sprintf("failed to fetch file history: %v", err))
 		return
 	}
 
@@ -221,18 +216,18 @@ func (hs *HistoryService) HandleFetchFileHistoryRequest(ctx context.Context, msg
 
 // HandleRestoreFileRequest processes a file restore request.
 func (hs *HistoryService) HandleRestoreFileRequest(ctx context.Context, msg PubSubCommandMessage) {
-	var rfp models.RestoreFileRequestPayload
-	if err := json.Unmarshal(msg.Payload, &rfp); err != nil {
-		hs.logger.Error("Failed to decode restore file payload", "error", err)
-		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.RestoreFile.Failed, "invalid request payload", "restore_file_error")
+	var protoRestore operatorv1.RestoreFileRequested
+	if err := proto.Unmarshal(msg.Payload, &protoRestore); err != nil {
+		hs.logger.Error("Failed to decode restore file payload as protobuf RestoreFileRequested", "error", err)
+		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.RestoreFile.Failed, "invalid request payload")
 		return
 	}
-	hs.logger.Info("RESTORE_FILE requested (LFAA)", "file_path", rfp.FilePath, "commit_hash", rfp.CommitHash)
+	hs.logger.Info("RESTORE_FILE requested (LFAA, via Protobuf)", "file_path", protoRestore.FilePath, "commit_hash", protoRestore.CommitHash)
 
 	if hs.historyHandler == nil || !hs.historyHandler.IsEnabled() {
 		hs.logger.Warn("History handler not available")
 		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.RestoreFile.Failed,
-			"history handler not available on this operator", "restore_file_error")
+			"history handler not available on this operator")
 		return
 	}
 
@@ -240,7 +235,7 @@ func (hs *HistoryService) HandleRestoreFileRequest(ctx context.Context, msg PubS
 	if err != nil {
 		hs.logger.Error("Restore file handler failed", "error", err)
 		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.RestoreFile.Failed,
-			fmt.Sprintf("failed to restore file: %v", err), "restore_file_error")
+			fmt.Sprintf("failed to restore file: %v", err))
 		return
 	}
 
@@ -249,25 +244,25 @@ func (hs *HistoryService) HandleRestoreFileRequest(ctx context.Context, msg PubS
 
 // HandleFetchFileDiffRequest processes a fetch file diff request.
 func (hs *HistoryService) HandleFetchFileDiffRequest(ctx context.Context, msg PubSubCommandMessage) {
-	hs.logger.Info("FETCH_FILE_DIFF requested (LFAA)")
+	hs.logger.Info("FETCH_FILE_DIFF requested (LFAA, via Protobuf)")
 
 	if hs.localStore == nil || !hs.localStore.IsEnabled() {
 		hs.logger.Warn("Local store (scrubbed vault) not available")
 		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchFileDiff.Failed,
-			"local storage not available on this operator", "fetch_file_diff_error")
+			"local storage not available on this operator")
 		return
 	}
 
-	var ffdp models.FetchFileDiffRequestPayload
-	if err := json.Unmarshal(msg.Payload, &ffdp); err != nil {
-		hs.logger.Error("Failed to decode fetch file diff payload", "error", err)
-		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchFileDiff.Failed, "invalid request payload", "fetch_file_diff_error")
+	var protoDiff operatorv1.FetchFileDiffRequested
+	if err := proto.Unmarshal(msg.Payload, &protoDiff); err != nil {
+		hs.logger.Error("Failed to decode fetch file diff payload as protobuf FetchFileDiffRequested", "error", err)
+		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchFileDiff.Failed, "invalid request payload")
 		return
 	}
-	diffID := ffdp.DiffID
-	operatorSessionID := ffdp.OperatorSessionID
-	filePath := ffdp.FilePath
-	limit := ffdp.Limit
+	diffID := protoDiff.DiffId
+	operatorSessionID := protoDiff.OperatorSessionId
+	filePath := protoDiff.FilePath
+	limit := protoDiff.Limit
 	if limit <= 0 {
 		limit = 50
 	}
@@ -277,17 +272,17 @@ func (hs *HistoryService) HandleFetchFileDiffRequest(ctx context.Context, msg Pu
 		if err != nil {
 			hs.logger.Error("Failed to fetch file diff", "diff_id", diffID, "error", err)
 			publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchFileDiff.Failed,
-				fmt.Sprintf("failed to fetch file diff: %v", err), "fetch_file_diff_error")
+				fmt.Sprintf("failed to fetch file diff: %v", err))
 			return
 		}
 		if record == nil {
 			publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchFileDiff.Failed,
-				fmt.Sprintf("file diff not found: %s", diffID), "fetch_file_diff_error")
+				fmt.Sprintf("file diff not found: %s", diffID))
 			return
 		}
 
-		diffEntry := models.FileDiffEntry{
-			ID:                record.ID,
+		diffEntry := &operatorv1.FileDiffEntry{
+			Id:                record.ID,
 			Timestamp:         sqliteutil.FormatTimestamp(record.TimestampUTC),
 			FilePath:          record.FilePath,
 			Operation:         record.Operation,
@@ -295,56 +290,54 @@ func (hs *HistoryService) HandleFetchFileDiffRequest(ctx context.Context, msg Pu
 			LedgerHashAfter:   record.LedgerHashAfter,
 			DiffStat:          record.DiffStat,
 			DiffContent:       string(record.DiffCompressed),
-			DiffSize:          record.DiffSize,
-			OperatorSessionID: record.OperatorSessionID,
+			DiffSize:          int32(record.DiffSize),
+			OperatorSessionId: record.OperatorSessionID,
 		}
 		publishLFAATypedResponseTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchFileDiff.Completed,
-			models.FetchFileDiffResultPayload{
-				PayloadType: "fetch_file_diff_by_id_success",
-				Success:     true,
-				Diff:        &diffEntry,
+			&operatorv1.FetchFileDiffResult{
+				Success: true,
+				Diff:    diffEntry,
 			})
 		return
 	}
 
 	if operatorSessionID != "" {
-		records, err := hs.localStore.GetFileDiffsBySession(operatorSessionID, limit)
+		records, err := hs.localStore.GetFileDiffsBySession(operatorSessionID, int(limit))
 		if err != nil {
 			hs.logger.Error("Failed to fetch file diffs by session", "operator_session_id", operatorSessionID, "error", err)
 			publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchFileDiff.Failed,
-				fmt.Sprintf("failed to fetch file diffs: %v", err), "fetch_file_diff_error")
+				fmt.Sprintf("failed to fetch file diffs: %v", err))
 			return
 		}
 
-		diffs := make([]models.FileDiffEntry, 0, len(records))
+		diffs := make([]*operatorv1.FileDiffEntry, 0, len(records))
 		for _, record := range records {
 			if filePath != "" && record.FilePath != filePath {
 				continue
 			}
-			diffs = append(diffs, models.FileDiffEntry{
-				ID:               record.ID,
+			diffs = append(diffs, &operatorv1.FileDiffEntry{
+				Id:               record.ID,
 				Timestamp:        sqliteutil.FormatTimestamp(record.TimestampUTC),
 				FilePath:         record.FilePath,
 				Operation:        record.Operation,
 				LedgerHashBefore: record.LedgerHashBefore,
 				LedgerHashAfter:  record.LedgerHashAfter,
 				DiffStat:         record.DiffStat,
-				DiffSize:         record.DiffSize,
+				DiffSize:         int32(record.DiffSize),
 			})
 		}
 
-		total := len(diffs)
+		total := int32(len(diffs))
 		publishLFAATypedResponseTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchFileDiff.Completed,
-			models.FetchFileDiffResultPayload{
-				PayloadType:       "fetch_file_diff_by_session_success",
+			&operatorv1.FetchFileDiffResult{
 				Success:           true,
 				Diffs:             diffs,
-				Total:             &total,
-				OperatorSessionID: operatorSessionID,
+				Total:             total,
+				OperatorSessionId: operatorSessionID,
 			})
 		return
 	}
 
 	publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchFileDiff.Failed,
-		"either diff_id or operator_session_id is required", "fetch_file_diff_error")
+		"either diff_id or operator_session_id is required")
 }

@@ -16,9 +16,9 @@ Command request payload models for g8eo pub/sub wire protocol.
 
 These are the inbound payload shapes published by g8ee to the
 cmd:{operator_id}:{operator_session_id} pub/sub channel. g8eo deserializes
-them. Field names and types mirror the canonical Go structs in
-components/g8eo/models/commands.go and the JSON schema in
-shared/models/wire/command_payloads.json.
+them using Protobuf. Field names and types mirror the canonical Go structs in
+components/g8eo/models/commands.go and the Protobuf definitions in
+shared/proto/operator.proto.
 """
 
 from typing import Literal, Union
@@ -27,6 +27,7 @@ from pydantic import Field
 
 from app.constants import FileOperation
 from app.models.base import G8eBaseModel
+from app.proto import operator_pb2
 
 __all__ = [
     "CheckPortRequestPayload",
@@ -39,8 +40,10 @@ __all__ = [
     "FetchLogsRequestPayload",
     "FileEditRequestPayload",
     "FsListRequestPayload",
+    "FsGrepRequestPayload",
     "FsReadRequestPayload",
     "G8eCommandPayload",
+    "HeartbeatRequestPayload",
     "RestoreFileRequestPayload",
     "TargetedOperatorBase",
 ]
@@ -67,11 +70,30 @@ class CommandRequestPayload(G8eBaseModel):
     sentinel_mode: str | None = Field(default=None, description="Vault scrubbing mode for output storage")
     timeout_seconds: int | None = Field(default=None, description="Execution timeout override in seconds")
 
+    def to_protobuf(self) -> operator_pb2.CommandRequested:
+        """Convert to protobuf CommandRequested message."""
+        proto = operator_pb2.CommandRequested()
+        proto.command = self.command
+        proto.execution_id = self.execution_id
+        if self.justification:
+            proto.justification = self.justification
+        if self.sentinel_mode:
+            proto.sentinel_mode = self.sentinel_mode
+        if self.timeout_seconds:
+            proto.timeout_seconds = self.timeout_seconds
+        return proto
+
 
 class CommandCancelRequestPayload(G8eBaseModel):
     """Payload for EventType.OPERATOR_COMMAND_CANCEL_REQUESTED."""
     payload_type: Literal["command_cancel"] = Field(default="command_cancel", description="Payload type discriminator")
     execution_id: str = Field(..., description="execution_id of the running command to cancel")
+
+    def to_protobuf(self) -> operator_pb2.CommandCancelRequested:
+        """Convert to protobuf CommandCancelRequested message."""
+        proto = operator_pb2.CommandCancelRequested()
+        proto.execution_id = self.execution_id
+        return proto
 
 
 class FileEditRequestPayload(TargetedOperatorBase):
@@ -93,6 +115,34 @@ class FileEditRequestPayload(TargetedOperatorBase):
     create_backup: bool = Field(default=False, description="Create a backup before modifying")
     create_if_missing: bool = Field(default=False, description="Create the file if it does not exist (write operation)")
 
+    def to_protobuf(self) -> operator_pb2.FileEditRequested:
+        """Convert to protobuf FileEditRequested message."""
+        proto = operator_pb2.FileEditRequested()
+        proto.file_path = self.file_path
+        proto.operation = self.operation
+        proto.execution_id = self.execution_id
+        if self.justification:
+            proto.justification = self.justification
+        if self.content:
+            proto.content = self.content
+        if self.old_content:
+            proto.old_content = self.old_content
+        if self.new_content:
+            proto.new_content = self.new_content
+        if self.insert_content:
+            proto.insert_content = self.insert_content
+        if self.insert_position is not None:
+            proto.insert_position = self.insert_position
+        if self.start_line is not None:
+            proto.start_line = self.start_line
+        if self.end_line is not None:
+            proto.end_line = self.end_line
+        if self.patch_content:
+            proto.patch_content = self.patch_content
+        proto.create_backup = self.create_backup
+        proto.create_if_missing = self.create_if_missing
+        return proto
+
 
 class FsListRequestPayload(TargetedOperatorBase):
     """Payload for EventType.OPERATOR_FILESYSTEM_LIST_REQUESTED."""
@@ -102,6 +152,40 @@ class FsListRequestPayload(TargetedOperatorBase):
     max_depth: int | None = Field(default=None, description="Recursion depth. 0 = current directory only. Max 3.")
     max_entries: int | None = Field(default=None, description="Maximum number of entries to return. Max 500.")
 
+    def to_protobuf(self) -> operator_pb2.FsListRequested:
+        """Convert to protobuf FsListRequested message."""
+        proto = operator_pb2.FsListRequested()
+        if self.path:
+            proto.path = self.path
+        proto.execution_id = self.execution_id
+        if self.max_depth is not None:
+            proto.max_depth = self.max_depth
+        if self.max_entries is not None:
+            proto.max_entries = self.max_entries
+        return proto
+
+
+class FsGrepRequestPayload(TargetedOperatorBase):
+    """Payload for EventType.OPERATOR_FILESYSTEM_GREP_REQUESTED."""
+    payload_type: Literal["fs_grep"] = Field(default="fs_grep", description="Payload type discriminator")
+    path: str = Field(..., description="Directory path to search. Can be absolute or relative.")
+    pattern: str = Field(..., description="Regular expression pattern to search for.")
+    execution_id: str = Field(..., description="Unique execution identifier")
+    includes: list[str] | None = Field(default=None, description="Glob patterns to filter files.")
+    max_matches: int | None = Field(default=100, description="Maximum number of matches to return. Max 500.")
+
+    def to_protobuf(self) -> operator_pb2.FsGrepRequested:
+        """Convert to protobuf FsGrepRequested message."""
+        proto = operator_pb2.FsGrepRequested()
+        proto.path = self.path
+        proto.execution_id = self.execution_id
+        proto.pattern = self.pattern
+        if self.includes:
+            proto.includes.extend(self.includes)
+        if self.max_matches is not None:
+            proto.max_matches = self.max_matches
+        return proto
+
 
 class FsReadRequestPayload(TargetedOperatorBase):
     """Payload for EventType.OPERATOR_FILESYSTEM_READ_REQUESTED."""
@@ -110,12 +194,29 @@ class FsReadRequestPayload(TargetedOperatorBase):
     execution_id: str = Field(..., description="Unique execution identifier")
     max_size: int | None = Field(default=None, description="Maximum number of bytes to read. Defaults to 100 KiB.")
 
+    def to_protobuf(self) -> operator_pb2.FsReadRequested:
+        """Convert to protobuf FsReadRequested message."""
+        proto = operator_pb2.FsReadRequested()
+        proto.path = self.path
+        proto.execution_id = self.execution_id
+        if self.max_size is not None:
+            proto.max_size = self.max_size
+        return proto
+
 
 class FetchLogsRequestPayload(G8eBaseModel):
     """Payload for EventType.OPERATOR_LOGS_FETCH_REQUESTED."""
     payload_type: Literal["fetch_logs"] = Field(default="fetch_logs", description="Payload type discriminator")
     execution_id: str = Field(..., description="execution_id of the stored execution to fetch logs for")
     sentinel_mode: str | None = Field(default=None, description="Vault scrubbing mode to use when reading")
+
+    def to_protobuf(self) -> operator_pb2.FetchLogsRequested:
+        """Convert to protobuf FetchLogsRequested message."""
+        proto = operator_pb2.FetchLogsRequested()
+        proto.execution_id = self.execution_id
+        if self.sentinel_mode:
+            proto.sentinel_mode = self.sentinel_mode
+        return proto
 
 
 class FetchHistoryRequestPayload(G8eBaseModel):
@@ -128,6 +229,22 @@ class FetchHistoryRequestPayload(G8eBaseModel):
     include_commands: bool | None = Field(default=None, description="Include command execution entries")
     include_file_mutations: bool | None = Field(default=None, description="Include file mutation entries")
 
+    def to_protobuf(self) -> operator_pb2.FetchHistoryRequested:
+        """Convert to protobuf FetchHistoryRequested message."""
+        proto = operator_pb2.FetchHistoryRequested()
+        proto.execution_id = self.execution_id
+        if self.operator_session_id:
+            proto.operator_session_id = self.operator_session_id
+        if self.limit is not None:
+            proto.limit = self.limit
+        if self.offset is not None:
+            proto.offset = self.offset
+        if self.include_commands is not None:
+            proto.include_commands = self.include_commands
+        if self.include_file_mutations is not None:
+            proto.include_file_mutations = self.include_file_mutations
+        return proto
+
 
 class FetchFileHistoryRequestPayload(TargetedOperatorBase):
     """Payload for EventType.OPERATOR_FILE_HISTORY_FETCH_REQUESTED."""
@@ -135,6 +252,15 @@ class FetchFileHistoryRequestPayload(TargetedOperatorBase):
     execution_id: str = Field(..., description="Unique execution identifier")
     file_path: str = Field(..., description="Absolute path to the file to retrieve edit history for")
     limit: int | None = Field(default=None, description="Maximum number of history entries to return")
+
+    def to_protobuf(self) -> operator_pb2.FetchFileHistoryRequested:
+        """Convert to protobuf FetchFileHistoryRequested message."""
+        proto = operator_pb2.FetchFileHistoryRequested()
+        proto.execution_id = self.execution_id
+        proto.file_path = self.file_path
+        if self.limit is not None:
+            proto.limit = self.limit
+        return proto
 
 
 class FetchFileDiffRequestPayload(TargetedOperatorBase):
@@ -146,6 +272,20 @@ class FetchFileDiffRequestPayload(TargetedOperatorBase):
     file_path: str | None = Field(default=None, description="Filter diffs by file path")
     limit: int | None = Field(default=None, description="Maximum number of diff entries to return")
 
+    def to_protobuf(self) -> operator_pb2.FetchFileDiffRequested:
+        """Convert to protobuf FetchFileDiffRequested message."""
+        proto = operator_pb2.FetchFileDiffRequested()
+        proto.execution_id = self.execution_id
+        if self.diff_id:
+            proto.diff_id = self.diff_id
+        if self.operator_session_id:
+            proto.operator_session_id = self.operator_session_id
+        if self.file_path:
+            proto.file_path = self.file_path
+        if self.limit is not None:
+            proto.limit = self.limit
+        return proto
+
 
 class CheckPortRequestPayload(TargetedOperatorBase):
     """Payload for EventType.OPERATOR_PORT_CHECK_REQUESTED."""
@@ -155,6 +295,15 @@ class CheckPortRequestPayload(TargetedOperatorBase):
     host: str = Field(default="localhost", description="Host to check (IP address or hostname)")
     protocol: str = Field(default="tcp", description="Protocol to use: 'tcp' or 'udp'")
 
+    def to_protobuf(self) -> operator_pb2.CheckPortRequested:
+        """Convert to protobuf CheckPortRequested message."""
+        proto = operator_pb2.CheckPortRequested()
+        proto.execution_id = self.execution_id
+        proto.port = self.port
+        proto.host = self.host
+        proto.protocol = self.protocol
+        return proto
+
 
 class RestoreFileRequestPayload(G8eBaseModel):
     """Payload for EventType.OPERATOR_FILE_RESTORE_REQUESTED."""
@@ -162,6 +311,17 @@ class RestoreFileRequestPayload(G8eBaseModel):
     execution_id: str = Field(..., description="Unique execution identifier")
     file_path: str = Field(..., description="Absolute path of the file to restore")
     commit_hash: str = Field(..., description="Git commit hash to restore the file to")
+    operator_session_id: str | None = Field(default=None, description="Operator session ID for auditing")
+
+    def to_protobuf(self) -> operator_pb2.RestoreFileRequested:
+        """Convert to protobuf RestoreFileRequested message."""
+        proto = operator_pb2.RestoreFileRequested()
+        proto.execution_id = self.execution_id
+        proto.file_path = self.file_path
+        proto.commit_hash = self.commit_hash
+        if self.operator_session_id:
+            proto.operator_session_id = self.operator_session_id
+        return proto
 
 
 class DirectCommandAuditRequestPayload(G8eBaseModel):
@@ -172,6 +332,24 @@ class DirectCommandAuditRequestPayload(G8eBaseModel):
     operator_session_id: str = Field(..., description="Operator session ID")
     type: Literal["direct_terminal_exec"] = Field(default="direct_terminal_exec", description="Audit event type")
 
+    def to_protobuf(self) -> operator_pb2.DirectCommandAuditRequested:
+        """Convert to protobuf DirectCommandAuditRequested message."""
+        proto = operator_pb2.DirectCommandAuditRequested()
+        proto.command = self.command
+        proto.execution_id = self.execution_id
+        proto.operator_session_id = self.operator_session_id
+        proto.type = self.type
+        return proto
+
+
+class HeartbeatRequestPayload(G8eBaseModel):
+    """Payload for EventType.OPERATOR_HEARTBEAT_REQUESTED."""
+    payload_type: Literal["heartbeat"] = Field(default="heartbeat", description="Payload type discriminator")
+
+    def to_protobuf(self) -> operator_pb2.HeartbeatRequested:
+        """Convert to protobuf HeartbeatRequested message."""
+        return operator_pb2.HeartbeatRequested()
+
 
 # Union type for all outbound command payloads to g8eo
 G8eCommandPayload = Union[
@@ -179,6 +357,7 @@ G8eCommandPayload = Union[
     CommandCancelRequestPayload,
     FileEditRequestPayload,
     FsListRequestPayload,
+    FsGrepRequestPayload,
     FsReadRequestPayload,
     FetchLogsRequestPayload,
     FetchHistoryRequestPayload,
@@ -187,4 +366,5 @@ G8eCommandPayload = Union[
     CheckPortRequestPayload,
     RestoreFileRequestPayload,
     DirectCommandAuditRequestPayload,
+    HeartbeatRequestPayload,
 ]

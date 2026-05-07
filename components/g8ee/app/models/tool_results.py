@@ -59,7 +59,7 @@ class PerOperatorResultBase(G8eBaseModel):
 class FsListEntry(G8eBaseModel):
     """A single directory entry returned by an fs_list operation.
 
-    Canonical shape: shared/models/wire/result_payloads.json fs_list_result entries items.
+    Canonical shape defined in shared/proto/operator.proto (FsListEntry message).
     """
     name: str
     path: str
@@ -75,10 +75,19 @@ class FsListEntry(G8eBaseModel):
     nlink: int | None = None
 
 
+class FsGrepMatch(G8eBaseModel):
+    """A single grep match record."""
+    path: str
+    line_number: int
+    content: str
+    before: list[str] = Field(default_factory=list)
+    after: list[str] = Field(default_factory=list)
+
+
 class AuditFileMutation(G8eBaseModel):
     """A single file mutation record embedded in an AuditEvent.
 
-    Canonical shape: shared/models/wire/result_payloads.json fetch_history_result events file_mutations items.
+    Canonical shape defined in shared/proto/operator.proto (AuditFileMutation message).
     """
     id: int
     filepath: str
@@ -91,7 +100,7 @@ class AuditFileMutation(G8eBaseModel):
 class AuditEvent(G8eBaseModel):
     """A single audit event record returned by fetch_session_history.
 
-    Canonical shape: shared/models/wire/result_payloads.json fetch_history_result events items.
+    Canonical shape defined in shared/proto/operator.proto (AuditEvent message).
     """
     id: int | None = None
     web_session_id: str | None = None
@@ -112,7 +121,7 @@ class AuditEvent(G8eBaseModel):
 class FileHistoryEntry(G8eBaseModel):
     """A single commit history entry returned by fetch_file_history.
 
-    Canonical shape: shared/models/wire/result_payloads.json fetch_file_history_result history items.
+    Canonical shape defined in shared/proto/operator.proto (FileHistoryEntry message).
     """
     commit_hash: str
     timestamp: str | None = None
@@ -282,6 +291,26 @@ class FsReadToolResult(BatchExecutionMeta):
     per_operator_results: list[PerOperatorFsReadResult] | None = None
 
 
+class PerOperatorFsGrepResult(PerOperatorResultBase):
+    """Per-operator result for filesystem grep operations."""
+    matches: list[FsGrepMatch] = Field(default_factory=list)
+    total_matches: int = 0
+    truncated: bool = False
+
+
+class FsGrepToolResult(BatchExecutionMeta):
+    """Result returned by FilesystemMixin._execute_fs_grep."""
+    success: bool = True
+    error: str | None = None
+    error_type: CommandErrorType | None = None
+    path: str | None = None
+    pattern: str | None = None
+    matches: list[FsGrepMatch] = Field(default_factory=list)
+    total_matches: int = 0
+    truncated: bool = False
+    per_operator_results: list[PerOperatorFsGrepResult] | None = None
+
+
 class FetchLogsToolResult(G8eBaseModel):
     """Result returned by ExecutionLogMixin._execute_fetch_logs."""
     success: bool = True
@@ -300,7 +329,7 @@ class FetchLogsToolResult(G8eBaseModel):
 class AuditSessionMetadata(G8eBaseModel):
     """Session metadata returned by fetch_session_history.
 
-    Canonical shape: shared/models/wire/result_payloads.json fetch_history_result.session.
+    Canonical shape defined in shared/proto/operator.proto (AuditWebSession message).
     """
     id: str
     title: str
@@ -311,7 +340,7 @@ class AuditSessionMetadata(G8eBaseModel):
 class FileDiffEntry(G8eBaseModel):
     """Single file diff record from the operator ledger.
 
-    Canonical shape: shared/models/wire/result_payloads.json file_diff_entry.
+    Canonical shape defined in shared/proto/operator.proto (FileDiffEntry message).
     """
     id: str
     timestamp: str
@@ -547,6 +576,7 @@ ToolResult = Union[
     FileEditResult,
     PortCheckToolResult,
     FsListToolResult,
+    FsGrepToolResult,
     FsReadToolResult,
     FetchLogsToolResult,
     FetchHistoryToolResult,

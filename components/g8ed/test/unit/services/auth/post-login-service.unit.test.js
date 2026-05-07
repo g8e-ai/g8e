@@ -13,6 +13,8 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { PostLoginService } from '@g8ed/services/auth/post_login_service.js';
+import { G8eHttpContext } from '@g8ed/models/request_models.js';
+import { SentinelId } from '@g8ed/constants/document_ids.js';
 
 vi.mock('@g8ed/utils/logger.js', () => ({
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }
@@ -67,9 +69,6 @@ function makeService(overrides = {}) {
         },
         operatorService: {
             initializeOperatorSlots: vi.fn().mockResolvedValue([]),
-        },
-        g8eNodeOperatorService: {
-            activateG8ENodeOperatorForUser: vi.fn().mockResolvedValue(undefined),
         },
         sseService: {
             publishEvent: vi.fn().mockResolvedValue(true),
@@ -152,7 +151,14 @@ describe('PostLoginService [UNIT]', () => {
 
             expect(service.userService.createUserG8eKey).toHaveBeenCalledWith(
                 USER_ID,
-                ORG_ID
+                ORG_ID,
+                expect.objectContaining({
+                    user_id: USER_ID,
+                    organization_id: ORG_ID,
+                    case_id: SentinelId.UNKNOWN,
+                    investigation_id: SentinelId.UNKNOWN,
+                    source_component: 'g8ed'
+                })
             );
         });
 
@@ -171,7 +177,14 @@ describe('PostLoginService [UNIT]', () => {
 
             expect(service.userService.createUserG8eKey).toHaveBeenCalledWith(
                 USER_ID,
-                USER_ID
+                USER_ID,
+                expect.objectContaining({
+                    user_id: USER_ID,
+                    organization_id: USER_ID,
+                    case_id: SentinelId.UNKNOWN,
+                    investigation_id: SentinelId.UNKNOWN,
+                    source_component: 'g8ed'
+                })
             );
         });
 
@@ -205,15 +218,6 @@ describe('PostLoginService [UNIT]', () => {
     // -------------------------------------------------------------------------
 
     describe('onSuccessfulLogin', () => {
-        it('calls activateG8ENodeOperatorForUser with user_id, org_id, and session_id', async () => {
-            await service.onSuccessfulLogin(makeUser(), makeSession());
-
-            await vi.waitFor(() =>
-                expect(service.g8eNodeOperatorService.activateG8ENodeOperatorForUser)
-                    .toHaveBeenCalledWith(USER_ID, ORG_ID, SESSION_ID)
-            );
-        });
-
         it('calls initializeOperatorSlots with user_id, org_id, and session_id', async () => {
             await service.onSuccessfulLogin(makeUser(), makeSession());
 
@@ -229,19 +233,9 @@ describe('PostLoginService [UNIT]', () => {
             await service.onSuccessfulLogin(user, makeSession());
 
             await vi.waitFor(() => {
-                expect(service.g8eNodeOperatorService.activateG8ENodeOperatorForUser)
-                    .toHaveBeenCalledWith(USER_ID, null, SESSION_ID);
                 expect(service.operatorService.initializeOperatorSlots)
                     .toHaveBeenCalledWith(USER_ID, USER_ID, SESSION_ID);
             });
-        });
-
-        it('resolves even when activateG8ENodeOperatorForUser rejects', async () => {
-            service.g8eNodeOperatorService.activateG8ENodeOperatorForUser =
-                vi.fn().mockRejectedValue(new Error('docker exec failed'));
-
-            await expect(service.onSuccessfulLogin(makeUser(), makeSession()))
-                .resolves.toBeUndefined();
         });
 
         it('resolves even when initializeOperatorSlots rejects', async () => {
@@ -283,23 +277,6 @@ describe('PostLoginService [UNIT]', () => {
                 expect(metric.lastUserId).toBe(USER_ID);
             });
         });
-
-        it('publishes G8EP activation failed event when activateG8ENodeOperatorForUser rejects', async () => {
-            service.g8eNodeOperatorService.activateG8ENodeOperatorForUser =
-                vi.fn().mockRejectedValue(new Error('docker exec failed'));
-
-            await service.onSuccessfulLogin(makeUser(), makeSession());
-
-            await vi.waitFor(() => {
-                expect(service.sseService.publishEvent).toHaveBeenCalled();
-            });
-
-            const publishCall = service.sseService.publishEvent.mock.calls[0];
-            expect(publishCall[0]).toBe(SESSION_ID);
-            expect(publishCall[1].type).toBe('g8e.v1.operator.g8ep.activation.failed');
-            expect(publishCall[1].data.user_id).toBe(USER_ID);
-            expect(publishCall[1].data.error).toBe('docker exec failed');
-        });
     });
 
     // -------------------------------------------------------------------------
@@ -307,15 +284,6 @@ describe('PostLoginService [UNIT]', () => {
     // -------------------------------------------------------------------------
 
     describe('onSuccessfulRegistration', () => {
-        it('calls activateG8ENodeOperatorForUser with user_id, org_id, and session_id', async () => {
-            await service.onSuccessfulRegistration(makeUser(), makeSession());
-
-            await vi.waitFor(() =>
-                expect(service.g8eNodeOperatorService.activateG8ENodeOperatorForUser)
-                    .toHaveBeenCalledWith(USER_ID, ORG_ID, SESSION_ID)
-            );
-        });
-
         it('calls initializeOperatorSlots with user_id, org_id, and session_id', async () => {
             await service.onSuccessfulRegistration(makeUser(), makeSession());
 
@@ -323,25 +291,6 @@ describe('PostLoginService [UNIT]', () => {
                 expect(service.operatorService.initializeOperatorSlots)
                     .toHaveBeenCalledWith(USER_ID, ORG_ID, SESSION_ID)
             );
-        });
-
-        it('passes null org to activateG8ENodeOperatorForUser when organization_id is absent', async () => {
-            const user = makeUser({ organization_id: null });
-
-            await service.onSuccessfulRegistration(user, makeSession());
-
-            await vi.waitFor(() =>
-                expect(service.g8eNodeOperatorService.activateG8ENodeOperatorForUser)
-                    .toHaveBeenCalledWith(USER_ID, null, SESSION_ID)
-            );
-        });
-
-        it('resolves even when activateG8ENodeOperatorForUser rejects', async () => {
-            service.g8eNodeOperatorService.activateG8ENodeOperatorForUser =
-                vi.fn().mockRejectedValue(new Error('container not running'));
-
-            await expect(service.onSuccessfulRegistration(makeUser(), makeSession()))
-                .resolves.toBeUndefined();
         });
 
         it('resolves even when initializeOperatorSlots rejects', async () => {
@@ -386,51 +335,23 @@ describe('PostLoginService [UNIT]', () => {
     });
 
     // -------------------------------------------------------------------------
-    // _initializeSlotsAndActivateG8eNode (sequential ordering)
+    // _initializeSlots (sequential ordering)
     // -------------------------------------------------------------------------
 
-    describe('_initializeSlotsAndActivateG8eNode (ordering)', () => {
-        it('awaits initializeOperatorSlots before calling activateG8ENodeOperatorForUser', async () => {
-            const callOrder = [];
-
-            service.operatorService.initializeOperatorSlots = vi.fn().mockImplementation(async () => {
-                callOrder.push('initializeOperatorSlots:start');
-                await new Promise(r => setTimeout(r, 10));
-                callOrder.push('initializeOperatorSlots:end');
-                return [];
-            });
-
-            service.g8eNodeOperatorService.activateG8ENodeOperatorForUser = vi.fn().mockImplementation(async () => {
-                callOrder.push('activateG8eNode:start');
-            });
-
-            await service._initializeSlotsAndActivateG8eNode(makeUser(), makeSession(), 'login');
-
-            expect(callOrder).toEqual([
-                'initializeOperatorSlots:start',
-                'initializeOperatorSlots:end',
-                'activateG8eNode:start',
-            ]);
+    describe('_initializeSlots (ordering)', () => {
+        it('calls initializeOperatorSlots', async () => {
+            await service._initializeSlots(makeUser(), makeSession(), 'login');
+            expect(service.operatorService.initializeOperatorSlots)
+                .toHaveBeenCalledWith(USER_ID, ORG_ID, SESSION_ID);
         });
 
-        it('does not call activateG8ENodeOperatorForUser when initializeOperatorSlots rejects', async () => {
+        it('propagates initializeOperatorSlots errors to the caller', async () => {
             service.operatorService.initializeOperatorSlots =
                 vi.fn().mockRejectedValue(new Error('g8es unavailable'));
 
             await expect(
-                service._initializeSlotsAndActivateG8eNode(makeUser(), makeSession(), 'login')
+                service._initializeSlots(makeUser(), makeSession(), 'login')
             ).rejects.toThrow('g8es unavailable');
-
-            expect(service.g8eNodeOperatorService.activateG8ENodeOperatorForUser).not.toHaveBeenCalled();
-        });
-
-        it('propagates activateG8ENodeOperatorForUser errors to the caller', async () => {
-            service.g8eNodeOperatorService.activateG8ENodeOperatorForUser =
-                vi.fn().mockRejectedValue(new Error('supervisor unreachable'));
-
-            await expect(
-                service._initializeSlotsAndActivateG8eNode(makeUser(), makeSession(), 'login')
-            ).rejects.toThrow('supervisor unreachable');
         });
     });
 });

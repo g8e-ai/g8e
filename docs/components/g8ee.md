@@ -5,6 +5,9 @@ parent: Components
 
 # g8ee
 
+Last Updated: 2026-05-07
+Version: v0.2.0
+
 g8ee is the AI engine for the g8e platform. It provides an agentic, LLM-powered interface for infrastructure operations and troubleshooting, featuring human-in-the-loop safety controls, data sovereignty, and a multi-provider LLM abstraction layer.
 
 ---
@@ -17,7 +20,6 @@ g8ee follows a strict "Traceable Pipeline" model for every message. A single use
 The `internal_router` receives the request. `ChatPipelineService` triggers `_prepare_chat_context`, performing a 15-step assembly process:
 - **Context Enrichment**: Fetches the investigation state and binds available `g8eo` operators.
 - **Workflow Detection**: Determines if the investigation is `OPERATOR_BOUND` or `OPERATOR_NOT_BOUND`.
-- **Memory Injection**: Retrieves user-level and case-level memories from `MemoryDataService`.
 - **System Prompt Assembly**: Builds a modular system prompt based on agent mode, bound operators, and investigation state.
 
 ### 2. Triage (The Gatekeeper)
@@ -184,7 +186,6 @@ Each method accepts a role-specific settings dataclass (`PrimaryLLMSettings`, `A
 | `AnthropicProvider` | `app/llm/providers/anthropic.py` | Streams via `client.messages.stream`, accumulating tool input JSON across deltas; yields text and thinking chunks immediately, emits tool call chunks on `content_block_stop`. **Parameter constraints:** `temperature` and `top_p` are mutually exclusive on Anthropic — the provider always uses `temperature` and never sends `top_p`. When extended thinking is enabled, `temperature` is forced to `1.0` and `top_k` is omitted. **Hardened Message handling:** messages must strictly alternate between user and assistant — consecutive same-role Content objects are merged. Every `tool_result` must carry the `tool_use_id` from the preceding assistant's `tool_use` block. Empty text blocks are dropped. |
 | `OllamaProvider` | `app/llm/providers/ollama.py` | Streams via the `ollama` Python SDK's AsyncClient; selects the reasoning dialect via `LLMModelConfig.thinking_dialect` (`NONE` or `NATIVE_TOGGLE`); extracts `thinking` field from responses and streams it as `thought=True` chunks. |
 | `OpenAIProvider` | `app/llm/providers/open_ai.py` | Streams via `AsyncOpenAI` for OpenAI endpoints; translates `ThinkingLevel` into `reasoning.effort` for reasoning models; when tools are present falls back to a non-streaming call and yields the response as a single chunk |
-| `G8elProvider` | `app/llm/providers/g8el.py` | Platform's llama.cpp inference server component; inherits from `LlamaCppProvider` to reuse OpenAI-compatible logic. |
 | `LlamaCppProvider` | `app/llm/providers/llama_cpp.py` | Generic llama.cpp provider; supports streaming via OpenAI-compatible API. |
 
 **Gemini retry contract:** `_open_stream_attempt` wraps only the `generate_content_stream` API call in a tenacity retry (up to 4 attempts, exponential backoff, retryable on 429/503). Once the stream is open, chunks flow directly — no retry is possible mid-stream. If the stream breaks after yielding has started, the error propagate to the retry guard, which prevents re-attempting a partially-delivered response.
@@ -325,7 +326,7 @@ Activated when at least one `g8eo` Operator has `status=bound`.
 - **Full Tool Suite**: Command execution (via Tribunal), file operations, directory listing, port checks, and web search (if configured).
 - **Human-in-the-Loop**: All state-changing operations require explicit user approval.
 - **Thinking**: Enabled for models supporting reasoning levels (`MINIMAL`, `LOW`, `MEDIUM`, `HIGH`).
-- **Cloud Operators**: AWS-type operators use JIT permission escalation via the **Intent System**. `g8ep` operators (`cloud_subtype=g8ep`) are a special type of cloud operator that provides direct system access and bypasses the intent system.
+- **Cloud Operators**: AWS-type operators use JIT permission escalation via the **Intent System**.
 - **Multi-Operator**: The AI selects the target per command using `target_operator`. Batch operations fan out across `target_operators` with a single unified approval.
 
 ### Operator Not Bound (Advisory Mode)
@@ -473,6 +474,7 @@ Consumers (auth gate, Tribunal routing, prompt assembly) all derive from this on
 | `file_update_on_operator` | Yes | Gated | Surgical find-and-replace within files |
 | `file_read_on_operator` | No | Gated | Read file content (with optional line ranges) |
 | `list_files_and_directories_with_detailed_metadata` | No | Gated | Directory listing with metadata |
+| `recursive_grep_search` | No | Gated | Recursive regex search for context gathering |
 | `fetch_file_history` | No | Gated | Retrieve file edit history and commit information |
 | `fetch_file_diff` | No | Gated | Retrieve specific file diffs and change details |
 | `check_port_status` | No | Gated | Check TCP/UDP port reachability |
@@ -564,15 +566,44 @@ g8ee implements an **MCP Client Adapter** that translates outbound tool calls in
 
 **Initialization:** `MCPGatewayService` is created on `app.state.mcp_gateway_service` during startup, after `AIToolService` and `OperatorDataService`.
 
-### Command Validation Policies
+### Command Validation Policies (The 3-Layer Safety Path)
 
-`OperatorCommandService` enforces three **independent** policies on every command, configured via `settings.command_validation`:
+g8e enforces a multi-layered validation hierarchy designed to maximize safety while minimizing click fatigue. This hierarchy ensures that every command is technically sound, aligned with intent, and approved by the appropriate authority.
 
-| Policy | Setting | JSON Config | Semantics | Where enforced |
-|--------|---------|-------------|-----------|----------------|
-| Whitelist (hard allow-list) | `enable_whitelisting` + `whitelisted_commands` | `config/whitelist.json` (`enabled` field) | Only listed commands may run at all. Non-listed commands are rejected at L1 safety validation. | `app/utils/safety.py::validate_command_safety` |
-| Blacklist (hard block-list) | `enable_blacklisting` | `config/blacklist.json` (`enabled` field) | Listed commands/patterns are rejected at L1 safety validation. **Enabled by default** as a recommended safety boundary. | `app/utils/safety.py::validate_command_safety` |
-| Auto-approve (skip-approval list) | `enable_auto_approve` + `config/auto_approved.json` (platform default) + `auto_approved_commands` (CSV override) | `config/auto_approved.json` (`enabled` field) | Listed base verbs bypass the human approval prompt. **Enabled by default** to work in harmony with reputation staking (agent personas + built-in engine) for peak signal and efficiency. | `OperatorCommandService.execute_command_internal` |
+#### Layer 1: Technical Bedrock (Hard Gates)
+The technical bedrock is the foundation of g8e safety. It is enforced by code models (Pydantic/validators) and is **always** active, regardless of agent consensus or auto-approval settings.
+
+| Policy | Setting | JSON Config | Semantics |
+|--------|---------|-------------|-----------|
+| **Forbidden Patterns** | — | `app/constants/settings.py` | Hardcoded list of blocked substrings (e.g., `sudo`, `su`, `rm -rf /`). Always active. |
+| **Blacklist** | `enable_blacklisting` | `config/blacklist.json` | Blocks specific dangerous commands, binaries, substrings, and arguments. **Enabled by default**. |
+| **Whitelist** | `enable_whitelisting` | `config/whitelist.json` | When enabled, only explicitly listed commands/arguments are permitted. Rejects everything else. |
+
+#### Layer 2: Consensus Mechanism (The Tribunal)
+Once a command passes Layer 1, it enters the **Consensus Layer**. This is the default mode of operation for g8e:
+- **Multi-Agent Generation**: Five independent personas (Axiom, Concord, Variance, Pragma, Nemesis) produce candidate commands.
+- **Ensemble Voting**: A winning command is selected based on frequency and deterministic tie-breaking.
+- **Auditor Verification**: The Auditor performs a final check against the original intent, ensuring the command is idiomatic and correct.
+- **Reputation Staking**: All agents stake their reputation on the verdict. Slashing occurs for any command that passes the Tribunal but violates L1 or produces catastrophic failures.
+
+#### Layer 3: Authorization (Approval Gate)
+The final layer determines if a human needs to click "Approve".
+
+| Policy | Setting | Semantics |
+|--------|---------|-----------|
+| **Human-in-the-Loop** | (Default) | Every command requires a user signature. The UI shows the command, justification, risk analysis, and Tribunal consensus. |
+| **Auto-Approve** | `enable_auto_approve` | Listed base verbs (e.g., `uptime`, `df`, `free`) bypass the human prompt. This is a **rubber-stamp** mechanism for benign, low-risk commands. |
+
+**Crucial Invariant:** Auto-approval **NEVER** bypasses Layer 1 (Hard Gates) or Layer 2 (Consensus). A command must be generated/verified by the Tribunal and pass all Hard Gates before it can be auto-approved.
+
+---
+
+### Minimizing Click Fatigue
+
+g8e is designed to operate at "peak signal" by default. We minimize click fatigue through two primary mechanisms:
+
+1.  **Consensus as Quality Control**: Because the Tribunal (L2) ensures high-quality command generation, users can trust the system's output more readily, allowing them to focus only on high-risk operations.
+2.  **Reputation-Backed Auto-Approval**: The `auto_approved.json` list contains benign diagnostic commands that have been "pre-vetted" by the platform. Combined with the reputation staking of the agents generating those commands, this allows for a high-efficiency operating mode where common lookups happen autonomously.
 
 **JSON `enabled` field semantics:** Each JSON config file has an `enabled` boolean field (defaults to `true`). When `enabled: false`, the validator loads an empty index regardless of the entries in the file — this is a file-level kill switch that allows platform operators to neutralize the entire JSON file without touching per-request settings. Enforcement requires **both** the JSON `enabled` field and the corresponding per-request setting to be `true`.
 
@@ -605,7 +636,7 @@ While g8es stores a summary of recent activity, the **Operator remains the syste
 
 ## Cloud Operator & AWS Intents
 
-The Operator has two `OperatorType` values: **System** (`system` — cloud CLI tools blocked) and **Cloud** (`cloud` — cloud CLI tools enabled). Cloud operators carry an additional `cloud_subtype` field (`aws`, `gcp`, `azure`) identifying the provider. The intent system described in this section applies only to Cloud Operators with `cloud_subtype=aws`. g8ep operators (`cloud_subtype=g8ep`) have direct system access and do not use the intent system.
+The Operator has two `OperatorType` values: **System** (`system` — cloud CLI tools blocked) and **Cloud** (`cloud` — cloud CLI tools enabled). Cloud operators carry an additional `cloud_subtype` field (`aws`, `gcp`, `azure`) identifying the provider. The intent system described in this section applies only to Cloud Operators with `cloud_subtype=aws`.
 
 Cloud Operators for AWS implement a **Zero Standing Privileges** model. The Operator is started with `--cloud --provider aws` — either automatically on the g8ep sidecar (local dev, credentials from `~/.aws`) or deployed to an EC2 instance in the customer's VPC (credentials from IAM instance profile). In both cases the AI launches with only bootstrap permissions (STS identity, IAM role introspection) and dynamically requests additional permissions through the intent system.
 
@@ -1092,14 +1123,10 @@ The `agent_tool_loop.py` extracts these constraints from `tool_executor._user_se
 | `enable_whitelisting` | `false` | Restrict commands to an allowlist |
 | `enable_blacklisting` | `true` | Block commands matching a denylist. Recommended for system safety. |
 | `whitelisted_commands` | — | CSV string of allowed commands (overrides default whitelist) |
-| `enable_auto_approve` | `true` | Skip approval for rubber-stamped commands. Works in harmony with reputation staking. |
-
-**Whitelist Mode Semantics:**
-- **JSON mode (default):** When `whitelisted_commands` is empty, the system uses a rich JSON whitelist (`config/whitelist.json`) with per-command `safe_options` and `validation` patterns.
-- **CSV mode (override):** When `whitelisted_commands` contains a comma-separated list (e.g., `uptime,df,free`), this list **entirely replaces** the JSON whitelist. Every argument must pass basic shell safety checks (`_is_safe_value`). Rich per-command patterns from the JSON whitelist are NOT used in this mode.
+| `enable_auto_approve` | `true` | Skip approval for rubber-stamped commands. Works in harmony with consensus and reputation staking. |
 
 **Auto-Approval Bypass Behavior:**
-When `enable_whitelisting` is true and a command successfully passes the whitelist validation (either JSON mode or CSV override mode), the command is **auto-approved**. It bypasses the human approval requirement and executes immediately.
+When `enable_auto_approve` is true and a command's base verb is in the auto-approve list (and it has passed all L1 Hard Gates and L2 Consensus), the command bypasses the human approval requirement and executes immediately.
 
 > **Note:** Command validation is configured per-user via user settings, not platform settings. Users can enable/disable whitelist and blacklist through the Settings UI or API. See [Security Architecture — Command Allowlist and Denylist](../architecture/security.md#command-allowlist-and-denylist) for details on how to configure these controls.
 
@@ -1133,12 +1160,21 @@ AI agent evaluation runs through the **host-driven evals framework** at `compone
 
 ```bash
 # Bring up real-operator fleet
+
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e evals up -d dlk_xxx
 
 # Inspect fleet status
+
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e evals status
 
 # Tear down
+
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e evals down
 ```
 

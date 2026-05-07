@@ -18,11 +18,13 @@ Provides health check endpoints following the standard g8e pattern.
 """
 
 import logging
+from typing import cast
 
 from fastapi import APIRouter, Depends, Request
 
 from app.utils.timestamp import now_iso
 from app.dependencies import require_internal_origin
+from app.models.state import G8eeAppState
 
 router = APIRouter(tags=["health"])
 logger = logging.getLogger(__name__)
@@ -60,12 +62,14 @@ async def detailed_health_check(
     _: bool = Depends(require_internal_origin),
 ):
     """Detailed health check endpoint that verifies all services are available."""
+    state = cast(G8eeAppState, request.app.state)
+    services = getattr(state, "services", None)
     clients_status = {
-        "cache_aside_service": "up" if hasattr(request.app.state, "cache_aside_service") and request.app.state.cache_aside_service else "down",
-        "g8es_kv": "up" if hasattr(request.app.state, "pubsub_client") and request.app.state.pubsub_client else "down",
-        "internal_http_client": "up" if hasattr(request.app.state, "internal_http_client") and request.app.state.internal_http_client else "down",
-        "operator_command_service": "up" if hasattr(request.app.state, "operator_command_service") and request.app.state.operator_command_service else "down",
-        "chat_pipeline": "up" if hasattr(request.app.state, "chat_pipeline") and request.app.state.chat_pipeline else "down"
+        "cache_aside_service": "up" if services and getattr(services, "cache_aside_service", None) else "down",
+        "g8es_kv": "up" if hasattr(state, "pubsub_client") and state.pubsub_client else "down",
+        "internal_http_client": "up" if hasattr(state, "internal_http_client") and state.internal_http_client else "down",
+        "operator_command_service": "up" if services and getattr(services, "operator_command_service", None) else "down",
+        "chat_pipeline": "up" if services and getattr(services, "chat_pipeline", None) else "down"
     }
 
     return {

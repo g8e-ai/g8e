@@ -34,6 +34,7 @@ ALLOW_LIST = {
     "app/models/agents/tribunal.py",                 # Result models
     "app/models/tribunal_commands.py",               # Auditor model
     "app/services/ai/generator.py",                  # Threads reputation id
+    "app/services/ai/tribunal/stages/auditor.py",    # Auditor stage (Stage 3b)
 }
 
 REPUTATION_MODELS = {

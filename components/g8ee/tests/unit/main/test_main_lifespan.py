@@ -92,6 +92,7 @@ def _configure_factory(mocks):
     mock_services = MagicMock(spec=AllServices)
     mock_services.api_key_service = MagicMock()
     mock_services.cache_aside_service = MagicMock()
+    mock_services.settings_service = MagicMock()
     mock_services.operator_lifecycle_service = MagicMock()
     mock_services.operator_data_service = MagicMock()
     mock_services.heartbeat_service = MagicMock()
@@ -100,6 +101,8 @@ def _configure_factory(mocks):
     mock_services.certificate_service = MagicMock()
     mock_services.investigation_service = MagicMock()
     mock_services.approval_service = MagicMock()
+    mock_services.db_service = MagicMock()
+    mock_services.db_service.close = AsyncMock()
 
     factory.create_all_services.return_value = mock_services
     factory.bind_to_app_state = MagicMock()
@@ -212,7 +215,7 @@ class TestLifespanShutdown:
             mock_app.state.pubsub_client.close.assert_called_once()
             mock_app.state.kv_cache_client.close.assert_called_once()
             mock_app.state.blob_client.close.assert_called_once()
-            mock_app.state.db_service.close.assert_called_once()
+            mock_app.state.services.db_service.close.assert_called_once()
         finally:
             for p in patches:
                 p.stop()

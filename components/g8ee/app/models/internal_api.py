@@ -114,7 +114,6 @@ class OperatorSlotCreationRequest(G8eBaseModel):
     operator_type: str = Field(..., description="Operator type (CLOUD, SYSTEM)")
     cloud_subtype: str | None = Field(default=None, description="Cloud operator subtype")
     name_prefix: str = Field(default="operator", description="Name prefix")
-    is_g8e_node: bool = Field(default=False, description="Is g8e pod operator")
 
 
 class OperatorSlotCreationResponse(G8eBaseModel):
@@ -206,7 +205,7 @@ class OperatorUnbindResponse(G8eBaseModel):
 class InternalOperatorAuthCall(G8eBaseModel):
     """Request model for operator authentication via API key (Bearer) relayed through g8ed.
 
-    Aligned with shared/models/wire/operator_auth_call.json (InternalOperatorAuthCall)
+    Internal g8ee-g8ed API contract for operator authentication.
     """
     model_config = ConfigDict(extra="forbid")
 
@@ -341,43 +340,6 @@ class ApiKeyGenerationResponse(G8eBaseModel):
     error: str | None = None
 
 
-class G8epOperatorActivationRequest(G8eBaseModel):
-    """Request model for g8ep operator activation.
-    
-    Authority: g8ee.
-    Aligned with shared/models/wire/internal_requests.json (g8ep_operator_activation)
-    """
-    user_id: str = Field(..., description="ID of the user whose g8ep operator should be activated")
-
-
-class G8epOperatorActivationResponse(G8eBaseModel):
-    """Response model for g8ep operator activation.
-    
-    Aligned with shared/models/wire/operator_management_responses.json (g8ep_operator_activation_response)
-    """
-    success: bool
-    error: str | None = Field(default=None, description="Error message when unsuccessful")
-
-
-class G8epOperatorRelaunchRequest(G8eBaseModel):
-    """Request model for g8ep operator relaunch.
-    
-    Authority: g8ee.
-    Aligned with shared/models/wire/internal_requests.json (g8ep_operator_relaunch)
-    """
-    user_id: str = Field(..., description="ID of the user whose g8ep operator should be relaunched")
-
-
-class G8epOperatorRelaunchResponse(G8eBaseModel):
-    """Response model for g8ep operator relaunch.
-    
-    Aligned with shared/models/wire/operator_management_responses.json (g8ep_operator_relaunch_response)
-    """
-    success: bool
-    operator_id: str | None = Field(default=None, description="The ID of the relaunched operator slot")
-    error: str | None = Field(default=None, description="Error message when unsuccessful")
-
-
 class OperatorListenSessionAuthRequest(G8eBaseModel):
     """Request model for starting a session auth listener.
     
@@ -413,3 +375,9 @@ class DirectCommandRequest(G8eBaseModel):
     execution_id: str = Field(..., description="Execution ID for tracking")
     hostname: str | None = Field(default=None, description="Hostname of the target operator for result display")
     source: str = Field(default="anchored_terminal", description="Source of the command")
+
+
+class UserSettingsUpdateResponse(G8eBaseModel):
+    """Response model for user settings update sync."""
+    success: bool
+    error: str | None = None

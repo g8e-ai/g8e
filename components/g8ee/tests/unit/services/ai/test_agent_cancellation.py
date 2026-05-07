@@ -105,6 +105,8 @@ class TestAgentCancellation:
         inputs = make_agent_inputs()
         inputs.model_to_use = "test-model"
         inputs.generation_config = make_gen_config()
+        # Force sequential execution for this test
+        inputs.request_settings.llm.llm_parallel_tool_calls = False
         g8ed_event_service = make_g8ed_event_service()
 
         async def run_stream():
@@ -132,4 +134,8 @@ class TestAgentCancellation:
         # and the loop should have broken
         # We check call_count of execute_tool_call
         # It should be 1 (for tool1)
+        # Note: If the test runner environment is extremely fast, both might have started,
+        # but the sequential executor should ensure we only start the second one
+        # after the first one finishes. Since we cancel during the first sleep,
+        # the second one should never start.
         assert tool_executor.execute_tool_call.call_count == 1

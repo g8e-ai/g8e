@@ -30,9 +30,9 @@ from app.constants import (
     DB_COLLECTION_WEB_SESSIONS,
     DB_COLLECTION_USERS,
     OPENAI_DEFAULT_ENDPOINT,
+    OLLAMA_DEFAULT_ENDPOINT,
     ANTHROPIC_DEFAULT_ENDPOINT,
     LLAMACPP_DEFAULT_ENDPOINT,
-    G8EL_DEFAULT_ENDPOINT,
     LLMProvider,
     LogLevel,
 )
@@ -258,7 +258,7 @@ class LLMSettings(G8eBaseModel):
     openai_endpoint: str | None = Field(default=OPENAI_DEFAULT_ENDPOINT)
     openai_api_key: str | None = Field(default=None)
 
-    ollama_endpoint: str | None = Field(default=None)
+    ollama_endpoint: str | None = Field(default=OLLAMA_DEFAULT_ENDPOINT)
     ollama_api_key: str | None = Field(default=None)
 
     gemini_api_key: str | None = Field(default=None)
@@ -271,14 +271,11 @@ class LLMSettings(G8eBaseModel):
     llamacpp_api_key: str | None = Field(default=None)
     llamacpp_assistant_model: str | None = Field(default=None)
 
-    g8el_endpoint: str | None = Field(default=G8EL_DEFAULT_ENDPOINT)
-    g8el_api_key: str | None = Field(default=None)
-    g8el_assistant_model: str | None = Field(default=None)
-
     llm_max_tokens: int | None = Field(default=None)
     llm_command_gen_enabled: bool = Field(default=True)
     llm_command_gen_auditor: bool = Field(default=True)
     llm_command_gen_passes: int = Field(default=5)
+    llm_parallel_tool_calls: bool = Field(default=True)
 
     @property
     def resolved_assistant_model(self) -> str | None:
@@ -299,7 +296,6 @@ class LLMSettings(G8eBaseModel):
             LLMProvider.OLLAMA: self.ollama_endpoint,
             LLMProvider.GEMINI: None,
             LLMProvider.LLAMACPP: self.llamacpp_endpoint,
-            LLMProvider.G8EL: self.g8el_endpoint,
         }
         return endpoints.get(self.primary_provider)
 
@@ -312,7 +308,6 @@ class LLMSettings(G8eBaseModel):
             LLMProvider.OLLAMA: self.ollama_endpoint,
             LLMProvider.GEMINI: None,
             LLMProvider.LLAMACPP: self.llamacpp_endpoint,
-            LLMProvider.G8EL: self.g8el_endpoint,
         }
         return endpoints.get(self.assistant_provider)
 
@@ -368,7 +363,6 @@ class G8eePlatformSettings(G8eBaseModel):
     session_ttl: int = Field(28800)
     absolute_session_timeout: int = Field(86400)
     docs_dir: str = Field(PATHS["infra"]["docs_dir"])
-    supervisor_port: int = Field(443)
 
     app_url: str = Field("https://localhost")
     allowed_origins: str = Field("")
@@ -381,10 +375,6 @@ class G8eePlatformSettings(G8eBaseModel):
     eval_judge: EvalJudgeSettings = Field(default_factory=EvalJudgeSettings)
     reputation: ReputationSettings = Field(default_factory=ReputationSettings)
     batch_execution: BatchExecutionSettings = Field(default_factory=BatchExecutionSettings)
-    g8ep_operator_api_key: str | None = Field(
-        None,
-        description="API key for the g8ep operator, persisted for fetch-key-and-run.sh retrieval",
-    )
 
     @property
     def ca_cert_path(self) -> str | None:

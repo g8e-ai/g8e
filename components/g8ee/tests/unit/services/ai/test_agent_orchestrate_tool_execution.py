@@ -114,7 +114,7 @@ def sample_investigation(unique_investigation_id, unique_case_id, unique_user_id
             OperatorDocument(
                 id=unique_operator_id,
                 operator_session_id=unique_session_id,
-                status=OperatorStatus.AVAILABLE,
+                status=OperatorStatus.OFFLINE,
                 operator_type=OperatorType.SYSTEM,
                 latest_heartbeat_snapshot=HeartbeatSnapshot(
                     system_identity=HeartbeatSystemIdentity(
@@ -1005,7 +1005,7 @@ class TestTargetOperatorResolution:
                 OperatorDocument(
                     id="op-linux",
                     operator_session_id="session-linux",
-                    status=OperatorStatus.AVAILABLE,
+                    status=OperatorStatus.OFFLINE,
                     operator_type=OperatorType.SYSTEM,
                     latest_heartbeat_snapshot=HeartbeatSnapshot(
                         system_identity=HeartbeatSystemIdentity(
@@ -1020,7 +1020,7 @@ class TestTargetOperatorResolution:
                 OperatorDocument(
                     id="op-ubuntu",
                     operator_session_id="session-ubuntu",
-                    status=OperatorStatus.AVAILABLE,
+                    status=OperatorStatus.OFFLINE,
                     operator_type=OperatorType.SYSTEM,
                     current_hostname="ubuntu-host",
                     latest_heartbeat_snapshot=HeartbeatSnapshot(
