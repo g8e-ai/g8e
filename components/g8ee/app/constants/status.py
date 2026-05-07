@@ -128,7 +128,6 @@ class CloudSubtype(StrEnum):
     AWS = _STATUS["cloud.subtype"]["aws"]
     AZURE = _STATUS["cloud.subtype"]["azure"]
     GCP = _STATUS["cloud.subtype"]["gcp"]
-    G8E_POD = _STATUS["cloud.subtype"]["g8ep"]
 
 class CommandErrorType(StrEnum):
     VALIDATION_ERROR = "validation.error"

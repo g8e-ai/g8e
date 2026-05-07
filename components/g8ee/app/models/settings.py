@@ -363,7 +363,6 @@ class G8eePlatformSettings(G8eBaseModel):
     session_ttl: int = Field(28800)
     absolute_session_timeout: int = Field(86400)
     docs_dir: str = Field(PATHS["infra"]["docs_dir"])
-    supervisor_port: int = Field(443)
 
     app_url: str = Field("https://localhost")
     allowed_origins: str = Field("")

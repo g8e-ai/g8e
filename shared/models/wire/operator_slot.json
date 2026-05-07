@@ -14,7 +14,7 @@
       "name": {
         "type": "string",
         "required": false,
-        "description": "Operator name (e.g., 'operator-1', 'g8ep')"
+        "description": "Operator name (e.g., 'operator-1')"
       },
       "status": {
         "type": "string",
@@ -36,12 +36,6 @@
         "type": "string",
         "required": false,
         "description": "Web session ID this operator is bound to (if any)"
-      },
-      "is_g8ep": {
-        "type": "boolean",
-        "required": false,
-        "default": false,
-        "description": "True when this is the g8e node operator (g8ep)"
       },
       "first_deployed": {
         "type": "string",

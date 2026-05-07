@@ -27,8 +27,7 @@
   "cloud.subtype": {
     "aws": "aws",
     "gcp": "gcp",
-    "azure": "azure",
-    "g8ep": "g8ep"
+    "azure": "azure"
   },
 
   "execution.status": {
