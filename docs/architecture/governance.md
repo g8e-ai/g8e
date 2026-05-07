@@ -1,11 +1,11 @@
 # Governance & Mechanism Design
 
-Last Updated: 5-6-2026
+Last Updated: 5-7-2026
 Version: v.0.2.0
 
 Agentic AI safety in g8e is framed as a **consensus problem**: given a population of LLM-instantiated personas with different lenses, a calibrated adversary among them, and a human user with finite attention, how do we converge on an executable command that is safe, audited, and minimally costly?
 
-The mechanism operates through a strictly ordered 3-layer validation hierarchy where each layer provides a unique type of safety guarantee.
+The mechanism operates through a strictly ordered 3-layer validation hierarchy where each layer provides a unique type of safety guarantee. On operator pub/sub paths, this hierarchy is carried in the Protobuf `UniversalEnvelope` as governance metadata beside the typed `operator.proto` payload.
 
 ## The Players
 
@@ -39,6 +39,8 @@ This layer provides hardcoded, non-negotiable safety invariants that are enforce
 *   **Blacklist**: A configurable denylist of specific binary names or substrings that are restricted.
 *   **Whitelist**: When enabled, restricts execution to a strict set of permitted base commands and arguments.
 
+For Protobuf operator messages, L1 is also enforced at the Operator boundary through reflection over custom `forbidden_patterns` options in `shared/proto/operator.proto`. If the decoded payload violates a reflected hard gate, `g8eo` rejects it before dispatch.
+
 ### Layer 2: Consensus (The Tribunal)
 The Tribunal converts Sage's intent into a command using an ensemble of five independent agents.
 
@@ -51,12 +53,29 @@ The Tribunal converts Sage's intent into a command using an ensemble of five ind
 4.  **The Auditor (Final Verification)**: The Auditor reviews the winner against the intent. It can swap to a superior dissenter candidate or produce a revised command if technical flaws are found.
 5.  **Merkle Commitment**: The final verdict is cryptographically bound to a Merkle-signed snapshot of the reputation scoreboard.
 
+For command envelopes, the L2 Tribunal commitment is represented by `governance.l2.tribunal_signature`. `g8ee` signs `event_type || "\n" || payload_bytes` with the configured auditor HMAC key, and `g8eo` rejects missing or invalid signatures when L2 verification is configured.
+
 ### Layer 3: Authorization (PHP Gate)
 The final layer involves human authorization, governed by the **Auditor-User Partition**.
 
 *   **Proof of Human Presence (PHP)**: By default, the User must provide a hardware-bound signature for the final audited command.
-*   **Auto-Signature (Skip-PHP)**: To minimize click fatigue, benign diagnostic commands (e.g., `uptime`, `df`, `free`) can be auto-signed.
-*   **Safety Invariant**: Auto-signature **NEVER** bypasses Layer 1 or Layer 2. It only skips the Layer 3 human signature requirement for commands already verified as technically safe and low-risk.
+*   **Auto-Approval (Skip-Approval)**: To minimize click fatigue, benign diagnostic commands (e.g., `uptime`, `df`, `free`) can be marked as Layer 3 approved after L1 and L2 have already passed.
+*   **Safety Invariant**: Auto-approval **NEVER** bypasses Layer 1 or Layer 2. It only skips the Layer 3 human signature requirement for commands already verified as technically safe and low-risk.
+
+`common.proto` defines `governance.l3.human_signature`, `public_key`, and `auto_approved`. The schema can carry L3 authorization evidence in the envelope; current `g8eo` command acceptance is gated by envelope decoding, L1 checks, optional L2 verification, and optional state-root verification rather than by a runtime L3 verifier in the Operator.
+
+## Protocol Binding
+
+The governance hierarchy is not just a UI workflow. It is bound to the command protocol:
+
+| Governance layer | Protocol representation | Enforcement point |
+|---|---|---|
+| L1 Technical Bedrock | `governance.l1`, Protobuf `forbidden_patterns` field options, allowlist/denylist configuration | Pre-generation validation and `g8eo` pre-dispatch checks |
+| L2 Consensus | `governance.l2.tribunal_signature`, `governance.l2.agent_ids` | Auditor commitment in `g8ee`; HMAC verification in `g8eo` when configured |
+| L3 Authorization | `governance.l3.human_signature`, `governance.l3.public_key`, `governance.l3.auto_approved` | Governance Gateway approval flow and envelope metadata |
+| State freshness | `state_merkle_root` | `g8eo` compares the envelope root to the local ledger root when present |
+
+Legacy or malformed command payloads are rejected rather than translated. The operator command path is Protobuf-first: serialized `UniversalEnvelope` bytes carry the event type, typed payload bytes, operator/session context, state root, and governance evidence.
 
 ## Reputation & Stakes
 

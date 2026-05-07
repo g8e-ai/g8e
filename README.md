@@ -6,14 +6,14 @@
 
 governance architecture for trustless environments
 
-[Position Paper](docs/architecture/position_paper.md) · [Architecture](docs/architecture/about.md) · [Security](docs/architecture/security.md) · [Quick Start](#quick-start) · [Contributing](#contributing)
+[Position Paper](docs/architecture/position_paper.md) · [Architecture](docs/architecture/about.md) · [Protocol](docs/architecture/protocol.md) · [Security](docs/architecture/security.md) · [Quick Start](#quick-start) · [Contributing](#contributing)
 
 </div>
 ## What this is
 
 g8e is an agentic AI platform built on mutual adversarial assumption. Every actor — Engine, Operator, User — assumes the others may be compromised and verifies accordingly. No trusted component, no privileged path, no implicit consent.
 
-The architecture is a host-authoritative governance substrate: Byzantine consensus with an adversarial co-validator, sovereign execution on customer hardware, and chain-of-custody audit. BFT applied to the agentic stack.
+The architecture is a host-authoritative governance substrate: Byzantine consensus with an adversarial co-validator, sovereign execution on customer hardware, and chain-of-custody audit. Its cross-component contract is a typed Protobuf `UniversalEnvelope` that binds operator payloads to event names, state roots, and L1/L2/L3 governance metadata. BFT applied to the agentic stack.
 
 Self-hosted. Air-gap capable. Apache 2.0. Built for environments where nominal oversight is a failure state and the owner must own the ledger.
 
@@ -23,7 +23,7 @@ Self-hosted. Air-gap capable. Apache 2.0. Built for environments where nominal o
 
 - **LLM sovereignty.** A stateless reasoning engine decouples intent from execution. Context is ephemeral per request; providers never retain session state. Swap between Anthropic, Gemini, OpenAI, Ollama, or llama.cpp without losing continuity.
 
-- **Operator sovereignty.** The Operator is a protocol for verifiable execution, not just a binary. Sentinel pre-execution analysis (46 threat detectors), hardware fingerprint binding, outbound-only mTLS, and FIDO2-gated state changes. No bits move without an explicit, hardware-bound human signature.
+- **Operator sovereignty.** The Operator is a protocol for verifiable execution, not just a binary. Sentinel pre-execution analysis (46 threat detectors), hardware fingerprint binding, outbound-only mTLS, and Protobuf-first command envelopes carrying governance evidence. No bits move without the surrounding approval flow authorizing the transaction.
 
 - **Consensus integrity.** The Tribunal generates candidates under tiered information gating — agents cannot see each other's reasoning or downstream plans. An adversarial co-validator (Nemesis) is scored on a proper scoring rule alongside the honest panel. All eight core agent personas (Axiom, Concord, Variance, Pragma, Nemesis, Sage, Auditor, Warden) stake reputation on every turn; malfeasance or incompetence triggers automated slashing across tiered severity bands. Collusion is structurally unprofitable.
 
@@ -98,8 +98,8 @@ flowchart TD
 3. **The Tribunal** is five blind validators (Axiom, Concord, Variance, Pragma, Nemesis), each generating a candidate command independently with no visibility into the others. A winner requires ≥2 of 5 supporting votes. If consensus fails or a tie is unresolved by deterministic laddering (Shortest → Non-Nemesis), an anonymized peer-review round runs. If Round 2 also fails to reach consensus, a circuit breaker error is triggered and surfaced back to Sage.
 4. **Warden** (running on the Engine) performs a pre-execution risk assessment. It coordinates specialized sub-agents (`warden_command_risk`, `warden_file_risk`, `warden_error`) to validate the command safety profile for blast radius, destructive idioms, and risk. The **Nemesis** actively tries to trick the Warden into allowing flawed commands.
 5. **The Auditor** performs the final consistency check and Merkle commitment once the Warden has cleared the command. The Auditor is the only persona that cannot be tricked by the Nemesis; if a Nemesis command passes the Warden, the Auditor identifies the "attack," awards the Nemesis, but rejects the command.
-6. **Proof of Human Presence (PHP)**: You review the command and risk assessment via the Governance Gateway and provide a hardware-bound signature using a FIDO2 passkey. The **Operator** will only execute if this signature is present in the transaction envelope.
-7. **The Operator** receives the signed command over the outbound WebSocket, runs it in an isolated process group, captures the result into the local audit vault, and snapshots state into a git-backed ledger.
+6. **Proof of Human Presence (PHP)**: You review the command and risk assessment via the Governance Gateway and provide a hardware-bound signature using a FIDO2 passkey. When the flow is auto-approved, that is Layer 3 authorization state only; it never bypasses Layer 1 or Layer 2.
+7. **The Operator** receives a serialized `UniversalEnvelope` over the pub/sub WebSocket path, rejects non-envelope command bytes, enforces reflected L1 forbidden-pattern rules, verifies the L2 Tribunal signature when configured, checks the state root when present, runs the typed payload in an isolated process group, captures the result into the local audit vault, and snapshots state into a git-backed ledger.
 8. **Codex** (async) extracts durable user preferences and scrubbed investigation summaries from the conversation history to build long-term memory.
 
 The point of steps 1–5 is to minimize what reaches step 6. Your time is the only stake the system can't fake; everything upstream exists to spend it well.
@@ -202,7 +202,7 @@ curl -fsSL http://<hub>/g8e | sh -s -- <device-link-token>
 What happens on every state change:
 
 1. **Context Injection**: Bundles a signed snapshot of host state (OS, shell, hardware, history) into the reasoning loop.
-2. **Receives** the signed command via outbound mTLS WebSocket.
+2. **Receives** the typed `UniversalEnvelope` command via outbound mTLS WebSocket.
 3. **Pre-screens** with the Sentinel — 46 MITRE ATT&CK detectors, 28 scrubbing patterns.
 4. **Executes** in an isolated process group with closed stdin.
 5. **Captures** output into a Raw Vault (host-only) and a Scrubbed Vault (AI-accessible).
@@ -214,7 +214,7 @@ System fingerprint binding ties the Operator's mTLS cert to the host it was issu
 
 ## Security
 
-- **Auth** — Protocol-level Proof of Human Presence (PHP) via FIDO2 / WebAuthn passkeys. Hardware-bound signatures are required for all state changes. Passwords are unsupported by design.
+- **Auth** — Protocol-level Proof of Human Presence (PHP) via FIDO2 / WebAuthn passkeys. Hardware-bound approval is the default Layer 3 state for mutations; auto-approval is restricted to benign commands that already passed L1 and L2. Passwords are unsupported by design.
 - **Transport** — TLS 1.3. Platform-generated ECDSA P-384 CA. Per-Operator mTLS client certs issued at claim time.
 - **Sentinel** — On-host defensive analysis: 46 MITRE-mapped detectors, 28 scrubbing patterns, and command allowlist/denylist enforcement.
 - **Warden** — Engine-side defensive coordination: command/error/file risk classifiers applied before human approval.
@@ -305,6 +305,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 |---|---|
 | [Position Paper](docs/architecture/position_paper.md) | The thesis: AI-Powered, Human-Driven Infrastructure |
 | [Architecture](docs/architecture/about.md) | Origins, governance philosophy, core principles |
+| [Protocol](docs/architecture/protocol.md) | Protobuf `UniversalEnvelope`, typed operator payloads, and governance metadata |
+| [Governance](docs/architecture/governance.md) | L1/L2/L3 validation hierarchy, Tribunal mechanics, and protocol binding |
 | [Security](docs/architecture/security.md) | Authentication, Sentinel, LFAA, threat model |
 | [AI Control Plane](docs/architecture/ai_control_plane.md) | ReAct loop, Tribunal, prompts, tools, providers |
 | [Operator](docs/architecture/operator.md) | Lifecycle, modes, deployment, on-host storage |

@@ -1,13 +1,13 @@
 # **AI-Powered, Human-Driven Infrastructure**
 
-Last Updated: 5-6-2026
+Last Updated: 5-7-2026
 Version: v.0.2.0
 
 **A Byzantine Fault Tolerant Architecture for Agentic Automation**
 
 *Danny Barbour · [github.com/g8e-ai/g8e](https://github.com/g8e-ai/g8e)*
 
-**Abstract:** We propose a distributed governance architecture for agentic infrastructure built on mutual adversarial assumption. We treat LLM-driven automation as a Byzantine Fault Tolerance (BFT) problem. The architecture utilizes a stateless reasoning Engine running a consensus protocol over isolated, heterogeneous AI personas, and a single-binary sovereign Operator that runs on managed hosts with a tamper-evident local audit ledger. The AI is structurally prevented from auto-regressive collapse, and the human operator is elevated from a rubber-stamp supervisor to a first-class co-validator whose explicit stake is time.
+**Abstract:** We propose a distributed governance architecture for agentic infrastructure built on mutual adversarial assumption. We treat LLM-driven automation as a Byzantine Fault Tolerance (BFT) problem. The architecture utilizes a stateless reasoning Engine running a consensus protocol over isolated, heterogeneous AI personas, and a single-binary sovereign Operator that runs on managed hosts with a tamper-evident local audit ledger. Governance evidence travels with execution intent in a typed Protobuf `UniversalEnvelope`, binding event names, operator payloads, state roots, and L1/L2/L3 metadata into the same transaction. The AI is structurally prevented from auto-regressive collapse, and the human operator is elevated from a rubber-stamp supervisor to a first-class co-validator whose explicit stake is time.
 
 ## **1\. The Fallacy of the Single Agent**
 
@@ -23,9 +23,9 @@ Trusting a single agent to mutate state is gross negligence. Trusting a fatigued
 
 SaaS-based agent architectures pull your authoritative state into their cloud. We inverted this. The execution plane is the **Operator**: a single, statically compiled 4MB Go binary ("Satellite Agent") that runs on the managed host.
 
-In a typical agentic architecture, the execution worker is a dumb terminal that runs whatever payload the cloud orchestrator sends it. In g8e, the Operator is the reality portal. It treats the upstream AI Engine as inherently untrusted and actively expects adversarial inputs.
+In a typical agentic architecture, the execution worker is a dumb terminal that runs whatever payload the cloud orchestrator sends it. In g8e, the Operator is the reality portal. It treats the upstream AI Engine as inherently untrusted and actively expects adversarial inputs. Command and result traffic is not ad hoc JSON; it is serialized `UniversalEnvelope` bytes carrying typed `operator.proto` payloads through the pub/sub transport.
 
-Before a single bit moves on the host OS, the Operator routes the inbound payload through its **Sentinel** layer: 46 discrete MITRE ATT\&CK detectors and strict command allowlist/denylist enforcement. It executes commands in an isolated process group with a closed stdin.
+Before a single bit moves on the host OS, the Operator rejects malformed envelopes, applies protocol-level L1 checks, verifies L2 Tribunal signatures when configured, and routes the inbound payload through its **Sentinel** layer: 46 discrete MITRE ATT\&CK detectors and strict command allowlist/denylist enforcement. It executes commands in an isolated process group with a closed stdin.
 
 The Operator requires zero inbound ports, communicating exclusively via outbound mTLS WebSockets. By leveraging a Temporal Privilege Function, it attaches just-in-time IAM scopes based on the parsed intent and drops them post-execution, ensuring zero standing privileges. Locally, the Operator doesn't just execute the platform; it *is* the platform.
 
@@ -63,9 +63,9 @@ This is expressed by the **Co-Validation Identity**:
 
 Neither signature is sufficient alone. Crucially, we do not allow the human signature to be automated. The industry standard for HITL is a CLI prompt. CLI prompts can be bypassed by a tired developer writing a wrapper script with \--auto-approve.
 
-g8e permanently disables automatic function calling. We enforce explicit friction through **Proof of Human Presence (PHP)**. The **Governance Gateway** is the only path to the human, enforced by FIDO2. It doesn't just show a UI; it validates that a hardware-bound signature was appended to the transaction envelope. The only signature the Operator will accept is mathematically bound to a physical hardware token or biometric scan tied to a specific human's deliberate intent.
+g8e permanently disables automatic function calling. We enforce explicit friction through **Proof of Human Presence (PHP)**. The **Governance Gateway** is the only path to the human, enforced by FIDO2. It doesn't just show a UI; it records Layer 3 authorization evidence for the transaction. At the protocol layer, `UniversalEnvelope.governance.l3` can carry a human signature and public key, or an `auto_approved` flag for benign commands that have already passed L1 and L2. Auto-approval is not an execution shortcut; it is only Layer 3 authorization state.
 
-We enforce the friction because the friction is the security boundary.
+We enforce the friction because the friction is the security boundary. The wire protocol makes that boundary explicit instead of relying on side-channel trust.
 
 ## **6\. The Receipts: Evals Over Vibes**
 
@@ -83,6 +83,6 @@ Infrastructure has properties consumer AI does not. Mistakes are persistent. Bla
 
 The current generation of agent platforms cannot satisfy these constraints. Co-validation is the necessary correction. We use Byzantine Fault Tolerance to keep the AI honest, an encrypted ledger to power fleet memory, a sovereign Go binary to keep the state local, and a FIDO2 passkey to keep the human in authority.
 
-If you are building infrastructure that AI agents will operate, build it on a zero-trust governance protocol. The ideas are free; the code is public.
+If you are building infrastructure that AI agents will operate, build it on a zero-trust governance protocol whose enforcement metadata travels with the command. The ideas are free; the code is public.
 
 *g8e is open-source: [github.com/g8e-ai/g8e](https://github.com/g8e-ai/g8e)*

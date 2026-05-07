@@ -4,7 +4,7 @@ title: Glossary
 
 # g8e Glossary
 
-Last Updated: 5-6-2026
+Last Updated: 5-7-2026
 Version: v.0.2.0
 
 Essential terminology for understanding the g8e platform. Terms are organized alphabetically.
@@ -487,6 +487,12 @@ The ability to restore files to any previous state using the Ledger's git histor
 ## Unified Approval
 
 The batch execution approval dialog in g8ed that allows a single user approval to cover commands across multiple Operators. When commands need to execute on multiple systems, g8ed displays a unified UI with header "Command Requested (N systems)", a list of target hostnames and Operator types, and a single "Approve for N Systems" button. The approval routes to `/api/operator/approval/respond` once, and g8ee fans out the command to each Operator in parallel (bounded by `command_validation.max_batch_concurrency`), with all per-operator executions correlated back to the approval via a shared `batch_id`.
+
+---
+
+## UniversalEnvelope
+
+The Protobuf root container for cross-component operator protocol messages. It binds a canonical `event_type` to typed payload bytes, operator/session context, optional state root data, and L1/L2/L3 governance metadata.
 
 ---
 

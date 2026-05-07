@@ -6,7 +6,7 @@ permalink: /docs/
 
 # g8e Documentation Index
 
-Last Updated: 5-6-2026
+Last Updated: 5-7-2026
 Version: v.0.2.0
 
 g8e is a Zero-Trust AI platform for secure infrastructure operations. This index maps high-level concepts to their technical implementations.
@@ -47,6 +47,7 @@ Technical deep-dives into the services that comprise the g8e stack.
 
 | Document | Description |
 |----------|-------------|
+| [architecture/protocol.md](architecture/protocol.md) | **g8e Protocol**: Protobuf `UniversalEnvelope`, typed operator payloads, and governance metadata. |
 | [reference/events.md](reference/events.md) | **Wire Protocol**: Registry of all internal pub/sub and SSE events. |
 | [architecture/prompts.md](architecture/prompts.md) | **Prompt Engineering**: Schema and logic for agent persona assembly. |
 | [architecture/scripts.md](architecture/scripts.md) | **Management CLI**: Architecture of the core platform orchestration scripts. |
