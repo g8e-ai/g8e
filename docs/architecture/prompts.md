@@ -5,8 +5,8 @@ parent: Architecture
 
 # Prompt System
 
-Last Updated: 5-6-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 
 The g8e prompt system is a modular architecture designed for **prefix-cache reuse** and **strict structural enforcement**. It composes final system prompts from shared fragments, canonical persona definitions, and dynamic turn-specific context.
 

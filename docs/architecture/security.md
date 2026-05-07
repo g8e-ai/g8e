@@ -5,8 +5,8 @@ parent: Architecture
 
 # Security Architecture
 
-Last Updated: 5-6-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 
 g8e is a local-only, air-gapped platform designed for high-stakes environments. Security is not an "add-on" but the core constraint: the platform assumes the AI control plane is potentially adversarial or error-prone and enforces safety at the infrastructure level.
 

@@ -5,8 +5,8 @@ parent: Architecture
 
 # Agent Persona System
 
-Last Updated: 5-6-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 
 ## Overview
 

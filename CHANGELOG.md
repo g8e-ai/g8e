@@ -7,28 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.2.0] - 2026-05-06
+## [0.2.0] - 2026-05-07
 
 ### Added
+- **Protobuf-First Architecture:** Massively migrated the platform to a robust, typed Protobuf-first architecture for all component-to-component communication.
+- **Universal Envelope:** Introduced the `UniversalEnvelope` for all BFT transactions, binding event metadata, state roots, and hardware-bound fingerprints.
+- **L1/L2/L3 Governance:** Integrated a 3-layer command validation hierarchy (L1 Technical Bedrock, L2 Consensus/Tribunal, L3 Authorization/Human) directly into the message envelope.
 - **Recursive Grep Tool:** Introduced `recursive_grep_search` for high-efficiency filesystem exploration across operator fleets.
 - **Interrogation Gate:** Implemented a new gate in the agent loop that detects `<interrogation>` blocks and suppresses pending tool calls to prioritize user input.
 - **Warden Risk Analysis:** Enhanced risk classification logic for Warden sub-agents with improved reputation staking and file-read security.
-- **LFAA Audit Enhancements:** Added direct SQLite querying support for the LFAA Audit Vault and corresponding CLI tools for forensic analysis.
-- **Tribunal Voting in Audit UI:** The Audit page now displays detailed Tribunal voting breakdowns, consensus strength, and dissent records.
+- **LFAA Audit Enhancements:** Refactored the Low-Fidelity Agentic Assistance audit recording to use typed Protobuf schemas.
 
 ### Changed
+- **G8EO Protocol Hardening:** Hardened `g8eo` to reject malformed or non-envelope command bytes and enforce L1 `forbidden_patterns` via Protobuf reflection.
+- **Tribunal 2.0 Pipeline:** Refactored the Tribunal consensus pipeline into a modular, stage-based architecture utilizing strict Protobuf-typed payloads and signatures.
 - **G8eHttpContext Refactor:** Centralized and enforced strict security header validation (`web_session_id`, `user_id`, `source_component`) for all internal service communication.
-- **Tribunal 2.0 Pipeline:** Completely refactored the Tribunal consensus pipeline into a modular, stage-based architecture (`generation`, `voting`, `warden`, `auditor`).
 - **Internal API Security:** Enforced strict component-identity verification and session-binding for internal component-to-component routing.
 - **Operator Lifecycle:** Hardened operator slot management with atomic state transitions and reliable relaunch/activation logic for `g8ep` slots.
-- **Consensus Enforcement:** Implemented mandatory two-round consensus logic for Tribunal sessions with low initial agreement.
+- **Standardized Cloud Subtype:** Standardized operator identification using `cloud_subtype='g8ep'` for consistency across cloud providers.
 
 ### Fixed
 - **Warden Risk Regression:** Resolved a regression where Warden risk levels were incorrectly calculated in certain agent turns.
 - **Interrogation Plumbing:** Fixed response handling and user interaction flow for the device interrogation pipeline.
 - **G8EO Execution ID:** Fixed a bug where `FsGrepResultPayload` was missing `ExecutionID` propagation, breaking correlation for recursive searches.
-- **Internal Routing Loops:** Resolved edge cases in internal API routing that could lead to authentication loops under high concurrency.
-- **Test Coverage & Stability:** Massive increase in unit and integration test coverage for `g8ee` and `g8eo`, with significant improvements to test reliability and parallelism.
+- **Fingerprint Recording:** Resolved issues with system fingerprint recording and included missing events in the audit trail.
+- **Test Coverage & Stability:** Massive increase in unit and integration test coverage for `g8ee`, `g8eo`, and `g8es`, with full migration to typed payload assertions.
+
+### Removed
+- **Legacy Audit UI:** Removed the outdated Audit page and associated backend services from `g8ed` in favor of streamlined platform logging.
+- **"Available" Status:** Deprecated the "available" operator status as it was redundant for state management.
 
 ## [0.1.9] - 2026-05-05
 

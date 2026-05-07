@@ -4,8 +4,8 @@ title: Testing
 
 # Testing g8e
 
-Last Updated: 5-6-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 
 g8e is designed to be a **testing environment and production environment at the same time**. We do not believe in mocking the world just to get tests to pass. If it doesn't work in the test environment, it won't work in production.
 
@@ -50,32 +50,32 @@ All tests are orchestrated via the `./g8e` CLI, which routes each component to i
 ```bash
 # Start the platform infrastructure first
 
-Last Updated: 5-6-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e platform start
 
 # Authenticate once to local store
 
-Last Updated: 5-6-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e login
 
 # Run a specific component
 
-Last Updated: 5-6-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e test g8ee
 
 # Run with coverage
 
-Last Updated: 5-6-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e test g8eo --coverage
 
 # Run g8ee with parallelism and strict type checking
 
-Last Updated: 5-6-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e test g8ee -j auto --pyright --ruff
 ```
 
@@ -88,27 +88,27 @@ Evaluating non-deterministic AI models requires a multi-layered approach using t
 ```bash
 # 1. Start a fleet of real operator nodes linked via a device token
 
-Last Updated: 5-6-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e evals up --device-token dlk_xxx --nodes 3
 
 # 2. Run the eval runner (executes in g8ep)
 
-Last Updated: 5-6-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e evals run --gold-set evals/gold_sets/accuracy.json --device-token dlk_xxx
 
 # 3. View status and logs
 
-Last Updated: 5-6-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e evals status
 ./g8e evals logs eval-node-01
 
 # 4. Tear down the fleet
 
-Last Updated: 5-6-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e evals down
 ```
 
@@ -143,20 +143,20 @@ The platform includes automated security verification tools run via `g8ep`.
 ```bash
 # Run mTLS and configuration audit
 
-Last Updated: 5-6-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e security mtls-test
 
 # Validate platform security posture
 
-Last Updated: 5-6-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e security validate
 
 # Scan for dependency licenses
 
-Last Updated: 5-6-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e security scan-licenses
 ```
 

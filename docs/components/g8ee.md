@@ -5,8 +5,8 @@ parent: Components
 
 # g8ee
 
-Last Updated: 5-6-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 
 g8ee is the AI engine for the g8e platform. It provides an agentic, LLM-powered interface for infrastructure operations and troubleshooting, featuring human-in-the-loop safety controls, data sovereignty, and a multi-provider LLM abstraction layer.
 
@@ -1163,20 +1163,20 @@ AI agent evaluation runs through the **host-driven evals framework** at `compone
 ```bash
 # Bring up real-operator fleet
 
-Last Updated: 5-6-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e evals up -d dlk_xxx
 
 # Inspect fleet status
 
-Last Updated: 5-6-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e evals status
 
 # Tear down
 
-Last Updated: 5-6-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e evals down
 ```
 

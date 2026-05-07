@@ -5,8 +5,8 @@ parent: Architecture
 
 # g8e Pub/Sub Architecture
 
-Last Updated: 5-7-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 
 The g8e platform utilizes a high-performance, WebSocket-based Pub/Sub system for all real-time inter-component communication. This decoupled architecture allows the central engine (`g8ee`) to orchestrate distributed agents (`g8eo` Operators) across heterogeneous environments without direct network visibility.
 
@@ -70,8 +70,8 @@ The `operator_session_id` may contain the separator character (`:`). To prevent 
 ```python
 # Canonical parsing logic
 
-Last Updated: 5-6-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 parts = channel.split(":", 2) # Ensures the session ID remains intact
 ```
 

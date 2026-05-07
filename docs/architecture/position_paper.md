@@ -1,7 +1,7 @@
 # **AI-Powered, Human-Driven Infrastructure**
 
-Last Updated: 5-7-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 
 **A Byzantine Fault Tolerant Architecture for Agentic Automation**
 

@@ -5,8 +5,8 @@ parent: Components
 
 # g8es — Platform Persistence and Messaging
 
-Last Updated: 5-6-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 
 ## Overview
 
@@ -95,14 +95,14 @@ The g8es Dockerfile cross-compiles the operator binary for three architectures (
 ```bash
 # Start in listen mode
 
-Last Updated: 5-6-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 g8e.operator --listen
 
 # With custom ports
 
-Last Updated: 5-6-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 g8e.operator --listen --wss-listen-port 9001 --http-listen-port 9000 -l debug
 ```
 
@@ -341,20 +341,20 @@ In a fully air-gapped environment, the platform runs as three processes from a s
 ```bash
 # Terminal 1: Persistence + messaging backbone
 
-Last Updated: 5-6-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e.operator --listen --data-dir ./data
 
 # Terminal 2: Web dashboard
 
-Last Updated: 5-6-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 node components/g8ed/server.js
 
 # Terminal 3: AI engine
 
-Last Updated: 5-6-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 python components/g8ee/app/main.py
 ```
 

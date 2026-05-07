@@ -5,8 +5,8 @@ parent: Architecture
 
 # g8e Scripts
 
-Last Updated: 5-6-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 
 The scripts layer provides the operational interface for the g8e platform. It abstracts the complexity of a multi-container environment into a unified CLI, ensuring consistent execution across development, testing, and production environments.
 

@@ -5,8 +5,8 @@ parent: Architecture
 
 # g8e Protocol
 
-Last Updated: 5-7-2026
-Version: v.0.2.0
+Last Updated: 2026-05-07
+Version: v0.2.0
 
 The g8e protocol is the cross-component contract that binds AI intent, operator execution, event routing, and governance metadata into typed Protobuf messages. This document describes the current protocol surface used by `g8ee`, `g8eo`, `g8ed`, and `g8es`.
 
