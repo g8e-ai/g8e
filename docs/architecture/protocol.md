@@ -95,11 +95,19 @@ Representative request payloads include:
 | `g8e.v1.operator.network.port.check.requested` | `CheckPortRequested` |
 | `g8e.v1.operator.logs.fetch.requested` | `FetchLogsRequested` |
 | `g8e.v1.operator.history.fetch.requested` | `FetchHistoryRequested` |
+| `g8e.v1.operator.file.history.fetch.requested` | `FetchFileHistoryRequested` |
+| `g8e.v1.operator.file.diff.fetch.requested` | `FetchFileDiffRequested` |
+| `g8e.v1.operator.file.restore.requested` | `RestoreFileRequested` |
 | `g8e.v1.operator.heartbeat.requested` | `HeartbeatRequested` |
+| `g8e.v1.operator.shutdown.requested` | `ShutdownRequested` |
+| `g8e.v1.operator.audit.user.recorded` | `AuditMsgRequested` |
+| `g8e.v1.operator.audit.ai.recorded` | `AuditMsgRequested` |
+| `g8e.v1.operator.audit.direct.command.recorded` | `DirectCommandAuditRequested` |
+| `g8e.v1.operator.audit.direct.command.result.recorded` | `DirectCommandResultAuditRequested` |
 
 Representative result payloads include `CommandResult`, `ExecutionStatusUpdate`, `FileEditResult`, `FsListResult`, `FsReadResult`, `FsGrepResult`, `PortCheckResult`, `FetchLogsResult`, `FetchHistoryResult`, `FetchFileHistoryResult`, `FetchFileDiffResult`, `RestoreFileResult`, and `HeartbeatResult`.
 
-`g8eo` fails closed when the envelope cannot be decoded. First-class handlers reject payloads that cannot be decoded as their expected `operator.proto` message.
+`g8eo` fails closed when the envelope itself cannot be decoded or is missing `id`. For recognized first-class request events, `g8eo` decodes `UniversalEnvelope.payload` into the expected `operator.proto` message before dispatch, enforces reflected L1 gates when decoding succeeds, and each handler rejects payloads that cannot be decoded as its expected message. Unknown event types do not dispatch because no handler is registered.
 
 ---
 
@@ -111,7 +119,7 @@ Governance is part of the protocol envelope. It is not optional side-channel sta
 
 L1 enforcement uses Protobuf reflection over custom field options defined in `common.proto`. `operator.proto` marks safety-sensitive string fields with `g8e.common.v1.forbidden_patterns`.
 
-`CommandRequested.command` currently carries forbidden patterns for `sudo`, `su`, and `rm -rf /`. `g8eo` unmarshals the typed payload and rejects the command before dispatch when a reflected field violates its configured patterns.
+`CommandRequested.command` currently carries forbidden patterns for `sudo`, `su`, and `rm -rf /`. `g8eo` unmarshals recognized typed payloads and rejects the command before dispatch when a reflected field violates its configured patterns.
 
 ### L2: Consensus
 
@@ -127,7 +135,7 @@ The hex digest is stored in `governance.l2.tribunal_signature`. `g8eo` computes 
 
 `common.proto` defines `L3Metadata` with `human_signature`, `public_key`, and `auto_approved`. The current Protobuf schema can carry L3 authorization evidence, but command acceptance is not currently gated by a runtime L3 verifier in `g8eo`.
 
-Auto-approval never bypasses L1 or L2. It only represents Layer 3 authorization state when the surrounding approval flow populates and verifies it.
+Auto-approval never bypasses L1 or L2. It only represents L3 authorization state when the surrounding approval flow populates and verifies it.
 
 ---
 

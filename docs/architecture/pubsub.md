@@ -80,7 +80,7 @@ parts = channel.split(":", 2) # Ensures the session ID remains intact
 - **Auto-Cleanup**: `SessionAuthListener` enforces a 300s TTL on ephemeral auth listeners to prevent memory leaks from abandoned bootstrap attempts.
 
 ### 4. Protocol Payloads
-Operator command and result channel payloads carry serialized `UniversalEnvelope` bytes whose inner payloads are typed `operator.proto` messages. The envelope and governance contract is documented in [Protocol](protocol.md).
+Operator command and result channel payloads carry serialized g8e protocol `UniversalEnvelope` bytes whose inner payloads are typed `operator.proto` messages. Pub/sub channels provide routing only; `UniversalEnvelope` provides the protocol contract by binding `event_type`, payload bytes, operator/session context, state root, and L1/L2/L3 governance metadata. The envelope and governance contract is documented in [Protocol](protocol.md).
 
 ---
 
@@ -88,5 +88,6 @@ Operator command and result channel payloads carry serialized `UniversalEnvelope
 
 Pub/Sub is the only way `g8ee` communicates with `g8eo`. This provides a critical security boundary:
 - **No Inbound TCP to Operators**: Operators only need outbound WSS to the platform.
-- **Audit Logging**: Every message published to a `cmd` channel is logged with its `justification` and `operator_id` for compliance.
+- **Audit Logging**: Every command envelope carries correlation fields and governance evidence for compliance and local LFAA retention.
 - **Type Safety**: Operator command and result payloads are validated against generated Protobuf models before processing.
+- **Governance Binding**: Auto-approval is L3 authorization state only; it never bypasses L1 Technical Bedrock or L2 Consensus.
