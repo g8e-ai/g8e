@@ -192,6 +192,21 @@
     transition: transform var(--transition-fast);
 }
 
+
+/* Hamburger Theme Toggle */
+.hamburger-tutorial-btn {
+    width: 100%;
+    background: transparent;
+    border: none;
+    justify-content: flex-start;
+    text-transform: uppercase;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.65rem 0.85rem;
+}
+
 /* Nav Hamburger Menu - opens downward in header */
 .nav-hamburger {
     position: relative;
