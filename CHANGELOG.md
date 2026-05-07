@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.0] - 2026-05-07
+
+### Added
+- **Protobuf-First Architecture:** Massively migrated the platform to a robust, typed Protobuf-first architecture for all component-to-component communication.
+- **Universal Envelope:** Introduced the `UniversalEnvelope` for all BFT transactions, binding event metadata, state roots, and hardware-bound fingerprints.
+- **L1/L2/L3 Governance:** Integrated a 3-layer command validation hierarchy (L1 Technical Bedrock, L2 Consensus/Tribunal, L3 Authorization/Human) directly into the message envelope.
+- **Recursive Grep Tool:** Introduced `recursive_grep_search` for high-efficiency filesystem exploration across operator fleets.
+- **Interrogation Gate:** Implemented a new gate in the agent loop that detects `<interrogation>` blocks and suppresses pending tool calls to prioritize user input.
+- **Warden Risk Analysis:** Enhanced risk classification logic for Warden sub-agents with improved reputation staking and file-read security.
+- **LFAA Audit Enhancements:** Refactored the Low-Fidelity Agentic Assistance audit recording to use typed Protobuf schemas.
+
+### Changed
+- **G8EO Protocol Hardening:** Hardened `g8eo` to reject malformed or non-envelope command bytes and enforce L1 `forbidden_patterns` via Protobuf reflection.
+- **Tribunal 2.0 Pipeline:** Refactored the Tribunal consensus pipeline into a modular, stage-based architecture utilizing strict Protobuf-typed payloads and signatures.
+- **G8eHttpContext Refactor:** Centralized and enforced strict security header validation (`web_session_id`, `user_id`, `source_component`) for all internal service communication.
+- **Internal API Security:** Enforced strict component-identity verification and session-binding for internal component-to-component routing.
+- **Operator Lifecycle:** Hardened operator slot management with atomic state transitions and reliable relaunch/activation logic.
+- **Removed g8ep:** Eliminated the sidecar-managed `g8ep` operator node and `SupervisorService` in favor of external operators and unified slot management.
+- **Standardized Cloud Subtype:** Standardized operator identification using `cloud_subtype` for consistency across cloud providers.
+
+### Fixed
+- **Warden Risk Regression:** Resolved a regression where Warden risk levels were incorrectly calculated in certain agent turns.
+- **Interrogation Plumbing:** Fixed response handling and user interaction flow for the device interrogation pipeline.
+- **G8EO Execution ID:** Fixed a bug where `FsGrepResultPayload` was missing `ExecutionID` propagation, breaking correlation for recursive searches.
+- **Fingerprint Recording:** Resolved issues with system fingerprint recording and included missing events in the audit trail.
+- **Test Coverage & Stability:** Massive increase in unit and integration test coverage for `g8ee`, `g8eo`, and `g8es`, with full migration to typed payload assertions.
+
+### Removed
+- **Legacy Audit UI:** Removed the outdated Audit page and associated backend services from `g8ed` in favor of streamlined platform logging.
+- **"Available" Status:** Deprecated the "available" operator status as it was redundant for state management.
+
 ## [0.1.9] - 2026-05-05
 
 ### Added
@@ -80,7 +111,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Reputation System:** Introduced a multi-stage reputation and staking system, including `ReputationCommitment`, `ReputationState`, and `StakeResolution` models for trust-based operator management.
-- **`g8el` (LFAA) Re-introduction:** Restored the `g8el` component to provide Low-Fidelity Agentic Assistance, tuned specifically for eval performance and lightweight orchestration.
 - **SSH Inventory Streaming:** New capability to stream and import operator inventory directly from local SSH configuration files.
 - **Enhanced Test Fixtures:** Added `gold-set-schema.json` and `ledger-hash-fixtures.json` to improve consistency across platform evaluation suites.
 - **Reputation CLI:** New administrative scripts `manage-reputation.py` and `seed-reputation-state.py` for platform governance.
@@ -91,7 +121,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Settings UX Overhaul:** Redesigned the Dashboard Settings page to match the Setup page layout, including improved command validation and status rendering.
 - **Device Link Refactoring:** Streamlined device link management and added auto-approval logic for benign, non-mutating commands.
 - **System Info & Heartbeat Synchronization:** Overhauled `SystemInfo` and `Heartbeat` wire models for better cross-component consistency and reduced payload size.
-- **Documentation Refresh:** Comprehensive updates to all architectural and component documentation, including new guides for `g8el` and updated developer instructions.
 
 ### Fixed
 - **Authentication Loops:** Resolved edge cases in operator authentication and fixed internal routing issues during high-concurrency streams.

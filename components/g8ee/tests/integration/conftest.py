@@ -32,6 +32,7 @@ and avoid code duplication.
 import logging
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from unittest.mock import MagicMock
 
 import pytest
 import pytest_asyncio
@@ -205,6 +206,9 @@ async def all_services(cache_aside_service, test_settings):
     services = ServiceFactory.create_all_services(
         test_settings,
         cache_aside_service,
+        db_service=MagicMock(),
+        kv_service=MagicMock(),
+        blob_service=MagicMock(),
         web_search_provider=web_search_provider,
     )
 

@@ -83,8 +83,8 @@ type HeartbeatOSDetails struct {
 
 type HeartbeatUserDetails struct {
 	Username string `json:"username"`
-	UID      int    `json:"uid"`
-	GID      int    `json:"gid"`
+	UID      int32  `json:"uid"`
+	GID      int32  `json:"gid"`
 	Home     string `json:"home"`
 	Name     string `json:"name"`
 	Shell    string `json:"shell"`

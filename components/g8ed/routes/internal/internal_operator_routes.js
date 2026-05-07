@@ -15,6 +15,7 @@ import { IntentRequest } from '../../models/request_models.js';
 import express from 'express';
 import { logger } from '../../utils/logger.js';
 import { DeviceLinkError } from '../../constants/auth.js';
+import { InternalApiPaths } from '../../constants/api_paths.js';
 import { OperatorDocument, OperatorWithSessionContext } from '../../models/operator_model.js';
 import { ErrorResponse, OperatorListResponse, OperatorSlotsResponse } from '../../models/response_models.js';
 
@@ -24,7 +25,7 @@ import { ErrorResponse, OperatorListResponse, OperatorSlotsResponse } from '../.
  * @param {Object} options.authorizationMiddleware - Authorization middleware object
  */
 export function createInternalOperatorRouter({ services, authorizationMiddleware }) {
-    const { operatorService, g8eNodeOperatorService } = services;
+    const { operatorService } = services;
     const { requireInternalOrigin, requireInternalOrUserAuth } = authorizationMiddleware;
     const router = express.Router();
 
@@ -214,40 +215,6 @@ export function createInternalOperatorRouter({ services, authorizationMiddleware
     });
 
     /**
-     * POST /api/internal/operators/user/:userId/reauth
-     */
-    router.post('/user/:userId/reauth', requireInternalOrUserAuth, async (req, res, next) => {
-        const { userId } = req.params;
-
-        logger.info('[INTERNAL-HTTP] g8ep operator reauth requested', { user_id: userId });
-
-        try {
-            const result = await g8eNodeOperatorService.relaunchG8ENodeOperatorForUser(userId);
-
-            if (!result.success) {
-                logger.warn('[INTERNAL-HTTP] g8ep operator reauth failed', {
-                    user_id: userId,
-                    error: result.error,
-                });
-                return res.status(404).json(new ErrorResponse({ error: result.error }).forWire());
-            }
-
-            logger.info('[INTERNAL-HTTP] g8ep operator reauth completed', {
-                user_id: userId,
-                operator_id: result.operator_id,
-            });
-
-            return res.json({ success: true, user_id: userId, operator_id: result.operator_id });
-        } catch (error) {
-            logger.error('[INTERNAL-HTTP] g8ep operator reauth error', {
-                error: error.message,
-                user_id: userId,
-            });
-            return res.status(500).json(new ErrorResponse({ error: error.message || 'Reauth failed' }).forWire());
-        }
-    });
-
-    /**
      * GET /api/internal/operators/user/:userId
      */
     router.get('/user/:userId', requireInternalOrigin, async (req, res, next) => {
@@ -412,7 +379,8 @@ export function createInternalOperatorRouter({ services, authorizationMiddleware
     /**
      * POST /api/internal/operators/:operatorId/grant-intent
      */
-    router.post('/:operatorId/grant-intent', requireInternalOrigin, async (req, res, next) => {
+    const grantIntentPath = InternalApiPaths.g8ed.grant_intent.replace('{operator_id}', ':operatorId').split('/').pop();
+    router.post(`/:operatorId/${grantIntentPath}`, requireInternalOrigin, async (req, res, next) => {
         try {
             const { operatorId } = req.params;
             const { intent } = IntentRequest.parse(req.body);
@@ -450,7 +418,8 @@ export function createInternalOperatorRouter({ services, authorizationMiddleware
     /**
      * POST /api/internal/operators/:operatorId/revoke-intent
      */
-    router.post('/:operatorId/revoke-intent', requireInternalOrigin, async (req, res, next) => {
+    const revokeIntentPath = InternalApiPaths.g8ed.revoke_intent.replace('{operator_id}', ':operatorId').split('/').pop();
+    router.post(`/:operatorId/${revokeIntentPath}`, requireInternalOrigin, async (req, res, next) => {
         try {
             const { operatorId } = req.params;
             const { intent } = IntentRequest.parse(req.body);

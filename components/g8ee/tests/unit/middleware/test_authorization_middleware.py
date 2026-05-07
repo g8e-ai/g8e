@@ -171,7 +171,7 @@ class TestAuthorizationMiddleware:
         mock_inv_data_service = MagicMock()
         mock_inv_data_service.get_investigation = AsyncMock(return_value=investigation)
         mock_inv_service.investigation_data_service = mock_inv_data_service
-        mock_request.app.state.investigation_service = mock_inv_service
+        mock_request.app.state.services.investigation_service = mock_inv_service
 
         response = await middleware.dispatch(mock_request, mock_call_next)
         assert response.status_code == 200
@@ -195,7 +195,7 @@ class TestAuthorizationMiddleware:
         mock_inv_data_service = MagicMock()
         mock_inv_data_service.get_investigation = AsyncMock(return_value=investigation)
         mock_inv_service.investigation_data_service = mock_inv_data_service
-        mock_request.app.state.investigation_service = mock_inv_service
+        mock_request.app.state.services.investigation_service = mock_inv_service
 
         response = await middleware.dispatch(mock_request, mock_call_next)
         assert response.status_code == 200
@@ -218,7 +218,7 @@ class TestAuthorizationMiddleware:
         mock_inv_data_service = MagicMock()
         mock_inv_data_service.get_investigation = AsyncMock(return_value=investigation)
         mock_inv_service.investigation_data_service = mock_inv_data_service
-        mock_request.app.state.investigation_service = mock_inv_service
+        mock_request.app.state.services.investigation_service = mock_inv_service
 
         with pytest.raises(AuthorizationError) as exc_info:
             await middleware.dispatch(mock_request, mock_call_next)
@@ -238,7 +238,7 @@ class TestAuthorizationMiddleware:
         mock_inv_data_service = MagicMock()
         mock_inv_data_service.get_investigation = AsyncMock(return_value=None)
         mock_inv_service.investigation_data_service = mock_inv_data_service
-        mock_request.app.state.investigation_service = mock_inv_service
+        mock_request.app.state.services.investigation_service = mock_inv_service
 
         with pytest.raises(AuthorizationError) as exc_info:
             await middleware.dispatch(mock_request, mock_call_next)
@@ -254,8 +254,8 @@ class TestAuthorizationMiddleware:
             user_id="user-456",
             organization_id="org-789",
         )
-        # Mock investigation_service but make it None to trigger ServiceUnavailableError
-        mock_request.app.state.investigation_service = None
+        # Mock services but make investigation_service None to trigger ServiceUnavailableError
+        mock_request.app.state.services.investigation_service = None
 
         with pytest.raises(ServiceUnavailableError) as exc_info:
             await middleware.dispatch(mock_request, mock_call_next)
@@ -273,13 +273,13 @@ class TestAuthorizationMiddleware:
         case = build_case_model(case_id="case-789", title="Test case", user_id="user-456")
         mock_db = MagicMock()
         mock_db.get_case = AsyncMock(return_value=case)
-        mock_request.app.state.db_service = mock_db
+        mock_request.app.state.services.db_service = mock_db
 
         response = await middleware.dispatch(mock_request, mock_call_next)
         assert response.status_code == 200
 
     async def test_case_ownership_match_via_path_param(self, middleware, mock_request, mock_call_next):
-        mock_request.url.path = "/investigations/case-789/details"
+        mock_request.url.path = "/cases/case-789/details"
         mock_request.query_params = {}
         mock_request.path_params = {"case_id": "case-789"}
         mock_request.state.g8e_context = build_g8e_http_context(
@@ -290,7 +290,7 @@ class TestAuthorizationMiddleware:
         case = build_case_model(case_id="case-789", title="Test case", user_id="user-456")
         mock_db = MagicMock()
         mock_db.get_case = AsyncMock(return_value=case)
-        mock_request.app.state.db_service = mock_db
+        mock_request.app.state.services.db_service = mock_db
 
         response = await middleware.dispatch(mock_request, mock_call_next)
         assert response.status_code == 200
@@ -306,7 +306,7 @@ class TestAuthorizationMiddleware:
         case = build_case_model(case_id="case-789", title="Test case", user_id="other-user")
         mock_db = MagicMock()
         mock_db.get_case = AsyncMock(return_value=case)
-        mock_request.app.state.db_service = mock_db
+        mock_request.app.state.services.db_service = mock_db
 
         with pytest.raises(AuthorizationError) as exc_info:
             await middleware.dispatch(mock_request, mock_call_next)
@@ -324,7 +324,7 @@ class TestAuthorizationMiddleware:
         )
         mock_db = MagicMock()
         mock_db.get_case = AsyncMock(return_value=None)
-        mock_request.app.state.db_service = mock_db
+        mock_request.app.state.services.db_service = mock_db
 
         with pytest.raises(AuthorizationError) as exc_info:
             await middleware.dispatch(mock_request, mock_call_next)
@@ -340,8 +340,8 @@ class TestAuthorizationMiddleware:
             user_id="user-456",
             organization_id="org-789",
         )
-        # Mock db_service but make it None to trigger ServiceUnavailableError
-        mock_request.app.state.db_service = None
+        # Mock services but make db_service None to trigger ServiceUnavailableError
+        mock_request.app.state.services.db_service = None
 
         with pytest.raises(ServiceUnavailableError) as exc_info:
             await middleware.dispatch(mock_request, mock_call_next)
@@ -382,7 +382,7 @@ class TestAuthorizationMiddleware:
         mock_inv_data_service = MagicMock()
         mock_inv_data_service.get_investigation = AsyncMock(return_value=investigation)
         mock_inv_service.investigation_data_service = mock_inv_data_service
-        mock_request.app.state.investigation_service = mock_inv_service
+        mock_request.app.state.services.investigation_service = mock_inv_service
 
         with pytest.raises(AuthorizationError) as exc_info:
             await middleware.dispatch(mock_request, mock_call_next)
@@ -401,7 +401,7 @@ class TestAuthorizationMiddleware:
         case = build_case_model(case_id="case-789", title="Test case", user_id="other-user")
         mock_db = MagicMock()
         mock_db.get_case = AsyncMock(return_value=case)
-        mock_request.app.state.db_service = mock_db
+        mock_request.app.state.services.db_service = mock_db
 
         with pytest.raises(AuthorizationError) as exc_info:
             await middleware.dispatch(mock_request, mock_call_next)

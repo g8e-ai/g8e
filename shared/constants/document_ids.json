@@ -4,5 +4,9 @@
   "document_ids": {
     "platform_settings": "platform_settings",
     "user_settings_prefix": "user_settings_"
+  },
+
+  "sentinel_id": {
+    "unknown": "unknown"
   }
 }

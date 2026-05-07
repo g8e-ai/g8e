@@ -29,7 +29,6 @@ import { OperatorMetricsDisplayMixin } from './operator-metrics-display-mixin.js
 
 const _STATUS_UPDATED_VALUES = [
     EventType.OPERATOR_STATUS_UPDATED_ACTIVE,
-    EventType.OPERATOR_STATUS_UPDATED_AVAILABLE,
     EventType.OPERATOR_STATUS_UPDATED_UNAVAILABLE,
     EventType.OPERATOR_STATUS_UPDATED_BOUND,
     EventType.OPERATOR_STATUS_UPDATED_OFFLINE,

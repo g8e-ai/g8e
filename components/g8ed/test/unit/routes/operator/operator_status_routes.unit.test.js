@@ -22,16 +22,12 @@ import { contextMiddleware } from '@g8ed/middleware/context.js';
 describe('OperatorStatusRoutes Unit Tests', () => {
     let app;
     let mockOperatorService;
-    let mockG8ENodeOperatorService;
     let mockAuthMiddleware;
     let mockAuthorizationMiddleware;
 
     beforeEach(() => {
         mockOperatorService = {
             relayStopCommandToG8ee: vi.fn()
-        };
-        mockG8ENodeOperatorService = {
-            relaunchG8ENodeOperatorForUser: vi.fn()
         };
         mockAuthMiddleware = {
             requireAuth: vi.fn((req, res, next) => {
@@ -55,8 +51,7 @@ describe('OperatorStatusRoutes Unit Tests', () => {
         const router = createOperatorStatusRouter({
             services: {
                 operatorService: mockOperatorService,
-                g8eNodeOperatorService: mockG8ENodeOperatorService,
-                internalHttpClient: vi.fn() // Add mock internalHttpClient if needed
+                internalHttpClient: vi.fn()
             },
             authMiddleware: mockAuthMiddleware,
             authorizationMiddleware: mockAuthorizationMiddleware
@@ -66,34 +61,6 @@ describe('OperatorStatusRoutes Unit Tests', () => {
         app.use(express.json());
         app.use(contextMiddleware);
         app.use('/api/operator', router);
-    });
-
-    describe(`POST ${OperatorPaths.G8E_GATEWAY_REAUTH}`, () => {
-        it('successfully initiates g8ep reauth', async () => {
-            mockG8ENodeOperatorService.relaunchG8ENodeOperatorForUser.mockResolvedValue({
-                success: true,
-                id: 'new-g8ep-op-id'
-            });
-
-            const res = await request(app).post('/api/operator/g8ep/reauth');
-
-            expect(res.status).toBe(200);
-            expect(res.body.success).toBe(true);
-            expect(res.body.id).toBe('new-g8ep-op-id');
-            expect(mockG8ENodeOperatorService.relaunchG8ENodeOperatorForUser).toHaveBeenCalledWith('test-user-id');
-        });
-
-        it('returns 404 if g8ep reauth fails', async () => {
-            mockG8ENodeOperatorService.relaunchG8ENodeOperatorForUser.mockResolvedValue({
-                success: false,
-                error: 'g8ep not found'
-            });
-
-            const res = await request(app).post('/api/operator/g8ep/reauth');
-
-            expect(res.status).toBe(404);
-            expect(res.body.error).toBe('g8ep not found');
-        });
     });
 
     describe(`GET ${OperatorPaths.DETAILS}`, () => {

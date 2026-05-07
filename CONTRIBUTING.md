@@ -31,7 +31,7 @@ git checkout -b feature/your-feature-name
 
 ## Development Environment
 
-g8e runs as a set of Docker containers with source code volume-mounted for hot reload. Only Docker is required on the host—all toolchain operations (Python, Go, Node) run inside the `g8ep` runner container.
+g8e runs as a set of Docker containers with source code volume-mounted for hot reload. Only Docker is required on the host—all toolchain operations (Python, Go, Node) run inside dedicated test-runner containers when using `./g8e test`.
 
 ```bash
 ./g8e platform start        # Start without rebuilding
@@ -44,7 +44,7 @@ g8e runs as a set of Docker containers with source code volume-mounted for hot r
 
 ## Running Tests
 
-All tests execute inside the `g8ep` container to ensure environment parity.
+All tests execute inside dedicated test-runner containers to ensure environment parity.
 
 ```bash
 ./g8e test           # Run all test suites

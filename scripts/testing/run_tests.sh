@@ -206,10 +206,11 @@ _show_web_search_config() {
 
 run_g8ee() {
     log_header "Running g8ee tests (g8ee-test-runner)"
-    cd "$PROJECT_ROOT/components/g8ee"
     if [[ "$PYRIGHT" == "true" ]]; then
-        python -m pyright --project pyrightconfig.services.json
+        # Strip /app/components/ prefix to show relative paths from components
+        (set -o pipefail && cd "$PROJECT_ROOT/components/g8ee" && python -m pyright --project pyrightconfig.services.json | sed "s|$PROJECT_ROOT/components/||g")
     fi
+    cd "$PROJECT_ROOT/components/g8ee"
     if [[ "$RUFF" == "true" ]]; then
         local ruff_args=(check .)
         [[ "$RUFF_FIX" == "true" ]] && ruff_args+=(--fix)

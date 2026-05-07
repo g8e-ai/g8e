@@ -18,7 +18,7 @@ import logging
 import secrets
 from typing import TYPE_CHECKING
 
-from app.constants import DB_COLLECTION_API_KEYS
+from app.constants import DB_COLLECTION_API_KEYS, ApiKeyStatus
 from app.models.api_keys import ApiKeyDocument
 from app.services.cache.cache_aside import CacheAsideService
 from app.utils.timestamp import now
@@ -31,9 +31,6 @@ logger = logging.getLogger(__name__)
 # Constants for hashing (aligned with g8ed)
 API_KEY_HASH_ALGORITHM = "sha256"
 API_KEY_HASH_LENGTH = 32
-
-API_KEY_STATUS_ACTIVE = "ACTIVE"
-API_KEY_STATUS_REVOKED = "REVOKED"
 
 class ApiKeyService:
     """
@@ -58,7 +55,7 @@ class ApiKeyService:
         """
         return f"{prefix}{secrets.token_hex(32)}"
 
-    async def validate_key(self, api_key: str) -> tuple[bool, ApiKeyDocument | None, str | None]:
+    async def validate_key(self, api_key: str, system_fingerprint: str | None = None) -> tuple[bool, ApiKeyDocument | None, str | None]:
         """Validate a raw API key."""
         if not api_key:
             return False, None, "API key is required"
@@ -71,11 +68,23 @@ class ApiKeyService:
 
         doc = ApiKeyDocument.model_validate(data)
 
-        if doc.status != "ACTIVE":
+        if doc.status != ApiKeyStatus.ACTIVE:
             return False, doc, f"API key is {doc.status}"
 
         if doc.expires_at and doc.expires_at < now():
             return False, doc, "API key has expired"
+
+        # Enforce fingerprint matching if established
+        if doc.system_fingerprint and system_fingerprint and doc.system_fingerprint != system_fingerprint:
+            logger.error(
+                "[API-KEY-SERVICE] Fingerprint mismatch",
+                extra={
+                    "doc_id": doc_id[:8] + "...",
+                    "expected": doc.system_fingerprint,
+                    "received": system_fingerprint
+                }
+            )
+            return False, doc, "Invalid system fingerprint"
 
         return True, doc, None
 
@@ -87,7 +96,7 @@ class ApiKeyService:
         operator_id: str | None = None,
         client_name: str = "operator",
         permissions: list[str] | None = None,
-        status: str = "ACTIVE",
+        status: ApiKeyStatus = ApiKeyStatus.ACTIVE,
     ) -> bool:
         """Issue (create and store) a new API key."""
         try:
@@ -139,7 +148,7 @@ class ApiKeyService:
             await self.cache.update_document(
                 collection=self.collection,
                 document_id=doc_id,
-                data={"status": API_KEY_STATUS_REVOKED, "revoked_at": now()},
+                data={"status": ApiKeyStatus.REVOKED, "revoked_at": now()},
                 merge=True,
             )
             logger.info(
@@ -157,46 +166,20 @@ class ApiKeyService:
         user_id: str,
         organization_id: str | None,
         operator_id: str,
-        is_g8ep: bool,
         settings_service: SettingsServiceProtocol,
         client_name: str = "operator",
         permissions: list[str] | None = None,
     ) -> bool:
-        """Issue an operator API key with canonical-first dual-write.
-
-        1. Writes the key to the ``api_keys`` collection (canonical).
-        2. If ``is_g8ep`` is True, mirrors the key to
-           ``platform_settings.g8ep_operator_api_key`` so g8ep's
-           ``fetch-key-and-run.sh`` can retrieve it on bootstrap.
-        3. If step 2 fails, the canonical record is rolled back to REVOKED
-           so we never leave a key authoritative-without-mirror.
-        """
-        issued = await self.issue_key(
+        """Issue an operator API key."""
+        return await self.issue_key(
             api_key=api_key,
             user_id=user_id,
             organization_id=organization_id,
             operator_id=operator_id,
             client_name=client_name,
             permissions=permissions,
-            status=API_KEY_STATUS_ACTIVE,
+            status=ApiKeyStatus.ACTIVE,
         )
-        if not issued:
-            return False
-
-        if not is_g8ep:
-            return True
-
-        try:
-            await settings_service.update_g8ep_operator_api_key(api_key)
-            return True
-        except Exception as e:
-            logger.error(
-                "[API-KEY-SERVICE] Failed to mirror g8ep operator API key to "
-                "platform_settings; rolling back api_keys entry",
-                extra={"operator_id": operator_id, "error": str(e)},
-            )
-            await self.revoke_key(api_key)
-            return False
 
     async def rotate_operator_key(
         self,
@@ -205,24 +188,20 @@ class ApiKeyService:
         user_id: str,
         organization_id: str | None,
         operator_id: str,
-        is_g8ep: bool,
         settings_service: SettingsServiceProtocol,
         client_name: str = "operator",
         permissions: list[str] | None = None,
     ) -> bool:
         """Rotate an operator API key.
 
-        Issues + mirrors the new key first via ``issue_operator_key`` so a
-        failure leaves the OLD key authoritative everywhere. Only after the
-        new key is fully in place is the old key revoked in ``api_keys``.
-        Old-key revocation is best-effort; failure is logged but not fatal.
+        Issues the new key first so a failure leaves the OLD key authoritative.
+        Only after the new key is fully in place is the old key revoked.
         """
         ok = await self.issue_operator_key(
             api_key=new_api_key,
             user_id=user_id,
             organization_id=organization_id,
             operator_id=operator_id,
-            is_g8ep=is_g8ep,
             settings_service=settings_service,
             client_name=client_name,
             permissions=permissions,
@@ -244,40 +223,37 @@ class ApiKeyService:
     async def revoke_operator_key(
         self,
         api_key: str,
-        is_g8ep: bool,
         settings_service: SettingsServiceProtocol,
     ) -> bool:
-        """Revoke an operator API key in the canonical store, then clear the
-        platform_settings mirror if this was a g8ep key.
+        """Revoke an operator API key in the canonical store."""
+        return await self.revoke_key(api_key)
 
-        ``api_keys`` is intentionally revoked first: even if the mirror clear
-        fails, the key cannot authenticate anymore, and the startup
-        reconciler will clear the stale mirror on next boot.
-        """
-        ok = await self.revoke_key(api_key)
-        if not ok:
-            return False
-
-        if is_g8ep:
-            try:
-                await settings_service.clear_g8ep_operator_api_key(expected=api_key)
-            except Exception as e:
-                logger.warning(
-                    "[API-KEY-SERVICE] Failed to clear g8ep operator API key "
-                    "from platform_settings after revoke; reconciler will "
-                    "catch up",
-                    extra={"error": str(e)},
-                )
-        return True
-
-    async def record_usage(self, api_key: str) -> None:
-        """Update the last used timestamp of a key."""
+    async def record_usage(self, api_key: str, system_fingerprint: str | None = None) -> None:
+        """Update the last used timestamp of a key and establish fingerprint if missing."""
         try:
             doc_id = self.make_doc_id(api_key)
+            data = await self.cache.get_document_with_cache(self.collection, doc_id)
+            if not data:
+                return
+
+            doc = ApiKeyDocument.model_validate(data)
+            updates = {"last_used_at": now()}
+
+            # Establish fingerprint if not already set (immutable thereafter)
+            if not doc.system_fingerprint and system_fingerprint:
+                updates["system_fingerprint"] = system_fingerprint
+                logger.info(
+                    "[API-KEY-SERVICE] Established system fingerprint for API key",
+                    extra={
+                        "doc_id": doc_id[:8] + "...",
+                        "system_fingerprint": system_fingerprint
+                    }
+                )
+
             await self.cache.update_document(
                 collection=self.collection,
                 document_id=doc_id,
-                data={"last_used_at": now()},
+                data=updates,
                 merge=True
             )
         except Exception as e:

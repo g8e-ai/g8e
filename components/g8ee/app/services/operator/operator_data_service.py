@@ -138,16 +138,34 @@ class OperatorDataService(OperatorDataServiceProtocol):
         summary: str,
         details: dict[str, object] | None = None,
         additional_updates: dict[str, object] | None = None,
+        status_check: tuple[OperatorStatus, ...] | None = None,
     ) -> OperatorDocument:
         """Atomic status + history update under a keyed lock.
-        
+
         This is the single authoritative path for state transitions that require
         an audit trail entry.
+
+        Args:
+            operator_id: Operator document ID
+            event_type: History event type
+            actor: Component performing the action
+            summary: Human-readable summary
+            details: Optional event details
+            additional_updates: Additional fields to update atomically
+            status_check: Optional tuple of allowed statuses. If provided, the
+                operation will only proceed if the current status is in this tuple.
         """
         async with self._history_lock.acquire(operator_id):
             operator = await self.get_operator(operator_id)
             if not operator:
                 raise ValidationError(f"Operator {operator_id} not found")
+
+            # Perform atomic status check if requested
+            if status_check and operator.status not in status_check:
+                raise ValidationError(
+                    f"Operator {operator_id} has status {operator.status}, "
+                    f"expected one of {status_check}"
+                )
 
             # Determine prev_hash
             prev_hash = "0" * 64

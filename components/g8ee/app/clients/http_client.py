@@ -292,6 +292,8 @@ class HTTPClient:
             G8eHeaders.SOURCE_COMPONENT: context.source_component,
             G8eHeaders.EXECUTION_ID: context.execution_id,
         }
+        if context.system_fingerprint:
+            headers[G8eHeaders.SYSTEM_FINGERPRINT] = context.system_fingerprint
         if context.organization_id:
             headers[G8eHeaders.ORGANIZATION_ID] = context.organization_id
         if context.case_id:

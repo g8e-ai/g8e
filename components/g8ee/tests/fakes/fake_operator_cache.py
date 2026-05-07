@@ -54,6 +54,7 @@ class FakeOperatorCache:
         summary: str,
         details: dict[str, object] | None = None,
         additional_updates: dict[str, object] | None = None,
+        status_check: tuple[OperatorStatus, ...] | None = None,
     ):
         return None
 

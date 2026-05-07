@@ -610,7 +610,7 @@ class TestOperatorEnrichment:
         offline_operator = build_production_operator_document()
 
         # Manually set different statuses since factory hardcodes BOUND
-        claimed_operator.status = OperatorStatus.AVAILABLE
+        claimed_operator.status = OperatorStatus.ACTIVE
         offline_operator.status = OperatorStatus.OFFLINE
 
         # Create the actual investigation with the same IDs

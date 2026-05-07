@@ -19,7 +19,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // Payloads here mirror what sse-connection-manager actually emits on the
 // eventBus: the INNER `data` body only, with the `{ type, data }` transport
 // envelope already stripped. For heartbeat this is the flat envelope shape
-// from shared/models/wire/heartbeat_sse.json (operator_id, status, metrics).
+// from the HeartbeatSSEEnvelope (operator_id, status, metrics).
 // For status-updated this is the flat OperatorStatusUpdatedEvent shape.
 
 let OperatorPanel;
@@ -76,8 +76,8 @@ function createPanel(initialOperators) {
 describe('OperatorPanel._onHeartbeat [UNIT - PURE LOGIC]', () => {
     it('merges heartbeat metrics into the matching slot by operator_id', () => {
         const panel = createPanel([
-            { operator_id: 'op-1', status: OperatorStatus.AVAILABLE, latest_heartbeat_snapshot: null },
-            { operator_id: 'op-2', status: OperatorStatus.AVAILABLE, latest_heartbeat_snapshot: null },
+            { operator_id: 'op-1', status: OperatorStatus.OFFLINE, latest_heartbeat_snapshot: null },
+            { operator_id: 'op-2', status: OperatorStatus.OFFLINE, latest_heartbeat_snapshot: null },
         ]);
 
         panel._onHeartbeat({
@@ -107,7 +107,7 @@ describe('OperatorPanel._onHeartbeat [UNIT - PURE LOGIC]', () => {
 
     it('sets _heartbeatDirty = true and calls _patchOperatorCard, not displayOperators', () => {
         const panel = createPanel([
-            { operator_id: 'op-1', status: OperatorStatus.AVAILABLE, latest_heartbeat_snapshot: null },
+            { operator_id: 'op-1', status: OperatorStatus.OFFLINE, latest_heartbeat_snapshot: null },
         ]);
 
         panel._onHeartbeat({
@@ -145,7 +145,7 @@ describe('OperatorPanel._onHeartbeat [UNIT - PURE LOGIC]', () => {
 
     it('leaves operators untouched when no operator_id matches', () => {
         const panel = createPanel([
-            { operator_id: 'op-1', status: OperatorStatus.AVAILABLE, latest_heartbeat_snapshot: null },
+            { operator_id: 'op-1', status: OperatorStatus.OFFLINE, latest_heartbeat_snapshot: null },
         ]);
 
         panel._onHeartbeat({
@@ -161,7 +161,7 @@ describe('OperatorPanel._onHeartbeat [UNIT - PURE LOGIC]', () => {
         global.window.authState = { getState: () => ({ isAuthenticated: false }) };
 
         const panel = createPanel([
-            { operator_id: 'op-1', status: OperatorStatus.AVAILABLE, latest_heartbeat_snapshot: null },
+            { operator_id: 'op-1', status: OperatorStatus.OFFLINE, latest_heartbeat_snapshot: null },
         ]);
 
         panel._onHeartbeat({
@@ -178,7 +178,7 @@ describe('OperatorPanel._onHeartbeat [UNIT - PURE LOGIC]', () => {
 describe('OperatorPanel._onStatusUpdated [UNIT - PURE LOGIC]', () => {
     it('applies status, status_display, status_class, and bound_web_session_id to the matching slot', () => {
         const panel = createPanel([
-            { operator_id: 'op-1', status: OperatorStatus.AVAILABLE, status_display: 'AVAILABLE', status_class: 'available', bound_web_session_id: null },
+            { operator_id: 'op-1', status: OperatorStatus.OFFLINE, status_display: 'OFFLINE', status_class: 'offline', bound_web_session_id: null },
         ]);
 
         panel._onStatusUpdated({
@@ -210,7 +210,7 @@ describe('OperatorPanel._onStatusUpdated [UNIT - PURE LOGIC]', () => {
 
     it('does not mutate any slot when operator_id does not match', () => {
         const panel = createPanel([
-            { operator_id: 'op-1', status: OperatorStatus.AVAILABLE },
+            { operator_id: 'op-1', status: OperatorStatus.OFFLINE },
         ]);
 
         panel._onStatusUpdated({
@@ -218,12 +218,12 @@ describe('OperatorPanel._onStatusUpdated [UNIT - PURE LOGIC]', () => {
             status: OperatorStatus.ACTIVE,
         });
 
-        expect(panel.operators[0].status).toBe(OperatorStatus.AVAILABLE);
+        expect(panel.operators[0].status).toBe(OperatorStatus.OFFLINE);
     });
 
     it('updates aggregate counts from event payload', () => {
         const panel = createPanel([
-            { operator_id: 'op-1', status: OperatorStatus.AVAILABLE },
+            { operator_id: 'op-1', status: OperatorStatus.OFFLINE },
         ]);
 
         panel._onStatusUpdated({
@@ -239,7 +239,7 @@ describe('OperatorPanel._onStatusUpdated [UNIT - PURE LOGIC]', () => {
 
     it('clears _heartbeatDirty after immediate render', () => {
         const panel = createPanel([
-            { operator_id: 'op-1', status: OperatorStatus.AVAILABLE },
+            { operator_id: 'op-1', status: OperatorStatus.OFFLINE },
         ]);
         panel._isRendered = true;
         panel._heartbeatDirty = true;
@@ -256,7 +256,7 @@ describe('OperatorPanel._onStatusUpdated [UNIT - PURE LOGIC]', () => {
 describe('OperatorPanel.heartbeat buffering [UNIT - PURE LOGIC]', () => {
     it('_onListUpdated clears _heartbeatDirty after immediate render', () => {
         const panel = createPanel([
-            { operator_id: 'op-1', status: OperatorStatus.AVAILABLE },
+            { operator_id: 'op-1', status: OperatorStatus.OFFLINE },
         ]);
         panel._isRendered = true;
         panel._heartbeatDirty = true;
@@ -304,7 +304,7 @@ describe('OperatorPanel.heartbeat buffering [UNIT - PURE LOGIC]', () => {
 describe('OperatorPanel.state buffering during render [UNIT - PURE LOGIC]', () => {
     it('_triggerRender sets flag when not rendered, returns early', () => {
         const panel = createPanel([
-            { operator_id: 'op-1', status: OperatorStatus.AVAILABLE },
+            { operator_id: 'op-1', status: OperatorStatus.OFFLINE },
         ]);
         panel._isRendered = false;
         panel._statePendingDuringRender = false;
@@ -317,7 +317,7 @@ describe('OperatorPanel.state buffering during render [UNIT - PURE LOGIC]', () =
 
     it('_triggerRender applies state immediately when already rendered', () => {
         const panel = createPanel([
-            { operator_id: 'op-1', status: OperatorStatus.AVAILABLE },
+            { operator_id: 'op-1', status: OperatorStatus.OFFLINE },
         ]);
         panel._isRendered = true;
         panel._statePendingDuringRender = false;
@@ -330,7 +330,7 @@ describe('OperatorPanel.state buffering during render [UNIT - PURE LOGIC]', () =
 
     it('multiple state updates during render set flag each time, state accumulates', () => {
         const panel = createPanel([
-            { operator_id: 'op-1', status: OperatorStatus.AVAILABLE },
+            { operator_id: 'op-1', status: OperatorStatus.OFFLINE },
         ]);
         panel._isRendered = false;
         panel._statePendingDuringRender = false;
@@ -361,7 +361,7 @@ describe('OperatorPanel.state buffering during render [UNIT - PURE LOGIC]', () =
 
     it('after render completes, buffered state is applied with render_complete cause', () => {
         const panel = createPanel([
-            { operator_id: 'op-1', status: OperatorStatus.AVAILABLE },
+            { operator_id: 'op-1', status: OperatorStatus.OFFLINE },
         ]);
         panel._isRendered = false;
         panel._statePendingDuringRender = false;
@@ -386,7 +386,7 @@ describe('OperatorPanel.state buffering during render [UNIT - PURE LOGIC]', () =
 
     it('flag is cleared after applying buffered state', () => {
         const panel = createPanel([
-            { operator_id: 'op-1', status: OperatorStatus.AVAILABLE },
+            { operator_id: 'op-1', status: OperatorStatus.OFFLINE },
         ]);
         panel._isRendered = false;
         panel._statePendingDuringRender = false;
@@ -409,7 +409,7 @@ describe('OperatorPanel.state buffering during render [UNIT - PURE LOGIC]', () =
 
     it('stores pending list update data when arriving before render completes', () => {
         const panel = createPanel([
-            { operator_id: 'op-1', status: OperatorStatus.AVAILABLE },
+            { operator_id: 'op-1', status: OperatorStatus.OFFLINE },
         ]);
         panel._isRendered = false;
         panel._pendingListUpdateData = null;
@@ -430,7 +430,7 @@ describe('OperatorPanel.state buffering during render [UNIT - PURE LOGIC]', () =
 
     it('does not store pending list update data when already rendered', () => {
         const panel = createPanel([
-            { operator_id: 'op-1', status: OperatorStatus.AVAILABLE },
+            { operator_id: 'op-1', status: OperatorStatus.OFFLINE },
         ]);
         panel._isRendered = true;
         panel._pendingListUpdateData = null;
@@ -450,7 +450,7 @@ describe('OperatorPanel.state buffering during render [UNIT - PURE LOGIC]', () =
 
     it('clears pending list update data after render completes', () => {
         const panel = createPanel([
-            { operator_id: 'op-1', status: OperatorStatus.AVAILABLE },
+            { operator_id: 'op-1', status: OperatorStatus.OFFLINE },
         ]);
         panel._isRendered = false;
         panel._pendingListUpdateData = null;

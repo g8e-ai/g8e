@@ -37,12 +37,14 @@ export const G8eHeaders = Object.freeze({
     NEW_CASE:          _HEADERS['x-g8e.new-case'],
     SERVICE:           _HEADERS['x-g8e.service'],
     CLIENT:            _HEADERS['x-g8e.client'],
+    SYSTEM_FINGERPRINT: _HEADERS['x-g8e.system-fingerprint'],
     OPERATOR_STATUS:   _HEADERS['x-g8e.operator-status'],
 });
 
 export const HTTP_REQUESTED_WITH_HEADER        = _HEADERS['http.requested-with'];
 export const HTTP_G8E_SERVICE_HEADER           = _HEADERS['x-g8e.service'];
 export const HTTP_G8E_CLIENT_HEADER            = _HEADERS['x-g8e.client'];
+export const HTTP_G8E_SYSTEM_FINGERPRINT_HEADER = _HEADERS['x-g8e.system-fingerprint'];
 export const HTTP_G8E_OPERATOR_STATUS_HEADER   = _HEADERS['x-g8e.operator-status'];
 export const HTTP_CACHE_CONTROL_HEADER         = _HEADERS['http.cache-control'];
 export const HTTP_PRAGMA_HEADER                = _HEADERS['http.pragma'];

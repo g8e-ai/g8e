@@ -344,6 +344,23 @@ class TestCaseCreateRequest:
         req = self._make_request(organization_id="org-999")
         assert req.organization_id == "org-999"
 
+    def test_generated_title_short_message(self):
+        req = self._make_request(initial_message="Short message")
+        assert req.generated_title == "Short message"
+
+    def test_generated_title_long_message(self):
+        long_msg = "A" * 150
+        req = self._make_request(initial_message=long_msg)
+        assert req.generated_title == ("A" * 100) + "..."
+
+    def test_generated_title_whitespace_stripping(self):
+        req = self._make_request(initial_message="   Message with whitespace   ")
+        assert req.generated_title == "Message with whitespace"
+
+    def test_generated_description(self):
+        req = self._make_request(initial_message="Initial message")
+        assert req.generated_description == "Initial message"
+
 
     def test_priority_accepts_all_enum_values(self):
         for priority in Priority:

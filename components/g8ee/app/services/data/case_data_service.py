@@ -12,7 +12,10 @@
 # limitations under the License.
 
 import logging
+from typing import Awaitable, TypeVar
 from uuid import uuid4
+
+T = TypeVar('T')
 
 from app.models.settings import G8eePlatformSettings
 from app.constants import (
@@ -62,7 +65,29 @@ class CaseDataService:
         self.cases_collection = settings.database.cases_collection or DB_COLLECTION_CASES
         self.tasks_collection = settings.database.tasks_collection or DB_COLLECTION_TASKS
 
-    async def create_case(self, case_data: CaseCreateRequest, generated_title: str) -> CaseModel:
+    async def _with_error_handling(
+        self,
+        coro: Awaitable[T],
+        action_msg: str,
+        case_id: str,
+        error_code: str
+    ) -> T:
+        """Helper to centralize database error handling boilerplate."""
+        try:
+            return await coro
+        except G8eError:
+            raise
+        except Exception as e:
+            logger.error("Failed to %s %s: %s", action_msg, case_id, e, exc_info=True)
+            raise DatabaseError(
+                message=f"Failed to {action_msg}: {e}",
+                code=error_code,
+                details={"case_id": case_id},
+                cause=e,
+                component=ComponentName.G8EE
+            ) from e
+
+    async def create_case(self, case_data: CaseCreateRequest, generated_title: str | None = None) -> CaseModel:
         """
         Create a new case.
 
@@ -79,15 +104,9 @@ class CaseDataService:
         """
         case_id = str(uuid4())
 
-        title = generated_title
-        if not title and case_data.initial_message:
-            title = case_data.initial_message[:100].strip()
-            if len(case_data.initial_message) > 100:
-                title += "..."
-        if not title:
-            title = "Untitled Case"
-
-        description = case_data.initial_message or "No description provided"
+        # Use AI title if available, otherwise fall back to model-derived title
+        title = generated_title or case_data.generated_title
+        description = case_data.generated_description
 
         logger.info("Creating case: %s", case_id, extra={
             "case_id": case_id,
@@ -114,27 +133,21 @@ class CaseDataService:
             updated_at=ts,
         )
 
-        try:
+        async def _create():
             await self.cache.create_document(
                 collection=self.cases_collection,
                 document_id=case_id,
                 data=case.model_dump(mode="json"),
             )
-
             logger.info("Case created: %s", case_id, extra={"case_id": case_id})
             return case
 
-        except G8eError:
-            raise
-        except Exception as e:
-            logger.error("Failed to create case %s: %s", case_id, e, exc_info=True)
-            raise DatabaseError(
-                message=f"Failed to create case: {e}",
-                code=ErrorCode.DB_WRITE_ERROR,
-                details={"case_id": case_id},
-                cause=e,
-                component=ComponentName.G8EE
-            ) from e
+        return await self._with_error_handling(
+            _create(),
+            action_msg="create case",
+            case_id=case_id,
+            error_code=ErrorCode.DB_WRITE_ERROR
+        )
 
     async def get_case(self, case_id: str) -> CaseModel:
         """
@@ -151,7 +164,7 @@ class CaseDataService:
 
         logger.info("Retrieving case: %s", case_id, extra={"case_id": case_id})
 
-        try:
+        async def _get():
             doc_data = await self.cache.get_document_with_cache(
                 collection=self.cases_collection,
                 document_id=case_id,
@@ -167,17 +180,12 @@ class CaseDataService:
             doc_data["id"] = case_id
             return CaseModel.model_validate(doc_data)
 
-        except G8eError:
-            raise
-        except Exception as e:
-            logger.error("Failed to retrieve case %s: %s", case_id, e, exc_info=True)
-            raise DatabaseError(
-                message=f"Failed to retrieve case: {e}",
-                code=ErrorCode.DB_QUERY_ERROR,
-                details={"case_id": case_id},
-                cause=e,
-                component=ComponentName.G8EE
-            ) from e
+        return await self._with_error_handling(
+            _get(),
+            action_msg="retrieve case",
+            case_id=case_id,
+            error_code=ErrorCode.DB_QUERY_ERROR
+        )
 
     async def update_case(self, case_id: str, updates: CaseUpdateRequest) -> CaseModel:
         """
@@ -210,7 +218,7 @@ class CaseDataService:
 
         updated = existing.model_copy(update={**update_fields, "updated_at": updated_at})
 
-        try:
+        async def _update():
             db_payload = updated.model_dump(mode="json")
             await self.cache.update_document(
                 collection=self.cases_collection,
@@ -218,21 +226,15 @@ class CaseDataService:
                 data=db_payload,
                 merge=True,
             )
-
             logger.info("Case updated: %s", case_id, extra={"case_id": case_id})
             return updated
 
-        except G8eError:
-            raise
-        except Exception as e:
-            logger.error("Failed to update case %s: %s", case_id, e, exc_info=True)
-            raise DatabaseError(
-                message=f"Failed to update case: {e}",
-                code=ErrorCode.DB_WRITE_ERROR,
-                details={"case_id": case_id},
-                cause=e,
-                component=ComponentName.G8EE
-            ) from e
+        return await self._with_error_handling(
+            _update(),
+            action_msg="update case",
+            case_id=case_id,
+            error_code=ErrorCode.DB_WRITE_ERROR
+        )
 
     async def delete_case(self, case_id: str) -> None:
         """
@@ -245,7 +247,7 @@ class CaseDataService:
 
         await self.get_case(case_id)
 
-        try:
+        async def _delete():
             result = await self.cache.db.delete_document(
                 collection=self.cases_collection,
                 document_id=case_id,
@@ -260,20 +262,14 @@ class CaseDataService:
             key = self.cache._make_key(self.cases_collection, case_id)
             await self.cache.kv.delete(key)
             await self.cache.invalidate_query_cache(self.cases_collection)
-
             logger.info("Case deleted: %s", case_id, extra={"case_id": case_id})
 
-        except G8eError:
-            raise
-        except Exception as e:
-            logger.error("Failed to delete case %s: %s", case_id, e, exc_info=True)
-            raise DatabaseError(
-                message=f"Failed to delete case: {e}",
-                code=ErrorCode.DB_WRITE_ERROR,
-                details={"case_id": case_id},
-                cause=e,
-                component=ComponentName.G8EE
-            ) from e
+        return await self._with_error_handling(
+            _delete(),
+            action_msg="delete case",
+            case_id=case_id,
+            error_code=ErrorCode.DB_WRITE_ERROR
+        )
 
     async def publish_case_update_sse(
         self,

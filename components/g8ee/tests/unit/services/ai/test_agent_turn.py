@@ -22,6 +22,7 @@ from app.constants import (
 )
 from app.llm.llm_types import ThoughtSignature, ToolCall, UsageMetadata
 from app.services.ai.agent_turn import (
+    GatedTurnResult,
     TurnState,
     consolidate_model_parts,
     extract_status_code,
@@ -32,6 +33,7 @@ from app.services.ai.agent_turn import (
     handle_usage_chunk,
     normalize_finish_reason,
     process_provider_turn,
+    process_turn_with_gate,
     should_retry_error,
 )
 
@@ -513,6 +515,122 @@ class TestProcessProviderTurn:
 
         assert len(result_out[0].model_response_parts) == 1
         assert result_out[0].model_response_parts[0].thought_signature.value == "sig-value"
+
+
+class TestProcessTurnWithGate:
+    """Test process_turn_with_gate interrogation gate behaviour."""
+
+    @pytest.mark.asyncio
+    async def test_no_interrogation_passes_tool_chunks_through(self):
+        """When no <interrogation> block, tool chunks are included in pending_tool_chunks."""
+        tool_call = ToolCall(name="run_cmd", args={"cmd": "ls"}, id="call-1")
+
+        async def stream():
+            yield types.StreamChunkFromModel(text="Checking the system.")
+            yield types.StreamChunkFromModel(tool_calls=[tool_call])
+            yield types.StreamChunkFromModel(finish_reason="stop")
+
+        result_out: list[GatedTurnResult] = []
+        chunks = []
+        async for chunk in process_turn_with_gate(stream(), "test-model", result_out):
+            chunks.append(chunk)
+
+        assert len(result_out) == 1
+        gated = result_out[0]
+        assert gated.interrogation_detected is False
+        assert len(gated.turn_result.pending_tool_calls) == 1
+        assert gated.turn_result.pending_tool_calls[0] == tool_call
+        text_chunks = [c for c in chunks if c.type == StreamChunkFromModelType.TEXT]
+        assert len(text_chunks) == 1
+        assert text_chunks[0].data.content == "Checking the system."
+
+    @pytest.mark.asyncio
+    async def test_interrogation_suppresses_tool_calls(self):
+        """When <interrogation> block is present, tool calls are cleared and tool chunks discarded."""
+        tool_call = ToolCall(name="run_cmd", args={"cmd": "ls"}, id="call-1")
+        interrogation_text = (
+            "I need clarification.\n"
+            "<interrogation>\n"
+            "1. Is the service running?\n"
+            "2. What is the error message?\n"
+            "</interrogation>"
+        )
+
+        async def stream():
+            yield types.StreamChunkFromModel(text=interrogation_text)
+            yield types.StreamChunkFromModel(tool_calls=[tool_call])
+            yield types.StreamChunkFromModel(finish_reason="stop")
+
+        result_out: list[GatedTurnResult] = []
+        chunks = []
+        async for chunk in process_turn_with_gate(stream(), "test-model", result_out):
+            chunks.append(chunk)
+
+        assert len(result_out) == 1
+        gated = result_out[0]
+        assert gated.interrogation_detected is True
+        assert gated.turn_result.pending_tool_calls == []
+        assert not any(c.type == StreamChunkFromModelType.TOOL_CALL for c in chunks), (
+            "TOOL_CALL chunks must not be yielded when interrogation gate fires"
+        )
+
+    @pytest.mark.asyncio
+    async def test_text_only_turn_no_gate_effect(self):
+        """A text-only turn produces no tool chunks and interrogation_detected=False."""
+        async def stream():
+            yield types.StreamChunkFromModel(text="Here is the answer.")
+            yield types.StreamChunkFromModel(finish_reason="stop")
+
+        result_out: list[GatedTurnResult] = []
+        chunks = []
+        async for chunk in process_turn_with_gate(stream(), "test-model", result_out):
+            chunks.append(chunk)
+
+        assert len(result_out) == 1
+        gated = result_out[0]
+        assert gated.interrogation_detected is False
+        assert gated.turn_result.pending_tool_calls == []
+        assert len([c for c in chunks if c.type == StreamChunkFromModelType.TEXT]) == 1
+
+    @pytest.mark.asyncio
+    async def test_interrogation_without_tool_calls_still_detected(self):
+        """Gate fires on interrogation block even when no tool calls were emitted."""
+        async def stream():
+            yield types.StreamChunkFromModel(
+                text="Please clarify:\n<interrogation>\n1. Which host?\n</interrogation>"
+            )
+            yield types.StreamChunkFromModel(finish_reason="stop")
+
+        result_out: list[GatedTurnResult] = []
+        async for _ in process_turn_with_gate(stream(), "test-model", result_out):
+            pass
+
+        gated = result_out[0]
+        assert gated.interrogation_detected is True
+        assert gated.turn_result.pending_tool_calls == []
+
+    @pytest.mark.asyncio
+    async def test_token_counts_propagate_through_gate(self):
+        """Token counts from the inner turn are preserved in GatedTurnResult."""
+        from app.llm.llm_types import UsageMetadata
+
+        async def stream():
+            yield types.StreamChunkFromModel(
+                usage_metadata=UsageMetadata(
+                    prompt_token_count=42, candidates_token_count=18, total_token_count=60
+                )
+            )
+            yield types.StreamChunkFromModel(text="Done.")
+            yield types.StreamChunkFromModel(finish_reason="stop")
+
+        result_out: list[GatedTurnResult] = []
+        async for _ in process_turn_with_gate(stream(), "test-model", result_out):
+            pass
+
+        gated = result_out[0]
+        assert gated.turn_result.input_tokens == 42
+        assert gated.turn_result.output_tokens == 18
+        assert gated.turn_result.total_tokens == 60
 
 
 class TestConsolidateModelParts:

@@ -5,6 +5,9 @@ parent: Components
 
 # g8ed — g8e Terminal Backend
 
+Last Updated: 2026-05-07
+Version: v0.2.0
+
 ## Overview
 
 g8ed is the primary entry point, authentication gateway, and orchestration backend for the g8e platform. It serves the web UI, manages secure sessions, relays AI interactions to g8ee, and controls the operator lifecycle.
@@ -61,7 +64,6 @@ g8ed is built on a multi-phase initialization model defined in `services/initial
 | `BindOperatorsService` | Orchestrates the manual binding between WebSessions and OperatorSessions. |
 | `InternalHttpClient` | High-performance cluster-internal HTTP client for g8ee/g8es communication. |
 | `SSEService` | Manages the fan-out of real-time events to active browser clients. |
-| `G8ENodeOperatorService` | Specifically manages the `g8ep` operator lifecycle on the host node. |
 | `DownloadAuthService` | Unified authentication for operator binary downloads (supports DLT, G8eKey, and Operator API keys). |
 
 ---

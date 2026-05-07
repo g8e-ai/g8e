@@ -147,7 +147,7 @@ describe('OperatorService', () => {
         it('should return OperatorSlot projections for the panel list', async () => {
             const operators = [
                 new OperatorDocument({ id: 'op-1', user_id: 'u-1', status: OperatorStatus.ACTIVE, name: 'node-01', bound_web_session_id: 'ws-1' }),
-                new OperatorDocument({ id: 'op-2', user_id: 'u-1', status: OperatorStatus.AVAILABLE })
+                new OperatorDocument({ id: 'op-2', user_id: 'u-1', status: OperatorStatus.OFFLINE })
             ];
             mocks.operatorDataService.queryOperatorsFresh.mockResolvedValue(operators);
 
@@ -219,7 +219,7 @@ describe('OperatorService', () => {
         it('should return all non-terminated operators by default', async () => {
             const operators = [
                 new OperatorDocument({ id: 'op-1', user_id: 'u-1', status: OperatorStatus.ACTIVE }),
-                new OperatorDocument({ id: 'op-2', user_id: 'u-2', status: OperatorStatus.AVAILABLE }),
+                new OperatorDocument({ id: 'op-2', user_id: 'u-2', status: OperatorStatus.OFFLINE }),
                 new OperatorDocument({ id: 'op-3', user_id: 'u-1', status: OperatorStatus.TERMINATED })
             ];
             mocks.operatorDataService.queryOperators.mockResolvedValue(operators);
@@ -251,7 +251,7 @@ describe('OperatorService', () => {
         it('should use fresh queries when fresh=true', async () => {
             const operators = [
                 new OperatorDocument({ id: 'op-1', user_id: 'u-1', status: OperatorStatus.ACTIVE }),
-                new OperatorDocument({ id: 'op-2', user_id: 'u-2', status: OperatorStatus.AVAILABLE })
+                new OperatorDocument({ id: 'op-2', user_id: 'u-2', status: OperatorStatus.OFFLINE })
             ];
             mocks.operatorDataService.queryOperatorsFresh.mockResolvedValue(operators);
 
@@ -428,7 +428,7 @@ describe('OperatorService', () => {
     describe('getOperatorByUserId', () => {
         it('should return active/bound operator first', async () => {
             const operators = [
-                new OperatorDocument({ id: 'op-avail', user_id: 'u-1', status: OperatorStatus.AVAILABLE }),
+                new OperatorDocument({ id: 'op-avail', user_id: 'u-1', status: OperatorStatus.OFFLINE }),
                 new OperatorDocument({ id: 'op-active', user_id: 'u-1', status: OperatorStatus.ACTIVE })
             ];
             mocks.operatorDataService.queryOperators.mockResolvedValue(operators);
@@ -439,7 +439,7 @@ describe('OperatorService', () => {
 
         it('should return available operator if no active/bound', async () => {
             const operators = [
-                new OperatorDocument({ id: 'op-avail', user_id: 'u-1', status: OperatorStatus.AVAILABLE })
+                new OperatorDocument({ id: 'op-avail', user_id: 'u-1', status: OperatorStatus.OFFLINE })
             ];
             mocks.operatorDataService.queryOperators.mockResolvedValue(operators);
 

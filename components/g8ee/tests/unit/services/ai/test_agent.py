@@ -801,6 +801,140 @@ class TestGroundingMetadata:
 
 
 # =============================================================================
+# TEST: _stream_with_tool_loop - Interrogation Gate
+# =============================================================================
+
+@pytest.mark.asyncio(loop_scope="session")
+class TestInterrogationGate:
+    """When an agent emits clarifying questions in an <interrogation> block,
+    tool execution must be deferred and the ReAct loop must terminate."""
+
+    async def test_interrogation_gate_suppresses_tool_execution(self):
+        """Gate fires when <interrogation> block present: drops tool calls, breaks loop."""
+        from app.llm.llm_types import ToolCall
+        from unittest.mock import patch
+
+        tool_executor = MagicMock()
+        provider = MagicMock()
+
+        def interrogation_with_tool_stream(**kwargs):
+            async def _gen():
+                # First chunk: text with interrogation
+                yield make_provider_chunk(
+                    text="I need more information.\n<interrogation>\n1. Is the service running?\n2. What error are you seeing?\n3. When did this start?\n</interrogation>",
+                )
+                # Second chunk: tool call (should be suppressed)
+                yield make_provider_chunk(
+                    tool_calls=[ToolCall(name="search_web", args={"query": "test"})],
+                    finish_reason="STOP",
+                )
+            return _gen()
+
+        provider.generate_content_stream_primary = MagicMock(side_effect=interrogation_with_tool_stream)
+
+        agent = make_g8e_agent(fn_handler=tool_executor)
+        context = make_agent_inputs()
+        context.generation_config = make_gen_config()
+        context.model_to_use = "test-model"
+        g8ed_event_service = make_g8ed_event_service()
+
+        # Mock execute_turn_tool_calls to prevent actual tool execution
+        with patch("app.services.ai.agent.execute_turn_tool_calls") as mock_exec:
+            async def _fake_exec(*, result_out, **kwargs):
+                result_out.append([])
+                if False:
+                    yield
+            mock_exec.side_effect = lambda **kw: _fake_exec(**kw)
+
+            chunks = []
+            async for chunk in agent._stream_with_tool_loop(
+                inputs=context,
+                g8ed_event_service=g8ed_event_service,
+                llm_provider=provider,
+            ):
+                chunks.append(chunk)
+
+        # No TOOL_CALL or TOOL_RESULT chunks should be emitted
+        assert not any(c.type == StreamChunkFromModelType.TOOL_CALL for c in chunks), (
+            "Interrogation gate should suppress TOOL_CALL emission"
+        )
+        assert not any(c.type == StreamChunkFromModelType.TOOL_RESULT for c in chunks), (
+            "Interrogation gate should suppress TOOL_RESULT emission"
+        )
+
+        # Loop should terminate after one turn (COMPLETE emitted)
+        assert any(c.type == StreamChunkFromModelType.COMPLETE for c in chunks), (
+            "Interrogation gate should break the ReAct loop after emitting questions"
+        )
+
+        # Provider should only be called once (no second turn for tool execution)
+        assert provider.generate_content_stream_primary.call_count == 1, (
+            "Interrogation gate should prevent second provider call for tool execution"
+        )
+
+        # execute_turn_tool_calls should not be called when interrogation is present
+        assert not mock_exec.called, (
+            "Interrogation gate should prevent execute_turn_tool_calls from being called"
+        )
+
+    async def test_normal_tool_execution_without_interrogation(self):
+        """When no <interrogation> block, tool execution proceeds normally."""
+        from app.llm.llm_types import ToolCall
+
+        tool_executor = MagicMock()
+        provider = MagicMock()
+
+        call_count = 0
+
+        def normal_tool_stream(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                async def _gen():
+                    yield make_provider_chunk(
+                        text="I'll search for that information.",
+                        tool_calls=[ToolCall(name="search_web", args={"query": "test"})],
+                        finish_reason="STOP",
+                    )
+                return _gen()
+            async def _gen():
+                yield make_provider_chunk(text="Done")
+                yield make_provider_chunk(finish_reason="STOP")
+            return _gen()
+
+        provider.generate_content_stream_primary = normal_tool_stream
+
+        agent = make_g8e_agent(fn_handler=tool_executor)
+        context = make_agent_inputs()
+        context.generation_config = make_gen_config()
+        context.model_to_use = "test-model"
+        g8ed_event_service = make_g8ed_event_service()
+
+        with patch("app.services.ai.agent.execute_turn_tool_calls") as mock_exec:
+            async def _fake_exec(*, result_out, **kwargs):
+                result_out.append([])
+                if False:
+                    yield
+            mock_exec.side_effect = lambda **kw: _fake_exec(**kw)
+
+            chunks = []
+            async for chunk in agent._stream_with_tool_loop(
+                inputs=context,
+                g8ed_event_service=g8ed_event_service,
+                llm_provider=provider,
+            ):
+                chunks.append(chunk)
+
+        # Tool execution should proceed (execute_turn_tool_calls called)
+        assert mock_exec.called, (
+            "Without interrogation, tool execution should proceed normally"
+        )
+        assert call_count == 2, (
+            "Without interrogation, provider should be called twice (initial + tool response)"
+        )
+
+
+# =============================================================================
 # TEST: _stream_with_tool_loop - COMPLETE Emission
 # =============================================================================
 

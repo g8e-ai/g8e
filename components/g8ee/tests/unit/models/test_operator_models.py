@@ -29,7 +29,7 @@ class TestOperatorDocumentNoSystemInfoField:
         doc = OperatorDocument(
             id="op-123",
             user_id="user-456",
-            status=OperatorStatus.AVAILABLE,
+            status=OperatorStatus.OFFLINE,
             current_hostname="test-hostname",
         )
         assert not hasattr(doc, "system_info")
@@ -40,7 +40,7 @@ class TestOperatorDocumentNoSystemInfoField:
         doc = OperatorDocument(
             id="op-123",
             user_id="user-456",
-            status=OperatorStatus.AVAILABLE,
+            status=OperatorStatus.OFFLINE,
             current_hostname="test-hostname",
         )
         assert doc.hostname == "test-hostname"

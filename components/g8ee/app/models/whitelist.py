@@ -22,7 +22,7 @@ from .base import G8eBaseModel
 class WhitelistedCommand(G8eBaseModel):
     """Metadata for a whitelisted command, including constraints and examples.
     
-    Canonical shape: shared/models/wire/result_payloads.json get_command_constraints_result.
+    Internal g8ee whitelist contract.
     """
     command: str
     category: CommandCategory | None = None

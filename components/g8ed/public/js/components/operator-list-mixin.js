@@ -182,7 +182,6 @@ export const OperatorListMixin = {
         devLogger.log('[OPERATOR-PANEL] [RENDER] Status breakdown:', statusCounts);
 
         const statusPriority = (op) => {
-            if (op.is_g8ep) return 0;
             const isBoundToMe = op.status === OperatorStatus.BOUND && op.bound_web_session_id === currentWebSessionId;
             const isBoundElsewhere = op.status === OperatorStatus.BOUND && !isBoundToMe;
             if (isBoundToMe) return 1;
@@ -217,7 +216,7 @@ export const OperatorListMixin = {
             const identity = latestSnapshot.system_identity || {};
             const network = latestSnapshot.network || {};
             const operatorName = operator.name || 'Unknown';
-            const hostnameFull = operatorName === 'g8e' ? 'g8ep' : (identity.hostname || ' - ');
+            const hostnameFull = identity.hostname || ' - ';
 
             const isBoundToMe = operator.status === OperatorStatus.BOUND && operator.bound_web_session_id === currentWebSessionId;
             const isBoundElsewhere = operator.status === OperatorStatus.BOUND && !isBoundToMe;
@@ -241,7 +240,7 @@ export const OperatorListMixin = {
             const lastHeartbeatText = formatHeartbeatAge(ageSeconds);
 
             // latest_heartbeat_snapshot is the canonical HeartbeatSnapshot shape
-            // (shared/models/wire/heartbeat.json#operator_heartbeat) — same shape
+            // (defined in shared/proto/operator.proto) — same shape
             // whether read from the persisted operator document or the SSE envelope.
             const perf = latestSnapshot.performance || {};
             const uptimeInfo = latestSnapshot.uptime || {};
@@ -319,11 +318,6 @@ export const OperatorListMixin = {
 
             const actionsHtml = `
                 <div class="operator-actions-inline">
-                    ${operator.is_g8ep ? `
-                    <button class="operator-action-btn g8ep-reauth-btn" title="Restart g8ep Operator" data-operator-id="${operator.operator_id}">
-                        <span class="material-symbols-outlined">restart_alt</span>
-                    </button>
-                    ` : ''}
                     <button class="operator-action-btn device-link-btn" title="Get Device Link Token" data-operator-id="${operator.operator_id}">
                         <span class="material-symbols-outlined">dns</span>
                     </button>
@@ -346,9 +340,9 @@ export const OperatorListMixin = {
             const operatorTypeClass = 'binary-operator';
             const operatorTypeTitle = 'Operator';
 
-            const isAvailable = operator.status === OperatorStatus.AVAILABLE;
-            const hostnameDisplay = isAvailable ? 'Available' : hostnameFull;
-            const hostnameClass = isAvailable ? 'text-accent-green' : '';
+            const isOffline = operator.status === OperatorStatus.OFFLINE;
+            const hostnameDisplay = isOffline ? 'Offline' : hostnameFull;
+            const hostnameClass = isOffline ? 'text-accent-red' : '';
 
             const template = templateLoader.cache.get('operator-item');
             item.innerHTML = templateLoader.replace(template, {
@@ -469,14 +463,6 @@ export const OperatorListMixin = {
                 deviceLinkBtn.addEventListener('click', async (e) => {
                     e.stopPropagation();
                     await this.generateDeviceLink(deviceLinkBtn.getAttribute('data-operator-id'), deviceLinkBtn);
-                });
-            }
-
-            const g8eNodeReauthBtn = item.querySelector('.g8ep-reauth-btn');
-            if (g8eNodeReauthBtn) {
-                g8eNodeReauthBtn.addEventListener('click', async (e) => {
-                    e.stopPropagation();
-                    await this.restartG8ENodeOperator(g8eNodeReauthBtn);
                 });
             }
 
@@ -948,49 +934,6 @@ export const OperatorListMixin = {
         } catch (error) {
             devLogger.error('[OPERATOR] Failed to generate device link:', error);
             notificationService.error(`Failed to generate device link: ${error.message}`);
-        }
-    },
-
-    async restartG8ENodeOperator(buttonElement) {
-        const icon = buttonElement?.querySelector('.material-symbols-outlined');
-        const originalIcon = icon?.textContent;
-
-        try {
-            if (icon) {
-                icon.textContent = 'sync';
-                icon.classList.add('rotating');
-                buttonElement.disabled = true;
-            }
-
-            devLogger.log('[OPERATOR] Restarting g8ep operator');
-
-            const response = await operatorPanelService.g8eNodeReauth();
-
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || 'Failed to restart g8ep operator');
-            }
-
-            const result = await response.json();
-            devLogger.log('[OPERATOR] g8ep operator restarted:', result);
-
-            if (icon) {
-                icon.textContent = 'check';
-                icon.classList.remove('rotating');
-                setTimeout(() => {
-                    if (icon) icon.textContent = originalIcon;
-                    if (buttonElement) buttonElement.disabled = false;
-                }, 2000);
-            }
-
-        } catch (error) {
-            devLogger.error('[OPERATOR] Failed to restart g8ep operator:', error);
-            if (icon) {
-                icon.textContent = originalIcon;
-                icon.classList.remove('rotating');
-            }
-            if (buttonElement) buttonElement.disabled = false;
-            notificationService.error(`Failed to restart g8ep operator: ${error.message}`);
         }
     },
 

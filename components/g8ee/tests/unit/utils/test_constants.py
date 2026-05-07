@@ -140,9 +140,6 @@ def senders():
 
 
 class TestOperatorStatusMatchesSharedJSON:
-    def test_available(self, status):
-        assert status["g8e.status"]["available"] == OperatorStatus.AVAILABLE
-
     def test_unavailable(self, status):
         assert status["g8e.status"]["unavailable"] == OperatorStatus.UNAVAILABLE
 
@@ -197,9 +194,6 @@ class TestCloudSubtypeMatchesSharedJSON:
     def test_azure(self, status):
         assert status["cloud.subtype"]["azure"] == CloudSubtype.AZURE
 
-    def test_g8ep(self, status):
-        assert status["cloud.subtype"]["g8ep"] == CloudSubtype.G8E_POD
-
     def test_all_members_covered(self, status):
         json_keys = set(status["cloud.subtype"].keys())
         enum_count = len(CloudSubtype)
@@ -222,7 +216,7 @@ class TestCaseStatusMatchesSharedJSON:
         assert status["case.status"]["waiting.for.customer"] == CaseStatus.WAITING_FOR_CUSTOMER
 
     def test_investigate(self, status):
-        assert status["case.status"]["investigate"] == CaseStatus.INVESTIGATE
+        assert status["case.status"]["in.progress"] == CaseStatus.IN_PROGRESS
 
     def test_human_review(self, status):
         assert status["case.status"]["human.review"] == CaseStatus.HUMAN_REVIEW

@@ -44,7 +44,6 @@ import { createMetricsRouter } from './routes/platform/metrics_routes.js';
 import { createInternalRouter } from './routes/internal/internal_routes.js';
 import { createUserRouter } from './routes/platform/user_routes.js';
 import { createDeviceLinkRouter } from './routes/auth/device_link_routes.js';
-import { createAuditRouter } from './routes/platform/audit_routes.js';
 import { createConsoleRouter } from './routes/platform/console_routes.js';
 import { createSettingsRouter } from './routes/platform/settings_routes.js';
 import { createG8edApp } from './app_factory.js';
@@ -71,9 +70,7 @@ import {
     getCertificateService,
     getConsoleMetricsService,
     getBindOperatorsService,
-    getG8ENodeOperatorService,
     getPostLoginService,
-    getAuditService,
     getSetupService,
     getG8esBlobClient,
     getInternalHttpClient,
@@ -138,9 +135,7 @@ class G8edServer {
                 settingsService: getSettingsService(),
                 consoleMetricsService: getConsoleMetricsService(),
                 bindOperatorsService: getBindOperatorsService(),
-                g8eNodeOperatorService: getG8ENodeOperatorService(),
                 postLoginService: getPostLoginService(),
-                auditService: getAuditService(),
                 setupService: getSetupService(),
                 blobStorage: getG8esBlobClient(),
                 internalHttpClient: getInternalHttpClient(),

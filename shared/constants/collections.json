@@ -25,6 +25,7 @@
     "agent_activity_metadata": "agent_activity_metadata",
     "reputation_state": "reputation_state",
     "reputation_commitments": "reputation_commitments",
-    "stake_resolutions": "stake_resolutions"
+    "stake_resolutions": "stake_resolutions",
+    "revoked_certificates": "revoked_certificates"
   }
 }

@@ -32,13 +32,14 @@ package pubsub
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/models"
 	execution "github.com/g8e-ai/g8e/components/g8eo/services/execution"
+	commonv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
+	pb "github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -56,6 +57,14 @@ func drainUntilQuiet(ch <-chan []byte, quietWindow time.Duration) {
 			return
 		}
 	}
+}
+
+func mustUnmarshalHeartbeatResult(t *testing.T, raw []byte) (*commonv1.UniversalEnvelope, *pb.HeartbeatResult) {
+	t.Helper()
+	env := testutil.MustUnmarshalUniversalEnvelope(t, raw)
+	var hb pb.HeartbeatResult
+	testutil.MustUnmarshalPayload(t, env.Payload, &hb)
+	return env, &hb
 }
 
 // newLoopbackServiceWithInterval builds a PubSubCommandService connected to
@@ -103,14 +112,13 @@ func TestLoopback_HeartbeatInterval_ShortIntervalFiresOnBroker(t *testing.T) {
 
 	raw := drainOne(t, hbSub)
 
-	var hb models.Heartbeat
-	require.NoError(t, json.Unmarshal(raw, &hb))
+	env, hb := mustUnmarshalHeartbeatResult(t, raw)
 
-	assert.Equal(t, constants.Event.Operator.Heartbeat, hb.EventType)
-	assert.Equal(t, models.HeartbeatTypeAutomatic, hb.HeartbeatType)
+	assert.Equal(t, constants.Event.Operator.Heartbeat, env.EventType)
+	assert.Equal(t, string(models.HeartbeatTypeAutomatic), hb.Status)
 	assert.Equal(t, constants.Status.ComponentName.G8EO, hb.SourceComponent)
-	assert.Equal(t, svc.config.OperatorID, hb.OperatorID)
-	assert.Equal(t, svc.config.OperatorSessionId, hb.OperatorSessionID)
+	assert.Equal(t, svc.config.OperatorID, hb.OperatorId)
+	assert.Equal(t, svc.config.OperatorSessionId, hb.OperatorSessionId)
 }
 
 // =============================================================================
@@ -128,9 +136,8 @@ func TestLoopback_HeartbeatInterval_MultipleTicks(t *testing.T) {
 		raw := drainOne(t, hbSub)
 		require.NotNil(t, raw, "expected heartbeat tick %d", i+1)
 
-		var hb models.Heartbeat
-		require.NoError(t, json.Unmarshal(raw, &hb))
-		assert.Equal(t, models.HeartbeatTypeAutomatic, hb.HeartbeatType, "tick %d wrong type", i+1)
+		_, hb := mustUnmarshalHeartbeatResult(t, raw)
+		assert.Equal(t, string(models.HeartbeatTypeAutomatic), hb.Status, "tick %d wrong type", i+1)
 	}
 }
 
@@ -174,20 +181,19 @@ func TestLoopback_HeartbeatInterval_PayloadFieldsPopulated(t *testing.T) {
 
 	raw := drainOne(t, hbSub)
 
-	var hb models.Heartbeat
-	require.NoError(t, json.Unmarshal(raw, &hb))
+	_, hb := mustUnmarshalHeartbeatResult(t, raw)
 
-	assert.Equal(t, cfg.OperatorID, hb.OperatorID)
-	assert.Equal(t, cfg.OperatorSessionId, hb.OperatorSessionID)
+	assert.Equal(t, cfg.OperatorID, hb.OperatorId)
+	assert.Equal(t, cfg.OperatorSessionId, hb.OperatorSessionId)
 	assert.Equal(t, "loopback-test-version", hb.VersionInfo.OperatorVersion)
 	assert.Equal(t, constants.Status.VersionStability.Stable, hb.VersionInfo.Status)
 	assert.True(t, hb.CapabilityFlags.LocalStorageEnabled)
 	assert.True(t, hb.CapabilityFlags.GitAvailable)
 	assert.True(t, hb.CapabilityFlags.LedgerMirrorEnabled)
 	assert.NotEmpty(t, hb.SystemIdentity.Hostname)
-	assert.NotEmpty(t, hb.SystemIdentity.OS)
+	assert.NotEmpty(t, hb.SystemIdentity.Os)
 	assert.NotEmpty(t, hb.SystemIdentity.Architecture)
-	assert.Greater(t, hb.SystemIdentity.CPUCount, 0)
+	assert.Greater(t, hb.SystemIdentity.CpuCount, int32(0))
 	assert.NotEmpty(t, hb.Timestamp)
 }
 
@@ -206,9 +212,8 @@ func TestLoopback_HeartbeatInterval_PublishesToHeartbeatChannelOnly(t *testing.T
 
 	// Heartbeat must arrive on the heartbeat channel.
 	raw := drainOne(t, hbSub)
-	var hb models.Heartbeat
-	require.NoError(t, json.Unmarshal(raw, &hb))
-	assert.Equal(t, models.HeartbeatTypeAutomatic, hb.HeartbeatType)
+	_, hb := mustUnmarshalHeartbeatResult(t, raw)
+	assert.Equal(t, string(models.HeartbeatTypeAutomatic), hb.Status)
 
 	// Nothing should appear on the results channel.
 	drainNone(t, resultsSub, 120*time.Millisecond)
@@ -293,17 +298,10 @@ func TestLoopback_HeartbeatInterval_PayloadSerializesCorrectly(t *testing.T) {
 
 	raw := drainOne(t, hbSub)
 
-	var outer map[string]interface{}
-	require.NoError(t, json.Unmarshal(raw, &outer))
+	env, hb := mustUnmarshalHeartbeatResult(t, raw)
 
-	assert.Equal(t, constants.Event.Operator.Heartbeat, outer["event_type"])
-	assert.Equal(t, string(models.HeartbeatTypeAutomatic), outer["heartbeat_type"])
-
-	capFlags, ok := outer["capability_flags"].(map[string]interface{})
-	require.True(t, ok, "capability_flags must be a nested JSON object")
-	_, hasLSE := capFlags["local_storage_enabled"]
-	assert.True(t, hasLSE)
-
-	_, topLevelLSE := outer["local_storage_enabled"]
-	assert.False(t, topLevelLSE, "local_storage_enabled must not appear at top level")
+	assert.Equal(t, constants.Event.Operator.Heartbeat, env.EventType)
+	assert.Equal(t, string(models.HeartbeatTypeAutomatic), hb.Status)
+	require.NotNil(t, hb.CapabilityFlags)
+	assert.NotNil(t, hb.SystemIdentity)
 }

@@ -168,7 +168,7 @@ export class OperatorStatusUpdatedEvent extends G8eBaseModel {
 // ---------------------------------------------------------------------------
 // CommandResultSSEEvent  (operator.command.completed / operator.command.failed)
 // Mirrors: components/g8ee/app/models/operators.py CommandResultBroadcastEvent
-// Schema:  shared/models/wire/result_payloads.json execution_result
+// Schema:  defined in shared/proto/operator.proto (CommandResult message)
 // ---------------------------------------------------------------------------
 
 export class CommandResultSSEEvent extends G8eBaseModel {
@@ -271,25 +271,5 @@ export class OperatorSlotInitializationFailedEvent extends G8eBaseModel {
     };
 }
 
-// ---------------------------------------------------------------------------
-// OperatorG8EPActivationFailedEvent  (operator.g8ep.activation.failed)
-// ---------------------------------------------------------------------------
-
-export class OperatorG8EPActivationFailedData extends G8eBaseModel {
-    static fields = {
-        user_id:    { type: F.string, required: true },
-        error:      { type: F.string, required: true },
-        context:    { type: F.string, default: null },
-        timestamp:  { type: F.date,   default: () => now() },
-    };
-}
-
-export class OperatorG8EPActivationFailedEvent extends G8eBaseModel {
-    static fields = {
-        type:      { type: F.string, required: true },
-        data:      { type: F.object, model: OperatorG8EPActivationFailedData, default: null },
-        timestamp: { type: F.date,   default: () => now() },
-    };
-}
 
 

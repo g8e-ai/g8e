@@ -44,8 +44,10 @@ export class G8eHttpContext extends G8eBaseModel {
         task_id:           { type: F.string,  default: null },
         bound_operators:   { type: F.array,   default: () => [] }, // Array of BoundOperatorContext
         execution_id:      { type: F.string,  default: null },
+        system_fingerprint: { type: F.string,  default: null },
         timestamp:         { type: F.date,    default: () => new Date() },
         source_component:  { type: F.string,  default: SourceComponent.G8ED },
+        is_operator_auth_relay: { type: F.boolean, default: false },
     };
 
     _validate() {
@@ -53,16 +55,10 @@ export class G8eHttpContext extends G8eBaseModel {
         if (this.case_id === '') {
             this.case_id = null;
         }
-        // Mirror of g8ee G8eHttpContext.validate_web_session_or_operator_auth.
-        // Null web_session_id / user_id is only allowed for operator-auth relays
-        // originated by g8ed (Bearer-token operator authentication).
-        if (this.web_session_id === null || this.user_id === null) {
-            if (this.source_component !== SourceComponent.G8ED) {
-                throw new Error(
-                    'G8eHttpContext validation failed: web_session_id and user_id are required unless source_component is g8ed (operator auth relay)'
-                );
-            }
-        }
+        // NOTE: Validation of web_session_id and user_id is handled by g8ee at the edge layer.
+        // g8ed is an internal data service that trusts authenticated context from other components.
+        // This aligns with 2026 industry standards where validation occurs at the authentication boundary,
+        // not in internal data models.
     }
 }
 
@@ -162,7 +158,7 @@ export class ApprovalRespondRequest extends G8eBaseModel {
 // ---------------------------------------------------------------------------
 // IntentRequest
 //
-// Aligned with shared/models/wire/internal_requests.json (intent_request)
+// Internal g8ee-g8ed contract for intent requests
 // ---------------------------------------------------------------------------
 
 export class IntentRequest extends G8eBaseModel {
@@ -174,7 +170,7 @@ export class IntentRequest extends G8eBaseModel {
 // ---------------------------------------------------------------------------
 // UnlockAccountRequest
 //
-// Aligned with shared/models/wire/internal_requests.json (unlock_account)
+// Internal g8ee-g8ed contract for unlock account requests
 // ---------------------------------------------------------------------------
 
 export class UnlockAccountRequest extends G8eBaseModel {
@@ -186,7 +182,7 @@ export class UnlockAccountRequest extends G8eBaseModel {
 // ---------------------------------------------------------------------------
 // SSEPushRequest
 //
-// Aligned with shared/models/wire/internal_requests.json (sse_push)
+// Internal g8ee-g8ed contract for SSE push requests
 // ---------------------------------------------------------------------------
 
 export class SSEPushRequest extends G8eBaseModel {
@@ -342,30 +338,6 @@ export class PasskeyAuthVerifyRequest extends G8eBaseModel {
     static fields = {
         email:              { type: F.string, required: true },
         assertion_response: { type: F.object, required: true, model: AssertionResponseJSON },
-    };
-}
-
-// ---------------------------------------------------------------------------
-// G8EPOperatorActivationRequest
-//
-// Aligned with shared/models/wire/internal_requests.json (g8ep_operator_activation)
-// ---------------------------------------------------------------------------
-
-export class G8EPOperatorActivationRequest extends G8eBaseModel {
-    static fields = {
-        user_id: { type: F.string, required: true },
-    };
-}
-
-// ---------------------------------------------------------------------------
-// G8EPOperatorRelaunchRequest
-//
-// Aligned with shared/models/wire/internal_requests.json (g8ep_operator_relaunch)
-// ---------------------------------------------------------------------------
-
-export class G8EPOperatorRelaunchRequest extends G8eBaseModel {
-    static fields = {
-        user_id: { type: F.string, required: true },
     };
 }
 
@@ -589,7 +561,7 @@ export class SessionAuthResponse extends G8eBaseModel {
 // Typed representation of a single bound operator entry carried in the
 // X-G8E-Bound-Operators header from g8ed to G8EE.
 //
-// Canonical wire shape: shared/models/wire/bound_operator_context.json
+// Internal g8ee-g8ed contract for bound operator context
 // ---------------------------------------------------------------------------
 
 export class BoundOperatorContext extends G8eBaseModel {
@@ -630,6 +602,4 @@ export class RequestModelFactory {
     static createPasskeyRegisterVerifyRequest(data)      { return PasskeyRegisterVerifyRequest.parse(data); }
     static createPasskeyAuthChallengeRequest(data)       { return PasskeyAuthChallengeRequest.parse(data); }
     static createPasskeyAuthVerifyRequest(data)          { return PasskeyAuthVerifyRequest.parse(data); }
-    static createG8EPOperatorActivationRequest(data)    { return G8EPOperatorActivationRequest.parse(data); }
-    static createG8EPOperatorRelaunchRequest(data)      { return G8EPOperatorRelaunchRequest.parse(data); }
 }

@@ -30,7 +30,7 @@ import { logger } from '../../utils/logger.js';
 import { isValidTokenFormat } from '../../services/auth/device_link_service.js';
 import { OperatorLinkRequest } from '../../models/request_models.js';
 import { ErrorResponse, DeviceLinkResponse, DeviceLinkListResponse, SimpleSuccessResponse } from '../../models/response_models.js';
-import { AuthPaths, DeviceLinkPaths } from '../../constants/api_paths.js';
+import { AuthPaths, DeviceLinkPaths, InternalApiPaths } from '../../constants/api_paths.js';
 import { DEVICE_LINK_TTL_SECONDS, DeviceLinkError, DeviceLinkSuccess } from '../../constants/auth.js';
 
 /**
@@ -196,7 +196,8 @@ export function createInternalDeviceLinkRouter({ services, authorizationMiddlewa
      *
      * SECURITY: INTERNAL ONLY - cluster-only access
      */
-    router.post('/operator-link', requireInternalOrUserAuth, async (req, res, next) => {
+    const operatorLinkPath = `/${InternalApiPaths.g8ed.create_operator_link.split('/').pop()}`;
+    router.post(operatorLinkPath, requireInternalOrUserAuth, async (req, res, next) => {
         try {
             const generateReq = OperatorLinkRequest.parse(req.body);
 

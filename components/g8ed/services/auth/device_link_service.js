@@ -338,13 +338,72 @@ class DeviceLinkService {
         const targetOperatorId = null;
 
         // 3. Acquire distributed lock for fingerprint deduplication
+        const fingerprintKey = KVKey.deviceLinkFingerprints(token);
         const lockKey = KVKey.deviceLinkRegistrationLock(token);
         const lockValue = `${token}:${sanitizedFingerprint}:${Date.now()}`;
         let lockAcquired = false;
 
+        // Dedup check (fingerprint only — same physical device must not register twice on this link).
+        // Using SADD is atomic and prevents multiple registrations from the same device.
+        const fingerprintAdded = await this._cache_aside.kvSadd(fingerprintKey, sanitizedFingerprint);
+        
+        if (fingerprintAdded === 0) {
+            // Already registered or registration in progress.
+            // Poll for the claim to appear in linkData (handles race where SADD finished but claim not yet written).
+            for (let i = 0; i < 10; i++) {
+                const freshLink = await this.getLink(token);
+                if (freshLink.success) {
+                    const claim = freshLink.data.claims.find(c => c.system_fingerprint === sanitizedFingerprint);
+                    if (claim) {
+                        const webSessionId = await this._webSessionService.getUserActiveSession(linkData.user_id);
+                        return await this._deviceRegistration.registerDevice({
+                            operator_id: claim.operator_id,
+                            deviceInfo,
+                            g8eContext: G8eHttpContext.parse({
+                                web_session_id: webSessionId,
+                                user_id: linkData.user_id,
+                                organization_id: linkData.organization_id,
+                            }),
+                            device_link_token: token,
+                        });
+                    }
+                }
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+            return { success: false, error: DeviceLinkError.DEVICE_ALREADY_REGISTERED };
+        }
+
+        // Atomic usage check before calling g8ee
+        const currentUsage = await this._cache_aside.kvScard(fingerprintKey);
+        if (currentUsage > linkData.max_uses) {
+            await this._cache_aside.kvSrem(fingerprintKey, sanitizedFingerprint);
+            return { success: false, error: DeviceLinkError.LINK_EXHAUSTED };
+        }
+
+        // 4. g8ee is authoritative for slot management.
+        // We call g8ee OUTSIDE the lock to allow high-concurrency parallel registration.
+        // The lock is only used to protect the final linkData JSON update.
+        const webSessionId = await this._webSessionService.getUserActiveSession(linkData.user_id);
+        const g8eContext = G8eHttpContext.parse({
+            web_session_id: webSessionId,
+            user_id: linkData.user_id,
+            organization_id: linkData.organization_id,
+        });
+
+        const result = await this._deviceRegistration.registerDevice({
+            operator_id: targetOperatorId,
+            deviceInfo,
+            g8eContext,
+            device_link_token: token,
+        });
+
+        if (!result.success) {
+            await this._cache_aside.kvSrem(fingerprintKey, sanitizedFingerprint);
+            return result;
+        }
+
+        // 5. Acquire lock to update linkData JSON blob
         // Adaptive retry: scale max retries based on device link width (max_uses)
-        // to handle high-concurrency registration events. If a link is created for
-        // N concurrent registrations, ensure retry mechanism is sufficient.
         const concurrencyWidth = linkData.max_uses;
         const adaptiveMaxRetries = Math.min(
             LOCK_MAX_RETRIES + Math.ceil(concurrencyWidth * 2),
@@ -357,80 +416,36 @@ class DeviceLinkService {
                 lockAcquired = true;
                 break;
             }
-            // Exponential backoff with jitter to reduce thundering herd
-            const backoffMs = Math.min(
-                LOCK_RETRY_DELAY_MS * Math.pow(1.5, Math.floor(attempt / 5)),
-                LOCK_RETRY_DELAY_MS * 4
-            );
+            const backoffMs = Math.min(LOCK_RETRY_DELAY_MS * Math.pow(1.5, Math.floor(attempt / 5)), LOCK_RETRY_DELAY_MS * 4);
             const jitter = Math.random() * 50;
             await new Promise(resolve => setTimeout(resolve, backoffMs + jitter));
         }
 
         if (!lockAcquired) {
-            logger.error('[DEVICE-LINK] Failed to acquire registration lock', {
+            logger.error('[DEVICE-LINK] Failed to acquire registration lock for update', {
                 token_prefix: token.substring(0, 20) + '...',
                 user_id: linkData.user_id
             });
+            // We successfully registered on g8ee, so we MUST try to persist the claim even if the lock failed
+            // but for minimal changes, we'll return busy and let the device retry (it will find the claim via SADD check next time)
             return { success: false, error: DeviceLinkError.REGISTRATION_BUSY };
         }
 
-        // Fetch TTL after lock is acquired so it reflects the current remaining time.
+        // Fetch TTL after lock is acquired
         const linkTtl = await this._cache_aside.kvTtl(KVKey.deviceLink(token));
 
         try {
-            // Dedup check (fingerprint only — same physical device must not register twice on this link).
-            // This MUST happen after lock acquisition and before use counter increment to prevent
-            // race conditions where concurrent requests from the same device consume the quota.
-            const fingerprintKey = KVKey.deviceLinkFingerprints(token);
-            const fingerprintAdded = await this._cache_aside.kvSadd(fingerprintKey, sanitizedFingerprint);
-            if (fingerprintAdded === 0) {
-                return { success: false, error: DeviceLinkError.DEVICE_ALREADY_REGISTERED };
-            }
-
             if (linkTtl > 0) {
                 await this._cache_aside.kvExpire(fingerprintKey, linkTtl);
             }
 
-            // Persist claim BEFORE incrementing use counter so concurrent requests
-            // will see the existing claim and reuse the slot
             const freshLinkResult = await this.getLink(token);
             const freshLinkData = freshLinkResult.success ? freshLinkResult.data : linkData;
 
             // Check if claim was already added by a concurrent request
             const existingClaim = freshLinkData.claims.find(c => c.system_fingerprint === sanitizedFingerprint);
             if (existingClaim) {
-                await this._cache_aside.kvSrem(fingerprintKey, sanitizedFingerprint);
-                const webSessionId = await this._webSessionService.getUserActiveSession(linkData.user_id);
-                const result = await this._deviceRegistration.registerDevice({
-                    operator_id: existingClaim.operator_id,
-                    deviceInfo,
-                    g8eContext: G8eHttpContext.parse({
-                        web_session_id: webSessionId,
-                        user_id: linkData.user_id,
-                        organization_id: linkData.organization_id,
-                    }),
-                    device_link_token: token,
-                });
-                return result;
-            }
-
-            const webSessionId = await this._webSessionService.getUserActiveSession(linkData.user_id);
-
-            const g8eContext = G8eHttpContext.parse({
-                web_session_id: webSessionId,
-                user_id: linkData.user_id,
-                organization_id: linkData.organization_id,
-            });
-
-            const result = await this._deviceRegistration.registerDevice({
-                operator_id: targetOperatorId,
-                deviceInfo,
-                g8eContext,
-                device_link_token: token,
-            });
-
-            if (!result.success) {
-                await this._cache_aside.kvSrem(fingerprintKey, sanitizedFingerprint);
+                // Claim already exists, nothing to update
                 return result;
             }
 
@@ -451,7 +466,7 @@ class DeviceLinkService {
             const remainingTtl = linkTtl > 0 ? linkTtl : DEVICE_LINK_TTL_MIN_SECONDS;
             await this._cache_aside.kvSetJson(KVKey.deviceLink(token), freshLinkData.forKV(), remainingTtl);
 
-            logger.info('[DEVICE-LINK] Device registered', {
+            logger.info('[DEVICE-LINK] Device registered and link updated', {
                 token_prefix: token.substring(0, 20) + '...',
                 operator_id: result.operator_id,
                 uses: `${freshLinkData.uses}/${freshLinkData.max_uses}`

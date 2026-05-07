@@ -21,7 +21,7 @@ Concerns handled here:
 
 All other concerns live in dedicated modules:
   agent_turn.py          — thinking state machine, stream parsing, parts consolidation,
-                           finish reason normalization, retry classification
+                           interrogation gate, finish reason normalization, retry classification
   agent_tool_loop.py — tool call dispatch, sequential execution,
                            tool display metadata, grounding merge
   agent_sse.py           — SSE translation and g8ed event delivery
@@ -52,7 +52,6 @@ from app.models.agent import (
     StreamChunkFromModel,
     StreamChunkFromModelType,
     TokenUsage,
-    TurnResult,
 )
 from app.models.grounding import GroundingMetadata
 from app.models.operators import AgentContinueApprovalRequest
@@ -62,8 +61,9 @@ from app.services.ai.agent_tool_loop import (
 )
 from app.services.ai.agent_sse import deliver_via_sse
 from app.services.ai.agent_turn import (
+    GatedTurnResult,
     consolidate_model_parts,
-    process_provider_turn,
+    process_turn_with_gate,
     should_retry_error,
 )
 from app.services.ai.grounding.grounding_service import GroundingService
@@ -158,8 +158,9 @@ class g8eEngine:
                     llm_provider=llm_provider,
                     g8ed_event_service=g8ed_event_service,
                 ):
-                    if chunk.type == StreamChunkFromModelType.TEXT:
-                        streaming_started = True
+                    # Mark streaming as started as soon as we receive any chunk
+                    # This prevents retries after streaming has begun
+                    streaming_started = True
                     yield chunk
 
                 return
@@ -325,17 +326,24 @@ class g8eEngine:
                     primary_llm_settings=generation_config,
                 )
 
-                turn_result_out: list[TurnResult] = []
-                async for chunk in process_provider_turn(stream_response, model_name, turn_result_out):
+                gated_result_out: list[GatedTurnResult] = []
+                async for chunk in process_turn_with_gate(stream_response, model_name, gated_result_out):
                     yield chunk
 
-                turn_result = turn_result_out[0]
+                gated = gated_result_out[0]
+                turn_result = gated.turn_result
 
                 total_input_tokens += turn_result.input_tokens
                 total_output_tokens += turn_result.output_tokens
                 total_tokens += turn_result.total_tokens
                 if turn_result.finish_reason:
                     final_finish_reason = turn_result.finish_reason
+
+                if gated.interrogation_detected:
+                    logger.info(
+                        "[AGENT] Interrogation gate fired at turn=%d, suppressing tool execution",
+                        loop_turn,
+                    )
 
                 if not turn_result.pending_tool_calls:
                     logger.info(

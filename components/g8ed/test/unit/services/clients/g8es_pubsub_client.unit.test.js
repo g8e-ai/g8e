@@ -16,6 +16,8 @@ import { EventEmitter } from 'events';
 import { G8esPubSubClient } from '@g8ed/services/clients/g8es_pubsub_client.js';
 import { PubSubAction, PubSubMessageType } from '@g8ed/constants/channels.js';
 
+const { PubSubMessage, PubSubEvent } = require('../../../../shared/proto/pubsub_pb.cjs');
+
 // Simple global tracker for the latest mock instance
 let latestWsInstance = null;
 
@@ -92,24 +94,30 @@ describe('G8esPubSubClient', () => {
             client.subscribe('test-channel');
             const wsInstance = global.__LATEST_WS_INSTANCE__;
 
-            // Simulate message event - data must be a string for PubSubInboundMessage
-            const msgPayload = {
-                type: PubSubMessageType.MESSAGE,
-                channel: 'test-channel',
-                data: JSON.stringify({ foo: 'bar' })
-            };
-            wsInstance.emit('message', JSON.stringify(msgPayload));
-            expect(messageHandler).toHaveBeenCalledWith('test-channel', JSON.stringify({ foo: 'bar' }));
+            // Simulate message event
+            const event = new PubSubEvent();
+            event.setType(PubSubMessageType.MESSAGE);
+            event.setChannel('test-channel');
+            const data = Buffer.from(JSON.stringify({ foo: 'bar' }));
+            event.setData(data);
 
-            // Simulate pmessage event - data must be a string for PubSubInboundPMessage
-            const pmsgPayload = {
-                type: PubSubMessageType.PMESSAGE,
-                pattern: 'test-*',
-                channel: 'test-channel',
-                data: JSON.stringify({ baz: 'qux' })
-            };
-            wsInstance.emit('message', JSON.stringify(pmsgPayload));
-            expect(pmessageHandler).toHaveBeenCalledWith('test-*', 'test-channel', JSON.stringify({ baz: 'qux' }));
+            wsInstance.emit('message', event.serializeBinary());
+            expect(messageHandler).toHaveBeenCalledWith('test-channel', expect.any(Uint8Array));
+            const receivedData = messageHandler.mock.calls[0][1];
+            expect(Buffer.from(receivedData)).toEqual(data);
+
+            // Simulate pmessage event
+            const pEvent = new PubSubEvent();
+            pEvent.setType(PubSubMessageType.PMESSAGE);
+            pEvent.setPattern('test-*');
+            pEvent.setChannel('test-channel');
+            const pData = Buffer.from(JSON.stringify({ baz: 'qux' }));
+            pEvent.setData(pData);
+
+            wsInstance.emit('message', pEvent.serializeBinary());
+            expect(pmessageHandler).toHaveBeenCalledWith('test-*', 'test-channel', expect.any(Uint8Array));
+            const receivedPData = pmessageHandler.mock.calls[0][2];
+            expect(Buffer.from(receivedPData)).toEqual(pData);
         });
     });
 
@@ -121,12 +129,15 @@ describe('G8esPubSubClient', () => {
             wsInstance.readyState = 1; // OPEN
             wsInstance.emit('open');
 
-            expect(wsInstance.send).toHaveBeenCalledWith(expect.stringContaining(PubSubAction.SUBSCRIBE));
-            expect(wsInstance.send).toHaveBeenCalledWith(expect.stringContaining('my-channel'));
+            expect(wsInstance.send).toHaveBeenCalled();
+            const sentBinary = wsInstance.send.mock.calls[0][0];
+            const sentMsg = PubSubMessage.deserializeBinary(sentBinary);
+            expect(sentMsg.getAction()).toBe(PubSubAction.SUBSCRIBE);
+            expect(sentMsg.getChannel()).toBe('my-channel');
         });
 
-        it('publish() should send publish action with plain object', async () => {
-            const data = { event: 'test' };
+        it('publish() should send publish action with buffer', async () => {
+            const data = Buffer.from(JSON.stringify({ event: 'test' }));
             const publishPromise = client.publish('my-channel', data);
             
             const wsInstance = global.__LATEST_WS_INSTANCE__;
@@ -135,14 +146,19 @@ describe('G8esPubSubClient', () => {
 
             const result = await publishPromise;
             expect(result).toBe(1);
-            expect(wsInstance.send).toHaveBeenCalledWith(expect.stringContaining(PubSubAction.PUBLISH));
-            expect(wsInstance.send).toHaveBeenCalledWith(expect.stringContaining(JSON.stringify(data)));
+            expect(wsInstance.send).toHaveBeenCalled();
+            const sentBinary = wsInstance.send.mock.calls[0][0];
+            const sentMsg = PubSubMessage.deserializeBinary(sentBinary);
+            expect(sentMsg.getAction()).toBe(PubSubAction.PUBLISH);
+            expect(sentMsg.getChannel()).toBe('my-channel');
+            expect(Buffer.from(sentMsg.getData())).toEqual(data);
         });
 
-        it('publish() should throw if data is not a plain object', async () => {
-            await expect(client.publish('chan', 'string')).rejects.toThrow(/must be a plain object/);
-            await expect(client.publish('chan', null)).rejects.toThrow(/must be a plain object/);
-            await expect(client.publish('chan', [])).rejects.toThrow(/must be a plain object/);
+        it('publish() should throw if data is not a Buffer or Uint8Array', async () => {
+            await expect(client.publish('chan', { foo: 'bar' })).rejects.toThrow(/must be a Buffer or Uint8Array/);
+            await expect(client.publish('chan', 'string')).rejects.toThrow(/must be a Buffer or Uint8Array/);
+            await expect(client.publish('chan', null)).rejects.toThrow(/must be a Buffer or Uint8Array/);
+            await expect(client.publish('chan', [])).rejects.toThrow(/must be a Buffer or Uint8Array/);
         });
     });
 

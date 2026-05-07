@@ -150,6 +150,7 @@ class TestOperatorCommandValidator:
             operator_session_id="op-session-1",
             web_session_id="web-session-1",
             operator_id="op-test-1",
+            investigation_id="inv-test-1",
         )
         assert result.valid is True
 
@@ -166,6 +167,7 @@ class TestOperatorCommandValidator:
             operator_session_id="op-session-1",
             web_session_id="web-session-1",
             operator_id="op-test-1",
+            investigation_id="inv-test-1",
         )
         assert result.valid is False
         assert "not bound" in result.reason
@@ -183,6 +185,7 @@ class TestOperatorCommandValidator:
             operator_session_id="op-session-1",
             web_session_id="web-session-1",
             operator_id="op-test-1",
+            investigation_id="inv-test-1",
         )
         assert result.valid is False
         assert "mismatch" in result.reason
@@ -200,6 +203,7 @@ class TestOperatorCommandValidator:
             operator_session_id="op-session-1",
             web_session_id="web-session-1",
             operator_id="op-test-1",
+            investigation_id="inv-test-1",
         )
         assert result.valid is False
         assert "session ID mismatch" in result.reason
@@ -209,6 +213,7 @@ class TestOperatorCommandValidator:
             operator_session_id=None,
             web_session_id="web-session-1",
             operator_id="op-test-1",
+            investigation_id="inv-test-1",
         )
         assert result.valid is False
 
@@ -217,6 +222,7 @@ class TestOperatorCommandValidator:
             operator_session_id="op-session-1",
             web_session_id=None,
             operator_id="op-test-1",
+            investigation_id="inv-test-1",
         )
         assert result.valid is False
 

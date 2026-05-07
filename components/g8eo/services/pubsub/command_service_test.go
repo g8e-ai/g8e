@@ -21,9 +21,11 @@ import (
 	execution "github.com/g8e-ai/g8e/components/g8eo/services/execution"
 	sentinel "github.com/g8e-ai/g8e/components/g8eo/services/sentinel"
 	storage "github.com/g8e-ai/g8e/components/g8eo/services/storage"
+	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 func newTestCommandService(t *testing.T) *CommandService {
@@ -145,25 +147,28 @@ func TestCommandService_SetLocalStoreService_UpdatesExistingVaultWriter(t *testi
 
 type MockResultsPublisher struct{}
 
-func (m *MockResultsPublisher) PublishExecutionResult(ctx context.Context, result *models.ExecutionResultsPayload, originalMsg PubSubCommandMessage) error {
+func (m *MockResultsPublisher) PublishExecutionResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error {
 	return nil
 }
-func (m *MockResultsPublisher) PublishCancellationResult(ctx context.Context, result *models.ExecutionResultsPayload, originalMsg PubSubCommandMessage) error {
+func (m *MockResultsPublisher) PublishCancellationResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error {
 	return nil
 }
-func (m *MockResultsPublisher) PublishFileEditResult(ctx context.Context, result *models.FileEditResult, originalMsg PubSubCommandMessage) error {
+func (m *MockResultsPublisher) PublishFileEditResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error {
 	return nil
 }
-func (m *MockResultsPublisher) PublishFsListResult(ctx context.Context, result *models.FsListResult, originalMsg PubSubCommandMessage) error {
+func (m *MockResultsPublisher) PublishFsListResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error {
 	return nil
 }
-func (m *MockResultsPublisher) PublishExecutionStatus(ctx context.Context, status *ExecutionStatusUpdate) error {
+func (m *MockResultsPublisher) PublishFsGrepResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error {
 	return nil
 }
-func (m *MockResultsPublisher) PublishResult(ctx context.Context, result *models.G8eMessage) error {
+func (m *MockResultsPublisher) PublishExecutionStatus(ctx context.Context, status proto.Message) error {
 	return nil
 }
-func (m *MockResultsPublisher) PublishHeartbeat(ctx context.Context, heartbeat *models.Heartbeat) error {
+func (m *MockResultsPublisher) PublishResult(ctx context.Context, env *commonv1.UniversalEnvelope) error {
+	return nil
+}
+func (m *MockResultsPublisher) PublishHeartbeat(ctx context.Context, heartbeat proto.Message) error {
 	return nil
 }
 

@@ -62,7 +62,7 @@ export class TutorialManager {
                     element: '#operator-panel-container',
                     popover: {
                         title: 'Operator Management',
-                        description: 'Authenticated operators appear here as <strong>Active</strong>. An operator is already running in your <strong>g8ep</strong> sidecar container, ready to rock. You must manually <strong>Bind</strong> it to your session to start issuing commands.',
+                        description: 'Authenticated operators appear here as <strong>Active</strong>. You must manually <strong>Bind</strong> it to your session to start co-validation.',
                         side: "right",
                         align: 'start'
                     }

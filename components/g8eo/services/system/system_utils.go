@@ -303,16 +303,24 @@ func GetUserDetails(shell string) models.HeartbeatUserDetails {
 	}
 	// os/user returns UID/GID as decimal strings; the wire format carries them as
 	// POSIX ints. Fall back to 0 on a malformed string (never expected on real systems).
-	uid, _ := strconv.Atoi(currentUser.Uid)
-	gid, _ := strconv.Atoi(currentUser.Gid)
 	return models.HeartbeatUserDetails{
 		Username: currentUser.Username,
-		UID:      uid,
-		GID:      gid,
+		UID:      parseUserID(currentUser.Uid),
+		GID:      parseUserID(currentUser.Gid),
 		Home:     currentUser.HomeDir,
 		Name:     currentUser.Name,
 		Shell:    shell,
 	}
+}
+
+const maxInt32 = int64(1<<31 - 1)
+
+func parseUserID(value string) int32 {
+	id, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || id < 0 || id > maxInt32 {
+		return 0
+	}
+	return int32(id)
 }
 
 func GetDiskDetails() models.HeartbeatDiskDetails {

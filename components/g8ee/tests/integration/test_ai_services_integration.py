@@ -236,16 +236,12 @@ class TestMemoryGenerationServiceIntegration:
         tech_bg = updated_memory.technical_background.lower()
 
         # Should still know about hardware/firmware concepts from original memory
-        original_concepts = [
-            ("hardware", "firmware"),  # Core technical domain
-            ("skyline", "router"),     # Specific equipment/system
-            ("sensor", "turquoise")    # Component and color identifier
-        ]
-        original_found = any(
-            any(concept in tech_bg for concept in concept_group)
-            for concept_group in original_concepts
-        )
-        assert original_found, f"Original technical concepts not found in: {tech_bg}"
+        # We check for presence of core technical keywords individually to be resilient to LLM phrasing
+        tech_keywords = ["hardware", "firmware", "skyline", "router", "sensor", "turquoise"]
+        keywords_found = [kw for kw in tech_keywords if kw in tech_bg]
+        
+        # We expect at least most of these to be preserved
+        assert len(keywords_found) >= 3, f"Original technical keywords missing from: {tech_bg}. Found only: {keywords_found}"
 
         # Should have incorporated new fan/cooling concepts from conversation
         new_concepts = [

@@ -33,7 +33,6 @@ const BASE = {
     CHAT:         '/api/chat',
     DEVICE_LINKS: '/api/device-links',
     SSE:          '/sse',
-    AUDIT:        '/api/audit',
     SETTINGS:     '/api/settings',
     SETUP:        '/api/setup',
     HEALTH:       '/health',
@@ -53,8 +52,6 @@ const Seg = {
         STOP:            'stop',
         API_KEY:         'api-key',
         REFRESH_API_KEY: 'refresh-api-key',
-        G8E_POD:        'g8ep',
-        REAUTH:          'reauth',
     },
     auth: {
         WEB_SESSION:    'web-session',
@@ -97,10 +94,6 @@ const Seg = {
     sse: {
         EVENTS: 'events',
         HEALTH: 'health',
-    },
-    audit: {
-        EVENTS:   'events',
-        DOWNLOAD: 'download',
     },
     setup: {
         CONFIG: 'config',
@@ -157,7 +150,6 @@ export const ApiPaths = {
         stop:          (operatorId) => `${BASE.OPERATORS}/${operatorId}/${Seg.operator.STOP}`,
         apiKey:        (operatorId) => `${BASE.OPERATORS}/${operatorId}/${Seg.operator.API_KEY}`,
         refreshApiKey: (operatorId) => `${BASE.OPERATORS}/${operatorId}/${Seg.operator.REFRESH_API_KEY}`,
-        g8eNodeReauth: () => `${BASE.OPERATORS}/${Seg.operator.G8E_POD}/${Seg.operator.REAUTH}`,
     },
     auth: {
         webSession:     () => `${BASE.AUTH}/${Seg.auth.WEB_SESSION}`,
@@ -213,11 +205,7 @@ export const ApiPaths = {
         events: () => `${BASE.SSE}/${Seg.sse.EVENTS}`,
         health: () => `${BASE.SSE}/${Seg.sse.HEALTH}`,
     },
-    audit: {
-        events:   () => `${BASE.AUDIT}/${Seg.audit.EVENTS}`,
-        download: () => `${BASE.AUDIT}/${Seg.audit.DOWNLOAD}`,
-    },
-    health: {
+    health:{
         root:       () => `${BASE.HEALTH}`,
         live:       () => `${BASE.HEALTH}/${Seg.health.LIVE}`,
         store:      () => `${BASE.HEALTH}/${Seg.health.STORE}`,

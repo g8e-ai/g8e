@@ -384,20 +384,21 @@ class TestG8eHttpContext:
             G8eHttpContext(user_id="u", case_id="c", investigation_id="i", source_component=ComponentName.G8EE)
 
     def test_user_id_optional_for_g8ed_operator_auth(self):
-        # user_id can be None when source_component is G8ED for operator auth relay
+        # user_id can be None when source_component is G8ED for operator auth relay on exempt path
         ctx = G8eHttpContext(
             web_session_id=None,
             user_id=None,
             case_id="c",
             investigation_id="i",
-            source_component=ComponentName.G8ED
+            source_component=ComponentName.G8ED,
+            is_operator_auth_relay=True
         )
         assert ctx.user_id is None
         assert ctx.web_session_id is None
 
     def test_web_session_id_required_when_source_not_g8ed(self):
         # web_session_id is required when source_component is not G8ED
-        with pytest.raises(ValidationError, match="web_session_id and user_id are required unless source_component is G8ED"):
+        with pytest.raises(ValidationError, match="web_session_id and user_id are required unless source_component is G8ED and path is exempted"):
             G8eHttpContext(
                 web_session_id=None,
                 user_id="u",
@@ -408,7 +409,7 @@ class TestG8eHttpContext:
 
     def test_user_id_required_when_source_not_g8ed(self):
         # user_id is required when source_component is not G8ED
-        with pytest.raises(ValidationError, match="web_session_id and user_id are required unless source_component is G8ED"):
+        with pytest.raises(ValidationError, match="web_session_id and user_id are required unless source_component is G8ED and path is exempted"):
             G8eHttpContext(
                 web_session_id="s",
                 user_id=None,
@@ -419,7 +420,7 @@ class TestG8eHttpContext:
 
     def test_both_web_session_and_user_id_required_when_source_not_g8ed(self):
         # Both web_session_id and user_id are required when source_component is not G8ED
-        with pytest.raises(ValidationError, match="web_session_id and user_id are required unless source_component is G8ED"):
+        with pytest.raises(ValidationError, match="web_session_id and user_id are required unless source_component is G8ED and path is exempted"):
             G8eHttpContext(
                 web_session_id=None,
                 user_id=None,
@@ -472,6 +473,7 @@ class TestG8eHttpContext:
         ctx = self._make()
         assert ctx.organization_id is None
         assert ctx.task_id is None
+        assert ctx.system_fingerprint is None
 
     def test_required_correlation_ids_are_set(self):
         ctx = self._make()
@@ -484,11 +486,21 @@ class TestG8eHttpContext:
             case_id="case-222",
             investigation_id="inv-333",
             task_id="task-444",
+            system_fingerprint="fp-abc-123",
         )
         assert ctx.organization_id == "org-111"
         assert ctx.case_id == "case-222"
         assert ctx.investigation_id == "inv-333"
         assert ctx.task_id == "task-444"
+        assert ctx.system_fingerprint == "fp-abc-123"
+
+    def test_system_fingerprint_can_be_set(self):
+        ctx = self._make(system_fingerprint="fp-xyz-789")
+        assert ctx.system_fingerprint == "fp-xyz-789"
+
+    def test_system_fingerprint_defaults_to_none(self):
+        ctx = self._make()
+        assert ctx.system_fingerprint is None
 
     def test_bound_operators_defaults_to_empty_list(self):
         ctx = self._make()
@@ -497,7 +509,7 @@ class TestG8eHttpContext:
     def test_bound_operators_accepts_list_of_bound_operator(self):
         ops = [
             BoundOperator(operator_id="op-1", status=OperatorStatus.BOUND),
-            BoundOperator(operator_id="op-2", status=OperatorStatus.AVAILABLE),
+            BoundOperator(operator_id="op-2", status=OperatorStatus.ACTIVE),
         ]
         ctx = self._make(bound_operators=ops)
         assert len(ctx.bound_operators) == 2
@@ -506,7 +518,7 @@ class TestG8eHttpContext:
     def test_bound_operators_accepts_list_of_dicts(self):
         ctx = self._make(bound_operators=[
             {"operator_id": "op-1", "status": "bound"},
-            {"operator_id": "op-2", "status": "available"},
+            {"operator_id": "op-2", "status": "active"},
         ])
         assert len(ctx.bound_operators) == 2
         assert isinstance(ctx.bound_operators[0], BoundOperator)
@@ -571,13 +583,13 @@ class TestG8eHttpContext:
     def test_has_bound_operator_true_when_one_is_bound(self):
         ctx = self._make(bound_operators=[
             BoundOperator(operator_id="op-1", status=OperatorStatus.BOUND),
-            BoundOperator(operator_id="op-2", status=OperatorStatus.AVAILABLE),
+            BoundOperator(operator_id="op-2", status=OperatorStatus.ACTIVE),
         ])
         assert ctx.has_bound_operator() is True
 
     def test_has_bound_operator_false_when_none_bound(self):
         ctx = self._make(bound_operators=[
-            BoundOperator(operator_id="op-1", status=OperatorStatus.AVAILABLE),
+            BoundOperator(operator_id="op-1", status=OperatorStatus.ACTIVE),
             BoundOperator(operator_id="op-2", status=OperatorStatus.OFFLINE),
         ])
         assert ctx.has_bound_operator() is False

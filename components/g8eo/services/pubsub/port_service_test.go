@@ -15,13 +15,13 @@ package pubsub
 
 import (
 	"context"
-	"encoding/json"
 	"net"
 	"testing"
 	"time"
 
+	operatorv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
+
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
-	"github.com/g8e-ai/g8e/components/g8eo/models"
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -56,9 +56,10 @@ func TestPortService_HandlePortCheckRequest_InvalidPayload(t *testing.T) {
 	ps, db := newTestPortService(t)
 
 	msg := PubSubCommandMessage{
-		ID:      "msg-port-1",
-		CaseID:  "case-1",
-		Payload: []byte(`{invalid}`),
+		ID:        "msg-port-1",
+		EventType: constants.Event.Operator.PortCheck.Requested,
+		CaseID:    "case-1",
+		Payload:   []byte(`{invalid}`),
 	}
 	ps.HandlePortCheckRequest(context.Background(), msg)
 
@@ -75,9 +76,10 @@ func TestPortService_HandlePortCheckRequest_InvalidPort_Zero(t *testing.T) {
 	ps, db := newTestPortService(t)
 
 	msg := PubSubCommandMessage{
-		ID:      "msg-port-2",
-		CaseID:  "case-1",
-		Payload: mustMarshalJSON(t, models.PortCheckRequestPayload{Port: 0}),
+		ID:        "msg-port-2",
+		EventType: constants.Event.Operator.PortCheck.Requested,
+		CaseID:    "case-1",
+		Payload:   testutil.MustMarshalProtobufCheckPortRequested(t, "", 0, "", ""),
 	}
 	ps.HandlePortCheckRequest(context.Background(), msg)
 
@@ -90,9 +92,10 @@ func TestPortService_HandlePortCheckRequest_InvalidPort_TooHigh(t *testing.T) {
 	ps, db := newTestPortService(t)
 
 	msg := PubSubCommandMessage{
-		ID:      "msg-port-3",
-		CaseID:  "case-1",
-		Payload: mustMarshalJSON(t, models.PortCheckRequestPayload{Port: 65536}),
+		ID:        "msg-port-3",
+		EventType: constants.Event.Operator.PortCheck.Requested,
+		CaseID:    "case-1",
+		Payload:   testutil.MustMarshalProtobufCheckPortRequested(t, "", 65536, "", ""),
 	}
 	ps.HandlePortCheckRequest(context.Background(), msg)
 
@@ -109,13 +112,10 @@ func TestPortService_HandlePortCheckRequest_ClosedPort_ReturnsCompleted(t *testi
 	ps, db := newTestPortService(t)
 
 	msg := PubSubCommandMessage{
-		ID:     "msg-port-4",
-		CaseID: "case-1",
-		Payload: mustMarshalJSON(t, models.PortCheckRequestPayload{
-			Host:     "127.0.0.1",
-			Port:     19998,
-			Protocol: "tcp",
-		}),
+		ID:        "msg-port-4",
+		EventType: constants.Event.Operator.PortCheck.Requested,
+		CaseID:    "case-1",
+		Payload:   testutil.MustMarshalProtobufCheckPortRequested(t, "127.0.0.1", 19998, "tcp", ""),
 	}
 	ps.HandlePortCheckRequest(context.Background(), msg)
 
@@ -123,13 +123,9 @@ func TestPortService_HandlePortCheckRequest_ClosedPort_ReturnsCompleted(t *testi
 	require.NotNil(t, published)
 	assert.Contains(t, string(published.Data), constants.Event.Operator.PortCheck.Completed)
 
-	var wireMsg struct {
-		Payload json.RawMessage `json:"payload"`
-	}
-	require.NoError(t, json.Unmarshal(published.Data, &wireMsg))
-
-	var result models.PortCheckResultPayload
-	require.NoError(t, json.Unmarshal(wireMsg.Payload, &result))
+	env := testutil.MustUnmarshalUniversalEnvelope(t, published.Data)
+	var result operatorv1.PortCheckResult
+	testutil.MustUnmarshalPayload(t, env.Payload, &result)
 	require.Len(t, result.Results, 1)
 	assert.False(t, result.Results[0].Open)
 }
@@ -156,13 +152,10 @@ func TestPortService_HandlePortCheckRequest_OpenPort_ReturnsLatency(t *testing.T
 	ps, db := newTestPortService(t)
 
 	msg := PubSubCommandMessage{
-		ID:     "msg-port-5",
-		CaseID: "case-1",
-		Payload: mustMarshalJSON(t, models.PortCheckRequestPayload{
-			Host:     "127.0.0.1",
-			Port:     port,
-			Protocol: "tcp",
-		}),
+		ID:        "msg-port-5",
+		EventType: constants.Event.Operator.PortCheck.Requested,
+		CaseID:    "case-1",
+		Payload:   testutil.MustMarshalProtobufCheckPortRequested(t, "127.0.0.1", int32(port), "tcp", ""),
 	}
 	ps.HandlePortCheckRequest(context.Background(), msg)
 
@@ -170,13 +163,9 @@ func TestPortService_HandlePortCheckRequest_OpenPort_ReturnsLatency(t *testing.T
 	require.NotNil(t, published)
 	assert.Contains(t, string(published.Data), constants.Event.Operator.PortCheck.Completed)
 
-	var wireMsg struct {
-		Payload json.RawMessage `json:"payload"`
-	}
-	require.NoError(t, json.Unmarshal(published.Data, &wireMsg))
-
-	var result models.PortCheckResultPayload
-	require.NoError(t, json.Unmarshal(wireMsg.Payload, &result))
+	env := testutil.MustUnmarshalUniversalEnvelope(t, published.Data)
+	var result operatorv1.PortCheckResult
+	testutil.MustUnmarshalPayload(t, env.Payload, &result)
 	require.Len(t, result.Results, 1)
 	assert.True(t, result.Results[0].Open)
 	assert.NotNil(t, result.Results[0].LatencyMs)
@@ -190,9 +179,10 @@ func TestPortService_HandlePortCheckRequest_DefaultsHostAndProtocol(t *testing.T
 	ps, db := newTestPortService(t)
 
 	msg := PubSubCommandMessage{
-		ID:      "msg-port-6",
-		CaseID:  "case-1",
-		Payload: mustMarshalJSON(t, models.PortCheckRequestPayload{Port: 19997}),
+		ID:        "msg-port-6",
+		EventType: constants.Event.Operator.PortCheck.Requested,
+		CaseID:    "case-1",
+		Payload:   testutil.MustMarshalProtobufCheckPortRequested(t, "", 19997, "", ""),
 	}
 	ps.HandlePortCheckRequest(context.Background(), msg)
 
@@ -209,9 +199,10 @@ func TestPortService_HandlePortCheckRequest_ExecutionIDOverridesMsgID(t *testing
 	ps, db := newTestPortService(t)
 
 	msg := PubSubCommandMessage{
-		ID:      "msg-id-original",
-		CaseID:  "case-1",
-		Payload: mustMarshalJSON(t, models.PortCheckRequestPayload{Port: 19996, ExecutionID: "exec-override"}),
+		ID:        "msg-id-original",
+		EventType: constants.Event.Operator.PortCheck.Requested,
+		CaseID:    "case-1",
+		Payload:   testutil.MustMarshalProtobufCheckPortRequested(t, "", 19996, "", "exec-override"),
 	}
 	ps.HandlePortCheckRequest(context.Background(), msg)
 

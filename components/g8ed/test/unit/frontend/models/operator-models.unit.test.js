@@ -128,7 +128,6 @@ describe('OperatorSlot [FRONTEND UNIT]', () => {
             status_display: 'ACTIVE',
             status_class: 'active',
             bound_web_session_id: 'ws-456',
-            is_g8ep: false,
             first_deployed: '2026-01-01T00:00:00.000Z',
             claimed_at: '2026-01-01T12:00:00.000Z',
             latest_heartbeat_snapshot: {
@@ -144,7 +143,6 @@ describe('OperatorSlot [FRONTEND UNIT]', () => {
         expect(slot.status_display).toBe('ACTIVE');
         expect(slot.status_class).toBe('active');
         expect(slot.bound_web_session_id).toBe('ws-456');
-        expect(slot.is_g8ep).toBe(false);
         expect(slot.first_deployed).toEqual(new Date('2026-01-01T00:00:00.000Z'));
         expect(slot.claimed_at).toEqual(new Date('2026-01-01T12:00:00.000Z'));
         expect(slot.latest_heartbeat_snapshot.system_identity.hostname).toBe('test-host');

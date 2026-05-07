@@ -14,14 +14,12 @@
 package pubsub
 
 import (
-	"encoding/json"
 	"fmt"
 	"testing"
 
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
-	"github.com/g8e-ai/g8e/components/g8eo/models"
+	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // TestLoopback_CommandDispatch_HistoryAndAudit tests execution requests that were
@@ -40,53 +38,57 @@ func TestLoopback_CommandDispatch_HistoryAndAudit(t *testing.T) {
 	tests := []struct {
 		name      string
 		eventType string
-		payload   interface{}
 		expected  string
 	}{
 		{
 			name:      "FetchLogs",
 			eventType: constants.Event.Operator.FetchLogs.Requested,
-			payload:   models.FetchLogsRequestPayload{ExecutionID: "exec-1"},
 			expected:  constants.Event.Operator.FetchLogs.Failed,
 		},
 		{
 			name:      "FetchHistory",
 			eventType: constants.Event.Operator.FetchHistory.Requested,
-			payload:   models.FetchHistoryRequestPayload{},
 			expected:  constants.Event.Operator.FetchHistory.Failed,
 		},
 		{
 			name:      "FetchFileHistory",
 			eventType: constants.Event.Operator.FetchFileHistory.Requested,
-			payload:   models.FetchFileHistoryRequestPayload{FilePath: "test.txt"},
 			expected:  constants.Event.Operator.FetchFileHistory.Failed,
 		},
 		{
 			name:      "FetchFileDiff",
 			eventType: constants.Event.Operator.FetchFileDiff.Requested,
-			payload:   models.FetchFileDiffRequestPayload{FilePath: "test.txt"},
 			expected:  constants.Event.Operator.FetchFileDiff.Failed,
 		},
 		{
 			name:      "RestoreFile",
 			eventType: constants.Event.Operator.RestoreFile.Requested,
-			payload:   models.RestoreFileRequestPayload{FilePath: "test.txt", CommitHash: "abc"},
 			expected:  constants.Event.Operator.RestoreFile.Failed,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			payloadBytes, err := json.Marshal(tt.payload)
-			require.NoError(t, err)
+			var payloadBytes []byte
+			switch tt.eventType {
+			case constants.Event.Operator.FetchLogs.Requested:
+				payloadBytes = testutil.MustMarshalProtobufFetchLogsRequested(t, "exec-1")
+			case constants.Event.Operator.FetchHistory.Requested:
+				payloadBytes = testutil.MustMarshalProtobufFetchHistoryRequested(t, "exec-1", svc.config.OperatorSessionId, 50, 0)
+			case constants.Event.Operator.FetchFileHistory.Requested:
+				payloadBytes = testutil.MustMarshalProtobufFetchFileHistoryRequested(t, "exec-1", "test.txt", 50)
+			case constants.Event.Operator.FetchFileDiff.Requested:
+				payloadBytes = testutil.MustMarshalProtobufFetchFileDiffRequested(t, "exec-1", "test.txt")
+			case constants.Event.Operator.RestoreFile.Requested:
+				payloadBytes = testutil.MustMarshalProtobufRestoreFileRequested(t, "exec-1", "test.txt", "abc", svc.config.OperatorSessionId)
+			}
 
-			cmdMsg := newTestG8eMessage(t, svc.config, tt.eventType, "case-1", payloadBytes)
-			cmdMsg.ID = fmt.Sprintf("id-%s", tt.name)
-			cmdMsg.InvestigationID = "inv-1"
-			injectCmd(t, f, svc, cmdMsg)
+			envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, fmt.Sprintf("id-%s", tt.name), tt.eventType, payloadBytes, "", svc.config.OperatorID, "case-1", "inv-1", svc.config.OperatorSessionId)
+			injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 			msg := drainOne(t, resultsSub)
-			assert.Contains(t, string(msg), tt.expected, "expected event type %s in result", tt.expected)
+			envelope := testutil.MustUnmarshalUniversalEnvelope(t, msg)
+			assert.Equal(t, tt.expected, envelope.EventType)
 		})
 	}
 
@@ -102,10 +104,8 @@ func TestLoopback_CommandDispatch_HistoryAndAudit(t *testing.T) {
 		}
 
 		for _, tt := range auditTests {
-			payload := json.RawMessage(`{}`)
-			cmdMsg := newTestG8eMessage(t, svc.config, tt.eventType, "case-1", payload)
-			cmdMsg.ID = fmt.Sprintf("audit-%s", tt.name)
-			injectCmd(t, f, svc, cmdMsg)
+			envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, fmt.Sprintf("audit-%s", tt.name), tt.eventType, []byte("{}"), "", svc.config.OperatorID, "case-1", "inv-1", svc.config.OperatorSessionId)
+			injectCmdProtobuf(t, f, svc, envelopeBytes)
 			// Audit events are fire-and-forget in the dispatcher,
 			// they don't necessarily publish a "Completed" event back to results
 			// unless the specific handler does so. We verify no panic.

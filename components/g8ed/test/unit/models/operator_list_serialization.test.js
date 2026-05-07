@@ -70,7 +70,7 @@ describe('OperatorListUpdatedEvent nested model serialization [UNIT - PURE LOGIC
     it('should serialize multiple OperatorSlot instances correctly', () => {
         const slots = [
             new OperatorSlot({ operator_id: 'op-1', status: 'ACTIVE' }),
-            new OperatorSlot({ operator_id: 'op-2', status: 'AVAILABLE' }),
+            new OperatorSlot({ operator_id: 'op-2', status: 'OFFLINE' }),
         ];
 
         const event = new OperatorListUpdatedEvent({

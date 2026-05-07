@@ -63,7 +63,6 @@ export const EventType = Object.freeze({
     INVESTIGATION_CHAT_MESSAGE_SYSTEM: _EVENTS['app']['investigation']['chat']['message']['system'],
 
     OPERATOR_SLOT_INITIALIZATION_FAILED: _EVENTS['operator']['slot']['initialization']['failed'],
-    OPERATOR_G8EP_ACTIVATION_FAILED:    _EVENTS['operator']['g8ep']['activation']['failed'],
     OPERATOR_HEARTBEAT_SENT:      _EVENTS['operator']['heartbeat']['sent'],
     OPERATOR_HEARTBEAT_REQUESTED: _EVENTS['operator']['heartbeat']['requested'],
     OPERATOR_HEARTBEAT_RECEIVED:  _EVENTS['operator']['heartbeat']['received'],
@@ -75,8 +74,6 @@ export const EventType = Object.freeze({
     OPERATOR_DEVICE_REGISTERED:   _EVENTS['operator']['device']['registered'],
 
     OPERATOR_STATUS_UPDATED_ACTIVE:      _EVENTS['operator']['status']['updated']['active'],
-    OPERATOR_STATUS_UPDATED_AVAILABLE:   _EVENTS['operator']['status']['updated']['available'],
-    OPERATOR_STATUS_UPDATED_UNAVAILABLE: _EVENTS['operator']['status']['updated']['unavailable'],
     OPERATOR_STATUS_UPDATED_BOUND:       _EVENTS['operator']['status']['updated']['bound'],
     OPERATOR_STATUS_UPDATED_OFFLINE:     _EVENTS['operator']['status']['updated']['offline'],
     OPERATOR_STATUS_UPDATED_STALE:       _EVENTS['operator']['status']['updated']['stale'],
@@ -142,6 +139,12 @@ export const EventType = Object.freeze({
     OPERATOR_FILESYSTEM_READ_RECEIVED:  _EVENTS['operator']['filesystem']['read']['received'],
     OPERATOR_FILESYSTEM_READ_COMPLETED: _EVENTS['operator']['filesystem']['read']['completed'],
     OPERATOR_FILESYSTEM_READ_FAILED:    _EVENTS['operator']['filesystem']['read']['failed'],
+
+    OPERATOR_FILESYSTEM_GREP_STARTED:   _EVENTS['operator']['filesystem']['grep']['started'],
+    OPERATOR_FILESYSTEM_GREP_REQUESTED: _EVENTS['operator']['filesystem']['grep']['requested'],
+    OPERATOR_FILESYSTEM_GREP_RECEIVED:  _EVENTS['operator']['filesystem']['grep']['received'],
+    OPERATOR_FILESYSTEM_GREP_COMPLETED: _EVENTS['operator']['filesystem']['grep']['completed'],
+    OPERATOR_FILESYSTEM_GREP_FAILED:    _EVENTS['operator']['filesystem']['grep']['failed'],
 
     OPERATOR_LOGS_FETCH_REQUESTED: _EVENTS['operator']['logs']['fetch']['requested'],
     OPERATOR_LOGS_FETCH_RECEIVED:  _EVENTS['operator']['logs']['fetch']['received'],

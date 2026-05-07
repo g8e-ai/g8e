@@ -18,10 +18,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.clients.http_client import HTTPClient
-from app.constants import ComponentName, OperatorStatus, OperatorType
+from app.constants import ComponentName, OperatorStatus, OperatorType, CloudSubtype
 from app.errors import ValidationError
 from app.models.cache import CacheOperationResult
-from app.services.infra.supervisor_service import SupervisorService
 from app.services.operator.operator_data_service import OperatorDataService
 from app.services.operator.operator_lifecycle_service import OperatorLifecycleService
 from app.utils.timestamp import now
@@ -38,18 +37,8 @@ class TestOperatorLifecycleService:
         return OperatorDataService(mock_cache_aside_service, mock_g8ed_http_client)
 
     @pytest.fixture
-    def mock_supervisor_service(self):
-        return AsyncMock(spec=SupervisorService)
-
-    @pytest.fixture
-    def mock_settings_service(self):
-        mock = MagicMock()
-        mock.update_g8ep_operator_api_key = AsyncMock(return_value=None)
-        return mock
-
-    @pytest.fixture
-    def lifecycle_service(self, operator_data_service, mock_supervisor_service, mock_settings_service):
-        service = OperatorLifecycleService(operator_data_service, mock_supervisor_service, mock_settings_service)
+    def lifecycle_service(self, operator_data_service):
+        service = OperatorLifecycleService(operator_data_service)
         mock_api_key_service = MagicMock()
         mock_api_key_service.rotate_operator_key = AsyncMock(return_value={"success": True, "api_key": "new-key"})
         service.set_api_key_service(mock_api_key_service)
@@ -67,7 +56,7 @@ class TestOperatorLifecycleService:
             {
                 "id": operator_id,
                 "user_id": "user-test",
-                "status": OperatorStatus.AVAILABLE,
+                "status": OperatorStatus.OFFLINE,
                 "first_deployed": None,
                 "history_trail": [],
             },
@@ -235,81 +224,136 @@ class TestOperatorLifecycleService:
         success = await lifecycle_service.update_operator_status("missing", OperatorStatus.ACTIVE)
         assert success is False
 
-    async def test_activate_g8ep_operator_success(self, lifecycle_service, mock_cache, mock_supervisor_service, mock_settings_service):
-        user_id = "user-123"
-        operator_id = "op-g8ep"
-        api_key = "g8e_test_key"
+    async def test_claim_operator_slot_active_status_different_session_preempts(self, lifecycle_service, mock_cache):
+        operator_id = "op-reclaim"
+        old_session_id = "session-old"
+        new_session_id = "session-new"
 
-        mock_cache.query_documents.return_value = [{
-            "id": operator_id,
-            "user_id": user_id,
-            "status": OperatorStatus.AVAILABLE,
-            "is_g8ep": True,
-            "api_key": api_key,
-            "organization_id": "org-123",
-            "name": "g8ep",
-            "slot_number": 1,
-            "operator_type": OperatorType.SYSTEM,
-            "created_at": now().isoformat(),
-            "updated_at": now().isoformat(),
-        }]
+        mock_cache.get_document_with_cache.side_effect = [
+            {
+                "id": operator_id,
+                "user_id": "user-test",
+                "status": OperatorStatus.ACTIVE,
+                "operator_session_id": old_session_id,
+                "first_deployed": now().isoformat(),
+                "history_trail": [],
+            },
+            {
+                "id": operator_id,
+                "user_id": "user-test",
+                "status": OperatorStatus.ACTIVE,
+                "operator_session_id": new_session_id,
+                "first_deployed": now().isoformat(),
+                "history_trail": [],
+            },
+            {
+                "id": operator_id,
+                "user_id": "user-test",
+                "status": OperatorStatus.ACTIVE,
+                "operator_session_id": new_session_id,
+                "first_deployed": now().isoformat(),
+                "history_trail": [],
+            },
+            None
+        ]
         mock_cache.update_document.return_value = CacheOperationResult(success=True)
 
-        await lifecycle_service.activate_g8ep_operator(user_id)
+        success = await lifecycle_service.claim_operator_slot(
+            operator_id=operator_id,
+            operator_session_id=new_session_id,
+            bound_web_session_id="web-123",
+            operator_type=OperatorType.SYSTEM,
+        )
 
-        # Verify API key persistence via settings service
-        mock_settings_service.update_g8ep_operator_api_key.assert_called_once_with(api_key)
-        # Verify supervisor call
-        mock_supervisor_service.start_process.assert_called_once_with("operator", wait=False)
-
-    async def test_activate_g8ep_operator_already_active(self, lifecycle_service, mock_cache, mock_supervisor_service):
-        user_id = "user-123"
-        mock_cache.query_documents.return_value = [{
-            "id": "op-g8ep",
-            "user_id": user_id,
-            "status": OperatorStatus.ACTIVE,
-            "is_g8ep": True,
-            "organization_id": "org-123",
-            "name": "g8ep",
-            "slot_number": 1,
-            "operator_type": OperatorType.SYSTEM,
-            "created_at": now().isoformat(),
-            "updated_at": now().isoformat(),
-        }]
-
-        await lifecycle_service.activate_g8ep_operator(user_id)
-
-        assert mock_cache.update_document.call_count == 0
-        assert mock_supervisor_service.start_process.call_count == 0
-
-    async def test_relaunch_g8ep_operator_success(self, lifecycle_service, mock_cache, mock_supervisor_service, mock_settings_service):
-        user_id = "user-123"
-        operator_id = "op-g8ep"
-
-        mock_cache.query_documents.return_value = [{
-            "id": operator_id,
-            "user_id": user_id,
-            "status": OperatorStatus.ACTIVE,
-            "is_g8ep": True,
-            "organization_id": "org-123",
-            "name": "g8ep",
-            "slot_number": 1,
-            "operator_type": OperatorType.SYSTEM,
-            "created_at": now().isoformat(),
-            "updated_at": now().isoformat(),
-        }]
-        mock_cache.update_document.return_value = CacheOperationResult(success=True)
-
-        result = await lifecycle_service.relaunch_g8ep_operator(user_id)
-
-        assert result["success"] is True
-        assert result["operator_id"] == operator_id
-
-        # Verify stop called
-        mock_supervisor_service.stop_process.assert_called_once_with("operator", wait=True)
-        # Verify status reset (1 update for reset)
+        assert success is True
         assert mock_cache.update_document.call_count == 1
-        # Verify API key rotation via api_key_service (new implementation)
-        lifecycle_service.api_key_service.rotate_operator_key.assert_called_once()
-        # Verify start called
-        mock_supervisor_service.start_process.assert_called_once_with("operator", wait=False)
+
+        call_args = mock_cache.update_document.call_args
+        update_data = call_args.kwargs["data"]
+        assert update_data["operator_session_id"] == new_session_id
+        assert update_data["status"] == OperatorStatus.ACTIVE
+
+    async def test_claim_operator_slot_active_status_same_session_fails(self, lifecycle_service, mock_cache):
+        operator_id = "op-same-session"
+        session_id = "session-same"
+
+        mock_cache.get_document_with_cache.return_value = {
+            "id": operator_id,
+            "user_id": "user-test",
+            "status": OperatorStatus.ACTIVE,
+            "operator_session_id": session_id,
+            "first_deployed": now().isoformat(),
+            "history_trail": [],
+        }
+
+        success = await lifecycle_service.claim_operator_slot(
+            operator_id=operator_id,
+            operator_session_id=session_id,
+            bound_web_session_id="web-123",
+        )
+
+        assert success is False
+        assert mock_cache.update_document.call_count == 0
+
+    async def test_claim_operator_slot_stale_status_different_session_preempts(self, lifecycle_service, mock_cache):
+        operator_id = "op-stale"
+        old_session_id = "session-old"
+        new_session_id = "session-new"
+
+        mock_cache.get_document_with_cache.side_effect = [
+            {
+                "id": operator_id,
+                "user_id": "user-test",
+                "status": OperatorStatus.STALE,
+                "operator_session_id": old_session_id,
+                "first_deployed": now().isoformat(),
+                "history_trail": [],
+            },
+            {
+                "id": operator_id,
+                "user_id": "user-test",
+                "status": OperatorStatus.ACTIVE,
+                "operator_session_id": new_session_id,
+                "first_deployed": now().isoformat(),
+                "history_trail": [],
+            },
+            {
+                "id": operator_id,
+                "user_id": "user-test",
+                "status": OperatorStatus.ACTIVE,
+                "operator_session_id": new_session_id,
+                "first_deployed": now().isoformat(),
+                "history_trail": [],
+            },
+            None
+        ]
+        mock_cache.update_document.return_value = CacheOperationResult(success=True)
+
+        success = await lifecycle_service.claim_operator_slot(
+            operator_id=operator_id,
+            operator_session_id=new_session_id,
+            bound_web_session_id="web-123",
+        )
+
+        assert success is True
+        assert mock_cache.update_document.call_count == 1
+
+    async def test_claim_operator_slot_terminated_status_fails(self, lifecycle_service, mock_cache):
+        operator_id = "op-terminated"
+
+        mock_cache.get_document_with_cache.return_value = {
+            "id": operator_id,
+            "user_id": "user-test",
+            "status": OperatorStatus.TERMINATED,
+            "history_trail": [],
+        }
+
+        success = await lifecycle_service.claim_operator_slot(
+            operator_id=operator_id,
+            operator_session_id="session-new",
+            bound_web_session_id="web-123",
+        )
+
+        assert success is False
+        assert mock_cache.update_document.call_count == 0
+

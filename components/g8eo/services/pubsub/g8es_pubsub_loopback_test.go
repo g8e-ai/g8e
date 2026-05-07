@@ -38,12 +38,16 @@ import (
 
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/models"
-	execution "github.com/g8e-ai/g8e/components/g8eo/services/execution"
-	listen "github.com/g8e-ai/g8e/components/g8eo/services/listen"
+	"github.com/g8e-ai/g8e/components/g8eo/services/execution"
+	"github.com/g8e-ai/g8e/components/g8eo/services/listen"
+	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
+	pb "github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
+	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/pubsubv1"
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 // =============================================================================
@@ -95,24 +99,21 @@ func (f *loopbackFixture) subscribeAndWait(t *testing.T, channel string) *websoc
 	require.NoError(t, err)
 	t.Cleanup(func() { ws.Close() })
 
-	subMsg := listen.PubSubMessage{
+	subMsg := &pubsubv1.PubSubMessage{
 		Action:  constants.PubSubActionSubscribe,
 		Channel: channel,
 	}
-	b, err := json.Marshal(subMsg)
+	b, err := proto.Marshal(subMsg)
 	require.NoError(t, err)
-	require.NoError(t, ws.WriteMessage(websocket.TextMessage, b))
+	require.NoError(t, ws.WriteMessage(websocket.BinaryMessage, b))
 
 	// Read frames until we get the subscribed ack for our channel.
 	ws.SetReadDeadline(time.Now().Add(3 * time.Second))
 	for {
 		_, raw, err := ws.ReadMessage()
 		require.NoError(t, err, "waiting for subscribed ack on %s", channel)
-		var ack struct {
-			Type    string `json:"type"`
-			Channel string `json:"channel"`
-		}
-		if err := json.Unmarshal(raw, &ack); err != nil {
+		var ack pubsubv1.PubSubEvent
+		if err := proto.Unmarshal(raw, &ack); err != nil {
 			continue
 		}
 		if ack.Type == constants.PubSubEventSubscribed && ack.Channel == channel {
@@ -160,11 +161,18 @@ func TestLoopback_SubscriberReceivesBrokerPublish(t *testing.T) {
 	// Wait for the subscription to be registered before publishing.
 	f.subscribeAndWait(t, ch)
 
-	data := json.RawMessage(fmt.Sprintf(`{"event_type":"%s"}`, constants.Event.Operator.Command.Completed))
-	f.broker.Publish(ch, data)
+	// In Phase 3, we publish binary Protobuf UniversalEnvelope
+	payload := testutil.MustMarshalProtobufCommandRequested(t, "echo hello", "exec-1", "test", "", 0)
+	envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, "env-1", constants.Event.Operator.Command.Completed, payload, "", "op1", "case-1", "", "sess1")
+
+	f.broker.Publish(ch, envelopeBytes)
 
 	msg := drainOne(t, sub)
-	assert.Contains(t, string(msg), constants.Event.Operator.Command.Completed)
+	// The subscriber receives the raw Data field of the PubSubEvent, which is the UniversalEnvelope bytes
+	var env commonv1.UniversalEnvelope
+	err = proto.Unmarshal(msg, &env)
+	require.NoError(t, err)
+	assert.Equal(t, constants.Event.Operator.Command.Completed, env.EventType)
 }
 
 func TestLoopback_SubscriberDoesNotReceiveOtherChannel(t *testing.T) {
@@ -200,11 +208,15 @@ func TestLoopback_ClientPublishFansOutToSubscriber(t *testing.T) {
 	// Subscription is confirmed registered before the publish.
 	f.subscribeAndWait(t, ch)
 
-	payload := json.RawMessage(fmt.Sprintf(`{"event_type":"%s","id":"cmd-1"}`, constants.Event.Operator.Command.Requested))
-	require.NoError(t, publisher.Publish(context.Background(), ch, payload))
+	payload := testutil.MustMarshalProtobufCommandRequested(t, "echo hello", "cmd-1", "test", "", 0)
+	envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, "cmd-1", constants.Event.Operator.Command.Requested, payload, "", "opA", "caseA", "", "sessA")
+
+	require.NoError(t, publisher.Publish(context.Background(), ch, envelopeBytes))
 
 	msg := drainOne(t, sub)
-	assert.Contains(t, string(msg), "cmd-1")
+	var env commonv1.UniversalEnvelope
+	require.NoError(t, proto.Unmarshal(msg, &env))
+	assert.Equal(t, "cmd-1", env.Id)
 }
 
 func TestLoopback_ClientPublishFansOutToMultipleSubscribers(t *testing.T) {
@@ -227,8 +239,10 @@ func TestLoopback_ClientPublishFansOutToMultipleSubscribers(t *testing.T) {
 		f.subscribeAndWait(t, ch)
 	}
 
-	require.NoError(t, publisher.Publish(context.Background(), ch,
-		json.RawMessage(`{"event_type":"operator.heartbeat"}`)))
+	payload := testutil.MustMarshalProtobufHeartbeatRequested(t)
+	envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, "hb-1", constants.Event.Operator.Heartbeat, payload, "", "opB", "caseB", "", "sessB")
+
+	require.NoError(t, publisher.Publish(context.Background(), ch, envelopeBytes))
 
 	var wg sync.WaitGroup
 	for i, sub := range subs {
@@ -238,7 +252,9 @@ func TestLoopback_ClientPublishFansOutToMultipleSubscribers(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			msg := drainOne(t, sub)
-			assert.Contains(t, string(msg), "operator.heartbeat", "subscriber %d missed message", i)
+			var env commonv1.UniversalEnvelope
+			require.NoError(t, proto.Unmarshal(msg, &env))
+			assert.Equal(t, constants.Event.Operator.Heartbeat, env.EventType, "subscriber %d missed message", i)
 		}()
 	}
 	wg.Wait()
@@ -263,11 +279,16 @@ func TestLoopback_SameClientPublishesAndSubscribes(t *testing.T) {
 
 	f.subscribeAndWait(t, ch)
 
-	require.NoError(t, pubClient.Publish(context.Background(), ch,
-		json.RawMessage(`{"self":"true"}`)))
+	payload := []byte(`{"self":"true"}`) // Raw payload for self-loopback
+	envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, "self-1", "test.event", payload, "", "self", "case0", "", "sess0")
+
+	require.NoError(t, pubClient.Publish(context.Background(), ch, envelopeBytes))
 
 	msg := drainOne(t, sub)
-	assert.Contains(t, string(msg), `"self"`)
+	var env commonv1.UniversalEnvelope
+	require.NoError(t, proto.Unmarshal(msg, &env))
+	assert.Equal(t, "test.event", env.EventType)
+	assert.Contains(t, string(env.Payload), `"self"`)
 }
 
 // =============================================================================
@@ -361,19 +382,11 @@ func TestLoopback_CommandDispatch_InboundHeartbeatRequest(t *testing.T) {
 	cmdCh := constants.CmdChannel(cfg.OperatorID, cfg.OperatorSessionId)
 	f.subscribeAndWait(t, cmdCh)
 
-	cmdPayload := PubSubCommandMessage{
-		ID:              "req-1",
-		EventType:       constants.Event.Operator.HeartbeatRequested,
-		CaseID:          "case-loopback",
-		InvestigationID: "inv-loopback",
-		Payload:         json.RawMessage(`{}`),
-		Timestamp:       time.Now().UTC(),
-	}
-	cmdJSON, err := json.Marshal(cmdPayload)
-	require.NoError(t, err)
+	hbPayload := testutil.MustMarshalProtobufHeartbeatRequested(t)
+	envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, "req-1", constants.Event.Operator.HeartbeatRequested, hbPayload, "", cfg.OperatorID, "case-loopback", "inv-loopback", cfg.OperatorSessionId)
 
 	injector := f.newClient(t)
-	require.NoError(t, injector.Publish(context.Background(), cmdCh, cmdJSON))
+	require.NoError(t, injector.Publish(context.Background(), cmdCh, envelopeBytes))
 
 	// The service should respond with a heartbeat on the heartbeat channel.
 	response := drainOne(t, heartbeatSub)
@@ -400,13 +413,11 @@ func TestLoopback_ResultsService_PublishExecutionResult(t *testing.T) {
 	require.NoError(t, err)
 	f.subscribeAndWait(t, resultsCh)
 
-	result := &models.ExecutionResultsPayload{
-		ExecutionID:     "exec-loop-1",
-		Command:         "echo hello",
-		Status:          constants.ExecutionStatusCompleted,
-		Stdout:          "hello",
-		CaseID:          "case-r1",
-		DurationSeconds: 0.01,
+	result := &pb.CommandResult{
+		ExecutionId:          "exec-loop-1",
+		Status:               protoExecutionStatus(constants.ExecutionStatusCompleted),
+		Output:               "hello",
+		ExecutionTimeSeconds: 0.01,
 	}
 	originalMsg := PubSubCommandMessage{
 		ID:                "exec-loop-1",
@@ -418,7 +429,7 @@ func TestLoopback_ResultsService_PublishExecutionResult(t *testing.T) {
 
 	msg := drainOne(t, sub)
 	assert.Contains(t, string(msg), constants.Event.Operator.Command.Completed)
-	assert.Contains(t, string(msg), "echo hello")
+	assert.Contains(t, string(msg), "hello")
 }
 
 func TestLoopback_ResultsService_PublishHeartbeat(t *testing.T) {
@@ -436,12 +447,10 @@ func TestLoopback_ResultsService_PublishHeartbeat(t *testing.T) {
 	require.NoError(t, err)
 	f.subscribeAndWait(t, heartbeatCh)
 
-	hb := &models.Heartbeat{
-		EventType:         constants.Event.Operator.Heartbeat,
-		SourceComponent:   constants.Status.ComponentName.G8EO,
-		OperatorID:        cfg.OperatorID,
-		OperatorSessionID: cfg.OperatorSessionId,
-		HeartbeatType:     models.HeartbeatTypeAutomatic,
+	hb := &pb.HeartbeatResult{
+		OperatorId:        cfg.OperatorID,
+		OperatorSessionId: cfg.OperatorSessionId,
+		Status:            "healthy",
 		Timestamp:         models.NowTimestamp(),
 	}
 

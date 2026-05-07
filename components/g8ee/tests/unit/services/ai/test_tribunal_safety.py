@@ -19,7 +19,7 @@ from app.constants import AuditorReason, ComponentName
 from app.models.agent import OperatorContext
 from app.models.agents.tribunal import TribunalAuditorFailedError, TribunalGenerationFailedError
 from app.models.http_context import G8eHttpContext
-from app.services.ai.auditor_service import run_auditor
+from app.services.ai.auditor_service import AuditorClusterInfo
 from app.services.ai.generator import TribunalEmitter, generate_command
 from app.utils.agent_persona_loader import get_agent_persona
 from app.utils.command import normalise_command
@@ -145,7 +145,7 @@ class TestAuditorSafety:
         with patch("app.services.ai.auditor_service.get_model_config") as mock_config:
             mock_config.return_value.supports_structured_output = False
 
-            from app.models.agents.tribunal import VoteBreakdown
+            from app.models.agents.tribunal import VoteBreakdown, TribunalAuditorFailedError
             vote_breakdown = VoteBreakdown(
                 candidates_by_member={},
                 candidates_by_command={"ls": ["axiom"]},
@@ -155,20 +155,24 @@ class TestAuditorSafety:
                 consensus_strength=1.0,
             )
 
+            from app.services.ai.tribunal.stages.auditor import TribunalAuditor
             with pytest.raises(TribunalAuditorFailedError) as exc_info:
-                await run_auditor(
+                auditor = TribunalAuditor(
+                    emitter=emitter,
+                    reputation_data_service=MagicMock(),
+                    auditor_hmac_key="test-key",
+                )
+                await auditor.run(
                     provider=mock_provider,
                     model="test-model",
                     request="delete everything",
                     guidelines="",
-                    mode="unanimous",
                     vote_winner="ls",
                     vote_breakdown=vote_breakdown,
-                    tied_candidates=None,
                     operator_context=_make_mock_operator_context(),
-                    emitter=emitter,
+                    auditor_enabled=True,
                     command_constraints_message="",
-                    auditor_persona=get_agent_persona("auditor"),
+                    investigation_id="inv-1",
                 )
 
             assert exc_info.value.reason == AuditorReason.NO_VALID_REVISION
@@ -223,9 +227,9 @@ class TestStructuredOutputSupport:
         mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
         emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
-        from app.services.ai.generator import _run_generation_pass
-
-        with patch("app.services.ai.generator.get_model_config") as mock_config:
+        from app.services.ai.tribunal.stages.generation import _run_generation_pass
+        from app.models.model_configs import get_model_config
+        with patch("app.services.ai.tribunal.stages.generation.get_model_config") as mock_config:
             mock_config.return_value.supports_structured_output = True
 
             result = await _run_generation_pass(

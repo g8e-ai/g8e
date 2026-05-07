@@ -31,11 +31,9 @@ export class CliSessionService extends BaseSessionService {
      * @param {Object} options
      * @param {Object} options.cacheAsideService - CacheAside service instance
      * @param {Object} options.bootstrapService - Bootstrap service instance
-     * @param {Object} options.auditService - Audit service instance
      */
-    constructor({ cacheAsideService, bootstrapService, auditService }) {
+    constructor({ cacheAsideService, bootstrapService }) {
         super({ cacheAsideService, bootstrapService });
-        this._audit = auditService;
         this.sessionsCollection = Collections.CLI_SESSIONS;
         this.absoluteSessionTimeout = ABSOLUTE_SESSION_TIMEOUT_SECONDS;
     }
@@ -50,24 +48,6 @@ export class CliSessionService extends BaseSessionService {
             decrypted.api_key = this._decryptField(decrypted.api_key);
         }
         return decrypted;
-    }
-
-    async _logSessionEvent(eventType, session, metadata = {}) {
-        try {
-            await this._audit.logSessionEvent({
-                session_id: session.id,
-                user_id: session.user_id,
-                event_type: eventType,
-                session_type: session.session_type,
-                metadata: {
-                    ...metadata,
-                    ip: session.client_ip,
-                    user_agent: session.user_agent,
-                },
-            });
-        } catch (err) {
-            logger.warn('[CLI-SESSION-SERVICE] Failed to log session event', { error: err.message });
-        }
     }
 
     /**

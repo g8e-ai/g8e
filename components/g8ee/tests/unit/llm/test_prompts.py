@@ -268,26 +268,6 @@ def test_build_modular_system_prompt_cloud_operator(mock_loader):
     assert "Operator Type: Cloud Operator for AWS" in prompt
     assert "granted_intents: ['s3:ListBucket']" in prompt
 
-def test_build_modular_system_prompt_g8ep_cloud_operator(mock_loader):
-    g8ep_context = OperatorContext(
-        operator_id="op_g8ep",
-        operator_type=OperatorType.CLOUD,
-        cloud_subtype=CloudSubtype.G8E_POD,
-        is_cloud_operator=True
-    )
-
-    prompt, context_sizes = prompts.build_modular_system_prompt(
-        operator_bound=True,
-        system_context=g8ep_context,
-        user_memories=[],
-        case_memories=[],
-        investigation=None
-    )
-
-    assert "Operator Type: g8ep Cloud Operator - Direct system access via G8E_POD" in prompt
-    assert "Least-privilege" not in prompt
-
-
 def test_build_modular_system_prompt_cloud_operator_missing_subtype(mock_loader):
     no_subtype_context = OperatorContext(
         operator_id="op_no_subtype",

@@ -41,7 +41,7 @@
         "type": "string",
         "required": true,
         "default": "New",
-        "values": ["New", "Triage", "Escalated", "WaitingForCustomer", "Investigate", "HumanReview", "Resolved", "Closed"],
+        "values": ["New", "Triage", "Escalated", "WaitingForCustomer", "InProgress", "HumanReview", "Resolved", "Closed"],
         "description": "Case lifecycle status. See status.json case.status."
       },
       "priority": {

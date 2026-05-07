@@ -15,27 +15,32 @@ package pubsub
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
-	"github.com/g8e-ai/g8e/components/g8eo/models"
+	pb "github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestExecutionIDFromMessage_PrefersPayloadExecutionID(t *testing.T) {
-	payload, err := json.Marshal(map[string]string{"execution_id": "exec-123"})
-	assert.NoError(t, err)
-	msg := PubSubCommandMessage{ID: "envelope-abc", Payload: payload}
+	payload := testutil.MustMarshalProtobufCommandRequested(t, "ls", "exec-123", "", "", 0)
+	msg := PubSubCommandMessage{
+		ID:        "envelope-abc",
+		EventType: constants.Event.Operator.Command.Requested,
+		Payload:   payload,
+	}
 	assert.Equal(t, "exec-123", executionIDFromMessage(msg))
 }
 
 func TestExecutionIDFromMessage_FallsBackToEnvelopeID(t *testing.T) {
-	payload, err := json.Marshal(map[string]string{"other": "value"})
-	assert.NoError(t, err)
-	msg := PubSubCommandMessage{ID: "envelope-abc", Payload: payload}
+	payload := testutil.MustMarshalProtobufHeartbeatRequested(t)
+	msg := PubSubCommandMessage{
+		ID:        "envelope-abc",
+		EventType: constants.Event.Operator.HeartbeatRequested,
+		Payload:   payload,
+	}
 	assert.Equal(t, "envelope-abc", executionIDFromMessage(msg))
 }
 
@@ -50,109 +55,103 @@ func TestExecutionIDFromMessage_MalformedPayloadFallsBack(t *testing.T) {
 }
 
 func TestExecutionIDFromMessage_EmptyExecutionIDInPayloadFallsBack(t *testing.T) {
-	payload, err := json.Marshal(map[string]string{"execution_id": ""})
-	assert.NoError(t, err)
+	payload := testutil.MustMarshalProtobufCommandRequested(t, "ls", "", "", "", 0)
 	msg := PubSubCommandMessage{ID: "envelope-abc", Payload: payload}
 	assert.Equal(t, "envelope-abc", executionIDFromMessage(msg))
 }
 
-func TestSetExecutionIDOnPayload_LFAAErrorPayload(t *testing.T) {
-	payload := &models.LFAAErrorPayload{
-		Success: false,
-		Error:   "test error",
+func TestSetExecutionIDOnPayload_CommandResult(t *testing.T) {
+	payload := &pb.CommandResult{
+		Status: protoExecutionStatus(constants.ExecutionStatusFailed),
+		Error:  "test error",
 	}
 	setExecutionIDOnPayload(payload, "msg-abc")
-	assert.Equal(t, "msg-abc", payload.ExecutionID)
+	assert.Equal(t, "msg-abc", payload.ExecutionId)
 }
 
-func TestSetExecutionIDOnPayload_FileEditResultPayload(t *testing.T) {
-	payload := &models.FileEditResultPayload{
-		ExecutionID: "original-id",
-		Status:      constants.ExecutionStatusCompleted,
+func TestSetExecutionIDOnPayload_FileEditResult(t *testing.T) {
+	payload := &pb.FileEditResult{
+		ExecutionId: "original-id",
+		Status:      protoExecutionStatus(constants.ExecutionStatusCompleted),
 	}
 	setExecutionIDOnPayload(payload, "msg-abc")
-	assert.Equal(t, "msg-abc", payload.ExecutionID)
+	assert.Equal(t, "msg-abc", payload.ExecutionId)
 }
 
-func TestSetExecutionIDOnPayload_FsListResultPayload(t *testing.T) {
-	payload := &models.FsListResultPayload{
-		ExecutionID: "",
-		Status:      constants.ExecutionStatusCompleted,
+func TestSetExecutionIDOnPayload_FsListResult(t *testing.T) {
+	payload := &pb.FsListResult{
+		ExecutionId: "",
+		Status:      protoExecutionStatus(constants.ExecutionStatusCompleted),
 	}
 	setExecutionIDOnPayload(payload, "msg-abc")
-	assert.Equal(t, "msg-abc", payload.ExecutionID)
+	assert.Equal(t, "msg-abc", payload.ExecutionId)
 }
 
-func TestSetExecutionIDOnPayload_PortCheckResultPayload(t *testing.T) {
-	payload := &models.PortCheckResultPayload{
-		ExecutionID: "existing-id",
-		Status:      constants.ExecutionStatusCompleted,
+func TestSetExecutionIDOnPayload_PortCheckResult(t *testing.T) {
+	payload := &pb.PortCheckResult{
+		ExecutionId: "existing-id",
+		Status:      protoExecutionStatus(constants.ExecutionStatusCompleted),
 	}
 	setExecutionIDOnPayload(payload, "msg-abc")
-	assert.Equal(t, "msg-abc", payload.ExecutionID)
+	assert.Equal(t, "msg-abc", payload.ExecutionId)
 }
 
 func TestSetExecutionIDOnPayload_EmptyExecutionID(t *testing.T) {
-	payload := &models.LFAAErrorPayload{
-		Success: false,
-		Error:   "test error",
+	payload := &pb.CommandResult{
+		Status: protoExecutionStatus(constants.ExecutionStatusFailed),
+		Error:  "test error",
 	}
 	setExecutionIDOnPayload(payload, "")
-	assert.Equal(t, "", payload.ExecutionID)
+	assert.Equal(t, "", payload.ExecutionId)
 }
 
 func TestSetExecutionIDOnPayload_UnsupportedType(t *testing.T) {
-	type unsupportedPayload struct {
-		Field string
-	}
-	payload := &unsupportedPayload{Field: "value"}
+	// HeartbeatRequested does not have execution_id
+	payload := &pb.HeartbeatRequested{}
 	setExecutionIDOnPayload(payload, "msg-abc")
-	assert.Equal(t, "value", payload.Field)
+	// No panic, and no change (obviously)
 }
 
-func TestSetExecutionIDOnPayload_FetchFileDiffResultPayload(t *testing.T) {
-	payload := &models.FetchFileDiffResultPayload{
+func TestSetExecutionIDOnPayload_FetchFileDiffResult(t *testing.T) {
+	payload := &pb.FetchFileDiffResult{
 		Success:     true,
-		Error:       nil,
-		ExecutionID: "original-id",
+		ExecutionId: "original-id",
 	}
 	setExecutionIDOnPayload(payload, "msg-xyz")
-	assert.Equal(t, "msg-xyz", payload.ExecutionID)
+	assert.Equal(t, "msg-xyz", payload.ExecutionId)
 }
 
-func TestSetExecutionIDOnPayload_FetchHistoryResultPayload(t *testing.T) {
-	payload := &models.FetchHistoryResultPayload{
+func TestSetExecutionIDOnPayload_FetchHistoryResult(t *testing.T) {
+	payload := &pb.FetchHistoryResult{
 		Success:     true,
-		ExecutionID: "",
+		ExecutionId: "",
 	}
 	setExecutionIDOnPayload(payload, "msg-xyz")
-	assert.Equal(t, "msg-xyz", payload.ExecutionID)
+	assert.Equal(t, "msg-xyz", payload.ExecutionId)
 }
 
-func TestSetExecutionIDOnPayload_FetchFileHistoryResultPayload(t *testing.T) {
-	payload := &models.FetchFileHistoryResultPayload{
+func TestSetExecutionIDOnPayload_FetchFileHistoryResult(t *testing.T) {
+	payload := &pb.FetchFileHistoryResult{
 		Success:     false,
 		Error:       "test error",
-		ExecutionID: "old-id",
+		ExecutionId: "old-id",
 	}
 	setExecutionIDOnPayload(payload, "msg-xyz")
-	assert.Equal(t, "msg-xyz", payload.ExecutionID)
+	assert.Equal(t, "msg-xyz", payload.ExecutionId)
 }
 
-func TestSetExecutionIDOnPayload_RestoreFileResultPayload(t *testing.T) {
-	payload := &models.RestoreFileResultPayload{
+func TestSetExecutionIDOnPayload_RestoreFileResult(t *testing.T) {
+	payload := &pb.RestoreFileResult{
 		Success:     true,
-		ExecutionID: "",
+		ExecutionId: "",
 	}
 	setExecutionIDOnPayload(payload, "msg-xyz")
-	assert.Equal(t, "msg-xyz", payload.ExecutionID)
+	assert.Equal(t, "msg-xyz", payload.ExecutionId)
 }
 
 // The LFAA publish path (file reads, port checks, fetch logs/history, restore)
-// must stamp the configured operator APIKey onto the outbound G8eMessage for
-// identity continuity, matching the PublishResultEnvelope path in
-// pubsub_results.go.
-func TestPublishLFAA_StampsAPIKeyFromConfig(t *testing.T) {
+// must use UniversalEnvelope for cross-component consistency.
+func TestPublishLFAA_EnvelopeStructure(t *testing.T) {
 	ctx := context.Background()
 	logger := testutil.NewTestLogger()
 
@@ -164,54 +163,43 @@ func TestPublishLFAA_StampsAPIKeyFromConfig(t *testing.T) {
 		OperatorSessionID: "opsess-lfaa",
 	}
 
-	decode := func(t *testing.T, data []byte) models.G8eMessage {
-		t.Helper()
-		var m models.G8eMessage
-		require.NoError(t, json.Unmarshal(data, &m))
-		return m
-	}
-
-	t.Run("typed response stamps APIKey", func(t *testing.T) {
+	t.Run("typed response uses UniversalEnvelope", func(t *testing.T) {
 		client := NewMockG8esPubSubClient()
 		defer client.Close()
 		cfg := testutil.NewTestConfig(t)
-		cfg.APIKey = "g8e_typed_key"
 
 		publishLFAATypedResponseTo(ctx, client, cfg, logger, cmdMsg,
 			constants.Event.Operator.PortCheck.Completed,
-			&models.PortCheckResultPayload{Status: constants.ExecutionStatusCompleted})
+			&pb.PortCheckResult{Status: protoExecutionStatus(constants.ExecutionStatusCompleted)})
 
 		published := client.LastPublished()
 		require.NotNil(t, published)
-		assert.Equal(t, "g8e_typed_key", decode(t, published.Data).APIKey)
+
+		env := testutil.MustUnmarshalUniversalEnvelope(t, published.Data)
+		assert.Equal(t, constants.Event.Operator.PortCheck.Completed, env.EventType)
+		assert.Equal(t, cfg.OperatorID, env.OperatorId)
+		assert.Equal(t, "case-lfaa", env.CaseId)
+		assert.Equal(t, "inv-lfaa", env.InvestigationId)
+		assert.Equal(t, "opsess-lfaa", env.OperatorSessionId)
 	})
 
-	t.Run("error response stamps APIKey", func(t *testing.T) {
+	t.Run("error response uses UniversalEnvelope", func(t *testing.T) {
 		client := NewMockG8esPubSubClient()
 		defer client.Close()
 		cfg := testutil.NewTestConfig(t)
-		cfg.APIKey = "g8e_err_key"
 
 		publishLFAAErrorTo(ctx, client, cfg, logger, cmdMsg,
-			constants.Event.Operator.PortCheck.Failed, "boom", "port_check_error")
+			constants.Event.Operator.PortCheck.Failed, "boom")
 
 		published := client.LastPublished()
 		require.NotNil(t, published)
-		assert.Equal(t, "g8e_err_key", decode(t, published.Data).APIKey)
-	})
 
-	t.Run("raw response stamps APIKey", func(t *testing.T) {
-		client := NewMockG8esPubSubClient()
-		defer client.Close()
-		cfg := testutil.NewTestConfig(t)
-		cfg.APIKey = "g8e_raw_key"
+		env := testutil.MustUnmarshalUniversalEnvelope(t, published.Data)
+		assert.Equal(t, constants.Event.Operator.PortCheck.Failed, env.EventType)
 
-		publishLFAAResponseTo(ctx, client, cfg, logger, cmdMsg,
-			constants.Event.Operator.FetchHistory.Completed,
-			[]byte(`{"success":true,"events":[]}`))
-
-		published := client.LastPublished()
-		require.NotNil(t, published)
-		assert.Equal(t, "g8e_raw_key", decode(t, published.Data).APIKey)
+		var payload pb.CommandResult
+		testutil.MustUnmarshalPayload(t, env.Payload, &payload)
+		assert.Equal(t, protoExecutionStatus(constants.ExecutionStatusFailed), payload.Status)
+		assert.Equal(t, "boom", payload.Error)
 	})
 }

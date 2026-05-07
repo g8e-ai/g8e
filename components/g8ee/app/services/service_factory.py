@@ -42,7 +42,6 @@ from app.services.data.stake_resolution_data_service import StakeResolutionDataS
 from app.services.infra.http_service import HTTPService
 from app.services.infra.internal_http_client import InternalHttpClient
 from app.services.infra.g8ed_event_service import EventService
-from app.services.infra.supervisor_service import SupervisorService
 from app.services.infra.settings_service import SettingsService
 from app.services.auth.api_key_service import ApiKeyService
 from app.services.auth.certificate_service import CertificateService
@@ -63,7 +62,6 @@ from app.services.protocols import (
     AIResponseAnalyzerProtocol,
     ToolExecutorProtocol,
     ApprovalServiceProtocol,
-    SupervisorServiceProtocol,
 )
 from app.services.operator.command_service import OperatorCommandService
 from app.services.operator.operator_data_service import OperatorDataService
@@ -92,7 +90,6 @@ class CoreServices:
     http_service: HTTPService | HTTPServiceProtocol
     internal_http_client: InternalHttpClient
     g8ed_event_service: EventService | EventServiceProtocol
-    supervisor_service: SupervisorService | SupervisorServiceProtocol
     settings_service: SettingsService
 
 
@@ -127,8 +124,13 @@ class OperatorServices:
     certificate_service: CertificateService
 
 
+from app.models.state import G8eeAppState
+
 @dataclass(frozen=True)
 class AllServices:
+    db_service: DBService
+    kv_service: KVService
+    blob_service: BlobService
     cache_aside_service: CacheAsideService
     attachment_service: AttachmentService
     response_analyzer: AIResponseAnalyzer | AIResponseAnalyzerProtocol
@@ -146,7 +148,6 @@ class AllServices:
     http_service: HTTPService | HTTPServiceProtocol
     internal_http_client: InternalHttpClient
     g8ed_event_service: EventService | EventServiceProtocol
-    supervisor_service: SupervisorService | SupervisorServiceProtocol
     settings_service: SettingsService
     investigation_data_service: InvestigationDataService | InvestigationDataServiceProtocol
     operator_data_service: OperatorDataService | OperatorDataServiceProtocol
@@ -191,13 +192,11 @@ class ServiceFactory:
         )
 
         settings_service = SettingsService(cache_aside_service)
-        supervisor_service = SupervisorService(settings_service)
 
         return CoreServices(
             http_service=http_service,
             internal_http_client=internal_http_client,
             g8ed_event_service=g8ed_event_service,
-            supervisor_service=supervisor_service,
             settings_service=settings_service,
         )
 
@@ -242,8 +241,6 @@ class ServiceFactory:
         # Create lifecycle service after data service is available
         operator_lifecycle_service = OperatorLifecycleService(
             operator_data_service=operator_data_service,
-            supervisor_service=core_services.supervisor_service, # type: ignore[arg-type]
-            settings_service=core_services.settings_service, # type: ignore[arg-type]
         )
 
         return DataServices(
@@ -340,8 +337,11 @@ class ServiceFactory:
     def create_all_services(
         settings: G8eePlatformSettings,
         cache_aside_service: CacheAsideService,
+        db_service: DBService,
+        kv_service: KVService,
+        blob_service: BlobService,
         pubsub_client: PubSubClient | None = None,
-        blob_service: BlobClient | None = None,
+        blob_service_client: BlobClient | None = None,
         web_search_provider: WebSearchProvider | None = None,
     ) -> AllServices:
         """Create all g8ee services in proper dependency order.
@@ -367,7 +367,7 @@ class ServiceFactory:
         )
 
         attachment_service = AttachmentService(
-            blob_service=blob_service,  # type: ignore[arg-type]
+            blob_service=blob_service_client,  # type: ignore[arg-type]
             settings=settings,
         )
         response_analyzer = AIResponseAnalyzer()
@@ -456,6 +456,9 @@ class ServiceFactory:
         )
 
         all_services = AllServices(
+            db_service=db_service,
+            kv_service=kv_service,
+            blob_service=blob_service,
             cache_aside_service=cache_aside_service,
             attachment_service=attachment_service,
             response_analyzer=response_analyzer,
@@ -473,7 +476,6 @@ class ServiceFactory:
             http_service=core_services.http_service,
             internal_http_client=core_services.internal_http_client,
             g8ed_event_service=core_services.g8ed_event_service,
-            supervisor_service=core_services.supervisor_service,
             settings_service=core_services.settings_service,
             investigation_data_service=data_services.investigation_data_service,
             operator_data_service=data_services.operator_data_service,
@@ -500,17 +502,10 @@ class ServiceFactory:
 
     @staticmethod
     def bind_to_app_state(app: object, services: AllServices) -> None:
-        """Assign every service in *services* to ``app.state``.
-
-        Also creates the legacy alias ``memory_service`` that some dependency
-        getters expect.
+        """Assign the services container to ``app.state``.
         """
-        for field in fields(services):
-            name = field.name
-            svc = getattr(services, name)
-            setattr(app.state, name, svc)
-
-        app.state.memory_service = services.memory_data_service
+        state = cast(G8eeAppState, app.state)
+        state.services = services
 
     @staticmethod
     async def start_services(services: AllServices) -> None:

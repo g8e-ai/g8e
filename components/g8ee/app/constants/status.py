@@ -52,7 +52,6 @@ class OperatorHistoryEventType(StrEnum):
     REGISTERED = _STATUS["history.event.type"]["registered"]
 
 class OperatorStatus(StrEnum):
-    AVAILABLE = _STATUS["g8e.status"]["available"]
     UNAVAILABLE = _STATUS["g8e.status"]["unavailable"]
     OFFLINE = _STATUS["g8e.status"]["offline"]
     BOUND = _STATUS["g8e.status"]["bound"]
@@ -60,6 +59,7 @@ class OperatorStatus(StrEnum):
     ACTIVE = _STATUS["g8e.status"]["active"]
     STOPPED = _STATUS["g8e.status"]["stopped"]
     TERMINATED = _STATUS["g8e.status"]["terminated"]
+    AVAILABLE = _STATUS["g8e.status"]["available"]
 
 class ExecutionStatus(StrEnum):
     PENDING = _STATUS["execution.status"]["pending"]
@@ -97,6 +97,7 @@ class AITaskId(StrEnum):
     FETCH_FILE_HISTORY = "ai.fetch.file.history"
     RESTORE_FILE = "ai.restore.file"
     FETCH_FILE_DIFF = "ai.fetch.file.diff"
+    RECURSIVE_GREP = "ai.recursive_grep"
     INTENT_GRANT = "ai.intent.grant"
     INTENT_REVOKE = "ai.intent.revoke"
 
@@ -118,7 +119,7 @@ class CaseStatus(StrEnum):
     TRIAGE = "Triage"
     ESCALATED = "Escalated"
     WAITING_FOR_CUSTOMER = "WaitingForCustomer"
-    INVESTIGATE = "Investigate"
+    IN_PROGRESS = "InProgress"
     HUMAN_REVIEW = "HumanReview"
     RESOLVED = "Resolved"
     CLOSED = "Closed"
@@ -127,7 +128,6 @@ class CloudSubtype(StrEnum):
     AWS = _STATUS["cloud.subtype"]["aws"]
     AZURE = _STATUS["cloud.subtype"]["azure"]
     GCP = _STATUS["cloud.subtype"]["gcp"]
-    G8E_POD = _STATUS["cloud.subtype"]["g8ep"]
 
 class CommandErrorType(StrEnum):
     VALIDATION_ERROR = "validation.error"
@@ -260,6 +260,7 @@ class OperatorToolName(StrEnum):
     QUERY_INVESTIGATION_CONTEXT = "query_investigation_context"
     GET_COMMAND_CONSTRAINTS = "get_command_constraints"
     SSH_INVENTORY = "list_ssh_inventory"
+    RECURSIVE_GREP = "recursive_grep_search"
     STREAM_OPERATOR = "stream_operator_to_ssh_fleet"
 
 # OPERATOR_TOOLS and AI_UNIVERSAL_TOOLS moved to app.services.ai.tool_registry
@@ -320,6 +321,16 @@ class Severity(IntEnum):
     MEDIUM = 2
     HIGH = 3
     CRITICAL = 4
+
+class TribunalAuditStatus(StrEnum):
+    OK = "ok"
+    REVISED = "revised"
+    SWAP = "swap"
+
+class TribunalAuditMode(StrEnum):
+    UNANIMOUS = "unanimous"
+    MAJORITY = "majority"
+    TIED = "tied"
 
 class TaskStatus(StrEnum):
     PENDING = "pending"

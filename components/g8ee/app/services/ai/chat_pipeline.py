@@ -154,10 +154,10 @@ class ChatPipelineService:
             )
 
         investigation = await self.investigation_service.get_investigation_context(
-            investigation_id=investigation_id, user_id=user_id
+            investigation_id=investigation_id, user_id=user_id or ""
         )
         investigation = await self.investigation_service.get_enriched_investigation_context(
-            investigation=investigation, user_id=user_id, g8e_context=g8e_context
+            investigation=investigation, user_id=user_id or "", g8e_context=g8e_context
         )
 
         current_sentinel_mode = investigation.sentinel_mode
@@ -323,9 +323,11 @@ class ChatPipelineService:
         otherwise it is fired as a detached asyncio task with a done-callback
         that surfaces failures at WARNING level.
         """
+        from app.constants.collections import SENTINEL_ID_UNKNOWN
+
         logger.info(
             "[SSE-CHAT] _persist_ai_response started: investigation_id=%s response_len=%d",
-            getattr(g8e_context, "investigation_id", "unknown") if g8e_context else "None",
+            getattr(g8e_context, "investigation_id", SENTINEL_ID_UNKNOWN) if g8e_context else "None",
             len(state.response_text),
         )
 
@@ -370,7 +372,7 @@ class ChatPipelineService:
 
         logger.info("[SSE-CHAT] Detected %d clarifying questions, publishing event", len(questions))
         await self.g8ed_event_service.publish_investigation_event(
-            investigation_id=g8e_context.investigation_id,
+            investigation_id=g8e_context.investigation_id or "",
             event_type=EventType.AI_TRIAGE_CLARIFICATION_QUESTIONS,
             payload=TriageClarificationQuestionsPayload(
                 questions=questions,
@@ -382,9 +384,9 @@ class ChatPipelineService:
                 request_posture=inputs.triage_result.request_posture if inputs.triage_result else "unknown",
                 posture_confidence=str(inputs.triage_result.posture_confidence) if inputs.triage_result else "0",
             ),
-            web_session_id=g8e_context.web_session_id,
-            case_id=g8e_context.case_id,
-            user_id=g8e_context.user_id,
+            web_session_id=g8e_context.web_session_id or "",
+            case_id=g8e_context.case_id or "",
+            user_id=g8e_context.user_id or "",
         )
 
     async def _record_agent_activity_metadata(
@@ -543,12 +545,14 @@ class ChatPipelineService:
         Optionally registers the current asyncio task with ChatTaskManager so it
         can be cancelled via the stop endpoint.
         """
+        from app.constants.collections import SENTINEL_ID_UNKNOWN
+
         logger.info(
             "[SSE-CHAT] run_chat started: new_case=%s case_id=%s investigation_id=%s web_session_id=%s",
-            getattr(g8e_context, "new_case", "unknown") if g8e_context else "None",
-            getattr(g8e_context, "case_id", "unknown") if g8e_context else "None",
-            getattr(g8e_context, "investigation_id", "unknown") if g8e_context else "None",
-            getattr(g8e_context, "web_session_id", "unknown") if g8e_context else "None",
+            getattr(g8e_context, "new_case", SENTINEL_ID_UNKNOWN) if g8e_context else "None",
+            getattr(g8e_context, "case_id", SENTINEL_ID_UNKNOWN) if g8e_context else "None",
+            getattr(g8e_context, "investigation_id", SENTINEL_ID_UNKNOWN) if g8e_context else "None",
+            getattr(g8e_context, "web_session_id", SENTINEL_ID_UNKNOWN) if g8e_context else "None",
         )
 
         investigation_id = g8e_context.investigation_id if g8e_context else ""
@@ -595,9 +599,9 @@ class ChatPipelineService:
                     investigation_id=investigation_id,
                     event_type=EventType.LLM_CHAT_ITERATION_FAILED,
                     payload=ChatErrorPayload(error=str(e)),
-                    web_session_id=g8e_context.web_session_id,
-                    case_id=g8e_context.case_id,
-                    user_id=g8e_context.user_id,
+                    web_session_id=g8e_context.web_session_id or "",
+                    case_id=g8e_context.case_id or "",
+                    user_id=g8e_context.user_id or "",
                 )
             except Exception as notify_err:
                 logger.error(

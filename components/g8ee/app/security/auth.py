@@ -13,6 +13,7 @@
 
 import hmac
 import logging
+from typing import cast
 from fastapi import Request
 
 from app.constants import (
@@ -29,6 +30,7 @@ from app.constants import (
 from app.errors import AuthenticationError, AuthorizationError
 from app.models.auth import AuthenticatedUser
 from app.models.settings import G8eePlatformSettings
+from app.models.state import G8eeAppState
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +79,8 @@ async def validate_internal_origin(request: Request, settings: G8eePlatformSetti
     normalized_ip = client_ip.replace("::ffff:", "") if client_ip and client_ip.startswith("::ffff:") else client_ip
 
     if not settings and hasattr(request.app.state, "settings"):
-        settings = request.app.state.settings
+        state = cast(G8eeAppState, request.app.state)
+        settings = state.settings
 
     if settings and verify_internal_auth_token(request, settings):
         logger.info(

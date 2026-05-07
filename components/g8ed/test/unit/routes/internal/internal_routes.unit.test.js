@@ -36,8 +36,7 @@ describe('Internal Routes [UNIT]', () => {
                 webSessionService: {},
                 passkeyAuthService: {},
                 deviceLinkService: {},
-                settingsService: {},
-                g8eNodeOperatorService: {}
+                settingsService: {}
             },
 
             authorizationMiddleware: mockAuthorizationMiddleware

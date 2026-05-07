@@ -85,6 +85,25 @@ vi.mock('@g8ed/utils/logger.js', () => ({
     }
 }));
 
+function createMockInternalHttpClient() {
+    return {
+        request: vi.fn().mockResolvedValue({ success: true }),
+        sendChatMessage: vi.fn().mockResolvedValue({ success: true }),
+        deleteCase: vi.fn().mockResolvedValue({ success: true }),
+        stopAIProcessing: vi.fn().mockResolvedValue({ success: true }),
+        recordTriageAnswer: vi.fn().mockResolvedValue({ success: true }),
+        skipTriageQuestions: vi.fn().mockResolvedValue({ success: true }),
+        timeoutTriageQuestions: vi.fn().mockResolvedValue({ success: true }),
+        generateApiKey: vi.fn().mockResolvedValue({ success: true }),
+        revokeCertificate: vi.fn().mockResolvedValue({ success: true }),
+        syncUserSettings: vi.fn().mockResolvedValue({ success: true }),
+        healthCheck: vi.fn().mockResolvedValue({ success: true }),
+        activateG8EPOperator: vi.fn().mockResolvedValue({ success: true }),
+        relaunchG8EPOperator: vi.fn().mockResolvedValue({ success: true }),
+        buildG8eContextHeaders: vi.fn().mockReturnValue({})
+    };
+}
+
 describe('CertificateService [UNIT - filesystem isolated]', { timeout: 30000 }, () => {
     let CertificateService;
     let certService;
@@ -101,7 +120,7 @@ describe('CertificateService [UNIT - filesystem isolated]', { timeout: 30000 }, 
         await seedCA(tmpSslDir);
         certService = new CertificateService({ 
             bootstrapService: { getSslDir: () => tmpSslDir },
-            internalHttpClient: { request: vi.fn().mockResolvedValue({ success: true }) }
+            internalHttpClient: createMockInternalHttpClient()
         });
     });
 
@@ -224,7 +243,7 @@ describe('CertificateService [UNIT - filesystem isolated]', { timeout: 30000 }, 
         it('should auto-initialize if not already initialized', async () => {
             const uninitializedService = new CertificateService({ 
                 bootstrapService: { getSslDir: () => tmpSslDir },
-                internalHttpClient: { request: vi.fn().mockResolvedValue({ success: true }) }
+                internalHttpClient: createMockInternalHttpClient()
             });
 
             const result = await uninitializedService.generateOperatorCertificate(
@@ -243,7 +262,7 @@ describe('CertificateService [UNIT - filesystem isolated]', { timeout: 30000 }, 
                 await seedCAWithLegacyEcKey(sec1SslDir);
                 const service = new CertificateService({ 
                     bootstrapService: { getSslDir: () => sec1SslDir },
-                    internalHttpClient: { request: vi.fn().mockResolvedValue({ success: true }) }
+                    internalHttpClient: createMockInternalHttpClient()
                 });
                 const result = await service.generateOperatorCertificate(
                     `op_test_${uuidv4()}`,

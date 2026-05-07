@@ -44,6 +44,9 @@ type LoadOptions struct {
 	// Working directory
 	WorkDir string // Absolute path of the directory the operator was launched from (--working-dir or os.Getwd())
 
+	// SSL directory
+	SSLDir string // Directory for TLS certificates and auditor_hmac_key (default: .g8e/ssl in working directory)
+
 	// Monitoring
 	HeartbeatInterval time.Duration // --heartbeat-interval: overrides the 30s default when non-zero
 
@@ -149,6 +152,9 @@ type Config struct {
 	// All data storage and command execution is anchored here unless explicitly overridden.
 	WorkDir string
 
+	// SSL directory for TLS certificates and auditor_hmac_key
+	SSLDir string
+
 	// Local storage configuration. All paths are relative to WorkDir — the directory the operator was launched from.
 	LocalStoreEnabled       bool
 	LocalStoreDBPath        string
@@ -238,6 +244,7 @@ func Load(opts LoadOptions) (*Config, error) {
 		CloudProvider:     opts.CloudProvider,
 		LocalStoreEnabled: opts.LocalStorageEnabled,
 		WorkDir:           workDir,
+		SSLDir:            opts.SSLDir,
 
 		// Derived values — ports default to 443
 		Endpoint:      opts.OperatorEndpoint,
@@ -269,6 +276,11 @@ func Load(opts LoadOptions) (*Config, error) {
 		TZ:         opts.TZ,
 		IPService:  opts.IPService,
 		IPResolver: opts.IPResolver,
+	}
+
+	// Default SSLDir to .g8e/ssl if not explicitly set
+	if cfg.SSLDir == "" {
+		cfg.SSLDir = filepath.Join(workDir, ".g8e", "ssl")
 	}
 
 	return cfg, nil

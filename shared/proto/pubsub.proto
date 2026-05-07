@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package g8e.pubsub.v1;
+
+option go_package = "github.com/g8e-ai/g8e/components/g8eo/shared/proto/pubsubv1";
+
+message PubSubMessage {
+  string action = 1;
+  string channel = 2;
+  bytes data = 3;
+}
+
+message PubSubEvent {
+  string type = 1;
+  string channel = 2;
+  string pattern = 3;
+  bytes data = 4;
+}

@@ -73,6 +73,13 @@ type operatorFsReadEvents struct {
 	Failed    string
 }
 
+// operatorFsGrepEvents mirrors shared/constants/events.json g8e.fs.grep.*
+type operatorFsGrepEvents struct {
+	Requested string
+	Completed string
+	Failed    string
+}
+
 // operatorFetchLogsEvents mirrors shared/constants/events.json g8e.fetch.logs.*
 type operatorFetchLogsEvents struct {
 	Requested string
@@ -134,6 +141,7 @@ type operatorEvents struct {
 	PortCheck        operatorPortCheckEvents
 	FsList           operatorFsListEvents
 	FsRead           operatorFsReadEvents
+	FsGrep           operatorFsGrepEvents
 	FetchLogs        operatorFetchLogsEvents
 	FetchHistory     operatorFetchHistoryEvents
 	FetchFileHistory operatorFetchFileHistoryEvents
@@ -205,6 +213,11 @@ var Event = events{
 			Requested: "g8e.v1.operator.filesystem.read.requested",
 			Completed: "g8e.v1.operator.filesystem.read.completed",
 			Failed:    "g8e.v1.operator.filesystem.read.failed",
+		},
+		FsGrep: operatorFsGrepEvents{
+			Requested: "g8e.v1.operator.filesystem.grep.requested",
+			Completed: "g8e.v1.operator.filesystem.grep.completed",
+			Failed:    "g8e.v1.operator.filesystem.grep.failed",
 		},
 		FetchLogs: operatorFetchLogsEvents{
 			Requested: "g8e.v1.operator.logs.fetch.requested",

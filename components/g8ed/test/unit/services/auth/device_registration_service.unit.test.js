@@ -139,7 +139,7 @@ describe('DeviceRegistrationService', () => {
 
             operatorService.getOperator.mockResolvedValue({
                 operator_id: operatorId,
-                status: OperatorStatus.AVAILABLE
+                status: OperatorStatus.OFFLINE
             });
             userService.getUser.mockResolvedValue(mockUser);
             operatorService.relayRegisterDeviceLinkToG8ee.mockResolvedValue({
@@ -178,7 +178,7 @@ describe('DeviceRegistrationService', () => {
 
             operatorService.getOperator.mockResolvedValue({
                 operator_id: operatorId,
-                status: OperatorStatus.AVAILABLE,
+                status: OperatorStatus.OFFLINE,
             });
             userService.getUser.mockResolvedValue(mockUser);
             operatorService.relayRegisterDeviceLinkToG8ee.mockResolvedValue({
@@ -204,7 +204,7 @@ describe('DeviceRegistrationService', () => {
 
         it('should return failure if g8ee authentication fails', async () => {
             const operatorId = 'op-1';
-            operatorService.getOperator.mockResolvedValue({ status: OperatorStatus.AVAILABLE });
+            operatorService.getOperator.mockResolvedValue({ status: OperatorStatus.OFFLINE });
             userService.getUser.mockResolvedValue({ id: 'u1' });
             operatorService.relayRegisterDeviceLinkToG8ee.mockResolvedValue({
                 success: false,

@@ -257,7 +257,7 @@ def _grounding_from_sdk_candidate(candidate) -> SdkGroundingRawData | None:
             grounding_chunk_indices=chunk_indices,
         ))
 
-    search_entry_point: SdkSearchEntryPoint
+    search_entry_point: SdkSearchEntryPoint | None = None
     raw_sep = getattr(gm, "search_entry_point", None)
     if raw_sep is not None:
         search_entry_point = SdkSearchEntryPoint(

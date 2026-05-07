@@ -138,7 +138,9 @@ class EventType(StrEnum):
     OPERATOR_COMMAND_RESULT = "g8e.v1.operator.command.result"
     OPERATOR_COMMAND_OUTPUT_RECEIVED = "g8e.v1.operator.command.output.received"
 
+    OPERATOR_COMMAND_STATUS_UPDATED = "g8e.v1.operator.command.status.updated"
     OPERATOR_COMMAND_STATUS_UPDATED_QUEUED = "g8e.v1.operator.command.status.updated.queued"
+    OPERATOR_COMMAND_STATUS_UPDATED_EXECUTING = "g8e.v1.operator.command.status.updated.executing"
     OPERATOR_COMMAND_STATUS_UPDATED_RUNNING = "g8e.v1.operator.command.status.updated.running"
     OPERATOR_COMMAND_STATUS_UPDATED_COMPLETED = "g8e.v1.operator.command.status.updated.completed"
     OPERATOR_COMMAND_STATUS_UPDATED_FAILED = "g8e.v1.operator.command.status.updated.failed"
@@ -187,6 +189,17 @@ class EventType(StrEnum):
     OPERATOR_FILE_RESTORE_COMPLETED = "g8e.v1.operator.file.restore.completed"
     OPERATOR_FILE_RESTORE_FAILED = "g8e.v1.operator.file.restore.failed"
 
+    # g8e.fs (v0.2.0 Protocol-First)
+    OPERATOR_FS_LIST_COMPLETED = "g8e.v1.operator.fs.list.completed"
+    OPERATOR_FS_LIST_FAILED = "g8e.v1.operator.fs.list.failed"
+    OPERATOR_FS_GREP_COMPLETED = "g8e.v1.operator.fs.grep.completed"
+    OPERATOR_FS_GREP_FAILED = "g8e.v1.operator.fs.grep.failed"
+    OPERATOR_FS_READ_COMPLETED = "g8e.v1.operator.fs.read.completed"
+    OPERATOR_FS_READ_FAILED = "g8e.v1.operator.fs.read.failed"
+
+    OPERATOR_PORT_CHECK_COMPLETED = "g8e.v1.operator.port.check.completed"
+    OPERATOR_PORT_CHECK_FAILED = "g8e.v1.operator.port.check.failed"
+
     # g8e.filesystem
     OPERATOR_FILESYSTEM_LIST_STARTED = "g8e.v1.operator.filesystem.list.started"
     OPERATOR_FILESYSTEM_LIST_REQUESTED = "g8e.v1.operator.filesystem.list.requested"
@@ -199,6 +212,13 @@ class EventType(StrEnum):
     OPERATOR_FILESYSTEM_READ_RECEIVED = "g8e.v1.operator.filesystem.read.received"
     OPERATOR_FILESYSTEM_READ_COMPLETED = "g8e.v1.operator.filesystem.read.completed"
     OPERATOR_FILESYSTEM_READ_FAILED = "g8e.v1.operator.filesystem.read.failed"
+
+    # g8e.filesystem.grep
+    OPERATOR_FILESYSTEM_GREP_STARTED = "g8e.v1.operator.filesystem.grep.started"
+    OPERATOR_FILESYSTEM_GREP_REQUESTED = "g8e.v1.operator.filesystem.grep.requested"
+    OPERATOR_FILESYSTEM_GREP_RECEIVED = "g8e.v1.operator.filesystem.grep.received"
+    OPERATOR_FILESYSTEM_GREP_COMPLETED = "g8e.v1.operator.filesystem.grep.completed"
+    OPERATOR_FILESYSTEM_GREP_FAILED = "g8e.v1.operator.filesystem.grep.failed"
 
     # g8e.logs
     OPERATOR_LOGS_FETCH_REQUESTED = "g8e.v1.operator.logs.fetch.requested"

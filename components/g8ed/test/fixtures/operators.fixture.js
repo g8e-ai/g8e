@@ -31,7 +31,7 @@ export const mockOperators = {
     organization_id: PRIMARY_USER_ID,
     name: 'Operator Slot 1',
     slot_number: 1,
-    status: OperatorStatus.AVAILABLE,
+    status: OperatorStatus.OFFLINE,
     is_slot: true,
     claimed: false
   }),

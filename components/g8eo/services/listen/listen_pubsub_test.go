@@ -15,14 +15,15 @@ package listen
 
 import (
 	"bytes"
-	"encoding/json"
 	"log/slog"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/pubsubv1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 // TestPubSubBackPressureDropsOldestAndLogs verifies the drop-oldest
@@ -42,8 +43,8 @@ func TestPubSubBackPressureDropsOldestAndLogs(t *testing.T) {
 	sub := &wsSubscriber{send: make(chan []byte, 1), done: make(chan struct{})}
 	broker.subscribe("ch", sub)
 
-	oldest := json.RawMessage(`"oldest"`)
-	newest := json.RawMessage(`"newest"`)
+	oldest := []byte(`"oldest"`)
+	newest := []byte(`"newest"`)
 
 	// First publish fills the 1-slot buffer.
 	require.Equal(t, 1, broker.Publish("ch", oldest))
@@ -61,9 +62,9 @@ func TestPubSubBackPressureDropsOldestAndLogs(t *testing.T) {
 	// Buffer holds exactly the newest frame; the oldest was evicted.
 	require.Len(t, sub.send, 1, "buffer must hold exactly one frame after drop-oldest")
 	got := <-sub.send
-	var event PubSubEvent
-	require.NoError(t, json.Unmarshal(got, &event))
-	assert.JSONEq(t, string(newest), string(event.Data), "newest message must survive drop-oldest")
+	var event pubsubv1.PubSubEvent
+	require.NoError(t, proto.Unmarshal(got, &event))
+	assert.Equal(t, newest, event.Data, "newest message must survive drop-oldest")
 
 	logs := buf.String()
 	assert.Contains(t, logs, "back-pressure", "drop-oldest event must be logged")
@@ -84,7 +85,7 @@ func TestPubSubBackPressureKeepsSubscriptions(t *testing.T) {
 	broker.subscribe("ch", sub)
 	broker.psubscribe("ch.*", sub)
 
-	payload := json.RawMessage(`"x"`)
+	payload := []byte(`"x"`)
 	// Drive several overflows in a row.
 	for i := 0; i < 5; i++ {
 		broker.Publish("ch", payload)
@@ -121,7 +122,7 @@ func TestPubSubSubscriberShutdownIsIdempotentAndFailsFast(t *testing.T) {
 	broker.subscribe("ch", sub)
 
 	// Happy path still works before shutdown.
-	require.Equal(t, 1, broker.Publish("ch", json.RawMessage(`"pre"`)))
+	require.Equal(t, 1, broker.Publish("ch", []byte(`"pre"`)))
 
 	// Fire shutdown from multiple goroutines; sync.Once must coalesce.
 	var wg sync.WaitGroup
@@ -137,7 +138,7 @@ func TestPubSubSubscriberShutdownIsIdempotentAndFailsFast(t *testing.T) {
 	assert.True(t, sub.isDone(), "done must be signalled after shutdown")
 
 	// Post-shutdown publishes must fail fast, not panic.
-	assert.Equal(t, 0, broker.Publish("ch", json.RawMessage(`"post"`)),
+	assert.Equal(t, 0, broker.Publish("ch", []byte(`"post"`)),
 		"trySend must return false once subscriber is done")
 
 	// Extra shutdown calls remain no-ops.
@@ -154,6 +155,6 @@ func TestPubSubHappyPathDoesNotLogDrop(t *testing.T) {
 	sub := &wsSubscriber{send: make(chan []byte, 4), done: make(chan struct{})}
 	broker.subscribe("ch", sub)
 
-	require.Equal(t, 1, broker.Publish("ch", json.RawMessage(`"ok"`)))
+	require.Equal(t, 1, broker.Publish("ch", []byte(`"ok"`)))
 	assert.NotContains(t, buf.String(), "back-pressure")
 }

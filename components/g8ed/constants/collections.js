@@ -56,6 +56,7 @@ export const Collections = Object.freeze({
     REPUTATION_STATE:       c['reputation_state'],
     REPUTATION_COMMITMENTS: c['reputation_commitments'],
     STAKE_RESOLUTIONS:      c['stake_resolutions'],
+    REVOKED_CERTIFICATES:   c['revoked_certificates'],
 });
 
 export default Collections;

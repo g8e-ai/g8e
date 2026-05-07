@@ -55,7 +55,6 @@ from app.models.tool_results import (
     FsReadToolResult,
     IntentPermissionResult,
     PortCheckToolResult,
-    CommandRiskContext,
 )
 from app.services.protocols import (
     AIResponseAnalyzerProtocol,
@@ -677,6 +676,9 @@ class OperatorCommandService:
 
     async def execute_fs_list(self, args: FsListRequestPayload, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> FsListToolResult:
         return await self._filesystem_service.execute_fs_list(args, investigation, g8e_context=g8e_context)
+
+    async def execute_fs_grep(self, args: FsGrepRequestPayload, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> FsGrepToolResult:
+        return await self._filesystem_service.execute_fs_grep(args, investigation, g8e_context=g8e_context)
 
     async def execute_file_read(self, args: FsReadRequestPayload, investigation: EnrichedInvestigationContext, g8e_context: G8eHttpContext) -> FsReadToolResult:
         return await self._filesystem_service.execute_file_read(args, investigation, g8e_context=g8e_context)

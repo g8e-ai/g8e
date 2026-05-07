@@ -302,7 +302,7 @@ class KVCacheClient:
         if existing:
             with contextlib.suppress(json.JSONDecodeError, TypeError):
                 lst = json.loads(existing)
-        for v in reversed(values):
+        for v in values:
             lst.insert(0, v)
         await self.set(key, json.dumps(lst))
         return len(lst)

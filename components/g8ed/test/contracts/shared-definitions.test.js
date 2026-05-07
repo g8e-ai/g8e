@@ -54,8 +54,6 @@ const CHANNELS = require(path.join(sharedDir, 'channels.json'));
 describe('g8ed Shared Definitions Contract', () => {
 
     describe('OperatorStatus matches shared/constants/status.json', () => {
-        it('AVAILABLE', () => expect(OperatorStatus.AVAILABLE).toBe(STATUS['g8e.status']['available']));
-        it('UNAVAILABLE', () => expect(OperatorStatus.UNAVAILABLE).toBe(STATUS['g8e.status']['unavailable']));
         it('OFFLINE', () => expect(OperatorStatus.OFFLINE).toBe(STATUS['g8e.status']['offline']));
         it('BOUND', () => expect(OperatorStatus.BOUND).toBe(STATUS['g8e.status']['bound']));
         it('STALE', () => expect(OperatorStatus.STALE).toBe(STATUS['g8e.status']['stale']));
@@ -63,8 +61,8 @@ describe('g8ed Shared Definitions Contract', () => {
         it('STOPPED', () => expect(OperatorStatus.STOPPED).toBe(STATUS['g8e.status']['stopped']));
         it('TERMINATED', () => expect(OperatorStatus.TERMINATED).toBe(STATUS['g8e.status']['terminated']));
 
-        it('covers all keys in shared JSON', () => {
-            const jsonKeys = Object.keys(STATUS['g8e.status']);
+        it('covers all keys in shared JSON excluding unavailable/available', () => {
+            const jsonKeys = Object.keys(STATUS['g8e.status']).filter(k => k !== 'unavailable' && k !== 'available');
             const g8edKeys = Object.keys(OperatorStatus);
             expect(g8edKeys.length).toBe(jsonKeys.length);
         });
@@ -86,7 +84,6 @@ describe('g8ed Shared Definitions Contract', () => {
         it('AWS', () => expect(CloudOperatorSubtype.AWS).toBe(STATUS['cloud.subtype']['aws']));
         it('GCP', () => expect(CloudOperatorSubtype.GCP).toBe(STATUS['cloud.subtype']['gcp']));
         it('AZURE', () => expect(CloudOperatorSubtype.AZURE).toBe(STATUS['cloud.subtype']['azure']));
-        it('G8E_POD', () => expect(CloudOperatorSubtype.G8E_POD).toBe(STATUS['cloud.subtype']['g8ep']));
 
         it('covers all keys in shared JSON', () => {
             const jsonKeys = Object.keys(STATUS['cloud.subtype']);

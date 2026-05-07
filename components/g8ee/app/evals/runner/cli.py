@@ -266,7 +266,6 @@ async def run_full_eval(
         nodes: Number of eval nodes to use
         parallel: Number of scenarios to run in parallel
         judge_model: Eval judge model name
-        llm_provider: LLM provider (openai, anthropic, gemini, ollama, llamacpp, g8el)
         llm_primary_model: Primary LLM model
         llm_assistant_model: Assistant LLM model
         llm_lite_model: Lite LLM model
@@ -329,10 +328,6 @@ async def run_full_eval(
         settings.llamacpp_api_key = llm_api_key
         if llm_endpoint:
             settings.llamacpp_endpoint = llm_endpoint
-    elif settings.primary_provider == LLMProvider.G8EL:
-        settings.g8el_api_key = llm_api_key
-        if llm_endpoint:
-            settings.g8el_endpoint = llm_endpoint
 
     provider = get_llm_provider(settings)
     judge = EvalJudge(provider=provider, model=judge_model)
@@ -426,7 +421,6 @@ def main() -> None:
     )
     run_parser.add_argument(
         "-p", "--llm-provider",
-        help="LLM provider (openai, anthropic, gemini, ollama, llamacpp, g8el)",
     )
     run_parser.add_argument(
         "-m", "--primary-model",

@@ -4,17 +4,19 @@ title: Testing
 
 # Testing g8e
 
+Last Updated: 2026-05-07
+Version: v0.2.0
+
 g8e is designed to be a **testing environment and production environment at the same time**. We do not believe in mocking the world just to get tests to pass. If it doesn't work in the test environment, it won't work in production.
 
 This document outlines the testing architecture, core principles, and how to write and run tests across the g8e stack.
 
 ## Core Engineering Principles
 
-- **Hermetic Execution** — Each component runs tests inside a dedicated test-runner container (`g8ee-test-runner`, `g8ed-test-runner`, `g8eo-test-runner`). Source code is volume-mounted, meaning local development and CI execution are perfectly identical. For manual troubleshooting, use the `g8ep` container which includes all necessary tooling.
+- **Hermetic Execution** — Each component runs tests inside a dedicated test-runner container (`g8ee-test-runner`, `g8ed-test-runner`, `g8eo-test-runner`). Source code is volume-mounted, meaning local development and CI execution are perfectly identical.
 - **Real Infrastructure** — All testing must occur against real services and real inter-component communications. This means using a real `CacheAsideService` with a real `g8es` backend, real pub/sub over WebSockets, and real network stacks.
 - **The "No Mocks" Policy** — We strictly prohibit mocking internal services, database clients, or LLM providers. Integration tests must use real services. If a scenario is extremely difficult to test without a mock, you must justify its necessity in the PR.
 - **Real LLM Calls** — AI tests use real provider API calls. No `MagicMock`, `AsyncMock`, or HTTP interception on LLM clients. The system handles transient failures via exponential backoff in `EvalJudge`.
-- **Contract Enforcement** — We use `scripts/testing/check_model_parity.py` to ensure our source-of-truth constants (events, statuses, JSON schemas) match across Go, Python, and Node.js. This script runs automatically before every `./g8e test` command.
 
 ## Test Harness Architecture: E2E vs Evals
 
@@ -46,18 +48,33 @@ All tests are orchestrated via the `./g8e` CLI, which routes each component to i
 
 ```bash
 # Start the platform infrastructure first
+
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e platform start
 
 # Authenticate once to local store
+
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e login
 
 # Run a specific component
+
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e test g8ee
 
 # Run with coverage
+
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e test g8eo --coverage
 
 # Run g8ee with parallelism and strict type checking
+
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e test g8ee -j auto --pyright --ruff
 ```
 
@@ -69,16 +86,28 @@ Evaluating non-deterministic AI models requires a multi-layered approach using t
 
 ```bash
 # 1. Start a fleet of real operator nodes linked via a device token
+
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e evals up --device-token dlk_xxx --nodes 3
 
-# 2. Run the eval runner (executes in g8ep)
+# 2. Run the eval runner
+
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e evals run --gold-set evals/gold_sets/accuracy.json --device-token dlk_xxx
 
 # 3. View status and logs
+
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e evals status
 ./g8e evals logs eval-node-01
 
 # 4. Tear down the fleet
+
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e evals down
 ```
 
@@ -108,16 +137,25 @@ Evaluating non-deterministic AI models requires a multi-layered approach using t
 
 ## Security & Audit
 
-The platform includes automated security verification tools run via `g8ep`.
+The platform includes automated security verification tools.
 
 ```bash
 # Run mTLS and configuration audit
+
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e security mtls-test
 
 # Validate platform security posture
+
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e security validate
 
 # Scan for dependency licenses
+
+Last Updated: 2026-05-07
+Version: v0.2.0
 ./g8e security scan-licenses
 ```
 
@@ -130,5 +168,5 @@ Shared fixtures in `shared/test-fixtures/` (e.g., `sse-events.json`) are used to
 Our GitHub workflows (`.github/workflows/build-and-test.yml`) enforce:
 - Multi-architecture container builds (amd64, arm64).
 - Matrix execution of all component tests against real infrastructure.
-- Contract enforcement via `check_model_parity.py`.
+- Contract enforcement via shared test fixtures.
 - Automated eval runs for core agent behaviors.

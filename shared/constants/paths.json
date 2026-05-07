@@ -21,9 +21,5 @@
     "app_dir": "/app/components/g8ed",
     "views_dir": "/app/components/g8ed/views",
     "node_modules_dir": "/app/components/g8ed/node_modules"
-  },
-  "g8ep": {
-    "scripts_dir": "/app/components/g8ep/scripts",
-    "reports_dir": "/reports"
   }
 }

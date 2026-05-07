@@ -173,11 +173,7 @@ class CertificateService {
                 });
             }
 
-            const response = await internalHttpClient.request('g8ee', '/api/internal/auth/revoke-cert', {
-                method: 'POST',
-                body: { serial, reason, operator_id: operatorId },
-                g8eContext
-            });
+            const response = await internalHttpClient.revokeCertificate(serial, reason, operatorId, g8eContext);
 
             if (response.success) {
                 // Authority: g8ee. We maintain a local set as a "hot" cache.

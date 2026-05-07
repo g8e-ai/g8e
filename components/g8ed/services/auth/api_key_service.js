@@ -39,32 +39,34 @@ class ApiKeyService {
     /**
      * Generate a new raw API key via g8ee authority.
      * @param {string} prefix - Key prefix
+     * @param {G8eHttpContext} g8eContext - REQUIRED G8eHttpContext
      * @returns {Promise<string>}
      */
-    async generateRawKey(prefix = API_KEY_PREFIX) {
+    async generateRawKey(prefix = API_KEY_PREFIX, g8eContext = null) {
         if (!this._internalHttp) {
-            logger.warn('[API-KEY-SERVICE] InternalHttpClient not available, falling back to local generation');
-            return `${prefix}${crypto.randomBytes(32).toString('hex')}`;
+            throw new Error('InternalHttpClient is required for key generation - g8ee must be reachable');
         }
 
         try {
-            const response = await this._internalHttp.generateApiKey(prefix);
+            const response = await this._internalHttp.generateApiKey(prefix, g8eContext);
             if (response.success && response.api_key) {
                 return response.api_key;
             }
             throw new Error(response.error || 'Failed to generate API key via g8ee');
         } catch (error) {
-            logger.error('[API-KEY-SERVICE] g8ee key generation failed, falling back to local', { error: error.message });
-            return `${prefix}${crypto.randomBytes(32).toString('hex')}`;
+            logger.error('[API-KEY-SERVICE] g8ee key generation failed', { error: error.message });
+            throw new Error(`g8ee unreachable: ${error.message}. Ensure g8ee is running and accessible.`);
         }
     }
 
     /**
      * Validate a raw API key.
      * @param {string} apiKey
+     * @param {Object} [options]
+     * @param {string} [options.system_fingerprint] - Optional system fingerprint to validate against
      * @returns {Promise<{success: boolean, data?: ApiKeyDocument, error?: string}>}
      */
-    async validateKey(apiKey) {
+    async validateKey(apiKey, { system_fingerprint = null } = {}) {
         try {
             if (!apiKey) {
                 return { success: false, error: 'API key is required' };
@@ -97,6 +99,16 @@ class ApiKeyService {
                     expires_at: doc.expires_at
                 });
                 return { success: false, error: 'API key has expired' };
+            }
+
+            // Enforce fingerprint matching if established
+            if (doc.system_fingerprint && system_fingerprint && doc.system_fingerprint !== system_fingerprint) {
+                logger.error('[API-KEY-SERVICE] Fingerprint mismatch', {
+                    api_key_prefix: this._getLogPrefix(apiKey),
+                    expected: doc.system_fingerprint,
+                    received: system_fingerprint
+                });
+                return { success: false, error: ApiKeyError.INVALID_FINGERPRINT };
             }
 
             return { success: true, data: doc };
@@ -136,13 +148,30 @@ class ApiKeyService {
     }
 
     /**
-     * Update the last used timestamp of a key.
+     * Update the last used timestamp of a key and establish fingerprint if missing.
      * @param {string} apiKey
+     * @param {Object} [options]
+     * @param {string} [options.system_fingerprint] - Optional system fingerprint to establish
      */
-    async recordUsage(apiKey) {
+    async recordUsage(apiKey, { system_fingerprint = null } = {}) {
         try {
             const docId = this._data.makeDocId(apiKey);
-            await this._data.updateKey(docId, { last_used_at: now() });
+            const doc = await this._data.getKey(docId);
+            
+            if (!doc) return;
+
+            const updates = { last_used_at: now() };
+
+            // Establish fingerprint if not already set (immutable thereafter)
+            if (!doc.system_fingerprint && system_fingerprint) {
+                updates.system_fingerprint = system_fingerprint;
+                logger.info('[API-KEY-SERVICE] Established system fingerprint for API key', {
+                    api_key_prefix: this._getLogPrefix(apiKey),
+                    system_fingerprint
+                });
+            }
+
+            await this._data.updateKey(docId, updates);
         } catch (error) {
             logger.warn('[API-KEY-SERVICE] Failed to record usage', { error: error.message });
         }
@@ -162,14 +191,6 @@ class ApiKeyService {
             logger.error('[API-KEY-SERVICE] Failed to revoke key', { error: error.message });
             return { success: false };
         }
-    }
-
-    /**
-     * Legacy compatibility for storeApiKey (matches previous signature).
-     * @deprecated Use issueKey instead.
-     */
-    async storeApiKey(apiKey, keyData) {
-        return this.issueKey(apiKey, keyData);
     }
 
     _getLogPrefix(apiKey) {

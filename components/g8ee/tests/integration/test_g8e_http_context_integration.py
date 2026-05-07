@@ -365,7 +365,7 @@ def _base_headers(
     user_id: str = "test-user-id",
     case_id: str = "test-case-id",
     investigation_id: str = "test-investigation-id",
-    source_component: str = "g8ed",
+    source_component: str = "g8ee",
     bound_operators: str = "[]",
     new_case: str = "false",
     **kwargs

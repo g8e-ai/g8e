@@ -38,6 +38,7 @@ __all__ = [
     "FsReadArgs",
     "GrantIntentArgs",
     "QueryInvestigationContextArgs",
+    "RecursiveGrepArgs",
     "RestoreFileArgs",
     "RevokeIntentArgs",
     "SearchWebArgs",
@@ -153,6 +154,29 @@ class FsListArgs(TargetedOperatorBase):
             "Maximum number of entries to return. Default 100, max 500. "
             "Use lower values for quick scans, higher for comprehensive listings."
         ),
+    )
+
+
+class RecursiveGrepArgs(TargetedOperatorBase):
+    """LLM tool call args for OperatorToolName.RECURSIVE_GREP."""
+    path: str = Field(
+        ...,
+        description=(
+            "Directory path to search. Can be absolute (e.g., '/var/log') or relative "
+            "to operator's current working directory. Use '.' or empty for current directory."
+        ),
+    )
+    pattern: str = Field(
+        ...,
+        description="Regular expression pattern to search for."
+    )
+    includes: list[str] | None = Field(
+        default=None,
+        description="Glob patterns to filter files (e.g., ['*.js', '**/*.tsx']). Optional."
+    )
+    max_matches: int | None = Field(
+        default=100,
+        description="Maximum number of total matches to return. Default 100, max 500."
     )
 
 

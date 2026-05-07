@@ -32,8 +32,10 @@ from app.models.command_request_payloads import (
     FetchHistoryRequestPayload,
     FetchLogsRequestPayload,
     FileEditRequestPayload,
+    FsGrepRequestPayload,
     FsListRequestPayload,
     FsReadRequestPayload,
+    HeartbeatRequestPayload,
     RestoreFileRequestPayload,
 )
 from app.models.pubsub_messages import G8eOutboundPayload
@@ -60,6 +62,7 @@ class TestOutboundPayloadUnionContract:
             FileEditRequestPayload,
             FsListRequestPayload,
             FsReadRequestPayload,
+            FsGrepRequestPayload,
             FetchLogsRequestPayload,
             FetchHistoryRequestPayload,
             FetchFileHistoryRequestPayload,
@@ -67,6 +70,7 @@ class TestOutboundPayloadUnionContract:
             CheckPortRequestPayload,
             RestoreFileRequestPayload,
             DirectCommandAuditRequestPayload,
+            HeartbeatRequestPayload,
         }
 
         # Get all types in the G8eOutboundPayload Union

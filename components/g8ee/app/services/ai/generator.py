@@ -18,13 +18,10 @@ Implements the five-member heterogeneous AI panel (The Tribunal) as the sole
 authority for shell command generation.
 """
 
-import asyncio
 import logging
 from typing import Any
 
-from app.errors import OllamaEmptyResponseError
-from app.models.settings import LLMSettings, G8eeUserSettings
-from app.models.base import G8eBaseModel
+from app.models.settings import G8eeUserSettings
 from app.models.http_context import G8eHttpContext
 from app.models.agent import OperatorContext
 from app.constants import (
@@ -33,683 +30,56 @@ from app.constants import (
     DEFAULT_OS_NAME,
     DEFAULT_SHELL,
     DEFAULT_WORKING_DIRECTORY,
-    TribunalMember,
-    TieBreakReason,
     EventType,
     AuditorReason,
-    RiskLevel,
 )
+from app.services.ai.voter import TRIBUNAL_MIN_CONSENSUS
 from app.llm.prompts import (
     build_command_constraints_message,
-    build_tribunal_generator_prompt,
     build_tribunal_prompt_fields,
 )
 from app.llm.factory import get_llm_provider
-from app.llm.llm_types import Content, Part, Role, LiteLLMSettings, ResponseFormat
-from app.llm.provider import LLMProvider
 from app.models.whitelist import WhitelistedCommand
-from app.models.reputation import (
-    ReputationCommitmentCreatedPayload,
-    ReputationCommitmentFailedPayload,
-)
 from app.models.agents.tribunal import (
     CandidateCommand,
     CommandGenerationResult,
-    TribunalDisabledError,
-    TribunalSystemError,
-    TribunalProviderUnavailableError,
-    TribunalGenerationFailedError,
-    TribunalModelNotConfiguredError,
     TribunalConsensusFailedError,
-    TribunalPassCompletedPayload,
-    TribunalSessionStartedPayload,
+    TribunalConsensusFailedPayload,
+    TribunalDisabledError,
+    TribunalModelNotConfiguredError,
+    TribunalProviderUnavailableError,
+    TribunalSessionCompletedPayload,
     TribunalSessionDisabledPayload,
     TribunalSessionModelNotConfiguredPayload,
     TribunalSessionProviderUnavailablePayload,
-    TribunalSessionSystemErrorPayload,
-    TribunalSessionGenerationFailedPayload,
+    TribunalSessionStartedPayload,
     TribunalVotingCompletedPayload,
-    TribunalConsensusFailedPayload,
-    TribunalDissentRecordedPayload,
-    TribunalSessionCompletedPayload,
-    TribunalWardenBlockedError,
-    TribunalWardenBlockedPayload,
     VoteBreakdown,
 )
-from app.models.events import SessionEvent
-from app.models.model_configs import get_model_config
 from app.services.protocols import (
     AIResponseAnalyzerProtocol,
     EventServiceProtocol,
 )
-from app.utils.agent_persona_loader import get_agent_persona
-from app.utils.json_utils import extract_json_from_text
 from app.utils.ids import generate_tribunal_correlation_id
-from app.models.tool_results import (
-    CommandRiskAnalysis,
-    CommandRiskContext,
-    ErrorAnalysisContext,
-)
-
-from app.utils.command import normalise_command
-from app.services.ai.voter import (
-    TRIBUNAL_MIN_CONSENSUS,
-    weighted_vote,
-)
-from app.services.ai.auditor_service import (
-    commit_reputation,
-    run_auditor,
-    validate_command_safety,
-    AuditorClusterInfo,
-)
+from app.models.tool_results import CommandRiskAnalysis
 from app.services.data.reputation_data_service import ReputationDataService
+from app.utils.safety import validate_command_safety
+from app.models.model_configs import get_model_config
+
+from app.services.ai.tribunal.emitter import TribunalEmitter
+from app.services.ai.tribunal.stages.auditor import TribunalAuditor
+from app.services.ai.tribunal.stages.generation import (
+    _anonymize_clusters,
+    _run_generation_stage,
+)
+from app.services.ai.tribunal.stages.voting import _run_voting_stage
+from app.services.ai.tribunal.stages.warden import _run_warden_stage
+from app.services.ai.tribunal.utils import (
+    _member_for_pass,
+    _resolve_model,
+)
 
 logger = logging.getLogger(__name__)
-
-_MAX_TOKENS_GENERATION = 4096
-
-_TERMINAL_TRIBUNAL_EVENTS = {
-    EventType.TRIBUNAL_SESSION_STARTED,
-    EventType.TRIBUNAL_SESSION_COMPLETED,
-    EventType.TRIBUNAL_SESSION_DISABLED,
-    EventType.TRIBUNAL_SESSION_MODEL_NOT_CONFIGURED,
-    EventType.TRIBUNAL_SESSION_PROVIDER_UNAVAILABLE,
-    EventType.TRIBUNAL_SESSION_SYSTEM_ERROR,
-    EventType.TRIBUNAL_SESSION_GENERATION_FAILED,
-    EventType.TRIBUNAL_SESSION_AUDITOR_FAILED,
-}
-
-class TribunalEmitter:
-    """Handles emission of Tribunal SSE events via EventService."""
-
-    def __init__(
-        self,
-        event_service: EventServiceProtocol,
-        g8e_context: G8eHttpContext,
-        correlation_id: str | None = None,
-    ):
-        self.event_service = event_service
-        self.g8e_context = g8e_context
-        self.correlation_id = correlation_id
-
-    async def emit(self, event_type: EventType, payload: G8eBaseModel, correlation_id: str | None = None) -> None:
-        """Emit an SSE event. Re-raises if event_type is terminal."""
-        try:
-            if self.event_service is None or self.g8e_context is None:
-                return
-
-            # Inject correlation_id if provided and supported by the payload
-            # If not provided to emit, try to use the one stored on the emitter
-            corr_id = correlation_id or getattr(self, "correlation_id", None)
-            if corr_id and hasattr(payload, "correlation_id"):
-                payload.correlation_id = corr_id
-
-            event = SessionEvent(
-                event_type=event_type,
-                payload=payload,
-                web_session_id=self.g8e_context.web_session_id,
-                user_id=self.g8e_context.user_id,
-                case_id=self.g8e_context.case_id,
-                investigation_id=self.g8e_context.investigation_id,
-                source_component=ComponentName.G8EE,
-            )
-            await self.event_service.publish(event)
-        except Exception as exc:
-            if event_type in _TERMINAL_TRIBUNAL_EVENTS:
-                logger.error("[TRIBUNAL-EMIT] Terminal event %s failed: %s", event_type, exc)
-                raise
-            logger.warning("[TRIBUNAL-EMIT] Progress event %s failed (swallowed): %s", event_type, exc)
-
-def _is_system_error(error_message: str) -> bool:
-    """Classify an error message as a system error vs. a model error."""
-    error_lower = error_message.lower()
-    if "safety validation failed" in error_lower:
-        return False
-    system_indicators = [
-        "401", "403", "unauthorized", "forbidden",
-        "authentication", "api key",
-        "connection refused", "connectionerror", "timeout",
-        "dns", "ssl", "econnrefused",
-        "unsupported llm provider",
-    ]
-    return any(indicator in error_lower for indicator in system_indicators)
-
-def _member_for_pass(pass_index: int) -> TribunalMember:
-    """Map a pass index to a Tribunal member."""
-    members = [
-        TribunalMember.AXIOM,
-        TribunalMember.CONCORD,
-        TribunalMember.VARIANCE,
-        TribunalMember.PRAGMA,
-        TribunalMember.NEMESIS,
-    ]
-    return members[pass_index % len(members)]
-
-def _resolve_model(llm_settings: LLMSettings, tier: str = "assistant", request: str = "") -> str:
-    """Resolve the concrete model string from settings based on tier."""
-    if tier == "lite":
-        resolved = llm_settings.resolved_lite_model
-        if resolved:
-            return resolved
-
-    if tier == "assistant" and llm_settings.assistant_model:
-        return llm_settings.assistant_model
-
-    if tier == "primary" and llm_settings.primary_model:
-        return llm_settings.primary_model
-
-    # Fallback chain: lite -> assistant -> primary
-    resolved = llm_settings.resolved_lite_model
-    if resolved:
-        return resolved
-    if llm_settings.assistant_model:
-        return llm_settings.assistant_model
-    if llm_settings.primary_model:
-        return llm_settings.primary_model
-
-    provider = llm_settings.primary_provider or llm_settings.assistant_provider or llm_settings.lite_provider
-    raise TribunalModelNotConfiguredError(
-        provider=provider.value if provider else "unknown",
-        request=request,
-    )
-
-class TribunalResponse(G8eBaseModel):
-    """Structured response for Tribunal command generation."""
-    command: str
-
-async def _run_generation_pass(
-    provider: LLMProvider,
-    model: str,
-    request: str,
-    guidelines: str,
-    operator_context: OperatorContext | None,
-    pass_index: int,
-    emitter: TribunalEmitter,
-    pass_errors: list[str],
-    command_constraints_message: str,
-    round_num: int = 1,
-    r1_clusters: list[Any] | None = None,
-) -> str | None:
-    """Run a single Tribunal generation pass."""
-    member = _member_for_pass(pass_index)
-    member_persona = get_agent_persona(member.value)
-    fields = build_tribunal_prompt_fields(
-        operator_context,
-        request=request,
-        guidelines=guidelines,
-        default_os=DEFAULT_OS_NAME,
-        default_shell=DEFAULT_SHELL,
-        default_working_directory=DEFAULT_WORKING_DIRECTORY,
-    )
-
-    cluster_context = None
-    if round_num == 2 and r1_clusters:
-        cluster_lines = []
-        for c in r1_clusters:
-            cluster_lines.append(f"[{c.cluster_id}] (support: {c.support_count})\n{c.command}")
-        cluster_context = "\n".join(cluster_lines)
-
-    prompt = build_tribunal_generator_prompt(
-        request=request,
-        guidelines=guidelines,
-        forbidden_patterns_message=fields["forbidden_patterns_message"],
-        command_constraints_message=command_constraints_message,
-        os=fields["os"],
-        shell=fields["shell"],
-        user_context=fields["user_context"],
-        working_directory=fields["working_directory"],
-        operator_context_str=fields["operator_context"],
-        round_num=round_num,
-        cluster_context=cluster_context,
-        member=member.value if round_num == 2 else None,
-    )
-
-    logger.info(
-        "[TRIBUNAL-PASS] pass=%d member=%s model=%s request_len=%d",
-        pass_index, member.value, model, len(request),
-    )
-
-    model_config = get_model_config(model)
-
-    response_format = None
-    if model_config.supports_structured_output:
-        response_format = ResponseFormat.from_pydantic_schema(
-            TribunalResponse.model_json_schema(),
-            name="TribunalResponse"
-        )
-
-    settings = LiteLLMSettings(
-        max_output_tokens=_MAX_TOKENS_GENERATION,
-        top_p_nucleus_sampling=model_config.top_p,
-        top_k_filtering=model_config.top_k,
-        stop_sequences=model_config.stop_sequences,
-        system_instructions=member_persona.get_system_prompt(),
-        response_format=response_format,
-    )
-
-    try:
-        response = await provider.generate_content_lite(
-            model=model,
-            contents=[Content(role=Role.USER, parts=[Part.from_text(prompt)])],
-            lite_llm_settings=settings,
-        )
-
-        if not response.text or not response.text.strip():
-            error_msg = f"Pass {pass_index} ({member.value}): empty response"
-            pass_errors.append(error_msg)
-            logger.error("[TRIBUNAL-PASS] %s", error_msg)
-            return None
-
-        raw_command = response.text.strip()
-
-        if model_config.supports_structured_output:
-            parsed = extract_json_from_text(raw_command)
-            if not (isinstance(parsed, dict) and isinstance(parsed.get("command"), str)):
-                error_msg = f"Pass {pass_index} ({member.value}): structured output missing 'command' field"
-                pass_errors.append(error_msg)
-                logger.error("[TRIBUNAL-PASS] %s (raw=%r)", error_msg, raw_command[:100])
-                return None
-            raw_command = parsed["command"]
-
-        normalised = normalise_command(raw_command)
-
-        if not normalised:
-            error_msg = f"Pass {pass_index} ({member.value}): normalisation failed"
-            pass_errors.append(error_msg)
-            logger.error("[TRIBUNAL-PASS] %s (raw=%r)", error_msg, raw_command[:100])
-            return None
-
-        safety_result = validate_command_safety(normalised, False, False, operator_context)
-        if not safety_result.is_safe:
-            error_msg = f"Pass {pass_index} ({member.value}): safety validation failed: {safety_result.error_message}"
-            pass_errors.append(error_msg)
-            logger.error("[TRIBUNAL-PASS] %s", error_msg)
-            return None
-
-        logger.info(
-            "[TRIBUNAL-PASS] pass=%d member=%s success: cmd=%r",
-            pass_index, member.value, normalised[:80],
-        )
-
-        await emitter.emit(
-            EventType.TRIBUNAL_VOTING_PASS_COMPLETED,
-            TribunalPassCompletedPayload(
-                pass_index=pass_index,
-                member=member,
-                candidate=normalised,
-                success=True,
-            ),
-        )
-
-        return normalised
-
-    except OllamaEmptyResponseError as exc:
-        error_msg = f"Pass {pass_index} ({member.value}): {exc!s}"
-        pass_errors.append(error_msg)
-        logger.error("[TRIBUNAL-PASS] %s", error_msg)
-        return None
-    except Exception as exc:
-        error_msg = f"Pass {pass_index} ({member.value}): {exc!s}"
-        pass_errors.append(error_msg)
-        logger.error("[TRIBUNAL-PASS] %s", error_msg, exc_info=True)
-        return None
-
-def _anonymize_clusters(candidates: list[CandidateCommand]) -> tuple[list[AuditorClusterInfo], dict[str, str], dict[str, list[str]]]:
-    """Anonymize R1 candidates as cluster_a, cluster_b, etc.
-
-    Reuses the auditor's cluster anonymization helper for Round 2 peer review.
-
-    Returns (clusters, cluster_to_cmd, cluster_to_members).
-    """
-    # Group candidates by command
-    candidates_by_command: dict[str, list[str]] = {}
-    for c in candidates:
-        if c.command not in candidates_by_command:
-            candidates_by_command[c.command] = []
-        candidates_by_command[c.command].append(c.member.value)
-
-    # Anonymize as cluster_a, cluster_b, ...
-    clusters: list[AuditorClusterInfo] = []
-    cluster_to_cmd: dict[str, str] = {}
-    cluster_to_members: dict[str, list[str]] = {}
-
-    idx = 0
-    for cmd, members in candidates_by_command.items():
-        c_id = f"cluster_{chr(ord('a') + idx)}"
-        cluster_to_cmd[c_id] = cmd
-        cluster_to_members[c_id] = members
-        clusters.append(AuditorClusterInfo(
-            cluster_id=c_id,
-            command=cmd,
-            support_count=len(members)
-        ))
-        idx += 1
-
-    return clusters, cluster_to_cmd, cluster_to_members
-
-async def _run_generation_stage(
-    provider: LLMProvider,
-    model: str,
-    request: str,
-    guidelines: str,
-    operator_context: OperatorContext | None,
-    num_passes: int,
-    emitter: TribunalEmitter,
-    command_constraints_message: str,
-    round_num: int = 1,
-    r1_clusters: list[AuditorClusterInfo] | None = None,
-) -> list[CandidateCommand]:
-    """Run N parallel generation passes and return successful candidates.
-
-    Args:
-        round_num: Round number (1 for initial, 2 for peer review)
-        r1_clusters: Anonymized R1 clusters for Round 2 peer review context
-    """
-    pass_errors: list[str] = []
-    pass_tasks = [
-        _run_generation_pass(
-            provider=provider, model=model, request=request, guidelines=guidelines,
-            operator_context=operator_context, pass_index=i, emitter=emitter, pass_errors=pass_errors,
-            command_constraints_message=command_constraints_message,
-            round_num=round_num,
-            r1_clusters=r1_clusters,
-        )
-        for i in range(num_passes)
-    ]
-    raw_results = await asyncio.gather(*pass_tasks, return_exceptions=False)
-    candidates = [
-        CandidateCommand(command=res, pass_index=i, member=_member_for_pass(i))
-        for i, res in enumerate(raw_results) if res
-    ]
-
-    if not candidates:
-        if not pass_errors:
-            raise AssertionError(
-                "Tribunal invariant violated: all generation passes returned None but pass_errors is empty"
-            )
-        if all(_is_system_error(e) for e in pass_errors):
-            logger.error(
-                "[TRIBUNAL] All %d generation passes failed due to system errors: %s",
-                num_passes, pass_errors,
-            )
-            await emitter.emit(
-                EventType.TRIBUNAL_SESSION_SYSTEM_ERROR,
-                TribunalSessionSystemErrorPayload(
-                    request=request,
-                    pass_errors=pass_errors,
-                ),
-            )
-            raise TribunalSystemError(pass_errors=pass_errors, request=request)
-
-        logger.error("[TRIBUNAL] All generation passes failed for non-system reasons; halting execution")
-        await emitter.emit(
-            EventType.TRIBUNAL_SESSION_GENERATION_FAILED,
-            TribunalSessionGenerationFailedPayload(
-                request=request,
-                pass_errors=pass_errors,
-            ),
-        )
-        raise TribunalGenerationFailedError(
-            pass_errors=pass_errors,
-            request=request,
-        )
-
-    return candidates
-
-async def _run_voting_stage(
-    candidates: list[CandidateCommand],
-    request: str,
-    emitter: TribunalEmitter,
-    total_members: int,
-    is_final: bool = True,
-) -> tuple[str | None, float, VoteBreakdown, list[CandidateCommand] | None]:
-    """Stage 2: compute weighted majority vote and emit consensus event."""
-    vote_winner, vote_score, vote_breakdown, tied_candidates = weighted_vote(candidates, total_members)
-
-    if vote_winner is None:
-        if vote_breakdown.consensus_strength > 0:
-            logger.warning("[TRIBUNAL] Consensus strength too low: %.2f < %d members", vote_breakdown.consensus_strength, TRIBUNAL_MIN_CONSENSUS)
-            logger.info("[TRIBUNAL-TELEMETRY] Candidate breakdown for consensus failure:")
-            for member, cmd in vote_breakdown.candidates_by_member.items():
-                logger.info("[TRIBUNAL-TELEMETRY]   %s: %s", member, cmd[:200] + "..." if len(cmd) > 200 else cmd)
-        else:
-            logger.warning("[TRIBUNAL] Consensus failed: no agreement among members")
-            logger.info("[TRIBUNAL-TELEMETRY] Candidate breakdown for consensus failure:")
-            for member, cmd in vote_breakdown.candidates_by_member.items():
-                logger.info("[TRIBUNAL-TELEMETRY]   %s: %s", member, cmd[:200] + "..." if len(cmd) > 200 else cmd)
-
-        event_type = EventType.TRIBUNAL_VOTING_CONSENSUS_FAILED if is_final else EventType.TRIBUNAL_VOTING_CONSENSUS_NOT_REACHED
-        await emitter.emit(
-            event_type,
-            TribunalConsensusFailedPayload(
-                request=request,
-                vote_breakdown=vote_breakdown,
-            ),
-        )
-    else:
-        await emitter.emit(
-            EventType.TRIBUNAL_VOTING_CONSENSUS_REACHED,
-            TribunalVotingCompletedPayload(
-                vote_winner=vote_winner,
-                vote_score=vote_score,
-                num_candidates=len(candidates),
-                request=request,
-                vote_breakdown=vote_breakdown,
-            ),
-        )
-
-        for cmd, members in vote_breakdown.dissenters_by_command.items():
-            await emitter.emit(
-                EventType.TRIBUNAL_VOTING_DISSENT_RECORDED,
-                TribunalDissentRecordedPayload(
-                    request=request,
-                    losing_command=cmd,
-                    dissenting_member_ids=members,
-                    winner=vote_winner,
-                    vote_breakdown=vote_breakdown,
-                )
-            )
-
-    return vote_winner, vote_score, vote_breakdown, tied_candidates
-
-async def _run_audit_stage(
-    provider: LLMProvider,
-    model: str,
-    request: str,
-    guidelines: str,
-    vote_winner: str | None,
-    vote_breakdown: VoteBreakdown,
-    operator_context: OperatorContext | None,
-    auditor_enabled: bool,
-    emitter: TribunalEmitter,
-    command_constraints_message: str,
-    reputation_data_service: ReputationDataService,
-    auditor_hmac_key: str,
-    investigation_id: str,
-    settings: G8eeUserSettings,
-    ai_response_analyzer: AIResponseAnalyzerProtocol | None = None,
-    investigation_state: Any | None = None,
-    investigation_context: str = "",
-    tied_candidates: list[CandidateCommand] | None = None,
-    whitelisting_enabled: bool = False,
-    blacklisting_enabled: bool = False,
-) -> tuple[str | None, CommandGenerationOutcome, bool, str | None, AuditorReason, str | None, CommandRiskAnalysis | None]:
-    """Stage 3: Warden risk analysis and optionally audit the vote winner.
-    
-    Warden (risk analysis) now happens BEFORE Auditor (reputation commitment)
-    per USER request. If Warden blocks the command, the session fails and
-    Auditor/Reputation steps are skipped.
-    """
-    if not vote_winner:
-        return vote_winner, CommandGenerationOutcome.CONSENSUS_FAILED, False, None, AuditorReason.OK, None, None
-
-    # 1. Warden Risk Analysis (BEFORE Auditor)
-    risk_analysis: CommandRiskAnalysis | None = None
-    if ai_response_analyzer:
-        logger.info("[TRIBUNAL-WARDEN] Starting risk analysis for command: %r", vote_winner[:200] + "..." if len(vote_winner) > 200 else vote_winner)
-        justification_parts = [request.strip()] if request else []
-        if guidelines and guidelines.strip():
-            justification_parts.append(f"Guidelines: {guidelines.strip()}")
-        justification = " | ".join(justification_parts) if justification_parts else "(no justification provided)"
-
-        risk_analysis = await ai_response_analyzer.analyze_command_risk(
-            command=vote_winner,
-            justification=justification,
-            context=CommandRiskContext(
-                working_directory=operator_context.working_directory if operator_context else "",
-                investigation_context=investigation_context,
-            ),
-            settings=settings,
-        )
-
-        if risk_analysis:
-            logger.info("[TRIBUNAL-WARDEN] Risk analysis complete: level=%s score=%.2f reason=%s", 
-                        risk_analysis.risk_level, risk_analysis.risk_score, risk_analysis.reason)
-
-        if risk_analysis and risk_analysis.risk_level == RiskLevel.HIGH:
-            # Two-Strike Circuit Breaker logic moved from OperatorCommandService
-            block_count = investigation_state.warden_block_count if investigation_state else 0
-            correlation_id = getattr(emitter, "correlation_id", None) or ""
-
-            if block_count >= 1:
-                # SECOND STRIKE: Agent Conflict
-                logger.warning("[WARDEN-CIRCUIT-BREAKER] Second warden block detected for investigation=%s - triggering AGENT_CONFLICT", investigation_id)
-                logger.warning("[TRIBUNAL-WARDEN] Blocking command due to repeated HIGH risk detection: %r", vote_winner)
-                if investigation_state:
-                    investigation_state.warden_block_count = 0
-
-                await emitter.emit(
-                    EventType.AI_AGENT_CONFLICT_DETECTED,
-                    TribunalWardenBlockedPayload(
-                        request=request,
-                        command=vote_winner,
-                        risk_level=risk_analysis.risk_level,
-                        error="AGENT CONFLICT: Warden blocked Sage's command twice. The AI agents cannot agree on a safe approach. Human intervention required.",
-                        is_conflict=True,
-                    )
-                )
-                raise TribunalWardenBlockedError(
-                    request=request,
-                    error_message="Agent Conflict: Warden blocked Sage's command twice. The AI agents cannot agree on a safe approach.",
-                    risk_level=risk_analysis.risk_level,
-                )
-
-            # FIRST STRIKE: Contextual feedback
-            logger.info("[WARDEN-CIRCUIT-BREAKER] First warden block for investigation=%s - generating contextual feedback", investigation_id)
-            logger.info("[TRIBUNAL-WARDEN] Blocking command due to HIGH risk detection: %r", vote_winner)
-            if investigation_state:
-                investigation_state.warden_block_count = block_count + 1
-
-            error_analysis = await ai_response_analyzer.analyze_error_and_suggest_fix(
-                command=vote_winner,
-                exit_code=None,
-                stdout="",
-                stderr=f"WARDEN BLOCK: Command classified as HIGH risk. Justification: {justification}",
-                context=ErrorAnalysisContext(retry_count=0, working_directory=operator_context.working_directory if operator_context else ""),
-                settings=settings,
-            )
-
-            feedback_msg = error_analysis.user_message if error_analysis and error_analysis.user_message else "Command blocked as high risk. Propose a safer alternative."
-            if error_analysis and error_analysis.suggested_fix:
-                feedback_msg += f" Suggestion: {error_analysis.suggested_fix}"
-
-            logger.info("[TRIBUNAL-WARDEN] Feedback for Sage: %s", feedback_msg)
-
-            await emitter.emit(
-                EventType.TRIBUNAL_SESSION_WARDEN_BLOCKED,
-                TribunalWardenBlockedPayload(
-                    request=request,
-                    command=vote_winner,
-                    risk_level=risk_analysis.risk_level,
-                    error=f"WARDEN BLOCK: {feedback_msg}",
-                    is_conflict=False,
-                )
-            )
-            raise TribunalWardenBlockedError(
-                request=request,
-                error_message=f"Risk analysis blocked command: {feedback_msg}",
-                risk_level=risk_analysis.risk_level,
-            )
-
-    if not auditor_enabled:
-        return vote_winner, CommandGenerationOutcome.CONSENSUS, True, None, AuditorReason.OK, None, risk_analysis
-
-    if vote_breakdown.consensus_strength == 1.0:
-        mode = "unanimous"
-    else:
-        mode = "majority"
-
-    auditor_passed, final_command, auditor_revision, auditor_reason, swap_to_cluster, swap_to_member = await run_auditor(
-        provider=provider,
-        model=model,
-        request=request,
-        guidelines=guidelines,
-        mode=mode,
-        vote_winner=vote_winner,
-        vote_breakdown=vote_breakdown,
-        tied_candidates=tied_candidates,
-        operator_context=operator_context,
-        emitter=emitter,
-        command_constraints_message=command_constraints_message,
-        auditor_persona=get_agent_persona("auditor"),
-        whitelisting_enabled=whitelisting_enabled,
-        blacklisting_enabled=blacklisting_enabled,
-    )
-
-    outcome = CommandGenerationOutcome.VERIFIED if auditor_passed else CommandGenerationOutcome.VERIFICATION_FAILED
-
-    if not auditor_passed and auditor_reason == AuditorReason.REVISED:
-        outcome = CommandGenerationOutcome.VERIFICATION_FAILED
-
-    commitment_id: str | None = None
-    if auditor_passed:
-        correlation_id = getattr(emitter, "correlation_id", None) or ""
-        logger.info("[TRIBUNAL-AUDITOR] Command verified successfully, creating reputation commitment for correlation_id=%s", correlation_id)
-        try:
-            commitment = await commit_reputation(
-                reputation_data_service=reputation_data_service,
-                tribunal_command_id=correlation_id,
-                investigation_id=investigation_id,
-                hmac_key=auditor_hmac_key,
-            )
-            commitment_id = commitment.id
-            logger.info("[TRIBUNAL-AUDITOR] Reputation commitment created: id=%s merkle_root=%s", commitment.id, commitment.merkle_root[:16])
-            await emitter.emit(
-                EventType.REPUTATION_COMMITMENT_CREATED,
-                ReputationCommitmentCreatedPayload(
-                    commitment_id=commitment.id,
-                    tribunal_command_id=commitment.tribunal_command_id,
-                    investigation_id=commitment.investigation_id,
-                    merkle_root=commitment.merkle_root,
-                    prev_root=commitment.prev_root,
-                    leaves_count=commitment.leaves_count,
-                    correlation_id=correlation_id or None,
-                ),
-                correlation_id=correlation_id or None,
-            )
-        except Exception as exc:
-            logger.error(
-                "[TRIBUNAL-AUDITOR] reputation commitment failed (fatal): %s",
-                exc,
-                exc_info=True,
-            )
-            await emitter.emit(
-                EventType.REPUTATION_COMMITMENT_FAILED,
-                ReputationCommitmentFailedPayload(
-                    tribunal_command_id=correlation_id,
-                    investigation_id=investigation_id,
-                    error=str(exc),
-                    correlation_id=correlation_id or None,
-                ),
-                correlation_id=correlation_id or None,
-            )
-            # Commitment failure is fatal - verdict cannot proceed without cryptographic binding
-            raise RuntimeError(
-                f"Reputation commitment failed for tribunal_command_id={correlation_id}: {exc}. "
-                "Verdict cannot proceed without cryptographic binding to reputation scoreboard."
-            ) from exc
-
-    return final_command, outcome, auditor_passed, auditor_revision, auditor_reason, commitment_id, risk_analysis
 
 async def _build_and_emit_result(
     request: str,
@@ -837,11 +207,8 @@ async def generate_command(
     correlation_id = generate_tribunal_correlation_id()
     emitter = TribunalEmitter(g8ed_event_service, g8e_context, correlation_id=correlation_id)
 
-    if not request:
-        raise TribunalGenerationFailedError(
-            pass_errors=["Empty request submitted; cannot generate command"],
-            request=request,
-        )
+    if settings.llm is None:
+        raise ConfigurationError("LLM settings are missing")
 
     if not settings.llm.llm_command_gen_enabled:
         await emitter.emit(
@@ -898,6 +265,11 @@ async def generate_command(
             request=request,
         ) from exc
 
+    if generation_provider is None:
+        lite_provider = settings.llm.lite_provider
+        provider_name = lite_provider.value if lite_provider else "not_configured"
+        raise ConfigurationError(f"Failed to initialize generation provider for {provider_name}")
+
     candidates = await _run_generation_stage(
         provider=generation_provider, model=generation_model, request=request, guidelines=guidelines,
         operator_context=operator_context, num_passes=num_passes, emitter=emitter,
@@ -914,7 +286,6 @@ async def generate_command(
     # Round 2: anonymized peer review if consensus is low
     round_2_candidates = None
     round_2_vote_breakdown = None
-    rounds_executed = 1
 
     if vote_winner is None:
 
@@ -934,7 +305,7 @@ async def generate_command(
         )
 
         # Anonymize R1 clusters for peer review context
-        r1_clusters, cluster_to_cmd, cluster_to_members = _anonymize_clusters(candidates)
+        r1_clusters, _, _ = _anonymize_clusters(candidates)
 
         await emitter.emit(
             EventType.TRIBUNAL_VOTING_ROUND_2_STARTED,
@@ -961,8 +332,6 @@ async def generate_command(
         vote_winner, vote_score, vote_breakdown, tied_candidates = await _run_voting_stage(
             candidates=round_2_candidates, request=request, emitter=emitter, total_members=num_passes,
         )
-
-        rounds_executed = 2
 
         if vote_winner is not None:
             await emitter.emit(
@@ -1028,7 +397,25 @@ async def generate_command(
         # Auditor failure is non-fatal if consensus was reached, but here we can't even start it
         auditor_provider = None
 
-    final_command, outcome, auditor_passed, auditor_revision, auditor_reason, reputation_commitment_id, warden_risk_analysis = await _run_audit_stage(
+    warden_risk_analysis = await _run_warden_stage(
+        request=request,
+        guidelines=guidelines,
+        vote_winner=vote_winner,
+        operator_context=operator_context,
+        emitter=emitter,
+        settings=settings,
+        investigation_id=investigation_id,
+        ai_response_analyzer=ai_response_analyzer,
+        investigation_state=investigation_state,
+        investigation_context=investigation_context,
+    )
+
+    auditor = TribunalAuditor(
+        emitter=emitter,
+        reputation_data_service=reputation_data_service,
+        auditor_hmac_key=auditor_hmac_key,
+    )
+    audit_result = await auditor.run(
         provider=auditor_provider or generation_provider,
         model=auditor_model if auditor_provider else generation_model,
         request=request,
@@ -1038,15 +425,8 @@ async def generate_command(
         tied_candidates=tied_candidates,
         operator_context=operator_context,
         auditor_enabled=settings.llm.llm_command_gen_auditor,
-        emitter=emitter,
         command_constraints_message=command_constraints_message,
-        reputation_data_service=reputation_data_service,
-        auditor_hmac_key=auditor_hmac_key,
         investigation_id=investigation_id,
-        settings=settings,
-        ai_response_analyzer=ai_response_analyzer,
-        investigation_state=investigation_state,
-        investigation_context=investigation_context,
         whitelisting_enabled=whitelisting_enabled,
         blacklisting_enabled=blacklisting_enabled,
     )
@@ -1054,21 +434,21 @@ async def generate_command(
     return await _build_and_emit_result(
         request=request,
         guidelines=guidelines,
-        final_command=final_command,
-        outcome=outcome,
+        final_command=audit_result.final_command,
+        outcome=audit_result.outcome,
         candidates=candidates,
         vote_winner=vote_winner,
         vote_score=vote_score,
         vote_breakdown=vote_breakdown,
-        auditor_passed=auditor_passed,
-        auditor_revision=auditor_revision,
-        auditor_reason=auditor_reason,
+        auditor_passed=audit_result.passed,
+        auditor_revision=audit_result.revision,
+        auditor_reason=audit_result.reason,
         emitter=emitter,
         whitelisting_enabled=whitelisting_enabled,
         blacklisting_enabled=blacklisting_enabled,
         operator_context=operator_context,
         correlation_id=correlation_id,
-        reputation_commitment_id=reputation_commitment_id,
+        reputation_commitment_id=audit_result.reputation_commitment_id,
         warden_risk_analysis=warden_risk_analysis,
         round_2_candidates=round_2_candidates,
         round_2_vote_breakdown=round_2_vote_breakdown,

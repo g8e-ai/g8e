@@ -18,8 +18,7 @@
 #   g8ed-data — g8ed app data
 #
 # Profiles:
-#   (default)      - g8es, g8ee, g8ed, g8ep
-#   g8ep       - g8ep (never touched unless explicitly rebuilt or cleaned)
+#   (default)      - g8es, g8ee, g8ed
 #   development    - includes source bind mounts for hot reload
 #
 # Development:
@@ -92,53 +91,7 @@ services:
       g8es:
         condition: service_healthy
 
-  # g8el (g8el) - llama.cpp inference server
-  g8el:
-    build:
-      context: .
-      dockerfile: ./components/g8el/Dockerfile
-      labels:
-        - "io.g8e.managed=true"
-    container_name: g8el
-    labels:
-      - "io.g8e.managed=true"
-    profiles:
-      - g8el
-    restart: unless-stopped
-    ports:
-      - "11444:11444"
-    volumes:
-      - ./components/g8ee/models:/models
-    environment:
-      - G8EL_MODEL_NAME=google_gemma-4-E2B-it-Q4_K_M.gguf
-      - G8EL_MODEL_URL=https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf
-      - G8EL_CONTEXT_SIZE=49152
-      - G8EL_THREADS=8
-      - G8EL_HOST=0.0.0.0
-      - G8EL_PORT=11444
-      - OMP_NUM_THREADS=8
-    cpuset: "0-3"
-    ulimits:
-      memlock: -1
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-    networks:
-      g8e-network:
-        aliases:
-          - g8el
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:11444/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 300s
-
   # g8ed (g8ed) - Web frontend + single external entry point
-  #
-  # g8ed's G8ENodeOperatorService manages operator sessions inside the g8ep
-  # container via Supervisor XML-RPC over the network (port 443).
   g8ed:
     build:
       context: .
@@ -365,86 +318,6 @@ services:
       g8e-network:
         aliases:
           - g8eo-test-runner
-
-  # =============================================================================
-  # g8e node — always-on sidecar for operator management and platform tooling
-  # =============================================================================
-
-  # Operator host, platform scripts, and security tooling.
-  # Test running has been moved to dedicated per-component test-runner containers.
-  #
-  # Docker socket: required for operator build/stream/deploy workflows.
-  # g8ep is internal-only (never public-facing). Runs as g8e (uid 1001).
-  g8ep:
-    build:
-      context: .
-      dockerfile: components/g8ep/Dockerfile
-      labels:
-        - "io.g8e.managed=true"
-    container_name: g8ep
-    hostname: g8ep
-    user: "1001:1001"
-    labels:
-      - "io.g8e.managed=true"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    environment:
-      - HOME=/home/g8e
-      - G8E_DB_PATH=/data/g8e.db
-      - G8E_SSL_DIR=/g8es
-      - G8E_PUBSUB_CA_CERT=/g8es/ca.crt
-      - G8E_OPERATOR_PUBSUB_URL=wss://g8es:9001
-      - G8E_SSL_CERT_FILE=/g8es/ca.crt
-      - RUNNING_IN_DOCKER=1
-      # SSH streaming: only set SSH_AUTH_SOCK in-container when the host has
-      # an agent. Empty value disables agent auth in g8eo.
-      - SSH_AUTH_SOCK=${SSH_AUTH_SOCK:+/run/host-ssh-agent.sock}
-    volumes:
-      - ./components/g8ep/scripts:/app/components/g8ep/scripts
-      - ./components/g8ee:/app/components/g8ee
-      - ./shared:/app/shared
-      - ./scripts:/app/scripts
-      - g8es-ssl:/g8es:ro
-      - /var/run/docker.sock:/var/run/docker.sock
-      # SSH streaming inputs (read-only). Mount the user's existing SSH config
-      # and known_hosts; agent socket falls through to /dev/null when no agent.
-      - ${HOME}/.ssh/config:/home/g8e/.ssh/config:ro
-      - ${HOME}/.ssh/known_hosts:/home/g8e/.ssh/known_hosts:ro
-      - ${SSH_AUTH_SOCK:-/dev/null}:/run/host-ssh-agent.sock
-    group_add:
-      - ${DOCKER_GID:-0}
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 6G
-          pids: 200
-        reservations:
-          cpus: '0.5'
-          memory: 1G
-    cap_add:
-      - NET_RAW
-      - NET_ADMIN
-      - SYS_PTRACE
-      - SETUID
-      - SETGID
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-    networks:
-      g8e-network:
-        aliases:
-          - g8ep
-    healthcheck:
-      test: ["CMD", "pgrep", "-x", "supervisord"]
-      interval: 5s
-      timeout: 5s
-      retries: 3
-      start_period: 5s
-    depends_on:
-      g8ed:
-        condition: service_healthy
 
 networks:
   g8e-network:

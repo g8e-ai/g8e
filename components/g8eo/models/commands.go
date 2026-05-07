@@ -105,6 +105,14 @@ type FsListRequestPayload struct {
 	MaxEntries  int    `json:"max_entries,omitempty"`
 }
 
+type FsGrepRequestPayload struct {
+	Path        string   `json:"path,omitempty"`
+	ExecutionID string   `json:"execution_id,omitempty"`
+	Pattern     string   `json:"pattern"`
+	Includes    []string `json:"includes,omitempty"`
+	MaxMatches  int      `json:"max_matches,omitempty"`
+}
+
 type FetchLogsRequestPayload struct {
 	ExecutionID  string `json:"execution_id"`
 	SentinelMode string `json:"sentinel_mode,omitempty"`

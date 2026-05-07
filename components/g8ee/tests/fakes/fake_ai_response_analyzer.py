@@ -15,13 +15,15 @@
 
 from __future__ import annotations
 
-from app.constants import FileOperation, RiskLevel
+from app.constants import ErrorAnalysisCategory, FileOperation, RiskLevel
 from app.models.settings import G8eeUserSettings
 from app.models.tool_results import (
     CommandRiskAnalysis,
     CommandRiskContext,
     ErrorAnalysisContext,
+    ErrorAnalysisResult,
     FileOperationRiskAnalysis,
+    FileOperationRiskContext,
 )
 from app.services.protocols import AIResponseAnalyzerProtocol
 
@@ -50,11 +52,7 @@ class FakeAIResponseAnalyzer:
             "context": context,
             "settings": settings,
         })
-        return CommandRiskAnalysis(
-            risk_level=RiskLevel.LOW,
-            explanation="fake: low risk",
-            requires_approval=False,
-        )
+        return CommandRiskAnalysis(risk_level=RiskLevel.LOW)
 
     async def analyze_error_and_suggest_fix(
         self,
@@ -63,15 +61,24 @@ class FakeAIResponseAnalyzer:
         stdout: str,
         stderr: str,
         context: ErrorAnalysisContext,
-    ) -> object:
+        settings: G8eeUserSettings | None = None,
+    ) -> ErrorAnalysisResult:
         self.error_analyses.append({
             "command": command,
             "exit_code": exit_code,
             "stdout": stdout,
             "stderr": stderr,
             "context": context,
+            "settings": settings,
         })
-        return None
+        return ErrorAnalysisResult(
+            error_category=ErrorAnalysisCategory.UNKNOWN,
+            root_cause="fake: no analysis",
+            can_auto_fix=False,
+            should_escalate=True,
+            reasoning="fake analyzer returns a safe default",
+            user_message="fake: no analysis available",
+        )
 
     async def analyze_file_operation_risk(
         self,

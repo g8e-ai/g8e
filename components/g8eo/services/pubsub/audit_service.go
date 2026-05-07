@@ -15,14 +15,15 @@ package pubsub
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"time"
 
 	"github.com/g8e-ai/g8e/components/g8eo/config"
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
-	"github.com/g8e-ai/g8e/components/g8eo/models"
 	storage "github.com/g8e-ai/g8e/components/g8eo/services/storage"
+	"github.com/g8e-ai/g8e/components/g8eo/services/system"
+	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
+	"google.golang.org/protobuf/proto"
 )
 
 // AuditService owns LFAA audit event recording for user messages, AI messages,
@@ -43,19 +44,19 @@ func NewAuditService(cfg *config.Config, logger *slog.Logger) *AuditService {
 
 // HandleUserMsgRequest records an inbound user message to the audit vault.
 func (as *AuditService) HandleUserMsgRequest(_ context.Context, msg PubSubCommandMessage) {
-	as.logger.Info("LFAA: Recording user message")
+	as.logger.Info("LFAA: Recording user message (via Protobuf)")
 
 	if as.auditVault == nil || !as.auditVault.IsEnabled() {
 		as.logger.Info("Audit vault not enabled, skipping user message recording")
 		return
 	}
 
-	var ump models.AuditMsgRequestPayload
-	if err := json.Unmarshal(msg.Payload, &ump); err != nil {
-		as.logger.Error("Failed to decode audit user msg payload", "error", err)
+	var protoMsg operatorv1.AuditMsgRequested
+	if err := proto.Unmarshal(msg.Payload, &protoMsg); err != nil {
+		as.logger.Error("Failed to decode audit user msg payload as protobuf AuditMsgRequested", "error", err)
 		return
 	}
-	content := ump.Content
+	content := protoMsg.Content
 	if content == "" {
 		as.logger.Warn("LFAA: User message has no content")
 		return
@@ -79,19 +80,19 @@ func (as *AuditService) HandleUserMsgRequest(_ context.Context, msg PubSubComman
 
 // HandleAIMsgRequest records an inbound AI message to the audit vault.
 func (as *AuditService) HandleAIMsgRequest(_ context.Context, msg PubSubCommandMessage) {
-	as.logger.Info("LFAA: Recording AI message")
+	as.logger.Info("LFAA: Recording AI message (via Protobuf)")
 
 	if as.auditVault == nil || !as.auditVault.IsEnabled() {
 		as.logger.Info("Audit vault not enabled, skipping AI message recording")
 		return
 	}
 
-	var ap models.AuditMsgRequestPayload
-	if err := json.Unmarshal(msg.Payload, &ap); err != nil {
-		as.logger.Error("Failed to decode audit AI msg payload", "error", err)
+	var protoMsg operatorv1.AuditMsgRequested
+	if err := proto.Unmarshal(msg.Payload, &protoMsg); err != nil {
+		as.logger.Error("Failed to decode audit AI msg payload as protobuf AuditMsgRequested", "error", err)
 		return
 	}
-	content := ap.Content
+	content := protoMsg.Content
 	if content == "" {
 		as.logger.Warn("LFAA: AI message has no content")
 		return
@@ -115,19 +116,19 @@ func (as *AuditService) HandleAIMsgRequest(_ context.Context, msg PubSubCommandM
 
 // HandleDirectCmdRequest records an inbound direct terminal command to the audit vault.
 func (as *AuditService) HandleDirectCmdRequest(_ context.Context, msg PubSubCommandMessage) {
-	as.logger.Info("LFAA: Recording direct terminal command")
+	as.logger.Info("LFAA: Recording direct terminal command (via Protobuf)")
 
 	if as.auditVault == nil || !as.auditVault.IsEnabled() {
 		as.logger.Info("Audit vault not enabled, skipping direct command recording")
 		return
 	}
 
-	var p models.AuditDirectCmdRequestPayload
-	if err := json.Unmarshal(msg.Payload, &p); err != nil {
-		as.logger.Error("Failed to decode audit direct cmd payload", "error", err)
+	var protoCmd operatorv1.DirectCommandAuditRequested
+	if err := proto.Unmarshal(msg.Payload, &protoCmd); err != nil {
+		as.logger.Error("Failed to decode audit direct cmd payload as protobuf DirectCommandAuditRequested", "error", err)
 		return
 	}
-	if p.Command == "" {
+	if protoCmd.Command == "" {
 		as.logger.Warn("LFAA: Direct command audit has no command")
 		return
 	}
@@ -137,7 +138,7 @@ func (as *AuditService) HandleDirectCmdRequest(_ context.Context, msg PubSubComm
 		Timestamp:         time.Now().UTC(),
 		Type:              storage.EventTypeCmdExec,
 		ContentText:       constants.Status.AISource.TerminalDirect,
-		CommandRaw:        p.Command,
+		CommandRaw:        protoCmd.Command,
 	}
 
 	if _, err := as.auditVault.RecordEvent(event); err != nil {
@@ -145,25 +146,25 @@ func (as *AuditService) HandleDirectCmdRequest(_ context.Context, msg PubSubComm
 	} else {
 		as.logger.Info("Direct terminal command recorded in audit vault (LFAA)",
 			"operator_session_id", as.config.OperatorSessionId,
-			"execution_id", p.ExecutionID)
+			"execution_id", protoCmd.ExecutionId)
 	}
 }
 
 // HandleDirectCmdResultRequest records an inbound direct terminal command result to the audit vault.
 func (as *AuditService) HandleDirectCmdResultRequest(_ context.Context, msg PubSubCommandMessage) {
-	as.logger.Info("LFAA: Recording direct terminal command result")
+	as.logger.Info("LFAA: Recording direct terminal command result (via Protobuf)")
 
 	if as.auditVault == nil || !as.auditVault.IsEnabled() {
 		as.logger.Info("Audit vault not enabled, skipping direct command result recording")
 		return
 	}
 
-	var p models.AuditDirectCmdResultPayload
-	if err := json.Unmarshal(msg.Payload, &p); err != nil {
-		as.logger.Error("Failed to decode audit direct cmd result payload", "error", err)
+	var protoResult operatorv1.DirectCommandResultAuditRequested
+	if err := proto.Unmarshal(msg.Payload, &protoResult); err != nil {
+		as.logger.Error("Failed to decode audit direct cmd result payload as protobuf DirectCommandResultAuditRequested", "error", err)
 		return
 	}
-	if p.Command == "" {
+	if protoResult.Command == "" {
 		as.logger.Warn("LFAA: Direct command result audit has no command")
 		return
 	}
@@ -173,11 +174,11 @@ func (as *AuditService) HandleDirectCmdResultRequest(_ context.Context, msg PubS
 		Timestamp:           time.Now().UTC(),
 		Type:                storage.EventTypeCmdExec,
 		ContentText:         constants.Status.AISource.TerminalDirect,
-		CommandRaw:          p.Command,
-		CommandExitCode:     p.ExitCode,
-		CommandStdout:       p.Output,
-		CommandStderr:       p.Stderr,
-		ExecutionDurationMs: int64(p.ExecutionTimeSeconds * 1000),
+		CommandRaw:          protoResult.Command,
+		CommandExitCode:     system.IntPtr(int(protoResult.ExitCode)),
+		CommandStdout:       protoResult.Output,
+		CommandStderr:       protoResult.Stderr,
+		ExecutionDurationMs: int64(protoResult.ExecutionTimeSeconds * 1000),
 	}
 
 	if _, err := as.auditVault.RecordEvent(event); err != nil {
@@ -185,6 +186,6 @@ func (as *AuditService) HandleDirectCmdResultRequest(_ context.Context, msg PubS
 	} else {
 		as.logger.Info("Direct terminal command result recorded in audit vault (LFAA)",
 			"operator_session_id", as.config.OperatorSessionId,
-			"execution_id", p.ExecutionID)
+			"execution_id", protoResult.ExecutionId)
 	}
 }

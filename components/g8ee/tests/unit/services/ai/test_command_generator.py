@@ -21,8 +21,10 @@ from app.constants import (
     AuditorReason,
     CommandGenerationOutcome,
     ComponentName,
+    ErrorAnalysisCategory,
     EventType,
     LLMProvider,
+    RiskLevel,
     TieBreakReason,
     TribunalMember,
 )
@@ -38,6 +40,7 @@ from app.llm.prompts import (
 )
 from app.models.agent import OperatorContext
 from app.models.agents.tribunal import (
+    CandidateCommand,
     TribunalAuditorFailedError,
     TribunalAuditorFailedPayload,
     TribunalDisabledError,
@@ -52,28 +55,31 @@ from app.models.agents.tribunal import (
     TribunalSessionStartedPayload,
     TribunalSessionSystemErrorPayload,
     TribunalSystemError,
+    TribunalWardenBlockedError,
+    TribunalWardenBlockedPayload,
+    VoteBreakdown,
 )
 from app.models.http_context import G8eHttpContext
 from app.models.model_configs import LLMModelConfig
 from app.models.reputation import ReputationCommitment
 from app.models.settings import G8eeUserSettings, LLMSettings
-from app.services.ai.auditor_service import (
-    _MAX_TOKENS_AUDITOR,
-    run_auditor,
+from app.models.tool_results import (
+    CommandRiskAnalysis,
+    ErrorAnalysisResult,
 )
+from app.services.ai.auditor_service import AuditorClusterInfo
 from app.services.ai.generator import (
-    _MAX_TOKENS_GENERATION,
     TribunalEmitter,
     _build_and_emit_result,
-    _is_system_error,
     _member_for_pass,
     _resolve_model,
-    _run_audit_stage,
-    _run_generation_pass,
-    _run_generation_stage,
-    _run_voting_stage,
     generate_command,
 )
+from app.services.ai.tribunal.stages.generation import _run_generation_pass
+from app.services.ai.tribunal.stages.auditor import TribunalAuditor
+from app.services.ai.tribunal.stages.warden import _run_warden_stage
+from app.services.ai.tribunal.utils import _is_system_error
+from app.models.model_configs import get_model_config
 from app.utils.agent_persona_loader import get_agent_persona
 
 _TEST_HMAC_KEY = "a" * 64
@@ -165,75 +171,6 @@ def _make_mock_g8e_context() -> G8eHttpContext:
     )
 
 
-class TestResolveModel:
-    """_resolve_model returns a concrete model string with proper fallback chain."""
-
-    def test_returns_lite_model_when_set(self):
-        llm = LLMSettings(lite_model="custom-lite")
-        assert _resolve_model(llm, tier="lite") == "custom-lite"
-
-    def test_falls_back_to_primary_model_when_lite_is_none(self):
-        llm = LLMSettings(primary_model="custom-primary")
-        assert llm.lite_model is None
-        assert _resolve_model(llm, tier="lite") == "custom-primary"
-
-    def test_raises_when_both_models_none(self):
-        llm = LLMSettings(primary_provider=LLMProvider.OLLAMA)
-        assert llm.lite_model is None
-        assert llm.primary_model is None
-        with pytest.raises(TribunalModelNotConfiguredError) as exc_info:
-            _resolve_model(llm, tier="lite")
-        assert exc_info.value.provider == "ollama"
-
-    def test_raises_for_openai_when_no_model_configured(self):
-        llm = LLMSettings(primary_provider=LLMProvider.OPENAI)
-        with pytest.raises(TribunalModelNotConfiguredError) as exc_info:
-            _resolve_model(llm, tier="lite")
-        assert exc_info.value.provider == "openai"
-
-    def test_raises_for_anthropic_when_no_model_configured(self):
-        llm = LLMSettings(primary_provider=LLMProvider.ANTHROPIC)
-        with pytest.raises(TribunalModelNotConfiguredError) as exc_info:
-            _resolve_model(llm, tier="lite")
-        assert exc_info.value.provider == "anthropic"
-
-    def test_raises_for_gemini_when_no_model_configured(self):
-        llm = LLMSettings(primary_provider=LLMProvider.GEMINI)
-        with pytest.raises(TribunalModelNotConfiguredError) as exc_info:
-            _resolve_model(llm, tier="lite")
-        assert exc_info.value.provider == "gemini"
-
-    def test_lite_takes_priority_over_primary(self):
-        llm = LLMSettings(primary_model="primary", lite_model="lite")
-        assert _resolve_model(llm, tier="lite") == "lite"
-
-
-class TestTribunalSessionStartedPayloadRegression:
-    """TribunalSessionStartedPayload must never receive None for model."""
-
-    def test_payload_rejects_none_model(self):
-        with pytest.raises(Exception):
-            TribunalSessionStartedPayload(
-                request="list files",
-                model=None,
-                num_passes=3,
-                members=[],
-                correlation_id="test-corr-id"
-                )
-
-    def test_payload_accepts_resolved_model(self):
-        llm = LLMSettings(primary_provider=LLMProvider.OLLAMA, lite_model="gemma3:1b")
-        model = _resolve_model(llm, tier="lite")
-        payload = TribunalSessionStartedPayload(
-            request="list files",
-            model=model,
-            num_passes=3,
-            members=[],
-            correlation_id="test-corr-id"
-        )
-        assert payload.model == "gemma3:1b"
-
-
 class TestRoleImportRegression:
     """Regression: command_generator must use Role.USER, not types.Role.USER.
 
@@ -255,6 +192,8 @@ class TestRoleImportRegression:
         emitter = TribunalEmitter(None, _make_mock_g8e_context())
         pass_errors: list[str] = []
 
+        # Importing from generation module
+        from app.services.ai.tribunal.stages.generation import _run_generation_pass
         result = await _run_generation_pass(
             provider=mock_provider,
             model="test-model",
@@ -284,7 +223,6 @@ class TestRoleImportRegression:
         mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
         emitter = TribunalEmitter(None, _make_mock_g8e_context())
 
-        from app.models.agents.tribunal import VoteBreakdown
         vote_breakdown = VoteBreakdown(
             candidates_by_member={},
             candidates_by_command={"ls -la": ["axiom"]},
@@ -294,19 +232,30 @@ class TestRoleImportRegression:
             consensus_strength=1.0,
         )
 
-        auditor_passed, final_cmd, auditor_revision, auditor_reason, swap_to_cluster, swap_to_member = await run_auditor(
+        from app.services.ai.tribunal.stages.auditor import TribunalAuditor
+        auditor = TribunalAuditor(
+            emitter=emitter,
+            **_REPUTATION_KWARGS,
+        )
+        audit_result = await auditor.run(
             provider=mock_provider,
             model="test-model",
             request="list files",
             guidelines="",
-            mode="unanimous",
             vote_winner="ls -la",
             vote_breakdown=vote_breakdown,
-            tied_candidates=None,
             operator_context=_make_mock_operator_context(os="linux"),
-            emitter=emitter,
+            auditor_enabled=True,
             command_constraints_message="No whitelist or blacklist constraints are active.",
-            auditor_persona=get_agent_persona("auditor"),
+            investigation_id="inv-test",
+        )
+        final_cmd, outcome, auditor_passed, auditor_revision, auditor_reason, commitment_id = (
+            audit_result.final_command,
+            audit_result.outcome,
+            audit_result.passed,
+            audit_result.revision,
+            audit_result.reason,
+            audit_result.reputation_commitment_id,
         )
 
         assert auditor_passed is True
@@ -315,36 +264,6 @@ class TestRoleImportRegression:
         contents = call_kwargs.kwargs.get("contents") or call_kwargs[1].get("contents")
         assert len(contents) == 1
         assert contents[0].role == Role.USER
-
-
-class TestIsSystemError:
-    """_is_system_error classifies error messages into system vs. model errors."""
-
-    def test_auth_errors(self):
-        assert _is_system_error("401 Unauthorized")
-        assert _is_system_error("403 Forbidden")
-        assert _is_system_error("Invalid API key provided")
-        assert _is_system_error("Authentication failed for endpoint")
-
-    def test_network_errors(self):
-        assert _is_system_error("Connection refused")
-        assert _is_system_error("ConnectionError: cannot reach host")
-        assert _is_system_error("Timeout waiting for response")
-        assert _is_system_error("DNS name resolution failed")
-        assert _is_system_error("SSL certificate verify failed")
-        assert _is_system_error("ECONNREFUSED 127.0.0.1:11434")
-
-    def test_config_errors(self):
-        assert _is_system_error("Unsupported LLM provider: foo")
-
-    def test_model_errors_are_not_system(self):
-        assert not _is_system_error("Model returned empty response")
-        assert not _is_system_error("Invalid JSON in response")
-        assert not _is_system_error("Unexpected response format")
-        assert not _is_system_error("Content filter triggered")
-
-    def test_empty_string_is_not_system(self):
-        assert not _is_system_error("")
 
 
 class TestTribunalSystemError:
@@ -774,7 +693,6 @@ class TestTribunalAuditorFailedError:
     @pytest.mark.asyncio
     async def test_raises_on_empty_auditor_response(self):
         """Empty auditor response raises TribunalAuditorFailedError instead of treating as passed."""
-        from app.models.agents.tribunal import VoteBreakdown
         mock_response = MagicMock()
         mock_response.text = None
 
@@ -791,21 +709,24 @@ class TestTribunalAuditorFailedError:
             consensus_strength=1.0,
         )
 
-        with pytest.raises(TribunalAuditorFailedError) as exc_info:
-            await run_auditor(
-            provider=mock_provider,
-            model="test-model",
-            request="list files",
-            guidelines="",
-            mode="unanimous",
-            vote_winner="ls -la",
-            vote_breakdown=vote_breakdown,
-            tied_candidates=None,
-            operator_context=_make_mock_operator_context(os="linux"),
+        from app.services.ai.tribunal.stages.auditor import TribunalAuditor
+        auditor = TribunalAuditor(
             emitter=emitter,
-            command_constraints_message="No whitelist or blacklist constraints are active",
-            auditor_persona=get_agent_persona("auditor"),
+            **_REPUTATION_KWARGS,
         )
+        with pytest.raises(TribunalAuditorFailedError) as exc_info:
+            await auditor.run(
+                provider=mock_provider,
+                model="test-model",
+                request="list files",
+                guidelines="",
+                vote_winner="ls -la",
+                vote_breakdown=vote_breakdown,
+                operator_context=_make_mock_operator_context(os="linux"),
+                auditor_enabled=True,
+                command_constraints_message="No whitelist or blacklist constraints are active",
+                investigation_id="inv-test",
+            )
 
         assert exc_info.value.reason == AuditorReason.EMPTY_RESPONSE
         assert exc_info.value.request == "list files"
@@ -813,7 +734,6 @@ class TestTribunalAuditorFailedError:
     @pytest.mark.asyncio
     async def test_raises_on_no_valid_revision(self):
         """Non-ok answer without valid revision raises TribunalAuditorFailedError instead of treating as passed."""
-        from app.models.agents.tribunal import VoteBreakdown
         mock_response = MagicMock()
         # Response that's not "ok" and normalizes to the same command (not a valid revision)
         mock_response.text = "ls -la"
@@ -831,21 +751,24 @@ class TestTribunalAuditorFailedError:
             consensus_strength=1.0,
         )
 
-        with pytest.raises(TribunalAuditorFailedError) as exc_info:
-            await run_auditor(
-            provider=mock_provider,
-            model="test-model",
-            request="list files",
-            guidelines="",
-            mode="unanimous",
-            vote_winner="ls -la",
-            vote_breakdown=vote_breakdown,
-            tied_candidates=None,
-            operator_context=_make_mock_operator_context(os="linux"),
+        from app.services.ai.tribunal.stages.auditor import TribunalAuditor
+        auditor = TribunalAuditor(
             emitter=emitter,
-            command_constraints_message="No whitelist or blacklist constraints are active",
-            auditor_persona=get_agent_persona("auditor"),
+            **_REPUTATION_KWARGS,
         )
+        with pytest.raises(TribunalAuditorFailedError) as exc_info:
+            await auditor.run(
+                provider=mock_provider,
+                model="test-model",
+                request="list files",
+                guidelines="",
+                vote_winner="ls -la",
+                vote_breakdown=vote_breakdown,
+                operator_context=_make_mock_operator_context(os="linux"),
+                auditor_enabled=True,
+                command_constraints_message="No whitelist or blacklist constraints are active",
+                investigation_id="inv-test",
+            )
 
         assert exc_info.value.reason == AuditorReason.NO_VALID_REVISION
         assert exc_info.value.request == "list files"
@@ -853,7 +776,6 @@ class TestTribunalAuditorFailedError:
     @pytest.mark.asyncio
     async def test_raises_on_auditor_exception(self):
         """Auditor exception raises TribunalAuditorFailedError instead of treating as passed."""
-        from app.models.agents.tribunal import VoteBreakdown
         mock_provider = MagicMock()
         mock_provider.generate_content_lite = AsyncMock(
             side_effect=RuntimeError("Auditor API timeout")
@@ -869,649 +791,194 @@ class TestTribunalAuditorFailedError:
             consensus_strength=1.0,
         )
 
+        from app.services.ai.tribunal.stages.auditor import TribunalAuditor
+        auditor = TribunalAuditor(
+            emitter=emitter,
+            **_REPUTATION_KWARGS,
+        )
         with pytest.raises(TribunalAuditorFailedError) as exc_info:
-            await run_auditor(
-            provider=mock_provider,
-            model="test-model",
-            request="list files",
-            guidelines="",
-            mode="unanimous",
-            vote_winner="ls -la",
-            vote_breakdown=vote_breakdown,
-            tied_candidates=None,
-            operator_context=_make_mock_operator_context(os="linux"),
-            emitter=emitter,
-            command_constraints_message="No whitelist or blacklist constraints are active",
-            auditor_persona=get_agent_persona("auditor"),
-        )
-
-        assert exc_info.value.reason == AuditorReason.AUDITOR_ERROR
-        assert "timeout" in exc_info.value.error
-        assert exc_info.value.request == "list files"
-
-
-class TestRunGenerationStage:
-    """_run_generation_stage returns candidates or raises on total failure."""
-
-    @pytest.mark.asyncio
-    async def test_returns_candidates_on_success(self):
-        mock_response = MagicMock()
-        mock_response.text = "ls -la"
-        mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
-        emitter = TribunalEmitter(None, _make_mock_g8e_context())
-
-        candidates = await _run_generation_stage(
-            provider=mock_provider, model="test-model", request="list files",
-            guidelines="",
-            operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-            num_passes=3, emitter=emitter,
-            command_constraints_message="No whitelist or blacklist constraints are active.",
-        )
-
-        assert len(candidates) == 3
-        assert all(c.command == "ls -la" for c in candidates)
-
-    @pytest.mark.asyncio
-    async def test_raises_system_error_on_all_system_failures(self):
-        mock_provider = _make_mock_provider(
-            generate_content_lite_side_effect=RuntimeError("401 Unauthorized")
-        )
-        emitter = TribunalEmitter(None, _make_mock_g8e_context())
-
-        with pytest.raises(TribunalSystemError):
-            await _run_generation_stage(
-                provider=mock_provider, model="test-model", request="list files",
+            await auditor.run(
+                provider=mock_provider,
+                model="test-model",
+                request="list files",
                 guidelines="",
-                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                num_passes=3, emitter=emitter,
-                command_constraints_message="No whitelist or blacklist constraints are active.",
-            )
-
-    @pytest.mark.asyncio
-    async def test_raises_generation_failed_on_non_system_failures(self):
-        mock_provider = _make_mock_provider(
-            generate_content_lite_side_effect=RuntimeError("Model returned gibberish")
-        )
-        emitter = TribunalEmitter(None, _make_mock_g8e_context())
-
-        with pytest.raises(TribunalGenerationFailedError):
-            await _run_generation_stage(
-                provider=mock_provider, model="test-model", request="list files",
-                guidelines="",
-                operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-                num_passes=2, emitter=emitter,
-                command_constraints_message="No whitelist or blacklist constraints are active.",
-            )
-
-    @pytest.mark.asyncio
-    async def test_partial_failures_return_successful_candidates(self):
-        call_count = 0
-
-        async def partial_side_effect(**kwargs):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 2:
-                raise RuntimeError("Model failed")
-            mock_resp = MagicMock()
-            mock_resp.text = "ls -la"
-            return mock_resp
-
-        mock_provider = _make_mock_provider(generate_content_lite_side_effect=partial_side_effect)
-        emitter = TribunalEmitter(None, _make_mock_g8e_context())
-
-        candidates = await _run_generation_stage(
-            provider=mock_provider, model="test-model", request="list files",
-            guidelines="",
-            operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user", username="user", uid=1000),
-            num_passes=3, emitter=emitter,
-            command_constraints_message="No whitelist or blacklist constraints are active.",
-        )
-
-        assert len(candidates) == 2
-
-
-class TestRunVotingStage:
-    """_run_voting_stage computes uniform vote and emits consensus event."""
-
-    @pytest.mark.asyncio
-    async def test_returns_winner_and_score_with_breakdown(self):
-        from app.models.agents.tribunal import CandidateCommand
-
-        candidates = [
-            CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
-            CandidateCommand(command="ls -la", pass_index=1, member=TribunalMember.CONCORD),
-            CandidateCommand(command="ls -l", pass_index=2, member=TribunalMember.VARIANCE),
-            CandidateCommand(command="ls -la", pass_index=3, member=TribunalMember.PRAGMA),
-            CandidateCommand(command="ls -l", pass_index=4, member=TribunalMember.NEMESIS),
-        ]
-        emitter = TribunalEmitter(None, _make_mock_g8e_context())
-
-        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
-            candidates=candidates, request="list files", emitter=emitter, total_members=5,
-        )
-
-        assert winner == "ls -la"
-        assert score == 0.6
-        assert vote_breakdown is not None
-        assert vote_breakdown.winner == "ls -la"
-        assert vote_breakdown.consensus_strength == 0.6
-        assert len(vote_breakdown.winner_supporters) == 3
-        assert tied_candidates is None
-
-    @pytest.mark.asyncio
-    async def test_single_cluster_unanimous_wins(self):
-        """All five members produce the same command - unanimous consensus."""
-        from app.models.agents.tribunal import CandidateCommand
-
-        candidates = [
-            CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
-            CandidateCommand(command="ls -la", pass_index=1, member=TribunalMember.CONCORD),
-            CandidateCommand(command="ls -la", pass_index=2, member=TribunalMember.VARIANCE),
-            CandidateCommand(command="ls -la", pass_index=3, member=TribunalMember.PRAGMA),
-            CandidateCommand(command="ls -la", pass_index=4, member=TribunalMember.NEMESIS),
-        ]
-        emitter = TribunalEmitter(None, _make_mock_g8e_context())
-
-        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
-            candidates=candidates, request="list files", emitter=emitter, total_members=5,
-        )
-
-        assert winner == "ls -la"
-        assert score == 1.0
-        assert vote_breakdown.consensus_strength == 1.0
-        assert tied_candidates is None
-
-    @pytest.mark.asyncio
-    async def test_consensus_failed_returns_none_winner(self):
-        """When no two members agree, consensus fails and winner is None."""
-        from app.models.agents.tribunal import CandidateCommand
-
-        candidates = [
-            CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
-            CandidateCommand(command="ls -l", pass_index=1, member=TribunalMember.CONCORD),
-            CandidateCommand(command="ls", pass_index=2, member=TribunalMember.VARIANCE),
-            CandidateCommand(command="ll", pass_index=3, member=TribunalMember.PRAGMA),
-            CandidateCommand(command="rm -rf", pass_index=4, member=TribunalMember.NEMESIS),
-        ]
-        emitter = TribunalEmitter(None, _make_mock_g8e_context())
-
-        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
-            candidates=candidates, request="list files", emitter=emitter, total_members=5,
-        )
-
-        assert winner is None
-        assert score == 0.0
-        assert vote_breakdown.consensus_strength == 0.2
-        assert vote_breakdown.winner is None
-        assert tied_candidates is None
-
-    @pytest.mark.asyncio
-    async def test_single_member_produces_consensus_failed(self):
-        """1 member produces, 4 fail → CONSENSUS_FAILED with strength 0.2."""
-        from app.models.agents.tribunal import CandidateCommand
-
-        candidates = [
-            CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
-        ]
-        emitter = TribunalEmitter(None, _make_mock_g8e_context())
-
-        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
-            candidates=candidates, request="list files", emitter=emitter, total_members=5,
-        )
-
-        assert winner is None
-        assert score == 0.0
-        assert vote_breakdown.consensus_strength == 0.2
-        assert vote_breakdown.winner is None
-        assert tied_candidates is None
-
-    @pytest.mark.asyncio
-    async def test_five_five_unanimous_consensus(self):
-        """All five members produce the same chained command."""
-        from app.models.agents.tribunal import CandidateCommand
-
-        candidates = [
-            CandidateCommand(command="cd /var/log && tail -100 nginx/access.log && grep ERROR nginx/access.log && grep WARN nginx/access.log && wc -l nginx/access.log", pass_index=0, member=TribunalMember.AXIOM),
-            CandidateCommand(command="cd /var/log && tail -100 nginx/access.log && grep ERROR nginx/access.log && grep WARN nginx/access.log && wc -l nginx/access.log", pass_index=1, member=TribunalMember.CONCORD),
-            CandidateCommand(command="cd /var/log && tail -100 nginx/access.log && grep ERROR nginx/access.log && grep WARN nginx/access.log && wc -l nginx/access.log", pass_index=2, member=TribunalMember.VARIANCE),
-            CandidateCommand(command="cd /var/log && tail -100 nginx/access.log && grep ERROR nginx/access.log && grep WARN nginx/access.log && wc -l nginx/access.log", pass_index=3, member=TribunalMember.PRAGMA),
-            CandidateCommand(command="cd /var/log && tail -100 nginx/access.log && grep ERROR nginx/access.log && grep WARN nginx/access.log && wc -l nginx/access.log", pass_index=4, member=TribunalMember.NEMESIS),
-        ]
-        emitter = TribunalEmitter(None, _make_mock_g8e_context())
-
-        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
-            candidates=candidates, request="check nginx logs for errors and warnings", emitter=emitter, total_members=5,
-        )
-
-        assert winner == "cd /var/log && tail -100 nginx/access.log && grep ERROR nginx/access.log && grep WARN nginx/access.log && wc -l nginx/access.log"
-        assert score == 1.0
-        assert vote_breakdown.consensus_strength == 1.0
-        assert len(vote_breakdown.winner_supporters) == 5
-        assert tied_candidates is None
-
-    @pytest.mark.asyncio
-    async def test_four_one_majority(self):
-        """Four members agree on chained command, one dissents with single command."""
-        from app.models.agents.tribunal import CandidateCommand
-
-        candidates = [
-            CandidateCommand(command="docker ps -a && docker images && docker volume ls && docker network ls && docker system df", pass_index=0, member=TribunalMember.AXIOM),
-            CandidateCommand(command="docker ps -a && docker images && docker volume ls && docker network ls && docker system df", pass_index=1, member=TribunalMember.CONCORD),
-            CandidateCommand(command="docker ps -a && docker images && docker volume ls && docker network ls && docker system df", pass_index=2, member=TribunalMember.VARIANCE),
-            CandidateCommand(command="docker ps -a && docker images && docker volume ls && docker network ls && docker system df", pass_index=3, member=TribunalMember.PRAGMA),
-            CandidateCommand(command="docker ps", pass_index=4, member=TribunalMember.NEMESIS),
-        ]
-        emitter = TribunalEmitter(None, _make_mock_g8e_context())
-
-        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
-            candidates=candidates, request="check full docker state", emitter=emitter, total_members=5,
-        )
-
-        assert winner == "docker ps -a && docker images && docker volume ls && docker network ls && docker system df"
-        assert score == 0.8
-        assert vote_breakdown.consensus_strength == 0.8
-        assert len(vote_breakdown.winner_supporters) == 4
-        assert tied_candidates is None
-
-    @pytest.mark.asyncio
-    async def test_three_two_majority(self):
-        """Three members agree on chained command, two disagree with different command."""
-        from app.models.agents.tribunal import CandidateCommand
-
-        candidates = [
-            CandidateCommand(command="git status && git diff && git log -5 && git branch -a && git remote -v", pass_index=0, member=TribunalMember.AXIOM),
-            CandidateCommand(command="git status && git diff && git log -5 && git branch -a && git remote -v", pass_index=1, member=TribunalMember.CONCORD),
-            CandidateCommand(command="git status && git diff && git log -5 && git branch -a && git remote -v", pass_index=2, member=TribunalMember.VARIANCE),
-            CandidateCommand(command="git status", pass_index=3, member=TribunalMember.PRAGMA),
-            CandidateCommand(command="git diff", pass_index=4, member=TribunalMember.NEMESIS),
-        ]
-        emitter = TribunalEmitter(None, _make_mock_g8e_context())
-
-        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
-            candidates=candidates, request="check full git state", emitter=emitter, total_members=5,
-        )
-
-        assert winner == "git status && git diff && git log -5 && git branch -a && git remote -v"
-        assert score == 0.6
-        assert vote_breakdown.consensus_strength == 0.6
-        assert len(vote_breakdown.winner_supporters) == 3
-        assert tied_candidates is None
-
-    @pytest.mark.asyncio
-    async def test_two_two_one_tied_top_breaks_by_shortest_command(self):
-        """2/2/1 tie broken by shortest command rule (compositional pressure)."""
-        from app.models.agents.tribunal import CandidateCommand
-
-        candidates = [
-            CandidateCommand(command="docker ps -a && docker images && docker volume ls && docker network ls && docker system df", pass_index=0, member=TribunalMember.AXIOM),
-            CandidateCommand(command="docker ps -a && docker images && docker volume ls && docker network ls && docker system df", pass_index=1, member=TribunalMember.CONCORD),
-            CandidateCommand(command="docker ps", pass_index=2, member=TribunalMember.VARIANCE),
-            CandidateCommand(command="docker ps", pass_index=3, member=TribunalMember.PRAGMA),
-            CandidateCommand(command="docker images", pass_index=4, member=TribunalMember.NEMESIS),
-        ]
-        emitter = TribunalEmitter(None, _make_mock_g8e_context())
-
-        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
-            candidates=candidates, request="check docker state", emitter=emitter, total_members=5,
-        )
-
-        assert winner == "docker ps"
-        assert score == 0.4
-        assert vote_breakdown.consensus_strength == 0.4
-        assert vote_breakdown.tie_broken is True
-        assert vote_breakdown.tie_break_reason == TieBreakReason.SHORTEST
-        assert len(vote_breakdown.winner_supporters) == 2
-        assert tied_candidates is not None
-        assert len(tied_candidates) == 2
-
-    @pytest.mark.asyncio
-    async def test_tie_break_non_nemesis_cluster_wins(self):
-        """Tie broken by non-Nemesis cluster preference (equal length commands, one cluster has Nemesis)."""
-        from app.models.agents.tribunal import CandidateCommand
-
-        candidates = [
-            CandidateCommand(command="cat /var/log/nginx/app.log | tail -100", pass_index=0, member=TribunalMember.AXIOM),
-            CandidateCommand(command="cat /var/log/nginx/app.log | tail -100", pass_index=1, member=TribunalMember.CONCORD),
-            CandidateCommand(command="cat /var/log/nginx/err.log | tail -100", pass_index=2, member=TribunalMember.VARIANCE),
-            CandidateCommand(command="cat /var/log/nginx/err.log | tail -100", pass_index=3, member=TribunalMember.NEMESIS),
-            CandidateCommand(command="ls", pass_index=4, member=TribunalMember.PRAGMA),
-        ]
-        emitter = TribunalEmitter(None, _make_mock_g8e_context())
-
-        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
-            candidates=candidates, request="check nginx logs", emitter=emitter, total_members=5,
-        )
-
-        # Both top commands are equal length (same pattern), Nemesis is in the second cluster
-        # Non-nemesis cluster should win
-        assert winner == "cat /var/log/nginx/app.log | tail -100"
-        assert score == 0.4
-        assert vote_breakdown.consensus_strength == 0.4
-        assert vote_breakdown.tie_broken is True
-        assert vote_breakdown.tie_break_reason == TieBreakReason.EXCLUDED_NEMESIS
-        assert len(vote_breakdown.winner_supporters) == 2
-
-    @pytest.mark.asyncio
-    async def test_consensus_strength_five_unique_candidates(self):
-        """5 members, 5 unique candidates → consensus_strength = 0.2 (1/5), winner is None."""
-        from app.models.agents.tribunal import CandidateCommand
-
-        candidates = [
-            CandidateCommand(command="cmd1", pass_index=0, member=TribunalMember.AXIOM),
-            CandidateCommand(command="cmd2", pass_index=1, member=TribunalMember.CONCORD),
-            CandidateCommand(command="cmd3", pass_index=2, member=TribunalMember.VARIANCE),
-            CandidateCommand(command="cmd4", pass_index=3, member=TribunalMember.PRAGMA),
-            CandidateCommand(command="cmd5", pass_index=4, member=TribunalMember.NEMESIS),
-        ]
-        emitter = TribunalEmitter(None, _make_mock_g8e_context())
-
-        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
-            candidates=candidates, request="test", emitter=emitter, total_members=5,
-        )
-
-        assert winner is None
-        assert vote_breakdown.consensus_strength == 0.2
-        assert vote_breakdown.winner is None
-
-    @pytest.mark.asyncio
-    async def test_consensus_strength_three_two_split(self):
-        """5 members, 3 produce "A" and 2 produce "B" → consensus_strength = 0.6 (3/5), winner is "A"."""
-        from app.models.agents.tribunal import CandidateCommand
-
-        candidates = [
-            CandidateCommand(command="cmdA", pass_index=0, member=TribunalMember.AXIOM),
-            CandidateCommand(command="cmdA", pass_index=1, member=TribunalMember.CONCORD),
-            CandidateCommand(command="cmdA", pass_index=2, member=TribunalMember.VARIANCE),
-            CandidateCommand(command="cmdB", pass_index=3, member=TribunalMember.PRAGMA),
-            CandidateCommand(command="cmdB", pass_index=4, member=TribunalMember.NEMESIS),
-        ]
-        emitter = TribunalEmitter(None, _make_mock_g8e_context())
-
-        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
-            candidates=candidates, request="test", emitter=emitter, total_members=5,
-        )
-
-        assert winner == "cmdA"
-        assert vote_breakdown.consensus_strength == 0.6
-        assert len(vote_breakdown.winner_supporters) == 3
-
-    @pytest.mark.asyncio
-    async def test_consensus_strength_unanimous(self):
-        """5 members, all produce same → consensus_strength = 1.0."""
-        from app.models.agents.tribunal import CandidateCommand
-
-        candidates = [
-            CandidateCommand(command="cmdX", pass_index=0, member=TribunalMember.AXIOM),
-            CandidateCommand(command="cmdX", pass_index=1, member=TribunalMember.CONCORD),
-            CandidateCommand(command="cmdX", pass_index=2, member=TribunalMember.VARIANCE),
-            CandidateCommand(command="cmdX", pass_index=3, member=TribunalMember.PRAGMA),
-            CandidateCommand(command="cmdX", pass_index=4, member=TribunalMember.NEMESIS),
-        ]
-        emitter = TribunalEmitter(None, _make_mock_g8e_context())
-
-        winner, score, vote_breakdown, tied_candidates = await _run_voting_stage(
-            candidates=candidates, request="test", emitter=emitter, total_members=5,
-        )
-
-        assert winner == "cmdX"
-        assert vote_breakdown.consensus_strength == 1.0
-        assert len(vote_breakdown.winner_supporters) == 5
-
-
-class TestRunVerificationStage:
-    """_run_verification_stage determines final command and outcome."""
-
-    @pytest.mark.asyncio
-    async def test_auditor_disabled_returns_consensus(self):
-        from app.models.agents.tribunal import VoteBreakdown
-        vote_breakdown = VoteBreakdown(
-            candidates_by_member={},
-            candidates_by_command={"ls -la": ["axiom"]},
-            winner="ls -la",
-            winner_supporters=["axiom"],
-            dissenters_by_command={},
-            consensus_strength=1.0,
-        )
-        emitter = TribunalEmitter(None, _make_mock_g8e_context())
-
-        final_cmd, outcome, passed, revision, auditor_reason, commitment_id, risk_analysis = await _run_audit_stage(
-            provider=MagicMock(), model="test-model", request="list files", guidelines="",
-            vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=None,
-            operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-            auditor_enabled=False,
-            emitter=emitter,
-            command_constraints_message="No whitelist or blacklist constraints are active.",
-            settings=_MOCK_USER_SETTINGS,
-            **_AUDIT_STAGE_REPUTATION_KWARGS,
-        )
-
-        assert final_cmd == "ls -la"
-        assert outcome == CommandGenerationOutcome.CONSENSUS
-        assert passed is True
-        assert revision is None
-        assert auditor_reason == AuditorReason.OK
-
-    @pytest.mark.asyncio
-    async def test_auditor_approves_returns_verified(self):
-        from app.models.agents.tribunal import VoteBreakdown
-        vote_breakdown = VoteBreakdown(
-            candidates_by_member={},
-            candidates_by_command={"ls -la": ["axiom"]},
-            winner="ls -la",
-            winner_supporters=["axiom"],
-            dissenters_by_command={},
-            consensus_strength=1.0,
-        )
-        mock_response = MagicMock()
-        mock_response.text = '{"status": "ok"}'
-        mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
-        emitter = TribunalEmitter(None, _make_mock_g8e_context())
-        emitter.correlation_id = "tribunal_test_command"
-
-        final_cmd, outcome, passed, revision, auditor_reason, commitment_id, risk_analysis = await _run_audit_stage(
-            provider=mock_provider, model="test-model", request="list files", guidelines="",
-            vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=None,
-            operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-            auditor_enabled=True,
-            emitter=emitter,
-            command_constraints_message="No whitelist or blacklist constraints are active.",
-            settings=_MOCK_USER_SETTINGS,
-            **_AUDIT_STAGE_REPUTATION_KWARGS,
-        )
-
-        assert final_cmd == "ls -la"
-        assert outcome == CommandGenerationOutcome.VERIFIED
-        assert passed is True
-        assert revision is None
-        assert auditor_reason == AuditorReason.OK
-
-    @pytest.mark.asyncio
-    async def test_auditor_revision_returns_verification_failed(self):
-        from app.models.agents.tribunal import VoteBreakdown
-        vote_breakdown = VoteBreakdown(
-            candidates_by_member={},
-            candidates_by_command={"ls -la": ["axiom"]},
-            winner="ls -la",
-            winner_supporters=["axiom"],
-            dissenters_by_command={},
-            consensus_strength=1.0,
-        )
-        mock_response = MagicMock()
-        mock_response.text = '{"status": "revised", "revised_command": "ls -la --color=auto"}'
-        mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
-        emitter = TribunalEmitter(None, _make_mock_g8e_context())
-
-        final_cmd, outcome, passed, revision, auditor_reason, commitment_id, risk_analysis = await _run_audit_stage(
-            provider=mock_provider, model="test-model", request="list files", guidelines="",
-            vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=None,
-            operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-            auditor_enabled=True,
-            emitter=emitter,
-            command_constraints_message="No whitelist or blacklist constraints are active.",
-            settings=_MOCK_USER_SETTINGS,
-            **_AUDIT_STAGE_REPUTATION_KWARGS,
-        )
-
-        assert final_cmd == "ls -la --color=auto"
-        assert outcome == CommandGenerationOutcome.VERIFICATION_FAILED
-        assert passed is False
-        assert revision == "ls -la --color=auto"
-        assert auditor_reason == AuditorReason.REVISED
-
-    @pytest.mark.asyncio
-    async def test_auditor_swap_to_dissenter_returns_verified(self):
-        """Auditor swaps to a dissenting cluster."""
-        from app.models.agents.tribunal import CandidateCommand, VoteBreakdown
-        vote_breakdown = VoteBreakdown(
-            candidates_by_member={},
-            candidates_by_command={"ls -la": ["axiom"], "ls -l": ["concord"]},
-            winner="ls -la",
-            winner_supporters=["axiom"],
-            dissenters_by_command={"ls -l": ["concord"]},
-            consensus_strength=0.5,
-        )
-        tied_candidates = [
-            CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
-            CandidateCommand(command="ls -l", pass_index=1, member=TribunalMember.CONCORD),
-        ]
-        mock_response = MagicMock()
-        mock_response.text = '{"status": "swap", "swap_to_cluster": "cluster_b"}'
-        mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
-        emitter = TribunalEmitter(None, _make_mock_g8e_context())
-        emitter.correlation_id = "tribunal_test_command"
-
-        final_cmd, outcome, passed, revision, auditor_reason, commitment_id, risk_analysis = await _run_audit_stage(
-            provider=mock_provider, model="test-model", request="list files", guidelines="",
-            vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=tied_candidates,
-            operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-            auditor_enabled=True,
-            emitter=emitter,
-            command_constraints_message="No whitelist or blacklist constraints are active.",
-            settings=_MOCK_USER_SETTINGS,
-            **_AUDIT_STAGE_REPUTATION_KWARGS,
-        )
-
-        assert final_cmd == "ls -l"
-        assert outcome == CommandGenerationOutcome.VERIFIED
-        assert passed is True
-        assert revision is None
-        assert auditor_reason == AuditorReason.SWAPPED_TO_DISSENTER
-
-    @pytest.mark.asyncio
-    async def test_auditor_revise_from_dissent(self):
-        """Auditor revises from a dissenting cluster."""
-        from app.models.agents.tribunal import CandidateCommand, VoteBreakdown
-        vote_breakdown = VoteBreakdown(
-            candidates_by_member={},
-            candidates_by_command={"ls -la": ["axiom"], "ls -l": ["concord"]},
-            winner="ls -la",
-            winner_supporters=["axiom"],
-            dissenters_by_command={"ls -l": ["concord"]},
-            consensus_strength=0.5,
-        )
-        tied_candidates = [
-            CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
-            CandidateCommand(command="ls -l", pass_index=1, member=TribunalMember.CONCORD),
-        ]
-        mock_response = MagicMock()
-        mock_response.text = '{"status": "revised", "revised_command": "ls -la --color=auto"}'
-        mock_provider = _make_mock_provider(generate_content_lite_return=mock_response)
-        emitter = TribunalEmitter(None, _make_mock_g8e_context())
-
-        final_cmd, outcome, passed, revision, auditor_reason, commitment_id, risk_analysis = await _run_audit_stage(
-            provider=mock_provider, model="test-model", request="list files", guidelines="",
-            vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=tied_candidates,
-            operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-            auditor_enabled=True,
-            emitter=emitter,
-            command_constraints_message="No whitelist or blacklist constraints are active.",
-            settings=_MOCK_USER_SETTINGS,
-            **_AUDIT_STAGE_REPUTATION_KWARGS,
-        )
-
-        assert final_cmd == "ls -la --color=auto"
-        assert outcome == CommandGenerationOutcome.VERIFICATION_FAILED
-        assert passed is False
-        assert revision == "ls -la --color=auto"
-        assert auditor_reason == AuditorReason.REVISED_FROM_DISSENT
-
-    @pytest.mark.asyncio
-    async def test_malformed_auditor_response_retries_once(self):
-        """Auditor returns malformed JSON, retries once, then succeeds."""
-        from app.models.agents.tribunal import VoteBreakdown
-        vote_breakdown = VoteBreakdown(
-            candidates_by_member={},
-            candidates_by_command={"ls -la": ["axiom"]},
-            winner="ls -la",
-            winner_supporters=["axiom"],
-            dissenters_by_command={},
-            consensus_strength=1.0,
-        )
-        call_count = 0
-
-        def _side_effect(*args, **kwargs):
-            nonlocal call_count
-            call_count += 1
-            mock_response = MagicMock()
-            if call_count == 1:
-                mock_response.text = "invalid json"
-            else:
-                mock_response.text = '{"status": "ok"}'
-            return mock_response
-
-        mock_provider = _make_mock_provider(generate_content_lite_side_effect=_side_effect)
-        emitter = TribunalEmitter(None, _make_mock_g8e_context())
-        emitter.correlation_id = "tribunal_test_command"
-
-        final_cmd, outcome, passed, revision, auditor_reason, commitment_id, risk_analysis = await _run_audit_stage(
-            provider=mock_provider, model="test-model", request="list files", guidelines="",
-            vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=None,
-            operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
-            auditor_enabled=True,
-            emitter=emitter,
-            command_constraints_message="No whitelist or blacklist constraints are active.",
-            settings=_MOCK_USER_SETTINGS,
-            **_AUDIT_STAGE_REPUTATION_KWARGS,
-        )
-
-        assert call_count == 2  # Initial call + one retry
-        assert final_cmd == "ls -la"
-        assert outcome == CommandGenerationOutcome.VERIFIED
-        assert passed is True
-        assert revision is None
-        assert auditor_reason == AuditorReason.OK
-
-    @pytest.mark.asyncio
-    async def test_auditor_exception_raises_auditor_failed_error(self):
-        from app.models.agents.tribunal import VoteBreakdown
-        vote_breakdown = VoteBreakdown(
-            candidates_by_member={},
-            candidates_by_command={"ls -la": ["axiom"]},
-            winner="ls -la",
-            winner_supporters=["axiom"],
-            dissenters_by_command={},
-            consensus_strength=1.0,
-        )
-        mock_provider = _make_mock_provider(
-            generate_content_lite_side_effect=RuntimeError("timeout")
-        )
-        emitter = TribunalEmitter(None, _make_mock_g8e_context())
-
-        with pytest.raises(TribunalAuditorFailedError) as exc_info:
-            await _run_audit_stage(
-                provider=mock_provider, model="test-model", request="list files", guidelines="",
-                vote_winner="ls -la", vote_breakdown=vote_breakdown, tied_candidates=None,
-                operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
+                vote_winner="ls -la",
+                vote_breakdown=vote_breakdown,
+                operator_context=_make_mock_operator_context(os="linux"),
                 auditor_enabled=True,
-                emitter=emitter,
-                command_constraints_message="No whitelist or blacklist constraints are active.",
-                settings=_MOCK_USER_SETTINGS,
-                **_AUDIT_STAGE_REPUTATION_KWARGS,
+                command_constraints_message="No whitelist or blacklist constraints are active",
+                investigation_id="inv-test",
             )
 
         assert exc_info.value.reason == AuditorReason.AUDITOR_ERROR
         assert "timeout" in exc_info.value.error
         assert exc_info.value.request == "list files"
+
+class TestRunAuditStageWardenRiskAnalysis:
+    """TribunalAuditor exercises Warden risk analysis before the Auditor.
+
+    Regression coverage for the Warden command-risk path: ``CommandRiskAnalysis``
+    only carries ``risk_level``. Touching any other attribute on the analysis
+    object inside ``_run_audit_stage`` is a bug. These tests cover both the
+    LOW-risk pass-through and the HIGH-risk Two-Strike Circuit Breaker paths
+    so any future drift between the model and the consumer fails fast.
+    """
+
+    @staticmethod
+    def _make_breakdown():
+        return VoteBreakdown(
+            candidates_by_member={},
+            candidates_by_command={"ls -la": ["axiom"]},
+            winner="ls -la",
+            winner_supporters=["axiom"],
+            dissenters_by_command={},
+            consensus_strength=1.0,
+        )
+
+    @staticmethod
+    def _make_analyzer(risk_level, error_user_message: str | None = None, error_suggested_fix: str | None = None):
+        from app.constants import ErrorAnalysisCategory
+        from app.models.tool_results import CommandRiskAnalysis, ErrorAnalysisResult
+        analyzer = MagicMock()
+        analyzer.analyze_command_risk = AsyncMock(
+            return_value=CommandRiskAnalysis(risk_level=risk_level)
+        )
+        analyzer.analyze_error_and_suggest_fix = AsyncMock(
+            return_value=ErrorAnalysisResult(
+                error_category=ErrorAnalysisCategory.UNKNOWN,
+                root_cause="HIGH-risk command",
+                can_auto_fix=False,
+                should_escalate=True,
+                reasoning="warden block",
+                user_message=error_user_message or "Use a safer alternative.",
+                suggested_fix=error_suggested_fix,
+            )
+        )
+        return analyzer
+
+    @pytest.mark.asyncio
+    async def test_low_risk_passes_through_without_attribute_error(self):
+        """LOW risk classification logs and proceeds to the auditor.
+
+        Regression: the post-analysis log statement must only reference
+        attributes that exist on ``CommandRiskAnalysis``. Before the fix it
+        accessed ``risk_score`` and ``reason``, both removed when the
+        Warden contract was simplified to ``risk_level`` only.
+        """
+        from app.constants import RiskLevel
+        analyzer = self._make_analyzer(RiskLevel.LOW)
+        emitter = TribunalEmitter(None, _make_mock_g8e_context())
+
+        risk_analysis = await _run_warden_stage(
+            request="list files", guidelines="",
+            vote_winner="ls -la",
+            operator_context=_make_mock_operator_context(os="linux", username="user", uid=1000),
+            emitter=emitter,
+            settings=_MOCK_USER_SETTINGS,
+            ai_response_analyzer=analyzer,
+            investigation_id="inv-test",
+            investigation_state=MagicMock(),
+        )
+
+        analyzer.analyze_command_risk.assert_awaited_once()
+        assert risk_analysis is not None
+        assert risk_analysis.risk_level == RiskLevel.LOW
+
+    @pytest.mark.asyncio
+    async def test_high_risk_first_strike_emits_warden_blocked_and_increments_counter(self):
+        """HIGH risk on a fresh investigation raises a first-strike block."""
+        from app.constants import EventType, RiskLevel
+        from app.models.agents.tribunal import (
+            TribunalWardenBlockedError,
+            TribunalWardenBlockedPayload,
+        )
+
+        analyzer = self._make_analyzer(
+            RiskLevel.HIGH,
+            error_user_message="Command blocked. Try a read-only listing.",
+            error_suggested_fix="ls -la /etc",
+        )
+        mock_event_service = MagicMock()
+        mock_event_service.publish = AsyncMock()
+        emitter = TribunalEmitter(mock_event_service, _make_mock_g8e_context(), correlation_id="corr-warden-1")
+
+        investigation_state = MagicMock()
+        investigation_state.warden_block_count = 0
+
+        with pytest.raises(TribunalWardenBlockedError) as exc_info:
+            await _run_warden_stage(
+                request="purge logs", guidelines="",
+                vote_winner="rm -rf /var/log",
+                operator_context=_make_mock_operator_context(os="linux", username="root", uid=0),
+                emitter=emitter,
+                settings=_MOCK_USER_SETTINGS,
+                ai_response_analyzer=analyzer,
+                investigation_id="inv-test",
+                investigation_state=investigation_state,
+            )
+
+        assert exc_info.value.risk_level == RiskLevel.HIGH
+        assert investigation_state.warden_block_count == 1
+        analyzer.analyze_error_and_suggest_fix.assert_awaited_once()
+
+        emitted_types = [call.args[0].event_type for call in mock_event_service.publish.call_args_list]
+        assert EventType.TRIBUNAL_SESSION_WARDEN_BLOCKED in emitted_types
+        warden_payloads = [
+            call.args[0].payload
+            for call in mock_event_service.publish.call_args_list
+            if call.args[0].event_type == EventType.TRIBUNAL_SESSION_WARDEN_BLOCKED
+        ]
+        assert len(warden_payloads) == 1
+        payload = warden_payloads[0]
+        assert isinstance(payload, TribunalWardenBlockedPayload)
+        assert payload.risk_level == RiskLevel.HIGH
+        assert payload.is_conflict is False
+
+    @pytest.mark.asyncio
+    async def test_high_risk_second_strike_emits_agent_conflict_and_resets_counter(self):
+        """HIGH risk after a prior block raises an agent-conflict second strike."""
+        from app.constants import EventType, RiskLevel
+        from app.models.agents.tribunal import (
+            TribunalWardenBlockedError,
+            TribunalWardenBlockedPayload,
+        )
+
+        analyzer = self._make_analyzer(RiskLevel.HIGH)
+        mock_event_service = MagicMock()
+        mock_event_service.publish = AsyncMock()
+        emitter = TribunalEmitter(mock_event_service, _make_mock_g8e_context(), correlation_id="corr-warden-2")
+
+        investigation_state = MagicMock()
+        investigation_state.warden_block_count = 1
+
+        with pytest.raises(TribunalWardenBlockedError) as exc_info:
+            await _run_warden_stage(
+                request="purge logs", guidelines="",
+                vote_winner="rm -rf /var/log",
+                operator_context=_make_mock_operator_context(os="linux", username="root", uid=0),
+                emitter=emitter,
+                settings=_MOCK_USER_SETTINGS,
+                ai_response_analyzer=analyzer,
+                investigation_id="inv-test",
+                investigation_state=investigation_state,
+            )
+
+        assert exc_info.value.risk_level == RiskLevel.HIGH
+        assert investigation_state.warden_block_count == 0
+        analyzer.analyze_error_and_suggest_fix.assert_not_awaited()
+
+        emitted_types = [call.args[0].event_type for call in mock_event_service.publish.call_args_list]
+        assert EventType.AI_AGENT_CONFLICT_DETECTED in emitted_types
+        conflict_payloads = [
+            call.args[0].payload
+            for call in mock_event_service.publish.call_args_list
+            if call.args[0].event_type == EventType.AI_AGENT_CONFLICT_DETECTED
+        ]
+        assert len(conflict_payloads) == 1
+        payload = conflict_payloads[0]
+        assert isinstance(payload, TribunalWardenBlockedPayload)
+        assert payload.risk_level == RiskLevel.HIGH
+        assert payload.is_conflict is True
 
 
 class TestBuildAndEmitResult:
@@ -1519,8 +986,6 @@ class TestBuildAndEmitResult:
 
     @pytest.mark.asyncio
     async def test_builds_complete_result(self):
-        from app.models.agents.tribunal import CandidateCommand, VoteBreakdown
-
         candidates = [
             CandidateCommand(command="ls -la", pass_index=0, member=TribunalMember.AXIOM),
         ]
@@ -2265,82 +1730,6 @@ class TestGenerateCommandAuditorFailure:
             for call in mock_event_service.publish.call_args_list
         ]
         assert emitted_types.count(EventType.TRIBUNAL_VOTING_PASS_COMPLETED) == 2
-
-
-class TestMaxTokensConstants:
-    """_MAX_TOKENS constants are used by generation passes and auditor."""
-
-    @pytest.mark.asyncio
-    async def test_generation_pass_uses_max_tokens(self):
-        mock_response = MagicMock()
-        mock_response.text = "ls -la"
-        mock_provider = MagicMock()
-        mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
-        emitter = TribunalEmitter(None, _make_mock_g8e_context())
-
-        await _run_generation_pass(
-            provider=mock_provider,
-            model="test-model",
-            request="list files",
-            guidelines="",
-            operator_context=_make_mock_operator_context(os="linux", shell="bash", working_directory="/home/user"),
-            pass_index=0,
-            emitter=emitter,
-            pass_errors=[],
-            command_constraints_message="No whitelist or blacklist constraints are active.",
-        )
-
-        call_kwargs = mock_provider.generate_content_lite.call_args
-        settings = call_kwargs.kwargs.get("lite_llm_settings")
-        assert settings.max_output_tokens == _MAX_TOKENS_GENERATION
-
-    @pytest.mark.asyncio
-    async def test_auditor_uses_max_tokens(self):
-        from unittest.mock import patch
-        mock_response = MagicMock()
-        mock_response.text = '{"status": "ok"}'
-        mock_provider = MagicMock()
-        mock_provider.generate_content_lite = AsyncMock(return_value=mock_response)
-        emitter = TribunalEmitter(None, _make_mock_g8e_context())
-
-        # Mock get_model_config to return a config for auditor
-        with patch("app.models.model_configs.get_model_config") as mock_get_config:
-            mock_config = LLMModelConfig(
-                name="test-model",
-                max_output_tokens=_MAX_TOKENS_AUDITOR,
-                top_p=1.0,
-                top_k=None,
-                stop_sequences=None,
-            )
-            mock_get_config.return_value = mock_config
-
-            from app.models.agents.tribunal import VoteBreakdown
-            vote_breakdown = VoteBreakdown(
-                candidates_by_member={},
-                candidates_by_command={"ls -la": ["axiom"]},
-                winner="ls -la",
-                winner_supporters=["axiom"],
-                dissenters_by_command={},
-            )
-
-            await run_auditor(
-                provider=mock_provider,
-                model="test-model",
-                request="list files",
-                guidelines="",
-                mode="unanimous",
-                vote_winner="ls -la",
-                vote_breakdown=vote_breakdown,
-                tied_candidates=None,
-                operator_context=_make_mock_operator_context(os="linux"),
-                emitter=emitter,
-                command_constraints_message="No whitelist or blacklist constraints are active",
-                auditor_persona=get_agent_persona("auditor"),
-            )
-
-            call_kwargs = mock_provider.generate_content_lite.call_args
-            settings = call_kwargs.kwargs.get("lite_llm_settings")
-            assert settings.max_output_tokens == _MAX_TOKENS_AUDITOR
 
 
 class TestForbiddenPatternsMessage:

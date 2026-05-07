@@ -14,7 +14,7 @@
 """
 Provider turn processing — thinking state machine, stream chunk parsing,
 model parts accumulation, token counting, parts consolidation, finish reason
-normalization, and retry error classification.
+normalization, interrogation gate, and retry error classification.
 
 All functions are stateless and accept typed inputs. Side-channel instance
 variables are eliminated: callers pass a mutable result_out list to receive
@@ -41,6 +41,7 @@ from app.models.agent import (
     StreamChunkFromModel,
     TurnResult,
 )
+from app.utils.interrogation import extract_interrogation_questions
 
 logger = logging.getLogger(__name__)
 
@@ -243,6 +244,64 @@ async def process_provider_turn(
         total_tokens=state.total_tokens,
     ))
 
+
+@dataclass
+class GatedTurnResult:
+    """Result of process_turn_with_gate for a single LLM stream turn.
+
+    Wraps TurnResult with the interrogation gate decision:
+    - interrogation_detected: True if an <interrogation> block was found in the
+      response text. When True, pending_tool_calls has been cleared so the ReAct
+      loop breaks naturally without executing tools.
+    """
+    turn_result: TurnResult
+    interrogation_detected: bool
+
+
+async def process_turn_with_gate(
+    stream_response: AsyncGenerator[types.StreamChunkFromModel],
+    model_name: str,
+    result_out: list[GatedTurnResult],
+) -> AsyncGenerator[StreamChunkFromModel]:
+    """Consume one provider stream turn, applying the interrogation gate.
+
+    Wraps process_provider_turn and checks the completed TurnResult for an
+    <interrogation> block in the response text. If found:
+      - Sets interrogation_detected=True on the GatedTurnResult.
+      - Clears pending_tool_calls so the ReAct loop breaks naturally.
+
+    All stream chunks from process_provider_turn are yielded as-is.
+
+    Appends a GatedTurnResult to result_out (always exactly one item).
+    """
+    inner_result_out: list[TurnResult] = []
+
+    async for chunk in process_provider_turn(stream_response, model_name, inner_result_out):
+        yield chunk
+
+    turn_result = inner_result_out[0]
+
+    response_text = ""
+    if turn_result.model_response_parts:
+        consolidated = consolidate_model_parts(turn_result.model_response_parts, model_name=model_name)
+        response_text = "".join(
+            part.text for part in consolidated if part.text and not part.thought
+        )
+
+    interrogation_detected = bool(extract_interrogation_questions(response_text))
+
+    if interrogation_detected:
+        logger.info(
+            "[TURN] Interrogation gate firing: detected <interrogation> block, "
+            "suppressing %d pending tool calls and deferring to user answers",
+            len(turn_result.pending_tool_calls),
+        )
+        turn_result.pending_tool_calls.clear()
+
+    result_out.append(GatedTurnResult(
+        turn_result=turn_result,
+        interrogation_detected=interrogation_detected,
+    ))
 
 
 def consolidate_model_parts(

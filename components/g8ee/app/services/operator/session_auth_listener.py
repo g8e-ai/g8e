@@ -17,6 +17,7 @@ import asyncio
 import hashlib
 import logging
 
+from app.constants.channels import PubSubChannel
 from app.clients.pubsub_client import PubSubClient
 from app.services.operator.operator_session_service import OperatorSessionService
 from app.services.operator.operator_data_service import OperatorDataService
@@ -60,10 +61,8 @@ class SessionAuthListener:
         # authChannel     = `${PubSubChannel.AUTH_PUBLISH_SESSION_PREFIX}${sessionHash}`;
         # responseChannel = `${PubSubChannel.AUTH_RESPONSE_SESSION_PREFIX}${sessionHash}`;
 
-        # I'll hardcode them for now if not in g8ee constants, but I should check.
-
-        auth_channel = f"auth.publish:session:{session_hash}"
-        response_channel = f"auth.response:session:{session_hash}"
+        auth_channel = f"{PubSubChannel.AUTH_PUBLISH_SESSION_PREFIX}{session_hash}"
+        response_channel = f"{PubSubChannel.AUTH_RESPONSE_SESSION_PREFIX}{session_hash}"
 
         if auth_channel in self._active_listeners:
             return

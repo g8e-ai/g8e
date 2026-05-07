@@ -60,13 +60,16 @@ class OperatorStreamExecutor:
 
         # 1. Mint dlk_ token
         try:
-            # Note: We need to verify the exact endpoint for minting dlk_ tokens in g8ed
-            # For now, we'll assume a standard internal path
-            token_response = await self._internal_http_client.post(
-                "/api/internal/tokens/mint-device-link",
-                json={"user_id": g8e_context.user_id}
+            # Authority: g8ed owns device link token lifecycle.
+            # Using high-level client method which uses canonical InternalApiPaths.G8ED_CREATE_OPERATOR_LINK.
+            link_response = await self._internal_http_client.generate_operator_link(
+                user_id=g8e_context.user_id,
+                operator_id="", # Multi-host stream isn't bound to one operator yet
+                web_session_id=g8e_context.web_session_id,
+                organization_id=g8e_context.organization_id,
+                context=g8e_context
             )
-            device_token = token_response.get("token")
+            device_token = link_response.token
             if not device_token:
                 raise ExternalServiceError(
                     "Failed to mint device link token: no token in response",

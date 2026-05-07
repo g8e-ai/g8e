@@ -16,10 +16,10 @@ from pydantic import Field
 from app.constants import CommandGenerationOutcome, AuditorReason
 from app.models.agents.tribunal import CandidateCommand, VoteBreakdown
 
-from .base import G8eIdentifiableModel, UTCDatetime
+from .base import G8eBaseModel, G8eIdentifiableModel, UTCDatetime
 
 
-class TribunalCommandRequestContext(G8eIdentifiableModel.model.__base__):
+class TribunalCommandRequestContext(G8eBaseModel):
     request: str = Field(..., description="Caller's natural-language request that seeded the Tribunal")
     guidelines: str = Field(default="", description="Caller's optional guidelines on command shape passed to the Tribunal")
     model: str | None = Field(default=None, description="LLM model used for Tribunal generation")
@@ -27,14 +27,14 @@ class TribunalCommandRequestContext(G8eIdentifiableModel.model.__base__):
     rounds_executed: int = Field(default=1, description="Number of Tribunal voting rounds executed (1=single-round, 2=two-round with peer review)")
 
 
-class TribunalCommandGenerationResult(G8eIdentifiableModel.model.__base__):
+class TribunalCommandGenerationResult(G8eBaseModel):
     final_command: str | None = Field(default=None, description="Command string produced by the Tribunal pipeline; null when outcome=consensus_failed")
     outcome: CommandGenerationOutcome = Field(..., description="Tribunal pipeline outcome")
     vote_winner: str | None = Field(default=None, description="Command string that won the uniform majority vote; null when outcome=consensus_failed")
     vote_score: float | None = Field(default=None, description="Fraction of members who voted for the winner (winner_count / total_members); null when outcome=consensus_failed")
 
 
-class TribunalCommandAuditor(G8eIdentifiableModel.model.__base__):
+class TribunalCommandAuditor(G8eBaseModel):
     auditor_passed: bool | None = Field(default=None, description="True if the auditor approved the vote winner (or an equivalent dissenter cluster)")
     auditor_revision: str | None = Field(default=None, description="Revised command produced by the auditor when auditor_passed=false")
     auditor_reason: AuditorReason | None = Field(default=None, description="The auditor's stated reason")
@@ -43,7 +43,7 @@ class TribunalCommandAuditor(G8eIdentifiableModel.model.__base__):
     reputation_commitment_id: str | None = Field(default=None, description="FK to the reputation_commitment row written inside this verdict (Phase 2; null when REPUTATION_COMMITMENT_ENABLED=false or commit step skipped/failed)")
 
 
-class TribunalCommandPipelineMetadata(G8eIdentifiableModel.model.__base__):
+class TribunalCommandPipelineMetadata(G8eBaseModel):
     consensus_confidence: str | None = Field(default=None, description="Qualitative consensus confidence level derived from quantitative metrics")
     execution_duration_ms: int | None = Field(default=None, description="Total Tribunal pipeline execution duration in milliseconds")
     stage_1_duration_ms: int | None = Field(default=None, description="Stage 1 (generation) duration in milliseconds")
@@ -51,7 +51,7 @@ class TribunalCommandPipelineMetadata(G8eIdentifiableModel.model.__base__):
     stage_3_duration_ms: int | None = Field(default=None, description="Stage 3 (verification) duration in milliseconds")
 
 
-class TribunalCommandErrorContext(G8eIdentifiableModel.model.__base__):
+class TribunalCommandErrorContext(G8eBaseModel):
     error_type: str | None = Field(default=None, description="Type of Tribunal error that occurred")
     error_message: str | None = Field(default=None, description="Human-readable error message")
     pass_errors: list[str] = Field(default_factory=list, description="Per-pass error messages when multiple passes fail")

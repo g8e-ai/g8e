@@ -22,8 +22,8 @@
 #   status      Show cert expiry, subject, and SANs for the CA and server
 #               cert currently live in the g8es-data volume.
 #   trust       Install the platform CA certificate into the host OS trust
-#               store. Streams the CA from the g8ep container (which mounts
-#               g8es-data read-only at /g8es) — no file is written to the host.
+#               store. Streams the CA from the g8es container (which mounts
+#               g8es-data read-only at /ssl) — no file is written to the host.
 #               Use --ca-file to supply a cert directly (used by the g8e CLI).
 #
 # Options:
@@ -64,8 +64,8 @@ PROJECT_TMP="$PROJECT_ROOT/tmp"
 [[ -d "$PROJECT_TMP" ]] || mkdir -p "$PROJECT_TMP"
 
 CONTAINER="g8es"
-CERT_CONTAINER="g8ep"
-CERT_SSL_DIR="/g8es"
+CERT_CONTAINER="g8es"
+CERT_SSL_DIR="/ssl"
 COMPOSE_FILE="$PROJECT_ROOT/docker-compose.yml"
 
 log()  { echo "[certs] $*"; }

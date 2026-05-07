@@ -110,6 +110,18 @@ class LLMModelConfig(G8eBaseModel):
     # Opus-class models typically want 8_192+.
     thinking_output_reserve: int = 4_096
 
+    def to_litellm_settings(self, system_instructions: str = "", response_format: Any = None) -> "LiteLLMSettings":
+        """Convert this model config to a LiteLLMSettings object."""
+        from app.llm.llm_types import LiteLLMSettings
+        return LiteLLMSettings(
+            max_output_tokens=self.max_output_tokens or 4096,
+            top_p_nucleus_sampling=self.top_p,
+            top_k_filtering=self.top_k,
+            stop_sequences=self.stop_sequences,
+            system_instructions=system_instructions,
+            response_format=response_format,
+        )
+
 
 # -----------------------------------------------------------------------------
 # Default per-level token budgets for Anthropic extended thinking.
