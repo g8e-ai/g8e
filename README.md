@@ -262,15 +262,6 @@ curl -fsSL http://<host>/g8e | sh -s -- <device-link-token>
 ./g8e test <component>     # Run component tests (g8ee, g8ed, g8eo)
 ```
 
-
-## Setup Walkthrough
-
-https://www.youtube.com/watch?v=tY7A6BHatF8
-
-
-![alt text](components/g8ed/public/media/fixed-by-g8e.png)
-
-
 ---
 
 ## Status

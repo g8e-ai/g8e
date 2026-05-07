@@ -192,33 +192,41 @@ class TestKVCacheClientLifecycle:
 
     async def test_ping(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"status": "ok"}')
-        assert await client.ping() is True
+        res = await client.ping()
+        assert res is True
 
 
 @pytest.mark.asyncio
 class TestKVCacheClientUnhealthyGuards:
     async def test_get_returns_none_when_unhealthy(self, disconnected_client):
-        assert await disconnected_client.get("some:key") is None
+        res = await disconnected_client.get("some:key")
+        assert res is None
 
     async def test_set_returns_false_when_unhealthy(self, disconnected_client):
-        assert await disconnected_client.set("some:key", "value") is False
+        res = await disconnected_client.set("some:key", "value")
+        assert res is False
 
     async def test_incr_returns_zero_when_unhealthy(self, disconnected_client):
-        assert await disconnected_client.incr("counter:key") == 0
+        res = await disconnected_client.incr("counter:key")
+        assert res == 0
 
     async def test_decr_returns_zero_when_unhealthy(self, disconnected_client):
-        assert await disconnected_client.decr("counter:key") == 0
+        res = await disconnected_client.decr("counter:key")
+        assert res == 0
     async def test_get_success(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"value": "bar"}')
-        assert await client.get("foo") == "bar"
+        res = await client.get("foo")
+        assert res == "bar"
 
     async def test_get_failure(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=404, text="Not found")
-        assert await client.get("foo") is None
+        res = await client.get("foo")
+        assert res is None
 
     async def test_set_success(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"status": "ok"}')
-        assert await client.set("foo", "bar") is True
+        res = await client.set("foo", "bar")
+        assert res is True
 
     async def test_set_with_ex(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"status": "ok"}')
@@ -234,15 +242,18 @@ class TestKVCacheClientUnhealthyGuards:
 
     async def test_set_failure(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=500, text="Error")
-        assert await client.set("foo", "bar") is False
+        res = await client.set("foo", "bar")
+        assert res is False
 
     async def test_setex(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"status": "ok"}')
-        assert await client.setex("foo", 10, "bar") is True
+        res = await client.setex("foo", 10, "bar")
+        assert res is True
 
     async def test_delete(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"status": "ok"}')
-        assert await client.delete("k1", "k2") == 2
+        deleted_count = await client.delete("k1", "k2")
+        assert deleted_count == 2
         assert mock_session.request.call_count == 2
 
     async def test_exists(self, client, mock_session):
@@ -250,63 +261,77 @@ class TestKVCacheClientUnhealthyGuards:
             MockResponse(status=200, text='{"value": "v1"}'),
             MockResponse(status=404, text="Not found"),
         ]
-        assert await client.exists("k1", "k2") == 1
+        res = await client.exists("k1", "k2")
+        assert res == 1
 
     async def test_expire(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"status": "ok"}')
-        assert await client.expire("foo", 30) is True
+        res = await client.expire("foo", 30)
+        assert res is True
 
     async def test_ttl(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"ttl": 45}')
-        assert await client.ttl("foo") == 45
+        res = await client.ttl("foo")
+        assert res == 45
 
     async def test_ttl_not_found(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=404, text="Not found")
-        assert await client.ttl("foo") == -2
+        res = await client.ttl("foo")
+        assert res == -2
 
     async def test_keys(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"keys": ["k1", "k2"]}')
-        assert await client.keys("prefix:*") == ["k1", "k2"]
+        res = await client.keys("prefix:*")
+        assert res == ["k1", "k2"]
 
     async def test_delete_pattern(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"deleted": 5}')
-        assert await client.delete_pattern("prefix:*") == 5
+        res = await client.delete_pattern("prefix:*")
+        assert res == 5
 
 
     async def test_delete_exception(self, client, mock_session):
         mock_session.request.side_effect = Exception("error")
-        assert await client.delete("k1") == 0
+        res = await client.delete("k1")
+        assert res == 0
 
     async def test_expire_exception(self, client, mock_session):
         mock_session.request.side_effect = Exception("error")
-        assert await client.expire("foo", 30) is False
+        res = await client.expire("foo", 30)
+        assert res is False
 
     async def test_keys_exception(self, client, mock_session):
         mock_session.request.side_effect = Exception("error")
-        assert await client.keys() == []
+        res = await client.keys()
+        assert res == []
 
     async def test_delete_pattern_exception(self, client, mock_session):
         mock_session.request.side_effect = Exception("error")
-        assert await client.delete_pattern("prefix:*") == 0
+        res = await client.delete_pattern("prefix:*")
+        assert res == 0
 
 
 @pytest.mark.asyncio
 class TestKVCacheClientJSONOperations:
     async def test_get_json_not_found(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=404, text="Not found")
-        assert await client.get_json("foo") is None
+        res = await client.get_json("foo")
+        assert res is None
 
     async def test_get_json_success(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"value": "{\\"a\\": 1}"}')
-        assert await client.get_json("foo") == {"a": 1}
+        res = await client.get_json("foo")
+        assert res == {"a": 1}
 
     async def test_get_json_invalid(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"value": "not json"}')
-        assert await client.get_json("foo") == "not json"
+        res = await client.get_json("foo")
+        assert res == "not json"
 
     async def test_set_json(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"status": "ok"}')
-        assert await client.set_json("foo", {"a": 1}) is True
+        res = await client.set_json("foo", {"a": 1})
+        assert res is True
         args, kwargs = mock_session.request.call_args
         assert kwargs["json"]["value"] == '{"a": 1}'
 
@@ -318,7 +343,8 @@ class TestKVCacheClientHashOperations:
             MockResponse(status=404, text="Not found"),  # get
             MockResponse(status=200, text='{"status": "ok"}'),  # set
         ]
-        assert await client.hset("hkey", "f1", "v1") == 1
+        res = await client.hset("hkey", "f1", "v1")
+        assert res == 1
         args, kwargs = mock_session.request.call_args
         assert kwargs["json"]["value"] == '{"f1": "v1"}'
 
@@ -327,26 +353,31 @@ class TestKVCacheClientHashOperations:
             MockResponse(status=200, text='{"value": "{\\"f1\\": \\"v1\\"}"}'),  # get
             MockResponse(status=200, text='{"status": "ok"}'),  # set
         ]
-        assert await client.hset("hkey", "f2", "v2") == 1
+        res = await client.hset("hkey", "f2", "v2")
+        assert res == 1
         args, kwargs = mock_session.request.call_args
         assert "f1" in kwargs["json"]["value"]
         assert "f2" in kwargs["json"]["value"]
 
     async def test_hget(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"value": "{\\"f1\\": \\"v1\\"}"}')
-        assert await client.hget("hkey", "f1") == "v1"
-        assert await client.hget("hkey", "f2") is None
+        res1 = await client.hget("hkey", "f1")
+        assert res1 == "v1"
+        res2 = await client.hget("hkey", "f2")
+        assert res2 is None
 
     async def test_hgetall(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"value": "{\\"f1\\": \\"v1\\"}"}')
-        assert await client.hgetall("hkey") == {"f1": "v1"}
+        res = await client.hgetall("hkey")
+        assert res == {"f1": "v1"}
 
     async def test_hdel(self, client, mock_session):
         mock_session.request.side_effect = [
             MockResponse(status=200, text='{"value": "{\\"f1\\": \\"v1\\", \\"f2\\": \\"v2\\"}"}'),  # get
             MockResponse(status=200, text='{"status": "ok"}'),  # set
         ]
-        assert await client.hdel("hkey", "f1") == 1
+        res = await client.hdel("hkey", "f1")
+        assert res == 1
         args, kwargs = mock_session.request.call_args
         assert "f1" not in kwargs["json"]["value"]
         assert "f2" in kwargs["json"]["value"]
@@ -354,31 +385,38 @@ class TestKVCacheClientHashOperations:
 
     async def test_hget_not_found(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=404, text="Not found")
-        assert await client.hget("hkey", "f1") is None
+        res = await client.hget("hkey", "f1")
+        assert res is None
 
     async def test_hget_invalid_json(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"value": "not json"}')
-        assert await client.hget("hkey", "f1") is None
+        res = await client.hget("hkey", "f1")
+        assert res is None
 
     async def test_hgetall_not_found(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=404, text="Not found")
-        assert await client.hgetall("hkey") is None
+        res = await client.hgetall("hkey")
+        assert res is None
 
     async def test_hgetall_invalid_json(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"value": "not json"}')
-        assert await client.hgetall("hkey") is None
+        res = await client.hgetall("hkey")
+        assert res is None
 
     async def test_hdel_not_found(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=404, text="Not found")
-        assert await client.hdel("hkey", "f1") == 0
+        res = await client.hdel("hkey", "f1")
+        assert res == 0
 
     async def test_hdel_field_not_present(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"value": "{\\"f1\\": \\"v1\\"}"}')
-        assert await client.hdel("hkey", "f2") == 0
+        res = await client.hdel("hkey", "f2")
+        assert res == 0
 
     async def test_hdel_invalid_json(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"value": "not json"}')
-        assert await client.hdel("hkey", "f1") == 0
+        res = await client.hdel("hkey", "f1")
+        assert res == 0
 
 
 @pytest.mark.asyncio
@@ -388,44 +426,53 @@ class TestKVCacheClientListOperations:
             MockResponse(status=404, text="Not found"),  # get
             MockResponse(status=200, text='{"status": "ok"}'),  # set
         ]
-        assert await client.rpush("lkey", "a") == 1
+        res = await client.rpush("lkey", "a")
+        assert res == 1
 
     async def test_lpush_new(self, client, mock_session):
         mock_session.request.side_effect = [
             MockResponse(status=404, text="Not found"),  # get
             MockResponse(status=200, text='{"status": "ok"}'),  # set
         ]
-        assert await client.lpush("lkey", "a") == 1
+        res = await client.lpush("lkey", "a")
+        assert res == 1
 
     async def test_lrange_not_found(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=404, text="Not found")
-        assert await client.lrange("lkey", 0, -1) == []
+        res = await client.lrange("lkey", 0, -1)
+        assert res == []
 
     async def test_lrange_invalid_json(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"value": "not json"}')
-        assert await client.lrange("lkey", 0, -1) == []
+        res = await client.lrange("lkey", 0, -1)
+        assert res == []
 
     async def test_llen_not_found(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=404, text="Not found")
-        assert await client.llen("lkey") == 0
+        res = await client.llen("lkey")
+        assert res == 0
 
     async def test_llen_invalid_json(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"value": "not json"}')
-        assert await client.llen("lkey") == 0
+        res = await client.llen("lkey")
+        assert res == 0
 
     async def test_ltrim_not_found(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=404, text="Not found")
-        assert await client.ltrim("lkey", 0, -1) is True
+        res = await client.ltrim("lkey", 0, -1)
+        assert res is True
 
     async def test_ltrim_invalid_json(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"value": "not json"}')
-        assert await client.ltrim("lkey", 0, -1) is True
+        res = await client.ltrim("lkey", 0, -1)
+        assert res is True
     async def test_rpush(self, client, mock_session):
         mock_session.request.side_effect = [
             MockResponse(status=200, text='{"value": "[\\"a\\"]"}'),  # get
             MockResponse(status=200, text='{"status": "ok"}'),  # set
         ]
-        assert await client.rpush("lkey", "b", "c") == 3
+        res = await client.rpush("lkey", "b", "c")
+        assert res == 3
         args, kwargs = mock_session.request.call_args
         assert kwargs["json"]["value"] == '["a", "b", "c"]'
 
@@ -434,25 +481,30 @@ class TestKVCacheClientListOperations:
             MockResponse(status=200, text='{"value": "[\\"a\\"]"}'),  # get
             MockResponse(status=200, text='{"status": "ok"}'),  # set
         ]
-        assert await client.lpush("lkey", "b", "c") == 3
+        res = await client.lpush("lkey", "b", "c")
+        assert res == 3
         args, kwargs = mock_session.request.call_args
         assert kwargs["json"]["value"] == '["c", "b", "a"]'
 
     async def test_lrange(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"value": "[1, 2, 3, 4, 5]"}')
-        assert await client.lrange("lkey", 1, 3) == [2, 3, 4]
-        assert await client.lrange("lkey", 2, -1) == [3, 4, 5]
+        res1 = await client.lrange("lkey", 1, 3)
+        assert res1 == [2, 3, 4]
+        res2 = await client.lrange("lkey", 2, -1)
+        assert res2 == [3, 4, 5]
 
     async def test_llen(self, client, mock_session):
         mock_session.request.return_value = MockResponse(status=200, text='{"value": "[1, 2, 3]"}')
-        assert await client.llen("lkey") == 3
+        res = await client.llen("lkey")
+        assert res == 3
 
     async def test_ltrim(self, client, mock_session):
         mock_session.request.side_effect = [
             MockResponse(status=200, text='{"value": "[1, 2, 3, 4, 5]"}'),  # get
             MockResponse(status=200, text='{"status": "ok"}'),  # set
         ]
-        assert await client.ltrim("lkey", 1, 3) is True
+        res = await client.ltrim("lkey", 1, 3)
+        assert res is True
         args, kwargs = mock_session.request.call_args
         assert kwargs["json"]["value"] == "[2, 3, 4]"
 
@@ -464,14 +516,16 @@ class TestKVCacheClientAtomicOperations:
             MockResponse(status=200, text='{"value": "10"}'),  # get
             MockResponse(status=200, text='{"status": "ok"}'),  # set
         ]
-        assert await client.incr("counter") == 11
+        res = await client.incr("counter")
+        assert res == 11
 
     async def test_decr(self, client, mock_session):
         mock_session.request.side_effect = [
             MockResponse(status=200, text='{"value": "10"}'),  # get
             MockResponse(status=200, text='{"status": "ok"}'),  # set
         ]
-        assert await client.decr("counter") == 9
+        res = await client.decr("counter")
+        assert res == 9
 
 class TestEncodeKey:
     def test_plain_key_unchanged(self):
