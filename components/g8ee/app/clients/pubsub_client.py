@@ -26,6 +26,7 @@ import uuid
 from collections.abc import Callable, Coroutine
 from typing import Any
 
+from app.proto.pubsub_pb2 import PubSubMessage, PubSubEvent
 import aiohttp
 
 from app.models.settings import ListenSettings
@@ -131,9 +132,11 @@ class PubSubClient:
             await asyncio.sleep(0)
 
         for channel in list(self._subscribed_channels):
-            await self._ws.send_json({PubSubField.ACTION: PubSubAction.SUBSCRIBE, PubSubField.CHANNEL: channel})
+            msg = PubSubMessage(action=PubSubAction.SUBSCRIBE, channel=channel)
+            await self._ws.send_bytes(msg.SerializeToString())
         for pattern in list(self._subscribed_patterns):
-            await self._ws.send_json({PubSubField.ACTION: PubSubAction.PSUBSCRIBE, PubSubField.CHANNEL: pattern})
+            msg = PubSubMessage(action=PubSubAction.PSUBSCRIBE, channel=pattern)
+            await self._ws.send_bytes(msg.SerializeToString())
         if self._subscribed_channels or self._subscribed_patterns:
             logger.info(
                 f"[PUBSUB-CLIENT] Re-registered {len(self._subscribed_channels)} channels "
@@ -145,14 +148,15 @@ class PubSubClient:
         try:
             assert self._ws is not None
             async for msg in self._ws:
-                if msg.type == aiohttp.WSMsgType.TEXT:
+                if msg.type == aiohttp.WSMsgType.BINARY:
                     try:
-                        event = json.loads(msg.data)
-                        event_type = event.get(PubSubField.TYPE)
+                        event = PubSubEvent()
+                        event.ParseFromString(msg.data)
+                        event_type = event.type
 
                         if event_type == PubSubWireEventType.MESSAGE:
-                            channel = event.get(PubSubField.CHANNEL)
-                            data = event.get(PubSubField.DATA)
+                            channel = event.channel
+                            data = event.data
 
                             if not channel:
                                 continue
@@ -172,9 +176,9 @@ class PubSubClient:
                                 task.add_done_callback(self._background_tasks.discard)
 
                         elif event_type == PubSubWireEventType.PMESSAGE:
-                            pattern = event.get(PubSubField.PATTERN, "")
-                            channel = event.get(PubSubField.CHANNEL, "")
-                            data = event.get(PubSubField.DATA)
+                            pattern = event.pattern
+                            channel = event.channel
+                            data = event.data
 
                             if not pattern:
                                 continue
@@ -189,7 +193,7 @@ class PubSubClient:
 
                         elif event_type == PubSubWireEventType.SUBSCRIBED:
                             # The broker always uses the 'channel' key even for pattern acks
-                            target = event.get(PubSubField.CHANNEL)
+                            target = event.channel
                             if not target:
                                 continue
 
@@ -205,10 +209,8 @@ class PubSubClient:
                         else:
                             logger.warning("[PUBSUB-CLIENT] Unknown wire event type '%s'", event_type)
 
-                    except json.JSONDecodeError:
-                        logger.error("[PUBSUB-CLIENT] Malformed JSON from pub/sub: %r", msg.data[:200])
-                    except (KeyError, ValueError, AttributeError) as e:
-                        logger.error("[PUBSUB-CLIENT] Malformed event shape from pub/sub: %s", e, exc_info=True)
+                    except Exception as e:
+                        logger.error("[PUBSUB-CLIENT] Failed to parse binary protobuf message: %s", e)
 
                 elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
                     logger.info("[PUBSUB-CLIENT] WebSocket closed or error: %s", msg.type)
@@ -347,10 +349,8 @@ class PubSubClient:
                 self._pending_acks.setdefault(channel, []).append(ack)
                 self._subscribed_channels.add(channel)
 
-                await self._ws.send_json({
-                    PubSubField.ACTION: PubSubAction.SUBSCRIBE,
-                    PubSubField.CHANNEL: channel
-                })
+                msg = PubSubMessage(action=PubSubAction.SUBSCRIBE, channel=channel)
+                await self._ws.send_bytes(msg.SerializeToString())
 
         try:
             await asyncio.wait_for(ack.wait(), timeout=5.0)
@@ -397,10 +397,8 @@ class PubSubClient:
                 self._pending_acks.setdefault(pattern, []).append(ack)
                 self._subscribed_patterns.add(pattern)
 
-                await self._ws.send_json({
-                    PubSubField.ACTION: PubSubAction.PSUBSCRIBE,
-                    PubSubField.CHANNEL: pattern
-                })
+                msg = PubSubMessage(action=PubSubAction.PSUBSCRIBE, channel=pattern)
+                await self._ws.send_bytes(msg.SerializeToString())
 
         try:
             await asyncio.wait_for(ack.wait(), timeout=5.0)
@@ -438,12 +436,9 @@ class PubSubClient:
                 return
 
             logger.info("[PUBSUB-CLIENT] Unsubscribing from channel '%s'", channel)
-            self._subscribed_channels.discard(channel)
+            msg = PubSubMessage(action=PubSubAction.UNSUBSCRIBE, channel=channel)
             if self._ws and not self._ws.closed:
-                await self._ws.send_json({
-                    PubSubField.ACTION: PubSubAction.UNSUBSCRIBE,
-                    PubSubField.CHANNEL: channel
-                })
+                await self._ws.send_bytes(msg.SerializeToString())
 
     async def punsubscribe(self, pattern: str):
         """Decrement refcount and punsubscribe if it reaches zero."""
@@ -460,14 +455,11 @@ class PubSubClient:
                 return
 
             logger.info("[PUBSUB-CLIENT] Unsubscribing from pattern '%s'", pattern)
-            self._subscribed_patterns.discard(pattern)
+            msg = PubSubMessage(action=PubSubAction.UNSUBSCRIBE, channel=pattern)
             if self._ws and not self._ws.closed:
-                await self._ws.send_json({
-                    PubSubField.ACTION: PubSubAction.UNSUBSCRIBE,
-                    PubSubField.CHANNEL: pattern
-                })
+                await self._ws.send_bytes(msg.SerializeToString())
 
-    async def publish(self, channel: str, data: dict[str, object]) -> int:
+    async def publish(self, channel: str, data: bytes) -> int:
         """Publish a message over the shared WebSocket connection."""
         try:
             await self._ensure_ws()
@@ -475,12 +467,8 @@ class PubSubClient:
                 logger.error("[PUBSUB-CLIENT] Cannot publish: WebSocket is not connected")
                 return 0
 
-            await self._ws.send_json({
-                PubSubField.ACTION: PubSubAction.PUBLISH,
-                PubSubField.CHANNEL: channel,
-                PubSubField.DATA: data,
-                PubSubField.SENDER: self.client_id,
-            })
+            msg = PubSubMessage(action=PubSubAction.PUBLISH, channel=channel, data=data)
+            await self._ws.send_bytes(msg.SerializeToString())
             return 1
         except Exception as e:
             logger.error("[PUBSUB-CLIENT] publish failed for channel '%s': %s", channel, e, exc_info=True)
@@ -538,7 +526,7 @@ class PubSubClient:
             }
         )
 
-        result = await self.publish(channel, command_data.model_dump(mode="json"))
+        result = await self.publish(channel, command_data.model_dump_json().encode("utf-8"))
 
         if result > 0:
             logger.info(
@@ -686,7 +674,7 @@ class PubSubClient:
                 operator_id=operator_id,
                 operator_session_id=operator_session_id,
             )
-            receivers = await self.publish(channel, ping.model_dump(mode="json"))
+            receivers = await self.publish(channel, ping.model_dump_json().encode("utf-8"))
 
             is_online = receivers > 0
             logger.info(

@@ -25,7 +25,7 @@
 import { readFileSync, existsSync } from 'fs';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const { PubSubMessage, PubSubEvent } = require('../shared/proto/pubsub_pb.js');
+const { PubSubMessage, PubSubEvent } = require('../../shared/proto/pubsub_pb.cjs');
 
 import WebSocket from 'ws';
 import { logger } from '../../utils/logger.js';

@@ -22,7 +22,7 @@ grpc.web = require('grpc-web');
 const proto = {};
 proto.g8e = {};
 proto.g8e.operator = {};
-proto.g8e.operator.v1 = require('./operator_pb.js');
+proto.g8e.operator.v1 = require('./operator_pb.cjs');
 
 /**
  * @param {string} hostname
