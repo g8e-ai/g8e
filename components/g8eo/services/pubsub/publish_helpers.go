@@ -19,43 +19,47 @@ import (
 	"log/slog"
 
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 
 	"github.com/g8e-ai/g8e/components/g8eo/config"
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/models"
-	operatorv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
+	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
 )
 
 // executionIDFromMessage resolves the execution_id for a command from the
-// inbound payload's execution_id field. It handles both JSON and Protobuf payloads.
+// inbound payload's execution_id field using strict Protobuf extraction.
 // If the payload does not carry one it falls back to the envelope id (msg.ID).
 func executionIDFromMessage(msg PubSubCommandMessage) string {
-	// 1. Try Protobuf first (protocol-first architecture)
-	// Many requested types have an execution_id at field 2 (common convention in our .proto)
-	// We'll try unmarshaling into a generic struct that matches the most common ones.
-	var protoCmd operatorv1.CommandRequested
-	if err := proto.Unmarshal(msg.Payload, &protoCmd); err == nil && protoCmd.ExecutionId != "" {
-		return protoCmd.ExecutionId
+	payloadMsg, err := unmarshalPayload(msg.EventType, msg.Payload)
+	if err != nil {
+		return msg.ID
 	}
 
-	// 2. Fall back to JSON for components not yet fully migrated
-	var probe struct {
-		ExecutionID string `json:"execution_id"`
+	reflectMsg := payloadMsg.ProtoReflect()
+	descriptor := reflectMsg.Descriptor()
+
+	// Try "execution_id" field by name first (Protocol-First reflection)
+	fd := descriptor.Fields().ByName("execution_id")
+	if fd != nil && fd.Kind() == protoreflect.StringKind {
+		val := reflectMsg.Get(fd).String()
+		if val != "" {
+			return val
+		}
 	}
-	if err := json.Unmarshal(msg.Payload, &probe); err == nil && probe.ExecutionID != "" {
-		return probe.ExecutionID
-	}
+
 	return msg.ID
 }
 
-// setExecutionIDOnPayload sets the ExecutionID field on typed payloads that support it.
-// This is done before serialization to avoid manipulating JSON mid-stream.
-func setExecutionIDOnPayload(payload interface{}, executionID string) {
+// setExecutionIDOnPayload sets the execution_id field on Protobuf payloads that support it via reflection.
+func setExecutionIDOnPayload(payload proto.Message, executionID string) {
 	if executionID == "" {
 		return
 	}
-	if setter, ok := payload.(models.ExecutionIDSetter); ok {
-		setter.SetExecutionID(executionID)
+	reflectMsg := payload.ProtoReflect()
+	fd := reflectMsg.Descriptor().Fields().ByName("execution_id")
+	if fd != nil && fd.Kind() == protoreflect.StringKind {
+		reflectMsg.Set(fd, protoreflect.ValueOfString(executionID))
 	}
 }
 
@@ -68,7 +72,7 @@ func publishLFAATypedResponseTo(
 	logger *slog.Logger,
 	msg PubSubCommandMessage,
 	eventType string,
-	payload interface{},
+	payload proto.Message,
 ) {
 	executionID := executionIDFromMessage(msg)
 	setExecutionIDOnPayload(payload, executionID)
@@ -104,9 +108,6 @@ func publishLFAATypedResponseTo(
 }
 
 // publishLFAAErrorTo builds an error G8eMessage and publishes it to the results channel.
-// payloadType must be set to the discriminator value expected by the Python consumer
-// (e.g. "fetch_logs_error", "fetch_history_error"). It is required — callers must provide
-// the correct value matching the G8eoResultPayload union member on the Python side.
 func publishLFAAErrorTo(
 	ctx context.Context,
 	client PubSubClient,
@@ -114,16 +115,14 @@ func publishLFAAErrorTo(
 	logger *slog.Logger,
 	msg PubSubCommandMessage,
 	eventType, errorMsg string,
-	payloadType string,
 ) {
 	executionID := executionIDFromMessage(msg)
-	payload := models.LFAAErrorPayload{
-		PayloadType:       payloadType,
-		Success:           false,
-		Error:             errorMsg,
-		ExecutionID:       executionID,
-		OperatorID:        cfg.OperatorID,
-		OperatorSessionID: cfg.OperatorSessionId,
+
+	// Use CommandResult as a generic error container for Protocol-First
+	payload := &operatorv1.CommandResult{
+		ExecutionId: executionID,
+		Status:      string(constants.ExecutionStatusFailed),
+		Error:       errorMsg,
 	}
 
 	resultMsg, err := models.NewG8eMessage(

@@ -77,7 +77,7 @@ func TestPortService_HandlePortCheckRequest_InvalidPort_Zero(t *testing.T) {
 	msg := PubSubCommandMessage{
 		ID:      "msg-port-2",
 		CaseID:  "case-1",
-		Payload: mustMarshalJSON(t, models.PortCheckRequestPayload{Port: 0}),
+		Payload: testutil.MustMarshalProtobufCheckPortRequested(t, "", 0, ""),
 	}
 	ps.HandlePortCheckRequest(context.Background(), msg)
 
@@ -92,7 +92,7 @@ func TestPortService_HandlePortCheckRequest_InvalidPort_TooHigh(t *testing.T) {
 	msg := PubSubCommandMessage{
 		ID:      "msg-port-3",
 		CaseID:  "case-1",
-		Payload: mustMarshalJSON(t, models.PortCheckRequestPayload{Port: 65536}),
+		Payload: testutil.MustMarshalProtobufCheckPortRequested(t, "", 65536, ""),
 	}
 	ps.HandlePortCheckRequest(context.Background(), msg)
 
@@ -109,13 +109,9 @@ func TestPortService_HandlePortCheckRequest_ClosedPort_ReturnsCompleted(t *testi
 	ps, db := newTestPortService(t)
 
 	msg := PubSubCommandMessage{
-		ID:     "msg-port-4",
-		CaseID: "case-1",
-		Payload: mustMarshalJSON(t, models.PortCheckRequestPayload{
-			Host:     "127.0.0.1",
-			Port:     19998,
-			Protocol: "tcp",
-		}),
+		ID:      "msg-port-4",
+		CaseID:  "case-1",
+		Payload: testutil.MustMarshalProtobufCheckPortRequested(t, "127.0.0.1", 19998, "tcp"),
 	}
 	ps.HandlePortCheckRequest(context.Background(), msg)
 
@@ -156,13 +152,9 @@ func TestPortService_HandlePortCheckRequest_OpenPort_ReturnsLatency(t *testing.T
 	ps, db := newTestPortService(t)
 
 	msg := PubSubCommandMessage{
-		ID:     "msg-port-5",
-		CaseID: "case-1",
-		Payload: mustMarshalJSON(t, models.PortCheckRequestPayload{
-			Host:     "127.0.0.1",
-			Port:     port,
-			Protocol: "tcp",
-		}),
+		ID:      "msg-port-5",
+		CaseID:  "case-1",
+		Payload: testutil.MustMarshalProtobufCheckPortRequested(t, "127.0.0.1", int32(port), "tcp"),
 	}
 	ps.HandlePortCheckRequest(context.Background(), msg)
 
@@ -192,7 +184,7 @@ func TestPortService_HandlePortCheckRequest_DefaultsHostAndProtocol(t *testing.T
 	msg := PubSubCommandMessage{
 		ID:      "msg-port-6",
 		CaseID:  "case-1",
-		Payload: mustMarshalJSON(t, models.PortCheckRequestPayload{Port: 19997}),
+		Payload: testutil.MustMarshalProtobufCheckPortRequested(t, "", 19997, ""),
 	}
 	ps.HandlePortCheckRequest(context.Background(), msg)
 
@@ -211,7 +203,7 @@ func TestPortService_HandlePortCheckRequest_ExecutionIDOverridesMsgID(t *testing
 	msg := PubSubCommandMessage{
 		ID:      "msg-id-original",
 		CaseID:  "case-1",
-		Payload: mustMarshalJSON(t, models.PortCheckRequestPayload{Port: 19996, ExecutionID: "exec-override"}),
+		Payload: testutil.MustMarshalProtobufCheckPortRequested(t, "", 19996, ""),
 	}
 	ps.HandlePortCheckRequest(context.Background(), msg)
 

@@ -25,6 +25,8 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/models"
 	"github.com/g8e-ai/g8e/components/g8eo/services/system"
+	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
+	"google.golang.org/protobuf/proto"
 )
 
 // HeartbeatService owns all heartbeat logic for the g8eo operator:
@@ -148,7 +150,13 @@ func (hs *HeartbeatService) Build(heartbeatType models.HeartbeatType) *models.He
 
 // HandleRequest processes an inbound heartbeat request message.
 func (hs *HeartbeatService) HandleRequest(ctx context.Context, msg PubSubCommandMessage) {
-	hs.logger.Info("[HEARTBEAT] Heartbeat request received",
+	var protoReq operatorv1.HeartbeatRequested
+	if err := proto.Unmarshal(msg.Payload, &protoReq); err != nil {
+		hs.logger.Error("[HEARTBEAT] Failed to decode heartbeat request payload as protobuf HeartbeatRequested", "error", err)
+		return
+	}
+
+	hs.logger.Info("[HEARTBEAT] Heartbeat request received (via Protobuf)",
 		"case_id", msg.CaseID,
 		"investigation_id", msg.InvestigationID,
 		"operator_session_id", msg.OperatorSessionID)
@@ -156,7 +164,13 @@ func (hs *HeartbeatService) HandleRequest(ctx context.Context, msg PubSubCommand
 	heartbeat.CaseID = msg.CaseID
 	heartbeat.InvestigationID = msg.InvestigationID
 	if hs.results != nil {
-		if err := hs.results.PublishHeartbeat(ctx, heartbeat); err != nil {
+		protoHeartbeat := &operatorv1.HeartbeatResult{
+			OperatorId:        heartbeat.OperatorID,
+			OperatorSessionId: heartbeat.OperatorSessionID,
+			Timestamp:         heartbeat.Timestamp,
+			Status:            string(heartbeat.HeartbeatType),
+		}
+		if err := hs.results.PublishHeartbeat(ctx, protoHeartbeat); err != nil {
 			hs.logger.Error("[HEARTBEAT] Failed to send requested heartbeat", "error", err)
 		} else {
 			hs.logger.Info("[HEARTBEAT] Requested heartbeat sent successfully")
@@ -171,7 +185,13 @@ func (hs *HeartbeatService) SendAutomatic() {
 	hs.logger.Info("[HEARTBEAT] Sending automatic heartbeat")
 	heartbeat := hs.Build(models.HeartbeatTypeAutomatic)
 	if hs.results != nil {
-		if err := hs.results.PublishHeartbeat(hs.ctx, heartbeat); err != nil {
+		protoHeartbeat := &operatorv1.HeartbeatResult{
+			OperatorId:        heartbeat.OperatorID,
+			OperatorSessionId: heartbeat.OperatorSessionID,
+			Timestamp:         heartbeat.Timestamp,
+			Status:            string(heartbeat.HeartbeatType),
+		}
+		if err := hs.results.PublishHeartbeat(hs.ctx, protoHeartbeat); err != nil {
 			hs.logger.Error("[HEARTBEAT] Failed to send automatic heartbeat", "error", err)
 		} else {
 			hs.logger.Info("[HEARTBEAT] Automatic heartbeat sent successfully")

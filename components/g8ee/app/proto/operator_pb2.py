@@ -22,9 +22,10 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
+import common_pb2 as common__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0eoperator.proto\x12\x0fg8e.operator.v1\"\xa8\x02\n\x10\x43ommandRequested\x12\x0f\n\x07\x63ommand\x18\x01 \x01(\t\x12\x14\n\x0c\x65xecution_id\x18\x02 \x01(\t\x12\x15\n\rjustification\x18\x03 \x01(\t\x12\x15\n\rsentinel_mode\x18\x04 \x01(\t\x12\x17\n\x0ftimeout_seconds\x18\x05 \x01(\x05\x12\x0e\n\x06intent\x18\x06 \x01(\t\x12G\n\x0b\x65nvironment\x18\x07 \x03(\x0b\x32\x32.g8e.operator.v1.CommandRequested.EnvironmentEntry\x12\x19\n\x11working_directory\x18\x08 \x01(\t\x1a\x32\n\x10\x45nvironmentEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\".\n\x16\x43ommandCancelRequested\x12\x14\n\x0c\x65xecution_id\x18\x01 \x01(\t\"\xc1\x02\n\x11\x46ileEditRequested\x12\x11\n\tfile_path\x18\x01 \x01(\t\x12\x11\n\toperation\x18\x02 \x01(\t\x12\x14\n\x0c\x65xecution_id\x18\x03 \x01(\t\x12\x15\n\rjustification\x18\x04 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x05 \x01(\t\x12\x13\n\x0bold_content\x18\x06 \x01(\t\x12\x13\n\x0bnew_content\x18\x07 \x01(\t\x12\x16\n\x0einsert_content\x18\x08 \x01(\t\x12\x17\n\x0finsert_position\x18\t \x01(\x05\x12\x12\n\nstart_line\x18\n \x01(\x05\x12\x10\n\x08\x65nd_line\x18\x0b \x01(\x05\x12\x15\n\rpatch_content\x18\x0c \x01(\t\x12\x15\n\rcreate_backup\x18\r \x01(\x08\x12\x19\n\x11\x63reate_if_missing\x18\x0e \x01(\x08\"]\n\x0f\x46sListRequested\x12\x0c\n\x04path\x18\x01 \x01(\t\x12\x14\n\x0c\x65xecution_id\x18\x02 \x01(\t\x12\x11\n\tmax_depth\x18\x03 \x01(\x05\x12\x13\n\x0bmax_entries\x18\x04 \x01(\x05\"G\n\x0f\x46sReadRequested\x12\x0c\n\x04path\x18\x01 \x01(\t\x12\x14\n\x0c\x65xecution_id\x18\x02 \x01(\t\x12\x10\n\x08max_size\x18\x03 \x01(\x05\"\x14\n\x12HeartbeatRequested\"m\n\x0f\x46sGrepRequested\x12\x0c\n\x04path\x18\x01 \x01(\t\x12\x14\n\x0c\x65xecution_id\x18\x02 \x01(\t\x12\x0f\n\x07pattern\x18\x03 \x01(\t\x12\x10\n\x08includes\x18\x04 \x03(\t\x12\x13\n\x0bmax_matches\x18\x05 \x01(\x05\"X\n\x12\x43heckPortRequested\x12\x14\n\x0c\x65xecution_id\x18\x01 \x01(\t\x12\x0c\n\x04port\x18\x02 \x01(\x05\x12\x0c\n\x04host\x18\x03 \x01(\t\x12\x10\n\x08protocol\x18\x04 \x01(\t\"A\n\x12\x46\x65tchLogsRequested\x12\x14\n\x0c\x65xecution_id\x18\x01 \x01(\t\x12\x15\n\rsentinel_mode\x18\x02 \x01(\t\"\xa3\x01\n\x15\x46\x65tchHistoryRequested\x12\x14\n\x0c\x65xecution_id\x18\x01 \x01(\t\x12\x1b\n\x13operator_session_id\x18\x02 \x01(\t\x12\r\n\x05limit\x18\x03 \x01(\x05\x12\x0e\n\x06offset\x18\x04 \x01(\x05\x12\x18\n\x10include_commands\x18\x05 \x01(\x08\x12\x1e\n\x16include_file_mutations\x18\x06 \x01(\x08\"S\n\x19\x46\x65tchFileHistoryRequested\x12\x14\n\x0c\x65xecution_id\x18\x01 \x01(\t\x12\x11\n\tfile_path\x18\x02 \x01(\t\x12\r\n\x05limit\x18\x03 \x01(\x05\"~\n\x16\x46\x65tchFileDiffRequested\x12\x14\n\x0c\x65xecution_id\x18\x01 \x01(\t\x12\x0f\n\x07\x64iff_id\x18\x02 \x01(\t\x12\x1b\n\x13operator_session_id\x18\x03 \x01(\t\x12\x11\n\tfile_path\x18\x04 \x01(\t\x12\r\n\x05limit\x18\x05 \x01(\x05\"T\n\x14RestoreFileRequested\x12\x14\n\x0c\x65xecution_id\x18\x01 \x01(\t\x12\x11\n\tfile_path\x18\x02 \x01(\t\x12\x13\n\x0b\x63ommit_hash\x18\x03 \x01(\t\"o\n\x1b\x44irectCommandAuditRequested\x12\x0f\n\x07\x63ommand\x18\x01 \x01(\t\x12\x14\n\x0c\x65xecution_id\x18\x02 \x01(\t\x12\x1b\n\x13operator_session_id\x18\x03 \x01(\t\x12\x0c\n\x04type\x18\x04 \x01(\t\"\xcd\x01\n\rCommandResult\x12\x14\n\x0c\x65xecution_id\x18\x01 \x01(\t\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x0e\n\x06output\x18\x03 \x01(\t\x12\r\n\x05\x65rror\x18\x04 \x01(\t\x12\x0e\n\x06stderr\x18\x05 \x01(\t\x12\x11\n\texit_code\x18\x06 \x01(\x05\x12\x1e\n\x16\x65xecution_time_seconds\x18\x07 \x01(\x02\x12\x1a\n\x12start_time_unix_ms\x18\x08 \x01(\x03\x12\x18\n\x10\x65nd_time_unix_ms\x18\t \x01(\x03\x32\xb8\x03\n\x0fOperatorService\x12S\n\x0e\x45xecuteCommand\x12!.g8e.operator.v1.CommandRequested\x1a\x1e.g8e.operator.v1.CommandResult\x12X\n\rCancelCommand\x12\'.g8e.operator.v1.CommandCancelRequested\x1a\x1e.g8e.operator.v1.CommandResult\x12N\n\x08\x45\x64itFile\x12\".g8e.operator.v1.FileEditRequested\x1a\x1e.g8e.operator.v1.CommandResult\x12R\n\x0eListFileSystem\x12 .g8e.operator.v1.FsListRequested\x1a\x1e.g8e.operator.v1.CommandResult\x12R\n\x0eReadFileSystem\x12 .g8e.operator.v1.FsReadRequested\x1a\x1e.g8e.operator.v1.CommandResultB?Z=github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0eoperator.proto\x12\x0fg8e.operator.v1\x1a\x0c\x63ommon.proto\"\xbe\x02\n\x10\x43ommandRequested\x12%\n\x07\x63ommand\x18\x01 \x01(\tB\x14\x8a\xb5\x18\x10sudo,su,rm -rf /\x12\x14\n\x0c\x65xecution_id\x18\x02 \x01(\t\x12\x15\n\rjustification\x18\x03 \x01(\t\x12\x15\n\rsentinel_mode\x18\x04 \x01(\t\x12\x17\n\x0ftimeout_seconds\x18\x05 \x01(\x05\x12\x0e\n\x06intent\x18\x06 \x01(\t\x12G\n\x0b\x65nvironment\x18\x07 \x03(\x0b\x32\x32.g8e.operator.v1.CommandRequested.EnvironmentEntry\x12\x19\n\x11working_directory\x18\x08 \x01(\t\x1a\x32\n\x10\x45nvironmentEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\".\n\x16\x43ommandCancelRequested\x12\x14\n\x0c\x65xecution_id\x18\x01 \x01(\t\"\xd8\x02\n\x11\x46ileEditRequested\x12\x11\n\tfile_path\x18\x01 \x01(\t\x12\x11\n\toperation\x18\x02 \x01(\t\x12\x14\n\x0c\x65xecution_id\x18\x03 \x01(\t\x12\x15\n\rjustification\x18\x04 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x05 \x01(\t\x12\x13\n\x0bold_content\x18\x06 \x01(\t\x12\x13\n\x0bnew_content\x18\x07 \x01(\t\x12\x16\n\x0einsert_content\x18\x08 \x01(\t\x12\x17\n\x0finsert_position\x18\t \x01(\x05\x12\x12\n\nstart_line\x18\n \x01(\x05\x12\x10\n\x08\x65nd_line\x18\x0b \x01(\x05\x12\x15\n\rpatch_content\x18\x0c \x01(\t\x12\x15\n\rcreate_backup\x18\r \x01(\x08\x12\x19\n\x11\x63reate_if_missing\x18\x0e \x01(\x08\x12\x15\n\rsentinel_mode\x18\x0f \x01(\t\"t\n\x0f\x46sListRequested\x12\x0c\n\x04path\x18\x01 \x01(\t\x12\x14\n\x0c\x65xecution_id\x18\x02 \x01(\t\x12\x11\n\tmax_depth\x18\x03 \x01(\x05\x12\x13\n\x0bmax_entries\x18\x04 \x01(\x05\x12\x15\n\rsentinel_mode\x18\x05 \x01(\t\"^\n\x0f\x46sReadRequested\x12\x0c\n\x04path\x18\x01 \x01(\t\x12\x14\n\x0c\x65xecution_id\x18\x02 \x01(\t\x12\x10\n\x08max_size\x18\x03 \x01(\x05\x12\x15\n\rsentinel_mode\x18\x04 \x01(\t\"\x14\n\x12HeartbeatRequested\"\x84\x01\n\x0f\x46sGrepRequested\x12\x0c\n\x04path\x18\x01 \x01(\t\x12\x14\n\x0c\x65xecution_id\x18\x02 \x01(\t\x12\x0f\n\x07pattern\x18\x03 \x01(\t\x12\x10\n\x08includes\x18\x04 \x03(\t\x12\x13\n\x0bmax_matches\x18\x05 \x01(\x05\x12\x15\n\rsentinel_mode\x18\x06 \x01(\t\"X\n\x12\x43heckPortRequested\x12\x14\n\x0c\x65xecution_id\x18\x01 \x01(\t\x12\x0c\n\x04port\x18\x02 \x01(\x05\x12\x0c\n\x04host\x18\x03 \x01(\t\x12\x10\n\x08protocol\x18\x04 \x01(\t\"A\n\x12\x46\x65tchLogsRequested\x12\x14\n\x0c\x65xecution_id\x18\x01 \x01(\t\x12\x15\n\rsentinel_mode\x18\x02 \x01(\t\"\xa3\x01\n\x15\x46\x65tchHistoryRequested\x12\x14\n\x0c\x65xecution_id\x18\x01 \x01(\t\x12\x1b\n\x13operator_session_id\x18\x02 \x01(\t\x12\r\n\x05limit\x18\x03 \x01(\x05\x12\x0e\n\x06offset\x18\x04 \x01(\x05\x12\x18\n\x10include_commands\x18\x05 \x01(\x08\x12\x1e\n\x16include_file_mutations\x18\x06 \x01(\x08\"S\n\x19\x46\x65tchFileHistoryRequested\x12\x14\n\x0c\x65xecution_id\x18\x01 \x01(\t\x12\x11\n\tfile_path\x18\x02 \x01(\t\x12\r\n\x05limit\x18\x03 \x01(\x05\"~\n\x16\x46\x65tchFileDiffRequested\x12\x14\n\x0c\x65xecution_id\x18\x01 \x01(\t\x12\x0f\n\x07\x64iff_id\x18\x02 \x01(\t\x12\x1b\n\x13operator_session_id\x18\x03 \x01(\t\x12\x11\n\tfile_path\x18\x04 \x01(\t\x12\r\n\x05limit\x18\x05 \x01(\x05\"q\n\x14RestoreFileRequested\x12\x14\n\x0c\x65xecution_id\x18\x01 \x01(\t\x12\x11\n\tfile_path\x18\x02 \x01(\t\x12\x13\n\x0b\x63ommit_hash\x18\x03 \x01(\t\x12\x1b\n\x13operator_session_id\x18\x04 \x01(\t\"o\n\x1b\x44irectCommandAuditRequested\x12\x0f\n\x07\x63ommand\x18\x01 \x01(\t\x12\x14\n\x0c\x65xecution_id\x18\x02 \x01(\t\x12\x1b\n\x13operator_session_id\x18\x03 \x01(\t\x12\x0c\n\x04type\x18\x04 \x01(\t\"\x9d\x01\n!DirectCommandResultAuditRequested\x12\x0f\n\x07\x63ommand\x18\x01 \x01(\t\x12\x14\n\x0c\x65xecution_id\x18\x02 \x01(\t\x12\x0e\n\x06output\x18\x03 \x01(\t\x12\x0e\n\x06stderr\x18\x04 \x01(\t\x12\x11\n\texit_code\x18\x05 \x01(\x05\x12\x1e\n\x16\x65xecution_time_seconds\x18\x06 \x01(\x02\"$\n\x11\x41uditMsgRequested\x12\x0f\n\x07\x63ontent\x18\x01 \x01(\t\"#\n\x11ShutdownRequested\x12\x0e\n\x06reason\x18\x01 \x01(\t\"\xcd\x01\n\rCommandResult\x12\x14\n\x0c\x65xecution_id\x18\x01 \x01(\t\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x0e\n\x06output\x18\x03 \x01(\t\x12\r\n\x05\x65rror\x18\x04 \x01(\t\x12\x0e\n\x06stderr\x18\x05 \x01(\t\x12\x11\n\texit_code\x18\x06 \x01(\x05\x12\x1e\n\x16\x65xecution_time_seconds\x18\x07 \x01(\x02\x12\x1a\n\x12start_time_unix_ms\x18\x08 \x01(\x03\x12\x18\n\x10\x65nd_time_unix_ms\x18\t \x01(\x03\"U\n\x07\x46sEntry\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0e\n\x06is_dir\x18\x02 \x01(\x08\x12\x0c\n\x04size\x18\x03 \x01(\x03\x12\x0c\n\x04mode\x18\x04 \x01(\x05\x12\x10\n\x08mod_time\x18\x05 \x01(\x03\"\xda\x01\n\x0c\x46sListResult\x12\x14\n\x0c\x65xecution_id\x18\x01 \x01(\t\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x0c\n\x04path\x18\x03 \x01(\t\x12)\n\x07\x65ntries\x18\x04 \x03(\x0b\x32\x18.g8e.operator.v1.FsEntry\x12\x11\n\ttruncated\x18\x05 \x01(\x08\x12\x13\n\x0btotal_count\x18\x06 \x01(\x05\x12\x18\n\x10\x64uration_seconds\x18\x07 \x01(\x02\x12\x15\n\rerror_message\x18\x08 \x01(\t\x12\x12\n\nerror_type\x18\t \x01(\t\"\xbf\x01\n\x0c\x46sReadResult\x12\x14\n\x0c\x65xecution_id\x18\x01 \x01(\t\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x0c\n\x04path\x18\x03 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x04 \x01(\x0c\x12\x12\n\nsize_bytes\x18\x05 \x01(\x03\x12\x11\n\ttruncated\x18\x06 \x01(\x08\x12\x18\n\x10\x64uration_seconds\x18\x07 \x01(\x02\x12\x15\n\rerror_message\x18\x08 \x01(\t\x12\x12\n\nerror_type\x18\t \x01(\t\"`\n\x0b\x46sGrepMatch\x12\x0c\n\x04path\x18\x01 \x01(\t\x12\x13\n\x0bline_number\x18\x02 \x01(\x05\x12\x0f\n\x07\x63ontent\x18\x03 \x01(\t\x12\x0e\n\x06\x62\x65\x66ore\x18\x04 \x03(\t\x12\r\n\x05\x61\x66ter\x18\x05 \x03(\t\"\xe0\x01\n\x0c\x46sGrepResult\x12\x14\n\x0c\x65xecution_id\x18\x01 \x01(\t\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x0c\n\x04path\x18\x03 \x01(\t\x12-\n\x07matches\x18\x04 \x03(\x0b\x32\x1c.g8e.operator.v1.FsGrepMatch\x12\x15\n\rtotal_matches\x18\x05 \x01(\x05\x12\x11\n\ttruncated\x18\x06 \x01(\x08\x12\x18\n\x10\x64uration_seconds\x18\x07 \x01(\x02\x12\x15\n\rerror_message\x18\x08 \x01(\t\x12\x12\n\nerror_type\x18\t \x01(\t\"\xe4\x01\n\x0e\x46ileEditResult\x12\x14\n\x0c\x65xecution_id\x18\x01 \x01(\t\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x11\n\tfile_path\x18\x03 \x01(\t\x12\x11\n\toperation\x18\x04 \x01(\t\x12\x18\n\x10\x64uration_seconds\x18\x05 \x01(\x02\x12\x15\n\rbytes_written\x18\x06 \x01(\x03\x12\x15\n\rlines_changed\x18\x07 \x01(\x05\x12\x13\n\x0b\x62\x61\x63kup_path\x18\x08 \x01(\t\x12\x15\n\rerror_message\x18\t \x01(\t\x12\x12\n\nerror_type\x18\n \x01(\t\"\xb7\x01\n\x15\x45xecutionStatusUpdate\x12\x14\n\x0c\x65xecution_id\x18\x01 \x01(\t\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x0f\n\x07\x63ommand\x18\x03 \x01(\t\x12\x15\n\rprocess_alive\x18\x04 \x01(\x08\x12\x17\n\x0f\x65lapsed_seconds\x18\x05 \x01(\x02\x12\x12\n\nnew_output\x18\x06 \x01(\t\x12\x12\n\nnew_stderr\x18\x07 \x01(\t\x12\x0f\n\x07message\x18\x08 \x01(\t\"]\n\x0ePortCheckEntry\x12\x0c\n\x04host\x18\x01 \x01(\t\x12\x0c\n\x04port\x18\x02 \x01(\x05\x12\x0c\n\x04open\x18\x03 \x01(\x08\x12\x12\n\nlatency_ms\x18\x04 \x01(\x02\x12\r\n\x05\x65rror\x18\x05 \x01(\t\"\x94\x01\n\x0fPortCheckResult\x12\x14\n\x0c\x65xecution_id\x18\x01 \x01(\t\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x30\n\x07results\x18\x03 \x03(\x0b\x32\x1f.g8e.operator.v1.PortCheckEntry\x12\x15\n\rerror_message\x18\x04 \x01(\t\x12\x12\n\nerror_type\x18\x05 \x01(\t\"\xe3\x01\n\x0f\x46\x65tchLogsResult\x12\x14\n\x0c\x65xecution_id\x18\x01 \x01(\t\x12\x0f\n\x07\x63ommand\x18\x02 \x01(\t\x12\x11\n\texit_code\x18\x03 \x01(\x05\x12\x13\n\x0b\x64uration_ms\x18\x04 \x01(\x03\x12\x0e\n\x06stdout\x18\x05 \x01(\t\x12\x0e\n\x06stderr\x18\x06 \x01(\t\x12\x13\n\x0bstdout_size\x18\x07 \x01(\x05\x12\x13\n\x0bstderr_size\x18\x08 \x01(\x05\x12\x11\n\ttimestamp\x18\t \x01(\t\x12\x15\n\rsentinel_mode\x18\n \x01(\t\x12\r\n\x05\x65rror\x18\x0b \x01(\t\"W\n\x0f\x41uditWebSession\x12\n\n\x02id\x18\x01 \x01(\t\x12\r\n\x05title\x18\x02 \x01(\t\x12\x12\n\ncreated_at\x18\x03 \x01(\t\x12\x15\n\ruser_identity\x18\x04 \x01(\t\"\x8e\x01\n\x11\x41uditFileMutation\x12\n\n\x02id\x18\x01 \x01(\x03\x12\x10\n\x08\x66ilepath\x18\x02 \x01(\t\x12\x11\n\toperation\x18\x03 \x01(\t\x12\x1a\n\x12ledger_hash_before\x18\x04 \x01(\t\x12\x19\n\x11ledger_hash_after\x18\x05 \x01(\t\x12\x11\n\tdiff_stat\x18\x06 \x01(\t\"\xf3\x02\n\nAuditEvent\x12\n\n\x02id\x18\x01 \x01(\x03\x12\x1b\n\x13operator_session_id\x18\x02 \x01(\t\x12\x11\n\ttimestamp\x18\x03 \x01(\t\x12\x0c\n\x04type\x18\x04 \x01(\t\x12\x14\n\x0c\x63ontent_text\x18\x05 \x01(\t\x12\x13\n\x0b\x63ommand_raw\x18\x06 \x01(\t\x12\x19\n\x11\x63ommand_exit_code\x18\x07 \x01(\x05\x12\x16\n\x0e\x63ommand_stdout\x18\x08 \x01(\t\x12\x16\n\x0e\x63ommand_stderr\x18\t \x01(\t\x12\x1d\n\x15\x65xecution_duration_ms\x18\n \x01(\x03\x12\x16\n\x0estored_locally\x18\x0b \x01(\x08\x12\x18\n\x10stdout_truncated\x18\x0c \x01(\x08\x12\x18\n\x10stderr_truncated\x18\r \x01(\x08\x12:\n\x0e\x66ile_mutations\x18\x0e \x03(\x0b\x32\".g8e.operator.v1.AuditFileMutation\"\xf9\x01\n\x12\x46\x65tchHistoryResult\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x14\n\x0c\x65xecution_id\x18\x02 \x01(\t\x12\x1b\n\x13operator_session_id\x18\x03 \x01(\t\x12\x35\n\x0bweb_session\x18\x04 \x01(\x0b\x32 .g8e.operator.v1.AuditWebSession\x12+\n\x06\x65vents\x18\x05 \x03(\x0b\x32\x1b.g8e.operator.v1.AuditEvent\x12\r\n\x05total\x18\x06 \x01(\x05\x12\r\n\x05limit\x18\x07 \x01(\x05\x12\x0e\n\x06offset\x18\x08 \x01(\x05\x12\r\n\x05\x65rror\x18\t \x01(\t\"K\n\x10\x46ileHistoryEntry\x12\x13\n\x0b\x63ommit_hash\x18\x01 \x01(\t\x12\x11\n\ttimestamp\x18\x02 \x01(\t\x12\x0f\n\x07message\x18\x03 \x01(\t\"\x95\x01\n\x16\x46\x65tchFileHistoryResult\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x14\n\x0c\x65xecution_id\x18\x02 \x01(\t\x12\x11\n\tfile_path\x18\x03 \x01(\t\x12\x32\n\x07history\x18\x04 \x03(\x0b\x32!.g8e.operator.v1.FileHistoryEntry\x12\r\n\x05\x65rror\x18\x05 \x01(\t\"q\n\x11RestoreFileResult\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x14\n\x0c\x65xecution_id\x18\x02 \x01(\t\x12\x11\n\tfile_path\x18\x03 \x01(\t\x12\x13\n\x0b\x63ommit_hash\x18\x04 \x01(\t\x12\r\n\x05\x65rror\x18\x05 \x01(\t\"\xe4\x01\n\rFileDiffEntry\x12\n\n\x02id\x18\x01 \x01(\t\x12\x11\n\ttimestamp\x18\x02 \x01(\t\x12\x11\n\tfile_path\x18\x03 \x01(\t\x12\x11\n\toperation\x18\x04 \x01(\t\x12\x1a\n\x12ledger_hash_before\x18\x05 \x01(\t\x12\x19\n\x11ledger_hash_after\x18\x06 \x01(\t\x12\x11\n\tdiff_stat\x18\x07 \x01(\t\x12\x14\n\x0c\x64iff_content\x18\x08 \x01(\t\x12\x11\n\tdiff_size\x18\t \x01(\x05\x12\x1b\n\x13operator_session_id\x18\n \x01(\t\"\xd4\x01\n\x13\x46\x65tchFileDiffResult\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x14\n\x0c\x65xecution_id\x18\x02 \x01(\t\x12-\n\x05\x64iffs\x18\x03 \x03(\x0b\x32\x1e.g8e.operator.v1.FileDiffEntry\x12,\n\x04\x64iff\x18\x04 \x01(\x0b\x32\x1e.g8e.operator.v1.FileDiffEntry\x12\r\n\x05total\x18\x05 \x01(\x05\x12\x1b\n\x13operator_session_id\x18\x06 \x01(\t\x12\r\n\x05\x65rror\x18\x07 \x01(\t\"f\n\x0fHeartbeatResult\x12\x13\n\x0boperator_id\x18\x01 \x01(\t\x12\x1b\n\x13operator_session_id\x18\x02 \x01(\t\x12\x11\n\ttimestamp\x18\x03 \x01(\t\x12\x0e\n\x06status\x18\x04 \x01(\t2\xb8\x03\n\x0fOperatorService\x12S\n\x0e\x45xecuteCommand\x12!.g8e.operator.v1.CommandRequested\x1a\x1e.g8e.operator.v1.CommandResult\x12X\n\rCancelCommand\x12\'.g8e.operator.v1.CommandCancelRequested\x1a\x1e.g8e.operator.v1.CommandResult\x12N\n\x08\x45\x64itFile\x12\".g8e.operator.v1.FileEditRequested\x1a\x1e.g8e.operator.v1.CommandResult\x12R\n\x0eListFileSystem\x12 .g8e.operator.v1.FsListRequested\x1a\x1e.g8e.operator.v1.CommandResult\x12R\n\x0eReadFileSystem\x12 .g8e.operator.v1.FsReadRequested\x1a\x1e.g8e.operator.v1.CommandResultB?Z=github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -34,38 +35,86 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._serialized_options = b'Z=github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1'
   _globals['_COMMANDREQUESTED_ENVIRONMENTENTRY']._loaded_options = None
   _globals['_COMMANDREQUESTED_ENVIRONMENTENTRY']._serialized_options = b'8\001'
-  _globals['_COMMANDREQUESTED']._serialized_start=36
-  _globals['_COMMANDREQUESTED']._serialized_end=332
-  _globals['_COMMANDREQUESTED_ENVIRONMENTENTRY']._serialized_start=282
-  _globals['_COMMANDREQUESTED_ENVIRONMENTENTRY']._serialized_end=332
-  _globals['_COMMANDCANCELREQUESTED']._serialized_start=334
-  _globals['_COMMANDCANCELREQUESTED']._serialized_end=380
-  _globals['_FILEEDITREQUESTED']._serialized_start=383
-  _globals['_FILEEDITREQUESTED']._serialized_end=704
-  _globals['_FSLISTREQUESTED']._serialized_start=706
-  _globals['_FSLISTREQUESTED']._serialized_end=799
-  _globals['_FSREADREQUESTED']._serialized_start=801
-  _globals['_FSREADREQUESTED']._serialized_end=872
-  _globals['_HEARTBEATREQUESTED']._serialized_start=874
-  _globals['_HEARTBEATREQUESTED']._serialized_end=894
-  _globals['_FSGREPREQUESTED']._serialized_start=896
-  _globals['_FSGREPREQUESTED']._serialized_end=1005
-  _globals['_CHECKPORTREQUESTED']._serialized_start=1007
-  _globals['_CHECKPORTREQUESTED']._serialized_end=1095
-  _globals['_FETCHLOGSREQUESTED']._serialized_start=1097
-  _globals['_FETCHLOGSREQUESTED']._serialized_end=1162
-  _globals['_FETCHHISTORYREQUESTED']._serialized_start=1165
-  _globals['_FETCHHISTORYREQUESTED']._serialized_end=1328
-  _globals['_FETCHFILEHISTORYREQUESTED']._serialized_start=1330
-  _globals['_FETCHFILEHISTORYREQUESTED']._serialized_end=1413
-  _globals['_FETCHFILEDIFFREQUESTED']._serialized_start=1415
-  _globals['_FETCHFILEDIFFREQUESTED']._serialized_end=1541
-  _globals['_RESTOREFILEREQUESTED']._serialized_start=1543
-  _globals['_RESTOREFILEREQUESTED']._serialized_end=1627
-  _globals['_DIRECTCOMMANDAUDITREQUESTED']._serialized_start=1629
-  _globals['_DIRECTCOMMANDAUDITREQUESTED']._serialized_end=1740
-  _globals['_COMMANDRESULT']._serialized_start=1743
-  _globals['_COMMANDRESULT']._serialized_end=1948
-  _globals['_OPERATORSERVICE']._serialized_start=1951
-  _globals['_OPERATORSERVICE']._serialized_end=2391
+  _globals['_COMMANDREQUESTED'].fields_by_name['command']._loaded_options = None
+  _globals['_COMMANDREQUESTED'].fields_by_name['command']._serialized_options = b'\212\265\030\020sudo,su,rm -rf /'
+  _globals['_COMMANDREQUESTED']._serialized_start=50
+  _globals['_COMMANDREQUESTED']._serialized_end=368
+  _globals['_COMMANDREQUESTED_ENVIRONMENTENTRY']._serialized_start=318
+  _globals['_COMMANDREQUESTED_ENVIRONMENTENTRY']._serialized_end=368
+  _globals['_COMMANDCANCELREQUESTED']._serialized_start=370
+  _globals['_COMMANDCANCELREQUESTED']._serialized_end=416
+  _globals['_FILEEDITREQUESTED']._serialized_start=419
+  _globals['_FILEEDITREQUESTED']._serialized_end=763
+  _globals['_FSLISTREQUESTED']._serialized_start=765
+  _globals['_FSLISTREQUESTED']._serialized_end=881
+  _globals['_FSREADREQUESTED']._serialized_start=883
+  _globals['_FSREADREQUESTED']._serialized_end=977
+  _globals['_HEARTBEATREQUESTED']._serialized_start=979
+  _globals['_HEARTBEATREQUESTED']._serialized_end=999
+  _globals['_FSGREPREQUESTED']._serialized_start=1002
+  _globals['_FSGREPREQUESTED']._serialized_end=1134
+  _globals['_CHECKPORTREQUESTED']._serialized_start=1136
+  _globals['_CHECKPORTREQUESTED']._serialized_end=1224
+  _globals['_FETCHLOGSREQUESTED']._serialized_start=1226
+  _globals['_FETCHLOGSREQUESTED']._serialized_end=1291
+  _globals['_FETCHHISTORYREQUESTED']._serialized_start=1294
+  _globals['_FETCHHISTORYREQUESTED']._serialized_end=1457
+  _globals['_FETCHFILEHISTORYREQUESTED']._serialized_start=1459
+  _globals['_FETCHFILEHISTORYREQUESTED']._serialized_end=1542
+  _globals['_FETCHFILEDIFFREQUESTED']._serialized_start=1544
+  _globals['_FETCHFILEDIFFREQUESTED']._serialized_end=1670
+  _globals['_RESTOREFILEREQUESTED']._serialized_start=1672
+  _globals['_RESTOREFILEREQUESTED']._serialized_end=1785
+  _globals['_DIRECTCOMMANDAUDITREQUESTED']._serialized_start=1787
+  _globals['_DIRECTCOMMANDAUDITREQUESTED']._serialized_end=1898
+  _globals['_DIRECTCOMMANDRESULTAUDITREQUESTED']._serialized_start=1901
+  _globals['_DIRECTCOMMANDRESULTAUDITREQUESTED']._serialized_end=2058
+  _globals['_AUDITMSGREQUESTED']._serialized_start=2060
+  _globals['_AUDITMSGREQUESTED']._serialized_end=2096
+  _globals['_SHUTDOWNREQUESTED']._serialized_start=2098
+  _globals['_SHUTDOWNREQUESTED']._serialized_end=2133
+  _globals['_COMMANDRESULT']._serialized_start=2136
+  _globals['_COMMANDRESULT']._serialized_end=2341
+  _globals['_FSENTRY']._serialized_start=2343
+  _globals['_FSENTRY']._serialized_end=2428
+  _globals['_FSLISTRESULT']._serialized_start=2431
+  _globals['_FSLISTRESULT']._serialized_end=2649
+  _globals['_FSREADRESULT']._serialized_start=2652
+  _globals['_FSREADRESULT']._serialized_end=2843
+  _globals['_FSGREPMATCH']._serialized_start=2845
+  _globals['_FSGREPMATCH']._serialized_end=2941
+  _globals['_FSGREPRESULT']._serialized_start=2944
+  _globals['_FSGREPRESULT']._serialized_end=3168
+  _globals['_FILEEDITRESULT']._serialized_start=3171
+  _globals['_FILEEDITRESULT']._serialized_end=3399
+  _globals['_EXECUTIONSTATUSUPDATE']._serialized_start=3402
+  _globals['_EXECUTIONSTATUSUPDATE']._serialized_end=3585
+  _globals['_PORTCHECKENTRY']._serialized_start=3587
+  _globals['_PORTCHECKENTRY']._serialized_end=3680
+  _globals['_PORTCHECKRESULT']._serialized_start=3683
+  _globals['_PORTCHECKRESULT']._serialized_end=3831
+  _globals['_FETCHLOGSRESULT']._serialized_start=3834
+  _globals['_FETCHLOGSRESULT']._serialized_end=4061
+  _globals['_AUDITWEBSESSION']._serialized_start=4063
+  _globals['_AUDITWEBSESSION']._serialized_end=4150
+  _globals['_AUDITFILEMUTATION']._serialized_start=4153
+  _globals['_AUDITFILEMUTATION']._serialized_end=4295
+  _globals['_AUDITEVENT']._serialized_start=4298
+  _globals['_AUDITEVENT']._serialized_end=4669
+  _globals['_FETCHHISTORYRESULT']._serialized_start=4672
+  _globals['_FETCHHISTORYRESULT']._serialized_end=4921
+  _globals['_FILEHISTORYENTRY']._serialized_start=4923
+  _globals['_FILEHISTORYENTRY']._serialized_end=4998
+  _globals['_FETCHFILEHISTORYRESULT']._serialized_start=5001
+  _globals['_FETCHFILEHISTORYRESULT']._serialized_end=5150
+  _globals['_RESTOREFILERESULT']._serialized_start=5152
+  _globals['_RESTOREFILERESULT']._serialized_end=5265
+  _globals['_FILEDIFFENTRY']._serialized_start=5268
+  _globals['_FILEDIFFENTRY']._serialized_end=5496
+  _globals['_FETCHFILEDIFFRESULT']._serialized_start=5499
+  _globals['_FETCHFILEDIFFRESULT']._serialized_end=5711
+  _globals['_HEARTBEATRESULT']._serialized_start=5713
+  _globals['_HEARTBEATRESULT']._serialized_end=5815
+  _globals['_OPERATORSERVICE']._serialized_start=5818
+  _globals['_OPERATORSERVICE']._serialized_end=6258
 # @@protoc_insertion_point(module_scope)

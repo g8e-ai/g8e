@@ -150,7 +150,14 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 			}
 		}
 		if cs.results != nil {
-			if err := cs.results.PublishExecutionResult(ctx, verdict.blockedResult, msg); err != nil {
+			protoResult := &operatorv1.CommandResult{
+				ExecutionId: verdict.blockedResult.ExecutionID,
+				Status:      string(verdict.blockedResult.Status),
+				Error:       *verdict.blockedResult.ErrorMessage,
+				Stderr:      verdict.blockedResult.Stderr,
+				ExitCode:    int32(*verdict.blockedResult.ReturnCode),
+			}
+			if err := cs.results.PublishExecutionResult(ctx, protoResult, msg); err != nil {
 				cs.logger.Error("Failed to publish blocked result", "error", err)
 			}
 		}
@@ -262,7 +269,27 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 	}
 
 	if cs.results != nil {
-		if err := cs.results.PublishExecutionResult(ctx, result, msg); err != nil {
+		protoResult := &operatorv1.CommandResult{
+			ExecutionId:          result.ExecutionID,
+			Status:               string(result.Status),
+			Output:               result.Stdout,
+			Stderr:               result.Stderr,
+			ExecutionTimeSeconds: float32(result.DurationSeconds),
+		}
+		if result.ReturnCode != nil {
+			protoResult.ExitCode = int32(*result.ReturnCode)
+		}
+		if result.ErrorMessage != nil {
+			protoResult.Error = *result.ErrorMessage
+		}
+		if result.StartTime != nil {
+			protoResult.StartTimeUnixMs = result.StartTime.UnixMilli()
+		}
+		if result.EndTime != nil {
+			protoResult.EndTimeUnixMs = result.EndTime.UnixMilli()
+		}
+
+		if err := cs.results.PublishExecutionResult(ctx, protoResult, msg); err != nil {
 			cs.logger.Error("Failed to publish execution result", "error", err)
 		}
 	}
@@ -351,17 +378,13 @@ func (cs *CommandService) runStatusTicker(
 			elapsed := time.Since(startTime).Seconds()
 
 			if cs.results != nil {
-				statusUpdate := &ExecutionStatusUpdate{
-					ExecutionID:       execReq.ExecutionID,
-					CaseID:            execReq.CaseID,
-					TaskID:            execReq.TaskID,
-					InvestigationID:   execReq.InvestigationID,
-					OperatorSessionID: msg.OperatorSessionID,
-					Command:           command,
-					Status:            constants.ExecutionStatusExecuting,
-					ProcessAlive:      true,
-					ElapsedSeconds:    elapsed,
-					Message:           fmt.Sprintf("Command still executing (%.0fs elapsed)", elapsed),
+				statusUpdate := &operatorv1.ExecutionStatusUpdate{
+					ExecutionId:    execReq.ExecutionID,
+					Command:        command,
+					Status:         string(constants.ExecutionStatusExecuting),
+					ProcessAlive:   true,
+					ElapsedSeconds: float32(elapsed),
+					Message:        fmt.Sprintf("Command still executing (%.0fs elapsed)", elapsed),
 				}
 				if err := cs.results.PublishExecutionStatus(ctx, statusUpdate); err != nil {
 					cs.logger.Warn("Failed to publish status update", "error", err)
@@ -425,7 +448,18 @@ func (cs *CommandService) HandleCancelRequest(ctx context.Context, msg PubSubCom
 	}
 
 	if cs.results != nil {
-		if err := cs.results.PublishCancellationResult(ctx, result, msg); err != nil {
+		protoResult := &operatorv1.CommandResult{
+			ExecutionId: executionID,
+			Status:      string(result.Status),
+		}
+		if result.ErrorMessage != nil {
+			protoResult.Error = *result.ErrorMessage
+		}
+		if result.StartTime != nil {
+			protoResult.StartTimeUnixMs = result.StartTime.UnixMilli()
+		}
+
+		if err := cs.results.PublishCancellationResult(ctx, protoResult, msg); err != nil {
 			cs.logger.Error("Failed to publish cancellation result", "error", err)
 		}
 	}

@@ -25,10 +25,12 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/components/g8eo/config"
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/models"
+	pubsubv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/pubsubv1"
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -744,16 +746,20 @@ func TestWebSocketAuthIntegration(t *testing.T) {
 		assert.Equal(t, http.StatusSwitchingProtocols, resp.StatusCode)
 
 		// Verify we can send/receive
-		subMsg := PubSubMessage{Action: constants.PubSubActionSubscribe, Channel: "test-chan"}
-		err = ws.WriteJSON(subMsg)
+		subMsg := &pubsubv1.PubSubMessage{Action: constants.PubSubActionSubscribe, Channel: "test-chan"}
+		data, err := proto.Marshal(subMsg)
+		require.NoError(t, err)
+		err = ws.WriteMessage(websocket.BinaryMessage, data)
 		require.NoError(t, err)
 
-		var ack map[string]interface{}
 		err = ws.SetReadDeadline(time.Now().Add(2 * time.Second))
 		require.NoError(t, err)
-		err = ws.ReadJSON(&ack)
+		_, respData, err := ws.ReadMessage()
 		require.NoError(t, err)
-		assert.Equal(t, constants.PubSubEventSubscribed, ack["type"])
+		var ack pubsubv1.PubSubEvent
+		err = proto.Unmarshal(respData, &ack)
+		require.NoError(t, err)
+		assert.Equal(t, constants.PubSubEventSubscribed, ack.Type)
 	})
 
 	t.Run("Valid token in header", func(t *testing.T) {

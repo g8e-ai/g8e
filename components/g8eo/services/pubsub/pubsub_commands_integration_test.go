@@ -350,13 +350,14 @@ func TestPubSubCommandService_HandleCommandExecutionRequest_Integration(t *testi
 
 		// Create command message
 		taskID := "task-123"
+		cmdPayload := mustMarshalProtobufCommandRequested(t, "echo", "exec-msg-1", "Integration test", "", 0)
 		msg := PubSubCommandMessage{
 			ID:              "exec-msg-1",
 			EventType:       constants.Event.Operator.Command.Requested,
 			CaseID:          "case-789",
 			TaskID:          &taskID,
 			InvestigationID: "inv-456",
-			Payload:         json.RawMessage(`{"command":"echo","justification":"Integration test"}`),
+			Payload:         cmdPayload,
 			Timestamp:       time.Now().UTC(),
 		}
 
@@ -404,11 +405,12 @@ func TestPubSubCommandService_HandleCommandExecutionRequest_Integration(t *testi
 		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), resultsChannel)
 
 		// Create command message with invalid command
+		cmdPayload := mustMarshalProtobufCommandRequested(t, "nonexistentcommandxyz", "exec-fail-1", "Testing failure", "", 0)
 		msg := PubSubCommandMessage{
 			ID:        "exec-fail-1",
 			EventType: constants.Event.Operator.Command.Requested,
 			CaseID:    "case-fail",
-			Payload:   json.RawMessage(`{"command":"nonexistentcommandxyz","justification":"Testing failure"}`),
+			Payload:   cmdPayload,
 			Timestamp: time.Now().UTC(),
 		}
 
@@ -451,11 +453,12 @@ func TestPubSubCommandService_HandleCommandExecutionRequest_Integration(t *testi
 		require.NoError(t, err)
 
 		// Create command message without justification
+		cmdPayload := mustMarshalProtobufCommandRequested(t, "echo", "exec-no-just-1", "", "", 0)
 		msg := PubSubCommandMessage{
 			ID:        "exec-no-just-1",
 			EventType: constants.Event.Operator.Command.Requested,
 			CaseID:    "case-no-just",
-			Payload:   json.RawMessage(`{"command":"echo"}`),
+			Payload:   cmdPayload,
 			Timestamp: time.Now().UTC(),
 		}
 

@@ -7,6 +7,7 @@
 package operatorv1
 
 import (
+	_ "github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -190,6 +191,7 @@ type FileEditRequested struct {
 	PatchContent    string                 `protobuf:"bytes,12,opt,name=patch_content,json=patchContent,proto3" json:"patch_content,omitempty"`
 	CreateBackup    bool                   `protobuf:"varint,13,opt,name=create_backup,json=createBackup,proto3" json:"create_backup,omitempty"`
 	CreateIfMissing bool                   `protobuf:"varint,14,opt,name=create_if_missing,json=createIfMissing,proto3" json:"create_if_missing,omitempty"`
+	SentinelMode    string                 `protobuf:"bytes,15,opt,name=sentinel_mode,json=sentinelMode,proto3" json:"sentinel_mode,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -322,12 +324,20 @@ func (x *FileEditRequested) GetCreateIfMissing() bool {
 	return false
 }
 
+func (x *FileEditRequested) GetSentinelMode() string {
+	if x != nil {
+		return x.SentinelMode
+	}
+	return ""
+}
+
 type FsListRequested struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
 	ExecutionId   string                 `protobuf:"bytes,2,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
 	MaxDepth      int32                  `protobuf:"varint,3,opt,name=max_depth,json=maxDepth,proto3" json:"max_depth,omitempty"`
 	MaxEntries    int32                  `protobuf:"varint,4,opt,name=max_entries,json=maxEntries,proto3" json:"max_entries,omitempty"`
+	SentinelMode  string                 `protobuf:"bytes,5,opt,name=sentinel_mode,json=sentinelMode,proto3" json:"sentinel_mode,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -390,11 +400,19 @@ func (x *FsListRequested) GetMaxEntries() int32 {
 	return 0
 }
 
+func (x *FsListRequested) GetSentinelMode() string {
+	if x != nil {
+		return x.SentinelMode
+	}
+	return ""
+}
+
 type FsReadRequested struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
 	ExecutionId   string                 `protobuf:"bytes,2,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
 	MaxSize       int32                  `protobuf:"varint,3,opt,name=max_size,json=maxSize,proto3" json:"max_size,omitempty"`
+	SentinelMode  string                 `protobuf:"bytes,4,opt,name=sentinel_mode,json=sentinelMode,proto3" json:"sentinel_mode,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -450,6 +468,13 @@ func (x *FsReadRequested) GetMaxSize() int32 {
 	return 0
 }
 
+func (x *FsReadRequested) GetSentinelMode() string {
+	if x != nil {
+		return x.SentinelMode
+	}
+	return ""
+}
+
 type HeartbeatRequested struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -493,6 +518,7 @@ type FsGrepRequested struct {
 	Pattern       string                 `protobuf:"bytes,3,opt,name=pattern,proto3" json:"pattern,omitempty"`
 	Includes      []string               `protobuf:"bytes,4,rep,name=includes,proto3" json:"includes,omitempty"`
 	MaxMatches    int32                  `protobuf:"varint,5,opt,name=max_matches,json=maxMatches,proto3" json:"max_matches,omitempty"`
+	SentinelMode  string                 `protobuf:"bytes,6,opt,name=sentinel_mode,json=sentinelMode,proto3" json:"sentinel_mode,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -560,6 +586,13 @@ func (x *FsGrepRequested) GetMaxMatches() int32 {
 		return x.MaxMatches
 	}
 	return 0
+}
+
+func (x *FsGrepRequested) GetSentinelMode() string {
+	if x != nil {
+		return x.SentinelMode
+	}
+	return ""
 }
 
 type CheckPortRequested struct {
@@ -903,12 +936,13 @@ func (x *FetchFileDiffRequested) GetLimit() int32 {
 }
 
 type RestoreFileRequested struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ExecutionId   string                 `protobuf:"bytes,1,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
-	FilePath      string                 `protobuf:"bytes,2,opt,name=file_path,json=filePath,proto3" json:"file_path,omitempty"`
-	CommitHash    string                 `protobuf:"bytes,3,opt,name=commit_hash,json=commitHash,proto3" json:"commit_hash,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	ExecutionId       string                 `protobuf:"bytes,1,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
+	FilePath          string                 `protobuf:"bytes,2,opt,name=file_path,json=filePath,proto3" json:"file_path,omitempty"`
+	CommitHash        string                 `protobuf:"bytes,3,opt,name=commit_hash,json=commitHash,proto3" json:"commit_hash,omitempty"`
+	OperatorSessionId string                 `protobuf:"bytes,4,opt,name=operator_session_id,json=operatorSessionId,proto3" json:"operator_session_id,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *RestoreFileRequested) Reset() {
@@ -958,6 +992,13 @@ func (x *RestoreFileRequested) GetFilePath() string {
 func (x *RestoreFileRequested) GetCommitHash() string {
 	if x != nil {
 		return x.CommitHash
+	}
+	return ""
+}
+
+func (x *RestoreFileRequested) GetOperatorSessionId() string {
+	if x != nil {
+		return x.OperatorSessionId
 	}
 	return ""
 }
@@ -1030,6 +1071,178 @@ func (x *DirectCommandAuditRequested) GetType() string {
 	return ""
 }
 
+type DirectCommandResultAuditRequested struct {
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	Command              string                 `protobuf:"bytes,1,opt,name=command,proto3" json:"command,omitempty"`
+	ExecutionId          string                 `protobuf:"bytes,2,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
+	Output               string                 `protobuf:"bytes,3,opt,name=output,proto3" json:"output,omitempty"`
+	Stderr               string                 `protobuf:"bytes,4,opt,name=stderr,proto3" json:"stderr,omitempty"`
+	ExitCode             int32                  `protobuf:"varint,5,opt,name=exit_code,json=exitCode,proto3" json:"exit_code,omitempty"`
+	ExecutionTimeSeconds float32                `protobuf:"fixed32,6,opt,name=execution_time_seconds,json=executionTimeSeconds,proto3" json:"execution_time_seconds,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *DirectCommandResultAuditRequested) Reset() {
+	*x = DirectCommandResultAuditRequested{}
+	mi := &file_operator_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DirectCommandResultAuditRequested) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DirectCommandResultAuditRequested) ProtoMessage() {}
+
+func (x *DirectCommandResultAuditRequested) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DirectCommandResultAuditRequested.ProtoReflect.Descriptor instead.
+func (*DirectCommandResultAuditRequested) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *DirectCommandResultAuditRequested) GetCommand() string {
+	if x != nil {
+		return x.Command
+	}
+	return ""
+}
+
+func (x *DirectCommandResultAuditRequested) GetExecutionId() string {
+	if x != nil {
+		return x.ExecutionId
+	}
+	return ""
+}
+
+func (x *DirectCommandResultAuditRequested) GetOutput() string {
+	if x != nil {
+		return x.Output
+	}
+	return ""
+}
+
+func (x *DirectCommandResultAuditRequested) GetStderr() string {
+	if x != nil {
+		return x.Stderr
+	}
+	return ""
+}
+
+func (x *DirectCommandResultAuditRequested) GetExitCode() int32 {
+	if x != nil {
+		return x.ExitCode
+	}
+	return 0
+}
+
+func (x *DirectCommandResultAuditRequested) GetExecutionTimeSeconds() float32 {
+	if x != nil {
+		return x.ExecutionTimeSeconds
+	}
+	return 0
+}
+
+type AuditMsgRequested struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Content       string                 `protobuf:"bytes,1,opt,name=content,proto3" json:"content,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AuditMsgRequested) Reset() {
+	*x = AuditMsgRequested{}
+	mi := &file_operator_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AuditMsgRequested) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AuditMsgRequested) ProtoMessage() {}
+
+func (x *AuditMsgRequested) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AuditMsgRequested.ProtoReflect.Descriptor instead.
+func (*AuditMsgRequested) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *AuditMsgRequested) GetContent() string {
+	if x != nil {
+		return x.Content
+	}
+	return ""
+}
+
+type ShutdownRequested struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Reason        string                 `protobuf:"bytes,1,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ShutdownRequested) Reset() {
+	*x = ShutdownRequested{}
+	mi := &file_operator_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ShutdownRequested) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ShutdownRequested) ProtoMessage() {}
+
+func (x *ShutdownRequested) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ShutdownRequested.ProtoReflect.Descriptor instead.
+func (*ShutdownRequested) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *ShutdownRequested) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
 // Result payload for g8e.v1.operator.command.completed or failed
 type CommandResult struct {
 	state                protoimpl.MessageState `protogen:"open.v1"`
@@ -1050,7 +1263,7 @@ type CommandResult struct {
 
 func (x *CommandResult) Reset() {
 	*x = CommandResult{}
-	mi := &file_operator_proto_msgTypes[14]
+	mi := &file_operator_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1062,7 +1275,7 @@ func (x *CommandResult) String() string {
 func (*CommandResult) ProtoMessage() {}
 
 func (x *CommandResult) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[14]
+	mi := &file_operator_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1075,7 +1288,7 @@ func (x *CommandResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandResult.ProtoReflect.Descriptor instead.
 func (*CommandResult) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{14}
+	return file_operator_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *CommandResult) GetExecutionId() string {
@@ -1141,13 +1354,1877 @@ func (x *CommandResult) GetEndTimeUnixMs() int64 {
 	return 0
 }
 
+type FsEntry struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	IsDir         bool                   `protobuf:"varint,2,opt,name=is_dir,json=isDir,proto3" json:"is_dir,omitempty"`
+	Size          int64                  `protobuf:"varint,3,opt,name=size,proto3" json:"size,omitempty"`
+	Mode          int32                  `protobuf:"varint,4,opt,name=mode,proto3" json:"mode,omitempty"`
+	ModTime       int64                  `protobuf:"varint,5,opt,name=mod_time,json=modTime,proto3" json:"mod_time,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FsEntry) Reset() {
+	*x = FsEntry{}
+	mi := &file_operator_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FsEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FsEntry) ProtoMessage() {}
+
+func (x *FsEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FsEntry.ProtoReflect.Descriptor instead.
+func (*FsEntry) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *FsEntry) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *FsEntry) GetIsDir() bool {
+	if x != nil {
+		return x.IsDir
+	}
+	return false
+}
+
+func (x *FsEntry) GetSize() int64 {
+	if x != nil {
+		return x.Size
+	}
+	return 0
+}
+
+func (x *FsEntry) GetMode() int32 {
+	if x != nil {
+		return x.Mode
+	}
+	return 0
+}
+
+func (x *FsEntry) GetModTime() int64 {
+	if x != nil {
+		return x.ModTime
+	}
+	return 0
+}
+
+type FsListResult struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ExecutionId     string                 `protobuf:"bytes,1,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
+	Status          string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	Path            string                 `protobuf:"bytes,3,opt,name=path,proto3" json:"path,omitempty"`
+	Entries         []*FsEntry             `protobuf:"bytes,4,rep,name=entries,proto3" json:"entries,omitempty"`
+	Truncated       bool                   `protobuf:"varint,5,opt,name=truncated,proto3" json:"truncated,omitempty"`
+	TotalCount      int32                  `protobuf:"varint,6,opt,name=total_count,json=totalCount,proto3" json:"total_count,omitempty"`
+	DurationSeconds float32                `protobuf:"fixed32,7,opt,name=duration_seconds,json=durationSeconds,proto3" json:"duration_seconds,omitempty"`
+	ErrorMessage    string                 `protobuf:"bytes,8,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	ErrorType       string                 `protobuf:"bytes,9,opt,name=error_type,json=errorType,proto3" json:"error_type,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *FsListResult) Reset() {
+	*x = FsListResult{}
+	mi := &file_operator_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FsListResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FsListResult) ProtoMessage() {}
+
+func (x *FsListResult) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FsListResult.ProtoReflect.Descriptor instead.
+func (*FsListResult) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *FsListResult) GetExecutionId() string {
+	if x != nil {
+		return x.ExecutionId
+	}
+	return ""
+}
+
+func (x *FsListResult) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *FsListResult) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *FsListResult) GetEntries() []*FsEntry {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
+
+func (x *FsListResult) GetTruncated() bool {
+	if x != nil {
+		return x.Truncated
+	}
+	return false
+}
+
+func (x *FsListResult) GetTotalCount() int32 {
+	if x != nil {
+		return x.TotalCount
+	}
+	return 0
+}
+
+func (x *FsListResult) GetDurationSeconds() float32 {
+	if x != nil {
+		return x.DurationSeconds
+	}
+	return 0
+}
+
+func (x *FsListResult) GetErrorMessage() string {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return ""
+}
+
+func (x *FsListResult) GetErrorType() string {
+	if x != nil {
+		return x.ErrorType
+	}
+	return ""
+}
+
+type FsReadResult struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ExecutionId     string                 `protobuf:"bytes,1,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
+	Status          string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	Path            string                 `protobuf:"bytes,3,opt,name=path,proto3" json:"path,omitempty"`
+	Content         []byte                 `protobuf:"bytes,4,opt,name=content,proto3" json:"content,omitempty"`
+	SizeBytes       int64                  `protobuf:"varint,5,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	Truncated       bool                   `protobuf:"varint,6,opt,name=truncated,proto3" json:"truncated,omitempty"`
+	DurationSeconds float32                `protobuf:"fixed32,7,opt,name=duration_seconds,json=durationSeconds,proto3" json:"duration_seconds,omitempty"`
+	ErrorMessage    string                 `protobuf:"bytes,8,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	ErrorType       string                 `protobuf:"bytes,9,opt,name=error_type,json=errorType,proto3" json:"error_type,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *FsReadResult) Reset() {
+	*x = FsReadResult{}
+	mi := &file_operator_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FsReadResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FsReadResult) ProtoMessage() {}
+
+func (x *FsReadResult) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FsReadResult.ProtoReflect.Descriptor instead.
+func (*FsReadResult) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *FsReadResult) GetExecutionId() string {
+	if x != nil {
+		return x.ExecutionId
+	}
+	return ""
+}
+
+func (x *FsReadResult) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *FsReadResult) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *FsReadResult) GetContent() []byte {
+	if x != nil {
+		return x.Content
+	}
+	return nil
+}
+
+func (x *FsReadResult) GetSizeBytes() int64 {
+	if x != nil {
+		return x.SizeBytes
+	}
+	return 0
+}
+
+func (x *FsReadResult) GetTruncated() bool {
+	if x != nil {
+		return x.Truncated
+	}
+	return false
+}
+
+func (x *FsReadResult) GetDurationSeconds() float32 {
+	if x != nil {
+		return x.DurationSeconds
+	}
+	return 0
+}
+
+func (x *FsReadResult) GetErrorMessage() string {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return ""
+}
+
+func (x *FsReadResult) GetErrorType() string {
+	if x != nil {
+		return x.ErrorType
+	}
+	return ""
+}
+
+type FsGrepMatch struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	LineNumber    int32                  `protobuf:"varint,2,opt,name=line_number,json=lineNumber,proto3" json:"line_number,omitempty"`
+	Content       string                 `protobuf:"bytes,3,opt,name=content,proto3" json:"content,omitempty"`
+	Before        []string               `protobuf:"bytes,4,rep,name=before,proto3" json:"before,omitempty"`
+	After         []string               `protobuf:"bytes,5,rep,name=after,proto3" json:"after,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FsGrepMatch) Reset() {
+	*x = FsGrepMatch{}
+	mi := &file_operator_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FsGrepMatch) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FsGrepMatch) ProtoMessage() {}
+
+func (x *FsGrepMatch) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FsGrepMatch.ProtoReflect.Descriptor instead.
+func (*FsGrepMatch) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *FsGrepMatch) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *FsGrepMatch) GetLineNumber() int32 {
+	if x != nil {
+		return x.LineNumber
+	}
+	return 0
+}
+
+func (x *FsGrepMatch) GetContent() string {
+	if x != nil {
+		return x.Content
+	}
+	return ""
+}
+
+func (x *FsGrepMatch) GetBefore() []string {
+	if x != nil {
+		return x.Before
+	}
+	return nil
+}
+
+func (x *FsGrepMatch) GetAfter() []string {
+	if x != nil {
+		return x.After
+	}
+	return nil
+}
+
+type FsGrepResult struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ExecutionId     string                 `protobuf:"bytes,1,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
+	Status          string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	Path            string                 `protobuf:"bytes,3,opt,name=path,proto3" json:"path,omitempty"`
+	Matches         []*FsGrepMatch         `protobuf:"bytes,4,rep,name=matches,proto3" json:"matches,omitempty"`
+	TotalMatches    int32                  `protobuf:"varint,5,opt,name=total_matches,json=totalMatches,proto3" json:"total_matches,omitempty"`
+	Truncated       bool                   `protobuf:"varint,6,opt,name=truncated,proto3" json:"truncated,omitempty"`
+	DurationSeconds float32                `protobuf:"fixed32,7,opt,name=duration_seconds,json=durationSeconds,proto3" json:"duration_seconds,omitempty"`
+	ErrorMessage    string                 `protobuf:"bytes,8,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	ErrorType       string                 `protobuf:"bytes,9,opt,name=error_type,json=errorType,proto3" json:"error_type,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *FsGrepResult) Reset() {
+	*x = FsGrepResult{}
+	mi := &file_operator_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FsGrepResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FsGrepResult) ProtoMessage() {}
+
+func (x *FsGrepResult) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FsGrepResult.ProtoReflect.Descriptor instead.
+func (*FsGrepResult) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *FsGrepResult) GetExecutionId() string {
+	if x != nil {
+		return x.ExecutionId
+	}
+	return ""
+}
+
+func (x *FsGrepResult) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *FsGrepResult) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *FsGrepResult) GetMatches() []*FsGrepMatch {
+	if x != nil {
+		return x.Matches
+	}
+	return nil
+}
+
+func (x *FsGrepResult) GetTotalMatches() int32 {
+	if x != nil {
+		return x.TotalMatches
+	}
+	return 0
+}
+
+func (x *FsGrepResult) GetTruncated() bool {
+	if x != nil {
+		return x.Truncated
+	}
+	return false
+}
+
+func (x *FsGrepResult) GetDurationSeconds() float32 {
+	if x != nil {
+		return x.DurationSeconds
+	}
+	return 0
+}
+
+func (x *FsGrepResult) GetErrorMessage() string {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return ""
+}
+
+func (x *FsGrepResult) GetErrorType() string {
+	if x != nil {
+		return x.ErrorType
+	}
+	return ""
+}
+
+type FileEditResult struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ExecutionId     string                 `protobuf:"bytes,1,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
+	Status          string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	FilePath        string                 `protobuf:"bytes,3,opt,name=file_path,json=filePath,proto3" json:"file_path,omitempty"`
+	Operation       string                 `protobuf:"bytes,4,opt,name=operation,proto3" json:"operation,omitempty"`
+	DurationSeconds float32                `protobuf:"fixed32,5,opt,name=duration_seconds,json=durationSeconds,proto3" json:"duration_seconds,omitempty"`
+	BytesWritten    int64                  `protobuf:"varint,6,opt,name=bytes_written,json=bytesWritten,proto3" json:"bytes_written,omitempty"`
+	LinesChanged    int32                  `protobuf:"varint,7,opt,name=lines_changed,json=linesChanged,proto3" json:"lines_changed,omitempty"`
+	BackupPath      string                 `protobuf:"bytes,8,opt,name=backup_path,json=backupPath,proto3" json:"backup_path,omitempty"`
+	ErrorMessage    string                 `protobuf:"bytes,9,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	ErrorType       string                 `protobuf:"bytes,10,opt,name=error_type,json=errorType,proto3" json:"error_type,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *FileEditResult) Reset() {
+	*x = FileEditResult{}
+	mi := &file_operator_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FileEditResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FileEditResult) ProtoMessage() {}
+
+func (x *FileEditResult) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FileEditResult.ProtoReflect.Descriptor instead.
+func (*FileEditResult) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *FileEditResult) GetExecutionId() string {
+	if x != nil {
+		return x.ExecutionId
+	}
+	return ""
+}
+
+func (x *FileEditResult) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *FileEditResult) GetFilePath() string {
+	if x != nil {
+		return x.FilePath
+	}
+	return ""
+}
+
+func (x *FileEditResult) GetOperation() string {
+	if x != nil {
+		return x.Operation
+	}
+	return ""
+}
+
+func (x *FileEditResult) GetDurationSeconds() float32 {
+	if x != nil {
+		return x.DurationSeconds
+	}
+	return 0
+}
+
+func (x *FileEditResult) GetBytesWritten() int64 {
+	if x != nil {
+		return x.BytesWritten
+	}
+	return 0
+}
+
+func (x *FileEditResult) GetLinesChanged() int32 {
+	if x != nil {
+		return x.LinesChanged
+	}
+	return 0
+}
+
+func (x *FileEditResult) GetBackupPath() string {
+	if x != nil {
+		return x.BackupPath
+	}
+	return ""
+}
+
+func (x *FileEditResult) GetErrorMessage() string {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return ""
+}
+
+func (x *FileEditResult) GetErrorType() string {
+	if x != nil {
+		return x.ErrorType
+	}
+	return ""
+}
+
+type ExecutionStatusUpdate struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ExecutionId    string                 `protobuf:"bytes,1,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
+	Status         string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	Command        string                 `protobuf:"bytes,3,opt,name=command,proto3" json:"command,omitempty"`
+	ProcessAlive   bool                   `protobuf:"varint,4,opt,name=process_alive,json=processAlive,proto3" json:"process_alive,omitempty"`
+	ElapsedSeconds float32                `protobuf:"fixed32,5,opt,name=elapsed_seconds,json=elapsedSeconds,proto3" json:"elapsed_seconds,omitempty"`
+	NewOutput      string                 `protobuf:"bytes,6,opt,name=new_output,json=newOutput,proto3" json:"new_output,omitempty"`
+	NewStderr      string                 `protobuf:"bytes,7,opt,name=new_stderr,json=newStderr,proto3" json:"new_stderr,omitempty"`
+	Message        string                 `protobuf:"bytes,8,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ExecutionStatusUpdate) Reset() {
+	*x = ExecutionStatusUpdate{}
+	mi := &file_operator_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExecutionStatusUpdate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExecutionStatusUpdate) ProtoMessage() {}
+
+func (x *ExecutionStatusUpdate) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExecutionStatusUpdate.ProtoReflect.Descriptor instead.
+func (*ExecutionStatusUpdate) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *ExecutionStatusUpdate) GetExecutionId() string {
+	if x != nil {
+		return x.ExecutionId
+	}
+	return ""
+}
+
+func (x *ExecutionStatusUpdate) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *ExecutionStatusUpdate) GetCommand() string {
+	if x != nil {
+		return x.Command
+	}
+	return ""
+}
+
+func (x *ExecutionStatusUpdate) GetProcessAlive() bool {
+	if x != nil {
+		return x.ProcessAlive
+	}
+	return false
+}
+
+func (x *ExecutionStatusUpdate) GetElapsedSeconds() float32 {
+	if x != nil {
+		return x.ElapsedSeconds
+	}
+	return 0
+}
+
+func (x *ExecutionStatusUpdate) GetNewOutput() string {
+	if x != nil {
+		return x.NewOutput
+	}
+	return ""
+}
+
+func (x *ExecutionStatusUpdate) GetNewStderr() string {
+	if x != nil {
+		return x.NewStderr
+	}
+	return ""
+}
+
+func (x *ExecutionStatusUpdate) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+type PortCheckEntry struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Host          string                 `protobuf:"bytes,1,opt,name=host,proto3" json:"host,omitempty"`
+	Port          int32                  `protobuf:"varint,2,opt,name=port,proto3" json:"port,omitempty"`
+	Open          bool                   `protobuf:"varint,3,opt,name=open,proto3" json:"open,omitempty"`
+	LatencyMs     float32                `protobuf:"fixed32,4,opt,name=latency_ms,json=latencyMs,proto3" json:"latency_ms,omitempty"`
+	Error         string                 `protobuf:"bytes,5,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PortCheckEntry) Reset() {
+	*x = PortCheckEntry{}
+	mi := &file_operator_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PortCheckEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PortCheckEntry) ProtoMessage() {}
+
+func (x *PortCheckEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PortCheckEntry.ProtoReflect.Descriptor instead.
+func (*PortCheckEntry) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *PortCheckEntry) GetHost() string {
+	if x != nil {
+		return x.Host
+	}
+	return ""
+}
+
+func (x *PortCheckEntry) GetPort() int32 {
+	if x != nil {
+		return x.Port
+	}
+	return 0
+}
+
+func (x *PortCheckEntry) GetOpen() bool {
+	if x != nil {
+		return x.Open
+	}
+	return false
+}
+
+func (x *PortCheckEntry) GetLatencyMs() float32 {
+	if x != nil {
+		return x.LatencyMs
+	}
+	return 0
+}
+
+func (x *PortCheckEntry) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+type PortCheckResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ExecutionId   string                 `protobuf:"bytes,1,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
+	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	Results       []*PortCheckEntry      `protobuf:"bytes,3,rep,name=results,proto3" json:"results,omitempty"`
+	ErrorMessage  string                 `protobuf:"bytes,4,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	ErrorType     string                 `protobuf:"bytes,5,opt,name=error_type,json=errorType,proto3" json:"error_type,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PortCheckResult) Reset() {
+	*x = PortCheckResult{}
+	mi := &file_operator_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PortCheckResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PortCheckResult) ProtoMessage() {}
+
+func (x *PortCheckResult) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PortCheckResult.ProtoReflect.Descriptor instead.
+func (*PortCheckResult) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *PortCheckResult) GetExecutionId() string {
+	if x != nil {
+		return x.ExecutionId
+	}
+	return ""
+}
+
+func (x *PortCheckResult) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *PortCheckResult) GetResults() []*PortCheckEntry {
+	if x != nil {
+		return x.Results
+	}
+	return nil
+}
+
+func (x *PortCheckResult) GetErrorMessage() string {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return ""
+}
+
+func (x *PortCheckResult) GetErrorType() string {
+	if x != nil {
+		return x.ErrorType
+	}
+	return ""
+}
+
+type FetchLogsResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ExecutionId   string                 `protobuf:"bytes,1,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
+	Command       string                 `protobuf:"bytes,2,opt,name=command,proto3" json:"command,omitempty"`
+	ExitCode      int32                  `protobuf:"varint,3,opt,name=exit_code,json=exitCode,proto3" json:"exit_code,omitempty"`
+	DurationMs    int64                  `protobuf:"varint,4,opt,name=duration_ms,json=durationMs,proto3" json:"duration_ms,omitempty"`
+	Stdout        string                 `protobuf:"bytes,5,opt,name=stdout,proto3" json:"stdout,omitempty"`
+	Stderr        string                 `protobuf:"bytes,6,opt,name=stderr,proto3" json:"stderr,omitempty"`
+	StdoutSize    int32                  `protobuf:"varint,7,opt,name=stdout_size,json=stdoutSize,proto3" json:"stdout_size,omitempty"`
+	StderrSize    int32                  `protobuf:"varint,8,opt,name=stderr_size,json=stderrSize,proto3" json:"stderr_size,omitempty"`
+	Timestamp     string                 `protobuf:"bytes,9,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	SentinelMode  string                 `protobuf:"bytes,10,opt,name=sentinel_mode,json=sentinelMode,proto3" json:"sentinel_mode,omitempty"`
+	Error         string                 `protobuf:"bytes,11,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FetchLogsResult) Reset() {
+	*x = FetchLogsResult{}
+	mi := &file_operator_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FetchLogsResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FetchLogsResult) ProtoMessage() {}
+
+func (x *FetchLogsResult) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FetchLogsResult.ProtoReflect.Descriptor instead.
+func (*FetchLogsResult) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *FetchLogsResult) GetExecutionId() string {
+	if x != nil {
+		return x.ExecutionId
+	}
+	return ""
+}
+
+func (x *FetchLogsResult) GetCommand() string {
+	if x != nil {
+		return x.Command
+	}
+	return ""
+}
+
+func (x *FetchLogsResult) GetExitCode() int32 {
+	if x != nil {
+		return x.ExitCode
+	}
+	return 0
+}
+
+func (x *FetchLogsResult) GetDurationMs() int64 {
+	if x != nil {
+		return x.DurationMs
+	}
+	return 0
+}
+
+func (x *FetchLogsResult) GetStdout() string {
+	if x != nil {
+		return x.Stdout
+	}
+	return ""
+}
+
+func (x *FetchLogsResult) GetStderr() string {
+	if x != nil {
+		return x.Stderr
+	}
+	return ""
+}
+
+func (x *FetchLogsResult) GetStdoutSize() int32 {
+	if x != nil {
+		return x.StdoutSize
+	}
+	return 0
+}
+
+func (x *FetchLogsResult) GetStderrSize() int32 {
+	if x != nil {
+		return x.StderrSize
+	}
+	return 0
+}
+
+func (x *FetchLogsResult) GetTimestamp() string {
+	if x != nil {
+		return x.Timestamp
+	}
+	return ""
+}
+
+func (x *FetchLogsResult) GetSentinelMode() string {
+	if x != nil {
+		return x.SentinelMode
+	}
+	return ""
+}
+
+func (x *FetchLogsResult) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+type AuditWebSession struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Title         string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
+	CreatedAt     string                 `protobuf:"bytes,3,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UserIdentity  string                 `protobuf:"bytes,4,opt,name=user_identity,json=userIdentity,proto3" json:"user_identity,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AuditWebSession) Reset() {
+	*x = AuditWebSession{}
+	mi := &file_operator_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AuditWebSession) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AuditWebSession) ProtoMessage() {}
+
+func (x *AuditWebSession) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AuditWebSession.ProtoReflect.Descriptor instead.
+func (*AuditWebSession) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *AuditWebSession) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *AuditWebSession) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *AuditWebSession) GetCreatedAt() string {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return ""
+}
+
+func (x *AuditWebSession) GetUserIdentity() string {
+	if x != nil {
+		return x.UserIdentity
+	}
+	return ""
+}
+
+type AuditFileMutation struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Id               int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Filepath         string                 `protobuf:"bytes,2,opt,name=filepath,proto3" json:"filepath,omitempty"`
+	Operation        string                 `protobuf:"bytes,3,opt,name=operation,proto3" json:"operation,omitempty"`
+	LedgerHashBefore string                 `protobuf:"bytes,4,opt,name=ledger_hash_before,json=ledgerHashBefore,proto3" json:"ledger_hash_before,omitempty"`
+	LedgerHashAfter  string                 `protobuf:"bytes,5,opt,name=ledger_hash_after,json=ledgerHashAfter,proto3" json:"ledger_hash_after,omitempty"`
+	DiffStat         string                 `protobuf:"bytes,6,opt,name=diff_stat,json=diffStat,proto3" json:"diff_stat,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *AuditFileMutation) Reset() {
+	*x = AuditFileMutation{}
+	mi := &file_operator_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AuditFileMutation) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AuditFileMutation) ProtoMessage() {}
+
+func (x *AuditFileMutation) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AuditFileMutation.ProtoReflect.Descriptor instead.
+func (*AuditFileMutation) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *AuditFileMutation) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *AuditFileMutation) GetFilepath() string {
+	if x != nil {
+		return x.Filepath
+	}
+	return ""
+}
+
+func (x *AuditFileMutation) GetOperation() string {
+	if x != nil {
+		return x.Operation
+	}
+	return ""
+}
+
+func (x *AuditFileMutation) GetLedgerHashBefore() string {
+	if x != nil {
+		return x.LedgerHashBefore
+	}
+	return ""
+}
+
+func (x *AuditFileMutation) GetLedgerHashAfter() string {
+	if x != nil {
+		return x.LedgerHashAfter
+	}
+	return ""
+}
+
+func (x *AuditFileMutation) GetDiffStat() string {
+	if x != nil {
+		return x.DiffStat
+	}
+	return ""
+}
+
+type AuditEvent struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	Id                  int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	OperatorSessionId   string                 `protobuf:"bytes,2,opt,name=operator_session_id,json=operatorSessionId,proto3" json:"operator_session_id,omitempty"`
+	Timestamp           string                 `protobuf:"bytes,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	Type                string                 `protobuf:"bytes,4,opt,name=type,proto3" json:"type,omitempty"`
+	ContentText         string                 `protobuf:"bytes,5,opt,name=content_text,json=contentText,proto3" json:"content_text,omitempty"`
+	CommandRaw          string                 `protobuf:"bytes,6,opt,name=command_raw,json=commandRaw,proto3" json:"command_raw,omitempty"`
+	CommandExitCode     int32                  `protobuf:"varint,7,opt,name=command_exit_code,json=commandExitCode,proto3" json:"command_exit_code,omitempty"`
+	CommandStdout       string                 `protobuf:"bytes,8,opt,name=command_stdout,json=commandStdout,proto3" json:"command_stdout,omitempty"`
+	CommandStderr       string                 `protobuf:"bytes,9,opt,name=command_stderr,json=commandStderr,proto3" json:"command_stderr,omitempty"`
+	ExecutionDurationMs int64                  `protobuf:"varint,10,opt,name=execution_duration_ms,json=executionDurationMs,proto3" json:"execution_duration_ms,omitempty"`
+	StoredLocally       bool                   `protobuf:"varint,11,opt,name=stored_locally,json=storedLocally,proto3" json:"stored_locally,omitempty"`
+	StdoutTruncated     bool                   `protobuf:"varint,12,opt,name=stdout_truncated,json=stdoutTruncated,proto3" json:"stdout_truncated,omitempty"`
+	StderrTruncated     bool                   `protobuf:"varint,13,opt,name=stderr_truncated,json=stderrTruncated,proto3" json:"stderr_truncated,omitempty"`
+	FileMutations       []*AuditFileMutation   `protobuf:"bytes,14,rep,name=file_mutations,json=fileMutations,proto3" json:"file_mutations,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *AuditEvent) Reset() {
+	*x = AuditEvent{}
+	mi := &file_operator_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AuditEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AuditEvent) ProtoMessage() {}
+
+func (x *AuditEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AuditEvent.ProtoReflect.Descriptor instead.
+func (*AuditEvent) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *AuditEvent) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *AuditEvent) GetOperatorSessionId() string {
+	if x != nil {
+		return x.OperatorSessionId
+	}
+	return ""
+}
+
+func (x *AuditEvent) GetTimestamp() string {
+	if x != nil {
+		return x.Timestamp
+	}
+	return ""
+}
+
+func (x *AuditEvent) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *AuditEvent) GetContentText() string {
+	if x != nil {
+		return x.ContentText
+	}
+	return ""
+}
+
+func (x *AuditEvent) GetCommandRaw() string {
+	if x != nil {
+		return x.CommandRaw
+	}
+	return ""
+}
+
+func (x *AuditEvent) GetCommandExitCode() int32 {
+	if x != nil {
+		return x.CommandExitCode
+	}
+	return 0
+}
+
+func (x *AuditEvent) GetCommandStdout() string {
+	if x != nil {
+		return x.CommandStdout
+	}
+	return ""
+}
+
+func (x *AuditEvent) GetCommandStderr() string {
+	if x != nil {
+		return x.CommandStderr
+	}
+	return ""
+}
+
+func (x *AuditEvent) GetExecutionDurationMs() int64 {
+	if x != nil {
+		return x.ExecutionDurationMs
+	}
+	return 0
+}
+
+func (x *AuditEvent) GetStoredLocally() bool {
+	if x != nil {
+		return x.StoredLocally
+	}
+	return false
+}
+
+func (x *AuditEvent) GetStdoutTruncated() bool {
+	if x != nil {
+		return x.StdoutTruncated
+	}
+	return false
+}
+
+func (x *AuditEvent) GetStderrTruncated() bool {
+	if x != nil {
+		return x.StderrTruncated
+	}
+	return false
+}
+
+func (x *AuditEvent) GetFileMutations() []*AuditFileMutation {
+	if x != nil {
+		return x.FileMutations
+	}
+	return nil
+}
+
+type FetchHistoryResult struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Success           bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	ExecutionId       string                 `protobuf:"bytes,2,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
+	OperatorSessionId string                 `protobuf:"bytes,3,opt,name=operator_session_id,json=operatorSessionId,proto3" json:"operator_session_id,omitempty"`
+	WebSession        *AuditWebSession       `protobuf:"bytes,4,opt,name=web_session,json=webSession,proto3" json:"web_session,omitempty"`
+	Events            []*AuditEvent          `protobuf:"bytes,5,rep,name=events,proto3" json:"events,omitempty"`
+	Total             int32                  `protobuf:"varint,6,opt,name=total,proto3" json:"total,omitempty"`
+	Limit             int32                  `protobuf:"varint,7,opt,name=limit,proto3" json:"limit,omitempty"`
+	Offset            int32                  `protobuf:"varint,8,opt,name=offset,proto3" json:"offset,omitempty"`
+	Error             string                 `protobuf:"bytes,9,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *FetchHistoryResult) Reset() {
+	*x = FetchHistoryResult{}
+	mi := &file_operator_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FetchHistoryResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FetchHistoryResult) ProtoMessage() {}
+
+func (x *FetchHistoryResult) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FetchHistoryResult.ProtoReflect.Descriptor instead.
+func (*FetchHistoryResult) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *FetchHistoryResult) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *FetchHistoryResult) GetExecutionId() string {
+	if x != nil {
+		return x.ExecutionId
+	}
+	return ""
+}
+
+func (x *FetchHistoryResult) GetOperatorSessionId() string {
+	if x != nil {
+		return x.OperatorSessionId
+	}
+	return ""
+}
+
+func (x *FetchHistoryResult) GetWebSession() *AuditWebSession {
+	if x != nil {
+		return x.WebSession
+	}
+	return nil
+}
+
+func (x *FetchHistoryResult) GetEvents() []*AuditEvent {
+	if x != nil {
+		return x.Events
+	}
+	return nil
+}
+
+func (x *FetchHistoryResult) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+func (x *FetchHistoryResult) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *FetchHistoryResult) GetOffset() int32 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
+func (x *FetchHistoryResult) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+type FileHistoryEntry struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CommitHash    string                 `protobuf:"bytes,1,opt,name=commit_hash,json=commitHash,proto3" json:"commit_hash,omitempty"`
+	Timestamp     string                 `protobuf:"bytes,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	Message       string                 `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FileHistoryEntry) Reset() {
+	*x = FileHistoryEntry{}
+	mi := &file_operator_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FileHistoryEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FileHistoryEntry) ProtoMessage() {}
+
+func (x *FileHistoryEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FileHistoryEntry.ProtoReflect.Descriptor instead.
+func (*FileHistoryEntry) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *FileHistoryEntry) GetCommitHash() string {
+	if x != nil {
+		return x.CommitHash
+	}
+	return ""
+}
+
+func (x *FileHistoryEntry) GetTimestamp() string {
+	if x != nil {
+		return x.Timestamp
+	}
+	return ""
+}
+
+func (x *FileHistoryEntry) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+type FetchFileHistoryResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	ExecutionId   string                 `protobuf:"bytes,2,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
+	FilePath      string                 `protobuf:"bytes,3,opt,name=file_path,json=filePath,proto3" json:"file_path,omitempty"`
+	History       []*FileHistoryEntry    `protobuf:"bytes,4,rep,name=history,proto3" json:"history,omitempty"`
+	Error         string                 `protobuf:"bytes,5,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FetchFileHistoryResult) Reset() {
+	*x = FetchFileHistoryResult{}
+	mi := &file_operator_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FetchFileHistoryResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FetchFileHistoryResult) ProtoMessage() {}
+
+func (x *FetchFileHistoryResult) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FetchFileHistoryResult.ProtoReflect.Descriptor instead.
+func (*FetchFileHistoryResult) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *FetchFileHistoryResult) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *FetchFileHistoryResult) GetExecutionId() string {
+	if x != nil {
+		return x.ExecutionId
+	}
+	return ""
+}
+
+func (x *FetchFileHistoryResult) GetFilePath() string {
+	if x != nil {
+		return x.FilePath
+	}
+	return ""
+}
+
+func (x *FetchFileHistoryResult) GetHistory() []*FileHistoryEntry {
+	if x != nil {
+		return x.History
+	}
+	return nil
+}
+
+func (x *FetchFileHistoryResult) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+type RestoreFileResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	ExecutionId   string                 `protobuf:"bytes,2,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
+	FilePath      string                 `protobuf:"bytes,3,opt,name=file_path,json=filePath,proto3" json:"file_path,omitempty"`
+	CommitHash    string                 `protobuf:"bytes,4,opt,name=commit_hash,json=commitHash,proto3" json:"commit_hash,omitempty"`
+	Error         string                 `protobuf:"bytes,5,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RestoreFileResult) Reset() {
+	*x = RestoreFileResult{}
+	mi := &file_operator_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RestoreFileResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RestoreFileResult) ProtoMessage() {}
+
+func (x *RestoreFileResult) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RestoreFileResult.ProtoReflect.Descriptor instead.
+func (*RestoreFileResult) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *RestoreFileResult) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *RestoreFileResult) GetExecutionId() string {
+	if x != nil {
+		return x.ExecutionId
+	}
+	return ""
+}
+
+func (x *RestoreFileResult) GetFilePath() string {
+	if x != nil {
+		return x.FilePath
+	}
+	return ""
+}
+
+func (x *RestoreFileResult) GetCommitHash() string {
+	if x != nil {
+		return x.CommitHash
+	}
+	return ""
+}
+
+func (x *RestoreFileResult) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+type FileDiffEntry struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Id                string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Timestamp         string                 `protobuf:"bytes,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	FilePath          string                 `protobuf:"bytes,3,opt,name=file_path,json=filePath,proto3" json:"file_path,omitempty"`
+	Operation         string                 `protobuf:"bytes,4,opt,name=operation,proto3" json:"operation,omitempty"`
+	LedgerHashBefore  string                 `protobuf:"bytes,5,opt,name=ledger_hash_before,json=ledgerHashBefore,proto3" json:"ledger_hash_before,omitempty"`
+	LedgerHashAfter   string                 `protobuf:"bytes,6,opt,name=ledger_hash_after,json=ledgerHashAfter,proto3" json:"ledger_hash_after,omitempty"`
+	DiffStat          string                 `protobuf:"bytes,7,opt,name=diff_stat,json=diffStat,proto3" json:"diff_stat,omitempty"`
+	DiffContent       string                 `protobuf:"bytes,8,opt,name=diff_content,json=diffContent,proto3" json:"diff_content,omitempty"`
+	DiffSize          int32                  `protobuf:"varint,9,opt,name=diff_size,json=diffSize,proto3" json:"diff_size,omitempty"`
+	OperatorSessionId string                 `protobuf:"bytes,10,opt,name=operator_session_id,json=operatorSessionId,proto3" json:"operator_session_id,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *FileDiffEntry) Reset() {
+	*x = FileDiffEntry{}
+	mi := &file_operator_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FileDiffEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FileDiffEntry) ProtoMessage() {}
+
+func (x *FileDiffEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FileDiffEntry.ProtoReflect.Descriptor instead.
+func (*FileDiffEntry) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *FileDiffEntry) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *FileDiffEntry) GetTimestamp() string {
+	if x != nil {
+		return x.Timestamp
+	}
+	return ""
+}
+
+func (x *FileDiffEntry) GetFilePath() string {
+	if x != nil {
+		return x.FilePath
+	}
+	return ""
+}
+
+func (x *FileDiffEntry) GetOperation() string {
+	if x != nil {
+		return x.Operation
+	}
+	return ""
+}
+
+func (x *FileDiffEntry) GetLedgerHashBefore() string {
+	if x != nil {
+		return x.LedgerHashBefore
+	}
+	return ""
+}
+
+func (x *FileDiffEntry) GetLedgerHashAfter() string {
+	if x != nil {
+		return x.LedgerHashAfter
+	}
+	return ""
+}
+
+func (x *FileDiffEntry) GetDiffStat() string {
+	if x != nil {
+		return x.DiffStat
+	}
+	return ""
+}
+
+func (x *FileDiffEntry) GetDiffContent() string {
+	if x != nil {
+		return x.DiffContent
+	}
+	return ""
+}
+
+func (x *FileDiffEntry) GetDiffSize() int32 {
+	if x != nil {
+		return x.DiffSize
+	}
+	return 0
+}
+
+func (x *FileDiffEntry) GetOperatorSessionId() string {
+	if x != nil {
+		return x.OperatorSessionId
+	}
+	return ""
+}
+
+type FetchFileDiffResult struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Success           bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	ExecutionId       string                 `protobuf:"bytes,2,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
+	Diffs             []*FileDiffEntry       `protobuf:"bytes,3,rep,name=diffs,proto3" json:"diffs,omitempty"`
+	Diff              *FileDiffEntry         `protobuf:"bytes,4,opt,name=diff,proto3" json:"diff,omitempty"`
+	Total             int32                  `protobuf:"varint,5,opt,name=total,proto3" json:"total,omitempty"`
+	OperatorSessionId string                 `protobuf:"bytes,6,opt,name=operator_session_id,json=operatorSessionId,proto3" json:"operator_session_id,omitempty"`
+	Error             string                 `protobuf:"bytes,7,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *FetchFileDiffResult) Reset() {
+	*x = FetchFileDiffResult{}
+	mi := &file_operator_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FetchFileDiffResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FetchFileDiffResult) ProtoMessage() {}
+
+func (x *FetchFileDiffResult) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FetchFileDiffResult.ProtoReflect.Descriptor instead.
+func (*FetchFileDiffResult) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *FetchFileDiffResult) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *FetchFileDiffResult) GetExecutionId() string {
+	if x != nil {
+		return x.ExecutionId
+	}
+	return ""
+}
+
+func (x *FetchFileDiffResult) GetDiffs() []*FileDiffEntry {
+	if x != nil {
+		return x.Diffs
+	}
+	return nil
+}
+
+func (x *FetchFileDiffResult) GetDiff() *FileDiffEntry {
+	if x != nil {
+		return x.Diff
+	}
+	return nil
+}
+
+func (x *FetchFileDiffResult) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+func (x *FetchFileDiffResult) GetOperatorSessionId() string {
+	if x != nil {
+		return x.OperatorSessionId
+	}
+	return ""
+}
+
+func (x *FetchFileDiffResult) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+type HeartbeatResult struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	OperatorId        string                 `protobuf:"bytes,1,opt,name=operator_id,json=operatorId,proto3" json:"operator_id,omitempty"`
+	OperatorSessionId string                 `protobuf:"bytes,2,opt,name=operator_session_id,json=operatorSessionId,proto3" json:"operator_session_id,omitempty"`
+	Timestamp         string                 `protobuf:"bytes,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	Status            string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *HeartbeatResult) Reset() {
+	*x = HeartbeatResult{}
+	mi := &file_operator_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HeartbeatResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HeartbeatResult) ProtoMessage() {}
+
+func (x *HeartbeatResult) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HeartbeatResult.ProtoReflect.Descriptor instead.
+func (*HeartbeatResult) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *HeartbeatResult) GetOperatorId() string {
+	if x != nil {
+		return x.OperatorId
+	}
+	return ""
+}
+
+func (x *HeartbeatResult) GetOperatorSessionId() string {
+	if x != nil {
+		return x.OperatorSessionId
+	}
+	return ""
+}
+
+func (x *HeartbeatResult) GetTimestamp() string {
+	if x != nil {
+		return x.Timestamp
+	}
+	return ""
+}
+
+func (x *HeartbeatResult) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
 var File_operator_proto protoreflect.FileDescriptor
 
 const file_operator_proto_rawDesc = "" +
 	"\n" +
-	"\x0eoperator.proto\x12\x0fg8e.operator.v1\"\x9e\x03\n" +
-	"\x10CommandRequested\x12\x18\n" +
-	"\acommand\x18\x01 \x01(\tR\acommand\x12!\n" +
+	"\x0eoperator.proto\x12\x0fg8e.operator.v1\x1a\fcommon.proto\"\xb4\x03\n" +
+	"\x10CommandRequested\x12.\n" +
+	"\acommand\x18\x01 \x01(\tB\x14\x8a\xb5\x18\x10sudo,su,rm -rf /R\acommand\x12!\n" +
 	"\fexecution_id\x18\x02 \x01(\tR\vexecutionId\x12$\n" +
 	"\rjustification\x18\x03 \x01(\tR\rjustification\x12#\n" +
 	"\rsentinel_mode\x18\x04 \x01(\tR\fsentinelMode\x12'\n" +
@@ -1159,7 +3236,7 @@ const file_operator_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\";\n" +
 	"\x16CommandCancelRequested\x12!\n" +
-	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\"\xf3\x03\n" +
+	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\"\x98\x04\n" +
 	"\x11FileEditRequested\x12\x1b\n" +
 	"\tfile_path\x18\x01 \x01(\tR\bfilePath\x12\x1c\n" +
 	"\toperation\x18\x02 \x01(\tR\toperation\x12!\n" +
@@ -1178,25 +3255,29 @@ const file_operator_proto_rawDesc = "" +
 	"\bend_line\x18\v \x01(\x05R\aendLine\x12#\n" +
 	"\rpatch_content\x18\f \x01(\tR\fpatchContent\x12#\n" +
 	"\rcreate_backup\x18\r \x01(\bR\fcreateBackup\x12*\n" +
-	"\x11create_if_missing\x18\x0e \x01(\bR\x0fcreateIfMissing\"\x86\x01\n" +
+	"\x11create_if_missing\x18\x0e \x01(\bR\x0fcreateIfMissing\x12#\n" +
+	"\rsentinel_mode\x18\x0f \x01(\tR\fsentinelMode\"\xab\x01\n" +
 	"\x0fFsListRequested\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12!\n" +
 	"\fexecution_id\x18\x02 \x01(\tR\vexecutionId\x12\x1b\n" +
 	"\tmax_depth\x18\x03 \x01(\x05R\bmaxDepth\x12\x1f\n" +
 	"\vmax_entries\x18\x04 \x01(\x05R\n" +
-	"maxEntries\"c\n" +
+	"maxEntries\x12#\n" +
+	"\rsentinel_mode\x18\x05 \x01(\tR\fsentinelMode\"\x88\x01\n" +
 	"\x0fFsReadRequested\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12!\n" +
 	"\fexecution_id\x18\x02 \x01(\tR\vexecutionId\x12\x19\n" +
-	"\bmax_size\x18\x03 \x01(\x05R\amaxSize\"\x14\n" +
-	"\x12HeartbeatRequested\"\x9f\x01\n" +
+	"\bmax_size\x18\x03 \x01(\x05R\amaxSize\x12#\n" +
+	"\rsentinel_mode\x18\x04 \x01(\tR\fsentinelMode\"\x14\n" +
+	"\x12HeartbeatRequested\"\xc4\x01\n" +
 	"\x0fFsGrepRequested\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12!\n" +
 	"\fexecution_id\x18\x02 \x01(\tR\vexecutionId\x12\x18\n" +
 	"\apattern\x18\x03 \x01(\tR\apattern\x12\x1a\n" +
 	"\bincludes\x18\x04 \x03(\tR\bincludes\x12\x1f\n" +
 	"\vmax_matches\x18\x05 \x01(\x05R\n" +
-	"maxMatches\"{\n" +
+	"maxMatches\x12#\n" +
+	"\rsentinel_mode\x18\x06 \x01(\tR\fsentinelMode\"{\n" +
 	"\x12CheckPortRequested\x12!\n" +
 	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12\x12\n" +
 	"\x04port\x18\x02 \x01(\x05R\x04port\x12\x12\n" +
@@ -1221,17 +3302,29 @@ const file_operator_proto_rawDesc = "" +
 	"\adiff_id\x18\x02 \x01(\tR\x06diffId\x12.\n" +
 	"\x13operator_session_id\x18\x03 \x01(\tR\x11operatorSessionId\x12\x1b\n" +
 	"\tfile_path\x18\x04 \x01(\tR\bfilePath\x12\x14\n" +
-	"\x05limit\x18\x05 \x01(\x05R\x05limit\"w\n" +
+	"\x05limit\x18\x05 \x01(\x05R\x05limit\"\xa7\x01\n" +
 	"\x14RestoreFileRequested\x12!\n" +
 	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12\x1b\n" +
 	"\tfile_path\x18\x02 \x01(\tR\bfilePath\x12\x1f\n" +
 	"\vcommit_hash\x18\x03 \x01(\tR\n" +
-	"commitHash\"\x9e\x01\n" +
+	"commitHash\x12.\n" +
+	"\x13operator_session_id\x18\x04 \x01(\tR\x11operatorSessionId\"\x9e\x01\n" +
 	"\x1bDirectCommandAuditRequested\x12\x18\n" +
 	"\acommand\x18\x01 \x01(\tR\acommand\x12!\n" +
 	"\fexecution_id\x18\x02 \x01(\tR\vexecutionId\x12.\n" +
 	"\x13operator_session_id\x18\x03 \x01(\tR\x11operatorSessionId\x12\x12\n" +
-	"\x04type\x18\x04 \x01(\tR\x04type\"\xb9\x02\n" +
+	"\x04type\x18\x04 \x01(\tR\x04type\"\xe3\x01\n" +
+	"!DirectCommandResultAuditRequested\x12\x18\n" +
+	"\acommand\x18\x01 \x01(\tR\acommand\x12!\n" +
+	"\fexecution_id\x18\x02 \x01(\tR\vexecutionId\x12\x16\n" +
+	"\x06output\x18\x03 \x01(\tR\x06output\x12\x16\n" +
+	"\x06stderr\x18\x04 \x01(\tR\x06stderr\x12\x1b\n" +
+	"\texit_code\x18\x05 \x01(\x05R\bexitCode\x124\n" +
+	"\x16execution_time_seconds\x18\x06 \x01(\x02R\x14executionTimeSeconds\"-\n" +
+	"\x11AuditMsgRequested\x12\x18\n" +
+	"\acontent\x18\x01 \x01(\tR\acontent\"+\n" +
+	"\x11ShutdownRequested\x12\x16\n" +
+	"\x06reason\x18\x01 \x01(\tR\x06reason\"\xb9\x02\n" +
 	"\rCommandResult\x12!\n" +
 	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x16\n" +
@@ -1241,7 +3334,196 @@ const file_operator_proto_rawDesc = "" +
 	"\texit_code\x18\x06 \x01(\x05R\bexitCode\x124\n" +
 	"\x16execution_time_seconds\x18\a \x01(\x02R\x14executionTimeSeconds\x12+\n" +
 	"\x12start_time_unix_ms\x18\b \x01(\x03R\x0fstartTimeUnixMs\x12'\n" +
-	"\x10end_time_unix_ms\x18\t \x01(\x03R\rendTimeUnixMs2\xb8\x03\n" +
+	"\x10end_time_unix_ms\x18\t \x01(\x03R\rendTimeUnixMs\"w\n" +
+	"\aFsEntry\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x15\n" +
+	"\x06is_dir\x18\x02 \x01(\bR\x05isDir\x12\x12\n" +
+	"\x04size\x18\x03 \x01(\x03R\x04size\x12\x12\n" +
+	"\x04mode\x18\x04 \x01(\x05R\x04mode\x12\x19\n" +
+	"\bmod_time\x18\x05 \x01(\x03R\amodTime\"\xbf\x02\n" +
+	"\fFsListResult\x12!\n" +
+	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12\x12\n" +
+	"\x04path\x18\x03 \x01(\tR\x04path\x122\n" +
+	"\aentries\x18\x04 \x03(\v2\x18.g8e.operator.v1.FsEntryR\aentries\x12\x1c\n" +
+	"\ttruncated\x18\x05 \x01(\bR\ttruncated\x12\x1f\n" +
+	"\vtotal_count\x18\x06 \x01(\x05R\n" +
+	"totalCount\x12)\n" +
+	"\x10duration_seconds\x18\a \x01(\x02R\x0fdurationSeconds\x12#\n" +
+	"\rerror_message\x18\b \x01(\tR\ferrorMessage\x12\x1d\n" +
+	"\n" +
+	"error_type\x18\t \x01(\tR\terrorType\"\xa3\x02\n" +
+	"\fFsReadResult\x12!\n" +
+	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12\x12\n" +
+	"\x04path\x18\x03 \x01(\tR\x04path\x12\x18\n" +
+	"\acontent\x18\x04 \x01(\fR\acontent\x12\x1d\n" +
+	"\n" +
+	"size_bytes\x18\x05 \x01(\x03R\tsizeBytes\x12\x1c\n" +
+	"\ttruncated\x18\x06 \x01(\bR\ttruncated\x12)\n" +
+	"\x10duration_seconds\x18\a \x01(\x02R\x0fdurationSeconds\x12#\n" +
+	"\rerror_message\x18\b \x01(\tR\ferrorMessage\x12\x1d\n" +
+	"\n" +
+	"error_type\x18\t \x01(\tR\terrorType\"\x8a\x01\n" +
+	"\vFsGrepMatch\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12\x1f\n" +
+	"\vline_number\x18\x02 \x01(\x05R\n" +
+	"lineNumber\x12\x18\n" +
+	"\acontent\x18\x03 \x01(\tR\acontent\x12\x16\n" +
+	"\x06before\x18\x04 \x03(\tR\x06before\x12\x14\n" +
+	"\x05after\x18\x05 \x03(\tR\x05after\"\xc7\x02\n" +
+	"\fFsGrepResult\x12!\n" +
+	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12\x12\n" +
+	"\x04path\x18\x03 \x01(\tR\x04path\x126\n" +
+	"\amatches\x18\x04 \x03(\v2\x1c.g8e.operator.v1.FsGrepMatchR\amatches\x12#\n" +
+	"\rtotal_matches\x18\x05 \x01(\x05R\ftotalMatches\x12\x1c\n" +
+	"\ttruncated\x18\x06 \x01(\bR\ttruncated\x12)\n" +
+	"\x10duration_seconds\x18\a \x01(\x02R\x0fdurationSeconds\x12#\n" +
+	"\rerror_message\x18\b \x01(\tR\ferrorMessage\x12\x1d\n" +
+	"\n" +
+	"error_type\x18\t \x01(\tR\terrorType\"\xe0\x02\n" +
+	"\x0eFileEditResult\x12!\n" +
+	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12\x1b\n" +
+	"\tfile_path\x18\x03 \x01(\tR\bfilePath\x12\x1c\n" +
+	"\toperation\x18\x04 \x01(\tR\toperation\x12)\n" +
+	"\x10duration_seconds\x18\x05 \x01(\x02R\x0fdurationSeconds\x12#\n" +
+	"\rbytes_written\x18\x06 \x01(\x03R\fbytesWritten\x12#\n" +
+	"\rlines_changed\x18\a \x01(\x05R\flinesChanged\x12\x1f\n" +
+	"\vbackup_path\x18\b \x01(\tR\n" +
+	"backupPath\x12#\n" +
+	"\rerror_message\x18\t \x01(\tR\ferrorMessage\x12\x1d\n" +
+	"\n" +
+	"error_type\x18\n" +
+	" \x01(\tR\terrorType\"\x92\x02\n" +
+	"\x15ExecutionStatusUpdate\x12!\n" +
+	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12\x18\n" +
+	"\acommand\x18\x03 \x01(\tR\acommand\x12#\n" +
+	"\rprocess_alive\x18\x04 \x01(\bR\fprocessAlive\x12'\n" +
+	"\x0felapsed_seconds\x18\x05 \x01(\x02R\x0eelapsedSeconds\x12\x1d\n" +
+	"\n" +
+	"new_output\x18\x06 \x01(\tR\tnewOutput\x12\x1d\n" +
+	"\n" +
+	"new_stderr\x18\a \x01(\tR\tnewStderr\x12\x18\n" +
+	"\amessage\x18\b \x01(\tR\amessage\"\x81\x01\n" +
+	"\x0ePortCheckEntry\x12\x12\n" +
+	"\x04host\x18\x01 \x01(\tR\x04host\x12\x12\n" +
+	"\x04port\x18\x02 \x01(\x05R\x04port\x12\x12\n" +
+	"\x04open\x18\x03 \x01(\bR\x04open\x12\x1d\n" +
+	"\n" +
+	"latency_ms\x18\x04 \x01(\x02R\tlatencyMs\x12\x14\n" +
+	"\x05error\x18\x05 \x01(\tR\x05error\"\xcb\x01\n" +
+	"\x0fPortCheckResult\x12!\n" +
+	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x129\n" +
+	"\aresults\x18\x03 \x03(\v2\x1f.g8e.operator.v1.PortCheckEntryR\aresults\x12#\n" +
+	"\rerror_message\x18\x04 \x01(\tR\ferrorMessage\x12\x1d\n" +
+	"\n" +
+	"error_type\x18\x05 \x01(\tR\terrorType\"\xd7\x02\n" +
+	"\x0fFetchLogsResult\x12!\n" +
+	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12\x18\n" +
+	"\acommand\x18\x02 \x01(\tR\acommand\x12\x1b\n" +
+	"\texit_code\x18\x03 \x01(\x05R\bexitCode\x12\x1f\n" +
+	"\vduration_ms\x18\x04 \x01(\x03R\n" +
+	"durationMs\x12\x16\n" +
+	"\x06stdout\x18\x05 \x01(\tR\x06stdout\x12\x16\n" +
+	"\x06stderr\x18\x06 \x01(\tR\x06stderr\x12\x1f\n" +
+	"\vstdout_size\x18\a \x01(\x05R\n" +
+	"stdoutSize\x12\x1f\n" +
+	"\vstderr_size\x18\b \x01(\x05R\n" +
+	"stderrSize\x12\x1c\n" +
+	"\ttimestamp\x18\t \x01(\tR\ttimestamp\x12#\n" +
+	"\rsentinel_mode\x18\n" +
+	" \x01(\tR\fsentinelMode\x12\x14\n" +
+	"\x05error\x18\v \x01(\tR\x05error\"{\n" +
+	"\x0fAuditWebSession\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
+	"\x05title\x18\x02 \x01(\tR\x05title\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x03 \x01(\tR\tcreatedAt\x12#\n" +
+	"\ruser_identity\x18\x04 \x01(\tR\fuserIdentity\"\xd4\x01\n" +
+	"\x11AuditFileMutation\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1a\n" +
+	"\bfilepath\x18\x02 \x01(\tR\bfilepath\x12\x1c\n" +
+	"\toperation\x18\x03 \x01(\tR\toperation\x12,\n" +
+	"\x12ledger_hash_before\x18\x04 \x01(\tR\x10ledgerHashBefore\x12*\n" +
+	"\x11ledger_hash_after\x18\x05 \x01(\tR\x0fledgerHashAfter\x12\x1b\n" +
+	"\tdiff_stat\x18\x06 \x01(\tR\bdiffStat\"\xb8\x04\n" +
+	"\n" +
+	"AuditEvent\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12.\n" +
+	"\x13operator_session_id\x18\x02 \x01(\tR\x11operatorSessionId\x12\x1c\n" +
+	"\ttimestamp\x18\x03 \x01(\tR\ttimestamp\x12\x12\n" +
+	"\x04type\x18\x04 \x01(\tR\x04type\x12!\n" +
+	"\fcontent_text\x18\x05 \x01(\tR\vcontentText\x12\x1f\n" +
+	"\vcommand_raw\x18\x06 \x01(\tR\n" +
+	"commandRaw\x12*\n" +
+	"\x11command_exit_code\x18\a \x01(\x05R\x0fcommandExitCode\x12%\n" +
+	"\x0ecommand_stdout\x18\b \x01(\tR\rcommandStdout\x12%\n" +
+	"\x0ecommand_stderr\x18\t \x01(\tR\rcommandStderr\x122\n" +
+	"\x15execution_duration_ms\x18\n" +
+	" \x01(\x03R\x13executionDurationMs\x12%\n" +
+	"\x0estored_locally\x18\v \x01(\bR\rstoredLocally\x12)\n" +
+	"\x10stdout_truncated\x18\f \x01(\bR\x0fstdoutTruncated\x12)\n" +
+	"\x10stderr_truncated\x18\r \x01(\bR\x0fstderrTruncated\x12I\n" +
+	"\x0efile_mutations\x18\x0e \x03(\v2\".g8e.operator.v1.AuditFileMutationR\rfileMutations\"\xd3\x02\n" +
+	"\x12FetchHistoryResult\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12!\n" +
+	"\fexecution_id\x18\x02 \x01(\tR\vexecutionId\x12.\n" +
+	"\x13operator_session_id\x18\x03 \x01(\tR\x11operatorSessionId\x12A\n" +
+	"\vweb_session\x18\x04 \x01(\v2 .g8e.operator.v1.AuditWebSessionR\n" +
+	"webSession\x123\n" +
+	"\x06events\x18\x05 \x03(\v2\x1b.g8e.operator.v1.AuditEventR\x06events\x12\x14\n" +
+	"\x05total\x18\x06 \x01(\x05R\x05total\x12\x14\n" +
+	"\x05limit\x18\a \x01(\x05R\x05limit\x12\x16\n" +
+	"\x06offset\x18\b \x01(\x05R\x06offset\x12\x14\n" +
+	"\x05error\x18\t \x01(\tR\x05error\"k\n" +
+	"\x10FileHistoryEntry\x12\x1f\n" +
+	"\vcommit_hash\x18\x01 \x01(\tR\n" +
+	"commitHash\x12\x1c\n" +
+	"\ttimestamp\x18\x02 \x01(\tR\ttimestamp\x12\x18\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage\"\xc5\x01\n" +
+	"\x16FetchFileHistoryResult\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12!\n" +
+	"\fexecution_id\x18\x02 \x01(\tR\vexecutionId\x12\x1b\n" +
+	"\tfile_path\x18\x03 \x01(\tR\bfilePath\x12;\n" +
+	"\ahistory\x18\x04 \x03(\v2!.g8e.operator.v1.FileHistoryEntryR\ahistory\x12\x14\n" +
+	"\x05error\x18\x05 \x01(\tR\x05error\"\xa4\x01\n" +
+	"\x11RestoreFileResult\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12!\n" +
+	"\fexecution_id\x18\x02 \x01(\tR\vexecutionId\x12\x1b\n" +
+	"\tfile_path\x18\x03 \x01(\tR\bfilePath\x12\x1f\n" +
+	"\vcommit_hash\x18\x04 \x01(\tR\n" +
+	"commitHash\x12\x14\n" +
+	"\x05error\x18\x05 \x01(\tR\x05error\"\xdf\x02\n" +
+	"\rFileDiffEntry\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
+	"\ttimestamp\x18\x02 \x01(\tR\ttimestamp\x12\x1b\n" +
+	"\tfile_path\x18\x03 \x01(\tR\bfilePath\x12\x1c\n" +
+	"\toperation\x18\x04 \x01(\tR\toperation\x12,\n" +
+	"\x12ledger_hash_before\x18\x05 \x01(\tR\x10ledgerHashBefore\x12*\n" +
+	"\x11ledger_hash_after\x18\x06 \x01(\tR\x0fledgerHashAfter\x12\x1b\n" +
+	"\tdiff_stat\x18\a \x01(\tR\bdiffStat\x12!\n" +
+	"\fdiff_content\x18\b \x01(\tR\vdiffContent\x12\x1b\n" +
+	"\tdiff_size\x18\t \x01(\x05R\bdiffSize\x12.\n" +
+	"\x13operator_session_id\x18\n" +
+	" \x01(\tR\x11operatorSessionId\"\x98\x02\n" +
+	"\x13FetchFileDiffResult\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12!\n" +
+	"\fexecution_id\x18\x02 \x01(\tR\vexecutionId\x124\n" +
+	"\x05diffs\x18\x03 \x03(\v2\x1e.g8e.operator.v1.FileDiffEntryR\x05diffs\x122\n" +
+	"\x04diff\x18\x04 \x01(\v2\x1e.g8e.operator.v1.FileDiffEntryR\x04diff\x12\x14\n" +
+	"\x05total\x18\x05 \x01(\x05R\x05total\x12.\n" +
+	"\x13operator_session_id\x18\x06 \x01(\tR\x11operatorSessionId\x12\x14\n" +
+	"\x05error\x18\a \x01(\tR\x05error\"\x98\x01\n" +
+	"\x0fHeartbeatResult\x12\x1f\n" +
+	"\voperator_id\x18\x01 \x01(\tR\n" +
+	"operatorId\x12.\n" +
+	"\x13operator_session_id\x18\x02 \x01(\tR\x11operatorSessionId\x12\x1c\n" +
+	"\ttimestamp\x18\x03 \x01(\tR\ttimestamp\x12\x16\n" +
+	"\x06status\x18\x04 \x01(\tR\x06status2\xb8\x03\n" +
 	"\x0fOperatorService\x12S\n" +
 	"\x0eExecuteCommand\x12!.g8e.operator.v1.CommandRequested\x1a\x1e.g8e.operator.v1.CommandResult\x12X\n" +
 	"\rCancelCommand\x12'.g8e.operator.v1.CommandCancelRequested\x1a\x1e.g8e.operator.v1.CommandResult\x12N\n" +
@@ -1261,42 +3543,74 @@ func file_operator_proto_rawDescGZIP() []byte {
 	return file_operator_proto_rawDescData
 }
 
-var file_operator_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_operator_proto_msgTypes = make([]protoimpl.MessageInfo, 39)
 var file_operator_proto_goTypes = []any{
-	(*CommandRequested)(nil),            // 0: g8e.operator.v1.CommandRequested
-	(*CommandCancelRequested)(nil),      // 1: g8e.operator.v1.CommandCancelRequested
-	(*FileEditRequested)(nil),           // 2: g8e.operator.v1.FileEditRequested
-	(*FsListRequested)(nil),             // 3: g8e.operator.v1.FsListRequested
-	(*FsReadRequested)(nil),             // 4: g8e.operator.v1.FsReadRequested
-	(*HeartbeatRequested)(nil),          // 5: g8e.operator.v1.HeartbeatRequested
-	(*FsGrepRequested)(nil),             // 6: g8e.operator.v1.FsGrepRequested
-	(*CheckPortRequested)(nil),          // 7: g8e.operator.v1.CheckPortRequested
-	(*FetchLogsRequested)(nil),          // 8: g8e.operator.v1.FetchLogsRequested
-	(*FetchHistoryRequested)(nil),       // 9: g8e.operator.v1.FetchHistoryRequested
-	(*FetchFileHistoryRequested)(nil),   // 10: g8e.operator.v1.FetchFileHistoryRequested
-	(*FetchFileDiffRequested)(nil),      // 11: g8e.operator.v1.FetchFileDiffRequested
-	(*RestoreFileRequested)(nil),        // 12: g8e.operator.v1.RestoreFileRequested
-	(*DirectCommandAuditRequested)(nil), // 13: g8e.operator.v1.DirectCommandAuditRequested
-	(*CommandResult)(nil),               // 14: g8e.operator.v1.CommandResult
-	nil,                                 // 15: g8e.operator.v1.CommandRequested.EnvironmentEntry
+	(*CommandRequested)(nil),                  // 0: g8e.operator.v1.CommandRequested
+	(*CommandCancelRequested)(nil),            // 1: g8e.operator.v1.CommandCancelRequested
+	(*FileEditRequested)(nil),                 // 2: g8e.operator.v1.FileEditRequested
+	(*FsListRequested)(nil),                   // 3: g8e.operator.v1.FsListRequested
+	(*FsReadRequested)(nil),                   // 4: g8e.operator.v1.FsReadRequested
+	(*HeartbeatRequested)(nil),                // 5: g8e.operator.v1.HeartbeatRequested
+	(*FsGrepRequested)(nil),                   // 6: g8e.operator.v1.FsGrepRequested
+	(*CheckPortRequested)(nil),                // 7: g8e.operator.v1.CheckPortRequested
+	(*FetchLogsRequested)(nil),                // 8: g8e.operator.v1.FetchLogsRequested
+	(*FetchHistoryRequested)(nil),             // 9: g8e.operator.v1.FetchHistoryRequested
+	(*FetchFileHistoryRequested)(nil),         // 10: g8e.operator.v1.FetchFileHistoryRequested
+	(*FetchFileDiffRequested)(nil),            // 11: g8e.operator.v1.FetchFileDiffRequested
+	(*RestoreFileRequested)(nil),              // 12: g8e.operator.v1.RestoreFileRequested
+	(*DirectCommandAuditRequested)(nil),       // 13: g8e.operator.v1.DirectCommandAuditRequested
+	(*DirectCommandResultAuditRequested)(nil), // 14: g8e.operator.v1.DirectCommandResultAuditRequested
+	(*AuditMsgRequested)(nil),                 // 15: g8e.operator.v1.AuditMsgRequested
+	(*ShutdownRequested)(nil),                 // 16: g8e.operator.v1.ShutdownRequested
+	(*CommandResult)(nil),                     // 17: g8e.operator.v1.CommandResult
+	(*FsEntry)(nil),                           // 18: g8e.operator.v1.FsEntry
+	(*FsListResult)(nil),                      // 19: g8e.operator.v1.FsListResult
+	(*FsReadResult)(nil),                      // 20: g8e.operator.v1.FsReadResult
+	(*FsGrepMatch)(nil),                       // 21: g8e.operator.v1.FsGrepMatch
+	(*FsGrepResult)(nil),                      // 22: g8e.operator.v1.FsGrepResult
+	(*FileEditResult)(nil),                    // 23: g8e.operator.v1.FileEditResult
+	(*ExecutionStatusUpdate)(nil),             // 24: g8e.operator.v1.ExecutionStatusUpdate
+	(*PortCheckEntry)(nil),                    // 25: g8e.operator.v1.PortCheckEntry
+	(*PortCheckResult)(nil),                   // 26: g8e.operator.v1.PortCheckResult
+	(*FetchLogsResult)(nil),                   // 27: g8e.operator.v1.FetchLogsResult
+	(*AuditWebSession)(nil),                   // 28: g8e.operator.v1.AuditWebSession
+	(*AuditFileMutation)(nil),                 // 29: g8e.operator.v1.AuditFileMutation
+	(*AuditEvent)(nil),                        // 30: g8e.operator.v1.AuditEvent
+	(*FetchHistoryResult)(nil),                // 31: g8e.operator.v1.FetchHistoryResult
+	(*FileHistoryEntry)(nil),                  // 32: g8e.operator.v1.FileHistoryEntry
+	(*FetchFileHistoryResult)(nil),            // 33: g8e.operator.v1.FetchFileHistoryResult
+	(*RestoreFileResult)(nil),                 // 34: g8e.operator.v1.RestoreFileResult
+	(*FileDiffEntry)(nil),                     // 35: g8e.operator.v1.FileDiffEntry
+	(*FetchFileDiffResult)(nil),               // 36: g8e.operator.v1.FetchFileDiffResult
+	(*HeartbeatResult)(nil),                   // 37: g8e.operator.v1.HeartbeatResult
+	nil,                                       // 38: g8e.operator.v1.CommandRequested.EnvironmentEntry
 }
 var file_operator_proto_depIdxs = []int32{
-	15, // 0: g8e.operator.v1.CommandRequested.environment:type_name -> g8e.operator.v1.CommandRequested.EnvironmentEntry
-	0,  // 1: g8e.operator.v1.OperatorService.ExecuteCommand:input_type -> g8e.operator.v1.CommandRequested
-	1,  // 2: g8e.operator.v1.OperatorService.CancelCommand:input_type -> g8e.operator.v1.CommandCancelRequested
-	2,  // 3: g8e.operator.v1.OperatorService.EditFile:input_type -> g8e.operator.v1.FileEditRequested
-	3,  // 4: g8e.operator.v1.OperatorService.ListFileSystem:input_type -> g8e.operator.v1.FsListRequested
-	4,  // 5: g8e.operator.v1.OperatorService.ReadFileSystem:input_type -> g8e.operator.v1.FsReadRequested
-	14, // 6: g8e.operator.v1.OperatorService.ExecuteCommand:output_type -> g8e.operator.v1.CommandResult
-	14, // 7: g8e.operator.v1.OperatorService.CancelCommand:output_type -> g8e.operator.v1.CommandResult
-	14, // 8: g8e.operator.v1.OperatorService.EditFile:output_type -> g8e.operator.v1.CommandResult
-	14, // 9: g8e.operator.v1.OperatorService.ListFileSystem:output_type -> g8e.operator.v1.CommandResult
-	14, // 10: g8e.operator.v1.OperatorService.ReadFileSystem:output_type -> g8e.operator.v1.CommandResult
-	6,  // [6:11] is the sub-list for method output_type
-	1,  // [1:6] is the sub-list for method input_type
-	1,  // [1:1] is the sub-list for extension type_name
-	1,  // [1:1] is the sub-list for extension extendee
-	0,  // [0:1] is the sub-list for field type_name
+	38, // 0: g8e.operator.v1.CommandRequested.environment:type_name -> g8e.operator.v1.CommandRequested.EnvironmentEntry
+	18, // 1: g8e.operator.v1.FsListResult.entries:type_name -> g8e.operator.v1.FsEntry
+	21, // 2: g8e.operator.v1.FsGrepResult.matches:type_name -> g8e.operator.v1.FsGrepMatch
+	25, // 3: g8e.operator.v1.PortCheckResult.results:type_name -> g8e.operator.v1.PortCheckEntry
+	29, // 4: g8e.operator.v1.AuditEvent.file_mutations:type_name -> g8e.operator.v1.AuditFileMutation
+	28, // 5: g8e.operator.v1.FetchHistoryResult.web_session:type_name -> g8e.operator.v1.AuditWebSession
+	30, // 6: g8e.operator.v1.FetchHistoryResult.events:type_name -> g8e.operator.v1.AuditEvent
+	32, // 7: g8e.operator.v1.FetchFileHistoryResult.history:type_name -> g8e.operator.v1.FileHistoryEntry
+	35, // 8: g8e.operator.v1.FetchFileDiffResult.diffs:type_name -> g8e.operator.v1.FileDiffEntry
+	35, // 9: g8e.operator.v1.FetchFileDiffResult.diff:type_name -> g8e.operator.v1.FileDiffEntry
+	0,  // 10: g8e.operator.v1.OperatorService.ExecuteCommand:input_type -> g8e.operator.v1.CommandRequested
+	1,  // 11: g8e.operator.v1.OperatorService.CancelCommand:input_type -> g8e.operator.v1.CommandCancelRequested
+	2,  // 12: g8e.operator.v1.OperatorService.EditFile:input_type -> g8e.operator.v1.FileEditRequested
+	3,  // 13: g8e.operator.v1.OperatorService.ListFileSystem:input_type -> g8e.operator.v1.FsListRequested
+	4,  // 14: g8e.operator.v1.OperatorService.ReadFileSystem:input_type -> g8e.operator.v1.FsReadRequested
+	17, // 15: g8e.operator.v1.OperatorService.ExecuteCommand:output_type -> g8e.operator.v1.CommandResult
+	17, // 16: g8e.operator.v1.OperatorService.CancelCommand:output_type -> g8e.operator.v1.CommandResult
+	17, // 17: g8e.operator.v1.OperatorService.EditFile:output_type -> g8e.operator.v1.CommandResult
+	17, // 18: g8e.operator.v1.OperatorService.ListFileSystem:output_type -> g8e.operator.v1.CommandResult
+	17, // 19: g8e.operator.v1.OperatorService.ReadFileSystem:output_type -> g8e.operator.v1.CommandResult
+	15, // [15:20] is the sub-list for method output_type
+	10, // [10:15] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_operator_proto_init() }
@@ -1310,7 +3624,7 @@ func file_operator_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_operator_proto_rawDesc), len(file_operator_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   16,
+			NumMessages:   39,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

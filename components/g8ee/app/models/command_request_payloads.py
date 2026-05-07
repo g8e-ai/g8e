@@ -310,6 +310,7 @@ class RestoreFileRequestPayload(G8eBaseModel):
     execution_id: str = Field(..., description="Unique execution identifier")
     file_path: str = Field(..., description="Absolute path of the file to restore")
     commit_hash: str = Field(..., description="Git commit hash to restore the file to")
+    operator_session_id: str | None = Field(default=None, description="Operator session ID for auditing")
 
     def to_protobuf(self) -> operator_pb2.RestoreFileRequested:
         """Convert to protobuf RestoreFileRequested message."""
@@ -317,6 +318,8 @@ class RestoreFileRequestPayload(G8eBaseModel):
         proto.execution_id = self.execution_id
         proto.file_path = self.file_path
         proto.commit_hash = self.commit_hash
+        if self.operator_session_id:
+            proto.operator_session_id = self.operator_session_id
         return proto
 
 

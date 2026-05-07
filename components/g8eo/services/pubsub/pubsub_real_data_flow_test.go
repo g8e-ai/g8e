@@ -71,18 +71,11 @@ func TestRealDataFlow_CommandExecution(t *testing.T) {
 
 		caseID := fmt.Sprintf("case-%s-%d", t.Name(), time.Now().UnixNano())
 		commandChannel := constants.CmdChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		msg := PubSubCommandMessage{
-			ID:        fmt.Sprintf("real-echo-%d", time.Now().UnixNano()),
-			EventType: constants.Event.Operator.Command.Requested,
-			CaseID:    caseID,
-			Payload:   json.RawMessage(`{"command":"echo hello real data flow","justification":"Real data flow test"}`),
-			Timestamp: time.Now().UTC(),
-		}
+		execID := fmt.Sprintf("real-echo-%d", time.Now().UnixNano())
+		cmdPayload := testutil.MustMarshalProtobufCommandRequested(t, "echo hello real data flow", execID, "Real data flow test", "", 0)
+		envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, execID, constants.Event.Operator.Command.Requested, cmdPayload, "", cfg.OperatorID, caseID, "inv-real-flow", cfg.OperatorSessionId)
 
-		msgJSON, err := json.Marshal(msg)
-		require.NoError(t, err)
-
-		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(msgJSON))
+		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(envelopeBytes))
 
 		received := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 		require.NotNil(t, received)
@@ -138,18 +131,11 @@ func TestRealDataFlow_CommandExecution(t *testing.T) {
 
 		caseID := fmt.Sprintf("case-%s-%d", t.Name(), time.Now().UnixNano())
 		commandChannel := constants.CmdChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		msg := PubSubCommandMessage{
-			ID:        fmt.Sprintf("real-exit-%d", time.Now().UnixNano()),
-			EventType: constants.Event.Operator.Command.Requested,
-			CaseID:    caseID,
-			Payload:   json.RawMessage(`{"command":"sh -c 'exit 42'","justification":"Non-zero exit code test"}`),
-			Timestamp: time.Now().UTC(),
-		}
+		execID := fmt.Sprintf("real-exit-%d", time.Now().UnixNano())
+		cmdPayload := testutil.MustMarshalProtobufCommandRequested(t, "sh -c 'exit 42'", execID, "Non-zero exit code test", "", 0)
+		envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, execID, constants.Event.Operator.Command.Requested, cmdPayload, "", cfg.OperatorID, caseID, "inv-real-exit", cfg.OperatorSessionId)
 
-		msgJSON, err := json.Marshal(msg)
-		require.NoError(t, err)
-
-		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(msgJSON))
+		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(envelopeBytes))
 
 		received := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 		require.NotNil(t, received)
@@ -201,18 +187,11 @@ func TestRealDataFlow_CommandExecution(t *testing.T) {
 
 		caseID := fmt.Sprintf("case-%s-%d", t.Name(), time.Now().UnixNano())
 		commandChannel := constants.CmdChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		msg := PubSubCommandMessage{
-			ID:        fmt.Sprintf("real-stderr-%d", time.Now().UnixNano()),
-			EventType: constants.Event.Operator.Command.Requested,
-			CaseID:    caseID,
-			Payload:   json.RawMessage(`{"command":"sh -c 'echo stdout-msg \u0026\u0026 echo stderr-msg \u003e\u00262'","justification":"Stderr output test"}`),
-			Timestamp: time.Now().UTC(),
-		}
+		execID := fmt.Sprintf("real-stderr-%d", time.Now().UnixNano())
+		cmdPayload := testutil.MustMarshalProtobufCommandRequested(t, "sh -c 'echo error message >&2'", execID, "Stderr output test", "", 0)
+		envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, execID, constants.Event.Operator.Command.Requested, cmdPayload, "", cfg.OperatorID, caseID, "inv-real-stderr", cfg.OperatorSessionId)
 
-		msgJSON, err := json.Marshal(msg)
-		require.NoError(t, err)
-
-		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(msgJSON))
+		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(envelopeBytes))
 
 		received := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 		require.NotNil(t, received)
@@ -266,51 +245,39 @@ func TestRealDataFlow_FileOperations(t *testing.T) {
 
 		time.Sleep(100 * time.Millisecond)
 
-		caseID := fmt.Sprintf("case-%s-%d", t.Name(), time.Now().UnixNano())
+		caseID := fmt.Sprintf("case-flow-multi-%d", time.Now().UnixNano())
 		commandChannel := constants.CmdChannel(cfg.OperatorID, cfg.OperatorSessionId)
 		tmpFile := filepath.Join(t.TempDir(), "g8es-flow-test.txt")
 
 		// Step 1: Write file
-		writeMsg := PubSubCommandMessage{
-			ID:        fmt.Sprintf("flow-write-%d", time.Now().UnixNano()),
-			EventType: constants.Event.Operator.FileEdit.Requested,
-			CaseID:    caseID,
-			Payload: mustMarshalJSON(t, models.FileEditPayload{
-				Operation:       "write",
-				FilePath:        tmpFile,
-				Content:         "initial content",
-				CreateIfMissing: true,
-				Justification:   "File flow test - write",
-			}),
-			Timestamp: time.Now().UTC(),
-		}
+		execID1 := fmt.Sprintf("flow-write-%d", time.Now().UnixNano())
+		writePayload := testutil.MustMarshalProtobufFileEditRequested(t, testutil.FileEditRequestFields{
+			FilePath:        tmpFile,
+			Operation:       "write",
+			ExecutionId:     execID1,
+			Justification:   "File flow test - write",
+			Content:         "initial content",
+			CreateIfMissing: true,
+		})
+		envelopeBytes1 := testutil.MustMarshalUniversalEnvelope(t, execID1, constants.Event.Operator.FileEdit.Requested, writePayload, "", cfg.OperatorID, caseID, "inv-write", cfg.OperatorSessionId)
 
-		writeMsgJSON, err := json.Marshal(writeMsg)
-		require.NoError(t, err)
-
-		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(writeMsgJSON))
+		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(envelopeBytes1))
 
 		writeResult := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 		require.NotNil(t, writeResult)
 		assert.Contains(t, string(writeResult), "file.edit.completed")
 
 		// Step 2: Read file
-		readMsg := PubSubCommandMessage{
-			ID:        fmt.Sprintf("flow-read-%d", time.Now().UnixNano()),
-			EventType: constants.Event.Operator.FileEdit.Requested,
-			CaseID:    caseID,
-			Payload: mustMarshalJSON(t, models.FileEditPayload{
-				Operation:     "read",
-				FilePath:      tmpFile,
-				Justification: "File flow test - read",
-			}),
-			Timestamp: time.Now().UTC(),
-		}
+		execID2 := fmt.Sprintf("flow-read-%d", time.Now().UnixNano())
+		readPayload := testutil.MustMarshalProtobufFileEditRequested(t, testutil.FileEditRequestFields{
+			FilePath:      tmpFile,
+			Operation:     "read",
+			ExecutionId:   execID2,
+			Justification: "File flow test - read",
+		})
+		envelopeBytes2 := testutil.MustMarshalUniversalEnvelope(t, execID2, constants.Event.Operator.FileEdit.Requested, readPayload, "", cfg.OperatorID, caseID, "inv-read", cfg.OperatorSessionId)
 
-		readMsgJSON, err := json.Marshal(readMsg)
-		require.NoError(t, err)
-
-		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(readMsgJSON))
+		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(envelopeBytes2))
 
 		readResult := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 		require.NotNil(t, readResult)
@@ -318,46 +285,34 @@ func TestRealDataFlow_FileOperations(t *testing.T) {
 		assert.Contains(t, string(readResult), "initial content")
 
 		// Step 3: Replace content
-		replaceMsg := PubSubCommandMessage{
-			ID:        fmt.Sprintf("flow-replace-%d", time.Now().UnixNano()),
-			EventType: constants.Event.Operator.FileEdit.Requested,
-			CaseID:    caseID,
-			Payload: mustMarshalJSON(t, models.FileEditPayload{
-				Operation:     "replace",
-				FilePath:      tmpFile,
-				OldContent:    "initial content",
-				NewContent:    "modified content",
-				Justification: "File flow test - replace",
-			}),
-			Timestamp: time.Now().UTC(),
-		}
+		execID3 := fmt.Sprintf("flow-replace-%d", time.Now().UnixNano())
+		replacePayload := testutil.MustMarshalProtobufFileEditRequested(t, testutil.FileEditRequestFields{
+			FilePath:      tmpFile,
+			Operation:     "replace",
+			ExecutionId:   execID3,
+			Justification: "File flow test - replace",
+			OldContent:    "initial content",
+			NewContent:    "modified content",
+		})
+		envelopeBytes3 := testutil.MustMarshalUniversalEnvelope(t, execID3, constants.Event.Operator.FileEdit.Requested, replacePayload, "", cfg.OperatorID, caseID, "inv-replace", cfg.OperatorSessionId)
 
-		replaceMsgJSON, err := json.Marshal(replaceMsg)
-		require.NoError(t, err)
-
-		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(replaceMsgJSON))
+		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(envelopeBytes3))
 
 		replaceResult := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 		require.NotNil(t, replaceResult)
 		assert.Contains(t, string(replaceResult), "file.edit.completed")
 
 		// Step 4: Read modified file
-		readMsg2 := PubSubCommandMessage{
-			ID:        fmt.Sprintf("flow-read2-%d", time.Now().UnixNano()),
-			EventType: constants.Event.Operator.FileEdit.Requested,
-			CaseID:    caseID,
-			Payload: mustMarshalJSON(t, models.FileEditPayload{
-				Operation:     "read",
-				FilePath:      tmpFile,
-				Justification: "File flow test - read modified",
-			}),
-			Timestamp: time.Now().UTC(),
-		}
+		execID4 := fmt.Sprintf("flow-read2-%d", time.Now().UnixNano())
+		readPayload2 := testutil.MustMarshalProtobufFileEditRequested(t, testutil.FileEditRequestFields{
+			FilePath:      tmpFile,
+			Operation:     "read",
+			ExecutionId:   execID4,
+			Justification: "File flow test - read modified",
+		})
+		envelopeBytes4 := testutil.MustMarshalUniversalEnvelope(t, execID4, constants.Event.Operator.FileEdit.Requested, readPayload2, "", cfg.OperatorID, caseID, "inv-read-mod", cfg.OperatorSessionId)
 
-		readMsg2JSON, err := json.Marshal(readMsg2)
-		require.NoError(t, err)
-
-		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(readMsg2JSON))
+		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(envelopeBytes4))
 
 		readResult2 := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 		require.NotNil(t, readResult2)
@@ -402,18 +357,11 @@ func TestRealDataFlow_FileOperations(t *testing.T) {
 
 		caseID := fmt.Sprintf("case-%s-%d", t.Name(), time.Now().UnixNano())
 		commandChannel := constants.CmdChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		msg := PubSubCommandMessage{
-			ID:        fmt.Sprintf("real-large-%d", time.Now().UnixNano()),
-			EventType: constants.Event.Operator.Command.Requested,
-			CaseID:    caseID,
-			Payload:   json.RawMessage(`{"command":"sh -c 'for i in $(seq 1 50); do echo Line $i: data; done'","justification":"Large output test"}`),
-			Timestamp: time.Now().UTC(),
-		}
+		execID := fmt.Sprintf("real-large-%d", time.Now().UnixNano())
+		cmdPayload := testutil.MustMarshalProtobufCommandRequested(t, "sh -c 'for i in $(seq 1 50); do echo Line $i: data; done'", execID, "Large output test", "", 0)
+		envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, execID, constants.Event.Operator.Command.Requested, cmdPayload, "", cfg.OperatorID, caseID, "inv-real-large", cfg.OperatorSessionId)
 
-		msgJSON, err := json.Marshal(msg)
-		require.NoError(t, err)
-
-		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(msgJSON))
+		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(envelopeBytes))
 
 		received := testutil.WaitForMessage(t, msgChan, 10*time.Second)
 		require.NotNil(t, received)
@@ -466,18 +414,16 @@ func TestRealDataFlow_FileOperations(t *testing.T) {
 
 		caseID := fmt.Sprintf("case-%s-%d", t.Name(), time.Now().UnixNano())
 		commandChannel := constants.CmdChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		msg := PubSubCommandMessage{
-			ID:        fmt.Sprintf("real-error-%d", time.Now().UnixNano()),
-			EventType: constants.Event.Operator.FileEdit.Requested,
-			CaseID:    caseID,
-			Payload:   json.RawMessage(`{"operation":"read","file_path":"/nonexistent/path/file.txt","justification":"Error scenario test"}`),
-			Timestamp: time.Now().UTC(),
-		}
+		execID := fmt.Sprintf("real-error-%d", time.Now().UnixNano())
+		readPayload := testutil.MustMarshalProtobufFileEditRequested(t, testutil.FileEditRequestFields{
+			Operation:     "read",
+			FilePath:      "/nonexistent/path/file.txt",
+			ExecutionId:   execID,
+			Justification: "Error scenario test",
+		})
+		envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, execID, constants.Event.Operator.FileEdit.Requested, readPayload, "", cfg.OperatorID, caseID, "inv-real-error", cfg.OperatorSessionId)
 
-		msgJSON, err := json.Marshal(msg)
-		require.NoError(t, err)
-
-		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(msgJSON))
+		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(envelopeBytes))
 
 		received := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 		require.NotNil(t, received)

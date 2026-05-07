@@ -40,16 +40,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/g8e-ai/g8e/components/g8eo/config"
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/models"
 	execution "github.com/g8e-ai/g8e/components/g8eo/services/execution"
 	sentinelpkg "github.com/g8e-ai/g8e/components/g8eo/services/sentinel"
-	commonv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/proto"
 )
 
 // =============================================================================
@@ -89,56 +86,6 @@ func newLoopbackService(t *testing.T, f *loopbackFixture) (*PubSubCommandService
 	require.NoError(t, err)
 
 	return svc, resultsSvc
-}
-
-// newTestG8eMessage creates a models.G8eMessage for testing with required fields populated.
-func newTestG8eMessage(t *testing.T, cfg *config.Config, eventType, caseID string, payload interface{}) *models.G8eMessage {
-	t.Helper()
-	msg, err := models.NewG8eMessage(
-		eventType,
-		caseID,
-		cfg.OperatorID,
-		cfg.OperatorSessionId,
-		cfg.SystemFingerprint,
-		payload,
-	)
-	require.NoError(t, err)
-	return msg
-}
-
-// injectCmd publishes a models.G8eMessage on the cmd channel for cfg using an
-// injector client connected to the loopback broker.
-// It wraps the G8eMessage in a UniversalEnvelope for the protobuf-only transport.
-func injectCmd(t *testing.T, f *loopbackFixture, svc *PubSubCommandService, msg *models.G8eMessage) {
-	t.Helper()
-	cmdCh := constants.CmdChannel(svc.config.OperatorID, svc.config.OperatorSessionId)
-
-	// Confirm the service's subscription is registered before publishing.
-	f.subscribeAndWait(t, cmdCh)
-
-	raw, err := msg.Marshal()
-	require.NoError(t, err)
-
-	taskID := ""
-	if msg.TaskID != nil {
-		taskID = *msg.TaskID
-	}
-
-	envelope := &commonv1.UniversalEnvelope{
-		Id:                msg.ID,
-		EventType:         msg.EventType,
-		CaseId:            msg.CaseID,
-		TaskId:            taskID,
-		InvestigationId:   msg.InvestigationID,
-		OperatorSessionId: msg.OperatorSessionID,
-		OperatorId:        msg.OperatorID,
-		Payload:           raw,
-	}
-	envelopeBytes, err := proto.Marshal(envelope)
-	require.NoError(t, err)
-
-	injector := f.newClient(t)
-	require.NoError(t, injector.Publish(context.Background(), cmdCh, envelopeBytes))
 }
 
 // injectCmdProtobuf publishes a protobuf UniversalEnvelope on the cmd channel.
@@ -204,8 +151,8 @@ func TestLoopback_CommandDispatch_ExecutionRequest_EchoCommand(t *testing.T) {
 	// Consume the automatic heartbeat published on connect.
 	_ = drainOne(t, hbSub)
 
-	cmdPayload := mustMarshalProtobufCommandRequested(t, "echo hello loopback", "exec-loop-echo-1", "test", "", 0)
-	envelopeBytes := mustMarshalUniversalEnvelope(t, "exec-loop-echo-1", constants.Event.Operator.Command.Requested, cmdPayload, "", svc.config.OperatorID, "case-echo", "inv-echo", svc.config.OperatorSessionId)
+	cmdPayload := testutil.MustMarshalProtobufCommandRequested(t, "echo hello loopback", "exec-loop-echo-1", "test", "", 0)
+	envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, "exec-loop-echo-1", constants.Event.Operator.Command.Requested, cmdPayload, "", svc.config.OperatorID, "case-echo", "inv-echo", svc.config.OperatorSessionId)
 	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
@@ -228,8 +175,8 @@ func TestLoopback_CommandDispatch_ExecutionRequest_InvalidCommand(t *testing.T) 
 	startService(t, svc)
 	_ = drainOne(t, hbSub)
 
-	cmdPayload := mustMarshalProtobufCommandRequested(t, "__no_such_exec_xyzzy__", "exec-loop-fail-1", "test", "", 0)
-	envelopeBytes := mustMarshalUniversalEnvelope(t, "exec-loop-fail-1", constants.Event.Operator.Command.Requested, cmdPayload, "", svc.config.OperatorID, "case-fail", "", svc.config.OperatorSessionId)
+	cmdPayload := testutil.MustMarshalProtobufCommandRequested(t, "__no_such_exec_xyzzy__", "exec-loop-fail-1", "test", "", 0)
+	envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, "exec-loop-fail-1", constants.Event.Operator.Command.Requested, cmdPayload, "", svc.config.OperatorID, "case-fail", "", svc.config.OperatorSessionId)
 	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
@@ -249,8 +196,8 @@ func TestLoopback_CommandDispatch_ExecutionRequest_StdoutContent(t *testing.T) {
 	_ = drainOne(t, hbSub)
 
 	const sentinel = "loopback-output-sentinel-42"
-	cmdPayload := mustMarshalProtobufCommandRequested(t, fmt.Sprintf("echo %s", sentinel), "exec-loop-stdout-1", "test", "", 0)
-	envelopeBytes := mustMarshalUniversalEnvelope(t, "exec-loop-stdout-1", constants.Event.Operator.Command.Requested, cmdPayload, "", svc.config.OperatorID, "case-stdout", "", svc.config.OperatorSessionId)
+	cmdPayload := testutil.MustMarshalProtobufCommandRequested(t, fmt.Sprintf("echo %s", sentinel), "exec-loop-stdout-1", "test", "", 0)
+	envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, "exec-loop-stdout-1", constants.Event.Operator.Command.Requested, cmdPayload, "", svc.config.OperatorID, "case-stdout", "", svc.config.OperatorSessionId)
 	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
@@ -269,8 +216,8 @@ func TestLoopback_CommandDispatch_ExecutionRequest_TaskIDThreaded(t *testing.T) 
 	_ = drainOne(t, hbSub)
 
 	taskID := "task-loop-99"
-	cmdPayload := mustMarshalProtobufCommandRequested(t, "echo task threaded", "exec-loop-task-1", "test", "", 0)
-	envelopeBytes := mustMarshalUniversalEnvelope(t, "exec-loop-task-1", constants.Event.Operator.Command.Requested, cmdPayload, taskID, svc.config.OperatorID, "case-task", "inv-task", svc.config.OperatorSessionId)
+	cmdPayload := testutil.MustMarshalProtobufCommandRequested(t, "echo task threaded", "exec-loop-task-1", "test", "", 0)
+	envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, "exec-loop-task-1", constants.Event.Operator.Command.Requested, cmdPayload, taskID, svc.config.OperatorID, "case-task", "inv-task", svc.config.OperatorSessionId)
 	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
@@ -299,15 +246,15 @@ func TestLoopback_CommandDispatch_CancelRequest_RunningCommand(t *testing.T) {
 
 	// Start a long-running command.
 	execID := "cancel-target-exec-1"
-	cmdPayload := mustMarshalProtobufCommandRequested(t, "sleep 30", execID, "test", "", 0)
-	envelopeBytes := mustMarshalUniversalEnvelope(t, execID, constants.Event.Operator.Command.Requested, cmdPayload, "", svc.config.OperatorID, "case-cancel", "", svc.config.OperatorSessionId)
+	cmdPayload := testutil.MustMarshalProtobufCommandRequested(t, "sleep 30", execID, "test", "", 0)
+	envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, execID, constants.Event.Operator.Command.Requested, cmdPayload, "", svc.config.OperatorID, "case-cancel", "", svc.config.OperatorSessionId)
 	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	// Give the command time to start executing before sending cancel.
 	time.Sleep(150 * time.Millisecond)
 
-	cancelPayload := mustMarshalProtobufCommandCancelRequested(t, execID)
-	cancelEnvelopeBytes := mustMarshalUniversalEnvelope(t, "cancel-req-1", constants.Event.Operator.Command.CancelRequested, cancelPayload, "", svc.config.OperatorID, "case-cancel", "", svc.config.OperatorSessionId)
+	cancelPayload := testutil.MustMarshalProtobufCommandCancelRequested(t, execID)
+	cancelEnvelopeBytes := testutil.MustMarshalUniversalEnvelope(t, "cancel-req-1", constants.Event.Operator.Command.CancelRequested, cancelPayload, "", svc.config.OperatorID, "case-cancel", "", svc.config.OperatorSessionId)
 	injectCmdProtobuf(t, f, svc, cancelEnvelopeBytes)
 
 	// Expect either a cancellation result or a completed result (race window).
@@ -338,8 +285,8 @@ func TestLoopback_CommandDispatch_CancelRequest_NotFound(t *testing.T) {
 	_ = drainOne(t, hbSub)
 
 	// Cancel a command that was never started — should publish a failure result.
-	cancelPayload := mustMarshalProtobufCommandCancelRequested(t, "nonexistent-exec-id")
-	cancelEnvelopeBytes := mustMarshalUniversalEnvelope(t, "cancel-ghost-1", constants.Event.Operator.Command.CancelRequested, cancelPayload, "", svc.config.OperatorID, "case-ghost", "", svc.config.OperatorSessionId)
+	cancelPayload := testutil.MustMarshalProtobufCommandCancelRequested(t, "nonexistent-exec-id")
+	cancelEnvelopeBytes := testutil.MustMarshalUniversalEnvelope(t, "cancel-ghost-1", constants.Event.Operator.Command.CancelRequested, cancelPayload, "", svc.config.OperatorID, "case-ghost", "", svc.config.OperatorSessionId)
 	injectCmdProtobuf(t, f, svc, cancelEnvelopeBytes)
 
 	msg := drainOne(t, resultsSub)
@@ -363,8 +310,15 @@ func TestLoopback_CommandDispatch_FileEdit_WriteAndRead(t *testing.T) {
 
 	targetPath := filepath.Join(t.TempDir(), "loopback-write.txt")
 
-	filePayload := mustMarshalProtobufFileEditRequested(t, targetPath, "write", "file-write-1", "test", "hello from loopback\n", true)
-	envelopeBytes := mustMarshalUniversalEnvelope(t, "file-write-1", constants.Event.Operator.FileEdit.Requested, filePayload, "", svc.config.OperatorID, "case-file-write", "inv-file-write", svc.config.OperatorSessionId)
+	filePayload := testutil.MustMarshalProtobufFileEditRequested(t, testutil.FileEditRequestFields{
+		FilePath:        targetPath,
+		Operation:       "write",
+		ExecutionId:     "file-write-1",
+		Justification:   "test",
+		Content:         "hello from loopback\n",
+		CreateIfMissing: true,
+	})
+	envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, "file-write-1", constants.Event.Operator.FileEdit.Requested, filePayload, "", svc.config.OperatorID, "case-file-write", "inv-file-write", svc.config.OperatorSessionId)
 	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
@@ -391,8 +345,16 @@ func TestLoopback_CommandDispatch_FileEdit_SentinelBlocked(t *testing.T) {
 	// pattern matches without touching any real system file.
 	tmpDir := t.TempDir()
 	targetPath := filepath.Join(tmpDir, "etc", "passwd")
-	filePayload := mustMarshalProtobufFileEditRequested(t, "/etc/passwd", "write", "file-sentinel-1", "test", "injected", false)
-	envelopeBytes := mustMarshalUniversalEnvelope(t, "file-sentinel-1", constants.Event.Operator.FileEdit.Requested, filePayload, "", svc.config.OperatorID, "case-sentinel", "", svc.config.OperatorSessionId)
+	filePayload := testutil.MustMarshalProtobufFileEditRequested(t, testutil.FileEditRequestFields{
+		FilePath:        targetPath,
+		Operation:       "insert",
+		ExecutionId:     "file-insert-1",
+		Justification:   "test",
+		InsertContent:   "inserted\n",
+		InsertPosition:  5,
+		CreateIfMissing: true,
+	})
+	envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, "file-sentinel-1", constants.Event.Operator.FileEdit.Requested, filePayload, "", svc.config.OperatorID, "case-sentinel", "", svc.config.OperatorSessionId)
 	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
@@ -413,8 +375,16 @@ func TestLoopback_CommandDispatch_FileEdit_MissingPath(t *testing.T) {
 
 	// Missing file_path — handler should log and not publish (no result expected).
 	// We assert no message arrives within a short window.
-	filePayload := mustMarshalProtobufFileEditRequested(t, "", "write", "file-no-path-1", "test", "x", false)
-	envelopeBytes := mustMarshalUniversalEnvelope(t, "file-no-path-1", constants.Event.Operator.FileEdit.Requested, filePayload, "", svc.config.OperatorID, "case-no-path", "", svc.config.OperatorSessionId)
+	filePayload := testutil.MustMarshalProtobufFileEditRequested(t, testutil.FileEditRequestFields{
+		FilePath:        "",
+		Operation:       "replace",
+		ExecutionId:     "file-replace-1",
+		Justification:   "test",
+		OldContent:      "original\n",
+		NewContent:      "replaced\n",
+		CreateIfMissing: true,
+	})
+	envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, "file-no-path-1", constants.Event.Operator.FileEdit.Requested, filePayload, "", svc.config.OperatorID, "case-no-path", "", svc.config.OperatorSessionId)
 	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	drainNone(t, resultsSub, 200*time.Millisecond)
@@ -436,8 +406,16 @@ func TestLoopback_CommandDispatch_FileEdit_NilResultNoPanic(t *testing.T) {
 	// error path; even if it somehow returned (nil, nil), the nil guard must
 	// synthesise a failed result rather than dereferencing nil.
 	targetPath := filepath.Join(t.TempDir(), "does-not-exist.txt")
-	filePayload := mustMarshalProtobufFileEditRequested(t, targetPath, "delete", "nil-result-guard-1", "regression test", "", false)
-	envelopeBytes := mustMarshalUniversalEnvelope(t, "nil-result-guard-1", constants.Event.Operator.FileEdit.Requested, filePayload, "", svc.config.OperatorID, "case-nil-guard", "", svc.config.OperatorSessionId)
+	filePayload := testutil.MustMarshalProtobufFileEditRequested(t, testutil.FileEditRequestFields{
+		FilePath:        targetPath,
+		Operation:       "replace",
+		ExecutionId:     "file-replace-1",
+		Justification:   "test",
+		OldContent:      "original\n",
+		NewContent:      "replaced\n",
+		CreateIfMissing: true,
+	})
+	envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, "nil-result-guard-1", constants.Event.Operator.FileEdit.Requested, filePayload, "", svc.config.OperatorID, "case-nil-guard", "", svc.config.OperatorSessionId)
 	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
@@ -461,8 +439,8 @@ func TestLoopback_CommandDispatch_FsList_WorkDir(t *testing.T) {
 	startService(t, svc)
 	_ = drainOne(t, hbSub)
 
-	fsListPayload := mustMarshalProtobufFsListRequested(t, ".", "fslist-1", 50)
-	envelopeBytes := mustMarshalUniversalEnvelope(t, "fslist-1", constants.Event.Operator.FsList.Requested, fsListPayload, "", svc.config.OperatorID, "case-fslist", "inv-fslist", svc.config.OperatorSessionId)
+	fsListPayload := testutil.MustMarshalProtobufFsListRequested(t, ".", "fslist-1", 50, 0)
+	envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, "fslist-1", constants.Event.Operator.FsList.Requested, fsListPayload, "", svc.config.OperatorID, "case-fslist", "inv-fslist", svc.config.OperatorSessionId)
 	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
@@ -480,8 +458,8 @@ func TestLoopback_CommandDispatch_FsList_NonExistentPath(t *testing.T) {
 	startService(t, svc)
 	_ = drainOne(t, hbSub)
 
-	fsListPayload := mustMarshalProtobufFsListRequested(t, "/no/such/path/xyzzy", "fslist-missing-1", 10)
-	envelopeBytes := mustMarshalUniversalEnvelope(t, "fslist-missing-1", constants.Event.Operator.FsList.Requested, fsListPayload, "", svc.config.OperatorID, "case-fslist-miss", "", svc.config.OperatorSessionId)
+	fsListPayload := testutil.MustMarshalProtobufFsListRequested(t, "/no/such/path/xyzzy", "fslist-missing-1", 10, 0)
+	envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, "fslist-missing-1", constants.Event.Operator.FsList.Requested, fsListPayload, "", svc.config.OperatorID, "case-fslist-miss", "", svc.config.OperatorSessionId)
 	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
@@ -508,8 +486,8 @@ func TestLoopback_CommandDispatch_FsRead_ExistingFile(t *testing.T) {
 	const content = "loopback fs read test content"
 	require.NoError(t, os.WriteFile(target, []byte(content), 0o644))
 
-	fsReadPayload := mustMarshalProtobufFsReadRequested(t, target, "fsread-1", 4096)
-	envelopeBytes := mustMarshalUniversalEnvelope(t, "fsread-1", constants.Event.Operator.FsRead.Requested, fsReadPayload, "", svc.config.OperatorID, "case-fsread", "", svc.config.OperatorSessionId)
+	fsReadPayload := testutil.MustMarshalProtobufFsReadRequested(t, target, "fsread-1", 4096)
+	envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, "fsread-1", constants.Event.Operator.FsRead.Requested, fsReadPayload, "", svc.config.OperatorID, "case-fsread", "", svc.config.OperatorSessionId)
 	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
@@ -527,8 +505,8 @@ func TestLoopback_CommandDispatch_FsRead_MissingFile(t *testing.T) {
 	startService(t, svc)
 	_ = drainOne(t, hbSub)
 
-	fsReadPayload := mustMarshalProtobufFsReadRequested(t, "/no/such/file/xyzzy.txt", "fsread-miss-1", 4096)
-	envelopeBytes := mustMarshalUniversalEnvelope(t, "fsread-miss-1", constants.Event.Operator.FsRead.Requested, fsReadPayload, "", svc.config.OperatorID, "case-fsread-miss", "", svc.config.OperatorSessionId)
+	fsReadPayload := testutil.MustMarshalProtobufFsReadRequested(t, "/no/such/file/xyzzy.txt", "fsread-miss-1", 4096)
+	envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, "fsread-miss-1", constants.Event.Operator.FsRead.Requested, fsReadPayload, "", svc.config.OperatorID, "case-fsread-miss", "", svc.config.OperatorSessionId)
 	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
@@ -562,8 +540,8 @@ func TestLoopback_CommandDispatch_FanOut_MultipleResultSubscribers(t *testing.T)
 	startService(t, svc)
 	_ = drainOne(t, hbSub)
 
-	cmdPayload := mustMarshalProtobufCommandRequested(t, "echo fanout", "fanout-1", "test", "", 0)
-	envelopeBytes := mustMarshalUniversalEnvelope(t, "fanout-1", constants.Event.Operator.Command.Requested, cmdPayload, "", svc.config.OperatorID, "case-fanout", "", svc.config.OperatorSessionId)
+	cmdPayload := testutil.MustMarshalProtobufCommandRequested(t, "echo fanout", "fanout-1", "test", "", 0)
+	envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, "fanout-1", constants.Event.Operator.Command.Requested, cmdPayload, "", svc.config.OperatorID, "case-fanout", "", svc.config.OperatorSessionId)
 	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	for i, sub := range subs {
@@ -588,8 +566,8 @@ func TestLoopback_CommandDispatch_HeartbeatRequested_CaseIDThreaded(t *testing.T
 	// Consume the automatic heartbeat.
 	_ = drainOne(t, hbSub)
 
-	hbPayload := mustMarshalProtobufHeartbeatRequested(t)
-	envelopeBytes := mustMarshalUniversalEnvelope(t, "hb-req-case-1", constants.Event.Operator.HeartbeatRequested, hbPayload, "", svc.config.OperatorID, "case-hb-req", "inv-hb-req", svc.config.OperatorSessionId)
+	hbPayload := testutil.MustMarshalProtobufHeartbeatRequested(t)
+	envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, "hb-req-case-1", constants.Event.Operator.HeartbeatRequested, hbPayload, "", svc.config.OperatorID, "case-hb-req", "inv-hb-req", svc.config.OperatorSessionId)
 	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, hbSub)
@@ -619,7 +597,7 @@ func TestLoopback_CommandDispatch_UnknownEventType_NoResult(t *testing.T) {
 	_ = drainOne(t, hbSub)
 
 	// Unknown event type - use empty payload since we don't have a specific protobuf for it
-	envelopeBytes := mustMarshalUniversalEnvelope(t, "unknown-event-1", "operator.unknown.made_up_type", []byte{}, "", svc.config.OperatorID, "case-unknown", "", svc.config.OperatorSessionId)
+	envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, "unknown-event-1", "operator.unknown.made_up_type", []byte{}, "", svc.config.OperatorID, "case-unknown", "", svc.config.OperatorSessionId)
 	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	// Unknown event types are silently dropped — no result is published.

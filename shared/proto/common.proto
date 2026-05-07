@@ -5,6 +5,13 @@ package g8e.common.v1;
 option go_package = "github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1";
 
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/descriptor.proto";
+
+// Custom options for governance
+extend google.protobuf.FieldOptions {
+  // Comma-separated list of forbidden regex patterns
+  string forbidden_patterns = 50001;
+}
 
 // Source component identifier
 enum Component {

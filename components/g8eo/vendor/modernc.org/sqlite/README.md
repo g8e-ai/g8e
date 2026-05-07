@@ -1,6 +1,4 @@
-## Important: Repository Mirroring
-
-**This project is primarily developed on GitLab.** The repository you are currently viewing might be a mirror. Please review the guidelines below based on where you are viewing this:
+The repository you are currently viewing might be a mirror. Please review the guidelines below based on where you are viewing this:
 
 | Platform | Role | Contributing Guidelines |
 | :--- | :--- | :--- |
@@ -22,6 +20,8 @@
 ![tailscale](sponsors/tailscale.png "tailscale") [Tailscale](https://tailscale.com/)
 
 ### Startup / Small Business Tier Sponsor
+
+![exe.dev](sponsors/boldsoftware.png "boldsoftware") [exe.dev](https://exe.dev)
 
 ![octoberswimmer](sponsors/octoberswimmer.png "osctoberswimmer") [October Swimmer](https://www.octoberswimmer.com/)
 

@@ -9,6 +9,7 @@ package commonv1
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	descriptorpb "google.golang.org/protobuf/types/descriptorpb"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
@@ -467,11 +468,30 @@ func (x *L3Metadata) GetAutoApproved() bool {
 	return false
 }
 
+var file_common_proto_extTypes = []protoimpl.ExtensionInfo{
+	{
+		ExtendedType:  (*descriptorpb.FieldOptions)(nil),
+		ExtensionType: (*string)(nil),
+		Field:         50001,
+		Name:          "g8e.common.v1.forbidden_patterns",
+		Tag:           "bytes,50001,opt,name=forbidden_patterns",
+		Filename:      "common.proto",
+	},
+}
+
+// Extension fields to descriptorpb.FieldOptions.
+var (
+	// Comma-separated list of forbidden regex patterns
+	//
+	// optional string forbidden_patterns = 50001;
+	E_ForbiddenPatterns = &file_common_proto_extTypes[0]
+)
+
 var File_common_proto protoreflect.FileDescriptor
 
 const file_common_proto_rawDesc = "" +
 	"\n" +
-	"\fcommon.proto\x12\rg8e.common.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xcd\x04\n" +
+	"\fcommon.proto\x12\rg8e.common.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a google/protobuf/descriptor.proto\"\xcd\x04\n" +
 	"\x11UniversalEnvelope\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x128\n" +
 	"\ttimestamp\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12C\n" +
@@ -516,7 +536,8 @@ const file_common_proto_rawDesc = "" +
 	"\x15COMPONENT_UNSPECIFIED\x10\x00\x12\x12\n" +
 	"\x0eCOMPONENT_G8EE\x10\x01\x12\x12\n" +
 	"\x0eCOMPONENT_G8EO\x10\x02\x12\x12\n" +
-	"\x0eCOMPONENT_G8ED\x10\x03B=Z;github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1b\x06proto3"
+	"\x0eCOMPONENT_G8ED\x10\x03:N\n" +
+	"\x12forbidden_patterns\x12\x1d.google.protobuf.FieldOptions\x18ц\x03 \x01(\tR\x11forbiddenPatternsB=Z;github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1b\x06proto3"
 
 var (
 	file_common_proto_rawDescOnce sync.Once
@@ -533,13 +554,14 @@ func file_common_proto_rawDescGZIP() []byte {
 var file_common_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_common_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_common_proto_goTypes = []any{
-	(Component)(0),                // 0: g8e.common.v1.Component
-	(*UniversalEnvelope)(nil),     // 1: g8e.common.v1.UniversalEnvelope
-	(*GovernanceMetadata)(nil),    // 2: g8e.common.v1.GovernanceMetadata
-	(*L1Metadata)(nil),            // 3: g8e.common.v1.L1Metadata
-	(*L2Metadata)(nil),            // 4: g8e.common.v1.L2Metadata
-	(*L3Metadata)(nil),            // 5: g8e.common.v1.L3Metadata
-	(*timestamppb.Timestamp)(nil), // 6: google.protobuf.Timestamp
+	(Component)(0),                    // 0: g8e.common.v1.Component
+	(*UniversalEnvelope)(nil),         // 1: g8e.common.v1.UniversalEnvelope
+	(*GovernanceMetadata)(nil),        // 2: g8e.common.v1.GovernanceMetadata
+	(*L1Metadata)(nil),                // 3: g8e.common.v1.L1Metadata
+	(*L2Metadata)(nil),                // 4: g8e.common.v1.L2Metadata
+	(*L3Metadata)(nil),                // 5: g8e.common.v1.L3Metadata
+	(*timestamppb.Timestamp)(nil),     // 6: google.protobuf.Timestamp
+	(*descriptorpb.FieldOptions)(nil), // 7: google.protobuf.FieldOptions
 }
 var file_common_proto_depIdxs = []int32{
 	6, // 0: g8e.common.v1.UniversalEnvelope.timestamp:type_name -> google.protobuf.Timestamp
@@ -548,10 +570,11 @@ var file_common_proto_depIdxs = []int32{
 	3, // 3: g8e.common.v1.GovernanceMetadata.l1:type_name -> g8e.common.v1.L1Metadata
 	4, // 4: g8e.common.v1.GovernanceMetadata.l2:type_name -> g8e.common.v1.L2Metadata
 	5, // 5: g8e.common.v1.GovernanceMetadata.l3:type_name -> g8e.common.v1.L3Metadata
-	6, // [6:6] is the sub-list for method output_type
-	6, // [6:6] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
+	7, // 6: g8e.common.v1.forbidden_patterns:extendee -> google.protobuf.FieldOptions
+	7, // [7:7] is the sub-list for method output_type
+	7, // [7:7] is the sub-list for method input_type
+	7, // [7:7] is the sub-list for extension type_name
+	6, // [6:7] is the sub-list for extension extendee
 	0, // [0:6] is the sub-list for field type_name
 }
 
@@ -567,13 +590,14 @@ func file_common_proto_init() {
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_common_proto_rawDesc), len(file_common_proto_rawDesc)),
 			NumEnums:      1,
 			NumMessages:   5,
-			NumExtensions: 0,
+			NumExtensions: 1,
 			NumServices:   0,
 		},
 		GoTypes:           file_common_proto_goTypes,
 		DependencyIndexes: file_common_proto_depIdxs,
 		EnumInfos:         file_common_proto_enumTypes,
 		MessageInfos:      file_common_proto_msgTypes,
+		ExtensionInfos:    file_common_proto_extTypes,
 	}.Build()
 	File_common_proto = out.File
 	file_common_proto_goTypes = nil

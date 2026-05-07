@@ -16,6 +16,9 @@ package models
 import (
 	"encoding/json"
 
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
 	"github.com/google/uuid"
 )
@@ -40,7 +43,16 @@ type G8eMessage struct {
 // that need to correlate a result back to an in-flight command MUST use
 // payload.execution_id (see shared/models/wire/envelope.json for the contract).
 func NewG8eMessage(eventType, caseID, operatorID, operatorSessionID, systemFingerprint string, payload interface{}) (*G8eMessage, error) {
-	raw, err := json.Marshal(payload)
+	var raw []byte
+	var err error
+
+	if pm, ok := payload.(proto.Message); ok {
+		// Use protojson for Protobuf messages to ensure canonical JSON representation
+		raw, err = protojson.Marshal(pm)
+	} else {
+		raw, err = json.Marshal(payload)
+	}
+
 	if err != nil {
 		return nil, err
 	}

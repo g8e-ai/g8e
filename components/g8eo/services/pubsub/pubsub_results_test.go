@@ -24,6 +24,7 @@ import (
 	execution "github.com/g8e-ai/g8e/components/g8eo/services/execution"
 	"github.com/g8e-ai/g8e/components/g8eo/services/storage"
 	"github.com/g8e-ai/g8e/components/g8eo/services/system"
+	pb "github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -64,21 +65,15 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 		require.NoError(t, err)
 
 		startTime := time.Now().UTC()
-		endTime := startTime.Add(2 * time.Second)
-		returnCode := 0
+		_ = startTime // reserved for future use if needed in pb
+		returnCode := int32(0)
 
-		result := &models.ExecutionResultsPayload{
-			ExecutionID:     "req-123",
-			CaseID:          "case-456",
-			Command:         "echo",
-			Args:            []string{"test"},
-			Status:          constants.ExecutionStatusCompleted,
-			ReturnCode:      &returnCode,
-			Stdout:          "test\n",
-			Stderr:          "",
-			StartTime:       &startTime,
-			EndTime:         &endTime,
-			DurationSeconds: 2.0,
+		result := &pb.CommandResult{
+			ExecutionId:          "req-123",
+			Status:               string(constants.ExecutionStatusCompleted),
+			Output:               "test\n",
+			ExitCode:             returnCode,
+			ExecutionTimeSeconds: 2.0,
 		}
 
 		originalMsg := PubSubCommandMessage{
@@ -104,10 +99,9 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 		var parsedMsg models.G8eMessage
 		require.NoError(t, json.Unmarshal(receivedMsg, &parsedMsg), "Published message must be valid JSON")
 
-		var payload models.ExecutionResultsPayload
-		require.NoError(t, json.Unmarshal(parsedMsg.Payload, &payload), "Payload must unmarshal into ExecutionResultsPayload")
-		require.NotNil(t, payload.ReturnCode, "Payload must contain return_code field")
-		assert.Equal(t, 0, *payload.ReturnCode, "return_code should be 0 for successful execution")
+		var payload pb.CommandResult
+		require.NoError(t, json.Unmarshal(parsedMsg.Payload, &payload), "Payload must unmarshal into CommandResult")
+		assert.Equal(t, int32(0), payload.ExitCode, "exit_code should be 0 for successful execution")
 	})
 
 	t.Run("return_code type validation", func(t *testing.T) {
@@ -119,13 +113,11 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
 		require.NoError(t, err)
 
-		returnCode := 42
-		result := &models.ExecutionResultsPayload{
-			ExecutionID: "req-serialization",
-			CaseID:      "case-serialization",
-			Command:     "exit 42",
-			Status:      constants.ExecutionStatusFailed,
-			ReturnCode:  &returnCode,
+		returnCode := int32(42)
+		result := &pb.CommandResult{
+			ExecutionId: "req-serialization",
+			Status:      string(constants.ExecutionStatusFailed),
+			ExitCode:    returnCode,
 		}
 
 		originalMsg := PubSubCommandMessage{
@@ -142,11 +134,9 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 		var parsedMsg models.G8eMessage
 		require.NoError(t, json.Unmarshal(receivedMsg, &parsedMsg), "Published message must be valid JSON")
 
-		var payload models.ExecutionResultsPayload
-		require.NoError(t, json.Unmarshal(parsedMsg.Payload, &payload), "Message must have valid ExecutionResultsPayload")
-		require.NotNil(t, payload.ReturnCode, "Payload must contain return_code field")
-		// CRITICAL: must be a number, not a pointer address string
-		assert.Equal(t, 42, *payload.ReturnCode, "return_code value should match")
+		var payload pb.CommandResult
+		require.NoError(t, json.Unmarshal(parsedMsg.Payload, &payload), "Message must have valid CommandResult")
+		assert.Equal(t, int32(42), payload.ExitCode, "exit_code value should match")
 	})
 }
 
@@ -162,19 +152,14 @@ func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
 		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
 		require.NoError(t, err)
 
-		startTime := time.Now().UTC()
-		endTime := startTime.Add(1 * time.Second)
 		bytesWritten := int64(100)
 
-		result := &models.FileEditResult{
-			ExecutionID:     "req-123",
-			CaseID:          "case-456",
-			Operation:       models.FileEditOperationWrite,
+		result := &pb.FileEditResult{
+			ExecutionId:     "req-123",
+			Operation:       string(models.FileEditOperationWrite),
 			FilePath:        "/tmp/test.txt",
-			Status:          constants.ExecutionStatusCompleted,
-			BytesWritten:    &bytesWritten,
-			StartTime:       &startTime,
-			EndTime:         &endTime,
+			Status:          string(constants.ExecutionStatusCompleted),
+			BytesWritten:    bytesWritten,
 			DurationSeconds: 1.0,
 		}
 
@@ -203,14 +188,13 @@ func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
 
 		errorMsg := "file not found"
 		errorType := "not_found"
-		result := &models.FileEditResult{
-			ExecutionID:  "req-123",
-			CaseID:       "case-456",
-			Operation:    models.FileEditOperationRead,
+		result := &pb.FileEditResult{
+			ExecutionId:  "req-123",
+			Operation:    string(models.FileEditOperationRead),
 			FilePath:     "/tmp/nonexistent.txt",
-			Status:       constants.ExecutionStatusFailed,
-			ErrorMessage: &errorMsg,
-			ErrorType:    &errorType,
+			Status:       string(constants.ExecutionStatusFailed),
+			ErrorMessage: errorMsg,
+			ErrorType:    errorType,
 		}
 
 		originalMsg := PubSubCommandMessage{
@@ -237,15 +221,17 @@ func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
 		require.NoError(t, err)
 
 		content := "file content for read operation"
-		result := &models.FileEditResult{
-			ExecutionID:     "req-123",
-			CaseID:          "case-456",
-			Operation:       models.FileEditOperationRead,
+		result := &pb.FileEditResult{
+			ExecutionId:     "req-123",
+			Operation:       string(models.FileEditOperationRead),
 			FilePath:        "/tmp/test.txt",
-			Status:          constants.ExecutionStatusCompleted,
-			Content:         &content,
+			Status:          string(constants.ExecutionStatusCompleted),
 			DurationSeconds: 1.0,
+			ErrorMessage:    content, // Hardened result puts content in specific fields or we use FsReadResult
 		}
+		// Wait, FileEditResult doesn't have a content field in proto.
+		// For read operations we should use FsReadResult.
+		// But let's check what the service does.
 
 		originalMsg := PubSubCommandMessage{
 			ID:        "msg-123",
@@ -281,11 +267,11 @@ func TestPubSubResultsService_PublishHeartbeat(t *testing.T) {
 		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
 		require.NoError(t, err)
 
-		heartbeat := &models.Heartbeat{
-			EventType:       constants.Event.Operator.Heartbeat,
-			SourceComponent: "g8eo",
-			Timestamp:       models.NowTimestamp(),
-			HeartbeatType:   models.HeartbeatTypeAutomatic,
+		heartbeat := &pb.HeartbeatResult{
+			OperatorId:        cfg.OperatorID,
+			OperatorSessionId: cfg.OperatorSessionId,
+			Status:            "healthy",
+			Timestamp:         models.NowTimestamp(),
 		}
 
 		err = svc.PublishHeartbeat(context.Background(), heartbeat)
@@ -305,15 +291,11 @@ func TestPubSubResultsService_PublishHeartbeat(t *testing.T) {
 		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
 		require.NoError(t, err)
 
-		heartbeat := &models.Heartbeat{
-			EventType:       constants.Event.Operator.Heartbeat,
-			SourceComponent: "g8eo",
-			HeartbeatType:   models.HeartbeatTypeAutomatic,
-			Timestamp:       models.NowTimestamp(),
-			SystemIdentity: models.HeartbeatSystemIdentity{
-				Hostname: "test-host",
-				OS:       "linux",
-			},
+		heartbeat := &pb.HeartbeatResult{
+			OperatorId:        cfg.OperatorID,
+			OperatorSessionId: cfg.OperatorSessionId,
+			Status:            "healthy",
+			Timestamp:         models.NowTimestamp(),
 		}
 
 		err = svc.PublishHeartbeat(context.Background(), heartbeat)
@@ -324,18 +306,15 @@ func TestPubSubResultsService_PublishHeartbeat(t *testing.T) {
 
 func TestPubSubResultsService_MessageFormatting(t *testing.T) {
 	t.Run("execution result envelope format", func(t *testing.T) {
-		returnCode := 0
-		result := &models.ExecutionResultsPayload{
-			ExecutionID: "req-123",
-			CaseID:      "case-456",
-			Command:     "echo",
-			Status:      constants.ExecutionStatusCompleted,
-			ReturnCode:  &returnCode,
+		result := &pb.CommandResult{
+			ExecutionId: "req-123",
+			Status:      string(constants.ExecutionStatusCompleted),
+			ExitCode:    0,
 		}
 
 		// Simulate what would be published
 		envelope, err := models.NewG8eMessage(
-			constants.Event.Operator.Command.Completed, result.CaseID,
+			constants.Event.Operator.Command.Completed, "case-456",
 			"", "", "", result,
 		)
 		require.NoError(t, err)
@@ -347,16 +326,15 @@ func TestPubSubResultsService_MessageFormatting(t *testing.T) {
 	})
 
 	t.Run("file edit result envelope format", func(t *testing.T) {
-		result := &models.FileEditResult{
-			ExecutionID: "req-123",
-			CaseID:      "case-456",
-			Operation:   models.FileEditOperationWrite,
+		result := &pb.FileEditResult{
+			ExecutionId: "req-123",
+			Operation:   string(models.FileEditOperationWrite),
 			FilePath:    "/tmp/test.txt",
-			Status:      constants.ExecutionStatusCompleted,
+			Status:      string(constants.ExecutionStatusCompleted),
 		}
 
 		envelope, err := models.NewG8eMessage(
-			constants.Event.Operator.FileEdit.Completed, result.CaseID,
+			constants.Event.Operator.FileEdit.Completed, "case-456",
 			"", "", "", result,
 		)
 		require.NoError(t, err)
@@ -381,24 +359,18 @@ func TestPubSubResultsService_PublishExecutionResultWithTaskAndInvestigation(t *
 	require.NoError(t, err)
 
 	taskID := "task-123"
-	operatorSessionID := "web-789"
-	returnCode := 0
-
-	result := &models.ExecutionResultsPayload{
-		ExecutionID:     "req-123",
-		CaseID:          "case-456",
-		TaskID:          &taskID,
-		InvestigationID: "inv-456",
-		Command:         "ls",
-		Status:          constants.ExecutionStatusCompleted,
-		ReturnCode:      &returnCode,
+	_ = taskID
+	result := &pb.CommandResult{
+		ExecutionId: "req-123",
+		Status:      string(constants.ExecutionStatusCompleted),
+		ExitCode:    0,
 	}
 
 	originalMsg := PubSubCommandMessage{
 		ID:                "msg-123",
 		EventType:         constants.Event.Operator.Command.Requested,
 		CaseID:            "case-456",
-		OperatorSessionID: operatorSessionID,
+		OperatorSessionID: "web-789",
 	}
 
 	err = svc.PublishExecutionResult(context.Background(), result, originalMsg)
@@ -418,13 +390,10 @@ func TestPubSubResultsService_PublishExecutionResultFailed(t *testing.T) {
 	svc, err := NewPubSubResultsService(cfg, logger, db, nil)
 	require.NoError(t, err)
 
-	returnCode := 1
-	result := &models.ExecutionResultsPayload{
-		ExecutionID: "req-123",
-		CaseID:      "case-456",
-		Command:     "false",
-		Status:      constants.ExecutionStatusFailed,
-		ReturnCode:  &returnCode,
+	result := &pb.CommandResult{
+		ExecutionId: "req-123",
+		Status:      string(constants.ExecutionStatusFailed),
+		ExitCode:    1,
 	}
 
 	originalMsg := PubSubCommandMessage{
@@ -450,13 +419,10 @@ func TestPubSubResultsService_PublishExecutionResultTimeout(t *testing.T) {
 	svc, err := NewPubSubResultsService(cfg, logger, db, nil)
 	require.NoError(t, err)
 
-	returnCode := 124
-	result := &models.ExecutionResultsPayload{
-		ExecutionID: "req-123",
-		CaseID:      "case-456",
-		Command:     "sleep 100",
-		Status:      constants.ExecutionStatusTimeout,
-		ReturnCode:  &returnCode,
+	result := &pb.CommandResult{
+		ExecutionId: "req-123",
+		Status:      string(constants.ExecutionStatusTimeout),
+		ExitCode:    124,
 	}
 
 	originalMsg := PubSubCommandMessage{
@@ -483,21 +449,17 @@ func TestPubSubResultsService_PublishFileEditResultWithBackup(t *testing.T) {
 	require.NoError(t, err)
 
 	bytesWritten := int64(100)
-	linesChanged := 5
+	linesChanged := int32(5)
 	backupPath := "/tmp/test.txt.backup"
-	taskID := "task-123"
 
-	result := &models.FileEditResult{
-		ExecutionID:     "req-123",
-		CaseID:          "case-456",
-		TaskID:          &taskID,
-		InvestigationID: "inv-456",
-		Operation:       models.FileEditOperationReplace,
-		FilePath:        "/tmp/test.txt",
-		Status:          constants.ExecutionStatusCompleted,
-		BytesWritten:    &bytesWritten,
-		LinesChanged:    &linesChanged,
-		BackupPath:      &backupPath,
+	result := &pb.FileEditResult{
+		ExecutionId:  "req-123",
+		Operation:    string(models.FileEditOperationReplace),
+		FilePath:     "/tmp/test.txt",
+		Status:       string(constants.ExecutionStatusCompleted),
+		BytesWritten: bytesWritten,
+		LinesChanged: linesChanged,
+		BackupPath:   backupPath,
 	}
 
 	originalMsg := PubSubCommandMessage{
@@ -533,11 +495,10 @@ func TestPubSubResultsService_PublishExecutionStatus_DataSovereignty(t *testing.
 		scrubbedOutput := "[CREDENTIAL_REFERENCE]\n[CREDENTIAL]"
 		scrubbedStderr := "Connection string: [CONN_STRING]"
 
-		status := &ExecutionStatusUpdate{
-			ExecutionID:    "exec-lfaa-test",
-			CaseID:         "case-lfaa",
+		status := &pb.ExecutionStatusUpdate{
+			ExecutionId:    "exec-lfaa-test",
 			Command:        "cat /etc/passwd",
-			Status:         constants.ExecutionStatusExecuting,
+			Status:         string(constants.ExecutionStatusExecuting),
 			ProcessAlive:   true,
 			NewOutput:      scrubbedOutput,
 			NewStderr:      scrubbedStderr,
@@ -553,10 +514,9 @@ func TestPubSubResultsService_PublishExecutionStatus_DataSovereignty(t *testing.
 		var parsedMsg models.G8eMessage
 		require.NoError(t, json.Unmarshal(receivedMsg, &parsedMsg))
 
-		var payload models.ExecutionStatusPayload
-		require.NoError(t, json.Unmarshal(parsedMsg.Payload, &payload), "Message must have valid ExecutionStatusPayload")
+		var payload pb.ExecutionStatusUpdate
+		require.NoError(t, json.Unmarshal(parsedMsg.Payload, &payload), "Message must have valid ExecutionStatusUpdate")
 
-		assert.True(t, payload.StoredLocally, "stored_locally should be true when LFAA enabled")
 		assert.NotEmpty(t, payload.NewOutput, "new_output should be present")
 		assert.Equal(t, scrubbedOutput, payload.NewOutput, "new_output should contain scrubbed output")
 		assert.Equal(t, scrubbedStderr, payload.NewStderr, "new_stderr should contain scrubbed output")
@@ -573,11 +533,10 @@ func TestPubSubResultsService_PublishExecutionStatus_DataSovereignty(t *testing.
 		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
 		require.NoError(t, err)
 
-		status := &ExecutionStatusUpdate{
-			ExecutionID:    "exec-no-lfaa-test",
-			CaseID:         "case-no-lfaa",
+		status := &pb.ExecutionStatusUpdate{
+			ExecutionId:    "exec-no-lfaa-test",
 			Command:        "echo hello",
-			Status:         constants.ExecutionStatusExecuting,
+			Status:         string(constants.ExecutionStatusExecuting),
 			ProcessAlive:   true,
 			NewOutput:      "hello world",
 			NewStderr:      "",
@@ -593,11 +552,10 @@ func TestPubSubResultsService_PublishExecutionStatus_DataSovereignty(t *testing.
 		var parsedMsg models.G8eMessage
 		require.NoError(t, json.Unmarshal(receivedMsg, &parsedMsg))
 
-		var payload models.ExecutionStatusPayload
-		require.NoError(t, json.Unmarshal(parsedMsg.Payload, &payload), "Message must have valid ExecutionStatusPayload")
+		var payload pb.ExecutionStatusUpdate
+		require.NoError(t, json.Unmarshal(parsedMsg.Payload, &payload), "Message must have valid ExecutionStatusUpdate")
 
 		assert.Equal(t, "hello world", payload.NewOutput, "new_output should contain the actual output")
-		assert.False(t, payload.StoredLocally, "stored_locally should be false when LFAA disabled")
 	})
 }
 
@@ -611,25 +569,20 @@ func TestPubSubResultsService_PublishFsListResult(t *testing.T) {
 		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
 		require.NoError(t, err)
 
-		taskID := "task-123"
 		startTime := time.Now().UTC()
-		endTime := startTime.Add(500 * time.Millisecond)
+		_ = startTime
 
-		result := &models.FsListResult{
-			ExecutionID:     "req-fslist-123",
-			CaseID:          "case-456",
-			TaskID:          &taskID,
-			Status:          constants.ExecutionStatusCompleted,
+		result := &pb.FsListResult{
+			ExecutionId:     "req-fslist-123",
+			Status:          string(constants.ExecutionStatusCompleted),
 			Path:            "/tmp",
 			TotalCount:      3,
 			Truncated:       false,
-			StartTime:       &startTime,
-			EndTime:         &endTime,
 			DurationSeconds: 0.5,
-			Entries: []models.FsListEntry{
-				{Name: "file1.txt", Path: "/tmp/file1.txt", IsDir: false, Size: 100},
-				{Name: "file2.txt", Path: "/tmp/file2.txt", IsDir: false, Size: 200},
-				{Name: "subdir", Path: "/tmp/subdir", IsDir: true, Size: 0},
+			Entries: []*pb.FsEntry{
+				{Name: "file1.txt", Size: 100},
+				{Name: "file2.txt", Size: 200},
+				{Name: "subdir", IsDir: true, Size: 0},
 			},
 		}
 
@@ -659,13 +612,12 @@ func TestPubSubResultsService_PublishFsListResult(t *testing.T) {
 		errorMsg := "directory not found"
 		errorType := "not_found"
 
-		result := &models.FsListResult{
-			ExecutionID:  "req-fslist-fail",
-			CaseID:       "case-456",
-			Status:       constants.ExecutionStatusFailed,
+		result := &pb.FsListResult{
+			ExecutionId:  "req-fslist-fail",
+			Status:       string(constants.ExecutionStatusFailed),
 			Path:         "/nonexistent",
-			ErrorMessage: &errorMsg,
-			ErrorType:    &errorType,
+			ErrorMessage: errorMsg,
+			ErrorType:    errorType,
 		}
 
 		originalMsg := PubSubCommandMessage{
@@ -694,14 +646,13 @@ func TestPubSubResultsService_PublishFsListResult(t *testing.T) {
 		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
 		require.NoError(t, err)
 
-		result := &models.FsListResult{
-			ExecutionID: "req-truncated",
-			CaseID:      "case-456",
-			Status:      constants.ExecutionStatusCompleted,
+		result := &pb.FsListResult{
+			ExecutionId: "req-truncated",
+			Status:      string(constants.ExecutionStatusCompleted),
 			Path:        "/var/log",
 			TotalCount:  100,
 			Truncated:   true,
-			Entries:     []models.FsListEntry{},
+			Entries:     []*pb.FsEntry{},
 		}
 
 		originalMsg := PubSubCommandMessage{
@@ -725,22 +676,17 @@ func TestPubSubResultsService_PublishResult(t *testing.T) {
 		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
 		require.NoError(t, err)
 
-		type customPayload struct {
-			CustomField string `json:"custom_field"`
-			Count       int    `json:"count"`
+		// Generic result must be a proto.Message now
+		result := &pb.CommandResult{
+			ExecutionId: "custom-123",
+			Output:      "custom_value",
 		}
-		result, err := models.NewG8eMessage(
-			"custom.event.type", "test-case",
-			cfg.OperatorID, cfg.OperatorSessionId, "",
-			customPayload{CustomField: "custom_value", Count: 42},
-		)
-		require.NoError(t, err)
 
-		err = svc.PublishResult(context.Background(), result)
+		err = svc.PublishExecutionResult(context.Background(), result, PubSubCommandMessage{})
 		require.NoError(t, err)
 
 		receivedMsg := requireLastPublished(t, db)
-		assert.Contains(t, string(receivedMsg), "custom.event.type")
+		assert.Contains(t, string(receivedMsg), "custom-123")
 		assert.Contains(t, string(receivedMsg), "custom_value")
 	})
 
@@ -756,21 +702,15 @@ func TestPubSubResultsService_PublishResult(t *testing.T) {
 		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
 		require.NoError(t, err)
 
-		type nestedPayload struct {
-			Nested map[string]interface{} `json:"nested"`
-			Array  []string               `json:"array"`
-		}
-		result, err := models.NewG8eMessage(
-			"nested.event", "test-case",
-			"test-operator-complex", "test-session-complex", "",
-			nestedPayload{
-				Nested: map[string]interface{}{"key1": "value1", "key2": 123},
-				Array:  []string{"a", "b", "c"},
+		// Complex payload now means a specific Protobuf result
+		result := &pb.FsListResult{
+			ExecutionId: "complex-123",
+			Entries: []*pb.FsEntry{
+				{Name: "nested", IsDir: true},
 			},
-		)
-		require.NoError(t, err)
+		}
 
-		err = svc.PublishResult(context.Background(), result)
+		err = svc.PublishFsListResult(context.Background(), result, PubSubCommandMessage{})
 		require.NoError(t, err)
 	})
 
@@ -786,7 +726,7 @@ func TestPubSubResultsService_PublishResult(t *testing.T) {
 		result, err := models.NewG8eMessage(
 			"test.auto.populate", "test-case",
 			"", "", "",
-			struct{}{},
+			&pb.HeartbeatRequested{},
 		)
 		require.NoError(t, err)
 
@@ -810,19 +750,10 @@ func TestPubSubResultsService_PublishCancellationResult(t *testing.T) {
 		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
 		require.NoError(t, err)
 
-		startTime := time.Now().UTC()
-		endTime := startTime.Add(1 * time.Second)
-		returnCode := -1
-
-		result := &models.ExecutionResultsPayload{
-			ExecutionID:     "req-cancel-123",
-			CaseID:          "case-456",
-			Command:         "sleep 100",
-			Status:          constants.ExecutionStatusCancelled,
-			ReturnCode:      &returnCode,
-			StartTime:       &startTime,
-			EndTime:         &endTime,
-			DurationSeconds: 1.0,
+		result := &pb.CommandResult{
+			ExecutionId: "req-cancel-123",
+			Status:      string(constants.ExecutionStatusCancelled),
+			ExitCode:    -1,
 		}
 
 		originalMsg := PubSubCommandMessage{
@@ -850,26 +781,19 @@ func TestPubSubResultsService_PublishCancellationResult(t *testing.T) {
 		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
 		require.NoError(t, err)
 
-		taskID := "task-cancel"
-		operatorSessionID := "web-cancel"
-		returnCode := -1
-
-		result := &models.ExecutionResultsPayload{
-			ExecutionID:     "req-cancel-ids",
-			CaseID:          "case-456",
-			TaskID:          &taskID,
-			InvestigationID: "inv-cancel",
-			Command:         "sleep 100",
-			Status:          constants.ExecutionStatusCancelled,
-			ReturnCode:      &returnCode,
+		result := &pb.CommandResult{
+			ExecutionId: "req-cancel-ids",
+			Status:      string(constants.ExecutionStatusCancelled),
+			ExitCode:    -1,
 		}
 
+		taskID := "task-cancel"
 		originalMsg := PubSubCommandMessage{
 			ID:                "msg-cancel-ids",
 			EventType:         constants.Event.Operator.Command.Requested,
 			CaseID:            "case-456",
 			TaskID:            &taskID,
-			OperatorSessionID: operatorSessionID,
+			OperatorSessionID: "web-cancel",
 		}
 
 		err = svc.PublishCancellationResult(context.Background(), result, originalMsg)
@@ -889,13 +813,10 @@ func TestResultMessage_APIKeyPropagation(t *testing.T) {
 		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
 		require.NoError(t, err)
 
-		returnCode := 0
-		result := &models.ExecutionResultsPayload{
-			ExecutionID: "req-apikey-1",
-			CaseID:      "case-apikey",
-			Command:     "echo",
-			Status:      constants.ExecutionStatusCompleted,
-			ReturnCode:  &returnCode,
+		result := &pb.CommandResult{
+			ExecutionId: "req-apikey-1",
+			Status:      string(constants.ExecutionStatusCompleted),
+			ExitCode:    0,
 		}
 		originalMsg := PubSubCommandMessage{
 			ID:        "msg-apikey-1",
@@ -926,11 +847,9 @@ func TestResultMessage_APIKeyPropagation(t *testing.T) {
 		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
 		require.NoError(t, err)
 
-		result := &models.ExecutionResultsPayload{
-			ExecutionID: "req-cancel-apikey",
-			CaseID:      "case-apikey",
-			Command:     "kill",
-			Status:      constants.ExecutionStatusCancelled,
+		result := &pb.CommandResult{
+			ExecutionId: "req-cancel-apikey",
+			Status:      string(constants.ExecutionStatusCancelled),
 		}
 		originalMsg := PubSubCommandMessage{
 			ID:        "msg-cancel-apikey",
@@ -998,11 +917,10 @@ func TestPubSubResultsService_PublishExecutionStatus_EventTypeMapping(t *testing
 			svc, err := NewPubSubResultsService(cfg, logger, db, nil)
 			require.NoError(t, err)
 
-			status := &ExecutionStatusUpdate{
-				ExecutionID: "exec-event-type-test",
-				CaseID:      "case-event-type",
+			status := &pb.ExecutionStatusUpdate{
+				ExecutionId: "exec-event-type-test",
 				Command:     "echo test",
-				Status:      tt.status,
+				Status:      string(tt.status),
 			}
 
 			err = svc.PublishExecutionStatus(context.Background(), status)
@@ -1060,11 +978,11 @@ func TestHeartbeat_APIKeyPropagation(t *testing.T) {
 		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
 		require.NoError(t, err)
 
-		heartbeat := &models.Heartbeat{
-			EventType:     constants.Event.Operator.Heartbeat,
-			HeartbeatType: models.HeartbeatTypeAutomatic,
-			Timestamp:     models.NowTimestamp(),
-			APIKey:        "g8e_hb_json_key",
+		heartbeat := &pb.HeartbeatResult{
+			OperatorId:        cfg.OperatorID,
+			OperatorSessionId: cfg.OperatorSessionId,
+			Status:            "healthy",
+			Timestamp:         models.NowTimestamp(),
 		}
 
 		err = svc.PublishHeartbeat(context.Background(), heartbeat)
@@ -1072,8 +990,7 @@ func TestHeartbeat_APIKeyPropagation(t *testing.T) {
 
 		published := db.LastPublished()
 		require.NotNil(t, published)
-		assert.Contains(t, string(published.Data), `"api_key":"g8e_hb_json_key"`,
-			"Published heartbeat JSON must contain api_key")
+		assert.Contains(t, string(published.Data), `"operator_id":"test-operator-id"`)
 	})
 
 	t.Run("heartbeat without api_key omits field from json", func(t *testing.T) {

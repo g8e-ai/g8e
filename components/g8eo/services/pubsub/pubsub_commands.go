@@ -15,7 +15,6 @@ package pubsub
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -25,24 +24,24 @@ import (
 
 	"github.com/g8e-ai/g8e/components/g8eo/config"
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
-	"github.com/g8e-ai/g8e/components/g8eo/models"
 	execution "github.com/g8e-ai/g8e/components/g8eo/services/execution"
 	"github.com/g8e-ai/g8e/components/g8eo/services/sentinel"
 	storage "github.com/g8e-ai/g8e/components/g8eo/services/storage"
 	commonv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
+	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
 )
 
 // PubSubCommandMessage is the inbound wire message received from g8es pub/sub.
 type PubSubCommandMessage struct {
-	ID                string          `json:"id"`
-	EventType         string          `json:"event_type"`
-	CaseID            string          `json:"case_id"`
-	TaskID            *string         `json:"task_id,omitempty"`
-	InvestigationID   string          `json:"investigation_id"`
-	OperatorSessionID string          `json:"operator_session_id"`
-	OperatorID        *string         `json:"operator_id,omitempty"`
-	Payload           json.RawMessage `json:"payload"`
-	Timestamp         time.Time       `json:"timestamp"`
+	ID                string
+	EventType         string
+	CaseID            string
+	TaskID            *string
+	InvestigationID   string
+	OperatorSessionID string
+	OperatorID        *string
+	Payload           []byte
+	Timestamp         time.Time
 }
 
 // PubSubCommandService manages the g8es pub/sub connection and dispatches inbound
@@ -404,6 +403,28 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 	}
 
 	rs.logger.Info("Processing request")
+
+	// L1 Governance: Enforce forbidden patterns via reflection (Protocol-First architecture)
+	payloadMsg, err := unmarshalPayload(env.EventType, env.Payload)
+	if err == nil {
+		violations := validateL1Governance(payloadMsg)
+		if len(violations) > 0 {
+			rs.logger.Error("L1 Governance violation: command rejected",
+				"event_type", env.EventType,
+				"violations", violations,
+				"execution_id", env.Id)
+
+			// We reject the command here. In a production system, we would also
+			// publish a failure result to the gateway, but for now we follow
+			// the central enforcement rule.
+			return
+		}
+		rs.logger.Info("L1 Governance validation passed", "event_type", env.EventType)
+	} else {
+		// Log warning but continue; not all events may have proto-message definitions yet
+		rs.logger.Warn("Skipping L1 Governance validation: failed to unmarshal payload", "error", err)
+	}
+
 	rs.dispatchCommand(cmdMsg)
 }
 
@@ -417,10 +438,10 @@ func (rs *PubSubCommandService) dispatchCommand(cmdMsg PubSubCommandMessage) {
 }
 
 func (rs *PubSubCommandService) handleShutdownRequest(msg PubSubCommandMessage) {
-	rs.logger.Info("Shutdown command received")
-	var sp models.ShutdownRequestPayload
-	if err := json.Unmarshal(msg.Payload, &sp); err != nil {
-		rs.logger.Warn("Failed to decode shutdown payload", "error", err)
+	rs.logger.Info("Shutdown command received (via Protobuf)")
+	var sp operatorv1.ShutdownRequested
+	if err := proto.Unmarshal(msg.Payload, &sp); err != nil {
+		rs.logger.Warn("Failed to decode shutdown payload as protobuf ShutdownRequested", "error", err)
 	}
 	reason := sp.Reason
 	if reason == "" {
