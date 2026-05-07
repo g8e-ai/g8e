@@ -9,6 +9,7 @@ governance architecture for trustless environments
 [Position Paper](docs/architecture/position_paper.md) · [Architecture](docs/architecture/about.md) · [Protocol](docs/architecture/protocol.md) · [Security](docs/architecture/security.md) · [Quick Start](#quick-start) · [Contributing](#contributing)
 
 </div>
+
 ## What this is
 
 g8e is an agentic AI platform built on mutual adversarial assumption. Every actor — Engine, Operator, User — assumes the others may be compromised and verifies accordingly. No trusted component, no privileged path, no implicit consent.
