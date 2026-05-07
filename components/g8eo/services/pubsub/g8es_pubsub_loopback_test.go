@@ -415,7 +415,7 @@ func TestLoopback_ResultsService_PublishExecutionResult(t *testing.T) {
 
 	result := &pb.CommandResult{
 		ExecutionId:          "exec-loop-1",
-		Status:               string(constants.ExecutionStatusCompleted),
+		Status:               protoExecutionStatus(constants.ExecutionStatusCompleted),
 		Output:               "hello",
 		ExecutionTimeSeconds: 0.01,
 	}

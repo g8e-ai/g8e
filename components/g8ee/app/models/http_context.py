@@ -33,7 +33,7 @@ from .base import Field, G8eBaseModel, UTCDatetime, field_validator, model_valid
 class BoundOperator(G8eBaseModel):
     """Represents a bound operator in the HTTP context.
     
-    Canonical wire shape: shared/models/wire/bound_operator_context.json
+    Internal g8ee-g8ed contract for bound operator context.
     """
     operator_id: str = Field(..., description="Unique operator identifier")
     operator_session_id: str | None = Field(default=None, description="Operator session identifier")

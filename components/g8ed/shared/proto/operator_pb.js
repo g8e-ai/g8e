@@ -36,6 +36,7 @@ goog.exportSymbol('proto.g8e.operator.v1.DirectCommandAuditRequested', null, glo
 goog.exportSymbol('proto.g8e.operator.v1.DirectCommandResultAuditRequested', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.DiskDetails', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.EnvironmentDetails', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.ExecutionStatus', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.ExecutionStatusUpdate', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.FetchFileDiffRequested', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.FetchFileDiffResult', null, global);
@@ -60,6 +61,7 @@ goog.exportSymbol('proto.g8e.operator.v1.FsReadRequested', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.FsReadResult', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.HeartbeatRequested', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.HeartbeatResult', null, global);
+goog.exportSymbol('proto.g8e.operator.v1.HeartbeatType', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.MemoryDetails', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.NetworkInfo', null, global);
 goog.exportSymbol('proto.g8e.operator.v1.NetworkInterface', null, global);
@@ -5158,7 +5160,7 @@ proto.g8e.operator.v1.CommandResult.prototype.toObject = function(opt_includeIns
 proto.g8e.operator.v1.CommandResult.toObject = function(includeInstance, msg) {
   var f, obj = {
     executionId: jspb.Message.getFieldWithDefault(msg, 1, ""),
-    status: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    status: jspb.Message.getFieldWithDefault(msg, 2, 0),
     output: jspb.Message.getFieldWithDefault(msg, 3, ""),
     error: jspb.Message.getFieldWithDefault(msg, 4, ""),
     stderr: jspb.Message.getFieldWithDefault(msg, 5, ""),
@@ -5207,7 +5209,7 @@ proto.g8e.operator.v1.CommandResult.deserializeBinaryFromReader = function(msg, 
       msg.setExecutionId(value);
       break;
     case 2:
-      var value = /** @type {string} */ (reader.readString());
+      var value = /** @type {!proto.g8e.operator.v1.ExecutionStatus} */ (reader.readEnum());
       msg.setStatus(value);
       break;
     case 3:
@@ -5275,8 +5277,8 @@ proto.g8e.operator.v1.CommandResult.serializeBinaryToWriter = function(message, 
     );
   }
   f = message.getStatus();
-  if (f.length > 0) {
-    writer.writeString(
+  if (f !== 0.0) {
+    writer.writeEnum(
       2,
       f
     );
@@ -5352,20 +5354,20 @@ proto.g8e.operator.v1.CommandResult.prototype.setExecutionId = function(value) {
 
 
 /**
- * optional string status = 2;
- * @return {string}
+ * optional ExecutionStatus status = 2;
+ * @return {!proto.g8e.operator.v1.ExecutionStatus}
  */
 proto.g8e.operator.v1.CommandResult.prototype.getStatus = function() {
-  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+  return /** @type {!proto.g8e.operator.v1.ExecutionStatus} */ (jspb.Message.getFieldWithDefault(this, 2, 0));
 };
 
 
 /**
- * @param {string} value
+ * @param {!proto.g8e.operator.v1.ExecutionStatus} value
  * @return {!proto.g8e.operator.v1.CommandResult} returns this
  */
 proto.g8e.operator.v1.CommandResult.prototype.setStatus = function(value) {
-  return jspb.Message.setProto3StringField(this, 2, value);
+  return jspb.Message.setProto3EnumField(this, 2, value);
 };
 
 
@@ -5785,7 +5787,7 @@ proto.g8e.operator.v1.FsListResult.prototype.toObject = function(opt_includeInst
 proto.g8e.operator.v1.FsListResult.toObject = function(includeInstance, msg) {
   var f, obj = {
     executionId: jspb.Message.getFieldWithDefault(msg, 1, ""),
-    status: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    status: jspb.Message.getFieldWithDefault(msg, 2, 0),
     path: jspb.Message.getFieldWithDefault(msg, 3, ""),
     entriesList: jspb.Message.toObjectList(msg.getEntriesList(),
     proto.g8e.operator.v1.FsEntry.toObject, includeInstance),
@@ -5835,7 +5837,7 @@ proto.g8e.operator.v1.FsListResult.deserializeBinaryFromReader = function(msg, r
       msg.setExecutionId(value);
       break;
     case 2:
-      var value = /** @type {string} */ (reader.readString());
+      var value = /** @type {!proto.g8e.operator.v1.ExecutionStatus} */ (reader.readEnum());
       msg.setStatus(value);
       break;
     case 3:
@@ -5904,8 +5906,8 @@ proto.g8e.operator.v1.FsListResult.serializeBinaryToWriter = function(message, w
     );
   }
   f = message.getStatus();
-  if (f.length > 0) {
-    writer.writeString(
+  if (f !== 0.0) {
+    writer.writeEnum(
       2,
       f
     );
@@ -5982,20 +5984,20 @@ proto.g8e.operator.v1.FsListResult.prototype.setExecutionId = function(value) {
 
 
 /**
- * optional string status = 2;
- * @return {string}
+ * optional ExecutionStatus status = 2;
+ * @return {!proto.g8e.operator.v1.ExecutionStatus}
  */
 proto.g8e.operator.v1.FsListResult.prototype.getStatus = function() {
-  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+  return /** @type {!proto.g8e.operator.v1.ExecutionStatus} */ (jspb.Message.getFieldWithDefault(this, 2, 0));
 };
 
 
 /**
- * @param {string} value
+ * @param {!proto.g8e.operator.v1.ExecutionStatus} value
  * @return {!proto.g8e.operator.v1.FsListResult} returns this
  */
 proto.g8e.operator.v1.FsListResult.prototype.setStatus = function(value) {
-  return jspb.Message.setProto3StringField(this, 2, value);
+  return jspb.Message.setProto3EnumField(this, 2, value);
 };
 
 
@@ -6178,7 +6180,7 @@ proto.g8e.operator.v1.FsReadResult.prototype.toObject = function(opt_includeInst
 proto.g8e.operator.v1.FsReadResult.toObject = function(includeInstance, msg) {
   var f, obj = {
     executionId: jspb.Message.getFieldWithDefault(msg, 1, ""),
-    status: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    status: jspb.Message.getFieldWithDefault(msg, 2, 0),
     path: jspb.Message.getFieldWithDefault(msg, 3, ""),
     content: jspb.Message.getFieldWithDefault(msg, 4, ""),
     sizeBytes: jspb.Message.getFieldWithDefault(msg, 5, 0),
@@ -6227,7 +6229,7 @@ proto.g8e.operator.v1.FsReadResult.deserializeBinaryFromReader = function(msg, r
       msg.setExecutionId(value);
       break;
     case 2:
-      var value = /** @type {string} */ (reader.readString());
+      var value = /** @type {!proto.g8e.operator.v1.ExecutionStatus} */ (reader.readEnum());
       msg.setStatus(value);
       break;
     case 3:
@@ -6295,8 +6297,8 @@ proto.g8e.operator.v1.FsReadResult.serializeBinaryToWriter = function(message, w
     );
   }
   f = message.getStatus();
-  if (f.length > 0) {
-    writer.writeString(
+  if (f !== 0.0) {
+    writer.writeEnum(
       2,
       f
     );
@@ -6372,20 +6374,20 @@ proto.g8e.operator.v1.FsReadResult.prototype.setExecutionId = function(value) {
 
 
 /**
- * optional string status = 2;
- * @return {string}
+ * optional ExecutionStatus status = 2;
+ * @return {!proto.g8e.operator.v1.ExecutionStatus}
  */
 proto.g8e.operator.v1.FsReadResult.prototype.getStatus = function() {
-  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+  return /** @type {!proto.g8e.operator.v1.ExecutionStatus} */ (jspb.Message.getFieldWithDefault(this, 2, 0));
 };
 
 
 /**
- * @param {string} value
+ * @param {!proto.g8e.operator.v1.ExecutionStatus} value
  * @return {!proto.g8e.operator.v1.FsReadResult} returns this
  */
 proto.g8e.operator.v1.FsReadResult.prototype.setStatus = function(value) {
-  return jspb.Message.setProto3StringField(this, 2, value);
+  return jspb.Message.setProto3EnumField(this, 2, value);
 };
 
 
@@ -6850,7 +6852,7 @@ proto.g8e.operator.v1.FsGrepResult.prototype.toObject = function(opt_includeInst
 proto.g8e.operator.v1.FsGrepResult.toObject = function(includeInstance, msg) {
   var f, obj = {
     executionId: jspb.Message.getFieldWithDefault(msg, 1, ""),
-    status: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    status: jspb.Message.getFieldWithDefault(msg, 2, 0),
     path: jspb.Message.getFieldWithDefault(msg, 3, ""),
     matchesList: jspb.Message.toObjectList(msg.getMatchesList(),
     proto.g8e.operator.v1.FsGrepMatch.toObject, includeInstance),
@@ -6900,7 +6902,7 @@ proto.g8e.operator.v1.FsGrepResult.deserializeBinaryFromReader = function(msg, r
       msg.setExecutionId(value);
       break;
     case 2:
-      var value = /** @type {string} */ (reader.readString());
+      var value = /** @type {!proto.g8e.operator.v1.ExecutionStatus} */ (reader.readEnum());
       msg.setStatus(value);
       break;
     case 3:
@@ -6969,8 +6971,8 @@ proto.g8e.operator.v1.FsGrepResult.serializeBinaryToWriter = function(message, w
     );
   }
   f = message.getStatus();
-  if (f.length > 0) {
-    writer.writeString(
+  if (f !== 0.0) {
+    writer.writeEnum(
       2,
       f
     );
@@ -7047,20 +7049,20 @@ proto.g8e.operator.v1.FsGrepResult.prototype.setExecutionId = function(value) {
 
 
 /**
- * optional string status = 2;
- * @return {string}
+ * optional ExecutionStatus status = 2;
+ * @return {!proto.g8e.operator.v1.ExecutionStatus}
  */
 proto.g8e.operator.v1.FsGrepResult.prototype.getStatus = function() {
-  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+  return /** @type {!proto.g8e.operator.v1.ExecutionStatus} */ (jspb.Message.getFieldWithDefault(this, 2, 0));
 };
 
 
 /**
- * @param {string} value
+ * @param {!proto.g8e.operator.v1.ExecutionStatus} value
  * @return {!proto.g8e.operator.v1.FsGrepResult} returns this
  */
 proto.g8e.operator.v1.FsGrepResult.prototype.setStatus = function(value) {
-  return jspb.Message.setProto3StringField(this, 2, value);
+  return jspb.Message.setProto3EnumField(this, 2, value);
 };
 
 
@@ -7243,7 +7245,7 @@ proto.g8e.operator.v1.FileEditResult.prototype.toObject = function(opt_includeIn
 proto.g8e.operator.v1.FileEditResult.toObject = function(includeInstance, msg) {
   var f, obj = {
     executionId: jspb.Message.getFieldWithDefault(msg, 1, ""),
-    status: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    status: jspb.Message.getFieldWithDefault(msg, 2, 0),
     filePath: jspb.Message.getFieldWithDefault(msg, 3, ""),
     operation: jspb.Message.getFieldWithDefault(msg, 4, ""),
     durationSeconds: jspb.Message.getFloatingPointFieldWithDefault(msg, 5, 0.0),
@@ -7296,7 +7298,7 @@ proto.g8e.operator.v1.FileEditResult.deserializeBinaryFromReader = function(msg,
       msg.setExecutionId(value);
       break;
     case 2:
-      var value = /** @type {string} */ (reader.readString());
+      var value = /** @type {!proto.g8e.operator.v1.ExecutionStatus} */ (reader.readEnum());
       msg.setStatus(value);
       break;
     case 3:
@@ -7380,8 +7382,8 @@ proto.g8e.operator.v1.FileEditResult.serializeBinaryToWriter = function(message,
     );
   }
   f = message.getStatus();
-  if (f.length > 0) {
-    writer.writeString(
+  if (f !== 0.0) {
+    writer.writeEnum(
       2,
       f
     );
@@ -7485,20 +7487,20 @@ proto.g8e.operator.v1.FileEditResult.prototype.setExecutionId = function(value) 
 
 
 /**
- * optional string status = 2;
- * @return {string}
+ * optional ExecutionStatus status = 2;
+ * @return {!proto.g8e.operator.v1.ExecutionStatus}
  */
 proto.g8e.operator.v1.FileEditResult.prototype.getStatus = function() {
-  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+  return /** @type {!proto.g8e.operator.v1.ExecutionStatus} */ (jspb.Message.getFieldWithDefault(this, 2, 0));
 };
 
 
 /**
- * @param {string} value
+ * @param {!proto.g8e.operator.v1.ExecutionStatus} value
  * @return {!proto.g8e.operator.v1.FileEditResult} returns this
  */
 proto.g8e.operator.v1.FileEditResult.prototype.setStatus = function(value) {
-  return jspb.Message.setProto3StringField(this, 2, value);
+  return jspb.Message.setProto3EnumField(this, 2, value);
 };
 
 
@@ -7733,7 +7735,7 @@ proto.g8e.operator.v1.ExecutionStatusUpdate.prototype.toObject = function(opt_in
 proto.g8e.operator.v1.ExecutionStatusUpdate.toObject = function(includeInstance, msg) {
   var f, obj = {
     executionId: jspb.Message.getFieldWithDefault(msg, 1, ""),
-    status: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    status: jspb.Message.getFieldWithDefault(msg, 2, 0),
     command: jspb.Message.getFieldWithDefault(msg, 3, ""),
     processAlive: jspb.Message.getBooleanFieldWithDefault(msg, 4, false),
     elapsedSeconds: jspb.Message.getFloatingPointFieldWithDefault(msg, 5, 0.0),
@@ -7781,7 +7783,7 @@ proto.g8e.operator.v1.ExecutionStatusUpdate.deserializeBinaryFromReader = functi
       msg.setExecutionId(value);
       break;
     case 2:
-      var value = /** @type {string} */ (reader.readString());
+      var value = /** @type {!proto.g8e.operator.v1.ExecutionStatus} */ (reader.readEnum());
       msg.setStatus(value);
       break;
     case 3:
@@ -7845,8 +7847,8 @@ proto.g8e.operator.v1.ExecutionStatusUpdate.serializeBinaryToWriter = function(m
     );
   }
   f = message.getStatus();
-  if (f.length > 0) {
-    writer.writeString(
+  if (f !== 0.0) {
+    writer.writeEnum(
       2,
       f
     );
@@ -7915,20 +7917,20 @@ proto.g8e.operator.v1.ExecutionStatusUpdate.prototype.setExecutionId = function(
 
 
 /**
- * optional string status = 2;
- * @return {string}
+ * optional ExecutionStatus status = 2;
+ * @return {!proto.g8e.operator.v1.ExecutionStatus}
  */
 proto.g8e.operator.v1.ExecutionStatusUpdate.prototype.getStatus = function() {
-  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+  return /** @type {!proto.g8e.operator.v1.ExecutionStatus} */ (jspb.Message.getFieldWithDefault(this, 2, 0));
 };
 
 
 /**
- * @param {string} value
+ * @param {!proto.g8e.operator.v1.ExecutionStatus} value
  * @return {!proto.g8e.operator.v1.ExecutionStatusUpdate} returns this
  */
 proto.g8e.operator.v1.ExecutionStatusUpdate.prototype.setStatus = function(value) {
-  return jspb.Message.setProto3StringField(this, 2, value);
+  return jspb.Message.setProto3EnumField(this, 2, value);
 };
 
 
@@ -8330,7 +8332,7 @@ proto.g8e.operator.v1.PortCheckResult.prototype.toObject = function(opt_includeI
 proto.g8e.operator.v1.PortCheckResult.toObject = function(includeInstance, msg) {
   var f, obj = {
     executionId: jspb.Message.getFieldWithDefault(msg, 1, ""),
-    status: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    status: jspb.Message.getFieldWithDefault(msg, 2, 0),
     resultsList: jspb.Message.toObjectList(msg.getResultsList(),
     proto.g8e.operator.v1.PortCheckEntry.toObject, includeInstance),
     errorMessage: jspb.Message.getFieldWithDefault(msg, 4, ""),
@@ -8376,7 +8378,7 @@ proto.g8e.operator.v1.PortCheckResult.deserializeBinaryFromReader = function(msg
       msg.setExecutionId(value);
       break;
     case 2:
-      var value = /** @type {string} */ (reader.readString());
+      var value = /** @type {!proto.g8e.operator.v1.ExecutionStatus} */ (reader.readEnum());
       msg.setStatus(value);
       break;
     case 3:
@@ -8429,8 +8431,8 @@ proto.g8e.operator.v1.PortCheckResult.serializeBinaryToWriter = function(message
     );
   }
   f = message.getStatus();
-  if (f.length > 0) {
-    writer.writeString(
+  if (f !== 0.0) {
+    writer.writeEnum(
       2,
       f
     );
@@ -8479,20 +8481,20 @@ proto.g8e.operator.v1.PortCheckResult.prototype.setExecutionId = function(value)
 
 
 /**
- * optional string status = 2;
- * @return {string}
+ * optional ExecutionStatus status = 2;
+ * @return {!proto.g8e.operator.v1.ExecutionStatus}
  */
 proto.g8e.operator.v1.PortCheckResult.prototype.getStatus = function() {
-  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 2, ""));
+  return /** @type {!proto.g8e.operator.v1.ExecutionStatus} */ (jspb.Message.getFieldWithDefault(this, 2, 0));
 };
 
 
 /**
- * @param {string} value
+ * @param {!proto.g8e.operator.v1.ExecutionStatus} value
  * @return {!proto.g8e.operator.v1.PortCheckResult} returns this
  */
 proto.g8e.operator.v1.PortCheckResult.prototype.setStatus = function(value) {
-  return jspb.Message.setProto3StringField(this, 2, value);
+  return jspb.Message.setProto3EnumField(this, 2, value);
 };
 
 
@@ -16078,5 +16080,26 @@ proto.g8e.operator.v1.FingerprintDetails.prototype.setMachineId = function(value
   return jspb.Message.setProto3StringField(this, 4, value);
 };
 
+
+/**
+ * @enum {number}
+ */
+proto.g8e.operator.v1.ExecutionStatus = {
+  EXECUTION_STATUS_UNSPECIFIED: 0,
+  EXECUTION_STATUS_EXECUTING: 1,
+  EXECUTION_STATUS_COMPLETED: 2,
+  EXECUTION_STATUS_FAILED: 3,
+  EXECUTION_STATUS_CANCELLED: 4,
+  EXECUTION_STATUS_TIMEOUT: 5
+};
+
+/**
+ * @enum {number}
+ */
+proto.g8e.operator.v1.HeartbeatType = {
+  HEARTBEAT_TYPE_UNSPECIFIED: 0,
+  HEARTBEAT_TYPE_AUTOMATIC: 1,
+  HEARTBEAT_TYPE_MANUAL: 2
+};
 
 goog.object.extend(exports, proto.g8e.operator.v1);

@@ -228,7 +228,7 @@ export class OperatorRelayService {
             has_authorization_header: !!params.authorization_header,
         });
 
-        // Aligned with shared/models/wire/operator_auth_call.json (InternalOperatorAuthCall).
+        // Internal g8ee-g8ed API contract for operator authentication.
         // The InternalOperatorAuthCall contract requires the operator's Bearer token
         // in the 'authorization' field of the body for internal cluster calls.
         const { authorization_header, ...bodyParams } = params;

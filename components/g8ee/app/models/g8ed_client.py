@@ -35,7 +35,7 @@ class SSEPushResponse(G8eBaseModel):
     legitimate outcome for a BackgroundEvent when the user has no connected
     sessions, not an error.
 
-    Canonical wire shape: shared/models/wire/sse_responses.json (sse_push_response)
+    Internal g8ee-g8ed SSE push response contract.
     """
 
     success: bool = Field(description="Whether the push was accepted and processed")

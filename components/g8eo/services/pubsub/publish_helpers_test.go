@@ -62,7 +62,7 @@ func TestExecutionIDFromMessage_EmptyExecutionIDInPayloadFallsBack(t *testing.T)
 
 func TestSetExecutionIDOnPayload_CommandResult(t *testing.T) {
 	payload := &pb.CommandResult{
-		Status: string(constants.ExecutionStatusFailed),
+		Status: protoExecutionStatus(constants.ExecutionStatusFailed),
 		Error:  "test error",
 	}
 	setExecutionIDOnPayload(payload, "msg-abc")
@@ -72,7 +72,7 @@ func TestSetExecutionIDOnPayload_CommandResult(t *testing.T) {
 func TestSetExecutionIDOnPayload_FileEditResult(t *testing.T) {
 	payload := &pb.FileEditResult{
 		ExecutionId: "original-id",
-		Status:      string(constants.ExecutionStatusCompleted),
+		Status:      protoExecutionStatus(constants.ExecutionStatusCompleted),
 	}
 	setExecutionIDOnPayload(payload, "msg-abc")
 	assert.Equal(t, "msg-abc", payload.ExecutionId)
@@ -81,7 +81,7 @@ func TestSetExecutionIDOnPayload_FileEditResult(t *testing.T) {
 func TestSetExecutionIDOnPayload_FsListResult(t *testing.T) {
 	payload := &pb.FsListResult{
 		ExecutionId: "",
-		Status:      string(constants.ExecutionStatusCompleted),
+		Status:      protoExecutionStatus(constants.ExecutionStatusCompleted),
 	}
 	setExecutionIDOnPayload(payload, "msg-abc")
 	assert.Equal(t, "msg-abc", payload.ExecutionId)
@@ -90,7 +90,7 @@ func TestSetExecutionIDOnPayload_FsListResult(t *testing.T) {
 func TestSetExecutionIDOnPayload_PortCheckResult(t *testing.T) {
 	payload := &pb.PortCheckResult{
 		ExecutionId: "existing-id",
-		Status:      string(constants.ExecutionStatusCompleted),
+		Status:      protoExecutionStatus(constants.ExecutionStatusCompleted),
 	}
 	setExecutionIDOnPayload(payload, "msg-abc")
 	assert.Equal(t, "msg-abc", payload.ExecutionId)
@@ -98,7 +98,7 @@ func TestSetExecutionIDOnPayload_PortCheckResult(t *testing.T) {
 
 func TestSetExecutionIDOnPayload_EmptyExecutionID(t *testing.T) {
 	payload := &pb.CommandResult{
-		Status: string(constants.ExecutionStatusFailed),
+		Status: protoExecutionStatus(constants.ExecutionStatusFailed),
 		Error:  "test error",
 	}
 	setExecutionIDOnPayload(payload, "")
@@ -170,7 +170,7 @@ func TestPublishLFAA_EnvelopeStructure(t *testing.T) {
 
 		publishLFAATypedResponseTo(ctx, client, cfg, logger, cmdMsg,
 			constants.Event.Operator.PortCheck.Completed,
-			&pb.PortCheckResult{Status: string(constants.ExecutionStatusCompleted)})
+			&pb.PortCheckResult{Status: protoExecutionStatus(constants.ExecutionStatusCompleted)})
 
 		published := client.LastPublished()
 		require.NotNil(t, published)
@@ -199,7 +199,7 @@ func TestPublishLFAA_EnvelopeStructure(t *testing.T) {
 
 		var payload pb.CommandResult
 		testutil.MustUnmarshalPayload(t, env.Payload, &payload)
-		assert.Equal(t, string(constants.ExecutionStatusFailed), payload.Status)
+		assert.Equal(t, protoExecutionStatus(constants.ExecutionStatusFailed), payload.Status)
 		assert.Equal(t, "boom", payload.Error)
 	})
 }

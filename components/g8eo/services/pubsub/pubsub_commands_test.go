@@ -876,7 +876,7 @@ func TestPubSubCommandService_PublishFetchLogsFailure(t *testing.T) {
 		env := testutil.MustUnmarshalUniversalEnvelope(t, published.Data)
 		var result operatorv1.CommandResult
 		testutil.MustUnmarshalPayload(t, env.Payload, &result)
-		assert.Equal(t, string(constants.ExecutionStatusFailed), result.Status)
+		assert.Equal(t, protoExecutionStatus(constants.ExecutionStatusFailed), result.Status)
 	})
 }
 

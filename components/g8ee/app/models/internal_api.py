@@ -205,7 +205,7 @@ class OperatorUnbindResponse(G8eBaseModel):
 class InternalOperatorAuthCall(G8eBaseModel):
     """Request model for operator authentication via API key (Bearer) relayed through g8ed.
 
-    Aligned with shared/models/wire/operator_auth_call.json (InternalOperatorAuthCall)
+    Internal g8ee-g8ed API contract for operator authentication.
     """
     model_config = ConfigDict(extra="forbid")
 

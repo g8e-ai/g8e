@@ -168,7 +168,7 @@ func TestLoopback_CommandDispatch_ExecutionRequest_EchoCommand(t *testing.T) {
 
 	var result operatorv1.CommandResult
 	testutil.MustUnmarshalPayload(t, resultEnvelope.Payload, &result)
-	assert.Equal(t, string(constants.ExecutionStatusCompleted), result.Status)
+	assert.Equal(t, protoExecutionStatus(constants.ExecutionStatusCompleted), result.Status)
 	assert.Contains(t, result.Output, "hello loopback")
 }
 
@@ -193,7 +193,7 @@ func TestLoopback_CommandDispatch_ExecutionRequest_InvalidCommand(t *testing.T) 
 
 	var result operatorv1.CommandResult
 	testutil.MustUnmarshalPayload(t, resultEnvelope.Payload, &result)
-	assert.Equal(t, string(constants.ExecutionStatusFailed), result.Status)
+	assert.Equal(t, protoExecutionStatus(constants.ExecutionStatusFailed), result.Status)
 }
 
 func TestLoopback_CommandDispatch_ExecutionRequest_StdoutContent(t *testing.T) {
@@ -337,7 +337,7 @@ func TestLoopback_CommandDispatch_FileEdit_WriteAndRead(t *testing.T) {
 
 	var result operatorv1.FileEditResult
 	testutil.MustUnmarshalPayload(t, resultEnvelope.Payload, &result)
-	assert.Equal(t, string(constants.ExecutionStatusCompleted), result.Status)
+	assert.Equal(t, protoExecutionStatus(constants.ExecutionStatusCompleted), result.Status)
 
 	data, err := os.ReadFile(targetPath)
 	require.NoError(t, err)
@@ -464,7 +464,7 @@ func TestLoopback_CommandDispatch_FsList_WorkDir(t *testing.T) {
 
 	var result operatorv1.FsListResult
 	testutil.MustUnmarshalPayload(t, resultEnvelope.Payload, &result)
-	assert.Equal(t, string(constants.ExecutionStatusCompleted), result.Status)
+	assert.Equal(t, protoExecutionStatus(constants.ExecutionStatusCompleted), result.Status)
 }
 
 func TestLoopback_CommandDispatch_FsList_NonExistentPath(t *testing.T) {

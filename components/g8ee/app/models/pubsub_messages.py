@@ -433,7 +433,7 @@ class G8eoHeartbeatCapabilityFlags(G8eBaseModel):
 class G8eoHeartbeatPayload(G8eBaseModel):
     """Typed wire model for the g8eo heartbeat pub/sub payload.
 
-    Canonical shape defined in shared/models/wire/heartbeat.json.
+    Canonical shape defined in shared/proto/operator.proto (HeartbeatSnapshot message).
     This is the boundary model — validated once when the raw pub/sub
     message arrives in command_pubsub.py, then passed typed throughout.
     """
@@ -528,7 +528,7 @@ class G8eoResultEnvelope(G8eBaseModel):
     in the G8eoResultPayload union (e.g., FetchLogsErrorPayload, FetchHistoryErrorPayload).
     """
 
-    id: str = Field(default_factory=lambda: str(uuid4()), description="Unique per-message UUID v4 from g8eo. NOT a correlation key — do NOT use to match results to outbound commands. For correlation, use payload.execution_id. See shared/models/wire/envelope.json.")
+    id: str = Field(default_factory=lambda: str(uuid4()), description="Unique per-message UUID v4 from g8eo. NOT a correlation key — do NOT use to match results to outbound commands. For correlation, use payload.execution_id.")
     event_type: EventType = Field(..., description="Event type from g8eo")
     operator_id: str = Field(..., description="Operator ID from channel routing")
     operator_session_id: str = Field(..., description="Operator session ID from channel routing")

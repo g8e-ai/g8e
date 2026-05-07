@@ -240,7 +240,7 @@ export const OperatorListMixin = {
             const lastHeartbeatText = formatHeartbeatAge(ageSeconds);
 
             // latest_heartbeat_snapshot is the canonical HeartbeatSnapshot shape
-            // (shared/models/wire/heartbeat.json#operator_heartbeat) — same shape
+            // (defined in shared/proto/operator.proto) — same shape
             // whether read from the persisted operator document or the SSE envelope.
             const perf = latestSnapshot.performance || {};
             const uptimeInfo = latestSnapshot.uptime || {};

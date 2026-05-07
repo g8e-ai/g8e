@@ -6,6 +6,23 @@ option go_package = "github.com/g8e-ai/g8e/components/g8eo/shared/proto/operator
 
 import "common.proto";
 
+// Execution status enum for command and operation results
+enum ExecutionStatus {
+  EXECUTION_STATUS_UNSPECIFIED = 0;
+  EXECUTION_STATUS_EXECUTING = 1;
+  EXECUTION_STATUS_COMPLETED = 2;
+  EXECUTION_STATUS_FAILED = 3;
+  EXECUTION_STATUS_CANCELLED = 4;
+  EXECUTION_STATUS_TIMEOUT = 5;
+}
+
+// Heartbeat type enum
+enum HeartbeatType {
+  HEARTBEAT_TYPE_UNSPECIFIED = 0;
+  HEARTBEAT_TYPE_AUTOMATIC = 1;
+  HEARTBEAT_TYPE_MANUAL = 2;
+}
+
 // Payload for g8e.v1.operator.command.requested
 message CommandRequested {
   // Shell command string to execute
@@ -152,7 +169,7 @@ message ShutdownRequested {
 // Result payload for g8e.v1.operator.command.completed or failed
 message CommandResult {
   string execution_id = 1;
-  string status = 2; // e.g. "completed", "failed"
+  ExecutionStatus status = 2;
   string output = 3;
   string error = 4;
   string stderr = 5;
@@ -195,7 +212,7 @@ message FsEntry {
 
 message FsListResult {
   string execution_id = 1;
-  string status = 2;
+  ExecutionStatus status = 2;
   string path = 3;
   repeated FsEntry entries = 4;
   bool truncated = 5;
@@ -207,7 +224,7 @@ message FsListResult {
 
 message FsReadResult {
   string execution_id = 1;
-  string status = 2;
+  ExecutionStatus status = 2;
   string path = 3;
   string content = 4;
   int64 size_bytes = 5;
@@ -227,7 +244,7 @@ message FsGrepMatch {
 
 message FsGrepResult {
   string execution_id = 1;
-  string status = 2;
+  ExecutionStatus status = 2;
   string path = 3;
   repeated FsGrepMatch matches = 4;
   int32 total_matches = 5;
@@ -239,7 +256,7 @@ message FsGrepResult {
 
 message FileEditResult {
   string execution_id = 1;
-  string status = 2;
+  ExecutionStatus status = 2;
   string file_path = 3;
   string operation = 4;
   float duration_seconds = 5;
@@ -255,7 +272,7 @@ message FileEditResult {
 
 message ExecutionStatusUpdate {
   string execution_id = 1;
-  string status = 2;
+  ExecutionStatus status = 2;
   string command = 3;
   bool process_alive = 4;
   float elapsed_seconds = 5;
@@ -274,7 +291,7 @@ message PortCheckEntry {
 
 message PortCheckResult {
   string execution_id = 1;
-  string status = 2;
+  ExecutionStatus status = 2;
   repeated PortCheckEntry results = 3;
   string error_message = 4;
   string error_type = 5;

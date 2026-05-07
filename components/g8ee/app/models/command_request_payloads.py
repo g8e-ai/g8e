@@ -16,9 +16,9 @@ Command request payload models for g8eo pub/sub wire protocol.
 
 These are the inbound payload shapes published by g8ee to the
 cmd:{operator_id}:{operator_session_id} pub/sub channel. g8eo deserializes
-them. Field names and types mirror the canonical Go structs in
-components/g8eo/models/commands.go and the JSON schema in
-shared/models/wire/command_payloads.json.
+them using Protobuf. Field names and types mirror the canonical Go structs in
+components/g8eo/models/commands.go and the Protobuf definitions in
+shared/proto/operator.proto.
 """
 
 from typing import Literal, Union

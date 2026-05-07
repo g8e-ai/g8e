@@ -50,7 +50,7 @@ LFAA Payload Stamping: All Local Function Access & Audit (LFAA) result payloads 
 
 Concurrency: Goroutines must have explicit cancellation contexts. Do not leave dangling goroutines. Channels must have clear ownership for closure.
 
-Wire Alignment: Structs must strictly align with shared/models/wire/*.json for all wire-protocol payloads.
+Wire Alignment: Structs must strictly align with shared/proto/*.proto for all wire-protocol payloads. The g8e platform uses Protobuf as the canonical wire format for operator commands, results, and heartbeats.
 
 V. Testing Invariants
 Reproduce First: Always reproduce a bug with a failing test before generating the fix.

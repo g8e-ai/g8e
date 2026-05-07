@@ -27,6 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/models"
 	execution "github.com/g8e-ai/g8e/components/g8eo/services/execution"
 	listen "github.com/g8e-ai/g8e/components/g8eo/services/listen"
+	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
@@ -164,18 +165,10 @@ func TestPubSubCommandService_ListenForCommands_Integration(t *testing.T) {
 
 		// Publish a heartbeat request
 		commandChannel := constants.CmdChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		msg := PubSubCommandMessage{
-			ID:        "test-heartbeat-1",
-			EventType: constants.Event.Operator.HeartbeatRequested,
-			CaseID:    "case-123",
-			Payload:   json.RawMessage(`{}`),
-			Timestamp: time.Now().UTC(),
-		}
+		hbReq := testutil.MustMarshalProtobufHeartbeatRequested(t)
+		envBytes := testutil.MustMarshalUniversalEnvelope(t, "test-heartbeat-1", constants.Event.Operator.HeartbeatRequested, hbReq, "", cfg.OperatorID, "case-123", "", cfg.OperatorSessionId)
 
-		msgJSON, err := json.Marshal(msg)
-		require.NoError(t, err)
-
-		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(msgJSON))
+		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(envBytes))
 
 		// Wait for heartbeat response
 		receivedMsg := testutil.WaitForMessage(t, msgChan, 2*time.Second)
@@ -223,18 +216,10 @@ func TestPubSubCommandService_ListenForCommands_Integration(t *testing.T) {
 
 		// Publish a command execution request
 		commandChannel := constants.CmdChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		msg := PubSubCommandMessage{
-			ID:        "test-exec-1",
-			EventType: constants.Event.Operator.Command.Requested,
-			CaseID:    "case-456",
-			Payload:   json.RawMessage(`{"command":"echo","justification":"Testing command execution"}`),
-			Timestamp: time.Now().UTC(),
-		}
+		cmdReq := testutil.MustMarshalProtobufCommandRequested(t, "echo", "test-exec-1", "Testing command execution", "", 0)
+		envBytes := testutil.MustMarshalUniversalEnvelope(t, "test-exec-1", constants.Event.Operator.Command.Requested, cmdReq, "", cfg.OperatorID, "case-456", "", cfg.OperatorSessionId)
 
-		msgJSON, err := json.Marshal(msg)
-		require.NoError(t, err)
-
-		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(msgJSON))
+		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(envBytes))
 
 		// Wait for execution result
 		receivedMsg := testutil.WaitForMessage(t, msgChan, 3*time.Second)
@@ -282,17 +267,15 @@ func TestPubSubCommandService_SendAutomaticHeartbeat_Integration(t *testing.T) {
 		require.NoError(t, err)
 		defer svc.Stop()
 
-		// Wait for at least one automatic heartbeat
 		receivedMsg := testutil.WaitForMessage(t, msgChan, 1*time.Second)
 		assert.NotNil(t, receivedMsg)
-		assert.Contains(t, string(receivedMsg), constants.Event.Operator.Heartbeat)
 
-		var heartbeat models.Heartbeat
-		err = json.Unmarshal(receivedMsg, &heartbeat)
-		require.NoError(t, err)
+		env := testutil.MustUnmarshalUniversalEnvelope(t, receivedMsg)
+		assert.Equal(t, constants.Event.Operator.Heartbeat, env.EventType)
 
-		assert.Equal(t, constants.Event.Operator.Heartbeat, heartbeat.EventType)
-		assert.NotEmpty(t, heartbeat.SystemIdentity.OS)
+		var heartbeat operatorv1.HeartbeatResult
+		testutil.MustUnmarshalPayload(t, env.Payload, &heartbeat)
+		assert.NotEmpty(t, heartbeat.SystemIdentity.Os)
 	})
 
 	t.Run("handles nil results service gracefully", func(t *testing.T) {
@@ -365,16 +348,13 @@ func TestPubSubCommandService_HandleCommandExecutionRequest_Integration(t *testi
 		ctx := context.Background()
 		svc.handleCommandExecutionRequest(ctx, msg)
 
-		// Wait for result
+		// Wait for execution result
 		receivedMsg := testutil.WaitForMessage(t, msgChan, 3*time.Second)
 		assert.NotNil(t, receivedMsg)
 
-		var result models.G8eMessage
-		err = json.Unmarshal([]byte(string(receivedMsg)), &result)
-		require.NoError(t, err)
-
-		assert.Contains(t, []string{constants.Event.Operator.Command.Completed, constants.Event.Operator.Command.Failed}, result.EventType)
-		assert.Equal(t, "case-789", result.CaseID)
+		env := testutil.MustUnmarshalUniversalEnvelope(t, receivedMsg)
+		assert.Contains(t, []string{constants.Event.Operator.Command.Completed, constants.Event.Operator.Command.Failed}, env.EventType)
+		assert.Equal(t, "case-789", env.CaseId)
 	})
 
 	t.Run("handles command execution failure", func(t *testing.T) {
@@ -418,15 +398,12 @@ func TestPubSubCommandService_HandleCommandExecutionRequest_Integration(t *testi
 		ctx := context.Background()
 		svc.handleCommandExecutionRequest(ctx, msg)
 
-		// Wait for result
+		// Wait for execution result
 		receivedMsg := testutil.WaitForMessage(t, msgChan, 3*time.Second)
 		assert.NotNil(t, receivedMsg)
 
-		var result models.G8eMessage
-		err = json.Unmarshal([]byte(string(receivedMsg)), &result)
-		require.NoError(t, err)
-
-		assert.Contains(t, []string{constants.Event.Operator.Command.Completed, constants.Event.Operator.Command.Failed}, result.EventType)
+		env := testutil.MustUnmarshalUniversalEnvelope(t, receivedMsg)
+		assert.Contains(t, []string{constants.Event.Operator.Command.Completed, constants.Event.Operator.Command.Failed}, env.EventType)
 	})
 
 	t.Run("handles default justification", func(t *testing.T) {

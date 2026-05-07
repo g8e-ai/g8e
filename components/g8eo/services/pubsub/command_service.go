@@ -152,7 +152,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 		if cs.results != nil {
 			protoResult := &operatorv1.CommandResult{
 				ExecutionId: verdict.blockedResult.ExecutionID,
-				Status:      string(verdict.blockedResult.Status),
+				Status:      protoExecutionStatus(verdict.blockedResult.Status),
 				Error:       *verdict.blockedResult.ErrorMessage,
 				Stderr:      verdict.blockedResult.Stderr,
 				ExitCode:    int32(*verdict.blockedResult.ReturnCode),
@@ -271,7 +271,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 	if cs.results != nil {
 		protoResult := &operatorv1.CommandResult{
 			ExecutionId:          result.ExecutionID,
-			Status:               string(result.Status),
+			Status:               protoExecutionStatus(result.Status),
 			Output:               result.Stdout,
 			Stderr:               result.Stderr,
 			ExecutionTimeSeconds: float32(result.DurationSeconds),
@@ -381,7 +381,7 @@ func (cs *CommandService) runStatusTicker(
 				statusUpdate := &operatorv1.ExecutionStatusUpdate{
 					ExecutionId:    execReq.ExecutionID,
 					Command:        command,
-					Status:         string(constants.ExecutionStatusExecuting),
+					Status:         protoExecutionStatus(constants.ExecutionStatusExecuting),
 					ProcessAlive:   true,
 					ElapsedSeconds: float32(elapsed),
 					Message:        fmt.Sprintf("Command still executing (%.0fs elapsed)", elapsed),
@@ -450,7 +450,7 @@ func (cs *CommandService) HandleCancelRequest(ctx context.Context, msg PubSubCom
 	if cs.results != nil {
 		protoResult := &operatorv1.CommandResult{
 			ExecutionId: executionID,
-			Status:      string(result.Status),
+			Status:      protoExecutionStatus(result.Status),
 		}
 		if result.ErrorMessage != nil {
 			protoResult.Error = *result.ErrorMessage

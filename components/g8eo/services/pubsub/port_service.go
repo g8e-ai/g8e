@@ -89,7 +89,7 @@ func (ps *PortService) HandlePortCheckRequest(ctx context.Context, msg PubSubCom
 
 	payload := &operatorv1.PortCheckResult{
 		ExecutionId: executionID,
-		Status:      string(constants.ExecutionStatusCompleted),
+		Status:      protoExecutionStatus(constants.ExecutionStatusCompleted),
 		Results:     []*operatorv1.PortCheckEntry{entry},
 	}
 	publishLFAATypedResponseTo(ctx, ps.client, ps.config, ps.logger, msg, constants.Event.Operator.PortCheck.Completed, payload)

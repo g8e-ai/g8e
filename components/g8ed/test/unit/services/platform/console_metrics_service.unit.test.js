@@ -76,8 +76,8 @@ describe('ConsoleMetricsService [UNIT]', () => {
 
     describe('getOperatorStats', () => {
         it('calculates health and distribution correctly', async () => {
-            // Canonical shape: latest_heartbeat_snapshot is OperatorHeartbeat
-            // (nested performance block). See shared/models/wire/heartbeat.json#operator_heartbeat.
+            // Canonical shape: latest_heartbeat_snapshot is HeartbeatSnapshot
+            // (defined in shared/proto/operator.proto).
             const operators = [
                 { status: OperatorStatus.ACTIVE, latest_heartbeat_snapshot: { performance: { network_latency: 10, cpu_percent: 5, memory_percent: 20 } } },
                 { status: OperatorStatus.BOUND, latest_heartbeat_snapshot: { performance: { network_latency: 20, cpu_percent: 15, memory_percent: 30 } } },

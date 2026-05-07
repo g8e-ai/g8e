@@ -19,7 +19,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // Payloads here mirror what sse-connection-manager actually emits on the
 // eventBus: the INNER `data` body only, with the `{ type, data }` transport
 // envelope already stripped. For heartbeat this is the flat envelope shape
-// from shared/models/wire/heartbeat_sse.json (operator_id, status, metrics).
+// from the HeartbeatSSEEnvelope (operator_id, status, metrics).
 // For status-updated this is the flat OperatorStatusUpdatedEvent shape.
 
 let OperatorPanel;

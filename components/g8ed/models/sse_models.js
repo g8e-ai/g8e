@@ -168,7 +168,7 @@ export class OperatorStatusUpdatedEvent extends G8eBaseModel {
 // ---------------------------------------------------------------------------
 // CommandResultSSEEvent  (operator.command.completed / operator.command.failed)
 // Mirrors: components/g8ee/app/models/operators.py CommandResultBroadcastEvent
-// Schema:  shared/models/wire/result_payloads.json execution_result
+// Schema:  defined in shared/proto/operator.proto (CommandResult message)
 // ---------------------------------------------------------------------------
 
 export class CommandResultSSEEvent extends G8eBaseModel {

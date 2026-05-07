@@ -22,6 +22,115 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// Execution status enum for command and operation results
+type ExecutionStatus int32
+
+const (
+	ExecutionStatus_EXECUTION_STATUS_UNSPECIFIED ExecutionStatus = 0
+	ExecutionStatus_EXECUTION_STATUS_EXECUTING   ExecutionStatus = 1
+	ExecutionStatus_EXECUTION_STATUS_COMPLETED   ExecutionStatus = 2
+	ExecutionStatus_EXECUTION_STATUS_FAILED      ExecutionStatus = 3
+	ExecutionStatus_EXECUTION_STATUS_CANCELLED   ExecutionStatus = 4
+	ExecutionStatus_EXECUTION_STATUS_TIMEOUT     ExecutionStatus = 5
+)
+
+// Enum value maps for ExecutionStatus.
+var (
+	ExecutionStatus_name = map[int32]string{
+		0: "EXECUTION_STATUS_UNSPECIFIED",
+		1: "EXECUTION_STATUS_EXECUTING",
+		2: "EXECUTION_STATUS_COMPLETED",
+		3: "EXECUTION_STATUS_FAILED",
+		4: "EXECUTION_STATUS_CANCELLED",
+		5: "EXECUTION_STATUS_TIMEOUT",
+	}
+	ExecutionStatus_value = map[string]int32{
+		"EXECUTION_STATUS_UNSPECIFIED": 0,
+		"EXECUTION_STATUS_EXECUTING":   1,
+		"EXECUTION_STATUS_COMPLETED":   2,
+		"EXECUTION_STATUS_FAILED":      3,
+		"EXECUTION_STATUS_CANCELLED":   4,
+		"EXECUTION_STATUS_TIMEOUT":     5,
+	}
+)
+
+func (x ExecutionStatus) Enum() *ExecutionStatus {
+	p := new(ExecutionStatus)
+	*p = x
+	return p
+}
+
+func (x ExecutionStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ExecutionStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_operator_proto_enumTypes[0].Descriptor()
+}
+
+func (ExecutionStatus) Type() protoreflect.EnumType {
+	return &file_operator_proto_enumTypes[0]
+}
+
+func (x ExecutionStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ExecutionStatus.Descriptor instead.
+func (ExecutionStatus) EnumDescriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{0}
+}
+
+// Heartbeat type enum
+type HeartbeatType int32
+
+const (
+	HeartbeatType_HEARTBEAT_TYPE_UNSPECIFIED HeartbeatType = 0
+	HeartbeatType_HEARTBEAT_TYPE_AUTOMATIC   HeartbeatType = 1
+	HeartbeatType_HEARTBEAT_TYPE_MANUAL      HeartbeatType = 2
+)
+
+// Enum value maps for HeartbeatType.
+var (
+	HeartbeatType_name = map[int32]string{
+		0: "HEARTBEAT_TYPE_UNSPECIFIED",
+		1: "HEARTBEAT_TYPE_AUTOMATIC",
+		2: "HEARTBEAT_TYPE_MANUAL",
+	}
+	HeartbeatType_value = map[string]int32{
+		"HEARTBEAT_TYPE_UNSPECIFIED": 0,
+		"HEARTBEAT_TYPE_AUTOMATIC":   1,
+		"HEARTBEAT_TYPE_MANUAL":      2,
+	}
+)
+
+func (x HeartbeatType) Enum() *HeartbeatType {
+	p := new(HeartbeatType)
+	*p = x
+	return p
+}
+
+func (x HeartbeatType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (HeartbeatType) Descriptor() protoreflect.EnumDescriptor {
+	return file_operator_proto_enumTypes[1].Descriptor()
+}
+
+func (HeartbeatType) Type() protoreflect.EnumType {
+	return &file_operator_proto_enumTypes[1]
+}
+
+func (x HeartbeatType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use HeartbeatType.Descriptor instead.
+func (HeartbeatType) EnumDescriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{1}
+}
+
 // Payload for g8e.v1.operator.command.requested
 type CommandRequested struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -1247,7 +1356,7 @@ func (x *ShutdownRequested) GetReason() string {
 type CommandResult struct {
 	state                protoimpl.MessageState `protogen:"open.v1"`
 	ExecutionId          string                 `protobuf:"bytes,1,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
-	Status               string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"` // e.g. "completed", "failed"
+	Status               ExecutionStatus        `protobuf:"varint,2,opt,name=status,proto3,enum=g8e.operator.v1.ExecutionStatus" json:"status,omitempty"`
 	Output               string                 `protobuf:"bytes,3,opt,name=output,proto3" json:"output,omitempty"`
 	Error                string                 `protobuf:"bytes,4,opt,name=error,proto3" json:"error,omitempty"`
 	Stderr               string                 `protobuf:"bytes,5,opt,name=stderr,proto3" json:"stderr,omitempty"`
@@ -1298,11 +1407,11 @@ func (x *CommandResult) GetExecutionId() string {
 	return ""
 }
 
-func (x *CommandResult) GetStatus() string {
+func (x *CommandResult) GetStatus() ExecutionStatus {
 	if x != nil {
 		return x.Status
 	}
-	return ""
+	return ExecutionStatus_EXECUTION_STATUS_UNSPECIFIED
 }
 
 func (x *CommandResult) GetOutput() string {
@@ -1433,7 +1542,7 @@ func (x *FsEntry) GetModTime() int64 {
 type FsListResult struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	ExecutionId     string                 `protobuf:"bytes,1,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
-	Status          string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	Status          ExecutionStatus        `protobuf:"varint,2,opt,name=status,proto3,enum=g8e.operator.v1.ExecutionStatus" json:"status,omitempty"`
 	Path            string                 `protobuf:"bytes,3,opt,name=path,proto3" json:"path,omitempty"`
 	Entries         []*FsEntry             `protobuf:"bytes,4,rep,name=entries,proto3" json:"entries,omitempty"`
 	Truncated       bool                   `protobuf:"varint,5,opt,name=truncated,proto3" json:"truncated,omitempty"`
@@ -1482,11 +1591,11 @@ func (x *FsListResult) GetExecutionId() string {
 	return ""
 }
 
-func (x *FsListResult) GetStatus() string {
+func (x *FsListResult) GetStatus() ExecutionStatus {
 	if x != nil {
 		return x.Status
 	}
-	return ""
+	return ExecutionStatus_EXECUTION_STATUS_UNSPECIFIED
 }
 
 func (x *FsListResult) GetPath() string {
@@ -1541,7 +1650,7 @@ func (x *FsListResult) GetErrorType() string {
 type FsReadResult struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	ExecutionId     string                 `protobuf:"bytes,1,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
-	Status          string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	Status          ExecutionStatus        `protobuf:"varint,2,opt,name=status,proto3,enum=g8e.operator.v1.ExecutionStatus" json:"status,omitempty"`
 	Path            string                 `protobuf:"bytes,3,opt,name=path,proto3" json:"path,omitempty"`
 	Content         string                 `protobuf:"bytes,4,opt,name=content,proto3" json:"content,omitempty"`
 	SizeBytes       int64                  `protobuf:"varint,5,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
@@ -1590,11 +1699,11 @@ func (x *FsReadResult) GetExecutionId() string {
 	return ""
 }
 
-func (x *FsReadResult) GetStatus() string {
+func (x *FsReadResult) GetStatus() ExecutionStatus {
 	if x != nil {
 		return x.Status
 	}
-	return ""
+	return ExecutionStatus_EXECUTION_STATUS_UNSPECIFIED
 }
 
 func (x *FsReadResult) GetPath() string {
@@ -1725,7 +1834,7 @@ func (x *FsGrepMatch) GetAfter() []string {
 type FsGrepResult struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	ExecutionId     string                 `protobuf:"bytes,1,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
-	Status          string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	Status          ExecutionStatus        `protobuf:"varint,2,opt,name=status,proto3,enum=g8e.operator.v1.ExecutionStatus" json:"status,omitempty"`
 	Path            string                 `protobuf:"bytes,3,opt,name=path,proto3" json:"path,omitempty"`
 	Matches         []*FsGrepMatch         `protobuf:"bytes,4,rep,name=matches,proto3" json:"matches,omitempty"`
 	TotalMatches    int32                  `protobuf:"varint,5,opt,name=total_matches,json=totalMatches,proto3" json:"total_matches,omitempty"`
@@ -1774,11 +1883,11 @@ func (x *FsGrepResult) GetExecutionId() string {
 	return ""
 }
 
-func (x *FsGrepResult) GetStatus() string {
+func (x *FsGrepResult) GetStatus() ExecutionStatus {
 	if x != nil {
 		return x.Status
 	}
-	return ""
+	return ExecutionStatus_EXECUTION_STATUS_UNSPECIFIED
 }
 
 func (x *FsGrepResult) GetPath() string {
@@ -1833,7 +1942,7 @@ func (x *FsGrepResult) GetErrorType() string {
 type FileEditResult struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	ExecutionId     string                 `protobuf:"bytes,1,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
-	Status          string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	Status          ExecutionStatus        `protobuf:"varint,2,opt,name=status,proto3,enum=g8e.operator.v1.ExecutionStatus" json:"status,omitempty"`
 	FilePath        string                 `protobuf:"bytes,3,opt,name=file_path,json=filePath,proto3" json:"file_path,omitempty"`
 	Operation       string                 `protobuf:"bytes,4,opt,name=operation,proto3" json:"operation,omitempty"`
 	DurationSeconds float32                `protobuf:"fixed32,5,opt,name=duration_seconds,json=durationSeconds,proto3" json:"duration_seconds,omitempty"`
@@ -1886,11 +1995,11 @@ func (x *FileEditResult) GetExecutionId() string {
 	return ""
 }
 
-func (x *FileEditResult) GetStatus() string {
+func (x *FileEditResult) GetStatus() ExecutionStatus {
 	if x != nil {
 		return x.Status
 	}
-	return ""
+	return ExecutionStatus_EXECUTION_STATUS_UNSPECIFIED
 }
 
 func (x *FileEditResult) GetFilePath() string {
@@ -1973,7 +2082,7 @@ func (x *FileEditResult) GetStderrSize() int32 {
 type ExecutionStatusUpdate struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	ExecutionId    string                 `protobuf:"bytes,1,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
-	Status         string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	Status         ExecutionStatus        `protobuf:"varint,2,opt,name=status,proto3,enum=g8e.operator.v1.ExecutionStatus" json:"status,omitempty"`
 	Command        string                 `protobuf:"bytes,3,opt,name=command,proto3" json:"command,omitempty"`
 	ProcessAlive   bool                   `protobuf:"varint,4,opt,name=process_alive,json=processAlive,proto3" json:"process_alive,omitempty"`
 	ElapsedSeconds float32                `protobuf:"fixed32,5,opt,name=elapsed_seconds,json=elapsedSeconds,proto3" json:"elapsed_seconds,omitempty"`
@@ -2021,11 +2130,11 @@ func (x *ExecutionStatusUpdate) GetExecutionId() string {
 	return ""
 }
 
-func (x *ExecutionStatusUpdate) GetStatus() string {
+func (x *ExecutionStatusUpdate) GetStatus() ExecutionStatus {
 	if x != nil {
 		return x.Status
 	}
-	return ""
+	return ExecutionStatus_EXECUTION_STATUS_UNSPECIFIED
 }
 
 func (x *ExecutionStatusUpdate) GetCommand() string {
@@ -2149,7 +2258,7 @@ func (x *PortCheckEntry) GetError() string {
 type PortCheckResult struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ExecutionId   string                 `protobuf:"bytes,1,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
-	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	Status        ExecutionStatus        `protobuf:"varint,2,opt,name=status,proto3,enum=g8e.operator.v1.ExecutionStatus" json:"status,omitempty"`
 	Results       []*PortCheckEntry      `protobuf:"bytes,3,rep,name=results,proto3" json:"results,omitempty"`
 	ErrorMessage  string                 `protobuf:"bytes,4,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
 	ErrorType     string                 `protobuf:"bytes,5,opt,name=error_type,json=errorType,proto3" json:"error_type,omitempty"`
@@ -2194,11 +2303,11 @@ func (x *PortCheckResult) GetExecutionId() string {
 	return ""
 }
 
-func (x *PortCheckResult) GetStatus() string {
+func (x *PortCheckResult) GetStatus() ExecutionStatus {
 	if x != nil {
 		return x.Status
 	}
-	return ""
+	return ExecutionStatus_EXECUTION_STATUS_UNSPECIFIED
 }
 
 func (x *PortCheckResult) GetResults() []*PortCheckEntry {
@@ -4424,10 +4533,10 @@ const file_operator_proto_rawDesc = "" +
 	"\x11AuditMsgRequested\x12\x18\n" +
 	"\acontent\x18\x01 \x01(\tR\acontent\"+\n" +
 	"\x11ShutdownRequested\x12\x16\n" +
-	"\x06reason\x18\x01 \x01(\tR\x06reason\"\xb9\x02\n" +
+	"\x06reason\x18\x01 \x01(\tR\x06reason\"\xdb\x02\n" +
 	"\rCommandResult\x12!\n" +
-	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12\x16\n" +
-	"\x06status\x18\x02 \x01(\tR\x06status\x12\x16\n" +
+	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x128\n" +
+	"\x06status\x18\x02 \x01(\x0e2 .g8e.operator.v1.ExecutionStatusR\x06status\x12\x16\n" +
 	"\x06output\x18\x03 \x01(\tR\x06output\x12\x14\n" +
 	"\x05error\x18\x04 \x01(\tR\x05error\x12\x16\n" +
 	"\x06stderr\x18\x05 \x01(\tR\x06stderr\x12\x1b\n" +
@@ -4440,10 +4549,10 @@ const file_operator_proto_rawDesc = "" +
 	"\x06is_dir\x18\x02 \x01(\bR\x05isDir\x12\x12\n" +
 	"\x04size\x18\x03 \x01(\x03R\x04size\x12\x12\n" +
 	"\x04mode\x18\x04 \x01(\x05R\x04mode\x12\x19\n" +
-	"\bmod_time\x18\x05 \x01(\x03R\amodTime\"\xbf\x02\n" +
+	"\bmod_time\x18\x05 \x01(\x03R\amodTime\"\xe1\x02\n" +
 	"\fFsListResult\x12!\n" +
-	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12\x16\n" +
-	"\x06status\x18\x02 \x01(\tR\x06status\x12\x12\n" +
+	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x128\n" +
+	"\x06status\x18\x02 \x01(\x0e2 .g8e.operator.v1.ExecutionStatusR\x06status\x12\x12\n" +
 	"\x04path\x18\x03 \x01(\tR\x04path\x122\n" +
 	"\aentries\x18\x04 \x03(\v2\x18.g8e.operator.v1.FsEntryR\aentries\x12\x1c\n" +
 	"\ttruncated\x18\x05 \x01(\bR\ttruncated\x12\x1f\n" +
@@ -4452,10 +4561,10 @@ const file_operator_proto_rawDesc = "" +
 	"\x10duration_seconds\x18\a \x01(\x02R\x0fdurationSeconds\x12#\n" +
 	"\rerror_message\x18\b \x01(\tR\ferrorMessage\x12\x1d\n" +
 	"\n" +
-	"error_type\x18\t \x01(\tR\terrorType\"\xa3\x02\n" +
+	"error_type\x18\t \x01(\tR\terrorType\"\xc5\x02\n" +
 	"\fFsReadResult\x12!\n" +
-	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12\x16\n" +
-	"\x06status\x18\x02 \x01(\tR\x06status\x12\x12\n" +
+	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x128\n" +
+	"\x06status\x18\x02 \x01(\x0e2 .g8e.operator.v1.ExecutionStatusR\x06status\x12\x12\n" +
 	"\x04path\x18\x03 \x01(\tR\x04path\x12\x18\n" +
 	"\acontent\x18\x04 \x01(\tR\acontent\x12\x1d\n" +
 	"\n" +
@@ -4471,10 +4580,10 @@ const file_operator_proto_rawDesc = "" +
 	"lineNumber\x12\x18\n" +
 	"\acontent\x18\x03 \x01(\tR\acontent\x12\x16\n" +
 	"\x06before\x18\x04 \x03(\tR\x06before\x12\x14\n" +
-	"\x05after\x18\x05 \x03(\tR\x05after\"\xc7\x02\n" +
+	"\x05after\x18\x05 \x03(\tR\x05after\"\xe9\x02\n" +
 	"\fFsGrepResult\x12!\n" +
-	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12\x16\n" +
-	"\x06status\x18\x02 \x01(\tR\x06status\x12\x12\n" +
+	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x128\n" +
+	"\x06status\x18\x02 \x01(\x0e2 .g8e.operator.v1.ExecutionStatusR\x06status\x12\x12\n" +
 	"\x04path\x18\x03 \x01(\tR\x04path\x126\n" +
 	"\amatches\x18\x04 \x03(\v2\x1c.g8e.operator.v1.FsGrepMatchR\amatches\x12#\n" +
 	"\rtotal_matches\x18\x05 \x01(\x05R\ftotalMatches\x12\x1c\n" +
@@ -4482,10 +4591,10 @@ const file_operator_proto_rawDesc = "" +
 	"\x10duration_seconds\x18\a \x01(\x02R\x0fdurationSeconds\x12#\n" +
 	"\rerror_message\x18\b \x01(\tR\ferrorMessage\x12\x1d\n" +
 	"\n" +
-	"error_type\x18\t \x01(\tR\terrorType\"\xbc\x03\n" +
+	"error_type\x18\t \x01(\tR\terrorType\"\xde\x03\n" +
 	"\x0eFileEditResult\x12!\n" +
-	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12\x16\n" +
-	"\x06status\x18\x02 \x01(\tR\x06status\x12\x1b\n" +
+	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x128\n" +
+	"\x06status\x18\x02 \x01(\x0e2 .g8e.operator.v1.ExecutionStatusR\x06status\x12\x1b\n" +
 	"\tfile_path\x18\x03 \x01(\tR\bfilePath\x12\x1c\n" +
 	"\toperation\x18\x04 \x01(\tR\toperation\x12)\n" +
 	"\x10duration_seconds\x18\x05 \x01(\x02R\x0fdurationSeconds\x12#\n" +
@@ -4501,10 +4610,10 @@ const file_operator_proto_rawDesc = "" +
 	"\vstdout_size\x18\f \x01(\x05R\n" +
 	"stdoutSize\x12\x1f\n" +
 	"\vstderr_size\x18\r \x01(\x05R\n" +
-	"stderrSize\"\x92\x02\n" +
+	"stderrSize\"\xb4\x02\n" +
 	"\x15ExecutionStatusUpdate\x12!\n" +
-	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12\x16\n" +
-	"\x06status\x18\x02 \x01(\tR\x06status\x12\x18\n" +
+	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x128\n" +
+	"\x06status\x18\x02 \x01(\x0e2 .g8e.operator.v1.ExecutionStatusR\x06status\x12\x18\n" +
 	"\acommand\x18\x03 \x01(\tR\acommand\x12#\n" +
 	"\rprocess_alive\x18\x04 \x01(\bR\fprocessAlive\x12'\n" +
 	"\x0felapsed_seconds\x18\x05 \x01(\x02R\x0eelapsedSeconds\x12\x1d\n" +
@@ -4519,10 +4628,10 @@ const file_operator_proto_rawDesc = "" +
 	"\x04open\x18\x03 \x01(\bR\x04open\x12\x1d\n" +
 	"\n" +
 	"latency_ms\x18\x04 \x01(\x02R\tlatencyMs\x12\x14\n" +
-	"\x05error\x18\x05 \x01(\tR\x05error\"\xcb\x01\n" +
+	"\x05error\x18\x05 \x01(\tR\x05error\"\xed\x01\n" +
 	"\x0fPortCheckResult\x12!\n" +
-	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12\x16\n" +
-	"\x06status\x18\x02 \x01(\tR\x06status\x129\n" +
+	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x128\n" +
+	"\x06status\x18\x02 \x01(\x0e2 .g8e.operator.v1.ExecutionStatusR\x06status\x129\n" +
 	"\aresults\x18\x03 \x03(\v2\x1f.g8e.operator.v1.PortCheckEntryR\aresults\x12#\n" +
 	"\rerror_message\x18\x04 \x01(\tR\ferrorMessage\x12\x1d\n" +
 	"\n" +
@@ -4729,7 +4838,18 @@ const file_operator_proto_rawDesc = "" +
 	"\farchitecture\x18\x02 \x01(\tR\farchitecture\x12\x1b\n" +
 	"\tcpu_count\x18\x03 \x01(\x05R\bcpuCount\x12\x1d\n" +
 	"\n" +
-	"machine_id\x18\x04 \x01(\tR\tmachineId2\xb8\x03\n" +
+	"machine_id\x18\x04 \x01(\tR\tmachineId*\xce\x01\n" +
+	"\x0fExecutionStatus\x12 \n" +
+	"\x1cEXECUTION_STATUS_UNSPECIFIED\x10\x00\x12\x1e\n" +
+	"\x1aEXECUTION_STATUS_EXECUTING\x10\x01\x12\x1e\n" +
+	"\x1aEXECUTION_STATUS_COMPLETED\x10\x02\x12\x1b\n" +
+	"\x17EXECUTION_STATUS_FAILED\x10\x03\x12\x1e\n" +
+	"\x1aEXECUTION_STATUS_CANCELLED\x10\x04\x12\x1c\n" +
+	"\x18EXECUTION_STATUS_TIMEOUT\x10\x05*h\n" +
+	"\rHeartbeatType\x12\x1e\n" +
+	"\x1aHEARTBEAT_TYPE_UNSPECIFIED\x10\x00\x12\x1c\n" +
+	"\x18HEARTBEAT_TYPE_AUTOMATIC\x10\x01\x12\x19\n" +
+	"\x15HEARTBEAT_TYPE_MANUAL\x10\x022\xb8\x03\n" +
 	"\x0fOperatorService\x12S\n" +
 	"\x0eExecuteCommand\x12!.g8e.operator.v1.CommandRequested\x1a\x1e.g8e.operator.v1.CommandResult\x12X\n" +
 	"\rCancelCommand\x12'.g8e.operator.v1.CommandCancelRequested\x1a\x1e.g8e.operator.v1.CommandResult\x12N\n" +
@@ -4749,100 +4869,110 @@ func file_operator_proto_rawDescGZIP() []byte {
 	return file_operator_proto_rawDescData
 }
 
+var file_operator_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
 var file_operator_proto_msgTypes = make([]protoimpl.MessageInfo, 52)
 var file_operator_proto_goTypes = []any{
-	(*CommandRequested)(nil),                  // 0: g8e.operator.v1.CommandRequested
-	(*CommandCancelRequested)(nil),            // 1: g8e.operator.v1.CommandCancelRequested
-	(*FileEditRequested)(nil),                 // 2: g8e.operator.v1.FileEditRequested
-	(*FsListRequested)(nil),                   // 3: g8e.operator.v1.FsListRequested
-	(*FsReadRequested)(nil),                   // 4: g8e.operator.v1.FsReadRequested
-	(*HeartbeatRequested)(nil),                // 5: g8e.operator.v1.HeartbeatRequested
-	(*FsGrepRequested)(nil),                   // 6: g8e.operator.v1.FsGrepRequested
-	(*CheckPortRequested)(nil),                // 7: g8e.operator.v1.CheckPortRequested
-	(*FetchLogsRequested)(nil),                // 8: g8e.operator.v1.FetchLogsRequested
-	(*FetchHistoryRequested)(nil),             // 9: g8e.operator.v1.FetchHistoryRequested
-	(*FetchFileHistoryRequested)(nil),         // 10: g8e.operator.v1.FetchFileHistoryRequested
-	(*FetchFileDiffRequested)(nil),            // 11: g8e.operator.v1.FetchFileDiffRequested
-	(*RestoreFileRequested)(nil),              // 12: g8e.operator.v1.RestoreFileRequested
-	(*DirectCommandAuditRequested)(nil),       // 13: g8e.operator.v1.DirectCommandAuditRequested
-	(*DirectCommandResultAuditRequested)(nil), // 14: g8e.operator.v1.DirectCommandResultAuditRequested
-	(*AuditMsgRequested)(nil),                 // 15: g8e.operator.v1.AuditMsgRequested
-	(*ShutdownRequested)(nil),                 // 16: g8e.operator.v1.ShutdownRequested
-	(*CommandResult)(nil),                     // 17: g8e.operator.v1.CommandResult
-	(*FsEntry)(nil),                           // 18: g8e.operator.v1.FsEntry
-	(*FsListResult)(nil),                      // 19: g8e.operator.v1.FsListResult
-	(*FsReadResult)(nil),                      // 20: g8e.operator.v1.FsReadResult
-	(*FsGrepMatch)(nil),                       // 21: g8e.operator.v1.FsGrepMatch
-	(*FsGrepResult)(nil),                      // 22: g8e.operator.v1.FsGrepResult
-	(*FileEditResult)(nil),                    // 23: g8e.operator.v1.FileEditResult
-	(*ExecutionStatusUpdate)(nil),             // 24: g8e.operator.v1.ExecutionStatusUpdate
-	(*PortCheckEntry)(nil),                    // 25: g8e.operator.v1.PortCheckEntry
-	(*PortCheckResult)(nil),                   // 26: g8e.operator.v1.PortCheckResult
-	(*FetchLogsResult)(nil),                   // 27: g8e.operator.v1.FetchLogsResult
-	(*AuditWebSession)(nil),                   // 28: g8e.operator.v1.AuditWebSession
-	(*AuditFileMutation)(nil),                 // 29: g8e.operator.v1.AuditFileMutation
-	(*AuditEvent)(nil),                        // 30: g8e.operator.v1.AuditEvent
-	(*FetchHistoryResult)(nil),                // 31: g8e.operator.v1.FetchHistoryResult
-	(*FileHistoryEntry)(nil),                  // 32: g8e.operator.v1.FileHistoryEntry
-	(*FetchFileHistoryResult)(nil),            // 33: g8e.operator.v1.FetchFileHistoryResult
-	(*RestoreFileResult)(nil),                 // 34: g8e.operator.v1.RestoreFileResult
-	(*FileDiffEntry)(nil),                     // 35: g8e.operator.v1.FileDiffEntry
-	(*FetchFileDiffResult)(nil),               // 36: g8e.operator.v1.FetchFileDiffResult
-	(*HeartbeatResult)(nil),                   // 37: g8e.operator.v1.HeartbeatResult
-	(*SystemIdentity)(nil),                    // 38: g8e.operator.v1.SystemIdentity
-	(*NetworkInterface)(nil),                  // 39: g8e.operator.v1.NetworkInterface
-	(*NetworkInfo)(nil),                       // 40: g8e.operator.v1.NetworkInfo
-	(*CapabilityFlags)(nil),                   // 41: g8e.operator.v1.CapabilityFlags
-	(*VersionInfo)(nil),                       // 42: g8e.operator.v1.VersionInfo
-	(*UptimeInfo)(nil),                        // 43: g8e.operator.v1.UptimeInfo
-	(*PerformanceMetrics)(nil),                // 44: g8e.operator.v1.PerformanceMetrics
-	(*OSDetails)(nil),                         // 45: g8e.operator.v1.OSDetails
-	(*UserDetails)(nil),                       // 46: g8e.operator.v1.UserDetails
-	(*DiskDetails)(nil),                       // 47: g8e.operator.v1.DiskDetails
-	(*MemoryDetails)(nil),                     // 48: g8e.operator.v1.MemoryDetails
-	(*EnvironmentDetails)(nil),                // 49: g8e.operator.v1.EnvironmentDetails
-	(*FingerprintDetails)(nil),                // 50: g8e.operator.v1.FingerprintDetails
-	nil,                                       // 51: g8e.operator.v1.CommandRequested.EnvironmentEntry
+	(ExecutionStatus)(0),                      // 0: g8e.operator.v1.ExecutionStatus
+	(HeartbeatType)(0),                        // 1: g8e.operator.v1.HeartbeatType
+	(*CommandRequested)(nil),                  // 2: g8e.operator.v1.CommandRequested
+	(*CommandCancelRequested)(nil),            // 3: g8e.operator.v1.CommandCancelRequested
+	(*FileEditRequested)(nil),                 // 4: g8e.operator.v1.FileEditRequested
+	(*FsListRequested)(nil),                   // 5: g8e.operator.v1.FsListRequested
+	(*FsReadRequested)(nil),                   // 6: g8e.operator.v1.FsReadRequested
+	(*HeartbeatRequested)(nil),                // 7: g8e.operator.v1.HeartbeatRequested
+	(*FsGrepRequested)(nil),                   // 8: g8e.operator.v1.FsGrepRequested
+	(*CheckPortRequested)(nil),                // 9: g8e.operator.v1.CheckPortRequested
+	(*FetchLogsRequested)(nil),                // 10: g8e.operator.v1.FetchLogsRequested
+	(*FetchHistoryRequested)(nil),             // 11: g8e.operator.v1.FetchHistoryRequested
+	(*FetchFileHistoryRequested)(nil),         // 12: g8e.operator.v1.FetchFileHistoryRequested
+	(*FetchFileDiffRequested)(nil),            // 13: g8e.operator.v1.FetchFileDiffRequested
+	(*RestoreFileRequested)(nil),              // 14: g8e.operator.v1.RestoreFileRequested
+	(*DirectCommandAuditRequested)(nil),       // 15: g8e.operator.v1.DirectCommandAuditRequested
+	(*DirectCommandResultAuditRequested)(nil), // 16: g8e.operator.v1.DirectCommandResultAuditRequested
+	(*AuditMsgRequested)(nil),                 // 17: g8e.operator.v1.AuditMsgRequested
+	(*ShutdownRequested)(nil),                 // 18: g8e.operator.v1.ShutdownRequested
+	(*CommandResult)(nil),                     // 19: g8e.operator.v1.CommandResult
+	(*FsEntry)(nil),                           // 20: g8e.operator.v1.FsEntry
+	(*FsListResult)(nil),                      // 21: g8e.operator.v1.FsListResult
+	(*FsReadResult)(nil),                      // 22: g8e.operator.v1.FsReadResult
+	(*FsGrepMatch)(nil),                       // 23: g8e.operator.v1.FsGrepMatch
+	(*FsGrepResult)(nil),                      // 24: g8e.operator.v1.FsGrepResult
+	(*FileEditResult)(nil),                    // 25: g8e.operator.v1.FileEditResult
+	(*ExecutionStatusUpdate)(nil),             // 26: g8e.operator.v1.ExecutionStatusUpdate
+	(*PortCheckEntry)(nil),                    // 27: g8e.operator.v1.PortCheckEntry
+	(*PortCheckResult)(nil),                   // 28: g8e.operator.v1.PortCheckResult
+	(*FetchLogsResult)(nil),                   // 29: g8e.operator.v1.FetchLogsResult
+	(*AuditWebSession)(nil),                   // 30: g8e.operator.v1.AuditWebSession
+	(*AuditFileMutation)(nil),                 // 31: g8e.operator.v1.AuditFileMutation
+	(*AuditEvent)(nil),                        // 32: g8e.operator.v1.AuditEvent
+	(*FetchHistoryResult)(nil),                // 33: g8e.operator.v1.FetchHistoryResult
+	(*FileHistoryEntry)(nil),                  // 34: g8e.operator.v1.FileHistoryEntry
+	(*FetchFileHistoryResult)(nil),            // 35: g8e.operator.v1.FetchFileHistoryResult
+	(*RestoreFileResult)(nil),                 // 36: g8e.operator.v1.RestoreFileResult
+	(*FileDiffEntry)(nil),                     // 37: g8e.operator.v1.FileDiffEntry
+	(*FetchFileDiffResult)(nil),               // 38: g8e.operator.v1.FetchFileDiffResult
+	(*HeartbeatResult)(nil),                   // 39: g8e.operator.v1.HeartbeatResult
+	(*SystemIdentity)(nil),                    // 40: g8e.operator.v1.SystemIdentity
+	(*NetworkInterface)(nil),                  // 41: g8e.operator.v1.NetworkInterface
+	(*NetworkInfo)(nil),                       // 42: g8e.operator.v1.NetworkInfo
+	(*CapabilityFlags)(nil),                   // 43: g8e.operator.v1.CapabilityFlags
+	(*VersionInfo)(nil),                       // 44: g8e.operator.v1.VersionInfo
+	(*UptimeInfo)(nil),                        // 45: g8e.operator.v1.UptimeInfo
+	(*PerformanceMetrics)(nil),                // 46: g8e.operator.v1.PerformanceMetrics
+	(*OSDetails)(nil),                         // 47: g8e.operator.v1.OSDetails
+	(*UserDetails)(nil),                       // 48: g8e.operator.v1.UserDetails
+	(*DiskDetails)(nil),                       // 49: g8e.operator.v1.DiskDetails
+	(*MemoryDetails)(nil),                     // 50: g8e.operator.v1.MemoryDetails
+	(*EnvironmentDetails)(nil),                // 51: g8e.operator.v1.EnvironmentDetails
+	(*FingerprintDetails)(nil),                // 52: g8e.operator.v1.FingerprintDetails
+	nil,                                       // 53: g8e.operator.v1.CommandRequested.EnvironmentEntry
 }
 var file_operator_proto_depIdxs = []int32{
-	51, // 0: g8e.operator.v1.CommandRequested.environment:type_name -> g8e.operator.v1.CommandRequested.EnvironmentEntry
-	18, // 1: g8e.operator.v1.FsListResult.entries:type_name -> g8e.operator.v1.FsEntry
-	21, // 2: g8e.operator.v1.FsGrepResult.matches:type_name -> g8e.operator.v1.FsGrepMatch
-	25, // 3: g8e.operator.v1.PortCheckResult.results:type_name -> g8e.operator.v1.PortCheckEntry
-	29, // 4: g8e.operator.v1.AuditEvent.file_mutations:type_name -> g8e.operator.v1.AuditFileMutation
-	28, // 5: g8e.operator.v1.FetchHistoryResult.web_session:type_name -> g8e.operator.v1.AuditWebSession
-	30, // 6: g8e.operator.v1.FetchHistoryResult.events:type_name -> g8e.operator.v1.AuditEvent
-	32, // 7: g8e.operator.v1.FetchFileHistoryResult.history:type_name -> g8e.operator.v1.FileHistoryEntry
-	35, // 8: g8e.operator.v1.FetchFileDiffResult.diffs:type_name -> g8e.operator.v1.FileDiffEntry
-	35, // 9: g8e.operator.v1.FetchFileDiffResult.diff:type_name -> g8e.operator.v1.FileDiffEntry
-	38, // 10: g8e.operator.v1.HeartbeatResult.system_identity:type_name -> g8e.operator.v1.SystemIdentity
-	40, // 11: g8e.operator.v1.HeartbeatResult.network_info:type_name -> g8e.operator.v1.NetworkInfo
-	42, // 12: g8e.operator.v1.HeartbeatResult.version_info:type_name -> g8e.operator.v1.VersionInfo
-	43, // 13: g8e.operator.v1.HeartbeatResult.uptime_info:type_name -> g8e.operator.v1.UptimeInfo
-	44, // 14: g8e.operator.v1.HeartbeatResult.performance_metrics:type_name -> g8e.operator.v1.PerformanceMetrics
-	45, // 15: g8e.operator.v1.HeartbeatResult.os_details:type_name -> g8e.operator.v1.OSDetails
-	46, // 16: g8e.operator.v1.HeartbeatResult.user_details:type_name -> g8e.operator.v1.UserDetails
-	47, // 17: g8e.operator.v1.HeartbeatResult.disk_details:type_name -> g8e.operator.v1.DiskDetails
-	48, // 18: g8e.operator.v1.HeartbeatResult.memory_details:type_name -> g8e.operator.v1.MemoryDetails
-	49, // 19: g8e.operator.v1.HeartbeatResult.environment:type_name -> g8e.operator.v1.EnvironmentDetails
-	41, // 20: g8e.operator.v1.HeartbeatResult.capability_flags:type_name -> g8e.operator.v1.CapabilityFlags
-	50, // 21: g8e.operator.v1.HeartbeatResult.fingerprint_details:type_name -> g8e.operator.v1.FingerprintDetails
-	39, // 22: g8e.operator.v1.NetworkInfo.connectivity_status:type_name -> g8e.operator.v1.NetworkInterface
-	0,  // 23: g8e.operator.v1.OperatorService.ExecuteCommand:input_type -> g8e.operator.v1.CommandRequested
-	1,  // 24: g8e.operator.v1.OperatorService.CancelCommand:input_type -> g8e.operator.v1.CommandCancelRequested
-	2,  // 25: g8e.operator.v1.OperatorService.EditFile:input_type -> g8e.operator.v1.FileEditRequested
-	3,  // 26: g8e.operator.v1.OperatorService.ListFileSystem:input_type -> g8e.operator.v1.FsListRequested
-	4,  // 27: g8e.operator.v1.OperatorService.ReadFileSystem:input_type -> g8e.operator.v1.FsReadRequested
-	17, // 28: g8e.operator.v1.OperatorService.ExecuteCommand:output_type -> g8e.operator.v1.CommandResult
-	17, // 29: g8e.operator.v1.OperatorService.CancelCommand:output_type -> g8e.operator.v1.CommandResult
-	17, // 30: g8e.operator.v1.OperatorService.EditFile:output_type -> g8e.operator.v1.CommandResult
-	17, // 31: g8e.operator.v1.OperatorService.ListFileSystem:output_type -> g8e.operator.v1.CommandResult
-	17, // 32: g8e.operator.v1.OperatorService.ReadFileSystem:output_type -> g8e.operator.v1.CommandResult
-	28, // [28:33] is the sub-list for method output_type
-	23, // [23:28] is the sub-list for method input_type
-	23, // [23:23] is the sub-list for extension type_name
-	23, // [23:23] is the sub-list for extension extendee
-	0,  // [0:23] is the sub-list for field type_name
+	53, // 0: g8e.operator.v1.CommandRequested.environment:type_name -> g8e.operator.v1.CommandRequested.EnvironmentEntry
+	0,  // 1: g8e.operator.v1.CommandResult.status:type_name -> g8e.operator.v1.ExecutionStatus
+	0,  // 2: g8e.operator.v1.FsListResult.status:type_name -> g8e.operator.v1.ExecutionStatus
+	20, // 3: g8e.operator.v1.FsListResult.entries:type_name -> g8e.operator.v1.FsEntry
+	0,  // 4: g8e.operator.v1.FsReadResult.status:type_name -> g8e.operator.v1.ExecutionStatus
+	0,  // 5: g8e.operator.v1.FsGrepResult.status:type_name -> g8e.operator.v1.ExecutionStatus
+	23, // 6: g8e.operator.v1.FsGrepResult.matches:type_name -> g8e.operator.v1.FsGrepMatch
+	0,  // 7: g8e.operator.v1.FileEditResult.status:type_name -> g8e.operator.v1.ExecutionStatus
+	0,  // 8: g8e.operator.v1.ExecutionStatusUpdate.status:type_name -> g8e.operator.v1.ExecutionStatus
+	0,  // 9: g8e.operator.v1.PortCheckResult.status:type_name -> g8e.operator.v1.ExecutionStatus
+	27, // 10: g8e.operator.v1.PortCheckResult.results:type_name -> g8e.operator.v1.PortCheckEntry
+	31, // 11: g8e.operator.v1.AuditEvent.file_mutations:type_name -> g8e.operator.v1.AuditFileMutation
+	30, // 12: g8e.operator.v1.FetchHistoryResult.web_session:type_name -> g8e.operator.v1.AuditWebSession
+	32, // 13: g8e.operator.v1.FetchHistoryResult.events:type_name -> g8e.operator.v1.AuditEvent
+	34, // 14: g8e.operator.v1.FetchFileHistoryResult.history:type_name -> g8e.operator.v1.FileHistoryEntry
+	37, // 15: g8e.operator.v1.FetchFileDiffResult.diffs:type_name -> g8e.operator.v1.FileDiffEntry
+	37, // 16: g8e.operator.v1.FetchFileDiffResult.diff:type_name -> g8e.operator.v1.FileDiffEntry
+	40, // 17: g8e.operator.v1.HeartbeatResult.system_identity:type_name -> g8e.operator.v1.SystemIdentity
+	42, // 18: g8e.operator.v1.HeartbeatResult.network_info:type_name -> g8e.operator.v1.NetworkInfo
+	44, // 19: g8e.operator.v1.HeartbeatResult.version_info:type_name -> g8e.operator.v1.VersionInfo
+	45, // 20: g8e.operator.v1.HeartbeatResult.uptime_info:type_name -> g8e.operator.v1.UptimeInfo
+	46, // 21: g8e.operator.v1.HeartbeatResult.performance_metrics:type_name -> g8e.operator.v1.PerformanceMetrics
+	47, // 22: g8e.operator.v1.HeartbeatResult.os_details:type_name -> g8e.operator.v1.OSDetails
+	48, // 23: g8e.operator.v1.HeartbeatResult.user_details:type_name -> g8e.operator.v1.UserDetails
+	49, // 24: g8e.operator.v1.HeartbeatResult.disk_details:type_name -> g8e.operator.v1.DiskDetails
+	50, // 25: g8e.operator.v1.HeartbeatResult.memory_details:type_name -> g8e.operator.v1.MemoryDetails
+	51, // 26: g8e.operator.v1.HeartbeatResult.environment:type_name -> g8e.operator.v1.EnvironmentDetails
+	43, // 27: g8e.operator.v1.HeartbeatResult.capability_flags:type_name -> g8e.operator.v1.CapabilityFlags
+	52, // 28: g8e.operator.v1.HeartbeatResult.fingerprint_details:type_name -> g8e.operator.v1.FingerprintDetails
+	41, // 29: g8e.operator.v1.NetworkInfo.connectivity_status:type_name -> g8e.operator.v1.NetworkInterface
+	2,  // 30: g8e.operator.v1.OperatorService.ExecuteCommand:input_type -> g8e.operator.v1.CommandRequested
+	3,  // 31: g8e.operator.v1.OperatorService.CancelCommand:input_type -> g8e.operator.v1.CommandCancelRequested
+	4,  // 32: g8e.operator.v1.OperatorService.EditFile:input_type -> g8e.operator.v1.FileEditRequested
+	5,  // 33: g8e.operator.v1.OperatorService.ListFileSystem:input_type -> g8e.operator.v1.FsListRequested
+	6,  // 34: g8e.operator.v1.OperatorService.ReadFileSystem:input_type -> g8e.operator.v1.FsReadRequested
+	19, // 35: g8e.operator.v1.OperatorService.ExecuteCommand:output_type -> g8e.operator.v1.CommandResult
+	19, // 36: g8e.operator.v1.OperatorService.CancelCommand:output_type -> g8e.operator.v1.CommandResult
+	19, // 37: g8e.operator.v1.OperatorService.EditFile:output_type -> g8e.operator.v1.CommandResult
+	19, // 38: g8e.operator.v1.OperatorService.ListFileSystem:output_type -> g8e.operator.v1.CommandResult
+	19, // 39: g8e.operator.v1.OperatorService.ReadFileSystem:output_type -> g8e.operator.v1.CommandResult
+	35, // [35:40] is the sub-list for method output_type
+	30, // [30:35] is the sub-list for method input_type
+	30, // [30:30] is the sub-list for extension type_name
+	30, // [30:30] is the sub-list for extension extendee
+	0,  // [0:30] is the sub-list for field type_name
 }
 
 func init() { file_operator_proto_init() }
@@ -4855,13 +4985,14 @@ func file_operator_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_operator_proto_rawDesc), len(file_operator_proto_rawDesc)),
-			NumEnums:      0,
+			NumEnums:      2,
 			NumMessages:   52,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_operator_proto_goTypes,
 		DependencyIndexes: file_operator_proto_depIdxs,
+		EnumInfos:         file_operator_proto_enumTypes,
 		MessageInfos:      file_operator_proto_msgTypes,
 	}.Build()
 	File_operator_proto = out.File

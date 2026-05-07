@@ -194,7 +194,7 @@ class ConsoleMetricsService {
                 }
 
                 // latest_heartbeat_snapshot is the canonical HeartbeatSnapshot shape
-                // (shared/models/wire/heartbeat.json#operator_heartbeat) — persisted
+                // (defined in shared/proto/operator.proto) — persisted
                 // and SSE envelope both carry the same nested shape.
                 const perf = heartbeat.performance || {};
 

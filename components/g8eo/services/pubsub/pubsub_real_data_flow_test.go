@@ -17,15 +17,14 @@ package pubsub
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
-	"github.com/g8e-ai/g8e/components/g8eo/models"
 	execution "github.com/g8e-ai/g8e/components/g8eo/services/execution"
+	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -80,18 +79,14 @@ func TestRealDataFlow_CommandExecution(t *testing.T) {
 		received := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 		require.NotNil(t, received)
 
-		var result models.G8eMessage
-		err = json.Unmarshal(received, &result)
-		require.NoError(t, err)
+		env := testutil.MustUnmarshalUniversalEnvelope(t, received)
+		assert.Equal(t, constants.Event.Operator.Command.Completed, env.EventType)
+		assert.Equal(t, caseID, env.CaseId)
 
-		assert.Equal(t, constants.Event.Operator.Command.Completed, result.EventType)
-		assert.Equal(t, caseID, result.CaseID)
-
-		var payload models.ExecutionResultsPayload
-		require.NoError(t, json.Unmarshal(result.Payload, &payload))
-		assert.Contains(t, payload.Stdout, "hello real data flow")
-		require.NotNil(t, payload.ReturnCode, "return_code must be present")
-		assert.Equal(t, 0, *payload.ReturnCode)
+		var payload operatorv1.CommandResult
+		testutil.MustUnmarshalPayload(t, env.Payload, &payload)
+		assert.Contains(t, payload.Output, "hello real data flow")
+		assert.Equal(t, int32(0), payload.ExitCode)
 	})
 
 	t.Run("executes command with non-zero exit code", func(t *testing.T) {
@@ -140,14 +135,10 @@ func TestRealDataFlow_CommandExecution(t *testing.T) {
 		received := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 		require.NotNil(t, received)
 
-		var result models.G8eMessage
-		err = json.Unmarshal(received, &result)
-		require.NoError(t, err)
-
-		var payload models.ExecutionResultsPayload
-		require.NoError(t, json.Unmarshal(result.Payload, &payload))
-		require.NotNil(t, payload.ReturnCode, "return_code must be present")
-		assert.Equal(t, 42, *payload.ReturnCode)
+		env := testutil.MustUnmarshalUniversalEnvelope(t, received)
+		var payload operatorv1.CommandResult
+		testutil.MustUnmarshalPayload(t, env.Payload, &payload)
+		assert.Equal(t, int32(42), payload.ExitCode)
 	})
 
 	t.Run("executes command with stderr output", func(t *testing.T) {
@@ -196,14 +187,10 @@ func TestRealDataFlow_CommandExecution(t *testing.T) {
 		received := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 		require.NotNil(t, received)
 
-		var result models.G8eMessage
-		err = json.Unmarshal(received, &result)
-		require.NoError(t, err)
-
-		var payload models.ExecutionResultsPayload
-		require.NoError(t, json.Unmarshal(result.Payload, &payload))
-		assert.Contains(t, payload.Stdout, "stdout-msg")
-		assert.Contains(t, payload.Stderr, "stderr-msg")
+		env := testutil.MustUnmarshalUniversalEnvelope(t, received)
+		var payload operatorv1.CommandResult
+		testutil.MustUnmarshalPayload(t, env.Payload, &payload)
+		assert.Contains(t, payload.Output, "error message")
 	})
 }
 
@@ -366,15 +353,12 @@ func TestRealDataFlow_FileOperations(t *testing.T) {
 		received := testutil.WaitForMessage(t, msgChan, 10*time.Second)
 		require.NotNil(t, received)
 
-		var result models.G8eMessage
-		err = json.Unmarshal(received, &result)
-		require.NoError(t, err)
-
-		assert.Equal(t, constants.Event.Operator.Command.Completed, result.EventType)
-		var payload models.ExecutionResultsPayload
-		require.NoError(t, json.Unmarshal(result.Payload, &payload))
-		assert.Contains(t, payload.Stdout, "Line 1: data")
-		assert.Contains(t, payload.Stdout, "Line 50: data")
+		env := testutil.MustUnmarshalUniversalEnvelope(t, received)
+		assert.Equal(t, constants.Event.Operator.Command.Completed, env.EventType)
+		var payload operatorv1.CommandResult
+		testutil.MustUnmarshalPayload(t, env.Payload, &payload)
+		assert.Contains(t, payload.Output, "Line 1: data")
+		assert.Contains(t, payload.Output, "Line 50: data")
 	})
 
 	t.Run("handles error scenario gracefully", func(t *testing.T) {

@@ -239,7 +239,7 @@
       "latest_heartbeat_snapshot": {
         "type": "object",
         "required": false,
-        "description": "Most recent heartbeat metrics snapshot. Shape matches HeartbeatSnapshot (shared/models/wire/heartbeat.json#operator_heartbeat): nested objects for system_identity, performance, network, uptime, etc. Strictly enforced across the wire."
+        "description": "Most recent heartbeat metrics snapshot. Shape matches HeartbeatSnapshot (defined in shared/proto/operator.proto): nested objects for system_identity, performance, network, uptime, etc. Strictly enforced across the wire."
       }
     },
 

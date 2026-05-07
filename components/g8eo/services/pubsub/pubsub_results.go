@@ -19,11 +19,13 @@ import (
 	"log/slog"
 
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 
 	"github.com/g8e-ai/g8e/components/g8eo/config"
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
 	storage "github.com/g8e-ai/g8e/components/g8eo/services/storage"
 	commonv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
+	operatorv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
 )
 
 func (rr *PubSubResultsService) resultsChannel(operatorSessionID string) string {
@@ -95,8 +97,8 @@ func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, resu
 	reflectMsg := result.ProtoReflect()
 	statusFd := reflectMsg.Descriptor().Fields().ByName("status")
 	if statusFd != nil {
-		status := reflectMsg.Get(statusFd).String()
-		if status == string(constants.ExecutionStatusFailed) || status == string(constants.ExecutionStatusTimeout) {
+		status := reflectMsg.Get(statusFd).Enum()
+		if status == protoreflect.EnumNumber(operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED) || status == protoreflect.EnumNumber(operatorv1.ExecutionStatus_EXECUTION_STATUS_TIMEOUT) {
 			eventType = constants.Event.Operator.Command.Failed
 		}
 	}
@@ -138,8 +140,8 @@ func (rr *PubSubResultsService) PublishFileEditResult(ctx context.Context, resul
 	reflectMsg := result.ProtoReflect()
 	statusFd := reflectMsg.Descriptor().Fields().ByName("status")
 	if statusFd != nil {
-		status := reflectMsg.Get(statusFd).String()
-		if status == string(constants.ExecutionStatusFailed) {
+		status := reflectMsg.Get(statusFd).Enum()
+		if status == protoreflect.EnumNumber(operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED) {
 			eventType = constants.Event.Operator.FileEdit.Failed
 		}
 	}
@@ -159,8 +161,8 @@ func (rr *PubSubResultsService) PublishFsListResult(ctx context.Context, result 
 	reflectMsg := result.ProtoReflect()
 	statusFd := reflectMsg.Descriptor().Fields().ByName("status")
 	if statusFd != nil {
-		status := reflectMsg.Get(statusFd).String()
-		if status == string(constants.ExecutionStatusFailed) {
+		status := reflectMsg.Get(statusFd).Enum()
+		if status == protoreflect.EnumNumber(operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED) {
 			eventType = constants.Event.Operator.FsList.Failed
 		}
 	}
@@ -180,8 +182,8 @@ func (rr *PubSubResultsService) PublishFsGrepResult(ctx context.Context, result 
 	reflectMsg := result.ProtoReflect()
 	statusFd := reflectMsg.Descriptor().Fields().ByName("status")
 	if statusFd != nil {
-		status := reflectMsg.Get(statusFd).String()
-		if status == string(constants.ExecutionStatusFailed) {
+		status := reflectMsg.Get(statusFd).Enum()
+		if status == protoreflect.EnumNumber(operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED) {
 			eventType = constants.Event.Operator.FsGrep.Failed
 		}
 	}
@@ -203,7 +205,7 @@ func (rr *PubSubResultsService) PublishExecutionStatus(ctx context.Context, stat
 	var taskID *string
 	var investigationID string
 	var operatorSessionID string
-	var executionStatus string
+	var executionStatus protoreflect.EnumNumber
 
 	if fd := reflectMsg.Descriptor().Fields().ByName("case_id"); fd != nil {
 		caseID = reflectMsg.Get(fd).String()
@@ -219,18 +221,18 @@ func (rr *PubSubResultsService) PublishExecutionStatus(ctx context.Context, stat
 		operatorSessionID = reflectMsg.Get(fd).String()
 	}
 	if fd := reflectMsg.Descriptor().Fields().ByName("status"); fd != nil {
-		executionStatus = reflectMsg.Get(fd).String()
+		executionStatus = reflectMsg.Get(fd).Enum()
 	}
 
 	eventType := constants.Event.Operator.Command.StatusUpdated.Running
 	switch executionStatus {
-	case string(constants.ExecutionStatusPending):
+	case protoreflect.EnumNumber(operatorv1.ExecutionStatus_EXECUTION_STATUS_UNSPECIFIED):
 		eventType = constants.Event.Operator.Command.StatusUpdated.Queued
-	case string(constants.ExecutionStatusCompleted):
+	case protoreflect.EnumNumber(operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED):
 		eventType = constants.Event.Operator.Command.StatusUpdated.Completed
-	case string(constants.ExecutionStatusFailed), string(constants.ExecutionStatusTimeout):
+	case protoreflect.EnumNumber(operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED), protoreflect.EnumNumber(operatorv1.ExecutionStatus_EXECUTION_STATUS_TIMEOUT):
 		eventType = constants.Event.Operator.Command.StatusUpdated.Failed
-	case string(constants.ExecutionStatusCancelled):
+	case protoreflect.EnumNumber(operatorv1.ExecutionStatus_EXECUTION_STATUS_CANCELLED):
 		eventType = constants.Event.Operator.Command.StatusUpdated.Cancelled
 	}
 

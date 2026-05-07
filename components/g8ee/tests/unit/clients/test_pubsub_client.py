@@ -271,7 +271,7 @@ class TestResultDispatchDespiteMatchingEnvelopeId:
     the envelope `id` matches an id the client recently published.
 
     g8eo reuses the command's execution_id as the envelope `id` on the
-    corresponding result message (shared/models/wire/envelope.json `id` is
+    corresponding result message (the envelope `id` is
     treated as a correlation token on results). Previously, pubsub_client
     tracked outbound envelope ids in `_sent_ids` and dropped any inbound
     message whose id matched -- labelling it a "self-broadcast". g8ee

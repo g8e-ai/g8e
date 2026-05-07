@@ -158,7 +158,7 @@ export class ApprovalRespondRequest extends G8eBaseModel {
 // ---------------------------------------------------------------------------
 // IntentRequest
 //
-// Aligned with shared/models/wire/internal_requests.json (intent_request)
+// Internal g8ee-g8ed contract for intent requests
 // ---------------------------------------------------------------------------
 
 export class IntentRequest extends G8eBaseModel {
@@ -170,7 +170,7 @@ export class IntentRequest extends G8eBaseModel {
 // ---------------------------------------------------------------------------
 // UnlockAccountRequest
 //
-// Aligned with shared/models/wire/internal_requests.json (unlock_account)
+// Internal g8ee-g8ed contract for unlock account requests
 // ---------------------------------------------------------------------------
 
 export class UnlockAccountRequest extends G8eBaseModel {
@@ -182,7 +182,7 @@ export class UnlockAccountRequest extends G8eBaseModel {
 // ---------------------------------------------------------------------------
 // SSEPushRequest
 //
-// Aligned with shared/models/wire/internal_requests.json (sse_push)
+// Internal g8ee-g8ed contract for SSE push requests
 // ---------------------------------------------------------------------------
 
 export class SSEPushRequest extends G8eBaseModel {
@@ -561,7 +561,7 @@ export class SessionAuthResponse extends G8eBaseModel {
 // Typed representation of a single bound operator entry carried in the
 // X-G8E-Bound-Operators header from g8ed to G8EE.
 //
-// Canonical wire shape: shared/models/wire/bound_operator_context.json
+// Internal g8ee-g8ed contract for bound operator context
 // ---------------------------------------------------------------------------
 
 export class BoundOperatorContext extends G8eBaseModel {
