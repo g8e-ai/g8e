@@ -59,6 +59,72 @@ message FsListRequested {
   int32 max_entries = 4;
 }
 
+message FsReadRequested {
+  string path = 1;
+  string execution_id = 2;
+  int32 max_size = 3;
+}
+
+message HeartbeatRequested {
+  // Empty message - just the event type matters
+}
+
+message FsGrepRequested {
+  string path = 1;
+  string execution_id = 2;
+  string pattern = 3;
+  repeated string includes = 4;
+  int32 max_matches = 5;
+}
+
+message CheckPortRequested {
+  string execution_id = 1;
+  int32 port = 2;
+  string host = 3;
+  string protocol = 4;
+}
+
+message FetchLogsRequested {
+  string execution_id = 1;
+  string sentinel_mode = 2;
+}
+
+message FetchHistoryRequested {
+  string execution_id = 1;
+  string operator_session_id = 2;
+  int32 limit = 3;
+  int32 offset = 4;
+  bool include_commands = 5;
+  bool include_file_mutations = 6;
+}
+
+message FetchFileHistoryRequested {
+  string execution_id = 1;
+  string file_path = 2;
+  int32 limit = 3;
+}
+
+message FetchFileDiffRequested {
+  string execution_id = 1;
+  string diff_id = 2;
+  string operator_session_id = 3;
+  string file_path = 4;
+  int32 limit = 5;
+}
+
+message RestoreFileRequested {
+  string execution_id = 1;
+  string file_path = 2;
+  string commit_hash = 3;
+}
+
+message DirectCommandAuditRequested {
+  string command = 1;
+  string execution_id = 2;
+  string operator_session_id = 3;
+  string type = 4;
+}
+
 // Result payload for g8e.v1.operator.command.completed or failed
 message CommandResult {
   string execution_id = 1;
@@ -88,4 +154,7 @@ service OperatorService {
   
   // List directory contents
   rpc ListFileSystem(FsListRequested) returns (CommandResult);
+  
+  // Read file contents
+  rpc ReadFileSystem(FsReadRequested) returns (CommandResult);
 }

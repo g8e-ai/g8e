@@ -23,6 +23,7 @@ const (
 	OperatorService_CancelCommand_FullMethodName  = "/g8e.operator.v1.OperatorService/CancelCommand"
 	OperatorService_EditFile_FullMethodName       = "/g8e.operator.v1.OperatorService/EditFile"
 	OperatorService_ListFileSystem_FullMethodName = "/g8e.operator.v1.OperatorService/ListFileSystem"
+	OperatorService_ReadFileSystem_FullMethodName = "/g8e.operator.v1.OperatorService/ReadFileSystem"
 )
 
 // OperatorServiceClient is the client API for OperatorService service.
@@ -37,6 +38,8 @@ type OperatorServiceClient interface {
 	EditFile(ctx context.Context, in *FileEditRequested, opts ...grpc.CallOption) (*CommandResult, error)
 	// List directory contents
 	ListFileSystem(ctx context.Context, in *FsListRequested, opts ...grpc.CallOption) (*CommandResult, error)
+	// Read file contents
+	ReadFileSystem(ctx context.Context, in *FsReadRequested, opts ...grpc.CallOption) (*CommandResult, error)
 }
 
 type operatorServiceClient struct {
@@ -87,6 +90,16 @@ func (c *operatorServiceClient) ListFileSystem(ctx context.Context, in *FsListRe
 	return out, nil
 }
 
+func (c *operatorServiceClient) ReadFileSystem(ctx context.Context, in *FsReadRequested, opts ...grpc.CallOption) (*CommandResult, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CommandResult)
+	err := c.cc.Invoke(ctx, OperatorService_ReadFileSystem_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // OperatorServiceServer is the server API for OperatorService service.
 // All implementations must embed UnimplementedOperatorServiceServer
 // for forward compatibility.
@@ -99,6 +112,8 @@ type OperatorServiceServer interface {
 	EditFile(context.Context, *FileEditRequested) (*CommandResult, error)
 	// List directory contents
 	ListFileSystem(context.Context, *FsListRequested) (*CommandResult, error)
+	// Read file contents
+	ReadFileSystem(context.Context, *FsReadRequested) (*CommandResult, error)
 	mustEmbedUnimplementedOperatorServiceServer()
 }
 
@@ -120,6 +135,9 @@ func (UnimplementedOperatorServiceServer) EditFile(context.Context, *FileEditReq
 }
 func (UnimplementedOperatorServiceServer) ListFileSystem(context.Context, *FsListRequested) (*CommandResult, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListFileSystem not implemented")
+}
+func (UnimplementedOperatorServiceServer) ReadFileSystem(context.Context, *FsReadRequested) (*CommandResult, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReadFileSystem not implemented")
 }
 func (UnimplementedOperatorServiceServer) mustEmbedUnimplementedOperatorServiceServer() {}
 func (UnimplementedOperatorServiceServer) testEmbeddedByValue()                         {}
@@ -214,6 +232,24 @@ func _OperatorService_ListFileSystem_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _OperatorService_ReadFileSystem_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FsReadRequested)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OperatorServiceServer).ReadFileSystem(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: OperatorService_ReadFileSystem_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OperatorServiceServer).ReadFileSystem(ctx, req.(*FsReadRequested))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // OperatorService_ServiceDesc is the grpc.ServiceDesc for OperatorService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -236,6 +272,10 @@ var OperatorService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListFileSystem",
 			Handler:    _OperatorService_ListFileSystem_Handler,
+		},
+		{
+			MethodName: "ReadFileSystem",
+			Handler:    _OperatorService_ReadFileSystem_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

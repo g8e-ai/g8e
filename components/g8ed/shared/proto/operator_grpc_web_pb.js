@@ -320,5 +320,66 @@ proto.g8e.operator.v1.OperatorServicePromiseClient.prototype.listFileSystem =
 };
 
 
+/**
+ * @const
+ * @type {!grpc.web.MethodDescriptor<
+ *   !proto.g8e.operator.v1.FsReadRequested,
+ *   !proto.g8e.operator.v1.CommandResult>}
+ */
+const methodDescriptor_OperatorService_ReadFileSystem = new grpc.web.MethodDescriptor(
+  '/g8e.operator.v1.OperatorService/ReadFileSystem',
+  grpc.web.MethodType.UNARY,
+  proto.g8e.operator.v1.FsReadRequested,
+  proto.g8e.operator.v1.CommandResult,
+  /**
+   * @param {!proto.g8e.operator.v1.FsReadRequested} request
+   * @return {!Uint8Array}
+   */
+  function(request) {
+    return request.serializeBinary();
+  },
+  proto.g8e.operator.v1.CommandResult.deserializeBinary
+);
+
+
+/**
+ * @param {!proto.g8e.operator.v1.FsReadRequested} request The
+ *     request proto
+ * @param {?Object<string, string>} metadata User defined
+ *     call metadata
+ * @param {function(?grpc.web.RpcError, ?proto.g8e.operator.v1.CommandResult)}
+ *     callback The callback function(error, response)
+ * @return {!grpc.web.ClientReadableStream<!proto.g8e.operator.v1.CommandResult>|undefined}
+ *     The XHR Node Readable Stream
+ */
+proto.g8e.operator.v1.OperatorServiceClient.prototype.readFileSystem =
+    function(request, metadata, callback) {
+  return this.client_.rpcCall(this.hostname_ +
+      '/g8e.operator.v1.OperatorService/ReadFileSystem',
+      request,
+      metadata || {},
+      methodDescriptor_OperatorService_ReadFileSystem,
+      callback);
+};
+
+
+/**
+ * @param {!proto.g8e.operator.v1.FsReadRequested} request The
+ *     request proto
+ * @param {?Object<string, string>=} metadata User defined
+ *     call metadata
+ * @return {!Promise<!proto.g8e.operator.v1.CommandResult>}
+ *     Promise that resolves to the response
+ */
+proto.g8e.operator.v1.OperatorServicePromiseClient.prototype.readFileSystem =
+    function(request, metadata) {
+  return this.client_.unaryCall(this.hostname_ +
+      '/g8e.operator.v1.OperatorService/ReadFileSystem',
+      request,
+      metadata || {},
+      methodDescriptor_OperatorService_ReadFileSystem);
+};
+
+
 module.exports = proto.g8e.operator.v1;
 

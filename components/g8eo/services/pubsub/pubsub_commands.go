@@ -377,11 +377,30 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 		Timestamp:         env.Timestamp.AsTime(),
 	}
 
-	// Log state merkle root for BFT synchronization tracking
+	// BFT Verification: Verify state merkle root if present
 	if env.StateMerkleRoot != "" {
-		rs.logger.Info("State Merkle Root received in UniversalEnvelope",
-			"merkle_root", env.StateMerkleRoot,
-			"execution_id", env.Id)
+		if rs.commands.ledger != nil {
+			currentRoot, err := rs.commands.ledger.GetStateMerkleRoot()
+			if err != nil {
+				rs.logger.Warn("Failed to get current state merkle root for BFT verification", "error", err)
+				// Continue without verification - non-fatal error
+			} else if currentRoot == "" {
+				rs.logger.Info("Ledger not available for BFT verification, accepting command without verification")
+			} else if env.StateMerkleRoot != currentRoot {
+				rs.logger.Error("BFT verification failed: State merkle root mismatch - command based on stale state",
+					"expected_root", currentRoot,
+					"received_root", env.StateMerkleRoot,
+					"execution_id", env.Id)
+				// Reject the command - it was generated based on stale state
+				return
+			} else {
+				rs.logger.Info("BFT verification passed: State merkle root matches",
+					"merkle_root", env.StateMerkleRoot,
+					"execution_id", env.Id)
+			}
+		} else {
+			rs.logger.Info("Ledger service not configured, skipping BFT verification")
+		}
 	}
 
 	rs.logger.Info("Processing request")

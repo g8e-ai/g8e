@@ -40,10 +40,12 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/models"
 	execution "github.com/g8e-ai/g8e/components/g8eo/services/execution"
 	listen "github.com/g8e-ai/g8e/components/g8eo/services/listen"
+	pubsubv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/pubsubv1"
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 // =============================================================================
@@ -95,24 +97,21 @@ func (f *loopbackFixture) subscribeAndWait(t *testing.T, channel string) *websoc
 	require.NoError(t, err)
 	t.Cleanup(func() { ws.Close() })
 
-	subMsg := listen.PubSubMessage{
+	subMsg := &pubsubv1.PubSubMessage{
 		Action:  constants.PubSubActionSubscribe,
 		Channel: channel,
 	}
-	b, err := json.Marshal(subMsg)
+	b, err := proto.Marshal(subMsg)
 	require.NoError(t, err)
-	require.NoError(t, ws.WriteMessage(websocket.TextMessage, b))
+	require.NoError(t, ws.WriteMessage(websocket.BinaryMessage, b))
 
 	// Read frames until we get the subscribed ack for our channel.
 	ws.SetReadDeadline(time.Now().Add(3 * time.Second))
 	for {
 		_, raw, err := ws.ReadMessage()
 		require.NoError(t, err, "waiting for subscribed ack on %s", channel)
-		var ack struct {
-			Type    string `json:"type"`
-			Channel string `json:"channel"`
-		}
-		if err := json.Unmarshal(raw, &ack); err != nil {
+		var ack pubsubv1.PubSubEvent
+		if err := proto.Unmarshal(raw, &ack); err != nil {
 			continue
 		}
 		if ack.Type == constants.PubSubEventSubscribed && ack.Channel == channel {

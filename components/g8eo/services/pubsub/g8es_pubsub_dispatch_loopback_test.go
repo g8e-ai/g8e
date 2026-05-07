@@ -228,10 +228,9 @@ func TestLoopback_CommandDispatch_ExecutionRequest_InvalidCommand(t *testing.T) 
 	startService(t, svc)
 	_ = drainOne(t, hbSub)
 
-	payload := json.RawMessage(`{"command":"__no_such_exec_xyzzy__","justification":"test"}`)
-	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.Command.Requested, "case-fail", payload)
-	cmdMsg.ID = "exec-loop-fail-1"
-	injectCmd(t, f, svc, cmdMsg)
+	cmdPayload := mustMarshalProtobufCommandRequested(t, "__no_such_exec_xyzzy__", "exec-loop-fail-1", "test", "", 0)
+	envelopeBytes := mustMarshalUniversalEnvelope(t, "exec-loop-fail-1", constants.Event.Operator.Command.Requested, cmdPayload, "", svc.config.OperatorID, "case-fail", "", svc.config.OperatorSessionId)
+	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
 	// Non-existent command completes with failed status.
@@ -250,10 +249,9 @@ func TestLoopback_CommandDispatch_ExecutionRequest_StdoutContent(t *testing.T) {
 	_ = drainOne(t, hbSub)
 
 	const sentinel = "loopback-output-sentinel-42"
-	payload := json.RawMessage(fmt.Sprintf(`{"command":"echo %s","justification":"test"}`, sentinel))
-	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.Command.Requested, "case-stdout", payload)
-	cmdMsg.ID = "exec-loop-stdout-1"
-	injectCmd(t, f, svc, cmdMsg)
+	cmdPayload := mustMarshalProtobufCommandRequested(t, fmt.Sprintf("echo %s", sentinel), "exec-loop-stdout-1", "test", "", 0)
+	envelopeBytes := mustMarshalUniversalEnvelope(t, "exec-loop-stdout-1", constants.Event.Operator.Command.Requested, cmdPayload, "", svc.config.OperatorID, "case-stdout", "", svc.config.OperatorSessionId)
+	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
 	assert.Contains(t, string(msg), constants.Event.Operator.Command.Completed)
@@ -271,12 +269,9 @@ func TestLoopback_CommandDispatch_ExecutionRequest_TaskIDThreaded(t *testing.T) 
 	_ = drainOne(t, hbSub)
 
 	taskID := "task-loop-99"
-	payload := json.RawMessage(`{"command":"echo task threaded","justification":"test"}`)
-	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.Command.Requested, "case-task", payload)
-	cmdMsg.ID = "exec-loop-task-1"
-	cmdMsg.InvestigationID = "inv-task"
-	cmdMsg.TaskID = &taskID
-	injectCmd(t, f, svc, cmdMsg)
+	cmdPayload := mustMarshalProtobufCommandRequested(t, "echo task threaded", "exec-loop-task-1", "test", "", 0)
+	envelopeBytes := mustMarshalUniversalEnvelope(t, "exec-loop-task-1", constants.Event.Operator.Command.Requested, cmdPayload, taskID, svc.config.OperatorID, "case-task", "inv-task", svc.config.OperatorSessionId)
+	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
 	assert.Contains(t, string(msg), constants.Event.Operator.Command.Completed)
@@ -304,18 +299,16 @@ func TestLoopback_CommandDispatch_CancelRequest_RunningCommand(t *testing.T) {
 
 	// Start a long-running command.
 	execID := "cancel-target-exec-1"
-	payload := json.RawMessage(fmt.Sprintf(`{"command":"sleep 30","execution_id":"%s","justification":"test"}`, execID))
-	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.Command.Requested, "case-cancel", payload)
-	cmdMsg.ID = execID
-	injectCmd(t, f, svc, cmdMsg)
+	cmdPayload := mustMarshalProtobufCommandRequested(t, "sleep 30", execID, "test", "", 0)
+	envelopeBytes := mustMarshalUniversalEnvelope(t, execID, constants.Event.Operator.Command.Requested, cmdPayload, "", svc.config.OperatorID, "case-cancel", "", svc.config.OperatorSessionId)
+	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	// Give the command time to start executing before sending cancel.
 	time.Sleep(150 * time.Millisecond)
 
-	cancelPayload := json.RawMessage(fmt.Sprintf(`{"execution_id":"%s"}`, execID))
-	cancelMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.Command.CancelRequested, "case-cancel", cancelPayload)
-	cancelMsg.ID = "cancel-req-1"
-	injectCmd(t, f, svc, cancelMsg)
+	cancelPayload := mustMarshalProtobufCommandCancelRequested(t, execID)
+	cancelEnvelopeBytes := mustMarshalUniversalEnvelope(t, "cancel-req-1", constants.Event.Operator.Command.CancelRequested, cancelPayload, "", svc.config.OperatorID, "case-cancel", "", svc.config.OperatorSessionId)
+	injectCmdProtobuf(t, f, svc, cancelEnvelopeBytes)
 
 	// Expect either a cancellation result or a completed result (race window).
 	msg := drainOne(t, resultsSub)
@@ -345,10 +338,9 @@ func TestLoopback_CommandDispatch_CancelRequest_NotFound(t *testing.T) {
 	_ = drainOne(t, hbSub)
 
 	// Cancel a command that was never started — should publish a failure result.
-	payload := json.RawMessage(`{"execution_id":"nonexistent-exec-id"}`)
-	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.Command.CancelRequested, "case-ghost", payload)
-	cmdMsg.ID = "cancel-ghost-1"
-	injectCmd(t, f, svc, cmdMsg)
+	cancelPayload := mustMarshalProtobufCommandCancelRequested(t, "nonexistent-exec-id")
+	cancelEnvelopeBytes := mustMarshalUniversalEnvelope(t, "cancel-ghost-1", constants.Event.Operator.Command.CancelRequested, cancelPayload, "", svc.config.OperatorID, "case-ghost", "", svc.config.OperatorSessionId)
+	injectCmdProtobuf(t, f, svc, cancelEnvelopeBytes)
 
 	msg := drainOne(t, resultsSub)
 	assert.Contains(t, string(msg), constants.Event.Operator.Command.Cancelled,
@@ -371,14 +363,9 @@ func TestLoopback_CommandDispatch_FileEdit_WriteAndRead(t *testing.T) {
 
 	targetPath := filepath.Join(t.TempDir(), "loopback-write.txt")
 
-	payload := json.RawMessage(fmt.Sprintf(
-		`{"file_path":%q,"operation":"write","content":"hello from loopback\n","create_if_missing":true,"justification":"test"}`,
-		targetPath,
-	))
-	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.FileEdit.Requested, "case-file-write", payload)
-	cmdMsg.ID = "file-write-1"
-	cmdMsg.InvestigationID = "inv-file-write"
-	injectCmd(t, f, svc, cmdMsg)
+	filePayload := mustMarshalProtobufFileEditRequested(t, targetPath, "write", "file-write-1", "test", "hello from loopback\n", true)
+	envelopeBytes := mustMarshalUniversalEnvelope(t, "file-write-1", constants.Event.Operator.FileEdit.Requested, filePayload, "", svc.config.OperatorID, "case-file-write", "inv-file-write", svc.config.OperatorSessionId)
+	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
 	assert.Contains(t, string(msg), constants.Event.Operator.FileEdit.Completed)
@@ -404,10 +391,9 @@ func TestLoopback_CommandDispatch_FileEdit_SentinelBlocked(t *testing.T) {
 	// pattern matches without touching any real system file.
 	tmpDir := t.TempDir()
 	targetPath := filepath.Join(tmpDir, "etc", "passwd")
-	payload := json.RawMessage(`{"file_path":"/etc/passwd","operation":"write","content":"injected","justification":"test"}`)
-	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.FileEdit.Requested, "case-sentinel", payload)
-	cmdMsg.ID = "file-sentinel-1"
-	injectCmd(t, f, svc, cmdMsg)
+	filePayload := mustMarshalProtobufFileEditRequested(t, "/etc/passwd", "write", "file-sentinel-1", "test", "injected", false)
+	envelopeBytes := mustMarshalUniversalEnvelope(t, "file-sentinel-1", constants.Event.Operator.FileEdit.Requested, filePayload, "", svc.config.OperatorID, "case-sentinel", "", svc.config.OperatorSessionId)
+	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
 	assert.Contains(t, string(msg), constants.Event.Operator.FileEdit.Failed, "sentinel must block writes to /etc/passwd, got: %s", string(msg))
@@ -427,10 +413,9 @@ func TestLoopback_CommandDispatch_FileEdit_MissingPath(t *testing.T) {
 
 	// Missing file_path — handler should log and not publish (no result expected).
 	// We assert no message arrives within a short window.
-	payload := json.RawMessage(`{"operation":"write","content":"x","justification":"test"}`)
-	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.FileEdit.Requested, "case-no-path", payload)
-	cmdMsg.ID = "file-no-path-1"
-	injectCmd(t, f, svc, cmdMsg)
+	filePayload := mustMarshalProtobufFileEditRequested(t, "", "write", "file-no-path-1", "test", "x", false)
+	envelopeBytes := mustMarshalUniversalEnvelope(t, "file-no-path-1", constants.Event.Operator.FileEdit.Requested, filePayload, "", svc.config.OperatorID, "case-no-path", "", svc.config.OperatorSessionId)
+	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	drainNone(t, resultsSub, 200*time.Millisecond)
 }
@@ -451,13 +436,9 @@ func TestLoopback_CommandDispatch_FileEdit_NilResultNoPanic(t *testing.T) {
 	// error path; even if it somehow returned (nil, nil), the nil guard must
 	// synthesise a failed result rather than dereferencing nil.
 	targetPath := filepath.Join(t.TempDir(), "does-not-exist.txt")
-	payload := json.RawMessage(fmt.Sprintf(
-		`{"file_path":%q,"operation":"delete","justification":"regression test"}`,
-		targetPath,
-	))
-	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.FileEdit.Requested, "case-nil-guard", payload)
-	cmdMsg.ID = "nil-result-guard-1"
-	injectCmd(t, f, svc, cmdMsg)
+	filePayload := mustMarshalProtobufFileEditRequested(t, targetPath, "delete", "nil-result-guard-1", "regression test", "", false)
+	envelopeBytes := mustMarshalUniversalEnvelope(t, "nil-result-guard-1", constants.Event.Operator.FileEdit.Requested, filePayload, "", svc.config.OperatorID, "case-nil-guard", "", svc.config.OperatorSessionId)
+	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
 	// Must receive either a completed or failed result — never a panic or silence.
@@ -480,11 +461,9 @@ func TestLoopback_CommandDispatch_FsList_WorkDir(t *testing.T) {
 	startService(t, svc)
 	_ = drainOne(t, hbSub)
 
-	payload := json.RawMessage(`{"path":".","max_entries":50}`)
-	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.FsList.Requested, "case-fslist", payload)
-	cmdMsg.ID = "fslist-1"
-	cmdMsg.InvestigationID = "inv-fslist"
-	injectCmd(t, f, svc, cmdMsg)
+	fsListPayload := mustMarshalProtobufFsListRequested(t, ".", "fslist-1", 50)
+	envelopeBytes := mustMarshalUniversalEnvelope(t, "fslist-1", constants.Event.Operator.FsList.Requested, fsListPayload, "", svc.config.OperatorID, "case-fslist", "inv-fslist", svc.config.OperatorSessionId)
+	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
 	assert.Contains(t, string(msg), constants.Event.Operator.FsList.Completed)
@@ -501,10 +480,9 @@ func TestLoopback_CommandDispatch_FsList_NonExistentPath(t *testing.T) {
 	startService(t, svc)
 	_ = drainOne(t, hbSub)
 
-	payload := json.RawMessage(`{"path":"/no/such/path/xyzzy","max_entries":10}`)
-	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.FsList.Requested, "case-fslist-miss", payload)
-	cmdMsg.ID = "fslist-missing-1"
-	injectCmd(t, f, svc, cmdMsg)
+	fsListPayload := mustMarshalProtobufFsListRequested(t, "/no/such/path/xyzzy", "fslist-missing-1", 10)
+	envelopeBytes := mustMarshalUniversalEnvelope(t, "fslist-missing-1", constants.Event.Operator.FsList.Requested, fsListPayload, "", svc.config.OperatorID, "case-fslist-miss", "", svc.config.OperatorSessionId)
+	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
 	assert.Contains(t, string(msg), constants.Event.Operator.FsList.Failed)
@@ -530,10 +508,9 @@ func TestLoopback_CommandDispatch_FsRead_ExistingFile(t *testing.T) {
 	const content = "loopback fs read test content"
 	require.NoError(t, os.WriteFile(target, []byte(content), 0o644))
 
-	payload := json.RawMessage(fmt.Sprintf(`{"path":%q,"max_size":4096}`, target))
-	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.FsRead.Requested, "case-fsread", payload)
-	cmdMsg.ID = "fsread-1"
-	injectCmd(t, f, svc, cmdMsg)
+	fsReadPayload := mustMarshalProtobufFsReadRequested(t, target, "fsread-1", 4096)
+	envelopeBytes := mustMarshalUniversalEnvelope(t, "fsread-1", constants.Event.Operator.FsRead.Requested, fsReadPayload, "", svc.config.OperatorID, "case-fsread", "", svc.config.OperatorSessionId)
+	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
 	assert.Contains(t, string(msg), constants.Event.Operator.FsRead.Completed)
@@ -550,10 +527,9 @@ func TestLoopback_CommandDispatch_FsRead_MissingFile(t *testing.T) {
 	startService(t, svc)
 	_ = drainOne(t, hbSub)
 
-	payload := json.RawMessage(`{"path":"/no/such/file/xyzzy.txt","max_size":4096}`)
-	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.FsRead.Requested, "case-fsread-miss", payload)
-	cmdMsg.ID = "fsread-miss-1"
-	injectCmd(t, f, svc, cmdMsg)
+	fsReadPayload := mustMarshalProtobufFsReadRequested(t, "/no/such/file/xyzzy.txt", "fsread-miss-1", 4096)
+	envelopeBytes := mustMarshalUniversalEnvelope(t, "fsread-miss-1", constants.Event.Operator.FsRead.Requested, fsReadPayload, "", svc.config.OperatorID, "case-fsread-miss", "", svc.config.OperatorSessionId)
+	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, resultsSub)
 	assert.Contains(t, string(msg), constants.Event.Operator.FsRead.Failed)
@@ -586,10 +562,9 @@ func TestLoopback_CommandDispatch_FanOut_MultipleResultSubscribers(t *testing.T)
 	startService(t, svc)
 	_ = drainOne(t, hbSub)
 
-	payload := json.RawMessage(`{"command":"echo fanout","justification":"test"}`)
-	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.Command.Requested, "case-fanout", payload)
-	cmdMsg.ID = "fanout-1"
-	injectCmd(t, f, svc, cmdMsg)
+	cmdPayload := mustMarshalProtobufCommandRequested(t, "echo fanout", "fanout-1", "test", "", 0)
+	envelopeBytes := mustMarshalUniversalEnvelope(t, "fanout-1", constants.Event.Operator.Command.Requested, cmdPayload, "", svc.config.OperatorID, "case-fanout", "", svc.config.OperatorSessionId)
+	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	for i, sub := range subs {
 		msg := drainOne(t, sub)
@@ -613,11 +588,9 @@ func TestLoopback_CommandDispatch_HeartbeatRequested_CaseIDThreaded(t *testing.T
 	// Consume the automatic heartbeat.
 	_ = drainOne(t, hbSub)
 
-	payload := json.RawMessage(`{}`)
-	cmdMsg := newTestG8eMessage(t, svc.config, constants.Event.Operator.HeartbeatRequested, "case-hb-req", payload)
-	cmdMsg.ID = "hb-req-case-1"
-	cmdMsg.InvestigationID = "inv-hb-req"
-	injectCmd(t, f, svc, cmdMsg)
+	hbPayload := mustMarshalProtobufHeartbeatRequested(t)
+	envelopeBytes := mustMarshalUniversalEnvelope(t, "hb-req-case-1", constants.Event.Operator.HeartbeatRequested, hbPayload, "", svc.config.OperatorID, "case-hb-req", "inv-hb-req", svc.config.OperatorSessionId)
+	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	msg := drainOne(t, hbSub)
 	assert.Contains(t, string(msg), constants.Event.Operator.Heartbeat)
@@ -645,10 +618,9 @@ func TestLoopback_CommandDispatch_UnknownEventType_NoResult(t *testing.T) {
 	startService(t, svc)
 	_ = drainOne(t, hbSub)
 
-	payload := json.RawMessage(`{}`)
-	cmdMsg := newTestG8eMessage(t, svc.config, "operator.unknown.made_up_type", "case-unknown", payload)
-	cmdMsg.ID = "unknown-event-1"
-	injectCmd(t, f, svc, cmdMsg)
+	// Unknown event type - use empty payload since we don't have a specific protobuf for it
+	envelopeBytes := mustMarshalUniversalEnvelope(t, "unknown-event-1", "operator.unknown.made_up_type", []byte{}, "", svc.config.OperatorID, "case-unknown", "", svc.config.OperatorSessionId)
+	injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 	// Unknown event types are silently dropped — no result is published.
 	drainNone(t, resultsSub, 200*time.Millisecond)

@@ -1,0 +1,10 @@
+# g8e ACME Corp Demo Fleet SSH Config
+# This file is used by the g8ep operator to access demo nodes.
+# Location: /app/demo/profiles/acme-corp/ssh_config (mapped from host)
+
+Host *
+  User appuser
+  IdentityFile /app/scripts/id_ed25519
+  StrictHostKeyChecking no
+  UserKnownHostsFile /dev/null
+  LogLevel ERROR

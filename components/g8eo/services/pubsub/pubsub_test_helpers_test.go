@@ -85,3 +85,62 @@ func mustMarshalUniversalEnvelope(t *testing.T, id string, eventType string, pay
 	}
 	return b
 }
+
+// mustMarshalProtobufFileEditRequested marshals a FileEditRequested protobuf to bytes.
+func mustMarshalProtobufFileEditRequested(t *testing.T, filePath string, operation string, execID string, justification string, content string, createIfMissing bool) []byte {
+	t.Helper()
+	protoFileEdit := &operatorv1.FileEditRequested{
+		FilePath:        filePath,
+		Operation:       operation,
+		ExecutionId:     execID,
+		Justification:   justification,
+		Content:         content,
+		CreateIfMissing: createIfMissing,
+	}
+	b, err := proto.Marshal(protoFileEdit)
+	if err != nil {
+		t.Fatalf("failed to marshal protobuf FileEditRequested: %v", err)
+	}
+	return b
+}
+
+// mustMarshalProtobufFsListRequested marshals a FsListRequested protobuf to bytes.
+func mustMarshalProtobufFsListRequested(t *testing.T, path string, execID string, maxEntries int32) []byte {
+	t.Helper()
+	protoFsList := &operatorv1.FsListRequested{
+		Path:        path,
+		ExecutionId: execID,
+		MaxEntries:  maxEntries,
+	}
+	b, err := proto.Marshal(protoFsList)
+	if err != nil {
+		t.Fatalf("failed to marshal protobuf FsListRequested: %v", err)
+	}
+	return b
+}
+
+// mustMarshalProtobufFsReadRequested marshals a FsReadRequested protobuf to bytes.
+func mustMarshalProtobufFsReadRequested(t *testing.T, path string, execID string, maxSize int32) []byte {
+	t.Helper()
+	protoFsRead := &operatorv1.FsReadRequested{
+		Path:        path,
+		ExecutionId: execID,
+		MaxSize:     maxSize,
+	}
+	b, err := proto.Marshal(protoFsRead)
+	if err != nil {
+		t.Fatalf("failed to marshal protobuf FsReadRequested: %v", err)
+	}
+	return b
+}
+
+// mustMarshalProtobufHeartbeatRequested marshals an empty HeartbeatRequested protobuf to bytes.
+func mustMarshalProtobufHeartbeatRequested(t *testing.T) []byte {
+	t.Helper()
+	protoHb := &operatorv1.HeartbeatRequested{}
+	b, err := proto.Marshal(protoHb)
+	if err != nil {
+		t.Fatalf("failed to marshal protobuf HeartbeatRequested: %v", err)
+	}
+	return b
+}

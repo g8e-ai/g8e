@@ -54,6 +54,11 @@ class OperatorServiceStub(object):
                 request_serializer=operator__pb2.FsListRequested.SerializeToString,
                 response_deserializer=operator__pb2.CommandResult.FromString,
                 _registered_method=True)
+        self.ReadFileSystem = channel.unary_unary(
+                '/g8e.operator.v1.OperatorService/ReadFileSystem',
+                request_serializer=operator__pb2.FsReadRequested.SerializeToString,
+                response_deserializer=operator__pb2.CommandResult.FromString,
+                _registered_method=True)
 
 
 class OperatorServiceServicer(object):
@@ -87,6 +92,13 @@ class OperatorServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ReadFileSystem(self, request, context):
+        """Read file contents
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_OperatorServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -108,6 +120,11 @@ def add_OperatorServiceServicer_to_server(servicer, server):
             'ListFileSystem': grpc.unary_unary_rpc_method_handler(
                     servicer.ListFileSystem,
                     request_deserializer=operator__pb2.FsListRequested.FromString,
+                    response_serializer=operator__pb2.CommandResult.SerializeToString,
+            ),
+            'ReadFileSystem': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReadFileSystem,
+                    request_deserializer=operator__pb2.FsReadRequested.FromString,
                     response_serializer=operator__pb2.CommandResult.SerializeToString,
             ),
     }
@@ -218,6 +235,33 @@ class OperatorService(object):
             target,
             '/g8e.operator.v1.OperatorService/ListFileSystem',
             operator__pb2.FsListRequested.SerializeToString,
+            operator__pb2.CommandResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ReadFileSystem(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/g8e.operator.v1.OperatorService/ReadFileSystem',
+            operator__pb2.FsReadRequested.SerializeToString,
             operator__pb2.CommandResult.FromString,
             options,
             channel_credentials,

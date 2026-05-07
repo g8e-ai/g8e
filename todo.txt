@@ -1,3 +1,0 @@
-1. Fix test failure in components/g8eo/contracts/shared_constants_test.go
-2. Verify all g8eo tests pass
-3. Create UniversalEnvelope support in g8ee

@@ -18,15 +18,27 @@ import (
 	"encoding/json"
 	"log/slog"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/g8e-ai/g8e/components/g8eo/config"
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/models"
+	operatorv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
 )
 
 // executionIDFromMessage resolves the execution_id for a command from the
-// inbound payload's execution_id field. If the payload does not carry one it
-// falls back to the envelope id (msg.ID).
+// inbound payload's execution_id field. It handles both JSON and Protobuf payloads.
+// If the payload does not carry one it falls back to the envelope id (msg.ID).
 func executionIDFromMessage(msg PubSubCommandMessage) string {
+	// 1. Try Protobuf first (protocol-first architecture)
+	// Many requested types have an execution_id at field 2 (common convention in our .proto)
+	// We'll try unmarshaling into a generic struct that matches the most common ones.
+	var protoCmd operatorv1.CommandRequested
+	if err := proto.Unmarshal(msg.Payload, &protoCmd); err == nil && protoCmd.ExecutionId != "" {
+		return protoCmd.ExecutionId
+	}
+
+	// 2. Fall back to JSON for components not yet fully migrated
 	var probe struct {
 		ExecutionID string `json:"execution_id"`
 	}
