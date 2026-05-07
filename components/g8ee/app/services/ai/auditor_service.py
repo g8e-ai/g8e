@@ -31,6 +31,8 @@ from app.constants import (
     DEFAULT_WORKING_DIRECTORY,
     EventType,
     AuditorReason,
+    TribunalAuditStatus,
+    TribunalAuditMode,
 )
 from app.constants.status import CommandErrorType
 from app.llm.prompts import (
@@ -64,7 +66,7 @@ logger = logging.getLogger(__name__)
 
 class TribunalAuditorResponse(G8eBaseModel):
     """Structured response for Tribunal audit."""
-    status: str  # "ok", "revised", or "swap"
+    status: TribunalAuditStatus
     revised_command: str | None = None
     swap_to_cluster: str | None = None
 
@@ -73,7 +75,7 @@ class TribunalAuditorResponse(G8eBaseModel):
 class AuditorInput(G8eBaseModel):
     """Internal model for the auditor prompt context."""
     winner: str | None
-    mode: str  # "unanimous", "majority", "tied"
+    mode: TribunalAuditMode
     clusters: list[AuditorClusterInfo]
 
 async def fail_auditor(
@@ -102,9 +104,9 @@ async def fail_auditor(
 
 def parse_auditor_response(
     raw_text: str,
-    mode: str,
+    mode: TribunalAuditMode,
     cluster_ids: list[str]
-) -> tuple[str, str | None, str | None]:
+) -> tuple[TribunalAuditStatus, str | None, str | None]:
     """Parse and validate auditor JSON response with mode-specific rules."""
     data = extract_json_from_text(raw_text)
     if not isinstance(data, dict):
@@ -112,7 +114,7 @@ def parse_auditor_response(
 
     try:
         status_raw = data.get("status")
-        status = str(status_raw).lower() if status_raw is not None else ""
+        status = TribunalAuditStatus(str(status_raw).lower()) if status_raw is not None else TribunalAuditStatus.OK
         revised_raw = data.get("revised_command")
         swap_to_cluster = data.get("swap_to_cluster")
 
@@ -122,27 +124,27 @@ def parse_auditor_response(
         swap_id = str(swap_to_cluster) if swap_to_cluster is not None else None
 
         # Mode-specific validation
-        if mode == "unanimous":
-            if status not in ("ok", "revised"):
+        if mode == TribunalAuditMode.UNANIMOUS:
+            if status not in (TribunalAuditStatus.OK, TribunalAuditStatus.REVISED):
                 raise ValueError(f"invalid status {status!r} for mode {mode!r}")
             if swap_to_cluster:
                 raise ValueError(f"Auditor returned swap_to_cluster in {mode!r} mode")
-        elif mode == "tied":
-            if status == "ok":
+        elif mode == TribunalAuditMode.TIED:
+            if status == TribunalAuditStatus.OK:
                 raise ValueError(f"invalid status {status!r} for mode {mode!r} (must disambiguate)")
-            if status not in ("swap", "revised"):
+            if status not in (TribunalAuditStatus.SWAP, TribunalAuditStatus.REVISED):
                 raise ValueError(f"invalid status {status!r} for mode {mode!r}")
-        elif mode == "majority":
-            if status not in ("ok", "swap", "revised"):
+        elif mode == TribunalAuditMode.MAJORITY:
+            if status not in (TribunalAuditStatus.OK, TribunalAuditStatus.SWAP, TribunalAuditStatus.REVISED):
                 raise ValueError(f"invalid status {status!r} for mode {mode!r}")
 
-        if status == "swap":
+        if status == TribunalAuditStatus.SWAP:
             if not swap_to_cluster:
                 raise ValueError("Auditor returned status='swap' but no swap_to_cluster")
             if swap_to_cluster not in cluster_ids:
                 raise ValueError(f"invalid swap_to_cluster {swap_to_cluster!r}")
 
-        if status == "revised" and not revised_cmd:
+        if status == TribunalAuditStatus.REVISED and not revised_cmd:
             raise ValueError("Auditor returned status='revised' but no revised_command")
 
         return status, revised_cmd, swap_id
@@ -152,7 +154,7 @@ def parse_auditor_response(
 def build_auditor_prompt(
     request: str,
     guidelines: str,
-    mode: str,
+    mode: TribunalAuditMode,
     target_cmd: str,
     clusters: list[AuditorClusterInfo],
     operator_context: OperatorContext | None,
@@ -242,7 +244,7 @@ async def run_auditor(
     model: str,
     request: str,
     guidelines: str,
-    mode: str,
+    mode: TribunalAuditMode,
     vote_winner: str | None,
     vote_breakdown: VoteBreakdown,
     tied_candidates: list[CandidateCommand] | None,
@@ -317,7 +319,7 @@ async def run_auditor(
                 raw_text, mode, list(cluster_to_cmd.keys())
             )
 
-            if status == "ok":
+            if status == TribunalAuditStatus.OK:
                 total_duration_ms = (time.time() - auditor_start_time) * 1000
                 logger.info("[TRIBUNAL-AUDITOR] Completed with status=ok total_duration_ms=%.2f", total_duration_ms)
                 await emitter.emit(
@@ -327,7 +329,7 @@ async def run_auditor(
                 )
                 return True, target_cmd, None, AuditorReason.OK, None, None
 
-            if status == "swap" and swap_to_cluster:
+            if status == TribunalAuditStatus.SWAP and swap_to_cluster:
                 final_cmd = cluster_to_cmd[swap_to_cluster]
                 swap_to_member = cluster_to_members[swap_to_cluster][0] # Pick first member for telemetry
 
@@ -352,7 +354,7 @@ async def run_auditor(
                 return True, final_cmd, None, AuditorReason.SWAPPED_TO_DISSENTER, swap_to_cluster, swap_to_member
 
             # Handle revised
-            if status == "revised" and revised_raw:
+            if status == TribunalAuditStatus.REVISED and revised_raw:
                 revised_str = str(revised_raw)
                 revised = normalise_command(revised_str)
                 if not revised:
@@ -360,7 +362,7 @@ async def run_auditor(
 
             # RE-VALIDATE REVISION SAFETY (L1 Technical Bedrock)
             # revised is defined if status == "revised" and normalise_command succeeded
-            if status == "revised":
+            if status == TribunalAuditStatus.REVISED:
                 # Ensure revised is bound for safety, though normalise_command check above handles it
                 revised_final = locals().get('revised')
                 if not revised_final:
@@ -371,7 +373,7 @@ async def run_auditor(
                     reason = AuditorReason.WHITELIST_VIOLATION if safety_result.error_type == CommandErrorType.WHITELIST_VIOLATION else AuditorReason.NO_VALID_REVISION
                     await fail_auditor(emitter, request, reason, f"Revision technical safety failure: {safety_result.error_message}", target_cmd)
 
-                reason = AuditorReason.REVISED_FROM_DISSENT if mode in ("majority", "tied") else AuditorReason.REVISED
+                reason = AuditorReason.REVISED_FROM_DISSENT if mode in (TribunalAuditMode.MAJORITY, TribunalAuditMode.TIED) else AuditorReason.REVISED
                 total_duration_ms = (time.time() - auditor_start_time) * 1000
                 logger.info("[TRIBUNAL-AUDITOR] Completed with status=revised total_duration_ms=%.2f", total_duration_ms)
                 await emitter.emit(

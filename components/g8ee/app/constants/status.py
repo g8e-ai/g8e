@@ -322,6 +322,16 @@ class Severity(IntEnum):
     HIGH = 3
     CRITICAL = 4
 
+class TribunalAuditStatus(StrEnum):
+    OK = "ok"
+    REVISED = "revised"
+    SWAP = "swap"
+
+class TribunalAuditMode(StrEnum):
+    UNANIMOUS = "unanimous"
+    MAJORITY = "majority"
+    TIED = "tied"
+
 class TaskStatus(StrEnum):
     PENDING = "pending"
     IN_PROGRESS = "executing"

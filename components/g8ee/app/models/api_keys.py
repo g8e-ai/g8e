@@ -12,6 +12,7 @@
 # limitations under the License.
 
 from pydantic import Field
+from app.constants import ApiKeyStatus
 from app.utils.timestamp import now
 from .base import G8eBaseModel, UTCDatetime
 
@@ -22,7 +23,7 @@ class ApiKeyDocument(G8eBaseModel):
     operator_id: str | None = Field(default=None, description="Operator ID if tied to a specific operator")
     client_name: str = Field(description="Client name (e.g. 'operator', 'cli')")
     permissions: list[str] = Field(default_factory=list, description="List of granted permissions")
-    status: str = Field(default="ACTIVE", description="Status of the key (ACTIVE, REVOKED)")
+    status: ApiKeyStatus = Field(default=ApiKeyStatus.ACTIVE, description="Status of the key")
     system_fingerprint: str | None = Field(default=None, description="System fingerprint established on first use")
     created_at: UTCDatetime = Field(default_factory=now, description="When the key was created")
     last_used_at: UTCDatetime | None = Field(default=None, description="When the key was last used")

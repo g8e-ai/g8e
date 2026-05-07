@@ -18,6 +18,8 @@ from app.constants import (
     CommandGenerationOutcome,
     EventType,
     AuditorReason,
+    TribunalAuditMode,
+    TribunalAuditStatus,
 )
 from app.constants.status import CommandErrorType
 from app.llm.provider import LLMProvider
@@ -96,9 +98,9 @@ class TribunalAuditor:
             )
 
         if vote_breakdown.consensus_strength == 1.0:
-            mode = "unanimous"
+            mode = TribunalAuditMode.UNANIMOUS
         else:
-            mode = "majority"
+            mode = TribunalAuditMode.MAJORITY
 
         # Prepare cluster info and mapping
         clusters: list[AuditorClusterInfo] = []
@@ -160,7 +162,7 @@ class TribunalAuditor:
                     raw_text, mode, list(cluster_to_cmd.keys())
                 )
 
-                if status == "ok":
+                if status == TribunalAuditStatus.OK:
                     total_duration_ms = (time.time() - auditor_start_time) * 1000
                     logger.info("[TRIBUNAL-AUDITOR] Completed with status=ok total_duration_ms=%.2f", total_duration_ms)
                     await self.emitter.emit(
@@ -171,7 +173,7 @@ class TribunalAuditor:
                     auditor_passed, final_command, auditor_revision, auditor_reason = True, target_cmd, None, AuditorReason.OK
                     break
 
-                if status == "swap" and swap_to_cluster_id:
+                if status == TribunalAuditStatus.SWAP and swap_to_cluster_id:
                     final_cmd = cluster_to_cmd[swap_to_cluster_id]
                     swap_to_member = cluster_to_members[swap_to_cluster_id][0]
                     
@@ -195,7 +197,7 @@ class TribunalAuditor:
                     auditor_passed, final_command, auditor_revision, auditor_reason = True, final_cmd, None, AuditorReason.SWAPPED_TO_DISSENTER
                     break
 
-                if status == "revised" and revised_raw:
+                if status == TribunalAuditStatus.REVISED and revised_raw:
                     revised = normalise_command(revised_raw)
                     if not revised:
                         await fail_auditor(self.emitter, request, AuditorReason.NO_VALID_REVISION, "Empty revision", target_cmd)
@@ -205,7 +207,7 @@ class TribunalAuditor:
                         reason = AuditorReason.WHITELIST_VIOLATION if safety_result.error_type == CommandErrorType.WHITELIST_VIOLATION else AuditorReason.NO_VALID_REVISION
                         await fail_auditor(self.emitter, request, reason, f"Revision technical safety failure: {safety_result.error_message}", target_cmd)
 
-                    reason = AuditorReason.REVISED_FROM_DISSENT if mode in ("majority", "tied") else AuditorReason.REVISED
+                    reason = AuditorReason.REVISED_FROM_DISSENT if mode in (TribunalAuditMode.MAJORITY, TribunalAuditMode.TIED) else AuditorReason.REVISED
                     total_duration_ms = (time.time() - auditor_start_time) * 1000
                     logger.info("[TRIBUNAL-AUDITOR] Completed with status=revised total_duration_ms=%.2f", total_duration_ms)
                     await self.emitter.emit(

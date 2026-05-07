@@ -338,6 +338,8 @@ from app.constants.status import (
     SessionType,
     Severity,
     TaskStatus,
+    TribunalAuditMode,
+    TribunalAuditStatus,
     VaultMode,
     VersionStability,
 )
@@ -643,6 +645,8 @@ __all__ = [
     "TriageIntentClassification",
     "TriageRequestPosture",
     "TriageRole",
+    "TribunalAuditMode",
+    "TribunalAuditStatus",
     "TribunalMember",
     "VaultMode",
     "VersionStability",

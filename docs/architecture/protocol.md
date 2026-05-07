@@ -8,7 +8,13 @@ parent: Architecture
 Last Updated: 2026-05-07
 Version: v0.2.0
 
-The g8e protocol is the cross-component contract that binds AI intent, operator execution, event routing, and governance metadata into typed Protobuf messages. This document describes the current protocol surface used by `g8ee`, `g8eo`, `g8ed`, and `g8es`.
+# Protocol Invariants
+
+## 1. No Backwards Compatibility
+The g8e platform follows a strict **NO BACKWARDS COMPATIBILITY** policy. Protocol updates (e.g., migrating from JSON to Protobuf) are breaking changes. Components MUST reject legacy data formats with clear error messages. Users are expected to recreate resources if a protocol change makes existing data unreadable.
+
+## 2. Protobuf-First
+All cross-component operator traffic (commands, results, status updates) MUST use serialized `UniversalEnvelope` Protobuf messages. JSON fallbacks are forbidden.
 
 ---
 
@@ -145,6 +151,28 @@ Current compliance rules:
 - Runtime result publishers emit serialized `UniversalEnvelope` bytes containing typed result payloads.
 
 Protocol changes must update `shared/proto/`, generated language artifacts, event constants when event names change, and every doc that owns the affected behavior.
+
+---
+
+## Field Mappings and Enum Conversions
+
+When `g8ee` decodes a `UniversalEnvelope` from `g8eo`, it performs several transformations to ensure compatibility with internal Pydantic models and Python-idiomatic types.
+
+### 1. Enum Conversions
+Protobuf numeric enums are converted to Python string-based `StrEnum` values:
+
+| Protobuf Enum | Python Enum | Mapping Logic |
+|---------------|-------------|---------------|
+| `g8e.operator.v1.ExecutionStatus` | `app.constants.status.ExecutionStatus` | `EXECUTION_STATUS_COMPLETED` (2) -> `"completed"` |
+| `UniversalEnvelope.event_type` | `app.constants.events.EventType` | Raw string -> `EventType` member |
+
+### 2. Field Boundary Shims
+To maintain compatibility with internal Pydantic models while using standardized Protobuf field names, the following mappings are applied during decoding in `app.utils.envelope_builder.py`:
+
+| Protobuf Field | Python Model Field | Context |
+|----------------|--------------------|---------|
+| `CommandResult.output` | `stdout` | Consistent with `ExecutionResultsPayload` |
+| `CommandResult.exit_code` | `return_code` | Consistent with Python `subprocess.CompletedProcess` |
 
 ---
 

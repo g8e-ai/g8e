@@ -18,7 +18,7 @@ import logging
 import secrets
 from typing import TYPE_CHECKING
 
-from app.constants import DB_COLLECTION_API_KEYS
+from app.constants import DB_COLLECTION_API_KEYS, ApiKeyStatus
 from app.models.api_keys import ApiKeyDocument
 from app.services.cache.cache_aside import CacheAsideService
 from app.utils.timestamp import now
@@ -31,9 +31,6 @@ logger = logging.getLogger(__name__)
 # Constants for hashing (aligned with g8ed)
 API_KEY_HASH_ALGORITHM = "sha256"
 API_KEY_HASH_LENGTH = 32
-
-API_KEY_STATUS_ACTIVE = "ACTIVE"
-API_KEY_STATUS_REVOKED = "REVOKED"
 
 class ApiKeyService:
     """
@@ -71,7 +68,7 @@ class ApiKeyService:
 
         doc = ApiKeyDocument.model_validate(data)
 
-        if doc.status != "ACTIVE":
+        if doc.status != ApiKeyStatus.ACTIVE:
             return False, doc, f"API key is {doc.status}"
 
         if doc.expires_at and doc.expires_at < now():
@@ -99,7 +96,7 @@ class ApiKeyService:
         operator_id: str | None = None,
         client_name: str = "operator",
         permissions: list[str] | None = None,
-        status: str = "ACTIVE",
+        status: ApiKeyStatus = ApiKeyStatus.ACTIVE,
     ) -> bool:
         """Issue (create and store) a new API key."""
         try:
@@ -151,7 +148,7 @@ class ApiKeyService:
             await self.cache.update_document(
                 collection=self.collection,
                 document_id=doc_id,
-                data={"status": API_KEY_STATUS_REVOKED, "revoked_at": now()},
+                data={"status": ApiKeyStatus.REVOKED, "revoked_at": now()},
                 merge=True,
             )
             logger.info(
@@ -181,7 +178,7 @@ class ApiKeyService:
             operator_id=operator_id,
             client_name=client_name,
             permissions=permissions,
-            status=API_KEY_STATUS_ACTIVE,
+            status=ApiKeyStatus.ACTIVE,
         )
 
     async def rotate_operator_key(

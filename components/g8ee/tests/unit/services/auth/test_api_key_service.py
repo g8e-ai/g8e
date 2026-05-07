@@ -15,9 +15,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.constants import ApiKeyStatus
+from app.models.api_keys import ApiKeyDocument
 from app.services.auth.api_key_service import (
-    API_KEY_STATUS_ACTIVE,
-    API_KEY_STATUS_REVOKED,
     ApiKeyService,
 )
 
@@ -50,7 +50,7 @@ class TestApiKeyService:
             operator_id="op-789",
             client_name="operator",
             permissions=["command:execute"],
-            status=API_KEY_STATUS_ACTIVE,
+            status=ApiKeyStatus.ACTIVE,
         )
 
         assert result is True
@@ -59,7 +59,7 @@ class TestApiKeyService:
         assert call_args[1]["collection"] == "api_keys"
         assert call_args[1]["data"]["user_id"] == "user-123"
         assert call_args[1]["data"]["operator_id"] == "op-789"
-        assert call_args[1]["data"]["status"] == API_KEY_STATUS_ACTIVE
+        assert call_args[1]["data"]["status"] == ApiKeyStatus.ACTIVE
 
     async def test_issue_key_failure(self, api_key_service, mock_cache_aside):
         """Test issuing a key when storage fails."""
@@ -74,7 +74,7 @@ class TestApiKeyService:
 
     async def test_revoke_key_success(self, api_key_service, mock_cache_aside):
         """Test revoking an API key successfully."""
-        mock_cache_aside.get_document_with_cache.return_value = {"status": API_KEY_STATUS_ACTIVE}
+        mock_cache_aside.get_document_with_cache.return_value = {"status": ApiKeyStatus.ACTIVE}
         mock_cache_aside.update_document.return_value = MagicMock(success=True)
 
         result = await api_key_service.revoke_key("g8e_test_key_12345")
@@ -82,7 +82,7 @@ class TestApiKeyService:
         assert result is True
         mock_cache_aside.update_document.assert_called_once()
         call_args = mock_cache_aside.update_document.call_args
-        assert call_args[1]["data"]["status"] == API_KEY_STATUS_REVOKED
+        assert call_args[1]["data"]["status"] == ApiKeyStatus.REVOKED
 
     async def test_revoke_key_not_found(self, api_key_service, mock_cache_aside):
         """Test revoking a key that doesn't exist (idempotent)."""
@@ -95,7 +95,7 @@ class TestApiKeyService:
 
     async def test_revoke_key_storage_failure(self, api_key_service, mock_cache_aside):
         """Test revoking a key when storage fails."""
-        mock_cache_aside.get_document_with_cache.return_value = {"status": API_KEY_STATUS_ACTIVE}
+        mock_cache_aside.get_document_with_cache.return_value = {"status": ApiKeyStatus.ACTIVE}
         mock_cache_aside.update_document.side_effect = Exception("Storage error")
 
         result = await api_key_service.revoke_key("g8e_test_key_12345")
@@ -166,7 +166,7 @@ class TestApiKeyService:
 
     async def test_revoke_operator_key_success(self, api_key_service, mock_cache_aside):
         """Test revoking an operator key."""
-        mock_cache_aside.get_document_with_cache.return_value = {"status": API_KEY_STATUS_ACTIVE}
+        mock_cache_aside.get_document_with_cache.return_value = {"status": ApiKeyStatus.ACTIVE}
         mock_cache_aside.update_document.return_value = MagicMock(success=True)
         mock_settings_service = AsyncMock()
 
@@ -179,7 +179,7 @@ class TestApiKeyService:
 
     async def test_revoke_operator_key_failure(self, api_key_service, mock_cache_aside):
         """Test revoking an operator key when storage fails."""
-        mock_cache_aside.get_document_with_cache.return_value = {"status": API_KEY_STATUS_ACTIVE}
+        mock_cache_aside.get_document_with_cache.return_value = {"status": ApiKeyStatus.ACTIVE}
         mock_cache_aside.update_document.side_effect = Exception("Storage error")
         mock_settings_service = AsyncMock()
 
@@ -192,18 +192,21 @@ class TestApiKeyService:
 
     async def test_validate_key_success(self, api_key_service, mock_cache_aside):
         """Test validating a valid API key."""
-        mock_cache_aside.get_document_with_cache.return_value = {
-            "user_id": "user-123",
-            "client_name": "operator",
-            "status": API_KEY_STATUS_ACTIVE,
-            "expires_at": None,
-        }
+        doc = ApiKeyDocument(
+            user_id="user-123",
+            client_name="operator",
+            status=ApiKeyStatus.ACTIVE,
+            expires_at=None,
+            permissions=[],
+        )
+        mock_cache_aside.get_document_with_cache.return_value = doc.model_dump()
 
-        valid, doc, error = await api_key_service.validate_key("g8e_test_key_12345")
+        valid, doc_result, error = await api_key_service.validate_key("g8e_test_key_12345")
 
         assert valid is True
         assert error is None
-        assert doc is not None
+        assert doc_result is not None
+        assert doc_result.user_id == "user-123"
 
     async def test_validate_key_missing(self, api_key_service, mock_cache_aside):
         """Test validating a missing API key."""
@@ -217,38 +220,41 @@ class TestApiKeyService:
 
     async def test_validate_key_revoked(self, api_key_service, mock_cache_aside):
         """Test validating a revoked API key."""
-        mock_cache_aside.get_document_with_cache.return_value = {
-            "user_id": "user-123",
-            "client_name": "operator",
-            "status": API_KEY_STATUS_REVOKED,
-            "expires_at": None,
-        }
+        doc = ApiKeyDocument(
+            user_id="user-123",
+            client_name="operator",
+            status=ApiKeyStatus.REVOKED,
+            expires_at=None,
+            permissions=[],
+        )
+        mock_cache_aside.get_document_with_cache.return_value = doc.model_dump()
 
-        valid, doc, error = await api_key_service.validate_key("g8e_test_key_12345")
+        valid, doc_result, error = await api_key_service.validate_key("g8e_test_key_12345")
 
         assert valid is False
-        assert "REVOKED" in error
-        assert doc is not None
+        assert "revoked" in error.lower()
+        assert doc_result is not None
 
     async def test_validate_key_expired(self, api_key_service, mock_cache_aside):
         """Test validating an expired API key."""
         from datetime import timedelta
-
         from app.utils.timestamp import now
 
         expired_time = now() - timedelta(days=1)
-        mock_cache_aside.get_document_with_cache.return_value = {
-            "user_id": "user-123",
-            "client_name": "operator",
-            "status": API_KEY_STATUS_ACTIVE,
-            "expires_at": expired_time,
-        }
+        doc = ApiKeyDocument(
+            user_id="user-123",
+            client_name="operator",
+            status=ApiKeyStatus.ACTIVE,
+            expires_at=expired_time,
+            permissions=[],
+        )
+        mock_cache_aside.get_document_with_cache.return_value = doc.model_dump()
 
-        valid, doc, error = await api_key_service.validate_key("g8e_test_key_12345")
+        valid, doc_result, error = await api_key_service.validate_key("g8e_test_key_12345")
 
         assert valid is False
         assert "expired" in error.lower()
-        assert doc is not None
+        assert doc_result is not None
 
     def test_make_doc_id(self, api_key_service):
         """Test generating deterministic document ID from API key."""
