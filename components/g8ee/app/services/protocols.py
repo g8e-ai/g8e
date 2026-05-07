@@ -308,6 +308,7 @@ class OperatorDataServiceProtocol(Protocol):
         summary: str,
         details: dict[str, object] | None = None,
         additional_updates: dict[str, object] | None = None,
+        status_check: tuple[OperatorStatus, ...] | None = None,
     ) -> OperatorDocument:
         """Atomic status + history update under a keyed lock."""
         raise NotImplementedError

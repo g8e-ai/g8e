@@ -224,3 +224,136 @@ class TestOperatorLifecycleService:
         success = await lifecycle_service.update_operator_status("missing", OperatorStatus.ACTIVE)
         assert success is False
 
+    async def test_claim_operator_slot_active_status_different_session_preempts(self, lifecycle_service, mock_cache):
+        operator_id = "op-reclaim"
+        old_session_id = "session-old"
+        new_session_id = "session-new"
+
+        mock_cache.get_document_with_cache.side_effect = [
+            {
+                "id": operator_id,
+                "user_id": "user-test",
+                "status": OperatorStatus.ACTIVE,
+                "operator_session_id": old_session_id,
+                "first_deployed": now().isoformat(),
+                "history_trail": [],
+            },
+            {
+                "id": operator_id,
+                "user_id": "user-test",
+                "status": OperatorStatus.ACTIVE,
+                "operator_session_id": new_session_id,
+                "first_deployed": now().isoformat(),
+                "history_trail": [],
+            },
+            {
+                "id": operator_id,
+                "user_id": "user-test",
+                "status": OperatorStatus.ACTIVE,
+                "operator_session_id": new_session_id,
+                "first_deployed": now().isoformat(),
+                "history_trail": [],
+            },
+            None
+        ]
+        mock_cache.update_document.return_value = CacheOperationResult(success=True)
+
+        success = await lifecycle_service.claim_operator_slot(
+            operator_id=operator_id,
+            operator_session_id=new_session_id,
+            bound_web_session_id="web-123",
+            operator_type=OperatorType.SYSTEM,
+        )
+
+        assert success is True
+        assert mock_cache.update_document.call_count == 1
+
+        call_args = mock_cache.update_document.call_args
+        update_data = call_args.kwargs["data"]
+        assert update_data["operator_session_id"] == new_session_id
+        assert update_data["status"] == OperatorStatus.ACTIVE
+
+    async def test_claim_operator_slot_active_status_same_session_fails(self, lifecycle_service, mock_cache):
+        operator_id = "op-same-session"
+        session_id = "session-same"
+
+        mock_cache.get_document_with_cache.return_value = {
+            "id": operator_id,
+            "user_id": "user-test",
+            "status": OperatorStatus.ACTIVE,
+            "operator_session_id": session_id,
+            "first_deployed": now().isoformat(),
+            "history_trail": [],
+        }
+
+        success = await lifecycle_service.claim_operator_slot(
+            operator_id=operator_id,
+            operator_session_id=session_id,
+            bound_web_session_id="web-123",
+        )
+
+        assert success is False
+        assert mock_cache.update_document.call_count == 0
+
+    async def test_claim_operator_slot_stale_status_different_session_preempts(self, lifecycle_service, mock_cache):
+        operator_id = "op-stale"
+        old_session_id = "session-old"
+        new_session_id = "session-new"
+
+        mock_cache.get_document_with_cache.side_effect = [
+            {
+                "id": operator_id,
+                "user_id": "user-test",
+                "status": OperatorStatus.STALE,
+                "operator_session_id": old_session_id,
+                "first_deployed": now().isoformat(),
+                "history_trail": [],
+            },
+            {
+                "id": operator_id,
+                "user_id": "user-test",
+                "status": OperatorStatus.ACTIVE,
+                "operator_session_id": new_session_id,
+                "first_deployed": now().isoformat(),
+                "history_trail": [],
+            },
+            {
+                "id": operator_id,
+                "user_id": "user-test",
+                "status": OperatorStatus.ACTIVE,
+                "operator_session_id": new_session_id,
+                "first_deployed": now().isoformat(),
+                "history_trail": [],
+            },
+            None
+        ]
+        mock_cache.update_document.return_value = CacheOperationResult(success=True)
+
+        success = await lifecycle_service.claim_operator_slot(
+            operator_id=operator_id,
+            operator_session_id=new_session_id,
+            bound_web_session_id="web-123",
+        )
+
+        assert success is True
+        assert mock_cache.update_document.call_count == 1
+
+    async def test_claim_operator_slot_terminated_status_fails(self, lifecycle_service, mock_cache):
+        operator_id = "op-terminated"
+
+        mock_cache.get_document_with_cache.return_value = {
+            "id": operator_id,
+            "user_id": "user-test",
+            "status": OperatorStatus.TERMINATED,
+            "history_trail": [],
+        }
+
+        success = await lifecycle_service.claim_operator_slot(
+            operator_id=operator_id,
+            operator_session_id="session-new",
+            bound_web_session_id="web-123",
+        )
+
+        assert success is False
+        assert mock_cache.update_document.call_count == 0
+

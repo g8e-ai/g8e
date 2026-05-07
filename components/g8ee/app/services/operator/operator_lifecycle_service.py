@@ -76,6 +76,9 @@ class OperatorLifecycleService:
         This orchestrates the transition from AVAILABLE to ACTIVE status,
         sets session bindings, and records first deployment if applicable.
 
+        Allows re-claiming ACTIVE or STALE slots with a different session_id
+        to handle re-authentication race conditions.
+
         Authority: g8ee (single writer for the operator document).
         """
         operator = await self.operator_data_service.get_operator(operator_id)
@@ -83,13 +86,23 @@ class OperatorLifecycleService:
             logger.warning("[OPERATOR-LIFECYCLE] Cannot claim non-existent operator %s", operator_id)
             return False
 
-        if operator.status != OperatorStatus.OFFLINE:
-            logger.warning(
-                "[OPERATOR-LIFECYCLE] Cannot claim operator %s: status is %s (expected OFFLINE)",
+        # Determine if this is a re-claim (pre-empting stale session)
+        is_reclaim = operator.status in (OperatorStatus.ACTIVE, OperatorStatus.STALE)
+        if is_reclaim:
+            if operator.operator_session_id == operator_session_id:
+                logger.warning(
+                    "[OPERATOR-LIFECYCLE] Cannot claim operator %s: already claimed by same session %s",
+                    operator_id,
+                    operator_session_id
+                )
+                return False
+            logger.info(
+                "[OPERATOR-LIFECYCLE] Pre-empting stale session for operator %s: status=%s, old_session=%s, new_session=%s",
                 operator_id,
-                operator.status
+                operator.status,
+                operator.operator_session_id,
+                operator_session_id
             )
-            return False
 
         now_timestamp = now()
         update_data: dict[str, object] = {
@@ -109,11 +122,14 @@ class OperatorLifecycleService:
             update_data["operator_type"] = operator_type
 
         # Perform the status update and history append atomically via data service
+        # Use atomic status check to prevent race conditions with heartbeat monitor
+        allowed_statuses = (OperatorStatus.OFFLINE, OperatorStatus.ACTIVE, OperatorStatus.STALE)
         history_summary = f"Operator slot claimed by session {operator_session_id}"
         history_details = {
             "operator_session_id": operator_session_id,
             "bound_web_session_id": bound_web_session_id,
             "operator_type": str(operator_type) if operator_type else None,
+            "is_reclaim": is_reclaim,
         }
 
         try:
@@ -123,8 +139,12 @@ class OperatorLifecycleService:
                 actor=ComponentName.G8EE,
                 summary=history_summary,
                 details=history_details,
-                additional_updates=update_data
+                additional_updates=update_data,
+                status_check=allowed_statuses,
             )
+        except ValidationError as e:
+            logger.warning("[OPERATOR-LIFECYCLE] Claim failed validation for operator %s: %s", operator_id, e)
+            return False
         except Exception as e:
             logger.error("[OPERATOR-LIFECYCLE] Atomic claim failed for operator %s: %s", operator_id, e)
             return False
@@ -132,6 +152,7 @@ class OperatorLifecycleService:
         logger.info("[OPERATOR-LIFECYCLE] Operator slot claimed %s", operator_id, extra={
             "operator_id": operator_id,
             "operator_session_id": operator_session_id,
+            "is_reclaim": is_reclaim,
         })
 
         return True
