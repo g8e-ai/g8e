@@ -12,9 +12,9 @@
 // limitations under the License.
 
 // Cross-language fixture parity for ledger hashing.
-// Consumes shared/test-fixtures/ledger-hash-fixtures.json (generated from the
-// Python implementation) and asserts the JS verifier produces byte-identical
-// canonical JSON, entry hashes, genesis hashes, and chain validation results.
+// Consumes shared/test-fixtures/ledger-hash-fixtures.json and asserts the JS
+// verifier produces byte-identical canonical JSON, entry hashes, genesis hashes,
+// and chain validation results.
 
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';

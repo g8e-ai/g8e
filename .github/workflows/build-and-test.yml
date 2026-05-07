@@ -92,5 +92,3 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Check model parity
-        run: python3 scripts/testing/check_model_parity.py

@@ -232,8 +232,8 @@ func TestGetDarwinMachineID_PreferencesFileMissing_ReturnsFallback(t *testing.T)
 }
 
 func TestGetDarwinMachineID_PreferencesFileExists_ReturnsHash(t *testing.T) {
-	if runtime.GOOS != constants.Status.Platform.Darwin {
-		t.Skip("hash path only reachable on Darwin where the plist exists")
+	if _, err := os.Stat("/Library/Preferences/SystemConfiguration/preferences.plist"); os.IsNotExist(err) {
+		t.Skip("skipping hash path test: macOS preferences plist does not exist in this environment")
 	}
 
 	id, err := getDarwinMachineID()

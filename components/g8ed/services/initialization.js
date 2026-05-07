@@ -314,6 +314,7 @@ async function _doInitialize() {
             internalHttpClient: internalHttpClientInstance 
         });
         healthCheckService = new HealthCheckService({ 
+            cacheAsideService,
             webSessionService: webSessionService 
         });
 

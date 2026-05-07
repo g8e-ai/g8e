@@ -70,8 +70,6 @@ Manages the platform's root of trust and security invariants.
 Runs component-specific test suites in isolated runner containers via `scripts/testing/run_tests.sh`.
 
 - **Isolation:** Tests for `g8ee` (Python), `g8ed` (Node.js), and `g8eo` (Go) run in dedicated containers.
-- **Parity Check:** Every test run first triggers `scripts/testing/check_model_parity.py` to ensure Pydantic models match JSON schemas.
-- **Fixtures:** `gen_ledger_hash_fixtures.py` manages Merkle ledger test data.
 
 ### Operator Operations (`./g8e operator`)
 Lifecycle management for the `g8eo` operator binary.
@@ -111,9 +109,7 @@ scripts/
 │   ├── mtls-test.sh      # mTLS validation
 │   └── validate-platform-security.sh
 ├── testing/        # Test runners and parity
-│   ├── run_tests.sh      # Main test execution bridge
-│   ├── check_model_parity.py
-│   └── gen_ledger_hash_fixtures.py
+│   └── run_tests.sh      # Main test execution bridge
 └── tools/          # Setup wizards
     ├── setup-llm.sh      # LLM provider config
     ├── setup-search.sh   # Vertex Search config

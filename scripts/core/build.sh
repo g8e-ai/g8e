@@ -324,6 +324,7 @@ if [[ "$COMMAND" == "status" ]]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Component Versions"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    for svc in "${MANAGED_SERVICES[@]}"; do
         printf "  %-14s  %s\n" "$svc" "$_VER"
     done
     echo ""

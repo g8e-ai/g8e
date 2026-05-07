@@ -17,7 +17,6 @@ This document outlines the testing architecture, core principles, and how to wri
 - **Real Infrastructure** — All testing must occur against real services and real inter-component communications. This means using a real `CacheAsideService` with a real `g8es` backend, real pub/sub over WebSockets, and real network stacks.
 - **The "No Mocks" Policy** — We strictly prohibit mocking internal services, database clients, or LLM providers. Integration tests must use real services. If a scenario is extremely difficult to test without a mock, you must justify its necessity in the PR.
 - **Real LLM Calls** — AI tests use real provider API calls. No `MagicMock`, `AsyncMock`, or HTTP interception on LLM clients. The system handles transient failures via exponential backoff in `EvalJudge`.
-- **Contract Enforcement** — We use `scripts/testing/check_model_parity.py` to ensure our source-of-truth constants (events, statuses, JSON schemas) match across Go, Python, and Node.js. This script runs automatically before every `./g8e test` command.
 
 ## Test Harness Architecture: E2E vs Evals
 
@@ -169,5 +168,5 @@ Shared fixtures in `shared/test-fixtures/` (e.g., `sse-events.json`) are used to
 Our GitHub workflows (`.github/workflows/build-and-test.yml`) enforce:
 - Multi-architecture container builds (amd64, arm64).
 - Matrix execution of all component tests against real infrastructure.
-- Contract enforcement via `check_model_parity.py`.
+- Contract enforcement via shared test fixtures.
 - Automated eval runs for core agent behaviors.

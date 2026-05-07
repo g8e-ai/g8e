@@ -1,9 +1,0 @@
-# g8e Demo Fleet SSH Config
-# Use with: ssh -F /app/scripts/ssh_config_demo <hostname>
-
-Host acme-* web-node-* pos-* kiosk-* scanner-* camera-* printer-* badge-* sensor-* controller-* gateway-* router-* logger-* probe-*
-  User appuser
-  IdentityFile /home/g8e/.ssh/id_ed25519
-  StrictHostKeyChecking no
-  UserKnownHostsFile /dev/null
-  LogLevel ERROR

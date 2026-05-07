@@ -266,10 +266,9 @@ type sharedOperatorTypeValues struct {
 }
 
 type sharedCloudSubtypeValues struct {
-	AWS     string `json:"aws"`
-	GCP     string `json:"gcp"`
-	Azure   string `json:"azure"`
-	G8eNode string `json:"g8ep"`
+	AWS   string `json:"aws"`
+	GCP   string `json:"gcp"`
+	Azure string `json:"azure"`
 }
 
 type sharedVaultModeValues struct {
@@ -589,7 +588,6 @@ func TestSharedStatusMatchesGoConstants(t *testing.T) {
 		assert.Equal(t, st.CloudSubtype.AWS, constants.Status.CloudSubtype.AWS)
 		assert.Equal(t, st.CloudSubtype.GCP, constants.Status.CloudSubtype.GCP)
 		assert.Equal(t, st.CloudSubtype.Azure, constants.Status.CloudSubtype.Azure)
-		assert.Equal(t, st.CloudSubtype.G8eNode, constants.Status.CloudSubtype.G8eNode)
 	})
 
 	t.Run("vault.mode", func(t *testing.T) {
