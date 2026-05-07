@@ -103,49 +103,39 @@ class TestApiKeyService:
         assert result is False
 
     async def test_issue_operator_key_success(self, api_key_service, mock_cache_aside):
-        """Test issuing an operator key with g8ep mirror."""
+        """Test issuing an operator key."""
         mock_cache_aside.create_document.return_value = MagicMock(success=True)
         mock_settings_service = AsyncMock()
-        mock_settings_service.update_g8ep_operator_api_key = AsyncMock()
 
         result = await api_key_service.issue_operator_key(
             api_key="g8e_op_key_12345",
             user_id="user-123",
             organization_id="org-456",
             operator_id="op-789",
-            is_g8ep=True,
             settings_service=mock_settings_service,
         )
 
         assert result is True
-        mock_settings_service.update_g8ep_operator_api_key.assert_called_once_with("g8e_op_key_12345")
 
-    async def test_issue_operator_key_mirror_failure_rollback(self, api_key_service, mock_cache_aside):
-        """Test that mirror failure rolls back the canonical record."""
-        mock_cache_aside.create_document.return_value = MagicMock(success=True)
+    async def test_issue_operator_key_failure(self, api_key_service, mock_cache_aside):
+        """Test issuing an operator key when storage fails."""
+        mock_cache_aside.create_document.return_value = MagicMock(success=False, error="Storage error")
         mock_settings_service = AsyncMock()
-        mock_settings_service.update_g8ep_operator_api_key = AsyncMock(side_effect=Exception("Mirror failed"))
-        mock_cache_aside.update_document = AsyncMock()
 
         result = await api_key_service.issue_operator_key(
             api_key="g8e_op_key_12345",
             user_id="user-123",
             organization_id="org-456",
             operator_id="op-789",
-            is_g8ep=True,
             settings_service=mock_settings_service,
         )
 
         assert result is False
-        mock_cache_aside.update_document.assert_called_once()
-        call_args = mock_cache_aside.update_document.call_args
-        assert call_args[1]["data"]["status"] == API_KEY_STATUS_REVOKED
 
     async def test_rotate_operator_key_success(self, api_key_service, mock_cache_aside):
         """Test rotating an operator key."""
         mock_cache_aside.create_document.return_value = MagicMock(success=True)
         mock_settings_service = AsyncMock()
-        mock_settings_service.update_g8ep_operator_api_key = AsyncMock()
 
         result = await api_key_service.rotate_operator_key(
             old_api_key="g8e_old_key_12345",
@@ -153,7 +143,6 @@ class TestApiKeyService:
             user_id="user-123",
             organization_id="org-456",
             operator_id="op-789",
-            is_g8ep=True,
             settings_service=mock_settings_service,
         )
 
@@ -170,42 +159,36 @@ class TestApiKeyService:
             user_id="user-123",
             organization_id="org-456",
             operator_id="op-789",
-            is_g8ep=True,
             settings_service=mock_settings_service,
         )
 
         assert result is False
 
     async def test_revoke_operator_key_success(self, api_key_service, mock_cache_aside):
-        """Test revoking an operator key with mirror clear."""
+        """Test revoking an operator key."""
         mock_cache_aside.get_document_with_cache.return_value = {"status": API_KEY_STATUS_ACTIVE}
         mock_cache_aside.update_document.return_value = MagicMock(success=True)
         mock_settings_service = AsyncMock()
-        mock_settings_service.clear_g8ep_operator_api_key = AsyncMock()
 
         result = await api_key_service.revoke_operator_key(
             api_key="g8e_op_key_12345",
-            is_g8ep=True,
             settings_service=mock_settings_service,
         )
 
         assert result is True
-        mock_settings_service.clear_g8ep_operator_api_key.assert_called_once()
 
-    async def test_revoke_operator_key_mirror_clear_failure(self, api_key_service, mock_cache_aside):
-        """Test that mirror clear failure is logged but not fatal."""
+    async def test_revoke_operator_key_failure(self, api_key_service, mock_cache_aside):
+        """Test revoking an operator key when storage fails."""
         mock_cache_aside.get_document_with_cache.return_value = {"status": API_KEY_STATUS_ACTIVE}
-        mock_cache_aside.update_document.return_value = MagicMock(success=True)
+        mock_cache_aside.update_document.side_effect = Exception("Storage error")
         mock_settings_service = AsyncMock()
-        mock_settings_service.clear_g8ep_operator_api_key = AsyncMock(side_effect=Exception("Clear failed"))
 
         result = await api_key_service.revoke_operator_key(
             api_key="g8e_op_key_12345",
-            is_g8ep=True,
             settings_service=mock_settings_service,
         )
 
-        assert result is True
+        assert result is False
 
     async def test_validate_key_success(self, api_key_service, mock_cache_aside):
         """Test validating a valid API key."""

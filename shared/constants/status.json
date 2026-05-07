@@ -570,6 +570,9 @@
       "nemotron.3.30b": "nemotron-3-nano:30b",
       "llama.3.2.3b": "llama3.2:3b",
       "qwen3.5.2b": "qwen3.5:2b"
+    },
+    "llamacpp": {
+      "gemma4.e2b": "google_gemma-4-E2B-it-Q4_K_M.gguf"
     }
   }
 }

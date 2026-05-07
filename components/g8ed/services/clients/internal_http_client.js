@@ -620,39 +620,6 @@ class InternalHttpClient{
 
         return results;
     }
-
-    /**
-     * Activate the g8ep operator for a user via g8ee authority.
-     * @param {string} user_id - User ID to activate operator for
-     * @returns {Promise<{success: boolean, error?: string}>}
-     */
-    async activateG8EPOperator(user_id, g8eContext = null) {
-        logger.info('[HTTP-INTERNAL] Requesting g8ep operator activation', { user_id });
-        
-        return this.request('g8ee', ApiPaths.g8ee.operatorsG8epActivate(), {
-            method: 'POST',
-            body: { 
-                user_id,
-                web_session_id: g8eContext?.web_session_id
-            },
-            g8eContext
-        });
-    }
-
-    /**
-     * Relaunch the g8ep operator for a user via g8ee authority.
-     * @param {string} user_id - User ID to relaunch operator for
-     * @returns {Promise<{success: boolean, operator_id?: string, error?: string}>}
-     */
-    async relaunchG8EPOperator(user_id, g8eContext = null) {
-        logger.info('[HTTP-INTERNAL] Requesting g8ep operator relaunch', { user_id });
-        
-        return this.request('g8ee', ApiPaths.g8ee.operatorsG8epRelaunch(), {
-            method: 'POST',
-            body: { user_id },
-            g8eContext
-        });
-    }
 }
 
 // Singleton instance is now managed via initialization.js factory

@@ -258,16 +258,6 @@ class OperatorService {
         const { usedSlots } = this.calculateSlotUsage(stats.operators);
         const slots = stats.operators.map(op => OperatorSlot.fromOperator(op));
 
-        // Detect if g8ep (platform operator) setup is pending.
-        // If the g8ep slot is present but not yet active/bound, setup is pending.
-        // If the g8ep slot is missing entirely, it's either not enabled for this user 
-        // or still being initialized in the background.
-        const g8epOp = stats.operators.find(op => op.is_g8ep);
-        const isPlatformSetupPending = g8epOp && (
-            g8epOp.status !== OperatorStatus.ACTIVE && 
-            g8epOp.status !== OperatorStatus.BOUND
-        );
-
         return new OperatorListUpdatedEvent({
             type: EventType.OPERATOR_PANEL_LIST_UPDATED,
             operators: slots,
@@ -275,7 +265,7 @@ class OperatorService {
             active_count: stats.activeCount,
             used_slots: usedSlots,
             max_slots: slots.length,
-            is_platform_setup_pending: !!isPlatformSetupPending,
+            is_platform_setup_pending: false,
             timestamp: now(),
         });
     }

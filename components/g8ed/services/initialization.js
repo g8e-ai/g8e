@@ -55,7 +55,6 @@ import { DeviceLinkService } from './auth/device_link_service.js';
 import { OrganizationModel } from '../models/organization_model.js';
 import { BootstrapService } from './platform/bootstrap_service.js';
 import { SettingsService } from './platform/settings_service.js';
-import { G8ENodeOperatorService } from './platform/g8ep_operator_service.js';
 import { BindOperatorsService } from './operator/operator_bind_service.js';
 import { ConsoleMetricsService } from './platform/console_metrics_service.js';
 import { PostLoginService } from './auth/post_login_service.js';
@@ -83,7 +82,6 @@ let certificateService = null;
 let deviceLinkService = null;
 let deviceRegistrationService = null;
 let settingsService = null;
-let g8eNodeOperatorService = null;
 let consoleMetricsService = null;
 let operatorDownloadService = null;
 let postLoginService = null;
@@ -316,14 +314,7 @@ async function _doInitialize() {
             internalHttpClient: internalHttpClientInstance 
         });
         healthCheckService = new HealthCheckService({ 
-            cacheAsideService, 
             webSessionService: webSessionService 
-        });
-        
-        g8eNodeOperatorService = new G8ENodeOperatorService({ 
-            settingsService: settingsSvc, 
-            operatorService: operatorServiceInstance,
-            internalHttpClient: internalHttpClientInstance
         });
 
         postLoginService = new PostLoginService({
@@ -331,7 +322,6 @@ async function _doInitialize() {
             apiKeyService: apiKeyService,
             userService: userService,
             operatorService: operatorServiceInstance,
-            g8eNodeOperatorService: g8eNodeOperatorService,
             sseService: sseService,
             consoleMetricsService: consoleMetricsService,
         });
@@ -364,7 +354,7 @@ async function _doInitialize() {
             sseService: sseService,
         });
 
-        logger.info('[G8ED-INIT] Phase 6 complete: platform services (SSE, attachments, device links, certificates, g8ep operator, console metrics, post-login, setup, operator-bind)');
+        logger.info('[G8ED-INIT] Phase 6 complete: platform services (SSE, attachments, device links, certificates, console metrics, post-login, setup, operator-bind)');
 
         // --- Phase 7: Configuration ---
         // All configuration is now available via settingsService
@@ -515,11 +505,6 @@ export function getConsoleMetricsService() {
 export function getBindOperatorsService() {
     if (!bindOperatorsServiceInstance) throw new Error('BindOperatorsService not initialized. Call initializeServices() first.');
     return bindOperatorsServiceInstance;
-}
-
-export function getG8ENodeOperatorService() {
-    if (!g8eNodeOperatorService) throw new Error('G8ENodeOperatorService not initialized. Call initializeServices() first.');
-    return g8eNodeOperatorService;
 }
 
 export function getPostLoginService() {

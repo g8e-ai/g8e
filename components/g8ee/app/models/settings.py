@@ -30,6 +30,7 @@ from app.constants import (
     DB_COLLECTION_WEB_SESSIONS,
     DB_COLLECTION_USERS,
     OPENAI_DEFAULT_ENDPOINT,
+    OLLAMA_DEFAULT_ENDPOINT,
     ANTHROPIC_DEFAULT_ENDPOINT,
     LLAMACPP_DEFAULT_ENDPOINT,
     LLMProvider,
@@ -257,7 +258,7 @@ class LLMSettings(G8eBaseModel):
     openai_endpoint: str | None = Field(default=OPENAI_DEFAULT_ENDPOINT)
     openai_api_key: str | None = Field(default=None)
 
-    ollama_endpoint: str | None = Field(default=None)
+    ollama_endpoint: str | None = Field(default=OLLAMA_DEFAULT_ENDPOINT)
     ollama_api_key: str | None = Field(default=None)
 
     gemini_api_key: str | None = Field(default=None)
@@ -375,10 +376,6 @@ class G8eePlatformSettings(G8eBaseModel):
     eval_judge: EvalJudgeSettings = Field(default_factory=EvalJudgeSettings)
     reputation: ReputationSettings = Field(default_factory=ReputationSettings)
     batch_execution: BatchExecutionSettings = Field(default_factory=BatchExecutionSettings)
-    g8ep_operator_api_key: str | None = Field(
-        None,
-        description="API key for the g8ep operator, persisted for fetch-key-and-run.sh retrieval",
-    )
 
     @property
     def ca_cert_path(self) -> str | None:

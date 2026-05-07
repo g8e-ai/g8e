@@ -89,7 +89,6 @@ from .services.service_factory import ServiceFactory
 from .llm.factory import set_settings
 from .utils.service_init import initialize_g8e_service
 from .utils.version import get_version
-from .services.auth.operator_key_reconciler import reconcile_g8ep_operator_key
 from .llm import clear_provider_cache
 
 logger = logging.getLogger(__name__)
@@ -196,12 +195,6 @@ async def lifespan(app: FastAPI):
         )
         ServiceFactory.bind_to_app_state(app, all_services)
         logger.info("All domain services created and bound to app state")
-
-        # -- Phase 5b: Reconcile g8ep operator API key mirror (split-brain guard) --
-        await reconcile_g8ep_operator_key(
-            api_key_service=all_services.api_key_service,
-            settings_service=all_services.settings_service,
-        )
 
         # -- Phase 6: Lifecycle start --
         await ServiceFactory.start_services(all_services)

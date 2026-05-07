@@ -12,6 +12,7 @@ from app.evals.runner.cli import (
     run_full_eval
 )
 from app.evals.runner.metrics import EvalRow
+from app.constants import LLMProvider
 
 def test_get_available_gold_sets():
     with patch('app.evals.runner.cli._GOLD_SETS_DIR') as mock_dir:
@@ -197,7 +198,7 @@ async def test_run_full_eval_no_fleet_fail():
 async def test_run_full_eval_all_providers():
     gold_set_content = [{"id": "s1", "user_query": "q1", "agent_mode": "OPERATOR_BOUND"}]
     
-    for provider in providers:
+    for provider in list(LLMProvider):
         with patch('app.evals.runner.cli.FleetManager'), \
              patch('app.evals.runner.cli.get_llm_provider'), \
              patch('app.evals.runner.cli.EvalJudge'), \

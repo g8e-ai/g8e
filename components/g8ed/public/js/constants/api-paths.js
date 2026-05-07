@@ -52,8 +52,6 @@ const Seg = {
         STOP:            'stop',
         API_KEY:         'api-key',
         REFRESH_API_KEY: 'refresh-api-key',
-        G8E_POD:        'g8ep',
-        REAUTH:          'reauth',
     },
     auth: {
         WEB_SESSION:    'web-session',
@@ -152,7 +150,6 @@ export const ApiPaths = {
         stop:          (operatorId) => `${BASE.OPERATORS}/${operatorId}/${Seg.operator.STOP}`,
         apiKey:        (operatorId) => `${BASE.OPERATORS}/${operatorId}/${Seg.operator.API_KEY}`,
         refreshApiKey: (operatorId) => `${BASE.OPERATORS}/${operatorId}/${Seg.operator.REFRESH_API_KEY}`,
-        g8eNodeReauth: () => `${BASE.OPERATORS}/${Seg.operator.G8E_POD}/${Seg.operator.REAUTH}`,
     },
     auth: {
         webSession:     () => `${BASE.AUTH}/${Seg.auth.WEB_SESSION}`,

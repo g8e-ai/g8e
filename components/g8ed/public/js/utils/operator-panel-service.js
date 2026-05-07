@@ -67,10 +67,6 @@ class OperatorPanelService {
         return this._getClient().post(ComponentName.G8ED, ApiPaths.operator.stop(operatorId), {});
     }
 
-    g8eNodeReauth() {
-        return this._getClient().post(ComponentName.G8ED, ApiPaths.operator.g8eNodeReauth(), {});
-    }
-
     // -------------------------------------------------------------------------
     // Operator details & API keys
     // -------------------------------------------------------------------------

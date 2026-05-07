@@ -39,20 +39,14 @@ export class OperatorSlotService {
         const createdSlotIds = [];
 
         if (existingCount < DEFAULT_OPERATOR_SLOTS) {
-            const hasG8eNode = liveOperators.some(op => op.cloud_subtype === CloudOperatorSubtype.G8E_POD);
             const slotsToCreate = DEFAULT_OPERATOR_SLOTS - existingCount;
-            let g8eNodeAssigned = hasG8eNode;
             for (let i = 0; i < slotsToCreate; i++) {
                 const slotNumber = existingCount + i + 1;
-                const assignG8eNode = !g8eNodeAssigned;
-                if (assignG8eNode) g8eNodeAssigned = true;
                 const creationResponse = await this.createOperatorSlot({
                     userId,
                     organizationId,
                     slotNumber,
-                    operatorType: OperatorType.CLOUD,
-                    cloudSubtype: assignG8eNode ? CloudOperatorSubtype.G8E_POD : null,
-                    isG8eNode: assignG8eNode,
+                    operatorType: OperatorType.SYSTEM,
                     namePrefix: 'operator',
                     webSessionId,
                 });

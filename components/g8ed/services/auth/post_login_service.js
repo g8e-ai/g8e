@@ -15,7 +15,7 @@ import { logger } from '../../utils/logger.js';
 import { SESSION_COOKIE_NAME, COOKIE_SAME_SITE, SESSION_TTL_SECONDS } from '../../constants/session.js';
 import { getCookieDomain } from '../../utils/security.js';
 import { EventType } from '../../constants/events.js';
-import { OperatorSlotInitializationFailedEvent, OperatorG8EPActivationFailedEvent } from '../../models/sse_models.js';
+import { OperatorSlotInitializationFailedEvent } from '../../models/sse_models.js';
 import { G8eHttpContext } from '../../models/request_models.js';
 import { SentinelId } from '../../constants/document_ids.js';
 
@@ -26,16 +26,14 @@ export class PostLoginService {
      * @param {Object} options.apiKeyService - ApiKeyService instance
      * @param {Object} options.userService - UserService instance
      * @param {Object} options.operatorService - OperatorDataService instance
-     * @param {Object} options.g8eNodeOperatorService - G8ENodeOperatorService instance
      * @param {Object} options.sseService - SSEService instance
      * @param {Object} options.consoleMetricsService - ConsoleMetricsService instance
      */
-    constructor({ webSessionService, apiKeyService, userService, operatorService, g8eNodeOperatorService, sseService, consoleMetricsService }) {
+    constructor({ webSessionService, apiKeyService, userService, operatorService, sseService, consoleMetricsService }) {
         this.webSessionService = webSessionService;
         this.apiKeyService = apiKeyService;
         this.userService = userService;
         this.operatorService = operatorService;
-        this.g8eNodeOperatorService = g8eNodeOperatorService;
         this.sseService = sseService;
         this.consoleMetricsService = consoleMetricsService;
     }
@@ -98,68 +96,38 @@ export class PostLoginService {
     }
 
     async onSuccessfulRegistration(user, session) {
-        this._initializeSlotsAndActivateG8eNode(user, session, 'registration').catch(err => {
+        this._initializeSlots(user, session, 'registration').catch(err => {
             logger.error('[POST-LOGIN] post-registration operator setup failed', { userId: user.id, error: err.message, stack: err.stack });
             this._handleSlotInitFailure(user, session, err, 'registration');
         });
     }
 
     async onSuccessfulLogin(user, session) {
-        this._initializeSlotsAndActivateG8eNode(user, session, 'login').catch(err => {
+        this._initializeSlots(user, session, 'login').catch(err => {
             logger.error('[POST-LOGIN] post-login operator setup failed', { userId: user.id, error: err.message, stack: err.stack });
             this._handleSlotInitFailure(user, session, err, 'login');
         });
     }
 
-    async _initializeSlotsAndActivateG8eNode(user, session, context) {
-        const g8eContext = G8eHttpContext.parse({
-            user_id: user.id,
-            web_session_id: session.id,
-            organization_id: user.organization_id || user.id,
-            case_id: SentinelId.UNKNOWN,
-            investigation_id: SentinelId.UNKNOWN,
-            source_component: 'g8ed'
-        });
-
+    async _initializeSlots(user, session, context) {
         await this.operatorService.initializeOperatorSlots(
             user.id,
             user.organization_id || user.id,
             session.id
         );
-
-        await this.g8eNodeOperatorService.activateG8ENodeOperatorForUser(
-            user.id,
-            user.organization_id || null,
-            session.id,
-            g8eContext
-        );
     }
 
     async _handleSlotInitFailure(user, session, error, context) {
         try {
-            const errorContext = error.message;
-            
-            if (errorContext.includes('slot') || errorContext.includes('initializeOperatorSlots')) {
-                const event = OperatorSlotInitializationFailedEvent.parse({
-                    type: EventType.OPERATOR_SLOT_INITIALIZATION_FAILED,
-                    data: {
-                        user_id: user.id,
-                        error: error.message,
-                        context: context
-                    }
-                });
-                await this.sseService.publishEvent(session.id, event);
-            } else {
-                const event = OperatorG8EPActivationFailedEvent.parse({
-                    type: EventType.OPERATOR_G8EP_ACTIVATION_FAILED,
-                    data: {
-                        user_id: user.id,
-                        error: error.message,
-                        context: context
-                    }
-                });
-                await this.sseService.publishEvent(session.id, event);
-            }
+            const event = OperatorSlotInitializationFailedEvent.parse({
+                type: EventType.OPERATOR_SLOT_INITIALIZATION_FAILED,
+                data: {
+                    user_id: user.id,
+                    error: error.message,
+                    context: context
+                }
+            });
+            await this.sseService.publishEvent(session.id, event);
 
             if (this.consoleMetricsService) {
                 this.consoleMetricsService.metricsCache.set('slot_init_failures', {

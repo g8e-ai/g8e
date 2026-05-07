@@ -51,10 +51,6 @@ from app.models.internal_api import (
     ChatStartedResponse,
     DirectCommandRequest,
     DirectCommandSentResponse,
-    G8epOperatorActivationRequest,
-    G8epOperatorActivationResponse,
-    G8epOperatorRelaunchRequest,
-    G8epOperatorRelaunchResponse,
     OperatorApprovalResponse,
     InternalOperatorAuthCall,
     OperatorAuthenticateResponse,
@@ -617,57 +613,6 @@ async def get_pending_approvals(
     return PendingApprovalsResponse(pending_approvals=pending_approvals)
 
 
-@router.post(InternalApiPaths.G8EE_OPERATORS_G8EP_ACTIVATE, response_model=G8epOperatorActivationResponse)
-async def activate_g8ep_operator(
-    request: G8epOperatorActivationRequest,
-    operator_lifecycle_service: "OperatorLifecycleService" = Depends(get_g8ee_operator_lifecycle_service),
-):
-    """
-    Activate the g8ep operator for a user.
-    
-    Called by g8ed after login/registration.
-    Authority: g8ee (process owner for g8ep operator).
-    """
-    try:
-        await operator_lifecycle_service.activate_g8ep_operator(
-            user_id=request.user_id,
-            web_session_id=request.web_session_id
-        )
-        return G8epOperatorActivationResponse(success=True)
-    except Exception as e:
-        logger.error(
-            "[INTERNAL-HTTP] Failed to activate g8ep operator",
-            extra={"error": str(e), "user_id": request.user_id}
-        )
-        return G8epOperatorActivationResponse(success=False, error=str(e))
-
-
-@router.post(InternalApiPaths.G8EE_OPERATORS_G8EP_RELAUNCH, response_model=G8epOperatorRelaunchResponse)
-async def relaunch_g8ep_operator(
-    request: G8epOperatorRelaunchRequest,
-    operator_lifecycle_service: "OperatorLifecycleService" = Depends(get_g8ee_operator_lifecycle_service),
-):
-    """
-    Relaunch the g8ep operator for a user.
-    
-    Called by g8ed during reauth/relaunch.
-    Authority: g8ee (process owner for g8ep operator).
-    """
-    try:
-        result = await operator_lifecycle_service.relaunch_g8ep_operator(request.user_id)
-        return G8epOperatorRelaunchResponse(
-            success=result.get("success", False),
-            operator_id=result.get("operator_id"),
-            error=result.get("error"),
-        )
-    except Exception as e:
-        logger.error(
-            "[INTERNAL-HTTP] Failed to relaunch g8ep operator",
-            extra={"error": str(e), "user_id": request.user_id}
-        )
-        return G8epOperatorRelaunchResponse(success=False, error=str(e))
-
-
 @router.post(InternalApiPaths.G8EE_OPERATOR_DIRECT_COMMAND, response_model=DirectCommandSentResponse)
 async def execute_direct_command(
     request: DirectCommandRequest,
@@ -927,17 +872,12 @@ async def create_operator_slot(
 
         await operator_data_service.create_operator(operator_doc)
 
-        # Issue API key to api_keys collection (canonical) and, if this is a
-        # g8ep operator, mirror to platform_settings in a single coordinated
-        # call. The coordinator rolls back the api_keys entry if the mirror
-        # write fails so we never leave authoritative-without-mirror state.
-        is_g8ep = request.cloud_subtype == CloudSubtype.G8E_POD
+        # Issue API key to api_keys collection (canonical)
         key_issued = await api_key_service.issue_operator_key(
             api_key=api_key,
             user_id=request.user_id,
             organization_id=request.organization_id,
             operator_id=operator_id,
-            is_g8ep=is_g8ep,
             settings_service=settings_service,
             client_name="operator",
             permissions=["OPERATOR_BOOTSTRAP", "OPERATOR_HEARTBEAT", "OPERATOR_DOWNLOAD"],
@@ -954,19 +894,12 @@ async def create_operator_slot(
                 error="Failed to issue API key",
             )
 
-        if is_g8ep:
-            logger.info(
-                "[INTERNAL-HTTP] g8ep operator API key persisted to platform_settings",
-                extra={"operator_id": operator_id, "user_id": request.user_id}
-            )
-
         logger.info(
             "[INTERNAL-HTTP] Operator slot created",
             extra={
                 "operator_id": operator_id,
                 "user_id": request.user_id,
                 "slot_number": request.slot_number,
-                "is_g8ep": is_g8ep,
             }
         )
 
@@ -1015,9 +948,8 @@ async def update_operator_api_key(
             )
             return OperatorUpdateApiKeyResponse(success=False, error="Operator not found")
 
-        # Rotate the API key in the canonical store (and the platform_settings
-        # mirror if g8ep) BEFORE updating the operator doc. Failure here means
-        # the operator doc is left untouched and the old key remains
+        # Rotate the API key in the canonical store BEFORE updating the operator doc.
+        # Failure here means the operator doc is left untouched and the old key remains
         # authoritative — no phantom keys, no split-brain.
         rotated = await api_key_service.rotate_operator_key(
             old_api_key=operator.api_key,
@@ -1025,7 +957,6 @@ async def update_operator_api_key(
             user_id=operator.user_id,
             organization_id=operator.organization_id,
             operator_id=operator.id,
-            is_g8ep=operator.is_g8ep,
             settings_service=settings_service,
             permissions=["OPERATOR_BOOTSTRAP", "OPERATOR_HEARTBEAT", "OPERATOR_DOWNLOAD"],
         )
@@ -1042,12 +973,6 @@ async def update_operator_api_key(
         })
 
         await operator_data_service.update_operator(updated_operator)
-
-        if operator.is_g8ep:
-            logger.info(
-                "[INTERNAL-HTTP] g8ep operator API key updated in platform_settings",
-                extra={"operator_id": request.operator_id}
-            )
 
         logger.info(
             "[INTERNAL-HTTP] Operator API key updated",

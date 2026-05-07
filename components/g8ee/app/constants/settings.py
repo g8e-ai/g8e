@@ -366,7 +366,7 @@ OLLAMA_LLAMA_3_2_3B            = "llama3.2:3b"
 OLLAMA_QWEN3_5_2B              = "qwen3.5:2b"
 
 # llama.cpp models
-LLAMACPP_GEMMA4_E2B           = "google_gemma-4-E2B-it-Q4_K_M.gguf"
+LLAMACPP_GEMMA4_E2B           = _STATUS["llm.models"]["llamacpp"]["gemma4.e2b"]
 
 
 # Provider default models
@@ -379,10 +379,10 @@ LLAMACPP_DEFAULT_MODEL          = LLAMACPP_GEMMA4_E2B
 
 # Provider default endpoints
 OPENAI_DEFAULT_ENDPOINT         = "https://api.openai.com/v1"
-OLLAMA_DEFAULT_ENDPOINT         = "http://10.0.0.5:11434"
+OLLAMA_DEFAULT_ENDPOINT         = "http://localhost:11434"
 ANTHROPIC_DEFAULT_ENDPOINT     = "https://api.anthropic.com"
 GEMINI_DEFAULT_ENDPOINT         = ""  # Gemini uses different discovery mechanism
-LLAMACPP_DEFAULT_ENDPOINT       = "http://10.0.0.6:11444"
+LLAMACPP_DEFAULT_ENDPOINT       = "http://localhost:11444"
 
 
 DEFAULT_FINISH_REASON           = "STOP"

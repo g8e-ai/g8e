@@ -35,8 +35,8 @@ class SupervisorService:
 
     async def _resolve_settings(self):
         settings = await self._settings_service.get_platform_settings()
-        port = settings.get("supervisor_port", "443")
-        token = settings.get("internal_auth_token", "")
+        port = getattr(settings, "supervisor_port", "443")
+        token = getattr(settings.auth, "internal_auth_token", "")
 
         auth_bytes = f"g8e-internal:{token}".encode()
         auth_header = f"Basic {base64.b64encode(auth_bytes).decode('utf-8')}"

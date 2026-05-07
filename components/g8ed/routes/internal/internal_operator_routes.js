@@ -25,7 +25,7 @@ import { ErrorResponse, OperatorListResponse, OperatorSlotsResponse } from '../.
  * @param {Object} options.authorizationMiddleware - Authorization middleware object
  */
 export function createInternalOperatorRouter({ services, authorizationMiddleware }) {
-    const { operatorService, g8eNodeOperatorService } = services;
+    const { operatorService } = services;
     const { requireInternalOrigin, requireInternalOrUserAuth } = authorizationMiddleware;
     const router = express.Router();
 
@@ -211,40 +211,6 @@ export function createInternalOperatorRouter({ services, authorizationMiddleware
             return res.status(500).json(new ErrorResponse({
                 error: error.message || 'Failed to terminate operator'
             }).forWire());
-        }
-    });
-
-    /**
-     * POST /api/internal/operators/user/:userId/reauth
-     */
-    router.post('/user/:userId/reauth', requireInternalOrUserAuth, async (req, res, next) => {
-        const { userId } = req.params;
-
-        logger.info('[INTERNAL-HTTP] g8ep operator reauth requested', { user_id: userId });
-
-        try {
-            const result = await g8eNodeOperatorService.relaunchG8ENodeOperatorForUser(userId);
-
-            if (!result.success) {
-                logger.warn('[INTERNAL-HTTP] g8ep operator reauth failed', {
-                    user_id: userId,
-                    error: result.error,
-                });
-                return res.status(404).json(new ErrorResponse({ error: result.error }).forWire());
-            }
-
-            logger.info('[INTERNAL-HTTP] g8ep operator reauth completed', {
-                user_id: userId,
-                operator_id: result.operator_id,
-            });
-
-            return res.json({ success: true, user_id: userId, operator_id: result.operator_id });
-        } catch (error) {
-            logger.error('[INTERNAL-HTTP] g8ep operator reauth error', {
-                error: error.message,
-                user_id: userId,
-            });
-            return res.status(500).json(new ErrorResponse({ error: error.message || 'Reauth failed' }).forWire());
         }
     });
 

@@ -40,46 +40,10 @@ export function createOperatorStatusRouter({
     authMiddleware,
     authorizationMiddleware
 }) {
-    const { operatorService, g8eNodeOperatorService, internalHttpClient } = services;
+    const { operatorService, internalHttpClient } = services;
     const { requireAuth } = authMiddleware;
     const { requireOperatorOwnership } = authorizationMiddleware;
     const router = express.Router();
-
-    router.post(OperatorPaths.G8E_GATEWAY_REAUTH, requireAuth, async (req, res, next) => {
-        const userId = req.userId;
-
-        logger.info('[g8ep-REAUTH] g8ep operator reauth requested', { user_id: userId });
-
-        try {
-            const result = await g8eNodeOperatorService.relaunchG8ENodeOperatorForUser(userId);
-
-            if (!result.success) {
-                logger.warn('[g8ep-REAUTH] g8ep operator reauth failed', {
-                    user_id: userId,
-                    error: result.error,
-                });
-                return res.status(404).json(new ErrorResponse({ error: result.error }).forClient());
-            }
-
-            logger.info('[g8ep-REAUTH] g8ep operator reauth completed', {
-                user_id: userId,
-                operator_id: result.operator_id,
-            });
-
-            return res.json({
-                success: true,
-                message: 'g8ep reauth initiated',
-                id: result.id
-            });
-
-        } catch (error) {
-            logger.error('[g8ep-REAUTH] g8ep operator reauth error', {
-                user_id: userId,
-                error: error.message,
-            });
-            return res.status(500).json(new ErrorResponse({ error: error.message || 'Reauth failed' }).forClient());
-        }
-    });
 
     router.get(OperatorPaths.DETAILS, requireAuth, requireOperatorOwnership, async (req, res, next) => {
         try {

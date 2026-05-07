@@ -100,8 +100,6 @@ const Operator = {
     REFRESH_API_KEY:   'refresh-api-key',
     DOWNLOAD:          'download',
     HEALTH:            'health',
-    G8E_POD:          'g8ep',
-    REAUTH:            'reauth',
     PARAM:             ':operatorId',
 };
 
@@ -294,7 +292,6 @@ export const OperatorPaths = Object.freeze({
     DOWNLOAD:          `/${Operator.DOWNLOAD}/${':os'}/${':arch'}`,
     DOWNLOAD_SHA256:   `/${Operator.DOWNLOAD}/${':os'}/${':arch'}/sha256`,
     HEALTH:            `/${Operator.HEALTH}`,
-    G8E_GATEWAY_REAUTH:   `/${Operator.G8E_POD}/${Operator.REAUTH}`,
 });
 
 export const AuthPaths = Object.freeze({
@@ -425,7 +422,6 @@ export const InternalPaths = Object.freeze({
     HEALTH:                    InternalApiPaths.g8ed.health,
     SSE_PUSH:                  InternalApiPaths.g8ed.sse_push,
     OPERATORS_USER:            `/${Internal.OPERATORS}/${Internal.USER}/${Internal.PARAM_USER}`,
-    OPERATORS_USER_REAUTH:     `/${Internal.OPERATORS}/${Internal.USER}/${Internal.PARAM_USER}/${Internal.REAUTH}`,
     OPERATORS_USER_INIT_SLOTS: `/${Internal.OPERATORS}/${Internal.USER}/${Internal.PARAM_USER}/${Internal.INITIALIZE_SLOTS}`,
     OPERATOR:                  `/${Internal.OPERATORS}/${Internal.PARAM_OPERATOR}`,
     OPERATOR_STATUS:           `/${Internal.OPERATORS}/${Internal.PARAM_OPERATOR}/${Internal.STATUS}`,
@@ -496,7 +492,6 @@ export const apiPaths = {
         download:       (os, arch)   => `${OperatorBin.BASE}/${Operator.DOWNLOAD}/${os}/${arch}`,
         downloadSha256: (os, arch)   => `${OperatorBin.BASE}/${Operator.DOWNLOAD}/${os}/${arch}/sha256`,
         health:         () => `${OperatorBin.BASE}/${Operator.HEALTH}`,
-        g8eNodeReauth:  () => `${Operator.BASE}/${Operator.G8E_POD}/${Operator.REAUTH}`,
     },
     auth: {
         webSession:          () => `${Auth.BASE}/${Auth.WEB_SESSION}`,
@@ -589,7 +584,6 @@ export const apiPaths = {
         health:              () => `${Internal.BASE}/${Internal.HEALTH}`,
         ssePush:             () => `${Internal.BASE}/${Internal.SSE}/${Internal.PUSH}`,
         operatorsForUser:    (userId) => `${Internal.BASE}/${Internal.OPERATORS}/${Internal.USER}/${userId}`,
-        operatorReauth:      (userId) => `${Internal.BASE}/${Internal.OPERATORS}/${Internal.USER}/${userId}/${Internal.REAUTH}`,
         operatorInitSlots:   (userId) => `${Internal.BASE}/${Internal.OPERATORS}/${Internal.USER}/${userId}/${Internal.INITIALIZE_SLOTS}`,
         operator:            (operatorId) => `${Internal.BASE}/${Internal.OPERATORS}/${operatorId}`,
         operatorStatus:      (operatorId) => `${Internal.BASE}/${Internal.OPERATORS}/${operatorId}/${Internal.STATUS}`,
