@@ -23,8 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tribunal 2.0 Pipeline:** Refactored the Tribunal consensus pipeline into a modular, stage-based architecture utilizing strict Protobuf-typed payloads and signatures.
 - **G8eHttpContext Refactor:** Centralized and enforced strict security header validation (`web_session_id`, `user_id`, `source_component`) for all internal service communication.
 - **Internal API Security:** Enforced strict component-identity verification and session-binding for internal component-to-component routing.
-- **Operator Lifecycle:** Hardened operator slot management with atomic state transitions and reliable relaunch/activation logic for `g8ep` slots.
-- **Standardized Cloud Subtype:** Standardized operator identification using `cloud_subtype='g8ep'` for consistency across cloud providers.
+- **Operator Lifecycle:** Hardened operator slot management with atomic state transitions and reliable relaunch/activation logic.
+- **Removed g8ep:** Eliminated the sidecar-managed `g8ep` operator node and `SupervisorService` in favor of external operators and unified slot management.
+- **Standardized Cloud Subtype:** Standardized operator identification using `cloud_subtype` for consistency across cloud providers.
 
 ### Fixed
 - **Warden Risk Regression:** Resolved a regression where Warden risk levels were incorrectly calculated in certain agent turns.

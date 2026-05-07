@@ -12,19 +12,18 @@ The scripts layer provides the operational interface for the g8e platform. It ab
 
 ## Architecture Overview
 
-g8e uses a **host-bridged execution model**. While the platform runs in Docker, most operational tasks are executed inside the `g8ep` (Platform) container to ensure environment consistency and access to internal APIs.
+g8e uses a **host-bridged execution model**. While the platform runs in Docker, most operational tasks are executed inside dedicated ephemeral containers or via direct API calls to ensure environment consistency.
 
 ### The `./g8e` CLI Entry Point
 
 The root `./g8e` script is a Bash-based dispatcher. It is the only script an operator should invoke directly on the host.
 
 - **Dependency-Free Host:** The host requires only `docker` and `docker-compose`. No Python, Go, or Node.js toolchains are needed locally.
-- **Auto-Bootstrapping:** If a command requires `g8ep` and it's not running, the CLI automatically builds and starts it.
 - **Session Management:** Commands targeting the internal API (`data`, `security`, `mcp`, `operator`) are gated by a local credential store (`~/.g8e/credentials`) which is populated via `./g8e login`.
 
 ### Execution Flow
 1. **Host-Side:** Commands like `platform start` or `operator build` run directly on the host, orchestrating Docker Compose or triggering builds in specialized test-runners.
-2. **Container-Side:** Commands like `data users list` or `security validate` are forwarded via `docker exec` into `g8ep`, where they have access to:
+2. **Container-Side:** Commands like `data users list` or `security validate` are forwarded via `docker run` or `docker exec` into ephemeral runner containers, where they have access to:
    - Internal service networks (`g8es`, `g8ed`).
    - Mounted secrets (TLS certs, internal auth tokens).
    - The full Python operational toolchain.

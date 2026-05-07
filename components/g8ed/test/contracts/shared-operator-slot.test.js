@@ -77,14 +77,6 @@ describe('g8ed OperatorSlot matches shared/models/wire/operator_slot.json', () =
         expect(modelFields.bound_web_session_id.required).toBeUndefined();
     });
 
-    it('is_g8ep field exists and is optional', () => {
-        expect(wireFields.is_g8ep).toBeDefined();
-        expect(wireFields.is_g8ep.required).toBe(false);
-        expect(wireFields.is_g8ep.default).toBe(false);
-        expect(modelFields.is_g8ep).toBeDefined();
-        expect(modelFields.is_g8ep.default).toBe(false);
-    });
-
     it('first_deployed field exists and is optional', () => {
         expect(wireFields.first_deployed).toBeDefined();
         expect(wireFields.first_deployed.required).toBe(false);

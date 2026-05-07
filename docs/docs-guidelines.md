@@ -70,12 +70,7 @@ docs/
 | Heartbeat end-to-end flow | `docs/components/g8ed.md` | `g8eo.md`, `g8ee.md` |
 | Shared constants and models (`shared/`) | `docs/developer.md` | `testing.md` |
 | Universal code quality rules | `docs/developer.md` | do not restate in component docs |
-| Component `#### Tests` code-quality rules (assertion discipline, model usage, anti-patterns) | `docs/developer.md` per-component section | cross-link to `testing.md` for infra |
-| Testing principles, test-runner containers, CI workflows | `docs/testing.md` | do not restate in component docs or `developer.md` |
-| Test infrastructure, fixtures, mocks, helpers, how to run tests | `docs/testing.md` per-component section | `developer.md` `#### Tests` subsections cross-link here |
-| AI agents cross-component architecture (transport, pipeline) | `docs/architecture/ai_agents.md` | `docs/components/g8ee.md` |
 | g8ee component internals (workflow modes, tools, LLM config, Sentinel, LFAA) | `docs/components/g8ee.md` | `docs/architecture/ai_agents.md` |
-| g8ep container definition, volume mounts, SSH deployment | `docs/components/g8ep.md` | |
 | Coverage goals per g8eo package | `docs/components/g8eo.md` | do not restate in `testing.md` |
 
 ---

@@ -194,9 +194,6 @@ class TestCloudSubtypeMatchesSharedJSON:
     def test_azure(self, status):
         assert status["cloud.subtype"]["azure"] == CloudSubtype.AZURE
 
-    def test_g8ep(self, status):
-        assert status["cloud.subtype"]["g8ep"] == CloudSubtype.G8E_POD
-
     def test_all_members_covered(self, status):
         json_keys = set(status["cloud.subtype"].keys())
         enum_count = len(CloudSubtype)

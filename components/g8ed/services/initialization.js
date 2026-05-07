@@ -547,7 +547,6 @@ export function resetInitialization() {
     deviceLinkService = null;
     deviceRegistrationService = null;
     settingsService = null;
-    g8eNodeOperatorService = null;
     consoleMetricsService = null;
     operatorDownloadService = null;
     organizationModel = null;

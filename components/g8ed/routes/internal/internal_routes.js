@@ -44,7 +44,7 @@ export function createInternalRouter({
     services,
     authorizationMiddleware
 }) {
-    const { sseService, operatorService, userService, webSessionService, passkeyAuthService, deviceLinkService, settingsService, g8eNodeOperatorService } = services;
+    const { sseService, operatorService, userService, webSessionService, passkeyAuthService, deviceLinkService, settingsService } = services;
     const { requireInternalOrigin } = authorizationMiddleware;
     const router = express.Router();
 

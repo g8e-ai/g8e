@@ -157,13 +157,6 @@ class OperatorIntentService:
         if not op_doc or op_doc.operator_type != OperatorType.CLOUD:
             return IntentPermissionResult(success=False, error="Intent permissions require a Cloud Operator", error_type=CommandErrorType.CLOUD_OPERATOR_REQUIRED)
 
-        if op_doc.cloud_subtype == CloudSubtype.G8E_POD:
-            return IntentPermissionResult(
-                success=False,
-                error="g8ep operators have direct system access and do not support IAM intent grants. Use run_commands_with_operator directly.",
-                error_type=CommandErrorType.VALIDATION_ERROR
-            )
-
         operator_id = op_doc.id
         operator_session_id = op_doc.operator_session_id
         execution_id = generate_intent_execution_id()

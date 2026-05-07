@@ -13,7 +13,7 @@ This document outlines the testing architecture, core principles, and how to wri
 
 ## Core Engineering Principles
 
-- **Hermetic Execution** — Each component runs tests inside a dedicated test-runner container (`g8ee-test-runner`, `g8ed-test-runner`, `g8eo-test-runner`). Source code is volume-mounted, meaning local development and CI execution are perfectly identical. For manual troubleshooting, use the `g8ep` container which includes all necessary tooling.
+- **Hermetic Execution** — Each component runs tests inside a dedicated test-runner container (`g8ee-test-runner`, `g8ed-test-runner`, `g8eo-test-runner`). Source code is volume-mounted, meaning local development and CI execution are perfectly identical.
 - **Real Infrastructure** — All testing must occur against real services and real inter-component communications. This means using a real `CacheAsideService` with a real `g8es` backend, real pub/sub over WebSockets, and real network stacks.
 - **The "No Mocks" Policy** — We strictly prohibit mocking internal services, database clients, or LLM providers. Integration tests must use real services. If a scenario is extremely difficult to test without a mock, you must justify its necessity in the PR.
 - **Real LLM Calls** — AI tests use real provider API calls. No `MagicMock`, `AsyncMock`, or HTTP interception on LLM clients. The system handles transient failures via exponential backoff in `EvalJudge`.
@@ -92,7 +92,7 @@ Last Updated: 2026-05-07
 Version: v0.2.0
 ./g8e evals up --device-token dlk_xxx --nodes 3
 
-# 2. Run the eval runner (executes in g8ep)
+# 2. Run the eval runner
 
 Last Updated: 2026-05-07
 Version: v0.2.0
@@ -138,7 +138,7 @@ Version: v0.2.0
 
 ## Security & Audit
 
-The platform includes automated security verification tools run via `g8ep`.
+The platform includes automated security verification tools.
 
 ```bash
 # Run mTLS and configuration audit

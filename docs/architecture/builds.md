@@ -19,7 +19,7 @@ g8e is designed for speed and reliability. Every component is containerized and 
 - **Parallel Builds**: All component images build in parallel with no build-time dependencies on each other.
 - **Runtime Discovery**: Component dependencies are enforced at runtime via Docker health checks.
 - **Root of Trust**: `g8es` (the Operator in `--listen` mode) generates the platform CA on first boot, which all other services mount read-only.
-- **Lean Sidecars**: Runtime containers like `g8ep` do not ship with compilers (Go/Node/Python-dev). They fetch binary artifacts from the `g8es` blob store.
+- **Lean Services**: Runtime containers do not ship with unnecessary compilers. They fetch binary artifacts from the `g8es` blob store.
 
 ---
 
@@ -30,7 +30,6 @@ g8e is designed for speed and reliability. Every component is containerized and 
 | **g8es** | Persistence & Pub/Sub | Alpine / Go binary | Multi-stage Go (cross-compiles all arches) |
 | **g8ee** | AI Backend | Python 3.12-slim / FastAPI | Multi-stage Python (pip-install builder) |
 | **g8ed** | Web Gateway | Node 22-alpine / Express | Multi-stage Node (npm-install builder) |
-| **g8ep** | Tooling Sidecar | Python 3.13-alpine | Supervisor-managed processes |
 
 ---
 
@@ -43,8 +42,7 @@ graph TD
     A[Build all images in parallel] --> B[g8es starts]
     B -->|Generates CA Cert| C[g8ee starts]
     B -->|Provides API/PubSub| D[g8ed starts]
-    D -->|Wait for Gateway| E[g8ep starts]
-    E -->|Fetch Operator Binary| F[Platform Live]
+    D -->|Platform Live| F[Ready]
 ```
 
 ### 1. Image Compilation
@@ -58,9 +56,6 @@ On first start, `g8es` generates a self-signed ECDSA P-384 CA and writes it to t
 
 ### 3. Service Convergence
 `g8ee` and `g8ed` wait for `g8es` to be healthy. They mount `g8es-ssl` read-only to establish mTLS trust and authenticate via the `X-Internal-Auth` token. 
-
-### 4. Sidecar Activation
-`g8ep` starts only after `g8ed` is healthy. It uses a `supervisord` PID 1 to manage the local operator process. Since `g8ep` contains no Go compiler, it downloads the appropriate `g8e.operator` binary from the `g8es` blob store on first boot.
 
 ---
 

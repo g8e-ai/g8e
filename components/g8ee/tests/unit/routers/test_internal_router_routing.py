@@ -109,16 +109,6 @@ class TestInternalRouterPathRegistration:
         route_paths = {route.path for route in internal_router.routes}
         assert InternalApiPaths.G8EE_CHAT_TRIAGE_TIMEOUT in route_paths
 
-    def test_operators_g8ep_activate_path_absolute(self):
-        """Operators g8ep activate endpoint should be registered at absolute path."""
-        route_paths = {route.path for route in internal_router.routes}
-        assert InternalApiPaths.G8EE_OPERATORS_G8EP_ACTIVATE in route_paths
-
-    def test_operators_g8ep_relaunch_path_absolute(self):
-        """Operators g8ep relaunch endpoint should be registered at absolute path."""
-        route_paths = {route.path for route in internal_router.routes}
-        assert InternalApiPaths.G8EE_OPERATORS_G8EP_RELAUNCH in route_paths
-
     def test_operators_claim_slot_path_absolute(self):
         """Operators claim slot endpoint should be registered at absolute path."""
         route_paths = {route.path for route in internal_router.routes}

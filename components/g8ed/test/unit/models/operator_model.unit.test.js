@@ -313,7 +313,6 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
             slot_number: 1,
             operator_type: OperatorType.CLOUD,
             cloud_subtype: CloudOperatorSubtype.AWS,
-            is_g8ep: true,
         });
         expect(doc.id).toBe('op-123');
         expect(doc.user_id).toBe('user-456');
@@ -322,7 +321,6 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
         expect(doc.name).toBe('Test Operator');
         expect(doc.operator_type).toBe(OperatorType.CLOUD);
         expect(doc.cloud_subtype).toBe(CloudOperatorSubtype.AWS);
-        expect(doc.is_g8ep).toBe(true);
         expect(doc.slot_cost).toBe(1);
     });
 
@@ -352,11 +350,9 @@ describe('OperatorDocument [UNIT - PURE LOGIC]', () => {
             namePrefix: 'operator',
             slotNumber: 1,
             operatorType: OperatorType.CLOUD,
-            cloudSubtype: CloudOperatorSubtype.G8E_POD,
-            isG8eNode: true,
+            cloudSubtype: CloudOperatorSubtype.AWS,
         });
-        expect(doc.name).toBe('g8ep');
-        expect(doc.is_g8ep).toBe(true);
+        expect(doc.name).toBe('operator-1');
     });
 
     it('forRefresh() creates operator from refresh data', () => {

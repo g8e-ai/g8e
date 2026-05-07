@@ -21,7 +21,6 @@ import { OperatorSlot, OperatorListUpdatedEvent } from '@g8ed/models/operator_mo
 describe('Internal Operator Routes [UNIT]', () => {
     let router;
     let mockOperatorService;
-    let mockG8ENodeOperatorService;
     let mockAuthorizationMiddleware;
 
     beforeEach(() => {
@@ -34,9 +33,6 @@ describe('Internal Operator Routes [UNIT]', () => {
             getOperator: vi.fn(),
             getOperatorWithSessionContext: vi.fn()
         };
-        mockG8ENodeOperatorService = {
-            relaunchG8ENodeOperatorForUser: vi.fn()
-        };
         mockAuthorizationMiddleware = {
             requireInternalOrigin: vi.fn((req, res, next) => next()),
             requireInternalOrUserAuth: vi.fn((req, res, next) => next())
@@ -46,8 +42,7 @@ describe('Internal Operator Routes [UNIT]', () => {
 
         router = createInternalOperatorRouter({
             services: {
-                operatorService: mockOperatorService,
-                g8eNodeOperatorService: mockG8ENodeOperatorService
+                operatorService: mockOperatorService
             },
 
             authorizationMiddleware: mockAuthorizationMiddleware
@@ -266,62 +261,6 @@ describe('Internal Operator Routes [UNIT]', () => {
             await getRoute()(req, res);
 
             expect(mockOperatorService.getUserOperators).toHaveBeenCalledWith('user_123', true);
-        });
-    });
-
-    describe('POST /user/:userId/reauth', () => {
-        const getRoute = () => {
-            const layer = router.stack.find(s => s.route?.path === '/user/:userId/reauth' && s.route?.methods?.post);
-            return layer.route.stack[layer.route.stack.length - 1].handle;
-        };
-
-        it('should relaunch g8ep operator for user', async () => {
-            const req = createMockReq({ params: { userId: 'user_123' } });
-            const res = createMockRes();
-
-            mockG8ENodeOperatorService.relaunchG8ENodeOperatorForUser.mockResolvedValue({
-                success: true,
-                operator_id: 'op_dp_123'
-            });
-
-            await getRoute()(req, res);
-
-            expect(mockG8ENodeOperatorService.relaunchG8ENodeOperatorForUser).toHaveBeenCalledWith('user_123');
-            expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-                success: true,
-                operator_id: 'op_dp_123'
-            }));
-        });
-
-        it('should return 404 if relaunch fails', async () => {
-            const req = createMockReq({ params: { userId: 'user_123' } });
-            const res = createMockRes();
-
-            mockG8ENodeOperatorService.relaunchG8ENodeOperatorForUser.mockResolvedValue({
-                success: false,
-                error: 'Launch failed'
-            });
-
-            await getRoute()(req, res);
-
-            expect(res.status).toHaveBeenCalledWith(404);
-            expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-                error: 'Launch failed'
-            }));
-        });
-
-        it('should return 500 on unexpected error', async () => {
-            const req = createMockReq({ params: { userId: 'user_123' } });
-            const res = createMockRes();
-
-            mockG8ENodeOperatorService.relaunchG8ENodeOperatorForUser.mockRejectedValue(new Error('Boom'));
-
-            await getRoute()(req, res);
-
-            expect(res.status).toHaveBeenCalledWith(500);
-            expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-                error: 'Boom'
-            }));
         });
     });
 

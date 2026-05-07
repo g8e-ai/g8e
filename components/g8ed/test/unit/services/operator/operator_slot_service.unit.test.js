@@ -13,7 +13,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OperatorSlotService } from '@g8ed/services/operator/operator_slot_service.js';
-import { OperatorStatus, OperatorType, DEFAULT_OPERATOR_SLOTS } from '@g8ed/constants/operator.js';
+import { OperatorStatus, OperatorType, DEFAULT_OPERATOR_SLOTS, CloudOperatorSubtype } from '@g8ed/constants/operator.js';
 import { OperatorDocument, CertInfo, OperatorSlotCreationResponse } from '@g8ed/models/operator_model.js';
 import { OperatorRefreshKeyResponse } from '@g8ed/models/response_models.js';
 import { SourceComponent } from '@g8ed/constants/ai.js';
@@ -339,9 +339,8 @@ describe('OperatorSlotService', () => {
                 organizationId: 'org-1',
                 slotNumber: 1,
                 operatorType: OperatorType.CLOUD,
-                cloudSubtype: CloudOperatorSubtype.G8E_POD,
+                cloudSubtype: CloudOperatorSubtype.AWS,
                 namePrefix: 'op',
-                isG8eNode: true,
                 webSessionId: 'web-sess-123'
             };
 

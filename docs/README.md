@@ -30,14 +30,13 @@ Technical deep-dives into the services that comprise the g8e stack.
 | [**g8ee**](components/g8ee.md) | Engine | Python (FastAPI) agentic orchestrator for LLM interactions and tool dispatch. |
 | [**g8ed**](components/g8ed.md) | Terminal | Node.js (Express) management plane, SSE fan-out, and session binding. |
 | [**g8es**](components/g8es.md) | Data Bus | g8eo in `--listen` mode providing unified persistence and pub/sub. |
-| [**g8ep**](components/g8ep.md) | Sidecar | Always-on management node for fleet operations and security scanning. |
 
 ## Guides & Standards
 
 | Document | Description |
 |----------|-------------|
 | [developer.md](developer.md) | Environment setup, service bootstrap, and development workflows. |
-| [testing.md](testing.md) | CI/CD, unit/integration testing on g8ep, and gold-set validation. |
+| [testing.md](testing.md) | CI/CD, unit/integration testing, and gold-set validation. |
 | [g8e-help.md](g8e-help.md) | CLI reference for the `./g8e` management tool. |
 | [docs-guidelines.md](docs-guidelines.md) | Standards for documentation structure and code-first discovery rules. |
 | [glossary.md](glossary.md) | Canonical platform terminology. |

@@ -24,14 +24,12 @@ g8e is a multi-service platform orchestrated by Docker Compose. The architecture
 | **g8ed** | `g8ed` | Node.js 22 | Web frontend, API gateway, and external entry point. |
 | **g8ee** | `g8ee` | Python 3.12 | AI backend engine for agent logic and tool execution. |
 | **g8es** | `g8es` | Go 1.26 | Persistence (SQLite), Pub/Sub broker, and binary store. |
-| **g8ep** | `g8ep` | Python 3.13 | "g8e node" sidecar. Management, CLI tooling, and build orchestration. |
 
 ## Container Lifecycle
 
 ### Production Flow
 1. **g8es** (Persistence) starts first. It generates the platform CA certificate and internal auth tokens.
 2. **g8ed** (Frontend) and **g8ee** (Backend) wait for `g8es` to be healthy. They mount the `g8es-ssl` volume to retrieve the CA cert for mTLS.
-3. **g8ep** (Node) starts last, depending on a healthy frontend.
 
 ### Development & Testing
 - **Test Runners**: Per-component containers (`g8ee-test-runner`, `g8ed-test-runner`, `g8eo-test-runner`) provide isolated, parallel-buildable environments for unit/integration tests.
@@ -53,19 +51,6 @@ All services run as user `g8e` (UID/GID 1001). This is enforced in both Dockerfi
 - **`no-new-privileges: true`**: Prevents privilege escalation even if a container process is compromised.
 - **Exceptions**:
     - `g8es`: Adds `NET_BIND_SERVICE` for internal TLS.
-    - `g8ep`: Adds `NET_RAW, NET_ADMIN, SYS_PTRACE, SETUID, SETGID` for platform management, packet tracing, and debugging.
-
-## Management Sidecar (`g8ep`)
-
-The `g8ep` container (the "node") is the administrative hub of the platform.
-
-### The Docker Socket
-- **Access**: `g8ep` mounts `/var/run/docker.sock` and uses `group_add` to gain host-level Docker permissions as a non-root user.
-- **Usage**: It orchestrates operator builds (via `g8eo`), image management, and platform-wide logging.
-- **Safety**: `g8ep` is internal-only. `g8ed` communicates with it via Supervisor XML-RPC over the internal network.
-
-### SSH Integration
-`g8ep` facilitates SSH streaming by mounting the host's `${HOME}/.ssh/config` and known hosts, along with the SSH agent socket (if available).
 
 ## Network Architecture
 
