@@ -18,7 +18,7 @@
  * Moved from settings_service.js to follow proper model separation.
  */
 
-import { LLMProvider, SearchProvider, GeminiModel, OpenAIModel, AnthropicModel, OllamaModel, LlamaCppModel, PROVIDER_MODELS } from '../constants/ai.js';
+import { LLMProvider, OpenAIModel, AnthropicModel, LlamaCppModel, PROVIDER_MODELS } from '../constants/ai.js';
 
 // All models for each provider are available at every tier; the user decides
 // which model serves primary / assistant / lite.
