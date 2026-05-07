@@ -58,7 +58,7 @@ g8es is the `g8e.operator` binary running in `--listen` mode. It serves as the p
     └─────────┘    └─────────┘        └─────────┘
 ```
 
-**Data Flow:** g8ed and g8ee use HTTP for document store, KV operations, and blob storage. WebSocket is used exclusively for pub/sub messaging. Operators (in normal execution mode) connect via WebSocket only for pub/sub — they do not access the document or KV stores directly.
+**Data Flow:** g8ed and g8ee use HTTP for document store, KV operations, and blob storage. WebSocket is used exclusively for pub/sub messaging. Operators (in normal execution mode) connect via WebSocket only for pub/sub — they do not access the document or KV stores directly. For operator command/result paths, g8es is a byte transport: `data` carries serialized g8e protocol `UniversalEnvelope` bytes, and g8ee/g8eo own payload typing, governance metadata, and L1/L2/L3 enforcement.
 
 **Why SQLite with WAL?** Write-Ahead Logging provides concurrent read/write access without locking, allowing g8ed and g8ee to persist data simultaneously while maintaining ACID guarantees. The single database file at `/data/g8e.db` contains all platform state.
 

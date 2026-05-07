@@ -5,11 +5,11 @@ parent: Reference
 
 # g8e Event Type Reference
 
-Reference guide for g8e platform event type definitions. All inter-component communication uses these event types.
+Reference guide for g8e platform event type definitions. These event strings are canonical identifiers used by the g8e protocol and by UI/API event surfaces.
 
 ---
 
-## Protocol Format
+## Event Name Format
 
 ```
 g8e.v<version>.<domain>.<resource>[.<sub-resource>...].<action>
@@ -83,9 +83,11 @@ g8eo only binds the operator-domain events it produces or consumes. g8ed client 
 
 ---
 
-## Wire Envelope
+## Wire Representation
 
-All events are transmitted as JSON objects with a `type` field carrying the wire value:
+Event names are identifiers, not the whole wire contract. Operator command/result traffic uses the g8e protocol: serialized Protobuf `UniversalEnvelope` bytes carry `event_type`, typed `operator.proto` payload bytes, operator/session context, state roots, and L1/L2/L3 governance metadata. See [g8e Protocol](../architecture/protocol.md).
+
+Browser-facing SSE and internal UI event surfaces use JSON objects with a `type` field carrying the same canonical event value:
 
 ```json
 {
@@ -102,7 +104,7 @@ All events are transmitted as JSON objects with a `type` field carrying the wire
 }
 ```
 
-SSE events use the same structure, serialized via `G8eBaseModel.forWire()` at the g8ed SSE service boundary.
+SSE events use this structure, serialized via `G8eBaseModel.forWire()` at the g8ed SSE service boundary.
 
 ---
 

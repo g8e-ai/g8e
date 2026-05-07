@@ -59,7 +59,9 @@ The machine handles what is machine-checkable. The human handles what is strictl
 
 This is expressed by the **Co-Validation Identity**:
 
-![][image1]
+$$
+\text{Safe}(a) \iff \sigma_{\text{machine}}(a) \land \sigma_{\text{human}}(a)
+$$
 
 Neither signature is sufficient alone. Crucially, we do not allow the human signature to be automated. The industry standard for HITL is a CLI prompt. CLI prompts can be bypassed by a tired developer writing a wrapper script with \--auto-approve.
 

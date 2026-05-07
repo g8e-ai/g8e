@@ -391,7 +391,7 @@ A globally-accessible knowledge base of adversary tactics and techniques based o
 
 ## Operator
 
-The language-agnostic, platform-agnostic execution binary that runs on target systems and receives commands from the g8e control plane. A headless, stateless execution environment that operates with least-privilege principles. Any client that follows the g8e events protocol can act as an Operator. Operators connect via outbound-only WebSocket (Gateway Protocol) to g8ed — no inbound connectivity required. g8ed bridges commands between the internal g8es pub/sub bus and the Operator's WebSocket connection. The current ~4MB Go binary (`g8eo`) is the reference implementation for Linux and macOS.
+The language-agnostic, platform-agnostic execution binary that runs on target systems and receives commands from the g8e control plane. A headless, stateless execution environment that operates with least-privilege principles. Operator command/result traffic follows the g8e protocol: serialized Protobuf `UniversalEnvelope` bytes carry typed `operator.proto` payloads and L1/L2/L3 governance metadata over the pub/sub transport. Operators connect via outbound-only WebSocket (Gateway Protocol) to g8ed — no inbound connectivity required. g8ed bridges commands between the internal g8es pub/sub bus and the Operator's WebSocket connection. The current ~4MB Go binary (`g8eo`) is the reference implementation for Linux and macOS.
 
 Three types exist, determined at startup:
 - **System Operator** (`--cloud=false`) — cloud CLI tools blocked
@@ -500,7 +500,7 @@ The Protobuf root container for cross-component operator protocol messages. It b
 
 Also known as: **g8e.operator**
 
-The Go-based reference implementation of the Operator. A lightweight (~4MB) binary that provides language-agnostic, platform-agnostic execution, file operations, local storage, and heartbeat monitoring. It follows the g8e events protocol, connecting to g8ed via the Gateway Protocol (WebSocket) for command dispatch, result delivery, and heartbeat telemetry.
+The Go-based reference implementation of the Operator. A lightweight (~4MB) binary that provides language-agnostic, platform-agnostic execution, file operations, local storage, and heartbeat monitoring. Operator command/result traffic follows the g8e protocol: serialized Protobuf `UniversalEnvelope` bytes carry typed `operator.proto` payloads and L1/L2/L3 governance metadata over the pub/sub transport.
 
 ---
 

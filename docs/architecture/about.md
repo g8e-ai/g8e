@@ -3,50 +3,51 @@ title: About
 parent: Architecture
 ---
 
-# Origins, Governance, and Philosophy
+# Origins & Architecture
 
 Last Updated: 2026-05-07
 Version: v0.2.0
 
 g8e is the governance layer for AI-powered operations in mission-critical infrastructure. It provides the cryptographic control, threat detection, and non-bypassable human oversight needed to deploy AI into production without compromising security or handing over the keys.
 
-## Origins: Building the Governor with the Governed
+## The Architecture at a Glance
 
-g8e was built from scratch with the help of AI coding agents — the very kind of agents this platform is designed to govern. 
+The industry's current trajectory for agentic AI on infrastructure is structurally broken. Relying on a single Large Language Model creates a system vulnerable to auto-regressive collapse. Conversely, traditional "Human-in-the-Loop" setups rapidly degrade into alert fatigue, where human approval becomes a rubber-stamp. 
 
-The entire stack (Go, Python, Node.js, SQLite, React, Docker) was written, tested, and shipped by leveraging AI as a force multiplier. But we never let it drive unsupervised. We experienced firsthand the sheer power of LLM-assisted engineering, alongside the terrifying reality of what happens when an AI confidently proposes a destructive command or silently hallucinates a dependency.
+To solve this, g8e implements a Byzantine Fault Tolerant (BFT) architecture composed of four core mechanisms:
 
-We realized that to safely use AI to manage infrastructure, we needed a dedicated platform that assumes the AI is simultaneously brilliant and dangerous. A platform where AI is treated as an untrusted advisory input, not a trusted administrative user. 
+### 1. The Reality Portal: Sovereign Execution
+SaaS-based agent architectures pull your authoritative state into their cloud. We inverted this. The execution plane is the **Operator**: a statically compiled 4MB Go binary that runs on your managed host. 
 
-That platform is g8e.
+The Operator treats upstream AI as inherently untrusted. Command traffic isn't ad hoc JSON; it is serialized `UniversalEnvelope` bytes carrying typed Protobuf payloads. Before a single bit moves on the host OS, the Operator rejects malformed envelopes, applies protocol-level L1 checks, verifies L2 Tribunal signatures, and routes the payload through a Sentinel layer enforcing strict allowlist/denylist controls and 46 MITRE ATT&CK detectors.
 
-## The Vision
+### 2. The BFT Control Plane: The Tribunal
+Any state-changing intent is forced through a 5-node LLM consensus panel. Operating under strict information isolation, they evaluate intent in a vacuum. Because they cannot socially engineer each other, they cannot sycophantically agree. 
 
-The problem in modern operations isn't a shortage of tooling—it's the friction between intent and execution, compounded by the massive risk of giving autonomous agents write access to production.
+A calibrated adversarial agent (**Nemesis**) continuously attempts to trick the platform's risk-assessment Wardens with flawed-but-plausible commands. We replaced external audits with continuous, mathematically bounded adversarial pressure.
 
-g8e is designed to bridge that gap by providing a fully self-hosted, air-gap capable platform with zero cloud dependencies. You run the platform on your hardware, using your preferred LLM, maintaining absolute control over your data and your environment.
+### 3. Execution is a Side-Effect of the Audit Log
+In g8e, auditability is the literal nervous system. Utilizing a Local-First Audit Architecture (LFAA), every intent, Tribunal verdict, risk assessment, and raw command output is anchored to an encrypted, Git-backed SQLite ledger on the host *before and during* execution. The cloud can disappear, and your history doesn't.
 
-## Core Principles
-
-Every architectural decision in g8e is an expression of these eight core principles:
-
-1.  **AUTHORITY** — Every mutation is gated by a protocol-level Proof of Human Presence (PHP). Hardware-bound signatures (FIDO2) are the final, non-bypassable security layer. AI proposes, but humans must sign.
-2.  **TRUST** — Zero standing credentials. Privileges are earned per-action, mathematically bound to sessions, and expire automatically.
-3.  **STRUCTURE** — Safety is enforced at the binary and network layers, not via fragile LLM prompts. Prompt injection cannot bypass cryptographic execution constraints.
-4.  **SOVEREIGNTY** — You own your data. The remote host is the system of record; raw operational data never leaves the host, and AI only receives scrubbed context.
-5.  **PRESENCE** — A tiny, outbound-only binary with no inbound ports and no dependencies. It leaves no footprint and vanishes the moment the process is killed.
-6.  **AUDIT** — Accountability lives where execution happens. Encrypted, local, git-backed ledgers provide an immutable record of every change without needing a cloud backend.
-7.  **ISOLATION** — Fully self-hosted and air-gap capable. No SaaS dependencies, no mandatory telemetry, and no "phone-home" behavior. You hold the keys.
-8.  **AGNOSTIC** — Swap models, providers, or infrastructure at will. Governance is the constant; the choice of intelligence is yours.
-
-## Human Agency is the Point
-
-If you give an AI an API key with write access to AWS, you no longer control your infrastructure—the AI's prompt does. Prompt engineering is not a security boundary.
-
-g8e is the governance layer between intent and production execution. It stands between your environment and the AI, ensuring safe and responsible deployments in real production infrastructure where humans stay in control. 
-
-It is not an AI assistant—it is an AI defense force that securely binds LLM reasoning to reality. It never runs autonomously, never bypasses human judgment, never increases your inbound attack surface, and leaves only an encrypted audit trail behind.
+### 4. Proof of Human Presence (PHP)
+The machine handles what is machine-checkable. The human handles what is strictly human-checkable: intent fidelity, contextual stakes, and the acceptance of consequences. g8e disables automatic function calling, enforcing friction through a FIDO2-backed Governance Gateway. The protocol explicitly binds this Layer 3 authorization state (`UniversalEnvelope.governance.l3`) into the payload envelope.
 
 ---
 
-g8e is developed by [Lateralus Labs, LLC](https://lateraluslabs.com), a Certified Veteran Owned Small Business (VOSB) dedicated to AI governance and safety research.
+## Origins: Building the Governor
+
+g8e was built from scratch with the help of AI coding agents — the very kind of agents this platform is designed to govern. 
+
+The entire stack (Go, Python, Node.js, SQLite, React, Docker) was architected, tested, and shipped by leveraging AI as a force multiplier. But we never let it drive unsupervised. We experienced firsthand the sheer power of LLM-assisted engineering, alongside the terrifying reality of what happens when an AI confidently proposes a destructive command or silently hallucinates a dependency. 
+
+We realized that to safely use AI to manage infrastructure, we needed a dedicated platform that assumes the AI is simultaneously brilliant and dangerous. A platform where AI is treated as an untrusted advisory input, not a trusted administrative user.
+
+## About the Architect
+
+g8e was designed and developed by **Danny Barbour**, founder of [Lateralus Labs, LLC](https://lateraluslabs.com), a Certified Veteran-Owned Small Business (VOSB) and SAM.gov registered federal contractor. 
+
+The instinct to design for adversarial conditions—including those inside an LLM—wasn't born in a lab. It was earned by standing on the bridge of a Navy vessel watching complex systems fail under pressure, and later serving as the lead on-call engineer responsible for global enterprise backup environments where failure to restore simply wasn't an option. 
+
+When you build systems where "down" means disaster, you don't bolt governance on at the end. You build it into the wire protocol. The g8e architecture reflects a career spent bridging the gap between cutting-edge systems engineering and zero-trust, TS-eligible, mission-critical infrastructure operations.
+
+*Danny is currently open to new opportunities, consulting, and systems/platform engineering roles. If your team is tackling AI governance, distributed systems, or mission-critical infrastructure, [reach out to build defensible AI infrastructure together](mailto:danny@g8e.ai).*

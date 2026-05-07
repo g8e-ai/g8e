@@ -43,7 +43,7 @@ Before an agent receives the task, the system assembles a comprehensive "world v
 
 To prevent hallucinations and ensure safety, agents never write shell commands. Instead, they emit a `SageOperatorRequest` containing an **Operational Intent**.
 
-### Execution Protocol
+### L1/L2/L3 Execution Path
 1. **Intent Articulation**: Sage describes the goal, targets, and constraints in natural language.
 2. **Technical Safety Validation (L1 Bedrock)**: Before generation, the system ensures the request doesn't violate hardcoded safety invariants (Forbidden Patterns).
 3. **Tribunal Generation (L2 Consensus)**: Five independent members (Axiom, Concord, Variance, Pragma, Nemesis) produce candidate commands based on their specific lens.
@@ -51,8 +51,10 @@ To prevent hallucinations and ensure safety, agents never write shell commands. 
 5. **Warden Risk Analysis**: The **Warden** performs a pre-execution assessment. If a command is classified as `HIGH` risk, it triggers the **Two-Strike Circuit Breaker**.
 6. **Auditor Verification**: The **Auditor** performs the final check of the winning command against the original intent. It can approve (`ok`), revise, or swap to a superior dissenter.
 7. **Technical Re-validation**: Any revised or swapped command is re-validated against the L1 Bedrock (Forbidden, Blacklist, Whitelist).
-8. **Human-in-the-Loop (L3 Authorization)**: The final command, risk assessment, and justification are presented for user approval.
-   - **Auto-Approval**: Benign commands in the `auto_approved.json` list bypass this step, provided they have passed all L1 and L2 gates. This minimizes click fatigue for routine operations.
+8. **L3 Authorization**: The final command, risk assessment, and justification are presented for user approval by default.
+   - **Auto-Approval**: Benign commands in the `auto_approved.json` list can be marked as L3-authorized without a human prompt only after they have passed all L1 and L2 gates. This minimizes click fatigue for routine operations without bypassing L1 Technical Bedrock or L2 Consensus.
+
+When a command is dispatched to an Operator, the result of this path is bound into the g8e protocol: a typed `operator.proto` payload is wrapped in serialized Protobuf `UniversalEnvelope` bytes with L1/L2/L3 governance metadata.
 
 ## Reputation & Staking (Phase 3)
 
