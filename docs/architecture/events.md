@@ -3,12 +3,12 @@ title: Events
 parent: Architecture
 ---
 
-# g8e Event Protocol Specification
+# g8e Event Naming Specification
 
 Last Updated: 2026-05-07
 Version: v0.2.0
 
-The g8e platform uses a unified, hierarchical event protocol for all inter-component communication. This system ensures that AI agents, operators, and human-interactive surfaces remain synchronized in real-time across a distributed environment.
+The g8e platform uses unified, hierarchical event names to identify state transitions and lifecycle signals. Operator command/result traffic is governed by the g8e protocol: serialized Protobuf `UniversalEnvelope` bytes carry `event_type`, typed `operator.proto` payload bytes, operator/session context, state roots, and L1/L2/L3 governance metadata.
 
 ---
 
@@ -100,9 +100,9 @@ Before `g8eo` executes a command, it passes through **The Sentinel** (pre-execut
 
 ---
 
-## Protocol Specification
+## Event Name Specification
 
-### Wire Format
+### Name Format
 Events follow a hierarchical, dot-separated naming convention:
 ```
 g8e.v<version>.<domain>.<resource>[.<sub-resource>...].<action>
@@ -112,7 +112,7 @@ g8e.v<version>.<domain>.<resource>[.<sub-resource>...].<action>
 - **Action**: Always a **past-tense** verb (`created`, `failed`) or state (`active`).
 
 ### Canonical Truth
-`shared/constants/events.json` is the single source of truth for the entire platform.
+`shared/constants/events.json` is the single source of truth for event names. `shared/proto/` is the canonical schema source for g8e protocol envelopes and typed operator payloads.
 - **`g8ee` (Python)**: `EventType` Enum in `app/constants/events.py`.
 - **`g8ed` (Node.js)**: `EventType` object in `public/js/constants/events.js`.
 - **`g8eo` (Go)**: Event constants in `constants/events.go`.

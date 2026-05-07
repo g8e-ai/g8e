@@ -533,7 +533,7 @@ g8ee also owns heartbeat status decay: `HeartbeatStaleMonitorService` (`app/serv
 
 ### Defensive Safety
 
-Before dispatching any state-changing operation, g8ee runs AI-powered safety analysis: command risk classification (LOW / MEDIUM / HIGH, fails closed to HIGH), file operation safety (blocks writes to system paths and destructive ops on dirty git repos), and error analysis with auto-fix (maximum 2 retries before escalating to the user). See [architecture/security.md — Operator Commands via Sentinel](../architecture/security.md#operator-commands-via-sentinel-g8eo) for full details.
+Before dispatching any state-changing operation, g8ee runs the L1/L2/L3 governance path: L1 technical bedrock checks, L2 Tribunal consensus and Auditor commitment, and L3 authorization state from the Governance Gateway. Command risk classification (LOW / MEDIUM / HIGH, fails closed to HIGH), file operation safety, and error analysis with auto-fix all feed that path. Dispatch to g8eo is a g8e protocol operation: a typed `operator.proto` payload is wrapped in a serialized Protobuf `UniversalEnvelope` with governance metadata and published through g8es pub/sub. See [architecture/protocol.md](../architecture/protocol.md) and [architecture/security.md — Operator Commands via Sentinel](../architecture/security.md#operator-commands-via-sentinel-g8eo) for full details.
 
 ### MCP Adapter
 
@@ -566,12 +566,12 @@ g8ee implements an **MCP Client Adapter** that translates outbound tool calls in
 
 **Initialization:** `MCPGatewayService` is created on `app.state.mcp_gateway_service` during startup, after `AIToolService` and `OperatorDataService`.
 
-### Command Validation Policies (The 3-Layer Safety Path)
+### Command Validation Policies (L1/L2/L3 Governance)
 
-g8e enforces a multi-layered validation hierarchy designed to maximize safety while minimizing click fatigue. This hierarchy ensures that every command is technically sound, aligned with intent, and approved by the appropriate authority.
+g8e enforces the L1/L2/L3 validation hierarchy described in the README and protocol docs. This hierarchy ensures that every command is technically sound, aligned with intent, and approved by the appropriate authority. On operator command paths, the hierarchy is carried in `UniversalEnvelope.governance` beside the typed `operator.proto` payload.
 
-#### Layer 1: Technical Bedrock (Hard Gates)
-The technical bedrock is the foundation of g8e safety. It is enforced by code models (Pydantic/validators) and is **always** active, regardless of agent consensus or auto-approval settings.
+#### L1: Technical Bedrock (Hard Gates)
+The technical bedrock is the foundation of g8e safety. It is enforced by validators before dispatch and by g8eo at the protocol boundary through Protobuf reflection over `forbidden_patterns` field options. L1 is **always** active, regardless of agent consensus or auto-approval settings.
 
 | Policy | Setting | JSON Config | Semantics |
 |--------|---------|-------------|-----------|
@@ -579,22 +579,23 @@ The technical bedrock is the foundation of g8e safety. It is enforced by code mo
 | **Blacklist** | `enable_blacklisting` | `config/blacklist.json` | Blocks specific dangerous commands, binaries, substrings, and arguments. **Enabled by default**. |
 | **Whitelist** | `enable_whitelisting` | `config/whitelist.json` | When enabled, only explicitly listed commands/arguments are permitted. Rejects everything else. |
 
-#### Layer 2: Consensus Mechanism (The Tribunal)
-Once a command passes Layer 1, it enters the **Consensus Layer**. This is the default mode of operation for g8e:
+#### L2: Consensus (The Tribunal)
+Once a command passes L1, it enters the **Consensus Layer**. This is the default mode of operation for g8e:
 - **Multi-Agent Generation**: Five independent personas (Axiom, Concord, Variance, Pragma, Nemesis) produce candidate commands.
 - **Ensemble Voting**: A winning command is selected based on frequency and deterministic tie-breaking.
 - **Auditor Verification**: The Auditor performs a final check against the original intent, ensuring the command is idiomatic and correct.
 - **Reputation Staking**: All agents stake their reputation on the verdict. Slashing occurs for any command that passes the Tribunal but violates L1 or produces catastrophic failures.
+- **Protocol Commitment**: Outbound command envelopes carry `governance.l2.tribunal_signature`, an HMAC over `event_type || "\n" || payload_bytes`; g8eo rejects missing or invalid signatures when L2 verification is configured.
 
-#### Layer 3: Authorization (Approval Gate)
+#### L3: Authorization (Approval Gate)
 The final layer determines if a human needs to click "Approve".
 
 | Policy | Setting | Semantics |
 |--------|---------|-----------|
 | **Human-in-the-Loop** | (Default) | Every command requires a user signature. The UI shows the command, justification, risk analysis, and Tribunal consensus. |
-| **Auto-Approve** | `enable_auto_approve` | Listed base verbs (e.g., `uptime`, `df`, `free`) bypass the human prompt. This is a **rubber-stamp** mechanism for benign, low-risk commands. |
+| **Auto-Approve** | `enable_auto_approve` | Listed base verbs (e.g., `uptime`, `df`, `free`) can be marked as L3-authorized without a human prompt after L1 and L2 have already passed. |
 
-**Crucial Invariant:** Auto-approval **NEVER** bypasses Layer 1 (Hard Gates) or Layer 2 (Consensus). A command must be generated/verified by the Tribunal and pass all Hard Gates before it can be auto-approved.
+**Crucial Invariant:** Auto-approval **NEVER** bypasses L1 Technical Bedrock or L2 Consensus. It is L3 authorization state only.
 
 ---
 
@@ -603,13 +604,13 @@ The final layer determines if a human needs to click "Approve".
 g8e is designed to operate at "peak signal" by default. We minimize click fatigue through two primary mechanisms:
 
 1.  **Consensus as Quality Control**: Because the Tribunal (L2) ensures high-quality command generation, users can trust the system's output more readily, allowing them to focus only on high-risk operations.
-2.  **Reputation-Backed Auto-Approval**: The `auto_approved.json` list contains benign diagnostic commands that have been "pre-vetted" by the platform. Combined with the reputation staking of the agents generating those commands, this allows for a high-efficiency operating mode where common lookups happen autonomously.
+2.  **Reputation-Backed L3 Auto-Approval**: The `auto_approved.json` list contains benign diagnostic commands that can skip the human prompt only after L1 and L2 have passed. Combined with the reputation staking of the agents generating those commands, this allows for a high-efficiency operating mode where common lookups happen autonomously.
 
 **JSON `enabled` field semantics:** Each JSON config file has an `enabled` boolean field (defaults to `true`). When `enabled: false`, the validator loads an empty index regardless of the entries in the file — this is a file-level kill switch that allows platform operators to neutralize the entire JSON file without touching per-request settings. Enforcement requires **both** the JSON `enabled` field and the corresponding per-request setting to be `true`.
 
-The three policies are orthogonal. Auto-approve runs **after** L1 safety validation, so a command must pass every hard gate before its base verb is checked against `auto_approved_commands`. The Tribunal is informed of all three via `get_command_constraints` (`auto_approve_enabled`, `auto_approved_commands`) but must still obey hard gates regardless of auto-approve.
+The three policies are orthogonal. Auto-approve runs **after** L1 safety validation and L2 consensus, so a command must pass every hard gate before its base verb is checked against `auto_approved_commands`. The Tribunal is informed of all three via `get_command_constraints` (`auto_approve_enabled`, `auto_approved_commands`) but must still obey hard gates regardless of auto-approve.
 
-When auto-approve applies, `OPERATOR_COMMAND_APPROVAL_PREPARING` is suppressed and `request_command_approval` is skipped entirely — the command proceeds directly to risk analysis and dispatch.
+When auto-approve applies, `OPERATOR_COMMAND_APPROVAL_PREPARING` is suppressed and `request_command_approval` is skipped entirely — the command proceeds with L3 auto-approval metadata into g8e protocol envelope construction and dispatch.
 
 ### Multi-Operator Binding
 
@@ -617,7 +618,7 @@ When multiple operators are bound, the AI must specify a `target_operator`. Reso
 
 ### Cloud Operator Self-Discovery
 
-Read-only AWS IAM introspection commands (e.g., `aws sts get-caller-identity`, role/policy listing) are not auto-approved by g8ee itself — they go through the same approval gate as every other command. Operators may rubber-stamp them via the `auto_approved_commands` setting (see [Command Validation Policies](#command-validation-policies)). The intent system handles privileged AWS operations: see [Cloud Operator & AWS Intents](#cloud-operator--aws-intents).
+Read-only AWS IAM introspection commands (e.g., `aws sts get-caller-identity`, role/policy listing) are not auto-approved by g8ee itself — they go through the same approval gate as every other command. Operators may mark them as L3 auto-approved via the `auto_approved_commands` setting (see [Command Validation Policies](#command-validation-policies)). The intent system handles privileged AWS operations: see [Cloud Operator & AWS Intents](#cloud-operator--aws-intents).
 
 ### Operator Execution History & Activity
 
@@ -1123,10 +1124,10 @@ The `agent_tool_loop.py` extracts these constraints from `tool_executor._user_se
 | `enable_whitelisting` | `false` | Restrict commands to an allowlist |
 | `enable_blacklisting` | `true` | Block commands matching a denylist. Recommended for system safety. |
 | `whitelisted_commands` | — | CSV string of allowed commands (overrides default whitelist) |
-| `enable_auto_approve` | `true` | Skip approval for rubber-stamped commands. Works in harmony with consensus and reputation staking. |
+| `enable_auto_approve` | `true` | Mark eligible commands as L3 auto-approved after L1 and L2 pass. |
 
-**Auto-Approval Bypass Behavior:**
-When `enable_auto_approve` is true and a command's base verb is in the auto-approve list (and it has passed all L1 Hard Gates and L2 Consensus), the command bypasses the human approval requirement and executes immediately.
+**L3 Auto-Approval Behavior:**
+When `enable_auto_approve` is true and a command's base verb is in the auto-approve list, the command can skip the human approval prompt only after it has passed all L1 Hard Gates and L2 Consensus. Auto-approval is L3 authorization state and never bypasses earlier layers.
 
 > **Note:** Command validation is configured per-user via user settings, not platform settings. Users can enable/disable whitelist and blacklist through the Settings UI or API. See [Security Architecture — Command Allowlist and Denylist](../architecture/security.md#command-allowlist-and-denylist) for details on how to configure these controls.
 

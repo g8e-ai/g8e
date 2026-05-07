@@ -9,11 +9,12 @@ governance architecture for trustless environments
 [Position Paper](docs/architecture/position_paper.md) · [Architecture](docs/architecture/about.md) · [Protocol](docs/architecture/protocol.md) · [Security](docs/architecture/security.md) · [Quick Start](#quick-start) · [Contributing](#contributing)
 
 </div>
+
 ## What this is
 
 g8e is an agentic AI platform built on mutual adversarial assumption. Every actor — Engine, Operator, User — assumes the others may be compromised and verifies accordingly. No trusted component, no privileged path, no implicit consent.
 
-The architecture is a host-authoritative governance substrate: Byzantine consensus with an adversarial co-validator, sovereign execution on customer hardware, and chain-of-custody audit. Its cross-component contract is a typed Protobuf `UniversalEnvelope` that binds operator payloads to event names, state roots, and L1/L2/L3 governance metadata. BFT applied to the agentic stack.
+The architecture is a host-authoritative governance substrate: Byzantine consensus with an adversarial co-validator, sovereign execution on customer hardware, and chain-of-custody audit. Its bedrock is the protocol: a Protobuf-first `UniversalEnvelope` contract that binds typed operator payloads to canonical event names, state roots, operator/session context, and L1/L2/L3 governance metadata. BFT applied to the agentic stack.
 
 Self-hosted. Air-gap capable. Apache 2.0. Built for environments where nominal oversight is a failure state and the owner must own the ledger.
 
@@ -23,7 +24,7 @@ Self-hosted. Air-gap capable. Apache 2.0. Built for environments where nominal o
 
 - **LLM sovereignty.** A stateless reasoning engine decouples intent from execution. Context is ephemeral per request; providers never retain session state. Swap between Anthropic, Gemini, OpenAI, Ollama, or llama.cpp without losing continuity.
 
-- **Operator sovereignty.** The Operator is a protocol for verifiable execution, not just a binary. Sentinel pre-execution analysis (46 threat detectors), hardware fingerprint binding, outbound-only mTLS, and Protobuf-first command envelopes carrying governance evidence. No bits move without the surrounding approval flow authorizing the transaction.
+- **Operator sovereignty.** The Operator is a protocol for verifiable execution, not just a binary. Sentinel pre-execution analysis (46 threat detectors), hardware fingerprint binding, outbound-only mTLS, and Protobuf-first command envelopes carrying governance evidence. Legacy or malformed command bytes are rejected rather than translated.
 
 - **Consensus integrity.** The Tribunal generates candidates under tiered information gating — agents cannot see each other's reasoning or downstream plans. An adversarial co-validator (Nemesis) is scored on a proper scoring rule alongside the honest panel. All eight core agent personas (Axiom, Concord, Variance, Pragma, Nemesis, Sage, Auditor, Warden) stake reputation on every turn; malfeasance or incompetence triggers automated slashing across tiered severity bands. Collusion is structurally unprofitable.
 
@@ -106,6 +107,30 @@ The point of steps 1–5 is to minimize what reaches step 6. Your time is the on
 
 ---
 
+## Protocol Foundation
+
+The protocol is the foundation layer of g8e. UI flows, agent workflows, and storage services can evolve, but operator command/result traffic is governed by a single wire contract:
+
+```text
+typed operator.proto payload
+  -> UniversalEnvelope.payload
+  -> serialized UniversalEnvelope bytes
+  -> g8es pub/sub data
+```
+
+Protocol-level enforcement is deliberately fail-closed:
+
+- **No legacy fallback** — operator command paths use serialized `UniversalEnvelope` bytes. JSON command payloads are rejected rather than migrated.
+- **Typed payload binding** — `event_type` selects the `operator.proto` payload type. Recognized request events are decoded before dispatch; unknown event types do not dispatch.
+- **Layer 1 bedrock** — hard technical gates are represented in protocol metadata and enforced at the Operator boundary through reflected `forbidden_patterns` options on typed Protobuf fields.
+- **Layer 2 commitment** — command envelopes carry `governance.l2.tribunal_signature`, an HMAC over `event_type || "\n" || payload_bytes`; `g8eo` rejects missing or invalid signatures when L2 verification is configured.
+- **Layer 3 authorization state** — `governance.l3` carries human-signature or auto-approval evidence from the Governance Gateway. Auto-approval is L3 state only and never bypasses L1 or L2.
+- **State freshness** — `state_merkle_root` binds a command to the fleet state observed at generation time; mismatches are rejected when the Operator has a comparable local root.
+
+Full contract: [protocol.md](docs/architecture/protocol.md).
+
+---
+
 ## Architecture
 
 ```mermaid
@@ -164,7 +189,7 @@ flowchart LR
 | **g8ed** | Node.js | Governance Gateway: FIDO2 auth, mTLS broker, ledger synchronization. |
 | **g8es** | Go | Document store, KV, pub/sub, blob store (SQLite-backed). |
 
-User to `g8ed` over TLS 1.3 with encrypted cookies. Operator to Gateway via outbound-only mTLS WebSocket. No inbound ports on managed hosts. Every connection mutually authenticated; every state change requires a hardware-bound passkey signature.
+User to `g8ed` over TLS 1.3 with encrypted cookies. Operator to Gateway via outbound-only mTLS WebSocket. No inbound ports on managed hosts. Every connection is mutually authenticated; state-changing workflows pass through the L1/L2/L3 governance hierarchy, with hardware-bound passkey authorization as the default Layer 3 path.
 
 ---
 
@@ -213,7 +238,7 @@ System fingerprint binding ties the Operator's mTLS cert to the host it was issu
 
 ## Security
 
-- **Auth** — Protocol-level Proof of Human Presence (PHP) via FIDO2 / WebAuthn passkeys. Hardware-bound approval is the default Layer 3 state for mutations; auto-approval is restricted to benign commands that already passed L1 and L2. Passwords are unsupported by design.
+- **Auth** — Proof of Human Presence (PHP) via FIDO2 / WebAuthn passkeys. Hardware-bound approval is the default Layer 3 state for mutations; auto-approval is restricted to benign commands that already passed L1 and L2. Passwords are unsupported by design.
 - **Transport** — TLS 1.3. Platform-generated ECDSA P-384 CA. Per-Operator mTLS client certs issued at claim time.
 - **Sentinel** — On-host defensive analysis: 46 MITRE-mapped detectors, 28 scrubbing patterns, and command allowlist/denylist enforcement.
 - **Warden** — Engine-side defensive coordination: command/error/file risk classifiers applied before human approval.
@@ -295,7 +320,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 |---|---|
 | [Position Paper](docs/architecture/position_paper.md) | The thesis: AI-Powered, Human-Driven Infrastructure |
 | [Architecture](docs/architecture/about.md) | Origins, governance philosophy, core principles |
-| [Protocol](docs/architecture/protocol.md) | Protobuf `UniversalEnvelope`, typed operator payloads, and governance metadata |
+| [Protocol](docs/architecture/protocol.md) | Bedrock Protobuf `UniversalEnvelope` contract, typed operator payloads, and protocol-level governance enforcement |
 | [Governance](docs/architecture/governance.md) | L1/L2/L3 validation hierarchy, Tribunal mechanics, and protocol binding |
 | [Security](docs/architecture/security.md) | Authentication, Sentinel, LFAA, threat model |
 | [AI Control Plane](docs/architecture/ai_control_plane.md) | ReAct loop, Tribunal, prompts, tools, providers |

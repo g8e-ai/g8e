@@ -17,7 +17,7 @@ g8eo is the Go-based reference implementation of the Operator for the g8e platfo
 ## Core Principles
 
 - **Zero-trust security**: Every operation requires authentication; nothing is implicitly trusted.
-- **Human-in-the-loop**: Every command requires explicit user approval before execution.
+- **Protocol-governed execution**: Every command is carried as a serialized Protobuf `UniversalEnvelope` with typed `operator.proto` payload bytes and L1/L2/L3 governance metadata.
 - **Data sovereignty**: Command output stays local by default; only metadata travels to the cloud.
 - **Defense in depth**: Multiple security layers — mTLS, certificate pinning, and Sentinel platform-wide protection.
 - **Outbound-only connectivity**: g8eo initiates all connections; no inbound ports required in default mode.
@@ -72,6 +72,8 @@ graph TD
     I --> J[g8ee Aggregation]
 ```
 
+g8eo treats g8ee as untrusted input at the protocol boundary. The command loop rejects non-envelope command bytes, decodes recognized `UniversalEnvelope.payload` values into typed `operator.proto` request messages, enforces L1 Technical Bedrock gates through reflected `forbidden_patterns` options, verifies the L2 Tribunal signature when configured, and checks `state_merkle_root` when a comparable local root is available. L3 authorization evidence is carried in `governance.l3`; auto-approval is L3 state only and never bypasses L1 or L2.
+
 ---
 
 ## Storage Architecture
@@ -93,8 +95,9 @@ The LFAA Audit Vault (`.g8e/data/g8e.db`) can be queried directly using SQLite f
 
 ## Canonical Truths
 
-All constants, event types, and status values are defined in shared JSON files. g8eo mirrors these as compile-time Go constants in the `constants/` package:
+The g8e protocol is defined in `shared/proto/`; shared constants JSON registries remain the source for event names, status values, and channel prefixes. g8eo mirrors those registries as compile-time Go constants in the `constants/` package:
 
+- **Protocol**: generated Go artifacts under `shared/proto/` mirror `shared/proto/common.proto`, `shared/proto/operator.proto`, and `shared/proto/pubsub.proto`.
 - **Events**: `constants/events.go` mirrors `shared/constants/events.json`.
 - **Status**: `constants/status.go` mirrors `shared/constants/status.json`.
 - **Channels**: `constants/channels.go` mirrors `shared/constants/channels.json`.
