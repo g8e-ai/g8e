@@ -538,8 +538,6 @@ export class AuthManager {
             actions.appendChild(this.createActionLink('/console', 'Console', null, 'console-link'));
         }
 
-        actions.appendChild(this.createActionLink('/audit', 'Audit Log', null, 'audit-log-link'));
-
         const logoutBtn = document.createElement('button');
         logoutBtn.type = 'button';
         logoutBtn.className = 'profile-dropdown-action-link profile-dropdown-action-button logout-link';

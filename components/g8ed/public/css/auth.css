@@ -562,20 +562,6 @@
     opacity: 0.8;
 }
 
-/* Audit Log link in profile dropdown */
-.audit-log-link {
-    display: inline-flex !important;
-    color: var(--text-primary);
-}
-
-.audit-log-link:hover {
-    color: var(--text-primary);
-}
-
-.audit-log-link .material-symbols-outlined {
-    font-size: 20px;
-}
-
 .profile-dropdown .btn {
     display: flex;
     flex-direction: column;
