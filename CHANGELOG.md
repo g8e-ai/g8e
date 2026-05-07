@@ -110,7 +110,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Reputation System:** Introduced a multi-stage reputation and staking system, including `ReputationCommitment`, `ReputationState`, and `StakeResolution` models for trust-based operator management.
-- **`g8el` (LFAA) Re-introduction:** Restored the `g8el` component to provide Low-Fidelity Agentic Assistance, tuned specifically for eval performance and lightweight orchestration.
 - **SSH Inventory Streaming:** New capability to stream and import operator inventory directly from local SSH configuration files.
 - **Enhanced Test Fixtures:** Added `gold-set-schema.json` and `ledger-hash-fixtures.json` to improve consistency across platform evaluation suites.
 - **Reputation CLI:** New administrative scripts `manage-reputation.py` and `seed-reputation-state.py` for platform governance.
@@ -121,7 +120,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Settings UX Overhaul:** Redesigned the Dashboard Settings page to match the Setup page layout, including improved command validation and status rendering.
 - **Device Link Refactoring:** Streamlined device link management and added auto-approval logic for benign, non-mutating commands.
 - **System Info & Heartbeat Synchronization:** Overhauled `SystemInfo` and `Heartbeat` wire models for better cross-component consistency and reduced payload size.
-- **Documentation Refresh:** Comprehensive updates to all architectural and component documentation, including new guides for `g8el` and updated developer instructions.
 
 ### Fixed
 - **Authentication Loops:** Resolved edge cases in operator authentication and fixed internal routing issues during high-concurrency streams.

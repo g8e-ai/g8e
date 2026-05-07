@@ -31,7 +31,6 @@ g8e is designed for speed and reliability. Every component is containerized and 
 | **g8ee** | AI Backend | Python 3.12-slim / FastAPI | Multi-stage Python (pip-install builder) |
 | **g8ed** | Web Gateway | Node 22-alpine / Express | Multi-stage Node (npm-install builder) |
 | **g8ep** | Tooling Sidecar | Python 3.13-alpine | Supervisor-managed processes |
-| **g8el** | Local Inference | llama.cpp server | Optional profile (`--profile g8el`) |
 
 ---
 

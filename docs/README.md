@@ -30,7 +30,6 @@ Technical deep-dives into the services that comprise the g8e stack.
 | [**g8ee**](components/g8ee.md) | Engine | Python (FastAPI) agentic orchestrator for LLM interactions and tool dispatch. |
 | [**g8ed**](components/g8ed.md) | Terminal | Node.js (Express) management plane, SSE fan-out, and session binding. |
 | [**g8es**](components/g8es.md) | Data Bus | g8eo in `--listen` mode providing unified persistence and pub/sub. |
-| [**g8el**](components/g8el.md) | Local LLM | llama.cpp sidecar for air-gapped or local model execution. |
 | [**g8ep**](components/g8ep.md) | Sidecar | Always-on management node for fleet operations and security scanning. |
 
 ## Guides & Standards

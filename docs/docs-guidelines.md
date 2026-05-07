@@ -49,7 +49,6 @@ docs/
 ├── glossary.md           # All platform terminology, alphabetical
 ├── docs-guidelines.md    # This file
 ├── architecture/         # Cross-component internals: storage, security, AI control plane
-├── components/           # Per-component reference: g8eo, g8ee, g8ed, g8es, g8el, g8ep
 └── reference/            # External reference material (e.g. MCP protocol spec) and core platform principles
 ```
 

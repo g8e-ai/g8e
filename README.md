@@ -163,7 +163,6 @@ flowchart LR
 | **g8ee** | Python / FastAPI | The Engine. Multi-provider LLM abstraction. Tribunal, Auditor, Warden. |
 | **g8ed** | Node.js | Governance Gateway: FIDO2 auth, mTLS broker, ledger synchronization. |
 | **g8es** | Go | Document store, KV, pub/sub, blob store (SQLite-backed). |
-| **g8el** | llama-server | Optional local LLM for air-gapped deployments. |
 
 User to `g8ed` over TLS 1.3 with encrypted cookies. Operator to Gateway via outbound-only mTLS WebSocket. No inbound ports on managed hosts. Every connection mutually authenticated; every state change requires a hardware-bound passkey signature.
 

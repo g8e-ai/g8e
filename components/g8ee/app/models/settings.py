@@ -32,7 +32,6 @@ from app.constants import (
     OPENAI_DEFAULT_ENDPOINT,
     ANTHROPIC_DEFAULT_ENDPOINT,
     LLAMACPP_DEFAULT_ENDPOINT,
-    G8EL_DEFAULT_ENDPOINT,
     LLMProvider,
     LogLevel,
 )
@@ -271,10 +270,6 @@ class LLMSettings(G8eBaseModel):
     llamacpp_api_key: str | None = Field(default=None)
     llamacpp_assistant_model: str | None = Field(default=None)
 
-    g8el_endpoint: str | None = Field(default=G8EL_DEFAULT_ENDPOINT)
-    g8el_api_key: str | None = Field(default=None)
-    g8el_assistant_model: str | None = Field(default=None)
-
     llm_max_tokens: int | None = Field(default=None)
     llm_command_gen_enabled: bool = Field(default=True)
     llm_command_gen_auditor: bool = Field(default=True)
@@ -300,7 +295,6 @@ class LLMSettings(G8eBaseModel):
             LLMProvider.OLLAMA: self.ollama_endpoint,
             LLMProvider.GEMINI: None,
             LLMProvider.LLAMACPP: self.llamacpp_endpoint,
-            LLMProvider.G8EL: self.g8el_endpoint,
         }
         return endpoints.get(self.primary_provider)
 
@@ -313,7 +307,6 @@ class LLMSettings(G8eBaseModel):
             LLMProvider.OLLAMA: self.ollama_endpoint,
             LLMProvider.GEMINI: None,
             LLMProvider.LLAMACPP: self.llamacpp_endpoint,
-            LLMProvider.G8EL: self.g8el_endpoint,
         }
         return endpoints.get(self.assistant_provider)
 

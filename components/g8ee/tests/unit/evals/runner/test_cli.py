@@ -196,7 +196,6 @@ async def test_run_full_eval_no_fleet_fail():
 @pytest.mark.asyncio
 async def test_run_full_eval_all_providers():
     gold_set_content = [{"id": "s1", "user_query": "q1", "agent_mode": "OPERATOR_BOUND"}]
-    providers = ["anthropic", "gemini", "ollama", "llamacpp", "g8el"]
     
     for provider in providers:
         with patch('app.evals.runner.cli.FleetManager'), \

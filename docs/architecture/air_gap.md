@@ -19,7 +19,6 @@ The air-gap configuration is the "Canonical Truth" of g8e's privacy model. In th
 - **No Telemetry:** Zero outbound usage, health, or error data is sent to Lateralus Labs.
 - **Local Assets:** All frontend assets (fonts, icons, JS libraries) are served locally from the `g8ed` container.
 - **Local Persistence:** All platform state is stored in a unified SQLite database managed by the `g8es` (Operator listen mode) service.
-- **Local Intelligence:** LLM inference is handled by the `g8el` component (a self-hosted `llama.cpp` server).
 
 ---
 
@@ -43,9 +42,7 @@ The `g8es` backbone exposes two primary interfaces for internal component commun
 
 ---
 
-## Local Inference: g8el
 
-The `g8el` component provides a local `llama.cpp` inference server, enabling agentic operations without cloud LLM providers.
 
 - **Interface:** OpenAI-compatible HTTP API on port `11444`.
 - **Default Model:** `google_gemma-4-E2B-it-Q4_K_M.gguf` (2.6B parameter model).
@@ -73,13 +70,11 @@ The `g8el` component provides a local `llama.cpp` inference server, enabling age
 ### 1. Preparation (Connected Environment)
 1. Build the platform: `./g8e platform setup`
 2. Download the required model file: `google_gemma-4-E2B-it-Q4_K_M.gguf`
-3. Export the platform images: `docker save g8es g8ee g8ed g8ep g8el | gzip > g8e-airgap.tar.gz`
 
 ### 2. Implementation (Air-Gapped Host)
 1. Load the images: `docker load < g8e-airgap.tar.gz`
 2. Stage the model: Place the `.gguf` file in `components/g8ee/models/`.
 3. Configure the platform:
-   - Set `primary_provider` to `g8el`.
    - Ensure `search.enabled` is `false`.
 4. Launch: `./g8e platform start`
 

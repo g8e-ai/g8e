@@ -118,7 +118,6 @@ export const LLMProvider = Object.freeze({
     GEMINI:    'gemini',
     ANTHROPIC: 'anthropic',
     LLAMACPP:  'llamacpp',
-    G8EL:      'g8el',
 });
 
 /**
@@ -188,14 +187,6 @@ export const LlamaCppModel = Object.freeze({
     GEMMA4_E2B: 'google_gemma-4-E2B-it-Q4_K_M.gguf',
 });
 
-/**
- * g8el model identifiers.
- * Must match g8ee's constants/settings.py G8EL_* constants exactly.
- */
-export const G8elModel = Object.freeze({
-    GEMMA4_E2B: 'google_gemma-4-E2B-it-Q4_K_M.gguf',
-});
-
 // Every model is available at every tier for every provider. The user picks
 // which model serves each role; we do not gate availability by tier.
 const _tierAll = (models) => ({ all: models, primary: models, assistant: models, lite: models });
@@ -230,9 +221,6 @@ export const PROVIDER_MODELS = Object.freeze({
     ]),
     [LLMProvider.LLAMACPP]: _tierAll([
         { id: LlamaCppModel.GEMMA4_E2B, label: 'Gemma 4 E2B (llama.cpp)' },
-    ]),
-    [LLMProvider.G8EL]: _tierAll([
-        { id: G8elModel.GEMMA4_E2B, label: 'Gemma 4 E2B (g8el)' },
     ]),
 });
 
@@ -270,11 +258,6 @@ export const PROVIDER_DEFAULT_MODELS = Object.freeze({
         primary:   OllamaModel.GEMMA4_26B,
         assistant: OllamaModel.GEMMA4_E4B,
         lite:      OllamaModel.LLAMA_3_2_3B,
-    },
-    [LLMProvider.G8EL]: {
-        primary:   G8elModel.GEMMA4_E2B,
-        assistant: G8elModel.GEMMA4_E2B,
-        lite:      G8elModel.GEMMA4_E2B,
     },
 });
 

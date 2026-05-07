@@ -14,7 +14,6 @@ g8e is a multi-service platform orchestrated by Docker Compose. The architecture
 
 - **Zero-Privilege by Default**: Services run as non-root (UID 1001) with nearly all Linux capabilities dropped.
 - **Immutable Infrastructure**: Production services utilize `read_only` root filesystems and image-baked entrypoints.
-- **Minimal Attack Surface**: Only `g8ed` (ingress) and `g8el` (inference) expose ports to the host; all other traffic is internal-only.
 - **Isolated Lifecycles**: Core platform, inference, and test runners have independent scaling and restart policies.
 - **No Backwards Compatibility**: Data structures are strictly enforced; legacy or broken state is rejected rather than migrated.
 
@@ -25,7 +24,6 @@ g8e is a multi-service platform orchestrated by Docker Compose. The architecture
 | **g8ed** | `g8ed` | Node.js 22 | Web frontend, API gateway, and external entry point. |
 | **g8ee** | `g8ee` | Python 3.12 | AI backend engine for agent logic and tool execution. |
 | **g8es** | `g8es` | Go 1.26 | Persistence (SQLite), Pub/Sub broker, and binary store. |
-| **g8el** | `g8el` | C++ | Local LLM inference server (llama.cpp). |
 | **g8ep** | `g8ep` | Python 3.13 | "g8e node" sidecar. Management, CLI tooling, and build orchestration. |
 
 ## Container Lifecycle

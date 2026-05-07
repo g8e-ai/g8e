@@ -11,11 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""llama.cpp LLM provider implementation.
-
-llama.cpp server provides an OpenAI-compatible HTTP API, so this implementation
-inherits from the OpenAI provider.
-"""
+"""LLM provider implementation."""
 
 import logging
 
