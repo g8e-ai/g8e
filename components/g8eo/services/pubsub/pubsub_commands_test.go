@@ -23,6 +23,7 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/models"
 	execution "github.com/g8e-ai/g8e/components/g8eo/services/execution"
 	storage "github.com/g8e-ai/g8e/components/g8eo/services/storage"
+	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -816,51 +817,6 @@ func TestPubSubCommandService_HandleRestoreFileRequest(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// publishLFAAResponse
-// ---------------------------------------------------------------------------
-
-func TestPubSubCommandService_PublishLFAAResponse(t *testing.T) {
-	t.Run("publishes valid LFAA response", func(t *testing.T) {
-		f := newPubsubFixture(t)
-
-		taskID := "task-123"
-		invID := "inv-456"
-		msg := PubSubCommandMessage{
-			ID:                "msg-123",
-			EventType:         constants.Event.Operator.FetchHistory.Requested,
-			CaseID:            "case-789",
-			TaskID:            &taskID,
-			InvestigationID:   invID,
-			OperatorSessionID: "web-123",
-			Payload:           json.RawMessage(`{}`),
-			Timestamp:         time.Now().UTC(),
-		}
-
-		publishLFAAResponseTo(context.Background(), f.DB, f.Cfg, f.Logger, msg, constants.Event.Operator.FetchHistory.Completed, []byte(`{"success": true, "events": []}`))
-
-		published := f.DB.LastPublished()
-		require.NotNil(t, published, "expected LFAA response to be published")
-		assert.Contains(t, string(published.Data), constants.Event.Operator.FetchHistory.Completed)
-	})
-
-	t.Run("handles invalid response JSON gracefully", func(t *testing.T) {
-		f := newPubsubFixture(t)
-
-		msg := PubSubCommandMessage{
-			ID:        "msg-123",
-			EventType: constants.Event.Operator.FetchHistory.Requested,
-			CaseID:    "case-789",
-			Payload:   json.RawMessage(`{}`),
-			Timestamp: time.Now().UTC(),
-		}
-
-		assert.NotPanics(t, func() {
-			publishLFAAResponseTo(context.Background(), f.DB, f.Cfg, f.Logger, msg, constants.Event.Operator.FetchHistory.Completed, []byte(`{invalid json}`))
-		})
-	})
-}
-
-// ---------------------------------------------------------------------------
 // publishLFAAError
 // ---------------------------------------------------------------------------
 
@@ -916,7 +872,11 @@ func TestPubSubCommandService_PublishFetchLogsFailure(t *testing.T) {
 		assert.Contains(t, string(published.Data), constants.Event.Operator.FetchLogs.Failed)
 		assert.Contains(t, string(published.Data), "execution not found")
 		assert.Contains(t, string(published.Data), "exec-123")
-		assert.Contains(t, string(published.Data), "\"status\":\"failed\"")
+
+		env := testutil.MustUnmarshalUniversalEnvelope(t, published.Data)
+		var result operatorv1.CommandResult
+		testutil.MustUnmarshalPayload(t, env.Payload, &result)
+		assert.Equal(t, string(constants.ExecutionStatusFailed), result.Status)
 	})
 }
 

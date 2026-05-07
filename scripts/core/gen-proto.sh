@@ -42,6 +42,11 @@ docker compose run --rm -u root -v "$PROTO_SRC_DIR:/proto_src" -v "$PY_OUT_DIR:/
   --grpc_python_out=/py_out \
   /proto_src/*.proto"
 
+# Post-process Python files to fix imports for package structure
+docker compose run --rm -u root -v "$PY_OUT_DIR:/py_out" g8eo-test-runner sh -c "\
+  touch /py_out/__init__.py && \
+  sed -i 's/^import \(.*_pb2\)/from . import \1/' /py_out/*_pb2*.py"
+
 # JS generation
 docker compose run --rm -u root -v "$PROTO_SRC_DIR:/proto_src" -v "$JS_OUT_DIR:/js_out" g8eo-test-runner sh -c "\
   grpc_tools_node_protoc -I=/proto_src -I=/usr/include \

@@ -320,6 +320,13 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg PubSubC
 		if result.BackupPath != nil {
 			protoResult.BackupPath = *result.BackupPath
 		}
+		if result.Content != nil {
+			protoResult.Content = *result.Content
+			protoResult.StdoutSize = int32(len(*result.Content))
+		}
+		if result.ErrorMessage != nil && result.Status == constants.ExecutionStatusFailed {
+			protoResult.StderrSize = int32(len(*result.ErrorMessage))
+		}
 
 		if err := fs.results.PublishFileEditResult(ctx, protoResult, msg); err != nil {
 			fs.logger.Error("Failed to publish file edit result", "error", err)
@@ -676,7 +683,7 @@ func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg PubSubCom
 		ExecutionId:     requestID,
 		Path:            protoRead.Path,
 		Status:          string(constants.ExecutionStatusCompleted),
-		Content:         []byte(content),
+		Content:         content,
 		SizeBytes:       int64(len(data)),
 		Truncated:       truncated,
 		DurationSeconds: float32(duration),

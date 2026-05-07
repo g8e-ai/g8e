@@ -9,6 +9,7 @@
   },
 
   "g8e.status": {
+    "available": "available",
     "unavailable": "unavailable",
     "offline": "offline",
     "bound": "bound",

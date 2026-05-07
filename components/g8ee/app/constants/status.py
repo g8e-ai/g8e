@@ -59,6 +59,7 @@ class OperatorStatus(StrEnum):
     ACTIVE = _STATUS["g8e.status"]["active"]
     STOPPED = _STATUS["g8e.status"]["stopped"]
     TERMINATED = _STATUS["g8e.status"]["terminated"]
+    AVAILABLE = _STATUS["g8e.status"]["available"]
 
 class ExecutionStatus(StrEnum):
     PENDING = _STATUS["execution.status"]["pending"]

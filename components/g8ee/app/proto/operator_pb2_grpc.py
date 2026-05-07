@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-import operator_pb2 as operator__pb2
+from . import operator_pb2 as operator__pb2
 
 GRPC_GENERATED_VERSION = '1.80.0'
 GRPC_VERSION = grpc.__version__

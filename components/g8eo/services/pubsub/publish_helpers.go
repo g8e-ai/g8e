@@ -15,7 +15,6 @@ package pubsub
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 
 	"google.golang.org/protobuf/proto"
@@ -23,7 +22,6 @@ import (
 
 	"github.com/g8e-ai/g8e/components/g8eo/config"
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
-	"github.com/g8e-ai/g8e/components/g8eo/models"
 	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
 )
 
@@ -63,7 +61,7 @@ func setExecutionIDOnPayload(payload proto.Message, executionID string) {
 	}
 }
 
-// publishLFAATypedResponseTo builds a G8eMessage from a typed payload and publishes it to the
+// publishLFAATypedResponseTo builds a UniversalEnvelope from a typed payload and publishes it to the
 // results channel. Used by services that hold a PubSubClient directly.
 func publishLFAATypedResponseTo(
 	ctx context.Context,
@@ -77,24 +75,23 @@ func publishLFAATypedResponseTo(
 	executionID := executionIDFromMessage(msg)
 	setExecutionIDOnPayload(payload, executionID)
 
-	resultMsg, err := models.NewG8eMessage(
-		eventType, msg.CaseID,
-		cfg.OperatorID, cfg.OperatorSessionId, cfg.SystemFingerprint,
-		payload,
-	)
+	env, err := BuildUniversalEnvelope(cfg, eventType, payload, "")
 	if err != nil {
-		logger.Error("Failed to build LFAA typed response", "error", err)
+		logger.Error("Failed to build LFAA typed response envelope", "error", err)
 		return
 	}
 
-	resultMsg.APIKey = cfg.APIKey
-	resultMsg.TaskID = msg.TaskID
-	resultMsg.InvestigationID = msg.InvestigationID
-	resultMsg.OperatorSessionID = msg.OperatorSessionID
+	// Override envelope metadata from original message
+	env.CaseId = msg.CaseID
+	if msg.TaskID != nil {
+		env.TaskId = *msg.TaskID
+	}
+	env.InvestigationId = msg.InvestigationID
+	env.OperatorSessionId = msg.OperatorSessionID
 
-	data, err := resultMsg.Marshal()
+	data, err := proto.Marshal(env)
 	if err != nil {
-		logger.Error("Failed to marshal LFAA typed response", "error", err)
+		logger.Error("Failed to marshal LFAA typed response envelope", "error", err)
 		return
 	}
 
@@ -104,10 +101,10 @@ func publishLFAATypedResponseTo(
 		return
 	}
 
-	logger.Info("LFAA typed response published", "event_type", eventType)
+	logger.Info("LFAA typed response published (Protocol-First)", "event_type", eventType)
 }
 
-// publishLFAAErrorTo builds an error G8eMessage and publishes it to the results channel.
+// publishLFAAErrorTo builds an error UniversalEnvelope and publishes it to the results channel.
 func publishLFAAErrorTo(
 	ctx context.Context,
 	client PubSubClient,
@@ -125,24 +122,23 @@ func publishLFAAErrorTo(
 		Error:       errorMsg,
 	}
 
-	resultMsg, err := models.NewG8eMessage(
-		eventType, msg.CaseID,
-		cfg.OperatorID, cfg.OperatorSessionId, cfg.SystemFingerprint,
-		payload,
-	)
+	env, err := BuildUniversalEnvelope(cfg, eventType, payload, "")
 	if err != nil {
-		logger.Error("Failed to build LFAA error message", "error", err)
+		logger.Error("Failed to build LFAA error envelope", "error", err)
 		return
 	}
 
-	resultMsg.APIKey = cfg.APIKey
-	resultMsg.TaskID = msg.TaskID
-	resultMsg.InvestigationID = msg.InvestigationID
-	resultMsg.OperatorSessionID = msg.OperatorSessionID
+	// Override envelope metadata from original message
+	env.CaseId = msg.CaseID
+	if msg.TaskID != nil {
+		env.TaskId = *msg.TaskID
+	}
+	env.InvestigationId = msg.InvestigationID
+	env.OperatorSessionId = msg.OperatorSessionID
 
-	data, err := resultMsg.Marshal()
+	data, err := proto.Marshal(env)
 	if err != nil {
-		logger.Error("Failed to marshal LFAA error", "error", err)
+		logger.Error("Failed to marshal LFAA error envelope", "error", err)
 		return
 	}
 
@@ -150,45 +146,4 @@ func publishLFAAErrorTo(
 	if err := client.Publish(ctx, channelName, data); err != nil {
 		logger.Error("Failed to publish LFAA error", "error", err)
 	}
-}
-
-// publishLFAAResponseTo publishes a pre-marshalled JSON response to the results channel.
-// The responseJSON must already include execution_id if needed for correlation.
-func publishLFAAResponseTo(
-	ctx context.Context,
-	client PubSubClient,
-	cfg *config.Config,
-	logger *slog.Logger,
-	msg PubSubCommandMessage,
-	eventType string,
-	responseJSON []byte,
-) {
-	resultMsg, err := models.NewG8eMessage(
-		eventType, msg.CaseID,
-		cfg.OperatorID, cfg.OperatorSessionId, cfg.SystemFingerprint,
-		json.RawMessage(responseJSON),
-	)
-	if err != nil {
-		logger.Error("Failed to build LFAA response", "error", err)
-		return
-	}
-
-	resultMsg.APIKey = cfg.APIKey
-	resultMsg.TaskID = msg.TaskID
-	resultMsg.InvestigationID = msg.InvestigationID
-	resultMsg.OperatorSessionID = msg.OperatorSessionID
-
-	data, err := resultMsg.Marshal()
-	if err != nil {
-		logger.Error("Failed to marshal LFAA response", "error", err)
-		return
-	}
-
-	channelName := constants.ResultsChannel(cfg.OperatorID, cfg.OperatorSessionId)
-	if err := client.Publish(ctx, channelName, data); err != nil {
-		logger.Error("Failed to publish LFAA response", "error", err)
-		return
-	}
-
-	logger.Info("LFAA response published", "event_type", eventType)
 }

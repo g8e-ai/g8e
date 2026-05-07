@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
-	"github.com/g8e-ai/g8e/components/g8eo/models"
 	storage "github.com/g8e-ai/g8e/components/g8eo/services/storage"
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 	"github.com/stretchr/testify/assert"
@@ -61,10 +60,8 @@ func TestHistoryService_PublishFetchLogsResultFromRaw_PublishesOnResultsChannel(
 		ID:              "fetch-raw-1",
 		CaseID:          "case-1",
 		InvestigationID: "inv-1",
-		Payload: mustMarshalJSON(t, models.FetchLogsRequestPayload{
-			ExecutionID:  "raw-exec-001",
-			SentinelMode: constants.Status.VaultMode.Raw,
-		}),
+		EventType:       constants.Event.Operator.FetchLogs.Requested,
+		Payload:         testutil.MustMarshalProtobufFetchLogsRequested(t, "raw-exec-001"),
 	}
 
 	hs.HandleFetchLogsRequest(context.Background(), msg)
@@ -110,10 +107,8 @@ func TestHistoryService_PublishFetchLogsResult_PublishesOnResultsChannel(t *test
 		ID:              "fetch-scrubbed-1",
 		CaseID:          "case-2",
 		InvestigationID: "inv-2",
-		Payload: mustMarshalJSON(t, models.FetchLogsRequestPayload{
-			ExecutionID:  "scrubbed-exec-001",
-			SentinelMode: constants.Status.VaultMode.Scrubbed,
-		}),
+		EventType:       constants.Event.Operator.FetchLogs.Requested,
+		Payload:         testutil.MustMarshalProtobufFetchLogsRequested(t, "scrubbed-exec-001"),
 	}
 
 	hs.HandleFetchLogsRequest(context.Background(), msg)
@@ -160,10 +155,8 @@ func TestHistoryService_PublishFetchLogsPayload_ThreadsMessageIDs(t *testing.T) 
 		InvestigationID:   "inv-3",
 		OperatorSessionID: "sess-xyz",
 		TaskID:            &taskID,
-		Payload: mustMarshalJSON(t, models.FetchLogsRequestPayload{
-			ExecutionID:  "thread-exec-001",
-			SentinelMode: constants.Status.VaultMode.Raw,
-		}),
+		EventType:         constants.Event.Operator.FetchLogs.Requested,
+		Payload:           testutil.MustMarshalProtobufFetchLogsRequested(t, "thread-exec-001"),
 	}
 
 	hs.HandleFetchLogsRequest(context.Background(), msg)
@@ -211,12 +204,10 @@ func TestHistoryService_PublishFetchLogsPayload_PublishesToResultsChannel(t *tes
 	require.NoError(t, ls.StoreExecution(record))
 
 	msg := PubSubCommandMessage{
-		ID:     "channel-msg-1",
-		CaseID: "case-4",
-		Payload: mustMarshalJSON(t, models.FetchLogsRequestPayload{
-			ExecutionID:  "channel-exec-001",
-			SentinelMode: constants.Status.VaultMode.Scrubbed,
-		}),
+		ID:        "channel-msg-1",
+		CaseID:    "case-4",
+		EventType: constants.Event.Operator.FetchLogs.Requested,
+		Payload:   testutil.MustMarshalProtobufFetchLogsRequested(t, "channel-exec-001"),
 	}
 
 	hs.HandleFetchLogsRequest(context.Background(), msg)
@@ -244,12 +235,10 @@ func TestHistoryService_PublishFetchLogsResultFromRaw_FallsBackToScrubbedWhenNot
 	hs.rawVault = rv
 
 	msg := PubSubCommandMessage{
-		ID:     "fallback-msg-1",
-		CaseID: "case-5",
-		Payload: mustMarshalJSON(t, models.FetchLogsRequestPayload{
-			ExecutionID:  "nonexistent-raw-exec",
-			SentinelMode: constants.Status.VaultMode.Raw,
-		}),
+		ID:        "fallback-msg-1",
+		CaseID:    "case-5",
+		EventType: constants.Event.Operator.FetchLogs.Requested,
+		Payload:   testutil.MustMarshalProtobufFetchLogsRequested(t, "nonexistent-raw-exec"),
 	}
 
 	hs.HandleFetchLogsRequest(context.Background(), msg)
@@ -267,12 +256,10 @@ func TestHistoryService_HandleFetchLogsRequest_DefaultVaultModeIsRaw(t *testing.
 	hs, db := newTestHistoryService(t)
 
 	msg := PubSubCommandMessage{
-		ID:     "default-mode-1",
-		CaseID: "case-6",
-		Payload: mustMarshalJSON(t, models.FetchLogsRequestPayload{
-			ExecutionID:  "exec-default",
-			SentinelMode: "",
-		}),
+		ID:        "default-mode-1",
+		CaseID:    "case-6",
+		EventType: constants.Event.Operator.FetchLogs.Requested,
+		Payload:   testutil.MustMarshalProtobufFetchLogsRequested(t, "exec-default"),
 	}
 
 	hs.HandleFetchLogsRequest(context.Background(), msg)

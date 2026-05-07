@@ -209,7 +209,7 @@ message FsReadResult {
   string execution_id = 1;
   string status = 2;
   string path = 3;
-  bytes content = 4;
+  string content = 4;
   int64 size_bytes = 5;
   bool truncated = 6;
   float duration_seconds = 7;
@@ -248,6 +248,9 @@ message FileEditResult {
   string backup_path = 8;
   string error_message = 9;
   string error_type = 10;
+  string content = 11;
+  int32 stdout_size = 12;
+  int32 stderr_size = 13;
 }
 
 message ExecutionStatusUpdate {
@@ -382,8 +385,123 @@ message FetchFileDiffResult {
 }
 
 message HeartbeatResult {
-    string operator_id = 1;
-    string operator_session_id = 2;
-    string timestamp = 3;
-    string status = 4;
+  string operator_id = 1;
+  string operator_session_id = 2;
+  string timestamp = 3;
+  string status = 4;
+  string event_type = 5;
+  string source_component = 6;
+  string case_id = 7;
+  string investigation_id = 8;
+  SystemIdentity system_identity = 9;
+  NetworkInfo network_info = 10;
+  VersionInfo version_info = 11;
+  UptimeInfo uptime_info = 12;
+  PerformanceMetrics performance_metrics = 13;
+  OSDetails os_details = 14;
+  UserDetails user_details = 15;
+  DiskDetails disk_details = 16;
+  MemoryDetails memory_details = 17;
+  EnvironmentDetails environment = 18;
+  CapabilityFlags capability_flags = 19;
+  FingerprintDetails fingerprint_details = 20;
+  string system_fingerprint = 21;
+  string api_key = 22;
+}
+
+message SystemIdentity {
+  string hostname = 1;
+  string os = 2;
+  string architecture = 3;
+  string pwd = 4;
+  string current_user = 5;
+  int32 cpu_count = 6;
+  int32 memory_mb = 7;
+}
+
+message NetworkInterface {
+  string name = 1;
+  string ip = 2;
+  int32 mtu = 3;
+}
+
+message NetworkInfo {
+  string public_ip = 1;
+  string internal_ip = 2;
+  repeated string interfaces = 3;
+  repeated NetworkInterface connectivity_status = 4;
+}
+
+message CapabilityFlags {
+  bool local_storage_enabled = 1;
+  bool git_available = 2;
+  bool ledger_mirror_enabled = 3;
+}
+
+message VersionInfo {
+  string operator_version = 1;
+  string status = 2;
+}
+
+message UptimeInfo {
+  string uptime = 1;
+  int64 uptime_seconds = 2;
+}
+
+message PerformanceMetrics {
+  double cpu_percent = 1;
+  double memory_percent = 2;
+  double disk_percent = 3;
+  double network_latency = 4;
+  int32 memory_used_mb = 5;
+  int32 memory_total_mb = 6;
+  double disk_used_gb = 7;
+  double disk_total_gb = 8;
+}
+
+message OSDetails {
+  string kernel = 1;
+  string distro = 2;
+  string version = 3;
+}
+
+message UserDetails {
+  string username = 1;
+  int32 uid = 2;
+  int32 gid = 3;
+  string home = 4;
+  string name = 5;
+  string shell = 6;
+}
+
+message DiskDetails {
+  double total_gb = 1;
+  double used_gb = 2;
+  double free_gb = 3;
+  double percent = 4;
+}
+
+message MemoryDetails {
+  int64 total_mb = 1;
+  int64 available_mb = 2;
+  int64 used_mb = 3;
+  double percent = 4;
+}
+
+message EnvironmentDetails {
+  string pwd = 1;
+  string lang = 2;
+  string timezone = 3;
+  string term = 4;
+  bool is_container = 5;
+  string container_runtime = 6;
+  repeated string container_signals = 7;
+  string init_system = 8;
+}
+
+message FingerprintDetails {
+  string os = 1;
+  string architecture = 2;
+  int32 cpu_count = 3;
+  string machine_id = 4;
 }

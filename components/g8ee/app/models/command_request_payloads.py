@@ -43,6 +43,7 @@ __all__ = [
     "FsGrepRequestPayload",
     "FsReadRequestPayload",
     "G8eCommandPayload",
+    "HeartbeatRequestPayload",
     "RestoreFileRequestPayload",
     "TargetedOperatorBase",
 ]
@@ -341,6 +342,15 @@ class DirectCommandAuditRequestPayload(G8eBaseModel):
         return proto
 
 
+class HeartbeatRequestPayload(G8eBaseModel):
+    """Payload for EventType.OPERATOR_HEARTBEAT_REQUESTED."""
+    payload_type: Literal["heartbeat"] = Field(default="heartbeat", description="Payload type discriminator")
+
+    def to_protobuf(self) -> operator_pb2.HeartbeatRequested:
+        """Convert to protobuf HeartbeatRequested message."""
+        return operator_pb2.HeartbeatRequested()
+
+
 # Union type for all outbound command payloads to g8eo
 G8eCommandPayload = Union[
     CommandRequestPayload,
@@ -356,4 +366,5 @@ G8eCommandPayload = Union[
     CheckPortRequestPayload,
     RestoreFileRequestPayload,
     DirectCommandAuditRequestPayload,
+    HeartbeatRequestPayload,
 ]

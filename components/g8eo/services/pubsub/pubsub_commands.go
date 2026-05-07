@@ -15,8 +15,12 @@ package pubsub
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -33,15 +37,15 @@ import (
 
 // PubSubCommandMessage is the inbound wire message received from g8es pub/sub.
 type PubSubCommandMessage struct {
-	ID                string
-	EventType         string
-	CaseID            string
-	TaskID            *string
-	InvestigationID   string
-	OperatorSessionID string
-	OperatorID        *string
-	Payload           []byte
-	Timestamp         time.Time
+	ID                string          `json:"id"`
+	EventType         string          `json:"event_type"`
+	CaseID            string          `json:"case_id"`
+	TaskID            *string         `json:"task_id"`
+	InvestigationID   string          `json:"investigation_id"`
+	OperatorSessionID string          `json:"operator_session_id"`
+	OperatorID        *string         `json:"operator_id"`
+	Payload           json.RawMessage `json:"payload"`
+	Timestamp         time.Time       `json:"timestamp"`
 }
 
 // PubSubCommandService manages the g8es pub/sub connection and dispatches inbound
@@ -70,6 +74,14 @@ type PubSubCommandService struct {
 	mu      sync.RWMutex
 
 	reconnectBaseDelay time.Duration
+
+	// auditorHMACKey is the shared Tribunal signing key used for L2
+	// governance verification. Loaded once at startup from
+	// <SSLDir>/auditor_hmac_key. When absent the dispatcher logs a
+	// warning and accepts envelopes without L2 enforcement (deployment
+	// bootstrap phase). When present, all inbound envelopes are
+	// strictly verified and rejected on signature mismatch.
+	auditorHMACKey string
 }
 
 // CommandServiceConfig holds all dependencies for PubSubCommandService.
@@ -144,6 +156,27 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 	rs.history.historyHandler = c.HistoryHandler
 
 	rs.buildHandlers()
+
+	// Load L2 Tribunal HMAC key for governance verification
+	auditorHMACKeyPath := filepath.Join(c.Config.SSLDir, "auditor_hmac_key")
+	keyBytes, err := os.ReadFile(auditorHMACKeyPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			c.Logger.Warn("L2 Tribunal HMAC key not found - L2 governance enforcement disabled (deployment bootstrap)",
+				"path", auditorHMACKeyPath,
+				"action", "commands will be accepted without L2 signature verification")
+			rs.auditorHMACKey = ""
+		} else {
+			c.Logger.Error("Failed to read L2 Tribunal HMAC key",
+				"path", auditorHMACKeyPath,
+				"error", err)
+			return nil, fmt.Errorf("failed to read auditor_hmac_key: %w", err)
+		}
+	} else {
+		rs.auditorHMACKey = strings.TrimSpace(string(keyBytes))
+		c.Logger.Info("L2 Tribunal HMAC key loaded - L2 governance enforcement enabled",
+			"path", auditorHMACKeyPath)
+	}
 
 	c.Logger.Info("g8e connectivity initialized",
 		"config_operator_id", c.Config.OperatorID,
@@ -423,6 +456,20 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 	} else {
 		// Log warning but continue; not all events may have proto-message definitions yet
 		rs.logger.Warn("Skipping L1 Governance validation: failed to unmarshal payload", "error", err)
+	}
+
+	// L2 Governance: Verify Tribunal signature
+	if rs.auditorHMACKey != "" {
+		if err := VerifyL2Governance(&env, rs.auditorHMACKey); err != nil {
+			rs.logger.Error("L2 Governance verification failed: command rejected",
+				"event_type", env.EventType,
+				"error", err,
+				"execution_id", env.Id)
+			return
+		}
+		rs.logger.Info("L2 Governance verification passed", "event_type", env.EventType)
+	} else {
+		rs.logger.Debug("L2 Governance verification skipped: auditor HMAC key not configured", "event_type", env.EventType)
 	}
 
 	rs.dispatchCommand(cmdMsg)

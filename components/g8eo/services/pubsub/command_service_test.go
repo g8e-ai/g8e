@@ -21,6 +21,7 @@ import (
 	execution "github.com/g8e-ai/g8e/components/g8eo/services/execution"
 	sentinel "github.com/g8e-ai/g8e/components/g8eo/services/sentinel"
 	storage "github.com/g8e-ai/g8e/components/g8eo/services/storage"
+	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -164,7 +165,7 @@ func (m *MockResultsPublisher) PublishFsGrepResult(ctx context.Context, result p
 func (m *MockResultsPublisher) PublishExecutionStatus(ctx context.Context, status proto.Message) error {
 	return nil
 }
-func (m *MockResultsPublisher) PublishResult(ctx context.Context, result *models.G8eMessage) error {
+func (m *MockResultsPublisher) PublishResult(ctx context.Context, env *commonv1.UniversalEnvelope) error {
 	return nil
 }
 func (m *MockResultsPublisher) PublishHeartbeat(ctx context.Context, heartbeat proto.Message) error {

@@ -86,6 +86,24 @@ func MustMarshalUniversalEnvelope(t *testing.T, id string, eventType string, pay
 	return b
 }
 
+// MustUnmarshalUniversalEnvelope unmarshals bytes to a UniversalEnvelope protobuf, fatally failing the test on error.
+func MustUnmarshalUniversalEnvelope(t *testing.T, data []byte) *commonv1.UniversalEnvelope {
+	t.Helper()
+	env := &commonv1.UniversalEnvelope{}
+	if err := proto.Unmarshal(data, env); err != nil {
+		t.Fatalf("failed to unmarshal UniversalEnvelope: %v", err)
+	}
+	return env
+}
+
+// MustUnmarshalPayload unmarshals bytes to a specific proto.Message, fatally failing the test on error.
+func MustUnmarshalPayload(t *testing.T, data []byte, m proto.Message) {
+	t.Helper()
+	if err := proto.Unmarshal(data, m); err != nil {
+		t.Fatalf("failed to unmarshal payload: %v", err)
+	}
+}
+
 // FileEditRequestFields is a helper struct for MustMarshalProtobufFileEditRequested
 type FileEditRequestFields struct {
 	FilePath        string
@@ -147,12 +165,13 @@ func MustMarshalProtobufFsListRequested(t *testing.T, path string, execID string
 }
 
 // MustMarshalProtobufCheckPortRequested marshals a CheckPortRequested protobuf to bytes.
-func MustMarshalProtobufCheckPortRequested(t *testing.T, host string, port int32, protocol string) []byte {
+func MustMarshalProtobufCheckPortRequested(t *testing.T, host string, port int32, protocol string, execID string) []byte {
 	t.Helper()
 	p := &operatorv1.CheckPortRequested{
-		Host:     host,
-		Port:     port,
-		Protocol: protocol,
+		ExecutionId: execID,
+		Host:        host,
+		Port:        port,
+		Protocol:    protocol,
 	}
 	b, err := proto.Marshal(p)
 	if err != nil {

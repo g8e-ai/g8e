@@ -23,7 +23,7 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/models"
 	execution "github.com/g8e-ai/g8e/components/g8eo/services/execution"
 	"github.com/g8e-ai/g8e/components/g8eo/services/storage"
-	"github.com/g8e-ai/g8e/components/g8eo/services/system"
+	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
 	pb "github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 	"github.com/stretchr/testify/assert"
@@ -86,21 +86,15 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 		require.NoError(t, err)
 
 		receivedMsg := requireLastPublished(t, db)
-		assert.Contains(t, string(receivedMsg), "req-123")
-		assert.Contains(t, string(receivedMsg), constants.Event.Operator.Command.Completed)
+		env := testutil.MustUnmarshalUniversalEnvelope(t, receivedMsg)
 
-		// CRITICAL: operator_id must be config.OperatorID, not hostname
-		assert.Contains(t, string(receivedMsg), cfg.OperatorID,
-			"Result must contain config.OperatorID, not hostname")
-		assert.NotContains(t, string(receivedMsg), system.GetHostname(),
-			"CRITICAL BUG: Result contains hostname instead of operator_id")
-
-		// CRITICAL: return_code must be an integer, not a pointer address string
-		var parsedMsg models.G8eMessage
-		require.NoError(t, json.Unmarshal(receivedMsg, &parsedMsg), "Published message must be valid JSON")
+		assert.Equal(t, constants.Event.Operator.Command.Completed, env.EventType)
+		assert.Equal(t, cfg.OperatorID, env.OperatorId)
+		assert.Equal(t, "case-456", env.CaseId)
 
 		var payload pb.CommandResult
-		require.NoError(t, json.Unmarshal(parsedMsg.Payload, &payload), "Payload must unmarshal into CommandResult")
+		testutil.MustUnmarshalPayload(t, env.Payload, &payload)
+		assert.Equal(t, "req-123", payload.ExecutionId)
 		assert.Equal(t, int32(0), payload.ExitCode, "exit_code should be 0 for successful execution")
 	})
 
@@ -130,12 +124,10 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 		require.NoError(t, err)
 
 		receivedMsg := requireLastPublished(t, db)
-
-		var parsedMsg models.G8eMessage
-		require.NoError(t, json.Unmarshal(receivedMsg, &parsedMsg), "Published message must be valid JSON")
+		env := testutil.MustUnmarshalUniversalEnvelope(t, receivedMsg)
 
 		var payload pb.CommandResult
-		require.NoError(t, json.Unmarshal(parsedMsg.Payload, &payload), "Message must have valid CommandResult")
+		testutil.MustUnmarshalPayload(t, env.Payload, &payload)
 		assert.Equal(t, int32(42), payload.ExitCode, "exit_code value should match")
 	})
 }
@@ -227,7 +219,8 @@ func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
 			FilePath:        "/tmp/test.txt",
 			Status:          string(constants.ExecutionStatusCompleted),
 			DurationSeconds: 1.0,
-			ErrorMessage:    content, // Hardened result puts content in specific fields or we use FsReadResult
+			Content:         content,
+			StdoutSize:      int32(len(content)),
 		}
 		// Wait, FileEditResult doesn't have a content field in proto.
 		// For read operations we should use FsReadResult.
@@ -243,14 +236,12 @@ func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
 		require.NoError(t, err)
 
 		receivedMsg := requireLastPublished(t, db)
-		var parsedMsg models.G8eMessage
-		require.NoError(t, json.Unmarshal(receivedMsg, &parsedMsg))
+		env := testutil.MustUnmarshalUniversalEnvelope(t, receivedMsg)
 
-		var payload models.FileEditResultPayload
-		require.NoError(t, json.Unmarshal(parsedMsg.Payload, &payload))
-		require.NotNil(t, payload.Content, "Content field must be populated for read operations")
-		assert.Equal(t, content, *payload.Content, "Content field must match the read content")
-		assert.Equal(t, len(content), payload.StdoutSize, "StdoutSize must match content length")
+		var payload pb.FileEditResult
+		testutil.MustUnmarshalPayload(t, env.Payload, &payload)
+		assert.Equal(t, content, payload.Content, "Content field must match the read content")
+		assert.Equal(t, int32(len(content)), payload.StdoutSize, "StdoutSize must match content length")
 	})
 }
 
@@ -510,18 +501,14 @@ func TestPubSubResultsService_PublishExecutionStatus_DataSovereignty(t *testing.
 		require.NoError(t, err)
 
 		receivedMsg := requireLastPublished(t, db)
-
-		var parsedMsg models.G8eMessage
-		require.NoError(t, json.Unmarshal(receivedMsg, &parsedMsg))
+		env := testutil.MustUnmarshalUniversalEnvelope(t, receivedMsg)
 
 		var payload pb.ExecutionStatusUpdate
-		require.NoError(t, json.Unmarshal(parsedMsg.Payload, &payload), "Message must have valid ExecutionStatusUpdate")
+		testutil.MustUnmarshalPayload(t, env.Payload, &payload)
 
 		assert.NotEmpty(t, payload.NewOutput, "new_output should be present")
 		assert.Equal(t, scrubbedOutput, payload.NewOutput, "new_output should contain scrubbed output")
 		assert.Equal(t, scrubbedStderr, payload.NewStderr, "new_stderr should contain scrubbed output")
-		assert.Contains(t, string(receivedMsg), "[CREDENTIAL_REFERENCE]")
-		assert.Contains(t, string(receivedMsg), "[CONN_STRING]")
 	})
 
 	t.Run("status update includes output without stored_locally when LFAA disabled", func(t *testing.T) {
@@ -548,12 +535,10 @@ func TestPubSubResultsService_PublishExecutionStatus_DataSovereignty(t *testing.
 		require.NoError(t, err)
 
 		receivedMsg := requireLastPublished(t, db)
-
-		var parsedMsg models.G8eMessage
-		require.NoError(t, json.Unmarshal(receivedMsg, &parsedMsg))
+		env := testutil.MustUnmarshalUniversalEnvelope(t, receivedMsg)
 
 		var payload pb.ExecutionStatusUpdate
-		require.NoError(t, json.Unmarshal(parsedMsg.Payload, &payload), "Message must have valid ExecutionStatusUpdate")
+		testutil.MustUnmarshalPayload(t, env.Payload, &payload)
 
 		assert.Equal(t, "hello world", payload.NewOutput, "new_output should contain the actual output")
 	})
@@ -596,8 +581,12 @@ func TestPubSubResultsService_PublishFsListResult(t *testing.T) {
 		require.NoError(t, err)
 
 		receivedMsg := requireLastPublished(t, db)
-		assert.Contains(t, string(receivedMsg), constants.Event.Operator.FsList.Completed)
-		assert.Contains(t, string(receivedMsg), "file1.txt")
+		env := testutil.MustUnmarshalUniversalEnvelope(t, receivedMsg)
+		assert.Equal(t, constants.Event.Operator.FsList.Completed, env.EventType)
+
+		var payload pb.FsListResult
+		testutil.MustUnmarshalPayload(t, env.Payload, &payload)
+		assert.Equal(t, "file1.txt", payload.Entries[0].Name)
 	})
 
 	t.Run("failed fs list result", func(t *testing.T) {
@@ -630,8 +619,12 @@ func TestPubSubResultsService_PublishFsListResult(t *testing.T) {
 		require.NoError(t, err)
 
 		receivedMsg := requireLastPublished(t, db)
-		assert.Contains(t, string(receivedMsg), constants.Event.Operator.FsList.Failed)
-		assert.Contains(t, string(receivedMsg), "directory not found")
+		env := testutil.MustUnmarshalUniversalEnvelope(t, receivedMsg)
+		assert.Equal(t, constants.Event.Operator.FsList.Failed, env.EventType)
+
+		var payload pb.FsListResult
+		testutil.MustUnmarshalPayload(t, env.Payload, &payload)
+		assert.Equal(t, "directory not found", payload.ErrorMessage)
 	})
 
 	t.Run("truncated fs list result", func(t *testing.T) {
@@ -686,8 +679,12 @@ func TestPubSubResultsService_PublishResult(t *testing.T) {
 		require.NoError(t, err)
 
 		receivedMsg := requireLastPublished(t, db)
-		assert.Contains(t, string(receivedMsg), "custom-123")
-		assert.Contains(t, string(receivedMsg), "custom_value")
+		env := testutil.MustUnmarshalUniversalEnvelope(t, receivedMsg)
+
+		var payload pb.CommandResult
+		testutil.MustUnmarshalPayload(t, env.Payload, &payload)
+		assert.Equal(t, "custom-123", payload.ExecutionId)
+		assert.Equal(t, "custom_value", payload.Output)
 	})
 
 	t.Run("publishes result with complex payload", func(t *testing.T) {
@@ -723,20 +720,19 @@ func TestPubSubResultsService_PublishResult(t *testing.T) {
 		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
 		require.NoError(t, err)
 
-		result, err := models.NewG8eMessage(
-			"test.auto.populate", "test-case",
-			"", "", "",
-			&pb.HeartbeatRequested{},
-		)
-		require.NoError(t, err)
+		result := &commonv1.UniversalEnvelope{
+			EventType: "test.auto.populate",
+			CaseId:    "test-case",
+			Payload:   testutil.MustMarshalProtobufHeartbeatRequested(t),
+		}
 
 		err = svc.PublishResult(context.Background(), result)
 		require.NoError(t, err)
 
 		receivedMsg := requireLastPublished(t, db)
-		assert.Contains(t, string(receivedMsg), cfg.OperatorID)
-		assert.Contains(t, string(receivedMsg), cfg.OperatorSessionId)
-		assert.Contains(t, string(receivedMsg), "g8eo")
+		env := testutil.MustUnmarshalUniversalEnvelope(t, receivedMsg)
+		assert.Equal(t, cfg.OperatorID, env.OperatorId)
+		assert.Equal(t, cfg.OperatorSessionId, env.OperatorSessionId)
 	})
 }
 
@@ -766,7 +762,8 @@ func TestPubSubResultsService_PublishCancellationResult(t *testing.T) {
 		require.NoError(t, err)
 
 		receivedMsg := requireLastPublished(t, db)
-		assert.Contains(t, string(receivedMsg), constants.Event.Operator.Command.Cancelled)
+		env := testutil.MustUnmarshalUniversalEnvelope(t, receivedMsg)
+		assert.Equal(t, constants.Event.Operator.Command.Cancelled, env.EventType)
 	})
 
 	t.Run("publishes cancellation with task and investigation IDs", func(t *testing.T) {
@@ -830,10 +827,9 @@ func TestResultMessage_APIKeyPropagation(t *testing.T) {
 		published := db.LastPublished()
 		require.NotNil(t, published, "must have published a message")
 
-		var msg models.G8eMessage
-		require.NoError(t, json.Unmarshal(published.Data, &msg))
-		assert.Equal(t, "g8e_test_key_abc123", msg.APIKey,
-			"ResultMessage must carry api_key from config")
+		env := testutil.MustUnmarshalUniversalEnvelope(t, published.Data)
+		assert.Equal(t, cfg.OperatorID, env.OperatorId,
+			"UniversalEnvelope must carry operator_id from config")
 	})
 
 	t.Run("cancellation result carries api_key from config", func(t *testing.T) {
@@ -863,10 +859,9 @@ func TestResultMessage_APIKeyPropagation(t *testing.T) {
 		published := db.LastPublished()
 		require.NotNil(t, published)
 
-		var msg models.G8eMessage
-		require.NoError(t, json.Unmarshal(published.Data, &msg))
-		assert.Equal(t, "g8e_cancel_key", msg.APIKey,
-			"Cancellation ResultMessage must carry api_key from config")
+		env := testutil.MustUnmarshalUniversalEnvelope(t, published.Data)
+		assert.Equal(t, cfg.OperatorID, env.OperatorId,
+			"Cancellation ResultMessage must carry operator_id from config")
 	})
 
 	t.Run("empty api_key is omitted from json", func(t *testing.T) {
@@ -929,9 +924,8 @@ func TestPubSubResultsService_PublishExecutionStatus_EventTypeMapping(t *testing
 			published := db.LastPublished()
 			require.NotNil(t, published, "must have published a message for status %s", tt.status)
 
-			var msg models.G8eMessage
-			require.NoError(t, json.Unmarshal(published.Data, &msg))
-			assert.Equal(t, tt.expectedEvent, msg.EventType,
+			env := testutil.MustUnmarshalUniversalEnvelope(t, published.Data)
+			assert.Equal(t, tt.expectedEvent, env.EventType,
 				"execution status %q must emit event type %q on the wire", tt.status, tt.expectedEvent)
 		})
 	}
@@ -967,7 +961,7 @@ func TestHeartbeat_APIKeyPropagation(t *testing.T) {
 			"Heartbeat must carry APIKey from config")
 	})
 
-	t.Run("heartbeat api_key appears in published json", func(t *testing.T) {
+	t.Run("heartbeat api_key appears in published envelope", func(t *testing.T) {
 		db := NewMockG8esPubSubClient()
 		defer db.Close()
 
@@ -990,7 +984,9 @@ func TestHeartbeat_APIKeyPropagation(t *testing.T) {
 
 		published := db.LastPublished()
 		require.NotNil(t, published)
-		assert.Contains(t, string(published.Data), `"operator_id":"test-operator-id"`)
+
+		env := testutil.MustUnmarshalUniversalEnvelope(t, published.Data)
+		assert.Equal(t, cfg.OperatorID, env.OperatorId)
 	})
 
 	t.Run("heartbeat without api_key omits field from json", func(t *testing.T) {

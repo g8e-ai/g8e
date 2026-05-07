@@ -35,6 +35,7 @@ def disconnected_client():
     client = PubSubClient(
         pubsub_url="wss://g8es:9001",
         component_name=ComponentName.G8EE,
+        auditor_hmac_key="test-key-1234",
     )
     return client
 
@@ -110,10 +111,7 @@ class TestPubSubClientSubscribe:
         await connected_client.subscribe(channel)
         await task
 
-        connected_client._ws.send_json.assert_called_with({
-            PubSubField.ACTION: PubSubAction.SUBSCRIBE,
-            PubSubField.CHANNEL: channel,
-        })
+        connected_client._ws.send_bytes.assert_called()
 
     async def test_subscribe_adds_channel_after_ensure_ws(self, connected_client, task_tracker):
         """Regression: channel must be added to _subscribed_channels after
@@ -162,10 +160,7 @@ class TestPubSubClientPsubscribe:
         await connected_client.psubscribe(pattern)
         await task
 
-        connected_client._ws.send_json.assert_called_with({
-            PubSubField.ACTION: PubSubAction.PSUBSCRIBE,
-            PubSubField.CHANNEL: pattern,
-        })
+        connected_client._ws.send_bytes.assert_called()
 
     async def test_psubscribe_adds_pattern_after_ensure_ws(self, connected_client, task_tracker):
         """Regression: pattern must be added to _subscribed_patterns after
@@ -291,10 +286,12 @@ class TestResultDispatchDespiteMatchingEnvelopeId:
     """
 
     @staticmethod
-    def _make_text_frame(event: dict) -> MagicMock:
+    def _make_binary_frame(event_type: int, channel: str, data: bytes, pattern: str = "") -> MagicMock:
+        from app.proto.pubsub_pb2 import PubSubEvent
+        event = PubSubEvent(type=event_type, channel=channel, data=data, pattern=pattern)
         msg = MagicMock()
-        msg.type = aiohttp.WSMsgType.TEXT
-        msg.data = json.dumps(event)
+        msg.type = aiohttp.WSMsgType.BINARY
+        msg.data = event.SerializeToString()
         return msg
 
     async def test_result_with_matching_envelope_id_is_dispatched(self, connected_client):
@@ -303,29 +300,25 @@ class TestResultDispatchDespiteMatchingEnvelopeId:
         results_channel = "results:op-1:sess-1"
 
         delivered = asyncio.Event()
-        captured: list[tuple[str, object]] = []
+        captured: list[tuple[str, bytes]] = []
 
-        async def handler(channel: str, data: object) -> None:
+        async def handler(channel: str, data: bytes) -> None:
             captured.append((channel, data))
             delivered.set()
 
         connected_client.on_channel_message(results_channel, handler)
 
-        await connected_client.publish(
-            cmd_channel,
-            {"id": exec_id, "event_type": "g8e.v1.operator.command.requested"},
-        )
+        with patch.object(connected_client, "publish", return_value=1):
+            await connected_client.publish(
+                cmd_channel,
+                b"some data",
+            )
 
-        result_frame = self._make_text_frame(
-            {
-                "type": PubSubWireEventType.MESSAGE.value,
-                "channel": results_channel,
-                "data": {
-                    "id": exec_id,
-                    "event_type": "g8e.v1.operator.command.completed",
-                    "payload": {"execution_id": exec_id, "status": "completed"},
-                },
-            }
+        result_data = b"result data"
+        result_frame = self._make_binary_frame(
+            PubSubWireEventType.MESSAGE.value,
+            results_channel,
+            result_data
         )
         mock_ws = connected_client._ws
         mock_ws.__aiter__ = MagicMock(return_value=async_iter([result_frame]))
@@ -340,9 +333,7 @@ class TestResultDispatchDespiteMatchingEnvelopeId:
         assert len(captured) == 1
         channel, data = captured[0]
         assert channel == results_channel
-        assert isinstance(data, dict)
-        assert data["id"] == exec_id
-        assert data["payload"]["execution_id"] == exec_id
+        assert data == result_data
 
     async def test_pmessage_with_matching_envelope_id_is_dispatched(self, connected_client):
         exec_id = "cmd_shared_correlation_id_pmsg"
@@ -351,30 +342,26 @@ class TestResultDispatchDespiteMatchingEnvelopeId:
         results_channel = "results:op-2:sess-2"
 
         delivered = asyncio.Event()
-        captured: list[tuple[str, str, object]] = []
+        captured: list[tuple[str, str, bytes]] = []
 
-        async def handler(pattern: str, channel: str, data: object) -> None:
+        async def handler(pattern: str, channel: str, data: bytes) -> None:
             captured.append((pattern, channel, data))
             delivered.set()
 
         connected_client._pmessage_handlers.setdefault(results_pattern, []).append(handler)
 
-        await connected_client.publish(
-            cmd_channel,
-            {"id": exec_id, "event_type": "g8e.v1.operator.command.requested"},
-        )
+        with patch.object(connected_client, "publish", return_value=1):
+            await connected_client.publish(
+                cmd_channel,
+                b"some data",
+            )
 
-        pmsg_frame = self._make_text_frame(
-            {
-                "type": PubSubWireEventType.PMESSAGE.value,
-                "pattern": results_pattern,
-                "channel": results_channel,
-                "data": {
-                    "id": exec_id,
-                    "event_type": "g8e.v1.operator.command.completed",
-                    "payload": {"execution_id": exec_id, "status": "completed"},
-                },
-            }
+        result_data = b"pmsg data"
+        pmsg_frame = self._make_binary_frame(
+            PubSubWireEventType.PMESSAGE.value,
+            results_channel,
+            result_data,
+            pattern=results_pattern
         )
         mock_ws = connected_client._ws
         mock_ws.__aiter__ = MagicMock(return_value=async_iter([pmsg_frame]))
@@ -390,8 +377,7 @@ class TestResultDispatchDespiteMatchingEnvelopeId:
         pattern, channel, data = captured[0]
         assert pattern == results_pattern
         assert channel == results_channel
-        assert isinstance(data, dict)
-        assert data["id"] == exec_id
+        assert data == result_data
 
 
 @pytest.mark.asyncio
@@ -406,32 +392,32 @@ class TestWsReaderPerMessageErrorHandling:
     """
 
     @staticmethod
-    def _text_frame(payload) -> MagicMock:
+    def _binary_frame(event_type: int, channel: str = "", data: bytes = b"") -> MagicMock:
+        from app.proto.pubsub_pb2 import PubSubEvent
+        event = PubSubEvent(type=event_type, channel=channel, data=data)
         msg = MagicMock()
-        msg.type = aiohttp.WSMsgType.TEXT
-        msg.data = json.dumps(payload)
+        msg.type = aiohttp.WSMsgType.BINARY
+        msg.data = event.SerializeToString()
         return msg
 
     async def test_malformed_shape_is_logged_and_reader_continues(
         self, connected_client, task_tracker
     ):
-        # json.loads of a list is valid JSON but not a dict, so .get() will
-        # raise AttributeError inside the per-message try -- it should be
-        # caught and logged, then the reader proceeds to the next frame.
-        bad_frame = self._text_frame(["not", "a", "dict"])
+        # We simulate a failure by making handler raise an exception
+        bad_frame = MagicMock()
+        bad_frame.type = aiohttp.WSMsgType.BINARY
+        bad_frame.data = b"corrupt"
 
         delivered = asyncio.Event()
 
-        async def handler(channel: str, data: object) -> None:
+        async def handler(channel: str, data: bytes) -> None:
             delivered.set()
 
         connected_client.on_channel_message("results:ok", handler)
-        good_frame = self._text_frame(
-            {
-                "type": PubSubWireEventType.MESSAGE.value,
-                "channel": "results:ok",
-                "data": {"id": "x"},
-            }
+        good_frame = self._binary_frame(
+            PubSubWireEventType.MESSAGE.value,
+            channel="results:ok",
+            data=b"ok"
         )
 
         mock_ws = connected_client._ws
@@ -447,14 +433,12 @@ class TestWsReaderPerMessageErrorHandling:
                 reader_task.cancel()
                 await asyncio.gather(reader_task, return_exceptions=True)
 
-            shape_logged = any(
-                "Malformed event shape" in str(call.args[0])
+            parse_failed = any(
+                "Failed to parse binary protobuf message" in str(call.args[0])
                 for call in mock_logger.error.call_args_list
                 if call.args
             )
-            assert shape_logged, (
-                "Shape errors (AttributeError on non-dict frame) must be logged"
-            )
+            assert parse_failed
 
     async def test_unexpected_exception_propagates(self, connected_client, task_tracker):
         """A RuntimeError from dispatch code (e.g. a typo surfacing as
@@ -469,12 +453,10 @@ class TestWsReaderPerMessageErrorHandling:
         broken_handlers.copy = MagicMock(return_value=broken_handlers)
         connected_client._channel_handlers = broken_handlers
 
-        frame = self._text_frame(
-            {
-                "type": PubSubWireEventType.MESSAGE.value,
-                "channel": "results:op",
-                "data": {"id": "x"},
-            }
+        frame = self._binary_frame(
+            PubSubWireEventType.MESSAGE.value,
+            channel="results:op",
+            data=b"x"
         )
         mock_ws = connected_client._ws
         mock_ws.__aiter__ = MagicMock(return_value=async_iter([frame]))
@@ -596,9 +578,12 @@ class TestPubSubClientCoverage:
 
     async def test_ws_reader_unknown_event_type(self, connected_client, task_tracker):
         """Test logging of unknown wire event types."""
+        from app.proto.pubsub_pb2 import PubSubEvent
+        
+        event = PubSubEvent(type="unknown_type") # Unknown type string
         frame = MagicMock()
-        frame.type = aiohttp.WSMsgType.TEXT
-        frame.data = json.dumps({"type": "unknown_type"})
+        frame.type = aiohttp.WSMsgType.BINARY
+        frame.data = event.SerializeToString()
         connected_client._ws.__aiter__ = MagicMock(return_value=async_iter([frame]))
 
         with patch("app.clients.pubsub_client.logger") as mock_logger:
@@ -606,17 +591,17 @@ class TestPubSubClientCoverage:
             await task
             mock_logger.warning.assert_any_call("[PUBSUB-CLIENT] Unknown wire event type '%s'", "unknown_type")
 
-    async def test_ws_reader_malformed_json(self, connected_client, task_tracker):
-        """Test logging of malformed JSON."""
+    async def test_ws_reader_malformed_proto(self, connected_client, task_tracker):
+        """Test logging of malformed binary message."""
         frame = MagicMock()
-        frame.type = aiohttp.WSMsgType.TEXT
-        frame.data = "invalid json"
+        frame.type = aiohttp.WSMsgType.BINARY
+        frame.data = b"invalid protobuf"
         connected_client._ws.__aiter__ = MagicMock(return_value=async_iter([frame]))
 
         with patch("app.clients.pubsub_client.logger") as mock_logger:
             task = task_tracker.track(asyncio.create_task(connected_client._ws_reader()))
             await task
-            mock_logger.error.assert_any_call("[PUBSUB-CLIENT] Malformed JSON from pub/sub: %r", "invalid json")
+            mock_logger.error.assert_any_call("[PUBSUB-CLIENT] Failed to parse binary protobuf message: %s", ANY)
 
     async def test_ws_reader_closed_type(self, connected_client, task_tracker):
         """Test reader exit on CLOSED message type."""
@@ -647,7 +632,7 @@ class TestPubSubClientCoverage:
         # Second subscription (should just increment refcount)
         await connected_client.subscribe(channel)
         assert connected_client._channel_refcounts[channel] == 2
-        assert connected_client._ws.send_json.call_count == 1 # Only one wire call
+        assert connected_client._ws.send_bytes.call_count == 1 # Only one wire call
 
         # Unsubscribe once
         await connected_client.unsubscribe(channel)
@@ -658,13 +643,13 @@ class TestPubSubClientCoverage:
         await connected_client.unsubscribe(channel)
         assert connected_client._channel_refcounts[channel] == 0
         assert channel not in connected_client._subscribed_channels
-        assert connected_client._ws.send_json.call_count == 2 # One SUBSCRIBE, one UNSUBSCRIBE
+        assert connected_client._ws.send_bytes.call_count == 2 # One SUBSCRIBE, one UNSUBSCRIBE
 
     async def test_publish_failure(self, connected_client):
         """Test publish failure logging."""
-        connected_client._ws.send_json.side_effect = Exception("send failed")
+        connected_client._ws.send_bytes.side_effect = Exception("send failed")
         with patch("app.clients.pubsub_client.logger") as mock_logger:
-            res = await connected_client.publish("chan", {"foo": "bar"})
+            res = await connected_client.publish("chan", b"data")
             assert res == 0
             mock_logger.error.assert_any_call("[PUBSUB-CLIENT] publish failed for channel '%s': %s", "chan", ANY, exc_info=True)
 
@@ -681,6 +666,7 @@ class TestPubSubClientCoverage:
     async def test_domain_methods(self, connected_client, task_tracker):
         """Test high-level domain methods: publish_command, subscribe_heartbeats, etc."""
         from app.models.pubsub_messages import G8eMessage
+        from app.models.command_request_payloads import CommandRequestPayload
         from app.constants import EventType
         
         op_id = "op-1"
@@ -697,6 +683,7 @@ class TestPubSubClientCoverage:
             task_id="task-1",
             investigation_id="inv-1",
             web_session_id="web-1",
+            payload=CommandRequestPayload(command="echo hi", execution_id="exec-1")
         )
         res = await connected_client.publish_command(op_id, sess_id, msg)
         assert res == 1
@@ -739,12 +726,9 @@ class TestPubSubClientCoverage:
         assert callback in connected_client._channel_handlers[channel]
         
         # check_operator_online
-        connected_client._ws.send_json.reset_mock()
+        connected_client._ws.send_bytes.reset_mock()
         
-        # We need to mock G8eMessage within check_operator_online because it requires many fields
-        with patch("app.clients.pubsub_client.G8eMessage") as mock_g8e_msg, \
-             patch.object(connected_client, "publish", return_value=1):
-            mock_g8e_msg.return_value.model_dump.return_value = {"id": "ping"}
+        with patch.object(connected_client, "publish", return_value=1):
             is_online = await connected_client.check_operator_online(op_id, sess_id)
             assert is_online is True
 

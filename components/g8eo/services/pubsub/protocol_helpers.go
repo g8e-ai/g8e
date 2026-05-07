@@ -20,11 +20,60 @@ import (
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/g8e-ai/g8e/components/g8eo/config"
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
 	commonv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
 	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
+	"github.com/google/uuid"
 )
+
+// BuildUniversalEnvelope constructs a canonical v0.2.0 BFT envelope for cross-component communication.
+func BuildUniversalEnvelope(
+	cfg *config.Config,
+	eventType string,
+	payload proto.Message,
+	originalID string, // Optional: for correlation if needed, but normally use payload.execution_id
+) (*commonv1.UniversalEnvelope, error) {
+	payloadBytes, err := proto.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	// Use originalID if provided, otherwise generate new UUID
+	id := originalID
+	if id == "" {
+		id = uuid.NewString()
+	}
+
+	env := &commonv1.UniversalEnvelope{
+		Id:                id,
+		Timestamp:         timestamppb.Now(),
+		SourceComponent:   commonv1.Component_COMPONENT_G8EO,
+		EventType:         eventType,
+		OperatorId:        cfg.OperatorID,
+		OperatorSessionId: cfg.OperatorSessionId,
+		SystemFingerprint: cfg.SystemFingerprint,
+		Payload:           payloadBytes,
+	}
+
+	// Attempt to extract metadata from payload via reflection if available
+	reflectMsg := payload.ProtoReflect()
+	md := reflectMsg.Descriptor()
+
+	if fd := md.Fields().ByName("case_id"); fd != nil {
+		env.CaseId = reflectMsg.Get(fd).String()
+	}
+	if fd := md.Fields().ByName("investigation_id"); fd != nil {
+		env.InvestigationId = reflectMsg.Get(fd).String()
+	}
+	if fd := md.Fields().ByName("task_id"); fd != nil {
+		env.TaskId = reflectMsg.Get(fd).String()
+	}
+
+	return env, nil
+}
 
 // validateL1Governance uses Protobuf reflection to find and enforce fields with the
 // forbidden_patterns custom option.

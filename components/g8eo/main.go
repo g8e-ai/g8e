@@ -316,6 +316,7 @@ func main() {
 		NoGit:               noGit,
 		LogLevel:            logLevel,
 		WorkDir:             effectiveWorkDir,
+		SSLDir:              settings.SSLDir,
 		HeartbeatInterval:   heartbeatInterval,
 		Shell:               settings.Shell,
 		Lang:                settings.Lang,

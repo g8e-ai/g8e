@@ -15,11 +15,9 @@ package pubsub
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
-	"github.com/g8e-ai/g8e/components/g8eo/models"
 	pb "github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 	"github.com/stretchr/testify/assert"
@@ -28,13 +26,21 @@ import (
 
 func TestExecutionIDFromMessage_PrefersPayloadExecutionID(t *testing.T) {
 	payload := testutil.MustMarshalProtobufCommandRequested(t, "ls", "exec-123", "", "", 0)
-	msg := PubSubCommandMessage{ID: "envelope-abc", Payload: payload}
+	msg := PubSubCommandMessage{
+		ID:        "envelope-abc",
+		EventType: constants.Event.Operator.Command.Requested,
+		Payload:   payload,
+	}
 	assert.Equal(t, "exec-123", executionIDFromMessage(msg))
 }
 
 func TestExecutionIDFromMessage_FallsBackToEnvelopeID(t *testing.T) {
 	payload := testutil.MustMarshalProtobufHeartbeatRequested(t)
-	msg := PubSubCommandMessage{ID: "envelope-abc", Payload: payload}
+	msg := PubSubCommandMessage{
+		ID:        "envelope-abc",
+		EventType: constants.Event.Operator.HeartbeatRequested,
+		Payload:   payload,
+	}
 	assert.Equal(t, "envelope-abc", executionIDFromMessage(msg))
 }
 
@@ -144,10 +150,8 @@ func TestSetExecutionIDOnPayload_RestoreFileResult(t *testing.T) {
 }
 
 // The LFAA publish path (file reads, port checks, fetch logs/history, restore)
-// must stamp the configured operator APIKey onto the outbound G8eMessage for
-// identity continuity, matching the PublishResultEnvelope path in
-// pubsub_results.go.
-func TestPublishLFAA_StampsAPIKeyFromConfig(t *testing.T) {
+// must use UniversalEnvelope for cross-component consistency.
+func TestPublishLFAA_EnvelopeStructure(t *testing.T) {
 	ctx := context.Background()
 	logger := testutil.NewTestLogger()
 
@@ -159,18 +163,10 @@ func TestPublishLFAA_StampsAPIKeyFromConfig(t *testing.T) {
 		OperatorSessionID: "opsess-lfaa",
 	}
 
-	decode := func(t *testing.T, data []byte) models.G8eMessage {
-		t.Helper()
-		var m models.G8eMessage
-		require.NoError(t, json.Unmarshal(data, &m))
-		return m
-	}
-
-	t.Run("typed response stamps APIKey", func(t *testing.T) {
+	t.Run("typed response uses UniversalEnvelope", func(t *testing.T) {
 		client := NewMockG8esPubSubClient()
 		defer client.Close()
 		cfg := testutil.NewTestConfig(t)
-		cfg.APIKey = "g8e_typed_key"
 
 		publishLFAATypedResponseTo(ctx, client, cfg, logger, cmdMsg,
 			constants.Event.Operator.PortCheck.Completed,
@@ -178,35 +174,32 @@ func TestPublishLFAA_StampsAPIKeyFromConfig(t *testing.T) {
 
 		published := client.LastPublished()
 		require.NotNil(t, published)
-		assert.Equal(t, "g8e_typed_key", decode(t, published.Data).APIKey)
+
+		env := testutil.MustUnmarshalUniversalEnvelope(t, published.Data)
+		assert.Equal(t, constants.Event.Operator.PortCheck.Completed, env.EventType)
+		assert.Equal(t, cfg.OperatorID, env.OperatorId)
+		assert.Equal(t, "case-lfaa", env.CaseId)
+		assert.Equal(t, "inv-lfaa", env.InvestigationId)
+		assert.Equal(t, "opsess-lfaa", env.OperatorSessionId)
 	})
 
-	t.Run("error response stamps APIKey", func(t *testing.T) {
+	t.Run("error response uses UniversalEnvelope", func(t *testing.T) {
 		client := NewMockG8esPubSubClient()
 		defer client.Close()
 		cfg := testutil.NewTestConfig(t)
-		cfg.APIKey = "g8e_err_key"
 
 		publishLFAAErrorTo(ctx, client, cfg, logger, cmdMsg,
 			constants.Event.Operator.PortCheck.Failed, "boom")
 
 		published := client.LastPublished()
 		require.NotNil(t, published)
-		assert.Equal(t, "g8e_err_key", decode(t, published.Data).APIKey)
-	})
 
-	t.Run("raw response stamps APIKey", func(t *testing.T) {
-		client := NewMockG8esPubSubClient()
-		defer client.Close()
-		cfg := testutil.NewTestConfig(t)
-		cfg.APIKey = "g8e_raw_key"
+		env := testutil.MustUnmarshalUniversalEnvelope(t, published.Data)
+		assert.Equal(t, constants.Event.Operator.PortCheck.Failed, env.EventType)
 
-		publishLFAAResponseTo(ctx, client, cfg, logger, cmdMsg,
-			constants.Event.Operator.FetchHistory.Completed,
-			[]byte(`{"success":true,"events":[]}`))
-
-		published := client.LastPublished()
-		require.NotNil(t, published)
-		assert.Equal(t, "g8e_raw_key", decode(t, published.Data).APIKey)
+		var payload pb.CommandResult
+		testutil.MustUnmarshalPayload(t, env.Payload, &payload)
+		assert.Equal(t, string(constants.ExecutionStatusFailed), payload.Status)
+		assert.Equal(t, "boom", payload.Error)
 	})
 }

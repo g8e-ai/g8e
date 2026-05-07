@@ -103,6 +103,7 @@ async def _connect_clients(settings):
     """
     ca = settings.ca_cert_path
     token = settings.auth.internal_auth_token
+    auditor_hmac_key = settings.auth.auditor_hmac_key
 
     db_client = DBClient(ca_cert_path=ca, internal_auth_token=token)
     await db_client.connect()
@@ -113,7 +114,10 @@ async def _connect_clients(settings):
     await kv_cache_client.connect()
 
     pubsub_client = PubSubClient(
-        component_name=ComponentName.G8EE, ca_cert_path=ca, internal_auth_token=token,
+        component_name=ComponentName.G8EE,
+        ca_cert_path=ca,
+        internal_auth_token=token,
+        auditor_hmac_key=auditor_hmac_key,
     )
     await pubsub_client.connect()
 

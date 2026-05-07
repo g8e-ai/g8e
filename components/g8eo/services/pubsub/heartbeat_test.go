@@ -22,6 +22,8 @@ import (
 
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/models"
+	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
+	pb "github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -64,7 +66,7 @@ func TestBuildHeartbeat_EnvelopeFields(t *testing.T) {
 	hb := hs.Build(models.HeartbeatTypeAutomatic)
 
 	assert.Equal(t, constants.Event.Operator.Heartbeat, hb.EventType)
-	assert.Equal(t, constants.Status.ComponentName.G8EO, hb.SourceComponent)
+	assert.Equal(t, commonv1.Component_COMPONENT_G8EO, hb.SourceComponent)
 	assert.Equal(t, cfg.OperatorID, hb.OperatorID)
 	assert.Equal(t, cfg.OperatorSessionId, hb.OperatorSessionID)
 	assert.NotEmpty(t, hb.Timestamp)
@@ -237,9 +239,13 @@ func TestHandleHeartbeatRequest_UsesHeartbeatTypeRequested(t *testing.T) {
 	last := db.LastPublished()
 	require.NotNil(t, last)
 
-	var hb models.Heartbeat
-	require.NoError(t, json.Unmarshal(last.Data, &hb))
-	assert.Equal(t, models.HeartbeatTypeRequested, hb.HeartbeatType)
+	// Unmarshal the UniversalEnvelope
+	env := testutil.MustUnmarshalUniversalEnvelope(t, last.Data)
+
+	// Unmarshal the payload as protobuf HeartbeatResult
+	var hb pb.HeartbeatResult
+	testutil.MustUnmarshalPayload(t, env.Payload, &hb)
+	assert.Equal(t, string(models.HeartbeatTypeRequested), hb.Status)
 }
 
 func TestHandleHeartbeatRequest_PropagatesCaseID(t *testing.T) {
@@ -249,7 +255,7 @@ func TestHandleHeartbeatRequest_PropagatesCaseID(t *testing.T) {
 		ID:        "msg-hbreq-2",
 		EventType: constants.Event.Operator.HeartbeatRequested,
 		CaseID:    "case-propagate-123",
-		Payload:   mustMarshalJSON(t, models.HeartbeatRequestPayload{}),
+		Payload:   testutil.MustMarshalProtobufHeartbeatRequested(t),
 		Timestamp: time.Now().UTC(),
 	}
 
@@ -258,9 +264,13 @@ func TestHandleHeartbeatRequest_PropagatesCaseID(t *testing.T) {
 	last := db.LastPublished()
 	require.NotNil(t, last)
 
-	var hb models.Heartbeat
-	require.NoError(t, json.Unmarshal(last.Data, &hb))
-	assert.Equal(t, "case-propagate-123", hb.CaseID)
+	// Unmarshal the UniversalEnvelope
+	env := testutil.MustUnmarshalUniversalEnvelope(t, last.Data)
+
+	// Unmarshal the payload as protobuf HeartbeatResult
+	var hb pb.HeartbeatResult
+	testutil.MustUnmarshalPayload(t, env.Payload, &hb)
+	assert.Equal(t, "case-propagate-123", hb.CaseId)
 }
 
 func TestHandleHeartbeatRequest_PropagatesInvestigationID(t *testing.T) {
@@ -271,7 +281,7 @@ func TestHandleHeartbeatRequest_PropagatesInvestigationID(t *testing.T) {
 		EventType:       constants.Event.Operator.HeartbeatRequested,
 		CaseID:          "case-x",
 		InvestigationID: "inv-propagate-456",
-		Payload:         mustMarshalJSON(t, models.HeartbeatRequestPayload{}),
+		Payload:         testutil.MustMarshalProtobufHeartbeatRequested(t),
 		Timestamp:       time.Now().UTC(),
 	}
 
@@ -280,9 +290,13 @@ func TestHandleHeartbeatRequest_PropagatesInvestigationID(t *testing.T) {
 	last := db.LastPublished()
 	require.NotNil(t, last)
 
-	var hb models.Heartbeat
-	require.NoError(t, json.Unmarshal(last.Data, &hb))
-	assert.Equal(t, "inv-propagate-456", hb.InvestigationID)
+	// Unmarshal the UniversalEnvelope
+	env := testutil.MustUnmarshalUniversalEnvelope(t, last.Data)
+
+	// Unmarshal the payload as protobuf HeartbeatResult
+	var hb pb.HeartbeatResult
+	testutil.MustUnmarshalPayload(t, env.Payload, &hb)
+	assert.Equal(t, "inv-propagate-456", hb.InvestigationId)
 }
 
 func TestHandleHeartbeatRequest_EmptyInvestigationIDIsValid(t *testing.T) {
@@ -338,7 +352,7 @@ func TestHandleHeartbeatRequest_PublishesToCorrectChannel(t *testing.T) {
 		ID:        "msg-hbreq-chan",
 		EventType: constants.Event.Operator.HeartbeatRequested,
 		CaseID:    "case-chan",
-		Payload:   mustMarshalJSON(t, models.HeartbeatRequestPayload{}),
+		Payload:   testutil.MustMarshalProtobufHeartbeatRequested(t),
 		Timestamp: time.Now().UTC(),
 	}
 
@@ -347,8 +361,12 @@ func TestHandleHeartbeatRequest_PublishesToCorrectChannel(t *testing.T) {
 	last := db.LastPublished()
 	require.NotNil(t, last)
 
+	// Unmarshal the UniversalEnvelope
+	env := testutil.MustUnmarshalUniversalEnvelope(t, last.Data)
+
 	expectedChannel := constants.HeartbeatChannel(cfg.OperatorID, cfg.OperatorSessionId)
 	assert.Equal(t, expectedChannel, last.Channel)
+	assert.Equal(t, cfg.OperatorSessionId, env.OperatorSessionId)
 }
 
 // ---------------------------------------------------------------------------
@@ -363,9 +381,13 @@ func TestSendAutomaticHeartbeat_PublishesAutomaticType(t *testing.T) {
 	last := db.LastPublished()
 	require.NotNil(t, last)
 
-	var hb models.Heartbeat
-	require.NoError(t, json.Unmarshal(last.Data, &hb))
-	assert.Equal(t, models.HeartbeatTypeAutomatic, hb.HeartbeatType)
+	// Unmarshal the UniversalEnvelope
+	env := testutil.MustUnmarshalUniversalEnvelope(t, last.Data)
+
+	// Unmarshal the payload as protobuf HeartbeatResult
+	var hb pb.HeartbeatResult
+	testutil.MustUnmarshalPayload(t, env.Payload, &hb)
+	assert.Equal(t, string(models.HeartbeatTypeAutomatic), hb.Status)
 }
 
 func TestSendAutomaticHeartbeat_UsesVersionFromConfig(t *testing.T) {
@@ -388,8 +410,12 @@ func TestSendAutomaticHeartbeat_UsesVersionFromConfig(t *testing.T) {
 	last := db.LastPublished()
 	require.NotNil(t, last)
 
-	var hb models.Heartbeat
-	require.NoError(t, json.Unmarshal(last.Data, &hb))
+	// Unmarshal the UniversalEnvelope
+	env := testutil.MustUnmarshalUniversalEnvelope(t, last.Data)
+
+	// Unmarshal the payload as protobuf HeartbeatResult
+	var hb pb.HeartbeatResult
+	testutil.MustUnmarshalPayload(t, env.Payload, &hb)
 	assert.Equal(t, "3.1.4", hb.VersionInfo.OperatorVersion)
 }
 
@@ -520,7 +546,7 @@ func TestPubSubCommandService_HandleHeartbeatRequestDelegate(t *testing.T) {
 		ID:        "msg-delegate-1",
 		EventType: constants.Event.Operator.HeartbeatRequested,
 		CaseID:    "case-del",
-		Payload:   mustMarshalJSON(t, models.HeartbeatRequestPayload{}),
+		Payload:   testutil.MustMarshalProtobufHeartbeatRequested(t),
 		Timestamp: time.Now().UTC(),
 	}
 
@@ -582,12 +608,16 @@ func TestHeartbeatScheduler_ShortIntervalFiresAndPublishes(t *testing.T) {
 	last := db.LastPublished()
 	require.NotNil(t, last)
 
-	var hb models.Heartbeat
-	require.NoError(t, json.Unmarshal(last.Data, &hb))
+	// Unmarshal the UniversalEnvelope
+	env := testutil.MustUnmarshalUniversalEnvelope(t, last.Data)
 
-	assert.Equal(t, constants.Event.Operator.Heartbeat, hb.EventType)
-	assert.Equal(t, models.HeartbeatTypeAutomatic, hb.HeartbeatType)
-	assert.Equal(t, constants.Status.ComponentName.G8EO, hb.SourceComponent)
+	// Unmarshal the payload as protobuf HeartbeatResult
+	var hb pb.HeartbeatResult
+	testutil.MustUnmarshalPayload(t, env.Payload, &hb)
+
+	assert.Equal(t, constants.Event.Operator.Heartbeat, env.EventType)
+	assert.Equal(t, string(models.HeartbeatTypeAutomatic), hb.Status)
+	assert.Equal(t, commonv1.Component_COMPONENT_G8EO, env.SourceComponent)
 }
 
 func TestHeartbeatScheduler_ShortIntervalPublishesMultipleTicks(t *testing.T) {
@@ -612,11 +642,15 @@ func TestHeartbeatScheduler_PayloadCarriesConfigFields(t *testing.T) {
 	last := db.LastPublished()
 	require.NotNil(t, last)
 
-	var hb models.Heartbeat
-	require.NoError(t, json.Unmarshal(last.Data, &hb))
+	// Unmarshal the UniversalEnvelope
+	env := testutil.MustUnmarshalUniversalEnvelope(t, last.Data)
 
-	assert.Equal(t, "op-sched-test", hb.OperatorID)
-	assert.Equal(t, "sess-sched-test", hb.OperatorSessionID)
+	// Unmarshal the payload as protobuf HeartbeatResult
+	var hb pb.HeartbeatResult
+	testutil.MustUnmarshalPayload(t, env.Payload, &hb)
+
+	assert.Equal(t, "op-sched-test", hb.OperatorId)
+	assert.Equal(t, "sess-sched-test", hb.OperatorSessionId)
 	assert.Equal(t, "9.8.7", hb.VersionInfo.OperatorVersion)
 	assert.True(t, hb.CapabilityFlags.LocalStorageEnabled)
 	assert.True(t, hb.CapabilityFlags.GitAvailable)
@@ -635,14 +669,17 @@ func TestHeartbeatScheduler_PayloadSystemIdentityPopulated(t *testing.T) {
 	last := db.LastPublished()
 	require.NotNil(t, last)
 
-	var hb models.Heartbeat
-	require.NoError(t, json.Unmarshal(last.Data, &hb))
+	// Unmarshal the UniversalEnvelope
+	env := testutil.MustUnmarshalUniversalEnvelope(t, last.Data)
+
+	// Unmarshal the payload as protobuf HeartbeatResult
+	var hb pb.HeartbeatResult
+	testutil.MustUnmarshalPayload(t, env.Payload, &hb)
 
 	assert.NotEmpty(t, hb.SystemIdentity.Hostname)
-	assert.NotEmpty(t, hb.SystemIdentity.OS)
+	assert.NotEmpty(t, hb.SystemIdentity.Os)
 	assert.NotEmpty(t, hb.SystemIdentity.Architecture)
-	assert.Greater(t, hb.SystemIdentity.CPUCount, 0)
-	assert.NotEmpty(t, hb.Timestamp)
+	assert.Greater(t, hb.SystemIdentity.CpuCount, int32(0))
 }
 
 func TestHeartbeatScheduler_PublishesToHeartbeatChannel(t *testing.T) {
@@ -771,7 +808,7 @@ func TestHeartbeatScheduler_ZeroIntervalSkips(t *testing.T) {
 	assert.Equal(t, 0, db.PublishedCount())
 }
 
-func TestHeartbeatScheduler_ShortIntervalSerializesValidJSON(t *testing.T) {
+func TestHeartbeatScheduler_ShortIntervalSerializesValidProtobuf(t *testing.T) {
 	hs, db := newHeartbeatFixtureWithInterval(t, 30*time.Millisecond)
 
 	hs.StartScheduler()
@@ -783,11 +820,11 @@ func TestHeartbeatScheduler_ShortIntervalSerializesValidJSON(t *testing.T) {
 	last := db.LastPublished()
 	require.NotNil(t, last)
 
-	var hb models.Heartbeat
-	require.NoError(t, json.Unmarshal(last.Data, &hb), "automatic heartbeat payload must be valid JSON")
+	env := testutil.MustUnmarshalUniversalEnvelope(t, last.Data)
+	assert.Equal(t, constants.Event.Operator.Heartbeat, env.EventType)
 
-	assert.Equal(t, constants.Event.Operator.Heartbeat, hb.EventType)
-	assert.Equal(t, models.HeartbeatTypeAutomatic, hb.HeartbeatType)
+	var hb pb.HeartbeatResult
+	testutil.MustUnmarshalPayload(t, env.Payload, &hb)
+	assert.Equal(t, string(models.HeartbeatTypeAutomatic), hb.Status)
 	assert.NotEmpty(t, hb.Timestamp)
-	assert.NotEmpty(t, hb.VersionInfo.Status)
 }

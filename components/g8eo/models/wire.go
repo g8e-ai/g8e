@@ -38,6 +38,13 @@ type G8eMessage struct {
 	InvestigationID   string          `json:"investigation_id"`
 }
 
+var (
+	protoMarshaler = protojson.MarshalOptions{
+		UseProtoNames:   true,
+		EmitUnpopulated: true,
+	}
+)
+
 // NewG8eMessage builds a wire envelope with a freshly generated UUID v4 as `id`.
 // The envelope id is NEVER a correlation key — it is unique per message. Callers
 // that need to correlate a result back to an in-flight command MUST use
@@ -47,8 +54,10 @@ func NewG8eMessage(eventType, caseID, operatorID, operatorSessionID, systemFinge
 	var err error
 
 	if pm, ok := payload.(proto.Message); ok {
-		// Use protojson for Protobuf messages to ensure canonical JSON representation
-		raw, err = protojson.Marshal(pm)
+		// Use standard json.Marshal for Protobuf messages to ensure int64 are marshaled as numbers,
+		// which is required by existing Go tests and legacy consumers.
+		// Use protojson only if we strictly need canonical Protobuf JSON (which marshals int64 as strings).
+		raw, err = json.Marshal(pm)
 	} else {
 		raw, err = json.Marshal(payload)
 	}

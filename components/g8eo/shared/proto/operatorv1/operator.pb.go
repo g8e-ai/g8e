@@ -1543,7 +1543,7 @@ type FsReadResult struct {
 	ExecutionId     string                 `protobuf:"bytes,1,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
 	Status          string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
 	Path            string                 `protobuf:"bytes,3,opt,name=path,proto3" json:"path,omitempty"`
-	Content         []byte                 `protobuf:"bytes,4,opt,name=content,proto3" json:"content,omitempty"`
+	Content         string                 `protobuf:"bytes,4,opt,name=content,proto3" json:"content,omitempty"`
 	SizeBytes       int64                  `protobuf:"varint,5,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
 	Truncated       bool                   `protobuf:"varint,6,opt,name=truncated,proto3" json:"truncated,omitempty"`
 	DurationSeconds float32                `protobuf:"fixed32,7,opt,name=duration_seconds,json=durationSeconds,proto3" json:"duration_seconds,omitempty"`
@@ -1604,11 +1604,11 @@ func (x *FsReadResult) GetPath() string {
 	return ""
 }
 
-func (x *FsReadResult) GetContent() []byte {
+func (x *FsReadResult) GetContent() string {
 	if x != nil {
 		return x.Content
 	}
-	return nil
+	return ""
 }
 
 func (x *FsReadResult) GetSizeBytes() int64 {
@@ -1842,6 +1842,9 @@ type FileEditResult struct {
 	BackupPath      string                 `protobuf:"bytes,8,opt,name=backup_path,json=backupPath,proto3" json:"backup_path,omitempty"`
 	ErrorMessage    string                 `protobuf:"bytes,9,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
 	ErrorType       string                 `protobuf:"bytes,10,opt,name=error_type,json=errorType,proto3" json:"error_type,omitempty"`
+	Content         string                 `protobuf:"bytes,11,opt,name=content,proto3" json:"content,omitempty"`
+	StdoutSize      int32                  `protobuf:"varint,12,opt,name=stdout_size,json=stdoutSize,proto3" json:"stdout_size,omitempty"`
+	StderrSize      int32                  `protobuf:"varint,13,opt,name=stderr_size,json=stderrSize,proto3" json:"stderr_size,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1944,6 +1947,27 @@ func (x *FileEditResult) GetErrorType() string {
 		return x.ErrorType
 	}
 	return ""
+}
+
+func (x *FileEditResult) GetContent() string {
+	if x != nil {
+		return x.Content
+	}
+	return ""
+}
+
+func (x *FileEditResult) GetStdoutSize() int32 {
+	if x != nil {
+		return x.StdoutSize
+	}
+	return 0
+}
+
+func (x *FileEditResult) GetStderrSize() int32 {
+	if x != nil {
+		return x.StderrSize
+	}
+	return 0
 }
 
 type ExecutionStatusUpdate struct {
@@ -3151,13 +3175,31 @@ func (x *FetchFileDiffResult) GetError() string {
 }
 
 type HeartbeatResult struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	OperatorId        string                 `protobuf:"bytes,1,opt,name=operator_id,json=operatorId,proto3" json:"operator_id,omitempty"`
-	OperatorSessionId string                 `protobuf:"bytes,2,opt,name=operator_session_id,json=operatorSessionId,proto3" json:"operator_session_id,omitempty"`
-	Timestamp         string                 `protobuf:"bytes,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
-	Status            string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	OperatorId         string                 `protobuf:"bytes,1,opt,name=operator_id,json=operatorId,proto3" json:"operator_id,omitempty"`
+	OperatorSessionId  string                 `protobuf:"bytes,2,opt,name=operator_session_id,json=operatorSessionId,proto3" json:"operator_session_id,omitempty"`
+	Timestamp          string                 `protobuf:"bytes,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	Status             string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	EventType          string                 `protobuf:"bytes,5,opt,name=event_type,json=eventType,proto3" json:"event_type,omitempty"`
+	SourceComponent    string                 `protobuf:"bytes,6,opt,name=source_component,json=sourceComponent,proto3" json:"source_component,omitempty"`
+	CaseId             string                 `protobuf:"bytes,7,opt,name=case_id,json=caseId,proto3" json:"case_id,omitempty"`
+	InvestigationId    string                 `protobuf:"bytes,8,opt,name=investigation_id,json=investigationId,proto3" json:"investigation_id,omitempty"`
+	SystemIdentity     *SystemIdentity        `protobuf:"bytes,9,opt,name=system_identity,json=systemIdentity,proto3" json:"system_identity,omitempty"`
+	NetworkInfo        *NetworkInfo           `protobuf:"bytes,10,opt,name=network_info,json=networkInfo,proto3" json:"network_info,omitempty"`
+	VersionInfo        *VersionInfo           `protobuf:"bytes,11,opt,name=version_info,json=versionInfo,proto3" json:"version_info,omitempty"`
+	UptimeInfo         *UptimeInfo            `protobuf:"bytes,12,opt,name=uptime_info,json=uptimeInfo,proto3" json:"uptime_info,omitempty"`
+	PerformanceMetrics *PerformanceMetrics    `protobuf:"bytes,13,opt,name=performance_metrics,json=performanceMetrics,proto3" json:"performance_metrics,omitempty"`
+	OsDetails          *OSDetails             `protobuf:"bytes,14,opt,name=os_details,json=osDetails,proto3" json:"os_details,omitempty"`
+	UserDetails        *UserDetails           `protobuf:"bytes,15,opt,name=user_details,json=userDetails,proto3" json:"user_details,omitempty"`
+	DiskDetails        *DiskDetails           `protobuf:"bytes,16,opt,name=disk_details,json=diskDetails,proto3" json:"disk_details,omitempty"`
+	MemoryDetails      *MemoryDetails         `protobuf:"bytes,17,opt,name=memory_details,json=memoryDetails,proto3" json:"memory_details,omitempty"`
+	Environment        *EnvironmentDetails    `protobuf:"bytes,18,opt,name=environment,proto3" json:"environment,omitempty"`
+	CapabilityFlags    *CapabilityFlags       `protobuf:"bytes,19,opt,name=capability_flags,json=capabilityFlags,proto3" json:"capability_flags,omitempty"`
+	FingerprintDetails *FingerprintDetails    `protobuf:"bytes,20,opt,name=fingerprint_details,json=fingerprintDetails,proto3" json:"fingerprint_details,omitempty"`
+	SystemFingerprint  string                 `protobuf:"bytes,21,opt,name=system_fingerprint,json=systemFingerprint,proto3" json:"system_fingerprint,omitempty"`
+	ApiKey             string                 `protobuf:"bytes,22,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *HeartbeatResult) Reset() {
@@ -3214,6 +3256,1064 @@ func (x *HeartbeatResult) GetTimestamp() string {
 func (x *HeartbeatResult) GetStatus() string {
 	if x != nil {
 		return x.Status
+	}
+	return ""
+}
+
+func (x *HeartbeatResult) GetEventType() string {
+	if x != nil {
+		return x.EventType
+	}
+	return ""
+}
+
+func (x *HeartbeatResult) GetSourceComponent() string {
+	if x != nil {
+		return x.SourceComponent
+	}
+	return ""
+}
+
+func (x *HeartbeatResult) GetCaseId() string {
+	if x != nil {
+		return x.CaseId
+	}
+	return ""
+}
+
+func (x *HeartbeatResult) GetInvestigationId() string {
+	if x != nil {
+		return x.InvestigationId
+	}
+	return ""
+}
+
+func (x *HeartbeatResult) GetSystemIdentity() *SystemIdentity {
+	if x != nil {
+		return x.SystemIdentity
+	}
+	return nil
+}
+
+func (x *HeartbeatResult) GetNetworkInfo() *NetworkInfo {
+	if x != nil {
+		return x.NetworkInfo
+	}
+	return nil
+}
+
+func (x *HeartbeatResult) GetVersionInfo() *VersionInfo {
+	if x != nil {
+		return x.VersionInfo
+	}
+	return nil
+}
+
+func (x *HeartbeatResult) GetUptimeInfo() *UptimeInfo {
+	if x != nil {
+		return x.UptimeInfo
+	}
+	return nil
+}
+
+func (x *HeartbeatResult) GetPerformanceMetrics() *PerformanceMetrics {
+	if x != nil {
+		return x.PerformanceMetrics
+	}
+	return nil
+}
+
+func (x *HeartbeatResult) GetOsDetails() *OSDetails {
+	if x != nil {
+		return x.OsDetails
+	}
+	return nil
+}
+
+func (x *HeartbeatResult) GetUserDetails() *UserDetails {
+	if x != nil {
+		return x.UserDetails
+	}
+	return nil
+}
+
+func (x *HeartbeatResult) GetDiskDetails() *DiskDetails {
+	if x != nil {
+		return x.DiskDetails
+	}
+	return nil
+}
+
+func (x *HeartbeatResult) GetMemoryDetails() *MemoryDetails {
+	if x != nil {
+		return x.MemoryDetails
+	}
+	return nil
+}
+
+func (x *HeartbeatResult) GetEnvironment() *EnvironmentDetails {
+	if x != nil {
+		return x.Environment
+	}
+	return nil
+}
+
+func (x *HeartbeatResult) GetCapabilityFlags() *CapabilityFlags {
+	if x != nil {
+		return x.CapabilityFlags
+	}
+	return nil
+}
+
+func (x *HeartbeatResult) GetFingerprintDetails() *FingerprintDetails {
+	if x != nil {
+		return x.FingerprintDetails
+	}
+	return nil
+}
+
+func (x *HeartbeatResult) GetSystemFingerprint() string {
+	if x != nil {
+		return x.SystemFingerprint
+	}
+	return ""
+}
+
+func (x *HeartbeatResult) GetApiKey() string {
+	if x != nil {
+		return x.ApiKey
+	}
+	return ""
+}
+
+type SystemIdentity struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Hostname      string                 `protobuf:"bytes,1,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	Os            string                 `protobuf:"bytes,2,opt,name=os,proto3" json:"os,omitempty"`
+	Architecture  string                 `protobuf:"bytes,3,opt,name=architecture,proto3" json:"architecture,omitempty"`
+	Pwd           string                 `protobuf:"bytes,4,opt,name=pwd,proto3" json:"pwd,omitempty"`
+	CurrentUser   string                 `protobuf:"bytes,5,opt,name=current_user,json=currentUser,proto3" json:"current_user,omitempty"`
+	CpuCount      int32                  `protobuf:"varint,6,opt,name=cpu_count,json=cpuCount,proto3" json:"cpu_count,omitempty"`
+	MemoryMb      int32                  `protobuf:"varint,7,opt,name=memory_mb,json=memoryMb,proto3" json:"memory_mb,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SystemIdentity) Reset() {
+	*x = SystemIdentity{}
+	mi := &file_operator_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SystemIdentity) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SystemIdentity) ProtoMessage() {}
+
+func (x *SystemIdentity) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SystemIdentity.ProtoReflect.Descriptor instead.
+func (*SystemIdentity) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *SystemIdentity) GetHostname() string {
+	if x != nil {
+		return x.Hostname
+	}
+	return ""
+}
+
+func (x *SystemIdentity) GetOs() string {
+	if x != nil {
+		return x.Os
+	}
+	return ""
+}
+
+func (x *SystemIdentity) GetArchitecture() string {
+	if x != nil {
+		return x.Architecture
+	}
+	return ""
+}
+
+func (x *SystemIdentity) GetPwd() string {
+	if x != nil {
+		return x.Pwd
+	}
+	return ""
+}
+
+func (x *SystemIdentity) GetCurrentUser() string {
+	if x != nil {
+		return x.CurrentUser
+	}
+	return ""
+}
+
+func (x *SystemIdentity) GetCpuCount() int32 {
+	if x != nil {
+		return x.CpuCount
+	}
+	return 0
+}
+
+func (x *SystemIdentity) GetMemoryMb() int32 {
+	if x != nil {
+		return x.MemoryMb
+	}
+	return 0
+}
+
+type NetworkInterface struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Ip            string                 `protobuf:"bytes,2,opt,name=ip,proto3" json:"ip,omitempty"`
+	Mtu           int32                  `protobuf:"varint,3,opt,name=mtu,proto3" json:"mtu,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NetworkInterface) Reset() {
+	*x = NetworkInterface{}
+	mi := &file_operator_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NetworkInterface) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NetworkInterface) ProtoMessage() {}
+
+func (x *NetworkInterface) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NetworkInterface.ProtoReflect.Descriptor instead.
+func (*NetworkInterface) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *NetworkInterface) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *NetworkInterface) GetIp() string {
+	if x != nil {
+		return x.Ip
+	}
+	return ""
+}
+
+func (x *NetworkInterface) GetMtu() int32 {
+	if x != nil {
+		return x.Mtu
+	}
+	return 0
+}
+
+type NetworkInfo struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	PublicIp           string                 `protobuf:"bytes,1,opt,name=public_ip,json=publicIp,proto3" json:"public_ip,omitempty"`
+	InternalIp         string                 `protobuf:"bytes,2,opt,name=internal_ip,json=internalIp,proto3" json:"internal_ip,omitempty"`
+	Interfaces         []string               `protobuf:"bytes,3,rep,name=interfaces,proto3" json:"interfaces,omitempty"`
+	ConnectivityStatus []*NetworkInterface    `protobuf:"bytes,4,rep,name=connectivity_status,json=connectivityStatus,proto3" json:"connectivity_status,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *NetworkInfo) Reset() {
+	*x = NetworkInfo{}
+	mi := &file_operator_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NetworkInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NetworkInfo) ProtoMessage() {}
+
+func (x *NetworkInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NetworkInfo.ProtoReflect.Descriptor instead.
+func (*NetworkInfo) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *NetworkInfo) GetPublicIp() string {
+	if x != nil {
+		return x.PublicIp
+	}
+	return ""
+}
+
+func (x *NetworkInfo) GetInternalIp() string {
+	if x != nil {
+		return x.InternalIp
+	}
+	return ""
+}
+
+func (x *NetworkInfo) GetInterfaces() []string {
+	if x != nil {
+		return x.Interfaces
+	}
+	return nil
+}
+
+func (x *NetworkInfo) GetConnectivityStatus() []*NetworkInterface {
+	if x != nil {
+		return x.ConnectivityStatus
+	}
+	return nil
+}
+
+type CapabilityFlags struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	LocalStorageEnabled bool                   `protobuf:"varint,1,opt,name=local_storage_enabled,json=localStorageEnabled,proto3" json:"local_storage_enabled,omitempty"`
+	GitAvailable        bool                   `protobuf:"varint,2,opt,name=git_available,json=gitAvailable,proto3" json:"git_available,omitempty"`
+	LedgerMirrorEnabled bool                   `protobuf:"varint,3,opt,name=ledger_mirror_enabled,json=ledgerMirrorEnabled,proto3" json:"ledger_mirror_enabled,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *CapabilityFlags) Reset() {
+	*x = CapabilityFlags{}
+	mi := &file_operator_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CapabilityFlags) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CapabilityFlags) ProtoMessage() {}
+
+func (x *CapabilityFlags) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CapabilityFlags.ProtoReflect.Descriptor instead.
+func (*CapabilityFlags) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *CapabilityFlags) GetLocalStorageEnabled() bool {
+	if x != nil {
+		return x.LocalStorageEnabled
+	}
+	return false
+}
+
+func (x *CapabilityFlags) GetGitAvailable() bool {
+	if x != nil {
+		return x.GitAvailable
+	}
+	return false
+}
+
+func (x *CapabilityFlags) GetLedgerMirrorEnabled() bool {
+	if x != nil {
+		return x.LedgerMirrorEnabled
+	}
+	return false
+}
+
+type VersionInfo struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	OperatorVersion string                 `protobuf:"bytes,1,opt,name=operator_version,json=operatorVersion,proto3" json:"operator_version,omitempty"`
+	Status          string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *VersionInfo) Reset() {
+	*x = VersionInfo{}
+	mi := &file_operator_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VersionInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VersionInfo) ProtoMessage() {}
+
+func (x *VersionInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VersionInfo.ProtoReflect.Descriptor instead.
+func (*VersionInfo) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *VersionInfo) GetOperatorVersion() string {
+	if x != nil {
+		return x.OperatorVersion
+	}
+	return ""
+}
+
+func (x *VersionInfo) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+type UptimeInfo struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Uptime        string                 `protobuf:"bytes,1,opt,name=uptime,proto3" json:"uptime,omitempty"`
+	UptimeSeconds int64                  `protobuf:"varint,2,opt,name=uptime_seconds,json=uptimeSeconds,proto3" json:"uptime_seconds,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UptimeInfo) Reset() {
+	*x = UptimeInfo{}
+	mi := &file_operator_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UptimeInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UptimeInfo) ProtoMessage() {}
+
+func (x *UptimeInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UptimeInfo.ProtoReflect.Descriptor instead.
+func (*UptimeInfo) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *UptimeInfo) GetUptime() string {
+	if x != nil {
+		return x.Uptime
+	}
+	return ""
+}
+
+func (x *UptimeInfo) GetUptimeSeconds() int64 {
+	if x != nil {
+		return x.UptimeSeconds
+	}
+	return 0
+}
+
+type PerformanceMetrics struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	CpuPercent     float64                `protobuf:"fixed64,1,opt,name=cpu_percent,json=cpuPercent,proto3" json:"cpu_percent,omitempty"`
+	MemoryPercent  float64                `protobuf:"fixed64,2,opt,name=memory_percent,json=memoryPercent,proto3" json:"memory_percent,omitempty"`
+	DiskPercent    float64                `protobuf:"fixed64,3,opt,name=disk_percent,json=diskPercent,proto3" json:"disk_percent,omitempty"`
+	NetworkLatency float64                `protobuf:"fixed64,4,opt,name=network_latency,json=networkLatency,proto3" json:"network_latency,omitempty"`
+	MemoryUsedMb   int32                  `protobuf:"varint,5,opt,name=memory_used_mb,json=memoryUsedMb,proto3" json:"memory_used_mb,omitempty"`
+	MemoryTotalMb  int32                  `protobuf:"varint,6,opt,name=memory_total_mb,json=memoryTotalMb,proto3" json:"memory_total_mb,omitempty"`
+	DiskUsedGb     float64                `protobuf:"fixed64,7,opt,name=disk_used_gb,json=diskUsedGb,proto3" json:"disk_used_gb,omitempty"`
+	DiskTotalGb    float64                `protobuf:"fixed64,8,opt,name=disk_total_gb,json=diskTotalGb,proto3" json:"disk_total_gb,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *PerformanceMetrics) Reset() {
+	*x = PerformanceMetrics{}
+	mi := &file_operator_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PerformanceMetrics) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PerformanceMetrics) ProtoMessage() {}
+
+func (x *PerformanceMetrics) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PerformanceMetrics.ProtoReflect.Descriptor instead.
+func (*PerformanceMetrics) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{44}
+}
+
+func (x *PerformanceMetrics) GetCpuPercent() float64 {
+	if x != nil {
+		return x.CpuPercent
+	}
+	return 0
+}
+
+func (x *PerformanceMetrics) GetMemoryPercent() float64 {
+	if x != nil {
+		return x.MemoryPercent
+	}
+	return 0
+}
+
+func (x *PerformanceMetrics) GetDiskPercent() float64 {
+	if x != nil {
+		return x.DiskPercent
+	}
+	return 0
+}
+
+func (x *PerformanceMetrics) GetNetworkLatency() float64 {
+	if x != nil {
+		return x.NetworkLatency
+	}
+	return 0
+}
+
+func (x *PerformanceMetrics) GetMemoryUsedMb() int32 {
+	if x != nil {
+		return x.MemoryUsedMb
+	}
+	return 0
+}
+
+func (x *PerformanceMetrics) GetMemoryTotalMb() int32 {
+	if x != nil {
+		return x.MemoryTotalMb
+	}
+	return 0
+}
+
+func (x *PerformanceMetrics) GetDiskUsedGb() float64 {
+	if x != nil {
+		return x.DiskUsedGb
+	}
+	return 0
+}
+
+func (x *PerformanceMetrics) GetDiskTotalGb() float64 {
+	if x != nil {
+		return x.DiskTotalGb
+	}
+	return 0
+}
+
+type OSDetails struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Kernel        string                 `protobuf:"bytes,1,opt,name=kernel,proto3" json:"kernel,omitempty"`
+	Distro        string                 `protobuf:"bytes,2,opt,name=distro,proto3" json:"distro,omitempty"`
+	Version       string                 `protobuf:"bytes,3,opt,name=version,proto3" json:"version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OSDetails) Reset() {
+	*x = OSDetails{}
+	mi := &file_operator_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OSDetails) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OSDetails) ProtoMessage() {}
+
+func (x *OSDetails) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OSDetails.ProtoReflect.Descriptor instead.
+func (*OSDetails) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *OSDetails) GetKernel() string {
+	if x != nil {
+		return x.Kernel
+	}
+	return ""
+}
+
+func (x *OSDetails) GetDistro() string {
+	if x != nil {
+		return x.Distro
+	}
+	return ""
+}
+
+func (x *OSDetails) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+type UserDetails struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Username      string                 `protobuf:"bytes,1,opt,name=username,proto3" json:"username,omitempty"`
+	Uid           int32                  `protobuf:"varint,2,opt,name=uid,proto3" json:"uid,omitempty"`
+	Gid           int32                  `protobuf:"varint,3,opt,name=gid,proto3" json:"gid,omitempty"`
+	Home          string                 `protobuf:"bytes,4,opt,name=home,proto3" json:"home,omitempty"`
+	Name          string                 `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
+	Shell         string                 `protobuf:"bytes,6,opt,name=shell,proto3" json:"shell,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UserDetails) Reset() {
+	*x = UserDetails{}
+	mi := &file_operator_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UserDetails) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserDetails) ProtoMessage() {}
+
+func (x *UserDetails) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserDetails.ProtoReflect.Descriptor instead.
+func (*UserDetails) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{46}
+}
+
+func (x *UserDetails) GetUsername() string {
+	if x != nil {
+		return x.Username
+	}
+	return ""
+}
+
+func (x *UserDetails) GetUid() int32 {
+	if x != nil {
+		return x.Uid
+	}
+	return 0
+}
+
+func (x *UserDetails) GetGid() int32 {
+	if x != nil {
+		return x.Gid
+	}
+	return 0
+}
+
+func (x *UserDetails) GetHome() string {
+	if x != nil {
+		return x.Home
+	}
+	return ""
+}
+
+func (x *UserDetails) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *UserDetails) GetShell() string {
+	if x != nil {
+		return x.Shell
+	}
+	return ""
+}
+
+type DiskDetails struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TotalGb       float64                `protobuf:"fixed64,1,opt,name=total_gb,json=totalGb,proto3" json:"total_gb,omitempty"`
+	UsedGb        float64                `protobuf:"fixed64,2,opt,name=used_gb,json=usedGb,proto3" json:"used_gb,omitempty"`
+	FreeGb        float64                `protobuf:"fixed64,3,opt,name=free_gb,json=freeGb,proto3" json:"free_gb,omitempty"`
+	Percent       float64                `protobuf:"fixed64,4,opt,name=percent,proto3" json:"percent,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DiskDetails) Reset() {
+	*x = DiskDetails{}
+	mi := &file_operator_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DiskDetails) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DiskDetails) ProtoMessage() {}
+
+func (x *DiskDetails) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DiskDetails.ProtoReflect.Descriptor instead.
+func (*DiskDetails) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *DiskDetails) GetTotalGb() float64 {
+	if x != nil {
+		return x.TotalGb
+	}
+	return 0
+}
+
+func (x *DiskDetails) GetUsedGb() float64 {
+	if x != nil {
+		return x.UsedGb
+	}
+	return 0
+}
+
+func (x *DiskDetails) GetFreeGb() float64 {
+	if x != nil {
+		return x.FreeGb
+	}
+	return 0
+}
+
+func (x *DiskDetails) GetPercent() float64 {
+	if x != nil {
+		return x.Percent
+	}
+	return 0
+}
+
+type MemoryDetails struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TotalMb       int64                  `protobuf:"varint,1,opt,name=total_mb,json=totalMb,proto3" json:"total_mb,omitempty"`
+	AvailableMb   int64                  `protobuf:"varint,2,opt,name=available_mb,json=availableMb,proto3" json:"available_mb,omitempty"`
+	UsedMb        int64                  `protobuf:"varint,3,opt,name=used_mb,json=usedMb,proto3" json:"used_mb,omitempty"`
+	Percent       float64                `protobuf:"fixed64,4,opt,name=percent,proto3" json:"percent,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MemoryDetails) Reset() {
+	*x = MemoryDetails{}
+	mi := &file_operator_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MemoryDetails) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MemoryDetails) ProtoMessage() {}
+
+func (x *MemoryDetails) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MemoryDetails.ProtoReflect.Descriptor instead.
+func (*MemoryDetails) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{48}
+}
+
+func (x *MemoryDetails) GetTotalMb() int64 {
+	if x != nil {
+		return x.TotalMb
+	}
+	return 0
+}
+
+func (x *MemoryDetails) GetAvailableMb() int64 {
+	if x != nil {
+		return x.AvailableMb
+	}
+	return 0
+}
+
+func (x *MemoryDetails) GetUsedMb() int64 {
+	if x != nil {
+		return x.UsedMb
+	}
+	return 0
+}
+
+func (x *MemoryDetails) GetPercent() float64 {
+	if x != nil {
+		return x.Percent
+	}
+	return 0
+}
+
+type EnvironmentDetails struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Pwd              string                 `protobuf:"bytes,1,opt,name=pwd,proto3" json:"pwd,omitempty"`
+	Lang             string                 `protobuf:"bytes,2,opt,name=lang,proto3" json:"lang,omitempty"`
+	Timezone         string                 `protobuf:"bytes,3,opt,name=timezone,proto3" json:"timezone,omitempty"`
+	Term             string                 `protobuf:"bytes,4,opt,name=term,proto3" json:"term,omitempty"`
+	IsContainer      bool                   `protobuf:"varint,5,opt,name=is_container,json=isContainer,proto3" json:"is_container,omitempty"`
+	ContainerRuntime string                 `protobuf:"bytes,6,opt,name=container_runtime,json=containerRuntime,proto3" json:"container_runtime,omitempty"`
+	ContainerSignals []string               `protobuf:"bytes,7,rep,name=container_signals,json=containerSignals,proto3" json:"container_signals,omitempty"`
+	InitSystem       string                 `protobuf:"bytes,8,opt,name=init_system,json=initSystem,proto3" json:"init_system,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *EnvironmentDetails) Reset() {
+	*x = EnvironmentDetails{}
+	mi := &file_operator_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnvironmentDetails) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnvironmentDetails) ProtoMessage() {}
+
+func (x *EnvironmentDetails) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnvironmentDetails.ProtoReflect.Descriptor instead.
+func (*EnvironmentDetails) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{49}
+}
+
+func (x *EnvironmentDetails) GetPwd() string {
+	if x != nil {
+		return x.Pwd
+	}
+	return ""
+}
+
+func (x *EnvironmentDetails) GetLang() string {
+	if x != nil {
+		return x.Lang
+	}
+	return ""
+}
+
+func (x *EnvironmentDetails) GetTimezone() string {
+	if x != nil {
+		return x.Timezone
+	}
+	return ""
+}
+
+func (x *EnvironmentDetails) GetTerm() string {
+	if x != nil {
+		return x.Term
+	}
+	return ""
+}
+
+func (x *EnvironmentDetails) GetIsContainer() bool {
+	if x != nil {
+		return x.IsContainer
+	}
+	return false
+}
+
+func (x *EnvironmentDetails) GetContainerRuntime() string {
+	if x != nil {
+		return x.ContainerRuntime
+	}
+	return ""
+}
+
+func (x *EnvironmentDetails) GetContainerSignals() []string {
+	if x != nil {
+		return x.ContainerSignals
+	}
+	return nil
+}
+
+func (x *EnvironmentDetails) GetInitSystem() string {
+	if x != nil {
+		return x.InitSystem
+	}
+	return ""
+}
+
+type FingerprintDetails struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Os            string                 `protobuf:"bytes,1,opt,name=os,proto3" json:"os,omitempty"`
+	Architecture  string                 `protobuf:"bytes,2,opt,name=architecture,proto3" json:"architecture,omitempty"`
+	CpuCount      int32                  `protobuf:"varint,3,opt,name=cpu_count,json=cpuCount,proto3" json:"cpu_count,omitempty"`
+	MachineId     string                 `protobuf:"bytes,4,opt,name=machine_id,json=machineId,proto3" json:"machine_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FingerprintDetails) Reset() {
+	*x = FingerprintDetails{}
+	mi := &file_operator_proto_msgTypes[50]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FingerprintDetails) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FingerprintDetails) ProtoMessage() {}
+
+func (x *FingerprintDetails) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[50]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FingerprintDetails.ProtoReflect.Descriptor instead.
+func (*FingerprintDetails) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{50}
+}
+
+func (x *FingerprintDetails) GetOs() string {
+	if x != nil {
+		return x.Os
+	}
+	return ""
+}
+
+func (x *FingerprintDetails) GetArchitecture() string {
+	if x != nil {
+		return x.Architecture
+	}
+	return ""
+}
+
+func (x *FingerprintDetails) GetCpuCount() int32 {
+	if x != nil {
+		return x.CpuCount
+	}
+	return 0
+}
+
+func (x *FingerprintDetails) GetMachineId() string {
+	if x != nil {
+		return x.MachineId
 	}
 	return ""
 }
@@ -3357,7 +4457,7 @@ const file_operator_proto_rawDesc = "" +
 	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x12\n" +
 	"\x04path\x18\x03 \x01(\tR\x04path\x12\x18\n" +
-	"\acontent\x18\x04 \x01(\fR\acontent\x12\x1d\n" +
+	"\acontent\x18\x04 \x01(\tR\acontent\x12\x1d\n" +
 	"\n" +
 	"size_bytes\x18\x05 \x01(\x03R\tsizeBytes\x12\x1c\n" +
 	"\ttruncated\x18\x06 \x01(\bR\ttruncated\x12)\n" +
@@ -3382,7 +4482,7 @@ const file_operator_proto_rawDesc = "" +
 	"\x10duration_seconds\x18\a \x01(\x02R\x0fdurationSeconds\x12#\n" +
 	"\rerror_message\x18\b \x01(\tR\ferrorMessage\x12\x1d\n" +
 	"\n" +
-	"error_type\x18\t \x01(\tR\terrorType\"\xe0\x02\n" +
+	"error_type\x18\t \x01(\tR\terrorType\"\xbc\x03\n" +
 	"\x0eFileEditResult\x12!\n" +
 	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x1b\n" +
@@ -3396,7 +4496,12 @@ const file_operator_proto_rawDesc = "" +
 	"\rerror_message\x18\t \x01(\tR\ferrorMessage\x12\x1d\n" +
 	"\n" +
 	"error_type\x18\n" +
-	" \x01(\tR\terrorType\"\x92\x02\n" +
+	" \x01(\tR\terrorType\x12\x18\n" +
+	"\acontent\x18\v \x01(\tR\acontent\x12\x1f\n" +
+	"\vstdout_size\x18\f \x01(\x05R\n" +
+	"stdoutSize\x12\x1f\n" +
+	"\vstderr_size\x18\r \x01(\x05R\n" +
+	"stderrSize\"\x92\x02\n" +
 	"\x15ExecutionStatusUpdate\x12!\n" +
 	"\fexecution_id\x18\x01 \x01(\tR\vexecutionId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x18\n" +
@@ -3517,13 +4622,114 @@ const file_operator_proto_rawDesc = "" +
 	"\x04diff\x18\x04 \x01(\v2\x1e.g8e.operator.v1.FileDiffEntryR\x04diff\x12\x14\n" +
 	"\x05total\x18\x05 \x01(\x05R\x05total\x12.\n" +
 	"\x13operator_session_id\x18\x06 \x01(\tR\x11operatorSessionId\x12\x14\n" +
-	"\x05error\x18\a \x01(\tR\x05error\"\x98\x01\n" +
+	"\x05error\x18\a \x01(\tR\x05error\"\xbc\t\n" +
 	"\x0fHeartbeatResult\x12\x1f\n" +
 	"\voperator_id\x18\x01 \x01(\tR\n" +
 	"operatorId\x12.\n" +
 	"\x13operator_session_id\x18\x02 \x01(\tR\x11operatorSessionId\x12\x1c\n" +
 	"\ttimestamp\x18\x03 \x01(\tR\ttimestamp\x12\x16\n" +
-	"\x06status\x18\x04 \x01(\tR\x06status2\xb8\x03\n" +
+	"\x06status\x18\x04 \x01(\tR\x06status\x12\x1d\n" +
+	"\n" +
+	"event_type\x18\x05 \x01(\tR\teventType\x12)\n" +
+	"\x10source_component\x18\x06 \x01(\tR\x0fsourceComponent\x12\x17\n" +
+	"\acase_id\x18\a \x01(\tR\x06caseId\x12)\n" +
+	"\x10investigation_id\x18\b \x01(\tR\x0finvestigationId\x12H\n" +
+	"\x0fsystem_identity\x18\t \x01(\v2\x1f.g8e.operator.v1.SystemIdentityR\x0esystemIdentity\x12?\n" +
+	"\fnetwork_info\x18\n" +
+	" \x01(\v2\x1c.g8e.operator.v1.NetworkInfoR\vnetworkInfo\x12?\n" +
+	"\fversion_info\x18\v \x01(\v2\x1c.g8e.operator.v1.VersionInfoR\vversionInfo\x12<\n" +
+	"\vuptime_info\x18\f \x01(\v2\x1b.g8e.operator.v1.UptimeInfoR\n" +
+	"uptimeInfo\x12T\n" +
+	"\x13performance_metrics\x18\r \x01(\v2#.g8e.operator.v1.PerformanceMetricsR\x12performanceMetrics\x129\n" +
+	"\n" +
+	"os_details\x18\x0e \x01(\v2\x1a.g8e.operator.v1.OSDetailsR\tosDetails\x12?\n" +
+	"\fuser_details\x18\x0f \x01(\v2\x1c.g8e.operator.v1.UserDetailsR\vuserDetails\x12?\n" +
+	"\fdisk_details\x18\x10 \x01(\v2\x1c.g8e.operator.v1.DiskDetailsR\vdiskDetails\x12E\n" +
+	"\x0ememory_details\x18\x11 \x01(\v2\x1e.g8e.operator.v1.MemoryDetailsR\rmemoryDetails\x12E\n" +
+	"\venvironment\x18\x12 \x01(\v2#.g8e.operator.v1.EnvironmentDetailsR\venvironment\x12K\n" +
+	"\x10capability_flags\x18\x13 \x01(\v2 .g8e.operator.v1.CapabilityFlagsR\x0fcapabilityFlags\x12T\n" +
+	"\x13fingerprint_details\x18\x14 \x01(\v2#.g8e.operator.v1.FingerprintDetailsR\x12fingerprintDetails\x12-\n" +
+	"\x12system_fingerprint\x18\x15 \x01(\tR\x11systemFingerprint\x12\x17\n" +
+	"\aapi_key\x18\x16 \x01(\tR\x06apiKey\"\xcf\x01\n" +
+	"\x0eSystemIdentity\x12\x1a\n" +
+	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x0e\n" +
+	"\x02os\x18\x02 \x01(\tR\x02os\x12\"\n" +
+	"\farchitecture\x18\x03 \x01(\tR\farchitecture\x12\x10\n" +
+	"\x03pwd\x18\x04 \x01(\tR\x03pwd\x12!\n" +
+	"\fcurrent_user\x18\x05 \x01(\tR\vcurrentUser\x12\x1b\n" +
+	"\tcpu_count\x18\x06 \x01(\x05R\bcpuCount\x12\x1b\n" +
+	"\tmemory_mb\x18\a \x01(\x05R\bmemoryMb\"H\n" +
+	"\x10NetworkInterface\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x0e\n" +
+	"\x02ip\x18\x02 \x01(\tR\x02ip\x12\x10\n" +
+	"\x03mtu\x18\x03 \x01(\x05R\x03mtu\"\xbf\x01\n" +
+	"\vNetworkInfo\x12\x1b\n" +
+	"\tpublic_ip\x18\x01 \x01(\tR\bpublicIp\x12\x1f\n" +
+	"\vinternal_ip\x18\x02 \x01(\tR\n" +
+	"internalIp\x12\x1e\n" +
+	"\n" +
+	"interfaces\x18\x03 \x03(\tR\n" +
+	"interfaces\x12R\n" +
+	"\x13connectivity_status\x18\x04 \x03(\v2!.g8e.operator.v1.NetworkInterfaceR\x12connectivityStatus\"\x9e\x01\n" +
+	"\x0fCapabilityFlags\x122\n" +
+	"\x15local_storage_enabled\x18\x01 \x01(\bR\x13localStorageEnabled\x12#\n" +
+	"\rgit_available\x18\x02 \x01(\bR\fgitAvailable\x122\n" +
+	"\x15ledger_mirror_enabled\x18\x03 \x01(\bR\x13ledgerMirrorEnabled\"P\n" +
+	"\vVersionInfo\x12)\n" +
+	"\x10operator_version\x18\x01 \x01(\tR\x0foperatorVersion\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\"K\n" +
+	"\n" +
+	"UptimeInfo\x12\x16\n" +
+	"\x06uptime\x18\x01 \x01(\tR\x06uptime\x12%\n" +
+	"\x0euptime_seconds\x18\x02 \x01(\x03R\ruptimeSeconds\"\xbc\x02\n" +
+	"\x12PerformanceMetrics\x12\x1f\n" +
+	"\vcpu_percent\x18\x01 \x01(\x01R\n" +
+	"cpuPercent\x12%\n" +
+	"\x0ememory_percent\x18\x02 \x01(\x01R\rmemoryPercent\x12!\n" +
+	"\fdisk_percent\x18\x03 \x01(\x01R\vdiskPercent\x12'\n" +
+	"\x0fnetwork_latency\x18\x04 \x01(\x01R\x0enetworkLatency\x12$\n" +
+	"\x0ememory_used_mb\x18\x05 \x01(\x05R\fmemoryUsedMb\x12&\n" +
+	"\x0fmemory_total_mb\x18\x06 \x01(\x05R\rmemoryTotalMb\x12 \n" +
+	"\fdisk_used_gb\x18\a \x01(\x01R\n" +
+	"diskUsedGb\x12\"\n" +
+	"\rdisk_total_gb\x18\b \x01(\x01R\vdiskTotalGb\"U\n" +
+	"\tOSDetails\x12\x16\n" +
+	"\x06kernel\x18\x01 \x01(\tR\x06kernel\x12\x16\n" +
+	"\x06distro\x18\x02 \x01(\tR\x06distro\x12\x18\n" +
+	"\aversion\x18\x03 \x01(\tR\aversion\"\x8b\x01\n" +
+	"\vUserDetails\x12\x1a\n" +
+	"\busername\x18\x01 \x01(\tR\busername\x12\x10\n" +
+	"\x03uid\x18\x02 \x01(\x05R\x03uid\x12\x10\n" +
+	"\x03gid\x18\x03 \x01(\x05R\x03gid\x12\x12\n" +
+	"\x04home\x18\x04 \x01(\tR\x04home\x12\x12\n" +
+	"\x04name\x18\x05 \x01(\tR\x04name\x12\x14\n" +
+	"\x05shell\x18\x06 \x01(\tR\x05shell\"t\n" +
+	"\vDiskDetails\x12\x19\n" +
+	"\btotal_gb\x18\x01 \x01(\x01R\atotalGb\x12\x17\n" +
+	"\aused_gb\x18\x02 \x01(\x01R\x06usedGb\x12\x17\n" +
+	"\afree_gb\x18\x03 \x01(\x01R\x06freeGb\x12\x18\n" +
+	"\apercent\x18\x04 \x01(\x01R\apercent\"\x80\x01\n" +
+	"\rMemoryDetails\x12\x19\n" +
+	"\btotal_mb\x18\x01 \x01(\x03R\atotalMb\x12!\n" +
+	"\favailable_mb\x18\x02 \x01(\x03R\vavailableMb\x12\x17\n" +
+	"\aused_mb\x18\x03 \x01(\x03R\x06usedMb\x12\x18\n" +
+	"\apercent\x18\x04 \x01(\x01R\apercent\"\x88\x02\n" +
+	"\x12EnvironmentDetails\x12\x10\n" +
+	"\x03pwd\x18\x01 \x01(\tR\x03pwd\x12\x12\n" +
+	"\x04lang\x18\x02 \x01(\tR\x04lang\x12\x1a\n" +
+	"\btimezone\x18\x03 \x01(\tR\btimezone\x12\x12\n" +
+	"\x04term\x18\x04 \x01(\tR\x04term\x12!\n" +
+	"\fis_container\x18\x05 \x01(\bR\visContainer\x12+\n" +
+	"\x11container_runtime\x18\x06 \x01(\tR\x10containerRuntime\x12+\n" +
+	"\x11container_signals\x18\a \x03(\tR\x10containerSignals\x12\x1f\n" +
+	"\vinit_system\x18\b \x01(\tR\n" +
+	"initSystem\"\x84\x01\n" +
+	"\x12FingerprintDetails\x12\x0e\n" +
+	"\x02os\x18\x01 \x01(\tR\x02os\x12\"\n" +
+	"\farchitecture\x18\x02 \x01(\tR\farchitecture\x12\x1b\n" +
+	"\tcpu_count\x18\x03 \x01(\x05R\bcpuCount\x12\x1d\n" +
+	"\n" +
+	"machine_id\x18\x04 \x01(\tR\tmachineId2\xb8\x03\n" +
 	"\x0fOperatorService\x12S\n" +
 	"\x0eExecuteCommand\x12!.g8e.operator.v1.CommandRequested\x1a\x1e.g8e.operator.v1.CommandResult\x12X\n" +
 	"\rCancelCommand\x12'.g8e.operator.v1.CommandCancelRequested\x1a\x1e.g8e.operator.v1.CommandResult\x12N\n" +
@@ -3543,7 +4749,7 @@ func file_operator_proto_rawDescGZIP() []byte {
 	return file_operator_proto_rawDescData
 }
 
-var file_operator_proto_msgTypes = make([]protoimpl.MessageInfo, 39)
+var file_operator_proto_msgTypes = make([]protoimpl.MessageInfo, 52)
 var file_operator_proto_goTypes = []any{
 	(*CommandRequested)(nil),                  // 0: g8e.operator.v1.CommandRequested
 	(*CommandCancelRequested)(nil),            // 1: g8e.operator.v1.CommandCancelRequested
@@ -3583,10 +4789,23 @@ var file_operator_proto_goTypes = []any{
 	(*FileDiffEntry)(nil),                     // 35: g8e.operator.v1.FileDiffEntry
 	(*FetchFileDiffResult)(nil),               // 36: g8e.operator.v1.FetchFileDiffResult
 	(*HeartbeatResult)(nil),                   // 37: g8e.operator.v1.HeartbeatResult
-	nil,                                       // 38: g8e.operator.v1.CommandRequested.EnvironmentEntry
+	(*SystemIdentity)(nil),                    // 38: g8e.operator.v1.SystemIdentity
+	(*NetworkInterface)(nil),                  // 39: g8e.operator.v1.NetworkInterface
+	(*NetworkInfo)(nil),                       // 40: g8e.operator.v1.NetworkInfo
+	(*CapabilityFlags)(nil),                   // 41: g8e.operator.v1.CapabilityFlags
+	(*VersionInfo)(nil),                       // 42: g8e.operator.v1.VersionInfo
+	(*UptimeInfo)(nil),                        // 43: g8e.operator.v1.UptimeInfo
+	(*PerformanceMetrics)(nil),                // 44: g8e.operator.v1.PerformanceMetrics
+	(*OSDetails)(nil),                         // 45: g8e.operator.v1.OSDetails
+	(*UserDetails)(nil),                       // 46: g8e.operator.v1.UserDetails
+	(*DiskDetails)(nil),                       // 47: g8e.operator.v1.DiskDetails
+	(*MemoryDetails)(nil),                     // 48: g8e.operator.v1.MemoryDetails
+	(*EnvironmentDetails)(nil),                // 49: g8e.operator.v1.EnvironmentDetails
+	(*FingerprintDetails)(nil),                // 50: g8e.operator.v1.FingerprintDetails
+	nil,                                       // 51: g8e.operator.v1.CommandRequested.EnvironmentEntry
 }
 var file_operator_proto_depIdxs = []int32{
-	38, // 0: g8e.operator.v1.CommandRequested.environment:type_name -> g8e.operator.v1.CommandRequested.EnvironmentEntry
+	51, // 0: g8e.operator.v1.CommandRequested.environment:type_name -> g8e.operator.v1.CommandRequested.EnvironmentEntry
 	18, // 1: g8e.operator.v1.FsListResult.entries:type_name -> g8e.operator.v1.FsEntry
 	21, // 2: g8e.operator.v1.FsGrepResult.matches:type_name -> g8e.operator.v1.FsGrepMatch
 	25, // 3: g8e.operator.v1.PortCheckResult.results:type_name -> g8e.operator.v1.PortCheckEntry
@@ -3596,21 +4815,34 @@ var file_operator_proto_depIdxs = []int32{
 	32, // 7: g8e.operator.v1.FetchFileHistoryResult.history:type_name -> g8e.operator.v1.FileHistoryEntry
 	35, // 8: g8e.operator.v1.FetchFileDiffResult.diffs:type_name -> g8e.operator.v1.FileDiffEntry
 	35, // 9: g8e.operator.v1.FetchFileDiffResult.diff:type_name -> g8e.operator.v1.FileDiffEntry
-	0,  // 10: g8e.operator.v1.OperatorService.ExecuteCommand:input_type -> g8e.operator.v1.CommandRequested
-	1,  // 11: g8e.operator.v1.OperatorService.CancelCommand:input_type -> g8e.operator.v1.CommandCancelRequested
-	2,  // 12: g8e.operator.v1.OperatorService.EditFile:input_type -> g8e.operator.v1.FileEditRequested
-	3,  // 13: g8e.operator.v1.OperatorService.ListFileSystem:input_type -> g8e.operator.v1.FsListRequested
-	4,  // 14: g8e.operator.v1.OperatorService.ReadFileSystem:input_type -> g8e.operator.v1.FsReadRequested
-	17, // 15: g8e.operator.v1.OperatorService.ExecuteCommand:output_type -> g8e.operator.v1.CommandResult
-	17, // 16: g8e.operator.v1.OperatorService.CancelCommand:output_type -> g8e.operator.v1.CommandResult
-	17, // 17: g8e.operator.v1.OperatorService.EditFile:output_type -> g8e.operator.v1.CommandResult
-	17, // 18: g8e.operator.v1.OperatorService.ListFileSystem:output_type -> g8e.operator.v1.CommandResult
-	17, // 19: g8e.operator.v1.OperatorService.ReadFileSystem:output_type -> g8e.operator.v1.CommandResult
-	15, // [15:20] is the sub-list for method output_type
-	10, // [10:15] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	38, // 10: g8e.operator.v1.HeartbeatResult.system_identity:type_name -> g8e.operator.v1.SystemIdentity
+	40, // 11: g8e.operator.v1.HeartbeatResult.network_info:type_name -> g8e.operator.v1.NetworkInfo
+	42, // 12: g8e.operator.v1.HeartbeatResult.version_info:type_name -> g8e.operator.v1.VersionInfo
+	43, // 13: g8e.operator.v1.HeartbeatResult.uptime_info:type_name -> g8e.operator.v1.UptimeInfo
+	44, // 14: g8e.operator.v1.HeartbeatResult.performance_metrics:type_name -> g8e.operator.v1.PerformanceMetrics
+	45, // 15: g8e.operator.v1.HeartbeatResult.os_details:type_name -> g8e.operator.v1.OSDetails
+	46, // 16: g8e.operator.v1.HeartbeatResult.user_details:type_name -> g8e.operator.v1.UserDetails
+	47, // 17: g8e.operator.v1.HeartbeatResult.disk_details:type_name -> g8e.operator.v1.DiskDetails
+	48, // 18: g8e.operator.v1.HeartbeatResult.memory_details:type_name -> g8e.operator.v1.MemoryDetails
+	49, // 19: g8e.operator.v1.HeartbeatResult.environment:type_name -> g8e.operator.v1.EnvironmentDetails
+	41, // 20: g8e.operator.v1.HeartbeatResult.capability_flags:type_name -> g8e.operator.v1.CapabilityFlags
+	50, // 21: g8e.operator.v1.HeartbeatResult.fingerprint_details:type_name -> g8e.operator.v1.FingerprintDetails
+	39, // 22: g8e.operator.v1.NetworkInfo.connectivity_status:type_name -> g8e.operator.v1.NetworkInterface
+	0,  // 23: g8e.operator.v1.OperatorService.ExecuteCommand:input_type -> g8e.operator.v1.CommandRequested
+	1,  // 24: g8e.operator.v1.OperatorService.CancelCommand:input_type -> g8e.operator.v1.CommandCancelRequested
+	2,  // 25: g8e.operator.v1.OperatorService.EditFile:input_type -> g8e.operator.v1.FileEditRequested
+	3,  // 26: g8e.operator.v1.OperatorService.ListFileSystem:input_type -> g8e.operator.v1.FsListRequested
+	4,  // 27: g8e.operator.v1.OperatorService.ReadFileSystem:input_type -> g8e.operator.v1.FsReadRequested
+	17, // 28: g8e.operator.v1.OperatorService.ExecuteCommand:output_type -> g8e.operator.v1.CommandResult
+	17, // 29: g8e.operator.v1.OperatorService.CancelCommand:output_type -> g8e.operator.v1.CommandResult
+	17, // 30: g8e.operator.v1.OperatorService.EditFile:output_type -> g8e.operator.v1.CommandResult
+	17, // 31: g8e.operator.v1.OperatorService.ListFileSystem:output_type -> g8e.operator.v1.CommandResult
+	17, // 32: g8e.operator.v1.OperatorService.ReadFileSystem:output_type -> g8e.operator.v1.CommandResult
+	28, // [28:33] is the sub-list for method output_type
+	23, // [23:28] is the sub-list for method input_type
+	23, // [23:23] is the sub-list for extension type_name
+	23, // [23:23] is the sub-list for extension extendee
+	0,  // [0:23] is the sub-list for field type_name
 }
 
 func init() { file_operator_proto_init() }
@@ -3624,7 +4856,7 @@ func file_operator_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_operator_proto_rawDesc), len(file_operator_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   39,
+			NumMessages:   52,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

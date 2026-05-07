@@ -27,10 +27,12 @@ from collections.abc import Callable, Coroutine
 from typing import Any
 
 from app.proto.pubsub_pb2 import PubSubMessage, PubSubEvent
+from google.protobuf.message import DecodeError
 import aiohttp
 
 from app.models.settings import ListenSettings
 from app.utils.aiohttp_session import new_pubsub_ws_session, resolve_pubsub_ssl_context
+from app.utils.envelope_builder import build_universal_envelope_bytes
 from app.constants import (
     ComponentName,
     EventType,
@@ -39,7 +41,7 @@ from app.constants import (
     PubSubField,
     PubSubWireEventType,
 )
-from app.models.pubsub_messages import G8eMessage
+from app.models.pubsub_messages import G8eMessage, HeartbeatRequestPayload
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +58,7 @@ class PubSubClient:
         timeout: float = 10.0,
         ca_cert_path: str | None = None,
         internal_auth_token: str | None = None,
+        auditor_hmac_key: str | None = None,
     ):
         _settings = ListenSettings()
         # Use direct internal WSS URL by default for service-to-service
@@ -67,6 +70,7 @@ class PubSubClient:
         self._timeout = timeout
         self._ca_cert_path = ca_cert_path
         self._internal_auth_token = internal_auth_token
+        self._auditor_hmac_key = auditor_hmac_key
 
         self._ws_session: aiohttp.ClientSession | None = None
         self._ws: aiohttp.ClientWebSocketResponse | None = None
@@ -152,65 +156,66 @@ class PubSubClient:
                     try:
                         event = PubSubEvent()
                         event.ParseFromString(msg.data)
-                        event_type = event.type
-
-                        if event_type == PubSubWireEventType.MESSAGE:
-                            channel = event.channel
-                            data = event.data
-
-                            if not channel:
-                                continue
-
-                            # Dispatch to handlers concurrently
-                            async with self._lock:
-                                handlers = self._channel_handlers.get(channel, []).copy()
-                                gen_handlers = self._message_handlers.copy()
-
-                            for handler in handlers:
-                                task = asyncio.create_task(self._safe_dispatch(handler, channel, data))
-                                self._background_tasks.add(task)
-                                task.add_done_callback(self._background_tasks.discard)
-                            for handler in gen_handlers:
-                                task = asyncio.create_task(self._safe_dispatch(handler, channel, data))
-                                self._background_tasks.add(task)
-                                task.add_done_callback(self._background_tasks.discard)
-
-                        elif event_type == PubSubWireEventType.PMESSAGE:
-                            pattern = event.pattern
-                            channel = event.channel
-                            data = event.data
-
-                            if not pattern:
-                                continue
-
-                            async with self._lock:
-                                p_handlers = self._pmessage_handlers.get(pattern, []).copy()
-
-                            for handler in p_handlers:
-                                task = asyncio.create_task(self._safe_dispatch(handler, pattern, channel, data))
-                                self._background_tasks.add(task)
-                                task.add_done_callback(self._background_tasks.discard)
-
-                        elif event_type == PubSubWireEventType.SUBSCRIBED:
-                            # The broker always uses the 'channel' key even for pattern acks
-                            target = event.channel
-                            if not target:
-                                continue
-
-                            async with self._lock:
-                                acks = self._pending_acks.pop(target, [])
-
-                            for ack in acks:
-                                ack.set()
-
-                            if not acks:
-                                logger.info("[PUBSUB-CLIENT] Received redundant SUBSCRIBED for target '%s'", target)
-
-                        else:
-                            logger.warning("[PUBSUB-CLIENT] Unknown wire event type '%s'", event_type)
-
-                    except Exception as e:
+                    except DecodeError as e:
                         logger.error("[PUBSUB-CLIENT] Failed to parse binary protobuf message: %s", e)
+                        continue
+
+                    event_type = event.type
+
+                    if event_type == PubSubWireEventType.MESSAGE:
+                        channel = event.channel
+                        data = event.data
+
+                        if not channel:
+                            continue
+
+                        # Dispatch to handlers concurrently
+                        async with self._lock:
+                            handlers = self._channel_handlers.get(channel, []).copy()
+                            gen_handlers = self._message_handlers.copy()
+
+                        for handler in handlers:
+                            task = asyncio.create_task(self._safe_dispatch(handler, channel, data))
+                            self._background_tasks.add(task)
+                            task.add_done_callback(self._background_tasks.discard)
+                        for handler in gen_handlers:
+                            task = asyncio.create_task(self._safe_dispatch(handler, channel, data))
+                            self._background_tasks.add(task)
+                            task.add_done_callback(self._background_tasks.discard)
+
+                    elif event_type == PubSubWireEventType.PMESSAGE:
+                        pattern = event.pattern
+                        channel = event.channel
+                        data = event.data
+
+                        if not pattern:
+                            continue
+
+                        async with self._lock:
+                            p_handlers = self._pmessage_handlers.get(pattern, []).copy()
+
+                        for handler in p_handlers:
+                            task = asyncio.create_task(self._safe_dispatch(handler, pattern, channel, data))
+                            self._background_tasks.add(task)
+                            task.add_done_callback(self._background_tasks.discard)
+
+                    elif event_type == PubSubWireEventType.SUBSCRIBED:
+                        # The broker always uses the 'channel' key even for pattern acks
+                        target = event.channel
+                        if not target:
+                            continue
+
+                        async with self._lock:
+                            acks = self._pending_acks.pop(target, [])
+
+                        for ack in acks:
+                            ack.set()
+
+                        if not acks:
+                            logger.info("[PUBSUB-CLIENT] Received redundant SUBSCRIBED for target '%s'", target)
+
+                    else:
+                        logger.warning("[PUBSUB-CLIENT] Unknown wire event type '%s'", event_type)
 
                 elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
                     logger.info("[PUBSUB-CLIENT] WebSocket closed or error: %s", msg.type)
@@ -436,6 +441,7 @@ class PubSubClient:
                 return
 
             logger.info("[PUBSUB-CLIENT] Unsubscribing from channel '%s'", channel)
+            self._subscribed_channels.discard(channel)
             msg = PubSubMessage(action=PubSubAction.UNSUBSCRIBE, channel=channel)
             if self._ws and not self._ws.closed:
                 await self._ws.send_bytes(msg.SerializeToString())
@@ -455,6 +461,7 @@ class PubSubClient:
                 return
 
             logger.info("[PUBSUB-CLIENT] Unsubscribing from pattern '%s'", pattern)
+            self._subscribed_patterns.discard(pattern)
             msg = PubSubMessage(action=PubSubAction.UNSUBSCRIBE, channel=pattern)
             if self._ws and not self._ws.closed:
                 await self._ws.send_bytes(msg.SerializeToString())
@@ -526,7 +533,19 @@ class PubSubClient:
             }
         )
 
-        result = await self.publish(channel, command_data.model_dump_json().encode("utf-8"))
+        # Use Protobuf UniversalEnvelope for all commands (v0.2.0 Protocol-First)
+        try:
+            payload_bytes = build_universal_envelope_bytes(
+                command_data,
+                auditor_hmac_key=self._auditor_hmac_key or "",
+            )
+            logger.debug("[PUBSUB-CLIENT] Publishing Protobuf UniversalEnvelope")
+        except Exception as e:
+            logger.error("[PUBSUB-CLIENT] Failed to build UniversalEnvelope: %s", e)
+            # In v0.2.0 we do NOT fall back to JSON. If the envelope fails, the command fails.
+            return 0
+
+        result = await self.publish(channel, payload_bytes)
 
         if result > 0:
             logger.info(
@@ -669,12 +688,31 @@ class PubSubClient:
 
         try:
             ping = G8eMessage(
+                id=str(uuid.uuid4()),
                 source_component=self.component_name,
                 event_type=EventType.OPERATOR_HEARTBEAT_REQUESTED,
                 operator_id=operator_id,
                 operator_session_id=operator_session_id,
+                case_id="",
+                task_id="",
+                investigation_id="",
+                web_session_id="",
+                payload=HeartbeatRequestPayload(),
             )
-            receivers = await self.publish(channel, ping.model_dump_json().encode("utf-8"))
+
+            # Use Protobuf UniversalEnvelope for all pings (v0.2.0 Protocol-First)
+            try:
+                payload_bytes = build_universal_envelope_bytes(
+                    ping,
+                    auditor_hmac_key=self._auditor_hmac_key or "",
+                )
+                logger.debug("[PUBSUB-CLIENT] Publishing Protobuf UniversalEnvelope for ping")
+            except Exception as e:
+                logger.error("[PUBSUB-CLIENT] Failed to build UniversalEnvelope for ping: %s", e)
+                # In v0.2.0 we do NOT fall back to JSON. If the envelope fails, the ping fails.
+                return False
+
+            receivers = await self.publish(channel, payload_bytes)
 
             is_online = receivers > 0
             logger.info(
