@@ -517,6 +517,10 @@ class CacheAsideService {
         return this.kvClient.get(key);
     }
 
+    async kvPing() {
+        return this.kvClient.ping();
+    }
+
     async kvSet(key, value, ...args) {
         return this.kvClient.set(key, value, ...args);
     }

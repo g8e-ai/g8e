@@ -24,7 +24,7 @@ describe('Metrics Routes [UNIT]', () => {
 
     beforeEach(() => {
         mockCacheAsideService = {
-            kvGet: vi.fn()
+            kvPing: vi.fn()
         };
         mockAuthorizationMiddleware = {
             requireInternalOrigin: vi.fn((req, res, next) => next())
@@ -58,14 +58,14 @@ describe('Metrics Routes [UNIT]', () => {
         };
 
         it('should return healthy status when g8es KV is accessible', async () => {
-            mockCacheAsideService.kvGet.mockResolvedValue('ok');
+            mockCacheAsideService.kvPing.mockResolvedValue('PONG');
 
             const req = createMockReq();
             const res = createMockRes();
 
             await getRoute()(req, res);
 
-            expect(mockCacheAsideService.kvGet).toHaveBeenCalledWith('__health_check__');
+            expect(mockCacheAsideService.kvPing).toHaveBeenCalled();
             expect(res.status).toHaveBeenCalledWith(200);
             expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
                 success: true,
@@ -76,7 +76,7 @@ describe('Metrics Routes [UNIT]', () => {
         });
 
         it('should return degraded status when g8es KV check fails', async () => {
-            mockCacheAsideService.kvGet.mockRejectedValue(new Error('KV connection lost'));
+            mockCacheAsideService.kvPing.mockRejectedValue(new Error('KV connection lost'));
 
             const req = createMockReq();
             const res = createMockRes();
@@ -93,7 +93,7 @@ describe('Metrics Routes [UNIT]', () => {
 
         it('should handle unexpected errors with 503 status', async () => {
             // Force an error outside the KV check try-catch
-            mockCacheAsideService.kvGet.mockImplementation(() => {
+            mockCacheAsideService.kvPing.mockImplementation(() => {
                 throw new Error('Unexpected crash');
             });
 

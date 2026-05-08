@@ -31,6 +31,7 @@ describe('ConsoleMetricsService [UNIT]', () => {
             kvScard: vi.fn(),
             kvGet: vi.fn(),
             kvTtl: vi.fn(),
+            kvPing: vi.fn(),
         };
         internalHttpClient = {
             request: vi.fn(),
@@ -142,7 +143,7 @@ describe('ConsoleMetricsService [UNIT]', () => {
 
     describe('getSystemHealth', () => {
         it('reports healthy when both KV and DB are responsive', async () => {
-            cacheAside.kvGet.mockResolvedValue('ok');
+            cacheAside.kvPing.mockResolvedValue('PONG');
             cacheAside.getDocument.mockResolvedValue({ settings: {} });
 
             const health = await service.getSystemHealth();
@@ -153,13 +154,42 @@ describe('ConsoleMetricsService [UNIT]', () => {
         });
 
         it('reports degraded if one service fails', async () => {
-            cacheAside.kvGet.mockRejectedValue(new Error('KV fail'));
+            cacheAside.kvPing.mockRejectedValue(new Error('KV fail'));
             cacheAside.getDocument.mockResolvedValue({ settings: {} });
 
             const health = await service.getSystemHealth();
 
             expect(health.overall).toBe(SystemHealth.DEGRADED);
             expect(health.g8es.status).toBe(SystemHealth.UNHEALTHY);
+        });
+    });
+
+    describe('getComponentHealth', () => {
+        it('reports healthy when all components are responsive', async () => {
+            cacheAside.kvPing.mockResolvedValue('PONG');
+            cacheAside.getDocument.mockResolvedValue({ settings: {} });
+            service.internalHttpClient.healthCheck = vi.fn().mockResolvedValue({
+                g8ee: { response: { status: SystemHealth.HEALTHY } }
+            });
+
+            const data = await service.getComponentHealth();
+
+            expect(data.overall).toBe(SystemHealth.HEALTHY);
+            expect(data.components.g8es_kv.status).toBe(SystemHealth.HEALTHY);
+            expect(cacheAside.kvPing).toHaveBeenCalled();
+        });
+
+        it('reports unhealthy if KV ping fails', async () => {
+            cacheAside.kvPing.mockRejectedValue(new Error('KV error'));
+            cacheAside.getDocument.mockResolvedValue({ settings: {} });
+            service.internalHttpClient.healthCheck = vi.fn().mockResolvedValue({
+                g8ee: { response: { status: SystemHealth.HEALTHY } }
+            });
+
+            const data = await service.getComponentHealth();
+
+            expect(data.overall).toBe(SystemHealth.UNHEALTHY);
+            expect(data.components.g8es_kv.status).toBe(SystemHealth.UNHEALTHY);
         });
     });
 
