@@ -104,5 +104,4 @@ Agent performance is tracked via an EMA scalar `[0.0, 1.0]` in the `reputation_s
 
 1.  **Fail Closed**: Any inconclusive risk analysis by the Warden defaults to `HIGH` risk.
 2.  **Auditor-User Partition**: The machine handles correctness; the human handles intent. Neither is sufficient alone.
-3.  **No Backwards Compatibility**: The system rejects malformed or legacy data structures immediately rather than attempting silent migration.
-4.  **Merkle Integrity**: Every agent commitment is tamper-evident, ensuring accountability for every generated command.
+3.  **Merkle Integrity**: Every agent commitment is tamper-evident, ensuring accountability for every generated command.

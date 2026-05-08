@@ -10,10 +10,7 @@ Version: v0.2.0
 
 # Protocol Invariants
 
-## 1. No Backwards Compatibility
-The g8e platform follows a strict **NO BACKWARDS COMPATIBILITY** policy. Protocol updates (e.g., migrating from JSON to Protobuf) are breaking changes. Components MUST reject legacy data formats with clear error messages. Users are expected to recreate resources if a protocol change makes existing data unreadable.
-
-## 2. Protobuf-First
+## 1. Protobuf-First
 All cross-component operator traffic (commands, results, status updates) MUST use serialized `UniversalEnvelope` Protobuf messages. JSON fallbacks are forbidden.
 
 ---

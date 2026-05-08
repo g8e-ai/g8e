@@ -15,7 +15,6 @@ g8e is a multi-service platform orchestrated by Docker Compose. The architecture
 - **Zero-Privilege by Default**: Services run as non-root (UID 1001) with nearly all Linux capabilities dropped.
 - **Immutable Infrastructure**: Production services utilize `read_only` root filesystems and image-baked entrypoints.
 - **Isolated Lifecycles**: Core platform, inference, and test runners have independent scaling and restart policies.
-- **No Backwards Compatibility**: Data structures are strictly enforced; legacy or broken state is rejected rather than migrated.
 
 ## Service Map
 
