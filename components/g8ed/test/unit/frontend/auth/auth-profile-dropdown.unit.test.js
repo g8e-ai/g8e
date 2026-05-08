@@ -78,7 +78,7 @@ describe('AuthManager renderUserProfile dropdown actions', () => {
         expect(consoleIdx).toBeGreaterThan(settingsIdx);
     });
 
-    it('renders plain-text Audit Log and Logout actions without button styling', () => {
+    it('renders plain-text Logout action without button styling', () => {
         const auth = new AuthManager(null);
 
         auth.renderUserProfile(createUserSession({}));
@@ -87,10 +87,7 @@ describe('AuthManager renderUserProfile dropdown actions', () => {
         expect(dropdown).toBeTruthy();
 
         const auditLink = dropdown.querySelector('a.audit-log-link');
-        expect(auditLink).toBeTruthy();
-        expect(auditLink.textContent).toBe('Audit Log');
-        expect(auditLink.className).toContain('profile-dropdown-action-link');
-        expect(auditLink.className).not.toContain('btn');
+        expect(auditLink).toBeNull();
 
         const logoutButton = dropdown.querySelector('button.logout-link');
         expect(logoutButton).toBeTruthy();

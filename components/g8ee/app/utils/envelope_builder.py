@@ -275,6 +275,7 @@ def decode_g8eo_result_envelope(envelope_bytes: bytes) -> dict[str, object]:
 
     result = {
         "id": envelope.id,
+        "timestamp": envelope.timestamp.ToDatetime().isoformat() if envelope.HasField("timestamp") else None,
         "event_type": event_type_enum,
         "operator_id": envelope.operator_id,
         "operator_session_id": envelope.operator_session_id,
@@ -344,7 +345,7 @@ def decode_g8eo_result_envelope(envelope_bytes: bytes) -> dict[str, object]:
         "g8e.v1.operator.port.check.failed",
     ):
         payload_message = operator_pb2.PortCheckResult()
-    elif event_type == "g8e.v1.operator.heartbeat":
+    elif event_type in ("g8e.v1.operator.heartbeat", "g8e.v1.operator.heartbeat.sent"):
         # Heartbeat uses string status, not enum - handle separately
         payload_message = operator_pb2.HeartbeatResult()
     elif event_type == "g8e.v1.operator.command.cancelled":

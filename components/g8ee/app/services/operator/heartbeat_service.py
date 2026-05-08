@@ -27,6 +27,7 @@ from app.models.operators import (
 from app.models.pubsub_messages import G8eoHeartbeatPayload
 from app.security.request_timestamp import RequestValidationResult, validate_timestamp
 from app.services.protocols import OperatorDataServiceProtocol, EventServiceProtocol
+from app.utils.envelope_builder import decode_g8eo_result_envelope
 
 logger = logging.getLogger(__name__)
 
@@ -105,10 +106,10 @@ class HeartbeatSnapshotService:
     async def on_ws_disconnect(self) -> None:
         await self._on_ws_disconnect()
 
-    async def on_heartbeat_message(self, channel: str, data: str | dict[str, object]) -> None:
+    async def on_heartbeat_message(self, channel: str, data: str | bytes | dict[str, object]) -> None:
         await self._on_heartbeat_message(channel, data)
 
-    async def on_pattern_heartbeat_message(self, pattern: str, channel: str, data: str | dict[str, object]) -> None:
+    async def on_pattern_heartbeat_message(self, pattern: str, channel: str, data: str | bytes | dict[str, object]) -> None:
         await self._on_pattern_heartbeat_message(pattern, channel, data)
 
     async def push_heartbeat_sse(
@@ -167,12 +168,12 @@ class HeartbeatSnapshotService:
         )
 
     async def _on_pattern_heartbeat_message(
-        self, pattern: str, channel: str, data: str | dict[str, object]
+        self, pattern: str, channel: str, data: str | bytes | dict[str, object]
     ) -> None:
         """Pattern-message dispatcher for ``heartbeat:*`` channels."""
         await self._on_heartbeat_message(channel, data)
 
-    async def _on_heartbeat_message(self, channel: str, data: str | dict[str, object]) -> None:
+    async def _on_heartbeat_message(self, channel: str, data: str | bytes | dict[str, object]) -> None:
         try:
             # channel format: heartbeat:operator_id:operator_session_id
             parts = channel.split(":")
@@ -195,7 +196,26 @@ class HeartbeatSnapshotService:
             if not operator_id or not operator_session_id:
                 logger.warning("[HEARTBEAT] Missing operator_id or operator_session_id in channel: %s", channel)
                 return
-            raw = data if isinstance(data, dict) else json.loads(data)
+
+            if isinstance(data, bytes):
+                # Protobuf-first: Heartbeats are now UniversalEnvelopes containing HeartbeatResult
+                logger.debug("[HEARTBEAT] Decoding binary Protobuf heartbeat")
+                envelope_dict = decode_g8eo_result_envelope(data)
+                raw = envelope_dict.get("payload", {})
+                
+                # Ensure identity fields from envelope are present in payload
+                if not raw.get("operator_id"):
+                    raw["operator_id"] = envelope_dict.get("operator_id")
+                if not raw.get("operator_session_id"):
+                    raw["operator_session_id"] = envelope_dict.get("operator_session_id")
+                if not raw.get("event_type"):
+                    raw["event_type"] = str(envelope_dict.get("event_type"))
+                if not raw.get("timestamp"):
+                    raw["timestamp"] = envelope_dict.get("timestamp")
+            else:
+                # Legacy JSON support (though we prefer Protobuf in v0.2.0+)
+                raw = data if isinstance(data, dict) else json.loads(data)
+
             payload = G8eoHeartbeatPayload.model_validate(raw)
             self._active_sessions.add((operator_id, operator_session_id))
             logger.info(

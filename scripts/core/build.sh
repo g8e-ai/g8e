@@ -340,7 +340,7 @@ fi
 if [[ "$COMMAND" == "down" ]]; then
     echo "Stopping managed containers (g8es, g8ee, g8ed)..."
     $COMPOSE stop g8es g8ee g8ed 2>/dev/null || true
-    $COMPOSE --profile stop 2>/dev/null || true
+    $COMPOSE stop 2>/dev/null || true
     echo "Done. Volumes, images, and networks are preserved."
     exit 0
 fi
@@ -379,9 +379,9 @@ if [[ "$COMMAND" == "reset" ]]; then
 
     echo "Wiping DB data volumes (g8es, g8ee, g8ed) — SSL certs preserved..."
     $COMPOSE stop g8es g8ee g8ed 2>/dev/null || true
-    $COMPOSE --profile stop 2>/dev/null || true
+    $COMPOSE stop 2>/dev/null || true
     $COMPOSE rm -f g8es g8ee g8ed 2>/dev/null || true
-    $COMPOSE --profile rm -f 2>/dev/null || true
+    $COMPOSE rm -f 2>/dev/null || true
     for svc in g8es g8ee g8ed; do
         vol="$(_service_volume "$svc")"
         [[ -n "$vol" ]] && docker volume rm "$vol" 2>/dev/null || true
@@ -391,11 +391,7 @@ if [[ "$COMMAND" == "reset" ]]; then
 
     _preflight
 
-    echo "Syncing personas from Python models to agents.json..."
-    python3 "$PROJECT_ROOT/scripts/data/sync-personas.py" || {
-        echo "Warning: Persona sync failed, continuing with reset"
-    }
-
+    # Syncing personas is handled by the app models at runtime
     echo "Building and starting all services..."
     $COMPOSE up -d --build --force-recreate g8es g8ee g8ed
     echo ""
@@ -529,7 +525,7 @@ if [[ "$COMMAND" == "up" ]]; then
     printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8es     && _wait_healthy g8es     60  1
     printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8ee  && _wait_healthy g8ee    120 2
     printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8ed && _wait_curl    g8ed "https://localhost/health" '"status"' 120 2
-    printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx  && $COMPOSE --profile up -d && _wait_healthy    300  5
+    printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8eo-test-runner && $COMPOSE up -d g8eo-test-runner && _wait_healthy g8eo-test-runner 300 5
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -550,15 +546,11 @@ fi
 if [[ "$COMMAND" == "setup" ]]; then
     echo "Stopping all managed containers..."
     $COMPOSE stop g8es g8ee g8ed 2>/dev/null || true
-    $COMPOSE --profile stop 2>/dev/null || true
+    $COMPOSE stop 2>/dev/null || true
     $COMPOSE rm -f g8es g8ee g8ed 2>/dev/null || true
-    $COMPOSE --profile rm -f 2>/dev/null || true
+    $COMPOSE rm -f 2>/dev/null || true
 
-    echo "Syncing personas from Python models to agents.json..."
-    python3 "$PROJECT_ROOT/scripts/data/sync-personas.py" || {
-        echo "Warning: Persona sync failed, continuing with setup"
-    }
-
+    # Syncing personas is handled by the app models at runtime
     echo "Building and starting all services..."
     $COMPOSE up -d --build --force-recreate g8es g8ee g8ed
     echo ""
@@ -584,12 +576,9 @@ if [[ "$COMMAND" == "rebuild" ]]; then
         REBUILD_COMPONENTS=(g8es g8ee g8ed)
     fi
 
-    # Sync personas from Python models to agents.json before rebuilding g8ee
+    # Syncing personas is handled by the app models at runtime
     if printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8ee; then
-        echo "Syncing personas from Python models to agents.json..."
-        python3 "$PROJECT_ROOT/scripts/data/sync-personas.py" || {
-            echo "Warning: Persona sync failed, continuing with rebuild"
-        }
+        echo "Rebuilding g8ee (personas will be updated at runtime)..."
     fi
 
     echo "Removing containers for: ${REBUILD_COMPONENTS[*]}..."
@@ -607,7 +596,7 @@ if [[ "$COMMAND" == "rebuild" ]]; then
     printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8es  && _wait_healthy g8es     300 2
     printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8ee  && _wait_healthy g8ee    120 2
     printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8ed && _wait_curl    g8ed "https://localhost/health" '"status"' 30 2
-    printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx && $COMPOSE --profile up -d --build --force-recreate && _wait_healthy    300  5
+    printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8eo-test-runner && $COMPOSE up -d --build --force-recreate g8eo-test-runner && _wait_healthy g8eo-test-runner 300 5
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

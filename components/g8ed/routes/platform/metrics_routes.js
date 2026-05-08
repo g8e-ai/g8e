@@ -36,7 +36,7 @@ export function createMetricsRouter({
             // Check g8es KV health via cache-aside
             let kvHealthy = false;
             try {
-                await cacheAsideService.kvGet('__health_check__');
+                await cacheAsideService.kvPing();
                 kvHealthy = true;
             } catch (e) {
                 logger.error('[METRICS] g8es KV health check failed', { error: e.message });
