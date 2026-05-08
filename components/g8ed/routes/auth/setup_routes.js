@@ -50,26 +50,32 @@ export function createSetupRouter({ services }) {
             return res.status(400).json({ error: 'URL is required' });
         }
 
-        // 1. Strip protocol and whitespace
-        let hostAndPort = url.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '');
-
-        // 2. Strict regex validation for host:port or IP:port (prevents path/query injection)
-        const hostPortRegex = /^([a-zA-Z0-9.-]+)(?::(\d+))?$/;
-        if (!hostPortRegex.test(hostAndPort)) {
-            return res.status(400).json({ error: 'Invalid Ollama URL format. Use "host:port" or "IP:port".' });
+        let parsedUrl;
+        try {
+            // Prepend protocol if missing for robust parsing
+            const urlWithProtocol = url.trim().match(/^https?:\/\//i) ? url.trim() : `http://${url.trim()}`;
+            parsedUrl = new URL(urlWithProtocol);
+        } catch (error) {
+            return res.status(400).json({ error: 'Invalid URL format.' });
         }
 
-        // 3. Prevent SSRF to cloud metadata endpoints
-        const forbiddenIps = ['169.254.169.254', 'metadata.google.internal', '100.100.100.200'];
-        if (forbiddenIps.some(ip => hostAndPort.includes(ip))) {
+        // 1. Strict protocol check
+        if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+            return res.status(400).json({ error: 'Only HTTP and HTTPS are supported.' });
+        }
+
+        // 2. Prevent SSRF to cloud metadata endpoints
+        const host = parsedUrl.hostname.toLowerCase();
+        const forbiddenHosts = ['169.254.169.254', 'metadata.google.internal', '100.100.100.200'];
+        if (forbiddenHosts.some(forbidden => host === forbidden || host.endsWith(`.${forbidden}`))) {
             return res.status(403).json({ error: 'Access to the specified host is forbidden.' });
         }
 
-        const protocol = url.trim().toLowerCase().startsWith('https://') ? 'https' : 'http';
-        const finalUrl = `${protocol}://${hostAndPort}/api/tags`;
+        // 3. Construct final URL securely using the URL object properties
+        const finalUrl = new URL('/api/tags', parsedUrl.origin);
 
         try {
-            const response = await fetch(finalUrl, {
+            const response = await fetch(finalUrl.toString(), {
                 method: 'GET',
                 headers: { 'Accept': 'application/json' },
                 signal: AbortSignal.timeout(5000) // 5 second timeout
