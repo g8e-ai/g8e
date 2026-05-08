@@ -863,16 +863,6 @@ func TestResultMessage_APIKeyPropagation(t *testing.T) {
 		assert.Equal(t, cfg.OperatorID, env.OperatorId,
 			"Cancellation ResultMessage must carry operator_id from config")
 	})
-
-	t.Run("empty api_key is omitted from json", func(t *testing.T) {
-		// DEPRECATED: UniversalEnvelope Protobuf is the wire format now.
-		t.Skip("Legacy JSON message test is deprecated")
-	})
-
-	t.Run("non-empty api_key is present in json", func(t *testing.T) {
-		// DEPRECATED: UniversalEnvelope Protobuf is the wire format now.
-		t.Skip("Legacy JSON message test is deprecated")
-	})
 }
 
 func TestPubSubResultsService_PublishExecutionStatus_EventTypeMapping(t *testing.T) {
@@ -973,11 +963,5 @@ func TestHeartbeat_APIKeyPropagation(t *testing.T) {
 
 		env := testutil.MustUnmarshalUniversalEnvelope(t, published.Data)
 		assert.Equal(t, cfg.OperatorID, env.OperatorId)
-	})
-
-	t.Run("heartbeat without api_key omits field from json", func(t *testing.T) {
-		// DEPRECATED: This test exercised legacy JSON heartbeat.
-		// Protobuf heartbeats are always strictly typed and don't use 'omitempty' JSON tags for API keys.
-		t.Skip("Legacy JSON heartbeat test is deprecated")
 	})
 }
