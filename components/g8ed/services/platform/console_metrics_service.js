@@ -283,7 +283,7 @@ class ConsoleMetricsService {
 
         try {
             const kvStart = Date.now();
-            await this._cache_aside.kvGet('__health_check__');
+            await this._cache_aside.kvPing();
             health.g8es = {
                 status: SystemHealth.HEALTHY,
                 latencyMs: Date.now() - kvStart
@@ -413,7 +413,7 @@ class ConsoleMetricsService {
 
         try {
             const kvStart = Date.now();
-            await this._cache_aside.kvGet('__console_health_check__');
+            await this._cache_aside.kvPing();
             components.g8es_kv = { name: 'g8es KV', status: SystemHealth.HEALTHY, latencyMs: Date.now() - kvStart };
         } catch (error) {
             components.g8es_kv = { name: 'g8es KV', status: SystemHealth.UNHEALTHY, latencyMs: null, error: error.message };
