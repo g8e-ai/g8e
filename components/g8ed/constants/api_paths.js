@@ -405,10 +405,12 @@ export const MCPPaths = Object.freeze({
 // --- SETUP domain ---
 const Setup = {
     BASE:   BasePaths.SETUP,
+    FETCH_MODELS: 'fetch-models',
 };
 
 export const SetupPaths = Object.freeze({
     WIZARD:  '/setup',
+    FETCH_MODELS: `${BasePaths.SETUP}/fetch-models`,
 });
 
 export const InternalDeviceLinkPaths = Object.freeze({
@@ -576,6 +578,7 @@ export const apiPaths = {
     },
     setup: {
         wizard: () => '/setup',
+        fetchModels: () => `${BasePaths.SETUP}/${Setup.FETCH_MODELS}`,
     },
     metrics: {
         health: () => `${Metrics.BASE}/${Metrics.HEALTH}`,
