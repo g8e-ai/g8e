@@ -17,7 +17,6 @@ The Operator is the platform's data plane, execution engine, and persistence lay
 - **Local-First Audit (LFAA)**: The host is the single source of truth for command history and file mutations, stored in a tamper-evident ledger.
 - **Protocol-Governed Execution**: Operator command/result traffic uses serialized Protobuf `UniversalEnvelope` bytes carrying typed `operator.proto` payloads and L1/L2/L3 governance metadata.
 - **Zero Trust execution**: Every command and file edit is analyzed by the Sentinel before execution.
-- **No Backwards Compatibility**: Stale keys or malformed data structures are rejected immediately to prevent integrity drift.
 
 ## Architecture Overview
 
