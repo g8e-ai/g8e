@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.1] - 2026-05-07
+
+### Added
+- **Build System Improvements:** Optimized `build.sh` for more reliable component container builds.
+
+### Changed
+- **Heartbeat Service:** Refactored heartbeat processing to align with updated Protobuf schemas and improved error handling.
+- **Envelope Builder:** Updated `EnvelopeBuilder` to ensure correct field mapping for heartbeat events.
+- **Metrics Routing:** Refined console metrics routing and service interaction in `g8ed`.
+
+### Fixed
+- **Heartbeat Proto Serialization:** Resolved serialization issues in the heartbeat service ensuring stable cross-component status updates.
+- **Test Suite Cleanup:** Removed deprecated `pubsub_results` tests and modernized console metrics unit tests.
+- **Cache Reliability:** Improved cache-aside service reliability in `g8ed`.
+
 ## [0.2.0] - 2026-05-07
 
 ### Added
