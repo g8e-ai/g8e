@@ -120,6 +120,7 @@ export class SetupPage {
         this._initFinishButton();
         this._initSearchProvider();
         this._initUseGeminiKeyCheckbox();
+        this._initOllamaFetchButton();
         this._initModelDropdowns();
 
         this._updateProviderStates();
@@ -293,6 +294,71 @@ export class SetupPage {
         this._updateProviderStates();
         this._updateModelDropdowns();
         this._updateNav();
+    }
+
+    _initOllamaFetchButton() {
+        const btn = document.getElementById('fetch-ollama-models');
+        if (!btn) return;
+
+        btn.addEventListener('click', async () => {
+            const urlInput = document.getElementById('ollama_url');
+            let url = urlInput?.value.trim();
+            if (!url) {
+                this._showStatus('error', 'Enter an Ollama URL first (e.g. 192.168.1.100:11434)');
+                return;
+            }
+
+            // Ensure protocol
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                url = `http://${url}`;
+            }
+
+            btn.classList.add('loading');
+            btn.disabled = true;
+
+            try {
+                this._showStatus('loading', `Fetching models from ${url}...`);
+                const response = await fetch(ApiPaths.setup.fetchModels(), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || `Server returned ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                const models = (data.models || []).map(m => ({
+                    id: m.name,
+                    label: m.name
+                }));
+
+                if (models.length === 0) {
+                    this._showStatus('info', 'No models found on this Ollama server');
+                } else {
+                    // Update the catalog in-memory for the current session
+                    PROVIDER_MODELS.ollama.all = models;
+                    PROVIDER_MODELS.ollama.primary = models;
+                    PROVIDER_MODELS.ollama.assistant = models;
+                    PROVIDER_MODELS.ollama.lite = models;
+
+                    this._lastProviderEdited = 'ollama';
+                    this._updateModelDropdowns();
+                    this._showStatus('success', `Successfully fetched ${models.length} models from Ollama`);
+                    
+                    // Mark as configured if we got models
+                    this._updateProviderStates();
+                }
+            } catch (err) {
+                console.error('[SETUP] Ollama fetch failed:', err);
+                this._showStatus('error', `Failed to fetch Ollama models: ${err.message}. Ensure the URL is correct and Ollama has OLLAMA_ORIGINS="*" set.`);
+            } finally {
+                btn.classList.remove('loading');
+                btn.disabled = false;
+            }
+        });
     }
 
     _validateApiKey(provider) {
