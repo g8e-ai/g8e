@@ -44,5 +44,37 @@ export function createSetupRouter({ services }) {
         });
     });
 
+    router.post(SetupPaths.FETCH_MODELS, async (req, res) => {
+        const { url } = req.body;
+        if (!url) {
+            return res.status(400).json({ error: 'URL is required' });
+        }
+
+        let ollamaUrl = url.trim();
+        if (!ollamaUrl.startsWith('http://') && !ollamaUrl.startsWith('https://')) {
+            ollamaUrl = `http://${ollamaUrl}`;
+        }
+
+        try {
+            const response = await fetch(`${ollamaUrl}/api/tags`, {
+                method: 'GET',
+                headers: { 'Accept': 'application/json' },
+                signal: AbortSignal.timeout(5000) // 5 second timeout
+            });
+
+            if (!response.ok) {
+                return res.status(response.status).json({ 
+                    error: `Ollama returned ${response.status}: ${response.statusText}` 
+                });
+            }
+
+            const data = await response.json();
+            res.json(data);
+        } catch (error) {
+            logger.error('[SETUP] Ollama fetch failed', { error: error.message, url: ollamaUrl });
+            res.status(500).json({ error: `Failed to connect to Ollama: ${error.message}` });
+        }
+    });
+
     return router;
 }

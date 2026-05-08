@@ -98,6 +98,7 @@ const Seg = {
     setup: {
         CONFIG: 'config',
         USER:   'user',
+        FETCH_MODELS: 'fetch-models',
     },
     health: {
         LIVE:        'live',
@@ -183,6 +184,7 @@ export const ApiPaths = {
     setup: {
         config: () => `${BASE.SETUP}/${Seg.setup.CONFIG}`,
         user:   () => `${BASE.SETUP}/${Seg.setup.USER}`,
+        fetchModels: () => `${BASE.SETUP}/${Seg.setup.FETCH_MODELS}`,
     },
     chat: {
         send:           () => `${BASE.CHAT}/${Seg.chat.SEND}`,
