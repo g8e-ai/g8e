@@ -145,7 +145,7 @@ class G8edServer {
 
             // No config object - use services directly
             
-            const { userService, webSessionService, setupService, operatorService, apiKeyService, settingsService, bindingService } = this.services;
+            const { userService, webSessionService, setupService, operatorService, apiKeyService, settingsService, bindingService, deviceLinkService } = this.services;
             const bootstrapService = settingsService.getBootstrapService();
             
             // Initialize middleware with minimal dependencies
@@ -153,13 +153,15 @@ class G8edServer {
             this.requestTimestampMiddleware = createRequestTimestampMiddleware({ cacheAsideService: this.services.cacheAsideService });
             this.errorHandlerMiddleware = createErrorHandlerMiddleware({ });
             const { globalPublicRateLimiter } = this.rateLimiters;
-
+            
             this.authMiddleware = createAuthMiddleware({ 
                 userService, 
                 webSessionService, 
                 setupService,
                 settingsService,
-                bindingService
+                bindingService,
+                operatorService,
+                deviceLinkService
             });
             this.apiKeyMiddleware = createApiKeyMiddleware({ apiKeyService, userService });
             this.authorizationMiddleware = createAuthorizationMiddleware({ operatorService, settingsService });

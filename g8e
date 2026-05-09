@@ -110,9 +110,69 @@ _exec_in_test_runner() {
         env_args=(-e "OPERATOR_SESSION_ID=$OPERATOR_SESSION_ID")
     fi
     if [ -t 0 ] && [ -t 1 ]; then
-        exec $COMPOSE run --rm ${env_args[@]+"${env_args[@]}"} -it "$runner" "$@
+        exec $COMPOSE run --rm ${env_args[@]+"${env_args[@]}"} -it "$runner" "$@"
     else
-        exec $COMPOSE run --rm ${env_args[@]+"${env_args[@]}"} "$runner" "$@
+        exec $COMPOSE run --rm ${env_args[@]+"${env_args[@]}"} "$runner" "$@"
+    fi
+}
+
+_run_in_g8ee_test_runner() {
+    local env_args=(-e "G8E_SHARED_DIR=/app/shared" -e "PYTHONPATH=/app/components/g8ee:/app/shared")
+    if [ -t 0 ] && [ -t 1 ]; then
+        $COMPOSE run --rm "${env_args[@]}" "$TR_G8EE" "$@"
+    else
+        $COMPOSE run --rm -T "${env_args[@]}" "$TR_G8EE" "$@"
+    fi
+}
+
+_eval_fleet_container_ids() {
+    COMPOSE_PROJECT_NAME=evals docker compose -f "$EVALS_COMPOSE" ps -q
+}
+
+_eval_fleet_running() {
+    local container_id
+    while IFS= read -r container_id; do
+        [[ -z "$container_id" ]] && continue
+        [[ "$(docker inspect -f '{{.State.Running}}' "$container_id" 2>/dev/null || true)" == "true" ]] && return 0
+    done < <(_eval_fleet_container_ids)
+    return 1
+}
+
+_eval_fleet_device_token() {
+    local container_id token
+    while IFS= read -r container_id; do
+        [[ -z "$container_id" ]] && continue
+        [[ "$(docker inspect -f '{{.State.Running}}' "$container_id" 2>/dev/null || true)" == "true" ]] || continue
+        token="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$container_id" 2>/dev/null | awk -F= '$1 == "DEVICE_TOKEN" {print substr($0, index($0, "=") + 1); exit}')"
+        [[ -n "$token" ]] && printf '%s\n' "$token" && return 0
+    done < <(_eval_fleet_container_ids)
+    return 1
+}
+
+_eval_device_token_user_id() {
+    local token="$1"
+    local response
+    response="$(docker exec -i g8ed \
+        curl -sf -X GET \
+        -H 'Content-Type: application/json' \
+        "https://localhost/api/internal/device-links/$token" 2>/dev/null || true)"
+    if [[ -n "$response" ]]; then
+        echo "$response" | grep -o '"user_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)".*/\1/'
+    fi
+}
+
+_eval_gold_set_path_for_container() {
+    local gold_set="$1"
+    if [[ "$gold_set" == /app/components/g8ee/* ]]; then
+        printf '%s\n' "$gold_set"
+    elif [[ "$gold_set" == "$SCRIPT_DIR/components/g8ee/"* ]]; then
+        printf '/app/components/g8ee/%s\n' "${gold_set#"$SCRIPT_DIR/components/g8ee/"}"
+    elif [[ "$gold_set" == components/g8ee/* ]]; then
+        printf '/app/%s\n' "$gold_set"
+    elif [[ -f "$SCRIPT_DIR/components/g8ee/$gold_set" ]]; then
+        printf '/app/components/g8ee/%s\n' "$gold_set"
+    else
+        printf '%s\n' "$gold_set"
     fi
 }
 
@@ -348,7 +408,7 @@ case "$TOP" in
                 exec bash "$SCRIPT_DIR/scripts/core/build.sh" rebuild "${@:3}" ;;
             settings)
                 _banner "platform settings"
-                _exec_in_pod python3 /app/scripts/data/manage-g8es.py settings show "${@:3}" ;;
+                _exec_in_g8ed python3 /app/scripts/data/manage-g8es.py settings show "${@:3}" ;;
             update)
                 _banner "platform update"
                 git -C "$SCRIPT_DIR" fetch origin main 2>&1 | sed 's/^/  /'
@@ -1046,19 +1106,19 @@ case "$TOP" in
             arg="${_eval_args[$((i-1))]}"
             case "$arg" in
                 -p|--llm-provider)
-                    eval_llm_args+=("-p" "${_eval_args[$i]}"); ((i+=2)) ;;
+                    eval_llm_args+=("-p" "${_eval_args[$i]}"); i=$((i+2)) ;;
                 -m|--primary-model)
-                    eval_llm_args+=("-m" "${_eval_args[$i]}"); ((i+=2)) ;;
+                    eval_llm_args+=("-m" "${_eval_args[$i]}"); i=$((i+2)) ;;
                 -a|--assistant-model)
-                    eval_llm_args+=("-a" "${_eval_args[$i]}"); ((i+=2)) ;;
+                    eval_llm_args+=("-a" "${_eval_args[$i]}"); i=$((i+2)) ;;
                 -l|--lite-model)
-                    eval_llm_args+=("-l" "${_eval_args[$i]}"); ((i+=2)) ;;
+                    eval_llm_args+=("-l" "${_eval_args[$i]}"); i=$((i+2)) ;;
                 -e|--llm-endpoint-url)
-                    eval_llm_args+=("-e" "${_eval_args[$i]}"); ((i+=2)) ;;
+                    eval_llm_args+=("-e" "${_eval_args[$i]}"); i=$((i+2)) ;;
                 -k|--llm-api-key)
-                    eval_llm_args+=("-k" "${_eval_args[$i]}"); ((i+=2)) ;;
+                    eval_llm_args+=("-k" "${_eval_args[$i]}"); i=$((i+2)) ;;
                 *)
-                    filtered_eval_args+=("$arg"); ((i++)) ;;
+                    filtered_eval_args+=("$arg"); i=$((i+1)) ;;
             esac
         done
         
@@ -1086,16 +1146,17 @@ case "$TOP" in
                 
                 run_args=("${eval_llm_args[@]}")
                 gold_set=""
+                device_token=""
                 set -- "${_args[@]}"
                 while [[ "$#" -gt 0 ]]; do
                     case "$1" in
-                        -d|--device-token) run_args+=("--device-token" "$2"); shift 2 ;;
+                        -d|--device-token)
+                            device_token="$2"
+                            run_args+=("--device-token" "$device_token")
+                            shift 2
+                            ;;
                         --gold-set)
-                            gold_set="$2"
-                            if [[ "$gold_set" != /* ]]; then
-                                gold_set="$SCRIPT_DIR/$gold_set"
-                            fi
-                            gold_set="/app/components/g8ee${gold_set#$SCRIPT_DIR/components/g8ee}"
+                            gold_set="$(_eval_gold_set_path_for_container "$2")"
                             run_args+=("--gold-set" "$gold_set")
                             shift 2
                             ;;
@@ -1103,10 +1164,74 @@ case "$TOP" in
                         *) run_args+=("$1"); shift 1 ;;
                     esac
                 done
+
+                if ! _eval_fleet_running; then
+                    echo "[g8e] eval fleet is not running" >&2
+                    echo "  Start it first: ./g8e evals up --device-token <token>" >&2
+                    exit 1
+                fi
+
+                if [[ -n "$device_token" ]]; then
+                    # Ensure the fleet is running with this token
+                    _nodes=$(docker ps --filter "label=io.g8e.evals=true" --format '{{.Names}}' | wc -l)
+                    [[ $_nodes -eq 0 ]] && _nodes=3
+                    echo "[g8e] Ensuring eval fleet is running with provided DEVICE_TOKEN..."
+                    DEVICE_TOKEN="$device_token" COMPOSE_PROJECT_NAME=evals docker compose -f "$EVALS_COMPOSE" up -d --scale eval-node="$_nodes" >/dev/null 2>&1
+                elif device_token="$(_eval_fleet_device_token)"; then
+                    run_args+=("--device-token" "$device_token")
+                else
+                    echo "[g8e] Error: No DEVICE_TOKEN provided and none found in running fleet" >&2
+                    echo "  Usage: ./g8e evals run --device-token <token> --gold-set <path>" >&2
+                    echo "     or: ./g8e evals up --device-token <token> && ./g8e evals run --gold-set <path>" >&2
+                    exit 1
+                fi
+
+                # Configure USER LLM settings from CLI arguments
+                if [[ ${#eval_llm_args[@]} -gt 0 ]]; then
+                    user_id="$(_eval_device_token_user_id "$device_token")"
+                    if [[ -z "$user_id" ]]; then
+                        echo "[g8e] Warning: Could not resolve user_id from device token, skipping LLM configuration" >&2
+                    else
+                        echo "[g8e] Configuring USER LLM settings for user: $user_id"
+                        settings_args=()
+                        i=0
+                        while [[ $i -lt ${#eval_llm_args[@]} ]]; do
+                            flag="${eval_llm_args[$i]}"
+                            value="${eval_llm_args[$((i+1))]}"
+                            case "$flag" in
+                                -p) settings_args+=("llm_provider=$value") ;;
+                                -m) settings_args+=("llm_model=$value") ;;
+                                -a) settings_args+=("llm_assistant_model=$value") ;;
+                                -l) settings_args+=("llm_lite_model=$value") ;;
+                                -e) settings_args+=("llm_endpoint=$value") ;;
+                                -k) 
+                                    provider=""
+                                    for j in "${!eval_llm_args[@]}"; do
+                                        if [[ "${eval_llm_args[$j]}" == "-p" && $j -lt ${#eval_llm_args[@]} ]]; then
+                                            provider="${eval_llm_args[$((j+1))]}"
+                                            break
+                                        fi
+                                    done
+                                    case "$provider" in
+                                        gemini) settings_args+=("gemini_api_key=$value") ;;
+                                        openai) settings_args+=("openai_api_key=$value") ;;
+                                        anthropic) settings_args+=("anthropic_api_key=$value") ;;
+                                        ollama) settings_args+=("ollama_api_key=$value") ;;
+                                        *) settings_args+=("gemini_api_key=$value") ;;
+                                    esac
+                                    ;;
+                            esac
+                            i=$((i+2))
+                        done
+
+                        if [[ ${#settings_args[@]} -gt 0 ]]; then
+                            _exec_in_g8ed python3 /app/scripts/data/manage-g8es.py settings set --user-id "$user_id" "${settings_args[@]}"
+                        fi
+                    fi
+                fi
                 
                 _banner "evals run"
-                _ensure_g8ep "evals run"
-                docker exec -i -e "G8E_SHARED_DIR=/app/shared" -e "PYTHONPATH=/app/components/g8ee:/app/shared" "$CONTAINER" python -m app.evals.runner.cli "${run_args[@]}"
+                _run_in_g8ee_test_runner python3 -m app.evals.runner.cli run "${run_args[@]}"
                 ;;
     up)
                 _banner "evals up"
@@ -1120,12 +1245,11 @@ case "$TOP" in
                         *) echo "[g8e] unknown option: '${3}'"; exit 1 ;;
                     esac
                 done
-                if [[ -z "$_device_token" ]]; then
-                    echo "[g8e] evals up requires --device-token" >&2
-                    echo "  Generate a device link token from the dashboard" >&2
-                    exit 1
+                if [[ -n "$_device_token" ]]; then
+                    echo "  Bringing up $_nodes eval nodes with device token..."
+                else
+                    echo "  Bringing up $_nodes eval nodes (no device token)..."
                 fi
-                echo "  Bringing up $_nodes eval nodes..."
                 DEVICE_TOKEN="$_device_token" COMPOSE_PROJECT_NAME=evals docker compose -f "$EVALS_COMPOSE" up -d --build --scale eval-node="$_nodes"
                 echo ""
                 echo "  Eval fleet is up. Check status with: ./g8e evals status"
@@ -1151,8 +1275,7 @@ case "$TOP" in
                 exit 0 ;;
             list)
                 _banner "evals list"
-                _ensure_g8ep "evals list"
-                docker exec -i -e "G8E_SHARED_DIR=/app/shared" -e "PYTHONPATH=/app/components/g8ee:/app/shared" "$CONTAINER" python -m app.evals.runner.cli list
+                _run_in_g8ee_test_runner python3 -m app.evals.runner.cli list
                 ;;
             *)
                 echo "[g8e] unknown evals subcommand: '$SUB'" >&2

@@ -26,6 +26,8 @@ import { _HEADERS } from './shared.js';
  */
 export const G8eHeaders = Object.freeze({
     WEB_SESSION_ID:    _HEADERS['x-g8e.session-id'],
+    OPERATOR_SESSION_ID: _HEADERS['x-g8e.operator-session-id'],
+    DEVICE_TOKEN:      _HEADERS['x-g8e.device-token'],
     USER_ID:           _HEADERS['x-g8e.user-id'],
     ORGANIZATION_ID:   _HEADERS['x-g8e.organization-id'],
     CASE_ID:           _HEADERS['x-g8e.case-id'],
