@@ -180,7 +180,7 @@ Manage the "broken fleet" simulation for AI operator training and evaluation.
 
 ### evals
 Real-operator evaluation fleet management.
-- `run --gold-set <path>`: Execute benchmark against gold set
+- `run --gold-set <name|path>`: Execute benchmark against a gold set from `g8ee-test-runner`
 - `list`: List available evaluation scenarios
 - `up --nodes <n> --device-token <tok>`: Bring up eval nodes
 - `down`: Tear down eval fleet

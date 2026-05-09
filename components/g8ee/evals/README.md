@@ -100,4 +100,4 @@ Results are aggregated into a `FullReport` and persisted to `reports/evals/` in 
 ## Invariants
 - **Real Binaries**: Evals always run the actual `g8e.operator` binary, never a mock.
 - **Isolation**: Nodes are restarted between scenarios to prevent state bleed.
-- **Host-Driven**: The runner executes on the Docker host, orchestrating containers via the Docker socket.
+- **Runner Container**: The runner executes in `g8ee-test-runner` with Docker socket access, orchestrating eval containers through Docker Compose.

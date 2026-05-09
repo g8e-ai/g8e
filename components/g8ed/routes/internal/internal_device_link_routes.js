@@ -188,6 +188,46 @@ export function createInternalDeviceLinkRouter({ services, authorizationMiddlewa
     });
 
     /**
+     * GET /api/internal/device-links/:token
+     *
+     * Resolve a device link and return its data.
+     *
+     * SECURITY: INTERNAL ONLY - cluster-only access
+     */
+    router.get('/:token', requireInternalOrUserAuth, async (req, res, next) => {
+        const { token } = req.params;
+
+        if (!isValidTokenFormat(token)) {
+            return res.status(400).json(new ErrorResponse({ error: DeviceLinkError.INVALID_TOKEN_FORMAT }).forWire());
+        }
+
+        try {
+            const result = await deviceLinkService.getLink(token);
+
+            if (!result.success) {
+                return res.status(404).json(new ErrorResponse({ error: result.error }).forWire());
+            }
+
+            logger.info('[INTERNAL-HTTP] Device link resolved', {
+                token_prefix: token.substring(0, 20) + '...',
+                user_id: result.data.user_id
+            });
+
+            return res.json(new DeviceLinkResponse({
+                success: true,
+                ...result.data.forWire()
+            }).forWire());
+
+        } catch (error) {
+            logger.error('[INTERNAL-HTTP] Failed to resolve device link', {
+                error: error.message,
+                token_prefix: token.substring(0, 20) + '...'
+            });
+            return res.status(500).json(new ErrorResponse({ error: error.message }).forWire());
+        }
+    });
+
+    /**
      * POST /api/internal/device-links/operator-link
      *
      * Generate a single-operator handshake link (dlk_ token).

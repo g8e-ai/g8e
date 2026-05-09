@@ -22,7 +22,6 @@ from app.models.settings import LLMSettings
 from app.services.ai.eval_judge import EvalJudge
 
 from .client import G8edClient
-from .fleet import FleetManager
 from .metrics import EvalRow, FullReport
 from .reporter import compute_summaries, persist_report, render_text_table
 from .scorer import (
@@ -31,9 +30,7 @@ from .scorer import (
     score_privacy_scenario,
 )
 
-# components/g8ee/ — anchors for sibling resources (evals fleet, reports/).
 _G8EE_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-_COMPOSE_FILE = _G8EE_ROOT / "evals" / "docker-compose.evals.yml"
 _REPORTS_DIR = _G8EE_ROOT / "reports" / "evals"
 _GOLD_SETS_DIR = _G8EE_ROOT / "evals" / "gold_sets"
 
@@ -77,51 +74,31 @@ def resolve_gold_set_path(gold_set_arg: str | None) -> Path | None:
 
 
 async def run_dry_run(device_token: str, g8ed_url: str = "https://g8e.local") -> None:
-    """Dry run: bring up fleet, run one canned chat, print response, tear down.
+    print("[evals] Running canned chat: 'uname -a'")
 
-    Args:
-        device_token: Device link token for operator authentication
-        g8ed_url: g8ed API base URL
-    """
-    fleet = FleetManager(_COMPOSE_FILE)
+    async with G8edClient(g8ed_url) as client:
+        investigation = await client.create_investigation(
+            operator_session_id=device_token
+        )
+        print(f"[evals] Created investigation: {investigation['id']}")
 
-    try:
-        print("[evals] Bringing up fleet...")
-        fleet.up(nodes=3, device_token=device_token)
+        response_text = ""
+        async for event in client.send_chat_message(
+            investigation_id=investigation["id"],
+            message="run `uname -a`",
+            operator_session_id=device_token,
+        ):
+            if event.get("type") == "text_chunk":
+                response_text += event.get("data", "")
 
-        print("[evals] Waiting for operators to bind...")
-        await fleet.wait_bound(timeout=60)
-
-        print("[evals] Fleet is up. Running canned chat: 'uname -a'")
-
-        async with G8edClient(g8ed_url) as client:
-            investigation = await client.create_investigation(
-                operator_session_id=device_token
-            )
-            print(f"[evals] Created investigation: {investigation['id']}")
-
-            response_text = ""
-            async for event in client.send_chat_message(
-                investigation_id=investigation["id"],
-                message="run `uname -a`",
-                operator_session_id=device_token,
-            ):
-                if event.get("type") == "text_chunk":
-                    response_text += event.get("data", "")
-
-        print(f"[evals] Response: {response_text}")
-
-    finally:
-        print("[evals] Tearing down fleet...")
-        fleet.down()
-        print("[evals] Done.")
+    print(f"[evals] Response: {response_text}")
+    print("[evals] Done.")
 
 
 async def run_scenario(
     scenario: dict[str, Any],
     device_token: str,
     g8ed_url: str,
-    fleet: FleetManager,
     node_id: str,
     judge: EvalJudge,
 ) -> EvalRow:
@@ -131,7 +108,6 @@ async def run_scenario(
         scenario: Gold set scenario dict
         device_token: Device link token for operator authentication
         g8ed_url: g8ed API base URL
-        fleet: FleetManager instance
         node_id: Container name to use
         judge: EvalJudge instance for accuracy scoring
 
@@ -272,23 +248,10 @@ async def run_full_eval(
         llm_endpoint: LLM provider endpoint URL
         llm_api_key: LLM provider API key
     """
-    fleet = FleetManager(_COMPOSE_FILE)
-
     if device_token is None:
-        if fleet.is_running():
-            device_token = fleet.get_device_token()
-            if device_token:
-                print("[evals] Using device token from running fleet")
-            else:
-                print("[evals] Error: Fleet is running but device token not found")
-                print("[evals] Run './g8e evals down' then './g8e evals up --device-token <token>'")
-                sys.exit(1)
-        else:
-            print("[evals] Error: Fleet is not running and no device token provided")
-            print("[evals] Run './g8e evals up --device-token <token>' first")
-            sys.exit(1)
-
-    fleet_was_running = fleet.is_running()
+        print("[evals] Error: --device-token is required")
+        print("[evals] Start a fleet with './g8e evals up --device-token <token>'")
+        sys.exit(1)
 
     with open(gold_set_path) as f:
         scenarios = json.load(f)
@@ -332,52 +295,36 @@ async def run_full_eval(
     provider = get_llm_provider(settings)
     judge = EvalJudge(provider=provider, model=judge_model)
 
-    try:
-        if not fleet_was_running:
-            print("[evals] Bringing up fleet...")
-            fleet.up(nodes=nodes, device_token=device_token)
+    print("[evals] Using existing eval fleet")
+    print(f"[evals] Running {len(operator_bound_scenarios)} scenarios...")
+    rows = []
 
-            print("[evals] Waiting for operators to bind...")
-            await fleet.wait_bound(timeout=60)
+    for i, scenario in enumerate(operator_bound_scenarios):
+        node_id = f"evals-eval-node-{(i % nodes) + 1}"
+        print(f"[evals] [{i+1}/{len(operator_bound_scenarios)}] Running {scenario['id']} on {node_id}")
+
+        row = await run_scenario(scenario, device_token, g8ed_url, node_id, judge)
+        rows.append(row)
+
+        if row.passed:
+            print(f"[evals]   PASSED ({row.latency_ms:.0f}ms)")
         else:
-            print("[evals] Using existing running fleet")
+            print(f"[evals]   FAILED: {row.error}")
 
-        print(f"[evals] Running {len(operator_bound_scenarios)} scenarios...")
-        rows = []
+    report = FullReport(
+        rows=rows,
+        summaries=compute_summaries(rows),
+        finished_at=datetime.now(UTC),
+    )
 
-        for i, scenario in enumerate(operator_bound_scenarios):
-            node_id = f"evals-eval-node-{(i % nodes) + 1}"
-            print(f"[evals] [{i+1}/{len(operator_bound_scenarios)}] Running {scenario['id']} on {node_id}")
+    print("\n" + "=" * 60)
+    print("EVALS REPORT")
+    print("=" * 60)
+    print(render_text_table(report))
 
-            row = await run_scenario(scenario, device_token, g8ed_url, fleet, node_id, judge)
-            rows.append(row)
-
-            if row.passed:
-                print(f"[evals]   PASSED ({row.latency_ms:.0f}ms)")
-            else:
-                print(f"[evals]   FAILED: {row.error}")
-
-            fleet.restart(node_id)
-
-        report = FullReport(
-            rows=rows,
-            summaries=compute_summaries(rows),
-            finished_at=datetime.now(UTC),
-        )
-
-        print("\n" + "=" * 60)
-        print("EVALS REPORT")
-        print("=" * 60)
-        print(render_text_table(report))
-
-        artifacts = persist_report(report, _REPORTS_DIR)
-        print(f"\nArtifacts persisted to: {artifacts['run_dir']}")
-
-    finally:
-        if not fleet_was_running:
-            print("[evals] Tearing down fleet...")
-            fleet.down()
-        print("[evals] Done.")
+    artifacts = persist_report(report, _REPORTS_DIR)
+    print(f"\nArtifacts persisted to: {artifacts['run_dir']}")
+    print("[evals] Done.")
 
 
 def main() -> None:

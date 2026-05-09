@@ -162,11 +162,17 @@ describe('ChatMessageRequest [UNIT - PURE LOGIC]', () => {
         expect(req.investigation_id).toBe('inv-def');
     });
 
-    it('throws when web_session_id is missing', () => {
-        expect(() => ChatMessageRequest.parse({
+    it('accepts requests without web_session_id (device-token / operator-session auth)', () => {
+        // Evals CLI and operator-session callers authenticate via headers
+        // (X-G8E-Device-Token / X-G8E-Operator-Session-ID) and have no web session.
+        // user_id is still resolved by requireAuth and required here.
+        const req = ChatMessageRequest.parse({
             user_id: 'user-456',
             message: 'test',
-        })).toThrow('web_session_id is required');
+        });
+        expect(req.web_session_id).toBeNull();
+        expect(req.user_id).toBe('user-456');
+        expect(req.message).toBe('test');
     });
 
     it('throws when user_id is missing', () => {
@@ -1643,7 +1649,7 @@ describe('RequestModelFactory [UNIT - PURE LOGIC]', () => {
 
     it('all factory methods delegate to Model.parse() and throw on invalid data', () => {
         expect(() => RequestModelFactory.createChatRequest({}))
-            .toThrow('web_session_id is required');
+            .toThrow('user_id is required');
         expect(() => RequestModelFactory.createIntentRequest({}))
             .toThrow('intent is required');
         expect(() => RequestModelFactory.createUnlockAccountRequest({}))
