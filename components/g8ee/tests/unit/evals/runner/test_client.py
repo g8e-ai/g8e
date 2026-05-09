@@ -61,12 +61,17 @@ async def test_send_chat_message():
         
         async with G8edClient(base_url) as client:
             events = []
-            async for event in client.send_chat_message(investigation_id, message):
+            async for event in client.send_chat_message(investigation_id, message, operator_session_id="session-123"):
                 events.append(event)
             
             assert len(events) == 2
             assert events[0]["data"] == "Hello"
             assert events[1]["data"] == " world"
+            
+            # Verify header was passed
+            mock_session.post.assert_called_once()
+            _, kwargs = mock_session.post.call_args
+            assert kwargs["headers"]["X-G8E-Operator-Session-ID"] == "session-123"
 
 @pytest.mark.asyncio
 async def test_client_context_manager_no_session():
@@ -127,8 +132,9 @@ async def test_approve_request():
         mock_session.post.return_value = mock_resp
         
         async with G8edClient(base_url) as client:
-            res = await client.approve_request(approval_id)
+            res = await client.approve_request(approval_id, operator_session_id="session-123")
             assert res["status"] == "approved"
             mock_session.post.assert_called_once()
             args, kwargs = mock_session.post.call_args
             assert kwargs["json"]["approval_id"] == approval_id
+            assert kwargs["headers"]["X-G8E-Operator-Session-ID"] == "session-123"

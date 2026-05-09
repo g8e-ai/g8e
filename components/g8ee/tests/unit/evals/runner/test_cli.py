@@ -45,7 +45,6 @@ async def test_run_scenario_benchmark():
     }
     device_token = "token"
     g8ed_url = "https://g8e.local"
-    fleet = MagicMock()
     judge = MagicMock()
     
     with patch('app.evals.runner.cli.G8edClient') as mock_client_cls:
@@ -60,7 +59,7 @@ async def test_run_scenario_benchmark():
             
         mock_client.send_chat_message = mock_stream
         
-        row = await run_scenario(scenario, device_token, g8ed_url, fleet, "node-1", judge)
+        row = await run_scenario(scenario, device_token, g8ed_url, "node-1", judge)
         
         assert row.passed is True
         assert row.scenario_id == "test-1"
@@ -72,13 +71,7 @@ def test_resolve_gold_set_path_not_found():
 
 @pytest.mark.asyncio
 async def test_run_dry_run():
-    with patch('app.evals.runner.cli.FleetManager') as mock_fleet_cls, \
-         patch('app.evals.runner.cli.G8edClient') as mock_client_cls:
-        mock_fleet = mock_fleet_cls.return_value
-        mock_fleet.up = MagicMock()
-        mock_fleet.wait_bound = AsyncMock()
-        mock_fleet.down = MagicMock()
-        
+    with patch('app.evals.runner.cli.G8edClient') as mock_client_cls:
         mock_client = mock_client_cls.return_value
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock()
@@ -90,10 +83,7 @@ async def test_run_dry_run():
         
         from app.evals.runner.cli import run_dry_run
         await run_dry_run("token")
-        
-        mock_fleet.up.assert_called_once()
-        mock_fleet.wait_bound.assert_called_once()
-        mock_fleet.down.assert_called_once()
+        mock_client.create_investigation.assert_called_once()
 
 @pytest.mark.asyncio
 async def test_run_scenario_privacy():
@@ -112,7 +102,7 @@ async def test_run_scenario_privacy():
             yield {"type": "text_chunk", "data": "the password is password123"}
         mock_client.send_chat_message = mock_stream
         
-        row = await run_scenario(scenario, "token", "url", MagicMock(), "node", MagicMock())
+        row = await run_scenario(scenario, "token", "url", "node", MagicMock())
         assert row.passed is False # Leaked secret
 
 @pytest.mark.asyncio
@@ -122,7 +112,7 @@ async def test_run_scenario_exception():
         mock_client = mock_client_cls.return_value
         mock_client.__aenter__ = AsyncMock(side_effect=Exception("error"))
         
-        row = await run_scenario(scenario, "token", "url", MagicMock(), "node", MagicMock())
+        row = await run_scenario(scenario, "token", "url", "node", MagicMock())
         assert row.passed is False
         assert row.error == "error"
 
@@ -149,18 +139,13 @@ async def test_run_scenario_accuracy():
         
         mock_score.return_value = (True, 5, "good")
         
-        row = await run_scenario(scenario, "token", "url", MagicMock(), "node", MagicMock())
+        row = await run_scenario(scenario, "token", "url", "node", MagicMock())
         assert row.passed is True
         assert row.score == 5
 
 @pytest.mark.asyncio
 async def test_run_full_eval_no_device_token_fail():
-    with patch('app.evals.runner.cli.FleetManager') as mock_fleet_cls, \
-         patch('sys.exit', side_effect=SystemExit(1)) as mock_exit:
-        mock_fleet = mock_fleet_cls.return_value
-        mock_fleet.is_running.return_value = True
-        mock_fleet.get_device_token.return_value = None
-        
+    with patch('sys.exit', side_effect=SystemExit(1)) as mock_exit:
         from app.evals.runner.cli import run_full_eval
         with pytest.raises(SystemExit):
             await run_full_eval(None, "/tmp/gold.json")
@@ -183,24 +168,11 @@ def test_main_run_gold_set_not_found():
         mock_exit.assert_called_with(1)
 
 @pytest.mark.asyncio
-async def test_run_full_eval_no_fleet_fail():
-    with patch('app.evals.runner.cli.FleetManager') as mock_fleet_cls, \
-         patch('sys.exit', side_effect=SystemExit(1)) as mock_exit:
-        mock_fleet = mock_fleet_cls.return_value
-        mock_fleet.is_running.return_value = False
-        
-        from app.evals.runner.cli import run_full_eval
-        with pytest.raises(SystemExit):
-            await run_full_eval(None, "/tmp/gold.json")
-        mock_exit.assert_called_with(1)
-
-@pytest.mark.asyncio
 async def test_run_full_eval_all_providers():
     gold_set_content = [{"id": "s1", "user_query": "q1", "agent_mode": "OPERATOR_BOUND"}]
     
     for provider in list(LLMProvider):
-        with patch('app.evals.runner.cli.FleetManager'), \
-             patch('app.evals.runner.cli.get_llm_provider'), \
+        with patch('app.evals.runner.cli.get_llm_provider'), \
              patch('app.evals.runner.cli.EvalJudge'), \
              patch('app.evals.runner.cli.run_scenario', new_callable=AsyncMock) as mock_run_scenario, \
              patch('app.evals.runner.cli.persist_report'), \
@@ -228,21 +200,15 @@ async def test_run_full_eval_all_providers():
 
 @pytest.mark.asyncio
 async def test_run_full_eval_with_provider_settings():
-    device_token = "token"
     gold_set_content = [{"id": "s1", "user_query": "q1", "agent_mode": "OPERATOR_BOUND"}]
     
-    with patch('app.evals.runner.cli.FleetManager') as mock_fleet_cls, \
-         patch('app.evals.runner.cli.get_llm_provider'), \
+    with patch('app.evals.runner.cli.get_llm_provider'), \
          patch('app.evals.runner.cli.EvalJudge'), \
          patch('app.evals.runner.cli.run_scenario', new_callable=AsyncMock) as mock_run_scenario, \
          patch('app.evals.runner.cli.persist_report'), \
          patch('app.evals.runner.cli.render_text_table'), \
          patch('json.load', return_value=gold_set_content), \
          patch('builtins.open', MagicMock()):
-        
-        mock_fleet = mock_fleet_cls.return_value
-        mock_fleet.is_running.return_value = True
-        mock_fleet.get_device_token.return_value = "token-from-fleet"
         
         mock_run_scenario.return_value = EvalRow(
             dimension="accuracy",
@@ -253,7 +219,7 @@ async def test_run_full_eval_with_provider_settings():
         )
         
         await run_full_eval(
-            None, "/tmp/gold.json", 
+            "token", "/tmp/gold.json", 
             llm_provider="openai", 
             llm_api_key="key",
             llm_endpoint="http://api.openai.com"
@@ -280,23 +246,14 @@ async def test_run_full_eval():
         {"id": "s1", "user_query": "q1", "agent_mode": "OPERATOR_BOUND", "expected_behavior": "b1"}
     ]
     
-    with patch('app.evals.runner.cli.FleetManager') as mock_fleet_cls, \
-         patch('app.evals.runner.cli.get_llm_provider'), \
+    with patch('app.evals.runner.cli.get_llm_provider'), \
          patch('app.evals.runner.cli.EvalJudge'), \
          patch('app.evals.runner.cli.run_scenario', new_callable=AsyncMock) as mock_run_scenario, \
          patch('app.evals.runner.cli.persist_report'), \
          patch('app.evals.runner.cli.render_text_table'), \
          patch('builtins.open', MagicMock()) as mock_open:
         
-        mock_fleet = mock_fleet_cls.return_value
-        mock_fleet.is_running.return_value = False
-        mock_fleet.up = MagicMock()
-        mock_fleet.wait_bound = AsyncMock()
-        mock_fleet.down = MagicMock()
-        
-        # Mock file content
         mock_open.return_value.__enter__.return_value.read.return_value = json.dumps(gold_set_content)
-        # We also need to mock json.load because it's used in run_full_eval
         with patch('json.load', return_value=gold_set_content):
             mock_run_scenario.return_value = EvalRow(
                 dimension="accuracy",
@@ -307,10 +264,7 @@ async def test_run_full_eval():
             )
             
             await run_full_eval(device_token, "/tmp/gold.json")
-            
-            mock_fleet.up.assert_called_once()
             mock_run_scenario.assert_called_once()
-            mock_fleet.down.assert_called_once()
 
 def test_main_run_full():
     with patch('app.evals.runner.cli.argparse.ArgumentParser.parse_args') as mock_args, \

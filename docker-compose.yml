@@ -53,6 +53,7 @@ services:
       - ./shared:/app/shared:ro
       - ./components/g8ee/app:/app/components/g8ee/app:ro
       - ./components/g8ee/config:/app/components/g8ee/config:ro
+      - ./components/g8ee/evals:/app/components/g8ee/evals:ro
       - g8ee-data:/data:noexec,nosuid,nodev
       - g8es-ssl:/g8es:ro
       # SSH inventory source for the AI ssh_inventory tool. Read-only.

@@ -69,11 +69,16 @@ export class G8eHttpContext extends G8eBaseModel {
 // Identity/context fields (web_session_id, user_id) are validated here but
 // NOT sent in the outbound body to g8ee — they travel via X-G8E-* headers
 // built by buildG8eContext(). forWire() returns only what g8ee expects in body.
+//
+// web_session_id is optional: only browser-cookie auth has a web session.
+// Operator-session and device-token auth (used by evals/CLI) authenticate via
+// X-G8E-Operator-Session-ID / X-G8E-Device-Token and have no web session.
+// user_id remains required: requireAuth resolves it from every supported path.
 // ---------------------------------------------------------------------------
 
 export class ChatMessageRequest extends G8eBaseModel {
     static fields = {
-        web_session_id:       { type: F.string,  required: true },
+        web_session_id:       { type: F.string,  default: null },
         user_id:              { type: F.string,  required: true },
         message:              { type: F.string,  required: true, minLength: 1 },
         attachments:          { type: F.array,   default: () => [] },

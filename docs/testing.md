@@ -95,7 +95,7 @@ Version: v0.2.0
 
 Last Updated: 2026-05-07
 Version: v0.2.0
-./g8e evals run --gold-set evals/gold_sets/accuracy.json --device-token dlk_xxx
+./g8e evals run --gold-set components/g8ee/evals/gold_sets/accuracy.json --device-token dlk_xxx
 
 # 3. View status and logs
 
@@ -116,6 +116,8 @@ Version: v0.2.0
 - **Deterministic Benchmarks**: Tool-call payloads graded via regex matching in `scorer.py` against `benchmark.json`.
 - **Subjective Evaluations**: `EvalJudge` uses the Primary Model to score the Assistant Model (Sage) against `accuracy.json`.
 - **Privacy Evaluation**: Asserts Sentinel scrubber placeholders (`[PII]`, `[AWS_KEY]`, etc.) are present in egress payloads via `privacy.json`.
+
+The `./g8e evals run` wrapper executes the Python runner in `g8ee-test-runner` so it can use the mounted source tree and Docker socket to manage the eval fleet. Gold sets may be referenced by short name (`accuracy`), host repo path (`components/g8ee/evals/gold_sets/accuracy.json`), or container path (`/app/components/g8ee/evals/gold_sets/accuracy.json`).
 
 ## Component Testing Strategies
 

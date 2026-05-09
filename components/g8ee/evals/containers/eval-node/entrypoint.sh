@@ -11,10 +11,12 @@ OPERATOR_LOG_PREFIX="[$NODE_ID operator]"
 
 echo "[$NODE_ID] Starting eval node (profile: $NODE_PROFILE)"
 
-# DEVICE_TOKEN is required for evals
+# DEVICE_TOKEN is optional at startup; operator will wait if it's missing
 if [ -z "${DEVICE_TOKEN:-}" ]; then
-    echo "[$NODE_ID] ERROR: DEVICE_TOKEN environment variable is required"
-    exit 1
+    echo "[$NODE_ID] WARNING: DEVICE_TOKEN environment variable is not set"
+    echo "[$NODE_ID] Operator will not start until container is restarted with a token"
+    # Just hang so the container stays 'running' but idle
+    exec tail -f /dev/null
 fi
 
 # Write realistic filesystem fixtures for scenarios

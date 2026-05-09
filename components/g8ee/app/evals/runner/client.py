@@ -60,15 +60,25 @@ class G8edClient:
         self,
         investigation_id: str,
         message: str,
+        operator_session_id: str | None = None,
     ) -> AsyncIterator[dict]:
         """Send a chat message and stream SSE events.
 
         Args:
             investigation_id: Investigation ID
             message: User message
+            operator_session_id: Optional session ID for the operator
         """
         url = f"{self.base_url}{PUBLIC_API_PATHS['chat_send']}"
-        headers = {"X-Request-Timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"}
+        headers = {
+            "X-Request-Timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+        }
+        if operator_session_id:
+            if operator_session_id.startswith("dlk_"):
+                headers["X-G8E-Device-Token"] = operator_session_id
+            else:
+                headers["X-G8E-Operator-Session-ID"] = operator_session_id
+
         payload = {
             "investigation_id": investigation_id,
             "message": message,
@@ -95,17 +105,26 @@ class G8edClient:
                     except json.JSONDecodeError:
                         continue
 
-    async def approve_request(self, approval_id: str) -> dict:
+    async def approve_request(self, approval_id: str, operator_session_id: str | None = None) -> dict:
         """Approve a pending approval request.
 
         Args:
             approval_id: Approval request ID
+            operator_session_id: Optional session ID for the operator
 
         Returns:
             Approval response data
         """
         url = f"{self.base_url}{PUBLIC_API_PATHS['operator_approval_respond']}"
-        headers = {"X-Request-Timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"}
+        headers = {
+            "X-Request-Timestamp": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+        }
+        if operator_session_id:
+            if operator_session_id.startswith("dlk_"):
+                headers["X-G8E-Device-Token"] = operator_session_id
+            else:
+                headers["X-G8E-Operator-Session-ID"] = operator_session_id
+
         payload = {
             "approval_id": approval_id,
             "action": "approve"
