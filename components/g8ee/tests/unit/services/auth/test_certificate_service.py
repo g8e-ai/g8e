@@ -57,19 +57,11 @@ def ca_cert(ca_key):
     return builder.sign(ca_key, hashes.SHA256())
 
 @pytest.fixture
-def setup_ca_files(temp_ssl_dir, ca_cert, ca_key):
+def setup_ca_files(temp_ssl_dir, ca_cert):
     cert_path = os.path.join(temp_ssl_dir, "ca.crt")
-    key_path = os.path.join(temp_ssl_dir, "ca.key")
     
     with open(cert_path, "wb") as f:
         f.write(ca_cert.public_bytes(serialization.Encoding.PEM))
-    
-    with open(key_path, "wb") as f:
-        f.write(ca_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption()
-        ))
     
     return temp_ssl_dir
 
@@ -78,6 +70,20 @@ def mock_data_service():
     service = MagicMock(spec=CertificateDataService)
     service.get_all_revocations = AsyncMock(return_value=[])
     service.revoke_certificate = AsyncMock(return_value=True)
+    
+    # Mock the internal HTTP client structure used in generate_operator_certificate
+    mock_db_client = AsyncMock()
+    mock_db_client._request_json.return_value = {
+        "success": True,
+        "certificate_pem": "-----BEGIN CERTIFICATE-----\nMOCK OPERATOR CERT\n-----END CERTIFICATE-----",
+        "serial": "MOCK-SERIAL-ABC123DEF"
+    }
+    
+    # Properly nest mocks
+    service.cache = MagicMock()
+    service.cache.db = MagicMock()
+    service.cache.db.client = mock_db_client
+    
     return service
 
 @pytest.mark.asyncio
@@ -87,26 +93,20 @@ async def test_initialize_success(setup_ca_files, mock_data_service):
     
     assert service.initialized is True
     assert service.ca_cert is not None
-    assert service.ca_key is not None
+    # service.ca_key should be None now as it's not loaded
+    assert service.ca_key is None
     mock_data_service.get_all_revocations.assert_called_once()
 
 @pytest.mark.asyncio
-async def test_initialize_alternate_path(temp_ssl_dir, ca_cert, ca_key, mock_data_service):
+async def test_initialize_alternate_path(temp_ssl_dir, ca_cert, mock_data_service):
     # Test path: ssl_dir/ca/ca.crt
     ca_subdir = os.path.join(temp_ssl_dir, "ca")
     os.makedirs(ca_subdir)
     
     cert_path = os.path.join(ca_subdir, "ca.crt")
-    key_path = os.path.join(ca_subdir, "ca.key")
     
     with open(cert_path, "wb") as f:
         f.write(ca_cert.public_bytes(serialization.Encoding.PEM))
-    with open(key_path, "wb") as f:
-        f.write(ca_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption()
-        ))
         
     service = CertificateService(ssl_dir=temp_ssl_dir, data_service=mock_data_service)
     await service.initialize()
@@ -136,28 +136,6 @@ async def test_initialize_fails_no_files(temp_ssl_dir, mock_data_service):
     assert service.initialized is False
 
 @pytest.mark.asyncio
-async def test_initialize_fails_invalid_key_type(temp_ssl_dir, ca_cert, mock_data_service):
-    # Generate an RSA key instead of EC
-    from cryptography.hazmat.primitives.asymmetric import rsa
-    rsa_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    
-    cert_path = os.path.join(temp_ssl_dir, "ca.crt")
-    key_path = os.path.join(temp_ssl_dir, "ca.key")
-    
-    with open(cert_path, "wb") as f:
-        f.write(ca_cert.public_bytes(serialization.Encoding.PEM))
-    with open(key_path, "wb") as f:
-        f.write(rsa_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption()
-        ))
-        
-    service = CertificateService(ssl_dir=temp_ssl_dir, data_service=mock_data_service)
-    with pytest.raises(RuntimeError, match="CA key is not an EC key"):
-        await service.initialize()
-
-@pytest.mark.asyncio
 async def test_generate_operator_certificate(setup_ca_files, mock_data_service):
     service = CertificateService(ssl_dir=setup_ca_files, data_service=mock_data_service)
     await service.initialize()
@@ -171,11 +149,20 @@ async def test_generate_operator_certificate(setup_ca_files, mock_data_service):
     assert "cert" in res
     assert "key" in res
     assert "serial" in res
+    assert res["cert"] == "-----BEGIN CERTIFICATE-----\nMOCK OPERATOR CERT\n-----END CERTIFICATE-----"
+    assert res["serial"] == "MOCK-SERIAL-ABC123DEF"
     
-    # Verify the generated cert
-    cert = x509.load_pem_x509_certificate(res["cert"].encode())
-    assert cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value == "test-op"
-    assert cert.subject.get_attributes_for_oid(x509.NameOID.ORGANIZATIONAL_UNIT_NAME)[0].value == "test-user"
+    # Verify the generated key is valid PEM (local generation)
+    assert "-----BEGIN PRIVATE KEY-----" in res["key"]
+    
+    # Verify the signing request was made
+    mock_data_service.cache.db.client._request_json.assert_called_once()
+    call_args = mock_data_service.cache.db.client._request_json.call_args
+    assert call_args[0][0] == "POST"
+    assert call_args[0][1] == "/ssl/sign-certificate"
+    payload = call_args[1]["json"]
+    assert payload["common_name"] == "test-op"
+    assert payload["organizational_unit"] == "test-user"
 
 @pytest.mark.asyncio
 async def test_generate_without_initialize_triggers_init(setup_ca_files, mock_data_service):
@@ -191,10 +178,11 @@ async def test_generate_without_initialize_triggers_init(setup_ca_files, mock_da
     assert "cert" in res
 
 @pytest.mark.asyncio
-async def test_generate_fails_if_no_ca(temp_ssl_dir, mock_data_service):
+async def test_generate_even_if_no_ca_cert(temp_ssl_dir, mock_data_service):
+    # If ca.crt is missing, it logs an error but doesn't prevent signing via API
     service = CertificateService(ssl_dir=temp_ssl_dir, data_service=mock_data_service)
-    with pytest.raises(RuntimeError, match="CertificateService not initialized with CA"):
-        await service.generate_operator_certificate("op", "user", "org")
+    res = await service.generate_operator_certificate("op", "user", "org")
+    assert "cert" in res
 
 @pytest.mark.asyncio
 async def test_revoke_certificate(setup_ca_files, mock_data_service):
