@@ -160,19 +160,19 @@ flowchart LR
         g8ed[g8ed<br>Governance Gateway<br>Node.js]
         g8ee[g8ee<br>AI Engine & Scrubber<br>Python]
 
-        subgraph Data_Layer [g8es Persistence Layer]
+        subgraph Operator_Listen [Operator Listen Mode]
             direction LR
-            g8es[(g8es<br>Listen Mode)]
+            Listen[(g8eo --listen)]
             DS[(Document Store)]
             KS[(KV Store & TTL)]
             PS((PubSub))
 
-            g8es --- DS & KS & PS
+            Listen --- DS & KS & PS
         end
 
         g8ed -- "Internal" --> g8ee
-        g8ed -- "Internal" --> g8es
-        g8ee -- "Internal" --> g8es
+        g8ed -- "Internal" --> Listen
+        g8ee -- "Internal" --> Listen
     end
 
     LLM((External LLM<br>Providers))
@@ -184,10 +184,9 @@ flowchart LR
 
 | Component | Stack | Role |
 |---|---|---|
-| **g8eo** | Go (~4MB static) | The Operator. Runs on every managed host. Executes commands. Owns the audit ledger. |
+| **g8eo** | Go (~4MB static) | The Operator. Runs on managed hosts, executes commands, owns the audit ledger, and provides listen-mode persistence/pub/sub. |
 | **g8ee** | Python / FastAPI | The Engine. Multi-provider LLM abstraction. Tribunal, Auditor, Warden. |
-| **g8ed** | Node.js | Governance Gateway: FIDO2 auth, mTLS broker, ledger synchronization. |
-| **g8es** | Go | Document store, KV, pub/sub, blob store (SQLite-backed). |
+| **g8ed** | Node.js | The Dashboard. Governance Gateway: FIDO2 auth, mTLS broker, ledger synchronization. |
 
 User to `g8ed` over TLS 1.3 with encrypted cookies. Operator to Gateway via outbound-only mTLS WebSocket. No inbound ports on managed hosts. Every connection is mutually authenticated; state-changing workflows pass through the L1/L2/L3 governance hierarchy, with hardware-bound passkey authorization as the default Layer 3 path.
 

@@ -1,18 +1,18 @@
 ---
-title: g8es
+title: Operator Listen Mode
 parent: Components
 ---
 
-# g8es — Platform Persistence and Messaging
+# Operator Listen Mode (Host-Native)
 
-Last Updated: 2026-05-07
-Version: v0.2.0
+Last Updated: 2026-05-09
+Version: v0.3.0
 
 ## Overview
 
-g8es is the `g8e.operator` binary running in `--listen` mode. It serves as the platform's single source of truth for persistence and messaging. The same Go binary that executes commands on operator machines also becomes the central data bus when started with `--listen`.
+Operator Listen Mode is the `g8e.operator` binary running in `--listen` mode as a host process. It serves as the platform's single source of truth for persistence and messaging. The same Go binary that executes commands on operator machines also becomes the central data bus when started with `--listen`.
 
-**Why a single binary?** This design eliminates duplicate code paths, reduces operational complexity, and ensures consistency between operator execution and platform infrastructure. The listen mode is a distinct operational mode of the same codebase, not a separate component.
+**Why host-native?** Docker elimination reduces operational overhead, removes network bridge complexity, and provides direct access to host resources. The listen mode is a distinct operational mode of the same binary, not a separate component.
 
 **Zero C dependencies.** Uses only Go's standard library and pure-Go implementations (e.g., `modernc.org/sqlite`). This ensures the binary is truly static and cross-compiles easily to any target architecture without requiring a C toolchain or shared libraries.
 
@@ -58,9 +58,9 @@ g8es is the `g8e.operator` binary running in `--listen` mode. It serves as the p
     └─────────┘    └─────────┘        └─────────┘
 ```
 
-**Data Flow:** g8ed and g8ee use HTTP for document store, KV operations, and blob storage. WebSocket is used exclusively for pub/sub messaging. Operators (in normal execution mode) connect via WebSocket only for pub/sub — they do not access the document or KV stores directly. For operator command/result paths, g8es is a byte transport: `data` carries serialized g8e protocol `UniversalEnvelope` bytes, and g8ee/g8eo own payload typing, governance metadata, and L1/L2/L3 enforcement.
+**Data Flow:** Dashboard and Engine use HTTP for document store, KV operations, and blob storage. WebSocket is used for pub/sub messaging. All communication occurs on `localhost` (ports 9000/9001).
 
-**Why SQLite with WAL?** Write-Ahead Logging provides concurrent read/write access without locking, allowing g8ed and g8ee to persist data simultaneously while maintaining ACID guarantees. The single database file at `/data/g8e.db` contains all platform state.
+**Persistence:** The single database file at `.g8e/data/g8e.db` contains all platform state.
 
 ## Transport Summary
 
@@ -73,14 +73,13 @@ g8es is the `g8e.operator` binary running in `--listen` mode. It serves as the p
 | **Pub/Sub** | WebSocket | Server-push required; long-lived connection; no polling. Supports HTTP publish. |
 | **Operator Binaries**| HTTP | Served from the blob store under namespace `operator-binary` (`GET /blob/operator-binary/linux-{arch}`) |
 
-## Startup and Lifecycle
+## Runtime Lifecycle
 
-### Container Initialization
+The operator listen process is managed by `./g8e` (via `scripts/core/build.sh`):
 
-The g8es container performs the following sequence on startup:
-
-1. **Start the listen server** on configured HTTP and WSS ports. The `g8e.operator` binary reads `internal_auth_token` and `session_encryption_key` directly from `--ssl-dir /ssl`; no environment injection is performed.
-2. **Upload operator binaries** to the blob store in the background after the health check passes
+1.  **Start the listen server** as a background host process.
+2.  **Binary Distribution:** Operator binaries for all architectures are built and synced to the internal blob store on startup.
+3.  **Bootstrap:** Secrets (tokens, keys, CA certs) are read from `.g8e/ssl`.
 
 **Why background upload?** This keeps container startup fast — the health check returns before the uploads complete, allowing other services (g8ed, g8ee) to begin connecting immediately. The upload runs as a fire-and-forget background job in the container entrypoint.
 
@@ -138,10 +137,10 @@ The `internal_auth_token` is written to the SSL volume and also stored in the `s
 ## TLS / Certificate Management
 
 The server certificate includes the following SANs:
-- **DNS:** `g8e.local`, `localhost`, `g8es`, `g8ee`, `g8ed`
+- **DNS:** `g8e.local`, `localhost`
 - **IP:** `127.0.0.1` plus any host IPs detected at runtime
 
-The `ca.crt` mirror at the ssl root is what g8ed, g8ee, and field Operators consume.
+The `ca.crt` mirror at the bootstrap root is what g8ed, g8ee, and field Operators consume.
 
 **Why auto-generated certificates?** This eliminates the need for external certificate management during initial deployment. The platform CA is self-signed and trusted only within the platform infrastructure. The 90-day server certificate validity balances security with operational simplicity — it renews automatically on startup if expiring within 30 days.
 
@@ -279,7 +278,7 @@ POST /pubsub/publish  {"channel": "cmd:op1:sess1", "data": {...}}
 
 WebSocket (subscribe + publish):
 ```
-wss://g8es:9001/ws/pubsub?token={token}
+wss://localhost:9001/ws/pubsub?token={token}
 
 → {"action": "subscribe",   "channel": "results:op1:sess1"}
 → {"action": "psubscribe",  "channel": "heartbeat:*"}
@@ -324,7 +323,7 @@ g8ee uses clients in `components/g8ee/app/clients/`:
 
 The canonical schema is defined in `components/g8eo/services/listen/schema.sql` and embedded into the binary via `//go:embed`.
 
-Single database at `/data/g8e.db` with the following tables:
+Single database at `.g8e/data/g8e.db` with the following tables:
 - `documents` - Collection-based JSON storage
 - `kv_store` - Key/value storage with TTL support
 - `sse_events` - Per-session event ring buffer (legacy)

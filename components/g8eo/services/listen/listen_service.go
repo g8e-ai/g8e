@@ -109,7 +109,7 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 		certs:  certs,
 	}
 
-	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, ls.IsReady)
+	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, certs, ls.IsReady)
 	ls.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.HTTPPort),
 		Handler:           ls.handler,
@@ -141,7 +141,7 @@ func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db 
 		auth:   auth,
 	}
 
-	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, ls.IsReady)
+	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, nil, ls.IsReady)
 	ls.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.HTTPPort),
 		Handler:           ls.handler,

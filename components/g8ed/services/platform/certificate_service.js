@@ -14,7 +14,7 @@
 /**
  * Certificate Service - Per-Operator mTLS Certificate Management
  *
- * CA cert and key are read from /g8es/ssl/ca/ (mounted read-only from g8es).
+ * CA cert and key are read from $G8E_SSL_DIR/ca/ (default: /g8es/ssl/ca/).
  * Per-operator client certificates are signed by the CA using Node.js crypto.
  * CRL is maintained in-memory; revoked serials are tracked in Operator documents.
  *
@@ -23,6 +23,10 @@
  *   +-- Client Certificate (ECDSA P-384, per-operator, 365-day validity)
  *       +-- Used by: Individual g8eo Operator instances
  *       +-- CN contains operator_id for identification
+ *
+ * TODO: Move CA private key operations behind a single host-side authority.
+ * App services should call a signing endpoint or consume pre-issued certificates
+ * rather than reading ca/ca.key directly. See g8es-host-transition-finalization.md.
  */
 
 import { logger } from '../../utils/logger.js';
@@ -58,37 +62,28 @@ class CertificateService {
             return;
         }
 
-        // Try standard locations for CA cert and key
-        const paths = [
-            { cert: join(this.sslDir, 'ca.crt'), key: join(this.sslDir, 'ca.key') },
-            { cert: join(this.sslDir, 'ca', 'ca.crt'), key: join(this.sslDir, 'ca', 'ca.key') }
-        ];
+        // Authority: g8es (Operator --listen mode)
+        // We no longer read ca.key directly. We only load the CA certificate for local reference (e.g. CSR building context)
+        // while the private key operations are behind the /ssl/sign-certificate API.
+        const caCertPath = join(this.sslDir, 'ca.crt');
+        const altCaCertPath = join(this.sslDir, 'ca', 'ca.crt');
 
-        let foundCert = null;
-        let foundKey = null;
-
-        for (const p of paths) {
-            if (existsSync(p.cert) && existsSync(p.key)) {
-                foundCert = p.cert;
-                foundKey = p.key;
-                break;
-            }
-        }
-
-        if (foundCert && foundKey) {
-            this.caCert = readFileSync(foundCert, 'utf8');
-            this.caKey = readFileSync(foundKey, 'utf8');
-            logger.info('[CERT-SERVICE] CA certificate loaded', { path: foundCert });
+        if (existsSync(caCertPath)) {
+            this.caCert = readFileSync(caCertPath, 'utf8');
+            logger.info('[CERT-SERVICE] CA certificate loaded', { path: caCertPath });
+        } else if (existsSync(altCaCertPath)) {
+            this.caCert = readFileSync(altCaCertPath, 'utf8');
+            logger.info('[CERT-SERVICE] CA certificate loaded', { path: altCaCertPath });
         } else {
-            logger.error('[CERT-SERVICE] CA certificate or key not found', {
+            logger.error('[CERT-SERVICE] CA certificate not found', {
                 sslDir: this.sslDir,
-                checked_paths: paths.map(p => p.cert)
+                checked_paths: [caCertPath, altCaCertPath]
             });
             throw new Error('CA certificate not found. Run scripts/security/manage-ssl.sh generate to generate certificates.');
         }
 
         this.initialized = true;
-        logger.info('[CERT-SERVICE] Certificate service initialized', {
+        logger.info('[CERT-SERVICE] Certificate service initialized (Native Signing API enabled)', {
             ca_loaded: !!this.caCert
         });
     }
@@ -98,7 +93,7 @@ class CertificateService {
             await this.initialize();
         }
 
-        logger.info('[CERT-SERVICE] Generating per-operator certificate', {
+        logger.info('[CERT-SERVICE] Requesting per-operator certificate via g8es signing API', {
             operator_id: operatorId,
             user_id: userId
         });
@@ -110,7 +105,25 @@ class CertificateService {
                 privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
             });
 
-            const serial = crypto.randomBytes(16).toString('hex').toUpperCase();
+            // Authority: g8eo (/ssl/sign-certificate)
+            const g8esClient = this._internalHttpClient?._bootstrapService?._g8esClient;
+            if (!g8esClient) {
+                throw new Error('CertificateService: g8esClient is not available via internalHttpClient');
+            }
+
+            const response = await g8esClient.post('/ssl/sign-certificate', JSON.stringify({
+                public_key_pem: publicKey,
+                common_name: operatorId,
+                organizational_unit: userId,
+                validity_days: CLIENT_CERT_VALIDITY_DAYS
+            }));
+
+            if (!response.success) {
+                throw new Error(response.error || 'Failed to sign certificate via g8es');
+            }
+
+            const cert = response.certificate_pem;
+            const serial = response.serial;
 
             const notBefore = now();
             const notAfter = addSeconds(notBefore, CLIENT_CERT_VALIDITY_DAYS * 24 * 60 * 60);
@@ -122,9 +135,7 @@ class CertificateService {
                 C: CERT_SUBJECT_COUNTRY
             };
 
-            const cert = await this._signCertificate(publicKey, subject, serial, notBefore, notAfter);
-
-            logger.info('[CERT-SERVICE] Operator certificate generated', {
+            logger.info('[CERT-SERVICE] Operator certificate signed by g8es', {
                 operator_id: operatorId,
                 serial: serial.substring(0, 16) + '...',
                 not_before: notBefore,
@@ -140,7 +151,7 @@ class CertificateService {
                 subject,
             }).forWire();
         } catch (error) {
-            logger.error('[CERT-SERVICE] Failed to generate Operator certificate', {
+            logger.error('[CERT-SERVICE] Failed to sign Operator certificate via g8es', {
                 operator_id: operatorId,
                 error: error.message
             });

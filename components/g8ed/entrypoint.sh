@@ -7,7 +7,7 @@ set -e
 echo "[G8ED-ENTRYPOINT] Waiting for g8es health check and platform_settings..."
 MAX_RETRIES=30
 RETRY_COUNT=0
-SSL_DIR="${G8E_SSL_DIR:-/g8es}"
+SSL_DIR="${G8E_SSL_DIR:-${PROJECT_ROOT}/.g8e/ssl}"
 
 # Load security tokens into environment if files exist
 if [ -f "${SSL_DIR}/internal_auth_token" ]; then

@@ -1,9 +1,8 @@
 #!/bin/bash
 # g8e Test Runner
 #
-# Runs inside a dedicated test-runner container (g8ee-test-runner, g8ed-test-runner,
-# g8eo-test-runner). The ./g8e CLI handles container selection and docker exec.
-# This script is never run on the host.
+# Runs tests for g8ee, g8ed, and g8eo components directly on the host.
+# Supports virtualenvs for Python, npm for Node, and native Go toolchain.
 
 set -e
 
@@ -126,10 +125,11 @@ fi
 # =============================================================================
 
 _install_ca_cert() {
-    local ca_cert="/g8es/ca.crt"
-    [[ ! -f "$ca_cert" ]] && ca_cert="/g8es/ca/ca.crt"
+    local ssl_dir="${G8E_SSL_DIR:-$PROJECT_ROOT/.g8e/ssl}"
+    local ca_cert="$ssl_dir/ca.crt"
+    [[ ! -f "$ca_cert" ]] && ca_cert="$ssl_dir/ca/ca.crt"
     if [[ ! -f "$ca_cert" ]]; then
-        log_warn "Platform CA cert not found"
+        log_warn "Platform CA cert not found at $ca_cert"
         return
     fi
     export G8E_SSL_CERT_FILE="$ca_cert"
@@ -138,31 +138,34 @@ _install_ca_cert() {
 }
 
 _load_platform_secrets() {
-    local auth_token_file="/g8es/internal_auth_token"
-    local session_key_file="/g8es/session_encryption_key"
+    local ssl_dir="${G8E_SSL_DIR:-$PROJECT_ROOT/.g8e/ssl}"
+    local auth_token_file="$ssl_dir/internal_auth_token"
+    local session_key_file="$ssl_dir/session_encryption_key"
     if [[ -f "$auth_token_file" ]]; then
-        export G8E_INTERNAL_AUTH_TOKEN=$(cat "$auth_token_file")
-        log_ok "G8E_INTERNAL_AUTH_TOKEN loaded from /g8es"
+        export G8E_INTERNAL_AUTH_TOKEN=$(cat "$auth_token_file" | tr -d ' \n\r')
+        log_ok "G8E_INTERNAL_AUTH_TOKEN loaded from $ssl_dir"
     fi
     if [[ -f "$session_key_file" ]]; then
-        export G8E_SESSION_ENCRYPTION_KEY=$(cat "$session_key_file")
-        log_ok "G8E_SESSION_ENCRYPTION_KEY loaded from /g8es"
+        export G8E_SESSION_ENCRYPTION_KEY=$(cat "$session_key_file" | tr -d ' \n\r')
+        log_ok "G8E_SESSION_ENCRYPTION_KEY loaded from $ssl_dir"
     fi
 }
 
 _verify_g8es() {
-    local ca_cert="/g8es/ca.crt"
-    [[ ! -f "$ca_cert" ]] && ca_cert="/g8es/ca/ca.crt"
+    local ssl_dir="${G8E_SSL_DIR:-$PROJECT_ROOT/.g8e/ssl}"
+    local ca_cert="$ssl_dir/ca.crt"
+    [[ ! -f "$ca_cert" ]] && ca_cert="$ssl_dir/ca/ca.crt"
     if [[ ! -f "$ca_cert" ]]; then
-        log_err "Platform CA cert not found at /g8es/ca.crt or /g8es/ca/ca.crt"
+        log_err "Platform CA cert not found at $ca_cert"
         exit 1
     fi
+    local g8es_url="${G8E_INTERNAL_HTTP_URL:-https://localhost:9000}"
     local curl_args=("--cacert" "$ca_cert")
-    if ! curl -sf "${curl_args[@]}" https://g8es:9000/health 2>/dev/null | grep -q '"status":"ok"'; then
-        log_err "g8es not accessible at https://g8es:9000/health"
+    if ! curl -sf "${curl_args[@]}" "$g8es_url/health" 2>/dev/null | grep -q '"status":"ok"'; then
+        log_err "Operator listen mode (g8es) not accessible at $g8es_url/health"
         exit 1
     fi
-    log_ok "g8es connected"
+    log_ok "Operator listen mode connected"
 }
 
 _show_llm_config() {
@@ -205,16 +208,24 @@ _show_web_search_config() {
 # =============================================================================
 
 run_g8ee() {
-    log_header "Running g8ee tests (g8ee-test-runner)"
+    log_header "Running g8ee tests (host)"
+    local venv_dir="$PROJECT_ROOT/components/g8ee/.venv"
+    if [[ ! -d "$venv_dir" ]]; then
+        log_err "g8ee virtualenv not found at $venv_dir. Run ./g8e platform setup first."
+        exit 1
+    fi
+    
+    export PYTHONPATH="$PROJECT_ROOT/components/g8ee:$PROJECT_ROOT/shared"
+    export G8E_SHARED_DIR="$PROJECT_ROOT/shared"
+    
     if [[ "$PYRIGHT" == "true" ]]; then
-        # Strip /app/components/ prefix to show relative paths from components
-        (set -o pipefail && cd "$PROJECT_ROOT/components/g8ee" && python -m pyright --project pyrightconfig.services.json | sed "s|$PROJECT_ROOT/components/||g")
+        (set -o pipefail && cd "$PROJECT_ROOT/components/g8ee" && "$venv_dir/bin/python" -m pyright --project pyrightconfig.services.json | sed "s|$PROJECT_ROOT/components/||g")
     fi
     cd "$PROJECT_ROOT/components/g8ee"
     if [[ "$RUFF" == "true" ]]; then
         local ruff_args=(check .)
         [[ "$RUFF_FIX" == "true" ]] && ruff_args+=(--fix)
-        python -m ruff "${ruff_args[@]}"
+        "$venv_dir/bin/python" -m ruff "${ruff_args[@]}"
     fi
     local cov_args=(-rs)
     [[ "$COVERAGE" == "true" ]] && cov_args+=("--cov" "--cov-report=term-missing")
@@ -228,25 +239,36 @@ run_g8ee() {
         cov_args=("${filtered[@]}" "-n" "$PARALLEL")
         log_ok "pytest parallelism: -n $PARALLEL"
     fi
-    pytest "${cov_args[@]}" "${EXTRA_ARGS[@]}"
+    "$venv_dir/bin/pytest" "${cov_args[@]}" "${EXTRA_ARGS[@]}"
 }
 
 run_e2e() {
-    log_header "Running E2E operator lifecycle tests (g8ee-test-runner)"
+    log_header "Running E2E operator lifecycle tests (host)"
+    local venv_dir="$PROJECT_ROOT/components/g8ee/.venv"
+    if [[ ! -d "$venv_dir" ]]; then
+        log_err "g8ee virtualenv not found at $venv_dir. Run ./g8e platform setup first."
+        exit 1
+    fi
+    export PYTHONPATH="$PROJECT_ROOT/components/g8ee:$PROJECT_ROOT/shared"
+    export G8E_SHARED_DIR="$PROJECT_ROOT/shared"
     cd "$PROJECT_ROOT/components/g8ee"
-    pytest -rs -m e2e tests/e2e/ "${EXTRA_ARGS[@]}"
+    "$venv_dir/bin/pytest" -rs -m e2e tests/e2e/ "${EXTRA_ARGS[@]}"
 }
 
 run_g8ed() {
-    log_header "Running g8ed tests (g8ed-test-runner)"
+    log_header "Running g8ed tests (host)"
+    if [[ ! -d "$PROJECT_ROOT/components/g8ed/node_modules" ]]; then
+        log_err "g8ed node_modules not found. Run ./g8e platform setup first."
+        exit 1
+    fi
     cd "$PROJECT_ROOT/components/g8ed"
     local cov_flag=""
     [[ "$COVERAGE" == "true" ]] && cov_flag="--coverage"
-    NODE_PATH="./node_modules" npx vitest run --config ./vitest.config.js $cov_flag "${EXTRA_ARGS[@]}"
+    npx vitest run --config ./vitest.config.js $cov_flag "${EXTRA_ARGS[@]}"
 }
 
 run_g8eo() {
-    log_header "Running g8eo tests (g8eo-test-runner)"
+    log_header "Running g8eo tests (host)"
     cd "$PROJECT_ROOT/components/g8eo"
     local test_target="./..."
     local pass_through_args=()
@@ -263,8 +285,13 @@ run_g8eo() {
         fi
     done
 
+    local test_cmd="go test"
+    if command -v gotestsum >/dev/null 2>&1; then
+        test_cmd="gotestsum --format dots-v2 --"
+    fi
+
     if [[ "$COVERAGE" == "true" ]]; then
-        gotestsum --format dots-v2 -- -race -parallel 4 -timeout 180s -coverprofile=coverage.out "$test_target" "${pass_through_args[@]}"
+        $test_cmd -race -parallel 4 -timeout 180s -coverprofile=coverage.out "$test_target" "${pass_through_args[@]}"
         local rc=$?
         if [[ -f coverage.out ]]; then
             echo ""
@@ -273,7 +300,7 @@ run_g8eo() {
         fi
         return $rc
     else
-        gotestsum --format dots-v2 -- -race -parallel 4 -timeout 180s "$test_target" "${pass_through_args[@]}"
+        $test_cmd -race -parallel 4 -timeout 180s "$test_target" "${pass_through_args[@]}"
     fi
 }
 

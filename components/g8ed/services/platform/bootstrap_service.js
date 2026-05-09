@@ -28,14 +28,14 @@ export const BOOTSTRAP_DIGEST_MANIFEST_FILE = 'bootstrap_digest.json';
 /**
  * Bootstrap Service for g8ed
  * 
- * This service is ONLY responsible for loading values from the g8es data volume.
+ * This service is ONLY responsible for loading values from the host bootstrap directory (.g8e/ssl).
  * It does not perform any settings management or configuration logic.
  */
 class BootstrapService {
     /**
-     * @param {string} volumePath - Path to g8es volume (default: /g8es)
+     * @param {string} volumePath - Path to bootstrap secrets directory (default: from G8E_SSL_DIR env var or .g8e/ssl)
      */
-    constructor(volumePath = '/g8es') {
+    constructor(volumePath = process.env.G8E_SSL_DIR || path.join(process.cwd(), '..', '..', '.g8e', 'ssl')) {
         this.volumePath = volumePath;
         this._cachedToken = null;
         this._cachedKey = null;
@@ -43,7 +43,7 @@ class BootstrapService {
     }
 
     /**
-     * Load internal auth token from g8es volume.
+     * Load internal auth token from bootstrap directory.
      * @returns {string|null}
      */
     loadInternalAuthToken() {
@@ -55,10 +55,10 @@ class BootstrapService {
         try {
             if (fs.existsSync(tokenPath)) {
                 this._cachedToken = fs.readFileSync(tokenPath, 'utf8').trim();
-                logger.info('[BOOTSTRAP-SERVICE] Loaded internal auth token from g8es volume');
+                logger.info('[BOOTSTRAP-SERVICE] Loaded internal auth token from bootstrap directory');
                 return this._cachedToken;
             } else {
-                logger.info('[BOOTSTRAP-SERVICE] Internal auth token not found in g8es volume');
+                logger.info('[BOOTSTRAP-SERVICE] Internal auth token not found in bootstrap directory');
                 return null;
             }
         } catch (err) {
@@ -70,7 +70,7 @@ class BootstrapService {
     }
 
     /**
-     * Load session encryption key from g8es volume.
+     * Load session encryption key from bootstrap directory.
      * @returns {string|null}
      */
     loadSessionEncryptionKey() {
@@ -87,14 +87,14 @@ class BootstrapService {
         try {
             if (fs.existsSync(keyPath)) {
                 this._cachedKey = fs.readFileSync(keyPath, 'utf8').trim();
-                logger.info('[BOOTSTRAP-SERVICE] Loaded session encryption key from g8es volume', { 
+                logger.info('[BOOTSTRAP-SERVICE] Loaded session encryption key from bootstrap directory', { 
                     path: keyPath,
                     keyLength: this._cachedKey.length,
                     volumePath: this.volumePath
                 });
                 return this._cachedKey;
             } else {
-                logger.info('[BOOTSTRAP-SERVICE] Session encryption key not found in g8es volume', { 
+                logger.info('[BOOTSTRAP-SERVICE] Session encryption key not found in bootstrap directory', { 
                     path: keyPath,
                     volumePath: this.volumePath,
                     volumeExists: fs.existsSync(this.volumePath),
@@ -114,7 +114,7 @@ class BootstrapService {
     }
 
     /**
-     * Load CA certificate path from g8es volume.
+     * Load CA certificate path from bootstrap directory.
      * @returns {string|null}
      */
     loadCaCertPath() {
@@ -132,7 +132,7 @@ class BootstrapService {
             try {
                 if (fs.existsSync(caPath)) {
                     this._cachedCaPath = caPath;
-                    logger.info('[BOOTSTRAP-SERVICE] Loaded CA cert path from g8es volume', { 
+                    logger.info('[BOOTSTRAP-SERVICE] Loaded CA cert path from bootstrap directory', { 
                         path: this._cachedCaPath 
                     });
                     return this._cachedCaPath;
@@ -145,7 +145,7 @@ class BootstrapService {
             }
         }
 
-        logger.info('[BOOTSTRAP-SERVICE] CA certificate not found in g8es volume');
+        logger.info('[BOOTSTRAP-SERVICE] CA certificate not found in bootstrap directory');
         return null;
     }
 

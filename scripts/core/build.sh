@@ -2,17 +2,18 @@
 # Platform lifecycle management for the local g8e environment.
 #
 # Service categories:
-#   Managed:  g8es, g8ee, g8ed  (in scope for up/rebuild/clean)
+#   Managed:  g8ee, g8ed  (in scope for up/rebuild/clean)
+#   Host:     Operator listen mode (runs as local operator binary)
 #   Test-runners: g8ee-test-runner, g8ed-test-runner, g8eo-test-runner (built separately)
 #   Data volumes:
-#     g8es-data     (g8es -- SQLite DB, users, settings; wiped by reset)
-#     g8es-ssl      (g8es -- TLS certs; NEVER wiped by reset or wipe)
+#     .g8e/data     (Operator listen mode -- SQLite DB, users, settings; wiped by reset)
+#     .g8e/ssl      (Operator listen mode -- TLS certs; NEVER wiped by reset or wipe)
 #     g8ee-data    (g8ee   -- app data; wiped by reset)
 #     g8ed-data (g8ed  -- app data; wiped by reset)
 #   Excluded from reset: core data services only
 #
 # Prerequisites:
-#   - Docker and docker compose available
+#   - Go, Node, Python available on host
 #
 # Invoked via: ./g8e platform <subcommand>
 
@@ -20,6 +21,16 @@ set -e
 
 _footer() {
     local rc=$?
+    # Ensure any stale PID files are cleaned up if the process is actually gone
+    for pid_file in "$OPERATOR_LISTEN_PID_FILE" "$G8EE_PID_FILE" "$G8ED_PID_FILE"; do
+        if [ -f "$pid_file" ]; then
+            local pid
+            pid=$(cat "$pid_file")
+            if ! ps -p "$pid" > /dev/null 2>&1; then
+                rm -f "$pid_file"
+            fi
+        fi
+    done
     [[ $rc -eq 0 ]] || return
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -38,22 +49,35 @@ echo ""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-DEV_MODE=false
-COMPOSE="docker compose -f $PROJECT_ROOT/docker-compose.yml"
+G8E_RUNTIME_DIR="${G8E_RUNTIME_DIR:-$PROJECT_ROOT/.g8e}"
+OPERATOR_LISTEN_DATA_DIR="${OPERATOR_LISTEN_DATA_DIR:-$G8E_RUNTIME_DIR/data}"
+OPERATOR_LISTEN_SSL_DIR="${OPERATOR_LISTEN_SSL_DIR:-$G8E_RUNTIME_DIR/ssl}"
+OPERATOR_LISTEN_PID_DIR="${OPERATOR_LISTEN_PID_DIR:-$G8E_RUNTIME_DIR/pids}"
+OPERATOR_LISTEN_LOG_DIR="${OPERATOR_LISTEN_LOG_DIR:-$G8E_RUNTIME_DIR/logs}"
+OPERATOR_LISTEN_PID_FILE="$OPERATOR_LISTEN_PID_DIR/operator-listen.pid"
+OPERATOR_LISTEN_LOG_FILE="$OPERATOR_LISTEN_LOG_DIR/operator-listen.log"
+G8ED_PID_FILE="$OPERATOR_LISTEN_PID_DIR/g8ed.pid"
+G8ED_LOG_FILE="$OPERATOR_LISTEN_LOG_DIR/g8ed.log"
+G8EE_PID_FILE="$OPERATOR_LISTEN_PID_DIR/g8ee.pid"
+G8EE_LOG_FILE="$OPERATOR_LISTEN_LOG_DIR/g8ee.log"
+OPERATOR_LISTEN_HTTP_PORT="${OPERATOR_LISTEN_HTTP_PORT:-9000}"
+OPERATOR_LISTEN_WSS_PORT="${OPERATOR_LISTEN_WSS_PORT:-9001}"
+OPERATOR_LISTEN_LOG_MAX_BACKUPS=5
 
-MANAGED_SERVICES=(g8es g8ee g8ed)
-TEST_RUNNER_SERVICES=(g8ee-test-runner g8ed-test-runner g8eo-test-runner)
+DEV_MODE=false
+
+MANAGED_SERVICES=(g8ee g8ed)
+TEST_RUNNER_SERVICES=()
 
 _service_volume() {
     case "$1" in
-        g8es)     echo "g8es-data" ;;
         g8ee)   echo "g8ee-data" ;;
         g8ed) echo "g8ed-data" ;;
     esac
 }
 
 # SSL volume is never wiped — preserved across reset, wipe, and rebuild.
-SSL_VOLUME="g8es-ssl"
+SSL_VOLUME="$OPERATOR_LISTEN_SSL_DIR"
 
 usage() {
     cat <<EOF
@@ -61,16 +85,16 @@ Usage: $(basename "$0") <command> [options]
 
 Commands:
   status                          Show container status and component versions
-  up [component ...]              Start managed services -- no build
-                                  Default (no components): g8es g8ee g8ed
-                                  Valid: g8es g8ee g8ed
-  down                            Stop managed containers -- nothing is removed
+  up [component ...]              Start managed services and Operator listen mode -- no build
+                                  Default (no components): g8ee g8ed
+                                  Valid: operator g8ee g8ed
+  down                            Stop managed containers and Operator listen mode -- nothing is removed
   rebuild [component ...]         Rebuild + restart of managed services using layer cache (no volume wipe)
-                                  Default (no components): g8es g8ee g8ed
+                                  Default (no components): g8ee g8ed
   reset                           Wipe DB data volumes + rebuild images from scratch
-                                  Removes: g8es, g8ee, g8ed volumes; SSL certs preserved
+                                  Removes: g8ee, g8ed volumes and Operator listen-mode data; SSL certs preserved
   wipe                            Clear app data from the database (all collections except platform settings)
-                                  g8es stays up; preserves: platform settings, SSL certs, auth token
+                                  Operator listen mode stays up; preserves: platform settings, SSL certs, auth token
   clean                           Nuke all managed Docker resources (containers, images,
                                   volumes, networks), dangling images, and orphaned networks.
                                   (Build cache is preserved for faster rebuilds)
@@ -82,13 +106,13 @@ Examples:
   $(basename "$0") status                       Show container status and versions
   $(basename "$0") up                           Start the environment (no build)
   $(basename "$0") up g8ee                      Start only the g8ee container
-  $(basename "$0") down                         Stop containers (preserve everything)
-  $(basename "$0") rebuild                      Rebuild g8es, g8ee, g8ed images (preserve volumes)
+  $(basename "$0") down                         Stop containers and host services
+  $(basename "$0") rebuild                      Rebuild g8ee, g8ed images (preserve volumes)
   $(basename "$0") rebuild g8ee g8ed            Rebuild g8ee and g8ed only (preserve volumes)
   $(basename "$0") rebuild g8ee                 Rebuild the g8ee image
   $(basename "$0") rebuild test-runners         Rebuild test-runner containers
   $(basename "$0") wipe                         Clear app data from the database; restart g8ee/g8ed
-  $(basename "$0") reset                        Wipe ALL data volumes and rebuild from scratch
+  $(basename "$0") reset                        Wipe ALL data volumes/host data and rebuild from scratch
   $(basename "$0") clean                        Full Docker cleanup (managed services only)
 EOF
 }
@@ -111,9 +135,9 @@ while [[ $# -gt 0 ]]; do
             COMMAND="$1"
             shift
             while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do
-                if ! printf '%s\n' g8es g8ee g8ed g8eo-test-runner g8ee-test-runner g8ed-test-runner | grep -qx "$1"; then
+                if ! printf '%s\n' operator g8ee g8ed g8eo-test-runner g8ee-test-runner g8ed-test-runner | grep -qx "$1"; then
                     echo "Error: Invalid component '$1'" >&2
-                    echo "Valid: g8es g8ee g8ed g8eo-test-runner g8ee-test-runner g8ed-test-runner " >&2
+                    echo "Valid: operator g8ee g8ed g8eo-test-runner g8ee-test-runner g8ed-test-runner " >&2
                     exit 1
                 fi
                 REBUILD_COMPONENTS+=("$1")
@@ -124,9 +148,9 @@ while [[ $# -gt 0 ]]; do
             COMMAND="rebuild"
             shift
             while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do
-                if ! printf '%s\n' g8es g8ee g8ed g8eo-test-runner g8ee-test-runner g8ed-test-runner | grep -qx "$1"; then
+                if ! printf '%s\n' operator g8ee g8ed g8eo-test-runner g8ee-test-runner g8ed-test-runner | grep -qx "$1"; then
                     echo "Error: Invalid component '$1'" >&2
-                    echo "Valid: g8es g8ee g8ed g8ea g8eo-test-runner g8ee-test-runner g8ed-test-runner " >&2
+                    echo "Valid: operator g8ee g8ed g8eo-test-runner g8ee-test-runner g8ed-test-runner " >&2
                     exit 1
                 fi
                 REBUILD_COMPONENTS+=("$1")
@@ -144,8 +168,278 @@ done
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 
-_is_running() {
-    docker ps --filter "name=^$1$" --filter "status=running" --format "{{.Names}}" 2>/dev/null | grep -q "^$1$"
+_operator_listen_running() {
+    if [ -f "$OPERATOR_LISTEN_PID_FILE" ]; then
+        local pid
+        pid=$(cat "$OPERATOR_LISTEN_PID_FILE")
+        if ps -p "$pid" > /dev/null 2>&1; then
+            return 0
+        fi
+        rm -f "$OPERATOR_LISTEN_PID_FILE"
+    fi
+    return 1
+}
+
+_g8ee_running() {
+    if [ -f "$G8EE_PID_FILE" ]; then
+        local pid
+        pid=$(cat "$G8EE_PID_FILE")
+        if ps -p "$pid" > /dev/null 2>&1; then
+            return 0
+        fi
+        rm -f "$G8EE_PID_FILE"
+    fi
+    return 1
+}
+
+_g8ed_running() {
+    if [ -f "$G8ED_PID_FILE" ]; then
+        local pid
+        pid=$(cat "$G8ED_PID_FILE")
+        if ps -p "$pid" > /dev/null 2>&1; then
+            return 0
+        fi
+        rm -f "$G8ED_PID_FILE"
+    fi
+    return 1
+}
+
+_rotate_logs() {
+    local log_file="$1"
+    if [ -f "$log_file" ]; then
+        local max_backups="$OPERATOR_LISTEN_LOG_MAX_BACKUPS"
+        for i in $(seq $((max_backups - 1)) -1 1); do
+            if [ -f "$log_file.$i" ]; then
+                mv "$log_file.$i" "$log_file.$((i + 1))"
+            fi
+        done
+        mv "$log_file" "$log_file.1"
+    fi
+}
+
+_start_g8ee() {
+    if _g8ee_running; then
+        echo "  g8ee is already running (PID: $(cat "$G8EE_PID_FILE"))."
+        return 0
+    fi
+
+    local venv_dir="$PROJECT_ROOT/components/g8ee/.venv"
+    if [ ! -d "$venv_dir" ]; then
+        echo "  Creating g8ee virtualenv..."
+        python3 -m venv "$venv_dir"
+        "$venv_dir/bin/pip" install --upgrade pip
+        "$venv_dir/bin/pip" install -r "$PROJECT_ROOT/components/g8ee/requirements.txt"
+    fi
+
+    echo "  Starting g8ee on port 443 (HTTPS)..."
+    _rotate_logs "$G8EE_LOG_FILE"
+    
+    # g8ee requires internal auth token and session encryption key from bootstrap
+    local auth_token
+    auth_token=$(cat "$OPERATOR_LISTEN_SSL_DIR/internal_auth_token" 2>/dev/null | tr -d ' \n\r' || true)
+    
+    # Start g8ee
+    # Note: Using sudo for port 443 if necessary, but assuming user has permissions or uses high port
+    # Actually, the Dockerfile used port 443, but for host dev we might want to allow override.
+    # For now, stick to 443 or allow it to fail if not root.
+    # The plan says "Replace service names... with host-native URLs".
+    
+    (
+        cd "$PROJECT_ROOT/components/g8ee"
+        export G8E_SSL_DIR="$OPERATOR_LISTEN_SSL_DIR"
+        export G8E_INTERNAL_AUTH_TOKEN="$auth_token"
+        export PYTHONPATH="$PROJECT_ROOT/components/g8ee:$PROJECT_ROOT/shared"
+        export G8E_SHARED_DIR="$PROJECT_ROOT/shared"
+        
+        setsid "$venv_dir/bin/uvicorn" app.main:app --host 127.0.0.1 --port 443 \
+            --ssl-keyfile "$OPERATOR_LISTEN_SSL_DIR/server.key" \
+            --ssl-certfile "$OPERATOR_LISTEN_SSL_DIR/server.crt" \
+            > "$G8EE_LOG_FILE" 2>&1 &
+        echo $! > "$G8EE_PID_FILE"
+    )
+
+    sleep 2
+    if ! _g8ee_running; then
+        echo "  Error: g8ee failed to start. See $G8EE_LOG_FILE"
+        rm -f "$G8EE_PID_FILE"
+        return 1
+    fi
+}
+
+_start_g8ed() {
+    if _g8ed_running; then
+        echo "  g8ed is already running (PID: $(cat "$G8ED_PID_FILE"))."
+        return 0
+    fi
+
+    if [ ! -d "$PROJECT_ROOT/components/g8ed/node_modules" ]; then
+        echo "  Installing g8ed dependencies..."
+        (cd "$PROJECT_ROOT/components/g8ed" && npm install)
+    fi
+
+    echo "  Starting g8ed on port 443 (HTTPS) and 80 (HTTP)..."
+    _rotate_logs "$G8ED_LOG_FILE"
+
+    (
+        cd "$PROJECT_ROOT/components/g8ed"
+        export G8E_SSL_DIR="$OPERATOR_LISTEN_SSL_DIR"
+        export NODE_EXTRA_CA_CERTS="$OPERATOR_LISTEN_SSL_DIR/ca.crt"
+        
+        setsid node server.js > "$G8ED_LOG_FILE" 2>&1 &
+        echo $! > "$G8ED_PID_FILE"
+    )
+
+    sleep 2
+    if ! _g8ed_running; then
+        echo "  Error: g8ed failed to start. See $G8ED_LOG_FILE"
+        rm -f "$G8ED_PID_FILE"
+        return 1
+    fi
+}
+
+_stop_g8ee() {
+    if [ -f "$G8EE_PID_FILE" ]; then
+        local pid=$(cat "$G8EE_PID_FILE")
+        echo "  Stopping g8ee (PID: $pid)..."
+        kill "$pid" 2>/dev/null || true
+        rm -f "$G8EE_PID_FILE"
+    fi
+}
+
+_stop_g8ed() {
+    if [ -f "$G8ED_PID_FILE" ]; then
+        local pid=$(cat "$G8ED_PID_FILE")
+        echo "  Stopping g8ed (PID: $pid)..."
+        kill "$pid" 2>/dev/null || true
+        rm -f "$G8ED_PID_FILE"
+    fi
+}
+
+_start_operator_listen() {
+    if _operator_listen_running; then
+        echo "  Operator listen mode is already running (PID: $(cat "$OPERATOR_LISTEN_PID_FILE"))."
+        return 0
+    fi
+
+    local bin="$PROJECT_ROOT/components/g8eo/build/linux-amd64/g8e.operator"
+    local needs_build=false
+
+    if [ ! -f "$bin" ]; then
+        echo "  Operator binary not found at $bin. Building it..."
+        needs_build=true
+    else
+        # Check if source files are newer than the binary
+        local source_files
+        source_files=$(find "$PROJECT_ROOT/components/g8eo" -type f \( -name "*.go" -o -name "Makefile" -o -name "go.mod" -o -name "go.sum" \) -not -path "*/vendor/*" -not -path "*/build/*")
+        for f in $source_files; do
+            if [ "$f" -nt "$bin" ]; then
+                echo "  Operator source changed: $f is newer than binary. Rebuilding..."
+                needs_build=true
+                break
+            fi
+        done
+    fi
+
+    if [ "$needs_build" = true ]; then
+        echo "  Building Operator binary natively..."
+        (cd "$PROJECT_ROOT/components/g8eo" && make build-local)
+    fi
+
+    echo "  Starting Operator listen mode on port $OPERATOR_LISTEN_HTTP_PORT..."
+    mkdir -p "$OPERATOR_LISTEN_DATA_DIR" "$OPERATOR_LISTEN_SSL_DIR" "$OPERATOR_LISTEN_PID_DIR" "$OPERATOR_LISTEN_LOG_DIR"
+
+    _rotate_logs "$OPERATOR_LISTEN_LOG_FILE"
+
+    setsid "$bin" --listen \
+        --data-dir "$OPERATOR_LISTEN_DATA_DIR" \
+        --ssl-dir "$OPERATOR_LISTEN_SSL_DIR" \
+        --http-listen-port "$OPERATOR_LISTEN_HTTP_PORT" \
+        --wss-listen-port "$OPERATOR_LISTEN_WSS_PORT" \
+        > "$OPERATOR_LISTEN_LOG_FILE" 2>&1 &
+
+    local pid=$!
+    echo "$pid" > "$OPERATOR_LISTEN_PID_FILE"
+
+    sleep 2
+    if ! _operator_listen_running; then
+        echo "  Error: Operator listen mode failed to start. See $OPERATOR_LISTEN_LOG_FILE"
+        rm -f "$OPERATOR_LISTEN_PID_FILE"
+        return 1
+    fi
+}
+
+_stop_operator_listen() {
+    if [ -f "$OPERATOR_LISTEN_PID_FILE" ]; then
+        local pid
+        pid=$(cat "$OPERATOR_LISTEN_PID_FILE")
+        echo "  Stopping Operator listen mode (PID: $pid)..."
+        kill "$pid" 2>/dev/null || true
+        local waited=0
+        while ps -p "$pid" > /dev/null 2>&1 && [ $waited -lt 10 ]; do
+            sleep 1
+            waited=$((waited + 1))
+        done
+        if ps -p "$pid" > /dev/null 2>&1; then
+            echo "  Force stopping Operator listen mode..."
+            kill -9 "$pid" 2>/dev/null || true
+        fi
+        rm -f "$OPERATOR_LISTEN_PID_FILE"
+    else
+        if _operator_listen_running; then
+            echo "  Stopping Operator listen mode via pkill..."
+            pkill -f "g8e.operator --listen" || true
+            rm -f "$OPERATOR_LISTEN_PID_FILE"
+        fi
+    fi
+}
+
+_sync_operator_binaries() {
+    echo "  Syncing operator binaries to blob store..."
+    local auth_token
+    auth_token=$(cat "$OPERATOR_LISTEN_SSL_DIR/internal_auth_token" 2>/dev/null | tr -d ' \n\r' || true)
+
+    if [ -z "$auth_token" ]; then
+        echo "  Warning: No internal auth token found, skipping binary sync."
+        return 0
+    fi
+
+    local bin_dir="$PROJECT_ROOT/components/g8eo/build"
+    if [ ! -d "$bin_dir" ]; then
+        echo "  No operator binaries found at $bin_dir, skipping sync."
+        return 0
+    fi
+
+    for arch in amd64 arm64 386; do
+        local bin_path="$bin_dir/linux-$arch/g8e.operator"
+        if [ -f "$bin_path" ]; then
+            echo "    Uploading linux/$arch..."
+            curl -sf -o /dev/null \
+                -X PUT \
+                --cacert "$OPERATOR_LISTEN_SSL_DIR/ca.crt" \
+                -H 'Content-Type: application/octet-stream' \
+                -H "X-Internal-Auth: $auth_token" \
+                --data-binary "@$bin_path" \
+                "https://localhost:$OPERATOR_LISTEN_HTTP_PORT/api/internal/blob/operator-binary/linux-$arch" || echo "      Warning: Failed to upload linux/$arch"
+        fi
+    done
+}
+
+_wait_operator_listen_healthy() {
+    local url="$1" timeout_s="$2" interval="${3:-1}"
+    local waited=0
+    echo "  Operator listen mode: waiting for $url..."
+    
+    until curl -sfk "$url" >/dev/null 2>&1; do
+        if (( waited >= timeout_s )); then
+            echo -e "  Operator listen mode: \033[0;31mTIMEOUT\033[0m"
+            echo "  Operator listen mode did not become healthy within ${timeout_s}s. See $OPERATOR_LISTEN_LOG_FILE"
+            tail -n 20 "$OPERATOR_LISTEN_LOG_FILE"
+            exit 1
+        fi
+        sleep "$interval"
+        waited=$(( waited + interval ))
+    done
+    echo -e "  Operator listen mode: \033[0;32mready\033[0m (${waited}s)"
 }
 
 _ensure_g8eo_test_runner() {
@@ -322,26 +616,39 @@ if [[ "$COMMAND" == "status" ]]; then
         || echo 'unknown')"
     [[ "$_VER" != v* ]] && _VER="v$_VER"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Component Versions"
+    echo "Component Status"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    for svc in "${MANAGED_SERVICES[@]}"; do
-        printf "  %-14s  %s\n" "$svc" "$_VER"
-    done
+    
+    if _operator_listen_running; then
+        printf "  %-14s  %-10s  (PID: %s)\n" "operator" "RUNNING" "$(cat "$OPERATOR_LISTEN_PID_FILE")"
+    else
+        printf "  %-14s  %-10s\n" "operator" "STOPPED"
+    fi
+
+    if _g8ee_running; then
+        printf "  %-14s  %-10s  (PID: %s)\n" "g8ee" "RUNNING" "$(cat "$G8EE_PID_FILE")"
+    else
+        printf "  %-14s  %-10s\n" "g8ee" "STOPPED"
+    fi
+
+    if _g8ed_running; then
+        printf "  %-14s  %-10s  (PID: %s)\n" "g8ed" "RUNNING" "$(cat "$G8ED_PID_FILE")"
+    else
+        printf "  %-14s  %-10s\n" "g8ed" "STOPPED"
+    fi
+
     echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Container Status"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    $COMPOSE ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null || true
     exit 0
 fi
 
 # ─── down ─────────────────────────────────────────────────────────────────────
 
 if [[ "$COMMAND" == "down" ]]; then
-    echo "Stopping managed containers (g8es, g8ee, g8ed)..."
-    $COMPOSE stop g8es g8ee g8ed 2>/dev/null || true
-    $COMPOSE stop 2>/dev/null || true
-    echo "Done. Volumes, images, and networks are preserved."
+    echo "Stopping managed services (g8ee, g8ed) and host services..."
+    _stop_g8ee
+    _stop_g8ed
+    _stop_operator_listen
+    echo "Done."
     exit 0
 fi
 
@@ -349,156 +656,150 @@ fi
 
 if [[ "$COMMAND" == "restart" ]]; then
     _preflight
-    echo "Restarting managed containers (g8es, g8ee, g8ed)..."
-    $COMPOSE stop g8es g8ee g8ed 2>/dev/null || true
-    if [[ "$DEV_MODE" == true ]]; then
-        $COMPOSE --profile development up -d g8es g8ee g8ed
-    else
-        $COMPOSE up -d g8es g8ee g8ed
-    fi
+    echo "Restarting managed services (g8ee, g8ed) and host services..."
+    _stop_g8ee
+    _stop_g8ed
+    _stop_operator_listen
+    _start_operator_listen
+    _start_g8ee
+    _start_g8ed
     echo ""
     echo "Waiting for services..."
-    _wait_healthy g8es     60  1
-    _wait_healthy g8ee    120 2
-    _wait_curl    g8ed "https://localhost/health" '"status"' 120 2
+    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_HTTP_PORT/health" 60 1
+    _sync_operator_binaries
+    
+    # Update health checks to probe host processes directly
+    echo "  g8ee: waiting for healthy status..."
+    until curl -sfk "https://localhost:443/health" >/dev/null 2>&1; do
+        sleep 1
+    done
+    echo -e "  g8ee: \033[0;32mready\033[0m"
+
+    echo "  g8ed: waiting for healthy status..."
+    until curl -sfk "https://localhost/health" | grep -q '"status"'; do
+        sleep 1
+    done
+    echo -e "  g8ed: \033[0;32mready\033[0m"
+
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Restart complete."
     echo ""
-    $COMPOSE ps --format "table {{.Name}}\t{{.Status}}"
     exit 0
 fi
 
 # ─── reset ───────────────────────────────────────────────────────────────────
-# Wipes DB data volumes (g8es, g8ee, g8ed). SSL certs are preserved in the
-# separate g8es-ssl volume — no need to re-trust after reset.
+# Wipes DB data volumes and Operator listen-mode data. SSL certs are preserved.
 # Use 'clean' to remove everything including SSL.
 
 if [[ "$COMMAND" == "reset" ]]; then
-    REBUILD_COMPONENTS=(g8es g8ee g8ed)
+    REBUILD_COMPONENTS=(g8ee g8ed)
 
-    echo "Wiping DB data volumes (g8es, g8ee, g8ed) — SSL certs preserved..."
-    $COMPOSE stop g8es g8ee g8ed 2>/dev/null || true
-    $COMPOSE stop 2>/dev/null || true
-    $COMPOSE rm -f g8es g8ee g8ed 2>/dev/null || true
-    $COMPOSE rm -f 2>/dev/null || true
-    for svc in g8es g8ee g8ed; do
-        vol="$(_service_volume "$svc")"
-        [[ -n "$vol" ]] && docker volume rm "$vol" 2>/dev/null || true
-    done
-    docker volume rm g8ed-node-modules 2>/dev/null || true
+    echo "Wiping managed service data and Operator listen-mode data — SSL certs preserved..."
+    _stop_g8ee
+    _stop_g8ed
+    _stop_operator_listen
+    
+    # Wipe host data
+    rm -rf "$OPERATOR_LISTEN_DATA_DIR/"* 2>/dev/null || true
+    rm -rf "$PROJECT_ROOT/components/g8ee/data/"* 2>/dev/null || true
+    rm -rf "$PROJECT_ROOT/components/g8ed/data/"* 2>/dev/null || true
+
     echo ""
 
     _preflight
 
     # Syncing personas is handled by the app models at runtime
-    echo "Building and starting all services..."
-    $COMPOSE up -d --build --force-recreate g8es g8ee g8ed
+    echo "Starting all services..."
+    _start_operator_listen
+    _start_g8ee
+    _start_g8ed
     echo ""
     echo "Waiting for services..."
-    _wait_healthy g8es     300 2
-    _wait_healthy g8ee    120 2
-    _wait_curl    g8ed "https://localhost/health" '"status"' 120 2
+    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_HTTP_PORT/health" 300 2
+    _sync_operator_binaries
+    
+    # Update health checks to probe host processes directly
+    echo "  g8ee: waiting for healthy status..."
+    until curl -sfk "https://localhost:443/health" >/dev/null 2>&1; do
+        sleep 1
+    done
+    echo -e "  g8ee: \033[0;32mready\033[0m"
+
+    echo "  g8ed: waiting for healthy status..."
+    until curl -sfk "https://localhost/health" | grep -q '"status"'; do
+        sleep 1
+    done
+    echo -e "  g8ed: \033[0;32mready\033[0m"
+
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Reset complete. SSL certs preserved — no need to re-trust."
     echo ""
-    $COMPOSE ps --format "table {{.Name}}\t{{.Status}}"
     exit 0
 fi
 
 # ─── wipe ─────────────────────────────────────────────────────────────────────
-# Clears all app data from the g8es database via the HTTP API.
+# Clears all app data from the Operator listen-mode database via the HTTP API.
 # Preserves: platform settings (components collection), SSL certs, auth token, LLM data.
-# g8es is restarted to flush in-memory state; no volume wipe, no rebuild.
+# Operator listen mode is restarted to flush in-memory state; no volume wipe, no rebuild.
 # Use 'reset' to wipe DB data volumes and rebuild from scratch (SSL still preserved).
 
 if [[ "$COMMAND" == "wipe" ]]; then
     _preflight
 
-    echo "Stopping g8ee, g8ed, and g8es..."
-    $COMPOSE stop g8ee g8ed g8es 2>/dev/null || true
-    $COMPOSE rm -f g8ee g8ed g8es 2>/dev/null || true
+    echo "Stopping g8ee, g8ed, and Operator listen mode..."
+    _stop_g8ee
+    _stop_g8ed
+    _stop_operator_listen
     echo ""
 
-    echo "Restarting g8es (compiles and publishes operator binaries)..."
-    $COMPOSE up -d --force-recreate g8es
-    _wait_healthy g8es 120 2
+    echo "Restarting Operator listen mode..."
+    _start_operator_listen
+    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_HTTP_PORT/health" 120 2
+    _sync_operator_binaries
 
-    echo "Clearing app data from g8es..."
-    docker exec -i g8es python3 /app/scripts/data/manage-g8es.py store wipe
+    echo "Clearing app data from Operator listen mode..."
+    curl -sfk -X POST -H "X-Internal-Auth: $(cat "$OPERATOR_LISTEN_SSL_DIR/internal_auth_token" 2>/dev/null | tr -d ' \n\r')" \
+        "https://localhost:$OPERATOR_LISTEN_HTTP_PORT/api/internal/store/wipe" || echo "  Warning: wipe endpoint failed"
     echo ""
 
     echo "Restarting g8ee and g8ed..."
-    $COMPOSE up -d --force-recreate g8ee g8ed
+    _start_g8ee
+    _start_g8ed
     echo ""
     echo "Waiting for services..."
-    _wait_healthy g8ee    120 2
-    _wait_curl    g8ed "https://localhost/health" '"status"' 120 2
+    # Update health checks to probe host processes directly
+    echo "  g8ee: waiting for healthy status..."
+    until curl -sfk "https://localhost:443/health" >/dev/null 2>&1; do
+        sleep 1
+    done
+    echo -e "  g8ee: \033[0;32mready\033[0m"
+
+    echo "  g8ed: waiting for healthy status..."
+    until curl -sfk "https://localhost/health" | grep -q '"status"'; do
+        sleep 1
+    done
+    echo -e "  g8ed: \033[0;32mready\033[0m"
+
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Wipe complete. Platform settings, SSL certs, and auth token preserved."
     echo ""
-    $COMPOSE ps --format "table {{.Name}}\t{{.Status}}"
     exit 0
 fi
 
 # ─── clean ────────────────────────────────────────────────────────────────────
 
 if [[ "$COMMAND" == "clean" ]]; then
-    echo "Cleaning ALL g8e Docker resources..."
+    echo "Cleaning all host services and runtime data..."
 
-    FILTER_MANAGED="label=io.g8e.managed=true"
-
-    # 1. Stop and remove all containers with io.g8e.managed=true label
-    echo "Stopping and removing containers..."
-    docker ps -aq --filter "$FILTER_MANAGED" --format "{{.ID}}" 2>/dev/null | while read -r container; do
-        [[ -n "$container" ]] && docker stop "$container" 2>/dev/null || true
-        [[ -n "$container" ]] && docker rm -f "$container" 2>/dev/null || true
-    done
-
-    # 2. Remove all volumes with io.g8e.managed=true label
-    echo "Removing volumes..."
-    volumes=$(docker volume ls -q --filter "$FILTER_MANAGED" 2>/dev/null)
-    if [[ -n "$volumes" ]]; then
-        echo "$volumes" | xargs -r docker volume rm -f 2>/dev/null || true
-    fi
-
-    # 3. Remove all networks with io.g8e.managed=true label
-    echo "Removing networks..."
-    networks=$(docker network ls -q --filter "$FILTER_MANAGED" 2>/dev/null)
-    if [[ -n "$networks" ]]; then
-        echo "$networks" | xargs -r docker network rm 2>/dev/null || true
-    fi
-
-    # 4. Remove all images with io.g8e.managed=true label (including intermediate layers)
-    echo "Removing images..."
-    images=$(docker images -q --filter "$FILTER_MANAGED" 2>/dev/null | sort -u)
-    if [[ -n "$images" ]]; then
-        echo "$images" | xargs -r docker rmi -f 2>/dev/null || true
-    fi
-
-    # 5. Remove all build cache for the g8e project
-    echo "Removing build cache..."
-    docker builder prune -af --filter "label=com.docker.compose.project=g8e" 2>/dev/null || true
-
-    # 6. Prune any remaining dangling images (catches untagged intermediate layers)
-    echo "Pruning dangling images..."
-    docker image prune -af 2>/dev/null || true
-
-    # 7. Prune any remaining orphaned networks
-    echo "Pruning orphaned networks..."
-    docker network prune -f 2>/dev/null || true
-
-    # 8. Prune any remaining buildx cache
-    echo "Pruning buildx cache..."
-    docker buildx prune -af 2>/dev/null || true
-
-    echo ""
-    echo "All g8e Docker resources removed."
-    echo ""
-    echo "Current Docker disk usage:"
-    docker system df
+    _stop_g8ee
+    _stop_g8ed
+    _stop_operator_listen
+    rm -rf "$G8E_RUNTIME_DIR" 2>/dev/null || true
+    
+    echo "Done."
     exit 0
 fi
 
@@ -511,27 +812,51 @@ _preflight
 if [[ "$COMMAND" == "up" ]]; then
     UP_COMPONENTS=("${REBUILD_COMPONENTS[@]}")
     if [[ ${#UP_COMPONENTS[@]} -eq 0 ]]; then
-        UP_COMPONENTS=(g8es g8ee g8ed)
+        UP_COMPONENTS=(g8ee g8ed)
+        _start_operator_listen
     fi
-    if [[ "$DEV_MODE" == true ]]; then
-        echo "Starting services in development mode (hot-reload enabled): ${UP_COMPONENTS[*]}..."
-        $COMPOSE --profile development up -d $(printf '%s\n' "${UP_COMPONENTS[@]}" | tr '\n' ' ')
-    else
-        echo "Starting services (no build): ${UP_COMPONENTS[*]}..."
-        $COMPOSE up -d $(printf '%s\n' "${UP_COMPONENTS[@]}" | tr '\n' ' ')
+    
+    if printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx operator; then
+        _start_operator_listen
+        UP_COMPONENTS=($(printf '%s\n' "${UP_COMPONENTS[@]}" | grep -vx operator || true))
+    fi
+
+    if [[ ${#UP_COMPONENTS[@]} -gt 0 ]]; then
+        for svc in "${UP_COMPONENTS[@]}"; do
+            case "$svc" in
+                g8ee) _start_g8ee ;;
+                g8ed) _start_g8ed ;;
+                *)
+                    echo "Error: Unknown component '$svc'" >&2
+                    exit 1
+                    ;;
+            esac
+        done
     fi
     echo ""
     echo "Waiting for services..."
-    printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8es     && _wait_healthy g8es     60  1
-    printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8ee  && _wait_healthy g8ee    120 2
-    printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8ed && _wait_curl    g8ed "https://localhost/health" '"status"' 120 2
-    printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8eo-test-runner && $COMPOSE up -d g8eo-test-runner && _wait_healthy g8eo-test-runner 300 5
-
+    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_HTTP_PORT/health" 60 1
+    _sync_operator_binaries
+    
+    # Update health checks to probe host processes directly
+    if printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8ee; then
+        echo "  g8ee: waiting for healthy status..."
+        until curl -sfk "https://localhost:443/health" >/dev/null 2>&1; do
+            sleep 1
+        done
+        echo -e "  g8ee: \033[0;32mready\033[0m"
+    fi
+    if printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8ed; then
+        echo "  g8ed: waiting for healthy status..."
+        until curl -sfk "https://localhost/health" | grep -q '"status"'; do
+            sleep 1
+        done
+        echo -e "  g8ed: \033[0;32mready\033[0m"
+    fi
+    
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Environment ready."
-    echo ""
-    $COMPOSE ps --format "table {{.Name}}\t{{.Status}}"
     echo ""
     _print_platform_info
     exit 0
@@ -540,30 +865,40 @@ fi
 # ─── setup ───────────────────────────────────────────────────────────────────
 # Full first-time setup: no-cache build of all images, then start the platform.
 # Does NOT wipe data volumes — safe to run on an existing installation.
-# g8es image bakes all 3 operator binaries (amd64/arm64/386) with UPX compression;
-# on container start, g8es uploads them to the blob store automatically.
+# Operator binary builds provide the listen-mode and remote Operator artifacts.
 
 if [[ "$COMMAND" == "setup" ]]; then
-    echo "Stopping all managed containers..."
-    $COMPOSE stop g8es g8ee g8ed 2>/dev/null || true
-    $COMPOSE stop 2>/dev/null || true
-    $COMPOSE rm -f g8es g8ee g8ed 2>/dev/null || true
-    $COMPOSE rm -f 2>/dev/null || true
+    echo "Stopping all managed services and host services..."
+    _stop_g8ee
+    _stop_g8ed
+    _stop_operator_listen
 
     # Syncing personas is handled by the app models at runtime
-    echo "Building and starting all services..."
-    $COMPOSE up -d --build --force-recreate g8es g8ee g8ed
+    echo "Starting all services..."
+    _start_operator_listen
+    _start_g8ee
+    _start_g8ed
     echo ""
     echo "Waiting for services..."
-    _wait_healthy g8es     300 2
-    _wait_healthy g8ee    120 2
-    _wait_curl    g8ed "https://localhost/health" '"status"' 120 2
+    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_HTTP_PORT/health" 300 2
+    _sync_operator_binaries
+    
+    # Update health checks to probe host processes directly
+    echo "  g8ee: waiting for healthy status..."
+    until curl -sfk "https://localhost:443/health" >/dev/null 2>&1; do
+        sleep 1
+    done
+    echo -e "  g8ee: \033[0;32mready\033[0m"
+
+    echo "  g8ed: waiting for healthy status..."
+    until curl -sfk "https://localhost/health" | grep -q '"status"'; do
+        sleep 1
+    done
+    echo -e "  g8ed: \033[0;32mready\033[0m"
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Setup complete."
-    echo ""
-    $COMPOSE ps --format "table {{.Name}}\t{{.Status}}"
     echo ""
     _print_platform_info
     exit 0
@@ -573,36 +908,58 @@ fi
 
 if [[ "$COMMAND" == "rebuild" ]]; then
     if [[ ${#REBUILD_COMPONENTS[@]} -eq 0 ]]; then
-        REBUILD_COMPONENTS=(g8es g8ee g8ed)
+        REBUILD_COMPONENTS=(g8ee g8ed)
+        _start_operator_listen
     fi
 
-    # Syncing personas is handled by the app models at runtime
-    if printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8ee; then
-        echo "Rebuilding g8ee (personas will be updated at runtime)..."
+    if printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx operator; then
+        _stop_operator_listen
+        _start_operator_listen
+        REBUILD_COMPONENTS=($(printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -vx operator || true))
     fi
 
-    echo "Removing containers for: ${REBUILD_COMPONENTS[*]}..."
-    $COMPOSE rm -f "${REBUILD_COMPONENTS[@]}" 2>/dev/null || true
-
-    if [[ "$DEV_MODE" == true ]]; then
-        echo "Rebuilding and starting in development mode (hot-reload enabled): ${REBUILD_COMPONENTS[*]}..."
-        $COMPOSE --profile development up -d --build --force-recreate "${REBUILD_COMPONENTS[@]}"
-    else
-        echo "Rebuilding and starting: ${REBUILD_COMPONENTS[*]}..."
-        $COMPOSE up -d --build --force-recreate "${REBUILD_COMPONENTS[@]}"
+    if [[ ${#REBUILD_COMPONENTS[@]} -gt 0 ]]; then
+        for svc in "${REBUILD_COMPONENTS[@]}"; do
+            case "$svc" in
+                g8ee)
+                    _stop_g8ee
+                    _start_g8ee
+                    ;;
+                g8ed)
+                    _stop_g8ed
+                    _start_g8ed
+                    ;;
+                *)
+                    echo "Error: Unknown component '$svc'" >&2
+                    exit 1
+                    ;;
+            esac
+        done
     fi
     echo ""
     echo "Waiting for services..."
-    printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8es  && _wait_healthy g8es     300 2
-    printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8ee  && _wait_healthy g8ee    120 2
-    printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8ed && _wait_curl    g8ed "https://localhost/health" '"status"' 30 2
-    printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8eo-test-runner && $COMPOSE up -d --build --force-recreate g8eo-test-runner && _wait_healthy g8eo-test-runner 300 5
+    _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_HTTP_PORT/health" 300 2
+    _sync_operator_binaries
+
+    # Update health checks to probe host processes directly
+    if printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8ee; then
+        echo "  g8ee: waiting for healthy status..."
+        until curl -sfk "https://localhost:443/health" >/dev/null 2>&1; do
+            sleep 1
+        done
+        echo -e "  g8ee: \033[0;32mready\033[0m"
+    fi
+    if printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8ed; then
+        echo "  g8ed: waiting for healthy status..."
+        until curl -sfk "https://localhost/health" | grep -q '"status"'; do
+            sleep 1
+        done
+        echo -e "  g8ed: \033[0;32mready\033[0m"
+    fi
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Rebuild complete."
-    echo ""
-    $COMPOSE ps --format "table {{.Name}}\t{{.Status}}"
     echo ""
     _print_platform_info
     exit 0
@@ -611,19 +968,19 @@ fi
 # ─── operator-build ─────────────────────────────────────────────────────────────
 
 if [[ "$COMMAND" == "operator-build" ]]; then
-    echo "Building linux/amd64 operator binary and uploading to g8es blob store..."
-    $COMPOSE run --rm g8eo-test-runner bash -c "cd /app/components/g8eo && make build"
+    echo "Building linux/amd64 operator binary natively..."
+    (cd "$PROJECT_ROOT/components/g8eo" && make build-local)
     echo ""
-    echo "Operator binary built and uploaded to g8es blob store."
+    echo "Operator binary built."
     exit 0
 fi
 
 # ─── operator-build-all ─────────────────────────────────────────────────────────
 
 if [[ "$COMMAND" == "operator-build-all" ]]; then
-    echo "Building all operator architectures and uploading to g8es blob store..."
-    $COMPOSE run --rm g8eo-test-runner bash -c "cd /app/components/g8eo && make build-all"
+    echo "Building all operator architectures natively..."
+    (cd "$PROJECT_ROOT/components/g8eo" && make build-local-all)
     echo ""
-    echo "All operator binaries built and uploaded to g8es blob store."
+    echo "All operator binaries built."
     exit 0
 fi

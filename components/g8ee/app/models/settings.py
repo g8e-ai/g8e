@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 from app.constants import (
@@ -206,9 +207,9 @@ class DatabaseSettings(G8eBaseModel):
 
 class ListenSettings(G8eBaseModel):
     """g8es (Operator --listen mode) configuration."""
-    http_url: str = Field("https://g8es:9000")
-    pubsub_url: str = Field("wss://g8es:9001")
-    blob_url: str = Field("https://g8es:9000")
+    http_url: str = Field(os.environ.get("G8E_INTERNAL_HTTP_URL", "https://localhost:9000"))
+    pubsub_url: str = Field(os.environ.get("G8E_INTERNAL_PUBSUB_URL", "wss://localhost:9001"))
+    blob_url: str = Field(os.environ.get("G8E_INTERNAL_HTTP_URL", "https://localhost:9000"))
     default_ttl: int = Field(CACHE_TTL_DEFAULT)
 
     @field_validator("http_url", "pubsub_url", "blob_url", mode="after")

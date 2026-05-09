@@ -36,16 +36,16 @@ _SHARED_CONSTANTS = PROJECT_ROOT / 'shared' / 'constants'
 with open(_SHARED_CONSTANTS / 'collections.json') as _f:
     _COLLECTIONS_DATA = json.load(_f)
 
-G8ES_BASE_URL = 'https://g8es:9000'
+G8ES_BASE_URL = os.environ.get('G8E_INTERNAL_HTTP_URL', 'https://g8es:9000')
 G8ED_BASE_URL = 'https://g8ed'
 COLLECTIONS: List[str] = sorted(set(_COLLECTIONS_DATA['collections'].values()))
 PRESERVE_COLLECTIONS = {'settings'}
 
-
-CA_CERT_PATH = Path('/g8es/ca.crt')
+SSL_DIR = Path(os.environ.get('G8E_SSL_DIR', '/g8es'))
+CA_CERT_PATH = SSL_DIR / 'ca.crt'
 INTERNAL_AUTH_TOKEN_PATHS = (
-    Path('/g8es/internal_auth_token'),
-    Path('/g8es/ssl/internal_auth_token'),
+    SSL_DIR / 'internal_auth_token',
+    SSL_DIR / 'ssl' / 'internal_auth_token',
 )
 
 
@@ -55,8 +55,8 @@ def _create_ssl_context() -> ssl.SSLContext | None:
     if CA_CERT_PATH.exists():
         ctx.load_verify_locations(str(CA_CERT_PATH))
     else:
-        # Fallback to internal volume path
-        alt_path = Path('/g8es/ssl/ca.crt')
+        # Fallback to legacy internal volume path
+        alt_path = SSL_DIR / 'ssl' / 'ca.crt'
         if alt_path.exists():
             ctx.load_verify_locations(str(alt_path))
     return ctx
@@ -81,7 +81,7 @@ def get_internal_auth_token() -> str:
     """Return the platform internal auth token.
 
     g8es authenticates every request with `X-Internal-Auth`. Inside g8ep the
-    token is mounted at /g8es/internal_auth_token (ro). Falls back to the
+    token is mounted at $G8E_SSL_DIR/internal_auth_token (ro). Falls back to the
     G8E_INTERNAL_AUTH_TOKEN env var for test-runner contexts.
     """
     for p in INTERNAL_AUTH_TOKEN_PATHS:
@@ -98,9 +98,9 @@ def get_internal_auth_token() -> str:
 def get_auditor_hmac_key() -> str:
     """Return the Tribunal auditor HMAC-SHA256 signing key.
 
-    Inside g8ep the key is mounted at /g8es/auditor_hmac_key (ro).
+    Inside g8ep the key is mounted at $G8E_SSL_DIR/auditor_hmac_key (ro).
     """
-    p = Path('/g8es/auditor_hmac_key')
+    p = SSL_DIR / 'auditor_hmac_key'
     try:
         if p.exists():
             key = p.read_text().strip()

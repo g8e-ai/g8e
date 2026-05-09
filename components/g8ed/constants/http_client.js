@@ -23,7 +23,7 @@
 // ---------------------------------------------------------------------------
 export const G8EE_INTERNAL_URL = 'https://g8ee';
 export const G8ED_INTERNAL_URL = 'https://g8ed';
-export const G8ES_INTERNAL_HTTP_URL = 'https://g8es:9000';
+export const G8ES_INTERNAL_HTTP_URL = process.env.G8E_INTERNAL_HTTP_URL || 'https://localhost:9000';
 
 // ---------------------------------------------------------------------------
 // Internal HTTP Client (g8ed -> g8ee)
@@ -50,7 +50,7 @@ export const G8ES_HTTP_TIMEOUT_MS = 30000;
 // ---------------------------------------------------------------------------
 // g8es PubSub WebSocket Client (g8ed -> g8es)
 // ---------------------------------------------------------------------------
-export const G8ES_INTERNAL_PUBSUB_URL = 'wss://g8es:9001';
+export const G8ES_INTERNAL_PUBSUB_URL = process.env.G8E_INTERNAL_PUBSUB_URL || 'wss://localhost:9001';
 export const G8ES_OPERATOR_PUBSUB_URL = 'wss://g8e.local';
 export const G8ES_PUBSUB_PATH = '/ws/pubsub';
 export const G8ES_PUBSUB_PUBLISH_PATH = '/publish';

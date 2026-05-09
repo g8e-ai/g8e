@@ -4,32 +4,14 @@ set -e
 # Check for common dependencies
 _check_deps() {
     local missing=()
-    for cmd in docker curl; do
+    for cmd in curl; do
         if ! command -v "$cmd" >/dev/null 2>&1; then
             missing+=("$cmd")
         fi
     done
 
-    # Check for docker-compose-plugin (preferred) or docker-compose (v1)
-    if ! docker compose version >/dev/null 2>&1 && ! command -v docker-compose >/dev/null 2>&1; then
-        missing+=("docker-compose")
-    fi
-
     if [ ${#missing[@]} -gt 0 ]; then
         echo -e "\033[0;31m[g8e] ERROR: Missing required dependencies: ${missing[*]}\033[0m" >&2
-        case "$(uname -s)" in
-            Linux)
-                if command -v apt-get >/dev/null 2>&1; then
-                    echo "  Install via: sudo apt-get update && sudo apt-get install -y docker.io docker-compose-v2 curl"
-                elif command -v dnf >/dev/null 2>&1; then
-                    echo "  Install via: sudo dnf install docker docker-compose-plugin curl"
-                elif command -v pacman >/dev/null 2>&1; then
-                    echo "  Install via: sudo pacman -S docker docker-compose curl"
-                elif command -v apk >/dev/null 2>&1; then
-                    echo "  Install via: sudo apk add docker docker-compose curl"
-                fi
-                ;;
-        esac
         exit 1
     fi
 }
@@ -82,15 +64,27 @@ _ensure_container() {
 _ensure_g8ed() { _ensure_container "$CONTAINER" "${1:-}"; }
 
 _exec_in_g8ed() {
-    _ensure_g8ed "$TOP${SUB:+ $SUB}"
-    local env_args=()
-    if [[ -n "$OPERATOR_SESSION_ID" ]]; then
-        env_args=(-e "OPERATOR_SESSION_ID=$OPERATOR_SESSION_ID")
-    fi
-    if [ -t 0 ] && [ -t 1 ]; then
-        exec docker exec -it "${env_args[@]}" "$CONTAINER" "$@"
+    # Check if g8ed is running on host
+    local pid_file="$SCRIPT_DIR/.g8e/pids/g8ed.pid"
+    if [ -f "$pid_file" ] && ps -p $(cat "$pid_file") >/dev/null 2>&1; then
+        (
+            cd "$SCRIPT_DIR/components/g8ed"
+            if [[ -n "$OPERATOR_SESSION_ID" ]]; then
+                export OPERATOR_SESSION_ID="$OPERATOR_SESSION_ID"
+            fi
+            exec "$@"
+        )
     else
-        exec docker exec -i "${env_args[@]}" "$CONTAINER" "$@"
+        _ensure_g8ed "$TOP${SUB:+ $SUB}"
+        local env_args=()
+        if [[ -n "$OPERATOR_SESSION_ID" ]]; then
+            env_args=(-e "OPERATOR_SESSION_ID=$OPERATOR_SESSION_ID")
+        fi
+        if [ -t 0 ] && [ -t 1 ]; then
+            exec docker exec -it "${env_args[@]}" "$CONTAINER" "$@"
+        else
+            exec docker exec -i "${env_args[@]}" "$CONTAINER" "$@"
+        fi
     fi
 }
 
@@ -521,19 +515,21 @@ case "$TOP" in
             init)
                 _banner "operator init"
                 _version="$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null | tr -d '[:space:]' || echo 'v0.0.0')"
+                # Build locally via test-runner but mount the build dir so it's on host
+                mkdir -p "$SCRIPT_DIR/components/g8eo/build/linux-amd64"
                 $COMPOSE run --rm "$TR_G8EO" bash -c "
                     set -e
                     cd /app/components/g8eo
                     mkdir -p certs
-                    [ -f /g8es/ssl/ca.crt ] && cp /g8es/ssl/ca.crt certs/server_ca.crt
+                    [ -f /g8es/ca.crt ] && rm -f certs/server_ca.crt && cp /g8es/ca.crt certs/server_ca.crt
                     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \\
                         -trimpath -buildvcs=false \\
                         -ldflags \"-s -w -X main.version=${_version} -X 'main.platform=linux/amd64'\" \\
-                        -o /home/g8e/g8e.operator .
-                    echo '[g8eo-test-runner] Built: /home/g8e/g8e.operator'
+                        -o build/linux-amd64/g8e.operator .
+                    echo '[g8eo-test-runner] Built: components/g8eo/build/linux-amd64/g8e.operator'
                 "
                 echo ""
-                echo "Operator binary built."
+                echo "Operator binary built on host."
                 exit 0 ;;
             build)
                 _banner "operator build"
@@ -586,11 +582,11 @@ case "$TOP" in
                 _ensure_g8ed "operator deploy"
                 _REMOTE_EXEC="${_DEPLOY_DEST}"
                 [[ "$(basename "${_DEPLOY_DEST}")" != "g8e.operator" ]] && _REMOTE_EXEC="${_DEPLOY_DEST%/}/g8e.operator"
-                echo "Fetching linux/${_DEPLOY_ARCH} operator from g8es blob store and copying to ${_DEPLOY_TARGET}:${_DEPLOY_DEST}..."
-                docker exec -i g8ed curl -sf \
+                echo "Fetching linux/${_DEPLOY_ARCH} operator from host g8es blob store and copying to ${_DEPLOY_TARGET}:${_DEPLOY_DEST}..."
+                curl -sfk \
                     -H "X-Operator-Session-Id: ${OPERATOR_SESSION_ID}" \
-                    --cacert /g8es/ca.crt \
-                    "https://g8es:9000/blob/operator-binary/linux-${_DEPLOY_ARCH}" \
+                    --cacert "$SCRIPT_DIR/ssl/ca.crt" \
+                    "https://localhost:9000/blob/operator-binary/linux-${_DEPLOY_ARCH}" \
                     | ssh "${_DEPLOY_TARGET}" "cat > ${_DEPLOY_DEST} && chmod +x ${_DEPLOY_DEST}"
                 echo "  Done."
                 if [[ -n "$_DEPLOY_ENDPOINT" ]]; then
@@ -767,9 +763,13 @@ case "$TOP" in
         [[ -n "${DEVICE_TOKEN:-}" ]]                    && _TEST_ENV_ARGS+=(-e "DEVICE_TOKEN=$DEVICE_TOKEN")
 
         if [ -t 0 ] && [ -t 1 ]; then
-            exec $COMPOSE run --rm ${_TEST_ENV_ARGS[@]+"${_TEST_ENV_ARGS[@]}"} -it "$_TEST_RUNNER" /app/scripts/testing/run_tests.sh "${_TEST_PASSTHROUGH[@]}"
+            export G8E_SSL_DIR="$SCRIPT_DIR/.g8e/ssl"
+            export G8E_INTERNAL_HTTP_URL="https://localhost:9000"
+            exec "$SCRIPT_DIR/scripts/testing/run_tests.sh" "${_TEST_PASSTHROUGH[@]}"
         else
-            exec $COMPOSE run --rm ${_TEST_ENV_ARGS[@]+"${_TEST_ENV_ARGS[@]}"} "$_TEST_RUNNER" /app/scripts/testing/run_tests.sh "${_TEST_PASSTHROUGH[@]}"
+            export G8E_SSL_DIR="$SCRIPT_DIR/.g8e/ssl"
+            export G8E_INTERNAL_HTTP_URL="https://localhost:9000"
+            exec "$SCRIPT_DIR/scripts/testing/run_tests.sh" "${_TEST_PASSTHROUGH[@]}"
         fi ;;
 
     # ------------------------------------------------------------------

@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "updated_at": "2026-05-09T14:38:04.327051135Z",
+  "secrets": {
+    "auditor_hmac_key": {
+      "sha256": "a79e156eedc231ba26a62c3e5600823d833729aa763c50e46a9007bc29da376f"
+    },
+    "internal_auth_token": {
+      "sha256": "5328db70adfb41bb97f93b6efa8ca9e46c909ac0b6291529ae8c10de7b561c4c"
+    },
+    "session_encryption_key": {
+      "sha256": "29d1e4ec2e126b3ceb9c9f96493e5e509938beb0b60fb18b39cdcbf5204f9bb7"
+    }
+  }
+}

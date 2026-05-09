@@ -30,8 +30,8 @@ def _load_paths() -> dict:
         paths = {
             "infra": {
                 "db_path": "/data/g8e.db",
-                "ca_cert_path": "/g8es/ca.crt",
-                "ssl_dir": "/g8es",
+                "ca_cert_path": f"{os.environ.get('G8E_SSL_DIR', '/g8es')}/ca.crt",
+                "ssl_dir": os.environ.get("G8E_SSL_DIR", "/g8es"),
                 "docs_dir": "/docs",
                 "shared_dir": _SHARED_DIR,
                 "shared_constants_dir": _SHARED_DIR + "/constants",

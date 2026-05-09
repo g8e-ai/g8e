@@ -18,12 +18,12 @@ VERSION := $(shell cat ../../VERSION 2>/dev/null | tr -d '[:space:]' || echo 'v0
 # =============================================================================
 BINARY_NAME := g8e.operator
 CERTS_DIR := certs
-G8ED_SSL_CA_CERT := ../../ssl/ca.crt
-BUILD_DIR := /home/g8e/build
+G8ED_SSL_CA_CERT := ../../.g8e/ssl/ca.crt
+BUILD_DIR := build
 BLOB_NAMESPACE := operator-binary
-G8ES_URL := https://g8es:9000
-CA_CERT := /g8es/ca.crt
-AUTH_TOKEN := $(shell cat /g8es/internal_auth_token 2>/dev/null | tr -d ' \n\r')
+G8ES_URL := https://localhost:9000
+CA_CERT := ../../.g8e/ssl/ca.crt
+AUTH_TOKEN := $(shell cat ../../.g8e/ssl/internal_auth_token 2>/dev/null | tr -d ' \n\r')
 
 # =============================================================================
 # ARCHITECTURES
@@ -73,22 +73,22 @@ help:
 build:
 	@echo "Building Operator (linux/amd64)..."
 	@mkdir -p certs
-	@[ -f /g8es/ssl/ca.crt ] && cp /g8es/ssl/ca.crt certs/server_ca.crt || true
+	@[ -f ../../.g8e/ssl/ca.crt ] && cp ../../.g8e/ssl/ca.crt certs/server_ca.crt || true
 	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
 		-trimpath \
 		-buildvcs=false \
 		-ldflags "-s -w -X main.version=$(VERSION) -X 'main.platform=linux/amd64'" \
-		-o /home/g8e/g8e.operator .
-	@echo 'Built: /home/g8e/g8e.operator'
-	@SIZE=$$(ls -lh /home/g8e/g8e.operator | awk '{print $$5}') && \
+		-o build/linux-amd64/g8e.operator .
+	@echo 'Built: build/linux-amd64/g8e.operator'
+	@SIZE=$$(ls -lh build/linux-amd64/g8e.operator | awk '{print $$5}') && \
 		echo "  Size: $$SIZE"
-	@$(MAKE) _upload-blob ARCH=amd64 BIN_PATH=/home/g8e/g8e.operator
+	@$(MAKE) _upload-blob ARCH=amd64 BIN_PATH=build/linux-amd64/g8e.operator
 
 .PHONY: build-all
 build-all:
 	@echo "Building Operator (all architectures)..."
 	@mkdir -p certs
-	@[ -f /g8es/ssl/ca.crt ] && cp /g8es/ssl/ca.crt certs/server_ca.crt || true
+	@[ -f ../../.g8e/ssl/ca.crt ] && cp ../../.g8e/ssl/ca.crt certs/server_ca.crt || true
 	@for arch in amd64 arm64 386; do \
 		echo "Building linux/$$arch..."; \
 		mkdir -p $(BUILD_DIR)/linux-$$arch && \

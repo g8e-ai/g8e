@@ -3,7 +3,7 @@
 
 set -e
 
-SSL_DIR="/g8es"
+SSL_DIR="${G8E_SSL_DIR:-${PROJECT_ROOT}/.g8e/ssl}"
 
 # Load security tokens into environment if files exist
 if [ -f "${SSL_DIR}/internal_auth_token" ]; then

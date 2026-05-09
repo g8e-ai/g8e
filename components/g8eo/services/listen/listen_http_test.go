@@ -61,7 +61,8 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config) {
 	t.Cleanup(func() { pubsub.Close() })
 
 	auth := NewAuthService(db, logger)
-	h := newHTTPHandler(cfg, logger, db, pubsub, auth, func() bool { return true })
+	certs := newCertStore(dbDir, sslDir, logger)
+	h := newHTTPHandler(cfg, logger, db, pubsub, auth, certs, func() bool { return true })
 	return h, cfg
 }
 
