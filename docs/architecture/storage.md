@@ -5,8 +5,8 @@ parent: Architecture
 
 # Storage Architecture
 
-Last Updated: 2026-05-07
-Version: v0.2.0
+Last Updated: 2026-05-10
+Version: v0.2.2
 
 This document explains how the g8e platform stores data across its components. It focuses on the **why** and **what** — the architectural decisions, data flows, and invariants — rather than implementation details.
 

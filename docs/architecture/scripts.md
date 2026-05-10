@@ -5,8 +5,8 @@ parent: Architecture
 
 # g8e Scripts
 
-Last Updated: 2026-05-07
-Version: v0.2.0
+Last Updated: 2026-05-10
+Version: v0.2.2
 
 The scripts layer provides the operational interface for the g8e platform. It is being migrated from container orchestration to host-native lifecycle management for Operator, Dashboard, and Engine.
 

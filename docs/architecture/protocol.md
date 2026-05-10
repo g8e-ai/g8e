@@ -5,8 +5,8 @@ parent: Architecture
 
 # g8e Protocol
 
-Last Updated: 2026-05-07
-Version: v0.2.0
+Last Updated: 2026-05-10
+Version: v0.2.2
 
 # Protocol Invariants
 

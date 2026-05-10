@@ -5,8 +5,8 @@ parent: Architecture
 
 # g8e Event Naming Specification
 
-Last Updated: 2026-05-07
-Version: v0.2.0
+Last Updated: 2026-05-10
+Version: v0.2.2
 
 The g8e platform uses unified, hierarchical event names to identify state transitions and lifecycle signals. Operator command/result traffic is governed by the g8e protocol: serialized Protobuf `UniversalEnvelope` bytes carry `event_type`, typed `operator.proto` payload bytes, operator/session context, state roots, and L1/L2/L3 governance metadata.
 

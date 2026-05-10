@@ -4,8 +4,8 @@ title: Docs Guidelines
 
 # g8e Documentation Guidelines
 
-Last Updated: 2026-05-07
-Version: v0.2.0
+Last Updated: 2026-05-10
+Version: v0.2.2
 
 Internal authoring standards for g8e documentation. All contributors must follow these guidelines when creating or updating docs.
 
@@ -82,8 +82,8 @@ Every document must follow this structure:
 ```
 # Title
 
-Last Updated: 2026-05-07
-Version: v0.2.0
+Last Updated: 2026-05-10
+Version: v0.2.2
 
 One or two sentence summary of what this document covers and who it is for.
 

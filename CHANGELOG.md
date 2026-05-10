@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.2] - 2026-05-10
+
+### Added
+- **Ollama Model Query:** Added support for querying available Ollama models during setup with improved UI feedback.
+- **Runtime Device Tokens:** Evals device tokens are now set at runtime instead of build time for improved security and flexibility.
+- **Host-Native Testing:** Platform now runs component tests host-native without Docker, improving test reliability and CI performance.
+
+### Changed
+- **Removed Docker:** Eliminated Docker containerization across the platform. Components now run directly on the host with the Operator binary in listen mode.
+- **g8es Component Removal:** Removed the g8es component abstraction. The platform now consists of exactly three components: Operator, Dashboard (g8ed), and Engine (g8ee).
+- **Platform Architecture:** Migrated to host-native execution model with platform runtime state in repo-local `.g8e` directory.
+- **Build System:** Comprehensive updates to `build.sh` for host-native bootstrapping, improved auth token handling, and better signal handling.
+- **Documentation:** Updated all documentation to reflect the removal of Docker and the new host-native architecture.
+- **Constants Paths:** Fixed and standardized constants paths across all components for better consistency.
+
+### Fixed
+- **Security:** Fixed SSRF vulnerability in Ollama model query endpoint.
+- **Port Conflicts:** Resolved port conflict issues during platform startup.
+- **Platform Commands:** Fixed g8e platform commands for proper host-native execution.
+- **Build.sh:** Fixed auth token handling and kill signal processing in build scripts.
+- **Test Suite:** Fixed test failures across g8ee, g8ed, and g8eo after Docker removal.
+- **Chat:** Fixed chat functionality issues in the dashboard.
+- **Demo Profiles:** Fixed nginx demo and cleaned up SAN configurations in demo profiles.
+- **Certificate Service:** Fixed test certificate service for host-native testing.
+- **Dependency:** Bumped fast-uri from 3.1.0 to 3.1.2 in g8ed for security.
+
+### Removed
+- **Dockerfiles:** Removed all Dockerfile configurations (Dockerfile, Dockerfile.test) from components.
+- **docker-compose.yml:** Removed Docker Compose configuration for platform components.
+- **g8es References:** Removed all references to the g8es component from code, tests, and documentation.
+
+---
+
 ## [0.2.1] - 2026-05-07
 
 ### Added

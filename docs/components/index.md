@@ -5,8 +5,8 @@ has_children: true
 
 # Components
 
-Last Updated: 2026-05-07
-Version: v0.2.0
+Last Updated: 2026-05-10
+Version: v0.2.2
 
 Technical reference for each platform component.
 
