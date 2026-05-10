@@ -93,7 +93,7 @@ describe('service-client-constants contract [UNIT]', () => {
     });
 
     it('ComponentUrl.G8EE is the expected internal URL', () => {
-        expect(ComponentUrl.G8EE).toBe('https://g8ee');
+        expect(ComponentUrl.G8EE).toBe('https://localhost:8443');
     });
 
     it('RequestTimeout values are positive integers', () => {
