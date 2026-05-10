@@ -241,7 +241,7 @@ run_g8ee() {
         cov_args=("${filtered[@]}" "-n" "$PARALLEL")
         log_ok "pytest parallelism: -n $PARALLEL"
     fi
-    cd "$PROJECT_ROOT"
+    cd "$PROJECT_ROOT/components/g8ee"
     "$venv_dir/bin/pytest" "${cov_args[@]}" "${EXTRA_ARGS[@]}"
 }
 
