@@ -18,7 +18,7 @@ vi.mock('@g8ed/utils/logger.js', () => ({
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }
 }));
 
-const BASE_URL = 'https://g8es:9000';
+const BASE_URL = 'https://localhost:9000';
 
 function makeClient() {
     return new g8esBlobClient({ baseUrl: BASE_URL });

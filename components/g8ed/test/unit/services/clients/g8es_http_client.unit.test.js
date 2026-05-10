@@ -22,7 +22,7 @@ vi.mock('@g8ed/utils/logger.js', () => ({
 }));
 
 describe('G8esHttpClient', () => {
-    const listenUrl = 'https://g8es:9000';
+    const listenUrl = 'https://localhost:9000';
     const internalAuthToken = 'test-token';
     let client;
 
@@ -43,8 +43,8 @@ describe('G8esHttpClient', () => {
         });
 
         it('should strip trailing slash from listenUrl', () => {
-            const clientWithSlash = new G8esHttpClient({ listenUrl: 'https://g8es:9000/' });
-            expect(clientWithSlash.listenUrl).toBe('https://g8es:9000');
+            const clientWithSlash = new G8esHttpClient({ listenUrl: 'https://localhost:9000/' });
+            expect(clientWithSlash.listenUrl).toBe('https://localhost:9000');
         });
 
         it('should set default component name', () => {

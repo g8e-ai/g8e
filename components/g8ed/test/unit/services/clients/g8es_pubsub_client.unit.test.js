@@ -48,7 +48,7 @@ vi.mock('ws', () => {
 });
 
 describe('G8esPubSubClient', () => {
-    const pubsubUrl = 'wss://g8es:9001';
+    const pubsubUrl = 'wss://localhost:9001';
     const internalAuthToken = 'test-token';
     let client;
 
@@ -68,8 +68,8 @@ describe('G8esPubSubClient', () => {
         });
 
         it('should strip trailing slash from pubsubUrl', () => {
-            const clientWithSlash = new G8esPubSubClient({ pubsubUrl: 'wss://g8es:9001/' });
-            expect(clientWithSlash.pubsubUrl).toBe('wss://g8es:9001');
+            const clientWithSlash = new G8esPubSubClient({ pubsubUrl: 'wss://localhost:9001/' });
+            expect(clientWithSlash.pubsubUrl).toBe('wss://localhost:9001');
         });
     });
 

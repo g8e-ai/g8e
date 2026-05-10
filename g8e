@@ -140,7 +140,12 @@ _eval_fleet_device_token() {
 _eval_device_token_user_id() {
     local token="$1"
     local response
-    response="$(_g8ed_curl GET "/api/internal/device-links/$token" 2>/dev/null || true)"
+    local internal_auth_token
+    internal_auth_token="$(cat "$G8E_SSL_DIR_HOST/internal_auth_token" 2>/dev/null | tr -d ' \n\r' || true)"
+    response="$(curl -sk -X GET --cacert "$G8E_SSL_DIR_HOST/ca.crt" \
+        -H "X-Internal-Auth: $internal_auth_token" \
+        -H "Content-Type: application/json" \
+        "$G8ED_URL/api/internal/device-links/$token" 2>/dev/null || true)"
     if [[ -n "$response" ]]; then
         echo "$response" | grep -o '"user_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)".*/\1/'
     fi
@@ -1133,50 +1138,50 @@ case "$TOP" in
                 if [[ ${#eval_llm_args[@]} -gt 0 ]]; then
                     user_id="$(_eval_device_token_user_id "$device_token")"
                     if [[ -z "$user_id" ]]; then
-                        echo "[g8e] Warning: Could not resolve user_id from device token, skipping LLM configuration" >&2
-                    else
-                        echo "[g8e] Configuring USER LLM settings for user: $user_id"
-                        settings_args=()
-                        i=0
-                        while [[ $i -lt ${#eval_llm_args[@]} ]]; do
-                            flag="${eval_llm_args[$i]}"
-                            value="${eval_llm_args[$((i+1))]}"
-                            case "$flag" in
-                                -p) settings_args+=("llm_provider=$value") ;;
-                                -m) settings_args+=("llm_model=$value") ;;
-                                -a) settings_args+=("llm_assistant_model=$value") ;;
-                                -l) settings_args+=("llm_lite_model=$value") ;;
-                                -e) settings_args+=("llm_endpoint=$value") ;;
-                                -k) 
-                                    provider=""
-                                    for j in "${!eval_llm_args[@]}"; do
-                                        if [[ "${eval_llm_args[$j]}" == "-p" && $j -lt ${#eval_llm_args[@]} ]]; then
-                                            provider="${eval_llm_args[$((j+1))]}"
-                                            break
-                                        fi
-                                    done
-                                    case "$provider" in
-                                        gemini) settings_args+=("gemini_api_key=$value") ;;
-                                        openai) settings_args+=("openai_api_key=$value") ;;
-                                        anthropic) settings_args+=("anthropic_api_key=$value") ;;
-                                        ollama) settings_args+=("ollama_api_key=$value") ;;
-                                        *) settings_args+=("gemini_api_key=$value") ;;
-                                    esac
-                                    ;;
-                            esac
-                            i=$((i+2))
-                        done
+                        echo "[g8e] Error: Could not resolve user_id from device token - device link may not exist or is corrupted" >&2
+                        exit 1
+                    fi
+                    echo "[g8e] Configuring USER LLM settings for user: $user_id"
+                    settings_args=()
+                    i=0
+                    while [[ $i -lt ${#eval_llm_args[@]} ]]; do
+                        flag="${eval_llm_args[$i]}"
+                        value="${eval_llm_args[$((i+1))]}"
+                        case "$flag" in
+                            -p) settings_args+=("llm_provider=$value") ;;
+                            -m) settings_args+=("llm_model=$value") ;;
+                            -a) settings_args+=("llm_assistant_model=$value") ;;
+                            -l) settings_args+=("llm_lite_model=$value") ;;
+                            -e) settings_args+=("llm_endpoint=$value") ;;
+                            -k) 
+                                provider=""
+                                for j in "${!eval_llm_args[@]}"; do
+                                    if [[ "${eval_llm_args[$j]}" == "-p" && $j -lt ${#eval_llm_args[@]} ]]; then
+                                        provider="${eval_llm_args[$((j+1))]}"
+                                        break
+                                    fi
+                                done
+                                case "$provider" in
+                                    gemini) settings_args+=("gemini_api_key=$value") ;;
+                                    openai) settings_args+=("openai_api_key=$value") ;;
+                                    anthropic) settings_args+=("anthropic_api_key=$value") ;;
+                                    ollama) settings_args+=("ollama_api_key=$value") ;;
+                                    *) settings_args+=("gemini_api_key=$value") ;;
+                                esac
+                                ;;
+                        esac
+                        i=$((i+2))
+                    done
 
-                        if [[ ${#settings_args[@]} -gt 0 ]]; then
-                            _ensure_g8ed
-                            (
-                                export G8E_SSL_DIR="$G8E_SSL_DIR_HOST"
-                                export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTP_URL"
-                                export G8ED_INTERNAL_URL="$G8ED_URL"
-                                export PYTHONPATH="$SCRIPT_DIR/scripts:$SCRIPT_DIR/shared${PYTHONPATH:+:$PYTHONPATH}"
-                                python3 "$SCRIPT_DIR/scripts/data/manage-g8es.py" settings set --user-id "$user_id" "${settings_args[@]}"
-                            )
-                        fi
+                    if [[ ${#settings_args[@]} -gt 0 ]]; then
+                        _ensure_g8ed
+                        (
+                            export G8E_SSL_DIR="$G8E_SSL_DIR_HOST"
+                            export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTP_URL"
+                            export G8ED_INTERNAL_URL="$G8ED_URL"
+                            export PYTHONPATH="$SCRIPT_DIR/scripts:$SCRIPT_DIR/shared${PYTHONPATH:+:$PYTHONPATH}"
+                            python3 "$SCRIPT_DIR/scripts/data/manage-g8es.py" settings set --user-id "$user_id" "${settings_args[@]}"
+                        )
                     fi
                 fi
 
@@ -1192,14 +1197,16 @@ case "$TOP" in
                     export G8E_SHARED_DIR="$SCRIPT_DIR/shared"
                     export G8E_SSL_DIR="$G8E_SSL_DIR_HOST"
                     export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTP_URL"
-                    export G8ED_INTERNAL_URL="$G8ED_URL"
+                    export G8ED_URL="$G8ED_URL"
+                    export G8EE_URL="$G8EE_URL"
                     "$_venv/bin/python" -m app.evals.runner.cli run "${run_args[@]}"
                 )
                 ;;
-    up)
+            up)
                 _banner "evals up"
                 _nodes=3
                 _device_token=""
+                _auto_created=false
                 _args=("${@:3}")
                 while [[ $# -gt 2 ]]; do
                     case "${3:-}" in
@@ -1208,14 +1215,60 @@ case "$TOP" in
                         *) echo "[g8e] unknown option: '${3}'"; exit 1 ;;
                     esac
                 done
+                
+                # Auto-create user and device link if no token provided
+                if [[ -z "$_device_token" ]]; then
+                    _ensure_g8ed
+                    echo "  No device token provided, checking for evals user..."
+                    
+                    # Check if evals user exists
+                    export G8E_SSL_DIR="$G8E_SSL_DIR_HOST"
+                    export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTP_URL"
+                    export G8ED_INTERNAL_URL="$G8ED_URL"
+                    export PYTHONPATH="$SCRIPT_DIR/scripts:$SCRIPT_DIR/shared${PYTHONPATH:+:$PYTHONPATH}"
+                    
+                    _user_id="$(python3 "$SCRIPT_DIR/scripts/data/manage-g8es.py" users get --email evals@g8e.local 2>/dev/null | grep -E '^  ID:' | awk '{print $2}' || true)"
+                    
+                    if [[ -z "$_user_id" ]]; then
+                        echo "  Creating evals user (evals@g8e.local)..."
+                        _user_id="$(python3 "$SCRIPT_DIR/scripts/data/manage-g8es.py" users create --email evals@g8e.local --name "Evals User" 2>/dev/null | grep -E '^  ID:' | awk '{print $2}' || true)"
+                        if [[ -z "$_user_id" ]]; then
+                            echo "[g8e] Failed to create evals user" >&2
+                            exit 1
+                        fi
+                        echo "  Created user with ID: $_user_id"
+                    else
+                        echo "  Found existing evals user: $_user_id"
+                    fi
+                    
+                    # Create device link for the user
+                    echo "  Creating device link for evals user..."
+                    _device_token="$(python3 "$SCRIPT_DIR/scripts/data/manage-g8es.py" device-links create --user-id "$_user_id" --name "evals-fleet" --max-uses 100 2>/dev/null | grep -E '^  Token:' | awk '{print $2}' || true)"
+                    if [[ -z "$_device_token" ]]; then
+                        echo "[g8e] Failed to create device link" >&2
+                        exit 1
+                    fi
+                    echo "  Created device link: $_device_token"
+                    _auto_created=true
+                fi
+                
                 if [[ -n "$_device_token" ]]; then
                     echo "  Bringing up $_nodes eval nodes with device token..."
                 else
                     echo "  Bringing up $_nodes eval nodes (no device token)..."
                 fi
-                DEVICE_TOKEN="$_device_token" COMPOSE_PROJECT_NAME=evals docker compose -f "$EVALS_COMPOSE" up -d --build --scale eval-node="$_nodes"
+                _ca_cert="$(cat "$G8E_SSL_DIR_HOST/ca.crt" 2>/dev/null || true)"
+                DEVICE_TOKEN="$_device_token" G8E_CA_CERT="$_ca_cert" COMPOSE_PROJECT_NAME=evals docker compose -f "$EVALS_COMPOSE" up -d --build --scale eval-node="$_nodes"
                 echo ""
                 echo "  Eval fleet is up. Check status with: ./g8e evals status"
+                if [[ "$_auto_created" == true ]]; then
+                    echo ""
+                    echo "  Auto-created resources:"
+                    echo "    User: evals@g8e.local"
+                    echo "    Device Token: $_device_token"
+                    echo ""
+                    echo "  Run evals with: ./g8e evals run --gold-set benchmark"
+                fi
                 exit 0 ;;
             down)
                 _banner "evals down"

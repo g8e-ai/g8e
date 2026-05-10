@@ -177,7 +177,8 @@ export class DeviceLinkResponse extends G8eBaseModel {
     static fields = {
         success:          { type: F.boolean, required: true },
         token:            { type: F.string,  required: true },
-        operator_command: { type: F.string,  required: true },
+        user_id:          { type: F.string,  default: null },
+        operator_command: { type: F.string,  default: null },
         expires_at:       { type: F.date,    required: true },
         name:             { type: F.string,  default: null },
         max_uses:         { type: F.number,  default: null },

@@ -18,7 +18,7 @@ import { HTTP_INTERNAL_AUTH_HEADER } from '@g8ed/constants/headers.js';
 
 describe('OperatorDownloadService', () => {
     let service;
-    const listenUrl = 'https://g8es:9000';
+    const listenUrl = 'https://localhost:9000';
     const authToken = 'test-internal-token';
 
     beforeEach(() => {
@@ -62,7 +62,7 @@ describe('OperatorDownloadService', () => {
             expect(result).toBeInstanceOf(Buffer);
             expect(result.toString()).toBe('fake-binary');
             expect(global.fetch).toHaveBeenCalledWith(
-                `https://g8es:9000/blob/${OPERATOR_BINARY_BLOB_NAMESPACE}/linux-amd64`,
+                `https://localhost:9000/blob/${OPERATOR_BINARY_BLOB_NAMESPACE}/linux-amd64`,
                 expect.objectContaining({
                     signal: expect.any(AbortSignal),
                     headers: expect.objectContaining({ [HTTP_INTERNAL_AUTH_HEADER]: authToken }),
@@ -110,7 +110,7 @@ describe('OperatorDownloadService', () => {
 
             expect(result).toBe(true);
             expect(global.fetch).toHaveBeenCalledWith(
-                `https://g8es:9000/blob/${OPERATOR_BINARY_BLOB_NAMESPACE}/linux-amd64/meta`,
+                `https://localhost:9000/blob/${OPERATOR_BINARY_BLOB_NAMESPACE}/linux-amd64/meta`,
                 expect.objectContaining({
                     signal: expect.any(AbortSignal),
                     headers: expect.objectContaining({ [HTTP_INTERNAL_AUTH_HEADER]: authToken }),

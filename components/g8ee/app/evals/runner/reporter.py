@@ -280,15 +280,10 @@ def persist_report(report: FullReport, reports_dir: str | Path) -> dict[str, str
     write_summary_json(report, json_path)
 
     latest_symlink = reports_dir / "latest"
-    if latest_symlink.exists():
-        if latest_symlink.is_symlink():
-            latest_symlink.unlink()
-        elif latest_symlink.is_dir():
-            shutil.rmtree(latest_symlink)
-        else:
-            latest_symlink.unlink()
+    if latest_symlink.exists() or latest_symlink.is_symlink():
+        latest_symlink.unlink(missing_ok=True)
 
-    latest_symlink.symlink_to(run_dir)
+    latest_symlink.symlink_to(run_dir, target_is_directory=True)
 
     return {
         "report_txt": str(report_txt_path.absolute()),

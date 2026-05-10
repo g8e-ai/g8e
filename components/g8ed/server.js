@@ -550,8 +550,8 @@ class G8edServer {
     }
 
     _proxyWebSocket(request, socket, head) {
-        // Use default g8es WebSocket URL - no config dependency
-        const g8esUrl = new URL('wss://g8es:9001');
+        // Use localhost for operator WebSocket - platform no longer runs in docker
+        const g8esUrl = new URL('wss://localhost:9001');
         const port = parseInt(g8esUrl.port, 10) || 9001;
         const host = g8esUrl.hostname;
         const isSecure = g8esUrl.protocol === 'wss:';

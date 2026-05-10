@@ -305,13 +305,13 @@ class CaseDataService:
 
             logger.info("Published case SSE update", extra={
                 "case_id": case_id,
-                "web_session_id": web_session_id[:8] + "...",
+                "web_session_id": (web_session_id[:8] + "...") if web_session_id else None,
             })
 
         except Exception as e:
             logger.warning("Failed to publish case SSE: %s", e, extra={
                 "case_id": case_id,
-                "web_session_id": web_session_id[:8] + "..."
+                "web_session_id": (web_session_id[:8] + "...") if web_session_id else None
             })
 
     async def get_case_history(self, query: CaseHistoryQuery) -> list[HistoryEntry]:

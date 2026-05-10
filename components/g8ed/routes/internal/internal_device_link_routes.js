@@ -85,13 +85,13 @@ export function createInternalDeviceLinkRouter({ services, authorizationMiddlewa
      *
      * Create a device link for a user.
      *
-     * Body: { name?, max_uses?, expires_in_hours? }
+     * Body: { name?, max_uses?, expires_in_hours?, operator_id? }
      *
      * SECURITY: INTERNAL ONLY - cluster-only access
      */
     router.post('/user/:userId', requireInternalOrUserAuth, async (req, res, next) => {
         const { userId } = req.params;
-        const { name, max_uses, expires_in_hours } = req.body;
+        const { name, max_uses, expires_in_hours, operator_id } = req.body;
 
         if (!userId) {
             return res.status(400).json(new ErrorResponse({ error: 'userId is required' }).forWire());
@@ -115,7 +115,8 @@ export function createInternalDeviceLinkRouter({ services, authorizationMiddlewa
             logger.info('[INTERNAL-HTTP] Device link created', {
                 userId,
                 token_prefix: result.token.substring(0, 25) + '...',
-                max_uses: result.max_uses
+                max_uses: result.max_uses,
+                has_operator_id: !!operator_id
             });
 
             return res.status(201).json(new DeviceLinkResponse({
@@ -213,9 +214,15 @@ export function createInternalDeviceLinkRouter({ services, authorizationMiddlewa
                 user_id: result.data.user_id
             });
 
+            const linkData = result.data.forWire();
             return res.json(new DeviceLinkResponse({
                 success: true,
-                ...result.data.forWire()
+                token: linkData.token,
+                user_id: linkData.user_id,
+                operator_command: linkData.operator_id ? `g8e.operator --device-token ${token}` : null,
+                expires_at: linkData.expires_at,
+                name: linkData.name,
+                max_uses: linkData.max_uses
             }).forWire());
 
         } catch (error) {

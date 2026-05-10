@@ -129,7 +129,8 @@ class G8eHttpContext(G8eBaseModel):
         logger = get_logger(__name__)
 
         # Authoritative list of paths that G8ED is allowed to call without web_session_id/user_id.
-        # These are strictly limited to operator authentication and session management.
+        # These are strictly limited to operator authentication and session management,
+        # plus chat endpoints for device token (evals) flows where no web session exists.
         exempt_paths = {
             InternalApiPaths.G8EE_OPERATORS_REGISTER_SESSION,
             InternalApiPaths.G8EE_OPERATORS_DEREGISTER_SESSION,
@@ -138,6 +139,11 @@ class G8eHttpContext(G8eBaseModel):
             InternalApiPaths.G8EE_OPERATORS_REFRESH_SESSION,
             InternalApiPaths.G8EE_OPERATORS_DEVICE_LINK_REGISTER,
             InternalApiPaths.G8EE_OPERATORS_LISTEN_SESSION_AUTH,
+            InternalApiPaths.G8EE_CHAT,
+            InternalApiPaths.G8EE_CHAT_STOP,
+            InternalApiPaths.G8EE_CHAT_TRIAGE_ANSWER,
+            InternalApiPaths.G8EE_CHAT_TRIAGE_SKIP,
+            InternalApiPaths.G8EE_CHAT_TRIAGE_TIMEOUT,
         }
         is_exempt_path = request.url.path in exempt_paths
 

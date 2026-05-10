@@ -68,9 +68,9 @@ class TestG8eeSettingsOverlayIntegration:
                     "operators_collection": "operators"
                 },
                 "listen": {
-                    "http_url": "https://g8es:9000",
-                    "pubsub_url": "wss://g8es:9001",
-                    "blob_url": "https://g8es:9000",
+                    "http_url": "https://localhost:9000",
+                    "pubsub_url": "wss://localhost:9001",
+                    "blob_url": "https://localhost:9000",
                     "default_ttl": 3600
                 },
                 "auth": {
@@ -151,9 +151,9 @@ class TestG8eeSettingsOverlayIntegration:
                     "operators_collection": "operators"
                 },
                 "listen": {
-                    "http_url": "https://g8es:9000",
-                    "pubsub_url": "wss://g8es:9001",
-                    "blob_url": "https://g8es:9000",
+                    "http_url": "https://localhost:9000",
+                    "pubsub_url": "wss://localhost:9001",
+                    "blob_url": "https://localhost:9000",
                     "default_ttl": 3600
                 },
                 "auth": {
@@ -310,9 +310,9 @@ class TestG8eeSettingsOverlayIntegration:
                     "operators_collection": "operators"
                 },
                 "listen": {
-                    "http_url": "https://g8es:9000",
-                    "pubsub_url": "wss://g8es:9001",
-                    "blob_url": "https://g8es:9000",
+                    "http_url": "https://localhost:9000",
+                    "pubsub_url": "wss://localhost:9001",
+                    "blob_url": "https://localhost:9000",
                     "default_ttl": 3600
                 },
                 "auth": {

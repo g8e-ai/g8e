@@ -16,7 +16,7 @@ import { KVCacheClient, KVOperationError } from '@g8ed/services/clients/g8es_kv_
 import { G8ES_KV_CLIENT_STATUS_READY } from '@g8ed/constants/http_client.js';
 
 describe('KVCacheClient', () => {
-    const listenUrl = 'https://g8es:9000';
+    const listenUrl = 'https://localhost:9000';
     const internalAuthToken = 'test-token';
     let client;
     let mockHttp;

@@ -24,7 +24,7 @@ class TestModel extends G8eBaseModel {
 }
 
 describe('G8esDocumentClient', () => {
-    const listenUrl = 'https://g8es:9000';
+    const listenUrl = 'https://localhost:9000';
     const internalAuthToken = 'test-token';
     let client;
     let mockHttp;

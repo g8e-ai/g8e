@@ -11,6 +11,13 @@ OPERATOR_LOG_PREFIX="[$NODE_ID operator]"
 
 echo "[$NODE_ID] Starting eval node (profile: $NODE_PROFILE)"
 
+# Write CA cert from environment if provided
+if [ -n "${G8E_CA_CERT:-}" ]; then
+    mkdir -p /tmp/ssl
+    echo "$G8E_CA_CERT" > /tmp/ssl/ca.crt
+    echo "[$NODE_ID] CA certificate written to /tmp/ssl/ca.crt"
+fi
+
 # DEVICE_TOKEN is optional at startup; operator will wait if it's missing
 if [ -z "${DEVICE_TOKEN:-}" ]; then
     echo "[$NODE_ID] WARNING: DEVICE_TOKEN environment variable is not set"
@@ -40,30 +47,13 @@ cat > /etc/app/config.json <<EOF
 }
 EOF
 
-# Download and supervise the operator
+# Supervise the operator (binary is baked into image)
 _run_operator() {
-    local attempt=0
-    while [ ! -x "$OPERATOR_BINARY" ]; do
-        attempt=$((attempt + 1))
-        echo "$OPERATOR_LOG_PREFIX downloading binary from $OPERATOR_ENDPOINT (attempt $attempt)..."
-
-        if curl -fsSL --cacert /g8es/ca.crt \
-                -H "Authorization: Bearer $DEVICE_TOKEN" \
-                -o "$OPERATOR_BINARY" \
-                "https://$OPERATOR_ENDPOINT/operator/download/linux/amd64" 2>/dev/null; then
-            chmod +x "$OPERATOR_BINARY"
-            echo "$OPERATOR_LOG_PREFIX binary ready ($(stat -c%s "$OPERATOR_BINARY" 2>/dev/null || wc -c < "$OPERATOR_BINARY") bytes)"
-        else
-            echo "$OPERATOR_LOG_PREFIX download failed; retrying in 5s"
-            rm -f "$OPERATOR_BINARY"
-            sleep 5
-        fi
-
-        if [ $attempt -ge 10 ]; then
-            echo "$OPERATOR_LOG_PREFIX ERROR: Failed to download operator after $attempt attempts"
-            exit 1
-        fi
-    done
+    if [ ! -x "$OPERATOR_BINARY" ]; then
+        echo "$OPERATOR_LOG_PREFIX ERROR: Operator binary not found at $OPERATOR_BINARY"
+        exit 1
+    fi
+    echo "$OPERATOR_LOG_PREFIX binary ready ($(stat -c%s "$OPERATOR_BINARY" 2>/dev/null || wc -c < "$OPERATOR_BINARY") bytes)"
 
     # Supervised restart loop
     while true; do
