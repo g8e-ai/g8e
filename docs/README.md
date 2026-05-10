@@ -7,28 +7,34 @@ permalink: /docs/
 # g8e Documentation Index
 
 Last Updated: 2026-05-10
-Version: v0.2.2
+Version: v0.2.3
 
-g8e is a Zero-Trust AI platform for secure infrastructure operations. This index maps high-level concepts to their technical implementations.
+g8e is a Zero-Trust AI platform for secure infrastructure operations. This index maps high-level concepts to their technical implementations across the three-component architecture (Operator, Dashboard, Engine).
 
 ## Platform Pillars
+
+Foundational architecture documents defining the safety, reasoning, and environment models.
 
 | Document | Description |
 |----------|-------------|
 | [architecture/security.md](architecture/security.md) | **Zero-Trust & Governance**: LFAA (Logs, Files, Audit, Activity) encryption, Sentinel traffic analysis, and human-in-the-loop controls. |
-| [architecture/ai_agents.md](architecture/ai_agents.md) | **Agentic AI**: Multi-provider LLM abstraction (g8ee), tool-loop execution, and secure command dispatch. |
+| [architecture/governance.md](architecture/governance.md) | **3-Layer Governance**: The L1/L2/L3 validation hierarchy (Bedrock, Consensus, Authorization) and the Warden circuit breaker. |
+| [architecture/ai_agents.md](architecture/ai_agents.md) | **Agentic AI**: Multi-provider LLM abstraction (g8ee), the 5-member Tribunal ensemble, and tool-loop execution. |
+| [architecture/thinking.md](architecture/thinking.md) | **Thinking & Reasoning**: Dual-layer architecture for structural reasoning (Tribunal) and provider-native reasoning (thinking levels). |
+| [architecture/air_gap.md](architecture/air_gap.md) | **Air-Gap Operations**: Principles for fully disconnected environments, local inference, and zero-config bootstrap. |
 | [architecture/operator.md](architecture/operator.md) | **Secure Execution**: The g8eo Operator lifecycle, vault management, and real-time command tunneling. |
-| [architecture/storage.md](architecture/storage.md) | **Persistence**: Operator listen mode using SQLite, KV stores, pub/sub, and secure blob storage. |
+| [architecture/storage.md](architecture/storage.md) | **Persistence**: Operator Listen Mode using the coordination store (SQLite), KV, and LFAA Audit Vault. |
+| [architecture/dashboard.md](architecture/dashboard.md) | **Dashboard & Relay**: The g8ed hub-and-spoke model, stateless relaying, and session binding. |
 
 ## Component Reference
 
-Technical deep-dives into the services that comprise the g8e stack.
+Technical deep-dives into the three services that comprise the g8e stack.
 
 | Component | Role | Primary Implementation |
 |-----------|------|------------------------|
-| [**g8eo**](components/g8eo.md) | Operator | Go-based secure execution agent and listen-mode persistence/pubsub runtime. |
-| [**g8ee**](components/g8ee.md) | Engine | Python (FastAPI) agentic orchestrator for LLM interactions and tool dispatch. |
-| [**g8ed**](components/g8ed.md) | Dashboard | Node.js (Express) management plane, SSE fan-out, and session binding. |
+| [**g8eo**](components/g8eo.md) | **Operator** | Go-based secure execution agent and listen-mode persistence/pubsub runtime. |
+| [**g8ee**](components/g8ee.md) | **Engine** | Python (FastAPI) agentic orchestrator for LLM interactions and tool dispatch. |
+| [**g8ed**](components/g8ed.md) | **Dashboard** | Node.js (Express) management plane, SSE fan-out, and session binding. |
 
 ## Guides & Standards
 

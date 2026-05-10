@@ -6,20 +6,20 @@ parent: Architecture
 # Builds, Dependencies, and Startup Sequence
 
 Last Updated: 2026-05-10
-Version: v0.2.2
+Version: v0.3.0
 
-This document explains the g8e component dependency chain, the lifecycle of a build, and the startup sequence that establishes the platform's root of trust.
+This document explains the g8e component dependency chain, the lifecycle of a build, and the host-native startup sequence that establishes the platform's root of trust.
 
 ---
 
 ## Architecture Philosophy
 
-g8e is designed for speed and reliability. Every component runs host-native and follows these principles:
+g8e is designed for speed, security, and low-overhead local development. The core platform runs host-native, avoiding the complexity of container orchestration for the primary services.
 
-- **Parallel Builds**: All components build in parallel with no build-time dependencies on each other.
-- **Runtime Discovery**: Component dependencies are enforced at runtime via health checks.
-- **Root of Trust**: Operator in `--listen` mode generates the platform CA on first boot, which all other services read from `.g8e/ssl`.
-- **Lean Services**: Runtime processes do not ship with unnecessary compilers. Operator binaries are served from the local file system by g8ed.
+- **Host-Native Execution**: All core components (`g8eo`, `g8ee`, `g8ed`) run as native processes on the host.
+- **Root of Trust**: The Operator in `--listen` mode is the foundational service. It generates the platform CA and internal auth tokens upon which all other services depend.
+- **Zero-Config Discovery**: Services use a standardized local runtime directory (`.g8e/`) for discovery and configuration sharing.
+- **Parallel Convergence**: While services are started in order, they converge asynchronously via health-check polling.
 
 ---
 
@@ -27,68 +27,77 @@ g8e is designed for speed and reliability. Every component runs host-native and 
 
 | Component | Role | Runtime Environment | Build Strategy |
 | :--- | :--- | :--- | :--- |
-| **operator** | Persistence & Pub/Sub | Alpine / Go binary | Multi-stage Go (cross-compiles all arches) |
-| **g8ee** | AI Backend | Python 3.12-slim / FastAPI | Multi-stage Python (pip-install builder) |
-| **g8ed** | Web Gateway | Node 22-alpine / Express | Multi-stage Node (npm-install builder) |
+| **Operator (g8eo)** | Persistence, Pub/Sub, Root of Trust | Host Go binary | Native Go build via `Makefile` |
+| **Engine (g8ee)** | AI Backend & Workflow Orchestration | Python 3.12 Venv | `pip install` into local `.venv` |
+| **Dashboard (g8ed)** | Web Gateway & GUI | Node 22 | `npm install` for local `node_modules` |
 
 ---
 
-## The Build & Startup Lifecycle
+## The Host-Native Startup Lifecycle
 
-Docker Compose enforces the following dependency graph via `condition: service_healthy`:
+The `./g8e platform start` command (invoked via `scripts/core/build.sh`) manages the sequence of operations:
 
 ```mermaid
 graph TD
-    A[Build all images in parallel] --> B[operator starts]
-    B -->|Generates CA Cert| C[g8ee starts]
-    B -->|Provides API/PubSub| D[g8ed starts]
-    D -->|Platform Live| F[Ready]
+    A[./g8e platform start] --> B[Operator binary check/build]
+    B --> C[Operator starts in --listen mode]
+    C -->|Generates .g8e/ssl/ca.crt| D[Engine & Dashboard start]
+    D --> E[Engine waits for Operator API]
+    D --> F[Dashboard waits for Operator & Engine]
+    E & F --> G[Platform Live]
 ```
 
-### 1. Image Compilation
-The `operator` build is the most intensive. It cross-compiles the `g8e.operator` binary for `amd64`, `arm64`, and `386`, applies UPX compression, and bakes them into the image. These binaries are used both for running `operator` itself and for distribution to other components.
+### 1. Root of Trust Generation
+On the first boot (or after a `clean`), the Operator in listen mode generates:
+- **ECDSA P-384 CA**: A unique, self-signed Certificate Authority stored in `.g8e/ssl/ca.crt`.
+- **Internal Auth Token**: A cryptographically secure token (`internal_auth_token`) used for service-to-service authentication.
+- **Server Certificates**: Leaf certificates for the API and Dashboard.
 
-### 2. Operator Initialization
-On first start, Operator in listen mode generates a self-signed ECDSA P-384 CA and writes it to `.g8e/ssl`. It then:
-- Opens the SQLite document store at `.g8e/data/g8e.db`.
-- Starts the HTTPS API (port 9000) and WSS Pub/Sub broker (port 9001).
-- Background-uploads the operator binaries to its internal blob store.
+### 2. Service Initialization
+- **Engine (g8ee)**: Starts using its local Python virtual environment. It reads the `internal_auth_token` and trusts the `ca.crt` to communicate with the Operator's internal HTTPS API.
+- **Dashboard (g8ed)**: Starts using Node.js. It requires `cap_net_bind_service` on the `node` binary to bind to privileged ports (80/443). Port 80 serves the **Trust Portal**, while port 443 serves the HTTPS dashboard.
 
-### 3. Service Convergence
-`g8ee` and `g8ed` wait for Operator listen mode to be healthy. They read the host SSL directory exported as `G8E_SSL_DIR` to establish TLS trust and authenticate via the `X-Internal-Auth` token; by default this resolves to `./.g8e/ssl`.
+### 3. Asynchronous Convergence
+Services do not hard-fail if dependencies are missing at launch. Instead, they poll the internal health-check endpoints:
+- Engine polls `https://localhost:9000/health`.
+- Dashboard polls both Engine and Operator health endpoints.
 
 ---
 
-## The Operator Pipeline
+## The Operator Build Pipeline
 
-While `operator` bakes default binaries, developers can force fresh builds without rebuilding the entire platform:
+The Operator is responsible for distributing its own binaries to remote nodes. The build pipeline is managed natively:
 
-- **`./g8e operator build`**: Invokes `g8eo-test-runner` (the Go toolchain container) to compile a fresh `amd64` binary and upload it to the `operator` blob store.
-- **`./g8e operator build-all`**: Compiles and uploads all three architectures with UPX compression.
+- **`./g8e operator build`**: Compiles the `linux/amd64` binary and uploads it to the Operator's internal blob store at `/api/internal/blob/operator-binary/linux-amd64`.
+- **`./g8e operator build-all`**: Cross-compiles for `amd64`, `arm64`, and `386`, applies UPX compression, and syncs all architectures to the blob store.
 
-This ensures that the `g8ep` sidecar (and any remote operators) can always pull the latest binary via a simple service restart or re-authentication.
+This "self-hosting" binary model ensures that `operator deploy` can always pull the correct architecture binary directly from the local platform.
 
 ---
 
 ## Data & Volume Strategy
 
-g8e splits data across two primary volumes to balance persistence with the ability to "reset" the application state.
+Data is organized within the `.g8e/` directory to balance persistence with the ability to "reset" the application state.
 
-| Volume | Purpose | Wipe Policy |
+| Path | Purpose | Wipe Policy |
 | :--- | :--- | :--- |
-| **`operator-ssl`** | CA cert, server keys, internal auth token | **Never wiped** by `reset` or `wipe`. |
-| **`operator-data`** | SQLite DB (users, cases, settings, blobs) | Wiped by `reset`. Preserved by `wipe`. |
-| **`g8ee/d-data`**| Component-specific application state | Wiped by `reset`. |
+| **`.g8e/ssl/`** | CA cert, server keys, internal auth token | **Preserved** by `reset` and `wipe`. |
+| **`.g8e/data/`** | SQLite DB (`g8e.db`) and blob storage | Wiped by `reset`. |
+| **`.g8e/logs/`** | Service logs (rotated automatically) | Cleared by `clean`. |
+| **`.g8e/pids/`** | Process ID files for lifecycle management | Cleared on `stop`. |
 
-- **`./g8e platform wipe`**: Clears domain data (cases, operators) via the API but preserves `platform_settings` and SSL.
-- **`./g8e platform reset`**: Deletes the database volume, but keeps the CA cert so users don't have to re-trust the platform.
+- **`./g8e platform wipe`**: Clears application data (cases, users, operators) via the API but preserves platform settings and SSL state.
+- **`./g8e platform reset`**: Deletes the database and data directory, but keeps the CA cert so client trust is maintained.
+- **`./g8e platform clean`**: Destructive removal of the entire `.g8e/` directory and all running processes.
 
 ---
 
-## CLI Reference
+## Trust & Networking
 
-The `./g8e platform` command is the primary entry point for lifecycle management:
-
-- **`status`**: Shows process health and component versions.
-- **`clean`**: Destructive removal of all managed processes and data.
-- **`test <component>`**: Executes the test suite for the specified component using native toolchains.d component using native toolchains.
+- **The Trust Portal**: Served on port 80. Users visit `http://localhost` (or `http://g8e.local`) to download and trust the platform CA.
+- **Port Bindings**:
+    - `80`: HTTP Trust Portal (Dashboard)
+    - `443`: HTTPS Dashboard (Dashboard)
+    - `8443`: Internal Engine API (HTTPS)
+    - `9000`: Internal Operator API (HTTPS)
+    - `9001`: Internal Operator Pub/Sub (WSS)

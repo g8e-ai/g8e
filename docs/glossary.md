@@ -5,7 +5,7 @@ title: Glossary
 # g8e Glossary
 
 Last Updated: 2026-05-10
-Version: v0.2.2
+Version: v0.3.0
 
 Essential terminology for understanding the g8e platform. Terms are organized alphabetically.
 
@@ -35,15 +35,21 @@ The interactive interface that presents proposed commands, file modifications, o
 
 ---
 
+## Audit Trail
+
+A chronological record of all actions performed within the g8e platform. Includes command executions, file modifications, permission changes, and user interactions. Stored locally in the Audit Vault on the Operator.
+
+---
+
 ## Audit Vault
 
 An embedded SQLite database (`./.g8e/data/g8e.db`) that stores all session history, command executions, and file mutations locally on the Operator. Part of the Local-First Audit Architecture (LFAA). Contains tables for `sessions`, `events`, and `file_mutation_log`.
 
 ---
 
-## Audit Trail
+## Auditor
 
-A chronological record of all actions performed within the g8e platform. Includes command executions, file modifications, permission changes, and user interactions. Stored locally in the Audit Vault on the Operator.
+A verifier persona within the g8ee Tribunal stage (L2 Governance). The Auditor evaluates the consensus command winner against the user's original intent. If verified, the Auditor signs a **Merkle Commitment** that binds the current **Reputation Scoreboard** state to the verdict, creating a tamper-evident cryptographic chain of all agent actions. Performs the final consistency check before a command proceeds to user approval.
 
 ---
 
@@ -53,9 +59,21 @@ A cryptographic credential used to establish identity between components. Includ
 
 ---
 
+## Auto-Approval
+
+A security mechanism in g8ee that allows benign, read-only diagnostic commands (e.g., `uptime`, `df -h`, `ls`) to bypass manual human approval. Defined in `auto_approved.json`, these commands are still subjected to L1 and L2 governance. Auto-approval reduces click fatigue without sacrificing the technical or consensus safety gates.
+
+---
+
 ## Binding
 
 The process of connecting an Operator to a web session, enabling command execution on that system. Users manually bind Operators via the Operator Panel. Multiple Operators can be bound to a single web session simultaneously (Multi-Operator Binding), but each Operator can only be bound to one web session at a time.
+
+---
+
+## Bootstrap Process
+
+The initial setup process for g8e, where the platform discovers the Internal Auth Token and configures the Operator's connection to the control plane.
 
 ---
 
@@ -65,15 +83,9 @@ A unique identifier for each investigation (chat session). Used to track convers
 
 ---
 
-## System Operator
-
-The Operator binary started with `--cloud=false`. Standard shell and system operations only — cloud CLI tools (`aws`, `gcloud`, `az`, `terraform`, `kubectl`, `helm`, `ansible`, etc.) are blocked at the execution layer. This is the security boundary intended for operators that should have no cloud access. Because `--cloud` defaults to `true`, `--cloud=false` must be passed explicitly to enforce System Operator mode.
-
----
-
 ## Cloud Operator
 
-The same ~4MB Operator binary started with `--cloud` (which defaults to `true`). Unlocks cloud CLI tools (`aws`, `gcloud`, `az`, `terraform`, `kubectl`, `helm`, `ansible`, etc.) and switches the AI to cloud-specific reasoning mode. Use `--provider aws|gcp|azure` to specify the cloud. Cloud Operators run on any Linux system with port 443 outbound. See **Cloud Operator for AWS** for the variant with Zero Standing Privileges and intent-based IAM access.
+An Operator binary started with `--cloud` (which defaults to `true`). Unlocks cloud CLI tools (`aws`, `gcloud`, `az`, `terraform`, `kubectl`, `helm`, `ansible`, etc.) and switches the AI to cloud-specific reasoning mode. Use `--provider aws|gcp|azure` to specify the cloud. Cloud Operators run on any Linux system with port 443 outbound. See **Cloud Operator for AWS** for the variant with Zero Standing Privileges and intent-based IAM access.
 
 ---
 
@@ -99,6 +111,12 @@ The set of standards and regulations that g8e adheres to, including NSA ZIG alig
 
 ---
 
+## Coordination Store (SQLite)
+
+The embedded SQLite database used for durable storage of users, operators, investigations, chat history, and platform data. The Operator binary running in `--listen` mode is the single source of truth — a single SQLite database in WAL mode shared by all components via the Operator's document store, KV, and pub/sub APIs. g8ee and g8ed are stateless with respect to persistence and access all data through the g8ed HTTP API.
+
+---
+
 ## Cryptographic Integrity
 
 The use of cryptographic hashes and signatures to ensure data authenticity and prevent tampering. Applied to file mutations in the Ledger, audit logs in the Audit Vault, and communication between components.
@@ -117,23 +135,11 @@ A security strategy that implements multiple layers of protection to ensure the 
 
 ---
 
-## g8e
-
-The platform name. g8e is an open-source, air-gapped capable AI governance platform that connects Operators to an AI control plane capable of reasoning about system state, executing commands, analyzing results, and performing multi-step operational workflows through natural language.
-
----
-
 ## Device Link
 
 A pre-authorized deployment method for installing Operators on one or many systems from a single token. Users generate a Device Link from the Operator Panel with configurable `max_uses` (1–10,000, default 1) and expiry (1 minute to 7 days, default 1 hour). The token (`dlk_` prefix) is distributed via Ansible, SSH, or configuration management as `g8e.operator --device-token dlk_xxx`. Each system auto-registers: the platform claims an existing AVAILABLE Operator slot for that user, or creates one on demand if none exist. No browser approval required — the link itself is the authorization. Operator slots are the accounting unit — each registered device consumes one slot.
 
 **Authority Split:** g8ed is authoritative for device link documents (usage tracking, exhaustion checking, claims management); g8ee is authoritative for operator documents (slot management, lifecycle operations).
-
----
-
-## g8e Sentinel
-
-A platform-wide, multi-layer security system that protects the user's remote system and data across both the Operator (`g8eo`) and the AI Engine (`g8ee`). Sentinel stands guard on the Operator side with **pre-execution protection** (46 threat detectors across MITRE ATT&CK-mapped categories) and **egress data scrubbing** to ensure sensitive information never leaves the host. It adds another layer of defense on the AI Engine side with **ingress data scrubbing**, protecting Operator data with redundant patterns before it is transmitted to any model provider. Scrubbing patterns cover credentials (AWS keys, API tokens), PII (emails, phone numbers), network identifiers, and cloud resources, replacing sensitive values with safe placeholders like `[AWS_KEY]` or `[EMAIL]`. Sentinel also includes indirect prompt injection defense to detect command output attempting to manipulate AI behavior. See [docs/architecture/storage.md](architecture/storage.md) for full details.
 
 ---
 
@@ -143,15 +149,9 @@ The protection of data stored on disk using AES-256-GCM encryption. Applied to t
 
 ---
 
-## g8e Security
-
-The comprehensive security model designed for organizations requiring regulatory compliance, audit trails, and granular access controls. Includes Zero Standing Privileges, data sovereignty, human oversight, and compliance documentation.
-
----
-
 ## Environment
 
-The runtime context of the system where an Operator is running, as reported by the Operator via heartbeat telemetry. Captured in `HeartbeatEnvironment` and includes: current working directory (`pwd`), locale (`lang`), timezone, terminal type (`term`), container detection (`is_container`, `container_runtime`, `container_signals`), and init system (`init_system`). Used by g8ee to provide the AI with accurate context about the Operator's execution environment — for example, whether to avoid `systemctl` commands in a containerized environment. Distinct from any platform-level deployment concept; g8e is self-hosted and has a single deployment environment.
+The runtime context of the system where an Operator is running, as reported by the Operator via heartbeat telemetry. Captured in `HeartbeatEnvironment` and includes: current working directory (`pwd`), locale (`lang`), timezone, terminal type (`term`), container detection (`is_container`, `container_runtime`, `container_signals`), and init system (`init_system`). Used by g8ee to provide the AI with accurate context about the Operator's execution environment.
 
 ---
 
@@ -167,15 +167,45 @@ The security architecture aligned with Federal Risk and Authorization Management
 
 ---
 
-## Tool Calling Loop
+## g8e
 
-The execution pattern used by g8ee where the AI generates tool calls to interact with Operators, receives results, and generates subsequent calls based on the outcomes. Enables complex multi-step workflows and adaptive reasoning about system state.
+The platform name. g8e is an open-source, air-gapped capable AI governance platform that connects Operators to an AI control plane capable of reasoning about system state, executing commands, analyzing results, and performing multi-step operational workflows through natural language.
 
 ---
 
-## Coordination Store (SQLite)
+## g8ed (g8e Dashboard)
 
-The embedded SQLite database used for durable storage of users, operators, investigations, chat history, and platform data. operator is the single source of truth — a single SQLite database in WAL mode shared by all components via operator's document store, KV, and pub/sub APIs. g8ee and g8ed are stateless with respect to persistence and access all data through the g8ed HTTP API. Replaces the former Google Cloud Firestore dependency.
+The Node.js/Express web frontend component. Handles user authentication (passkey/FIDO2/WebAuthn), session management, the chat interface, Operator Panel, and SSE streaming to browsers. Routes messages between users and g8ee.
+
+---
+
+## g8ee (g8e Engine)
+
+The AI engine component with LLM provider abstraction supporting OpenAI, Anthropic, Gemini, and Ollama providers. Processes natural language requests, reasons about system state, generates commands, and manages investigations. Implements the tool calling loop for Operator interactions and the Intent-Based Policy System for Cloud Operators.
+
+---
+
+## g8eo (g8e Operator)
+
+The Go-based reference implementation of the Operator. A lightweight (~4MB) binary that provides language-agnostic, platform-agnostic execution, file operations, local storage, and heartbeat monitoring. When started with `--listen`, it acts as the platform's central **Coordination Store**.
+
+---
+
+## g8e Security
+
+The comprehensive security model designed for organizations requiring regulatory compliance, audit trails, and granular access controls. Includes Zero Standing Privileges, data sovereignty, human oversight, and compliance documentation.
+
+---
+
+## g8e Sentinel
+
+A platform-wide, multi-layer security system that protects the user's remote system and data across both the Operator (`g8eo`) and the AI Engine (`g8ee`). Sentinel stands guard on the Operator side with **pre-execution protection** (46 threat detectors across MITRE ATT&CK-mapped categories) and **egress data scrubbing** to ensure sensitive information never leaves the host. It adds another layer of defense on the AI Engine side with **ingress data scrubbing**, protecting Operator data with redundant patterns before it is transmitted to any model provider. Scrubbing patterns cover credentials (AWS keys, API tokens), PII (emails, phone numbers), network identifiers, and cloud resources, replacing sensitive values with safe placeholders like `[AWS_KEY]` or `[EMAIL]`. Sentinel also includes indirect prompt injection defense to detect command output attempting to manipulate AI behavior.
+
+---
+
+## Heartbeat
+
+A periodic health telemetry message sent by the Operator to the control plane every 30 seconds. Contains system identity (hostname, OS, architecture), performance metrics (CPU, memory, disk usage), network information, and uptime data. Used for Operator health monitoring and status determination.
 
 ---
 
@@ -191,15 +221,15 @@ The requirement that all significant operations be reviewed and approved by auth
 
 ---
 
-## IAM Role
+## Human-in-the-Loop
 
-AWS Identity and Access Management role used by Cloud Operators for AWS to define permissions. Includes the Operator Role (starts with zero permissions) and Escalation Role (manages intent policy attachments).
+A security principle requiring explicit user approval before any state-changing operation executes. All destructive commands, file modifications, and permission escalations require user consent via the approval UI. Read-only operations execute automatically.
 
 ---
 
-## Idle Timeout
+## IAM Role
 
-A security mechanism that automatically terminates web sessions after 8 hours of inactivity. Prevents unauthorized access through abandoned browser sessions and requires users to re-authenticate when returning.
+AWS Identity and Access Management role used by Cloud Operators for AWS to define permissions. Includes the Operator Role (starts with zero permissions) and Escalation Role (manages intent policy attachments).
 
 ---
 
@@ -209,33 +239,27 @@ The process of confirming the authenticity of users, Operators, and systems. Inc
 
 ---
 
-## Intent Policy
+## Idle Timeout
 
-A pre-defined AWS IAM policy that grants specific permissions for a particular service or action. Cloud Operators for AWS request these policies through the Intent-Based Policy System when additional permissions are needed.
-
----
-
-## Investigation Management
-
-The process of creating, tracking, and resuming chat sessions (investigations) with proper context preservation, operator binding, and state management across browser sessions.
+A security mechanism that automatically terminates web sessions after 8 hours of inactivity. Prevents unauthorized access through abandoned browser sessions and requires users to re-authenticate when returning.
 
 ---
 
-## Heartbeat
+## Information Isolation Principle
 
-A periodic health telemetry message sent by the Operator to the control plane every 30 seconds. Contains system identity (hostname, OS, architecture), performance metrics (CPU, memory, disk usage), network information, and uptime data. Used for Operator health monitoring and status determination.
-
----
-
-## Human-in-the-Loop
-
-A security principle requiring explicit user approval before any state-changing operation executes. All destructive commands, file modifications, and permission escalations require user consent via the approval UI. Read-only operations execute automatically.
+A load-bearing safety property in g8e's mechanism design where AI agents operate in a sealed, tiered information environment. Each agent (Triage, Sage, Tribunal members, Auditor) has a quarantined view of the pipeline to prevent collusion and ensure honest participation.
 
 ---
 
 ## Intent
 
-A pre-defined AWS permission set that Cloud Operators for AWS can request via the Intent-Based Policy System. Examples include `ec2_discovery` (view EC2 instances), `s3_read` (read S3 objects), and `rds_management` (manage RDS instances). Intents are organized into discovery (read-only) and management (read-write) categories.
+A pre-defined AWS permission set that Cloud Operators for AWS can request via the Intent-Based Policy System. Examples include `ec2_discovery`, `s3_read`, and `rds_management`. Intents are organized into discovery (read-only) and management (read-write) categories.
+
+---
+
+## Intent Policy
+
+A pre-defined AWS IAM policy that grants specific permissions for a particular service or action. Cloud Operators for AWS request these policies through the Intent-Based Policy System when additional permissions are needed.
 
 ---
 
@@ -245,15 +269,69 @@ The security framework that governs Cloud Operator for AWS permissions through p
 
 ---
 
+## Interrogation Gate
+
+A safety mechanism in g8ee that detects `<interrogation>` blocks in LLM responses. When a reasoning agent (Sage or Dash) determines it lacks sufficient information to proceed safely, it emits an interrogation block containing clarifying questions. The Interrogation Gate suppresses all tool/command execution for that turn and defers to the user for answers, ensuring the AI never "guesses" when intent is ambiguous.
+
+---
+
+## Investigation
+
+A chat session or conversation between a user and the AI control plane. Investigations contain message history, operator context, and state. Each investigation has a unique `case_id` and can be resumed across sessions.
+
+---
+
+## Investigation Management
+
+The process of creating, tracking, and resuming chat sessions (investigations) with proper context preservation, operator binding, and state management across browser sessions.
+
+---
+
+## Just-in-Time Access
+
+A security model exclusive to the Cloud Operator for AWS where permissions are granted only when needed for a specific operation, only after explicit user approval, and with automatic expiration. Upon approval, the permission is attached with a **default 1-hour TTL** and automatically revoked when it expires.
+
+---
+
+## L1 Technical Bedrock
+
+The first and foundation layer of g8e governance. It implements hard-coded technical gates: **Forbidden Patterns** (blocking commands like `sudo` or `su`), a **Blacklist** (denylist of specific binaries), and a **Whitelist** (allowlist of permitted operations). L1 is foundationally active for every command, regardless of L2 consensus or L3 approval status.
+
+---
+
+## L2 Consensus (Tribunal)
+
+The second layer of g8e governance. A heterogeneous multi-model ensemble of 5 independent agents (Axiom, Concord, Variance, Pragma, Nemesis) that produces and votes on command candidates. Includes the **Warden** for risk analysis and the **Auditor** for final verification. L2 ensures that every command executed is the result of a rigorous consensus process rather than a single model's output.
+
+---
+
+## L3 Authorization (Approval)
+
+The third layer of g8e governance, focusing on human oversight. By default, every state-changing command requires explicit user authorization via the **Approval UI**. Benign diagnostic commands may be covered by **Auto-Approval**, but L3 never bypasses the safety requirements of L1 or L2.
+
+---
+
 ## Least Privilege
 
 A security principle where entities receive only the minimum permissions necessary to perform their functions. g8e implements this through Zero Standing Privileges for the Cloud Operator for AWS and user-level permissions for all Operators.
 
 ---
 
+## Ledger
+
+A git-backed version control system (`./.g8e/data/ledger`) that maintains cryptographic integrity and restoration capability for all files modified by the Operator. Every file mutation creates a git commit with hash references, enabling time-travel and rollback functionality.
+
+---
+
 ## Local Storage
 
 The practice of storing sensitive data on the local Operator rather than in the g8e platform. Applied to command outputs, file contents, and audit logs through the Audit Vault and Scrubbed Vault.
+
+---
+
+## Local-First Audit Architecture (LFAA)
+
+An architecture where the Operator is the System of Record for all chat history, execution logs, and file mutations. The self-hosted g8e platform acts as a stateless relay with no sensitive operational data persisting in platform storage. Core philosophy: "The Platform handles routing. The Operator handles retention."
 
 ---
 
@@ -269,15 +347,30 @@ Security measures that prevent attackers from intercepting or modifying communic
 
 ---
 
+## Merkle Commitment
+
+A cryptographic artifact produced by the **Auditor** during the Tribunal's verification step. It is a SHA-256 Merkle root computed over the sorted (agent_id, scalar) leaves of the **Reputation Scoreboard**. Each commitment includes the `prev_root` of the previous commitment, forming a tamper-evident hash chain.
+
+---
+
 ## Message Triage
 
-The classification of incoming user messages as "simple" or "complex" using the lightweight model (`LLM_LITE_MODEL`) before deciding which LLM to invoke. Per GDD §14.1, Triage is a classifier ONLY — it does NOT generate clarifying questions. A short-circuit decision tree first checks for OPERATOR_BOUND workflow (always escalates), attachments (always escalates), or empty messages (always escalates). If none apply, the lite model receives the last 6 conversation history messages (`TRIAGE_CONVERSATION_TAIL_LIMIT = 6`) plus the current message and responds with a structured JSON classification containing complexity, intent, confidence, and posture. "simple" routes to Dash (assistant tier); "complex" escalates to Sage (primary tier). Any ambiguous or error response defaults to complex (fail-safe escalation).
+The classification of incoming user messages as "simple" or "complex" using a lightweight lite model. Triage acts as a gatekeeper, emitting structured metadata:
+- **Complexity**: Decides whether to route to Dash (Assistant) or Sage (Primary).
+- **Intent**: Classifies the category of user intent (Action, Question, Unknown).
+- **Posture**: Assesses the user's state (Normal, Frustrated, etc.) to calibrate downstream agent behavior.
 
 ---
 
 ## Metadata Transmission
 
 The practice of sending only non-sensitive metadata (hashes, sizes, timestamps) to the g8e platform while keeping actual data content local on the Operator. Under the Local-First Audit Architecture (LFAA), the AI retrieves command output on-demand via `fetch_execution_output` rather than receiving it directly.
+
+---
+
+## MITRE ATT&CK Framework
+
+A globally-accessible knowledge base of adversary tactics and techniques based on real-world observations. g8e Sentinel maps threat detection patterns to this framework to provide standardized security monitoring and incident response capabilities.
 
 ---
 
@@ -293,36 +386,6 @@ Two-way TLS authentication where both client and server verify each other's cert
 
 ---
 
-## Internal Auth Token
-
-The shared secret (`X-Internal-Auth`) used for all service-to-service communication between g8ed, g8ee, and operator. Generated by operator on first boot and persisted exclusively in the `operator-ssl` volume at `/ssl/internal_auth_token`. Discovered by g8ee and g8ed at startup by reading the shared volume. This secret is **never stored in the database**, ensuring platform identity is decoupled from the database lifecycle. Strictly enforced by operator for all HTTP and WebSocket routes.
-
----
-
-## Investigation
-
-A chat session or conversation between a user and the AI control plane. Investigations contain message history, operator context, and state. Each investigation has a unique `case_id` and can be resumed across sessions.
-
----
-
-## Just-in-Time Access
-
-A security model exclusive to the Cloud Operator for AWS where permissions are granted only when needed for a specific operation, only after explicit user approval, and with automatic expiration. When the Cloud Operator lacks required permissions, it requests the appropriate Intent from the user. Upon approval, the permission is attached with a **default 1-hour TTL** and automatically revoked when it expires. Permissions can also be revoked at any time through conversation. Works in conjunction with Zero Standing Privileges to ensure the AI never accumulates persistent access.
-
----
-
-## Local-First Audit Architecture (LFAA)
-
-An architecture where the Operator is the System of Record for all chat history, execution logs, and file mutations. The self-hosted g8e platform acts as a stateless relay with no sensitive operational data persisting in platform storage. Core philosophy: "The Platform handles routing. The Operator handles retention."
-
----
-
-## Ledger
-
-A git-backed version control system (`./.g8e/data/ledger`) that maintains cryptographic integrity and restoration capability for all files modified by the Operator. Every file mutation creates a git commit with hash references, enabling time-travel and rollback functionality.
-
----
-
 ## Network Isolation
 
 The security practice of separating network segments to prevent lateral movement. g8e achieves this through outbound-only connectivity, eliminating the need for inbound ports or network exposure.
@@ -331,7 +394,27 @@ The security practice of separating network segments to prevent lateral movement
 
 ## NSA ZIG Alignment
 
-Compliance with the National Security Agency's Zero Trust Implementation Guidelines (ZIG). g8e **exceeds requirements in 6 of 7 pillars** (User, Device, Application, Data, Automation, Visibility) with the Network & Environment pillar fully compliant. The platform addresses Discovery Phase, Phase One, and Phase Two ZIG requirements (91 activities across 7 pillars). Key capabilities include human-in-the-loop for all operations, Zero Standing Privileges with 1-hour TTL, Sentinel bidirectional protection, Device Links with configurable max_uses for single and mass deployment, and SIEM-ready threat signals with MITRE ATT&CK mapping.
+Compliance with the National Security Agency's Zero Trust Implementation Guidelines (ZIG). g8e **exceeds requirements in 6 of 7 pillars** (User, Device, Application, Data, Automation, Visibility) with the Network & Environment pillar fully compliant.
+
+---
+
+## Ollama (Remote)
+
+The remote LLM inference component. g8e supports any remote Ollama server that provides an API at `/v1`. Used as an LLM backend for g8ee.
+
+---
+
+## Operator
+
+The language-agnostic, platform-agnostic execution binary that runs on target systems and receives commands from the g8e control plane. The current ~4MB Go binary (`g8eo`) is the reference implementation for Linux and macOS. When running in `--listen` mode, the Operator serves as the platform's **Coordination Store**, providing the document store, KV, and pub/sub broker for g8ed and g8ee.
+
+Operator command/result traffic follows the g8e protocol: serialized Protobuf `UniversalEnvelope` bytes carry typed `operator.proto` payloads and L1/L2/L3 governance metadata over the pub/sub transport.
+
+---
+
+## Operator Panel
+
+The web UI component that displays all Operators belonging to a user, showing their status, hostname, and metrics. Users bind/unbind Operators to their web session through this panel.
 
 ---
 
@@ -341,9 +424,21 @@ The AWS IAM role used by Cloud Operators for AWS for executing actions. Starts w
 
 ---
 
+## Operator Slot
+
+The accounting unit for Operators. Each running Operator occupies one slot. Slots are created explicitly at provisioning time or on demand when a Device Link is claimed and no available slot exists. Cloud providers like `g8ep` use `cloud_subtype='g8ep'` for identification.
+
+---
+
 ## Permission Boundary
 
 An AWS IAM policy that defines the maximum permissions that can be granted to a role. g8e uses this to prevent admin-level access and enforce least-privilege principles.
+
+---
+
+## Permission Escalation
+
+The process by which Cloud Operators for AWS request additional AWS permissions beyond their current scope. Requires explicit user approval through the Intent-Based Policy System.
 
 ---
 
@@ -361,7 +456,7 @@ A server certificate embedded in the Operator binary at compile time. Prevents m
 
 ## ReAct
 
-A reasoning pattern used by g8ee where the LLM cycles through Think → Act → Observe → Repeat. The AI generates a thought, executes an action (command, file operation, tool call), observes the result, and uses that observation to inform the next reasoning step. This enables complex multi-step workflows where the AI can adapt its approach based on command outputs and system state. The Tribunal refines command syntax within this loop without re-invoking the main LLM.
+A reasoning pattern used by g8ee where the LLM cycles through Think → Act → Observe → Repeat. The AI generates a thought, executes an action, observes the result, and uses that observation to inform the next reasoning step. The Tribunal refines command syntax within this loop without re-invoking the main LLM.
 
 ---
 
@@ -383,44 +478,9 @@ Security mechanisms that prevent captured requests from being replayed by attack
 
 ---
 
-## MITRE ATT&CK Framework
+## Reputation Staking
 
-A globally-accessible knowledge base of adversary tactics and techniques based on real-world observations. g8e Sentinel maps threat detection patterns to this framework to provide standardized security monitoring and incident response capabilities.
-
----
-
-## Operator
-
-The language-agnostic, platform-agnostic execution binary that runs on target systems and receives commands from the g8e control plane. A headless, stateless execution environment that operates with least-privilege principles. Operator command/result traffic follows the g8e protocol: serialized Protobuf `UniversalEnvelope` bytes carry typed `operator.proto` payloads and L1/L2/L3 governance metadata over the pub/sub transport. Operators connect via outbound-only WebSocket (Gateway Protocol) to g8ed — no inbound connectivity required. g8ed bridges commands between the internal operator pub/sub bus and the Operator's WebSocket connection. The current ~4MB Go binary (`g8eo`) is the reference implementation for Linux and macOS.
-
-Three types exist, determined at startup:
-- **System Operator** (`--cloud=false`) — cloud CLI tools blocked
-- **Cloud Operator** (`--cloud`, the default) — cloud CLI tools enabled
-- **Cloud Operator for AWS** (`--cloud --provider aws`) — cloud CLI tools enabled with Zero Standing Privileges and intent-based IAM access
-
----
-
-## Permission Escalation
-
-The process by which Cloud Operators for AWS request additional AWS permissions beyond their current scope. Requires explicit user approval through the Intent-Based Policy System. All escalation requests are logged and auditable.
-
----
-
-## Operator Panel
-
-The web UI component that displays all Operators belonging to a user, showing their status, hostname, and metrics. Users bind/unbind Operators to their web session through this panel. Supports Device Link for deployment.
-
----
-
-## Operator Slot
-
-The accounting unit for Operators. Each running Operator — System or Cloud — occupies one slot. Slots are created explicitly at provisioning time (e.g. initial setup, g8ep reauth) or on demand when a Device Link is claimed and no AVAILABLE slot exists for the user. Slot limits are configurable per deployment (default: unlimited in self-hosted mode).
-
----
-
-## operator Pub/Sub
-
-The internal real-time messaging system used for communication between g8ee, g8ed, and Operators. Each Operator has dedicated operator channels for commands, results, and heartbeats. g8ed's Gateway Connection Manager bridges these operator channels to the Operator's WebSocket connection via the Gateway Protocol. Operators connect to operator via WebSocket at the `/ws/pubsub` endpoint; the base URL and port are configurable via `G8E_OPERATOR_PUBSUB_URL`.
+The mechanism by which g8ee Tribunal agents earn or lose standing based on the quality of their contributions. Each agent is assigned a reputation scalar (0.0 to 1.0) on the **Reputation Scoreboard**. Scalars are updated via an Exponential Moving Average (EMA) based on consensus participation and the eventual success or failure of the commands they proposed. Agents can be "slashed" for proposing high-risk or failing commands.
 
 ---
 
@@ -432,37 +492,7 @@ The local SQLite database (`./.g8e/local_state.db`) that stores Sentinel-process
 
 ## Self-Discovery Permissions
 
-The minimal bootstrap permissions granted to Cloud Operators at launch, allowing them to identify their own AWS role and capabilities without accessing user resources. Includes permissions like `sts:GetCallerIdentity` and `iam:GetRole`.
-
----
-
-## Tribunal
-
-A heterogeneous multi-model architecture in g8ee for refining command syntax. Implements a multi-stage pipeline that fires only for `run_commands_with_operator` workflows:
-
-1. **Generation** — Up to five independent Small Language Model (SLM) passes produce candidate command strings for the same intent + context. Diversity is driven by distinct member personas: Axiom (The Minimalist), Concord (The Guardian), Variance (The Exhaustive), Pragma (The Conventional), and Nemesis (The Adversary).
-
-2. **Voting** — Candidates are normalized (stripped markdown fences and surrounding whitespace) and grouped by exact value. Each member contributes exactly 1 vote per candidate. The highest vote count wins, with deterministic tie-breaking (shortest command → non-Nemesis cluster).
-
-3. **Safety Analysis** — A defensive coordination agent (The Warden) performs pre-execution risk assessment (LOW/MEDIUM/HIGH) for the command, file operations, and errors. It enforces the Two-Strike Circuit Breaker, generating contextual feedback on blocks to guide the reasoning agent toward safer alternatives.
-
-4. **Verification** — A separate convergent verifier persona (The Auditor) evaluates the winner against the original intent once cleared by the Warden. The Auditor performs the final consistency check and Merkle commitment.
-
-5. **Approval** — The refined command is presented to the user for explicit approval.
-
-Failure modes (missing model, provider error, no consensus, Warden block, Auditor failure) halt the execution and return an error to the AI — there is no fallback to the original reasoning agent because it never proposes a command directly.
-
-Configuration via platform settings: `llm_command_gen_passes` (default: 5), `llm_command_gen_verifier` (default: true), `llm_command_gen_enabled` (default: true).
-
-## Information Isolation Principle
-
-A load-bearing safety property in g8e's mechanism design where AI agents operate in a sealed, tiered information environment. Each agent (Triage, Sage, Tribunal members, Auditor) has a quarantined view of the pipeline to prevent collusion and ensure honest participation. This structure ensures that no agent can coordinate to game the consensus or shape output to fit downstream expectations.
-
----
-
-## Warden
-
-A defensive coordination agent in g8ee that performs pre-execution risk assessment. It classifies the risk of commands (LOW/MEDIUM/HIGH), file operations, and errors before they proceed to the Auditor and subsequent human approval. The Warden enforces the Two-Strike Circuit Breaker, generating contextual feedback on blocks to guide the reasoning agent toward safer alternatives.
+The minimal bootstrap permissions granted to Cloud Operators at launch, allowing them to identify their own AWS role and capabilities without accessing user resources.
 
 ---
 
@@ -474,79 +504,73 @@ The streaming protocol used to push real-time events from the backend to the bro
 
 ## System Fingerprint
 
-A unique identifier generated by each Operator based on system characteristics including hostname, OS, architecture, and network configuration. Used for Operator identification, duplicate detection, and security monitoring.
+A unique identifier generated by each Operator based on system characteristics including hostname, OS, architecture, and network configuration. Used for Operator identification and duplicate detection.
+
+---
+
+## System Operator
+
+The Operator binary started with `--cloud=false`. Standard shell and system operations only — cloud CLI tools are blocked at the execution layer.
 
 ---
 
 ## Time-Travel
 
-The ability to restore files to any previous state using the Ledger's git history. Users can rollback changes, view historical versions, and recover from unintended modifications through the git-backed version control system.
+The ability to restore files to any previous state using the Ledger's git history. Users can rollback changes, view historical versions, and recover from unintended modifications.
+
+---
+
+## Tool Calling Loop
+
+The execution pattern used by g8ee where the AI generates tool calls to interact with Operators, receives results, and generates subsequent calls based on the outcomes.
+
+---
+
+## Tribunal
+
+See **L2 Consensus (Tribunal)**.
+
+---
+
+## Trust Portal
+
+A host-local bootstrap interface served by the Operator on Port 80 during initial setup. It provides a secure UI for generating the initial SSL certificates, Internal Auth Token, and other bootstrap secrets.
 
 ---
 
 ## Unified Approval
 
-The batch execution approval dialog in g8ed that allows a single user approval to cover commands across multiple Operators. When commands need to execute on multiple systems, g8ed displays a unified UI with header "Command Requested (N systems)", a list of target hostnames and Operator types, and a single "Approve for N Systems" button. The approval routes to `/api/operator/approval/respond` once, and g8ee fans out the command to each Operator in parallel (bounded by `command_validation.max_batch_concurrency`), with all per-operator executions correlated back to the approval via a shared `batch_id`.
+The batch execution approval dialog in g8ed that allows a single user approval to cover commands across multiple Operators.
 
 ---
 
-## UniversalEnvelope
+## Universal Envelope
 
-The Protobuf root container for cross-component operator protocol messages. It binds a canonical `event_type` to typed payload bytes, operator/session context, optional state root data, and L1/L2/L3 governance metadata.
-
----
-
-## g8eo (g8e Operator)
-
-Also known as: **g8e.operator**
-
-The Go-based reference implementation of the Operator. A lightweight (~4MB) binary that provides language-agnostic, platform-agnostic execution, file operations, local storage, and heartbeat monitoring. Operator command/result traffic follows the g8e protocol: serialized Protobuf `UniversalEnvelope` bytes carry typed `operator.proto` payloads and L1/L2/L3 governance metadata over the pub/sub transport.
+The Protobuf root container for cross-component operator protocol messages. It binds a canonical `event_type` to typed payload bytes, operator/session context, optional state root data, and **L1/L2/L3 governance metadata**.
 
 ---
 
-## g8ee
+## Warden
 
-Also known as: **g8ee**
-
-The AI engine component with LLM provider abstraction supporting OpenAI, Anthropic, Gemini, and Ollama providers. Processes natural language requests, reasons about system state, generates commands, and manages investigations. Implements the tool calling loop for Operator interactions and the Intent-Based Policy System for Cloud Operators.
-
----
-
-## g8ed (g8e Dashboard)
-
-Also known as: **g8ed**
-
-The Node.js/Express web frontend component. Handles user authentication (passkey/FIDO2/WebAuthn), session management, the chat interface, Operator Panel, and SSE streaming to browsers. Routes messages between users and g8ee.
-
----
-
-## operator (g8e Data Bus)
-
-Also known as: **operator**
-
-The Operator binary (`g8e.operator`) running in `--listen` mode. Serves as the platform's single source of truth for persistence and messaging. Provides a document store, KV store, and pub/sub broker via a single static binary with zero external dependencies. See **Coordination Store (SQLite)**.
-
----
-
-## Ollama (Remote)
-
-The remote LLM inference component. g8e supports any remote Ollama server that provides an API at `/v1`. Used as an LLM backend for g8ee. Configure the endpoint via the setup wizard or `./g8e llm setup`.
+A defensive coordination agent in g8ee that performs pre-execution risk assessment (LOW/MEDIUM/HIGH) for the consensus winner. It enforces the **Two-Strike Circuit Breaker**:
+- **Strike 1**: If a command is classified as HIGH risk, the Warden blocks execution and provides contextual feedback to the reasoning agent to suggest a safer alternative.
+- **Strike 2**: If a second HIGH risk command is proposed in the same turn, the Warden triggers an `AGENT_CONFLICT` error, halting the pipeline and requiring human intervention.
+Successful command execution resets the strike counter.
 
 ---
 
 ## WebSession
 
-An authenticated browser session. operator document store is the authoritative store; operator KV acts as a fast read cache (cache-aside pattern). Contains user identity and session metadata. Operator–web session bindings are tracked separately by `BoundSessionsService`. Sessions use encrypted cookies with idle timeout (8 hours) and absolute timeout (24 hours).
+An authenticated browser session. The **Coordination Store** is the authoritative store; the Operator KV acts as a fast read cache (cache-aside pattern). Contains user identity and session metadata. Sessions use encrypted cookies with idle and absolute timeouts.
 
 ---
 
 ## Zero Standing Privileges
 
-A security model exclusive to the Cloud Operator for AWS where the Operator launches with zero AWS access beyond bootstrap permissions (STS identity, IAM role introspection). Implements a **two-policy separation of execution from authority**: the Operator Role executes actions but cannot modify its own permissions; the Escalation Role can attach/detach pre-defined intent policies but cannot execute AWS actions. This separation prevents the AI from self-escalating privileges. All operational permissions must be explicitly requested and approved by the user through the Intent-Based Policy System.
+A security model exclusive to the Cloud Operator for AWS where the Operator launches with zero AWS access beyond bootstrap permissions. Implements a **two-policy separation of execution from authority**.
 
 ---
 
 ## Zero-Trust AI Architecture
 
-The platform's core security model. g8e assumes no implicit trust in either the AI or the systems it manages. All actions require explicit authorization, all data is filtered through Sentinel before platform transmission, and all execution happens with human oversight.
-
+The platform's core security model. g8e assumes no implicit trust in either the AI or the systems it manages. All actions require explicit authorization, all data is filtered through Sentinel, and all execution happens with human oversight.

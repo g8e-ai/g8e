@@ -3,35 +3,49 @@ title: Events
 parent: Architecture
 ---
 
-# g8e Event Naming Specification
+# g8e Event Specification
 
 Last Updated: 2026-05-10
 Version: v0.2.2
 
-The g8e platform uses unified, hierarchical event names to identify state transitions and lifecycle signals. Operator command/result traffic is governed by the g8e protocol: serialized Protobuf `UniversalEnvelope` bytes carry `event_type`, typed `operator.proto` payload bytes, operator/session context, state roots, and L1/L2/L3 governance metadata.
+The g8e platform uses a unified, hierarchical event system to drive state transitions and lifecycle signals. All cross-component traffic is governed by the **Universal Envelope**, a Protobuf-first transport wrapper that carries governance metadata, state roots, and typed payloads.
 
 ---
 
 ## Architecture & Transport
 
-Events in g8e are state transitions and lifecycle signals that drive the system's reactivity. The architecture follows a hub-and-spoke model with `g8ed` at the center.
+Events in g8e are the heartbeat of the system's reactivity. The architecture follows a hub-and-spoke model with `g8ed` (Dashboard) at the center.
 
 ### 1. The Central Hub: `g8ed`
-`g8ed` (Node.js) serves as the central event router and composition root. It manages two primary transport layers:
-- **Internal HTTP Push**: Receives events from `g8ee` (Python) via standard POST requests.
-- **OPERATOR Pub/Sub**: A WebSocket-based backbone for communication with `g8eo` (Go) operators. `g8ed` acts as a proxy, translating Pub/Sub messages into SSE for the Terminal.
-- **Server-Sent Events (SSE)**: Pushes real-time updates to human-interactive clients.
+`g8ed` serves as the central event router and composition root. It manages three primary transport layers:
+- **Internal HTTP Push**: Receives events from `g8ee` (Engine) via standard POST requests (guarded by `X-Internal-Auth`).
+- **Operator Pub/Sub**: A WebSocket-based backbone for communication with `g8eo` (Operator). `g8ed` proxies these messages to the UI.
+- **Server-Sent Events (SSE)**: Pushes real-time updates to human-interactive clients in the browser.
 
 ### 2. Event Producers
-- **`g8ee` (Python)**: The AI reasoning engine. Emits chat streams, tool requests, and Tribunal consensus results.
-- **`g8eo` (Go)**: The operator agent. Emits command execution results, heartbeats, and status updates via Pub/Sub.
-- **`g8ed` (Node.js)**: The platform service. Emits lifecycle events (auth, session management) and proxies events from other components.
+- **`g8ee` (Engine)**: The AI reasoning engine. Emits chat streams, tool requests, and Tribunal consensus results.
+- **`g8eo` (Operator)**: The remote execution agent. Emits command results, heartbeats, and filesystem updates.
+- **`g8ed` (Dashboard)**: The platform service. Emits lifecycle events (auth, session management) and proxies third-party events.
 
 ### 3. Delivery Lifecycle
-1. **Emission**: A producer constructs a typed event using the **Routing Tuple**.
-2. **Ingestion**: `g8ed` receives the event via HTTP or Pub/Sub.
-3. **Routing**: `SSEService` determines the destination based on `web_session_id` or `user_id`.
-4. **Delivery**: The event is serialized to the SSE wire format and pushed to the client.
+1. **Emission**: A producer serializes a **Universal Envelope** containing a typed Protobuf payload.
+2. **Ingestion**: `g8ed` receives the envelope via HTTP or Pub/Sub.
+3. **Routing**: `SSEService` determines the destination based on the **Routing Tuple**.
+4. **Delivery**: The event is pushed to the client via SSE or persisted to the audit log.
+
+---
+
+## The Universal Envelope
+
+The `UniversalEnvelope` (defined in `shared/proto/common.proto`) is the canonical wrapper for all platform transactions.
+
+| Field | Description |
+|-------|-------------|
+| `id` | Unique UUID v4 for the message. |
+| `event_type` | Canonical event string (e.g., `g8e.v1.operator.command.completed`). |
+| `state_merkle_root` | The Merkle root of the fleet state at the time of generation (used for BFT verification). |
+| `governance` | L1 (Technical), L2 (Tribunal), and L3 (Human) metadata/signatures. |
+| `payload` | Serialized bytes of the typed Protobuf message (e.g., `CommandRequested`). |
 
 ---
 
@@ -41,62 +55,45 @@ To ensure events reach the correct context, every event carries a routing tuple 
 
 | Field | Description | Required For |
 |-------|-------------|--------------|
-| `web_session_id` | Unique ID of the browser connection. | Point-to-point delivery (`SessionEvent`). |
-| `user_id` | Unique ID of the user. | User-wide fan-out (`BackgroundEvent`). |
+| `web_session_id` | Unique ID of the browser connection. | Point-to-point delivery to a specific tab. |
+| `operator_id` | Unique ID of the target operator slot. | Routing to a specific remote host. |
+| `operator_session_id`| Unique ID for the current operator process. | Correlation of long-running command streams. |
 | `case_id` | Correlation ID for the active case. | Contextual grouping and audit log association. |
 | `investigation_id` | Correlation ID for the active investigation. | Chat history and state recovery. |
 
 ---
 
-## Event Classification
+## Governance & Safety
 
-### Session Events
-Intended for a specific active session (e.g., a specific tab). These are used when the triggering action originated from a known `web_session_id`.
-- **Examples**: AI streaming text, tool results, and Proof of Human Presence (PHP) requests.
-- **Model**: `SessionEvent` in `g8ee`.
+### 1. L1: Technical Bedrock (Hard Gates)
+`g8eo` enforces L1 safety using Protobuf reflection. It inspects the `forbidden_patterns` option on incoming message fields (e.g., `CommandRequested.command`) and rejects any payload containing prohibited strings like `sudo` or `rm -rf /`.
 
-### Background Events
-System-initiated events with no specific active session. `g8ed` fans these out to **every active SSE session** owned by the `user_id`.
-- **Examples**: Global notifications, operator status changes (e.g., `OPERATOR_STATUS_UPDATED_ACTIVE`).
-- **Model**: `BackgroundEvent` in `g8ee`.
+### 2. L2: Consensus (The Tribunal)
+The Tribunal calculates an HMAC-SHA256 signature over the `event_type` and `payload_bytes` using a shared auditor key. `g8eo` verifies this signature before executing any command, ensuring the instruction originated from a valid consensus group.
+
+### 3. L3: Authorization (Human Approval)
+Human-in-the-loop signatures (captured via Passkeys) are carried in the `L3Metadata` field. For benign diagnostic commands, an `auto_approved` flag may be set, but it never bypasses L1 or L2 gates.
+
+### 4. BFT State Verification
+To prevent "stale state" attacks, `g8eo` compares the `state_merkle_root` in the incoming envelope with its local ledger root. If they mismatch, the command is rejected because the AI's reasoning was based on an outdated view of the system.
 
 ---
 
 ## Core Pipelines
 
 ### 1. LLM Chat & Iterations
-The chat pipeline uses a granular event sequence to expose the AI's "thought process":
-- `LLM_CHAT_ITERATION_STARTED`: Start of an AI reasoning turn.
-- `LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED`: Individual tokens streamed to the UI.
-- `LLM_CHAT_ITERATION_THINKING_STARTED`: Signals the AI has entered an internal chain-of-thought phase.
-- `LLM_CHAT_ITERATION_COMPLETED`: End of a reasoning turn.
+The chat pipeline uses granular events to expose the AI's "thought process":
+- `g8e.v1.ai.llm.chat.iteration.started`: Start of an AI reasoning turn.
+- `g8e.v1.ai.llm.chat.iteration.thinking.started`: AI has entered an internal chain-of-thought phase.
+- `g8e.v1.ai.llm.chat.iteration.text.chunk.received`: Tokens streamed to the UI.
+- `g8e.v1.ai.llm.chat.iteration.completed`: End of a reasoning turn.
 
-### 2. Universal Tool Lifecycle
-All tools follow a standardized request/response pattern for auditability:
-1. `LLM_TOOL_*_REQUESTED`: The AI requests tool execution.
-2. `LLM_TOOL_*_RECEIVED`: The execution environment acknowledges the request.
-3. `LLM_TOOL_*_COMPLETED` / `FAILED`: The final result or error.
-
-### 3. The Tribunal
-Consensus-based command generation emits discrete events for each internal stage:
-- `TRIBUNAL_SESSION_STARTED`: Initialization of the consensus group.
-- `TRIBUNAL_VOTING_STARTED`: Collection of command candidates from members.
-- `TRIBUNAL_VOTING_CONSENSUS_REACHED`: Successful agreement on a command.
-- `TRIBUNAL_VOTING_DISSENT_RECORDED`: Capture of minority member disagreements.
-- `TRIBUNAL_SESSION_COMPLETED`: Final validated command is ready for dispatch.
-
----
-
-## Governance & Safety
-
-### Log-First, Act-After (LFAA)
-Critical lifecycle events (commands, file edits, AI decisions) are recorded by the `AuditService` **before** the action is executed. This ensures a permanent, tamper-resistant record even if the operation fails or the component crashes.
-
-### The Sentinel
-Before `g8eo` executes a command, it passes through **The Sentinel** (pre-execution analysis).
-1. If a threat is detected, `g8eo` emits an `operator.command.failed` event.
-2. The `error_type` is set to `sentinel_blocked`.
-3. The violation is recorded in the audit vault before the command is discarded.
+### 2. Operator Command Lifecycle
+Standardized request/response pattern for auditability and reactivity:
+1. `g8e.v1.operator.command.requested`: AI/User requests execution.
+2. `g8e.v1.operator.command.started`: Operator acknowledges and forks the process.
+3. `g8e.v1.operator.command.status.updated.running`: Real-time stdout/stderr increments.
+4. `g8e.v1.operator.command.completed` / `failed`: Final execution result.
 
 ---
 
@@ -105,23 +102,25 @@ Before `g8eo` executes a command, it passes through **The Sentinel** (pre-execut
 ### Name Format
 Events follow a hierarchical, dot-separated naming convention:
 ```
-g8e.v<version>.<domain>.<resource>[.<sub-resource>...].<action>
+g8e.v1.<domain>.<resource>[.<sub-resource>...].<action>
 ```
-- **Protocol prefix**: `g8e.v1`
-- **Domain**: Namespace (`app`, `operator`, `ai`, `platform`, `source`)
+- **Domain**: Namespace (`app`, `operator`, `ai`, `platform`, `source`).
 - **Action**: Always a **past-tense** verb (`created`, `failed`) or state (`active`).
 
 ### Canonical Truth
-`shared/constants/events.json` is the single source of truth for event names. `shared/proto/` is the canonical schema source for g8e protocol envelopes and typed operator payloads.
-- **`g8ee` (Python)**: `EventType` Enum in `app/constants/events.py`.
-- **`g8ed` (Node.js)**: `EventType` object in `public/js/constants/events.js`.
-- **`g8eo` (Go)**: Event constants in `constants/events.go`.
+- `shared/constants/events.json`: The single source of truth for event name strings.
+- `shared/proto/`: The canonical schema source for envelopes and typed payloads.
+- **Python**: `EventType` StrEnum in `app/constants/events.py`.
+- **Go**: Constants in `components/g8eo/constants/events.go`.
+- **Node.js**: Constants in `shared/constants/events.json` (shared via symlink or copy).
 
 ---
 
 ## Adding New Events
 
 1. **Update Canonical Truth**: Add the new event string to `shared/constants/events.json`.
-2. **Propagate to Components**: Update the respective constants in `g8ee`, `g8ed`, and `g8eo`.
-3. **Verify Wire Value**: Ensure the string matches the dot-joined hierarchy and follows the past-tense rule.
+2. **Define Schema**: If the event carries a payload, define a message in `shared/proto/operator.proto`.
+3. **Propagate**: Update the respective constant enums in `g8ee` and `g8eo`.
+4. **Verify**: Ensure the name follows the hierarchical past-tense rule.
+
 
