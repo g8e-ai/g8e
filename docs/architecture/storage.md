@@ -181,21 +181,32 @@ The Ledger is a Git repository located at `.g8e/data/ledger`.
 | `users` | Account data and credential metadata. |
 | `web_sessions` | UI sessions (encrypted). |
 | `operator_sessions` | Operator CLI sessions (encrypted). |
+| `cli_sessions` | CLI tool sessions (encrypted). |
+| `bound_sessions` | Sessions cryptographically bound to a specific device/origin. |
 | `api_keys` | API key credentials for external integrations. |
 | `passkey_challenges` | Passkey authentication challenges. |
+| **Organizations & Tenants** |
+| `organizations` | Tenant isolation and policy grouping. |
 | **Audit & Security** |
 | `login_audit` | Login attempt history and security events. |
 | `auth_admin_audit` | Administrative authentication actions. |
+| `account_locks` | Temporary account locks due to security policy violations. |
 | `console_audit` | Console command execution audit trail. |
+| `revoked_certificates` | List of revoked mTLS/SSL certificates. |
 | **Operators & Usage** |
 | `operators` | Registration and heartbeat status for managed hosts. |
 | `operator_usage` | Operator resource usage metrics. |
 | **Cases & Investigations** |
 | `cases` | Support cases and forensic investigations. |
 | `investigations` | Detailed forensic investigation records including history trails and chat. |
+| `tasks` | Background tasks and long-running operations. |
+| **Governance & Reputation** |
+| `tribunal_commands` | History of commands reviewed by the Tribunal. |
+| `reputation_state` | Current reputation scores and metadata for agents and operators. |
+| `reputation_commitments` | Merkle commitments for reputation state transitions. |
+| `stake_resolutions` | Outcomes of reputation staking and slashed stakes. |
 | **AI & Context** |
 | `memories` | AI-generated long-term context. |
-| `tribunal_commands` | History of commands reviewed by the Tribunal. |
 | `agent_activity_metadata` | Execution context and performance metrics. |
 | **Configuration** |
 | `settings` | Global and user-level overrides. |
