@@ -13,6 +13,7 @@
 
 import json
 import os
+from pathlib import Path
 
 # The bridge to shared paths.
 # In container, this is always /app/shared/constants/paths.json
@@ -23,17 +24,21 @@ _PATH_FILE = _CONTAINER_SHARED_CONSTANTS_DIR + "/paths.json"
 
 def _load_paths() -> dict:
     try:
-        with open(_PATH_FILE) as f:
+        with Path(_PATH_FILE).open() as f:
             paths = json.load(f)
     except FileNotFoundError:
         # Emergency fallbacks for when shared volume isn't ready
         # On host, default to .g8e/ssl (Operator listen mode SSL directory)
         # In container, default to /operator for backwards compatibility
-        default_ssl_dir = os.environ.get("G8E_RUNTIME_DIR", "/home/bob/g8e/.g8e") + "/ssl" if _SHARED_DIR != "/app/shared" else "/operator"
+        if _SHARED_DIR != "/app/shared":
+            default_runtime_dir = os.environ.get("G8E_RUNTIME_DIR", str(Path(_SHARED_DIR).parent / ".g8e"))
+            default_ssl_dir = os.environ.get("G8E_SSL_DIR", str(Path(default_runtime_dir) / "ssl"))
+        else:
+            default_ssl_dir = os.environ.get("G8E_SSL_DIR", "/operator")
         paths = {
             "infra": {
                 "db_path": "/data/g8e.db",
-                "ca_cert_path": f"{os.environ.get('G8E_SSL_DIR', default_ssl_dir)}/ca.crt",
+                "ca_cert_path": str(Path(default_ssl_dir) / "ca.crt"),
                 "ssl_dir": os.environ.get("G8E_SSL_DIR", default_ssl_dir),
                 "docs_dir": "/docs",
                 "shared_dir": _SHARED_DIR,
@@ -52,9 +57,10 @@ def _load_paths() -> dict:
         paths["infra"]["shared_constants_dir"] = _SHARED_DIR + "/constants"
         paths["infra"]["shared_models_dir"] = _SHARED_DIR + "/models"
         # Override SSL paths to use host runtime directory when running on host
-        host_ssl_dir = os.environ.get("G8E_RUNTIME_DIR", "/home/bob/g8e/.g8e") + "/ssl"
+        host_runtime_dir = os.environ.get("G8E_RUNTIME_DIR", str(Path(_SHARED_DIR).parent / ".g8e"))
+        host_ssl_dir = os.environ.get("G8E_SSL_DIR", str(Path(host_runtime_dir) / "ssl"))
         paths["infra"]["ssl_dir"] = host_ssl_dir
-        paths["infra"]["ca_cert_path"] = host_ssl_dir + "/ca.crt"
+        paths["infra"]["ca_cert_path"] = str(Path(host_ssl_dir) / "ca.crt")
 
     return paths
 

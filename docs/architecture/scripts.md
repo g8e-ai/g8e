@@ -18,15 +18,12 @@ g8e uses a host-native target model. Operator listen mode owns local persistence
 
 The root `./g8e` script is a Bash-based dispatcher. It is the only script an operator should invoke directly on the host.
 
-- **Host Runtime State:** Generated platform runtime state is rooted at `./.g8e`, including `data`, `ssl`, `pids`, and `logs`.
+- **Host Runtime State:** Generated platform runtime state is rooted at `./.g8e`, including `data`, `ssl`, `pids`, and `logs`; managed services receive the SSL path via `G8E_SSL_DIR`.
 - **Session Management:** Commands targeting the internal API (`data`, `security`, `mcp`, `operator`) are gated by a local credential store (`~/.g8e/credentials`) which is populated via `./g8e login`.
 
 ### Execution Flow
 1. **Host-Side:** Commands like `platform start` or `operator build` run directly on the host, managing Operator listen mode and component lifecycle.
-2. **Container-Side:** Commands like `data users list` or `security validate` are forwarded via `docker run` or `docker exec` into ephemeral runner containers, where they have access to:
-   - Internal service networks (`operator`, `g8ed`).
-   - Mounted secrets (TLS certs, internal auth tokens).
-   - The full Python operational toolchain.
+2. **Tooling-Side:** Commands like `data users list` or `security validate` run with the platform environment populated, including internal URLs and the host SSL path.
 
 ---
 
@@ -35,7 +32,7 @@ The root `./g8e` script is a Bash-based dispatcher. It is the only script an ope
 ### Platform Management (`./g8e platform`)
 Orchestrates platform lifecycle via `scripts/core/build.sh`.
 
-- **`start` / `stop` / `restart`:** Basic container lifecycle. `start` waits for service health checks.
+- **`start` / `stop` / `restart`:** Host-native service lifecycle. `start` waits for service health checks.
 - **`build` / `rebuild`:** Creates or recreates images. `rebuild` automatically syncs agent personas before rebuilding the `g8ee` image.
 - **`setup`:** Initial platform configuration and volume initialization.
 - **`reset`:** Destructive. Wipes Dashboard/Engine data and Operator listen-mode data, while preserving TLS material in `./.g8e/ssl`.

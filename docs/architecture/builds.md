@@ -55,7 +55,7 @@ On first start, Operator in listen mode generates a self-signed ECDSA P-384 CA a
 - Background-uploads the operator binaries to its internal blob store.
 
 ### 3. Service Convergence
-`g8ee` and `g8ed` wait for Operator listen mode to be healthy. They read `.g8e/ssl` to establish mTLS trust and authenticate via the `X-Internal-Auth` token. 
+`g8ee` and `g8ed` wait for Operator listen mode to be healthy. They read the host SSL directory exported as `G8E_SSL_DIR` to establish TLS trust and authenticate via the `X-Internal-Auth` token; by default this resolves to `./.g8e/ssl`.
 
 ---
 
