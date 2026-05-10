@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 from app.constants import (
@@ -44,14 +45,14 @@ from app.models.base import ConfigDict, Field, G8eBaseModel, G8eIdentifiableMode
 logger = logging.getLogger(__name__)
 
 class PlatformSettingsDocument(G8eIdentifiableModel):
-    """Platform-wide configuration document from g8es 'platform_settings' collection."""
+    """Platform-wide configuration document from operator 'platform_settings' collection."""
 
     model_config = ConfigDict(extra="forbid")
 
     settings: G8eePlatformSettings
 
 class UserSettingsDocument(G8eIdentifiableModel):
-    """Per-user settings document from g8es 'user_settings' collection."""
+    """Per-user settings document from operator 'user_settings' collection."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -75,8 +76,8 @@ class AuthSettings(G8eBaseModel):
 
 class ComponentURLsSettings(G8eBaseModel):
     """Internal and external component URL configuration."""
-    g8ee_url: str = Field("https://g8ee")
-    g8ed_url: str = Field("https://g8ed")
+    g8ee_url: str = Field("https://localhost:8443")
+    g8ed_url: str = Field("https://localhost:443")
 
 class CommandValidationSettings(G8eBaseModel):
     """Operator command safety and validation configuration.
@@ -205,10 +206,10 @@ class DatabaseSettings(G8eBaseModel):
     operators_collection: str = Field(DB_COLLECTION_OPERATORS)
 
 class ListenSettings(G8eBaseModel):
-    """g8es (Operator --listen mode) configuration."""
-    http_url: str = Field("https://g8es:9000")
-    pubsub_url: str = Field("wss://g8es:9001")
-    blob_url: str = Field("https://g8es:9000")
+    """operator (Operator --listen mode) configuration."""
+    http_url: str = Field(os.environ.get("G8E_INTERNAL_HTTP_URL", "https://localhost:9000"))
+    pubsub_url: str = Field(os.environ.get("G8E_INTERNAL_PUBSUB_URL", "wss://localhost:9001"))
+    blob_url: str = Field(os.environ.get("G8E_INTERNAL_HTTP_URL", "https://localhost:9000"))
     default_ttl: int = Field(CACHE_TTL_DEFAULT)
 
     @field_validator("http_url", "pubsub_url", "blob_url", mode="after")
@@ -349,7 +350,7 @@ class ReputationSettings(G8eBaseModel):
 
 class G8eePlatformSettings(G8eBaseModel):
     """Platform-level deployment configuration."""
-    port: int = Field(443)
+    port: int = Field(8443)
     host: str = Field("0.0.0.0")
     log_level: LogLevel = Field(LogLevel.INFO)
     enable_logging: bool = Field(True)
@@ -366,7 +367,7 @@ class G8eePlatformSettings(G8eBaseModel):
 
     app_url: str = Field("https://localhost")
     allowed_origins: str = Field("")
-    passkey_rp_name: str = Field("g8e.local")
+    passkey_rp_name: str = Field("localhost")
     passkey_rp_id: str = Field("localhost")
     passkey_origin: str = Field("https://localhost")
 

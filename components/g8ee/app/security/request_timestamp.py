@@ -24,7 +24,7 @@ Headers (for HTTP requests):
 - X-Request-Timestamp: ISO 8601 timestamp of when request was created
 - X-Request-Nonce: Unique request identifier for replay prevention
 
-Message Fields (for g8es pub/sub messages):
+Message Fields (for operator pub/sub messages):
 - request_timestamp: ISO 8601 timestamp in message metadata
 - request_nonce: Unique identifier in message metadata
 """
@@ -141,7 +141,7 @@ async def check_nonce_kv(
     cache_aside_service: "CacheAsideService"
 ) -> NonceCheckResult:
     """
-    Check and mark nonce using g8es KV store.
+    Check and mark nonce using operator KV store.
 
     Args:
         nonce: Unique request nonce
@@ -164,7 +164,7 @@ async def check_nonce_kv(
         return NonceCheckResult(success=True, is_replay=is_replay)
 
     except Exception as e:
-        logger.warning("g8es nonce check failed: %s", e)
+        logger.warning("operator nonce check failed: %s", e)
         return NonceCheckResult(
             success=False,
             error=str(e),
@@ -335,7 +335,7 @@ def validate_message_timestamp(
 
 class RequestTimestampValidator:
     """
-    Request timestamp validator with optional g8es KV support.
+    Request timestamp validator with optional operator KV support.
 
     Provides both sync and async validation methods.
     """
@@ -357,7 +357,7 @@ class RequestTimestampValidator:
         nonce: str,
         context: dict[str, object]
     ) -> RequestValidationResult:
-        """Async validation with g8es KV support."""
+        """Async validation with operator KV support."""
         return await validate_request_timestamp(
             timestamp_str=timestamp_str,
             nonce=nonce,

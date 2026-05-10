@@ -30,7 +30,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func requireLastPublished(t *testing.T, db *MockG8esPubSubClient) []byte {
+func requireLastPublished(t *testing.T, db *MockOperatorPubSubClient) []byte {
 	t.Helper()
 	published := db.LastPublished()
 	require.NotNil(t, published, "expected a message to be published")
@@ -39,7 +39,7 @@ func requireLastPublished(t *testing.T, db *MockG8esPubSubClient) []byte {
 
 func TestNewPubSubResultsService(t *testing.T) {
 	t.Run("creates service", func(t *testing.T) {
-		db := NewMockG8esPubSubClient()
+		db := NewMockOperatorPubSubClient()
 
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -56,7 +56,7 @@ func TestNewPubSubResultsService(t *testing.T) {
 
 func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 	t.Run("successful publish", func(t *testing.T) {
-		db := NewMockG8esPubSubClient()
+		db := NewMockOperatorPubSubClient()
 
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -99,7 +99,7 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 	})
 
 	t.Run("return_code type validation", func(t *testing.T) {
-		db := NewMockG8esPubSubClient()
+		db := NewMockOperatorPubSubClient()
 
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -134,7 +134,7 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 
 func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
 	t.Run("successful publish", func(t *testing.T) {
-		db := NewMockG8esPubSubClient()
+		db := NewMockOperatorPubSubClient()
 		defer db.Close()
 
 		cfg := testutil.NewTestConfig(t)
@@ -167,7 +167,7 @@ func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
 	})
 
 	t.Run("failed file edit result", func(t *testing.T) {
-		db := NewMockG8esPubSubClient()
+		db := NewMockOperatorPubSubClient()
 		defer db.Close()
 
 		cfg := testutil.NewTestConfig(t)
@@ -201,7 +201,7 @@ func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
 	})
 
 	t.Run("successful read operation populates content field", func(t *testing.T) {
-		db := NewMockG8esPubSubClient()
+		db := NewMockOperatorPubSubClient()
 		defer db.Close()
 
 		cfg := testutil.NewTestConfig(t)
@@ -247,7 +247,7 @@ func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
 
 func TestPubSubResultsService_PublishHeartbeat(t *testing.T) {
 	t.Run("successful heartbeat publish", func(t *testing.T) {
-		db := NewMockG8esPubSubClient()
+		db := NewMockOperatorPubSubClient()
 		defer db.Close()
 
 		cfg := testutil.NewTestConfig(t)
@@ -271,7 +271,7 @@ func TestPubSubResultsService_PublishHeartbeat(t *testing.T) {
 	})
 
 	t.Run("heartbeat with system info", func(t *testing.T) {
-		db := NewMockG8esPubSubClient()
+		db := NewMockOperatorPubSubClient()
 		defer db.Close()
 
 		cfg := testutil.NewTestConfig(t)
@@ -338,7 +338,7 @@ func TestPubSubResultsService_MessageFormatting(t *testing.T) {
 }
 
 func TestPubSubResultsService_PublishExecutionResultWithTaskAndInvestigation(t *testing.T) {
-	db := NewMockG8esPubSubClient()
+	db := NewMockOperatorPubSubClient()
 	defer db.Close()
 
 	cfg := testutil.NewTestConfig(t)
@@ -370,7 +370,7 @@ func TestPubSubResultsService_PublishExecutionResultWithTaskAndInvestigation(t *
 }
 
 func TestPubSubResultsService_PublishExecutionResultFailed(t *testing.T) {
-	db := NewMockG8esPubSubClient()
+	db := NewMockOperatorPubSubClient()
 	defer db.Close()
 
 	cfg := testutil.NewTestConfig(t)
@@ -399,7 +399,7 @@ func TestPubSubResultsService_PublishExecutionResultFailed(t *testing.T) {
 }
 
 func TestPubSubResultsService_PublishExecutionResultTimeout(t *testing.T) {
-	db := NewMockG8esPubSubClient()
+	db := NewMockOperatorPubSubClient()
 	defer db.Close()
 
 	cfg := testutil.NewTestConfig(t)
@@ -428,7 +428,7 @@ func TestPubSubResultsService_PublishExecutionResultTimeout(t *testing.T) {
 }
 
 func TestPubSubResultsService_PublishFileEditResultWithBackup(t *testing.T) {
-	db := NewMockG8esPubSubClient()
+	db := NewMockOperatorPubSubClient()
 	defer db.Close()
 
 	cfg := testutil.NewTestConfig(t)
@@ -471,7 +471,7 @@ func TestPubSubResultsService_PublishExecutionStatus_DataSovereignty(t *testing.
 	// - Output is ALWAYS transmitted in status updates (after sentinel.Sentinel scrubbing by caller)
 
 	t.Run("status update sets stored_locally flag when LFAA enabled", func(t *testing.T) {
-		db := NewMockG8esPubSubClient()
+		db := NewMockOperatorPubSubClient()
 
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -512,7 +512,7 @@ func TestPubSubResultsService_PublishExecutionStatus_DataSovereignty(t *testing.
 	})
 
 	t.Run("status update includes output without stored_locally when LFAA disabled", func(t *testing.T) {
-		db := NewMockG8esPubSubClient()
+		db := NewMockOperatorPubSubClient()
 
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -546,7 +546,7 @@ func TestPubSubResultsService_PublishExecutionStatus_DataSovereignty(t *testing.
 
 func TestPubSubResultsService_PublishFsListResult(t *testing.T) {
 	t.Run("successful fs list publish", func(t *testing.T) {
-		db := NewMockG8esPubSubClient()
+		db := NewMockOperatorPubSubClient()
 
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -590,7 +590,7 @@ func TestPubSubResultsService_PublishFsListResult(t *testing.T) {
 	})
 
 	t.Run("failed fs list result", func(t *testing.T) {
-		db := NewMockG8esPubSubClient()
+		db := NewMockOperatorPubSubClient()
 
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -628,7 +628,7 @@ func TestPubSubResultsService_PublishFsListResult(t *testing.T) {
 	})
 
 	t.Run("truncated fs list result", func(t *testing.T) {
-		db := NewMockG8esPubSubClient()
+		db := NewMockOperatorPubSubClient()
 		defer db.Close()
 
 		cfg := testutil.NewTestConfig(t)
@@ -661,7 +661,7 @@ func TestPubSubResultsService_PublishFsListResult(t *testing.T) {
 
 func TestPubSubResultsService_PublishResult(t *testing.T) {
 	t.Run("publishes generic result", func(t *testing.T) {
-		db := NewMockG8esPubSubClient()
+		db := NewMockOperatorPubSubClient()
 
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -688,7 +688,7 @@ func TestPubSubResultsService_PublishResult(t *testing.T) {
 	})
 
 	t.Run("publishes result with complex payload", func(t *testing.T) {
-		db := NewMockG8esPubSubClient()
+		db := NewMockOperatorPubSubClient()
 		defer db.Close()
 
 		cfg := testutil.NewTestConfig(t)
@@ -712,7 +712,7 @@ func TestPubSubResultsService_PublishResult(t *testing.T) {
 	})
 
 	t.Run("populates missing operator fields", func(t *testing.T) {
-		db := NewMockG8esPubSubClient()
+		db := NewMockOperatorPubSubClient()
 
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -738,7 +738,7 @@ func TestPubSubResultsService_PublishResult(t *testing.T) {
 
 func TestPubSubResultsService_PublishCancellationResult(t *testing.T) {
 	t.Run("publishes cancellation result", func(t *testing.T) {
-		db := NewMockG8esPubSubClient()
+		db := NewMockOperatorPubSubClient()
 
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -767,7 +767,7 @@ func TestPubSubResultsService_PublishCancellationResult(t *testing.T) {
 	})
 
 	t.Run("publishes cancellation with task and investigation IDs", func(t *testing.T) {
-		db := NewMockG8esPubSubClient()
+		db := NewMockOperatorPubSubClient()
 		defer db.Close()
 
 		cfg := testutil.NewTestConfig(t)
@@ -800,7 +800,7 @@ func TestPubSubResultsService_PublishCancellationResult(t *testing.T) {
 
 func TestResultMessage_APIKeyPropagation(t *testing.T) {
 	t.Run("execution result carries api_key from config", func(t *testing.T) {
-		db := NewMockG8esPubSubClient()
+		db := NewMockOperatorPubSubClient()
 		defer db.Close()
 
 		cfg := testutil.NewTestConfig(t)
@@ -833,7 +833,7 @@ func TestResultMessage_APIKeyPropagation(t *testing.T) {
 	})
 
 	t.Run("cancellation result carries api_key from config", func(t *testing.T) {
-		db := NewMockG8esPubSubClient()
+		db := NewMockOperatorPubSubClient()
 		defer db.Close()
 
 		cfg := testutil.NewTestConfig(t)
@@ -880,7 +880,7 @@ func TestPubSubResultsService_PublishExecutionStatus_EventTypeMapping(t *testing
 
 	for _, tt := range tests {
 		t.Run(string(tt.status), func(t *testing.T) {
-			db := NewMockG8esPubSubClient()
+			db := NewMockOperatorPubSubClient()
 			defer db.Close()
 
 			cfg := testutil.NewTestConfig(t)
@@ -910,7 +910,7 @@ func TestPubSubResultsService_PublishExecutionStatus_EventTypeMapping(t *testing
 
 func TestHeartbeat_APIKeyPropagation(t *testing.T) {
 	t.Run("heartbeat carries api_key from config via buildHeartbeat", func(t *testing.T) {
-		db := NewMockG8esPubSubClient()
+		db := NewMockOperatorPubSubClient()
 		defer db.Close()
 
 		cfg := testutil.NewTestConfig(t)
@@ -938,7 +938,7 @@ func TestHeartbeat_APIKeyPropagation(t *testing.T) {
 	})
 
 	t.Run("heartbeat api_key appears in published envelope", func(t *testing.T) {
-		db := NewMockG8esPubSubClient()
+		db := NewMockOperatorPubSubClient()
 		defer db.Close()
 
 		cfg := testutil.NewTestConfig(t)

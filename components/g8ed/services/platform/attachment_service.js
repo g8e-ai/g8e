@@ -23,7 +23,7 @@ export class AttachmentService {
     /**
      * @param {Object} options
      * @param {Object} options.cacheAsideService - CacheAsideService instance
-     * @param {import('./g8es_blob_client.js').G8esBlobClient} options.blobStorage
+     * @param {import('./operator_blob_client.js').OperatorBlobClient} options.blobStorage
      */
     constructor({ cacheAsideService, blobStorage } = {}) {
         this._cache_aside = cacheAsideService;
@@ -189,7 +189,7 @@ export class AttachmentService {
      * Retrieve attachment metadata and hydrate base64_data from the blob store.
      * Used by g8ee when it needs the raw binary for LLM processing.
      *
-     * @param {string} attachmentKey - g8es KV key
+     * @param {string} attachmentKey - operator KV key
      * @returns {Promise<{record: AttachmentRecord, base64_data: string}|null>}
      */
     async getAttachmentWithData(attachmentKey) {

@@ -241,15 +241,15 @@ describe('SetupService [UNIT]', () => {
         it('derives fields from standard headers', () => {
             const req = {
                 get: vi.fn((name) => {
-                    if (name === 'host') return 'g8e.local:443';
+                    if (name === 'host') return 'localhost:443';
                     return null;
                 }),
                 protocol: 'https'
             };
 
             const fields = service.derivePasskeyFields(req);
-            expect(fields.passkey_rp_id).toBe('g8e.local');
-            expect(fields.passkey_origin).toBe('https://g8e.local:443');
+            expect(fields.passkey_rp_id).toBe('localhost');
+            expect(fields.passkey_origin).toBe('https://localhost:443');
         });
 
         it('prefers X-Forwarded headers over host/protocol', () => {

@@ -86,31 +86,31 @@ up: build
 		echo "Starting $$NUM web nodes (no DEVICE_TOKEN; operators will NOT auto-attach)..."; \
 		echo "  Provide DEVICE_TOKEN to auto-attach operators: make up -d dlk_xxx"; \
 		$(COMPOSE) up -d --scale node=$$EXTRA; \
-	fi
-	@echo ""
-	@echo "========================================"
-	@echo "  Broken Web App Fleet - $$NUM Nodes"
-	@echo "========================================"
-	@echo ""
-	@echo "Node Profiles:"
-	@echo "  node-01 to 05: Healthy"
-	@echo "  node-06: Bad Upstream (502)"
-	@echo "  node-07: SSL Expired"
-	@echo "  node-08: Wrong Root (404)"
-	@echo "  node-09: High Load (504)"
-	@echo "  node-10: Crashed (nginx won't start)"
-	@if [ "$$EXTRA" -gt 0 ]; then \
+	fi; \
+	echo ""; \
+	echo "========================================"; \
+	echo "  Broken Web App Fleet - $$NUM Nodes"; \
+	echo "========================================"; \
+	echo ""; \
+	echo "Node Profiles:"; \
+	echo "  node-01 to 05: Healthy"; \
+	echo "  node-06: Bad Upstream (502)"; \
+	echo "  node-07: SSL Expired"; \
+	echo "  node-08: Wrong Root (404)"; \
+	echo "  node-09: High Load (504)"; \
+	echo "  node-10: Crashed (nginx won't start)"; \
+	if [ "$$EXTRA" -gt 0 ]; then \
 		echo "  node-1 to $$EXTRA: Extra Healthy nodes (scaled)"; \
-	fi
-	@echo ""
-	@echo "Operator logs stream to: docker logs -f web-node-<NN>"
-	@echo "Dashboard:               http://localhost:3000"
-	@echo ""
-	@echo "Deploy operators:"
-	@echo "  ./g8e demo deploy -d dlk_xxx"
-	@echo "  ./g8e demo stream -d dlk_xxx"
-	@echo ""
-	@echo "========================================"
+	fi; \
+	echo ""; \
+	echo "Operator logs stream to: docker logs -f web-node-<NN>"; \
+	echo "Dashboard:               http://localhost:3000"; \
+	echo ""; \
+	echo "Deploy operators:"; \
+	echo "  ./g8e demo deploy -d dlk_xxx"; \
+	echo "  ./g8e demo stream -d dlk_xxx"; \
+	echo ""; \
+	echo "========================================"
 
 setup-ssh:
 	@docker cp $(CONTAINER_PREFIX)-01:/opt/demo-key ./.demo-key 2>/dev/null && chmod 600 ./.demo-key
@@ -183,13 +183,13 @@ deploy:
 	for node in $$(docker ps --filter "label=demo.service=web-node" --format '{{.Names}}' | sort); do \
 		echo "  Deploying to $$node..."; \
 		docker exec $$node sh -c "\
-			curl -fsSL --cacert /g8es/ca.crt -H \"Authorization: Bearer $$TOKEN\" \
-				-o g8e.operator \"https://g8e.local/operator/download/linux/amd64\" && \
-			curl -fsSL --cacert /g8es/ca.crt -H \"Authorization: Bearer $$TOKEN\" \
-				-o g8e.operator.sha256 \"https://g8e.local/operator/download/linux/amd64/sha256\" && \
+			curl -fsSL --cacert /operator/ca.crt -H \"Authorization: Bearer $$TOKEN\" \
+				-o g8e.operator \"https://172.17.0.1:443/operator/download/linux/amd64\" && \
+			curl -fsSL --cacert /operator/ca.crt -H \"Authorization: Bearer $$TOKEN\" \
+				-o g8e.operator.sha256 \"https://172.17.0.1:443/operator/download/linux/amd64/sha256\" && \
 			sha256sum -c g8e.operator.sha256 && \
 			chmod +x g8e.operator && \
-			nohup sudo ./g8e.operator --endpoint g8e.local --working-dir /home/appuser --log info -D "$$TOKEN" < /dev/null > g8e.operator.log 2>&1 & \
+			nohup sudo ./g8e.operator --endpoint 172.17.0.1:9001 --working-dir /home/appuser --log info -D \"$$TOKEN\" < /dev/null > g8e.operator.log 2>&1 & \
 			PID=\$$!; \
 			echo \"    operator started (pid: \$$PID)\"" || true; \
 	done; \
@@ -233,7 +233,7 @@ stream:
 	fi; \
 	echo "  Streaming to: $$HOSTS"; \
 	docker exec g8ep /home/g8e/g8e.operator stream \
-		--endpoint g8e.local \
+		--endpoint localhost \
 		--binary-dir /home/g8e \
 		--device-token "$$TOKEN" \
 		--ssh-identity-file /tmp/demo-ssh-key \

@@ -35,7 +35,7 @@ func newTestCommandService(t *testing.T) *CommandService {
 	execSvc := execution.NewExecutionService(cfg, logger)
 	fileEditSvc := execution.NewFileEditService(cfg, logger)
 
-	db := NewMockG8esPubSubClient()
+	db := NewMockOperatorPubSubClient()
 	t.Cleanup(func() { db.Close() })
 
 	resultsSvc, err := NewPubSubResultsService(cfg, logger, db, nil)

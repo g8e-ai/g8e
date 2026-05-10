@@ -15,14 +15,14 @@ package pubsub
 
 // Loopback tests verify the full g8eo pub/sub round-trip using an in-process
 // PubSubBroker served via httptest.NewServer.  No external infrastructure is
-// required — the G8esPubSubClient connects over plain ws:// to the broker
+// required — the OperatorPubSubClient connects over plain ws:// to the broker
 // running inside the same test process.
 //
 // This covers the dual role g8eo plays:
 //   - Normal mode: subscriber on cmd:{op}:{sess}, publisher on results/heartbeat channels
 //   - Listen mode: g8eo IS the broker (PubSubBroker) — other components connect to it
 //
-// Both roles collapse into a single loopback: one G8esPubSubClient dials the
+// Both roles collapse into a single loopback: one OperatorPubSubClient dials the
 // in-process broker to subscribe and another (or the same) dials to publish.
 
 import (
@@ -55,7 +55,7 @@ import (
 // =============================================================================
 
 // loopbackFixture wires a PubSubBroker behind an httptest.Server so that
-// G8esPubSubClient instances can connect over plain ws://.
+// OperatorPubSubClient instances can connect over plain ws://.
 type loopbackFixture struct {
 	broker *listen.PubSubBroker
 	server *httptest.Server
@@ -74,10 +74,10 @@ func newLoopbackFixture(t *testing.T) *loopbackFixture {
 	return &loopbackFixture{broker: broker, server: srv, wsURL: wsURL}
 }
 
-// newLoopbackClient creates a G8esPubSubClient connected to the loopback broker.
-func (f *loopbackFixture) newClient(t *testing.T) *G8esPubSubClient {
+// newLoopbackClient creates a OperatorPubSubClient connected to the loopback broker.
+func (f *loopbackFixture) newClient(t *testing.T) *OperatorPubSubClient {
 	t.Helper()
-	client, err := NewG8esPubSubClient(f.wsURL, "", testutil.NewTestLogger())
+	client, err := NewOperatorPubSubClient(f.wsURL, "", testutil.NewTestLogger())
 	require.NoError(t, err)
 	t.Cleanup(client.Close)
 	return client
@@ -147,7 +147,7 @@ func drainNone(t *testing.T, ch <-chan []byte, window time.Duration) {
 }
 
 // =============================================================================
-// G8esPubSubClient.Subscribe receives broker-published messages
+// OperatorPubSubClient.Subscribe receives broker-published messages
 // =============================================================================
 
 func TestLoopback_SubscriberReceivesBrokerPublish(t *testing.T) {
@@ -191,7 +191,7 @@ func TestLoopback_SubscriberDoesNotReceiveOtherChannel(t *testing.T) {
 }
 
 // =============================================================================
-// G8esPubSubClient.Publish fans out to broker subscribers
+// OperatorPubSubClient.Publish fans out to broker subscribers
 // =============================================================================
 
 func TestLoopback_ClientPublishFansOutToSubscriber(t *testing.T) {
@@ -302,7 +302,7 @@ func TestLoopback_CommandDispatch_HeartbeatRequest(t *testing.T) {
 	cfg.HeartbeatInterval = 0 // disable scheduler
 	logger := testutil.NewTestLogger()
 
-	cmdClient, err := NewG8esPubSubClient(f.wsURL, "", logger)
+	cmdClient, err := NewOperatorPubSubClient(f.wsURL, "", logger)
 	require.NoError(t, err)
 	t.Cleanup(cmdClient.Close)
 
@@ -345,7 +345,7 @@ func TestLoopback_CommandDispatch_InboundHeartbeatRequest(t *testing.T) {
 	cfg.HeartbeatInterval = 0
 	logger := testutil.NewTestLogger()
 
-	cmdClient, err := NewG8esPubSubClient(f.wsURL, "", logger)
+	cmdClient, err := NewOperatorPubSubClient(f.wsURL, "", logger)
 	require.NoError(t, err)
 	t.Cleanup(cmdClient.Close)
 
@@ -502,13 +502,13 @@ func TestLoopback_ClosedClientRejectsPublish(t *testing.T) {
 }
 
 // =============================================================================
-// MockG8esPubSubClient self-contained loopback
+// MockOperatorPubSubClient self-contained loopback
 // When no real broker is needed (pure logic tests), the mock fans out Publish
 // to its own Subscribe channels in-process — exactly the same loopback contract.
 // =============================================================================
 
 func TestMockClient_PublishFansOutToSubscriber(t *testing.T) {
-	mock := NewMockG8esPubSubClient()
+	mock := NewMockOperatorPubSubClient()
 	defer mock.Close()
 
 	ch := constants.CmdChannel("opM", "sessM")
@@ -527,7 +527,7 @@ func TestMockClient_PublishFansOutToSubscriber(t *testing.T) {
 }
 
 func TestMockClient_InjectMessageDelivers(t *testing.T) {
-	mock := NewMockG8esPubSubClient()
+	mock := NewMockOperatorPubSubClient()
 	defer mock.Close()
 
 	ch := constants.HeartbeatChannel("opI", "sessI")
@@ -545,7 +545,7 @@ func TestMockClient_InjectMessageDelivers(t *testing.T) {
 }
 
 func TestMockClient_CloseStopsAllSubscribers(t *testing.T) {
-	mock := NewMockG8esPubSubClient()
+	mock := NewMockOperatorPubSubClient()
 
 	ch := constants.ResultsChannel("opK", "sessK")
 	sub, err := mock.Subscribe(context.Background(), ch)
@@ -562,7 +562,7 @@ func TestMockClient_CloseStopsAllSubscribers(t *testing.T) {
 }
 
 func TestMockClient_PublishedRecordsAllMessages(t *testing.T) {
-	mock := NewMockG8esPubSubClient()
+	mock := NewMockOperatorPubSubClient()
 	defer mock.Close()
 
 	ch := constants.ResultsChannel("opR", "sessR")
@@ -579,7 +579,7 @@ func TestMockClient_PublishedRecordsAllMessages(t *testing.T) {
 }
 
 func TestMockClient_ResetClearsPublished(t *testing.T) {
-	mock := NewMockG8esPubSubClient()
+	mock := NewMockOperatorPubSubClient()
 	defer mock.Close()
 
 	ch := constants.CmdChannel("opReset", "sessReset")

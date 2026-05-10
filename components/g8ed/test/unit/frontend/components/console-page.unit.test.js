@@ -18,8 +18,9 @@ import { MockServiceClient } from '@test/mocks/mock-browser-env.js';
 import { EventType } from '@g8ed/constants/events.js';
 import fs from 'fs';
 import path from 'path';
+import { resolveProjectRoot } from '@g8ed/utils/path.js';
 
-const CONSOLE_EJS_PATH = path.resolve(__dirname, '../../../../views/console.ejs');
+const CONSOLE_EJS_PATH = path.resolve(resolveProjectRoot(), 'components/g8ed/views/console.ejs');
 const consoleEjsSource = fs.readFileSync(CONSOLE_EJS_PATH, 'utf8');
 
 describe('Console Page [FRONTEND - jsdom]', () => {
@@ -214,7 +215,7 @@ describe('Console Page [FRONTEND - jsdom]', () => {
                     message: 'Component health fetched successfully',
                     overall: 'healthy',
                     timestamp: '2026-01-01T00:00:00.000Z',
-                    components: { g8es: { status: 'healthy' } }
+                    components: { operator: { status: 'healthy' } }
                 })
             });
 
@@ -223,7 +224,7 @@ describe('Console Page [FRONTEND - jsdom]', () => {
 
             expect(result.data.overall).toBe('healthy');
             expect(result.data.timestamp).toBe('2026-01-01T00:00:00.000Z');
-            expect(result.data.components).toEqual({ g8es: { status: 'healthy' } });
+            expect(result.data.components).toEqual({ operator: { status: 'healthy' } });
         });
 
         it('should restructure login audit response correctly', async () => {

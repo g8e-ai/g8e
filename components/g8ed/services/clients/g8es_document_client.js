@@ -12,13 +12,13 @@
 // limitations under the License.
 
 /**
- * G8esDocumentClient — g8es Document Store HTTP client.
+ * OperatorDocumentClient — operator Document Store HTTP client.
  * 
- * Purpose-built client for g8es document store operations (/db/...).
+ * Purpose-built client for operator document store operations (/db/...).
  * Mirrors g8ee's DBClient (components/g8ee/app/db/client.py) in scope
  * and responsibility — document CRUD only, no KV, no pub/sub.
  * 
- * g8es endpoints:
+ * operator endpoints:
  *   GET    /db/{collection}/{id}       - get document
  *   PUT    /db/{collection}/{id}       - set (create/replace) document
  *   PATCH  /db/{collection}/{id}       - update (merge) document
@@ -27,12 +27,12 @@
  */
 
 import { randomUUID } from 'crypto';
-import { G8esHttpClient, G8esHttpError } from './g8es_http_client.js';
+import { OperatorHttpClient, OperatorHttpError } from './operator_http_client.js';
 import { G8eBaseModel } from '../../models/base.js';
 import { logger } from '../../utils/logger.js';
 import { nowISOString } from '../../utils/timestamp.js';
 
-const LOG_PREFIX = '[G8ES-DOC]';
+const LOG_PREFIX = '[OPERATOR-DOC]';
 const CLIENT_TERMINATED_ERROR = 'Client terminated';
 
 const FieldOp = {
@@ -43,7 +43,7 @@ const FieldOp = {
     SERVER_TIMESTAMP: '__SERVER_TIMESTAMP__',
 };
 
-class G8esFieldValuE {
+class OperatorFieldValuE {
     static serverTimestamp() {
         return nowISOString();
     }
@@ -71,21 +71,21 @@ function isFieldValueOp(val) {
     return val && typeof val === 'object' && '__op' in val;
 }
 
-class G8esDocumentClient {
-    static FieldValue = G8esFieldValuE;
+class OperatorDocumentClient {
+    static FieldValue = OperatorFieldValuE;
 
     /**
      * @param {object} config
-     * @param {string} config.listenUrl - Base URL of g8es (e.g. $G8E_INTERNAL_HTTP_URL)
-     * @param {string} [config.internalAuthToken] - Shared secret for g8es authentication
+     * @param {string} config.listenUrl - Base URL of operator (e.g. $G8E_INTERNAL_HTTP_URL)
+     * @param {string} [config.internalAuthToken] - Shared secret for operator authentication
      * @param {string} [config.caCertPath] - Path to CA certificate for TLS verification
      */
     constructor({ listenUrl, internalAuthToken = null, caCertPath = null } = {}) {
-        this._http = new G8esHttpClient({ listenUrl, component: 'G8E-DOC', internalAuthToken, caCertPath });
+        this._http = new OperatorHttpClient({ listenUrl, component: 'G8E-DOC', internalAuthToken, caCertPath });
     }
 
     get FieldValue() {
-        return G8esDocumentClient.FieldValue;
+        return OperatorDocumentClient.FieldValue;
     }
 
     // =========================================================================
@@ -99,7 +99,7 @@ class G8esDocumentClient {
             const data = await this._http.get(`/db/${collection}/${documentId}`);
             return { success: true, data, error: null };
         } catch (error) {
-            if (error instanceof G8esHttpError && error.status === 404) {
+            if (error instanceof OperatorHttpError && error.status === 404) {
                 return { success: true, data: null, error: 'Document not found' };
             }
             logger.error(`${LOG_PREFIX} getDocument failed: ${error.message}`);
@@ -190,7 +190,7 @@ class G8esDocumentClient {
             await this._http.delete(`/db/${collection}/${documentId}`);
             return { success: true, notFound: false, error: null };
         } catch (error) {
-            const notFound = error instanceof G8esHttpError && error.status === 404;
+            const notFound = error instanceof OperatorHttpError && error.status === 404;
             if (!notFound) {
                 logger.error(`${LOG_PREFIX} deleteDocument failed: ${error.message}`);
             }
@@ -271,4 +271,4 @@ class G8esDocumentClient {
     }
 }
 
-export { G8esDocumentClient, G8esFieldValuE };
+export { OperatorDocumentClient, OperatorFieldValuE };

@@ -5,21 +5,21 @@ parent: Architecture
 
 # Storage Architecture
 
-Last Updated: 2026-05-07
-Version: v0.2.0
+Last Updated: 2026-05-10
+Version: v0.2.2
 
 This document explains how the g8e platform stores data across its components. It focuses on the **why** and **what** — the architectural decisions, data flows, and invariants — rather than implementation details.
 
 ## Core Principles
 
-- **Operator-First Storage**: The Operator (`g8eo`) is the authoritative system of record for all operational data. Platform components (`g8ee`, `g8ed`) are stateless — they rely entirely on `g8es` for platform-side persistence.
+- **Operator-First Storage**: The Operator (`g8eo`) is the authoritative system of record for all operational data. Platform components (`g8ee`, `g8ed`) are stateless — they rely entirely on `operator` for platform-side persistence.
 - **Local-First Audit Architecture (LFAA)**: Every file mutation and command execution on a managed host is recorded locally in the Operator's Audit Vault and Ledger. The platform receives only Sentinel-scrubbed metadata; raw data never leaves the host unless explicitly retrieved by the customer.
-- **Cache-Aside Pattern**: The `g8es` Document Store (SQLite) is the authoritative source of truth for platform domain data. Stateless components (`g8ee`, `g8ed`) use a KV store for fast read caching with TTL-based expiration. Writes go to the Document Store first, which then triggers cache invalidation.
+- **Cache-Aside Pattern**: The `operator` Document Store (SQLite) is the authoritative source of truth for platform domain data. Stateless components (`g8ee`, `g8ed`) use a KV store for fast read caching with TTL-based expiration. Writes go to the Document Store first, which then triggers cache invalidation.
 - **Data Sovereignty**: Raw operational data (passwords, secrets, PII) never leaves the host. The platform only ever receives Sentinel-scrubbed summaries and metadata.
 
 ## Storage Tiers
 
-1. **Platform Store (g8es)**: Shared state for users, sessions, operators, cases, and configuration. Centralized persistence for stateless components.
+1. **Platform Store (operator)**: Shared state for users, sessions, operators, cases, and configuration. Centralized persistence for stateless components.
 2. **Operator Local Storage**:
     - **Audit Vault**: Cryptographically signed, append-only record of all session activity.
     - **Ledger**: Git-backed version control of all file mutations providing cryptographic history and rollback.
@@ -30,9 +30,9 @@ This document explains how the g8e platform stores data across its components. I
 ## Storage Architecture at a Glance
 
 ### Platform Side (Self-Hosted Hub)
-- **Component**: `g8es` (running `g8eo --listen`)
+- **Component**: `operator` (running `g8eo --listen`)
 - **Persistence**: Single SQLite database at `/data/g8e.db` (The "Coordination Store").
-- **Stateless Clients**: `g8ed` and `g8ee` read/write via HTTPS/WSS using `DBClient` (Python) or `G8esDocumentClient` (JS).
+- **Stateless Clients**: `g8ed` and `g8ee` read/write via HTTPS/WSS using `DBClient` (Python) or `OperatorDocumentClient` (JS).
 - **Subsystems**:
     - **Document Store**: JSON document CRUD (Collection/ID pattern).
     - **KV Store**: High-speed ephemeral data, TTL support, and read cache.
@@ -58,13 +58,13 @@ This document explains how the g8e platform stores data across its components. I
 │  │         g8ee          │      │              g8ed                │ │
 │  │  (stateless AI)       │      │  (stateless UI)                  │ │
 │  │                      │      │                                  │ │
-│  │  DBClient            │      │  G8esDocumentClient              │ │
+│  │  DBClient            │      │  OperatorDocumentClient              │ │
 │  │  (JSON documents)    │      │  (JSON documents)                │ │
 │  │                      │      │                                  │ │
-│  │  KVService           │      │  G8esKvCacheClient               │ │
+│  │  KVService           │      │  OperatorKvCacheClient               │ │
 │  │  (Cache + Pub/Sub)    │      │  (Cache + Session)               │ │
 │  │                      │      │                                  │ │
-│  │  BlobClient          │      │  G8esHttpClient                  │ │
+│  │  BlobClient          │      │  OperatorHttpClient                  │ │
 │  │  (Attachments)        │      │  (Binary data)                   │ │
 │  │                      │      │                                  │ │
 │  └──────────┬───────────┘      └──────────┬──────────┘             │
@@ -72,7 +72,7 @@ This document explains how the g8e platform stores data across its components. I
 │             └──────────────────┬──────────┘                          │
 │                                ▼                                     │
 │  ┌─────────────────────────────────────────┐                         │
-│  │                 g8es                   │                         │
+│  │                 operator                   │                         │
 │  │    g8eo binary in --listen mode          │                         │
 │  │    SQLite (g8e.db) at               │                         │
 │  │    /data/g8e.db                     │                         │
@@ -116,10 +116,10 @@ This document explains how the g8e platform stores data across its components. I
 
 | Component | Technology | Path/Volume | Role |
 |---|---|---|---|
-| **g8es (DB)** | SQLite | `g8es-data` -> `/data/g8e.db` | Central platform state (Coordination Store). |
-| **g8es (SSL)** | TLS Certs | `g8es-ssl` -> `/ssl` | CA, identity, and bootstrap secrets. **Survives reset**. |
+| **operator (DB)** | SQLite | `.g8e/data/g8e.db` | Central platform state (Coordination Store). |
+| **operator (SSL)** | TLS Certs | `.g8e/ssl` | CA, identity, and bootstrap secrets. **Survives reset**. |
 | **g8ee** | None | - | Stateless; uses `DBClient`, `KVService`, `BlobClient`. |
-| **g8ed** | None | - | Stateless; uses `G8esDocumentClient`, `G8esKvCacheClient`. |
+| **g8ed** | None | - | Stateless; uses `OperatorDocumentClient`, `OperatorKvCacheClient`. |
 | **g8eo (Scrubbed)** | SQLite | `.g8e/local_state.db` | Sentinel-scrubbed AI context. |
 | **g8eo (Raw)** | SQLite | `.g8e/raw_vault.db` | Customer-only unscrubbed forensic record. |
 | **g8eo (Audit)** | SQLite (Enc) | `.g8e/data/g8e.db` | LFAA encrypted append-only event log. |
@@ -127,9 +127,9 @@ This document explains how the g8e platform stores data across its components. I
 
 ---
 
-## Platform Persistence (g8es)
+## Platform Persistence (operator)
 
-`g8es` is the platform's central coordination point. It is an instance of `g8eo` running in `--listen` mode.
+`operator` is the platform's central coordination point. It is an instance of `g8eo` running in `--listen` mode.
 
 ### Subsystems
 - **Document Store**: Unified storage for JSON documents. Clients use a collection/ID pattern.
@@ -138,12 +138,12 @@ This document explains how the g8e platform stores data across its components. I
 - **SSE Buffer**: A ring buffer for Server-Sent Events, ensuring clients can catch up after disconnects.
 - **PubSub Broker**: Real-time message distribution for coordination.
 
-### The SSL Volume Authority
-The `g8es-ssl` volume is the platform's root of trust. It stores:
+### The SSL Directory Authority
+The `.g8e/ssl` directory is the platform's root of trust. It stores:
 1. **CA Certificates**: Root and intermediate certificates for mTLS.
 2. **Bootstrap Secrets**: `internal_auth_token`, `session_encryption_key`, and `auditor_hmac_key`.
 
-On startup, `g8es` synchronizes these secrets into its database. If a conflict occurs, the SSL volume is authoritative.
+On startup, `operator` synchronizes these secrets into its database. If a conflict occurs, the SSL volume is authoritative.
 
 ### Cache-Aside Consistency
 `g8ee` and `g8ed` implement a cache-aside pattern for performance:
@@ -229,6 +229,6 @@ The LFAA Audit Vault can be queried directly via SQLite for forensic analysis.
 - [../components/g8eo.md](../components/g8eo.md) — g8eo component reference
 - [../components/g8ee.md](../components/g8ee.md) — g8ee component reference
 - [../components/g8ed.md](../components/g8ed.md) — g8ed component reference
-- [../components/g8es.md](../components/g8es.md) — g8es component reference
+- [../components/operator.md](../components/operator.md) — operator component reference
 - [../architecture/security.md](security.md) — Full security model: mTLS, Sentinel patterns, LFAA encryption, threat detection
 - [../glossary.md](../glossary.md) — Platform terminology

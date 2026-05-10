@@ -272,3 +272,39 @@ async def test_omitting_callback_preserves_legacy_behavior():
     # Without the callback the intermediate text is lost (legacy behavior),
     # but the stream still completes and the final segment is preserved.
     assert state.response_text == "Final segment."
+
+
+async def test_device_token_flow_populates_response_text_without_sse():
+    """Device token flows (web_session_id=None) must process stream to populate state.response_text.
+    
+    Regression test for evals runner bug where agent produced empty responses because
+    stream was consumed without processing chunks when web_session_id was None.
+    
+    Note: case_id is provided for test factory compatibility but is not used when web_session_id is None.
+    """
+    inputs, state = make_agent_run_args(
+        case_id="case-device-1",  # Required by InvestigationModel validator, but not used for SSE when web_session_id is None
+        investigation_id="inv-device-1",
+        web_session_id=None,  # Device token flow
+        user_id="user-device-1",
+    )
+    event_svc = make_g8ed_event_service()
+
+    await deliver_via_sse(
+        stream=_stream(
+            _text("Analyzing the system state."),
+            _text("Checking service status."),
+            _tool_call(exec_id="exec-1"),
+            _tool_result(exec_id="exec-1"),
+            _text("All services are running normally."),
+            _complete(),
+        ),
+        inputs=inputs,
+        state=state,
+        g8ed_event_service=event_svc,
+    )
+
+    # Stream must be processed to populate response_text even without SSE delivery
+    assert state.response_text == "All services are running normally."
+    # Verify no events were published (SSE skipped)
+    assert len(event_svc.published_events) == 0

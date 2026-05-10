@@ -57,7 +57,7 @@ describe('Metrics Routes [UNIT]', () => {
             return layer.route.stack[layer.route.stack.length - 1].handle;
         };
 
-        it('should return healthy status when g8es KV is accessible', async () => {
+        it('should return healthy status when operator KV is accessible', async () => {
             mockCacheAsideService.kvPing.mockResolvedValue('PONG');
 
             const req = createMockReq();
@@ -71,11 +71,11 @@ describe('Metrics Routes [UNIT]', () => {
                 success: true,
                 status: SystemHealth.HEALTHY,
                 service: SourceComponent.G8ED,
-                g8es: { healthy: true }
+                operator: { healthy: true }
             }));
         });
 
-        it('should return degraded status when g8es KV check fails', async () => {
+        it('should return degraded status when operator KV check fails', async () => {
             mockCacheAsideService.kvPing.mockRejectedValue(new Error('KV connection lost'));
 
             const req = createMockReq();
@@ -87,7 +87,7 @@ describe('Metrics Routes [UNIT]', () => {
             expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
                 success: false,
                 status: SystemHealth.DEGRADED,
-                g8es: { healthy: false }
+                operator: { healthy: false }
             }));
         });
 
@@ -106,7 +106,7 @@ describe('Metrics Routes [UNIT]', () => {
             expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
                 success: false,
                 status: SystemHealth.DEGRADED,
-                g8es: { healthy: false }
+                operator: { healthy: false }
             }));
         });
     });

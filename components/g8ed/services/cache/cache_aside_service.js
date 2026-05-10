@@ -14,7 +14,7 @@
 /**
  * Cache-Aside Service
  *
- * All writes go to the g8es document store first (authoritative), then the
+ * All writes go to the operator document store first (authoritative), then the
  * cache is updated in place with the new value.
  *
  * WRITE:  DB write  →  setex (cache updated in place)
@@ -51,7 +51,7 @@ class CacheAsideService {
      * Initialize cache-aside service.
      * 
      * @param {Object} kvClient - KV client for caching
-     * @param {Object} dbClient - g8es document client (authoritative data store)
+     * @param {Object} dbClient - operator document client (authoritative data store)
      * @param {string} componentName - Component name for key prefixing
      * @param {number} defaultTTL - Default TTL for cached items (seconds)
      */
@@ -61,7 +61,7 @@ class CacheAsideService {
         this.componentName = componentName;
         this.defaultTTL = defaultTTL;
         
-        logger.info(`[${componentName.toUpperCase()}-CACHE-ASIDE] Service initialized (g8es document store writes, g8es KV cache)`);
+        logger.info(`[${componentName.toUpperCase()}-CACHE-ASIDE] Service initialized (operator document store writes, operator KV cache)`);
     }
 
     /**
@@ -89,14 +89,14 @@ class CacheAsideService {
         return TTL_STRATEGIES[collection] || this.defaultTTL;
     }
 
-    // ===== WRITE OPERATIONS (g8es document store) =====
+    // ===== WRITE OPERATIONS (operator document store) =====
 
     /**
      * Create document using cache-aside pattern.
      *
      * Flow:
-     * 1. Write to g8es document store (authoritative)
-     * 2. Update g8es KV cache synchronously
+     * 1. Write to operator document store (authoritative)
+     * 2. Update operator KV cache synchronously
      * 3. Return success
      *
      * @param {string} collection - Collection name
@@ -122,7 +122,7 @@ class CacheAsideService {
                 };
             }
 
-            logger.info(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] Document created in g8es`, {
+            logger.info(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] Document created in operator`, {
                 collection,
                 documentId: documentId.substring(0, 12) + '...'
             });
@@ -260,15 +260,15 @@ class CacheAsideService {
         }
     }
 
-    // ===== READ OPERATIONS (Cache-aside: g8es KV → g8es document store fallback) =====
+    // ===== READ OPERATIONS (Cache-aside: operator KV → operator document store fallback) =====
 
     /**
      * Get document using cache-aside pattern.
      * 
      * Flow:
-     * 1. Check g8es KV cache (~1-5ms)
-     * 2. If miss, read from g8es document store
-     * 3. Populate g8es KV cache
+     * 1. Check operator KV cache (~1-5ms)
+     * 2. If miss, read from operator document store
+     * 3. Populate operator KV cache
      * 4. Return data
      * 
      * @param {string} collection - Collection name
@@ -279,18 +279,18 @@ class CacheAsideService {
         const key = this._makeKey(collection, documentId);
         
         try {
-            // 1. Check g8es KV cache first
+            // 1. Check operator KV cache first
             const cached = await this.kvClient.get_json(key);
             if (cached !== null) {
-                logger.info(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] Cache HIT (g8es KV)`, {
+                logger.info(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] Cache HIT (operator KV)`, {
                     collection,
                     documentId: documentId.substring(0, 12) + '...'
                 });
                 return cached;
             }
 
-            // 2. Cache MISS - read from g8es document store (authoritative)
-            logger.info(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] Cache MISS - reading from g8es`, {
+            // 2. Cache MISS - read from operator document store (authoritative)
+            logger.info(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] Cache MISS - reading from operator`, {
                 collection,
                 documentId: documentId.substring(0, 12) + '...',
                 dbClientComponent: this.db._http?.component || 'unknown'
@@ -299,9 +299,9 @@ class CacheAsideService {
             const dbResponse = await this.db.getDocument(collection, documentId);
 
             if (!dbResponse.success || !dbResponse.data) {
-                // Enhanced logging for g8es connectivity issues
+                // Enhanced logging for operator connectivity issues
                 if (dbResponse.error && dbResponse.error.includes('fetch failed')) {
-                    logger.warn(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] g8es connectivity issue during read`, {
+                    logger.warn(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] operator connectivity issue during read`, {
                         collection,
                         documentId: documentId.substring(0, 12) + '...',
                         error: dbResponse.error,
@@ -309,7 +309,7 @@ class CacheAsideService {
                         fallbackBehavior: 'treating as document not found'
                     });
                 } else {
-                    logger.info(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] Document not found in g8es`, {
+                    logger.info(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] Document not found in operator`, {
                         collection,
                         documentId: documentId.substring(0, 12) + '...',
                         dbError: dbResponse.error
@@ -320,11 +320,11 @@ class CacheAsideService {
 
             const data = dbResponse.data;
 
-            // 3. Populate g8es KV cache for next read
+            // 3. Populate operator KV cache for next read
             const ttl = this._getTTLForCollection(collection);
             try {
                 await this.kvClient.set_json(key, data, ttl);
-                logger.info(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] Cache warmed from g8es`, {
+                logger.info(`[${this.componentName.toUpperCase()}-CACHE-ASIDE] Cache warmed from operator`, {
                     collection,
                     documentId: documentId.substring(0, 12) + '...',
                     ttl

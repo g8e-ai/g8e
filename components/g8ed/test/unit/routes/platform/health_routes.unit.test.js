@@ -103,14 +103,14 @@ describe('Health Routes [UNIT]', () => {
                 status: 'ready',
                 details: expect.objectContaining({
                     checks: {
-                        g8es: 'up',
+                        operator: 'up',
                         database: 'up'
                     }
                 })
             }));
         });
 
-        it('should return 503 when g8es is down', async () => {
+        it('should return 503 when operator is down', async () => {
             mockWebSessionService.isHealthy.mockReturnValue(false);
             const req = {};
             const res = createMockRes();
@@ -123,7 +123,7 @@ describe('Health Routes [UNIT]', () => {
                 status: SystemHealth.UNHEALTHY,
                 details: expect.objectContaining({
                     checks: expect.objectContaining({
-                        g8es: 'down'
+                        operator: 'down'
                     })
                 })
             }));
@@ -177,7 +177,7 @@ describe('Health Routes [UNIT]', () => {
             expect(res.status).toHaveBeenCalledWith(200);
             const response = res.json.mock.calls[0][0];
             expect(response.status).toBe(SystemHealth.HEALTHY);
-            expect(response.checks.g8es.activeSessions).toBe(42);
+            expect(response.checks.operator.activeSessions).toBe(42);
             expect(response.checks.database.status).toBe(SystemHealth.HEALTHY);
         });
 

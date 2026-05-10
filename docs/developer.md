@@ -4,8 +4,8 @@ title: Developer
 
 # g8e Developer Guide
 
-Last Updated: 2026-05-07
-Version: v0.2.0
+Last Updated: 2026-05-10
+Version: v0.2.2
 
 This document defines the deterministic execution constraints for all code generated for the g8e platform. The platform is an open-source, self-hosted AI governance layer designed for offline operation. The architecture is built around the Operator with Local Function Access & Audit (LFAA), which serves as the backend for the entire platform.
 
@@ -45,7 +45,7 @@ Async Safety: Avoid state-modifying finally blocks in async generators.
 
 Pydantic Enforcement: Domain objects must extend G8eBaseModel (Pydantic). Pydantic enforces type checking, default handling, and extra-field rejection at construction time. Use model.model_dump(mode="json") exclusively for wire boundaries.
 
-3. g8eo / g8es (Go)
+3. g8eo / operator (Go)
 LFAA Payload Stamping: All Local Function Access & Audit (LFAA) result payloads published by g8eo must include an execution_id field. The payload struct must implement the models.ExecutionIDSetter interface.
 
 Concurrency: Goroutines must have explicit cancellation contexts. Do not leave dangling goroutines. Channels must have clear ownership for closure.

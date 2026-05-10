@@ -5,8 +5,8 @@ parent: Architecture
 
 # Air-Gap Architecture
 
-Last Updated: 2026-05-07
-Version: v0.2.0
+Last Updated: 2026-05-10
+Version: v0.2.2
 
 g8e is designed for high-security environments where internet connectivity is strictly prohibited. The platform supports fully air-gapped deployments with **zero runtime internet dependencies**, achieving this through self-hosted core infrastructure, vendored dependencies, and local LLM inference.
 
@@ -18,16 +18,16 @@ The air-gap configuration is the "Canonical Truth" of g8e's privacy model. In th
 
 - **No Telemetry:** Zero outbound usage, health, or error data is sent to Lateralus Labs.
 - **Local Assets:** All frontend assets (fonts, icons, JS libraries) are served locally from the `g8ed` container.
-- **Local Persistence:** All platform state is stored in a unified SQLite database managed by the `g8es` (Operator listen mode) service.
+- **Local Persistence:** All platform state is stored in a unified SQLite database managed by the `operator` (Operator listen mode) service.
 
 ---
 
-## The Platform Backbone: g8es (Listen Mode)
+## The Platform Backbone: operator (Listen Mode)
 
-In an air-gapped deployment, the platform requires a local "Hub" for persistence and messaging. This is provided by running the `g8eo` (Operator) binary in **Listen Mode**, which the platform refers to as `g8es`.
+In an air-gapped deployment, the platform requires a local "Hub" for persistence and messaging. This is provided by running the `g8eo` (Operator) binary in **Listen Mode**, which the platform refers to as `operator`.
 
 ### Architecture & Ports
-The `g8es` backbone exposes two primary interfaces for internal component communication:
+The `operator` backbone exposes two primary interfaces for internal component communication:
 
 | Port | Protocol | Purpose |
 |---|---|---|
@@ -38,7 +38,7 @@ The `g8es` backbone exposes two primary interfaces for internal component commun
 - **Unified Persistence:** Replaces external databases with a single `g8e.db` SQLite file.
 - **Internal PKI:** Acts as the platform's Certificate Authority (CA), auto-generating TLS certificates for all inter-container traffic.
 - **Secret Management:** Provides an encrypted Vault for storing platform secrets (API keys, tokens) without external dependencies.
-- **Blob Storage:** Hosts local binaries (like the Operator itself) for deployment to other air-gapped nodes.
+- **Blob Storage:** Stores binary data such as attachments. Operator binaries are served from the local file system by g8ed.
 
 ---
 
@@ -68,7 +68,7 @@ The `g8es` backbone exposes two primary interfaces for internal component commun
 ## Deployment Workflow
 
 ### 1. Preparation (Connected Environment)
-1. Build the platform: `./g8e platform setup`
+1. Prepare the platform: Run `./g8e platform start` on a connected machine to cache dependencies.
 2. Download the required model file: `google_gemma-4-E2B-it-Q4_K_M.gguf`
 
 ### 2. Implementation (Air-Gapped Host)
@@ -82,6 +82,6 @@ The `g8es` backbone exposes two primary interfaces for internal component commun
 
 ## Security Invariants
 
-1. **No External Dialing:** In air-gap mode, components are forbidden from initiating connections to any address outside the Docker network.
-2. **TLS Mandatory:** All internal traffic between `g8ed`, `g8ee`, and `g8es` is encrypted using the `g8es` internal CA.
+1. **No External Dialing:** In air-gap mode, components are forbidden from initiating connections to any address outside localhost.
+2. **TLS Mandatory:** All internal traffic between g8ed, g8ee, and Operator listen mode is encrypted using the Operator internal CA.
 3. **Data Sovereignty:** All audit logs, chat history, and telemetry remain strictly on the host's filesystem.

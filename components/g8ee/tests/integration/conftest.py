@@ -255,7 +255,7 @@ async def user_settings(cache_aside_service, test_settings):
     """Returns user settings for integration tests.
     
     Uses TEST_LLM settings when available (set via ./g8e test flags),
-    otherwise loads user settings from g8es.
+    otherwise loads user settings from operator.
     """
     from app.llm.factory import get_llm_settings, get_search_settings
     from app.services.infra.settings_service import SettingsService
@@ -266,7 +266,7 @@ async def user_settings(cache_aside_service, test_settings):
     if llm:
         return G8eeUserSettings(llm=llm, search=search or test_settings.search)
 
-    # Otherwise load from g8es
+    # Otherwise load from operator
     settings_service = SettingsService(cache_aside_service=cache_aside_service)
     return await settings_service.get_user_settings("test-user-id")
 

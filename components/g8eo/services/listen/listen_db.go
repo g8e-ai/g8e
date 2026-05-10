@@ -28,7 +28,7 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/services/sqliteutil"
 )
 
-// listenSchema is the canonical g8es SQLite schema, embedded at compile time
+// listenSchema is the canonical operator SQLite schema, embedded at compile time
 // from `schema.sql`. That file is the single source of truth — do not inline
 // CREATE TABLE statements in Go code.
 //

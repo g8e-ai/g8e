@@ -192,9 +192,9 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	vs.logger.Info("Establishing g8e connectivity...")
 
 	if vs.pubSubClient == nil {
-		vs.pubSubClient, err = pubsub.NewG8esPubSubClient(vs.config.PubSubURL, vs.config.TLSServerName, vs.logger)
+		vs.pubSubClient, err = pubsub.NewOperatorPubSubClient(vs.config.PubSubURL, vs.config.TLSServerName, vs.logger)
 		if err != nil {
-			return fmt.Errorf("failed to create g8es pub/sub client: %w", err)
+			return fmt.Errorf("failed to create operator pub/sub client: %w", err)
 		}
 	}
 

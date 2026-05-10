@@ -26,17 +26,14 @@
 
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'module';
-import { fileURLToPath } from 'url';
 import path from 'path';
 import fs from 'fs';
+import { resolveProjectRoot } from '@g8ed/utils/path.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const G8ED_ROOT = path.resolve(__dirname, '../..');
+const G8ED_ROOT = path.resolve(resolveProjectRoot(), 'components/g8ed');
 const CONSTANTS_DIR = path.join(G8ED_ROOT, 'constants');
 const SHARED_JS = path.join(CONSTANTS_DIR, 'shared.js');
-const SHARED_CONSTANTS_DIR = path.resolve(G8ED_ROOT, '../../shared/constants');
+const SHARED_CONSTANTS_DIR = path.resolve(resolveProjectRoot(), 'shared/constants');
 
 describe('constants/shared.js loader', () => {
 
@@ -115,7 +112,7 @@ describe('constants/shared.js loader', () => {
     });
 
     it('shared.js path expression resolves to the same directory used by this test', () => {
-        const sharedJsResolved = path.resolve(CONSTANTS_DIR, '../../../shared/constants');
+        const sharedJsResolved = path.resolve(resolveProjectRoot(), 'shared/constants');
         expect(sharedJsResolved).toBe(SHARED_CONSTANTS_DIR);
     });
 

@@ -260,7 +260,7 @@ class TestG8edHttpClientPushSSEEvent:
         assert wire["event"]["type"] == EventType.CASE_CREATED
 
     async def test_push_sse_event_sends_auth_headers(self, mock_settings):
-        """push_sse_event sends internal auth headers to g8es."""
+        """push_sse_event sends internal auth headers to operator."""
         test_token = "dynamic-test-token-789"
         mock_settings.auth.internal_auth_token = test_token
         client = InternalHttpClient(settings=mock_settings)
@@ -364,7 +364,7 @@ class TestG8edHttpClientGrantIntent:
         assert mock_http._captured_json_data == expected
 
     async def test_sends_correct_auth_headers(self, mock_settings):
-        """grant_intent sends internal auth headers to g8es."""
+        """grant_intent sends internal auth headers to operator."""
         from app.models.http_context import G8eHttpContext
         test_token = "grant-token-123"
         mock_settings.auth.internal_auth_token = test_token

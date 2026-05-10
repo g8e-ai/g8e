@@ -40,7 +40,7 @@ The `FleetManager` brings up 3 `eval-node` containers. Each node:
 - Enters a supervised loop waiting for tasks.
 
 ### 2. Readiness Polling
-The runner polls `https://g8e.local/health` until the platform reports a healthy status, indicating that the operators have successfully bound to their respective slots.
+The runner polls `https://localhost/health` until the platform reports a healthy status, indicating that the operators have successfully bound to their respective slots.
 
 ### 3. Scenario Execution
 Scenarios are executed sequentially across the fleet:

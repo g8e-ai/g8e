@@ -16,4 +16,4 @@ package constants
 // DefaultEndpoint is the default g8e operator endpoint hostname.
 // It is also the TLS ServerName used when connecting to a raw IP address,
 // because the embedded CA certificate is issued to this hostname.
-const DefaultEndpoint = "g8e.local"
+const DefaultEndpoint = "localhost"

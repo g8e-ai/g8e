@@ -4,8 +4,8 @@ title: Docs Guidelines
 
 # g8e Documentation Guidelines
 
-Last Updated: 2026-05-07
-Version: v0.2.0
+Last Updated: 2026-05-10
+Version: v0.2.2
 
 Internal authoring standards for g8e documentation. All contributors must follow these guidelines when creating or updating docs.
 
@@ -57,16 +57,16 @@ docs/
 - Cross-component data flows, protocols, and architectural decisions belong in `docs/architecture/`.
 - External reference material belongs in `docs/reference/` — never modify files under `docs/reference/`.
 - Every new doc file must be added to `docs/README.md`.
-- `developer.md` component `#### Tests` subsections contain only code-quality rules (assertion discipline, model/constant usage, prohibited patterns). All test infrastructure — fixtures, mocks, helpers, cleanup, how to run, CI, test-runner containers — belongs exclusively in `testing.md`. Never duplicate these across the two files.
+- `developer.md` component `#### Tests` subsections contain only code-quality rules (assertion discipline, model/constant usage, prohibited patterns). All test infrastructure — fixtures, mocks, helpers, cleanup, how to run, CI, and host-native runners — belongs exclusively in `testing.md`. Never duplicate these across the two files.
 
 **Authoritative ownership — facts with a single home:**
 
 | Fact | Authoritative location | Others cross-reference |
 |------|----------------------|----------------------|
-| Pub/sub channel names and wire format | `docs/components/g8es.md` | `g8ed.md`, `g8ee.md`, `g8eo.md`, `testing.md` |
-| KV key namespace and patterns | `docs/components/g8es.md` | `g8ed.md`, `g8ee.md` |
+| Pub/sub channel names and wire format | `docs/components/operator.md` | `g8ed.md`, `g8ee.md`, `g8eo.md`, `testing.md` |
+| KV key namespace and patterns | `docs/components/operator.md` | `g8ed.md`, `g8ee.md` |
 | `G8eHttpContext` internal HTTP header full listing | `docs/components/g8ed.md` | `g8ee.md` cross-references; do not restate in other component docs |
-| `X-Internal-Auth` shared secret (generation and discovery) | `docs/architecture/security.md` | `developer.md`, `g8es.md`, `g8ee.md`, `g8ed.md` |
+| `X-Internal-Auth` shared secret (generation and discovery) | `docs/architecture/security.md` | `developer.md`, `operator.md`, `g8ee.md`, `g8ed.md` |
 | Heartbeat end-to-end flow | `docs/components/g8ed.md` | `g8eo.md`, `g8ee.md` |
 | Shared constants and models (`shared/`) | `docs/developer.md` | `testing.md` |
 | Universal code quality rules | `docs/developer.md` | do not restate in component docs |
@@ -82,8 +82,8 @@ Every document must follow this structure:
 ```
 # Title
 
-Last Updated: 2026-05-07
-Version: v0.2.0
+Last Updated: 2026-05-10
+Version: v0.2.2
 
 One or two sentence summary of what this document covers and who it is for.
 
@@ -109,7 +109,7 @@ One or two sentence summary of what this document covers and who it is for.
 - Be direct and specific — avoid vague terms like "handles", "manages", "deals with".
 - No filler phrases — "Note that", "Please be aware", "It is important to".
 - No emojis anywhere in documentation.
-- Refer to components by their canonical names: g8eo, g8ee, g8ed, g8es.
+- Refer to components by their canonical names: g8eo, g8ee, g8ed, operator.
 
 ---
 

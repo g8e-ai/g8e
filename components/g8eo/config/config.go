@@ -28,8 +28,8 @@ type LoadOptions struct {
 	// Required
 	APIKey           string
 	OperatorEndpoint string
-	WSSPort          int // WSS port to dial on g8es (default: 443)
-	HTTPPort         int // HTTP port to dial on g8es for auth proxy (default: 443)
+	WSSPort          int // WSS port to dial on operator (default: 443)
+	HTTPPort         int // HTTP port to dial on operator for auth proxy (default: 443)
 
 	// Cloud Operator mode
 	CloudMode     bool
@@ -133,10 +133,10 @@ type Config struct {
 	// (which carries a hostname SAN, not an IP SAN) still validates correctly.
 	TLSServerName string
 
-	// g8es connection ports (operator dials these on the remote host)
-	PubSubURL string // WebSocket base URL for g8es pub/sub (e.g., wss://192.168.1.10:443) — no path; client appends /ws/pubsub
+	// operator connection ports (operator dials these on the remote host)
+	PubSubURL string // WebSocket base URL for operator pub/sub (e.g., wss://192.168.1.10:443) — no path; client appends /ws/pubsub
 	WSSPort   int    // WSS port used to build PubSubURL (default: 443)
-	HTTPPort  int    // HTTPS port for auth/bootstrap requests via g8es proxy (default: 443)
+	HTTPPort  int    // HTTPS port for auth/bootstrap requests via operator proxy (default: 443)
 
 	// Logging
 	LogLevel string // Active log level (info, debug, error)
@@ -321,7 +321,7 @@ func httpPortOrDefault(p int) int {
 }
 
 // tlsServerName returns the TLS ServerName override to use when endpoint is a
-// raw IP address. The embedded CA cert is issued to "g8e.local",
+// raw IP address. The embedded CA cert is issued to "localhost",
 // so TLS verification must use that hostname regardless of what IP is dialed.
 // Returns an empty string when endpoint is already a hostname (no override needed).
 func tlsServerName(endpoint string) string {

@@ -16,7 +16,7 @@ import { ApiKeyStatus, AuthMethod, DeviceLinkStatus } from '../constants/auth.js
 import { SessionType } from '../constants/session.js';
 
 // ---------------------------------------------------------------------------
-// AuthAdminAuditEntry  (auth admin access audit record stored in g8es)
+// AuthAdminAuditEntry  (auth admin access audit record stored in operator)
 // ---------------------------------------------------------------------------
 
 export class AuthAdminAuditEntry extends G8eIdentifiableModel {
@@ -36,7 +36,7 @@ export class AuthAdminAuditEntry extends G8eIdentifiableModel {
 }
 
 // ---------------------------------------------------------------------------
-// DownloadTokenData  (one-time download token payload stored in g8es KV)
+// DownloadTokenData  (one-time download token payload stored in operator KV)
 // ---------------------------------------------------------------------------
 
 export class DownloadTokenData extends G8eBaseModel {
@@ -52,7 +52,7 @@ export class DownloadTokenData extends G8eBaseModel {
 }
 
 // ---------------------------------------------------------------------------
-// DownloadAuditEntry  (operator binary download token audit record stored in g8es)
+// DownloadAuditEntry  (operator binary download token audit record stored in operator)
 // ---------------------------------------------------------------------------
 
 export class DownloadAuditEntry extends G8eBaseModel {
@@ -81,7 +81,7 @@ export class LoginAttemptEntry extends G8eBaseModel {
 }
 
 // ---------------------------------------------------------------------------
-// AccountLockData  (persisted to KV + g8es document store on account lockout)
+// AccountLockData  (persisted to KV + operator document store on account lockout)
 // ---------------------------------------------------------------------------
 
 export class AccountLockData extends G8eIdentifiableModel {
@@ -119,7 +119,7 @@ export class IpTrackEntry extends G8eBaseModel {
 }
 
 // ---------------------------------------------------------------------------
-// LoginAuditEntry  (login audit log record stored in g8es)
+// LoginAuditEntry  (login audit log record stored in operator)
 // ---------------------------------------------------------------------------
 
 export class LoginAuditEntry extends G8eIdentifiableModel {
@@ -136,7 +136,7 @@ export class LoginAuditEntry extends G8eIdentifiableModel {
 }
 
 // ---------------------------------------------------------------------------
-// AuthAuditEntry  (operator auth audit log record stored in g8es)
+// AuthAuditEntry  (operator auth audit log record stored in operator)
 // ---------------------------------------------------------------------------
 
 export class AuthAuditEntry extends G8eIdentifiableModel {
@@ -154,7 +154,7 @@ export class AuthAuditEntry extends G8eIdentifiableModel {
 }
 
 // ---------------------------------------------------------------------------
-// ApiKeyDocument  (API key record stored in g8es document store + g8es KV)
+// ApiKeyDocument  (API key record stored in operator document store + operator KV)
 // ---------------------------------------------------------------------------
 
 export class ApiKeyDocument extends G8eIdentifiableModel {
@@ -274,7 +274,7 @@ export class DeviceLinkClaim extends G8eBaseModel {
 }
 
 // ---------------------------------------------------------------------------
-// DeviceLinkData  (device link record stored in g8es KV)
+// DeviceLinkData  (device link record stored in operator KV)
 // ---------------------------------------------------------------------------
 
 export class DeviceLinkData extends G8eBaseModel {

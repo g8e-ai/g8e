@@ -14,16 +14,16 @@
 /**
  * HTTP Client Constants
  * Configuration for all outbound HTTP/WebSocket clients: g8ed→g8ee internal
- * client, g8ed→g8ed HTTP client, and g8es PubSub WebSocket client.
+ * client, g8ed→g8ed HTTP client, and operator PubSub WebSocket client.
  * Also includes CORS origins that bypass the ALLOWED_ORIGINS env var check.
  */
 
 // ---------------------------------------------------------------------------
-// Internal Cluster URLs - g8es uses ports 9000 (HTTPS) and 9001 (WSS)
+// Internal Cluster URLs - operator uses ports 9000 (HTTPS) and 9001 (WSS)
 // ---------------------------------------------------------------------------
-export const G8EE_INTERNAL_URL = 'https://g8ee';
-export const G8ED_INTERNAL_URL = 'https://g8ed';
-export const G8ES_INTERNAL_HTTP_URL = 'https://g8es:9000';
+export const G8EE_INTERNAL_URL = 'https://localhost:8443';
+export const G8ED_INTERNAL_URL = 'https://localhost';
+export const OPERATOR_INTERNAL_HTTP_URL = process.env.G8E_INTERNAL_HTTP_URL || 'https://localhost:9000';
 
 // ---------------------------------------------------------------------------
 // Internal HTTP Client (g8ed -> g8ee)
@@ -43,28 +43,28 @@ export const CORS_INTERNAL_ORIGINS = Object.freeze([
 ]);
 
 // ---------------------------------------------------------------------------
-// g8ed HTTP Client (g8ed -> g8es)
+// g8ed HTTP Client (g8ed -> operator)
 // ---------------------------------------------------------------------------
-export const G8ES_HTTP_TIMEOUT_MS = 30000;
+export const OPERATOR_HTTP_TIMEOUT_MS = 30000;
 
 // ---------------------------------------------------------------------------
-// g8es PubSub WebSocket Client (g8ed -> g8es)
+// operator PubSub WebSocket Client (g8ed -> operator)
 // ---------------------------------------------------------------------------
-export const G8ES_INTERNAL_PUBSUB_URL = 'wss://g8es:9001';
-export const G8ES_OPERATOR_PUBSUB_URL = 'wss://g8e.local';
-export const G8ES_PUBSUB_PATH = '/ws/pubsub';
-export const G8ES_PUBSUB_PUBLISH_PATH = '/publish';
+export const OPERATOR_INTERNAL_PUBSUB_URL = process.env.G8E_INTERNAL_PUBSUB_URL || 'wss://localhost:9001';
+export const OPERATOR_OPERATOR_PUBSUB_URL = 'wss://localhost';
+export const OPERATOR_PUBSUB_PATH = '/ws/pubsub';
+export const OPERATOR_PUBSUB_PUBLISH_PATH = '/publish';
 
 // ---------------------------------------------------------------------------
-// g8es KV Client
+// operator KV Client
 // ---------------------------------------------------------------------------
-export const G8ES_KV_CLIENT_STATUS_READY = 'ready';
+export const OPERATOR_KV_CLIENT_STATUS_READY = 'ready';
 export const KV_SCAN_DEFAULT_COUNT = 100;
 export const KV_CLIENT_READY_WAIT_MS = 5000;
 export const KV_CLIENT_POLL_INTERVAL_MS = 50;
 
 // ---------------------------------------------------------------------------
-// g8es PubSub Client
+// operator PubSub Client
 // ---------------------------------------------------------------------------
 export const PUBSUB_RECONNECT_DELAY_MS = 1000;
 

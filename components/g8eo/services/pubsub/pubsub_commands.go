@@ -35,7 +35,7 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
 )
 
-// PubSubCommandMessage is the inbound wire message received from g8es pub/sub.
+// PubSubCommandMessage is the inbound wire message received from operator pub/sub.
 type PubSubCommandMessage struct {
 	ID                string          `json:"id"`
 	EventType         string          `json:"event_type"`
@@ -48,7 +48,7 @@ type PubSubCommandMessage struct {
 	Timestamp         time.Time       `json:"timestamp"`
 }
 
-// PubSubCommandService manages the g8es pub/sub connection and dispatches inbound
+// PubSubCommandService manages the operator pub/sub connection and dispatches inbound
 // operator commands to the appropriate first-class service handler.
 type PubSubCommandService struct {
 	client  PubSubClient
@@ -105,9 +105,9 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 	client := c.PubSubClient
 	if client == nil && c.Config.PubSubURL != "" {
 		var err error
-		client, err = NewG8esPubSubClient(c.Config.PubSubURL, c.Config.TLSServerName, c.Logger)
+		client, err = NewOperatorPubSubClient(c.Config.PubSubURL, c.Config.TLSServerName, c.Logger)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create g8es pub/sub client: %w", err)
+			return nil, fmt.Errorf("failed to create operator pub/sub client: %w", err)
 		}
 	}
 
@@ -290,7 +290,7 @@ func (rs *PubSubCommandService) listenForCommands(channelName string) {
 		}
 
 		if rs.client == nil {
-			rs.logger.Error("[RECONNECT] No g8es pub/sub client configured")
+			rs.logger.Error("[RECONNECT] No operator pub/sub client configured")
 			return
 		}
 

@@ -19,6 +19,8 @@
  */
 
 import { LLMProvider, OpenAIModel, AnthropicModel, LlamaCppModel, PROVIDER_MODELS } from '../constants/ai.js';
+import { resolveProjectRoot } from '../utils/path.js';
+import path from 'path';
 
 // All models for each provider are available at every tier; the user decides
 // which model serves primary / assistant / lite.
@@ -529,17 +531,17 @@ export const PLATFORM_SETTINGS = Object.freeze([
     Object.freeze({ key: 'app_url',                     default: 'https://localhost' }),
     Object.freeze({ key: 'allowed_origins',             default: 'https://localhost' }),
     Object.freeze({ key: 'setup_complete',                  default: false              }),
-    Object.freeze({ key: 'g8e_internal_http_url',   default: 'https://g8es:9000' }),
-    Object.freeze({ key: 'g8e_internal_pubsub_url', default: 'wss://g8es:9001' }),
-    Object.freeze({ key: 'g8ee_url',                     default: 'https://g8ee'   }),
+    Object.freeze({ key: 'g8e_internal_http_url',   default: process.env.G8E_INTERNAL_HTTP_URL || 'https://localhost:9000' }),
+    Object.freeze({ key: 'g8e_internal_pubsub_url', default: process.env.G8E_INTERNAL_PUBSUB_URL || 'wss://localhost:9001' }),
+    Object.freeze({ key: 'g8ee_url',                     default: 'https://localhost:8443'   }),
     Object.freeze({ key: 'docker_gid',                  default: '988'              }),
     Object.freeze({ key: 'https_port',                  default: '443'              }),
     Object.freeze({ key: 'http_port',                   default: '80'               }),
     Object.freeze({ key: 'port',                        default: '443'             }),
-    Object.freeze({ key: 'ssl_dir',                     default: '/g8es'       }),
+    Object.freeze({ key: 'ssl_dir',                     default: process.env.G8E_SSL_DIR || path.join(resolveProjectRoot(), '.g8e', 'ssl') }),
     Object.freeze({ key: 'tls_cert_path',               default: ''                 }),
     Object.freeze({ key: 'tls_key_path',                default: ''                 }),
-    Object.freeze({ key: 'g8e_pubsub_ca_cert',      default: '/g8es/ssl/ca.crt' }),
+    Object.freeze({ key: 'g8e_pubsub_ca_cert',      default: process.env.G8E_SSL_DIR ? `${process.env.G8E_SSL_DIR}/ca.crt` : '/operator/ssl/ca.crt' }),
     Object.freeze({ key: 'upload_path',                 default: ''                 }),
     Object.freeze({ key: 'session_ttl',                 default: '28800'            }),
     Object.freeze({ key: 'absolute_session_timeout',    default: '86400'            }),
@@ -547,8 +549,8 @@ export const PLATFORM_SETTINGS = Object.freeze([
     Object.freeze({ key: 'docs_dir',                     default: '/docs'            }),
     Object.freeze({ key: 'readme_path',                  default: '/readme/README.md' }),
     Object.freeze({ key: 'environment',                  default: 'production'       }),
-    Object.freeze({ key: 'g8es_http_port',              default: '9000'            }),
-    Object.freeze({ key: 'g8es_wss_port',               default: '9001'            }),
+    Object.freeze({ key: 'operator_http_port',              default: '9000'            }),
+    Object.freeze({ key: 'operator_wss_port',               default: '9001'            }),
     Object.freeze({
         key: 'auditor_hmac_key',
         writeOnce: true,

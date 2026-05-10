@@ -4,8 +4,8 @@ title: g8e CLI
 
 # g8e Platform CLI
 
-Last Updated: 2026-05-07
-Version: v0.2.0
+Last Updated: 2026-05-10
+Version: v0.2.2
 
 The `g8e` command is the unified entry point for the g8e AI governance platform. It orchestrates the full lifecycle of a self-hosted, human-in-the-loop AI operations system.
 
@@ -30,8 +30,7 @@ The platform is composed of specialized components, each with a single responsib
 |-----------|----------|---------|
 | **g8ed** | Node.js | Dashboard & API Gateway. Authentication, session management, SSE relay, operator lifecycle. |
 | **g8ee** | Python | Reasoning Engine. Orchestrates AI agents (Triage, Sage, Dash, Tribunal) and enforces governance. |
-| **g8es** | Go | Platform Persistence & Pub/Sub. SQLite-based blob store, KV cache, and event bus. |
-| **g8eo** | Go | Remote Operator. Execution agent deployed to target hosts with LFAA audit trails. |
+| **Operator** | Go | Platform Persistence & Pub/Sub (listen mode). SQLite-based blob store, KV cache, and event bus. Operator binaries are served from the local file system by g8ed. |
 
 ### Agent Terminology
 
@@ -74,14 +73,9 @@ When no operator is connected:
 
 ## Platform Lifecycle
 
-### Initial Setup
-```bash
-./g8e platform setup    # Bootstrap and build all containers
-./g8e platform start    # Bring up the managed services
-```
-
 ### Daily Operations
 ```bash
+./g8e platform start    # Start the managed services
 ./g8e platform status   # Check service health
 ./g8e platform logs     # Stream aggregated logs
 ./g8e platform settings # View or update configuration
@@ -109,22 +103,20 @@ Authentication and session management.
 - `logout`: Clear local session and credentials
 
 ### platform
-Manage the local Docker stack lifecycle.
-- `setup`: Initial bootstrap and non-cached container build
-- `start [--dev]`: Bring up managed services (use `--dev` for hot-reload)
-- `status`: View service health, ports, and component versions
-- `logs [service]`: Stream aggregated, time-ordered logs
-- `update`: Pull latest code from git and rebuild
-- `settings`: Manage global platform configuration
-- `rebuild [svc]`: Rebuild specific images without wiping volumes
-- `reset`: Wipe all data volumes and rebuild from scratch
-- `wipe`: Clear app data from database while preserving settings and certs
-- `clean`: Remove all g8e Docker resources (containers, volumes, images)
+Manage the local platform lifecycle.
+- `start`: Start all platform components
+- `stop`: Stop all platform components
+- `restart`: Restart all platform components
+- `status`: Show component health and versions
+- `reset`: Reset application data (preserves SSL)
+- `clean`: Remove all g8e processes and data
+- `logs`: Stream component logs
+- `settings`: Manage the local platform lifecycle.
 - `demo`: Start platform and demo environment together
 
 ### operator
 Build and deploy g8eo operators.
-- `init`: Build operator binary in test-runner container
+- `init`: Build operator binary
 - `build`: Build amd64 operator for current host
 - `build-all`: Build and compress binaries for all architectures (amd64, arm64, 386)
 - `deploy <host>`: SCP/SSH deployment and launch with flags for arch, endpoint, ports
@@ -133,7 +125,7 @@ Build and deploy g8eo operators.
 - `ssh-config`: Manage SSH identities for fleet operations
 
 ### test
-Run tests in isolated test-runner containers.
+Run tests through host-native per-component runners.
 - `g8ee [path]`: Python tests (pytest, ruff, pyright) with LLM provider flags
 - `g8ed [path]`: Dashboard and API tests (Vitest)
 - `g8eo [path]`: Go operator tests with race detection

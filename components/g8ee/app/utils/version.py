@@ -20,6 +20,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from app.models.version import VersionInfo
+from app.utils.path import resolve_project_root
 
 __all__ = ["VersionInfo", "get_version", "get_version_info"]
 
@@ -31,7 +32,7 @@ def get_version() -> str:
     Returns:
         Semver version string
     """
-    version_path = Path(__file__).parent.parent.parent.parent / "VERSION"
+    version_path = resolve_project_root() / "VERSION"
     if version_path.exists():
         return version_path.read_text().strip()
     return "v0.0.0"

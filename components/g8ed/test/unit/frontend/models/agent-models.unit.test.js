@@ -18,7 +18,7 @@ import {
     CommandGenerationResult, 
     AuditorResult, 
     CaseTitleResult 
-} from '../../../../public/js/models/agent-models.js';
+} from '@g8ed/public/js/models/agent-models.js';
 
 describe('Agent Models', () => {
     describe('TriageResult', () => {

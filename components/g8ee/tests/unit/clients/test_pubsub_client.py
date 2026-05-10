@@ -33,7 +33,7 @@ pytestmark = pytest.mark.unit
 @pytest.fixture
 def disconnected_client():
     client = PubSubClient(
-        pubsub_url="wss://g8es:9001",
+        pubsub_url="wss://localhost:9001",
         component_name=ComponentName.G8EE,
         auditor_hmac_key="test-key-1234",
     )
@@ -48,7 +48,7 @@ class TestPubSubClientInit:
 
     def test_trailing_slash_stripped_from_urls(self):
         client = PubSubClient(
-            pubsub_url="wss://g8es:9001/",
+            pubsub_url="wss://localhost:9001/",
         )
         assert not client.pubsub_url.endswith("/")
 
@@ -76,7 +76,7 @@ class TestPubSubWireProtocolConstants:
     def test_pubsub_field_has_pattern(self):
         assert PubSubField.PATTERN == "pattern"
 
-    def test_wire_protocol_values_match_g8es_go_constants(self):
+    def test_wire_protocol_values_match_operator_go_constants(self):
         assert PubSubWireEventType.MESSAGE.value == "message"
         assert PubSubWireEventType.PMESSAGE.value == "pmessage"
         assert PubSubWireEventType.SUBSCRIBED.value == "subscribed"
@@ -490,7 +490,7 @@ class TestReconnectLoop:
             nonlocal attempts
             attempts += 1
             if attempts < 3:
-                raise ConnectionError("g8es down")
+                raise ConnectionError("operator down")
 
         delays = []
         original_sleep = asyncio.sleep
@@ -514,7 +514,7 @@ class TestReconnectLoop:
             nonlocal attempts
             attempts += 1
             connected_client._subscribed_channels.clear()
-            raise ConnectionError("g8es down")
+            raise ConnectionError("operator down")
 
         connected_client._subscribed_channels.add("test-channel")
         connected_client._ensure_ws = mock_ensure_ws
@@ -531,7 +531,7 @@ class TestPubSubClientCoverage:
 
     async def test_ensure_ws_protocol_override(self, disconnected_client):
         """Test forcing WSS when ws:// is provided."""
-        disconnected_client.pubsub_url = "ws://g8es:9001"
+        disconnected_client.pubsub_url = "ws://localhost:9001"
         mock_session = MagicMock(spec=aiohttp.ClientSession)
         mock_ws = AsyncMock(spec=aiohttp.ClientWebSocketResponse)
         mock_ws.closed = False
@@ -551,7 +551,7 @@ class TestPubSubClientCoverage:
              patch("app.clients.pubsub_client.resolve_pubsub_ssl_context"):
             await disconnected_client._ensure_ws()
 
-        assert disconnected_client.pubsub_url == "ws://g8es:9001"
+        assert disconnected_client.pubsub_url == "ws://localhost:9001"
         args, kwargs = mock_session.ws_connect.call_args
         assert args[0].startswith("wss://")
 

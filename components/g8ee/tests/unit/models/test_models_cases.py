@@ -296,17 +296,6 @@ class TestCaseCreateRequest:
         with pytest.raises(ValidationError):
             self._make_request(user_id="")
 
-    def test_web_session_id_required(self):
-        with pytest.raises(ValidationError):
-            CaseCreateRequest(
-                initial_message="test",
-                user_id="user-abc",
-            )
-
-    def test_web_session_id_min_length_enforced(self):
-        with pytest.raises(ValidationError):
-            self._make_request(web_session_id="")
-
     def test_sentinel_mode_defaults_to_true(self):
         req = self._make_request()
         assert req.sentinel_mode is True

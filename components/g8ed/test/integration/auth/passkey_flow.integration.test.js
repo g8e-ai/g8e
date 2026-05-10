@@ -46,7 +46,7 @@ import { verifyRegistrationResponse, verifyAuthenticationResponse } from '@simpl
  * - UserService
  * - WebSessionService
  * - SettingsService
- * - g8es KV & Document Store
+ * - operator KV & Document Store
  */
 
 describe('Passkey Flow Integration [INTEGRATION]', () => {
@@ -89,7 +89,7 @@ describe('Passkey Flow Integration [INTEGRATION]', () => {
 
     it('should complete the full passkey lifecycle', async () => {
         const timestamp = Date.now();
-        const email = `admin-${timestamp}@g8e.local`;
+        const email = `admin-${timestamp}@localhost`;
         const name = 'Admin User';
 
         // 1. Setup flow: Atomic user creation + challenge

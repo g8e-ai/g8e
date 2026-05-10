@@ -12,7 +12,7 @@
 # limitations under the License.
 
 """
-KVCacheClient — HTTP-based Key-Value client for g8es.
+KVCacheClient — HTTP-based Key-Value client for operator.
 
 Talks to the Operator in --listen mode via HTTP (KV store).
 API: get, set, delete, exists, expire, ttl, keys,
@@ -49,7 +49,7 @@ def _encode_key(key: str) -> str:
 
 class KVCacheClient:
     """
-    Async HTTP client for the g8es KV store.
+    Async HTTP client for the operator KV store.
     """
 
     def __init__(
@@ -122,7 +122,7 @@ class KVCacheClient:
             ) from e
 
     async def connect(self) -> bool:
-        """Verify connectivity to the g8es KV service."""
+        """Verify connectivity to the operator KV service."""
         try:
             result = await self._request("GET", "/health")
             self._healthy = result.get("status") == "ok"

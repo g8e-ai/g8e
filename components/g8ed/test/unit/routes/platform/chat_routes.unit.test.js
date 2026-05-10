@@ -370,7 +370,7 @@ describe('Chat Routes [UNIT]', () => {
         it('should return health status with typed ChatHealthResponse', async () => {
             const req = createMockReq();
             const res = createMockRes();
-            const mockHealthStatus = { g8ee: 'healthy', g8es: 'healthy' };
+            const mockHealthStatus = { g8ee: 'healthy', operator: 'healthy' };
             mockInternalHttpClient.healthCheck.mockResolvedValue(mockHealthStatus);
 
             await getRoute()(req, res);

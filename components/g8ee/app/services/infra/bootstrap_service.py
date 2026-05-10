@@ -16,11 +16,14 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any, Protocol, cast, runtime_checkable
 
+from app.utils.path import resolve_project_root
+
 # Filename of the tamper-evidence manifest written by g8eo SecretManager
-# alongside bootstrap secrets on the SSL volume. Must stay in sync with
+# alongside bootstrap secrets on the host bootstrap directory (.g8e/ssl). Must stay in sync with
 # components/g8eo/services/listen/secret_manager.go::BootstrapDigestManifestFile.
 BOOTSTRAP_DIGEST_MANIFEST_FILE = "bootstrap_digest.json"
 
@@ -34,22 +37,22 @@ class BootstrapSecretTamperError(RuntimeError):
 
 @runtime_checkable
 class BootstrapServiceProtocol(Protocol):
-    """Protocol for bootstrap services that load g8es volume data."""
+    """Protocol for bootstrap services that load host bootstrap data."""
 
     def load_internal_auth_token(self) -> str | None:
-        """Load internal auth token from g8es volume."""
+        """Load internal auth token from host bootstrap directory."""
         ...
 
     def load_session_encryption_key(self) -> str | None:
-        """Load session encryption key from g8es volume."""
+        """Load session encryption key from host bootstrap directory."""
         ...
 
     def load_auditor_hmac_key(self) -> str | None:
-        """Load Tribunal auditor HMAC-SHA256 signing key from g8es volume."""
+        """Load Tribunal auditor HMAC-SHA256 signing key from host bootstrap directory."""
         ...
 
     def load_ca_cert_path(self) -> str | None:
-        """Load CA certificate path from g8es volume."""
+        """Load CA certificate path from host bootstrap directory."""
         ...
 
     def is_available(self) -> bool:
@@ -66,13 +69,18 @@ class BootstrapServiceProtocol(Protocol):
 
 
 class BootstrapService:
-    """Service responsible for loading bootstrap data from g8es volume.
+    """Service responsible for loading bootstrap data from host bootstrap directory (.g8e/ssl).
 
-    This service is ONLY responsible for loading values from the g8es data volume.
+    This service is ONLY responsible for loading values from the host bootstrap directory.
     It does not perform any settings management or configuration logic.
     """
 
-    def __init__(self, volume_path: str = "/g8es") -> None:
+    def __init__(self, volume_path: str | None = None) -> None:
+        if volume_path is None:
+            volume_path = os.environ.get("G8E_SSL_DIR")
+            if volume_path is None:
+                # Fallback to .g8e/ssl relative to project root
+                volume_path = str(resolve_project_root() / ".g8e" / "ssl")
         self._volume_path = Path(volume_path)
         self._logger = logging.getLogger(__name__)
         self._cached_token: str | None = None
@@ -81,7 +89,7 @@ class BootstrapService:
         self._cached_ca_path: str | None = None
 
     def load_internal_auth_token(self) -> str | None:
-        """Load internal auth token from g8es volume."""
+        """Load internal auth token from host bootstrap directory."""
         if self._cached_token is not None:
             return self._cached_token
 
@@ -89,16 +97,16 @@ class BootstrapService:
         try:
             if token_path.exists():
                 self._cached_token = token_path.read_text().strip()
-                self._logger.info("Loaded internal auth token from g8es volume")
+                self._logger.info("Loaded internal auth token from host bootstrap directory")
                 return self._cached_token
-            self._logger.info("Internal auth token not found in g8es volume")
+            self._logger.info("Internal auth token not found in host bootstrap directory")
             return None
         except Exception as e:
             self._logger.warning("Failed to read internal auth token: %s", e)
             return None
 
     def load_session_encryption_key(self) -> str | None:
-        """Load session encryption key from g8es volume."""
+        """Load session encryption key from host bootstrap directory."""
         if self._cached_key is not None:
             return self._cached_key
 
@@ -106,16 +114,16 @@ class BootstrapService:
         try:
             if key_path.exists():
                 self._cached_key = key_path.read_text().strip()
-                self._logger.info("Loaded session encryption key from g8es volume")
+                self._logger.info("Loaded session encryption key from host bootstrap directory")
                 return self._cached_key
-            self._logger.info("Session encryption key not found in g8es volume")
+            self._logger.info("Session encryption key not found in host bootstrap directory")
             return None
         except Exception as e:
             self._logger.warning("Failed to read session encryption key: %s", e)
             return None
 
     def load_auditor_hmac_key(self) -> str | None:
-        """Load Tribunal auditor HMAC-SHA256 signing key from g8es volume.
+        """Load Tribunal auditor HMAC-SHA256 signing key from host bootstrap directory.
 
         Paired with ``internal_auth_token`` / ``session_encryption_key``:
         the same SecretManager pattern on the g8eo side generates and
@@ -129,16 +137,16 @@ class BootstrapService:
         try:
             if key_path.exists():
                 self._cached_auditor_hmac_key = key_path.read_text().strip()
-                self._logger.info("Loaded auditor HMAC key from g8es volume")
+                self._logger.info("Loaded auditor HMAC key from host bootstrap directory")
                 return self._cached_auditor_hmac_key
-            self._logger.info("Auditor HMAC key not found in g8es volume")
+            self._logger.info("Auditor HMAC key not found in host bootstrap directory")
             return None
         except Exception as e:
             self._logger.warning("Failed to read auditor HMAC key: %s", e)
             return None
 
     def load_ca_cert_path(self) -> str | None:
-        """Load CA certificate path from g8es volume."""
+        """Load CA certificate path from host bootstrap directory."""
         if self._cached_ca_path is not None:
             return self._cached_ca_path
 
@@ -152,12 +160,12 @@ class BootstrapService:
             try:
                 if ca_path.exists():
                     self._cached_ca_path = str(ca_path)
-                    self._logger.info("Loaded CA cert path from g8es volume: %s", self._cached_ca_path)
+                    self._logger.info("Loaded CA cert path from host bootstrap directory: %s", self._cached_ca_path)
                     return self._cached_ca_path
             except Exception as e:
                 self._logger.warning("Failed to read CA cert at %s: %s", ca_path, e)
 
-        self._logger.info("CA certificate not found in g8es volume")
+        self._logger.info("CA certificate not found in host bootstrap directory")
         return None
 
     def is_available(self) -> bool:

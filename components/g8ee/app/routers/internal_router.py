@@ -218,7 +218,7 @@ async def internal_chat(
             "case_id": g8e_context.case_id,
             "investigation_id": g8e_context.investigation_id,
             "new_case": g8e_context.new_case,
-            "web_session_id": g8e_context.web_session_id[:8] + "...",
+            "web_session_id": (g8e_context.web_session_id[:8] + "...") if g8e_context.web_session_id else None,
             "message_length": len(request.message),
         }
     )
@@ -311,7 +311,7 @@ async def internal_chat(
     if not g8e_context.investigation_id or g8e_context.investigation_id == SENTINEL_ID_UNKNOWN:
         logger.error(
             "[INTERNAL-HTTP] Cannot start chat - investigation_id is missing or unknown",
-            extra={"case_id": g8e_context.case_id, "web_session_id": g8e_context.web_session_id[:8] + "..."}
+            extra={"case_id": g8e_context.case_id, "web_session_id": (g8e_context.web_session_id[:8] + "...") if g8e_context.web_session_id else None}
         )
         return ChatStartedResponse(
             success=False,
@@ -624,7 +624,7 @@ async def execute_direct_command(
         extra={
             "command": request.command[:100] if len(request.command) > 100 else request.command,
             "execution_id": g8e_context.execution_id,
-            "web_session_id": g8e_context.web_session_id[:12] + "...",
+            "web_session_id": (g8e_context.web_session_id[:12] + "...") if g8e_context.web_session_id else None,
             "source": g8e_context.source_component,
             "has_case_id": g8e_context.case_id is not None,
             "has_investigation_id": g8e_context.investigation_id is not None,
@@ -1461,7 +1461,7 @@ async def stop_operator(
     operator_command_service: OperatorCommandService = Depends(get_g8ee_operator_command_service)
 ):
     """
-    Stop an Operator by sending shutdown command via g8es pub/sub.
+    Stop an Operator by sending shutdown command via operator pub/sub.
     The Operator will receive the shutdown command and exit.
     """
     operator_id = request.operator_id
@@ -1613,7 +1613,7 @@ async def sync_user_settings(
     Sync user settings from g8ed - internal cluster use only.
     
     Invalidates the local cache for the user's settings so subsequent
-    requests will fetch the fresh settings from g8es.
+    requests will fetch the fresh settings from operator.
     """
     user_id = g8e_context.user_id
     if not user_id:

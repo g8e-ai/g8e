@@ -12,6 +12,7 @@
 # limitations under the License.
 
 import json
+import os
 from enum import StrEnum
 from pathlib import Path
 
@@ -491,7 +492,7 @@ MAX_OUTPUT_LENGTH               = 100_000
 
 # Certificates
 CLIENT_CERT_VALIDITY_DAYS = 365
-DEFAULT_SSL_DIR           = "/g8es"
+DEFAULT_SSL_DIR = os.environ.get("G8E_SSL_DIR", "/operator")
 CERT_SUBJECT_ORG          = "g8e Operator"
 CERT_SUBJECT_COUNTRY      = "US"
 CRL_ISSUER                = "g8e Platform CA"
@@ -593,16 +594,16 @@ FORBIDDEN_COMMAND_PATTERNS: tuple[str, ...] = tuple(
 G8EE_APP_TITLE                       = "g8e Engine"
 G8EE_APP_DESCRIPTION                 = "g8e Engine (g8ee) — AI engine for the g8e platform. Agentic AI system with LLM provider abstraction providing Zero-Trust AI for infrastructure operations."
 G8EE_APP_CONTACT_NAME                = "g8e Support"
-G8EE_APP_CONTACT_URL                 = "https://g8e.local"
+G8EE_APP_CONTACT_URL                 = "https://localhost"
 G8EE_APP_CONTACT_EMAIL               = "help@g8e.ai"
 G8EE_APP_LICENSE_NAME                = "Proprietary"
 G8EE_APP_LICENSE_URL                 = "https://github.com/g8e-ai/g8e/blob/main/LICENSE"
 
-CORS_ALLOWED_ORIGIN_G8EE             = "https://g8ee"
-CORS_ALLOWED_ORIGIN_G8ED_HTTP       = "https://g8ed"
-CORS_ALLOWED_ORIGIN_G8ED_HTTPS      = "https://g8ed"
+CORS_ALLOWED_ORIGIN_G8EE             = "https://localhost:8443"
+CORS_ALLOWED_ORIGIN_G8ED_HTTP       = "http://localhost:80"
+CORS_ALLOWED_ORIGIN_G8ED_HTTPS      = "https://localhost:443"
 CORS_ALLOWED_ORIGIN_LOCALHOST       = "https://localhost"
-CORS_ALLOWED_ORIGIN_G8E             = "https://g8e.local"
+CORS_ALLOWED_ORIGIN_G8E             = "https://localhost"
 
 HTTP_METHOD_GET                     = "GET"
 HTTP_METHOD_POST                    = "POST"

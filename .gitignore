@@ -208,6 +208,7 @@ go.work.sum
 
 # Logs
 *.log
+*.logs
 logs/
 
 # Temporary files
@@ -233,6 +234,7 @@ bin/
 .env.*.local
 .local.dev
 .local.dev/**
+/.g8e/
 
 # Database files
 *.db

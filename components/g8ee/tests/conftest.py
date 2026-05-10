@@ -183,7 +183,7 @@ def _web_search_settings_from_env() -> SearchSettings | None:
     )
 
 
-async def _load_settings_from_g8es(timeout: float = 5.0) -> G8eePlatformSettings:
+async def _load_settings_from_operator(timeout: float = 5.0) -> G8eePlatformSettings:
     """Load platform settings via SettingsService with a timeout."""
     import asyncio
     settings_service = SettingsService()
@@ -218,10 +218,10 @@ async def _load_settings_from_g8es(timeout: float = 5.0) -> G8eePlatformSettings
                 await kv_client.close()
                 await db_client.close()
     except TimeoutError:
-        logger.warning("Timed out loading platform settings from g8es (limit %ds)", timeout)
+        logger.warning("Timed out loading platform settings from operator (limit %ds)", timeout)
         return bootstrap_settings
     except Exception as e:
-        logger.warning("Failed to load platform settings from g8es: %s", e)
+        logger.warning("Failed to load platform settings from operator: %s", e)
         return bootstrap_settings
 
 
@@ -234,9 +234,9 @@ def pytest_configure(config):
 
     # Only load settings if they haven't been set yet
     try:
-        settings = asyncio.run(_load_settings_from_g8es())
+        settings = asyncio.run(_load_settings_from_operator())
     except Exception as e:
-        logger.warning(f"Failed to load settings from g8es: {e}")
+        logger.warning(f"Failed to load settings from operator: {e}")
         from app.services.infra.settings_service import SettingsService
         settings = SettingsService().get_local_settings()
 
@@ -265,12 +265,12 @@ def pytest_collection_modifyitems(config, items):
     has_test_llm_creds = _has_llm_credentials(llm)
 
     # Don't skip ai_integration tests if TEST_LLM_* env vars are not set,
-    # because tests now load user settings from g8es which may have API keys configured
+    # because tests now load user settings from operator which may have API keys configured
     # Only skip if TEST_LLM_* env vars are explicitly set but invalid
     env_llm_provider = os.environ.get("TEST_LLM_PROVIDER", "").strip()
 
     # If env var is set, use the credentials check.
-    # If env var is NOT set, we check if the platform settings from g8es have
+    # If env var is NOT set, we check if the platform settings from operator have
     # any LLM info, but since LLM info is in UserSettings, we can't easily check
     # here during collection.
     # For now, let's at least check if we have a primary_model in the platform
@@ -478,7 +478,7 @@ def mock_operator_document():
 def test_settings():
     """Returns the globally configured Settings object.
     
-    In a real test run, this is loaded from g8es by pytest_sessionstart.
+    In a real test run, this is loaded from operator by pytest_sessionstart.
     If settings are not properly configured, returns a default G8eePlatformSettings.
     """
     from app.llm.factory import get_settings
@@ -486,7 +486,7 @@ def test_settings():
 
     settings = get_settings()
     if settings is None or not hasattr(settings, "auth"):
-        return G8eePlatformSettings(port=443, auth=AuthSettings(), listen=ListenSettings())
+        return G8eePlatformSettings(port=8443, auth=AuthSettings(), listen=ListenSettings())
     return settings
 
 
@@ -657,7 +657,7 @@ def provider_config():
 
 
 # ---------------------------------------------------------------------------
-# Real g8es fixtures for integration tests
+# Real operator fixtures for integration tests
 # ---------------------------------------------------------------------------
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")

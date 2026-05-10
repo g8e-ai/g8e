@@ -15,65 +15,13 @@
 import { describe, it, expect, beforeEach, beforeAll, afterEach, vi } from 'vitest';
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
-import * as x509 from '@peculiar/x509';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
-// Configure @peculiar/x509 to use Node.js crypto
-x509.cryptoProvider.set(crypto.webcrypto);
-
-function pemToDer(pem, label) {
-    const regex = new RegExp(`-----BEGIN ${label}-----([\\s\\S]*?)-----END ${label}-----`);
-    const match = pem.match(regex);
-    return Buffer.from(match[1].replace(/\s/g, ''), 'base64');
-}
-
-async function generateTestCA() {
-    const { privateKey: caKeyPem, publicKey: caPubPem } = crypto.generateKeyPairSync('ec', {
-        namedCurve: 'P-384',
-        publicKeyEncoding: { type: 'spki', format: 'pem' },
-        privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
-    });
-    const caPublicKey = await crypto.webcrypto.subtle.importKey(
-        'spki', pemToDer(caPubPem, 'PUBLIC KEY'),
-        { name: 'ECDSA', namedCurve: 'P-384' }, true, ['verify']
-    );
-    const caPrivateKey = await crypto.webcrypto.subtle.importKey(
-        'pkcs8', pemToDer(caKeyPem, 'PRIVATE KEY'),
-        { name: 'ECDSA', namedCurve: 'P-384' }, false, ['sign']
-    );
-    const caCert = await x509.X509CertificateGenerator.createSelfSigned({
-        serialNumber: crypto.randomBytes(8).toString('hex').toUpperCase(),
-        name: 'CN=g8e Operator CA, O=g8e, C=US',
-        notBefore: new Date(),
-        notAfter: new Date(Date.now() + 10 * 365 * 24 * 60 * 60 * 1000),
-        signingAlgorithm: { name: 'ECDSA', hash: 'SHA-384' },
-        keys: { privateKey: caPrivateKey, publicKey: caPublicKey },
-        extensions: [
-            new x509.BasicConstraintsExtension(true, undefined, true),
-            new x509.KeyUsagesExtension(x509.KeyUsageFlags.keyCertSign | x509.KeyUsageFlags.cRLSign, true)
-        ]
-    });
-    return { caCertPem: caCert.toString('pem'), caKeyPem };
-}
-
-async function seedCA(sslDir) {
-    const { caCertPem, caKeyPem } = await generateTestCA();
-    mkdirSync(join(sslDir, 'ca'), { recursive: true });
-    writeFileSync(join(sslDir, 'ca', 'ca.crt'), caCertPem);
-    writeFileSync(join(sslDir, 'ca', 'ca.key'), caKeyPem);
-    return { caCertPem, caKeyPem };
-}
-
-async function seedCAWithLegacyEcKey(sslDir) {
-    const { caCertPem, caKeyPem } = await generateTestCA();
-    const legacyEcKey = crypto.createPrivateKey({ key: caKeyPem, format: 'pem' })
-        .export({ type: 'sec1', format: 'pem' });
-    mkdirSync(join(sslDir, 'ca'), { recursive: true });
-    writeFileSync(join(sslDir, 'ca', 'ca.crt'), caCertPem);
-    writeFileSync(join(sslDir, 'ca', 'ca.key'), legacyEcKey);
-    return { caCertPem, caKeyPem: legacyEcKey };
+function seedCA(sslDir) {
+    mkdirSync(sslDir, { recursive: true });
+    writeFileSync(join(sslDir, 'ca.crt'), '-----BEGIN CERTIFICATE-----\nMOCK CA CERT\n-----END CERTIFICATE-----');
 }
 
 vi.mock('@g8ed/utils/logger.js', () => ({
@@ -86,7 +34,24 @@ vi.mock('@g8ed/utils/logger.js', () => ({
 }));
 
 function createMockInternalHttpClient() {
+    const mockOperatorClient = {
+        post: vi.fn().mockImplementation(async (path, body) => {
+            if (path === '/ssl/sign-certificate') {
+                const data = JSON.parse(body);
+                return {
+                    success: true,
+                    certificate_pem: '-----BEGIN CERTIFICATE-----\nMOCK OPERATOR CERT\n-----END CERTIFICATE-----',
+                    serial: 'MOCK-SERIAL-' + uuidv4().replace(/-/g, '').toUpperCase()
+                };
+            }
+            return { success: true };
+        })
+    };
+
     return {
+        _bootstrapService: {
+            _operatorClient: mockOperatorClient
+        },
         request: vi.fn().mockResolvedValue({ success: true }),
         sendChatMessage: vi.fn().mockResolvedValue({ success: true }),
         deleteCase: vi.fn().mockResolvedValue({ success: true }),
@@ -129,16 +94,15 @@ describe('CertificateService [UNIT - filesystem isolated]', { timeout: 30000 }, 
     });
 
     describe('initialize', () => {
-        it('should load CA from SSL_DIR/ca/ and set caCert and caKey', async () => {
+        it('should load CA from SSL_DIR/ca.crt and set caCert', async () => {
             await certService.initialize();
 
             expect(certService.initialized).toBe(true);
             expect(certService.caCert).toContain('-----BEGIN CERTIFICATE-----');
-            expect(certService.caKey).toContain('-----BEGIN PRIVATE KEY-----');
         });
 
-        it('should throw if CA is not found in ssl_dir/ca/', async () => {
-            rmSync(join(tmpSslDir, 'ca'), { recursive: true, force: true });
+        it('should throw if CA is not found in ssl_dir', async () => {
+            rmSync(join(tmpSslDir, 'ca.crt'), { force: true });
             await expect(certService.initialize()).rejects.toThrow('CA certificate not found');
         });
 
@@ -196,8 +160,8 @@ describe('CertificateService [UNIT - filesystem isolated]', { timeout: 30000 }, 
             );
 
             expect(cert1.serial).not.toBe(cert2.serial);
-            expect(cert1.serial.length).toBe(32);
-            expect(cert2.serial.length).toBe(32);
+            expect(cert1.serial.length).toBe(44);
+            expect(cert2.serial.length).toBe(44);
         });
 
         it('should set correct validity period (365 days)', async () => {
@@ -214,7 +178,7 @@ describe('CertificateService [UNIT - filesystem isolated]', { timeout: 30000 }, 
             expect(diffDays).toBeCloseTo(365, 0);
         });
 
-        it('should generate valid PEM-formatted certificate and key', async () => {
+        it('should generate valid formatted certificate and key', async () => {
             const result = await certService.generateOperatorCertificate(
                 `op_test_${uuidv4()}`,
                 `user_test_${uuidv4()}`,
@@ -223,21 +187,23 @@ describe('CertificateService [UNIT - filesystem isolated]', { timeout: 30000 }, 
 
             expect(result.cert).toContain('-----BEGIN CERTIFICATE-----');
             expect(result.cert).toContain('-----END CERTIFICATE-----');
-            expect(result.key).toContain('-----BEGIN');
-            expect(result.key).toContain('-----END');
+            expect(result.key).toContain('-----BEGIN PRIVATE KEY-----');
+            expect(result.key).toContain('-----END PRIVATE KEY-----');
         });
 
-        it('should generate certificate signed by the CA', async () => {
-            const result = await certService.generateOperatorCertificate(
-                `op_test_${uuidv4()}`,
-                `user_test_${uuidv4()}`,
-                `org_test_${uuidv4()}`
-            );
+        it('should request certificate via operator signing API', async () => {
+            const operatorId = `op_test_${uuidv4()}`;
+            const userId = `user_test_${uuidv4()}`;
+            const orgId = `org_test_${uuidv4()}`;
 
-            const cert = new x509.X509Certificate(result.cert);
-            const caCert = new x509.X509Certificate(certService.caCert);
-            const verified = await cert.verify({ publicKey: await caCert.publicKey.export() });
-            expect(verified).toBe(true);
+            const result = await certService.generateOperatorCertificate(operatorId, userId, orgId);
+
+            expect(result).toHaveProperty('cert');
+            expect(result.cert).toBe('-----BEGIN CERTIFICATE-----\nMOCK OPERATOR CERT\n-----END CERTIFICATE-----');
+            
+            const operatorClient = certService._internalHttpClient._bootstrapService._operatorClient;
+            expect(operatorClient.post).toHaveBeenCalledWith('/ssl/sign-certificate', expect.stringContaining(operatorId));
+            expect(operatorClient.post).toHaveBeenCalledWith('/ssl/sign-certificate', expect.stringContaining(userId));
         });
 
         it('should auto-initialize if not already initialized', async () => {
@@ -254,27 +220,6 @@ describe('CertificateService [UNIT - filesystem isolated]', { timeout: 30000 }, 
 
             expect(result).toHaveProperty('cert');
             expect(uninitializedService.initialized).toBe(true);
-        });
-
-        it('should generate a valid certificate when CA key is in SEC1 (EC PRIVATE KEY) format', async () => {
-            const sec1SslDir = mkdtempSync(join(tmpdir(), 'g8e-ssl-sec1-'));
-            try {
-                await seedCAWithLegacyEcKey(sec1SslDir);
-                const service = new CertificateService({ 
-                    bootstrapService: { getSslDir: () => sec1SslDir },
-                    internalHttpClient: createMockInternalHttpClient()
-                });
-                const result = await service.generateOperatorCertificate(
-                    `op_test_${uuidv4()}`,
-                    `user_test_${uuidv4()}`,
-                    `org_test_${uuidv4()}`
-                );
-                expect(result).toHaveProperty('cert');
-                expect(result.cert).toContain('-----BEGIN CERTIFICATE-----');
-                expect(result).toHaveProperty('serial');
-            } finally {
-                rmSync(sec1SslDir, { recursive: true, force: true });
-            }
         });
     });
 

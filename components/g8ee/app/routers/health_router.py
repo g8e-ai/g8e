@@ -66,7 +66,7 @@ async def detailed_health_check(
     services = getattr(state, "services", None)
     clients_status = {
         "cache_aside_service": "up" if services and getattr(services, "cache_aside_service", None) else "down",
-        "g8es_kv": "up" if hasattr(state, "pubsub_client") and state.pubsub_client else "down",
+        "operator_kv": "up" if hasattr(state, "pubsub_client") and state.pubsub_client else "down",
         "internal_http_client": "up" if hasattr(state, "internal_http_client") and state.internal_http_client else "down",
         "operator_command_service": "up" if services and getattr(services, "operator_command_service", None) else "down",
         "chat_pipeline": "up" if services and getattr(services, "chat_pipeline", None) else "down"

@@ -27,7 +27,7 @@ from app.services.protocols import ExecutionServiceProtocol
 from app.utils.auto_approved_validator import CommandAutoApprovedValidator
 from app.utils.blacklist_validator import CommandBlacklistValidator
 from app.utils.whitelist_validator import CommandWhitelistValidator
-from tests.fakes.fake_g8es_clients import FakeDBClient, FakeKVClient, FakePubSubClient
+from tests.fakes.fake_operator_clients import FakeDBClient, FakeKVClient, FakePubSubClient
 
 from .fake_ai_response_analyzer import FakeAIResponseAnalyzer
 from .fake_approval_service import FakeApprovalService
@@ -143,7 +143,7 @@ def build_command_service(
     event_service = event_service or FakeEventService()
     ai_response_analyzer = ai_response_analyzer or FakeAIResponseAnalyzer()
     investigation_service = investigation_service or FakeInvestigationService()
-    settings = settings or G8eePlatformSettings(port=443)
+    settings = settings or G8eePlatformSettings(port=8443)
 
     operator_data_service = OperatorDataService(cache=cache_aside_service, internal_http_client=internal_http_client)
 

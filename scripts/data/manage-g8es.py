@@ -18,25 +18,25 @@ Single entry point for all platform data operations. Dispatches to
 individual resource scripts in scripts/data/.
 
 Usage:
-    python manage-g8es.py store stats
-    python manage-g8es.py store operators
-    python manage-g8es.py store doc --collection operators --id <id>
-    python manage-g8es.py store kv --pattern "g8e:session:*"
-    python manage-g8es.py store wipe --dry-run
+    python manage-operator.py store stats
+    python manage-operator.py store operators
+    python manage-operator.py store doc --collection operators --id <id>
+    python manage-operator.py store kv --pattern "g8e:session:*"
+    python manage-operator.py store wipe --dry-run
 
-    python manage-g8es.py users list
-    python manage-g8es.py users create --email user@example.com --name "John Doe"
+    python manage-operator.py users list
+    python manage-operator.py users create --email user@example.com --name "John Doe"
 
-    python manage-g8es.py operators list --email user@example.com
-    python manage-g8es.py operators get --id OPERATOR_ID
+    python manage-operator.py operators list --email user@example.com
+    python manage-operator.py operators get --id OPERATOR_ID
 
-    python manage-g8es.py settings show
-    python manage-g8es.py settings set llm_model=gemma3:4b
+    python manage-operator.py settings show
+    python manage-operator.py settings set llm_model=gemma3:4b
 
-    python manage-g8es.py device-links list --email user@example.com
+    python manage-operator.py device-links list --email user@example.com
 
-    python manage-g8es.py audit --db-path /path/to/g8e.db sessions
-    python manage-g8es.py audit --container operator-test-1 stats
+    python manage-operator.py audit --db-path /path/to/g8e.db sessions
+    python manage-operator.py audit --container operator-test-1 stats
 """
 
 import os
@@ -61,10 +61,10 @@ RESOURCES = {
 HELP_TEXT = """
 g8e Data Management CLI
 
-Usage: manage-g8es.py <resource> <command> [options]
+Usage: manage-operator.py <resource> <command> [options]
 
 Resources:
-  store          g8es document store & KV queries
+  store          operator document store & KV queries
   users          Platform user management
   operators      Operator document management
   settings       Platform settings (read/write)
@@ -74,21 +74,21 @@ Resources:
   reputation     Reputation state & commitment management
 
 Examples:
-  manage-g8es.py store stats
-  manage-g8es.py store operators
-  manage-g8es.py store wipe --dry-run
-  manage-g8es.py users list
-  manage-g8es.py users create --email user@example.com --name "John Doe"
-  manage-g8es.py operators list --email user@example.com
-  manage-g8es.py operators get --id OPERATOR_ID
-  manage-g8es.py settings show --section llm
-  manage-g8es.py settings set llm_model=gemma3:4b
-  manage-g8es.py device-links list --email user@example.com
-  manage-g8es.py audit --db-path /path/to/g8e.db sessions
-  manage-g8es.py mcp config --client claude-code --email user@example.com
-  manage-g8es.py mcp test --email user@example.com
+  manage-operator.py store stats
+  manage-operator.py store operators
+  manage-operator.py store wipe --dry-run
+  manage-operator.py users list
+  manage-operator.py users create --email user@example.com --name "John Doe"
+  manage-operator.py operators list --email user@example.com
+  manage-operator.py operators get --id OPERATOR_ID
+  manage-operator.py settings show --section llm
+  manage-operator.py settings set llm_model=gemma3:4b
+  manage-operator.py device-links list --email user@example.com
+  manage-operator.py audit --db-path /path/to/g8e.db sessions
+  manage-operator.py mcp config --client claude-code --email user@example.com
+  manage-operator.py mcp test --email user@example.com
 
-Run 'manage-g8es.py <resource> --help' for resource-specific help.
+Run 'manage-operator.py <resource> --help' for resource-specific help.
 """.strip()
 
 
@@ -109,7 +109,7 @@ def main() -> int:
     resource = sys.argv[1]
 
     if resource not in RESOURCES:
-        print(f'[manage-g8es] Unknown resource: {resource!r}', file=sys.stderr)
+        print(f'[manage-operator] Unknown resource: {resource!r}', file=sys.stderr)
         print(f'  Valid: {", ".join(RESOURCES)}', file=sys.stderr)
         return 1
 
@@ -117,7 +117,7 @@ def main() -> int:
     try:
         mod = _import_resource(module_name)
     except ImportError as e:
-        print(f'[manage-g8es] Failed to load {module_name}: {e}', file=sys.stderr)
+        print(f'[manage-operator] Failed to load {module_name}: {e}', file=sys.stderr)
         return 1
 
     return mod.run(sys.argv[2:])

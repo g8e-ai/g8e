@@ -104,8 +104,8 @@ func main() {
 	flag.StringVar(&logLevel, "l", "info", "Log level")
 	flag.BoolVar(&noGit, "G", false, "Disable git (ledger)")
 	flag.BoolVar(&showVersion, "v", false, "Version")
-	flag.IntVar(&wssPort, "wss-port", 443, "WSS port to dial on g8es (default: 443)")
-	flag.IntVar(&httpPort, "http-port", 443, "HTTPS port for auth/bootstrap via g8es proxy (default: 443)")
+	flag.IntVar(&wssPort, "wss-port", 443, "WSS port to dial on operator (default: 443)")
+	flag.IntVar(&httpPort, "http-port", 443, "HTTPS port for auth/bootstrap via operator proxy (default: 443)")
 	flag.StringVar(&apiKey, "key", "", "API key")
 	flag.StringVar(&deviceToken, "device-token", "", "Device link token for operator deployment")
 	flag.StringVar(&endpointURL, "endpoint", "", "Endpoint (hostname or IP)")
@@ -144,11 +144,11 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		fmt.Fprintf(os.Stderr, "  -k, --key <key>         API key (or set G8E_OPERATOR_API_KEY)\n")
 		fmt.Fprintf(os.Stderr, "  -D, --device-token <tok> Device link token for operator deployment\n")
-		fmt.Fprintf(os.Stderr, "  -e, --endpoint <host>     Operator endpoint: IP address of the Docker host running g8es\n")
+		fmt.Fprintf(os.Stderr, "  -e, --endpoint <host>     Operator endpoint: IP address of the Docker host running operator\n")
 		fmt.Fprintf(os.Stderr, "      --ca-url <url>        Override URL for hub CA certificate fetch (default: http://<endpoint>/ca.crt)\n")
 		fmt.Fprintf(os.Stderr, "      --working-dir <dir>   Working directory (default: directory operator was launched from)\n")
 		fmt.Fprintf(os.Stderr, "                            All commands and data storage are anchored to this directory\n")
-		fmt.Fprintf(os.Stderr, "      --wss-port <port>     WSS port to dial on g8es for pub/sub (default: 443)\n")
+		fmt.Fprintf(os.Stderr, "      --wss-port <port>     WSS port to dial on operator for pub/sub (default: 443)\n")
 		fmt.Fprintf(os.Stderr, "      --http-port <port>    HTTPS port to dial for auth/bootstrap (default: 443)\n")
 		fmt.Fprintf(os.Stderr, "  -c, --cloud             Cloud Operator mode (for AWS/cloud CLI)\n")
 		fmt.Fprintf(os.Stderr, "  -p, --provider <name>   Cloud provider: aws, gcp, azure\n")
@@ -396,11 +396,11 @@ func printVersion() {
 
 // loadCAFromLocalVolume attempts to read a platform CA certificate from common
 // SSL volume mount points (used when the Operator runs in a container alongside
-// g8es). Returns true on the first valid PEM found, which is installed via
+// operator). Returns true on the first valid PEM found, which is installed via
 // certs.SetCA. Returns false if no valid CA is found, in which case the caller
 // should fall back to an HTTPS fetch.
 func loadCAFromLocalVolume(logger *slog.Logger) bool {
-	sslPaths := []string{"/ssl/ca.crt", "/g8es/ca.crt", "/g8es/ssl/ca.crt", "/data/ssl/ca.crt"}
+	sslPaths := []string{"/ssl/ca.crt", "/operator/ca.crt", "/operator/ssl/ca.crt", "/data/ssl/ca.crt"}
 	for _, path := range sslPaths {
 		pemData, err := os.ReadFile(path)
 		if err != nil {
@@ -514,7 +514,7 @@ func (h *operatorHandler) WithGroup(name string) slog.Handler {
 }
 
 // runListenMode starts the Operator in listen mode — the platform's central
-// persistence (g8es) and pub/sub broker. In this mode, the Operator does
+// persistence (operator) and pub/sub broker. In this mode, the Operator does
 // NOT execute commands, initiate outbound connections, or perform
 // authentication against a remote hub. It is strictly an inbound service
 // for g8ee, g8ed, and Outbound Operators.
@@ -525,7 +525,7 @@ func runListenMode(wssPort, httpPort int, dataDir, sslDir, tlsCertPath, tlsKeyPa
 		os.Exit(constants.ExitConfigError)
 	}
 
-	logger.Info("g8e Operator — Listen Mode (g8es)", "version", version, "build", buildID)
+	logger.Info("g8e Operator — Listen Mode (operator)", "version", version, "build", buildID)
 
 	cfg, err := config.LoadListen(wssPort, httpPort, dataDir, sslDir, tlsCertPath, tlsKeyPath)
 	if err != nil {

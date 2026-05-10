@@ -70,7 +70,7 @@ describe('Settings Routes [UNIT]', () => {
 
         it('should fetch all settings', async () => {
             const mockPlatformSettings = { 'passkey_rp_name': 'g8e' };
-            const mockUserSettings = { 'app_url': 'https://g8e.local' };
+            const mockUserSettings = { 'app_url': 'https://localhost' };
             const mockSchema = [
                 { key: 'passkey_rp_name', default: 'g8e', secret: false },
                 { key: 'app_url', default: 'https://localhost', secret: false }
@@ -101,7 +101,7 @@ describe('Settings Routes [UNIT]', () => {
             
             const responseData = res.json.mock.calls[0][0];
             expect(responseData.settings).toHaveLength(2);
-            expect(responseData.settings.find(s => s.key === 'app_url').value).toBe('https://g8e.local');
+            expect(responseData.settings.find(s => s.key === 'app_url').value).toBe('https://localhost');
             expect(responseData.sections).toHaveLength(2);
             expect(responseData.sections[0].id).toBe('llm');
         });
@@ -128,7 +128,7 @@ describe('Settings Routes [UNIT]', () => {
         };
 
         it('should update settings successfully', async () => {
-            const updates = { 'app_url': 'https://g8e.local' };
+            const updates = { 'app_url': 'https://localhost' };
             const mockResult = { success: true, saved: ['app_url'] };
             mockSettingsService.updateUserSettings.mockResolvedValue(mockResult);
 

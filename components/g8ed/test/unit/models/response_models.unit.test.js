@@ -448,7 +448,7 @@ describe('InternalHealthResponse [UNIT - PURE LOGIC]', () => {
         });
         expect(response.success).toBe(true);
         expect(response.message).toBe('Health check passed');
-        expect(response.g8es_status).toBe('unknown');
+        expect(response.operator_status).toBe('unknown');
         expect(response.g8ee_status).toBe('unknown');
         expect(response.g8eo_status).toBe('unknown');
         expect(response.uptime_seconds).toBe(0);
@@ -460,13 +460,13 @@ describe('InternalHealthResponse [UNIT - PURE LOGIC]', () => {
         const response = InternalHealthResponse.parse({
             success: true,
             message: 'All systems operational',
-            g8es_status: 'healthy',
+            operator_status: 'healthy',
             g8ee_status: 'healthy',
             g8eo_status: 'healthy',
             uptime_seconds: 3600,
             memory_usage: memoryUsage,
         });
-        expect(response.g8es_status).toBe('healthy');
+        expect(response.operator_status).toBe('healthy');
         expect(response.g8ee_status).toBe('healthy');
         expect(response.g8eo_status).toBe('healthy');
         expect(response.uptime_seconds).toBe(3600);

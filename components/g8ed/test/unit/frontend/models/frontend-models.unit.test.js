@@ -277,7 +277,7 @@ describe('InvestigationHistoryEntry [UNIT]', () => {
         expect(InvestigationHistoryEntry.parse(minimal).getSenderDisplayName()).toBe('You');
     });
 
-    it('getSenderDisplayName() returns "g8e.local" for AI', () => {
+    it('getSenderDisplayName() returns "localhost" for AI', () => {
         const m = InvestigationHistoryEntry.parse({ 
             event_type: EventType.INVESTIGATION_CHAT_MESSAGE_AI,
             actor: EventType.EVENT_SOURCE_AI_PRIMARY,

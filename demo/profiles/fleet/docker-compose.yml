@@ -12,8 +12,6 @@ networks:
         # A /16 subnet allows up to 65,534 container IPs
         # default docker /24 subnets limit you to 254
         - subnet: 10.220.0.0/16
-  g8e-network:
-    external: true
 
 services:
   node:
@@ -22,14 +20,13 @@ services:
       dockerfile: Dockerfile
     networks:
       - fleet-net
-      - g8e-network
+    extra_hosts:
+      - "localhost:host-gateway"
     environment:
       - DEVICE_TOKEN=${DEVICE_TOKEN:-}
-      - G8E_ENDPOINT=${G8E_ENDPOINT:-g8e.local}
-    # Mount the local cert bundle if it exists
+      - G8E_ENDPOINT=${G8E_ENDPOINT:-localhost}
     volumes:
-      - g8es-ssl:/g8es:ro
-      - /var/run/docker.sock:/var/run/docker.sock
+      - ../../../.g8e/ssl/ca/ca.crt:/operator/ca.crt:ro
     labels:
       - "demo.service=operator-node"
 
@@ -39,14 +36,7 @@ services:
       dockerfile: Dockerfile
     networks:
       - fleet-net
-      - g8e-network
     ports:
       - "8080:8080"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
     labels:
       - "demo.service=fleet-dashboard"
-
-volumes:
-  g8es-ssl:
-    external: true

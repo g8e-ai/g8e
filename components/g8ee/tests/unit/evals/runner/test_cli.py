@@ -44,7 +44,8 @@ async def test_run_scenario_benchmark():
         "expected_payload": [{"field": "cmd", "pattern": "ls"}]
     }
     device_token = "token"
-    g8ed_url = "https://g8e.local"
+    g8ed_url = "https://localhost"
+    g8ee_url = "https://localhost:8443"
     judge = MagicMock()
     
     with patch('app.evals.runner.cli.G8edClient') as mock_client_cls:
@@ -59,7 +60,7 @@ async def test_run_scenario_benchmark():
             
         mock_client.send_chat_message = mock_stream
         
-        row = await run_scenario(scenario, device_token, g8ed_url, "node-1", judge)
+        row = await run_scenario(scenario, device_token, g8ed_url, g8ee_url, "node-1", judge)
         
         assert row.passed is True
         assert row.scenario_id == "test-1"
@@ -102,7 +103,7 @@ async def test_run_scenario_privacy():
             yield {"type": "text_chunk", "data": "the password is password123"}
         mock_client.send_chat_message = mock_stream
         
-        row = await run_scenario(scenario, "token", "url", "node", MagicMock())
+        row = await run_scenario(scenario, "token", "url", "url", "node", MagicMock())
         assert row.passed is False # Leaked secret
 
 @pytest.mark.asyncio
@@ -112,7 +113,7 @@ async def test_run_scenario_exception():
         mock_client = mock_client_cls.return_value
         mock_client.__aenter__ = AsyncMock(side_effect=Exception("error"))
         
-        row = await run_scenario(scenario, "token", "url", "node", MagicMock())
+        row = await run_scenario(scenario, "token", "url", "url", "node", MagicMock())
         assert row.passed is False
         assert row.error == "error"
 
@@ -139,7 +140,7 @@ async def test_run_scenario_accuracy():
         
         mock_score.return_value = (True, 5, "good")
         
-        row = await run_scenario(scenario, "token", "url", "node", MagicMock())
+        row = await run_scenario(scenario, "token", "url", "url", "node", MagicMock())
         assert row.passed is True
         assert row.score == 5
 
@@ -276,6 +277,7 @@ def test_main_run_full():
             device_token="token", 
             gold_set="benchmark",
             g8ed_url="url",
+            g8ee_url="url",
             nodes=1,
             parallel=1,
             judge_model="m",

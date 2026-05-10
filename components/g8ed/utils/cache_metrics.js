@@ -12,10 +12,10 @@
 // limitations under the License.
 
 /**
- * Cache Metrics - Track g8es KV Cache Performance
+ * Cache Metrics - Track operator KV Cache Performance
  * 
  * Monitors cache hit/miss ratios and estimates cost savings from reduced DB reads.
- * Used to measure effectiveness of the g8es KV caching strategy.
+ * Used to measure effectiveness of the operator KV caching strategy.
  */
 
 import { logger } from './logger.js';
@@ -33,7 +33,7 @@ class CacheMetrics {
     }
 
     /**
-     * Record cache hit (data found in g8es KV)
+     * Record cache hit (data found in operator KV)
      */
     recordHit(cacheType = 'unknown') {
         this.hits++;

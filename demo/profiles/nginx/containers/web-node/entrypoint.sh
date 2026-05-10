@@ -1,24 +1,7 @@
 #!/bin/bash
 # Web Node Entrypoint - Configures nginx + Flask app based on NODE_PROFILE
 
-# If NODE_ID is not set or is the default, try to get it from container name via Docker API
-if [ -z "$NODE_ID" ] || [ "$NODE_ID" = "node-01" ]; then
-    if [ -S /var/run/docker.sock ]; then
-        # Get container ID from cgroup
-        CONTAINER_ID=$(cat /proc/self/cgroup | head -n 1 | cut -d'/' -f3)
-        if [ -n "$CONTAINER_ID" ]; then
-            # Query Docker API for container name
-            CONTAINER_NAME=$(curl -s --unix-socket /var/run/docker.sock "http://localhost/containers/${CONTAINER_ID}/json" | python3 -c "import sys, json; print(json.load(sys.stdin)['Name'][1:])" 2>/dev/null)
-            if [ -n "$CONTAINER_NAME" ]; then
-                NODE_ID="$CONTAINER_NAME"
-                # Set the system hostname to match
-                hostname "$NODE_ID"
-            fi
-        fi
-    fi
-fi
-
-NODE_ID="${NODE_ID:-node-01}"
+NODE_ID="${NODE_ID:-${HOSTNAME:-node-01}}"
 NODE_PROFILE="${NODE_PROFILE:-healthy}"
 
 echo "[$NODE_ID] Starting web node (profile: $NODE_PROFILE)"

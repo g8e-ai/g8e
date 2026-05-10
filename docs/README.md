@@ -6,8 +6,8 @@ permalink: /docs/
 
 # g8e Documentation Index
 
-Last Updated: 2026-05-07
-Version: v0.2.0
+Last Updated: 2026-05-10
+Version: v0.2.2
 
 g8e is a Zero-Trust AI platform for secure infrastructure operations. This index maps high-level concepts to their technical implementations.
 
@@ -18,7 +18,7 @@ g8e is a Zero-Trust AI platform for secure infrastructure operations. This index
 | [architecture/security.md](architecture/security.md) | **Zero-Trust & Governance**: LFAA (Logs, Files, Audit, Activity) encryption, Sentinel traffic analysis, and human-in-the-loop controls. |
 | [architecture/ai_agents.md](architecture/ai_agents.md) | **Agentic AI**: Multi-provider LLM abstraction (g8ee), tool-loop execution, and secure command dispatch. |
 | [architecture/operator.md](architecture/operator.md) | **Secure Execution**: The g8eo Operator lifecycle, vault management, and real-time command tunneling. |
-| [architecture/storage.md](architecture/storage.md) | **Persistence**: g8es (Data Bus) architecture using SQLite, KV stores, and secure blob storage. |
+| [architecture/storage.md](architecture/storage.md) | **Persistence**: Operator listen mode using SQLite, KV stores, pub/sub, and secure blob storage. |
 
 ## Component Reference
 
@@ -26,10 +26,9 @@ Technical deep-dives into the services that comprise the g8e stack.
 
 | Component | Role | Primary Implementation |
 |-----------|------|------------------------|
-| [**g8eo**](components/g8eo.md) | Operator | Go-based secure execution agent with git-backed ledger (LFAA). |
+| [**g8eo**](components/g8eo.md) | Operator | Go-based secure execution agent and listen-mode persistence/pubsub runtime. |
 | [**g8ee**](components/g8ee.md) | Engine | Python (FastAPI) agentic orchestrator for LLM interactions and tool dispatch. |
-| [**g8ed**](components/g8ed.md) | Terminal | Node.js (Express) management plane, SSE fan-out, and session binding. |
-| [**g8es**](components/g8es.md) | Data Bus | g8eo in `--listen` mode providing unified persistence and pub/sub. |
+| [**g8ed**](components/g8ed.md) | Dashboard | Node.js (Express) management plane, SSE fan-out, and session binding. |
 
 ## Guides & Standards
 

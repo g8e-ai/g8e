@@ -9,7 +9,7 @@ class KeyedAsyncLock:
     long-lived services do not leak entries for transient keys.
 
     Single-process / single-event-loop only. If g8ee ever runs with multiple
-    workers, replace with a g8es-backed distributed lock (see followups doc).
+    workers, replace with a operator-backed distributed lock (see followups doc).
     """
 
     def __init__(self) -> None:

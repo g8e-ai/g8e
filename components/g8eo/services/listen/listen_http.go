@@ -39,16 +39,18 @@ type HTTPHandler struct {
 	db      *ListenDBService
 	pubsub  *PubSubBroker
 	auth    *AuthService
+	certs   *CertStore
 	isReady func() bool
 }
 
-func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker, auth *AuthService, isReady func() bool) *HTTPHandler {
+func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker, auth *AuthService, certs *CertStore, isReady func() bool) *HTTPHandler {
 	return &HTTPHandler{
 		cfg:     cfg,
 		logger:  logger,
 		db:      db,
 		pubsub:  pubsub,
 		auth:    auth,
+		certs:   certs,
 		isReady: isReady,
 	}
 }
@@ -62,6 +64,7 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux.HandleFunc("/pubsub/publish", h.handlePubSubPublish)
 	mux.Handle("/ws/pubsub", h.auth.WebSocketAuth(http.HandlerFunc(h.pubsub.HandleWebSocket)))
 	mux.HandleFunc("/blob/", h.handleBlob)
+	mux.HandleFunc("/ssl/sign-certificate", h.handleSignCertificate)
 
 	// authMiddleware must be inside pathTraversalGuard to ensure ".." is caught
 	// before any other processing, but pathTraversalGuard itself doesn't need auth.
@@ -680,4 +683,49 @@ func (h *HTTPHandler) handlePubSubPublish(w http.ResponseWriter, r *http.Request
 
 	receivers := h.pubsub.Publish(req.Channel, dataJSON)
 	jsonResponse(w, http.StatusOK, models.PubSubPublishResponse{Receivers: receivers})
+}
+
+func (h *HTTPHandler) handleSignCertificate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	body, err := readBody(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	var req struct {
+		PublicKeyPEM       string `json:"public_key_pem"`
+		CommonName         string `json:"common_name"`
+		OrganizationalUnit string `json:"organizational_unit"`
+		ValidityDays       int    `json:"validity_days"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	if h.certs == nil {
+		jsonError(w, http.StatusNotImplemented, "CA signing not enabled on this instance")
+		return
+	}
+
+	certPEM, serial, err := h.certs.SignCertificate(req.PublicKeyPEM, req.CommonName, req.OrganizationalUnit, req.ValidityDays)
+	if err != nil {
+		h.logger.Error("Failed to sign certificate", "error", err)
+		jsonResponse(w, http.StatusInternalServerError, map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"success":         true,
+		"certificate_pem": certPEM,
+		"serial":          serial.String(),
+	})
 }

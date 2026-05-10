@@ -1,13 +1,18 @@
 #!/bin/sh
-# g8ed Entrypoint script - waits for g8es then starts the application
+# g8ed Entrypoint script - waits for operator then starts the application
 
 set -e
 
-# Wait for g8es to be ready and platform_settings to be initialized
-echo "[G8ED-ENTRYPOINT] Waiting for g8es health check and platform_settings..."
+# Wait for operator to be ready and platform_settings to be initialized
+echo "[G8ED-ENTRYPOINT] Waiting for operator health check and platform_settings..."
 MAX_RETRIES=30
 RETRY_COUNT=0
-SSL_DIR="${G8E_SSL_DIR:-/g8es}"
+# Derive project root using shared utility
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+. "${SCRIPT_DIR}/../../scripts/core/path_utils.sh"
+
+SSL_DIR="${G8E_SSL_DIR:-${G8E_PROJECT_ROOT}/.g8e/ssl}"
+
 
 # Load security tokens into environment if files exist
 if [ -f "${SSL_DIR}/internal_auth_token" ]; then
@@ -21,24 +26,24 @@ fi
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
     if [ -f "${SSL_DIR}/internal_auth_token" ] && [ -f "${SSL_DIR}/ca.crt" ]; then
         INTERNAL_TOKEN=$(cat "${SSL_DIR}/internal_auth_token" | tr -d '\n\r')
-        # Check if g8es is responding on the health endpoint
+        # Check if operator is responding on the health endpoint
         # AND check if platform_settings is initialized (returns 200 instead of 401)
-        if curl -s -f --cacert "${SSL_DIR}/ca.crt" -H "X-Internal-Auth: ${INTERNAL_TOKEN}" https://g8es:9000/db/settings/platform_settings > /dev/null; then
-            echo "[G8ED-ENTRYPOINT] g8es is ready and platform_settings are initialized"
+        if curl -s -f --cacert "${SSL_DIR}/ca.crt" -H "X-Internal-Auth: ${INTERNAL_TOKEN}" https://localhost:9000/db/settings/platform_settings > /dev/null; then
+            echo "[G8ED-ENTRYPOINT] operator is ready and platform_settings are initialized"
             break
         fi
     fi
     RETRY_COUNT=$((RETRY_COUNT + 1))
-    echo "[G8ED-ENTRYPOINT] g8es not fully ready yet (attempt $RETRY_COUNT/$MAX_RETRIES), waiting 2s..."
+    echo "[G8ED-ENTRYPOINT] operator not fully ready yet (attempt $RETRY_COUNT/$MAX_RETRIES), waiting 2s..."
     sleep 2
 done
 
 if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
-    echo "[G8ED-ENTRYPOINT] ERROR: g8es health check failed or platform_settings missing after $MAX_RETRIES attempts"
+    echo "[G8ED-ENTRYPOINT] ERROR: operator health check failed or platform_settings missing after $MAX_RETRIES attempts"
     exit 1
 fi
 
-# Trust the g8es CA certificate for Node.js built-in fetch (undici)
+# Trust the operator CA certificate for Node.js built-in fetch (undici)
 export NODE_EXTRA_CA_CERTS="${SSL_DIR}/ca.crt"
 
 exec node server.js

@@ -36,7 +36,7 @@ vi.mock('../../../utils/logger.js', () => ({
 }));
 
 describe('Trust Endpoint Logic', () => {
-    const testHost = 'g8e.local';
+    const testHost = 'localhost';
     const testPort = 80;
     const securityHeaders = {
         'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self';",

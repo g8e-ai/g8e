@@ -14,17 +14,17 @@
 /**
  * User Service - g8ed Authoritative User Management
  *
- * g8ed owns all user/auth data. g8es document store is the source of truth.
- * g8es KV is a write-through read cache.
+ * g8ed owns all user/auth data. operator document store is the source of truth.
+ * operator KV is a write-through read cache.
  *
  * WRITE Flow (cache-aside):
- * 1. Write to g8es document store (authoritative)
- * 2. Update g8es KV cache
+ * 1. Write to operator document store (authoritative)
+ * 2. Update operator KV cache
  * 3. Return UserDocument to caller
  *
  * READ Flow (cache-aside):
- * 1. Check g8es KV cache (~1-5ms)
- * 2. On miss, read from g8es document store → populate KV cache
+ * 1. Check operator KV cache (~1-5ms)
+ * 2. On miss, read from operator document store → populate KV cache
  * 3. Return UserDocument
  *
  * All public methods return UserDocument instances.
@@ -71,7 +71,7 @@ class UserService {
     }
 
     /**
-     * Write-through: g8es document store first (source of truth), then KV cache.
+     * Write-through: operator document store first (source of truth), then KV cache.
      * Accepts only a UserDocument — single serialization point.
      * @param {UserDocument} userDoc
      */
@@ -84,7 +84,7 @@ class UserService {
 
     /**
      * Get user by ID. Returns UserDocument or null.
-     * KV-first, falls back to g8es document store with cache warm on miss.
+     * KV-first, falls back to operator document store with cache warm on miss.
      * @param {string} userId
      * @returns {Promise<UserDocument|null>}
      */
@@ -355,7 +355,7 @@ class UserService {
     }
 
     /**
-     * Delete user by ID. Removes from g8es document store and evicts KV cache.
+     * Delete user by ID. Removes from operator document store and evicts KV cache.
      * @param {string} userId
      * @returns {Promise<boolean>}
      */

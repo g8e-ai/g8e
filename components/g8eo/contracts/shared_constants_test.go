@@ -25,12 +25,12 @@ package contracts
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
+	"github.com/g8e-ai/g8e/components/g8eo/services/system"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -38,12 +38,7 @@ import (
 var sharedConstantsDir string
 
 func init() {
-	// shared/constants/ is two levels up from g8eoRoot: g8eo -> components -> repo root
-	dir, err := filepath.Abs(filepath.Join(g8eoRoot, "../../shared/constants"))
-	if err != nil {
-		panic(fmt.Sprintf("failed to resolve shared constants dir: %v", err))
-	}
-	sharedConstantsDir = dir
+	sharedConstantsDir = filepath.Join(system.ResolveProjectRoot(), "shared/constants")
 }
 
 func loadSharedFile(t *testing.T, filename string) []byte {

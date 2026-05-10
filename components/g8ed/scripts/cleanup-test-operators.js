@@ -29,10 +29,10 @@ async function cleanupTestOperators() {
         logger.info('[CLEANUP] Initializing services...');
         await initializeServices();
 
-        const { getCacheAsideService, getG8esKvClient, getOperatorService } = await import('../services/initialization.js');
+        const { getCacheAsideService, getOperatorKvClient, getOperatorService } = await import('../services/initialization.js');
         
         const cacheAside = getCacheAsideService();
-        const kvClient = getG8esKvClient();
+        const kvClient = getOperatorKvClient();
         const operatorService = getOperatorService();
 
         const TEST_OPERATORS_COLLECTION = `${Collections.OPERATORS}_test`;

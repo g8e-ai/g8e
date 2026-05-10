@@ -33,7 +33,7 @@ SCRIPT_DIR = Path(__file__).parent.absolute()
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from _lib import (
-    g8es_request,
+    operator_request,
     query_collection,
     print_banner,
     get_auditor_hmac_key,
@@ -209,8 +209,8 @@ def run_repair(args):
             "signature": new_sig
         }
         
-        # Send update to g8es
-        update_result = g8es_request(
+        # Send update to operator
+        update_result = operator_request(
             "PATCH",
             f"/api/internal/data/{COLLECTION_COMMITMENTS}/{c_id}",
             body=update_payload
@@ -230,7 +230,7 @@ def run_repair(args):
     return 0
 
 def run(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(prog="manage-g8es.py reputation")
+    parser = argparse.ArgumentParser(prog="manage-operator.py reputation")
     subparsers = parser.add_subparsers(dest="command", help="Reputation command")
 
     seed_parser = subparsers.add_parser("seed", help="Seed initial reputation state")

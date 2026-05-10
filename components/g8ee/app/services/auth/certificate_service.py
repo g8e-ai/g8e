@@ -38,9 +38,13 @@ logger = logging.getLogger(__name__)
 
 class CertificateService:
     """Certificate Service - Per-Operator mTLS Certificate Management.
-    
+
     Authority: g8ee.
     Signs operator client certificates using the platform CA.
+
+    TODO: Move CA private key operations behind a single host-side authority.
+    App services should call a signing endpoint or consume pre-issued certificates
+    rather than reading ca/ca.key directly. See operator-host-transition-finalization.md.
     """
 
     def __init__(self, ssl_dir: str = DEFAULT_SSL_DIR, data_service: CertificateDataService | None = None):
@@ -52,7 +56,7 @@ class CertificateService:
         self._revoked_serials: set[str] = set()
 
     async def initialize(self) -> None:
-        """Load CA certificate and key from disk and load CRL from DB."""
+        """Load CA certificate from disk and load CRL from DB."""
         if self.initialized:
             return
 
@@ -68,40 +72,32 @@ class CertificateService:
             except Exception as e:
                 logger.error("[CERT-SERVICE] Failed to load revocations from persistence: %s", e)
 
-        # 2. Load CA
+        # 2. Load CA Certificate for local reference
+        # Authority: operator (Operator --listen mode)
+        # We no longer read ca.key directly. Key operations are behind the /ssl/sign-certificate API.
         paths = [
-            (os.path.join(self.ssl_dir, "ca.crt"), os.path.join(self.ssl_dir, "ca.key")),
-            (os.path.join(self.ssl_dir, "ca", "ca.crt"), os.path.join(self.ssl_dir, "ca", "ca.key"))
+            os.path.join(self.ssl_dir, "ca.crt"),
+            os.path.join(self.ssl_dir, "ca", "ca.crt")
         ]
 
         found_cert_path = None
-        found_key_path = None
-
-        for cert_path, key_path in paths:
-            if os.path.exists(cert_path) and os.path.exists(key_path):
+        for cert_path in paths:
+            if os.path.exists(cert_path):
                 found_cert_path = cert_path
-                found_key_path = key_path
                 break
 
-        if found_cert_path and found_key_path:
+        if found_cert_path:
             try:
                 with open(found_cert_path, "rb") as f:
                     self.ca_cert = x509.load_pem_x509_certificate(f.read())
-                with open(found_key_path, "rb") as f:
-                    self.ca_key = serialization.load_pem_private_key(f.read(), password=None)
-
-                if not isinstance(self.ca_key, ec.EllipticCurvePrivateKey):
-                    raise ValueError("CA key is not an EC key")
-
                 logger.info("[CERT-SERVICE] CA certificate loaded from %s", found_cert_path)
                 self.initialized = True
             except Exception as e:
-                logger.error("[CERT-SERVICE] Failed to load CA certificate or key: %s", e)
-                raise RuntimeError(f"Failed to load CA: {e!s}") from e
+                logger.error("[CERT-SERVICE] Failed to load CA certificate: %s", e)
+                raise RuntimeError(f"Failed to load CA cert: {e!s}") from e
         else:
-            logger.error("[CERT-SERVICE] CA certificate or key not found in %s", self.ssl_dir)
-            # In a production environment, this should probably be a hard error.
-            # For now we log and let it fail on first use if not found.
+            logger.error("[CERT-SERVICE] CA certificate not found in %s", self.ssl_dir)
+            # We let it proceed but some operations might fail if they expect a CA cert local copy
 
     async def generate_operator_certificate(
         self,
@@ -109,77 +105,61 @@ class CertificateService:
         user_id: str,
         organization_id: str
     ) -> dict[str, str]:
-        """Generate and sign a new per-operator client certificate."""
+        """Request a new per-operator client certificate from operator signing API."""
         if not self.initialized:
             await self.initialize()
 
-        if not self.ca_cert or not self.ca_key:
-            raise RuntimeError("CertificateService not initialized with CA")
+        logger.info("[CERT-SERVICE] Requesting certificate for operator %s via operator", operator_id)
 
-        logger.info("[CERT-SERVICE] Generating certificate for operator %s", operator_id)
-
-        # Generate private key
+        # Generate local private key
         private_key = ec.generate_private_key(ec.SECP384R1())
         public_key = private_key.public_key()
-
-        # Build certificate
-        builder = x509.CertificateBuilder()
-        builder = builder.subject_name(x509.Name([
-            x509.NameAttribute(NameOID.COMMON_NAME, operator_id),
-            x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, user_id),
-            x509.NameAttribute(NameOID.ORGANIZATION_NAME, CERT_SUBJECT_ORG),
-            x509.NameAttribute(NameOID.COUNTRY_NAME, CERT_SUBJECT_COUNTRY),
-        ]))
-        builder = builder.issuer_name(self.ca_cert.subject)
-        builder = builder.not_valid_before(datetime.datetime.now(datetime.UTC))
-        builder = builder.not_valid_after(
-            datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=CLIENT_CERT_VALIDITY_DAYS)
-        )
-        builder = builder.serial_number(x509.random_serial_number())
-        builder = builder.public_key(public_key)
-
-        # Extensions
-        builder = builder.add_extension(
-            x509.BasicConstraints(ca=False, path_length=None), critical=True
-        )
-        builder = builder.add_extension(
-            x509.KeyUsage(
-                digital_signature=True,
-                content_commitment=False,
-                key_encipherment=True,
-                data_encipherment=False,
-                key_agreement=False,
-                key_cert_sign=False,
-                crl_sign=False,
-                encipher_only=False,
-                decipher_only=False,
-            ),
-            critical=True,
-        )
-        builder = builder.add_extension(
-            x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH]),
-            critical=False,
-        )
-
-        # Sign
-        certificate = builder.sign(
-            private_key=self.ca_key,
-            algorithm=hashes.SHA384(),
-        )
-
-        # Serialize
-        cert_pem = certificate.public_bytes(serialization.Encoding.PEM).decode("utf-8")
-        key_pem = private_key.private_bytes(
+        public_key_pem = public_key.public_bytes(
             encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption(),
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
         ).decode("utf-8")
 
-        return {
-            "cert": cert_pem,
-            "key": key_pem,
-            "serial": hex(certificate.serial_number)[2:].upper(),
+        # Authority: g8eo (/ssl/sign-certificate)
+        # We use the DBClient's underlying session to reach the Operator's listen API
+        from app.db.db_service import DBService
+        from app.services.service_factory import AllServices
+
+        # This is a bit of a shortcut, but service_factory provides access to everything.
+        # In a cleaner world we'd inject a OperatorClient, but DBClient already has the connection info.
+        # We'll use the _request_json internal of db_client for this transition phase.
+        
+        db_client = self.data_service.cache.db.client # type: ignore
+        
+        payload = {
+            "public_key_pem": public_key_pem,
+            "common_name": operator_id,
+            "organizational_unit": user_id,
+            "validity_days": CLIENT_CERT_VALIDITY_DAYS
         }
+
+        try:
+            response = await db_client._request_json("POST", "/ssl/sign-certificate", json=payload)
+            if not response or not response.get("success"):
+                error_msg = response.get("error") if response else "Unknown error"
+                raise RuntimeError(f"Failed to sign certificate via operator: {error_msg}")
+
+            cert_pem = str(response.get("certificate_pem"))
+            serial = str(response.get("serial"))
+
+            key_pem = private_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption(),
+            ).decode("utf-8")
+
+            return {
+                "cert": cert_pem,
+                "key": key_pem,
+                "serial": serial,
+            }
+        except Exception as e:
+            logger.error("[CERT-SERVICE] Certificate signing request failed: %s", e)
+            raise RuntimeError(f"Certificate signing failed: {e!s}") from e
 
     async def revoke_certificate(self, serial: str, reason: str, operator_id: str | None = None) -> bool:
         """Revoke a certificate by serial number."""

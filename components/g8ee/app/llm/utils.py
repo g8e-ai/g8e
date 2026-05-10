@@ -90,7 +90,7 @@ def is_internal_endpoint(url: str | None) -> bool:
     - Localhost/loopback
     - RFC 1918 private IP ranges
     - Known internal hostnames (.internal, .local)
-    - g8e platform services (g8ed, g8eo, g8es)
+    - g8e platform services (g8ed, g8eo, operator)
     """
     if not url:
         return False
@@ -108,7 +108,7 @@ def is_internal_endpoint(url: str | None) -> bool:
             return True
 
         # g8e platform services (Docker Compose service names)
-        if hostname_lower in ("g8ed", "g8eo", "g8es"):
+        if hostname_lower in ("g8ed", "g8eo", "operator"):
             return True
 
         # Internal TLDs
@@ -131,7 +131,7 @@ def is_internal_endpoint(url: str | None) -> bool:
         if not url:
             return False
         lower_url = url.lower()
-        return any(x in lower_url for x in ("localhost", "127.0.0.1", ".internal", ".local", "g8ed", "g8eo", "g8es"))
+        return any(x in lower_url for x in ("localhost", "127.0.0.1", ".internal", ".local", "g8ed", "g8eo", "operator"))
 
 
 def is_ollama_endpoint(url: str | None) -> bool:
