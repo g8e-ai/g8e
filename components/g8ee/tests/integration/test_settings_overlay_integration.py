@@ -79,8 +79,8 @@ class TestG8eeSettingsOverlayIntegration:
                     "g8e_api_key": None
                 },
                 "component_urls": {
-                    "g8ee_url": "https://g8ee",
-                    "g8ed_url": "https://g8ed"
+                    "g8ee_url": "https://localhost:8443",
+                    "g8ed_url": "https://localhost:443"
                 },
                 "docker_gid": "988",
                 "session_ttl": 28800,
@@ -162,8 +162,8 @@ class TestG8eeSettingsOverlayIntegration:
                     "g8e_api_key": None
                 },
                 "component_urls": {
-                    "g8ee_url": "https://g8ee",
-                    "g8ed_url": "https://g8ed"
+                    "g8ee_url": "https://localhost:8443",
+                    "g8ed_url": "https://localhost:443"
                 },
                 "docker_gid": "988",
                 "session_ttl": 28800,
@@ -321,8 +321,8 @@ class TestG8eeSettingsOverlayIntegration:
                     "g8e_api_key": None
                 },
                 "component_urls": {
-                    "g8ee_url": "https://g8ee",
-                    "g8ed_url": "https://g8ed"
+                    "g8ee_url": "https://localhost:8443",
+                    "g8ed_url": "https://localhost:443"
                 },
                 "docker_gid": "988",
                 "session_ttl": 28800,

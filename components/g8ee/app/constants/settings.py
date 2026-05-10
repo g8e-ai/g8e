@@ -599,9 +599,9 @@ G8EE_APP_CONTACT_EMAIL               = "help@g8e.ai"
 G8EE_APP_LICENSE_NAME                = "Proprietary"
 G8EE_APP_LICENSE_URL                 = "https://github.com/g8e-ai/g8e/blob/main/LICENSE"
 
-CORS_ALLOWED_ORIGIN_G8EE             = "https://g8ee"
-CORS_ALLOWED_ORIGIN_G8ED_HTTP       = "https://g8ed"
-CORS_ALLOWED_ORIGIN_G8ED_HTTPS      = "https://g8ed"
+CORS_ALLOWED_ORIGIN_G8EE             = "https://localhost:8443"
+CORS_ALLOWED_ORIGIN_G8ED_HTTP       = "http://localhost:80"
+CORS_ALLOWED_ORIGIN_G8ED_HTTPS      = "https://localhost:443"
 CORS_ALLOWED_ORIGIN_LOCALHOST       = "https://localhost"
 CORS_ALLOWED_ORIGIN_G8E             = "https://g8e.local"
 

@@ -76,8 +76,8 @@ class AuthSettings(G8eBaseModel):
 
 class ComponentURLsSettings(G8eBaseModel):
     """Internal and external component URL configuration."""
-    g8ee_url: str = Field("https://g8ee")
-    g8ed_url: str = Field("https://g8ed")
+    g8ee_url: str = Field("https://localhost:8443")
+    g8ed_url: str = Field("https://localhost:443")
 
 class CommandValidationSettings(G8eBaseModel):
     """Operator command safety and validation configuration.
