@@ -90,7 +90,7 @@ function _serializeCredential(credential) {
  * AuthManager - WebSession-Centric Authentication
  *
  * Architecture:
- * - Single source of truth: `session` (WebSessionModel from g8es KV via backend)
+ * - Single source of truth: `session` (WebSessionModel from operator KV via backend)
  * - All auth state derived from session object
  * - Passkey (FIDO2/WebAuthn) authentication via /api/auth/passkey/*
  * - HttpOnly cookie sessions managed by server

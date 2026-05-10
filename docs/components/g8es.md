@@ -107,7 +107,7 @@ g8e.operator --listen --wss-listen-port 9001 --http-listen-port 9000 -l debug
 
 ## Internal Authentication
 
-g8es requires an internal authentication token for all API access except the health check and initial bootstrap paths.
+operator requires an internal authentication token for all API access except the health check and initial bootstrap paths.
 
 **Why internal auth?** The platform components (g8ed, g8ee, operators) run in a trusted network but still require authentication to prevent accidental misconfiguration and provide defense in depth. The token is a shared secret passed via the `X-Internal-Auth` header or WebSocket `token` query parameter.
 
@@ -151,19 +151,19 @@ Pass `--tls-cert` and `--tls-key` to supply an externally-managed certificate fo
 ## Docker Compose
 
 ```yaml
-g8es:
+operator:
   build:
     context: .
-    dockerfile: ./components/g8es/Dockerfile
-  container_name: g8es
+    dockerfile: ./components/operator/Dockerfile
+  container_name: operator
   restart: unless-stopped
   volumes:
-    - g8es-data:/data
-    - g8es-ssl:/ssl
+    - operator-data:/data
+    - operator-ssl:/ssl
   networks:
     g8e-network:
       aliases:
-        - g8es
+        - operator
   healthcheck:
     test: ["CMD", "curl", "-f", "--cacert", "/ssl/ca.crt", "https://localhost:9000/health"]
     interval: 10s
@@ -207,7 +207,7 @@ POST   /db/{collection}/_query     → Query documents
 
 **Why collection-based?** This provides a flexible schema where each collection represents a domain entity (users, sessions, operators, cases). The primary key is `(collection, id)`, allowing efficient queries within a collection while keeping all data in a single table.
 
-System fields (`id`, `created_at`, `updated_at`) are managed by g8es — clients cannot override them. The `created_at` timestamp is set once on insert and never changes; `updated_at` refreshes on every write.
+System fields (`id`, `created_at`, `updated_at`) are managed by operator — clients cannot override them. The `created_at` timestamp is set once on insert and never changes; `updated_at` refreshes on every write.
 
 Query body:
 ```json
@@ -241,7 +241,7 @@ POST   /kv/_delete_pattern    → Delete by pattern   {"pattern": "cache:user:*"
 
 ### SSE Event Buffer
 
-g8es provides a per-session event ring buffer table (`sse_events`). **Note:** This is currently a legacy component. In the current architecture, `g8ee` pushes events to `g8ed` via HTTP, and `g8ed` delivers them to local SSE connections.
+operator provides a per-session event ring buffer table (`sse_events`). **Note:** This is currently a legacy component. In the current architecture, `g8ee` pushes events to `g8ed` via HTTP, and `g8ed` delivers them to local SSE connections.
 
 ```
 DELETE /db/_sse_events         → Wipe all SSE events
@@ -298,11 +298,11 @@ g8ed uses purpose-built clients in `components/g8ed/services/clients/` and `comp
 
 | Client | File | Transport | Scope |
 |--------|------|-----------|-------|
-| `G8esDocumentClient` | `g8es_document_client.js` | HTTP | Document store CRUD (`/db/...`) |
-| `KVCacheClient` | `g8es_kv_cache_client.js` | HTTP | KV store operations (`/kv/...`) |
-| `G8esPubSubClient` | `g8es_pubsub_client.js` | WebSocket | Pub/sub messaging (`/ws/pubsub`) |
-| `G8esBlobClient` | `g8es_blob_client.js` | HTTP | Blob store operations (`/blob/...`) |
-| `G8esHttpClient` | `g8es_http_client.js` | HTTP | Base client for HTTP operations |
+| `OperatorDocumentClient` | `operator_document_client.js` | HTTP | Document store CRUD (`/db/...`) |
+| `KVCacheClient` | `operator_kv_cache_client.js` | HTTP | KV store operations (`/kv/...`) |
+| `OperatorPubSubClient` | `operator_pubsub_client.js` | WebSocket | Pub/sub messaging (`/ws/pubsub`) |
+| `OperatorBlobClient` | `operator_blob_client.js` | HTTP | Blob store operations (`/blob/...`) |
+| `OperatorHttpClient` | `operator_http_client.js` | HTTP | Base client for HTTP operations |
 | `InternalHttpClient` | `internal_http_client.js` | HTTP | General internal service communication |
 
 **Atomicity Warning:** Compound operations (e.g., `increment`, `arrayUnion`) are implemented as read-modify-write cycles over HTTP and are **not atomic**.
@@ -331,7 +331,7 @@ Single database at `.g8e/data/g8e.db` with the following tables:
 
 ## Management Script
 
-`scripts/data/manage-g8es.py` provides read-only inspection of the g8es stores via the `store` subcommand.
+`scripts/data/manage-operator.py` provides read-only inspection of the operator stores via the `store` subcommand.
 
 ## Air-Gap Deployment
 

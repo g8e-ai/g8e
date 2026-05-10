@@ -45,7 +45,7 @@ Async Safety: Avoid state-modifying finally blocks in async generators.
 
 Pydantic Enforcement: Domain objects must extend G8eBaseModel (Pydantic). Pydantic enforces type checking, default handling, and extra-field rejection at construction time. Use model.model_dump(mode="json") exclusively for wire boundaries.
 
-3. g8eo / g8es (Go)
+3. g8eo / operator (Go)
 LFAA Payload Stamping: All Local Function Access & Audit (LFAA) result payloads published by g8eo must include an execution_id field. The payload struct must implement the models.ExecutionIDSetter interface.
 
 Concurrency: Goroutines must have explicit cancellation contexts. Do not leave dangling goroutines. Channels must have clear ownership for closure.

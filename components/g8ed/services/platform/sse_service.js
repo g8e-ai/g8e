@@ -177,7 +177,7 @@ class SSEService {
 
     /**
      * Deliver event to local SSE connection.
-     * Events come from g8ee via HTTP, NOT g8es KV pub/sub.
+     * Events come from g8ee via HTTP, NOT operator KV pub/sub.
      * Fire-and-forget: returns true even when no connection is present.
      *
      * @param {string} webSessionId - WebSession ID

@@ -40,7 +40,7 @@ class MetricsSnapshot extends G8eBaseModel {
 class RealTimeMetrics extends G8eBaseModel {
     static fields = {
         timestamp: { type: F.date, default: () => now() },
-        g8es:     { type: F.any,  default: null },
+        operator:     { type: F.any,  default: null },
         cache:     { type: F.any,  default: null },
     };
 }
@@ -276,7 +276,7 @@ class ConsoleMetricsService {
 
     async getSystemHealth() {
         const health = {
-            g8es: { status: SystemHealth.UNKNOWN, latencyMs: null },
+            operator: { status: SystemHealth.UNKNOWN, latencyMs: null },
             db: { status: SystemHealth.UNKNOWN, latencyMs: null },
             overall: SystemHealth.UNKNOWN
         };
@@ -284,12 +284,12 @@ class ConsoleMetricsService {
         try {
             const kvStart = Date.now();
             await this._cache_aside.kvPing();
-            health.g8es = {
+            health.operator = {
                 status: SystemHealth.HEALTHY,
                 latencyMs: Date.now() - kvStart
             };
         } catch (error) {
-            health.g8es = { status: SystemHealth.UNHEALTHY, error: error.message };
+            health.operator = { status: SystemHealth.UNHEALTHY, error: error.message };
         }
 
         try {
@@ -303,7 +303,7 @@ class ConsoleMetricsService {
             health.db = { status: SystemHealth.UNHEALTHY, error: error.message };
         }
 
-        health.overall = (health.g8es.status === SystemHealth.HEALTHY && health.db.status === SystemHealth.HEALTHY)
+        health.overall = (health.operator.status === SystemHealth.HEALTHY && health.db.status === SystemHealth.HEALTHY)
             ? SystemHealth.HEALTHY
             : SystemHealth.DEGRADED;
 
@@ -380,7 +380,7 @@ class ConsoleMetricsService {
 
             return new RealTimeMetrics({
                 timestamp: now(),
-                g8es: {
+                operator: {
                     memoryUsed: formatBytes(mem.heapUsed),
                     memoryPeak: formatBytes(mem.heapTotal),
                 },
@@ -414,17 +414,17 @@ class ConsoleMetricsService {
         try {
             const kvStart = Date.now();
             await this._cache_aside.kvPing();
-            components.g8es_kv = { name: 'g8es KV', status: SystemHealth.HEALTHY, latencyMs: Date.now() - kvStart };
+            components.operator_kv = { name: 'operator KV', status: SystemHealth.HEALTHY, latencyMs: Date.now() - kvStart };
         } catch (error) {
-            components.g8es_kv = { name: 'g8es KV', status: SystemHealth.UNHEALTHY, latencyMs: null, error: error.message };
+            components.operator_kv = { name: 'operator KV', status: SystemHealth.UNHEALTHY, latencyMs: null, error: error.message };
         }
 
         try {
             const dbStart = Date.now();
             await this._cache_aside.getDocument(Collections.SETTINGS, 'platform_settings');
-            components.g8es_db = { name: 'g8es DB', status: SystemHealth.HEALTHY, latencyMs: Date.now() - dbStart };
+            components.operator_db = { name: 'operator DB', status: SystemHealth.HEALTHY, latencyMs: Date.now() - dbStart };
         } catch (error) {
-            components.g8es_db = { name: 'g8es DB', status: SystemHealth.UNHEALTHY, latencyMs: null, error: error.message };
+            components.operator_db = { name: 'operator DB', status: SystemHealth.UNHEALTHY, latencyMs: null, error: error.message };
         }
 
         try {

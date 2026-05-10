@@ -214,7 +214,7 @@ describe('Console Page [FRONTEND - jsdom]', () => {
                     message: 'Component health fetched successfully',
                     overall: 'healthy',
                     timestamp: '2026-01-01T00:00:00.000Z',
-                    components: { g8es: { status: 'healthy' } }
+                    components: { operator: { status: 'healthy' } }
                 })
             });
 
@@ -223,7 +223,7 @@ describe('Console Page [FRONTEND - jsdom]', () => {
 
             expect(result.data.overall).toBe('healthy');
             expect(result.data.timestamp).toBe('2026-01-01T00:00:00.000Z');
-            expect(result.data.components).toEqual({ g8es: { status: 'healthy' } });
+            expect(result.data.components).toEqual({ operator: { status: 'healthy' } });
         });
 
         it('should restructure login audit response correctly', async () => {

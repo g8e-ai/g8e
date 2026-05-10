@@ -151,7 +151,7 @@ _load_platform_secrets() {
     fi
 }
 
-_verify_g8es() {
+_verify_operator() {
     local ssl_dir="${G8E_SSL_DIR:-$PROJECT_ROOT/.g8e/ssl}"
     local ca_cert="$ssl_dir/ca.crt"
     [[ ! -f "$ca_cert" ]] && ca_cert="$ssl_dir/ca/ca.crt"
@@ -159,10 +159,10 @@ _verify_g8es() {
         log_err "Platform CA cert not found at $ca_cert"
         exit 1
     fi
-    local g8es_url="${G8E_INTERNAL_HTTP_URL:-https://localhost:9000}"
+    local operator_url="${G8E_INTERNAL_HTTP_URL:-https://localhost:9000}"
     local curl_args=("--cacert" "$ca_cert")
-    if ! curl -sf "${curl_args[@]}" "$g8es_url/health" 2>/dev/null | grep -q '"status":"ok"'; then
-        log_err "Operator listen mode (g8es) not accessible at $g8es_url/health"
+    if ! curl -sf "${curl_args[@]}" "$operator_url/health" 2>/dev/null | grep -q '"status":"ok"'; then
+        log_err "Operator listen mode (operator) not accessible at $operator_url/health"
         exit 1
     fi
     log_ok "Operator listen mode connected"
@@ -211,7 +211,7 @@ run_g8ee() {
     log_header "Running g8ee tests (host)"
     local venv_dir="$PROJECT_ROOT/components/g8ee/.venv"
     if [[ ! -d "$venv_dir" ]]; then
-        log_err "g8ee virtualenv not found at $venv_dir. Run ./g8e platform setup first."
+        log_err "g8ee virtualenv not found at $venv_dir. Run ./g8e platform start first."
         exit 1
     fi
     
@@ -246,7 +246,7 @@ run_e2e() {
     log_header "Running E2E operator lifecycle tests (host)"
     local venv_dir="$PROJECT_ROOT/components/g8ee/.venv"
     if [[ ! -d "$venv_dir" ]]; then
-        log_err "g8ee virtualenv not found at $venv_dir. Run ./g8e platform setup first."
+        log_err "g8ee virtualenv not found at $venv_dir. Run ./g8e platform start first."
         exit 1
     fi
     export PYTHONPATH="$PROJECT_ROOT/components/g8ee:$PROJECT_ROOT/shared"
@@ -258,7 +258,7 @@ run_e2e() {
 run_g8ed() {
     log_header "Running g8ed tests (host)"
     if [[ ! -d "$PROJECT_ROOT/components/g8ed/node_modules" ]]; then
-        log_err "g8ed node_modules not found. Run ./g8e platform setup first."
+        log_err "g8ed node_modules not found. Run ./g8e platform start first."
         exit 1
     fi
     cd "$PROJECT_ROOT/components/g8ed"
@@ -311,7 +311,7 @@ run_g8eo() {
 export NODE_ENV="test"
 _install_ca_cert
 _load_platform_secrets
-_verify_g8es
+_verify_operator
 
 log_header "run_tests.sh ${COMPONENT} $*"
 

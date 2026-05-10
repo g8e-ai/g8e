@@ -73,14 +73,9 @@ When no operator is connected:
 
 ## Platform Lifecycle
 
-### Initial Setup
-```bash
-./g8e platform setup    # Bootstrap and build all containers
-./g8e platform start    # Bring up the managed services
-```
-
 ### Daily Operations
 ```bash
+./g8e platform start    # Start the managed services
 ./g8e platform status   # Check service health
 ./g8e platform logs     # Stream aggregated logs
 ./g8e platform settings # View or update configuration
@@ -113,8 +108,6 @@ Manage the local platform lifecycle.
 - `stop`: Stop all platform components
 - `restart`: Restart all platform components
 - `status`: Show component health and versions
-- `setup`: First-time platform setup
-- `rebuild`: Rebuild components
 - `reset`: Reset application data (preserves SSL)
 - `clean`: Remove all g8e processes and data
 - `logs`: Stream component logs

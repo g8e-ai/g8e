@@ -10,7 +10,7 @@ Alternatively, if an API key is known out of band, it can be provided directly v
 - The `G8E_OPERATOR_API_KEY` environment variable
 - Interactive prompt `promptForAPIKey()` if none of the above are provided.
 
-If we consider `g8eo` running in `--listen` mode (acting as `g8es`), it manages platform secrets itself.
+If we consider `g8eo` running in `--listen` mode (acting as `operator`), it manages platform secrets itself.
 In `/home/bob/g8e/components/g8eo/services/listen/secret_manager.go`, `InitPlatformSettings` handles generating the:
 - `internal_auth_token`
 - `session_encryption_key`
@@ -21,4 +21,4 @@ If these secrets are not already present in the local `.g8e/data/ssl` directory 
 2.  Into local volume files using `writeSecretFile()`: `internal_auth_token`, `session_encryption_key`, and `auditor_hmac_key`.
 3.  A `bootstrap_digest.json` manifest is written.
 
-These files are then accessed by other platform components (like `g8ed` and `g8ee`) to securely authenticate with `g8es`. If docker is eliminated, they can just read the generated files directly from the configured `--ssl-dir` directory on the host machine.
+These files are then accessed by other platform components (like `g8ed` and `g8ee`) to securely authenticate with `operator`. If docker is eliminated, they can just read the generated files directly from the configured `--ssl-dir` directory on the host machine.

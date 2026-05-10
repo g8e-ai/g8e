@@ -15,5 +15,5 @@
 g8ee Storage
 
 Attachment processing utilities for G8EE.
-Attachment data is stored in and retrieved from g8es KV — no local filesystem storage.
+Attachment data is stored in and retrieved from operator KV — no local filesystem storage.
 """

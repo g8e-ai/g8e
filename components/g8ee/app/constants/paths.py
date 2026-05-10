@@ -28,8 +28,8 @@ def _load_paths() -> dict:
     except FileNotFoundError:
         # Emergency fallbacks for when shared volume isn't ready
         # On host, default to .g8e/ssl (Operator listen mode SSL directory)
-        # In container, default to /g8es for backwards compatibility
-        default_ssl_dir = os.environ.get("G8E_RUNTIME_DIR", "/home/bob/g8e/.g8e") + "/ssl" if _SHARED_DIR != "/app/shared" else "/g8es"
+        # In container, default to /operator for backwards compatibility
+        default_ssl_dir = os.environ.get("G8E_RUNTIME_DIR", "/home/bob/g8e/.g8e") + "/ssl" if _SHARED_DIR != "/app/shared" else "/operator"
         paths = {
             "infra": {
                 "db_path": "/data/g8e.db",

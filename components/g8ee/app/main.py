@@ -18,10 +18,10 @@ LLM provider abstraction providing Zero-Trust AI for infrastructure operations.
 
 Bootstrap responsibilities (this file):
     1. SettingsService bootstrap + local settings
-    2. Raw g8es client connections (5 core clients: DB, KV, PubSub, Blob, HTTP)
+    2. Raw operator client connections (5 core clients: DB, KV, PubSub, Blob, HTTP)
     3. Handler services (sole users of each client): DBService, KVService, BlobService
     4. CacheAsideService (orchestrator over DB + KV handler services)
-    5. Platform settings load from g8es
+    5. Platform settings load from operator
     6. Delegate ALL domain service construction to ServiceFactory
     7. Service lifecycle start / stop
     8. FastAPI app creation, CORS, router registration
@@ -95,7 +95,7 @@ logger = logging.getLogger(__name__)
 
 
 async def _connect_clients(settings):
-    """Create and connect the 5 core g8es transport clients.
+    """Create and connect the 5 core operator transport clients.
 
     Returns (db_client, kv_cache_client, pubsub_client, blob_client).
     HTTP client is created by ServiceFactory (InternalHttpClient).
@@ -154,14 +154,14 @@ async def lifespan(app: FastAPI):
         setup_logging(settings, component_name="g8ee")
         logger.info("Bootstrap settings loaded")
 
-        # -- Phase 1: Core g8es clients (db, kv, pubsub, blob) --
+        # -- Phase 1: Core operator clients (db, kv, pubsub, blob) --
         (
             state.db_client,
             state.kv_cache_client,
             state.pubsub_client,
             state.blob_client,
         ) = await _connect_clients(settings)
-        logger.info("g8es transport clients connected (db, kv, pubsub, blob)")
+        logger.info("operator transport clients connected (db, kv, pubsub, blob)")
 
         # -- Phase 2: Handler services (sole users of each client) --
         db_service = DBService(state.db_client)
@@ -177,7 +177,7 @@ async def lifespan(app: FastAPI):
         )
         settings_service._cache_aside = cache_aside_service
 
-        # -- Phase 4: Platform settings from g8es --
+        # -- Phase 4: Platform settings from operator --
         settings = await settings_service.get_platform_settings()
         state.settings = settings
         set_settings(settings)
@@ -226,9 +226,9 @@ async def lifespan(app: FastAPI):
         if db_service is not None:
             try:
                 await db_service.close()
-                logger.info("g8es document service closed")
+                logger.info("operator document service closed")
             except Exception as exc:
-                logger.error("Error closing g8es document service: %s", exc)
+                logger.error("Error closing operator document service: %s", exc)
 
         logger.info("g8ee shutdown complete")
 

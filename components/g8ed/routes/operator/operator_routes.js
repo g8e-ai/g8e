@@ -117,7 +117,7 @@ export function createOperatorRouter({ services, authorizationMiddleware }) {
                 key_type:        keyType,
             });
 
-            logger.info('[OPERATOR-DOWNLOAD] Fetching binary from g8es...', { os, arch, platform });
+            logger.info('[OPERATOR-DOWNLOAD] Fetching binary from operator...', { os, arch, platform });
             const binary = await operatorDownloadService.getBinary(os, arch);
 
             res.setHeader('Content-Type', ContentType.OCTET_STREAM);

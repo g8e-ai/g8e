@@ -32,7 +32,7 @@ func (rr *PubSubResultsService) resultsChannel(operatorSessionID string) string 
 	return constants.ResultsChannel(rr.config.OperatorID, operatorSessionID)
 }
 
-// PubSubResultsService handles publishing results back to AI Agent Services via g8es pub/sub
+// PubSubResultsService handles publishing results back to AI Agent Services via operator pub/sub
 type PubSubResultsService struct {
 	client     PubSubClient
 	config     *config.Config
@@ -40,7 +40,7 @@ type PubSubResultsService struct {
 	localStore *storage.LocalStoreService
 }
 
-// NewPubSubResultsService creates a new g8es pub/sub results service
+// NewPubSubResultsService creates a new operator pub/sub results service
 func NewPubSubResultsService(cfg *config.Config, logger *slog.Logger, client PubSubClient, localStore *storage.LocalStoreService) (*PubSubResultsService, error) {
 	return &PubSubResultsService{
 		client:     client,
@@ -84,7 +84,7 @@ func (rr *PubSubResultsService) publishResultEnvelope(
 	return rr.publish(ctx, env)
 }
 
-// PublishExecutionResult publishes command execution result via g8es pub/sub
+// PublishExecutionResult publishes command execution result via operator pub/sub
 // Stdout/stderr have already been sentinel.Sentinel-scrubbed by pubsub_commands.go before this is called.
 func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error {
 	// If it's already a proto.Message, we just publish it.
@@ -120,7 +120,7 @@ func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, resu
 	return nil
 }
 
-// PublishCancellationResult publishes command cancellation result via g8es pub/sub
+// PublishCancellationResult publishes command cancellation result via operator pub/sub
 func (rr *PubSubResultsService) PublishCancellationResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error {
 	eventType := constants.Event.Operator.Command.Cancelled
 
@@ -133,7 +133,7 @@ func (rr *PubSubResultsService) PublishCancellationResult(ctx context.Context, r
 	return nil
 }
 
-// PublishFileEditResult publishes file edit result via g8es pub/sub.
+// PublishFileEditResult publishes file edit result via operator pub/sub.
 func (rr *PubSubResultsService) PublishFileEditResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error {
 	eventType := constants.Event.Operator.FileEdit.Completed
 
@@ -154,7 +154,7 @@ func (rr *PubSubResultsService) PublishFileEditResult(ctx context.Context, resul
 	return nil
 }
 
-// PublishFsListResult publishes file system list result via g8es pub/sub.
+// PublishFsListResult publishes file system list result via operator pub/sub.
 func (rr *PubSubResultsService) PublishFsListResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error {
 	eventType := constants.Event.Operator.FsList.Completed
 
@@ -175,7 +175,7 @@ func (rr *PubSubResultsService) PublishFsListResult(ctx context.Context, result 
 	return nil
 }
 
-// PublishFsGrepResult publishes file system grep result via g8es pub/sub.
+// PublishFsGrepResult publishes file system grep result via operator pub/sub.
 func (rr *PubSubResultsService) PublishFsGrepResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error {
 	eventType := constants.Event.Operator.FsGrep.Completed
 
@@ -264,10 +264,10 @@ func (rr *PubSubResultsService) PublishExecutionStatus(ctx context.Context, stat
 	return nil
 }
 
-// PublishHeartbeat publishes heartbeat to dedicated g8es pub/sub heartbeat channel.
+// PublishHeartbeat publishes heartbeat to dedicated operator pub/sub heartbeat channel.
 // It wraps the heartbeat in a UniversalEnvelope for consistency with other results.
 func (rr *PubSubResultsService) PublishHeartbeat(ctx context.Context, heartbeat proto.Message) error {
-	rr.logger.Info("[HEARTBEAT] Publishing heartbeat to g8es pub/sub (Protocol-First)")
+	rr.logger.Info("[HEARTBEAT] Publishing heartbeat to operator pub/sub (Protocol-First)")
 
 	// Build the envelope
 	env, err := BuildUniversalEnvelope(rr.config, constants.Event.Operator.Heartbeat, heartbeat, "")
@@ -296,7 +296,7 @@ func (rr *PubSubResultsService) PublishHeartbeat(ctx context.Context, heartbeat 
 	return nil
 }
 
-// PublishResult publishes a pre-built UniversalEnvelope to the g8es pub/sub results channel.
+// PublishResult publishes a pre-built UniversalEnvelope to the operator pub/sub results channel.
 func (rr *PubSubResultsService) PublishResult(ctx context.Context, env *commonv1.UniversalEnvelope) error {
 	if env.OperatorSessionId == "" {
 		env.OperatorSessionId = rr.config.OperatorSessionId

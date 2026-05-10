@@ -12,21 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-g8es Document Store & KV Management
+operator Document Store & KV Management
 
-Queries and manages the g8es document store and KV store via the HTTP API.
-Runs inside g8ep and communicates with g8es directly.
+Queries and manages the operator document store and KV store via the HTTP API.
+Runs inside g8ep and communicates with operator directly.
 
 Usage:
-    python manage-g8es.py store stats
-    python manage-g8es.py store network
-    python manage-g8es.py store find --collection operators --field status --value active
-    python manage-g8es.py store kv list [--pattern "g8e:session:*"]
-    python manage-g8es.py store kv get <key>
-    python manage-g8es.py store wipe [--dry-run]
-    python manage-g8es.py store get-setting <key>
-    python manage-g8es.py store <collection> list [--limit N] [--fields f1 f2]
-    python manage-g8es.py store <collection> get <id>
+    python manage-operator.py store stats
+    python manage-operator.py store network
+    python manage-operator.py store find --collection operators --field status --value active
+    python manage-operator.py store kv list [--pattern "g8e:session:*"]
+    python manage-operator.py store kv get <key>
+    python manage-operator.py store wipe [--dry-run]
+    python manage-operator.py store get-setting <key>
+    python manage-operator.py store <collection> list [--limit N] [--fields f1 f2]
+    python manage-operator.py store <collection> get <id>
 
 Collections:
     account_locks, api_keys, auth_admin_audit, bound_sessions, cases,
@@ -53,7 +53,7 @@ from _lib import (
     print_banner,
     print_table,
     query_collection,
-    g8es_request,
+    operator_request,
 )
 
 
@@ -162,7 +162,7 @@ def exec_stats() -> None:
     keys = kv_keys('*')
 
     print(f'\n{"=" * 60}')
-    print('g8es Statistics')
+    print('operator Statistics')
     print(f'{"=" * 60}')
     print(f'\n  Records:')
     print(f'    Documents:  {total_docs}')
@@ -292,12 +292,12 @@ def exec_kv_get(key: str) -> None:
 
 
 def _sse_events_count() -> int:
-    result = g8es_request('GET', '/db/_sse_events/count')
+    result = operator_request('GET', '/db/_sse_events/count')
     return int(result.get('count', 0)) if isinstance(result, dict) else 0
 
 
 def _sse_events_wipe() -> int:
-    result = g8es_request('DELETE', '/db/_sse_events')
+    result = operator_request('DELETE', '/db/_sse_events')
     return int(result.get('deleted', 0)) if isinstance(result, dict) else 0
 
 
@@ -363,18 +363,18 @@ def exec_get_setting(key: str) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description='g8es Document Store & KV Management',
+        description='operator Document Store & KV Management',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python manage-g8es.py store stats
-  python manage-g8es.py store network
-  python manage-g8es.py store find --collection operators --field status --value active
-  python manage-g8es.py store kv list --pattern "g8e:session:*"
-  python manage-g8es.py store kv get g8e:session:web:session_123
-  python manage-g8es.py store operators list --limit 10
-  python manage-g8es.py store operators get <operator_id>
-  python manage-g8es.py store wipe --dry-run
+  python manage-operator.py store stats
+  python manage-operator.py store network
+  python manage-operator.py store find --collection operators --field status --value active
+  python manage-operator.py store kv list --pattern "g8e:session:*"
+  python manage-operator.py store kv get g8e:session:web:session_123
+  python manage-operator.py store operators list --limit 10
+  python manage-operator.py store operators get <operator_id>
+  python manage-operator.py store wipe --dry-run
         """
     )
 
@@ -438,7 +438,7 @@ def run(argv: List[str]) -> int:
 
     _machine_readable = args.command == 'get-setting'
     if not _machine_readable:
-        print_banner('manage-g8es.py store', ' '.join(argv))
+        print_banner('manage-operator.py store', ' '.join(argv))
 
     try:
         if args.command == 'stats':
@@ -475,7 +475,7 @@ def run(argv: List[str]) -> int:
             parser.print_help()
             return 1
     except RuntimeError as e:
-        print(f'[manage-g8es store] {e}', file=sys.stderr)
+        print(f'[manage-operator store] {e}', file=sys.stderr)
         return 1
 
     return 0

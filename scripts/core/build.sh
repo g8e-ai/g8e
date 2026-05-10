@@ -4,7 +4,6 @@
 # Service categories:
 #   Managed:  g8ee, g8ed  (in scope for up/rebuild/clean)
 #   Host:     Operator listen mode (runs as local operator binary)
-#   Test-runners: g8ee-test-runner, g8ed-test-runner, g8eo-test-runner (built separately)
 #   Data volumes:
 #     .g8e/data     (Operator listen mode -- SQLite DB, users, settings; wiped by reset)
 #     .g8e/ssl      (Operator listen mode -- TLS certs; NEVER wiped by reset or wipe)
@@ -84,36 +83,33 @@ usage() {
 Usage: $(basename "$0") <command> [options]
 
 Commands:
-  status                          Show container status and component versions
-  up [component ...]              Start managed services and Operator listen mode -- no build
+  status                          Show host process status and component versions
+  up [component ...]              Start managed services and Operator listen mode
                                   Default (no components): g8ee g8ed
                                   Valid: operator g8ee g8ed
-  down                            Stop managed containers and Operator listen mode -- nothing is removed
-  rebuild [component ...]         Rebuild + restart of managed services using layer cache (no volume wipe)
+  down                            Stop managed services and Operator listen mode -- nothing is removed
+  rebuild [component ...]         Restart managed services
                                   Default (no components): g8ee g8ed
-  reset                           Wipe DB data volumes + rebuild images from scratch
-                                  Removes: g8ee, g8ed volumes and Operator listen-mode data; SSL certs preserved
+                                  Valid: operator g8ee g8ed
+  reset                           Wipe managed service data. SSL certs are preserved.
+                                  Removes: g8ee, g8ed data and Operator listen-mode data; SSL certs preserved
   wipe                            Clear app data from the database (all collections except platform settings)
                                   Operator listen mode stays up; preserves: platform settings, SSL certs, auth token
-  clean                           Nuke all managed Docker resources (containers, images,
-                                  volumes, networks), dangling images, and orphaned networks.
-                                  (Build cache is preserved for faster rebuilds)
-  setup                           Full first-time setup: no-cache build of all images, start platform
-  operator-build                  Build linux/amd64 operator binary inside g8eo-test-runner (no compression)
-  operator-build-all              Build all operator architectures with compression (for distribution)
+  clean                           Nuke all managed processes and data.
+  operator-build                  Build linux/amd64 operator binary natively
+  operator-build-all              Build all operator architectures natively
 
 Examples:
-  $(basename "$0") status                       Show container status and versions
+  $(basename "$0") status                       Show host process status and versions
   $(basename "$0") up                           Start the environment (no build)
-  $(basename "$0") up g8ee                      Start only the g8ee container
-  $(basename "$0") down                         Stop containers and host services
-  $(basename "$0") rebuild                      Rebuild g8ee, g8ed images (preserve volumes)
-  $(basename "$0") rebuild g8ee g8ed            Rebuild g8ee and g8ed only (preserve volumes)
-  $(basename "$0") rebuild g8ee                 Rebuild the g8ee image
-  $(basename "$0") rebuild test-runners         Rebuild test-runner containers
+  $(basename "$0") up g8ee                      Start only g8ee
+  $(basename "$0") down                         Stop managed services and host services
+  $(basename "$0") rebuild                      Restart g8ee and g8ed
+  $(basename "$0") rebuild g8ee g8ed            Restart g8ee and g8ed only
+  $(basename "$0") rebuild g8ee                 Restart g8ee
   $(basename "$0") wipe                         Clear app data from the database; restart g8ee/g8ed
-  $(basename "$0") reset                        Wipe ALL data volumes/host data and rebuild from scratch
-  $(basename "$0") clean                        Full Docker cleanup (managed services only)
+  $(basename "$0") reset                        Wipe managed service and Operator listen-mode data
+  $(basename "$0") clean                        Remove host runtime state
 EOF
 }
 
@@ -128,16 +124,15 @@ while [[ $# -gt 0 ]]; do
             ;;
         --dev)
             DEV_MODE=true
-            COMPOSE="$COMPOSE -f $PROJECT_ROOT/docker-compose.dev.yml"
             shift
             ;;
         setup|up|down|restart|reset|wipe|clean|status|operator-build|operator-build-all)
             COMMAND="$1"
             shift
             while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do
-                if ! printf '%s\n' operator g8ee g8ed g8eo-test-runner g8ee-test-runner g8ed-test-runner | grep -qx "$1"; then
+                if ! printf '%s\n' operator g8ee g8ed | grep -qx "$1"; then
                     echo "Error: Invalid component '$1'" >&2
-                    echo "Valid: operator g8ee g8ed g8eo-test-runner g8ee-test-runner g8ed-test-runner " >&2
+                    echo "Valid: operator g8ee g8ed" >&2
                     exit 1
                 fi
                 REBUILD_COMPONENTS+=("$1")
@@ -148,9 +143,9 @@ while [[ $# -gt 0 ]]; do
             COMMAND="rebuild"
             shift
             while [[ $# -gt 0 && ! "$1" =~ ^- ]]; do
-                if ! printf '%s\n' operator g8ee g8ed g8eo-test-runner g8ee-test-runner g8ed-test-runner | grep -qx "$1"; then
+                if ! printf '%s\n' operator g8ee g8ed | grep -qx "$1"; then
                     echo "Error: Invalid component '$1'" >&2
-                    echo "Valid: operator g8ee g8ed g8eo-test-runner g8ee-test-runner g8ed-test-runner " >&2
+                    echo "Valid: operator g8ee g8ed" >&2
                     exit 1
                 fi
                 REBUILD_COMPONENTS+=("$1")
@@ -500,78 +495,7 @@ _wait_operator_listen_healthy() {
     echo -e "  Operator listen mode: \033[0;32mready\033[0m (${waited}s)"
 }
 
-_ensure_g8eo_test_runner() {
-    if ! _is_running "g8eo-test-runner"; then
-        echo "g8eo-test-runner container is not running — starting it..."
-        $COMPOSE up -d g8eo-test-runner
-    fi
-}
-
-_wait_healthy() {
-    local name="$1" timeout_s="$2" interval="${3:-1}"
-    local waited=0
-    echo "  $name: waiting for healthy status..."
-    
-    # Start tailing logs in the background, filtered for entrypoint/startup messages
-    docker logs -f "$name" 2>&1 | grep --line-buffered -E "\[.*ENTRYPOINT\]|uvicorn|started|error|ERROR|Ready|ready" | sed "s/^/    [$name] /" &
-    local log_pid=$!
-    
-    # Ensure log tailing is killed on exit
-    trap "kill $log_pid 2>/dev/null || true" RETURN
-
-    until [ "$(docker inspect --format='{{.State.Health.Status}}' "$name" 2>/dev/null)" = "healthy" ]; do
-        if (( waited >= timeout_s )); then
-            kill $log_pid 2>/dev/null || true
-            echo -e "  $name: \033[0;31mTIMEOUT\033[0m"
-            echo "  $name did not become healthy within ${timeout_s}s. Last logs:"
-            docker logs --tail 30 "$name" 2>&1 | sed 's/^/    /'
-            exit 1
-        fi
-        local status
-        status=$(docker inspect --format='{{.State.Health.Status}}' "$name" 2>/dev/null || echo "starting")
-        # Update status line without interfering with streamed logs
-        # echo -ne "\r  $name: \033[0;33m$status\033[0m (${waited}s)   " >&2
-        sleep "$interval"
-        waited=$(( waited + interval ))
-    done
-    
-    kill $log_pid 2>/dev/null || true
-    echo -e "  $name: \033[0;32mready\033[0m (${waited}s)"
-}
-
-_wait_curl() {
-    local name="$1" url="$2" grep_pattern="$3" timeout_s="$4" interval="$5"
-    local waited=0
-    echo "  $name: waiting for endpoint $url..."
-
-    # Start tailing logs in the background
-    docker logs -f "$name" 2>&1 | grep --line-buffered -E "\[.*ENTRYPOINT\]|uvicorn|started|error|ERROR|Ready|ready|GET|POST" | sed "s/^/    [$name] /" &
-    local log_pid=$!
-    
-    trap "kill $log_pid 2>/dev/null || true" RETURN
-
-    until curl -sfk "$url" 2>/dev/null | grep -q "$grep_pattern"; do
-        if (( waited >= timeout_s )); then
-            kill $log_pid 2>/dev/null || true
-            echo -e "  $name: \033[0;31mTIMEOUT\033[0m"
-            echo "  $name did not become healthy within ${timeout_s}s. Last logs:"
-            docker logs --tail 30 "$name" 2>&1 | sed 's/^/    /'
-            exit 1
-        fi
-        sleep "$interval"
-        waited=$(( waited + interval ))
-    done
-    
-    kill $log_pid 2>/dev/null || true
-    echo -e "  $name: \033[0;32mready\033[0m (${waited}s)"
-}
-
 _load_env() {
-    if [[ -z "${DOCKER_GID:-}" ]]; then
-        DOCKER_GID="$(getent group docker 2>/dev/null | cut -d: -f3 || true)"
-        [[ -z "$DOCKER_GID" ]] && DOCKER_GID="0"
-        export DOCKER_GID
-    fi
     if [[ -z "${G8E_VERSION:-}" ]]; then
         G8E_VERSION="$(cat "$PROJECT_ROOT/VERSION" 2>/dev/null | tr -d '[:space:]' || echo 'dev')"
         export G8E_VERSION
@@ -921,7 +845,7 @@ if [[ "$COMMAND" == "up" ]]; then
 fi
 
 # ─── setup ───────────────────────────────────────────────────────────────────
-# Full first-time setup: no-cache build of all images, then start the platform.
+# Full first-time setup, then start the platform.
 # Does NOT wipe data volumes — safe to run on an existing installation.
 # Operator binary builds provide the listen-mode and remote Operator artifacts.
 

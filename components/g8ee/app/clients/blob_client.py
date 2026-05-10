@@ -12,12 +12,12 @@
 # limitations under the License.
 
 """
-BlobClient -- g8es Blob Store shim.
+BlobClient -- operator Blob Store shim.
 
-Wraps the g8es /blob/ HTTP API for binary object storage.
+Wraps the operator /blob/ HTTP API for binary object storage.
 Attachments are stored as raw binary keyed by namespace + id.
 
-g8es endpoints:
+operator endpoints:
     PUT    /blob/{namespace}/{id}   -> store blob
     GET    /blob/{namespace}/{id}   -> retrieve blob
     DELETE /blob/{namespace}/{id}   -> delete blob
@@ -42,7 +42,7 @@ BLOB_ATTACHMENT_NAMESPACE_PREFIX = "att"
 
 
 class BlobClient:
-    """HTTP shim over the g8es Blob Store API."""
+    """HTTP shim over the operator Blob Store API."""
 
     def __init__(
         self,
@@ -79,7 +79,7 @@ class BlobClient:
         return self._session
 
     async def connect(self) -> bool:
-        """Verify connectivity to the g8es Blob Store service."""
+        """Verify connectivity to the operator Blob Store service."""
         try:
             session = await self._get_http_session()
             async with session.get(f"{self._base_url}/health") as resp:
@@ -121,7 +121,7 @@ class BlobClient:
             ) as resp:
                 if resp.status >= 400:
                     text = await resp.text()
-                    raise NetworkError(f"g8es blob PUT {resp.status}: {text}", component="g8ee")
+                    raise NetworkError(f"operator blob PUT {resp.status}: {text}", component="g8ee")
             logger.info("[BLOB-CLIENT] Stored blob %s/%s (%d bytes)", namespace, blob_id, len(data))
         except NetworkError:
             raise
@@ -143,7 +143,7 @@ class BlobClient:
                     return None
                 if resp.status >= 400:
                     text = await resp.text()
-                    raise NetworkError(f"g8es blob GET {resp.status}: {text}", component="g8ee")
+                    raise NetworkError(f"operator blob GET {resp.status}: {text}", component="g8ee")
                 return await resp.read()
         except NetworkError:
             raise
@@ -163,7 +163,7 @@ class BlobClient:
             async with session.delete(url) as resp:
                 if resp.status >= 400 and resp.status != 404:
                     text = await resp.text()
-                    raise NetworkError(f"g8es blob DELETE {resp.status}: {text}", component="g8ee")
+                    raise NetworkError(f"operator blob DELETE {resp.status}: {text}", component="g8ee")
             logger.info("[BLOB-CLIENT] Deleted blob %s/%s", namespace, blob_id)
         except NetworkError:
             raise
@@ -183,7 +183,7 @@ class BlobClient:
             async with session.delete(url) as resp:
                 if resp.status >= 400:
                     text = await resp.text()
-                    raise NetworkError(f"g8es blob DELETE ns {resp.status}: {text}", component="g8ee")
+                    raise NetworkError(f"operator blob DELETE ns {resp.status}: {text}", component="g8ee")
                 body = json.loads(await resp.text())
                 count = body.get("deleted", 0)
                 logger.info("[BLOB-CLIENT] Deleted namespace %s (%d blobs)", namespace, count)

@@ -37,10 +37,10 @@
     "G8E_GOOGLE_SEARCH_API_KEY": "google_search.api_key",
     "G8E_GOOGLE_SEARCH_ENGINE_ID": "google_search.engine_id"
   },
-  "g8es": {
+  "operator": {
     "G8E_INTERNAL_HTTP_URL": "listen.http_url",
     "G8E_INTERNAL_PUBSUB_URL": "listen.pubsub_url",
-    "G8E_G8ES_BLOB_URL": "listen.blob_url"
+    "G8E_OPERATOR_BLOB_URL": "listen.blob_url"
   },
   "platform": {
     "G8E_DOCKER_GID": "platform.docker_gid",

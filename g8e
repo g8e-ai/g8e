@@ -374,59 +374,19 @@ case "$TOP" in
                 fi
                 [[ -z "$SUB" ]] && exit 1 || exit 0
                 ;;
-            setup)
-                _banner "platform setup"
-                exec bash "$SCRIPT_DIR/scripts/core/build.sh" setup ;;
-            build)
-                _banner "platform build"
-                exec bash "$SCRIPT_DIR/scripts/core/build.sh" rebuild "${@:3}" ;;
-            settings)
-                _banner "platform settings"
-                _ensure_g8ed
-                _run_host_script python3 "$SCRIPT_DIR/scripts/data/manage-g8es.py" settings show "${@:3}" ;;
-            update)
-                _banner "platform update"
-                git -C "$SCRIPT_DIR" fetch origin main 2>&1 | sed 's/^/  /'
-                _local=$(git -C "$SCRIPT_DIR" rev-parse HEAD)
-                _remote=$(git -C "$SCRIPT_DIR" rev-parse origin/main 2>/dev/null || echo "unknown")
-                if [[ "$_local" == "$_remote" ]]; then
-                    echo "  Already up to date ($(git -C "$SCRIPT_DIR" rev-parse --short HEAD))."
-                    echo ""
-                    echo "  Nothing to pull — run './g8e platform rebuild' to force a rebuild."
-                    exit 0
-                fi
-                echo ""
-                echo "  Local:  $(git -C "$SCRIPT_DIR" rev-parse --short HEAD)  ($(git -C "$SCRIPT_DIR" log -1 --format='%s' HEAD))"
-                echo "  Remote: $(git -C "$SCRIPT_DIR" rev-parse --short origin/main)  ($(git -C "$SCRIPT_DIR" log -1 --format='%s' origin/main))"
-                echo ""
-                git -C "$SCRIPT_DIR" log --oneline HEAD..origin/main | sed 's/^/  + /'
-                echo ""
-                printf "  Pull and rebuild? [y/N] "
-                read -r _confirm
-                if [[ "$_confirm" != "y" && "$_confirm" != "Y" ]]; then
-                    echo "  Aborted."
-                    exit 0
-                fi
-                git -C "$SCRIPT_DIR" pull origin main
-                echo ""
-                exec bash "$SCRIPT_DIR/scripts/core/build.sh" rebuild ;;
-            logs)
-                _banner "platform logs"
-                exec bash "$SCRIPT_DIR/scripts/core/logs.sh" "${@:3}" ;;
-            status|start|stop|restart|rebuild|reset|wipe|clean)
+            status|start|stop|restart|reset|wipe|clean)
                 case "$SUB" in
                     start)   _banner "platform start";   exec bash "$SCRIPT_DIR/scripts/core/build.sh" $([[ "$DEV_MODE" == true ]] && echo "--dev") up      "${@:3}" ;;
                     stop)    _banner "platform stop";    exec bash "$SCRIPT_DIR/scripts/core/build.sh" down    "${@:3}" ;;
                     restart) _banner "platform restart"; exec bash "$SCRIPT_DIR/scripts/core/build.sh" $([[ "$DEV_MODE" == true ]] && echo "--dev") restart "${@:3}" ;;
                     status)  _banner "platform status";  exec bash "$SCRIPT_DIR/scripts/core/build.sh" status  "${@:3}" ;;
-                    rebuild) _banner "platform rebuild"; exec bash "$SCRIPT_DIR/scripts/core/build.sh" $([[ "$DEV_MODE" == true ]] && echo "--dev") rebuild "${@:3}" ;;
                     reset)   _banner "platform reset";   exec bash "$SCRIPT_DIR/scripts/core/build.sh" reset   "${@:3}" ;;
                     wipe)    _banner "platform wipe";    exec bash "$SCRIPT_DIR/scripts/core/build.sh" wipe    "${@:3}" ;;
                     clean)   _banner "platform clean";   exec bash "$SCRIPT_DIR/scripts/core/build.sh" clean   "${@:3}" ;;
                 esac ;;
             *)
                 echo "[g8e] unknown platform subcommand: '$SUB'" >&2
-                echo "  Valid: setup, build, settings, update, status, start, stop, rebuild, reset, wipe, clean, logs" >&2
+                echo "  Valid: settings, update, status, start, stop, restart, reset, wipe, clean, logs" >&2
                 exit 1 ;;
         esac ;;
 
@@ -471,7 +431,7 @@ case "$TOP" in
                     export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTP_URL"
                     export G8ED_INTERNAL_URL="$G8ED_URL"
                     export PYTHONPATH="$SCRIPT_DIR/scripts:$SCRIPT_DIR/shared${PYTHONPATH:+:$PYTHONPATH}"
-                    USER_ID="$(python3 "$SCRIPT_DIR/scripts/data/manage-g8es.py" users get --email "$EMAIL" 2>/dev/null \
+                    USER_ID="$(python3 "$SCRIPT_DIR/scripts/data/manage-operator.py" users get --email "$EMAIL" 2>/dev/null \
                         | grep -E '^  ID:' | awk '{print $2}')"
                     if [[ -z "$USER_ID" ]]; then
                         echo "[g8e] No user found with email: $EMAIL" >&2
@@ -760,7 +720,7 @@ case "$TOP" in
                 export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTP_URL"
                 export G8ED_INTERNAL_URL="$G8ED_URL"
                 export PYTHONPATH="$SCRIPT_DIR/scripts:$SCRIPT_DIR/shared${PYTHONPATH:+:$PYTHONPATH}"
-                _new_token="$(python3 "$SCRIPT_DIR/scripts/data/manage-g8es.py" settings rotate-token 2>&1)"
+                _new_token="$(python3 "$SCRIPT_DIR/scripts/data/manage-operator.py" settings rotate-token 2>&1)"
                 if [[ -z "$_new_token" || "$_new_token" == *"Error"* ]]; then
                     echo "[g8e] Failed to rotate token: $_new_token" >&2
                     exit 1
@@ -794,7 +754,7 @@ case "$TOP" in
             users|operators|store|settings|audit|device-links)
                 _banner "data $SUB ${@:3}"
                 _ensure_g8ed
-                _run_host_script python3 "$SCRIPT_DIR/scripts/data/manage-g8es.py" "$SUB" "${@:3}" ;;
+                _run_host_script python3 "$SCRIPT_DIR/scripts/data/manage-operator.py" "$SUB" "${@:3}" ;;
             *)
                 echo "[g8e] unknown data subcommand: '$SUB'" >&2
                 echo "  Valid: users, operators, store, settings, audit, device-links" >&2
@@ -1003,7 +963,7 @@ case "$TOP" in
             config|test|status)
                 _banner "mcp $SUB"
                 _ensure_g8ed
-                _run_host_script python3 "$SCRIPT_DIR/scripts/data/manage-g8es.py" mcp "$SUB" "${@:3}" ;;
+                _run_host_script python3 "$SCRIPT_DIR/scripts/data/manage-operator.py" mcp "$SUB" "${@:3}" ;;
             *)
                 echo "[g8e] unknown mcp subcommand: '$SUB'" >&2
                 echo "  Valid: config, test, status" >&2
@@ -1180,7 +1140,7 @@ case "$TOP" in
                             export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTP_URL"
                             export G8ED_INTERNAL_URL="$G8ED_URL"
                             export PYTHONPATH="$SCRIPT_DIR/scripts:$SCRIPT_DIR/shared${PYTHONPATH:+:$PYTHONPATH}"
-                            python3 "$SCRIPT_DIR/scripts/data/manage-g8es.py" settings set --user-id "$user_id" "${settings_args[@]}"
+                            python3 "$SCRIPT_DIR/scripts/data/manage-operator.py" settings set --user-id "$user_id" "${settings_args[@]}"
                         )
                     fi
                 fi
@@ -1188,7 +1148,7 @@ case "$TOP" in
                 _banner "evals run"
                 _venv="$SCRIPT_DIR/components/g8ee/.venv"
                 if [ ! -x "$_venv/bin/python" ]; then
-                    echo "[g8e] g8ee virtualenv missing at $_venv — run ./g8e platform setup first" >&2
+                    echo "[g8e] g8ee virtualenv missing at $_venv — run ./g8e platform start first" >&2
                     exit 1
                 fi
                 (
@@ -1227,11 +1187,11 @@ case "$TOP" in
                     export G8ED_INTERNAL_URL="$G8ED_URL"
                     export PYTHONPATH="$SCRIPT_DIR/scripts:$SCRIPT_DIR/shared${PYTHONPATH:+:$PYTHONPATH}"
                     
-                    _user_id="$(python3 "$SCRIPT_DIR/scripts/data/manage-g8es.py" users get --email evals@g8e.local 2>/dev/null | grep -E '^  ID:' | awk '{print $2}' || true)"
+                    _user_id="$(python3 "$SCRIPT_DIR/scripts/data/manage-operator.py" users get --email evals@g8e.local 2>/dev/null | grep -E '^  ID:' | awk '{print $2}' || true)"
                     
                     if [[ -z "$_user_id" ]]; then
                         echo "  Creating evals user (evals@g8e.local)..."
-                        _user_id="$(python3 "$SCRIPT_DIR/scripts/data/manage-g8es.py" users create --email evals@g8e.local --name "Evals User" 2>/dev/null | grep -E '^  ID:' | awk '{print $2}' || true)"
+                        _user_id="$(python3 "$SCRIPT_DIR/scripts/data/manage-operator.py" users create --email evals@g8e.local --name "Evals User" 2>/dev/null | grep -E '^  ID:' | awk '{print $2}' || true)"
                         if [[ -z "$_user_id" ]]; then
                             echo "[g8e] Failed to create evals user" >&2
                             exit 1
@@ -1243,7 +1203,7 @@ case "$TOP" in
                     
                     # Create device link for the user
                     echo "  Creating device link for evals user..."
-                    _device_token="$(python3 "$SCRIPT_DIR/scripts/data/manage-g8es.py" device-links create --user-id "$_user_id" --name "evals-fleet" --max-uses 100 2>/dev/null | grep -E '^  Token:' | awk '{print $2}' || true)"
+                    _device_token="$(python3 "$SCRIPT_DIR/scripts/data/manage-operator.py" device-links create --user-id "$_user_id" --name "evals-fleet" --max-uses 100 2>/dev/null | grep -E '^  Token:' | awk '{print $2}' || true)"
                     if [[ -z "$_device_token" ]]; then
                         echo "[g8e] Failed to create device link" >&2
                         exit 1
@@ -1293,7 +1253,7 @@ case "$TOP" in
                 _banner "evals list"
                 _venv="$SCRIPT_DIR/components/g8ee/.venv"
                 if [ ! -x "$_venv/bin/python" ]; then
-                    echo "[g8e] g8ee virtualenv missing at $_venv — run ./g8e platform setup first" >&2
+                    echo "[g8e] g8ee virtualenv missing at $_venv — run ./g8e platform start first" >&2
                     exit 1
                 fi
                 (

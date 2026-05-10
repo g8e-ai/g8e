@@ -125,7 +125,7 @@ type aiTaskIDValues struct {
 	FetchFileDiff    string
 }
 
-// listenModeValues holds HTTP response constants for the g8es listen-mode HTTP API.
+// listenModeValues holds HTTP response constants for the operator listen-mode HTTP API.
 type listenModeValues struct {
 	StatusOK string
 	Mode     string

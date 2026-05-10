@@ -32,7 +32,7 @@ from app.security.request_timestamp import (
     validate_timestamp,
 )
 from tests.fakes.builder import create_mock_cache_aside_service
-from tests.fakes.fake_g8es_clients import FakeKVClient
+from tests.fakes.fake_operator_clients import FakeKVClient
 
 pytestmark = [pytest.mark.unit]
 

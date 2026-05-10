@@ -72,7 +72,7 @@ import {
     getBindOperatorsService,
     getPostLoginService,
     getSetupService,
-    getG8esBlobClient,
+    getOperatorBlobClient,
     getInternalHttpClient,
     getHealthCheckService,
     getInvestigationService
@@ -97,7 +97,7 @@ import { CORS_INTERNAL_ORIGINS } from './constants/http_client.js';
 import { getVersionInfo } from './utils/version.js';
 import { windowsTrustScript, macosTrustScript, linuxTrustScript, g8eDeploy, universalTrustScript, windowsPowerShellTrustScript } from './utils/cert-installers.js';
 import { BasePaths } from './constants/api_paths.js';
-import { G8ES_PUBSUB_PATH } from './constants/http_client.js';
+import { OPERATOR_PUBSUB_PATH } from './constants/http_client.js';
 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -137,7 +137,7 @@ class G8edServer {
                 bindOperatorsService: getBindOperatorsService(),
                 postLoginService: getPostLoginService(),
                 setupService: getSetupService(),
-                blobStorage: getG8esBlobClient(),
+                blobStorage: getOperatorBlobClient(),
                 internalHttpClient: getInternalHttpClient(),
                 healthCheckService: getHealthCheckService(),
                 investigationService: getInvestigationService()
@@ -355,7 +355,7 @@ class G8edServer {
         const httpPort = parseInt(bootstrapService.loadHttpPort?.()) || 80;
         const internalPort = parseInt(bootstrapService.loadInternalPort?.()) || 9000;
         
-        // Simple TLS check - look for certs in standard g8es SSL location
+        // Simple TLS check - look for certs in standard operator SSL location
         const sslDir = bootstrapService.getSslDir();
         let tlsOptions = null;
         
@@ -394,12 +394,12 @@ class G8edServer {
         this.server.keepAliveTimeout = 65000;
         this.server.headersTimeout = 66000;
 
-        // Proxy WebSocket upgrade requests for /ws/pubsub to g8es.
+        // Proxy WebSocket upgrade requests for /ws/pubsub to operator.
         // g8ed is the single external entry point — operators dial g8ed:443 for
-        // both HTTP auth and WebSocket pub/sub, and g8ed tunnels the latter to g8es.
+        // both HTTP auth and WebSocket pub/sub, and g8ed tunnels the latter to operator.
         this.server.on('upgrade', (request, socket, head) => {
             const pathname = new URL(request.url, 'https://localhost').pathname;
-            if (pathname === G8ES_PUBSUB_PATH) {
+            if (pathname === OPERATOR_PUBSUB_PATH) {
                 this._proxyWebSocket(request, socket, head);
             } else {
                 logger.warn('[g8ed] WebSocket upgrade rejected — unsupported path', { pathname });
@@ -551,10 +551,10 @@ class G8edServer {
 
     _proxyWebSocket(request, socket, head) {
         // Use localhost for operator WebSocket - platform no longer runs in docker
-        const g8esUrl = new URL('wss://localhost:9001');
-        const port = parseInt(g8esUrl.port, 10) || 9001;
-        const host = g8esUrl.hostname;
-        const isSecure = g8esUrl.protocol === 'wss:';
+        const operatorUrl = new URL('wss://localhost:9001');
+        const port = parseInt(operatorUrl.port, 10) || 9001;
+        const host = operatorUrl.hostname;
+        const isSecure = operatorUrl.protocol === 'wss:';
 
         // Get auth token from bootstrap service
         const bootstrapService = this.services.settingsService.getBootstrapService();
@@ -576,7 +576,7 @@ class G8edServer {
         const upstream = connect(() => {
             const reqLine = `${request.method} ${request.url} HTTP/${request.httpVersion}\r\n`;
             
-            // Inject internal auth token into headers for the upstream g8es connection
+            // Inject internal auth token into headers for the upstream operator connection
             const proxyHeaders = { ...request.headers };
             if (internalAuthToken) {
                 proxyHeaders['X-Internal-Auth'] = internalAuthToken;
@@ -600,7 +600,7 @@ class G8edServer {
         });
 
         upstream.on('error', (err) => {
-            logger.error('[g8ed] WebSocket proxy to g8es failed', { error: err.message });
+            logger.error('[g8ed] WebSocket proxy to operator failed', { error: err.message });
             socket.destroy();
         });
 

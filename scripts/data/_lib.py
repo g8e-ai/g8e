@@ -14,7 +14,7 @@
 """
 Shared utilities for g8e data management scripts.
 
-Provides authentication, HTTP clients (g8es direct + g8ed internal API),
+Provides authentication, HTTP clients (operator direct + g8ed internal API),
 and terminal display helpers used across all resource scripts.
 """
 
@@ -38,7 +38,7 @@ with open(_SHARED_CONSTANTS / 'collections.json') as _f:
 
 _DEFAULT_SSL_DIR = str(PROJECT_ROOT / '.g8e' / 'ssl')
 
-G8ES_BASE_URL = os.environ.get('G8E_INTERNAL_HTTP_URL', 'https://localhost:9000')
+OPERATOR_BASE_URL = os.environ.get('G8E_INTERNAL_HTTP_URL', 'https://localhost:9000')
 G8ED_BASE_URL = os.environ.get('G8ED_INTERNAL_URL', 'https://localhost')
 COLLECTIONS: List[str] = sorted(set(_COLLECTIONS_DATA['collections'].values()))
 PRESERVE_COLLECTIONS = {'settings'}
@@ -72,7 +72,7 @@ def get_auth_token() -> str:
 
     The wrapper gates `g8e data` on a valid operator session before invoking
     this script, so OPERATOR_SESSION_ID is expected to be present. It is
-    forwarded to g8ed for operator-scoped API calls; g8es calls use the
+    forwarded to g8ed for operator-scoped API calls; operator calls use the
     internal auth token instead (see get_internal_auth_token).
     """
     return os.environ.get('OPERATOR_SESSION_ID', '')
@@ -118,8 +118,8 @@ def get_auditor_hmac_key() -> str:
 # g8ed HTTP client — direct DB/KV access (same as g8ee's DBClient)
 # =============================================================================
 
-def g8es_request(method: str, path: str, body: Dict | None = None) -> Any:
-    url = f'{G8ES_BASE_URL}{path}'
+def operator_request(method: str, path: str, body: Dict | None = None) -> Any:
+    url = f'{OPERATOR_BASE_URL}{path}'
     data = json.dumps(body).encode() if body is not None else None
     headers = {'Content-Type': 'application/json'} if data is not None else {}
 
@@ -153,7 +153,7 @@ def g8es_request(method: str, path: str, body: Dict | None = None) -> Any:
         raise RuntimeError(f'HTTP {e.code} {method} {path}: {err}')
     except urllib.error.URLError as e:
         raise RuntimeError(
-            f'Cannot reach the Operator listen-mode HTTP API at {G8ES_BASE_URL}. '
+            f'Cannot reach the Operator listen-mode HTTP API at {OPERATOR_BASE_URL}. '
             f'Is the platform running? (./g8e platform start)\n  {e.reason}'
         )
 
@@ -162,30 +162,30 @@ def query_collection(collection: str, limit: int = 0) -> List[Dict]:
     body: Dict = {}
     if limit > 0:
         body['limit'] = limit
-    result = g8es_request('POST', f'/db/{urllib.parse.quote(collection, safe="")}/_query', body)
+    result = operator_request('POST', f'/db/{urllib.parse.quote(collection, safe="")}/_query', body)
     return result if isinstance(result, list) else []
 
 
 def get_document(collection: str, doc_id: str) -> Dict | None:
-    return g8es_request('GET', f'/db/{urllib.parse.quote(collection, safe="")}/{urllib.parse.quote(doc_id, safe="")}')
+    return operator_request('GET', f'/db/{urllib.parse.quote(collection, safe="")}/{urllib.parse.quote(doc_id, safe="")}')
 
 
 def delete_document(collection: str, doc_id: str) -> None:
-    g8es_request('DELETE', f'/db/{urllib.parse.quote(collection, safe="")}/{urllib.parse.quote(doc_id, safe="")}')
+    operator_request('DELETE', f'/db/{urllib.parse.quote(collection, safe="")}/{urllib.parse.quote(doc_id, safe="")}')
 
 
 def kv_keys(pattern: str = '*') -> List[str]:
-    result = g8es_request('POST', '/kv/_keys', {'pattern': pattern})
+    result = operator_request('POST', '/kv/_keys', {'pattern': pattern})
     return result.get('keys', []) if isinstance(result, dict) else []
 
 
 def kv_get(key: str) -> str | None:
-    result = g8es_request('GET', f'/kv/{urllib.parse.quote(key, safe="")}')
+    result = operator_request('GET', f'/kv/{urllib.parse.quote(key, safe="")}')
     return result.get('value') if isinstance(result, dict) else None
 
 
 def kv_delete_pattern(pattern: str) -> int:
-    result = g8es_request('POST', '/kv/_delete_pattern', {'pattern': pattern})
+    result = operator_request('POST', '/kv/_delete_pattern', {'pattern': pattern})
     return result.get('deleted', 0) if isinstance(result, dict) else 0
 
 

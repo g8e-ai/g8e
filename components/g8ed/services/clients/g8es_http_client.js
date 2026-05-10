@@ -12,40 +12,40 @@
 // limitations under the License.
 
 /**
- * G8esHttpClient — Purpose-built HTTP client for g8es.
+ * OperatorHttpClient — Purpose-built HTTP client for operator.
  * 
- * Shared base for G8esDocumentClient and KVCacheClient.
+ * Shared base for OperatorDocumentClient and KVCacheClient.
  * Provides timeout, error logging, and auth header propagation
- * for all HTTP calls to g8es (Operator --listen mode).
+ * for all HTTP calls to operator (Operator --listen mode).
  * 
  * Architecture (from docs/architecture/storage-data-flows.md):
- *   g8ed -> g8es uses HTTP ($G8E_INTERNAL_HTTP_URL) for KV, document store.
+ *   g8ed -> operator uses HTTP ($G8E_INTERNAL_HTTP_URL) for KV, document store.
  *   DB operations are never routed over WebSocket.
  */
 
 import { logger } from '../../utils/logger.js';
-import { G8ES_HTTP_TIMEOUT_MS } from '../../constants/http_client.js';
+import { OPERATOR_HTTP_TIMEOUT_MS } from '../../constants/http_client.js';
 import { HTTP_INTERNAL_AUTH_HEADER, HTTP_CONTENT_TYPE_HEADER } from '../../constants/headers.js';
 
-class G8esHttpError extends Error {
+class OperatorHttpError extends Error {
     constructor(message, status) {
         super(message);
-        this.name = 'G8esHttpError';
+        this.name = 'OperatorHttpError';
         this.status = status;
     }
 }
 
-class G8esHttpClient {
+class OperatorHttpClient {
     /**
      * @param {object} config
-     * @param {string} config.listenUrl - Base URL of g8es (e.g. $G8E_INTERNAL_HTTP_URL)
+     * @param {string} config.listenUrl - Base URL of operator (e.g. $G8E_INTERNAL_HTTP_URL)
      * @param {string} [config.component] - Client component name for log prefixes
-     * @param {string} [config.internalAuthToken] - Shared secret for g8es authentication
+     * @param {string} [config.internalAuthToken] - Shared secret for operator authentication
      * @param {string} [config.caCertPath] - Path to CA certificate for TLS verification
      */
     constructor({ listenUrl, component = 'G8E-HTTP', internalAuthToken = null, caCertPath = null } = {}) {
         if (!listenUrl) {
-            throw new Error('G8esHttpClient: listenUrl is required');
+            throw new Error('OperatorHttpClient: listenUrl is required');
         }
         this.listenUrl = listenUrl.replace(/\/$/, '');
         this.component = component;
@@ -63,7 +63,7 @@ class G8esHttpClient {
     }
 
     /**
-     * Make an HTTP request to g8es with timeout and structured error handling.
+     * Make an HTTP request to operator with timeout and structured error handling.
      *
      * @param {string} method - HTTP method
      * @param {string} path - URL path (e.g. /db/collection/id or /kv/key)
@@ -78,7 +78,7 @@ class G8esHttpClient {
 
         const url = `${this.listenUrl}${path}`;
         const timeoutController = new AbortController();
-        const timeoutId = setTimeout(() => timeoutController.abort(), G8ES_HTTP_TIMEOUT_MS);
+        const timeoutId = setTimeout(() => timeoutController.abort(), OPERATOR_HTTP_TIMEOUT_MS);
 
         try {
             const fetchOptions = {
@@ -96,7 +96,7 @@ class G8esHttpClient {
             try {
                 data = JSON.parse(text);
             } catch {
-                throw new G8esHttpError(`g8es returned non-JSON response: ${text}`, res.status);
+                throw new OperatorHttpError(`operator returned non-JSON response: ${text}`, res.status);
             }
 
             if (!res.ok) {
@@ -106,19 +106,19 @@ class G8esHttpClient {
                 } else {
                     logger.error(`[${this.component}] ${method} ${path} failed: ${errMsg || `HTTP ${res.status}`}`);
                 }
-                throw new G8esHttpError(errMsg || `HTTP ${res.status}`, res.status);
+                throw new OperatorHttpError(errMsg || `HTTP ${res.status}`, res.status);
             }
             return data;
         } catch (error) {
             clearTimeout(timeoutId);
 
-            if (error instanceof G8esHttpError) {
+            if (error instanceof OperatorHttpError) {
                 throw error;
             }
 
             if (error.name === 'AbortError') {
-                logger.error(`[${this.component}] ${method} ${path} timeout after ${G8ES_HTTP_TIMEOUT_MS}ms`);
-                throw new Error(`g8es request timeout: ${method} ${path} after ${G8ES_HTTP_TIMEOUT_MS}ms`);
+                logger.error(`[${this.component}] ${method} ${path} timeout after ${OPERATOR_HTTP_TIMEOUT_MS}ms`);
+                throw new Error(`operator request timeout: ${method} ${path} after ${OPERATOR_HTTP_TIMEOUT_MS}ms`);
             }
 
             logger.error(`[${this.component}] ${method} ${path} failed`, {
@@ -141,7 +141,7 @@ class G8esHttpClient {
      */
     async put(path, body, options = {}) {
         if (typeof body !== 'string') {
-            throw new Error(`G8esHttpClient.put: body must be a pre-serialized JSON string, got ${typeof body}`);
+            throw new Error(`OperatorHttpClient.put: body must be a pre-serialized JSON string, got ${typeof body}`);
         }
         return this.request('PUT', path, { ...options, body });
     }
@@ -151,7 +151,7 @@ class G8esHttpClient {
      */
     async patch(path, body, options = {}) {
         if (typeof body !== 'string') {
-            throw new Error(`G8esHttpClient.patch: body must be a pre-serialized JSON string, got ${typeof body}`);
+            throw new Error(`OperatorHttpClient.patch: body must be a pre-serialized JSON string, got ${typeof body}`);
         }
         return this.request('PATCH', path, { ...options, body });
     }
@@ -161,7 +161,7 @@ class G8esHttpClient {
      */
     async post(path, body, options = {}) {
         if (typeof body !== 'string') {
-            throw new Error(`G8esHttpClient.post: body must be a pre-serialized JSON string, got ${typeof body}`);
+            throw new Error(`OperatorHttpClient.post: body must be a pre-serialized JSON string, got ${typeof body}`);
         }
         return this.request('POST', path, { ...options, body });
     }
@@ -227,4 +227,4 @@ class G8esHttpClient {
     }
 }
 
-export { G8esHttpClient, G8esHttpError };
+export { OperatorHttpClient, OperatorHttpError };

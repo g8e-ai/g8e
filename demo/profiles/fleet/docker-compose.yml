@@ -28,7 +28,7 @@ services:
       - G8E_ENDPOINT=${G8E_ENDPOINT:-g8e.local}
     # Mount the local cert bundle if it exists
     volumes:
-      - g8es-ssl:/g8es:ro
+      - operator-ssl:/operator:ro
       - /var/run/docker.sock:/var/run/docker.sock
     labels:
       - "demo.service=operator-node"
@@ -48,5 +48,5 @@ services:
       - "demo.service=fleet-dashboard"
 
 volumes:
-  g8es-ssl:
+  operator-ssl:
     external: true

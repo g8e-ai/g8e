@@ -27,7 +27,7 @@ from app.services.protocols import ExecutionServiceProtocol
 from app.utils.auto_approved_validator import CommandAutoApprovedValidator
 from app.utils.blacklist_validator import CommandBlacklistValidator
 from app.utils.whitelist_validator import CommandWhitelistValidator
-from tests.fakes.fake_g8es_clients import FakeDBClient, FakeKVClient, FakePubSubClient
+from tests.fakes.fake_operator_clients import FakeDBClient, FakeKVClient, FakePubSubClient
 
 from .fake_ai_response_analyzer import FakeAIResponseAnalyzer
 from .fake_approval_service import FakeApprovalService

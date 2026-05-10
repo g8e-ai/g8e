@@ -250,7 +250,7 @@ export class MetricsHealthResponse extends G8eBaseModel {
         success:   { type: F.boolean, required: true },
         status:    { type: F.string,  required: true },
         service:   { type: F.string,  required: true },
-        g8es:     { type: F.object,  default: () => ({}) },
+        operator:     { type: F.object,  default: () => ({}) },
         timestamp: { type: F.date,    default: () => now() },
         error:     { type: F.string,  default: null },
     };
@@ -657,7 +657,7 @@ export class RealTimeMetricsResponse extends G8eBaseModel {
         success: { type: F.boolean, required: true },
         message: { type: F.string,  default: null },
         timestamp: { type: F.date,   required: true },
-        g8es: { type: F.object,  required: true },
+        operator: { type: F.object,  required: true },
         cache: { type: F.object,  required: true },
     };
 }
@@ -815,7 +815,7 @@ export class InternalHealthResponse extends G8eBaseModel {
     static fields = {
         success: { type: F.boolean, required: true },
         message: { type: F.string,  required: true },
-        g8es_status: { type: F.string,  default: 'unknown' },
+        operator_status: { type: F.string,  default: 'unknown' },
         g8ee_status: { type: F.string,  default: 'unknown' },
         g8eo_status: { type: F.string,  default: 'unknown' },
         uptime_seconds: { type: F.number,  default: 0 },

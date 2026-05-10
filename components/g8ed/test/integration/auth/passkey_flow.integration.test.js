@@ -46,7 +46,7 @@ import { verifyRegistrationResponse, verifyAuthenticationResponse } from '@simpl
  * - UserService
  * - WebSessionService
  * - SettingsService
- * - g8es KV & Document Store
+ * - operator KV & Document Store
  */
 
 describe('Passkey Flow Integration [INTEGRATION]', () => {

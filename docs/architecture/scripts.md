@@ -24,7 +24,7 @@ The root `./g8e` script is a Bash-based dispatcher. It is the only script an ope
 ### Execution Flow
 1. **Host-Side:** Commands like `platform start` or `operator build` run directly on the host, managing Operator listen mode and component lifecycle.
 2. **Container-Side:** Commands like `data users list` or `security validate` are forwarded via `docker run` or `docker exec` into ephemeral runner containers, where they have access to:
-   - Internal service networks (`g8es`, `g8ed`).
+   - Internal service networks (`operator`, `g8ed`).
    - Mounted secrets (TLS certs, internal auth tokens).
    - The full Python operational toolchain.
 
@@ -44,9 +44,9 @@ Orchestrates platform lifecycle via `scripts/core/build.sh`.
 - **`settings`:** Direct access to platform-wide settings (LLM, search, etc.) stored by Operator listen mode.
 
 ### Data Management (`./g8e data`)
-Unified interface for interacting with platform state, dispatched via `scripts/data/manage-g8es.py`.
+Unified interface for interacting with platform state, dispatched via `scripts/data/manage-operator.py`.
 
-- **Dispatcher Pattern:** `manage-g8es.py` routes requests to specialized modules:
+- **Dispatcher Pattern:** `manage-operator.py` routes requests to specialized modules:
     - **`store`**: Document store & KV queries (`manage-store.py`).
     - **`users`**: Platform user management (`manage-users.py`).
     - **`operators`**: Operator document management (`manage-operators.py`).
@@ -98,7 +98,7 @@ scripts/
 │   ├── logs.sh     #   Log aggregation
 │   └── setup.sh    #   Environment initialization
 ├── data/           # Data operations (Python)
-│   ├── manage-g8es.py    # Main dispatcher
+│   ├── manage-operator.py    # Main dispatcher
 │   ├── manage-store.py   # Document/KV queries
 │   ├── manage-users.py   # User management
 │   ├── manage-lfaa.py    # Audit vault queries

@@ -12,7 +12,7 @@
 // limitations under the License.
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { g8esBlobClient } from '@g8ed/services/platform/g8es_blob_client.js';
+import { operatorBlobClient } from '@g8ed/services/platform/operator_blob_client.js';
 
 vi.mock('@g8ed/utils/logger.js', () => ({
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }
@@ -21,7 +21,7 @@ vi.mock('@g8ed/utils/logger.js', () => ({
 const BASE_URL = 'https://localhost:9000';
 
 function makeClient() {
-    return new g8esBlobClient({ baseUrl: BASE_URL });
+    return new operatorBlobClient({ baseUrl: BASE_URL });
 }
 
 function mockFetchOk(body = {}, contentType = 'application/json') {
@@ -54,7 +54,7 @@ function mockFetchError(status, body = 'error') {
     });
 }
 
-describe('G8esBlobClient [UNIT]', () => {
+describe('OperatorBlobClient [UNIT]', () => {
     let client;
 
     beforeEach(() => {

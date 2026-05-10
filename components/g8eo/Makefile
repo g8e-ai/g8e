@@ -21,7 +21,7 @@ CERTS_DIR := certs
 G8ED_SSL_CA_CERT := ../../.g8e/ssl/ca.crt
 BUILD_DIR := build
 BLOB_NAMESPACE := operator-binary
-G8ES_URL := https://localhost:9000
+OPERATOR_URL := https://localhost:9000
 CA_CERT := ../../.g8e/ssl/ca.crt
 AUTH_TOKEN := $(shell cat ../../.g8e/ssl/internal_auth_token 2>/dev/null | tr -d ' \n\r')
 
@@ -42,7 +42,7 @@ help:
 	@echo "  build-all         Build all architectures inside g8ep container (CI)"
 	@echo ""
 	@echo "Build (local Go):"
-	@echo "  build-local       Build linux/amd64 locally and upload to g8es"
+	@echo "  build-local       Build linux/amd64 locally and upload to operator"
 	@echo "  build-local-all   Build all Linux architectures locally (release)"
 	@echo "  build-linux-amd64 Build linux/amd64 only"
 	@echo "  build-linux-arm64 Build linux/arm64 only"

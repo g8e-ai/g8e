@@ -206,11 +206,11 @@ x-edge-device: &edge-device
   extra_hosts:
     - "g8e.local:host-gateway"
     - "g8ed:host-gateway"
-    - "g8es:host-gateway"
+    - "operator:host-gateway"
   labels:
     - "demo.service=acme-edge"
   volumes:
-    - g8es-ssl:/g8es:ro
+    - operator-ssl:/operator:ro
   restart: unless-stopped
 
 services:
@@ -225,7 +225,7 @@ _emit_footer() {
     cat >> "$batch_file" <<'EOF'
 
 volumes:
-  g8es-ssl:
+  operator-ssl:
     external: true
 EOF
 }

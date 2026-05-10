@@ -18,19 +18,19 @@
  * at process startup. All getXxx() accessors throw if called before init.
  *
  * Initialization phases:
- *   1. g8es clients       — document store, KV, pub/sub transport layer
+ *   1. operator clients       — document store, KV, pub/sub transport layer
  *   2. Core platform       — DB service wrapper, models, cache-aside, session
  *   3. Platform base      — InternalHttpClient (required by auth services)
  *   4. Auth services       — API keys, users, passkey auth
  *   5. Operator subsystem  — operator service, binary cache, operator cache
  *   6. Platform services   — SSE, attachments, device links, certificates, settings
- *   7. Configuration       — load global settings from g8es
+ *   7. Configuration       — load global settings from operator
  */
 
-import { G8esDocumentClient } from './clients/g8es_document_client.js';
-import { G8esPubSubClient } from './clients/g8es_pubsub_client.js';
-import { KVCacheClient } from './clients/g8es_kv_cache_client.js';
-import { g8esBlobClient } from './platform/g8es_blob_client.js';
+import { OperatorDocumentClient } from './clients/operator_document_client.js';
+import { OperatorPubSubClient } from './clients/operator_pubsub_client.js';
+import { KVCacheClient } from './clients/operator_kv_cache_client.js';
+import { OperatorBlobClient } from './platform/operator_blob_client.js';
 import { WebSessionService } from './auth/web_session_service.js';
 import { CliSessionService } from './auth/cli_session_service.js';
 import { BoundSessionsService } from './auth/bound_sessions_service.js';
@@ -61,7 +61,7 @@ import { PostLoginService } from './auth/post_login_service.js';
 import { SetupService } from './platform/setup_service.js';
 import { HealthCheckService } from './platform/health_check_service.js';
 import { SourceComponent } from '../constants/ai.js';
-import { G8ES_INTERNAL_HTTP_URL, G8ES_INTERNAL_PUBSUB_URL } from '../constants/http_client.js';
+import { OPERATOR_INTERNAL_HTTP_URL, OPERATOR_INTERNAL_PUBSUB_URL } from '../constants/http_client.js';
 
 // --- Service instances (locally-owned only) ---
 let organizationModel = null;
@@ -103,10 +103,10 @@ export async function initializeSettingsService() {
     if (settingsService) {
         return settingsService;
     }
-    const listenUrl = G8ES_INTERNAL_HTTP_URL;
+    const listenUrl = OPERATOR_INTERNAL_HTTP_URL;
     const isHttps = listenUrl.startsWith('https://');
     
-    // 1. Initialize bootstrap service for g8es volume data
+    // 1. Initialize bootstrap service for operator volume data
     const bootstrapService = new BootstrapService();
     
     // 2. Load bootstrap secrets using the dedicated bootstrap service
@@ -114,8 +114,8 @@ export async function initializeSettingsService() {
     const caCertPath = bootstrapService.loadCaCertPath();
 
     if (!internalAuthToken) {
-        logger.error('[G8ED-INIT] Internal auth token not found in g8es volume');
-        throw new Error('Internal auth token not found in g8es volume. Platform bootstrap failed.');
+        logger.error('[G8ED-INIT] Internal auth token not found in operator volume');
+        throw new Error('Internal auth token not found in operator volume. Platform bootstrap failed.');
     }
 
     // Tamper-evidence: confirm the token read from the volume matches the
@@ -127,18 +127,18 @@ export async function initializeSettingsService() {
     bootstrapService.verifyAgainstManifest('internal_auth_token', internalAuthToken);
 
     if (isHttps && !caCertPath) {
-        logger.error('[G8ED-INIT] CA certificate not found for HTTPS connection to g8es');
-        throw new Error('CA certificate not found for HTTPS connection to g8es');
+        logger.error('[G8ED-INIT] CA certificate not found for HTTPS connection to operator');
+        throw new Error('CA certificate not found for HTTPS connection to operator');
     }
 
     const { dbClient, kvClient } = await _initializeBaseClients(listenUrl, internalAuthToken, caCertPath);
     
-    // 3. Wait for g8es to be ready before proceeding
+    // 3. Wait for operator to be ready before proceeding
     // This prevents race conditions during platform startup
     try {
         await dbClient.waitForReady();
     } catch (err) {
-        logger.error('[G8ED-INIT] g8es connection failed', { error: err.message });
+        logger.error('[G8ED-INIT] operator connection failed', { error: err.message });
         throw err;
     }
 
@@ -169,39 +169,39 @@ async function _doInitialize() {
     try {
         logger.info('[G8ED-INIT] Starting service initialization');
 
-        // --- Phase 1: g8es clients ---
+        // --- Phase 1: operator clients ---
         // settingsService.initialize() handles secret resolution and base clients via bootstrap logic.
         const settingsSvc = await initializeSettingsService();
         const bootstrapSvc = settingsSvc.getBootstrapService();
         const internalAuthToken = bootstrapSvc.loadInternalAuthToken();
         const caCertPath = bootstrapSvc.loadCaCertPath();
         
-        const listenUrl = G8ES_INTERNAL_HTTP_URL;
-        const pubsubUrl = G8ES_INTERNAL_PUBSUB_URL;
+        const listenUrl = OPERATOR_INTERNAL_HTTP_URL;
+        const pubsubUrl = OPERATOR_INTERNAL_PUBSUB_URL;
 
         // PubSub ALWAYS uses WSS.
-        pubSubClient = new G8esPubSubClient({ 
+        pubSubClient = new OperatorPubSubClient({ 
             pubsubUrl, 
             caCertPath, 
             internalAuthToken 
         });
-        blobStorage = new g8esBlobClient({ 
+        blobStorage = new OperatorBlobClient({ 
             baseUrl: listenUrl, 
             internalAuthToken
         });
-        logger.info('[G8ED-INIT] Phase 1 complete: g8es clients');
+        logger.info('[G8ED-INIT] Phase 1 complete: operator clients');
 
         // --- Phase 2: Core platform ---
         // cacheAsideService is already initialized in initializeSettingsService()
         organizationModel = new OrganizationModel({ cacheAsideService });
         logger.info('[G8ED-INIT] Phase 2 complete: core platform (DB service, models, cache-aside)');
 
-        // --- Phase 2b: Resolve all settings from g8es (DB > schema default) ---
+        // --- Phase 2b: Resolve all settings from operator (DB > schema default) ---
         // settingsSvc is already the SettingsService instance
 
         // Reinitialize pubSubClient with the resolved CA cert path and internal auth token.
         await pubSubClient.terminate();
-        pubSubClient = new G8esPubSubClient({
+        pubSubClient = new OperatorPubSubClient({
             pubsubUrl: settingsSvc.g8e_internal_pubsub_url || pubsubUrl,
             caCertPath: settingsSvc.g8e_pubsub_ca_cert || null,
             internalAuthToken: internalAuthToken
@@ -373,14 +373,14 @@ async function _doInitialize() {
 
 
 /**
- * Shared logic for initializing core g8es clients.
+ * Shared logic for initializing core operator clients.
  */
 async function _initializeBaseClients(listenUrl, internalAuthToken, caCertPath = null) {
-    const dbClient = new G8esDocumentClient({ listenUrl, internalAuthToken, caCertPath });
-    logger.info(`[G8ES-CLIENT] Document client initialized for ${listenUrl}`);
+    const dbClient = new OperatorDocumentClient({ listenUrl, internalAuthToken, caCertPath });
+    logger.info(`[OPERATOR-CLIENT] Document client initialized for ${listenUrl}`);
 
     const kvClient = new KVCacheClient({ listenUrl, internalAuthToken, caCertPath });
-    logger.info(`[G8ES-CLIENT] KV cache client initialized for ${listenUrl}`);
+    logger.info(`[OPERATOR-CLIENT] KV cache client initialized for ${listenUrl}`);
 
     return { dbClient, kvClient };
 }
@@ -523,8 +523,8 @@ export function getSetupService() {
     return setupService;
 }
 
-export function getG8esBlobClient() {
-    if (!blobStorage) throw new Error('G8esBlobClient not initialized. Call initializeServices() first.');
+export function getOperatorBlobClient() {
+    if (!blobStorage) throw new Error('OperatorBlobClient not initialized. Call initializeServices() first.');
     return blobStorage;
 }
 

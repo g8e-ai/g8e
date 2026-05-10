@@ -35,7 +35,7 @@ export const SESSION_ID_LOG_PREFIX_LENGTH = 25;
 
 /**
  * WebSession Types
- * Identifies the type of session for g8es KV key generation and session management.
+ * Identifies the type of session for operator KV key generation and session management.
  * Canonical values from shared/constants/status.json session.type.
  *
  * KV keys built via: KVKey.webSessionKey(id) / KVKey.operatorSessionKey(id)

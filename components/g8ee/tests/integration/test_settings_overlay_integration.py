@@ -36,8 +36,8 @@ class TestG8eeSettingsOverlayIntegration:
     def settings_service(self, cache_service):
         return SettingsService(cache_aside_service=cache_service)
 
-    async def test_get_platform_settings_loads_from_g8es(self, settings_service, cache_service):
-        """Verify platform settings are loaded from the correct g8es collection/ID.
+    async def test_get_platform_settings_loads_from_operator(self, settings_service, cache_service):
+        """Verify platform settings are loaded from the correct operator collection/ID.
         
         G8eePlatformSettings no longer carries LLM config. LLM settings are
         accessed via get_user_settings() which falls back to platform data

@@ -73,10 +73,10 @@ flowchart LR
             g8ee --> g8ed
         end
         subgraph Data ["Data Layer"]
-            g8es[("g8es<br/>SQLite/KV/PubSub")]
+            operator[("operator<br/>SQLite/KV/PubSub")]
         end
-        g8ed <--> g8es
-        g8ee <--> g8es
+        g8ed <--> operator
+        g8ee <--> operator
     end
 
     Browser((Browser)) -- "HTTPS / SSE" --> g8ed
@@ -139,17 +139,17 @@ g8ee maintains 5 core data clients, each with exactly one handler service:
 
 | Client | Handler Service | Responsibility |
 |--------|-----------------|----------------|
-| `DBClient` | `DBService` | Authoritative document persistence (SQLite `documents` via g8es) |
-| `KVCacheClient` | `KVService` | High-frequency state and session data (SQLite `kv_store` via g8es) |
+| `DBClient` | `DBService` | Authoritative document persistence (SQLite `documents` via operator) |
+| `KVCacheClient` | `KVService` | High-frequency state and session data (SQLite `kv_store` via operator) |
 | `PubSubClient` | `PubSubService` | Event-driven messaging and operator command dispatch |
-| `BlobClient` | `BlobService` | Binary data storage and retrieval (SQLite `blobs` via g8es) |
+| `BlobClient` | `BlobService` | Binary data storage and retrieval (SQLite `blobs` via operator) |
 | `InternalHttpClient` | `HTTPService` | External API communication (via `ServiceFactory`) |
 
 ### Initialization & Lifespan
 
 Client and service lifecycle is managed in `app/main.py` via a 6-phase bootstrap process:
 1. **Bootstrap Settings** -- Load minimal config for connectivity.
-2. **Core Clients** -- Instantiate all 4 g8es clients (DB, KV, PubSub, Blob).
+2. **Core Clients** -- Instantiate all 4 operator clients (DB, KV, PubSub, Blob).
 3. **Handler Services** -- Wrap clients in their respective services.
 4. **CacheAsideService** -- Initialize the query caching layer.
 5. **Platform Settings** -- Load full platform configuration.
@@ -307,7 +307,7 @@ Core data models for cache operations and markers are located in `app/models/cac
 
 ## Cache-Aside Service
 
-g8ee uses `CacheAsideService` to manage synchronization between the authoritative `DBService` and the `KVService` (g8es).
+g8ee uses `CacheAsideService` to manage synchronization between the authoritative `DBService` and the `KVService` (operator).
 
 - **Invariants**: All write operations (`create`, `update`, `delete`, `batch`) **invalidate** the cache. Population only occurs during a `get_document` MISS.
 - **`create_document`**: Checks for document existence in the DB first. If it exists, the call fails with a `DatabaseError`. If not, it writes to the DB and invalidates the cache key.
@@ -535,7 +535,7 @@ g8ee also owns heartbeat status decay: `HeartbeatStaleMonitorService` (`app/serv
 
 ### Defensive Safety
 
-Before dispatching any state-changing operation, g8ee runs the L1/L2/L3 governance path: L1 technical bedrock checks, L2 Tribunal consensus and Auditor commitment, and L3 authorization state from the Governance Gateway. Command risk classification (LOW / MEDIUM / HIGH, fails closed to HIGH), file operation safety, and error analysis with auto-fix all feed that path. Dispatch to g8eo is a g8e protocol operation: a typed `operator.proto` payload is wrapped in a serialized Protobuf `UniversalEnvelope` with governance metadata and published through g8es pub/sub. See [architecture/protocol.md](../architecture/protocol.md) and [architecture/security.md — Operator Commands via Sentinel](../architecture/security.md#operator-commands-via-sentinel-g8eo) for full details.
+Before dispatching any state-changing operation, g8ee runs the L1/L2/L3 governance path: L1 technical bedrock checks, L2 Tribunal consensus and Auditor commitment, and L3 authorization state from the Governance Gateway. Command risk classification (LOW / MEDIUM / HIGH, fails closed to HIGH), file operation safety, and error analysis with auto-fix all feed that path. Dispatch to g8eo is a g8e protocol operation: a typed `operator.proto` payload is wrapped in a serialized Protobuf `UniversalEnvelope` with governance metadata and published through operator pub/sub. See [architecture/protocol.md](../architecture/protocol.md) and [architecture/security.md — Operator Commands via Sentinel](../architecture/security.md#operator-commands-via-sentinel-g8eo) for full details.
 
 ### MCP Adapter
 
@@ -627,13 +627,13 @@ Read-only AWS IAM introspection commands (e.g., `aws sts get-caller-identity`, r
 g8ee tracks all operator-related actions and results to maintain a continuous picture of the environment.
 
 #### Activity Log
-The `add_operator_activity` method in `OperatorDataService` records high-level events (command execution, file edits, approvals) to the operator's `activity_log` array in g8es. These entries use the `ConversationHistoryMessage` model and are primarily used for UI visibility into what the AI has done on a specific system.
+The `add_operator_activity` method in `OperatorDataService` records high-level events (command execution, file edits, approvals) to the operator's `activity_log` array in operator. These entries use the `ConversationHistoryMessage` model and are primarily used for UI visibility into what the AI has done on a specific system.
 
 #### Command History
 All command results are appended to `command_results_history` on the `OperatorDocument` via `append_command_result`. g8eo results are processed by `OperatorResultHandlerService` and routed to this history.
 
 #### Local Retention (LFAA)
-While g8es stores a summary of recent activity, the **Operator remains the system of record** via LFAA. g8ee dispatches audit events to the operator's local vault for long-term retention and cryptographic verification.
+While operator stores a summary of recent activity, the **Operator remains the system of record** via LFAA. g8ee dispatches audit events to the operator's local vault for long-term retention and cryptographic verification.
 
 ---
 
@@ -795,7 +795,7 @@ g8ee processes multi-modal file attachments for LLM consumption.
 
 ### Flow
 
-1. **g8ed** stores full `AttachmentData` JSON (including base64 data, filename, content type) in g8es Blob Store and forwards a `store_key` reference to G8EE.
+1. **g8ed** stores full `AttachmentData` JSON (including base64 data, filename, content type) in operator Blob Store and forwards a `store_key` reference to G8EE.
 2. **g8ee** retrieves the full attachment from Blob Store on demand, classifies the attachment type (PDF, image, text), and formats it as a `Part` object for the LLM provider.
 3. **Blob Store** stores the complete attachment payload — both binary data and metadata in a single JSON object.
 
@@ -829,7 +829,7 @@ For the full KV key namespace (all patterns, builders, owners, TTLs) and the com
 
 ### Pub/Sub Channels
 
-g8ee publishes commands to `cmd:{operator_id}:{operator_session_id}` and subscribes to the corresponding `results:*` and `heartbeat:*` channels. The canonical channel listing and wire format are in [components/g8es.md — Channel Naming Convention](g8es.md#channel-naming-convention).
+g8ee publishes commands to `cmd:{operator_id}:{operator_session_id}` and subscribes to the corresponding `results:*` and `heartbeat:*` channels. The canonical channel listing and wire format are in [components/operator.md — Channel Naming Convention](operator.md#channel-naming-convention).
 
 #### Subscribe-and-Wait Contract
 
@@ -862,7 +862,7 @@ g8ee communicates with other components via direct HTTP using `X-Internal-Auth` 
 | `/api/internal/operators/register-operator-session` | POST | Subscribes g8ee to heartbeat/result channels for a new session |
 
 #### Authentication Discovery
-g8ee discovers the authoritative `internal_auth_token` by reading `/g8es/ssl/internal_auth_token` at startup (or via `INTERNAL_AUTH_TOKEN` env var). This is the absolute source of truth for service-to-service authentication.
+g8ee discovers the authoritative `internal_auth_token` by reading `/operator/ssl/internal_auth_token` at startup (or via `INTERNAL_AUTH_TOKEN` env var). This is the absolute source of truth for service-to-service authentication.
 
 #### Context Propagation
 The canonical header list and ownership rules are in [components/g8ed.md — Internal HTTP Communication](g8ed.md#internal-http-communication-g8ed--g8ee).
@@ -1043,7 +1043,7 @@ When using a Gemini provider with the `google_search` SDK tool enabled in `Gener
 
 #### Config Source
 
-g8ee loads its runtime configuration from the `platform_settings` and `user_settings` documents in g8es. All settings documents use a **nested structure** matching g8ee's Pydantic models. g8ed's `updateUserSettings()` structures flat UI input into nested before writing. g8ee reads the nested document directly via `UserSettingsDocument.model_validate()`.
+g8ee loads its runtime configuration from the `platform_settings` and `user_settings` documents in operator. All settings documents use a **nested structure** matching g8ee's Pydantic models. g8ed's `updateUserSettings()` structures flat UI input into nested before writing. g8ee reads the nested document directly via `UserSettingsDocument.model_validate()`.
 
 #### platform_settings & user_settings Schema
 
@@ -1214,6 +1214,6 @@ See [testing.md — g8ee](../testing.md#g8ee--python) for test infrastructure, p
 
 **Test types:**
 - **Unit tests** - Business logic isolation with mocked external boundaries
-- **Integration tests** - Real g8es and service wiring
+- **Integration tests** - Real operator and service wiring
 - **AI integration tests** - Real LLM provider calls (credentials required)
 - **Contract tests** - Wire protocol and constants enforcement

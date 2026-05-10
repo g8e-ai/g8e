@@ -14,7 +14,7 @@
 /**
  * KV Mock for Testing
  *
- * In-memory g8es KV simulation that faithfully mirrors the real
+ * In-memory operator KV simulation that faithfully mirrors the real
  * KVCacheClient contract:
  *   - set() requires a string value — throws on non-string input
  *   - All compound structures (rpush, sadd, zadd, incr, decr) store JSON

@@ -64,14 +64,14 @@ g8ee or g8eo
   -> serialized payload bytes
   -> UniversalEnvelope.payload
   -> serialized UniversalEnvelope bytes
-  -> g8es pub/sub data
+  -> operator pub/sub data
 ```
 
-For inbound operator requests, `g8ee` builds a typed payload from a `G8eMessage` payload model, serializes it, wraps it in `UniversalEnvelope`, signs the L2 metadata, and publishes the envelope bytes through g8es pub/sub. `g8eo` rejects command bytes that cannot be unmarshaled as `UniversalEnvelope`.
+For inbound operator requests, `g8ee` builds a typed payload from a `G8eMessage` payload model, serializes it, wraps it in `UniversalEnvelope`, signs the L2 metadata, and publishes the envelope bytes through operator pub/sub. `g8eo` rejects command bytes that cannot be unmarshaled as `UniversalEnvelope`.
 
-For outbound operator results, `g8eo` builds typed result payloads, wraps them in `UniversalEnvelope`, and publishes the envelope bytes through g8es pub/sub. Runtime result paths for command completion, cancellation, file operations, filesystem operations, logs/history, status updates, and heartbeats use the Protobuf envelope path.
+For outbound operator results, `g8eo` builds typed result payloads, wraps them in `UniversalEnvelope`, and publishes the envelope bytes through operator pub/sub. Runtime result paths for command completion, cancellation, file operations, filesystem operations, logs/history, status updates, and heartbeats use the Protobuf envelope path.
 
-Channel names, subscription lifecycles, and broker behavior are documented in the pub/sub architecture and g8es component docs. This page owns the protocol message contract, not the channel taxonomy.
+Channel names, subscription lifecycles, and broker behavior are documented in the pub/sub architecture and operator component docs. This page owns the protocol message contract, not the channel taxonomy.
 
 ---
 

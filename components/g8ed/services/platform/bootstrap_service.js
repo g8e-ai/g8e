@@ -183,7 +183,7 @@ class BootstrapService {
     }
 
     /**
-     * Verify the SHA-256 digests of secrets loaded from the g8es volume
+     * Verify the SHA-256 digests of secrets loaded from the operator volume
      * against the tamper-evidence manifest written by g8eo SecretManager.
      *
      * This closes the silent bootstrap-secret coupling: g8ed otherwise

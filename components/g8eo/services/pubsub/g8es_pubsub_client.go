@@ -31,7 +31,7 @@ import (
 	pubsubv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/pubsubv1"
 )
 
-// PubSubClient is the interface implemented by both G8esPubSubClient and MockG8esPubSubClient.
+// PubSubClient is the interface implemented by both OperatorPubSubClient and MockOperatorPubSubClient.
 // All service fields and function parameters use this interface to allow test doubles.
 type PubSubClient interface {
 	Subscribe(ctx context.Context, channel string) (<-chan []byte, error)
@@ -39,7 +39,7 @@ type PubSubClient interface {
 	Close()
 }
 
-// G8esPubSubClient connects to a g8es instance's WebSocket pub/sub endpoint.
+// OperatorPubSubClient connects to a operator instance's WebSocket pub/sub endpoint.
 // It provides Subscribe (receive) and Publish (send) over the channel
 // naming convention:
 //
@@ -52,7 +52,7 @@ type PubSubClient interface {
 // the client mutex is held. Exposed as a var so tests can shorten it.
 var pubSubWriteTimeout = 5 * time.Second
 
-type G8esPubSubClient struct {
+type OperatorPubSubClient struct {
 	baseURL    string // e.g. "wss://g8e.local"
 	logger     *slog.Logger
 	tlsConfig  *tls.Config // embedded CA trust; nil falls back to system CAs (plain ws://)
@@ -63,13 +63,13 @@ type G8esPubSubClient struct {
 	pubWs  *websocket.Conn // persistent WebSocket for publishing
 }
 
-// NewG8esPubSubClient creates a client that connects to a g8es pub/sub endpoint.
+// NewOperatorPubSubClient creates a client that connects to a operator pub/sub endpoint.
 // baseURL must use ws:// or wss:// scheme.
 // serverName overrides the TLS SNI hostname; pass an empty string when the
 // endpoint is a hostname (no override needed).
-func NewG8esPubSubClient(baseURL, serverName string, logger *slog.Logger) (*G8esPubSubClient, error) {
+func NewOperatorPubSubClient(baseURL, serverName string, logger *slog.Logger) (*OperatorPubSubClient, error) {
 	if baseURL == "" {
-		return nil, fmt.Errorf("g8es pub/sub URL is required")
+		return nil, fmt.Errorf("operator pub/sub URL is required")
 	}
 
 	isSecure := len(baseURL) >= 6 && baseURL[:6] == "wss://"
@@ -88,7 +88,7 @@ func NewG8esPubSubClient(baseURL, serverName string, logger *slog.Logger) (*G8es
 		}
 	}
 
-	return &G8esPubSubClient{
+	return &OperatorPubSubClient{
 		baseURL:    baseURL,
 		logger:     logger,
 		tlsConfig:  tlsCfg,
@@ -96,7 +96,7 @@ func NewG8esPubSubClient(baseURL, serverName string, logger *slog.Logger) (*G8es
 	}, nil
 }
 
-// Subscribe subscribes to a g8es pub/sub channel and returns a channel that
+// Subscribe subscribes to a operator pub/sub channel and returns a channel that
 // delivers raw JSON payloads. The returned channel is closed when the
 // subscription ends (context cancelled or connection lost).
 //
@@ -105,10 +105,10 @@ func NewG8esPubSubClient(baseURL, serverName string, logger *slog.Logger) (*G8es
 // immediately after Subscribe returns will be delivered to this subscriber —
 // there is no window where the broker could g8e a message because the
 // subscription was not yet registered.
-func (c *G8esPubSubClient) Subscribe(ctx context.Context, channel string) (<-chan []byte, error) {
+func (c *OperatorPubSubClient) Subscribe(ctx context.Context, channel string) (<-chan []byte, error) {
 	wsURL := c.pubSubWSURL()
 
-	c.logger.Info("Dialing g8es pub/sub WebSocket",
+	c.logger.Info("Dialing operator pub/sub WebSocket",
 		"url", wsURL,
 		"channel", channel,
 		"tls", c.tlsConfig != nil)
@@ -123,12 +123,12 @@ func (c *G8esPubSubClient) Subscribe(ctx context.Context, channel string) (<-cha
 		if resp != nil {
 			statusCode = resp.StatusCode
 		}
-		c.logger.Error("g8es pub/sub WebSocket dial failed",
+		c.logger.Error("operator pub/sub WebSocket dial failed",
 			"url", wsURL,
 			"error", err,
 			"http_status", statusCode,
 			"tls_enabled", c.tlsConfig != nil)
-		return nil, fmt.Errorf("failed to connect to g8es pub/sub (http_status=%d): %w", statusCode, err)
+		return nil, fmt.Errorf("failed to connect to operator pub/sub (http_status=%d): %w", statusCode, err)
 	}
 
 	subMsg := pubsubv1.PubSubMessage{
@@ -207,7 +207,7 @@ func (c *G8esPubSubClient) Subscribe(ctx context.Context, channel string) (<-cha
 // frame. Any data-bearing message frames received before the ACK are appended to pending so
 // the caller can replay them. Returns an error if the context is cancelled or the connection
 // closes before the ACK arrives.
-func (c *G8esPubSubClient) waitForSubscribedACK(ctx context.Context, ws *websocket.Conn, channel string, pending *[][]byte) error {
+func (c *OperatorPubSubClient) waitForSubscribedACK(ctx context.Context, ws *websocket.Conn, channel string, pending *[][]byte) error {
 	const ackTimeout = 5 * time.Second
 	ws.SetReadDeadline(time.Now().Add(ackTimeout))
 	defer ws.SetReadDeadline(time.Time{})
@@ -239,7 +239,7 @@ func (c *G8esPubSubClient) waitForSubscribedACK(ctx context.Context, ws *websock
 		}
 
 		if event.Type == constants.PubSubEventSubscribed && event.Channel == channel {
-			c.logger.Info("g8es pub/sub subscription confirmed", "channel", channel)
+			c.logger.Info("operator pub/sub subscription confirmed", "channel", channel)
 			return nil
 		}
 
@@ -250,13 +250,13 @@ func (c *G8esPubSubClient) waitForSubscribedACK(ctx context.Context, ws *websock
 }
 
 // pubSubWSURL returns the full WebSocket URL for /ws/pubsub.
-func (c *G8esPubSubClient) pubSubWSURL() string {
+func (c *OperatorPubSubClient) pubSubWSURL() string {
 	return c.baseURL + "/ws/pubsub"
 }
 
 // connectPubWs opens a new persistent publish WebSocket connection.
 // Caller must hold c.mu and must only call this when c.pubWs is nil.
-func (c *G8esPubSubClient) connectPubWs() error {
+func (c *OperatorPubSubClient) connectPubWs() error {
 	wsURL := c.pubSubWSURL()
 
 	var dialer websocket.Dialer
@@ -272,14 +272,14 @@ func (c *G8esPubSubClient) connectPubWs() error {
 	return nil
 }
 
-// Publish sends a message to a g8es pub/sub channel via the persistent WebSocket.
+// Publish sends a message to a operator pub/sub channel via the persistent WebSocket.
 // This is fire-and-forget: the server fans out to all subscribers.
-func (c *G8esPubSubClient) Publish(ctx context.Context, channel string, data []byte) error {
+func (c *OperatorPubSubClient) Publish(ctx context.Context, channel string, data []byte) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if c.closed {
-		return fmt.Errorf("g8es pub/sub client is closed")
+		return fmt.Errorf("operator pub/sub client is closed")
 	}
 
 	if c.pubWs == nil {
@@ -309,7 +309,7 @@ func (c *G8esPubSubClient) Publish(ctx context.Context, channel string, data []b
 		if err := c.pubWs.WriteMessage(websocket.BinaryMessage, msgBytes); err != nil {
 			c.pubWs.Close()
 			c.pubWs = nil
-			return fmt.Errorf("failed to publish to g8es after reconnect: %w", err)
+			return fmt.Errorf("failed to publish to operator after reconnect: %w", err)
 		}
 	}
 
@@ -319,7 +319,7 @@ func (c *G8esPubSubClient) Publish(ctx context.Context, channel string, data []b
 // checkTLSConnectivity performs a raw WebSocket dial to verify that TCP and TLS
 // are operational. A rejection with an HTTP response means the server replied
 // (TCP+TLS healthy). Only a TLS-level error (no HTTP response) is fatal.
-func (c *G8esPubSubClient) checkTLSConnectivity(ctx context.Context) error {
+func (c *OperatorPubSubClient) checkTLSConnectivity(ctx context.Context) error {
 	wsURL := c.pubSubWSURL()
 
 	var dialer websocket.Dialer
@@ -347,7 +347,7 @@ func (c *G8esPubSubClient) checkTLSConnectivity(ctx context.Context) error {
 
 // Close marks the client as closed and tears down the publish WebSocket.
 // Existing subscriptions will drain naturally when their contexts are cancelled.
-func (c *G8esPubSubClient) Close() {
+func (c *OperatorPubSubClient) Close() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.closed = true

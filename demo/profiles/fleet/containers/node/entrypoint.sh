@@ -29,8 +29,8 @@ fi
 # In production k3s/docker setups, the ca.crt might be mounted. If not, use standard CAs.
 # We'll allow insecure curl if needed for local dev, but try with system CA first.
 CURL_OPTS="-fsSL"
-if [ -f /g8es/ca.crt ]; then
-    CURL_OPTS="$CURL_OPTS --cacert /g8es/ca.crt"
+if [ -f /operator/ca.crt ]; then
+    CURL_OPTS="$CURL_OPTS --cacert /operator/ca.crt"
 else
     # Fallback to insecure if hitting a .local endpoint without certs mounted
     CURL_OPTS="$CURL_OPTS -k"

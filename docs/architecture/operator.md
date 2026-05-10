@@ -12,7 +12,7 @@ The Operator is the platform's data plane, execution engine, and persistence lay
 
 ## Core Principles
 
-- **Single Binary, Multi-Mode**: The same binary runs as the Hub (g8es), Target (Standard), and Fleet Utility (Stream).
+- **Single Binary, Multi-Mode**: The same binary runs as the Hub (operator), Target (Standard), and Fleet Utility (Stream).
 - **Outbound-Only**: Target operators initiate all connections via mTLS; no inbound ports are required.
 - **Local-First Audit (LFAA)**: The host is the single source of truth for command history and file mutations, stored in a tamper-evident ledger.
 - **Protocol-Governed Execution**: Operator command/result traffic uses serialized Protobuf `UniversalEnvelope` bytes carrying typed `operator.proto` payloads and L1/L2/L3 governance metadata.
@@ -20,7 +20,7 @@ The Operator is the platform's data plane, execution engine, and persistence lay
 
 ## Architecture Overview
 
-The Operator functions as the data plane for the platform. In **Listen Mode (g8es)**, it provides persistence, messaging, and CA services. In **Standard Mode**, it executes tasks on target hosts while maintaining local audit logs.
+The Operator functions as the data plane for the platform. In **Listen Mode (operator)**, it provides persistence, messaging, and CA services. In **Standard Mode**, it executes tasks on target hosts while maintaining local audit logs.
 
 ```mermaid
 flowchart TD
@@ -33,11 +33,11 @@ flowchart TD
         end
 
         subgraph Data ["Persistence"]
-            g8es[("g8es Persistence")]
+            operator[("operator Persistence")]
         end
 
-        g8ed <--> g8es
-        g8ee <--> g8es
+        g8ed <--> operator
+        g8ee <--> operator
     end
 
     subgraph EP_A ["Managed Host A"]
@@ -64,7 +64,7 @@ The default mode for execution on target hosts. The operator initiates an outbou
 4. **Vault Unlock**: If local storage is enabled, the API key is used to unlock the **Encryption Vault** and retrieve the Data Encryption Key (DEK).
 5. **Upgrade**: Receives a per-operator mTLS certificate and upgrades the transport.
 6. **Claim**: `g8ee` marks the pre-provisioned slot as `ACTIVE` and binds it to the current session.
-7. **Steady State**: Connects to `g8es` via WSS and subscribes to `cmd:{operator_id}:{session_id}` for serialized `UniversalEnvelope` command bytes.
+7. **Steady State**: Connects to `operator` via WSS and subscribes to `cmd:{operator_id}:{session_id}` for serialized `UniversalEnvelope` command bytes.
 
 ### Protocol Boundary
 
@@ -72,7 +72,7 @@ In Standard Mode, the Operator treats upstream command traffic as untrusted unti
 
 L3 authorization evidence is carried in `governance.l3`. Auto-approval is L3 authorization state only; it never bypasses L1 Technical Bedrock or L2 Consensus.
 
-### 2. Listen Mode (g8es)
+### 2. Listen Mode (operator)
 Transforms the operator into the platform's persistence layer.
 
 - **Storage**: SQLite-backed document store and TTL-aware KV store.
@@ -105,7 +105,7 @@ Used for operational metadata and caching.
 
 ## Operator Status & Lifecycle
 
-The lifecycle is orchestrated by `g8ee` and stored in `g8es`.
+The lifecycle is orchestrated by `g8ee` and stored in `operator`.
 
 | Status | Meaning |
 |---|---|
@@ -140,7 +140,7 @@ Cloud Operators run with minimal ambient permissions. Privileges are granted dyn
 | `-D` | Device link token for automated registration. |
 | `-e` | Hub endpoint address. |
 | `-s` | Enable local LFAA storage and auditing. |
-| `--listen` | Start in Listen Mode (g8es). |
+| `--listen` | Start in Listen Mode (operator). |
 | `--cloud` | Enable cloud provider specific integrations. |
 
 ## Exit Codes

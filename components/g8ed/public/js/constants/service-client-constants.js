@@ -67,13 +67,13 @@ export const ComponentName = Object.freeze({
     G8EE: 'g8ee',
     G8EO: 'g8eo',
     G8ED: 'g8ed',
-    G8ES: 'g8es',
+    OPERATOR: 'operator',
 });
 
 export const ComponentUrl = Object.freeze({
     G8EE: 'https://localhost:8443',
     G8ED: 'https://localhost',
-    G8ES: 'https://localhost:9000',
+    OPERATOR: 'https://localhost:9000',
 });
 
 export const MAX_ATTACHMENT_SIZE              = 10 * 1024 * 1024;

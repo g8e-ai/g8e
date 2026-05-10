@@ -87,7 +87,7 @@ def build_universal_envelope_bytes(
 
     The inner payload MUST implement ``to_protobuf()`` returning a
     Protobuf message. The resulting bytes are published directly to
-    the g8es pub/sub channel for consumption by g8eo.
+    the operator pub/sub channel for consumption by g8eo.
 
     The L2 Tribunal signature is always populated. L1 technical
     validation is performed downstream by g8eo via protobuf reflection
@@ -164,7 +164,7 @@ def decode_universal_envelope(envelope_bytes: bytes) -> common_pb2.UniversalEnve
     """Decode protobuf UniversalEnvelope bytes from g8eo.
 
     Args:
-        envelope_bytes: Raw protobuf UniversalEnvelope bytes from g8es pub/sub
+        envelope_bytes: Raw protobuf UniversalEnvelope bytes from operator pub/sub
 
     Returns:
         Decoded UniversalEnvelope protobuf message
@@ -254,7 +254,7 @@ def decode_g8eo_result_envelope(envelope_bytes: bytes) -> dict[str, object]:
     4. Returns a dict compatible with G8eoResultEnvelope Pydantic model
 
     Args:
-        envelope_bytes: Raw protobuf UniversalEnvelope bytes from g8es pub/sub
+        envelope_bytes: Raw protobuf UniversalEnvelope bytes from operator pub/sub
 
     Returns:
         Dict with envelope metadata and converted payload dict

@@ -76,7 +76,7 @@ class TestPubSubWireProtocolConstants:
     def test_pubsub_field_has_pattern(self):
         assert PubSubField.PATTERN == "pattern"
 
-    def test_wire_protocol_values_match_g8es_go_constants(self):
+    def test_wire_protocol_values_match_operator_go_constants(self):
         assert PubSubWireEventType.MESSAGE.value == "message"
         assert PubSubWireEventType.PMESSAGE.value == "pmessage"
         assert PubSubWireEventType.SUBSCRIBED.value == "subscribed"
@@ -490,7 +490,7 @@ class TestReconnectLoop:
             nonlocal attempts
             attempts += 1
             if attempts < 3:
-                raise ConnectionError("g8es down")
+                raise ConnectionError("operator down")
 
         delays = []
         original_sleep = asyncio.sleep
@@ -514,7 +514,7 @@ class TestReconnectLoop:
             nonlocal attempts
             attempts += 1
             connected_client._subscribed_channels.clear()
-            raise ConnectionError("g8es down")
+            raise ConnectionError("operator down")
 
         connected_client._subscribed_channels.add("test-channel")
         connected_client._ensure_ws = mock_ensure_ws

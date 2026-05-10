@@ -17,20 +17,20 @@ import { HTTP_INTERNAL_AUTH_HEADER } from '../../constants/headers.js';
 const BLOB_ATTACHMENT_NAMESPACE_PREFIX = 'att';
 
 /**
- * HTTP client for the g8es /blob/ store.
+ * HTTP client for the operator /blob/ store.
  *
  * Attachments are stored as raw binary
- * in the g8es SQLite blob table, keyed by namespace + id.
+ * in the operator SQLite blob table, keyed by namespace + id.
  *
  * Namespace per investigation: att:{investigationId}
  * Blob id: {attachmentId}
  * Object key (stored in KV record): att:{investigationId}/{attachmentId}
  */
-export class g8esBlobClient {
+export class operatorBlobClient {
     /**
      * @param {object} [config]
      * @param {string} [config.baseUrl] - g8ed HTTP base URL
-     * @param {string} [config.internalAuthToken] - Shared secret for g8es authentication
+     * @param {string} [config.internalAuthToken] - Shared secret for operator authentication
      */
     constructor({ baseUrl, internalAuthToken = null } = {}) {
         this._baseUrl = baseUrl;
@@ -76,7 +76,7 @@ export class g8esBlobClient {
      */
     async putAttachment(investigationId, attachmentId, base64Data, contentType) {
         if (typeof base64Data !== 'string') {
-            throw new Error('G8esBlobClient.putAttachment: base64Data must be a string');
+            throw new Error('OperatorBlobClient.putAttachment: base64Data must be a string');
         }
 
         const ns     = this.namespace(investigationId);
@@ -91,7 +91,7 @@ export class g8esBlobClient {
 
         if (!res.ok) {
             const text = await res.text().catch(() => '');
-            throw new Error(`G8esBlobClient.putAttachment failed: ${res.status} ${text}`);
+            throw new Error(`OperatorBlobClient.putAttachment failed: ${res.status} ${text}`);
         }
 
         const key = this.objectKey(investigationId, attachmentId);
@@ -114,11 +114,11 @@ export class g8esBlobClient {
             headers: this._headers()
         });
         if (res.status === 404) {
-            throw new Error(`G8esBlobClient.getAttachment: not found: ${objectKey}`);
+            throw new Error(`OperatorBlobClient.getAttachment: not found: ${objectKey}`);
         }
         if (!res.ok) {
             const text = await res.text().catch(() => '');
-            throw new Error(`G8esBlobClient.getAttachment failed: ${res.status} ${text}`);
+            throw new Error(`OperatorBlobClient.getAttachment failed: ${res.status} ${text}`);
         }
 
         const buf = Buffer.from(await res.arrayBuffer());
@@ -141,7 +141,7 @@ export class g8esBlobClient {
         });
         if (!res.ok && res.status !== 404) {
             const text = await res.text().catch(() => '');
-            throw new Error(`G8esBlobClient.deleteAttachment failed: ${res.status} ${text}`);
+            throw new Error(`OperatorBlobClient.deleteAttachment failed: ${res.status} ${text}`);
         }
         logger.info('[BLOB] Deleted attachment', { objectKey });
     }
@@ -162,7 +162,7 @@ export class g8esBlobClient {
         });
         if (!res.ok) {
             const text = await res.text().catch(() => '');
-            throw new Error(`G8esBlobClient.deleteAttachmentsForInvestigation failed: ${res.status} ${text}`);
+            throw new Error(`OperatorBlobClient.deleteAttachmentsForInvestigation failed: ${res.status} ${text}`);
         }
 
         const body = await res.json();
@@ -180,7 +180,7 @@ export class g8esBlobClient {
     _parseObjectKey(objectKey) {
         const slash = objectKey.lastIndexOf('/');
         if (slash === -1) {
-            throw new Error(`G8esBlobClient: malformed object key: ${objectKey}`);
+            throw new Error(`OperatorBlobClient: malformed object key: ${objectKey}`);
         }
         return {
             ns: objectKey.slice(0, slash),

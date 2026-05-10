@@ -67,7 +67,7 @@ describe('BootstrapService [UNIT - filesystem isolated]', () => {
         });
 
         it('should use custom volume path when provided', () => {
-            const customPath = '/custom/g8es';
+            const customPath = '/custom/operator';
             const service = new BootstrapService(customPath);
             expect(service.volumePath).toBe(customPath);
         });
@@ -204,7 +204,7 @@ describe('BootstrapService [UNIT - filesystem isolated]', () => {
     });
 
     describe('loadCaCertPath', () => {
-        it('should find and cache CA cert at /g8es/ca.crt', () => {
+        it('should find and cache CA cert at /operator/ca.crt', () => {
             const caDir = join(tmpVolumePath, 'ca');
             mkdirSync(caDir, { recursive: true });
             writeFileSync(join(caDir, 'ca.crt'), 'ca-cert-content');
@@ -215,7 +215,7 @@ describe('BootstrapService [UNIT - filesystem isolated]', () => {
             expect(bootstrapService._cachedCaPath).toBe(join(tmpVolumePath, 'ca', 'ca.crt'));
         });
 
-        it('should find and cache CA cert at /g8es/ca/ca.crt (legacy path)', () => {
+        it('should find and cache CA cert at /operator/ca/ca.crt (legacy path)', () => {
             const caDir = join(tmpVolumePath, 'ca');
             mkdirSync(caDir, { recursive: true });
             writeFileSync(join(caDir, 'ca.crt'), 'ca-cert-content');
@@ -225,7 +225,7 @@ describe('BootstrapService [UNIT - filesystem isolated]', () => {
             expect(result).toBe(join(tmpVolumePath, 'ca', 'ca.crt'));
         });
 
-        it('should prefer /g8es/ca.crt over /g8es/ca/ca.crt', () => {
+        it('should prefer /operator/ca.crt over /operator/ca/ca.crt', () => {
             writeFileSync(join(tmpVolumePath, 'ca.crt'), 'preferred-ca-cert');
             const caDir = join(tmpVolumePath, 'ca');
             mkdirSync(caDir, { recursive: true });

@@ -164,7 +164,7 @@ func TestPublishLFAA_EnvelopeStructure(t *testing.T) {
 	}
 
 	t.Run("typed response uses UniversalEnvelope", func(t *testing.T) {
-		client := NewMockG8esPubSubClient()
+		client := NewMockOperatorPubSubClient()
 		defer client.Close()
 		cfg := testutil.NewTestConfig(t)
 
@@ -184,7 +184,7 @@ func TestPublishLFAA_EnvelopeStructure(t *testing.T) {
 	})
 
 	t.Run("error response uses UniversalEnvelope", func(t *testing.T) {
-		client := NewMockG8esPubSubClient()
+		client := NewMockOperatorPubSubClient()
 		defer client.Close()
 		cfg := testutil.NewTestConfig(t)
 

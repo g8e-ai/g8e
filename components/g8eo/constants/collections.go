@@ -13,7 +13,7 @@
 
 package constants
 
-// CollectionName defines canonical collection names for g8es.
+// CollectionName defines canonical collection names for operator.
 type CollectionName string
 
 const (
@@ -37,7 +37,7 @@ const (
 	CollectionPasskeyChallenges CollectionName = "passkey_challenges"
 )
 
-// DocumentID defines canonical document IDs for g8es.
+// DocumentID defines canonical document IDs for operator.
 type DocumentID string
 
 const (

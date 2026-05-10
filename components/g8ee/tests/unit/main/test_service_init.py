@@ -15,7 +15,7 @@
 Unit tests for initialize_g8e_service.
 
 Covers:
-- use_db_config=True: loads config from g8es via cache_aside_service
+- use_db_config=True: loads config from operator via cache_aside_service
 - use_db_config=True without cache_aside_service: raises ValueError
 - use_db_config=False with explicit settings: uses supplied settings object
 - use_db_config=False without settings: creates G8eePlatformSettings()

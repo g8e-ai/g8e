@@ -15,10 +15,10 @@ g8ed is the primary entry point, authentication gateway, and orchestration backe
 **Core Responsibilities:**
 - **Single Entry Point:** All inbound traffic (HTTPS, Operator auth, SSE) enters through g8ed.
 - **Authentication:** Owns the Passkey (WebAuthn/FIDO2) and API key authentication flows.
-- **Session Management:** Manages WebSessions and OperatorSessions with AES-256-GCM encryption and g8es KV/Doc persistence.
+- **Session Management:** Manages WebSessions and OperatorSessions with AES-256-GCM encryption and operator KV/Doc persistence.
 - **Operator Orchestration:** Manages operator slot enrollment (via g8ee), manual binding, and lifecycle command relays (Stop, Relaunch).
 - **Chat/AI Proxy:** Relays chat requests to g8ee and delivers streaming responses via Server-Sent Events (SSE).
-- **WebSocket Proxy:** Tunnels `/ws/pubsub` upgrade requests directly to g8es for platform-wide eventing.
+- **WebSocket Proxy:** Tunnels `/ws/pubsub` upgrade requests directly to operator for platform-wide eventing.
 - **Trust Portal:** Serves workstation CA certificates and automated trust installers over plain HTTP (Port 80).
 - **Binary Distribution:** Distributes the `g8e.operator` binary for multiple architectures.
 
@@ -40,14 +40,14 @@ graph TD
         Proxy[WebSocket Proxy]
     end
     
-    G8ED -->|HTTP| G8ES[g8es Storage]
-    G8ED -->|WSS Proxy| G8ES
+    G8ED -->|HTTP| OPERATOR[operator Storage]
+    G8ED -->|WSS Proxy| OPERATOR
     G8ED -->|HTTP| G8EE[g8ee AI Engine]
 ```
 
 ### Key Design Invariants
-- **Zero-Config Runtime:** g8ed reads zero environment variables at runtime. All configuration flows through `SettingsService` (from g8es) and `BootstrapService` (from shared SSL volume).
-- **Stateless Relay:** g8ed maintains no local database state; all persistence is delegated to g8es via the `CacheAsideService`.
+- **Zero-Config Runtime:** g8ed reads zero environment variables at runtime. All configuration flows through `SettingsService` (from operator) and `BootstrapService` (from shared SSL volume).
+- **Stateless Relay:** g8ed maintains no local database state; all persistence is delegated to operator via the `CacheAsideService`.
 - **Enforced Context:** Every internal call to g8ee is accompanied by a `G8eHttpContext`, ensuring user identity and session bounds are strictly enforced cross-component.
 - **SSE-First Delivery:** All asynchronous AI results, tool events, and operator heartbeats are fanned out to clients via a single long-lived SSE connection.
 
@@ -62,7 +62,7 @@ g8ed is built on a multi-phase initialization model defined in `services/initial
 | `WebSessionService` | Lifecycle of browser sessions; manages AES encryption of session-stored API keys. |
 | `OperatorDataService` | Authoritative store for operator documents and slot tracking. |
 | `BindOperatorsService` | Orchestrates the manual binding between WebSessions and OperatorSessions. |
-| `InternalHttpClient` | High-performance cluster-internal HTTP client for g8ee/g8es communication. |
+| `InternalHttpClient` | High-performance cluster-internal HTTP client for g8ee/operator communication. |
 | `SSEService` | Manages the fan-out of real-time events to active browser clients. |
 | `DownloadAuthService` | Unified authentication for operator binary downloads (supports DLT, G8eKey, and Operator API keys). |
 
@@ -107,6 +107,6 @@ g8ed enforces several layers of isolation to protect the platform:
 - **Cookie Security:** `web_session_id` is an `HttpOnly`, `Secure`, `SameSite=Lax` cookie.
 - **Internal Origin Restriction:** All cluster-internal routes are guarded by `requireInternalOrigin`, validating `X-Internal-Auth` using timing-safe equality checks.
 - **Sentinel Scrubbing:** Outbound AI responses are processed to prevent the leakage of internal platform identifiers or secrets.
-- **Audit Logging:** `AuditService` records all high-impact actions (login, case deletion, command approval) to a persistent document store in g8es.
+- **Audit Logging:** `AuditService` records all high-impact actions (login, case deletion, command approval) to a persistent document store in operator.
 
 For deep-reference documentation on the platform's threat model and cryptographic foundations, see [architecture/security.md](../architecture/security.md).

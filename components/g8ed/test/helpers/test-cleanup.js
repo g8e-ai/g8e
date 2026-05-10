@@ -14,7 +14,7 @@
 /**
  * Comprehensive Test Cleanup Utilities
  * 
- * Provides automatic cleanup for g8es KV and g8es document store resources
+ * Provides automatic cleanup for operator KV and operator document store resources
  * Use this in all integration tests to ensure proper isolation
  */
 
@@ -69,16 +69,16 @@ export class TestCleanupHelper {
         this.trackDBDoc(this.operatorsCollection, opId);
         this.trackApiKeyByOperatorId(opId);
         
-        // Track all related g8es KV keys
-        this.trackG8esKey(KVKey.doc(this.operatorsCollection, opId));
-        this.trackG8esKey(KVKey.operatorFirstDeployed(opId));
-        this.trackG8esKey(KVKey.operatorTrackedStatus(opId));
-        this.trackG8esKey(KVKey.userOperators(userId));
+        // Track all related operator KV keys
+        this.trackOperatorKey(KVKey.doc(this.operatorsCollection, opId));
+        this.trackOperatorKey(KVKey.operatorFirstDeployed(opId));
+        this.trackOperatorKey(KVKey.operatorTrackedStatus(opId));
+        this.trackOperatorKey(KVKey.userOperators(userId));
         
         // Track session keys with unified format
-        this.trackG8esKey(KVKey.operatorSessionKey(operatorSessionId));
-        this.trackG8esKey(KVKey.webSessionKey(webSessionId));
-        this.trackG8esKey(KVKey.userWebSessions(userId));
+        this.trackOperatorKey(KVKey.operatorSessionKey(operatorSessionId));
+        this.trackOperatorKey(KVKey.webSessionKey(webSessionId));
+        this.trackOperatorKey(KVKey.userWebSessions(userId));
         
         return { opId, operatorSessionId, webSessionId };
     }
@@ -116,9 +116,9 @@ export class TestCleanupHelper {
     }
     
     /**
-     * Track a g8es KV key for cleanup
+     * Track a operator KV key for cleanup
      */
-    trackG8esKey(key) {
+    trackOperatorKey(key) {
         this.kvKeys.add(key);
     }
 
@@ -139,11 +139,11 @@ export class TestCleanupHelper {
         this.trackDBDoc(this.operatorsCollection, opId);
         // Track API key by operator_id pattern (api_keys uses hashed key as doc ID, not operator_id)
         this.trackApiKeyByOperatorId(opId);
-        this.trackG8esKey(KVKey.doc(this.operatorsCollection, opId));
-        this.trackG8esKey(KVKey.operatorFirstDeployed(opId));
-        this.trackG8esKey(KVKey.operatorTrackedStatus(opId));
+        this.trackOperatorKey(KVKey.doc(this.operatorsCollection, opId));
+        this.trackOperatorKey(KVKey.operatorFirstDeployed(opId));
+        this.trackOperatorKey(KVKey.operatorTrackedStatus(opId));
         if (userId) {
-            this.trackG8esKey(KVKey.userOperators(userId));
+            this.trackOperatorKey(KVKey.userOperators(userId));
         }
     }
 
@@ -195,27 +195,27 @@ export class TestCleanupHelper {
      * Use this after auth flow creates a user to ensure complete cleanup
      * 
      * This will clean up:
-     * - User document in g8es document store
-     * - All operators for this user (g8es document store + g8es KV)
-     * - All API keys for this user (g8es document store + g8es KV)
-     * - User's download API key (g8es KV)
+     * - User document in operator document store
+     * - All operators for this user (operator document store + operator KV)
+     * - All API keys for this user (operator document store + operator KV)
+     * - User's download API key (operator KV)
      * - WebSession audit logs for this user
      * - Operator usage documents for this user
-     * - User cache and session tracking keys (g8es KV)
+     * - User cache and session tracking keys (operator KV)
      * - Login audit logs (if email provided)
      * 
      * @param {string} userId - The user ID
      * @param {string} email - The user's email (for login audit cleanup)
      */
     trackUser(userId, email = null) {
-        // Track user sessions g8es KV key
-        this.trackG8esKey(KVKey.userWebSessions(userId));
+        // Track user sessions operator KV key
+        this.trackOperatorKey(KVKey.userWebSessions(userId));
         
-        // Track user operators g8es KV key
-        this.trackG8esKey(KVKey.userOperators(userId));
+        // Track user operators operator KV key
+        this.trackOperatorKey(KVKey.userOperators(userId));
         
-        // Track user doc g8es KV key
-        this.trackG8esKey(KVKey.doc(this.usersCollection, userId));
+        // Track user doc operator KV key
+        this.trackOperatorKey(KVKey.doc(this.usersCollection, userId));
         
         // Track login audit logs if email provided
         if (email) {
@@ -235,9 +235,9 @@ export class TestCleanupHelper {
      * Use this after calling webSessionService.createWebSession().
      */
     trackWebSession(sessionId, userId = null) {
-        this.trackG8esKey(KVKey.webSessionKey(sessionId));
+        this.trackOperatorKey(KVKey.webSessionKey(sessionId));
         if (userId) {
-            this.trackG8esKey(KVKey.userWebSessions(userId));
+            this.trackOperatorKey(KVKey.userWebSessions(userId));
         }
         this.trackDBDoc(Collections.WEB_SESSIONS, sessionId);
     }
@@ -247,9 +247,9 @@ export class TestCleanupHelper {
      * Use this after calling operatorSessionService.createOperatorSession().
      */
     trackOperatorSession(sessionId, userId = null) {
-        this.trackG8esKey(KVKey.operatorSessionKey(sessionId));
+        this.trackOperatorKey(KVKey.operatorSessionKey(sessionId));
         if (userId) {
-            this.trackG8esKey(KVKey.userOperators(userId));
+            this.trackOperatorKey(KVKey.userOperators(userId));
         }
         this.trackDBDoc(Collections.OPERATOR_SESSIONS, sessionId);
     }
@@ -278,8 +278,8 @@ export class TestCleanupHelper {
         this.trackAccountLock(identifier);
 
         // Track KV login security keys — these cause stale 429s if not cleaned
-        this.trackG8esKey(KVKey.loginFailed(identifier));
-        this.trackG8esKey(KVKey.loginLock(identifier));
+        this.trackOperatorKey(KVKey.loginFailed(identifier));
+        this.trackOperatorKey(KVKey.loginLock(identifier));
     }
 
     /**
@@ -295,7 +295,7 @@ export class TestCleanupHelper {
     }
 
     /**
-     * Track multiple g8es KV keys matching a pattern
+     * Track multiple operator KV keys matching a pattern
      */
     async trackKVPattern(pattern) {
         const keys = await this._scanKVKeys(pattern);
@@ -332,14 +332,14 @@ export class TestCleanupHelper {
     }
 
     /**
-     * Check if g8es KVCacheClient connection is available for operations
+     * Check if operator KVCacheClient connection is available for operations
      */
     _isKVAvailable() {
         return !!this._cache_aside;
     }
 
     /**
-     * Safely delete g8es KV key(s), ignoring connection closed errors
+     * Safely delete operator KV key(s), ignoring connection closed errors
      */
     async _safeKVDel(...keys) {
         if (!this._isKVAvailable()) {
@@ -353,7 +353,7 @@ export class TestCleanupHelper {
     }
 
     /**
-     * Clean up g8es KV keys
+     * Clean up operator KV keys
      */
     async _cleanupKV() {
         if (this.kvKeys.size === 0) {
@@ -527,7 +527,7 @@ export class TestCleanupHelper {
     }
 
     /**
-     * Scan g8es KV keys matching a pattern
+     * Scan operator KV keys matching a pattern
      */
     async _scanKVKeys(pattern) {
         if (this.kvClient && typeof this.kvClient.keys === 'function') {

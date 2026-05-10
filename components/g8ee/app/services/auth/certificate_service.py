@@ -44,7 +44,7 @@ class CertificateService:
 
     TODO: Move CA private key operations behind a single host-side authority.
     App services should call a signing endpoint or consume pre-issued certificates
-    rather than reading ca/ca.key directly. See g8es-host-transition-finalization.md.
+    rather than reading ca/ca.key directly. See operator-host-transition-finalization.md.
     """
 
     def __init__(self, ssl_dir: str = DEFAULT_SSL_DIR, data_service: CertificateDataService | None = None):
@@ -73,7 +73,7 @@ class CertificateService:
                 logger.error("[CERT-SERVICE] Failed to load revocations from persistence: %s", e)
 
         # 2. Load CA Certificate for local reference
-        # Authority: g8es (Operator --listen mode)
+        # Authority: operator (Operator --listen mode)
         # We no longer read ca.key directly. Key operations are behind the /ssl/sign-certificate API.
         paths = [
             os.path.join(self.ssl_dir, "ca.crt"),
@@ -105,11 +105,11 @@ class CertificateService:
         user_id: str,
         organization_id: str
     ) -> dict[str, str]:
-        """Request a new per-operator client certificate from g8es signing API."""
+        """Request a new per-operator client certificate from operator signing API."""
         if not self.initialized:
             await self.initialize()
 
-        logger.info("[CERT-SERVICE] Requesting certificate for operator %s via g8es", operator_id)
+        logger.info("[CERT-SERVICE] Requesting certificate for operator %s via operator", operator_id)
 
         # Generate local private key
         private_key = ec.generate_private_key(ec.SECP384R1())
@@ -125,7 +125,7 @@ class CertificateService:
         from app.services.service_factory import AllServices
 
         # This is a bit of a shortcut, but service_factory provides access to everything.
-        # In a cleaner world we'd inject a G8esClient, but DBClient already has the connection info.
+        # In a cleaner world we'd inject a OperatorClient, but DBClient already has the connection info.
         # We'll use the _request_json internal of db_client for this transition phase.
         
         db_client = self.data_service.cache.db.client # type: ignore
@@ -141,7 +141,7 @@ class CertificateService:
             response = await db_client._request_json("POST", "/ssl/sign-certificate", json=payload)
             if not response or not response.get("success"):
                 error_msg = response.get("error") if response else "Unknown error"
-                raise RuntimeError(f"Failed to sign certificate via g8es: {error_msg}")
+                raise RuntimeError(f"Failed to sign certificate via operator: {error_msg}")
 
             cert_pem = str(response.get("certificate_pem"))
             serial = str(response.get("serial"))

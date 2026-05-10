@@ -13,18 +13,18 @@
 
 import { logger } from '../../utils/logger.js';
 import { PLATFORMS, OPERATOR_BINARY_BLOB_NAMESPACE } from '../../constants/service_config.js';
-import { G8ES_HTTP_TIMEOUT_MS } from '../../constants/http_client.js';
+import { OPERATOR_HTTP_TIMEOUT_MS } from '../../constants/http_client.js';
 import { HTTP_INTERNAL_AUTH_HEADER } from '../../constants/headers.js';
 
 /**
  * OperatorDownloadService
  *
- * Owns all operator binary retrieval from g8es's blob store.
+ * Owns all operator binary retrieval from operator's blob store.
  * g8ed is stateless — no local disk cache, no KV store involvement.
  *
  * Architecture:
- *   g8ed → GET  https://g8es/blob/{ns}/{os}-{arch}      → g8es blob store
- *   g8ed → GET  https://g8es/blob/{ns}/{os}-{arch}/meta  → g8es blob metadata (availability check)
+ *   g8ed → GET  https://operator/blob/{ns}/{os}-{arch}      → operator blob store
+ *   g8ed → GET  https://operator/blob/{ns}/{os}-{arch}/meta  → operator blob metadata (availability check)
  */
 class OperatorDownloadService {
     constructor(listenUrl, internalAuthToken) {
@@ -48,7 +48,7 @@ class OperatorDownloadService {
     }
 
     /**
-     * Fetch a binary from g8es for the given platform.
+     * Fetch a binary from operator for the given platform.
      *
      * @param {string} os
      * @param {string} arch
@@ -61,7 +61,7 @@ class OperatorDownloadService {
 
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), G8ES_HTTP_TIMEOUT_MS);
+            const timeoutId = setTimeout(() => controller.abort(), OPERATOR_HTTP_TIMEOUT_MS);
             let res;
             try {
                 res = await fetch(url, { signal: controller.signal, headers: this._headers() });
@@ -70,13 +70,13 @@ class OperatorDownloadService {
             }
 
             if (!res.ok) {
-                logger.error(`[OPERATOR-DOWNLOAD-SERVICE] g8es blob store returned ${res.status} for platform: ${platform}`, { url });
+                logger.error(`[OPERATOR-DOWNLOAD-SERVICE] operator blob store returned ${res.status} for platform: ${platform}`, { url });
                 throw new Error(`Operator binary not available for platform: ${platform}`);
             }
 
             const arrayBuf = await res.arrayBuffer();
             const buffer = Buffer.from(arrayBuf);
-            logger.info(`[OPERATOR-DOWNLOAD-SERVICE] Fetched ${platform} binary from g8es blob store`, {
+            logger.info(`[OPERATOR-DOWNLOAD-SERVICE] Fetched ${platform} binary from operator blob store`, {
                 size_mb: (buffer.length / 1024 / 1024).toFixed(2),
             });
             return buffer;
@@ -84,7 +84,7 @@ class OperatorDownloadService {
             if (error.message.startsWith('Operator binary not available')) {
                 throw error;
             }
-            logger.error(`[OPERATOR-DOWNLOAD-SERVICE] Failed to fetch binary from g8es blob store`, { platform, error: error.message });
+            logger.error(`[OPERATOR-DOWNLOAD-SERVICE] Failed to fetch binary from operator blob store`, { platform, error: error.message });
             throw new Error(`Operator binary not available for platform: ${platform}`);
         }
     }
@@ -100,7 +100,7 @@ class OperatorDownloadService {
         const url = `${this._blobUrl(os, arch)}/meta`;
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), G8ES_HTTP_TIMEOUT_MS);
+            const timeoutId = setTimeout(() => controller.abort(), OPERATOR_HTTP_TIMEOUT_MS);
             let res;
             try {
                 res = await fetch(url, { signal: controller.signal, headers: this._headers() });

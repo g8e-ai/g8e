@@ -30,11 +30,11 @@ import (
 )
 
 // newHeartbeatFixture returns a wired HeartbeatService backed by a mock pubsub client.
-func newHeartbeatFixture(t *testing.T) (*HeartbeatService, *MockG8esPubSubClient, *PubSubResultsService) {
+func newHeartbeatFixture(t *testing.T) (*HeartbeatService, *MockOperatorPubSubClient, *PubSubResultsService) {
 	t.Helper()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
-	db := NewMockG8esPubSubClient()
+	db := NewMockOperatorPubSubClient()
 	t.Cleanup(func() { db.Close() })
 
 	resultsSvc, err := NewPubSubResultsService(cfg, logger, db, nil)
@@ -54,7 +54,7 @@ func newHeartbeatFixture(t *testing.T) (*HeartbeatService, *MockG8esPubSubClient
 func TestBuildHeartbeat_EnvelopeFields(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
-	db := NewMockG8esPubSubClient()
+	db := NewMockOperatorPubSubClient()
 	t.Cleanup(func() { db.Close() })
 	resultsSvc, err := NewPubSubResultsService(cfg, logger, db, nil)
 	require.NoError(t, err)
@@ -339,7 +339,7 @@ func TestHandleHeartbeatRequest_NoResultsServiceDoesNotPanic(t *testing.T) {
 func TestHandleHeartbeatRequest_PublishesToCorrectChannel(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
-	db := NewMockG8esPubSubClient()
+	db := NewMockOperatorPubSubClient()
 	t.Cleanup(func() { db.Close() })
 	resultsSvc, err := NewPubSubResultsService(cfg, logger, db, nil)
 	require.NoError(t, err)
@@ -394,7 +394,7 @@ func TestSendAutomaticHeartbeat_UsesVersionFromConfig(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	cfg.Version = "3.1.4"
 	logger := testutil.NewTestLogger()
-	db := NewMockG8esPubSubClient()
+	db := NewMockOperatorPubSubClient()
 	defer db.Close()
 
 	resultsSvc, err := NewPubSubResultsService(cfg, logger, db, nil)
@@ -563,7 +563,7 @@ func TestPubSubCommandService_HandleHeartbeatRequestDelegate(t *testing.T) {
 
 // newHeartbeatFixtureWithInterval creates a HeartbeatService with an explicit
 // HeartbeatInterval, mirroring what --heartbeat-interval sets at startup.
-func newHeartbeatFixtureWithInterval(t *testing.T, interval time.Duration) (*HeartbeatService, *MockG8esPubSubClient) {
+func newHeartbeatFixtureWithInterval(t *testing.T, interval time.Duration) (*HeartbeatService, *MockOperatorPubSubClient) {
 	t.Helper()
 	cfg := testutil.NewTestConfig(t)
 	cfg.HeartbeatInterval = interval
@@ -575,7 +575,7 @@ func newHeartbeatFixtureWithInterval(t *testing.T, interval time.Duration) (*Hea
 	cfg.NoGit = false
 
 	logger := testutil.NewTestLogger()
-	db := NewMockG8esPubSubClient()
+	db := NewMockOperatorPubSubClient()
 	t.Cleanup(func() { db.Close() })
 
 	resultsSvc, err := NewPubSubResultsService(cfg, logger, db, nil)
@@ -687,7 +687,7 @@ func TestHeartbeatScheduler_PublishesToHeartbeatChannel(t *testing.T) {
 	cfg.HeartbeatInterval = 30 * time.Millisecond
 
 	logger := testutil.NewTestLogger()
-	db := NewMockG8esPubSubClient()
+	db := NewMockOperatorPubSubClient()
 	t.Cleanup(func() { db.Close() })
 
 	resultsSvc, err := NewPubSubResultsService(cfg, logger, db, nil)
@@ -723,7 +723,7 @@ func TestHeartbeatScheduler_StopsCleanly(t *testing.T) {
 	cfg.HeartbeatInterval = 30 * time.Millisecond
 
 	logger := testutil.NewTestLogger()
-	db := NewMockG8esPubSubClient()
+	db := NewMockOperatorPubSubClient()
 	t.Cleanup(func() { db.Close() })
 
 	resultsSvc, err := NewPubSubResultsService(cfg, logger, db, nil)
@@ -758,7 +758,7 @@ func TestHeartbeatScheduler_ContextCancellationStopsScheduler(t *testing.T) {
 	cfg.HeartbeatInterval = 30 * time.Millisecond
 
 	logger := testutil.NewTestLogger()
-	db := NewMockG8esPubSubClient()
+	db := NewMockOperatorPubSubClient()
 	t.Cleanup(func() { db.Close() })
 
 	resultsSvc, err := NewPubSubResultsService(cfg, logger, db, nil)
@@ -790,7 +790,7 @@ func TestHeartbeatScheduler_ZeroIntervalSkips(t *testing.T) {
 	cfg.HeartbeatInterval = 0
 
 	logger := testutil.NewTestLogger()
-	db := NewMockG8esPubSubClient()
+	db := NewMockOperatorPubSubClient()
 	t.Cleanup(func() { db.Close() })
 
 	var wg sync.WaitGroup

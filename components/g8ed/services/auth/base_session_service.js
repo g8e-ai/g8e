@@ -171,7 +171,7 @@ export class BaseSessionService {
     }
 
     /**
-     * Log session event to g8es audit trail (async, non-blocking).
+     * Log session event to operator audit trail (async, non-blocking).
      * Events are stored as an array within the session document itself.
      */
     async _logSessionEvent(eventType, session, metadata = {}) {
@@ -250,7 +250,7 @@ export class BaseSessionService {
     }
 
     async waitForReady() {
-        logger.info('[SESSION-SERVICE] Session service ready (G8es-backed)');
+        logger.info('[SESSION-SERVICE] Session service ready (Operator-backed)');
         return true;
     }
 

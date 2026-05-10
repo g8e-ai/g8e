@@ -16,11 +16,11 @@
  *
  * Owns the full lifecycle of operator↔web session bindings.
  *
- * Binding state is stored bidirectionally in g8es KV (fast lookup path):
+ * Binding state is stored bidirectionally in operator KV (fast lookup path):
  *   sessionBindOperators(operatorSessionId) → webSessionId  (STRING)
  *   sessionWebBind(webSessionId)            → {operatorSessionId, ...}  (SET)
  *
- * A BoundSessionsDocument is persisted to g8es document store (bound_sessions
+ * A BoundSessionsDocument is persisted to operator document store (bound_sessions
  * collection) for durability and audit. The document id equals the web_session_id.
  *
  * All persistence and KV operations flow through CacheAsideService.
@@ -56,7 +56,7 @@ export class BoundSessionsService {
      *   sessionBindOperators(operatorSessionId) → webSessionId  (STRING)
      *   sessionWebBind(webSessionId)            → operatorSessionId  (SET member)
      *
-     * Creates or updates the BoundSessionsDocument in g8es document store.
+     * Creates or updates the BoundSessionsDocument in operator document store.
      *
      * @param {string} operatorSessionId
      * @param {string} webSessionId
@@ -93,7 +93,7 @@ export class BoundSessionsService {
      *   sessionWebBind(webSessionId) member: operatorSessionId
      *   (deletes SET key entirely when it becomes empty)
      *
-     * Updates the BoundSessionsDocument in g8es document store.
+     * Updates the BoundSessionsDocument in operator document store.
      *
      * @param {string} operatorSessionId
      * @param {string} webSessionId

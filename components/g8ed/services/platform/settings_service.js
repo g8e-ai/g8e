@@ -48,7 +48,7 @@ import {
     SETTINGS_BY_KEY,
 } from '../../models/settings_model.js';
 import { BootstrapService } from './bootstrap_service.js';
-import { G8ES_INTERNAL_HTTP_URL } from '../../constants/http_client.js';
+import { OPERATOR_INTERNAL_HTTP_URL } from '../../constants/http_client.js';
 import { now } from '../../models/base.js';
 
 
@@ -103,10 +103,10 @@ class SettingsService {
         const caCertPath = this.bootstrap.loadCaCertPath();
 
         logger.info('[SETTINGS-SERVICE] Initializing platform settings', {
-            g8esUrl: G8ES_INTERNAL_HTTP_URL ,
+            operatorUrl: OPERATOR_INTERNAL_HTTP_URL ,
             hasInternalAuthToken: !!internalAuthToken,
             caCertPath,
-            g8esVolumePath: this.bootstrap.volumePath
+            operatorVolumePath: this.bootstrap.volumePath
         });
 
         // 1. Load PLATFORM_SETTINGS defaults
@@ -125,8 +125,8 @@ class SettingsService {
             
             // Critical failure if platform settings document is missing during bootstrap
             if (Object.keys(dbSettings).length === 0) {
-                logger.error('[SETTINGS-SERVICE] Platform settings document missing in g8es');
-                throw new Error('Platform settings document missing in g8es');
+                logger.error('[SETTINGS-SERVICE] Platform settings document missing in operator');
+                throw new Error('Platform settings document missing in operator');
             }
 
             for (const [key, value] of Object.entries(dbSettings)) {

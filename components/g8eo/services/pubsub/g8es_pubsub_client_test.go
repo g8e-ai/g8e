@@ -29,9 +29,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestG8esPubSubClient_CheckTLSConnectivity verifies that checkTLSConnectivity
+// TestOperatorPubSubClient_CheckTLSConnectivity verifies that checkTLSConnectivity
 // correctly distinguishes between transport-layer failures and proxy rejections.
-func TestG8esPubSubClient_CheckTLSConnectivity(t *testing.T) {
+func TestOperatorPubSubClient_CheckTLSConnectivity(t *testing.T) {
 	t.Run("proxy rejection is treated as connectivity success", func(t *testing.T) {
 		// Simulate the g8ed proxy rejecting a sessionless connection with HTTP 401.
 		// The gorilla/websocket dialer returns a non-nil *http.Response on upgrade
@@ -44,7 +44,7 @@ func TestG8esPubSubClient_CheckTLSConnectivity(t *testing.T) {
 
 		wsURL := "ws://" + strings.TrimPrefix(server.Listener.Addr().String(), "http://")
 		logger := testutil.NewTestLogger()
-		client, err := NewG8esPubSubClient(wsURL, "", logger)
+		client, err := NewOperatorPubSubClient(wsURL, "", logger)
 		require.NoError(t, err)
 
 		err = client.checkTLSConnectivity(context.Background())
@@ -55,7 +55,7 @@ func TestG8esPubSubClient_CheckTLSConnectivity(t *testing.T) {
 		// Use a port that is not listening — this produces a transport-level error
 		// with no HTTP response, which checkTLSConnectivity must propagate.
 		logger := testutil.NewTestLogger()
-		client, err := NewG8esPubSubClient("ws://127.0.0.1:19999", "", logger)
+		client, err := NewOperatorPubSubClient("ws://127.0.0.1:19999", "", logger)
 		require.NoError(t, err)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 2)
@@ -82,7 +82,7 @@ func TestG8esPubSubClient_CheckTLSConnectivity(t *testing.T) {
 
 		wsURL := "ws://" + strings.TrimPrefix(server.Listener.Addr().String(), "http://")
 		logger := testutil.NewTestLogger()
-		client, err := NewG8esPubSubClient(wsURL, "", logger)
+		client, err := NewOperatorPubSubClient(wsURL, "", logger)
 		require.NoError(t, err)
 
 		err = client.checkTLSConnectivity(context.Background())
@@ -90,12 +90,12 @@ func TestG8esPubSubClient_CheckTLSConnectivity(t *testing.T) {
 	})
 }
 
-// TestG8esPubSubClient_Close verifies that Close marks the client closed and
+// TestOperatorPubSubClient_Close verifies that Close marks the client closed and
 // prevents subsequent Publish calls.
-func TestG8esPubSubClient_Close(t *testing.T) {
+func TestOperatorPubSubClient_Close(t *testing.T) {
 	t.Run("publish after close returns error", func(t *testing.T) {
 		logger := testutil.NewTestLogger()
-		client, err := NewG8esPubSubClient("ws://"+constants.DefaultEndpoint+":443", "", logger)
+		client, err := NewOperatorPubSubClient("ws://"+constants.DefaultEndpoint+":443", "", logger)
 		require.NoError(t, err)
 
 		client.Close()
@@ -106,11 +106,11 @@ func TestG8esPubSubClient_Close(t *testing.T) {
 	})
 }
 
-// TestG8esPubSubClient_ConnectPubWs verifies that connectPubWs (formerly
+// TestOperatorPubSubClient_ConnectPubWs verifies that connectPubWs (formerly
 // ensurePubWs) is called correctly via the explicit nil guard in Publish, and
 // that repeated Publish calls reuse the existing connection rather than
 // reconnecting on every call.
-func TestG8esPubSubClient_ConnectPubWs_ReusesConnection(t *testing.T) {
+func TestOperatorPubSubClient_ConnectPubWs_ReusesConnection(t *testing.T) {
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool { return true },
 	}
@@ -131,7 +131,7 @@ func TestG8esPubSubClient_ConnectPubWs_ReusesConnection(t *testing.T) {
 
 	wsURL := "ws://" + strings.TrimPrefix(server.Listener.Addr().String(), "http://")
 	logger := testutil.NewTestLogger()
-	client, err := NewG8esPubSubClient(wsURL, "", logger)
+	client, err := NewOperatorPubSubClient(wsURL, "", logger)
 	require.NoError(t, err)
 	defer client.Close()
 
@@ -142,10 +142,10 @@ func TestG8esPubSubClient_ConnectPubWs_ReusesConnection(t *testing.T) {
 	assert.Equal(t, int32(1), connectCount.Load(), "connectPubWs must be called once and the connection reused")
 }
 
-// TestG8esPubSubClient_WaitForSubscribedACK_ContextCancellation verifies that
+// TestOperatorPubSubClient_WaitForSubscribedACK_ContextCancellation verifies that
 // waitForSubscribedACK returns promptly when the context is cancelled, without
 // waiting for the full ackTimeout.
-func TestG8esPubSubClient_WaitForSubscribedACK_ContextCancellation(t *testing.T) {
+func TestOperatorPubSubClient_WaitForSubscribedACK_ContextCancellation(t *testing.T) {
 	// Server that accepts the WebSocket upgrade but never sends any frames —
 	// simulates a broker that is slow to ACK the subscription.
 	upgrader := websocket.Upgrader{
@@ -164,7 +164,7 @@ func TestG8esPubSubClient_WaitForSubscribedACK_ContextCancellation(t *testing.T)
 
 	wsURL := "ws://" + strings.TrimPrefix(server.Listener.Addr().String(), "http://")
 	logger := testutil.NewTestLogger()
-	client, err := NewG8esPubSubClient(wsURL, "", logger)
+	client, err := NewOperatorPubSubClient(wsURL, "", logger)
 	require.NoError(t, err)
 	defer client.Close()
 
@@ -186,13 +186,13 @@ func TestG8esPubSubClient_WaitForSubscribedACK_ContextCancellation(t *testing.T)
 		"Subscribe took too long after context cancellation: %v", elapsed)
 }
 
-// TestG8esPubSubClient_Publish_AppliesWriteDeadline verifies that Publish sets
+// TestOperatorPubSubClient_Publish_AppliesWriteDeadline verifies that Publish sets
 // a write deadline on the underlying WebSocket so a half-open TCP connection
 // cannot block the shared mutex indefinitely. The test proves the deadline is
 // applied by shrinking pubSubWriteTimeout to a value already in the past: the
 // server reads frames normally, yet every write must fail immediately because
 // the deadline has expired before Write is called.
-func TestG8esPubSubClient_Publish_AppliesWriteDeadline(t *testing.T) {
+func TestOperatorPubSubClient_Publish_AppliesWriteDeadline(t *testing.T) {
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool { return true },
 	}
@@ -216,7 +216,7 @@ func TestG8esPubSubClient_Publish_AppliesWriteDeadline(t *testing.T) {
 
 	wsURL := "ws://" + strings.TrimPrefix(server.Listener.Addr().String(), "http://")
 	logger := testutil.NewTestLogger()
-	client, err := NewG8esPubSubClient(wsURL, "", logger)
+	client, err := NewOperatorPubSubClient(wsURL, "", logger)
 	require.NoError(t, err)
 	defer client.Close()
 

@@ -28,7 +28,7 @@ package pubsub
 //  6. drainOne — assert the expected result arrived on the watcher channel.
 //
 // These tests exercise the full dispatch → service → publish path that
-// MockG8esPubSubClient-based unit tests cannot reach.
+// MockOperatorPubSubClient-based unit tests cannot reach.
 
 import (
 	"context"
@@ -62,7 +62,7 @@ func newLoopbackService(t *testing.T, f *loopbackFixture) (*PubSubCommandService
 	cfg.HeartbeatInterval = 0
 	logger := testutil.NewTestLogger()
 
-	cmdClient, err := NewG8esPubSubClient(f.wsURL, "", logger)
+	cmdClient, err := NewOperatorPubSubClient(f.wsURL, "", logger)
 	require.NoError(t, err)
 	t.Cleanup(cmdClient.Close)
 

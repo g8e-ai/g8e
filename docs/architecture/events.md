@@ -19,7 +19,7 @@ Events in g8e are state transitions and lifecycle signals that drive the system'
 ### 1. The Central Hub: `g8ed`
 `g8ed` (Node.js) serves as the central event router and composition root. It manages two primary transport layers:
 - **Internal HTTP Push**: Receives events from `g8ee` (Python) via standard POST requests.
-- **G8ES Pub/Sub**: A WebSocket-based backbone for communication with `g8eo` (Go) operators. `g8ed` acts as a proxy, translating Pub/Sub messages into SSE for the Terminal.
+- **OPERATOR Pub/Sub**: A WebSocket-based backbone for communication with `g8eo` (Go) operators. `g8ed` acts as a proxy, translating Pub/Sub messages into SSE for the Terminal.
 - **Server-Sent Events (SSE)**: Pushes real-time updates to human-interactive clients.
 
 ### 2. Event Producers

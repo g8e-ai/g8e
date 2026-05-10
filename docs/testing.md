@@ -14,7 +14,7 @@ This document outlines the testing architecture, core principles, and how to wri
 ## Core Engineering Principles
 
 - **Hermetic Execution** — Each component runs tests inside a dedicated test-runner container (`g8ee-test-runner`, `g8ed-test-runner`, `g8eo-test-runner`). Source code is volume-mounted, meaning local development and CI execution are perfectly identical.
-- **Real Infrastructure** — All testing must occur against real services and real inter-component communications. This means using a real `CacheAsideService` with a real `g8es` backend, real pub/sub over WebSockets, and real network stacks.
+- **Real Infrastructure** — All testing must occur against real services and real inter-component communications. This means using a real `CacheAsideService` with a real `operator` backend, real pub/sub over WebSockets, and real network stacks.
 - **The "No Mocks" Policy** — We strictly prohibit mocking internal services, database clients, or LLM providers. Integration tests must use real services. If a scenario is extremely difficult to test without a mock, you must justify its necessity in the PR.
 - **Real LLM Calls** — AI tests use real provider API calls. No `MagicMock`, `AsyncMock`, or HTTP interception on LLM clients. The system handles transient failures via exponential backoff in `EvalJudge`.
 
@@ -25,7 +25,7 @@ The platform maintains two distinct "real operator" test harnesses with **strict
 ### 1. E2E Tests (Internal Lifecycle Path)
 **Command:** `./g8e test g8ee --e2e` or `./g8e test g8ed test/integration/setup`
 **Purpose:** Validate the internal operator lifecycle and platform infrastructure.
-- **Pattern:** Provisions operator slots via `g8ed` internal API, uses `X-Internal-Auth`, reads API keys from `g8es`.
+- **Pattern:** Provisions operator slots via `g8ed` internal API, uses `X-Internal-Auth`, reads API keys from `operator`.
 - **Rationale:** Validates the platform's own internal mechanisms.
 
 ### 2. Evals (Public Device-Token Path)
@@ -123,7 +123,7 @@ The `./g8e evals run` wrapper executes the Python runner in `g8ee-test-runner` s
 
 ### Go (g8eo)
 - **gotestsum**: Used for formatted output and race detection (`-race`).
-- **Loopback**: Uses an in-process `PubSubBroker` over real WebSockets for full wire-path validation without a live `g8es`.
+- **Loopback**: Uses an in-process `PubSubBroker` over real WebSockets for full wire-path validation without a live `operator`.
 - **Integration**: Tagged with `//go:build integration`. Requires live platform infrastructure.
 
 ### Node.js (g8ed)

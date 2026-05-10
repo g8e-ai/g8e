@@ -22,21 +22,21 @@ DB location: <operator_cwd>/.g8e/data/g8e.db
 
 Usage:
     # Direct path to the DB file
-    python manage-g8es.py audit --db-path /path/to/g8e.db sessions
-    python manage-g8es.py audit --db-path /path/to/g8e.db events --session SESSION_ID
-    python manage-g8es.py audit --db-path /path/to/g8e.db events --session SESSION_ID --type CMD_EXEC
-    python manage-g8es.py audit --db-path /path/to/g8e.db event --id 42
-    python manage-g8es.py audit --db-path /path/to/g8e.db files --session SESSION_ID
-    python manage-g8es.py audit --db-path /path/to/g8e.db stats
-    python manage-g8es.py audit --db-path /path/to/g8e.db export --session SESSION_ID
+    python manage-operator.py audit --db-path /path/to/g8e.db sessions
+    python manage-operator.py audit --db-path /path/to/g8e.db events --session SESSION_ID
+    python manage-operator.py audit --db-path /path/to/g8e.db events --session SESSION_ID --type CMD_EXEC
+    python manage-operator.py audit --db-path /path/to/g8e.db event --id 42
+    python manage-operator.py audit --db-path /path/to/g8e.db files --session SESSION_ID
+    python manage-operator.py audit --db-path /path/to/g8e.db stats
+    python manage-operator.py audit --db-path /path/to/g8e.db export --session SESSION_ID
 
     # Auto-discover from a running Docker container (normal-mode operator)
-    python manage-g8es.py audit --container g8es sessions
-    python manage-g8es.py audit --container g8es events --session SESSION_ID --limit 20
-    python manage-g8es.py audit --container g8es stats
+    python manage-operator.py audit --container operator sessions
+    python manage-operator.py audit --container operator events --session SESSION_ID --limit 20
+    python manage-operator.py audit --container operator stats
 
     # Docker volume
-    python manage-g8es.py audit --volume g8es-data sessions
+    python manage-operator.py audit --volume operator-data sessions
 """
 
 from __future__ import annotations
@@ -112,7 +112,7 @@ class LFAAManager:
             )
             if listen_probe.returncode == 0:
                 raise RuntimeError(
-                    f'Container {self._container!r} is running in listen mode (g8es) — '
+                    f'Container {self._container!r} is running in listen mode (operator) — '
                     f'it has no LFAA audit vault.\n'
                     f'LFAA is written by normal-mode operators. '
                     f'Target an operator-test container instead.'
@@ -178,7 +178,7 @@ class LFAAManager:
         if 'sessions' not in tables or 'events' not in tables:
             if 'documents' in tables or 'kv_store' in tables:
                 raise RuntimeError(
-                    'This is a g8es coordination store DB (listen-mode operator), not an LFAA audit vault.\n'
+                    'This is a operator coordination store DB (listen-mode operator), not an LFAA audit vault.\n'
                     'LFAA data is written by normal-mode operators running with local storage enabled.\n'
                     'The operator must be started WITHOUT --listen to write LFAA audit data.'
                 )
@@ -553,21 +553,21 @@ def build_parser() -> argparse.ArgumentParser:
         epilog="""
 Examples:
   # Direct path
-  python manage-g8es.py audit --db-path /opt/g8e/.g8e/data/g8e.db sessions
-  python manage-g8es.py audit --db-path /opt/g8e/.g8e/data/g8e.db events --session SESSION_ID
-  python manage-g8es.py audit --db-path /opt/g8e/.g8e/data/g8e.db events --session SESSION_ID --type CMD_EXEC
-  python manage-g8es.py audit --db-path /opt/g8e/.g8e/data/g8e.db event --id 42
-  python manage-g8es.py audit --db-path /opt/g8e/.g8e/data/g8e.db files --session SESSION_ID
-  python manage-g8es.py audit --db-path /opt/g8e/.g8e/data/g8e.db stats
-  python manage-g8es.py audit --db-path /opt/g8e/.g8e/data/g8e.db export --session SESSION_ID --out audit.json
+  python manage-operator.py audit --db-path /opt/g8e/.g8e/data/g8e.db sessions
+  python manage-operator.py audit --db-path /opt/g8e/.g8e/data/g8e.db events --session SESSION_ID
+  python manage-operator.py audit --db-path /opt/g8e/.g8e/data/g8e.db events --session SESSION_ID --type CMD_EXEC
+  python manage-operator.py audit --db-path /opt/g8e/.g8e/data/g8e.db event --id 42
+  python manage-operator.py audit --db-path /opt/g8e/.g8e/data/g8e.db files --session SESSION_ID
+  python manage-operator.py audit --db-path /opt/g8e/.g8e/data/g8e.db stats
+  python manage-operator.py audit --db-path /opt/g8e/.g8e/data/g8e.db export --session SESSION_ID --out audit.json
 
   # Docker container (normal-mode operator)
-  python manage-g8es.py audit --container g8es sessions
-  python manage-g8es.py audit --container g8es events --session SESSION_ID --limit 20
-  python manage-g8es.py audit --container g8es stats
+  python manage-operator.py audit --container operator sessions
+  python manage-operator.py audit --container operator events --session SESSION_ID --limit 20
+  python manage-operator.py audit --container operator stats
 
   # Docker volume
-  python manage-g8es.py audit --volume g8es-data sessions
+  python manage-operator.py audit --volume operator-data sessions
         """
     )
 
@@ -628,7 +628,7 @@ def run(argv: List[str]) -> int:
         parser.print_help()
         return 1
 
-    print_banner('manage-g8es.py audit', ' '.join(argv))
+    print_banner('manage-operator.py audit', ' '.join(argv))
 
     manager = LFAAManager(
         db_path=args.db_path,
@@ -667,7 +667,7 @@ def run(argv: List[str]) -> int:
                 fmt=args.fmt,
             )
     except RuntimeError as e:
-        print(f'[manage-g8es audit] {e}', file=sys.stderr)
+        print(f'[manage-operator audit] {e}', file=sys.stderr)
         return 1
     finally:
         manager.cleanup()

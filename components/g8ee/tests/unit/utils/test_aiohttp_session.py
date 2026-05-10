@@ -49,7 +49,7 @@ class TestUrlUsesTls:
         assert _url_uses_tls("http://localhost:9000") is False
 
     def test_ws_returns_false(self):
-        assert _url_uses_tls("ws://g8es") is False
+        assert _url_uses_tls("ws://operator") is False
 
 
 # =============================================================================

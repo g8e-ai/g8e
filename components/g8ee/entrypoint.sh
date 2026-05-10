@@ -1,5 +1,5 @@
 #!/bin/sh
-# g8ee Entrypoint script - waits for g8es then starts the application
+# g8ee Entrypoint script - waits for operator then starts the application
 
 set -e
 
@@ -14,7 +14,7 @@ if [ -f "${SSL_DIR}/session_encryption_key" ]; then
     export G8E_SESSION_ENCRYPTION_KEY=$(cat "${SSL_DIR}/session_encryption_key" | tr -d ' \n\r')
 fi
 
-# g8es readiness is gated by docker-compose `depends_on: g8es: service_healthy`.
+# operator readiness is gated by docker-compose `depends_on: operator: service_healthy`.
 # Execute the main application - bootstrap service handles secret loading
 exec uvicorn app.main:app --host 0.0.0.0 --port 8443 \
     --ssl-keyfile "${SSL_DIR}/server.key" \

@@ -34,14 +34,14 @@ graph TD
     User[User] -- "TLS 1.3 + PHP (FIDO2)" --> g8ed
     g8ed[g8ed Governance Gateway] -- "X-Internal-Auth" --> g8ee
     g8ed -- "mTLS (TLS 1.3)" --> g8eo
-    g8ee -- "X-Internal-Auth" --> g8es
-    g8eo[g8eo Operator] -- "Pub/Sub (WSS + mTLS)" --> g8es
+    g8ee -- "X-Internal-Auth" --> operator
+    g8eo[g8eo Operator] -- "Pub/Sub (WSS + mTLS)" --> operator
     g8eo -- "Local Exec" --> Host[Target System]
 ```
 
 ### 1. User to Gateway (g8ed)
 - **Proof of Human Presence (PHP)**: FIDO2/WebAuthn hardware-bound signatures. No passwords.
-- **Sessions**: `HttpOnly`, `Secure`, `SameSite=Lax` cookies. Session state stored in `g8es` KV.
+- **Sessions**: `HttpOnly`, `Secure`, `SameSite=Lax` cookies. Session state stored in `operator` KV.
 - **Context Binding**: Sessions are tied to IP and User-Agent; 4+ IP changes trigger a security flag.
 
 ### 2. Internal Services (g8ed, g8ee, Operator)
@@ -75,7 +75,7 @@ Before a command reaches an Operator, it must pass through the `g8ee` Tribunal:
 The platform uses a "Capture and Persist" strategy for its core secrets, managed by the `g8eo` Secret Manager in `--listen` mode.
 
 ### Authoritative Secrets (The SSL Volume)
-Three critical secrets are generated on first boot and stored in the `g8es-ssl` volume (mounted at `/g8es`):
+Three critical secrets are generated on first boot and stored in the `operator-ssl` volume (mounted at `/operator`):
 - `internal_auth_token`: For `X-Internal-Auth` header validation.
 - `session_encryption_key`: For AES-256 encryption of sensitive session fields.
 - `auditor_hmac_key`: For signing Tribunal reputation commitments.

@@ -183,9 +183,9 @@ deploy:
 	for node in $$(docker ps --filter "label=demo.service=web-node" --format '{{.Names}}' | sort); do \
 		echo "  Deploying to $$node..."; \
 		docker exec $$node sh -c "\
-			curl -fsSL --cacert /g8es/ca.crt -H \"Authorization: Bearer $$TOKEN\" \
+			curl -fsSL --cacert /operator/ca.crt -H \"Authorization: Bearer $$TOKEN\" \
 				-o g8e.operator \"https://g8e.local/operator/download/linux/amd64\" && \
-			curl -fsSL --cacert /g8es/ca.crt -H \"Authorization: Bearer $$TOKEN\" \
+			curl -fsSL --cacert /operator/ca.crt -H \"Authorization: Bearer $$TOKEN\" \
 				-o g8e.operator.sha256 \"https://g8e.local/operator/download/linux/amd64/sha256\" && \
 			sha256sum -c g8e.operator.sha256 && \
 			chmod +x g8e.operator && \

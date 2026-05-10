@@ -19,10 +19,10 @@ package pubsub
 // in-process PubSubBroker (loopbackFixture).
 //
 // No external infrastructure is required.  These tests sit between the unit
-// tests (MockG8esPubSubClient) and the integration tests (live g8es) and
+// tests (MockOperatorPubSubClient) and the integration tests (live operator) and
 // cover:
 //   - Scheduler fires at the configured short interval and publishes on the
-//     heartbeat channel via the real G8esPubSubClient + PubSubBroker path.
+//     heartbeat channel via the real OperatorPubSubClient + PubSubBroker path.
 //   - Multiple ticks arrive at the correct cadence.
 //   - Every field in the published Heartbeat payload is populated correctly.
 //   - Heartbeats arrive only on the heartbeat channel, not the results channel.
@@ -76,7 +76,7 @@ func newLoopbackServiceWithInterval(t *testing.T, f *loopbackFixture, interval t
 	cfg.HeartbeatInterval = interval
 	logger := testutil.NewTestLogger()
 
-	cmdClient, err := NewG8esPubSubClient(f.wsURL, "", logger)
+	cmdClient, err := NewOperatorPubSubClient(f.wsURL, "", logger)
 	require.NoError(t, err)
 	t.Cleanup(cmdClient.Close)
 
@@ -156,7 +156,7 @@ func TestLoopback_HeartbeatInterval_PayloadFieldsPopulated(t *testing.T) {
 	cfg.NoGit = false
 	logger := testutil.NewTestLogger()
 
-	cmdClient, err := NewG8esPubSubClient(f.wsURL, "", logger)
+	cmdClient, err := NewOperatorPubSubClient(f.wsURL, "", logger)
 	require.NoError(t, err)
 	t.Cleanup(cmdClient.Close)
 

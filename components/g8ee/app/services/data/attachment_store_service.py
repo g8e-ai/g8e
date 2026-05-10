@@ -14,7 +14,7 @@
 """
 Attachment Service for g8ee
 
-Retrieves file attachment data from g8es Blob Store that was stored by g8ed,
+Retrieves file attachment data from operator Blob Store that was stored by g8ed,
 and processes the retrieved base64 data for LLM provider consumption.
 
 Attachments are stored per-investigation in Blob Store namespaces.
@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 class AttachmentService:
     """
-    Retrieves attachment data from g8es Blob Store and processes it for AI consumption.
+    Retrieves attachment data from operator Blob Store and processes it for AI consumption.
 
     g8ed stores full AttachmentData JSON (including base64 data) in Blob Store.
     g8ee retrieves and classifies it here for LLM provider consumption.
@@ -160,7 +160,7 @@ class AttachmentService:
                 )
 
         logger.info(
-            "[ATTACHMENTS] Retrieved attachments from g8es",
+            "[ATTACHMENTS] Retrieved attachments from operator",
             extra={"retrieved": len(attachments), "total": len(attachment_metadata)}
         )
         return attachments

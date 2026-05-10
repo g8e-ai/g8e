@@ -33,7 +33,7 @@ import (
 // TestRealDataFlow_CommandExecution tests real command execution through the full g8eo stack
 func TestRealDataFlow_CommandExecution(t *testing.T) {
 
-	t.Run("executes echo command and receives result via g8es pub/sub", func(t *testing.T) {
+	t.Run("executes echo command and receives result via operator pub/sub", func(t *testing.T) {
 		db := NewTestPubSubClient(t)
 
 		cfg := testutil.NewTestConfig(t)
@@ -64,7 +64,7 @@ func TestRealDataFlow_CommandExecution(t *testing.T) {
 		defer svc.Stop()
 
 		resultsChannel := constants.ResultsChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), resultsChannel)
+		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestOperatorDirectURL(), resultsChannel)
 
 		time.Sleep(100 * time.Millisecond)
 
@@ -74,7 +74,7 @@ func TestRealDataFlow_CommandExecution(t *testing.T) {
 		cmdPayload := testutil.MustMarshalProtobufCommandRequested(t, "echo hello real data flow", execID, "Real data flow test", "", 0)
 		envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, execID, constants.Event.Operator.Command.Requested, cmdPayload, "", cfg.OperatorID, caseID, "inv-real-flow", cfg.OperatorSessionId)
 
-		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(envelopeBytes))
+		testutil.PublishTestMessage(t, testutil.GetTestOperatorDirectURL(), commandChannel, string(envelopeBytes))
 
 		received := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 		require.NotNil(t, received)
@@ -120,7 +120,7 @@ func TestRealDataFlow_CommandExecution(t *testing.T) {
 		defer svc.Stop()
 
 		resultsChannel := constants.ResultsChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), resultsChannel)
+		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestOperatorDirectURL(), resultsChannel)
 
 		time.Sleep(100 * time.Millisecond)
 
@@ -130,7 +130,7 @@ func TestRealDataFlow_CommandExecution(t *testing.T) {
 		cmdPayload := testutil.MustMarshalProtobufCommandRequested(t, "sh -c 'exit 42'", execID, "Non-zero exit code test", "", 0)
 		envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, execID, constants.Event.Operator.Command.Requested, cmdPayload, "", cfg.OperatorID, caseID, "inv-real-exit", cfg.OperatorSessionId)
 
-		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(envelopeBytes))
+		testutil.PublishTestMessage(t, testutil.GetTestOperatorDirectURL(), commandChannel, string(envelopeBytes))
 
 		received := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 		require.NotNil(t, received)
@@ -172,7 +172,7 @@ func TestRealDataFlow_CommandExecution(t *testing.T) {
 		defer svc.Stop()
 
 		resultsChannel := constants.ResultsChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), resultsChannel)
+		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestOperatorDirectURL(), resultsChannel)
 
 		time.Sleep(100 * time.Millisecond)
 
@@ -182,7 +182,7 @@ func TestRealDataFlow_CommandExecution(t *testing.T) {
 		cmdPayload := testutil.MustMarshalProtobufCommandRequested(t, "sh -c 'echo error message >&2'", execID, "Stderr output test", "", 0)
 		envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, execID, constants.Event.Operator.Command.Requested, cmdPayload, "", cfg.OperatorID, caseID, "inv-real-stderr", cfg.OperatorSessionId)
 
-		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(envelopeBytes))
+		testutil.PublishTestMessage(t, testutil.GetTestOperatorDirectURL(), commandChannel, string(envelopeBytes))
 
 		received := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 		require.NotNil(t, received)
@@ -228,13 +228,13 @@ func TestRealDataFlow_FileOperations(t *testing.T) {
 		defer svc.Stop()
 
 		resultsChannel := constants.ResultsChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), resultsChannel)
+		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestOperatorDirectURL(), resultsChannel)
 
 		time.Sleep(100 * time.Millisecond)
 
 		caseID := fmt.Sprintf("case-flow-multi-%d", time.Now().UnixNano())
 		commandChannel := constants.CmdChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		tmpFile := filepath.Join(t.TempDir(), "g8es-flow-test.txt")
+		tmpFile := filepath.Join(t.TempDir(), "operator-flow-test.txt")
 
 		// Step 1: Write file
 		execID1 := fmt.Sprintf("flow-write-%d", time.Now().UnixNano())
@@ -248,7 +248,7 @@ func TestRealDataFlow_FileOperations(t *testing.T) {
 		})
 		envelopeBytes1 := testutil.MustMarshalUniversalEnvelope(t, execID1, constants.Event.Operator.FileEdit.Requested, writePayload, "", cfg.OperatorID, caseID, "inv-write", cfg.OperatorSessionId)
 
-		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(envelopeBytes1))
+		testutil.PublishTestMessage(t, testutil.GetTestOperatorDirectURL(), commandChannel, string(envelopeBytes1))
 
 		writeResult := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 		require.NotNil(t, writeResult)
@@ -264,7 +264,7 @@ func TestRealDataFlow_FileOperations(t *testing.T) {
 		})
 		envelopeBytes2 := testutil.MustMarshalUniversalEnvelope(t, execID2, constants.Event.Operator.FileEdit.Requested, readPayload, "", cfg.OperatorID, caseID, "inv-read", cfg.OperatorSessionId)
 
-		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(envelopeBytes2))
+		testutil.PublishTestMessage(t, testutil.GetTestOperatorDirectURL(), commandChannel, string(envelopeBytes2))
 
 		readResult := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 		require.NotNil(t, readResult)
@@ -283,7 +283,7 @@ func TestRealDataFlow_FileOperations(t *testing.T) {
 		})
 		envelopeBytes3 := testutil.MustMarshalUniversalEnvelope(t, execID3, constants.Event.Operator.FileEdit.Requested, replacePayload, "", cfg.OperatorID, caseID, "inv-replace", cfg.OperatorSessionId)
 
-		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(envelopeBytes3))
+		testutil.PublishTestMessage(t, testutil.GetTestOperatorDirectURL(), commandChannel, string(envelopeBytes3))
 
 		replaceResult := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 		require.NotNil(t, replaceResult)
@@ -299,7 +299,7 @@ func TestRealDataFlow_FileOperations(t *testing.T) {
 		})
 		envelopeBytes4 := testutil.MustMarshalUniversalEnvelope(t, execID4, constants.Event.Operator.FileEdit.Requested, readPayload2, "", cfg.OperatorID, caseID, "inv-read-mod", cfg.OperatorSessionId)
 
-		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(envelopeBytes4))
+		testutil.PublishTestMessage(t, testutil.GetTestOperatorDirectURL(), commandChannel, string(envelopeBytes4))
 
 		readResult2 := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 		require.NotNil(t, readResult2)
@@ -307,7 +307,7 @@ func TestRealDataFlow_FileOperations(t *testing.T) {
 		assert.Contains(t, string(readResult2), "modified content")
 	})
 
-	t.Run("handles large payload through g8es pub/sub", func(t *testing.T) {
+	t.Run("handles large payload through operator pub/sub", func(t *testing.T) {
 		db := NewTestPubSubClient(t)
 
 		cfg := testutil.NewTestConfig(t)
@@ -338,7 +338,7 @@ func TestRealDataFlow_FileOperations(t *testing.T) {
 		defer svc.Stop()
 
 		resultsChannel := constants.ResultsChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), resultsChannel)
+		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestOperatorDirectURL(), resultsChannel)
 
 		time.Sleep(100 * time.Millisecond)
 
@@ -348,7 +348,7 @@ func TestRealDataFlow_FileOperations(t *testing.T) {
 		cmdPayload := testutil.MustMarshalProtobufCommandRequested(t, "sh -c 'for i in $(seq 1 50); do echo Line $i: data; done'", execID, "Large output test", "", 0)
 		envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, execID, constants.Event.Operator.Command.Requested, cmdPayload, "", cfg.OperatorID, caseID, "inv-real-large", cfg.OperatorSessionId)
 
-		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(envelopeBytes))
+		testutil.PublishTestMessage(t, testutil.GetTestOperatorDirectURL(), commandChannel, string(envelopeBytes))
 
 		received := testutil.WaitForMessage(t, msgChan, 10*time.Second)
 		require.NotNil(t, received)
@@ -392,7 +392,7 @@ func TestRealDataFlow_FileOperations(t *testing.T) {
 		defer svc.Stop()
 
 		resultsChannel := constants.ResultsChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), resultsChannel)
+		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestOperatorDirectURL(), resultsChannel)
 
 		time.Sleep(100 * time.Millisecond)
 
@@ -407,7 +407,7 @@ func TestRealDataFlow_FileOperations(t *testing.T) {
 		})
 		envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, execID, constants.Event.Operator.FileEdit.Requested, readPayload, "", cfg.OperatorID, caseID, "inv-real-error", cfg.OperatorSessionId)
 
-		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(envelopeBytes))
+		testutil.PublishTestMessage(t, testutil.GetTestOperatorDirectURL(), commandChannel, string(envelopeBytes))
 
 		received := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 		require.NotNil(t, received)

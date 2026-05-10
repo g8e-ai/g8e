@@ -45,14 +45,14 @@ from app.models.base import ConfigDict, Field, G8eBaseModel, G8eIdentifiableMode
 logger = logging.getLogger(__name__)
 
 class PlatformSettingsDocument(G8eIdentifiableModel):
-    """Platform-wide configuration document from g8es 'platform_settings' collection."""
+    """Platform-wide configuration document from operator 'platform_settings' collection."""
 
     model_config = ConfigDict(extra="forbid")
 
     settings: G8eePlatformSettings
 
 class UserSettingsDocument(G8eIdentifiableModel):
-    """Per-user settings document from g8es 'user_settings' collection."""
+    """Per-user settings document from operator 'user_settings' collection."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -206,7 +206,7 @@ class DatabaseSettings(G8eBaseModel):
     operators_collection: str = Field(DB_COLLECTION_OPERATORS)
 
 class ListenSettings(G8eBaseModel):
-    """g8es (Operator --listen mode) configuration."""
+    """operator (Operator --listen mode) configuration."""
     http_url: str = Field(os.environ.get("G8E_INTERNAL_HTTP_URL", "https://localhost:9000"))
     pubsub_url: str = Field(os.environ.get("G8E_INTERNAL_PUBSUB_URL", "wss://localhost:9001"))
     blob_url: str = Field(os.environ.get("G8E_INTERNAL_HTTP_URL", "https://localhost:9000"))

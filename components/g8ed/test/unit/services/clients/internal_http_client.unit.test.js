@@ -26,8 +26,8 @@ import { ApiPaths, InternalApiPaths } from '@g8ed/constants/api_paths.js';
 function makeBootstrapService(token = null) {
     return {
         loadInternalAuthToken: vi.fn().mockReturnValue(token),
-        getSslDir: vi.fn().mockReturnValue('/g8es'),
-        loadCaCertPath: vi.fn().mockReturnValue('/g8es/ca.crt'),
+        getSslDir: vi.fn().mockReturnValue('/operator'),
+        loadCaCertPath: vi.fn().mockReturnValue('/operator/ca.crt'),
     };
 }
 

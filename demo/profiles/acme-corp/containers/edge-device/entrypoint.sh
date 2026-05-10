@@ -47,8 +47,8 @@ if [[ -z "${DEVICE_TOKEN:-}" ]]; then
 fi
 
 CURL_OPTS="-fsSL"
-if [[ -f /g8es/ca.crt ]]; then
-    CURL_OPTS="$CURL_OPTS --cacert /g8es/ca.crt"
+if [[ -f /operator/ca.crt ]]; then
+    CURL_OPTS="$CURL_OPTS --cacert /operator/ca.crt"
 else
     CURL_OPTS="$CURL_OPTS -k"
 fi

@@ -1461,7 +1461,7 @@ async def stop_operator(
     operator_command_service: OperatorCommandService = Depends(get_g8ee_operator_command_service)
 ):
     """
-    Stop an Operator by sending shutdown command via g8es pub/sub.
+    Stop an Operator by sending shutdown command via operator pub/sub.
     The Operator will receive the shutdown command and exit.
     """
     operator_id = request.operator_id
@@ -1613,7 +1613,7 @@ async def sync_user_settings(
     Sync user settings from g8ed - internal cluster use only.
     
     Invalidates the local cache for the user's settings so subsequent
-    requests will fetch the fresh settings from g8es.
+    requests will fetch the fresh settings from operator.
     """
     user_id = g8e_context.user_id
     if not user_id:

@@ -82,17 +82,17 @@ export class HealthCheckService {
         const checks = {};
         let isReady = true;
 
-        // Check g8es KV connectivity
+        // Check operator KV connectivity
         try {
-            const g8esHealthy = this._webSessionService.isHealthy();
-            if (g8esHealthy) {
-                checks.g8es = 'up';
+            const operatorHealthy = this._webSessionService.isHealthy();
+            if (operatorHealthy) {
+                checks.operator = 'up';
             } else {
-                checks.g8es = 'down';
+                checks.operator = 'down';
                 isReady = false;
             }
         } catch (e) {
-            checks.g8es = `down: ${e.message}`;
+            checks.operator = `down: ${e.message}`;
             isReady = false;
         }
 
@@ -137,8 +137,8 @@ export class HealthCheckService {
         // Storage check removed - file storage decommissioned
         healthStatus.checks.storage = { status: 'skipped', message: 'File storage decommissioned' };
 
-        // g8es KV check
-        await this._checkG8esKV(healthStatus);
+        // operator KV check
+        await this._checkOperatorKV(healthStatus);
 
         // Database check via cache-aside
         await this._checkDatabase(healthStatus);
@@ -165,7 +165,7 @@ export class HealthCheckService {
                 cache_performance: stats.overall,
                 cache_by_type: stats.byType,
                 cost_savings: stats.costSavings,
-                message: 'Cache statistics showing g8es KV performance and DB read reduction'
+                message: 'Cache statistics showing operator KV performance and DB read reduction'
             };
         } catch (error) {
             logger.error('Cache stats failed:', error);
@@ -174,24 +174,24 @@ export class HealthCheckService {
     }
 
     /**
-     * Check g8es KV connectivity and health
+     * Check operator KV connectivity and health
      * @private
      */
-    async _checkG8esKV(healthStatus) {
+    async _checkOperatorKV(healthStatus) {
         try {
-            const g8esHealthy = this._webSessionService.isHealthy();
-            if (g8esHealthy) {
+            const operatorHealthy = this._webSessionService.isHealthy();
+            if (operatorHealthy) {
                 const sessionCount = await this._webSessionService.getSessionCount();
-                healthStatus.checks.g8es = { 
+                healthStatus.checks.operator = { 
                     status: SystemHealth.HEALTHY, 
-                    message: 'g8es KV connection is healthy',
+                    message: 'operator KV connection is healthy',
                     activeSessions: sessionCount
                 };
             } else {
-                healthStatus.checks.g8es = { status: SystemHealth.UNHEALTHY, message: 'g8es KV connection is down' };
+                healthStatus.checks.operator = { status: SystemHealth.UNHEALTHY, message: 'operator KV connection is down' };
             }
         } catch (e) {
-            healthStatus.checks.g8es = { status: SystemHealth.UNHEALTHY, message: `g8es KV error: ${e.message}` };
+            healthStatus.checks.operator = { status: SystemHealth.UNHEALTHY, message: `operator KV error: ${e.message}` };
         }
     }
 
@@ -203,9 +203,9 @@ export class HealthCheckService {
         try {
             const configDoc = await this._cacheAside.getDocument(Collections.SETTINGS, 'platform_settings');
             if (configDoc !== null) {
-                healthStatus.checks.database = { status: SystemHealth.HEALTHY, message: 'g8es document store is OK.' };
+                healthStatus.checks.database = { status: SystemHealth.HEALTHY, message: 'operator document store is OK.' };
             } else {
-                healthStatus.checks.database = { status: SystemHealth.UNHEALTHY, message: 'Failed to query g8es: document not found' };
+                healthStatus.checks.database = { status: SystemHealth.UNHEALTHY, message: 'Failed to query operator: document not found' };
             }
         } catch (e) {
             healthStatus.checks.database = { status: SystemHealth.UNHEALTHY, message: `DB error: ${e.message}` };

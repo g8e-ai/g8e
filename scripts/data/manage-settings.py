@@ -18,19 +18,19 @@ Read and write effective platform settings via the g8ed internal HTTP API.
 Runs inside g8ep and communicates with g8ed over the internal network.
 Secret values (API keys, tokens) are never returned by the internal endpoint.
 
-The --direct flag bypasses g8ed and writes straight to g8es. Use this when
+The --direct flag bypasses g8ed and writes straight to operator. Use this when
 g8ed is not running (e.g. initial LLM setup before first platform start).
 
 Usage:
-    python manage-g8es.py settings show
-    python manage-g8es.py settings show --section llm
-    python manage-g8es.py settings show --section general
-    python manage-g8es.py settings get llm_provider
-    python manage-g8es.py settings get llm_model
-    python manage-g8es.py settings set llm_provider=openai llm_model=gemma3:4b
-    python manage-g8es.py settings set --direct llm_provider=openai llm_endpoint=https://api.openai.com/v1
-    python manage-g8es.py settings set llm_endpoint=https://10.0.0.1:11434/v1
-    python manage-g8es.py settings rotate-token
+    python manage-operator.py settings show
+    python manage-operator.py settings show --section llm
+    python manage-operator.py settings show --section general
+    python manage-operator.py settings get llm_provider
+    python manage-operator.py settings get llm_model
+    python manage-operator.py settings set llm_provider=openai llm_model=gemma3:4b
+    python manage-operator.py settings set --direct llm_provider=openai llm_endpoint=https://api.openai.com/v1
+    python manage-operator.py settings set llm_endpoint=https://10.0.0.1:11434/v1
+    python manage-operator.py settings rotate-token
 """
 
 from __future__ import annotations
@@ -45,15 +45,15 @@ from typing import Dict, Any, List
 
 from _lib import (
     G8ED_BASE_URL,
-    G8ES_BASE_URL,
+    OPERATOR_BASE_URL,
     get_document,
     print_banner,
     g8ed_request,
-    g8es_request,
+    operator_request,
 )
 
 INTERNAL_API_URL = f'{G8ED_BASE_URL}/api/internal/settings'
-G8ES_SETTINGS_COLLECTION = 'settings'
+OPERATOR_SETTINGS_COLLECTION = 'settings'
 PLATFORM_SETTINGS_ID = 'platform_settings'
 USER_SETTINGS_ID_PREFIX = 'user_settings_'
 
@@ -196,21 +196,21 @@ def exec_get(args: argparse.Namespace) -> None:
         print(value, end='')
 
 
-def _g8es_get_platform_settings() -> Dict[str, Any]:
-    result = get_document(G8ES_SETTINGS_COLLECTION, PLATFORM_SETTINGS_ID)
+def _operator_get_platform_settings() -> Dict[str, Any]:
+    result = get_document(OPERATOR_SETTINGS_COLLECTION, PLATFORM_SETTINGS_ID)
     return result if result else {}
 
 
-def _g8es_put_platform_settings(doc: Dict[str, Any]) -> None:
-    g8es_request('PUT', f'/db/{G8ES_SETTINGS_COLLECTION}/{PLATFORM_SETTINGS_ID}', doc)
+def _operator_put_platform_settings(doc: Dict[str, Any]) -> None:
+    operator_request('PUT', f'/db/{OPERATOR_SETTINGS_COLLECTION}/{PLATFORM_SETTINGS_ID}', doc)
 
 
 def exec_rotate_token(_args: argparse.Namespace) -> None:
     new_token = secrets.token_hex(32)
     now = datetime.now(timezone.utc).isoformat()
 
-    # 1. Update g8es document
-    doc = _g8es_get_platform_settings()
+    # 1. Update operator document
+    doc = _operator_get_platform_settings()
 
     if not doc:
         doc = {
@@ -223,7 +223,7 @@ def exec_rotate_token(_args: argparse.Namespace) -> None:
     doc['settings']['internal_auth_token'] = new_token
     doc['updated_at'] = now
 
-    _g8es_put_platform_settings(doc)
+    _operator_put_platform_settings(doc)
 
     # 2. Update token file in SSL directory
     ssl_dir = Path(os.environ.get('G8E_SSL_DIR', '.g8e/ssl'))
@@ -249,9 +249,9 @@ def _parse_assignments(assignments: list) -> Dict[str, str]:
 
 
 def _direct_set(settings: Dict[str, str]) -> None:
-    """Write settings directly to the g8es platform_settings document."""
+    """Write settings directly to the operator platform_settings document."""
     now = datetime.now(timezone.utc).isoformat()
-    doc = _g8es_get_platform_settings()
+    doc = _operator_get_platform_settings()
 
     if not doc:
         doc = {
@@ -265,7 +265,7 @@ def _direct_set(settings: Dict[str, str]) -> None:
         doc['settings'][key] = value
     doc['updated_at'] = now
 
-    _g8es_put_platform_settings(doc)
+    _operator_put_platform_settings(doc)
     for key in settings:
         print(f"  [OK] {key}")
 
@@ -354,7 +354,7 @@ def build_parser() -> argparse.ArgumentParser:
         '--direct',
         action='store_true',
         default=False,
-        help='Write directly to g8es, bypassing the g8ed internal API (use when g8ed is not running)',
+        help='Write directly to operator, bypassing the g8ed internal API (use when g8ed is not running)',
     )
     sp.set_defaults(func=exec_set)
 
@@ -370,7 +370,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser(
         'rotate-token',
-        help='Generate a new internal_auth_token and write it directly to g8es',
+        help='Generate a new internal_auth_token and write it directly to operator',
     ).set_defaults(func=exec_rotate_token)
 
     return parser
@@ -385,12 +385,12 @@ def run(argv: List[str]) -> int:
 
     _machine_readable = args.command in ('get', 'rotate-token')
     if not _machine_readable:
-        print_banner('manage-g8es.py settings', ' '.join(argv))
+        print_banner('manage-operator.py settings', ' '.join(argv))
 
     try:
         args.func(args)
     except RuntimeError as e:
-        print(f'[manage-g8es settings] {e}', file=sys.stderr)
+        print(f'[manage-operator settings] {e}', file=sys.stderr)
         return 1
     return 0
 

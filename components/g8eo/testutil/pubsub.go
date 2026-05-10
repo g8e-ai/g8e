@@ -32,34 +32,34 @@ import (
 // tests that require a live stack.
 func TestPubSubAvailable(t *testing.T) {
 	t.Helper()
-	wsURL := GetTestG8esDirectURL() + "/ws/pubsub"
+	wsURL := GetTestOperatorDirectURL() + "/ws/pubsub"
 	dialer, err := httpclient.WebSocketDialer()
 	if err != nil {
 		t.Fatalf("g8ed pub/sub TLS setup failed: %v", err)
 	}
 	ws, _, err := dialer.Dial(wsURL, nil)
 	if err != nil {
-		t.Fatalf("g8ed pub/sub not available at %s: %v", GetTestG8esDirectURL(), err)
+		t.Fatalf("g8ed pub/sub not available at %s: %v", GetTestOperatorDirectURL(), err)
 	}
 	ws.Close()
 }
 
-// SubscribeToChannel subscribes to a g8es pub/sub channel and returns a channel for receiving raw bytes from the Data field.
+// SubscribeToChannel subscribes to a operator pub/sub channel and returns a channel for receiving raw bytes from the Data field.
 // baseURL is accepted for API compatibility but ignored — subscriptions always go to the
-// g8es pub/sub endpoint at GetTestG8esDirectURL() using the TLS-aware dialer.
+// operator pub/sub endpoint at GetTestOperatorDirectURL() using the TLS-aware dialer.
 // The subscription runs until the test ends (via t.Cleanup).
 func SubscribeToChannel(t *testing.T, _ string, channel string) <-chan []byte {
 	t.Helper()
 
-	wsURL := GetTestG8esDirectURL() + "/ws/pubsub"
+	wsURL := GetTestOperatorDirectURL() + "/ws/pubsub"
 
 	dialer, err := httpclient.WebSocketDialer()
 	if err != nil {
-		t.Fatalf("Failed to build TLS dialer for g8es pub/sub: %v", err)
+		t.Fatalf("Failed to build TLS dialer for operator pub/sub: %v", err)
 	}
 	ws, _, err := dialer.Dial(wsURL, nil)
 	if err != nil {
-		t.Fatalf("Failed to connect to g8es pub/sub at %s: %v", wsURL, err)
+		t.Fatalf("Failed to connect to operator pub/sub at %s: %v", wsURL, err)
 	}
 
 	subMsg := &pubsubv1.PubSubMessage{Action: constants.PubSubActionSubscribe, Channel: channel}
@@ -108,13 +108,13 @@ func SubscribeToChannel(t *testing.T, _ string, channel string) <-chan []byte {
 }
 
 // PublishTestMessage publishes a message to a pub/sub channel via the g8ed WebSocket gateway.
-// g8ed is the single external entry point — g8es is not directly accessible from outside
+// g8ed is the single external entry point — operator is not directly accessible from outside
 // the docker network. baseURL is accepted for API compatibility but ignored; all publishes
-// go through GetTestG8esDirectURL() (g8ed:443) which proxies to g8es internally.
+// go through GetTestOperatorDirectURL() (g8ed:443) which proxies to operator internally.
 func PublishTestMessage(t *testing.T, _ string, channel string, message string) {
 	t.Helper()
 
-	wsURL := GetTestG8esDirectURL() + "/ws/pubsub"
+	wsURL := GetTestOperatorDirectURL() + "/ws/pubsub"
 
 	dialer, err := httpclient.WebSocketDialer()
 	if err != nil {

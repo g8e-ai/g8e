@@ -82,9 +82,9 @@ deploy:
 		name=$$(docker inspect --format '{{.Name}}' $$id | sed 's/^\///'); \
 		echo "  Deploying to $$name..."; \
 		docker exec -e DEVICE_TOKEN="$$TOKEN" $$id sh -c '\
-			curl -fsSL --cacert /g8es/ca.crt -H "Authorization: Bearer $$DEVICE_TOKEN" \
+			curl -fsSL --cacert /operator/ca.crt -H "Authorization: Bearer $$DEVICE_TOKEN" \
 				-o g8e.operator "https://g8e.local/operator/download/linux/amd64" && \
-			curl -fsSL --cacert /g8es/ca.crt -H "Authorization: Bearer $$DEVICE_TOKEN" \
+			curl -fsSL --cacert /operator/ca.crt -H "Authorization: Bearer $$DEVICE_TOKEN" \
 				-o g8e.operator.sha256 "https://g8e.local/operator/download/linux/amd64/sha256" && \
 			sha256sum -c g8e.operator.sha256 && \
 			chmod +x g8e.operator && \

@@ -333,7 +333,7 @@ func (cs *CertStore) generateServerCert(keyPath, certPath string, extraIPs []net
 		return err
 	}
 
-	dnsNames := []string{"g8e.local", "localhost", "g8es", constants.Status.ComponentName.G8EE, constants.Status.ComponentName.G8ED}
+	dnsNames := []string{"g8e.local", "localhost", "operator", constants.Status.ComponentName.G8EE, constants.Status.ComponentName.G8ED}
 	ipAddresses := append([]net.IP{net.ParseIP("127.0.0.1")}, extraIPs...)
 
 	now := time.Now().UTC()

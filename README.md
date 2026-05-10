@@ -115,7 +115,7 @@ The protocol is the foundation layer of g8e. UI flows, agent workflows, and stor
 typed operator.proto payload
   -> UniversalEnvelope.payload
   -> serialized UniversalEnvelope bytes
-  -> g8es pub/sub data
+  -> operator pub/sub data
 ```
 
 Protocol-level enforcement is deliberately fail-closed:
@@ -251,11 +251,11 @@ Threat model and full control catalogue: [security.md](docs/architecture/securit
 
 ## Quick Start
 
-Prerequisites: Docker 24+, Docker Compose v2.
+Prerequisites: Go, Node.js/npm, Python, and curl available on the host.
 
 ```bash
 git clone https://github.com/g8e-ai/g8e.git && cd g8e
-./g8e platform build
+./g8e platform start
 ```
 
 Trust the platform CA on your workstation:
@@ -277,12 +277,16 @@ curl -fsSL http://<host>/g8e | sh -s -- <device-link-token>
 ### CLI
 
 ```bash
-./g8e platform build       # First-time build and start
-./g8e platform start       # Start without rebuilding
-./g8e platform stop        # Stop (data preserved)
-./g8e platform wipe        # Wipe app data, restart fresh
+./g8e platform start       # Start all platform components
+./g8e platform status      # Show component health and versions
+./g8e platform restart     # Restart all platform components
+./g8e platform stop        # Stop all platform components
+./g8e platform wipe        # Wipe app data, preserve platform settings and SSL
+./g8e platform reset       # Reset application data, preserve SSL
+./g8e platform clean       # Remove all g8e processes and data
 
-./g8e operator build       # Compile Operator for all architectures
+./g8e operator build       # Compile Operator for the current host architecture
+./g8e operator build-all   # Compile Operator for all supported architectures
 ./g8e test <component>     # Run component tests (g8ee, g8ed, g8eo)
 ```
 

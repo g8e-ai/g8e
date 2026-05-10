@@ -34,7 +34,7 @@ vi.mock('@g8ed/utils/logger.js', () => ({
 }));
 
 function createMockInternalHttpClient() {
-    const mockG8esClient = {
+    const mockOperatorClient = {
         post: vi.fn().mockImplementation(async (path, body) => {
             if (path === '/ssl/sign-certificate') {
                 const data = JSON.parse(body);
@@ -50,7 +50,7 @@ function createMockInternalHttpClient() {
 
     return {
         _bootstrapService: {
-            _g8esClient: mockG8esClient
+            _operatorClient: mockOperatorClient
         },
         request: vi.fn().mockResolvedValue({ success: true }),
         sendChatMessage: vi.fn().mockResolvedValue({ success: true }),
@@ -191,7 +191,7 @@ describe('CertificateService [UNIT - filesystem isolated]', { timeout: 30000 }, 
             expect(result.key).toContain('-----END PRIVATE KEY-----');
         });
 
-        it('should request certificate via g8es signing API', async () => {
+        it('should request certificate via operator signing API', async () => {
             const operatorId = `op_test_${uuidv4()}`;
             const userId = `user_test_${uuidv4()}`;
             const orgId = `org_test_${uuidv4()}`;
@@ -201,9 +201,9 @@ describe('CertificateService [UNIT - filesystem isolated]', { timeout: 30000 }, 
             expect(result).toHaveProperty('cert');
             expect(result.cert).toBe('-----BEGIN CERTIFICATE-----\nMOCK OPERATOR CERT\n-----END CERTIFICATE-----');
             
-            const g8esClient = certService._internalHttpClient._bootstrapService._g8esClient;
-            expect(g8esClient.post).toHaveBeenCalledWith('/ssl/sign-certificate', expect.stringContaining(operatorId));
-            expect(g8esClient.post).toHaveBeenCalledWith('/ssl/sign-certificate', expect.stringContaining(userId));
+            const operatorClient = certService._internalHttpClient._bootstrapService._operatorClient;
+            expect(operatorClient.post).toHaveBeenCalledWith('/ssl/sign-certificate', expect.stringContaining(operatorId));
+            expect(operatorClient.post).toHaveBeenCalledWith('/ssl/sign-certificate', expect.stringContaining(userId));
         });
 
         it('should auto-initialize if not already initialized', async () => {

@@ -47,7 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Interrogation Plumbing:** Fixed response handling and user interaction flow for the device interrogation pipeline.
 - **G8EO Execution ID:** Fixed a bug where `FsGrepResultPayload` was missing `ExecutionID` propagation, breaking correlation for recursive searches.
 - **Fingerprint Recording:** Resolved issues with system fingerprint recording and included missing events in the audit trail.
-- **Test Coverage & Stability:** Massive increase in unit and integration test coverage for `g8ee`, `g8eo`, and `g8es`, with full migration to typed payload assertions.
+- **Test Coverage & Stability:** Massive increase in unit and integration test coverage for `g8ee`, `g8eo`, and `operator`, with full migration to typed payload assertions.
 
 ### Removed
 - **Legacy Audit UI:** Removed the outdated Audit page and associated backend services from `g8ed` in favor of streamlined platform logging.
@@ -234,8 +234,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Core Platform:** Open-source release of the `g8e` platform for AI-assisted infrastructure operations.
 - **g8ee (AI Engine):** ReAct-based Python orchestration layer with support for Anthropic, OpenAI, and local Ollama models.
 - **g8eo (Operator):** ~4MB dependency-free static Go binary for remote host execution. Features zero-inbound ports and outbound-only mTLS.
-- **g8es (Data Store):** SQLite-backed persistence layer, KV store, and pub/sub broker running within the Operator framework.
+- **operator (Data Store):** SQLite-backed persistence layer, KV store, and pub/sub broker running within the Operator framework.
 - **g8ed (Dashboard):** Node.js central management console featuring FIDO2 WebAuthn (passkey) authentication and real-time mTLS gateway proxying.
 - **Security:** "Tribunal Refinement Pipeline" utilizing stochastic swarm voting to validate AI-proposed terminal commands before human review.
 - **Security:** Local execution vaulting to ensure raw stdout/stderr logs are securely encrypted and retained strictly on the target host.
-- **DevOps:** Comprehensive `g8e` CLI wrapper for platform setup, testing, operator deployment, and CA certificate management.
+- **DevOps:** Comprehensive `g8e` CLI wrapper for host-native platform lifecycle, testing, operator deployment, and CA certificate management.
