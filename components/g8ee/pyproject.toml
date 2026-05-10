@@ -65,14 +65,14 @@ filterwarnings = [
 timeout = 60
 timeout_method = "signal"
 
-    # Cache directory — ~/ is writable by the g8e user
-    cache_dir = "/home/g8e/.pytest_cache"
+    # Cache directory — relative path works in both container and host contexts
+    cache_dir = ".pytest_cache"
 
     # ============================================================================
     # Coverage Configuration
     # ============================================================================
     [tool.coverage.run]
-    data_file = "/home/g8e/.coverage"
+    data_file = ".coverage"
     source = ["app"]
     branch = true
     parallel = true
@@ -119,7 +119,7 @@ timeout_method = "signal"
     target-version = "py313"
     line-length = 100
     indent-width = 4
-    cache-dir = "/home/g8e/.ruff_cache"
+    cache-dir = ".ruff_cache"
 
     [tool.ruff.lint]
     select = [

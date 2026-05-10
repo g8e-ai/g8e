@@ -289,7 +289,7 @@ class TestTimeAgo:
         assert result == "1 day ago"
 
     def test_naive_datetime_accepted(self):
-        naive = datetime.now() - timedelta(seconds=10)  # noqa: DTZ005
+        naive = datetime.now(UTC) - timedelta(seconds=10)
         result = time_ago(naive)
         assert "seconds ago" in result
 
