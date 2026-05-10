@@ -62,24 +62,25 @@ export async function initializeTestServices() {
             // 1. Load initialization module
             const initModule = await import('../../services/initialization.js');
             
-            // 2. Mock BootstrapService globally for tests to provide fallback secrets
+            // 2. When running against real g8eo (operator listen mode), use the real token from environment
+            // The test runner sets G8E_INTERNAL_AUTH_TOKEN from .g8e/ssl/internal_auth_token
+            // We should NOT provide a fallback mock token when running against a real operator
             const { BootstrapService } = await import('../../services/platform/bootstrap_service.js');
             const originalLoadKey = BootstrapService.prototype.loadSessionEncryptionKey;
             const originalLoadToken = BootstrapService.prototype.loadInternalAuthToken;
             
+            // Only mock session encryption key (not used by g8eo auth)
             BootstrapService.prototype.loadSessionEncryptionKey = function() {
                 const key = originalLoadKey.call(this);
                 if (key) return key;
                 return '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
             };
             
-            BootstrapService.prototype.loadInternalAuthToken = function() {
-                const token = originalLoadToken.call(this);
-                if (token) return token;
-                return 'test-auth-token';
-            };
+            // DO NOT mock internal auth token - use the real one from .g8e/ssl
+            // The test runner sets G8E_INTERNAL_AUTH_TOKEN env var, and BootstrapService reads it
+            // If the token is missing, initialization will fail (which is correct for real operator tests)
             
-            logger.info('[TEST-SERVICES] Global BootstrapService mocks applied for test environment');
+            logger.info('[TEST-SERVICES] BootstrapService session key mock applied (auth token uses real value)');
             
             // 3. Perform full multi-phase initialization (Phase 1-6)
             // This sets up real g8es clients, cache-aside, settings, and all services.

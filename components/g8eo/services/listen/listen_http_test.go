@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -43,13 +44,7 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config) {
 
 	// Clear environment to avoid interfering with tests
 	tokenEnv := string(constants.EnvVar.InternalAuthToken)
-	origToken := os.Getenv(tokenEnv)
-	if origToken != "" {
-		os.Unsetenv(tokenEnv)
-		t.Cleanup(func() {
-			os.Setenv(tokenEnv, origToken)
-		})
-	}
+	os.Unsetenv(tokenEnv)
 
 	dbDir := t.TempDir()
 	sslDir := t.TempDir()
@@ -57,10 +52,14 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config) {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
+	// Remove the SSL file written by InitPlatformSettings so tests can control
+	// token via DB without file precedence interfering
+	os.Remove(filepath.Join(sslDir, "internal_auth_token"))
+
 	pubsub := NewPubSubBroker(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
-	auth := NewAuthService(db, logger)
+	auth := NewAuthService(db, logger, sslDir)
 	certs := newCertStore(dbDir, sslDir, logger)
 	h := newHTTPHandler(cfg, logger, db, pubsub, auth, certs, func() bool { return true })
 	return h, cfg
@@ -72,13 +71,7 @@ func setupTestListenService(t *testing.T) (*ListenService, *config.Config) {
 	logger := testutil.NewTestLogger()
 
 	// Clear environment to avoid interfering with tests
-	origToken := os.Getenv(string(constants.EnvVar.InternalAuthToken))
 	os.Unsetenv(string(constants.EnvVar.InternalAuthToken))
-	t.Cleanup(func() {
-		if origToken != "" {
-			os.Setenv(string(constants.EnvVar.InternalAuthToken), origToken)
-		}
-	})
 
 	// Create a real DB service for the tests to use
 	dbDir := t.TempDir()
@@ -86,6 +79,10 @@ func setupTestListenService(t *testing.T) (*ListenService, *config.Config) {
 	db, err := NewListenDBService(dbDir, sslDir, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
+
+	// Remove the SSL file written by InitPlatformSettings so tests can control
+	// token via DB without file precedence interfering
+	os.Remove(filepath.Join(sslDir, "internal_auth_token"))
 
 	pubsub := NewPubSubBroker(logger)
 	t.Cleanup(func() { pubsub.Close() })
@@ -185,6 +182,7 @@ func TestAuthWebSocket(t *testing.T) {
 	h, _ := setupTestHTTPHandler(t)
 	token := "ws-token"
 
+	h.db.DocDelete("settings", "platform_settings")
 	err := h.db.DocSet("settings", "platform_settings", mustDocJSON(t, map[string]interface{}{
 		"internal_auth_token": token,
 	}))
@@ -245,6 +243,7 @@ func TestGetInternalAuthToken(t *testing.T) {
 		os.Setenv(string(constants.EnvVar.InternalAuthToken), "env-priority")
 		defer os.Unsetenv(string(constants.EnvVar.InternalAuthToken))
 
+		h.db.DocDelete("settings", "platform_settings")
 		err := h.db.DocSet("settings", "platform_settings", mustDocJSON(t, map[string]interface{}{
 			"internal_auth_token": "db-token",
 		}))
@@ -728,7 +727,8 @@ func TestWebSocketAuthIntegration(t *testing.T) {
 	h, _ := setupTestHTTPHandler(t)
 	token := "ws-auth-token"
 
-	// Seed token in DB
+	// Seed token in DB (clear auto-generated first)
+	h.db.DocDelete("settings", "platform_settings")
 	err := h.db.DocSet("settings", "platform_settings", mustDocJSON(t, map[string]interface{}{
 		"internal_auth_token": token,
 	}))

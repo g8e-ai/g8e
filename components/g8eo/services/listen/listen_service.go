@@ -56,7 +56,7 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 	}
 
 	pubsub := NewPubSubBroker(logger)
-	auth := NewAuthService(db, logger)
+	auth := NewAuthService(db, logger, cfg.Listen.SSLDir)
 
 	var certs *CertStore
 	var tlsConfig *tls.Config
@@ -132,7 +132,7 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 // newListenServiceFromComponents assembles a ListenService from pre-built components.
 // Used in tests where the DB and pub/sub broker are constructed independently.
 func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker) *ListenService {
-	auth := NewAuthService(db, logger)
+	auth := NewAuthService(db, logger, cfg.Listen.SSLDir)
 	ls := &ListenService{
 		cfg:    cfg,
 		logger: logger,
