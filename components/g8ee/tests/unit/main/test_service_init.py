@@ -37,7 +37,7 @@ def _make_cache_aside_service():
 
 
 def _make_settings():
-    return G8eePlatformSettings(port=443)
+    return G8eePlatformSettings(port=8443)
 
 
 class TestUseDbConfigTrue:

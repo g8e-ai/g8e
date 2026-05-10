@@ -19,106 +19,100 @@ _check_deps() {
 _check_deps
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-COMPOSE="docker compose -f $SCRIPT_DIR/docker-compose.yml"
-CONTAINER="g8ed"
 DEV_MODE=false
+
+# Host-native runtime layout — managed by scripts/core/build.sh.
+G8E_RUNTIME_DIR="${G8E_RUNTIME_DIR:-$SCRIPT_DIR/.g8e}"
+G8E_SSL_DIR_HOST="${G8E_SSL_DIR:-$G8E_RUNTIME_DIR/ssl}"
+OPERATOR_HTTP_URL="${G8E_INTERNAL_HTTP_URL:-https://localhost:9000}"
+G8ED_URL="${G8ED_INTERNAL_URL:-https://localhost}"
+G8EE_URL="${G8EE_INTERNAL_URL:-https://localhost:8443}"
+_OPERATOR_PID_FILE="$G8E_RUNTIME_DIR/pids/operator-listen.pid"
+_G8ED_PID_FILE="$G8E_RUNTIME_DIR/pids/g8ed.pid"
+_G8EE_PID_FILE="$G8E_RUNTIME_DIR/pids/g8ee.pid"
 
 # Local credential store (like AWS ~/.aws/credentials or gcloud ~/.config/gcloud)
 G8E_CREDENTIALS_DIR="$HOME/.g8e"
 G8E_CREDENTIALS_FILE="$G8E_CREDENTIALS_DIR/credentials"
 
-# Test-runner container names
-TR_G8EE="g8ee-test-runner"
-TR_G8ED="g8ed-test-runner"
-TR_G8EO="g8eo-test-runner"
-
 _banner() {
     echo -e "\033[1;34m[g8e]\033[0m $*"
 }
 
-_container_running() {
-    docker ps --filter "name=^${1}$" --filter "status=running" --format "{{.Names}}" 2>/dev/null | grep -q "^${1}$"
+_pid_alive() {
+    local pid_file="$1"
+    [ -f "$pid_file" ] && ps -p "$(cat "$pid_file")" > /dev/null 2>&1
 }
 
-_container_exists() {
-    docker ps -a --filter "name=^${1}$" --format "{{.Names}}" 2>/dev/null | grep -q "^${1}$"
-}
+_g8ed_running()    { _pid_alive "$_G8ED_PID_FILE"; }
+_g8ee_running()    { _pid_alive "$_G8EE_PID_FILE"; }
+_operator_running() { _pid_alive "$_OPERATOR_PID_FILE"; }
 
-_g8ed_running() { _container_running "$CONTAINER"; }
-_g8ed_exists() { _container_exists "$CONTAINER"; }
-
-_ensure_container() {
-    local name="$1" cmd="${2:-}"
-    if ! _container_running "$name"; then
-        if ! _container_exists "$name"; then
-            [[ -n "$cmd" ]] && echo "[g8e] Running: ./g8e $cmd"
-            echo "[g8e] ${name} is not built — building image (requires Docker)..."
-            echo ""
-            $COMPOSE build "$name"
-            echo ""
-        fi
-        $COMPOSE up -d --wait "$name"
+_ensure_g8ed() {
+    if ! _g8ed_running; then
+        echo "[g8e] g8ed is not running — start the platform: ./g8e platform start" >&2
+        exit 1
     fi
 }
 
-_ensure_g8ed() { _ensure_container "$CONTAINER" "${1:-}"; }
-
-_exec_in_g8ed() {
-    # Check if g8ed is running on host
-    local pid_file="$SCRIPT_DIR/.g8e/pids/g8ed.pid"
-    if [ -f "$pid_file" ] && ps -p $(cat "$pid_file") >/dev/null 2>&1; then
-        (
-            cd "$SCRIPT_DIR/components/g8ed"
-            if [[ -n "$OPERATOR_SESSION_ID" ]]; then
-                export OPERATOR_SESSION_ID="$OPERATOR_SESSION_ID"
-            fi
-            exec "$@"
-        )
-    else
-        _ensure_g8ed "$TOP${SUB:+ $SUB}"
-        local env_args=()
-        if [[ -n "$OPERATOR_SESSION_ID" ]]; then
-            env_args=(-e "OPERATOR_SESSION_ID=$OPERATOR_SESSION_ID")
-        fi
-        if [ -t 0 ] && [ -t 1 ]; then
-            exec docker exec -it "${env_args[@]}" "$CONTAINER" "$@"
-        else
-            exec docker exec -i "${env_args[@]}" "$CONTAINER" "$@"
-        fi
+_ensure_operator() {
+    if ! _operator_running; then
+        echo "[g8e] Operator listen mode is not running — start the platform: ./g8e platform start" >&2
+        exit 1
     fi
 }
 
-_test_runner_for() {
-    case "$1" in
-        g8ee) echo "$TR_G8EE" ;;
-        g8ed) echo "$TR_G8ED" ;;
-        g8eo) echo "$TR_G8EO" ;;
-        *)    echo "" ;;
-    esac
+# _g8ed_curl <method> <path> [body]
+# Fires an authenticated curl at the host-native g8ed instance, trusting the
+# platform CA. Echoes the response body to stdout, returns curl's exit code.
+_g8ed_curl() {
+    local method="$1" path="$2" body="${3:-}"
+    local args=(-sk -X "$method" --cacert "$G8E_SSL_DIR_HOST/ca.crt")
+    [[ -n "$OPERATOR_SESSION_ID" ]] && args+=(-H "x-operator-session-id: $OPERATOR_SESSION_ID")
+    args+=(-H "Content-Type: application/json")
+    [[ -n "$body" ]] && args+=(-d "$body")
+    curl "${args[@]}" "$G8ED_URL$path"
 }
 
-_exec_in_test_runner() {
-    local runner="$1"; shift
-    local env_args=()
-    if [[ -n "$OPERATOR_SESSION_ID" ]]; then
-        env_args=(-e "OPERATOR_SESSION_ID=$OPERATOR_SESSION_ID")
-    fi
-    if [ -t 0 ] && [ -t 1 ]; then
-        exec $COMPOSE run --rm ${env_args[@]+"${env_args[@]}"} -it "$runner" "$@"
-    else
-        exec $COMPOSE run --rm ${env_args[@]+"${env_args[@]}"} "$runner" "$@"
-    fi
+# _operator_curl <method> <path> [body]
+# Fires an internal-auth curl at the host-native Operator listen-mode HTTP API.
+_operator_curl() {
+    local method="$1" path="$2" body="${3:-}"
+    local token
+    token=$(cat "$G8E_SSL_DIR_HOST/internal_auth_token" 2>/dev/null | tr -d ' \n\r' || true)
+    local args=(-sk -X "$method" --cacert "$G8E_SSL_DIR_HOST/ca.crt")
+    [[ -n "$token" ]] && args+=(-H "X-Internal-Auth: $token")
+    args+=(-H "Content-Type: application/json")
+    [[ -n "$body" ]] && args+=(-d "$body")
+    curl "${args[@]}" "$OPERATOR_HTTP_URL$path"
 }
 
-_run_in_g8ee_test_runner() {
-    local env_args=(-e "G8E_SHARED_DIR=/app/shared" -e "PYTHONPATH=/app/components/g8ee:/app/shared")
-    if [ -t 0 ] && [ -t 1 ]; then
-        $COMPOSE run --rm "${env_args[@]}" "$TR_G8EE" "$@"
-    else
-        $COMPOSE run --rm -T "${env_args[@]}" "$TR_G8EE" "$@"
-    fi
+# Run a host-side script with the platform env populated. Used to invoke the
+# data/security/mcp helper scripts that talk to g8ed and the Operator over
+# HTTP and need access to the on-disk auth tokens.
+_run_host_script() {
+    export G8E_SSL_DIR="$G8E_SSL_DIR_HOST"
+    export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTP_URL"
+    export G8ED_INTERNAL_URL="$G8ED_URL"
+    export PYTHONPATH="$SCRIPT_DIR/scripts:$SCRIPT_DIR/shared${PYTHONPATH:+:$PYTHONPATH}"
+    [[ -n "${OPERATOR_SESSION_ID:-}" ]] && export OPERATOR_SESSION_ID
+    exec "$@"
 }
 
+# Resolve the host-native operator binary path used to drive `operator stream`,
+# `operator deploy`, etc. Builds via `make build-local` if the binary is missing.
+_operator_bin() {
+    local bin="${G8E_OPERATOR_BIN:-$SCRIPT_DIR/components/g8eo/build/linux-amd64/g8e.operator}"
+    if [ ! -x "$bin" ]; then
+        echo "[g8e] Operator binary missing at $bin — building..." >&2
+        (cd "$SCRIPT_DIR/components/g8eo" && make build-local) >&2
+    fi
+    printf '%s' "$bin"
+}
+
+# Eval-fleet helpers — evals legitimately use docker to spin up simulated
+# target nodes that the Operator deploys to. The platform itself is host-
+# native; only the simulated fleet runs in containers.
 _eval_fleet_container_ids() {
     COMPOSE_PROJECT_NAME=evals docker compose -f "$EVALS_COMPOSE" ps -q
 }
@@ -146,25 +140,22 @@ _eval_fleet_device_token() {
 _eval_device_token_user_id() {
     local token="$1"
     local response
-    response="$(docker exec -i g8ed \
-        curl -sf -X GET \
-        -H 'Content-Type: application/json' \
-        "https://localhost/api/internal/device-links/$token" 2>/dev/null || true)"
+    response="$(_g8ed_curl GET "/api/internal/device-links/$token" 2>/dev/null || true)"
     if [[ -n "$response" ]]; then
         echo "$response" | grep -o '"user_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)".*/\1/'
     fi
 }
 
-_eval_gold_set_path_for_container() {
+# Resolve a gold-set path for the evals runner. The runner now executes via
+# the host venv so paths are host-relative.
+_eval_gold_set_path_for_host() {
     local gold_set="$1"
-    if [[ "$gold_set" == /app/components/g8ee/* ]]; then
+    if [[ "$gold_set" == /* ]]; then
         printf '%s\n' "$gold_set"
-    elif [[ "$gold_set" == "$SCRIPT_DIR/components/g8ee/"* ]]; then
-        printf '/app/components/g8ee/%s\n' "${gold_set#"$SCRIPT_DIR/components/g8ee/"}"
     elif [[ "$gold_set" == components/g8ee/* ]]; then
-        printf '/app/%s\n' "$gold_set"
+        printf '%s/%s\n' "$SCRIPT_DIR" "$gold_set"
     elif [[ -f "$SCRIPT_DIR/components/g8ee/$gold_set" ]]; then
-        printf '/app/components/g8ee/%s\n' "$gold_set"
+        printf '%s/components/g8ee/%s\n' "$SCRIPT_DIR" "$gold_set"
     else
         printf '%s\n' "$gold_set"
     fi
@@ -218,29 +209,13 @@ _credentials_exist() {
 
 _validate_session() {
     local operator_session_id="$1"
-
     # The /api/auth/operator/validate endpoint authenticates via the session id
-    # itself (no internal auth token required). Use -k to accept the g8ed
-    # self-signed cert; drop -f so we can distinguish empty (network error)
-    # from a JSON error body.
-    local validate_url="https://localhost/api/auth/operator/validate"
+    # itself (no internal auth token required).
     local response
-
-    response=$(docker exec -i g8ed \
-        curl -sk -X POST \
-        -H 'Content-Type: application/json' \
-        -d "{\"operator_session_id\":\"$operator_session_id\"}" \
-        "$validate_url" 2>/dev/null || true)
-
-    if [[ -z "$response" ]]; then
-        return 1
-    fi
-
-    if echo "$response" | grep -q '"valid":true'; then
-        return 0
-    else
-        return 1
-    fi
+    response=$(_g8ed_curl POST '/api/auth/operator/validate' \
+        "{\"operator_session_id\":\"$operator_session_id\"}" 2>/dev/null || true)
+    [[ -z "$response" ]] && return 1
+    echo "$response" | grep -q '"valid":true'
 }
 
 
@@ -402,7 +377,8 @@ case "$TOP" in
                 exec bash "$SCRIPT_DIR/scripts/core/build.sh" rebuild "${@:3}" ;;
             settings)
                 _banner "platform settings"
-                _exec_in_g8ed python3 /app/scripts/data/manage-g8es.py settings show "${@:3}" ;;
+                _ensure_g8ed
+                _run_host_script python3 "$SCRIPT_DIR/scripts/data/manage-g8es.py" settings show "${@:3}" ;;
             update)
                 _banner "platform update"
                 git -C "$SCRIPT_DIR" fetch origin main 2>&1 | sed 's/^/  /'
@@ -466,7 +442,7 @@ case "$TOP" in
                 ;;
             reauth)
                 _banner "operator reauth"
-                _ensure_g8ed "operator reauth"
+                _ensure_g8ed
 
                 USER_ID=""
                 EMAIL=""
@@ -486,8 +462,11 @@ case "$TOP" in
                 fi
 
                 if [[ -n "$EMAIL" && -z "$USER_ID" ]]; then
-                    USER_ID="$(docker exec -i "$CONTAINER" \
-                        python3 /app/scripts/data/manage-g8es.py users get --email "$EMAIL" 2>/dev/null \
+                    export G8E_SSL_DIR="$G8E_SSL_DIR_HOST"
+                    export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTP_URL"
+                    export G8ED_INTERNAL_URL="$G8ED_URL"
+                    export PYTHONPATH="$SCRIPT_DIR/scripts:$SCRIPT_DIR/shared${PYTHONPATH:+:$PYTHONPATH}"
+                    USER_ID="$(python3 "$SCRIPT_DIR/scripts/data/manage-g8es.py" users get --email "$EMAIL" 2>/dev/null \
                         | grep -E '^  ID:' | awk '{print $2}')"
                     if [[ -z "$USER_ID" ]]; then
                         echo "[g8e] No user found with email: $EMAIL" >&2
@@ -495,11 +474,7 @@ case "$TOP" in
                     fi
                 fi
 
-                RESPONSE="$(docker exec -i g8ed \
-                    curl -sf -X POST \
-                    -H 'Content-Type: application/json' \
-                    -H "x-operator-session-id: $OPERATOR_SESSION_ID" \
-                    "https://localhost/api/internal/operators/user/$USER_ID/reauth")"
+                RESPONSE="$(_g8ed_curl POST "/api/internal/operators/user/$USER_ID/reauth")"
                 EXIT_CODE=$?
 
                 if [[ $EXIT_CODE -ne 0 ]]; then
@@ -514,22 +489,12 @@ case "$TOP" in
 
             init)
                 _banner "operator init"
-                _version="$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null | tr -d '[:space:]' || echo 'v0.0.0')"
-                # Build locally via test-runner but mount the build dir so it's on host
-                mkdir -p "$SCRIPT_DIR/components/g8eo/build/linux-amd64"
-                $COMPOSE run --rm "$TR_G8EO" bash -c "
-                    set -e
-                    cd /app/components/g8eo
-                    mkdir -p certs
-                    [ -f /g8es/ca.crt ] && rm -f certs/server_ca.crt && cp /g8es/ca.crt certs/server_ca.crt
-                    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \\
-                        -trimpath -buildvcs=false \\
-                        -ldflags \"-s -w -X main.version=${_version} -X 'main.platform=linux/amd64'\" \\
-                        -o build/linux-amd64/g8e.operator .
-                    echo '[g8eo-test-runner] Built: components/g8eo/build/linux-amd64/g8e.operator'
-                "
+                # Build the operator binary natively on the host using the
+                # local Go toolchain. Replaces the legacy docker-test-runner
+                # build path now that the platform runs host-native.
+                (cd "$SCRIPT_DIR/components/g8eo" && make build-local)
                 echo ""
-                echo "Operator binary built on host."
+                echo "Operator binary built on host: $SCRIPT_DIR/components/g8eo/build/linux-amd64/g8e.operator"
                 exit 0 ;;
             build)
                 _banner "operator build"
@@ -539,6 +504,7 @@ case "$TOP" in
                 exec bash "$SCRIPT_DIR/scripts/core/build.sh" operator-build-all ;;
             deploy)
                 _banner "operator deploy ${@:3}"
+                _ensure_operator
                 _DEPLOY_TARGET=""
                 _DEPLOY_ARCH="amd64"
                 _DEPLOY_DEST="./g8e.operator"
@@ -579,14 +545,13 @@ case "$TOP" in
                     echo "  Usage: ./g8e operator deploy <user@host> [options]" >&2
                     exit 1
                 fi
-                _ensure_g8ed "operator deploy"
                 _REMOTE_EXEC="${_DEPLOY_DEST}"
                 [[ "$(basename "${_DEPLOY_DEST}")" != "g8e.operator" ]] && _REMOTE_EXEC="${_DEPLOY_DEST%/}/g8e.operator"
-                echo "Fetching linux/${_DEPLOY_ARCH} operator from host g8es blob store and copying to ${_DEPLOY_TARGET}:${_DEPLOY_DEST}..."
+                echo "Fetching linux/${_DEPLOY_ARCH} operator from host Operator blob store and copying to ${_DEPLOY_TARGET}:${_DEPLOY_DEST}..."
                 curl -sfk \
                     -H "X-Operator-Session-Id: ${OPERATOR_SESSION_ID}" \
-                    --cacert "$SCRIPT_DIR/ssl/ca.crt" \
-                    "https://localhost:9000/blob/operator-binary/linux-${_DEPLOY_ARCH}" \
+                    --cacert "$G8E_SSL_DIR_HOST/ca.crt" \
+                    "$OPERATOR_HTTP_URL/blob/operator-binary/linux-${_DEPLOY_ARCH}" \
                     | ssh "${_DEPLOY_TARGET}" "cat > ${_DEPLOY_DEST} && chmod +x ${_DEPLOY_DEST}"
                 echo "  Done."
                 if [[ -n "$_DEPLOY_ENDPOINT" ]]; then
@@ -603,37 +568,23 @@ case "$TOP" in
                 fi
                 exit 0 ;;
             stream)
+                _bin="$(_operator_bin)"
                 if [[ "${3:-}" == "-h" || "${3:-}" == "--help" || "${3:-}" == "" ]]; then
-                    _ensure_g8ed "operator stream"
-                    if [ -t 0 ] && [ -t 1 ]; then
-                        exec docker exec -it "$CONTAINER" /home/g8e/g8e.operator stream --help
-                    else
-                        exec docker exec -i "$CONTAINER" /home/g8e/g8e.operator stream --help
-                    fi
+                    exec "$_bin" stream --help
                 fi
                 _banner "operator stream ${@:3}"
-                _ensure_g8ed "operator stream"
-                if ! docker exec "$CONTAINER" test -f /home/g8e/g8e.operator 2>/dev/null; then
-                    echo "[g8e] Operator binary not found in $CONTAINER at /home/g8e/g8e.operator" >&2
-                    echo "  Run: ./g8e operator build" >&2
-                    exit 1
-                fi
-                _stream_args=(/home/g8e/g8e.operator stream)
+                _stream_args=(stream)
                 _args=("${@:3}")
                 set -- "${_args[@]}"
                 while [[ $# -gt 0 ]]; do
                     case "$1" in
-                        --arch|--hosts|--concurrency|--timeout|--endpoint|--device-token|--key|--ssh-config)
+                        --arch|--hosts|--concurrency|--timeout|--endpoint|--device-token|--key|--ssh-config|--ssh-identity-file|--ssh-user|--binary-dir)
                             _stream_args+=("$1" "$2"); shift 2 ;;
                         --no-git) _stream_args+=("--no-git"); shift ;;
                         *) _stream_args+=("$1"); shift ;;
                     esac
                 done
-                if [ -t 0 ] && [ -t 1 ]; then
-                    exec docker exec -it "$CONTAINER" "${_stream_args[@]}"
-                else
-                    exec docker exec -i "$CONTAINER" "${_stream_args[@]}"
-                fi ;;
+                exec "$_bin" "${_stream_args[@]}" ;;
             ssh-config)
                 _banner "operator ssh-config"
                 exec bash "$SCRIPT_DIR/scripts/tools/setup-ssh.sh" ssh-config "${@:3}" ;;
@@ -658,14 +609,12 @@ case "$TOP" in
             fi
             [[ -z "$_TEST_COMPONENT" ]] && exit 1 || exit 0
         fi
-        _TEST_RUNNER="$(_test_runner_for "$_TEST_COMPONENT")"
-        if [[ -z "$_TEST_RUNNER" ]]; then
+        if [[ "$_TEST_COMPONENT" != "g8ee" && "$_TEST_COMPONENT" != "g8ed" && "$_TEST_COMPONENT" != "g8eo" ]]; then
             echo "[g8e] Unknown test component: '$_TEST_COMPONENT'" >&2
             echo "  Valid: g8ee, g8ed, g8eo" >&2
             exit 1
         fi
 
-        _TEST_ENV_ARGS=()
         _TEST_PASSTHROUGH=()
         _args=("${@:3}")
         _require_value() {
@@ -746,21 +695,8 @@ case "$TOP" in
         done
         _TEST_PASSTHROUGH=("$_TEST_COMPONENT" "${_TEST_PASSTHROUGH[@]}")
 
-        [[ -n "${TEST_LLM_PROVIDER:-}" ]]              && _TEST_ENV_ARGS+=(-e "TEST_LLM_PROVIDER=$TEST_LLM_PROVIDER")
-        [[ -n "${TEST_LLM_ASSISTANT_PROVIDER:-}" ]]     && _TEST_ENV_ARGS+=(-e "TEST_LLM_ASSISTANT_PROVIDER=$TEST_LLM_ASSISTANT_PROVIDER")
-        [[ -n "${TEST_LLM_LITE_PROVIDER:-}" ]]          && _TEST_ENV_ARGS+=(-e "TEST_LLM_LITE_PROVIDER=$TEST_LLM_LITE_PROVIDER")
-        [[ -n "${TEST_LLM_PRIMARY_MODEL:-}" ]]          && _TEST_ENV_ARGS+=(-e "TEST_LLM_PRIMARY_MODEL=$TEST_LLM_PRIMARY_MODEL")
-        [[ -n "${TEST_LLM_ASSISTANT_MODEL:-}" ]]        && _TEST_ENV_ARGS+=(-e "TEST_LLM_ASSISTANT_MODEL=$TEST_LLM_ASSISTANT_MODEL")
-        [[ -n "${TEST_LLM_LITE_MODEL:-}" ]]             && _TEST_ENV_ARGS+=(-e "TEST_LLM_LITE_MODEL=$TEST_LLM_LITE_MODEL")
-        [[ -n "${TEST_LLM_ENDPOINT_URL:-}" ]]           && _TEST_ENV_ARGS+=(-e "TEST_LLM_ENDPOINT_URL=$TEST_LLM_ENDPOINT_URL")
-        [[ -n "${TEST_LLM_API_KEY:-}" ]]                && _TEST_ENV_ARGS+=(-e "TEST_LLM_API_KEY=$TEST_LLM_API_KEY")
-        [[ -n "${TEST_LLM_ASSISTANT_ENDPOINT_URL:-}" ]] && _TEST_ENV_ARGS+=(-e "TEST_LLM_ASSISTANT_ENDPOINT_URL=$TEST_LLM_ASSISTANT_ENDPOINT_URL")
-        [[ -n "${TEST_LLM_ASSISTANT_API_KEY:-}" ]]      && _TEST_ENV_ARGS+=(-e "TEST_LLM_ASSISTANT_API_KEY=$TEST_LLM_ASSISTANT_API_KEY")
-        [[ -n "${TEST_WEB_SEARCH_PROJECT_ID:-}" ]]      && _TEST_ENV_ARGS+=(-e "TEST_WEB_SEARCH_PROJECT_ID=$TEST_WEB_SEARCH_PROJECT_ID")
-        [[ -n "${TEST_WEB_SEARCH_ENGINE_ID:-}" ]]       && _TEST_ENV_ARGS+=(-e "TEST_WEB_SEARCH_ENGINE_ID=$TEST_WEB_SEARCH_ENGINE_ID")
-        [[ -n "${TEST_WEB_SEARCH_API_KEY:-}" ]]         && _TEST_ENV_ARGS+=(-e "TEST_WEB_SEARCH_API_KEY=$TEST_WEB_SEARCH_API_KEY")
-        [[ -n "${TEST_WEB_SEARCH_LOCATION:-}" ]]        && _TEST_ENV_ARGS+=(-e "TEST_WEB_SEARCH_LOCATION=$TEST_WEB_SEARCH_LOCATION")
-        [[ -n "${DEVICE_TOKEN:-}" ]]                    && _TEST_ENV_ARGS+=(-e "DEVICE_TOKEN=$DEVICE_TOKEN")
+        # Test-related env vars are exported globally above and inherited by
+        # scripts/testing/run_tests.sh; no docker -e plumbing needed.
 
         if [ -t 0 ] && [ -t 1 ]; then
             export G8E_SSL_DIR="$SCRIPT_DIR/.g8e/ssl"
@@ -789,7 +725,7 @@ case "$TOP" in
                 ;;
             validate)
                 _banner "security validate"
-                _exec_in_g8ed /app/scripts/security/validate-platform-security.sh "${@:3}" ;;
+                _run_host_script bash "$SCRIPT_DIR/scripts/security/validate-platform-security.sh" "${@:3}" ;;
             certs)
                 CERT_SUB="${3:-status}"
                 case "$CERT_SUB" in
@@ -803,25 +739,30 @@ case "$TOP" in
                 esac ;;
             mtls-test)
                 _banner "security mtls-test"
-                _exec_in_g8ed /app/scripts/security/mtls-test.sh "${@:3}" ;;
+                _run_host_script bash "$SCRIPT_DIR/scripts/security/mtls-test.sh" "${@:3}" ;;
             scan-licenses)
                 _banner "security scan-licenses"
-                _exec_in_g8ed /app/scripts/security/scan-licenses.sh "${@:3}" ;;
+                _run_host_script bash "$SCRIPT_DIR/scripts/security/scan-licenses.sh" "${@:3}" ;;
             passkeys)
                 _banner "security passkeys ${@:3}"
-                _exec_in_g8ed /app/scripts/security/manage-passkeys.py "${@:3}" ;;
+                _ensure_g8ed
+                _run_host_script python3 "$SCRIPT_DIR/scripts/security/manage-passkeys.py" "${@:3}" ;;
             rotate-internal-token)
                 _banner "security rotate-internal-token"
-                _ensure_g8ed "security rotate-internal-token"
+                _ensure_operator
                 echo "  Rotating internal auth token..."
-                _new_token="$(docker exec -i "$CONTAINER" python3 /app/scripts/data/manage-g8es.py settings rotate-token 2>&1)"
+                export G8E_SSL_DIR="$G8E_SSL_DIR_HOST"
+                export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTP_URL"
+                export G8ED_INTERNAL_URL="$G8ED_URL"
+                export PYTHONPATH="$SCRIPT_DIR/scripts:$SCRIPT_DIR/shared${PYTHONPATH:+:$PYTHONPATH}"
+                _new_token="$(python3 "$SCRIPT_DIR/scripts/data/manage-g8es.py" settings rotate-token 2>&1)"
                 if [[ -z "$_new_token" || "$_new_token" == *"Error"* ]]; then
                     echo "[g8e] Failed to rotate token: $_new_token" >&2
                     exit 1
                 fi
-                echo "  Token written to g8es."
-                echo "  Restarting g8ed and g8ee to pick up new token..."
-                $COMPOSE restart g8ed g8ee
+                echo "  Token written to the Operator listen-mode store."
+                echo "  Restarting g8ed and g8ee to pick up the new token..."
+                bash "$SCRIPT_DIR/scripts/core/build.sh" rebuild g8ed g8ee
                 echo ""
                 echo "  Done. All components now use the new internal auth token." ;;
             *)
@@ -847,7 +788,8 @@ case "$TOP" in
                 ;;
             users|operators|store|settings|audit|device-links)
                 _banner "data $SUB ${@:3}"
-                _exec_in_g8ed python3 /app/scripts/data/manage-g8es.py "$SUB" "${@:3}" ;;
+                _ensure_g8ed
+                _run_host_script python3 "$SCRIPT_DIR/scripts/data/manage-g8es.py" "$SUB" "${@:3}" ;;
             *)
                 echo "[g8e] unknown data subcommand: '$SUB'" >&2
                 echo "  Valid: users, operators, store, settings, audit, device-links" >&2
@@ -1055,7 +997,8 @@ case "$TOP" in
                 ;;
             config|test|status)
                 _banner "mcp $SUB"
-                _exec_in_g8ed python3 /app/scripts/data/manage-g8es.py mcp "$SUB" "${@:3}" ;;
+                _ensure_g8ed
+                _run_host_script python3 "$SCRIPT_DIR/scripts/data/manage-g8es.py" mcp "$SUB" "${@:3}" ;;
             *)
                 echo "[g8e] unknown mcp subcommand: '$SUB'" >&2
                 echo "  Valid: config, test, status" >&2
@@ -1156,7 +1099,7 @@ case "$TOP" in
                             shift 2
                             ;;
                         --gold-set)
-                            gold_set="$(_eval_gold_set_path_for_container "$2")"
+                            gold_set="$(_eval_gold_set_path_for_host "$2")"
                             run_args+=("--gold-set" "$gold_set")
                             shift 2
                             ;;
@@ -1225,13 +1168,33 @@ case "$TOP" in
                         done
 
                         if [[ ${#settings_args[@]} -gt 0 ]]; then
-                            _exec_in_g8ed python3 /app/scripts/data/manage-g8es.py settings set --user-id "$user_id" "${settings_args[@]}"
+                            _ensure_g8ed
+                            (
+                                export G8E_SSL_DIR="$G8E_SSL_DIR_HOST"
+                                export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTP_URL"
+                                export G8ED_INTERNAL_URL="$G8ED_URL"
+                                export PYTHONPATH="$SCRIPT_DIR/scripts:$SCRIPT_DIR/shared${PYTHONPATH:+:$PYTHONPATH}"
+                                python3 "$SCRIPT_DIR/scripts/data/manage-g8es.py" settings set --user-id "$user_id" "${settings_args[@]}"
+                            )
                         fi
                     fi
                 fi
-                
+
                 _banner "evals run"
-                _run_in_g8ee_test_runner python3 -m app.evals.runner.cli run "${run_args[@]}"
+                _venv="$SCRIPT_DIR/components/g8ee/.venv"
+                if [ ! -x "$_venv/bin/python" ]; then
+                    echo "[g8e] g8ee virtualenv missing at $_venv — run ./g8e platform setup first" >&2
+                    exit 1
+                fi
+                (
+                    cd "$SCRIPT_DIR/components/g8ee"
+                    export PYTHONPATH="$SCRIPT_DIR/components/g8ee:$SCRIPT_DIR/shared${PYTHONPATH:+:$PYTHONPATH}"
+                    export G8E_SHARED_DIR="$SCRIPT_DIR/shared"
+                    export G8E_SSL_DIR="$G8E_SSL_DIR_HOST"
+                    export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTP_URL"
+                    export G8ED_INTERNAL_URL="$G8ED_URL"
+                    "$_venv/bin/python" -m app.evals.runner.cli run "${run_args[@]}"
+                )
                 ;;
     up)
                 _banner "evals up"
@@ -1275,7 +1238,17 @@ case "$TOP" in
                 exit 0 ;;
             list)
                 _banner "evals list"
-                _run_in_g8ee_test_runner python3 -m app.evals.runner.cli list
+                _venv="$SCRIPT_DIR/components/g8ee/.venv"
+                if [ ! -x "$_venv/bin/python" ]; then
+                    echo "[g8e] g8ee virtualenv missing at $_venv — run ./g8e platform setup first" >&2
+                    exit 1
+                fi
+                (
+                    cd "$SCRIPT_DIR/components/g8ee"
+                    export PYTHONPATH="$SCRIPT_DIR/components/g8ee:$SCRIPT_DIR/shared${PYTHONPATH:+:$PYTHONPATH}"
+                    export G8E_SHARED_DIR="$SCRIPT_DIR/shared"
+                    "$_venv/bin/python" -m app.evals.runner.cli list
+                )
                 ;;
             *)
                 echo "[g8e] unknown evals subcommand: '$SUB'" >&2

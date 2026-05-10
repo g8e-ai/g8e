@@ -21,8 +21,8 @@
 // ---------------------------------------------------------------------------
 // Internal Cluster URLs - g8es uses ports 9000 (HTTPS) and 9001 (WSS)
 // ---------------------------------------------------------------------------
-export const G8EE_INTERNAL_URL = 'https://g8ee';
-export const G8ED_INTERNAL_URL = 'https://g8ed';
+export const G8EE_INTERNAL_URL = 'https://localhost:8443';
+export const G8ED_INTERNAL_URL = 'https://localhost';
 export const G8ES_INTERNAL_HTTP_URL = process.env.G8E_INTERNAL_HTTP_URL || 'https://localhost:9000';
 
 // ---------------------------------------------------------------------------

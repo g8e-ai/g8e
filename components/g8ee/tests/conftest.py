@@ -486,7 +486,7 @@ def test_settings():
 
     settings = get_settings()
     if settings is None or not hasattr(settings, "auth"):
-        return G8eePlatformSettings(port=443, auth=AuthSettings(), listen=ListenSettings())
+        return G8eePlatformSettings(port=8443, auth=AuthSettings(), listen=ListenSettings())
     return settings
 
 

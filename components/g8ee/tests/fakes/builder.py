@@ -143,7 +143,7 @@ def build_command_service(
     event_service = event_service or FakeEventService()
     ai_response_analyzer = ai_response_analyzer or FakeAIResponseAnalyzer()
     investigation_service = investigation_service or FakeInvestigationService()
-    settings = settings or G8eePlatformSettings(port=443)
+    settings = settings or G8eePlatformSettings(port=8443)
 
     operator_data_service = OperatorDataService(cache=cache_aside_service, internal_http_client=internal_http_client)
 

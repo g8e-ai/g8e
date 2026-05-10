@@ -303,4 +303,4 @@ app = _build_app()
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("components.g8ee.app.main:app", host="0.0.0.0", port=443, reload=True)
+    uvicorn.run("components.g8ee.app.main:app", host="0.0.0.0", port=8443, reload=True)

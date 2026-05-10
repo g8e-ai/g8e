@@ -82,7 +82,7 @@ class SettingsService:
         """
         settings = G8eePlatformSettings(
             host="0.0.0.0",
-            port=443,
+            port=8443,
             log_level=LogLevel.INFO,
             enable_logging=True,
             docker_gid="988",
@@ -90,11 +90,11 @@ class SettingsService:
             absolute_session_timeout=86400,
             docs_dir="/docs",
             supervisor_port=9001,
-            app_url="http://localhost:443",
+            app_url="http://localhost:8443",
             allowed_origins="*",
             passkey_rp_name="g8e",
             passkey_rp_id="g8e",
-            passkey_origin="http://localhost:443",
+            passkey_origin="http://localhost:8443",
         )
 
         # Load secrets from bootstrap service

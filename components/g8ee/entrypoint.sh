@@ -16,6 +16,6 @@ fi
 
 # g8es readiness is gated by docker-compose `depends_on: g8es: service_healthy`.
 # Execute the main application - bootstrap service handles secret loading
-exec uvicorn app.main:app --host 0.0.0.0 --port 443 \
+exec uvicorn app.main:app --host 0.0.0.0 --port 8443 \
     --ssl-keyfile "${SSL_DIR}/server.key" \
     --ssl-certfile "${SSL_DIR}/server.crt"

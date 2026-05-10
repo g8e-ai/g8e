@@ -83,7 +83,7 @@ services:
         aliases:
           - g8ee
     healthcheck:
-      test: ["CMD", "curl", "-f", "--cacert", "/g8es/ca.crt", "https://localhost/health"]
+      test: ["CMD", "curl", "-f", "--cacert", "/g8es/ca.crt", "https://localhost:8443/health"]
       interval: 30s
       timeout: 5s
       retries: 5

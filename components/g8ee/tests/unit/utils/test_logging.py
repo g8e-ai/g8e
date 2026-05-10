@@ -45,7 +45,7 @@ pytestmark = pytest.mark.unit
 # ---------------------------------------------------------------------------
 
 def _make_settings(log_level: LogLevel = LogLevel.INFO, enable_logging: bool = True) -> G8eePlatformSettings:
-    settings = G8eePlatformSettings(port=443)
+    settings = G8eePlatformSettings(port=8443)
     settings.log_level = log_level
     settings.enable_logging = enable_logging
     return settings

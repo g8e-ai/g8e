@@ -27,11 +27,14 @@ def _load_paths() -> dict:
             paths = json.load(f)
     except FileNotFoundError:
         # Emergency fallbacks for when shared volume isn't ready
+        # On host, default to .g8e/ssl (Operator listen mode SSL directory)
+        # In container, default to /g8es for backwards compatibility
+        default_ssl_dir = os.environ.get("G8E_RUNTIME_DIR", "/home/bob/g8e/.g8e") + "/ssl" if _SHARED_DIR != "/app/shared" else "/g8es"
         paths = {
             "infra": {
                 "db_path": "/data/g8e.db",
-                "ca_cert_path": f"{os.environ.get('G8E_SSL_DIR', '/g8es')}/ca.crt",
-                "ssl_dir": os.environ.get("G8E_SSL_DIR", "/g8es"),
+                "ca_cert_path": f"{os.environ.get('G8E_SSL_DIR', default_ssl_dir)}/ca.crt",
+                "ssl_dir": os.environ.get("G8E_SSL_DIR", default_ssl_dir),
                 "docs_dir": "/docs",
                 "shared_dir": _SHARED_DIR,
                 "shared_constants_dir": _SHARED_DIR + "/constants",
@@ -48,6 +51,10 @@ def _load_paths() -> dict:
         paths["infra"]["shared_dir"] = _SHARED_DIR
         paths["infra"]["shared_constants_dir"] = _SHARED_DIR + "/constants"
         paths["infra"]["shared_models_dir"] = _SHARED_DIR + "/models"
+        # Override SSL paths to use host runtime directory when running on host
+        host_ssl_dir = os.environ.get("G8E_RUNTIME_DIR", "/home/bob/g8e/.g8e") + "/ssl"
+        paths["infra"]["ssl_dir"] = host_ssl_dir
+        paths["infra"]["ca_cert_path"] = host_ssl_dir + "/ca.crt"
 
     return paths
 

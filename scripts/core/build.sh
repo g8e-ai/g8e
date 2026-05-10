@@ -231,18 +231,12 @@ _start_g8ee() {
         "$venv_dir/bin/pip" install -r "$PROJECT_ROOT/components/g8ee/requirements.txt"
     fi
 
-    echo "  Starting g8ee on port 443 (HTTPS)..."
+    echo "  Starting g8ee on port 8443 (HTTPS)..."
     _rotate_logs "$G8EE_LOG_FILE"
     
     # g8ee requires internal auth token and session encryption key from bootstrap
     local auth_token
     auth_token=$(cat "$OPERATOR_LISTEN_SSL_DIR/internal_auth_token" 2>/dev/null | tr -d ' \n\r' || true)
-    
-    # Start g8ee
-    # Note: Using sudo for port 443 if necessary, but assuming user has permissions or uses high port
-    # Actually, the Dockerfile used port 443, but for host dev we might want to allow override.
-    # For now, stick to 443 or allow it to fail if not root.
-    # The plan says "Replace service names... with host-native URLs".
     
     (
         cd "$PROJECT_ROOT/components/g8ee"
@@ -250,8 +244,10 @@ _start_g8ee() {
         export G8E_INTERNAL_AUTH_TOKEN="$auth_token"
         export PYTHONPATH="$PROJECT_ROOT/components/g8ee:$PROJECT_ROOT/shared"
         export G8E_SHARED_DIR="$PROJECT_ROOT/shared"
+        export G8E_INTERNAL_HTTP_URL="https://localhost:9000"
+        export G8E_INTERNAL_PUBSUB_URL="wss://localhost:9001"
         
-        setsid "$venv_dir/bin/uvicorn" app.main:app --host 127.0.0.1 --port 443 \
+        setsid "$venv_dir/bin/uvicorn" app.main:app --host 127.0.0.1 --port 8443 \
             --ssl-keyfile "$OPERATOR_LISTEN_SSL_DIR/server.key" \
             --ssl-certfile "$OPERATOR_LISTEN_SSL_DIR/server.crt" \
             > "$G8EE_LOG_FILE" 2>&1 &
@@ -284,6 +280,9 @@ _start_g8ed() {
         cd "$PROJECT_ROOT/components/g8ed"
         export G8E_SSL_DIR="$OPERATOR_LISTEN_SSL_DIR"
         export NODE_EXTRA_CA_CERTS="$OPERATOR_LISTEN_SSL_DIR/ca.crt"
+        export G8E_INTERNAL_HTTP_URL="https://localhost:9000"
+        export G8E_INTERNAL_PUBSUB_URL="wss://localhost:9001"
+        export G8EE_INTERNAL_URL="https://localhost:8443"
         
         setsid node server.js > "$G8ED_LOG_FILE" 2>&1 &
         echo $! > "$G8ED_PID_FILE"
@@ -312,6 +311,12 @@ _stop_g8ed() {
         echo "  Stopping g8ed (PID: $pid)..."
         kill "$pid" 2>/dev/null || true
         rm -f "$G8ED_PID_FILE"
+    else
+        if _g8ed_running; then
+            echo "  Stopping g8ed via pkill..."
+            pkill -f "node server.js" || true
+            rm -f "$G8ED_PID_FILE"
+        fi
     fi
 }
 
@@ -670,7 +675,7 @@ if [[ "$COMMAND" == "restart" ]]; then
     
     # Update health checks to probe host processes directly
     echo "  g8ee: waiting for healthy status..."
-    until curl -sfk "https://localhost:443/health" >/dev/null 2>&1; do
+    until curl -sfk "https://localhost:8443/health" >/dev/null 2>&1; do
         sleep 1
     done
     echo -e "  g8ee: \033[0;32mready\033[0m"
@@ -721,7 +726,7 @@ if [[ "$COMMAND" == "reset" ]]; then
     
     # Update health checks to probe host processes directly
     echo "  g8ee: waiting for healthy status..."
-    until curl -sfk "https://localhost:443/health" >/dev/null 2>&1; do
+    until curl -sfk "https://localhost:8443/health" >/dev/null 2>&1; do
         sleep 1
     done
     echo -e "  g8ee: \033[0;32mready\033[0m"
@@ -771,7 +776,7 @@ if [[ "$COMMAND" == "wipe" ]]; then
     echo "Waiting for services..."
     # Update health checks to probe host processes directly
     echo "  g8ee: waiting for healthy status..."
-    until curl -sfk "https://localhost:443/health" >/dev/null 2>&1; do
+    until curl -sfk "https://localhost:8443/health" >/dev/null 2>&1; do
         sleep 1
     done
     echo -e "  g8ee: \033[0;32mready\033[0m"
@@ -841,7 +846,7 @@ if [[ "$COMMAND" == "up" ]]; then
     # Update health checks to probe host processes directly
     if printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8ee; then
         echo "  g8ee: waiting for healthy status..."
-        until curl -sfk "https://localhost:443/health" >/dev/null 2>&1; do
+        until curl -sfk "https://localhost:8443/health" >/dev/null 2>&1; do
             sleep 1
         done
         echo -e "  g8ee: \033[0;32mready\033[0m"
@@ -885,7 +890,7 @@ if [[ "$COMMAND" == "setup" ]]; then
     
     # Update health checks to probe host processes directly
     echo "  g8ee: waiting for healthy status..."
-    until curl -sfk "https://localhost:443/health" >/dev/null 2>&1; do
+    until curl -sfk "https://localhost:8443/health" >/dev/null 2>&1; do
         sleep 1
     done
     echo -e "  g8ee: \033[0;32mready\033[0m"

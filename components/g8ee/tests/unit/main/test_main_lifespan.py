@@ -71,7 +71,7 @@ def _configure_settings(mocks):
     settings.ca_cert_path = "/tmp/ca.crt"
     settings.auth.internal_auth_token = "tok"
     settings.listen.default_ttl = 3600
-    settings.port = 443
+    settings.port = 8443
 
     mocks["initialize_g8e_service"].side_effect = AsyncMock(return_value=settings)
 

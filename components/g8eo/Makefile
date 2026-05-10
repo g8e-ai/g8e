@@ -202,14 +202,13 @@ _build-release:
 .PHONY: check-certs
 check-certs:
 	@if [ ! -f "$(G8ED_SSL_CA_CERT)" ]; then \
-		echo "ERROR: g8ed server CA not found at $(G8ED_SSL_CA_CERT)"; \
-		echo "  Run: scripts/security/generate-certs.sh"; \
-		echo "  Or:  scripts/core/build.sh --generate-ssl"; \
-		exit 1; \
+		echo "WARNING: g8ed server CA not found at $(G8ED_SSL_CA_CERT)"; \
+		echo "  This is normal during first-time setup. The Operator will generate certs when started."; \
+	else \
+		mkdir -p $(CERTS_DIR); \
+		cp $(G8ED_SSL_CA_CERT) $(CERTS_DIR)/server_ca.crt; \
+		echo "Synced g8ed server CA to $(CERTS_DIR)/server_ca.crt"; \
 	fi
-	@mkdir -p $(CERTS_DIR)
-	@cp $(G8ED_SSL_CA_CERT) $(CERTS_DIR)/server_ca.crt
-	@echo "Synced g8ed server CA to $(CERTS_DIR)/server_ca.crt"
 
 .PHONY: clean-certs
 clean-certs:

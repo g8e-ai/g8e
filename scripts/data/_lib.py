@@ -36,12 +36,14 @@ _SHARED_CONSTANTS = PROJECT_ROOT / 'shared' / 'constants'
 with open(_SHARED_CONSTANTS / 'collections.json') as _f:
     _COLLECTIONS_DATA = json.load(_f)
 
-G8ES_BASE_URL = os.environ.get('G8E_INTERNAL_HTTP_URL', 'https://g8es:9000')
-G8ED_BASE_URL = 'https://g8ed'
+_DEFAULT_SSL_DIR = str(PROJECT_ROOT / '.g8e' / 'ssl')
+
+G8ES_BASE_URL = os.environ.get('G8E_INTERNAL_HTTP_URL', 'https://localhost:9000')
+G8ED_BASE_URL = os.environ.get('G8ED_INTERNAL_URL', 'https://localhost')
 COLLECTIONS: List[str] = sorted(set(_COLLECTIONS_DATA['collections'].values()))
 PRESERVE_COLLECTIONS = {'settings'}
 
-SSL_DIR = Path(os.environ.get('G8E_SSL_DIR', '/g8es'))
+SSL_DIR = Path(os.environ.get('G8E_SSL_DIR', _DEFAULT_SSL_DIR))
 CA_CERT_PATH = SSL_DIR / 'ca.crt'
 INTERNAL_AUTH_TOKEN_PATHS = (
     SSL_DIR / 'internal_auth_token',
@@ -55,7 +57,6 @@ def _create_ssl_context() -> ssl.SSLContext | None:
     if CA_CERT_PATH.exists():
         ctx.load_verify_locations(str(CA_CERT_PATH))
     else:
-        # Fallback to legacy internal volume path
         alt_path = SSL_DIR / 'ssl' / 'ca.crt'
         if alt_path.exists():
             ctx.load_verify_locations(str(alt_path))
@@ -80,9 +81,10 @@ def get_auth_token() -> str:
 def get_internal_auth_token() -> str:
     """Return the platform internal auth token.
 
-    g8es authenticates every request with `X-Internal-Auth`. Inside g8ep the
-    token is mounted at $G8E_SSL_DIR/internal_auth_token (ro). Falls back to the
-    G8E_INTERNAL_AUTH_TOKEN env var for test-runner contexts.
+    The Operator (listen mode) authenticates every internal request with
+    `X-Internal-Auth`. The token is written by the Operator on first start to
+    $G8E_SSL_DIR/internal_auth_token (default: $PROJECT_ROOT/.g8e/ssl/). Falls
+    back to the G8E_INTERNAL_AUTH_TOKEN env var for test-runner contexts.
     """
     for p in INTERNAL_AUTH_TOKEN_PATHS:
         try:
@@ -98,7 +100,8 @@ def get_internal_auth_token() -> str:
 def get_auditor_hmac_key() -> str:
     """Return the Tribunal auditor HMAC-SHA256 signing key.
 
-    Inside g8ep the key is mounted at $G8E_SSL_DIR/auditor_hmac_key (ro).
+    The key is written by the Operator on first start to
+    $G8E_SSL_DIR/auditor_hmac_key (default: $PROJECT_ROOT/.g8e/ssl/).
     """
     p = SSL_DIR / 'auditor_hmac_key'
     try:
@@ -120,10 +123,11 @@ def g8es_request(method: str, path: str, body: Dict | None = None) -> Any:
     data = json.dumps(body).encode() if body is not None else None
     headers = {'Content-Type': 'application/json'} if data is not None else {}
 
-    # g8es requires X-Internal-Auth on all non-health endpoints. The operator
-    # session from `g8e login` gates the wrapper; inside the trusted g8ep
-    # container we use the mounted internal auth token to reach g8es, the
-    # same way g8ed and g8ee do.
+    # The Operator listen-mode HTTP API requires X-Internal-Auth on all
+    # non-health endpoints. The operator session from `g8e login` gates the
+    # wrapper; the script reads the internal auth token written by the
+    # Operator at $G8E_SSL_DIR/internal_auth_token, the same way g8ed and
+    # g8ee do.
     internal_token = get_internal_auth_token()
     if internal_token:
         headers['X-Internal-Auth'] = internal_token
@@ -149,7 +153,8 @@ def g8es_request(method: str, path: str, body: Dict | None = None) -> Any:
         raise RuntimeError(f'HTTP {e.code} {method} {path}: {err}')
     except urllib.error.URLError as e:
         raise RuntimeError(
-            f'Cannot reach g8es at {G8ES_BASE_URL}. Is the platform running?\n  {e.reason}'
+            f'Cannot reach the Operator listen-mode HTTP API at {G8ES_BASE_URL}. '
+            f'Is the platform running? (./g8e platform start)\n  {e.reason}'
         )
 
 
@@ -196,9 +201,8 @@ def g8ed_request(method: str, url: str, body: Dict | None = None) -> Dict:
         'Accept': 'application/json',
     }
     # g8ed internal endpoints accept either an operator session OR the
-    # platform internal auth token. Running inside g8ee (trusted container)
-    # we forward the mounted internal token for bootstrap flows before
-    # any user is authenticated.
+    # platform internal auth token. We forward the on-disk internal token
+    # for bootstrap flows before any user is authenticated.
     internal_token = get_internal_auth_token()
     if internal_token:
         headers['X-Internal-Auth'] = internal_token
