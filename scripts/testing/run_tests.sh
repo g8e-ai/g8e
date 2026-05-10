@@ -7,7 +7,8 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+. "${SCRIPT_DIR}/../core/path_utils.sh"
+PROJECT_ROOT="$G8E_PROJECT_ROOT"
 
 # =============================================================================
 # Helper functions
@@ -217,7 +218,8 @@ run_g8ee() {
     
     export PYTHONPATH="$PROJECT_ROOT/components/g8ee:$PROJECT_ROOT/shared"
     export G8E_SHARED_DIR="$PROJECT_ROOT/shared"
-    
+    export G8E_PROJECT_ROOT="$PROJECT_ROOT"
+
     if [[ "$PYRIGHT" == "true" ]]; then
         (set -o pipefail && cd "$PROJECT_ROOT/components/g8ee" && "$venv_dir/bin/python" -m pyright --project pyrightconfig.services.json | sed "s|$PROJECT_ROOT/components/||g")
     fi
@@ -239,6 +241,7 @@ run_g8ee() {
         cov_args=("${filtered[@]}" "-n" "$PARALLEL")
         log_ok "pytest parallelism: -n $PARALLEL"
     fi
+    cd "$PROJECT_ROOT"
     "$venv_dir/bin/pytest" "${cov_args[@]}" "${EXTRA_ARGS[@]}"
 }
 

@@ -24,8 +24,10 @@
 
 import { readFileSync, existsSync } from 'fs';
 import { createRequire } from 'module';
+import path from 'path';
+import { resolveProjectRoot } from '../../utils/path.js';
 const require = createRequire(import.meta.url);
-const { PubSubMessage, PubSubEvent } = require('../../shared/proto/pubsub_pb.cjs');
+const { PubSubMessage, PubSubEvent } = require(path.join(resolveProjectRoot(), 'components/g8ed/shared/proto/pubsub_pb.cjs'));
 
 import WebSocket from 'ws';
 import { logger } from '../../utils/logger.js';

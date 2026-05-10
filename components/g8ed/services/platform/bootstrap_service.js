@@ -15,6 +15,7 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import { logger } from '../../utils/logger.js';
+import { resolveProjectRoot } from '../../utils/path.js';
 
 /**
  * Filename of the tamper-evidence manifest written by g8eo SecretManager
@@ -35,7 +36,7 @@ class BootstrapService {
     /**
      * @param {string} volumePath - Path to bootstrap secrets directory (default: from G8E_SSL_DIR env var or .g8e/ssl)
      */
-    constructor(volumePath = process.env.G8E_SSL_DIR || path.join(process.cwd(), '..', '..', '.g8e', 'ssl')) {
+    constructor(volumePath = process.env.G8E_SSL_DIR || path.join(resolveProjectRoot(), '.g8e', 'ssl')) {
         this.volumePath = volumePath;
         this._cachedToken = null;
         this._cachedKey = null;

@@ -61,9 +61,11 @@ describe('BootstrapService [UNIT - filesystem isolated]', () => {
     });
 
     describe('constructor', () => {
-        it('should use default volume path /home/bob/g8e/.g8e/ssl when not provided', () => {
+        it('should use default volume path when not provided', () => {
             const service = new BootstrapService();
-            expect(service.volumePath).toBe('/home/bob/g8e/.g8e/ssl');
+            // The default depends on G8E_PROJECT_ROOT or process.cwd(), so we just verify it's set
+            expect(service.volumePath).toBeDefined();
+            expect(service.volumePath).toContain('.g8e/ssl');
         });
 
         it('should use custom volume path when provided', () => {
@@ -289,10 +291,9 @@ describe('BootstrapService [UNIT - filesystem isolated]', () => {
             expect(service.getSslDir()).toBe(customPath);
         });
 
-        it('should return default /home/bob/g8e/.g8e/ssl when no custom path set', () => {
+        it('should return default volume path when no custom path set', () => {
             const service = new BootstrapService();
-
-            expect(service.getSslDir()).toBe('/home/bob/g8e/.g8e/ssl');
+            expect(service.getSslDir()).toBe(service.volumePath);
         });
     });
 

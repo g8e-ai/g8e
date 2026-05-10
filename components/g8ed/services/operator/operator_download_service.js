@@ -15,10 +15,7 @@ import { logger } from '../../utils/logger.js';
 import { PLATFORMS } from '../../constants/service_config.js';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { resolveProjectRoot } from '../../utils/path.js';
 
 /**
  * OperatorDownloadService
@@ -27,13 +24,12 @@ const __dirname = path.dirname(__filename);
  * The operator binary is built locally and served directly from disk.
  *
  * Architecture:
- *   g8ed → read  /home/bob/g8e/components/g8eo/build/{os}-{arch}/g8e.operator  → local file system
+ *   g8ed → read  {PROJECT_ROOT}/components/g8eo/build/{os}-{arch}/g8e.operator  → local file system
  */
 class OperatorDownloadService {
     constructor() {
         // The operator binary is built at: $PROJECT_ROOT/components/g8eo/build/{os}-{arch}/g8e.operator
-        // Derive the project root from the current file location
-        this._projectRoot = path.resolve(__dirname, '../../../..');
+        this._projectRoot = resolveProjectRoot();
         this._buildDir = path.join(this._projectRoot, 'components', 'g8eo', 'build');
     }
 

@@ -61,9 +61,9 @@ Broadcasting system-wide state changes to all listeners (primarily for the UI).
 ## Technical Invariants
 
 ### 1. Single Source of Truth
-All channel prefixes and segment counts are defined in `@/home/bob/g8e/shared/constants/channels.json`. 
+All channel prefixes and segment counts are defined in `@/shared/constants/channels.json`. 
 - **Never hand-roll**: Do not use string interpolation (e.g., `f"{prefix}:{id}"`).
-- **Use typed wrappers**: Python uses `OperatorChannel` in `@/home/bob/g8e/components/g8ee/app/constants/channels.py`. Go uses constructors in `components/g8eo/constants/channels.go`.
+- **Use typed wrappers**: Python uses `OperatorChannel` in `@/components/g8ee/app/constants/channels.py`. Go uses constructors in `components/g8eo/constants/channels.go`.
 
 ### 2. Bounded Parsing
 The `operator_session_id` may contain the separator character (`:`). To prevent data loss, always use a **bounded split** with a maximum of 2 splits when parsing a 3-segment channel.

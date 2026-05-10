@@ -3,7 +3,11 @@
 
 set -e
 
-SSL_DIR="${G8E_SSL_DIR:-${PROJECT_ROOT}/.g8e/ssl}"
+# Derive project root using shared utility
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+. "${SCRIPT_DIR}/../../scripts/core/path_utils.sh"
+
+SSL_DIR="${G8E_SSL_DIR:-${G8E_PROJECT_ROOT}/.g8e/ssl}"
 
 # Load security tokens into environment if files exist
 if [ -f "${SSL_DIR}/internal_auth_token" ]; then

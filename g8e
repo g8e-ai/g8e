@@ -19,6 +19,7 @@ _check_deps() {
 _check_deps
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export G8E_PROJECT_ROOT="$SCRIPT_DIR"
 DEV_MODE=false
 
 # Host-native runtime layout — managed by scripts/core/build.sh.

@@ -27,7 +27,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'module';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { resolveProjectRoot } from '@g8ed/utils/path.js';
 
 import {
     OperatorStatus,
@@ -43,8 +43,7 @@ import { Collections } from '@g8ed/constants/collections.js';
 import { CACHE_PREFIX } from '@g8ed/constants/kv_keys.js';
 import { PubSubChannel } from '@g8ed/constants/channels.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const sharedDir = path.resolve(__dirname, '../../../../shared/constants');
+const sharedDir = path.resolve(resolveProjectRoot(), 'shared/constants');
 const require = createRequire(import.meta.url);
 const STATUS = require(path.join(sharedDir, 'status.json'));
 const COLLECTIONS = require(path.join(sharedDir, 'collections.json'));

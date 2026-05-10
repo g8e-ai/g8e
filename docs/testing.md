@@ -144,7 +144,7 @@ Shared fixtures in `shared/test-fixtures/` (e.g., `sse-events.json`) are used to
 ## Continuous Integration
 
 Our GitHub workflows (`.github/workflows/build-and-test.yml`) enforce:
-- Multi-architecture Operator builds (amd64, arm64, 386).
-- Matrix execution of component tests against real infrastructure.
-- Contract enforcement via shared test fixtures.
-- Automated eval runs for core agent behaviors.
+- Host-native component test jobs with explicit Go, Python, and Node.js setup.
+- Real platform startup through `./g8e platform start`; CI does not set up Docker for component tests.
+- Component tests through `./g8e test g8ee`, `./g8e test g8ed`, and `./g8e test g8eo`.
+- Diagnostic platform log output on failure so silent runner exits expose root-cause logs.

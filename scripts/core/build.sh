@@ -46,7 +46,8 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+. "${SCRIPT_DIR}/path_utils.sh"
+PROJECT_ROOT="$G8E_PROJECT_ROOT"
 
 G8E_RUNTIME_DIR="${G8E_RUNTIME_DIR:-$PROJECT_ROOT/.g8e}"
 OPERATOR_LISTEN_DATA_DIR="${OPERATOR_LISTEN_DATA_DIR:-$G8E_RUNTIME_DIR/data}"

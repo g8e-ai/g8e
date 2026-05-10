@@ -11,7 +11,7 @@ Alternatively, if an API key is known out of band, it can be provided directly v
 - Interactive prompt `promptForAPIKey()` if none of the above are provided.
 
 If we consider `g8eo` running in `--listen` mode (acting as `operator`), it manages platform secrets itself.
-In `/home/bob/g8e/components/g8eo/services/listen/secret_manager.go`, `InitPlatformSettings` handles generating the:
+In `components/g8eo/services/listen/secret_manager.go`, `InitPlatformSettings` handles generating the:
 - `internal_auth_token`
 - `session_encryption_key`
 - `auditor_hmac_key`

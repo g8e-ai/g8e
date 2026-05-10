@@ -14,11 +14,9 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { resolveProjectRoot } from '@g8ed/utils/path.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const G8ED_ROOT = path.resolve(__dirname, '../../..');
+const G8ED_ROOT = path.resolve(resolveProjectRoot(), 'components/g8ed');
 
 /**
  * Directories to scan for raw internal API path usage
@@ -49,7 +47,7 @@ const EXCLUDE_PATTERNS = [
  * We want to catch raw usage of paths like '/api/internal/chat'.
  */
 async function getEnforcedPaths() {
-    const { InternalApiPaths } = await import('../../../constants/api_paths.js');
+    const { InternalApiPaths } = await import('@g8ed/constants/api_paths.js');
     const enforced = new Map(); // path -> { category, key }
 
     // Enforce g8ee paths

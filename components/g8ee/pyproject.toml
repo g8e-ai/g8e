@@ -106,11 +106,11 @@ timeout_method = "signal"
     skip_empty = true
 
     [tool.coverage.html]
-    directory = "/home/g8e/coverage-reports/g8ee"
+    directory = "coverage-reports/g8ee"
     title = "g8ee Test Coverage"
 
     [tool.coverage.json]
-    output = "/home/g8e/coverage-reports/g8ee/coverage.json"
+    output = "coverage-reports/g8ee/coverage.json"
 
     # ============================================================================
     # Ruff Configuration (Linter & Formatter)

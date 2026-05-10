@@ -20,6 +20,8 @@ import os
 from pathlib import Path
 from typing import Any, Protocol, cast, runtime_checkable
 
+from app.utils.path import resolve_project_root
+
 # Filename of the tamper-evidence manifest written by g8eo SecretManager
 # alongside bootstrap secrets on the host bootstrap directory (.g8e/ssl). Must stay in sync with
 # components/g8eo/services/listen/secret_manager.go::BootstrapDigestManifestFile.
@@ -78,8 +80,7 @@ class BootstrapService:
             volume_path = os.environ.get("G8E_SSL_DIR")
             if volume_path is None:
                 # Fallback to .g8e/ssl relative to project root
-                # Assuming started from components/g8ee
-                volume_path = str(Path.cwd().parent.parent / ".g8e" / "ssl")
+                volume_path = str(resolve_project_root() / ".g8e" / "ssl")
         self._volume_path = Path(volume_path)
         self._logger = logging.getLogger(__name__)
         self._cached_token: str | None = None

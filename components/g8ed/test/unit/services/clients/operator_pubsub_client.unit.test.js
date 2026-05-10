@@ -13,10 +13,14 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
+import { createRequire } from 'module';
+import path from 'path';
+import { resolveProjectRoot } from '@g8ed/utils/path.js';
 import { OperatorPubSubClient } from '@g8ed/services/clients/operator_pubsub_client.js';
 import { PubSubAction, PubSubMessageType } from '@g8ed/constants/channels.js';
 
-const { PubSubMessage, PubSubEvent } = require('../../../../shared/proto/pubsub_pb.cjs');
+const require = createRequire(import.meta.url);
+const { PubSubMessage, PubSubEvent } = require(path.join(resolveProjectRoot(), 'components/g8ed/shared/proto/pubsub_pb.cjs'));
 
 // Simple global tracker for the latest mock instance
 let latestWsInstance = null;

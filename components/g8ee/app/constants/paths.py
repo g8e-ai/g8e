@@ -14,11 +14,19 @@
 import json
 import os
 from pathlib import Path
+from app.utils.path import resolve_project_root
 
 # The bridge to shared paths.
 # In container, this is always /app/shared/constants/paths.json
 # On host, respect G8E_SHARED_DIR environment variable
-_SHARED_DIR = os.environ.get("G8E_SHARED_DIR", "/app/shared")
+_SHARED_DIR = os.environ.get("G8E_SHARED_DIR")
+if _SHARED_DIR is None:
+    # If not provided, try to resolve from project root
+    try:
+        _SHARED_DIR = str(resolve_project_root() / "shared")
+    except Exception:
+        _SHARED_DIR = "/app/shared"
+
 _CONTAINER_SHARED_CONSTANTS_DIR = _SHARED_DIR + "/constants"
 _PATH_FILE = _CONTAINER_SHARED_CONSTANTS_DIR + "/paths.json"
 

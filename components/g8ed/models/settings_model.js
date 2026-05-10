@@ -19,6 +19,8 @@
  */
 
 import { LLMProvider, OpenAIModel, AnthropicModel, LlamaCppModel, PROVIDER_MODELS } from '../constants/ai.js';
+import { resolveProjectRoot } from '../utils/path.js';
+import path from 'path';
 
 // All models for each provider are available at every tier; the user decides
 // which model serves primary / assistant / lite.
@@ -536,7 +538,7 @@ export const PLATFORM_SETTINGS = Object.freeze([
     Object.freeze({ key: 'https_port',                  default: '443'              }),
     Object.freeze({ key: 'http_port',                   default: '80'               }),
     Object.freeze({ key: 'port',                        default: '443'             }),
-    Object.freeze({ key: 'ssl_dir',                     default: process.env.G8E_SSL_DIR || '/home/bob/g8e/.g8e/ssl'       }),
+    Object.freeze({ key: 'ssl_dir',                     default: process.env.G8E_SSL_DIR || path.join(resolveProjectRoot(), '.g8e', 'ssl') }),
     Object.freeze({ key: 'tls_cert_path',               default: ''                 }),
     Object.freeze({ key: 'tls_key_path',                default: ''                 }),
     Object.freeze({ key: 'g8e_pubsub_ca_cert',      default: process.env.G8E_SSL_DIR ? `${process.env.G8E_SSL_DIR}/ca.crt` : '/operator/ssl/ca.crt' }),

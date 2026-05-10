@@ -18,8 +18,9 @@ import { MockServiceClient } from '@test/mocks/mock-browser-env.js';
 import { EventType } from '@g8ed/constants/events.js';
 import fs from 'fs';
 import path from 'path';
+import { resolveProjectRoot } from '@g8ed/utils/path.js';
 
-const CONSOLE_EJS_PATH = path.resolve(__dirname, '../../../../views/console.ejs');
+const CONSOLE_EJS_PATH = path.resolve(resolveProjectRoot(), 'components/g8ed/views/console.ejs');
 const consoleEjsSource = fs.readFileSync(CONSOLE_EJS_PATH, 'utf8');
 
 describe('Console Page [FRONTEND - jsdom]', () => {

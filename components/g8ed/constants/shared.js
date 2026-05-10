@@ -24,11 +24,11 @@
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import { resolveProjectRoot } from '../utils/path.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 
-const sharedDir = path.resolve(__dirname, '../../../shared/constants');
+const sharedDir = path.resolve(resolveProjectRoot(), 'shared/constants');
 
 export const _EVENTS      = require(path.join(sharedDir, 'events.json'));
 export const _STATUS = require(path.join(sharedDir, 'status.json'));
