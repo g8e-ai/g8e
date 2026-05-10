@@ -266,6 +266,28 @@ _start_g8ee() {
     fi
 }
 
+_ensure_node_capabilities() {
+    local node_bin
+    node_bin=$(which node)
+    if [ -z "$node_bin" ]; then
+        echo "  WARN: node binary not found in PATH"
+        return 0
+    fi
+
+    # Check if node already has cap_net_bind_service
+    if getcap "$node_bin" 2>/dev/null | grep -q "cap_net_bind_service"; then
+        return 0
+    fi
+
+    echo "  Setting cap_net_bind_service=+ep on node binary for privileged ports (80/443)..."
+    if sudo setcap cap_net_bind_service=+ep "$node_bin"; then
+        echo "  Successfully set capabilities on $node_bin"
+    else
+        echo "  WARN: Failed to set capabilities. g8ed may not be able to bind to ports 80/443 without running as root."
+        echo "  Run manually: sudo setcap cap_net_bind_service=+ep $node_bin"
+    fi
+}
+
 _start_g8ed() {
     if _g8ed_running; then
         local pid_msg=""
@@ -280,6 +302,8 @@ _start_g8ed() {
         echo "  Installing g8ed dependencies..."
         (cd "$PROJECT_ROOT/components/g8ed" && npm install)
     fi
+
+    _ensure_node_capabilities
 
     echo "  Starting g8ed on port 443 (HTTPS) and 80 (HTTP)..."
     _rotate_logs "$G8ED_LOG_FILE"

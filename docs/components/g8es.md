@@ -81,11 +81,11 @@ The operator listen process is managed by `./g8e` (via `scripts/core/build.sh`):
 2.  **Binary Distribution:** Operator binaries for all architectures are built and synced to the internal blob store on startup.
 3.  **Bootstrap:** Secrets (tokens, keys, CA certs) are read from `.g8e/ssl`.
 
-**Why background upload?** This keeps container startup fast — the health check returns before the uploads complete, allowing other services (g8ed, g8ee) to begin connecting immediately. The upload runs as a fire-and-forget background job in the container entrypoint.
+**Why background upload?** This keeps process startup fast — the health check returns before the uploads complete, allowing other services (g8ed, g8ee) to begin connecting immediately. The upload runs as a fire-and-forget background job.
 
 ### Operator Binary Distribution
 
-The g8es Dockerfile cross-compiles the operator binary for three architectures (amd64, arm64, 386) with UPX compression. These binaries are baked into the image at `/opt/operator-binaries/` and uploaded to the blob store under namespace `operator-binary` on every container start.
+The build script cross-compiles the operator binary for three architectures (amd64, arm64, 386) with UPX compression. These binaries are uploaded to the blob store under namespace `operator-binary` on every listen mode startup.
 
 **Why bake binaries into the image?** This enables remote operator deployment without external dependencies. g8ed can stream the appropriate architecture from the blob store when deploying operators to new machines.
 
@@ -185,7 +185,7 @@ The health check is the only endpoint that does not require authentication. It r
 
 ### Operator Binary Distribution
 
-Operator binaries are stored in the blob store under namespace `operator-binary` and streamed on demand. The g8es container bakes cross-compiled binaries for each supported architecture at image build time and uploads them to the blob store on startup.
+Operator binaries are stored in the blob store under namespace `operator-binary` and streamed on demand. The build script cross-compiles binaries for each supported architecture and uploads them to the blob store on listen mode startup.
 
 ```
 GET /blob/operator-binary/linux-amd64  → Stream linux/amd64 binary

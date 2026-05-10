@@ -82,6 +82,6 @@ The `g8es` backbone exposes two primary interfaces for internal component commun
 
 ## Security Invariants
 
-1. **No External Dialing:** In air-gap mode, components are forbidden from initiating connections to any address outside the Docker network.
-2. **TLS Mandatory:** All internal traffic between `g8ed`, `g8ee`, and `g8es` is encrypted using the `g8es` internal CA.
+1. **No External Dialing:** In air-gap mode, components are forbidden from initiating connections to any address outside localhost.
+2. **TLS Mandatory:** All internal traffic between g8ed, g8ee, and Operator listen mode is encrypted using the Operator internal CA.
 3. **Data Sovereignty:** All audit logs, chat history, and telemetry remain strictly on the host's filesystem.

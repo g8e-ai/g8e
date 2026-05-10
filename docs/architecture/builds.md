@@ -14,12 +14,12 @@ This document explains the g8e component dependency chain, the lifecycle of a bu
 
 ## Architecture Philosophy
 
-g8e is designed for speed and reliability. Every component is containerized and follows these principles:
+g8e is designed for speed and reliability. Every component runs host-native and follows these principles:
 
-- **Parallel Builds**: All component images build in parallel with no build-time dependencies on each other.
-- **Runtime Discovery**: Component dependencies are enforced at runtime via Docker health checks.
-- **Root of Trust**: `g8es` (the Operator in `--listen` mode) generates the platform CA on first boot, which all other services mount read-only.
-- **Lean Services**: Runtime containers do not ship with unnecessary compilers. They fetch binary artifacts from the `g8es` blob store.
+- **Parallel Builds**: All components build in parallel with no build-time dependencies on each other.
+- **Runtime Discovery**: Component dependencies are enforced at runtime via health checks.
+- **Root of Trust**: Operator in `--listen` mode generates the platform CA on first boot, which all other services read from `.g8e/ssl`.
+- **Lean Services**: Runtime processes do not ship with unnecessary compilers. They fetch binary artifacts from the Operator blob store.
 
 ---
 
@@ -48,14 +48,14 @@ graph TD
 ### 1. Image Compilation
 The `g8es` build is the most intensive. It cross-compiles the `g8e.operator` binary for `amd64`, `arm64`, and `386`, applies UPX compression, and bakes them into the image. These binaries are used both for running `g8es` itself and for distribution to other components.
 
-### 2. g8es Initialization
-On first start, `g8es` generates a self-signed ECDSA P-384 CA and writes it to the `g8es-ssl` volume. It then:
-- Opens the SQLite document store.
+### 2. Operator Initialization
+On first start, Operator in listen mode generates a self-signed ECDSA P-384 CA and writes it to `.g8e/ssl`. It then:
+- Opens the SQLite document store at `.g8e/data/g8e.db`.
 - Starts the HTTPS API (port 9000) and WSS Pub/Sub broker (port 9001).
-- Background-uploads the baked operator binaries to its internal blob store.
+- Background-uploads the operator binaries to its internal blob store.
 
 ### 3. Service Convergence
-`g8ee` and `g8ed` wait for `g8es` to be healthy. They mount `g8es-ssl` read-only to establish mTLS trust and authenticate via the `X-Internal-Auth` token. 
+`g8ee` and `g8ed` wait for Operator listen mode to be healthy. They read `.g8e/ssl` to establish mTLS trust and authenticate via the `X-Internal-Auth` token. 
 
 ---
 
@@ -90,7 +90,7 @@ g8e splits data across two primary volumes to balance persistence with the abili
 The `./g8e platform` command is the primary entry point for lifecycle management:
 
 - **`setup`**: Full first-time install (build + start).
-- **`rebuild`**: Updates images using layer cache (data is preserved).
-- **`status`**: Shows container health and component versions.
-- **`clean`**: Destructive removal of all managed Docker resources (containers, images, volumes).
-- **`test <component>`**: Lazily builds a dedicated `<component>-test-runner` image and executes its test suite.
+- **`rebuild`**: Rebuilds components (data is preserved).
+- **`status`**: Shows process health and component versions.
+- **`clean`**: Destructive removal of all managed processes and data.
+- **`test <component>`**: Executes the test suite for the specified component using native toolchains.d component using native toolchains.

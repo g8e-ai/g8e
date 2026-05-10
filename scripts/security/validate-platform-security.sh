@@ -74,12 +74,6 @@ check_port 9000 || FAILED=1 # g8eo (Operator --listen)
 check_port 9001 || FAILED=1 # g8eo (WSS)
 check_port 443 || FAILED=1  # g8ed/g8ee
 
-# 4. INTERNAL_AUTH_TOKEN environment checks
-echo -e "\n${YELLOW}4. Checking environment variables for active processes...${NC}"
-# In host-native mode, we check the environment of the running processes if possible,
-# or simply verify that the bootstrap material is correctly loaded.
-# For simplicity in this transition, we've already verified the files exist.
-
 if [ $FAILED -eq 0 ]; then
     echo -e "\n${GREEN}Platform Security Validation PASSED!${NC}"
     exit 0

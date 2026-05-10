@@ -24,7 +24,7 @@
 #               Use --ca-file to supply a cert directly (used by the g8e CLI).
 #
 # Options:
-#   --ca-file <path>    Use this CA cert file instead of fetching from docker
+#   --ca-file <path>    Use this CA cert file instead of reading from .g8e/ssl
 #                       (trust command only — used by the g8e CLI)
 #   -h, --help          Show this help
 #

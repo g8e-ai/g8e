@@ -67,9 +67,9 @@ Manages the platform's root of trust and security invariants.
 - **`rotate-internal-token`:** Rotates the `X-Internal-Auth` token used for service-to-service communication.
 
 ### Testing (`./g8e test`)
-Runs component-specific test suites in isolated runner containers via `scripts/testing/run_tests.sh`.
+Runs component-specific test suites using native toolchains via `scripts/testing/run_tests.sh`.
 
-- **Isolation:** Tests for `g8ee` (Python), `g8ed` (Node.js), and `g8eo` (Go) run in dedicated containers.
+- **Isolation:** Tests for `g8ee` (Python), `g8ed` (Node.js), and `g8eo` (Go) run in isolated environments using native virtualenvs, npm installs, and Go tooling.
 
 ### Operator Operations (`./g8e operator`)
 Lifecycle management for the `g8eo` operator binary.

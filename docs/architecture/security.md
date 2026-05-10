@@ -44,9 +44,9 @@ graph TD
 - **Sessions**: `HttpOnly`, `Secure`, `SameSite=Lax` cookies. Session state stored in `g8es` KV.
 - **Context Binding**: Sessions are tied to IP and User-Agent; 4+ IP changes trigger a security flag.
 
-### 2. Internal Services (g8ed, g8ee, g8es)
+### 2. Internal Services (g8ed, g8ee, Operator)
 - **Shared Secret**: Authenticated via `X-Internal-Auth` using `internal_auth_token`.
-- **Isolation**: Services communicate over a private Docker bridge network; only the gateway (443) is exposed to the host.
+- **Isolation**: Services communicate via localhost HTTPS; only the gateway (443) is exposed to the host.
 
 ### 3. Gateway to Operator (g8eo)
 - **mTLS**: Every Operator presents a per-device client certificate issued during bootstrap.

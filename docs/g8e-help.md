@@ -30,8 +30,7 @@ The platform is composed of specialized components, each with a single responsib
 |-----------|----------|---------|
 | **g8ed** | Node.js | Dashboard & API Gateway. Authentication, session management, SSE relay, operator lifecycle. |
 | **g8ee** | Python | Reasoning Engine. Orchestrates AI agents (Triage, Sage, Dash, Tribunal) and enforces governance. |
-| **g8es** | Go | Platform Persistence & Pub/Sub. SQLite-based blob store, KV cache, and event bus. |
-| **g8eo** | Go | Remote Operator. Execution agent deployed to target hosts with LFAA audit trails. |
+| **Operator** | Go | Platform Persistence & Pub/Sub (listen mode). SQLite-based blob store, KV cache, and event bus. Also provides remote operator binary for target hosts. |
 
 ### Agent Terminology
 
@@ -109,17 +108,17 @@ Authentication and session management.
 - `logout`: Clear local session and credentials
 
 ### platform
-Manage the local Docker stack lifecycle.
-- `setup`: Initial bootstrap and non-cached container build
-- `start [--dev]`: Bring up managed services (use `--dev` for hot-reload)
-- `status`: View service health, ports, and component versions
-- `logs [service]`: Stream aggregated, time-ordered logs
-- `update`: Pull latest code from git and rebuild
-- `settings`: Manage global platform configuration
-- `rebuild [svc]`: Rebuild specific images without wiping volumes
-- `reset`: Wipe all data volumes and rebuild from scratch
-- `wipe`: Clear app data from database while preserving settings and certs
-- `clean`: Remove all g8e Docker resources (containers, volumes, images)
+Manage the local platform lifecycle.
+- `start`: Start all platform components
+- `stop`: Stop all platform components
+- `restart`: Restart all platform components
+- `status`: Show component health and versions
+- `setup`: First-time platform setup
+- `rebuild`: Rebuild components
+- `reset`: Reset application data (preserves SSL)
+- `clean`: Remove all g8e processes and data
+- `logs`: Stream component logs
+- `settings`: Manage the local platform lifecycle.
 - `demo`: Start platform and demo environment together
 
 ### operator
