@@ -12,7 +12,7 @@
 # limitations under the License.
 
 """
-PubSubClient — WebSocket-based Pub/Sub client for g8es.
+PubSubClient — WebSocket-based Pub/Sub client for operator.
 
 Talks to the Operator in --listen mode via WebSocket.
 Supports: subscribe, psubscribe, publish,
@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 
 class PubSubClient:
     """
-    Robust Async WebSocket client for g8es pub/sub.
+    Robust Async WebSocket client for operator pub/sub.
     """
 
     def __init__(
@@ -284,7 +284,7 @@ class PubSubClient:
                 delay = min(delay * 2, max_delay)
 
     async def connect(self) -> bool:
-        """Verify connectivity to the g8es pub/sub service."""
+        """Verify connectivity to the operator pub/sub service."""
         try:
             await self._ensure_ws()
             return True

@@ -36,7 +36,7 @@ _service_pid=$!
 # ---------------------------------------------------------------------------
 # 3. Operator (optional). Reuses the large-fleet pattern.
 # ---------------------------------------------------------------------------
-_operator_endpoint="${G8E_ENDPOINT:-g8e.local}"
+_operator_endpoint="${G8E_ENDPOINT:-localhost}"
 _operator_binary="/home/appuser/g8e.operator"
 _operator_prefix="[$_host operator]"
 
@@ -47,8 +47,8 @@ if [[ -z "${DEVICE_TOKEN:-}" ]]; then
 fi
 
 CURL_OPTS="-fsSL"
-if [[ -f /g8es/ca.crt ]]; then
-    CURL_OPTS="$CURL_OPTS --cacert /g8es/ca.crt"
+if [[ -f /operator/ca.crt ]]; then
+    CURL_OPTS="$CURL_OPTS --cacert /operator/ca.crt"
 else
     CURL_OPTS="$CURL_OPTS -k"
 fi

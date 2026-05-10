@@ -12,13 +12,13 @@
 # limitations under the License.
 
 """
-Deep integration test for KVCacheClient with real g8es authentication.
+Deep integration test for KVCacheClient with real operator authentication.
 
-This test actually makes HTTP requests to g8es using the real internal auth token.
+This test actually makes HTTP requests to operator using the real internal auth token.
 It verifies that the X-Internal-Auth header is being sent correctly and that
 cache-aside operations work end-to-end.
 
-This test requires g8es to be running and accessible.
+This test requires operator to be running and accessible.
 """
 
 import pytest
@@ -36,13 +36,13 @@ pytestmark = pytest.mark.integration
 
 @pytest.fixture
 async def real_kv_client():
-    """Create a KVCacheClient that actually connects to g8es with real auth."""
+    """Create a KVCacheClient that actually connects to operator with real auth."""
     settings_service = SettingsService()
     bootstrap_settings = settings_service.get_local_settings()
 
-    # Skip test if no auth token is available (e.g., running without g8es)
+    # Skip test if no auth token is available (e.g., running without operator)
     if not bootstrap_settings.auth.internal_auth_token:
-        pytest.skip("No internal auth token available - g8es not accessible")
+        pytest.skip("No internal auth token available - operator not accessible")
 
     client = KVCacheClient(
         http_url=bootstrap_settings.listen.http_url,
@@ -60,13 +60,13 @@ async def real_kv_client():
 
 @pytest.fixture
 async def real_db_client():
-    """Create a DBClient that actually connects to g8es with real auth."""
+    """Create a DBClient that actually connects to operator with real auth."""
     settings_service = SettingsService()
     bootstrap_settings = settings_service.get_local_settings()
 
     # Skip test if no auth token is available
     if not bootstrap_settings.auth.internal_auth_token:
-        pytest.skip("No internal auth token available - g8es not accessible")
+        pytest.skip("No internal auth token available - operator not accessible")
 
     client = DBClient(
         ca_cert_path=bootstrap_settings.ca_cert_path,
@@ -82,7 +82,7 @@ async def real_db_client():
 
 @pytest.fixture
 async def real_cache_aside(real_kv_client, real_db_client):
-    """Create a CacheAsideService with real g8es clients."""
+    """Create a CacheAsideService with real operator clients."""
     cache_aside = CacheAsideService(
         kv=KVService(real_kv_client),
         db=DBService(real_db_client),

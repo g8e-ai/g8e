@@ -23,11 +23,9 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { resolveProjectRoot } from '../utils/path.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const _SHARED_DIR = path.resolve(__dirname, '../../../shared/constants');
+const _SHARED_DIR = path.resolve(resolveProjectRoot(), 'shared/constants');
 const apiPathsFile = path.join(_SHARED_DIR, 'api_paths.json');
 
 let _sharedApiPaths;

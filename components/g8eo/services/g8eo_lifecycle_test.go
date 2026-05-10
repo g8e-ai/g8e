@@ -67,7 +67,7 @@ func TestG8eoService_Start_SuccessFlow(t *testing.T) {
 	service.bootstrap.SetHTTPClient(server.Client())
 
 	// Inject Mock PubSub Client
-	mockPubSub := pubsub.NewMockG8esPubSubClient()
+	mockPubSub := pubsub.NewMockOperatorPubSubClient()
 	service.SetPubSubClient(mockPubSub)
 
 	// 4. Start the service

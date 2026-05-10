@@ -1,9 +1,9 @@
 {
-  "_comment": "Canonical User document shape. g8ed is the authority — it creates and owns this document in SQLite. g8ee reads it via g8es KV cache (cache-aside) for auth context. A field mismatch breaks authentication, session validation, and API key checks.",
+  "_comment": "Canonical User document shape. g8ed is the authority — it creates and owns this document in SQLite. g8ee reads it via operator KV cache (cache-aside) for auth context. A field mismatch breaks authentication, session validation, and API key checks.",
 
   "_authority": "g8ed (SQLite)",
   "_consumers": ["g8ee (Python — reads user context from X-G8E-* headers that g8ed populates from this document)", "g8ed internal services (auth, session, API key validation)"],
-  "_cache_aside": "g8es KV — keyed by g8e:doc:users:{user_id}. Write-through on every user write. SQLite is source of truth.",
+  "_cache_aside": "operator KV — keyed by g8e:doc:users:{user_id}. Write-through on every user write. SQLite is source of truth.",
 
   "user": {
     "_description": "Full user document as stored in g8ed SQLite.",

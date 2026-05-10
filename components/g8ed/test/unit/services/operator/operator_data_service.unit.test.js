@@ -12,9 +12,9 @@
 // limitations under the License.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { OperatorDataService } from '../../../../services/operator/operator_data_service.js';
-import { Collections } from '../../../../constants/collections.js';
-import { OperatorDocument } from '../../../../models/operator_model.js';
+import { OperatorDataService } from '@g8ed/services/operator/operator_data_service.js';
+import { Collections } from '@g8ed/constants/collections.js';
+import { OperatorDocument } from '@g8ed/models/operator_model.js';
 
 describe('OperatorDataService', () => {
     let operatorDataService;

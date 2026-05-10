@@ -36,8 +36,8 @@ class TestG8eeSettingsOverlayIntegration:
     def settings_service(self, cache_service):
         return SettingsService(cache_aside_service=cache_service)
 
-    async def test_get_platform_settings_loads_from_g8es(self, settings_service, cache_service):
-        """Verify platform settings are loaded from the correct g8es collection/ID.
+    async def test_get_platform_settings_loads_from_operator(self, settings_service, cache_service):
+        """Verify platform settings are loaded from the correct operator collection/ID.
         
         G8eePlatformSettings no longer carries LLM config. LLM settings are
         accessed via get_user_settings() which falls back to platform data
@@ -46,7 +46,7 @@ class TestG8eeSettingsOverlayIntegration:
         platform_data = {
             "id": "platform-doc-id",
             "settings": {
-                "port": 443,
+                "port": 8443,
                 "host": "0.0.0.0",
                 "log_level": "INFO",
                 "enable_logging": True,
@@ -68,9 +68,9 @@ class TestG8eeSettingsOverlayIntegration:
                     "operators_collection": "operators"
                 },
                 "listen": {
-                    "http_url": "https://g8es:9000",
-                    "pubsub_url": "wss://g8es:9001",
-                    "blob_url": "https://g8es:9000",
+                    "http_url": "https://localhost:9000",
+                    "pubsub_url": "wss://localhost:9001",
+                    "blob_url": "https://localhost:9000",
                     "default_ttl": 3600
                 },
                 "auth": {
@@ -79,8 +79,8 @@ class TestG8eeSettingsOverlayIntegration:
                     "g8e_api_key": None
                 },
                 "component_urls": {
-                    "g8ee_url": "https://g8ee",
-                    "g8ed_url": "https://g8ed"
+                    "g8ee_url": "https://localhost:8443",
+                    "g8ed_url": "https://localhost:443"
                 },
                 "docker_gid": "988",
                 "session_ttl": 28800,
@@ -89,7 +89,7 @@ class TestG8eeSettingsOverlayIntegration:
                 "supervisor_port": 443,
                 "app_url": "https://localhost",
                 "allowed_origins": "",
-                "passkey_rp_name": "g8e.local",
+                "passkey_rp_name": "localhost",
                 "passkey_rp_id": "localhost",
                 "passkey_origin": "https://localhost",
                 "command_validation": {
@@ -129,7 +129,7 @@ class TestG8eeSettingsOverlayIntegration:
         platform_data = {
             "id": "platform-doc-id",
             "settings": {
-                "port": 443,
+                "port": 8443,
                 "host": "0.0.0.0",
                 "log_level": "INFO",
                 "enable_logging": True,
@@ -151,9 +151,9 @@ class TestG8eeSettingsOverlayIntegration:
                     "operators_collection": "operators"
                 },
                 "listen": {
-                    "http_url": "https://g8es:9000",
-                    "pubsub_url": "wss://g8es:9001",
-                    "blob_url": "https://g8es:9000",
+                    "http_url": "https://localhost:9000",
+                    "pubsub_url": "wss://localhost:9001",
+                    "blob_url": "https://localhost:9000",
                     "default_ttl": 3600
                 },
                 "auth": {
@@ -162,8 +162,8 @@ class TestG8eeSettingsOverlayIntegration:
                     "g8e_api_key": None
                 },
                 "component_urls": {
-                    "g8ee_url": "https://g8ee",
-                    "g8ed_url": "https://g8ed"
+                    "g8ee_url": "https://localhost:8443",
+                    "g8ed_url": "https://localhost:443"
                 },
                 "docker_gid": "988",
                 "session_ttl": 28800,
@@ -172,7 +172,7 @@ class TestG8eeSettingsOverlayIntegration:
                 "supervisor_port": 443,
                 "app_url": "https://localhost",
                 "allowed_origins": "",
-                "passkey_rp_name": "g8e.local",
+                "passkey_rp_name": "localhost",
                 "passkey_rp_id": "localhost",
                 "passkey_origin": "https://localhost",
                 "command_validation": {
@@ -248,7 +248,7 @@ class TestG8eeSettingsOverlayIntegration:
         platform_data = {
             "id": "platform-doc-id",
             "settings": {
-                "port": 443,
+                "port": 8443,
                 "host": "0.0.0.0",
                 "log_level": "INFO",
                 "enable_logging": True,
@@ -288,7 +288,7 @@ class TestG8eeSettingsOverlayIntegration:
         platform_data = {
             "id": "platform-doc-id",
             "settings": {
-                "port": 443,
+                "port": 8443,
                 "host": "0.0.0.0",
                 "log_level": "INFO",
                 "enable_logging": True,
@@ -310,9 +310,9 @@ class TestG8eeSettingsOverlayIntegration:
                     "operators_collection": "operators"
                 },
                 "listen": {
-                    "http_url": "https://g8es:9000",
-                    "pubsub_url": "wss://g8es:9001",
-                    "blob_url": "https://g8es:9000",
+                    "http_url": "https://localhost:9000",
+                    "pubsub_url": "wss://localhost:9001",
+                    "blob_url": "https://localhost:9000",
                     "default_ttl": 3600
                 },
                 "auth": {
@@ -321,8 +321,8 @@ class TestG8eeSettingsOverlayIntegration:
                     "g8e_api_key": None
                 },
                 "component_urls": {
-                    "g8ee_url": "https://g8ee",
-                    "g8ed_url": "https://g8ed"
+                    "g8ee_url": "https://localhost:8443",
+                    "g8ed_url": "https://localhost:443"
                 },
                 "docker_gid": "988",
                 "session_ttl": 28800,
@@ -331,7 +331,7 @@ class TestG8eeSettingsOverlayIntegration:
                 "supervisor_port": 443,
                 "app_url": "https://localhost",
                 "allowed_origins": "",
-                "passkey_rp_name": "g8e.local",
+                "passkey_rp_name": "localhost",
                 "passkey_rp_id": "localhost",
                 "passkey_origin": "https://localhost",
                 "command_validation": {
@@ -391,7 +391,7 @@ class TestG8eeSettingsOverlayIntegration:
         platform_data = {
             "id": "platform-doc-id",
             "settings": {
-                "port": 443,
+                "port": 8443,
                 "host": "0.0.0.0",
                 "log_level": "INFO",
                 "enable_logging": True,
@@ -431,7 +431,7 @@ class TestG8eeSettingsOverlayIntegration:
         platform_data = {
             "id": "platform-doc-id",
             "settings": {
-                "port": 443,
+                "port": 8443,
                 "host": "0.0.0.0",
                 "log_level": "INFO",
                 "enable_logging": True,
@@ -470,7 +470,7 @@ class TestG8eeSettingsOverlayIntegration:
         platform_data = {
             "id": "platform-doc-id",
             "settings": {
-                "port": 443,
+                "port": 8443,
                 "host": "0.0.0.0",
                 "log_level": "INFO",
                 "enable_logging": True,
@@ -530,7 +530,7 @@ class TestG8eeSettingsOverlayIntegration:
         platform_data = {
             "id": "platform-doc-id",
             "settings": {
-                "port": 443,
+                "port": 8443,
                 "host": "0.0.0.0",
                 "log_level": "INFO",
                 "enable_logging": True,
@@ -585,7 +585,7 @@ class TestG8eeSettingsOverlayIntegration:
         platform_data = {
             "id": "platform-doc-id",
             "settings": {
-                "port": 443,
+                "port": 8443,
                 "host": "0.0.0.0",
                 "log_level": "INFO",
                 "enable_logging": True,

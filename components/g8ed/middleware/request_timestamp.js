@@ -37,7 +37,7 @@ import { NONCE_TTL_SECONDS, NONCE_CACHE_CLEANUP_INTERVAL_MS, TIMESTAMP_WINDOW_SE
 import { KVKey } from '../constants/kv_keys.js';
 
 // In-memory nonce cache (for single-instance deployments)
-// For production multi-instance, use g8es KV
+// For production multi-instance, use operator KV
 const nonceCache = new Map();
 
 // Cleanup interval for in-memory cache
@@ -163,7 +163,7 @@ export function createRequestTimestampMiddleware({ cacheAsideService = null } = 
                 let isUsed = false;
                 
                 if (cacheAsideService) {
-                    // Use g8es KV for distributed nonce tracking via CacheAsideService
+                    // Use operator KV for distributed nonce tracking via CacheAsideService
                     try {
                         const nonceKey = KVKey.nonce(nonce);
                         const exists = await cacheAsideService.kvGet(nonceKey);
@@ -174,7 +174,7 @@ export function createRequestTimestampMiddleware({ cacheAsideService = null } = 
                             await cacheAsideService.kvSetex(nonceKey, NONCE_TTL_SECONDS, '1');
                         }
                     } catch (kvError) {
-                        logger.warn('[REQUEST-TIMESTAMP] g8es KV nonce check failed, using in-memory', {
+                        logger.warn('[REQUEST-TIMESTAMP] operator KV nonce check failed, using in-memory', {
                             error: kvError.message
                         });
                         // Fallback to in-memory

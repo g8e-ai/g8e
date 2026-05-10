@@ -240,7 +240,7 @@ describe('PostLoginService [UNIT]', () => {
 
         it('resolves even when initializeOperatorSlots rejects', async () => {
             service.operatorService.initializeOperatorSlots =
-                vi.fn().mockRejectedValue(new Error('g8es unavailable'));
+                vi.fn().mockRejectedValue(new Error('operator unavailable'));
 
             await expect(service.onSuccessfulLogin(makeUser(), makeSession()))
                 .resolves.toBeUndefined();
@@ -347,11 +347,11 @@ describe('PostLoginService [UNIT]', () => {
 
         it('propagates initializeOperatorSlots errors to the caller', async () => {
             service.operatorService.initializeOperatorSlots =
-                vi.fn().mockRejectedValue(new Error('g8es unavailable'));
+                vi.fn().mockRejectedValue(new Error('operator unavailable'));
 
             await expect(
                 service._initializeSlots(makeUser(), makeSession(), 'login')
-            ).rejects.toThrow('g8es unavailable');
+            ).rejects.toThrow('operator unavailable');
         });
     });
 });

@@ -20,9 +20,9 @@ import { G8eIdentifiableModel, F, now } from './base.js';
  * one or more operator sessions.
  *
  * Document identity: id === web_session_id (natural key — one record per web session).
- * Stored in the bound_sessions collection in g8es document store.
+ * Stored in the bound_sessions collection in operator document store.
  *
- * The authoritative bind table is the g8es KV store (fast lookup path):
+ * The authoritative bind table is the operator KV store (fast lookup path):
  *   sessionBindOperators(operatorSessionId) → webSessionId  (STRING)
  *   sessionWebBind(webSessionId)            → {operatorSessionId, ...}  (SET)
  *

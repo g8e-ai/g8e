@@ -321,7 +321,7 @@ describe('TerminalOutputMixin — DOM rendering [FRONTEND - jsdom]', () => {
             expect(entry.classList.contains('streaming')).toBe(false);
         });
 
-        it('shows sender label "g8e.local"', () => {
+        it('shows sender label "localhost"', () => {
             terminal.appendDirectHtmlResponse('<p>ok</p>');
 
             const sender = terminal.outputContainer.querySelector('.anchored-terminal__ai-response-sender');

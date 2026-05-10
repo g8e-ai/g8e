@@ -27,7 +27,6 @@ import { _DOCUMENT_IDS } from './shared.js';
 // Operator Binary
 // ---------------------------------------------------------------------------
 export const BINARY_NAME = 'g8e.operator';
-export const OPERATOR_BINARY_BLOB_NAMESPACE = 'operator-binary';
 export const PLATFORMS = [
     { os: 'linux', arch: 'amd64' },
     { os: 'linux', arch: 'arm64' },
@@ -55,8 +54,8 @@ export const ContentType = Object.freeze({
 // Certificate Paths
 // ---------------------------------------------------------------------------
 export const CLIENT_CERT_VALIDITY_DAYS = 365;
-export const DEFAULT_CERT_DIR = '/g8es/certs';
-export const DEFAULT_SSL_DIR = '/g8es';
+export const DEFAULT_CERT_DIR = process.env.G8E_SSL_DIR ? `${process.env.G8E_SSL_DIR}/certs` : '/operator/certs';
+export const DEFAULT_SSL_DIR = process.env.G8E_SSL_DIR || '/operator';
 export const CERT_SUBJECT_ORG = 'g8e Operator';
 export const CERT_SUBJECT_COUNTRY = 'US';
 export const CRL_ISSUER = 'g8e Operator CA';

@@ -13,8 +13,8 @@
 
 """Unit tests for DBClient.
 
-DBClient is an HTTP shim over g8es. Tests mock the HTTP layer via
-InMemoryG8es to validate all client-side logic: CRUD, timestamp resolution,
+DBClient is an HTTP shim over operator. Tests mock the HTTP layer via
+InMemoryOperator to validate all client-side logic: CRUD, timestamp resolution,
 ArrayUnion/ArrayRemove, batch_write, and typed error propagation.
 """
 
@@ -30,7 +30,7 @@ from app.errors import NetworkError, ResourceNotFoundError
 from app.models.cache import BatchWriteOperation
 
 
-class InMemoryG8es:
+class InMemoryOperator:
     """In-memory backend wired to DBClient typed _request variants for unit tests."""
 
     def __init__(self):
@@ -101,7 +101,7 @@ class InMemoryG8es:
 
 @pytest.fixture
 def db_client():
-    store = InMemoryG8es()
+    store = InMemoryOperator()
     client = DBClient(ca_cert_path="/mock/ca.crt", internal_auth_token="mock-token")
     client._request_json = store.handle_json
     client._request_list = store.handle_list

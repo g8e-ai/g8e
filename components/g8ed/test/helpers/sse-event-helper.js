@@ -226,7 +226,7 @@ export const mockSSEEvents = {
 /**
  * Simulate a complete AI chat streaming flow with realistic event sequences.
  *
- * @param {Object} sseService - g8es KV SSE service
+ * @param {Object} sseService - operator KV SSE service
  * @param {string} sessionId - SSE session ID (also used as web_session_id)
  * @param {string} investigationId - Investigation ID
  * @param {string} flowType - One of: thinking_then_text, thinking_then_tool_then_text

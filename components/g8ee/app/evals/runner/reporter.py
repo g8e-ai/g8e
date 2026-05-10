@@ -82,7 +82,7 @@ def render_text_table(report: FullReport) -> str:
                 l2_l3_passed += 1
             if not details.get("persist_scrubbed", True):
                 if "privacy L1" not in findings:
-                    findings.append("privacy L1 — g8es persistence not scrubbed")
+                    findings.append("privacy L1 — operator persistence not scrubbed")
 
     l2_l3_pct = (l2_l3_passed / l2_l3_total * 100) if l2_l3_total > 0 else 0
 
@@ -155,7 +155,7 @@ def _render_privacy_section(lines: list[str], rows: list[EvalRow]) -> None:
     l3_pct = (l3_passed / l3_total * 100) if l3_total > 0 else 0
 
     lines.append("  (Sentinel egress layers, sentinel_mode=True)        n     pass     pct")
-    lines.append(f"  L1 g8es persistence scrubbed                   {l1_total:4d}   {l1_passed:4d}  {l1_pct:5.1f}%")
+    lines.append(f"  L1 operator persistence scrubbed                   {l1_total:4d}   {l1_passed:4d}  {l1_pct:5.1f}%")
     lines.append(f"  L2 LLM egress scrubbed                           {l2_total:4d}   {l2_passed:4d}  {l2_pct:5.1f}%")
     lines.append(f"  L3 AI response echo-clean                        {l3_total:4d}   {l3_passed:4d}  {l3_pct:5.1f}%")
     lines.append("-" * 78)
@@ -280,15 +280,10 @@ def persist_report(report: FullReport, reports_dir: str | Path) -> dict[str, str
     write_summary_json(report, json_path)
 
     latest_symlink = reports_dir / "latest"
-    if latest_symlink.exists():
-        if latest_symlink.is_symlink():
-            latest_symlink.unlink()
-        elif latest_symlink.is_dir():
-            shutil.rmtree(latest_symlink)
-        else:
-            latest_symlink.unlink()
+    if latest_symlink.exists() or latest_symlink.is_symlink():
+        latest_symlink.unlink(missing_ok=True)
 
-    latest_symlink.symlink_to(run_dir)
+    latest_symlink.symlink_to(run_dir, target_is_directory=True)
 
     return {
         "report_txt": str(report_txt_path.absolute()),

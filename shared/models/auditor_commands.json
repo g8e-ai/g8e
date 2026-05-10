@@ -1,8 +1,8 @@
 {
-  "_comment": "Canonical TribunalCommand model. Records Tribunal command generation results and all metadata with investigation_id reference. g8ee is the authority — it creates these documents in its SQLite store and syncs to g8es. g8ed can query via g8ee HTTP API for audit and analytics.",
+  "_comment": "Canonical TribunalCommand model. Records Tribunal command generation results and all metadata with investigation_id reference. g8ee is the authority — it creates these documents in its SQLite store and syncs to operator. g8ed can query via g8ee HTTP API for audit and analytics.",
 
   "_authority": "g8ee (Python — TribunalCommand in app/models/tribunal_commands.py)",
-  "_consumers": ["g8ed (JS — queries via g8ee HTTP API for tribunal command history and analytics)", "g8ee (SQLite — creates and updates tribunal commands, syncs to g8es)"],
+  "_consumers": ["g8ed (JS — queries via g8ee HTTP API for tribunal command history and analytics)", "g8ee (SQLite — creates and updates tribunal commands, syncs to operator)"],
 
   "tribunal_command": {
     "_description": "Full Tribunal command generation record with investigation reference. Captures all Tribunal pipeline metadata including candidate commands, voting breakdown, verifier decisions, and final outcome.",

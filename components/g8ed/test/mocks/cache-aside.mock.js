@@ -19,8 +19,8 @@
  *   getDocument, getQueryResult, setQueryResult
  *
  * Backed by two in-memory stores:
- *   _db  — simulates g8es document store (authoritative)
- *   _kv  — simulates g8es KV cache
+ *   _db  — simulates operator document store (authoritative)
+ *   _kv  — simulates operator KV cache
  *
  * Every public method is a vi.fn() spy so callers can assert on it.
  * The implementations faithfully reproduce the real cache-aside contract:

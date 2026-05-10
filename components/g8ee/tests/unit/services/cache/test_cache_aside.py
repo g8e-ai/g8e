@@ -36,7 +36,7 @@ from app.models.cache import (
     DocumentResult,
 )
 from app.services.cache.cache_aside import CacheAsideService
-from tests.fakes.fake_g8es_clients import FakeDBClient, FakeKVClient
+from tests.fakes.fake_operator_clients import FakeDBClient, FakeKVClient
 
 pytestmark = pytest.mark.unit
 

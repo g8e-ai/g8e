@@ -218,7 +218,7 @@ describe('Console Routes [UNIT]', () => {
                     } else if (serviceMethod === 'getRealTimeMetrics') {
                         mockData = {
                             timestamp: new Date(),
-                            g8es: { connections: 10 },
+                            operator: { connections: 10 },
                             cache: { hitRate: 0.8 }
                         };
                     } else if (serviceMethod === 'getOperatorStats') {
@@ -245,7 +245,7 @@ describe('Console Routes [UNIT]', () => {
                         mockData = {
                             overall: 'healthy',
                             timestamp: new Date(),
-                            components: { g8es: 'up', cache: 'up' }
+                            components: { operator: 'up', cache: 'up' }
                         };
                     } else {
                         mockData = { some: 'data' };

@@ -140,25 +140,25 @@ func TestTestLogWriter_Write_MultiLine(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// GetTestG8esDirectURL
+// GetTestOperatorDirectURL
 // ---------------------------------------------------------------------------
 
-func TestGetTestG8esDirectURL_DefaultScheme(t *testing.T) {
+func TestGetTestOperatorDirectURL_DefaultScheme(t *testing.T) {
 	// Ensure env var is not set so the default branch is exercised.
 	t.Setenv("G8E_OPERATOR_PUBSUB_URL", "")
-	url := GetTestG8esDirectURL()
+	url := GetTestOperatorDirectURL()
 	assert.True(t, strings.HasPrefix(url, "wss://"), "default URL must use wss:// scheme, got: %s", url)
 	assert.NotEmpty(t, url)
 }
 
-func TestGetTestG8esDirectURL_EnvVarOverride(t *testing.T) {
+func TestGetTestOperatorDirectURL_EnvVarOverride(t *testing.T) {
 	t.Setenv("G8E_OPERATOR_PUBSUB_URL", "wss://custom-host:1234")
-	url := GetTestG8esDirectURL()
+	url := GetTestOperatorDirectURL()
 	assert.Equal(t, "wss://custom-host:1234", url)
 }
 
-func TestGetTestG8esDirectURL_NotEmpty(t *testing.T) {
-	url := GetTestG8esDirectURL()
+func TestGetTestOperatorDirectURL_NotEmpty(t *testing.T) {
+	url := GetTestOperatorDirectURL()
 	assert.NotEmpty(t, url)
 }
 

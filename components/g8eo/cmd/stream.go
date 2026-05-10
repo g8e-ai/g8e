@@ -15,14 +15,18 @@ import (
 
 	"github.com/g8e-ai/g8e/components/g8eo/config"
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
+	"github.com/g8e-ai/g8e/components/g8eo/services/system"
 )
 
 const (
 	defaultConcurrency = 50
 	defaultTimeout     = 60 * time.Second
 	defaultArch        = "amd64"
-	defaultBinaryDir   = "/home/g8e"
 )
+
+func getDefaultBinaryDir() string {
+	return system.ResolveProjectRoot() + "/components/g8eo/build"
+}
 
 // StreamStatusEvent is written as a JSON line to stdout for each host event.
 type StreamStatusEvent struct {
@@ -71,7 +75,7 @@ func RunStream(args []string) {
 	fs.StringVar(&apiKey, "key", "", "API key auth")
 	fs.BoolVar(&noGit, "no-git", false, "Disable ledger")
 	fs.StringVar(&sshConfigArg, "ssh-config", "", "Path to SSH config file (default: ~/.ssh/config)")
-	fs.StringVar(&binaryDir, "binary-dir", defaultBinaryDir, "Directory containing arch-specific operator builds")
+	fs.StringVar(&binaryDir, "binary-dir", getDefaultBinaryDir(), "Directory containing arch-specific operator builds")
 	fs.StringVar(&sshIdentityFile, "ssh-identity-file", "", "SSH identity file path")
 	fs.StringVar(&sshUser, "ssh-user", "", "SSH username")
 

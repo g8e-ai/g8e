@@ -18,12 +18,12 @@ VERSION := $(shell cat ../../VERSION 2>/dev/null | tr -d '[:space:]' || echo 'v0
 # =============================================================================
 BINARY_NAME := g8e.operator
 CERTS_DIR := certs
-G8ED_SSL_CA_CERT := ../../ssl/ca.crt
-BUILD_DIR := /home/g8e/build
+G8ED_SSL_CA_CERT := ../../.g8e/ssl/ca.crt
+BUILD_DIR := build
 BLOB_NAMESPACE := operator-binary
-G8ES_URL := https://g8es:9000
-CA_CERT := /g8es/ca.crt
-AUTH_TOKEN := $(shell cat /g8es/internal_auth_token 2>/dev/null | tr -d ' \n\r')
+OPERATOR_URL := https://localhost:9000
+CA_CERT := ../../.g8e/ssl/ca.crt
+AUTH_TOKEN := $(shell cat ../../.g8e/ssl/internal_auth_token 2>/dev/null | tr -d ' \n\r')
 
 # =============================================================================
 # ARCHITECTURES
@@ -42,7 +42,7 @@ help:
 	@echo "  build-all         Build all architectures inside g8ep container (CI)"
 	@echo ""
 	@echo "Build (local Go):"
-	@echo "  build-local       Build linux/amd64 locally and upload to g8es"
+	@echo "  build-local       Build linux/amd64 locally and upload to operator"
 	@echo "  build-local-all   Build all Linux architectures locally (release)"
 	@echo "  build-linux-amd64 Build linux/amd64 only"
 	@echo "  build-linux-arm64 Build linux/arm64 only"
@@ -73,22 +73,21 @@ help:
 build:
 	@echo "Building Operator (linux/amd64)..."
 	@mkdir -p certs
-	@[ -f /g8es/ssl/ca.crt ] && cp /g8es/ssl/ca.crt certs/server_ca.crt || true
+	@[ -f ../../.g8e/ssl/ca.crt ] && cp ../../.g8e/ssl/ca.crt certs/server_ca.crt || true
 	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
 		-trimpath \
 		-buildvcs=false \
 		-ldflags "-s -w -X main.version=$(VERSION) -X 'main.platform=linux/amd64'" \
-		-o /home/g8e/g8e.operator .
-	@echo 'Built: /home/g8e/g8e.operator'
-	@SIZE=$$(ls -lh /home/g8e/g8e.operator | awk '{print $$5}') && \
+		-o build/linux-amd64/g8e.operator .
+	@echo 'Built: build/linux-amd64/g8e.operator'
+	@SIZE=$$(ls -lh build/linux-amd64/g8e.operator | awk '{print $$5}') && \
 		echo "  Size: $$SIZE"
-	@$(MAKE) _upload-blob ARCH=amd64 BIN_PATH=/home/g8e/g8e.operator
 
 .PHONY: build-all
 build-all:
 	@echo "Building Operator (all architectures)..."
 	@mkdir -p certs
-	@[ -f /g8es/ssl/ca.crt ] && cp /g8es/ssl/ca.crt certs/server_ca.crt || true
+	@[ -f ../../.g8e/ssl/ca.crt ] && cp ../../.g8e/ssl/ca.crt certs/server_ca.crt || true
 	@for arch in amd64 arm64 386; do \
 		echo "Building linux/$$arch..."; \
 		mkdir -p $(BUILD_DIR)/linux-$$arch && \
@@ -112,18 +111,12 @@ build-all:
 	fi
 	@echo ""
 	@echo "All architectures built successfully."
-	@echo "Uploading binaries to g8es blob store..."
-	@for arch in amd64 arm64 386; do \
-		$(MAKE) _upload-blob ARCH=$$arch BIN_PATH=$(BUILD_DIR)/linux-$$arch/g8e.operator || exit 1; \
-	done
-	@echo "All binaries uploaded to g8es blob store."
 
 # =============================================================================
 # BUILD TARGETS — local Go
 # =============================================================================
 .PHONY: build-local
 build-local: check-certs _build-local-binary
-	@$(MAKE) _upload-blob ARCH=amd64 BIN_PATH=build/linux-amd64/$(BINARY_NAME)
 
 .PHONY: _build-local-binary
 _build-local-binary:
@@ -136,26 +129,6 @@ _build-local-binary:
 		-o build/linux-amd64/$(BINARY_NAME) .
 	@echo "Built: build/linux-amd64/$(BINARY_NAME)"
 
-.PHONY: _upload-blob
-_upload-blob:
-	@if [ -z "$(AUTH_TOKEN)" ]; then \
-		echo "  WARNING: No internal auth token found — skipping blob upload"; \
-	else \
-		SIZE=$$(ls -lh $(BIN_PATH) | awk '{print $$5}'); \
-		HTTP_CODE=$$(curl -sf -o /dev/null -w '%{http_code}' \
-			-X PUT \
-			--cacert $(CA_CERT) \
-			-H 'Content-Type: application/octet-stream' \
-			-H 'X-Internal-Auth: $(AUTH_TOKEN)' \
-			--data-binary @$(BIN_PATH) \
-			'$(G8ES_URL)/blob/$(BLOB_NAMESPACE)/linux-$(ARCH)'); \
-		if [ "$$HTTP_CODE" = "200" ] || [ "$$HTTP_CODE" = "201" ]; then \
-			echo "  Uploaded linux/$(ARCH) to g8es blob store ($$SIZE)"; \
-		else \
-			echo "  ERROR: Upload failed for linux/$(ARCH) (HTTP $$HTTP_CODE)" >&2; \
-			exit 1; \
-		fi; \
-	fi
 
 .PHONY: build-local-all
 build-local-all: check-certs
@@ -202,14 +175,13 @@ _build-release:
 .PHONY: check-certs
 check-certs:
 	@if [ ! -f "$(G8ED_SSL_CA_CERT)" ]; then \
-		echo "ERROR: g8ed server CA not found at $(G8ED_SSL_CA_CERT)"; \
-		echo "  Run: scripts/security/generate-certs.sh"; \
-		echo "  Or:  scripts/core/build.sh --generate-ssl"; \
-		exit 1; \
+		echo "WARNING: g8ed server CA not found at $(G8ED_SSL_CA_CERT)"; \
+		echo "  This is normal during first-time setup. The Operator will generate certs when started."; \
+	else \
+		mkdir -p $(CERTS_DIR); \
+		cp $(G8ED_SSL_CA_CERT) $(CERTS_DIR)/server_ca.crt; \
+		echo "Synced g8ed server CA to $(CERTS_DIR)/server_ca.crt"; \
 	fi
-	@mkdir -p $(CERTS_DIR)
-	@cp $(G8ED_SSL_CA_CERT) $(CERTS_DIR)/server_ca.crt
-	@echo "Synced g8ed server CA to $(CERTS_DIR)/server_ca.crt"
 
 .PHONY: clean-certs
 clean-certs:

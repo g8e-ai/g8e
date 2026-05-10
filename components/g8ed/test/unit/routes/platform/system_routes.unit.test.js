@@ -24,7 +24,7 @@ describe('System Routes [UNIT]', () => {
     beforeEach(() => {
         mockConfig = {
             host_ips: '192.168.1.100, 10.0.0.5',
-            app_url: 'https://g8e.local'
+            app_url: 'https://localhost'
         };
         mockAuthMiddleware = {
             requireAuth: vi.fn((req, res, next) => next())
@@ -72,7 +72,7 @@ describe('System Routes [UNIT]', () => {
                 interfaces: [
                     { name: 'host', address: '192.168.1.100' },
                     { name: 'host', address: '10.0.0.5' },
-                    { name: 'APP_URL', address: 'g8e.local' }
+                    { name: 'APP_URL', address: 'localhost' }
                 ]
             }));
         });
@@ -87,7 +87,7 @@ describe('System Routes [UNIT]', () => {
             expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
                 success: true,
                 interfaces: [
-                    { name: 'APP_URL', address: 'g8e.local' }
+                    { name: 'APP_URL', address: 'localhost' }
                 ]
             }));
         });

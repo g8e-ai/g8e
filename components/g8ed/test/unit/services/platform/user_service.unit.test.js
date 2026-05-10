@@ -18,7 +18,7 @@ import { Collections } from '@g8ed/constants/collections.js';
 import { UserRole, AuthProvider, ApiKeyClientName, ApiKeyStatus, ApiKeyError } from '@g8ed/constants/auth.js';
 import { API_KEY_PREFIX } from '@g8ed/constants/operator_defaults.js';
 import { now } from '@g8ed/models/base.js';
-import { modelMatchers } from '../../../../test/utils/model_matchers.js';
+import { modelMatchers } from '@test/utils/model_matchers.js';
 import { G8eKeyError } from '@g8ed/services/error_service.js';
 
 describe('UserService [UNIT]', () => {

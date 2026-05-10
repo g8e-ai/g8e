@@ -115,7 +115,7 @@ The protocol is the foundation layer of g8e. UI flows, agent workflows, and stor
 typed operator.proto payload
   -> UniversalEnvelope.payload
   -> serialized UniversalEnvelope bytes
-  -> g8es pub/sub data
+  -> operator pub/sub data
 ```
 
 Protocol-level enforcement is deliberately fail-closed:
@@ -160,19 +160,19 @@ flowchart LR
         g8ed[g8ed<br>Governance Gateway<br>Node.js]
         g8ee[g8ee<br>AI Engine & Scrubber<br>Python]
 
-        subgraph Data_Layer [g8es Persistence Layer]
+        subgraph Operator_Listen [Operator Listen Mode]
             direction LR
-            g8es[(g8es<br>Listen Mode)]
+            Listen[(g8eo --listen)]
             DS[(Document Store)]
             KS[(KV Store & TTL)]
             PS((PubSub))
 
-            g8es --- DS & KS & PS
+            Listen --- DS & KS & PS
         end
 
         g8ed -- "Internal" --> g8ee
-        g8ed -- "Internal" --> g8es
-        g8ee -- "Internal" --> g8es
+        g8ed -- "Internal" --> Listen
+        g8ee -- "Internal" --> Listen
     end
 
     LLM((External LLM<br>Providers))
@@ -184,10 +184,9 @@ flowchart LR
 
 | Component | Stack | Role |
 |---|---|---|
-| **g8eo** | Go (~4MB static) | The Operator. Runs on every managed host. Executes commands. Owns the audit ledger. |
+| **g8eo** | Go (~4MB static) | The Operator. Runs on managed hosts, executes commands, owns the audit ledger, and provides listen-mode persistence/pub/sub. |
 | **g8ee** | Python / FastAPI | The Engine. Multi-provider LLM abstraction. Tribunal, Auditor, Warden. |
-| **g8ed** | Node.js | Governance Gateway: FIDO2 auth, mTLS broker, ledger synchronization. |
-| **g8es** | Go | Document store, KV, pub/sub, blob store (SQLite-backed). |
+| **g8ed** | Node.js | The Dashboard. Governance Gateway: FIDO2 auth, mTLS broker, ledger synchronization. |
 
 User to `g8ed` over TLS 1.3 with encrypted cookies. Operator to Gateway via outbound-only mTLS WebSocket. No inbound ports on managed hosts. Every connection is mutually authenticated; state-changing workflows pass through the L1/L2/L3 governance hierarchy, with hardware-bound passkey authorization as the default Layer 3 path.
 
@@ -252,11 +251,11 @@ Threat model and full control catalogue: [security.md](docs/architecture/securit
 
 ## Quick Start
 
-Prerequisites: Docker 24+, Docker Compose v2.
+Prerequisites: Go, Node.js/npm, Python, and curl available on the host.
 
 ```bash
 git clone https://github.com/g8e-ai/g8e.git && cd g8e
-./g8e platform build
+./g8e platform start
 ```
 
 Trust the platform CA on your workstation:
@@ -269,6 +268,10 @@ curl -fsSL http://<host>/trust | sudo sh
 irm http://<host>/trust | iex
 ```
 
+**Hostname Usage:**
+- If g8e is running on your local workstation: use `localhost`
+- If g8e is running on a remote system: use `g8e.local` (add to /etc/hosts pointing to the server IP)
+
 Open `https://<host>`, register a passkey, generate a device-link token, then on any host you want to manage:
 
 ```bash
@@ -278,12 +281,16 @@ curl -fsSL http://<host>/g8e | sh -s -- <device-link-token>
 ### CLI
 
 ```bash
-./g8e platform build       # First-time build and start
-./g8e platform start       # Start without rebuilding
-./g8e platform stop        # Stop (data preserved)
-./g8e platform wipe        # Wipe app data, restart fresh
+./g8e platform start       # Start all platform components
+./g8e platform status      # Show component health and versions
+./g8e platform restart     # Restart all platform components
+./g8e platform stop        # Stop all platform components
+./g8e platform wipe        # Wipe app data, preserve platform settings and SSL
+./g8e platform reset       # Reset application data, preserve SSL
+./g8e platform clean       # Remove all g8e processes and data
 
-./g8e operator build       # Compile Operator for all architectures
+./g8e operator build       # Compile Operator for the current host architecture
+./g8e operator build-all   # Compile Operator for all supported architectures
 ./g8e test <component>     # Run component tests (g8ee, g8ed, g8eo)
 ```
 

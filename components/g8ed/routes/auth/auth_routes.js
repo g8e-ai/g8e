@@ -80,7 +80,7 @@ export function createAuthRouter({ services, authMiddleware }) {
 
             // Default for simplified flow
             if (!email && isFirstRun) {
-                email = 'superadmin@g8e.local';
+                email = 'superadmin@localhost';
             }
 
             if (!email) {

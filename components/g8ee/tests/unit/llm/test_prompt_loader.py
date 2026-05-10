@@ -59,7 +59,7 @@ class TestLoadPrompt:
 
         assert isinstance(content, str)
         assert len(content) > 0
-        assert "g8e.local" in content
+        assert "localhost" in content
 
     def test_loads_core_safety(self):
         content = load_prompt(PromptFile.CORE_SAFETY)

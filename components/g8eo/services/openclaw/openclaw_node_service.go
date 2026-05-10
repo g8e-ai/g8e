@@ -265,7 +265,7 @@ func (s *OpenClawNodeService) dial(ctx context.Context) (*websocket.Conn, error)
 	}
 
 	// When connecting to wss:// outside g8e infra we use the system TLS roots.
-	// If the URL is ws:// (g8e.local dev gateway) we skip TLS entirely.
+	// If the URL is ws:// (localhost dev gateway) we skip TLS entirely.
 	if strings.HasPrefix(s.gatewayURL, "wss://") {
 		dialer.TLSClientConfig = &tls.Config{
 			MinVersion: tls.VersionTLS12,

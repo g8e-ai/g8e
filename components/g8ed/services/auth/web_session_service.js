@@ -17,18 +17,18 @@
  * Manages authenticated browser (web) sessions exclusively.
  *
  * WRITE Flow (cache-aside):
- * 1. Write to g8es document store (authoritative)
- * 2. Update g8es KV cache
+ * 1. Write to operator document store (authoritative)
+ * 2. Update operator KV cache
  * 3. Return to client
  *
  * READ Flow (cache-aside):
- * 1. Check g8es KV cache (~1-5ms)
- * 2. On miss, read from g8es document store -> populate KV cache
+ * 1. Check operator KV cache (~1-5ms)
+ * 2. On miss, read from operator document store -> populate KV cache
  * 3. Return data
  *
  * DELETE Flow (cache-aside):
- * 1. Delete from g8es document store (authoritative)
- * 2. Delete from g8es KV cache
+ * 1. Delete from operator document store (authoritative)
+ * 2. Delete from operator KV cache
  */
 
 import { logger } from '../../utils/logger.js';
@@ -291,7 +291,7 @@ export class WebSessionService extends BaseSessionService {
 
     /**
      * Refresh session TTL (respects absolute timeout).
-     * CACHE-ASIDE PATTERN: Update g8es document store (source of truth), then update g8es KV cache.
+     * CACHE-ASIDE PATTERN: Update operator document store (source of truth), then update operator KV cache.
      */
     async refreshSession(webSessionId, session = null) {
         if (!session) {
@@ -343,7 +343,7 @@ export class WebSessionService extends BaseSessionService {
     /**
      * Bind an operator to a web session.
      * Updates the operator_ids array in the web session document.
-     * CACHE-ASIDE PATTERN: Updates g8es document store then invalidates KV.
+     * CACHE-ASIDE PATTERN: Updates operator document store then invalidates KV.
      */
     async bindOperatorToWebSession(webSessionId, operatorId) {
         const session = await this._cache_aside.getDocument(this.sessionsCollection, webSessionId);
@@ -377,7 +377,7 @@ export class WebSessionService extends BaseSessionService {
     /**
      * Unbind an operator from a web session.
      * Updates the operator_ids array in the web session document.
-     * CACHE-ASIDE PATTERN: Updates g8es document store then invalidates KV.
+     * CACHE-ASIDE PATTERN: Updates operator document store then invalidates KV.
      */
     async unbindOperatorFromWebSession(webSessionId, operatorId) {
         const session = await this._cache_aside.getDocument(this.sessionsCollection, webSessionId);
@@ -410,7 +410,7 @@ export class WebSessionService extends BaseSessionService {
 
     /**
      * Update session data with deep merge for user_data.
-     * CACHE-ASIDE PATTERN: Update g8es document store (source of truth), then update g8es KV cache.
+     * CACHE-ASIDE PATTERN: Update operator document store (source of truth), then update operator KV cache.
      * @returns {Promise<WebSessionDocument|null>}
      */
     async updateSession(webSessionId, updates) {
@@ -464,7 +464,7 @@ export class WebSessionService extends BaseSessionService {
 
     /**
      * Extend session TTL to full duration.
-     * CACHE-ASIDE PATTERN: Update g8es document store (source of truth), then update g8es KV cache.
+     * CACHE-ASIDE PATTERN: Update operator document store (source of truth), then update operator KV cache.
      */
     async extendSession(webSessionId) {
         const session = await this._cache_aside.getDocument(
@@ -501,7 +501,7 @@ export class WebSessionService extends BaseSessionService {
 
     /**
      * End a web session (logout).
-     * CACHE-ASIDE PATTERN: Delete from g8es document store (source of truth), then invalidate g8es KV cache.
+     * CACHE-ASIDE PATTERN: Delete from operator document store (source of truth), then invalidate operator KV cache.
      */
     async endSession(webSessionId, reason = SessionEndReason.USER_LOGOUT) {
         const session = await this._cache_aside.getDocument(
@@ -682,7 +682,7 @@ export class WebSessionService extends BaseSessionService {
 
     /**
      * Get total session count across all web session keys (for monitoring).
-     * Uses SCAN instead of KEYS to avoid blocking g8es KV in production.
+     * Uses SCAN instead of KEYS to avoid blocking operator KV in production.
      */
     async getSessionCount() {
         let count = 0;

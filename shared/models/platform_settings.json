@@ -1,7 +1,7 @@
 {
-  "_comment": "Canonical PlatformSettings document shape. g8es (g8eo) is the initial authority for security secrets, while g8ed is the authority for user-managed configuration via the dashboard. Document ID is 'platform_settings' in the 'components' collection.",
+  "_comment": "Canonical PlatformSettings document shape. operator (g8eo) is the initial authority for security secrets, while g8ed is the authority for user-managed configuration via the dashboard. Document ID is 'platform_settings' in the 'components' collection.",
 
-  "_authority": "g8es (Secrets) / g8ed (Config)",
+  "_authority": "operator (Secrets) / g8ed (Config)",
   "_consumers": [
     "g8ee (Python — reads at startup and on cache miss to build base Settings)",
     "g8ed (JS — reads to serve internal settings API and UI dashboard)"
@@ -16,7 +16,7 @@
       "internal_auth_token": {
         "type": "string",
         "required": true,
-        "description": "Cryptographically secure token for internal service-to-service authentication (g8ee <-> g8es, g8ed <-> g8es)."
+        "description": "Cryptographically secure token for internal service-to-service authentication (g8ee <-> operator, g8ed <-> operator)."
       },
       "session_encryption_key": {
         "type": "string",

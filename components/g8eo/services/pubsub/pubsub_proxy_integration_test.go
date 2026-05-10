@@ -37,22 +37,22 @@ type testPubSubPayload struct {
 	Timestamp int64  `json:"timestamp"`
 }
 
-// TestG8esPubSubConnection tests connection to the g8es pub/sub endpoint
-func TestG8esPubSubConnection(t *testing.T) {
+// TestOperatorPubSubConnection tests connection to the operator pub/sub endpoint
+func TestOperatorPubSubConnection(t *testing.T) {
 	testutil.TestPubSubAvailable(t)
 
-	t.Run("connects to g8es pub/sub endpoint", func(t *testing.T) {
+	t.Run("connects to operator pub/sub endpoint", func(t *testing.T) {
 		client := NewTestPubSubClient(t)
-		assert.NotNil(t, client, "Should connect to g8es pub/sub endpoint")
+		assert.NotNil(t, client, "Should connect to operator pub/sub endpoint")
 	})
 
-	t.Run("performs pub/sub round-trip through g8es", func(t *testing.T) {
+	t.Run("performs pub/sub round-trip through operator", func(t *testing.T) {
 		channel := fmt.Sprintf("test:proxy:%d", time.Now().UnixNano())
-		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), channel)
+		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestOperatorDirectURL(), channel)
 
 		time.Sleep(50 * time.Millisecond)
 
-		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), channel, "test-value")
+		testutil.PublishTestMessage(t, testutil.GetTestOperatorDirectURL(), channel, "test-value")
 
 		received := testutil.WaitForMessage(t, msgChan, 2*time.Second)
 		assert.NotNil(t, received)
@@ -61,7 +61,7 @@ func TestG8esPubSubConnection(t *testing.T) {
 
 	t.Run("handles pub/sub with JSON payload", func(t *testing.T) {
 		channel := fmt.Sprintf("test:channel:%d", time.Now().UnixNano())
-		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), channel)
+		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestOperatorDirectURL(), channel)
 
 		time.Sleep(50 * time.Millisecond)
 
@@ -72,7 +72,7 @@ func TestG8esPubSubConnection(t *testing.T) {
 		payloadJSON, err := json.Marshal(payload)
 		require.NoError(t, err)
 
-		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), channel, string(payloadJSON))
+		testutil.PublishTestMessage(t, testutil.GetTestOperatorDirectURL(), channel, string(payloadJSON))
 
 		received := testutil.WaitForMessage(t, msgChan, 2*time.Second)
 		assert.NotNil(t, received)
@@ -80,10 +80,10 @@ func TestG8esPubSubConnection(t *testing.T) {
 	})
 }
 
-// TestG8esPubSubCommandFlow tests the full command flow through g8es pub/sub
-func TestG8esPubSubCommandFlow(t *testing.T) {
+// TestOperatorPubSubCommandFlow tests the full command flow through operator pub/sub
+func TestOperatorPubSubCommandFlow(t *testing.T) {
 
-	t.Run("command execution flow through g8es pub/sub", func(t *testing.T) {
+	t.Run("command execution flow through operator pub/sub", func(t *testing.T) {
 		db := NewTestPubSubClient(t)
 
 		cfg := testutil.NewTestConfig(t)
@@ -117,7 +117,7 @@ func TestG8esPubSubCommandFlow(t *testing.T) {
 		defer svc.Stop()
 
 		resultsChannel := constants.ResultsChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), resultsChannel)
+		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestOperatorDirectURL(), resultsChannel)
 
 		time.Sleep(100 * time.Millisecond)
 
@@ -127,22 +127,22 @@ func TestG8esPubSubCommandFlow(t *testing.T) {
 			ID:        fmt.Sprintf("proxy-exec-%d", time.Now().UnixNano()),
 			EventType: constants.Event.Operator.Command.Requested,
 			CaseID:    caseID,
-			Payload:   json.RawMessage(`{"command":"echo hello from g8es","justification":"Integration test via g8es pub/sub"}`),
+			Payload:   json.RawMessage(`{"command":"echo hello from operator","justification":"Integration test via operator pub/sub"}`),
 			Timestamp: time.Now().UTC(),
 		}
 
 		msgJSON, err := json.Marshal(msg)
 		require.NoError(t, err)
 
-		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(msgJSON))
+		testutil.PublishTestMessage(t, testutil.GetTestOperatorDirectURL(), commandChannel, string(msgJSON))
 
 		received := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 		require.NotNil(t, received)
 		assert.Contains(t, string(received), constants.Event.Operator.Command.Completed)
-		assert.Contains(t, string(received), "hello from g8es")
+		assert.Contains(t, string(received), "hello from operator")
 	})
 
-	t.Run("heartbeat flow through g8es pub/sub", func(t *testing.T) {
+	t.Run("heartbeat flow through operator pub/sub", func(t *testing.T) {
 		db := NewTestPubSubClient(t)
 
 		cfg := testutil.NewTestConfig(t)
@@ -176,7 +176,7 @@ func TestG8esPubSubCommandFlow(t *testing.T) {
 		defer svc.Stop()
 
 		heartbeatChannel := constants.HeartbeatChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), heartbeatChannel)
+		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestOperatorDirectURL(), heartbeatChannel)
 
 		time.Sleep(100 * time.Millisecond)
 
@@ -193,14 +193,14 @@ func TestG8esPubSubCommandFlow(t *testing.T) {
 		msgJSON, err := json.Marshal(msg)
 		require.NoError(t, err)
 
-		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(msgJSON))
+		testutil.PublishTestMessage(t, testutil.GetTestOperatorDirectURL(), commandChannel, string(msgJSON))
 
 		received := testutil.WaitForMessage(t, msgChan, 3*time.Second)
 		require.NotNil(t, received)
 		assert.Contains(t, string(received), constants.Event.Operator.Heartbeat)
 	})
 
-	t.Run("file edit flow through g8es pub/sub", func(t *testing.T) {
+	t.Run("file edit flow through operator pub/sub", func(t *testing.T) {
 		db := NewTestPubSubClient(t)
 
 		cfg := testutil.NewTestConfig(t)
@@ -234,12 +234,12 @@ func TestG8esPubSubCommandFlow(t *testing.T) {
 		defer svc.Stop()
 
 		resultsChannel := constants.ResultsChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), resultsChannel)
+		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestOperatorDirectURL(), resultsChannel)
 
 		time.Sleep(100 * time.Millisecond)
 
 		caseID := fmt.Sprintf("case-%s-%d", t.Name(), time.Now().UnixNano())
-		tmpFile := filepath.Join(t.TempDir(), "g8es-proxy-test.txt")
+		tmpFile := filepath.Join(t.TempDir(), "operator-proxy-test.txt")
 		commandChannel := constants.CmdChannel(cfg.OperatorID, cfg.OperatorSessionId)
 		msg := PubSubCommandMessage{
 			ID:        fmt.Sprintf("proxy-file-%d", time.Now().UnixNano()),
@@ -248,9 +248,9 @@ func TestG8esPubSubCommandFlow(t *testing.T) {
 			Payload: mustMarshalJSON(t, models.FileEditPayload{
 				Operation:       "write",
 				FilePath:        tmpFile,
-				Content:         "hello from g8es file edit",
+				Content:         "hello from operator file edit",
 				CreateIfMissing: true,
-				Justification:   "Integration test file write via g8es pub/sub",
+				Justification:   "Integration test file write via operator pub/sub",
 			}),
 			Timestamp: time.Now().UTC(),
 		}
@@ -258,7 +258,7 @@ func TestG8esPubSubCommandFlow(t *testing.T) {
 		msgJSON, err := json.Marshal(msg)
 		require.NoError(t, err)
 
-		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(msgJSON))
+		testutil.PublishTestMessage(t, testutil.GetTestOperatorDirectURL(), commandChannel, string(msgJSON))
 
 		received := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 		require.NotNil(t, received)
@@ -266,19 +266,19 @@ func TestG8esPubSubCommandFlow(t *testing.T) {
 	})
 }
 
-// TestG8esPubSubConnectionResilience tests connection resilience
-func TestG8esPubSubConnectionResilience(t *testing.T) {
+// TestOperatorPubSubConnectionResilience tests connection resilience
+func TestOperatorPubSubConnectionResilience(t *testing.T) {
 	testutil.TestPubSubAvailable(t)
 
 	t.Run("multiple subscribers on same channel", func(t *testing.T) {
 		channel := fmt.Sprintf("test:multi-sub:%d", time.Now().UnixNano())
 
-		sub1 := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), channel)
-		sub2 := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), channel)
+		sub1 := testutil.SubscribeToChannel(t, testutil.GetTestOperatorDirectURL(), channel)
+		sub2 := testutil.SubscribeToChannel(t, testutil.GetTestOperatorDirectURL(), channel)
 
 		time.Sleep(50 * time.Millisecond)
 
-		testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), channel, "broadcast-message")
+		testutil.PublishTestMessage(t, testutil.GetTestOperatorDirectURL(), channel, "broadcast-message")
 
 		msg1 := testutil.WaitForMessage(t, sub1, 2*time.Second)
 		msg2 := testutil.WaitForMessage(t, sub2, 2*time.Second)
@@ -299,11 +299,11 @@ func TestG8esPubSubConnectionResilience(t *testing.T) {
 			go func(idx int) {
 				defer wg.Done()
 				channel := fmt.Sprintf("test:concurrent:%d:%d", time.Now().UnixNano(), idx)
-				msgChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), channel)
+				msgChan := testutil.SubscribeToChannel(t, testutil.GetTestOperatorDirectURL(), channel)
 
 				time.Sleep(50 * time.Millisecond)
 
-				testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), channel,
+				testutil.PublishTestMessage(t, testutil.GetTestOperatorDirectURL(), channel,
 					fmt.Sprintf("message-%d", idx))
 
 				results[idx] = testutil.WaitForMessage(t, msgChan, 2*time.Second)
@@ -318,7 +318,7 @@ func TestG8esPubSubConnectionResilience(t *testing.T) {
 		}
 	})
 
-	t.Run("TLS configuration via G8esPubSubClient", func(t *testing.T) {
+	t.Run("TLS configuration via OperatorPubSubClient", func(t *testing.T) {
 		client := NewTestPubSubClient(t)
 		assert.NotNil(t, client)
 
@@ -334,12 +334,12 @@ func TestG8esPubSubConnectionResilience(t *testing.T) {
 		require.NoError(t, err)
 
 		err = client.Publish(ctx, channel, data)
-		assert.NoError(t, err, "Should publish via TLS-secured g8es connection")
+		assert.NoError(t, err, "Should publish via TLS-secured operator connection")
 	})
 }
 
-// TestG8esPubSubFullWorkflow tests the complete g8eo workflow through g8es pub/sub
-func TestG8esPubSubFullWorkflow(t *testing.T) {
+// TestOperatorPubSubFullWorkflow tests the complete g8eo workflow through operator pub/sub
+func TestOperatorPubSubFullWorkflow(t *testing.T) {
 
 	t.Run("complete command lifecycle", func(t *testing.T) {
 		db := NewTestPubSubClient(t)
@@ -376,7 +376,7 @@ func TestG8esPubSubFullWorkflow(t *testing.T) {
 		defer svc.Stop()
 
 		resultsChannel := constants.ResultsChannel(cfg.OperatorID, cfg.OperatorSessionId)
-		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestG8esDirectURL(), resultsChannel)
+		msgChan := testutil.SubscribeToChannel(t, testutil.GetTestOperatorDirectURL(), resultsChannel)
 
 		time.Sleep(100 * time.Millisecond)
 
@@ -408,7 +408,7 @@ func TestG8esPubSubFullWorkflow(t *testing.T) {
 			msgJSON, err := json.Marshal(msg)
 			require.NoError(t, err)
 
-			testutil.PublishTestMessage(t, testutil.GetTestG8esDirectURL(), commandChannel, string(msgJSON))
+			testutil.PublishTestMessage(t, testutil.GetTestOperatorDirectURL(), commandChannel, string(msgJSON))
 
 			received := testutil.WaitForMessage(t, msgChan, 5*time.Second)
 			require.NotNil(t, received, "Expected result for command %s", cmd.id)

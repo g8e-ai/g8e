@@ -180,10 +180,10 @@ deploy:
 		echo "  Deploying to $$c..."; \
 		docker exec -d -e DEVICE_TOKEN="$$TOKEN" $$c bash -c '\
 			CURL_OPTS="-fsSL"; \
-			[ -f /g8es/ca.crt ] && CURL_OPTS="$$CURL_OPTS --cacert /g8es/ca.crt" || CURL_OPTS="$$CURL_OPTS -k"; \
-			curl $$CURL_OPTS -H "Authorization: Bearer $$DEVICE_TOKEN" -o /home/appuser/g8e.operator "https://g8e.local/operator/download/linux/amd64" && \
+			[ -f /operator/ca.crt ] && CURL_OPTS="$$CURL_OPTS --cacert /operator/ca.crt" || CURL_OPTS="$$CURL_OPTS -k"; \
+			curl $$CURL_OPTS -H "Authorization: Bearer $$DEVICE_TOKEN" -o /home/appuser/g8e.operator "https://localhost/operator/download/linux/amd64" && \
 			chmod +x /home/appuser/g8e.operator && \
-			nohup /home/appuser/g8e.operator --endpoint g8e.local --working-dir /home/appuser --log info --cloud=false -D "$$DEVICE_TOKEN" > /home/appuser/g8e.operator.log 2>&1 & \
+			nohup /home/appuser/g8e.operator --endpoint localhost --working-dir /home/appuser --log info --cloud=false -D "$$DEVICE_TOKEN" > /home/appuser/g8e.operator.log 2>&1 & \
 		'; \
 	done; \
 	echo "Done."

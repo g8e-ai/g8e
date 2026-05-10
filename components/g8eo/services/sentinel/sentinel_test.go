@@ -222,7 +222,7 @@ func TestSentinel_ScrubText_ConnectionStrings(t *testing.T) {
 		contains string
 	}{
 		{"mysql://user:pass@host:3306/db", "[CONN_STRING]"},
-		{"postgres://admin:secret@g8e.local/mydb", "[CONN_STRING]"},
+		{"postgres://admin:secret@localhost/mydb", "[CONN_STRING]"},
 		{"mongodb://cluster.example.com:27017", "[CONN_STRING]"},
 		{"redis://default:password@redis.io:6379", "[CONN_STRING]"},
 	}
@@ -916,7 +916,7 @@ func TestSentinel_DetectThreats_ReverseShells(t *testing.T) {
 		},
 		{
 			name:       "legitimate netcat usage",
-			input:      "nc -z g8e.local 80",
+			input:      "nc -z localhost 80",
 			shouldFind: false,
 		},
 	}
@@ -2098,7 +2098,7 @@ func TestSentinel_LooksLikeKeyValue(t *testing.T) {
 	})
 
 	t.Run("equals-separated key value", func(t *testing.T) {
-		assert.True(t, sentinel.looksLikeKeyValue("DB_HOST=g8e.local"))
+		assert.True(t, sentinel.looksLikeKeyValue("DB_HOST=localhost"))
 		assert.True(t, sentinel.looksLikeKeyValue("count=42"))
 	})
 

@@ -5,8 +5,8 @@ parent: Architecture
 
 # Governance Gateway Terminal
 
-Last Updated: 2026-05-07
-Version: v0.2.0
+Last Updated: 2026-05-10
+Version: v0.2.2
 
 The terminal is the primary human-interactive surface of the Governance Gateway (g8ed), served at `/chat`. It provides a unified interface for AI interaction, Operator management, command execution, and system diagnostics. All terminal components communicate exclusively through the EventBus — no component holds a direct reference to another, enabling loose coupling and testability.
 

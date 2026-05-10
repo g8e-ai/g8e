@@ -16,7 +16,7 @@ import { CacheAsideService } from '@g8ed/services/cache/cache_aside_service.js';
 import { Collections } from '@g8ed/constants/collections.js';
 import { SourceComponent } from '@g8ed/constants/ai.js';
 import { G8eBaseModel, F } from '@g8ed/models/base.js';
-import { KVOperationError } from '@g8ed/services/clients/g8es_kv_cache_client.js';
+import { KVOperationError } from '@g8ed/services/clients/operator_kv_cache_client.js';
 
 // Minimal model for testing
 class TestModel extends G8eBaseModel {

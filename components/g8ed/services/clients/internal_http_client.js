@@ -22,7 +22,7 @@
  * 
  * Benefits over PubSub:
  * - 10x faster (5-20ms vs 100-300ms)
- * - No g8es KV polling
+ * - No operator KV polling
  * - Standard HTTP debugging
  * - Synchronous request-response
  */

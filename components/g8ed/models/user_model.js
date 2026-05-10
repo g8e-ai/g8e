@@ -14,7 +14,7 @@
 /**
  * User Domain Model
  *
- * Pure data class for user documents stored in g8es document store + g8es KV cache.
+ * Pure data class for user documents stored in operator document store + operator KV cache.
  * All business logic lives in UserService (services/platform/user_service.js).
  */
 
@@ -37,7 +37,7 @@ export class PasskeyCredential extends G8eBaseModel {
 }
 
 // ---------------------------------------------------------------------------
-// UserDocument  (user record stored in g8es document store + g8es KV cache)
+// UserDocument  (user record stored in operator document store + operator KV cache)
 // ---------------------------------------------------------------------------
 
 export class UserDocument extends G8eIdentifiableModel {

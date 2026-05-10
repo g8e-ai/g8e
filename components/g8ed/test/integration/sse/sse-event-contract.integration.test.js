@@ -29,8 +29,8 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'fs';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { resolve, dirname, join } from 'path';
+import { resolveProjectRoot } from '@g8ed/utils/path.js';
 import { EventType } from '@g8ed/constants/events.js';
 import { MockSSEResponse } from '@test/mocks/mock-sse-browser.js';
 import {
@@ -39,9 +39,7 @@ import {
 } from '@g8ed/models/sse_models.js';
 import { SSEService } from '@g8ed/services/platform/sse_service.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-const fixturesPath = resolve(__dirname, '../../../../../shared/test-fixtures/sse-events.json');
+const fixturesPath = join(resolveProjectRoot(), 'shared/test-fixtures/sse-events.json');
 const sharedSSEEvents = JSON.parse(readFileSync(fixturesPath, 'utf8'));
 
 const WEB_SESSION_ID = 'contract-test-session-123';

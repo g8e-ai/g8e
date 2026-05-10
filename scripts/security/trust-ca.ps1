@@ -10,13 +10,13 @@
     Run this whenever SSL certificates are rotated (e.g. after platform rebuild).
 
 .PARAMETER Server
-    SSH target in the format <user>@<server>. Example: admin@10.0.0.2 or admin@g8e.local
+    SSH target in the format <user>@<server>. Example: admin@10.0.0.2 or admin@localhost
 
 .EXAMPLE
     .\trust-ca.ps1 -Server admin@10.0.0.2
 
 .EXAMPLE
-    .\trust-ca.ps1 -Server admin@g8e.local
+    .\trust-ca.ps1 -Server admin@localhost
 #>
 
 param(
@@ -49,7 +49,7 @@ if ($existing.Count -gt 0) {
 
 Write-Host ""
 Write-Host "[2/3] Fetching CA cert from ${Server}..."
-$certPem = ssh $Server "docker exec g8es cat /ssl/ca.crt"
+$certPem = ssh $Server "docker exec operator cat /ssl/ca.crt"
 
 if (-not $certPem) {
     Write-Error "No certificate data received from ${Server}. Is the platform running?"

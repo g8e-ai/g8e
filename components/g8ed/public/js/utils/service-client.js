@@ -43,7 +43,7 @@ class RateLimitError extends Error {
 const COMPONENT_URLS = {
     [ComponentName.G8EE]: ComponentUrl.G8EE,
     [ComponentName.G8ED]: ComponentUrl.G8ED,
-    [ComponentName.G8ES]: ComponentUrl.G8ES,
+    [ComponentName.OPERATOR]: ComponentUrl.OPERATOR,
 };
 
 class ServiceClient {

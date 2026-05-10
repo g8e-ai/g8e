@@ -45,7 +45,7 @@ export class TeamMember extends G8eBaseModel {
 }
 
 // ---------------------------------------------------------------------------
-// OrganizationDocument  (persistent document stored in g8es)
+// OrganizationDocument  (persistent document stored in operator)
 // ---------------------------------------------------------------------------
 
 export class OrganizationDocument extends G8eIdentifiableModel {

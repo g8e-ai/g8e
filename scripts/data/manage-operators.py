@@ -18,14 +18,14 @@ Manage operator documents via the g8ed internal HTTP API.
 Runs inside a trusted container and communicates with g8ed over the internal network.
 
 Usage:
-    python manage-g8es.py operators list --user-id USER_ID
-    python manage-g8es.py operators list --email user@example.com
-    python manage-g8es.py operators get --id OPERATOR_ID
-    python manage-g8es.py operators init-slots --user-id USER_ID
-    python manage-g8es.py operators init-slots --email user@example.com
-    python manage-g8es.py operators refresh-key --id OPERATOR_ID
-    python manage-g8es.py operators get-key --id OPERATOR_ID
-    python manage-g8es.py operators reset --id OPERATOR_ID
+    python manage-operator.py operators list --user-id USER_ID
+    python manage-operator.py operators list --email user@example.com
+    python manage-operator.py operators get --id OPERATOR_ID
+    python manage-operator.py operators init-slots --user-id USER_ID
+    python manage-operator.py operators init-slots --email user@example.com
+    python manage-operator.py operators refresh-key --id OPERATOR_ID
+    python manage-operator.py operators get-key --id OPERATOR_ID
+    python manage-operator.py operators reset --id OPERATOR_ID
 """
 
 from __future__ import annotations
@@ -336,17 +336,17 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python manage-g8es.py operators list --user-id USER_ID
-  python manage-g8es.py operators list --email user@example.com
-  python manage-g8es.py operators list --email user@example.com --all
-  python manage-g8es.py operators get --id OPERATOR_ID
-  python manage-g8es.py operators init-slots --user-id USER_ID
-  python manage-g8es.py operators init-slots --email user@example.com
-  python manage-g8es.py operators refresh-key --id OPERATOR_ID
-  python manage-g8es.py operators refresh-key --id OPERATOR_ID --force
-  python manage-g8es.py operators get-key --id OPERATOR_ID
-  python manage-g8es.py operators reset --id OPERATOR_ID
-  python manage-g8es.py operators reset --id OPERATOR_ID --force
+  python manage-operator.py operators list --user-id USER_ID
+  python manage-operator.py operators list --email user@example.com
+  python manage-operator.py operators list --email user@example.com --all
+  python manage-operator.py operators get --id OPERATOR_ID
+  python manage-operator.py operators init-slots --user-id USER_ID
+  python manage-operator.py operators init-slots --email user@example.com
+  python manage-operator.py operators refresh-key --id OPERATOR_ID
+  python manage-operator.py operators refresh-key --id OPERATOR_ID --force
+  python manage-operator.py operators get-key --id OPERATOR_ID
+  python manage-operator.py operators reset --id OPERATOR_ID
+  python manage-operator.py operators reset --id OPERATOR_ID --force
         """
     )
 
@@ -393,7 +393,7 @@ def run(argv: List[str]) -> int:
         parser.print_help()
         return 1
 
-    print_banner('manage-g8es.py operators', ' '.join(argv))
+    print_banner('manage-operator.py operators', ' '.join(argv))
     manager = OperatorManager()
 
     try:
@@ -417,7 +417,7 @@ def run(argv: List[str]) -> int:
         elif args.command == 'reset':
             manager.reset(args.operator_id, force=args.force)
     except RuntimeError as e:
-        print(f'[manage-g8es operators] {e}', file=sys.stderr)
+        print(f'[manage-operator operators] {e}', file=sys.stderr)
         return 1
 
     return 0

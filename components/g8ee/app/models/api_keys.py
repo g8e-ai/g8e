@@ -17,7 +17,7 @@ from app.utils.timestamp import now
 from .base import G8eBaseModel, UTCDatetime
 
 class ApiKeyDocument(G8eBaseModel):
-    """API key record stored in g8es document store."""
+    """API key record stored in operator document store."""
     user_id: str = Field(description="User ID who owns this key")
     organization_id: str | None = Field(default=None, description="Organization ID")
     operator_id: str | None = Field(default=None, description="Operator ID if tied to a specific operator")

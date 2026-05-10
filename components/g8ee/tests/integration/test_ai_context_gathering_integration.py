@@ -43,7 +43,7 @@ Real code under test:
     CacheAsideService (app/services/cache/cache_aside.py)
     extract_system_context, extract_all_operators_context
 
-All tests use real g8es and cache services — no mocks allowed per testing guidelines.
+All tests use real operator and cache services — no mocks allowed per testing guidelines.
 """
 
 import asyncio

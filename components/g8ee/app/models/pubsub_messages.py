@@ -12,10 +12,10 @@
 # limitations under the License.
 
 """
-G8eMessage models for g8es pub/sub messaging.
+G8eMessage models for operator pub/sub messaging.
 
 This module defines the standardized message format for all g8e component
-communication via g8es pub/sub.
+communication via operator pub/sub.
 """
 
 from datetime import datetime
@@ -543,7 +543,7 @@ class G8eoResultEnvelope(G8eBaseModel):
 
 
 class G8eMessage(G8eBaseModel):
-    """Standardized message for g8es pub/sub communication between g8e components.
+    """Standardized message for operator pub/sub communication between g8e components.
     
     The payload field uses a Union discriminator pattern for type-safe parsing.
     Consumers can parse inbound messages without knowing the concrete type in advance.

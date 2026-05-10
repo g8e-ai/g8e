@@ -18,13 +18,13 @@ Manage device link tokens via the g8ed internal HTTP API.
 Runs inside g8ep and communicates with g8ed over the internal network.
 
 Usage:
-    python manage-g8es.py device-links list --user-id USER_ID
-    python manage-g8es.py device-links list --email user@example.com
-    python manage-g8es.py device-links create --user-id USER_ID
-    python manage-g8es.py device-links create --user-id USER_ID --name "prod-fleet" --max-uses 50 --expires-in-hours 24
-    python manage-g8es.py device-links create --email user@example.com --name "staging"
-    python manage-g8es.py device-links revoke --token dlk_...
-    python manage-g8es.py device-links delete --token dlk_...
+    python manage-operator.py device-links list --user-id USER_ID
+    python manage-operator.py device-links list --email user@example.com
+    python manage-operator.py device-links create --user-id USER_ID
+    python manage-operator.py device-links create --user-id USER_ID --name "prod-fleet" --max-uses 50 --expires-in-hours 24
+    python manage-operator.py device-links create --email user@example.com --name "staging"
+    python manage-operator.py device-links revoke --token dlk_...
+    python manage-operator.py device-links delete --token dlk_...
 """
 
 from __future__ import annotations
@@ -175,13 +175,13 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python manage-g8es.py device-links list --user-id USER_ID
-  python manage-g8es.py device-links list --email user@example.com
-  python manage-g8es.py device-links create --user-id USER_ID
-  python manage-g8es.py device-links create --user-id USER_ID --name "prod-fleet" --max-uses 50
-  python manage-g8es.py device-links create --email user@example.com --expires-in-hours 48
-  python manage-g8es.py device-links revoke --token dlk_...
-  python manage-g8es.py device-links delete --token dlk_...
+  python manage-operator.py device-links list --user-id USER_ID
+  python manage-operator.py device-links list --email user@example.com
+  python manage-operator.py device-links create --user-id USER_ID
+  python manage-operator.py device-links create --user-id USER_ID --name "prod-fleet" --max-uses 50
+  python manage-operator.py device-links create --email user@example.com --expires-in-hours 48
+  python manage-operator.py device-links revoke --token dlk_...
+  python manage-operator.py device-links delete --token dlk_...
         """
     )
 
@@ -216,7 +216,7 @@ def run(argv: List[str]) -> int:
         parser.print_help()
         return 1
 
-    print_banner('manage-g8es.py device-links', ' '.join(argv))
+    print_banner('manage-operator.py device-links', ' '.join(argv))
     manager = DeviceLinkManager()
 
     try:
@@ -235,7 +235,7 @@ def run(argv: List[str]) -> int:
         elif args.command == 'delete':
             manager.delete_link(args.token, force=args.force)
     except RuntimeError as e:
-        print(f'[manage-g8es device-links] {e}', file=sys.stderr)
+        print(f'[manage-operator device-links] {e}', file=sys.stderr)
         return 1
 
     return 0

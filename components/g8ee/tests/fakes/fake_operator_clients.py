@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Typed fakes for g8es KV, DB, and PubSub clients."""
+"""Typed fakes for operator KV, DB, and PubSub clients."""
 
 import fnmatch
 import json
@@ -22,7 +22,7 @@ from app.models.cache import BatchWriteOperation, CacheOperationResult, Document
 
 
 class FakeKVClient:
-    """In-memory fake for g8es KV client.
+    """In-memory fake for operator KV client.
     
     Provides a real dict-backed store so tests can assert on actual stored
     values. Used by KVCacheClient.
@@ -108,7 +108,7 @@ class FakeKVClient:
 
 
 class FakePubSubClient:
-    """In-memory fake for g8es Pub/Sub client.
+    """In-memory fake for operator Pub/Sub client.
     
     Used by PubSubClient.
     """
@@ -136,7 +136,7 @@ class FakePubSubClient:
 
 
 class FakeDBClient:
-    """In-memory fake for g8es DB client."""
+    """In-memory fake for operator DB client."""
 
     def __init__(self):
         self._store: dict[str, dict[str, dict]] = {}

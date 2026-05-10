@@ -26,7 +26,7 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/config"
 )
 
-// ListenService is the top-level orchestrator for --listen mode (g8es).
+// ListenService is the top-level orchestrator for --listen mode (operator).
 // It acts as the platform's central persistence and messaging backbone.
 // In this mode, the Operator does NOT execute commands or initiate outbound
 // connections. It strictly serves inbound requests from platform components.
@@ -56,7 +56,7 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 	}
 
 	pubsub := NewPubSubBroker(logger)
-	auth := NewAuthService(db, logger)
+	auth := NewAuthService(db, logger, cfg.Listen.SSLDir)
 
 	var certs *CertStore
 	var tlsConfig *tls.Config
@@ -109,7 +109,7 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 		certs:  certs,
 	}
 
-	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, ls.IsReady)
+	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, certs, ls.IsReady)
 	ls.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.HTTPPort),
 		Handler:           ls.handler,
@@ -132,7 +132,7 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 // newListenServiceFromComponents assembles a ListenService from pre-built components.
 // Used in tests where the DB and pub/sub broker are constructed independently.
 func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker) *ListenService {
-	auth := NewAuthService(db, logger)
+	auth := NewAuthService(db, logger, cfg.Listen.SSLDir)
 	ls := &ListenService{
 		cfg:    cfg,
 		logger: logger,
@@ -141,7 +141,7 @@ func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db 
 		auth:   auth,
 	}
 
-	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, ls.IsReady)
+	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, nil, ls.IsReady)
 	ls.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.HTTPPort),
 		Handler:           ls.handler,
@@ -185,7 +185,7 @@ func (ls *ListenService) Start(ctx context.Context) error {
 	// Start KV TTL cleanup goroutine
 	go ls.db.RunTTLCleanup(ctx)
 
-	ls.logger.Info("g8es Listen Mode ready",
+	ls.logger.Info("operator Listen Mode ready",
 		"http_port", ls.cfg.Listen.HTTPPort,
 		"wss_port", ls.cfg.Listen.WSSPort,
 		"data_dir", ls.cfg.Listen.DataDir)
@@ -230,7 +230,7 @@ func (ls *ListenService) Start(ctx context.Context) error {
 		ls.mu.Lock()
 		ls.ready = true
 		ls.mu.Unlock()
-		ls.logger.Info("g8es Listen Mode fully operational")
+		ls.logger.Info("operator Listen Mode fully operational")
 	}()
 
 	return <-errChan

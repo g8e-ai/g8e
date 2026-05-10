@@ -23,11 +23,11 @@ class AttachmentMetadata(G8eBaseModel):
     """
     Attachment reference passed from g8ed to G8EE.
 
-    Contains the g8es KV store key and file metadata needed to retrieve
+    Contains the operator KV store key and file metadata needed to retrieve
     the full attachment data. g8ed stores the binary content; g8ee retrieves
     it via this key before processing.
     """
-    store_key: str | None = Field(default=None, description="Primary g8es KV key (attachment:{inv_id}:{att_id})")
+    store_key: str | None = Field(default=None, description="Primary operator KV key (attachment:{inv_id}:{att_id})")
     filename: str = Field(..., description="Original filename")
     file_size: int | None = Field(default=None, description="File size in bytes")
     content_type: str = Field(default="application/octet-stream", description="MIME content type")
@@ -35,7 +35,7 @@ class AttachmentMetadata(G8eBaseModel):
 
 class AttachmentData(G8eBaseModel):
     """
-    Full attachment payload retrieved from g8es KV store.
+    Full attachment payload retrieved from operator KV store.
 
     Produced by AttachmentService.get_attachments_by_metadata() and consumed by
     AttachmentService.process_attachments() for classification and LLM formatting.

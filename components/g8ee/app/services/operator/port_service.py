@@ -150,7 +150,7 @@ class OperatorPortService:
                 ),
             )
 
-            logger.info("[PORT_CHECK] Publishing port check request via g8es pub/sub")
+            logger.info("[PORT_CHECK] Publishing port check request via operator pub/sub")
             await self.pubsub_service.register_operator_session(operator_id, operator_session_id)
 
             # Notify start

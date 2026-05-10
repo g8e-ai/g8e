@@ -46,7 +46,7 @@ class SettingsServiceProtocol(Protocol):
     """Protocol for SettingsService ensuring read-only access to platform and user settings."""
 
     async def get_platform_settings(self) -> G8eePlatformSettings:
-        """Retrieve platform-level settings from g8es with cache-aside."""
+        """Retrieve platform-level settings from operator with cache-aside."""
         ...
 
     async def get_user_settings(self, user_id: str) -> G8eeUserSettings:
@@ -70,7 +70,7 @@ class SettingsService:
         self._logger = logging.getLogger(__name__)
 
     def _get_env(self, env_key: str, default: str | None = None) -> str | None:
-        """DEPRECATED: Configuration is now loaded from g8es or bootstrap volumes.
+        """DEPRECATED: Configuration is now loaded from operator or bootstrap volumes.
         """
         return default
 
@@ -78,11 +78,11 @@ class SettingsService:
         """Load settings using canonical defaults and bootstrap service.
         
         This replaces legacy configuration with platform defaults and
-        secure bootstrap service for secrets from g8es volume.
+        secure bootstrap service for secrets from operator volume.
         """
         settings = G8eePlatformSettings(
             host="0.0.0.0",
-            port=443,
+            port=8443,
             log_level=LogLevel.INFO,
             enable_logging=True,
             docker_gid="988",
@@ -90,11 +90,11 @@ class SettingsService:
             absolute_session_timeout=86400,
             docs_dir="/docs",
             supervisor_port=9001,
-            app_url="http://localhost:443",
+            app_url="http://localhost:8443",
             allowed_origins="*",
             passkey_rp_name="g8e",
             passkey_rp_id="g8e",
-            passkey_origin="http://localhost:443",
+            passkey_origin="http://localhost:8443",
         )
 
         # Load secrets from bootstrap service
@@ -172,7 +172,7 @@ class SettingsService:
         return user_settings.llm
 
     async def get_platform_settings(self) -> G8eePlatformSettings:
-        """Load platform settings from g8es via CacheAsideService."""
+        """Load platform settings from operator via CacheAsideService."""
         if not self._cache_aside:
             return self.get_local_settings()
 
@@ -183,7 +183,7 @@ class SettingsService:
 
         if not doc_dict:
             raise ConfigurationError(
-                "g8ee cannot start: platform_settings document missing in g8es",
+                "g8ee cannot start: platform_settings document missing in operator",
                 code=ErrorCode.DB_QUERY_ERROR
             )
 

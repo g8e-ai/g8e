@@ -217,19 +217,19 @@ describe('AuthRoutes Unit Tests', () => {
         describe('First-Run Administrative Setup', () => {
             it('delegates to performFirstRunSetup with email, name, userSettings, and req', async () => {
                 mockSetupService.isFirstRun.mockResolvedValue(true);
-                mockSetupService.performFirstRunSetup.mockResolvedValue({ id: 'admin-id', email: 'admin@g8e.local' });
+                mockSetupService.performFirstRunSetup.mockResolvedValue({ id: 'admin-id', email: 'admin@localhost' });
                 mockPasskeyAuthService.generateRegistrationChallenge.mockResolvedValue({ challenge: 'setup-challenge' });
 
                 const userSettings = { llm_primary_provider: LLMProvider.GEMINI };
 
                 const res = await request(app)
                     .post('/api/auth/register')
-                    .send({ email: 'admin@g8e.local', name: 'Admin', settings: userSettings });
+                    .send({ email: 'admin@localhost', name: 'Admin', settings: userSettings });
 
                 expect(res.status).toBe(201);
                 expect(res.body.message).toBe('Administrative setup initialized');
                 expect(mockSetupService.performFirstRunSetup).toHaveBeenCalledWith({
-                    email: 'admin@g8e.local',
+                    email: 'admin@localhost',
                     name: 'Admin',
                     userSettings,
                     req: expect.any(Object)

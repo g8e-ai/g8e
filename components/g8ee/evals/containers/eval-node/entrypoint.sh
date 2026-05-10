@@ -5,7 +5,7 @@ set -e
 
 NODE_ID="${EVAL_NODE_ID:-${HOSTNAME:-eval-node}}"
 NODE_PROFILE="${EVAL_PROFILE:-healthy}"
-OPERATOR_ENDPOINT="${G8E_ENDPOINT:-g8e.local}"
+OPERATOR_ENDPOINT="${G8E_ENDPOINT:-localhost}"
 OPERATOR_BINARY="/opt/g8e/g8e.operator"
 OPERATOR_LOG_PREFIX="[$NODE_ID operator]"
 
@@ -40,30 +40,24 @@ cat > /etc/app/config.json <<EOF
 }
 EOF
 
-# Download and supervise the operator
+# Supervise the operator (binary is baked into image)
 _run_operator() {
-    local attempt=0
-    while [ ! -x "$OPERATOR_BINARY" ]; do
-        attempt=$((attempt + 1))
-        echo "$OPERATOR_LOG_PREFIX downloading binary from $OPERATOR_ENDPOINT (attempt $attempt)..."
+    if [ ! -x "$OPERATOR_BINARY" ]; then
+        echo "$OPERATOR_LOG_PREFIX ERROR: Operator binary not found at $OPERATOR_BINARY"
+        exit 1
+    fi
+    echo "$OPERATOR_LOG_PREFIX binary ready ($(stat -c%s "$OPERATOR_BINARY" 2>/dev/null || wc -c < "$OPERATOR_BINARY") bytes)"
 
-        if curl -fsSL --cacert /g8es/ca.crt \
-                -H "Authorization: Bearer $DEVICE_TOKEN" \
-                -o "$OPERATOR_BINARY" \
-                "https://$OPERATOR_ENDPOINT/operator/download/linux/amd64" 2>/dev/null; then
-            chmod +x "$OPERATOR_BINARY"
-            echo "$OPERATOR_LOG_PREFIX binary ready ($(stat -c%s "$OPERATOR_BINARY" 2>/dev/null || wc -c < "$OPERATOR_BINARY") bytes)"
-        else
-            echo "$OPERATOR_LOG_PREFIX download failed; retrying in 5s"
-            rm -f "$OPERATOR_BINARY"
-            sleep 5
-        fi
-
-        if [ $attempt -ge 10 ]; then
-            echo "$OPERATOR_LOG_PREFIX ERROR: Failed to download operator after $attempt attempts"
-            exit 1
-        fi
-    done
+    # Setup CA cert if it exists in the bind-mount
+    if [ -f /operator/ca.crt ]; then
+        mkdir -p /tmp/ssl
+        cp /operator/ca.crt /tmp/ssl/ca.crt
+        echo "[$NODE_ID] CA certificate copied from /operator/ca.crt to /tmp/ssl/ca.crt"
+    elif [ -n "${G8E_CA_CERT:-}" ]; then
+        mkdir -p /tmp/ssl
+        echo "$G8E_CA_CERT" > /tmp/ssl/ca.crt
+        echo "[$NODE_ID] CA certificate written from environment to /tmp/ssl/ca.crt"
+    fi
 
     # Supervised restart loop
     while true; do

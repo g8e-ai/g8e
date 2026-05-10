@@ -18,6 +18,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
@@ -27,14 +28,16 @@ import (
 type AuthService struct {
 	db            *ListenDBService
 	logger        *slog.Logger
+	sslDir        string
 	tokenProvider func() string
 }
 
 // NewAuthService creates a new AuthService.
-func NewAuthService(db *ListenDBService, logger *slog.Logger) *AuthService {
+func NewAuthService(db *ListenDBService, logger *slog.Logger, sslDir string) *AuthService {
 	s := &AuthService{
 		db:     db,
 		logger: logger,
+		sslDir: sslDir,
 	}
 	s.tokenProvider = s.defaultTokenProvider
 	return s
@@ -48,7 +51,8 @@ func (s *AuthService) defaultTokenProvider() string {
 	}
 
 	// 2. Try SSL volume file (authoritative source for bootstrap secrets)
-	if tokenBytes, err := os.ReadFile("/ssl/internal_auth_token"); err == nil {
+	tokenPath := filepath.Join(s.sslDir, "internal_auth_token")
+	if tokenBytes, err := os.ReadFile(tokenPath); err == nil {
 		if token := strings.TrimSpace(string(tokenBytes)); token != "" {
 			return token
 		}
@@ -95,7 +99,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 		// so the token can be seeded and services can coordinate.
 		if expected == "" {
 			// Allow access to platform_settings so it can be discovered/seeded.
-			if (r.Method == http.MethodGet || r.Method == http.MethodPut) && r.URL.Path == "/db/settings/platform_settings" {
+			if (r.Method == http.MethodGet || r.Method == http.MethodPut || r.Method == http.MethodPatch) && r.URL.Path == "/db/settings/platform_settings" {
 				next.ServeHTTP(w, r)
 				return
 			}

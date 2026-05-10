@@ -35,7 +35,7 @@ var configCounter atomic.Int64
 //
 // Each call produces a unique OperatorID and OperatorSessionId derived from the
 // test name and a process-local counter.  This guarantees that every test gets
-// its own g8es pub/sub channels and no cross-test message bleed can occur.
+// its own operator pub/sub channels and no cross-test message bleed can occur.
 func NewTestConfig(t *testing.T) *config.Config {
 	t.Helper()
 
@@ -56,7 +56,7 @@ func NewTestConfig(t *testing.T) *config.Config {
 		APIKey:             "test-api-key",
 		OperatorID:         operatorID,
 		OperatorSessionId:  operatorSessionID,
-		PubSubURL:          GetTestG8esDirectURL(),
+		PubSubURL:          GetTestOperatorDirectURL(),
 		MaxConcurrentTasks: 25,
 		MaxMemoryMB:        2048,
 		HeartbeatInterval:  30 * time.Second,
@@ -84,11 +84,11 @@ func (w testLogWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// GetTestG8esDirectURL returns the g8ed WebSocket gateway base URL for g8eo pub/sub tests.
+// GetTestOperatorDirectURL returns the g8ed WebSocket gateway base URL for g8eo pub/sub tests.
 // g8eo connects to pub/sub via g8ed (the single external entry point) at port 443; g8ed
-// proxies /ws/pubsub to g8es internally. g8es is not directly accessible from outside
+// proxies /ws/pubsub to operator internally. operator is not directly accessible from outside
 // the docker network. Must not include a path — callers append /ws/pubsub as needed.
-func GetTestG8esDirectURL() string {
+func GetTestOperatorDirectURL() string {
 	if u := os.Getenv(string(constants.EnvVar.OperatorPubSubURL)); u != "" {
 		return u
 	}

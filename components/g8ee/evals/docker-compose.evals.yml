@@ -1,10 +1,10 @@
 # g8e Evals Fleet - Real operator containers for evaluation scenarios
 # Each eval-node runs a real g8e operator with device token authentication
-# Containers join the g8e-network to reach the platform at g8e.local
+# Containers use their own network for evals isolation
 
 networks:
   g8e-network:
-    external: true
+    driver: bridge
 
 services:
   eval-node:
@@ -15,14 +15,14 @@ services:
       - g8e-network
     labels:
       - "io.g8e.evals=true"
-    volumes:
-      - g8es-ssl:/g8es:ro
+    tmpfs:
+      - /tmp:mode=1777
     restart: unless-stopped
+    volumes:
+      - ../../../.g8e/ssl/ca/ca.crt:/operator/ca.crt:ro
     environment:
       DEVICE_TOKEN: ${DEVICE_TOKEN:-}
-      G8E_ENDPOINT: ${G8E_ENDPOINT:-g8e.local}
+      G8E_ENDPOINT: ${G8E_ENDPOINT:-localhost}
       EVAL_PROFILE: healthy
-
-volumes:
-  g8es-ssl:
-    external: true
+    extra_hosts:
+      - "localhost:host-gateway"

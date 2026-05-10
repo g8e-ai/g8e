@@ -34,7 +34,7 @@ export class PubSubSubscribeMessage extends G8eBaseModel {
 
 // ---------------------------------------------------------------------------
 // PubSubPublishMessage  (publish wire message — data is a plain object, serialized
-// as json.RawMessage by the g8es broker; see components/g8eo/services/listen/listen_pubsub.go)
+// as json.RawMessage by the operator broker; see components/g8eo/services/listen/listen_pubsub.go)
 // ---------------------------------------------------------------------------
 
 export class PubSubPublishMessage extends G8eBaseModel {
@@ -52,7 +52,7 @@ export class PubSubPublishMessage extends G8eBaseModel {
 }
 
 // ---------------------------------------------------------------------------
-// PubSubInboundMessage  (inbound message event from g8es WebSocket)
+// PubSubInboundMessage  (inbound message event from operator WebSocket)
 // ---------------------------------------------------------------------------
 
 export class PubSubInboundMessage extends G8eBaseModel {
@@ -70,7 +70,7 @@ export class PubSubInboundMessage extends G8eBaseModel {
 }
 
 // ---------------------------------------------------------------------------
-// PubSubInboundPMessage  (inbound pmessage event from g8es WebSocket)
+// PubSubInboundPMessage  (inbound pmessage event from operator WebSocket)
 // ---------------------------------------------------------------------------
 
 export class PubSubInboundPMessage extends G8eBaseModel {

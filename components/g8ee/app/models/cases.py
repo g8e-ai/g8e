@@ -90,7 +90,7 @@ class CaseCreateRequest(G8eBaseModel):
     )
     user_id: str = Field(..., min_length=1, description="User ID - MUST be injected by g8ed from authenticated session")
     user_email: str | None = Field(default=None, description="User email - injected by g8ed from session")
-    web_session_id: str = Field(..., min_length=1, description="Session ID - MUST be injected by g8ed from validated session cookie")
+    web_session_id: str | None = Field(default=None, description="Session ID - injected by g8ed from validated session cookie (None for device token flows)")
     organization_id: str | None = Field(default=None, description="Organization ID - injected by g8ed from session")
     priority: Priority = Field(default=Priority.MEDIUM, description="Server default - not client controllable")
     severity: Severity = Field(default=Severity.MEDIUM, description="Server default - not client controllable")

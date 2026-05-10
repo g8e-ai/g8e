@@ -20,6 +20,7 @@ import { readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { VERSION_FALLBACK } from '../constants/service_config.js';
+import { resolveProjectRoot } from './path.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -28,7 +29,7 @@ let cachedVersionInfo = null;
 
 function getVersion() {
     try {
-        const versionPath = path.join(__dirname, '..', '..', '..', 'VERSION');
+        const versionPath = path.join(resolveProjectRoot(), 'VERSION');
         return readFileSync(versionPath, 'utf8').trim();
     } catch {
         return VERSION_FALLBACK;

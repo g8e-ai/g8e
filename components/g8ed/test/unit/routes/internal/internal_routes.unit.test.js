@@ -78,7 +78,7 @@ describe('Internal Routes [UNIT]', () => {
             expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
                 success: true,
                 message: 'Internal API healthy',
-                g8es_status: 'healthy',
+                operator_status: 'healthy',
                 g8ee_status: 'healthy', 
                 g8eo_status: 'healthy',
                 uptime_seconds: expect.any(Number),

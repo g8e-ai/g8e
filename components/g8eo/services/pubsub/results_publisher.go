@@ -23,7 +23,7 @@ import (
 
 // ResultsPublisher is the transport-agnostic interface for publishing results
 // from the g8eo Operator back to AI Agent Services (g8ee).
-// Implemented by PubSubResultsService (g8es pub/sub via g8ed proxy).
+// Implemented by PubSubResultsService (operator pub/sub via g8ed proxy).
 type ResultsPublisher interface {
 	PublishExecutionResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error
 	PublishCancellationResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error

@@ -93,7 +93,7 @@ describe('service-client-constants contract [UNIT]', () => {
     });
 
     it('ComponentUrl.G8EE is the expected internal URL', () => {
-        expect(ComponentUrl.G8EE).toBe('https://g8ee');
+        expect(ComponentUrl.G8EE).toBe('https://localhost:8443');
     });
 
     it('RequestTimeout values are positive integers', () => {
@@ -270,9 +270,9 @@ describe('ServiceClient.getServiceEndpoints [UNIT - jsdom]', () => {
     });
 
     it('reflects window.location.origin change for g8ed', () => {
-        window.location = { origin: 'https://g8e.local' };
+        window.location = { origin: 'https://localhost' };
         const endpoints = client.getServiceEndpoints(ComponentName.G8ED);
-        expect(endpoints).toEqual(['https://g8e.local']);
+        expect(endpoints).toEqual(['https://localhost']);
     });
 
     it('returns ComponentUrl.G8EE for g8ee', () => {

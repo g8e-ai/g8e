@@ -12,7 +12,7 @@
 // limitations under the License.
 
 /**
- * g8es KV Key Constants
+ * operator KV Key Constants
  * Single source of truth for ALL KV store keys used across the platform (g8ed + g8ee).
  *
  * All keys are built via KVKey.* functions. Never construct key strings manually.

@@ -32,7 +32,7 @@ async def initialize_g8e_service(
     if use_db_config:
         if cache_aside_service is None:
             raise ConfigurationError("cache_aside_service is required when use_db_config=True")
-        logger.info("Loading configuration from g8es platform_settings for %s", service_name)
+        logger.info("Loading configuration from operator platform_settings for %s", service_name)
 
         bootstrap_service = BootstrapService()
         service = SettingsService(cache_aside_service=cache_aside_service, bootstrap_service=bootstrap_service)

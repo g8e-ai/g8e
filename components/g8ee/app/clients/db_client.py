@@ -12,12 +12,12 @@
 # limitations under the License.
 
 """
-DBClient — g8es Document Store shim.
+DBClient — operator Document Store shim.
 
-Wraps the g8es (Operator --listen mode) Document Store HTTP API.
-No local database — every call goes to g8es over HTTP.
+Wraps the operator (Operator --listen mode) Document Store HTTP API.
+No local database — every call goes to operator over HTTP.
 
-g8es endpoints:
+operator endpoints:
     GET    /db/{collection}/{id}       → get document
     PUT    /db/{collection}/{id}       → set (create/replace) document
     PATCH  /db/{collection}/{id}       → update (merge) document
@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 
 
 class DBClient:
-    """HTTP shim over the g8es Document Store API."""
+    """HTTP shim over the operator Document Store API."""
 
     def __init__(
         self,
@@ -72,7 +72,7 @@ class DBClient:
         self._session: aiohttp.ClientSession | None = None
 
     async def connect(self) -> bool:
-        """Verify connectivity to the g8es Document Store service."""
+        """Verify connectivity to the operator Document Store service."""
         try:
             # Document store doesn't have a dedicated /health yet, but we can check the base URL
             # or just assume session creation is enough for now, but to match KVCacheClient:
@@ -257,7 +257,7 @@ class DBClient:
         """POST /db/{collection}/_query.
 
         Translates the order_by dict (e.g. {"created_at": "desc"})
-        into the g8es wire format ("created_at DESC").
+        into the operator wire format ("created_at DESC").
         """
         try:
             body: dict[str, object] = {}

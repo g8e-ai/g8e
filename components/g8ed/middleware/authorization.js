@@ -202,7 +202,7 @@ export function createAuthorizationMiddleware({ operatorService, settingsService
         // Try operator session ID (CLI scripts authenticated via login)
         if (operatorSessionId) {
             try {
-                // Validate the operator session against g8es
+                // Validate the operator session against operator
                 const session = await operatorService.validateOperatorSession(operatorSessionId);
                 if (session) {
                     // Store user context from the session

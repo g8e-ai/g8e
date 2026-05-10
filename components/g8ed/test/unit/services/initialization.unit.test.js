@@ -12,6 +12,7 @@
 // limitations under the License.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { execFileSync } from 'child_process';
 import * as initialization from '@g8ed/services/initialization.js';
 
 /**
@@ -19,7 +20,7 @@ import * as initialization from '@g8ed/services/initialization.js';
  * 
  * Rules (from testing.md):
  * 1. Mocks are prohibited for internal services and database clients.
- * 2. Use real infrastructure (g8es) and real components.
+ * 2. Use real infrastructure (operator) and real components.
  */
 
 describe('Initialization Service', () => {
@@ -33,6 +34,17 @@ describe('Initialization Service', () => {
     });
 
     describe('initializeSettingsService', () => {
+        it('should be importable by the production Node ESM runtime', () => {
+            expect(() => execFileSync(process.execPath, [
+                '--input-type=module',
+                '-e',
+                "await import('./services/initialization.js')"
+            ], {
+                cwd: process.cwd(),
+                stdio: 'pipe'
+            })).not.toThrow();
+        });
+
         it('should initialize settings service and core clients', async () => {
             const settingsService = await initialization.initializeSettingsService();
             
@@ -53,7 +65,7 @@ describe('Initialization Service', () => {
     describe('initializeServices', () => {
         it('should perform full multi-phase initialization', async () => {
             // This exercises the entire composition root
-            // Skip if g8es is not available
+            // Skip if operator is not available
             try {
                 await initialization.initializeServices();
 
@@ -67,15 +79,15 @@ describe('Initialization Service', () => {
                 expect(initialization.getApiKeyService()).toBeDefined();
                 expect(initialization.getPubSubClient()).toBeDefined();
             } catch (error) {
-                // g8es not available in test environment - skip this test
-                console.log('Skipping full initialization test - g8es not available');
+                // operator not available in test environment - skip this test
+                console.log('Skipping full initialization test - operator not available');
             }
         });
     });
 
     describe('Services bag contract (matches server.js expectations)', () => {
         it('should provide all services that server.js expects', async () => {
-            // Skip if g8es is not available
+            // Skip if operator is not available
             try {
                 await initialization.initializeServices();
 
@@ -102,7 +114,7 @@ describe('Initialization Service', () => {
                     bindOperatorsService: initialization.getBindOperatorsService(),
                     postLoginService: initialization.getPostLoginService(),
                     setupService: initialization.getSetupService(),
-                    blobStorage: initialization.getG8esBlobClient(),
+                    blobStorage: initialization.getOperatorBlobClient(),
                     internalHttpClient: initialization.getInternalHttpClient(),
                     healthCheckService: initialization.getHealthCheckService()
                 };
@@ -112,13 +124,13 @@ describe('Initialization Service', () => {
                     expect(service, `${name} should be defined`).toBeDefined();
                 }
             } catch (error) {
-                // g8es not available in test environment - skip this test
-                console.log('Skipping services bag contract test - g8es not available');
+                // operator not available in test environment - skip this test
+                console.log('Skipping services bag contract test - operator not available');
             }
         });
 
         it('should provide all additional services not in server.js bag', async () => {
-            // Skip if g8es is not available
+            // Skip if operator is not available
             try {
                 await initialization.initializeServices();
 
@@ -128,8 +140,8 @@ describe('Initialization Service', () => {
                 expect(initialization.getOperatorDataService()).toBeDefined();
                 expect(initialization.getDeviceRegistrationService()).toBeDefined();
             } catch (error) {
-                // g8es not available in test environment - skip this test
-                console.log('Skipping additional services test - g8es not available');
+                // operator not available in test environment - skip this test
+                console.log('Skipping additional services test - operator not available');
             }
         });
     });
@@ -164,7 +176,7 @@ describe('Initialization Service', () => {
                 () => initialization.getPostLoginService(),
                 () => initialization.getDeviceRegistrationService(),
                 () => initialization.getSetupService(),
-                () => initialization.getG8esBlobClient(),
+                () => initialization.getOperatorBlobClient(),
                 () => initialization.getHealthCheckService()
             ];
 
@@ -180,14 +192,14 @@ describe('Initialization Service', () => {
             expect(() => initialization.getWebSessionService()).toThrow('WebSessionService not initialized');
             expect(() => initialization.getUserService()).toThrow('UserService not initialized');
             expect(() => initialization.getOperatorService()).toThrow(/not initialized/);
-            expect(() => initialization.getG8esBlobClient()).toThrow('G8esBlobClient not initialized');
+            expect(() => initialization.getOperatorBlobClient()).toThrow('OperatorBlobClient not initialized');
             expect(() => initialization.getHealthCheckService()).toThrow('HealthCheckService not initialized');
         });
     });
 
     describe('resetInitialization', () => {
         it('should nullify all service instances', async () => {
-            // Skip if g8es is not available
+            // Skip if operator is not available
             try {
                 await initialization.initializeServices();
 
@@ -204,15 +216,15 @@ describe('Initialization Service', () => {
                 expect(() => initialization.getWebSessionService()).toThrow(/not initialized/);
                 expect(() => initialization.getOperatorService()).toThrow(/not initialized/);
                 expect(() => initialization.getPubSubClient()).toThrow(/not initialized/);
-                expect(() => initialization.getG8esBlobClient()).toThrow(/not initialized/);
+                expect(() => initialization.getOperatorBlobClient()).toThrow(/not initialized/);
             } catch (error) {
-                // g8es not available in test environment - skip this test
-                console.log('Skipping resetInitialization test - g8es not available');
+                // operator not available in test environment - skip this test
+                console.log('Skipping resetInitialization test - operator not available');
             }
         });
 
         it('should remove signal handlers', async () => {
-            // Skip if g8es is not available
+            // Skip if operator is not available
             try {
                 await initialization.initializeServices();
 
@@ -222,8 +234,8 @@ describe('Initialization Service', () => {
                 // Verify by checking that services are nullified (signal handlers removed as side effect)
                 expect(() => initialization.getSSEService()).toThrow(/not initialized/);
             } catch (error) {
-                // g8es not available in test environment - skip this test
-                console.log('Skipping signal handlers test - g8es not available');
+                // operator not available in test environment - skip this test
+                console.log('Skipping signal handlers test - operator not available');
             }
         });
     });

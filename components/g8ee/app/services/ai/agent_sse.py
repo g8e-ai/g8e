@@ -86,28 +86,33 @@ async def deliver_via_sse(
             "investigation_id is required for deliver_via_sse",
             field="investigation_id", constraint="required",
         )
-    if not inputs.web_session_id:
-        raise ValidationError(
-            "web_session_id is required for deliver_via_sse",
-            field="web_session_id", constraint="required",
-        )
-    if not inputs.case_id:
-        raise ValidationError(
-            "case_id is required for deliver_via_sse",
-            field="case_id", constraint="required",
-        )
-    case_id: str = inputs.case_id
+    
     investigation_id: str = inputs.investigation_id
-    web_session_id: str = inputs.web_session_id
+    web_session_id: str | None = inputs.web_session_id
     user_id: str = inputs.user_id or ""
     agent_mode = inputs.agent_mode
+    
+    # Device token flows (evals) don't have web sessions - skip SSE delivery
+    # but still process stream to populate state.response_text
+    has_sse = web_session_id is not None
+    
+    if has_sse:
+        if not inputs.case_id:
+            raise ValidationError(
+                "case_id is required for deliver_via_sse when web_session_id is present",
+                field="case_id", constraint="required",
+            )
+        case_id: str = inputs.case_id
 
     async def _publish(event_type: EventType, payload: G8eBaseModel) -> None:
         """Publish an investigation event with the stream's fixed routing tuple.
 
         Centralizes the (investigation_id, web_session_id, case_id, user_id)
         binding so new events can't accidentally drop a routing field.
+        No-op when web_session_id is None (device token flows).
         """
+        if not has_sse:
+            return
         await g8ed_event_service.publish_investigation_event(
             investigation_id=investigation_id,
             event_type=event_type,
@@ -117,10 +122,16 @@ async def deliver_via_sse(
             user_id=user_id,
         )
 
-    logger.info(
-        "[SSE] Starting delivery: investigation_id=%s case_id=%s user_id=%s workflow=%s sentinel_mode=%s",
-        investigation_id, case_id, user_id, agent_mode, inputs.sentinel_mode,
-    )
+    if has_sse:
+        logger.info(
+            "[SSE] Starting delivery: investigation_id=%s case_id=%s user_id=%s workflow=%s sentinel_mode=%s",
+            investigation_id, case_id, user_id, agent_mode, inputs.sentinel_mode,
+        )
+    else:
+        logger.info(
+            "[SSE] Starting delivery (device token flow, no SSE): investigation_id=%s user_id=%s workflow=%s sentinel_mode=%s",
+            investigation_id, user_id, agent_mode, inputs.sentinel_mode,
+        )
     logger.info("[SSE] Async generator iteration starting")
 
     # Emit iteration started event to signal AI processing has begun
@@ -295,14 +306,16 @@ async def deliver_via_sse(
             elif chunk.type == StreamChunkFromModelType.ERROR:
                 # Handle LLM provider errors gracefully instead of raising exceptions
                 error_message = chunk.data.error or UNKNOWN_ERROR_MESSAGE
+                error_extra = {
+                    "investigation_id": investigation_id,
+                    "agent_mode": agent_mode,
+                }
+                if has_sse:
+                    error_extra["case_id"] = case_id
                 logger.error(
                     "[SSE] LLM provider error: %s",
                     error_message,
-                    extra={
-                        "investigation_id": investigation_id,
-                        "case_id": case_id,
-                        "agent_mode": agent_mode,
-                    }
+                    extra=error_extra,
                 )
 
                 # Publish the error event and continue - don't raise exception

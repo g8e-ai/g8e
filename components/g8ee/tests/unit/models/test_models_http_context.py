@@ -94,7 +94,7 @@ class TestHealthCheckResult:
         defaults = dict(
             timestamp=_TS,
             component="g8ee",
-            dependencies={"g8es": DependencyStatus(status=HealthStatus.HEALTHY)},
+            dependencies={"operator": DependencyStatus(status=HealthStatus.HEALTHY)},
             overall_status=HealthStatus.HEALTHY,
         )
         defaults.update(overrides)
@@ -113,16 +113,16 @@ class TestHealthCheckResult:
 
     def test_dependencies_map_contains_dependency_status(self):
         result = self._make()
-        assert "g8es" in result.dependencies
-        assert isinstance(result.dependencies["g8es"], DependencyStatus)
+        assert "operator" in result.dependencies
+        assert isinstance(result.dependencies["operator"], DependencyStatus)
 
     def test_unhealthy_dependencies_defaults_to_none(self):
         result = self._make()
         assert result.unhealthy_dependencies is None
 
     def test_unhealthy_dependencies_can_be_set(self):
-        result = self._make(unhealthy_dependencies=["g8es", "redis"])
-        assert result.unhealthy_dependencies == ["g8es", "redis"]
+        result = self._make(unhealthy_dependencies=["operator", "redis"])
+        assert result.unhealthy_dependencies == ["operator", "redis"]
 
     def test_timestamp_is_datetime(self):
         result = self._make()
@@ -186,7 +186,7 @@ class TestServiceHealthResult:
         defaults = dict(
             service=HealthStatus.HEALTHY,
             timestamp=_TS,
-            checks={"g8es": DependencyStatus(status=HealthStatus.HEALTHY)},
+            checks={"operator": DependencyStatus(status=HealthStatus.HEALTHY)},
         )
         defaults.update(overrides)
         return ServiceHealthResult(**defaults)
@@ -195,7 +195,7 @@ class TestServiceHealthResult:
         result = self._make()
         assert result.service == HealthStatus.HEALTHY
         assert isinstance(result.timestamp, datetime)
-        assert "g8es" in result.checks
+        assert "operator" in result.checks
 
     def test_service_is_enum(self):
         result = self._make(service=HealthStatus.UNHEALTHY)

@@ -26,7 +26,7 @@ from app.models.operators import (
 from app.services.operator.execution_service import OperatorExecutionService
 from app.services.operator.pubsub_service import OperatorPubSubService
 from tests.fakes.factories import build_bound_operator, build_g8e_http_context
-from tests.fakes.fake_g8es_clients import FakePubSubClient
+from tests.fakes.fake_operator_clients import FakePubSubClient
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
 

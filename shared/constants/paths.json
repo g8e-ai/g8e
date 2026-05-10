@@ -1,8 +1,8 @@
 {
   "infra": {
-    "db_path": "/data/g8e.db",
-    "ca_cert_path": "/g8es/ca.crt",
-    "ssl_dir": "/g8es",
+    "db_path": ".g8e/data/g8e.db",
+    "ca_cert_path": ".g8e/ssl/ca.crt",
+    "ssl_dir": ".g8e/ssl",
     "docs_dir": "/docs",
     "shared_dir": "/app/shared",
     "shared_constants_dir": "/app/shared/constants",

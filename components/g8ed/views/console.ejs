@@ -356,16 +356,16 @@
             const healthy = system.overall === 'healthy';
             banner.className = 'console-health-banner ' + (healthy ? 'healthy' : 'degraded');
 
-            const g8es = system.g8es?.status === 'healthy'
-                ? `g8es ${system.g8es.latencyMs}ms`
-                : `g8es ${system.g8es?.status || 'unknown'}`;
+            const operator = system.operator?.status === 'healthy'
+                ? `operator ${system.operator.latencyMs}ms`
+                : `operator ${system.operator?.status || 'unknown'}`;
             const db = system.db?.status === 'healthy'
                 ? `DB ${system.db.latencyMs}ms`
                 : `DB ${system.db?.status || 'unknown'}`;
 
             text.textContent = healthy
-                ? `All systems healthy — ${g8es} | ${db}`
-                : `System degraded — ${g8es} | ${db}`;
+                ? `All systems healthy — ${operator} | ${db}`
+                : `System degraded — ${operator} | ${db}`;
         }
 
         function renderStats(data) {

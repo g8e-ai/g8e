@@ -56,7 +56,7 @@ def mock_session():
 @pytest.fixture
 def client(mock_session):
     client = KVCacheClient(
-        http_url="https://g8es:9000",
+        http_url="https://localhost:9000",
         component_name=ComponentName.G8EE,
     )
     client._session = mock_session
@@ -67,7 +67,7 @@ def client(mock_session):
 @pytest.fixture
 def disconnected_client():
     client = KVCacheClient(
-        http_url="https://g8es:9000",
+        http_url="https://localhost:9000",
         component_name=ComponentName.G8EE,
     )
     return client
@@ -81,7 +81,7 @@ class TestKVCacheClientInit:
 
     def test_trailing_slash_stripped_from_urls(self):
         client = KVCacheClient(
-            http_url="https://g8es:9000/",
+            http_url="https://localhost:9000/",
         )
         assert not client.http_url.endswith("/")
 
@@ -92,15 +92,15 @@ class TestKVCacheClientInit:
     def test_default_init(self):
         with patch("app.clients.kv_cache_client.SettingsService"), \
              patch("app.clients.kv_cache_client.ListenSettings") as mock_listen:
-            mock_listen.from_bootstrap.return_value = MagicMock(http_url="https://default-g8es:9000")
+            mock_listen.from_bootstrap.return_value = MagicMock(http_url="https://default-localhost:9000")
             client = KVCacheClient()
-            assert client.http_url == "https://default-g8es:9000"
+            assert client.http_url == "https://default-localhost:9000"
 
     def test_init_with_listen_settings(self):
         mock_listen = MagicMock(spec=ListenSettings)
-        mock_listen.http_url = "https://explicit-g8es:9000"
+        mock_listen.http_url = "https://explicit-localhost:9000"
         client = KVCacheClient(listen_settings=mock_listen)
-        assert client.http_url == "https://explicit-g8es:9000"
+        assert client.http_url == "https://explicit-localhost:9000"
 
     def test_is_healthy_false_on_init(self):
         client = KVCacheClient()

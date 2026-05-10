@@ -135,7 +135,7 @@ describe('PasskeyAuthService [UNIT]', () => {
 
     describe('RP ID resolution', () => {
         it('uses settings passkey_rp_id when set (and not localhost)', async () => {
-            const settingsService = makeSettingsService({ passkey_rp_id: 'g8e.local' });
+            const settingsService = makeSettingsService({ passkey_rp_id: 'example.com' });
             const svc = new PasskeyAuthService({ userService, cacheAsideService: services.cacheAsideService, settingsService });
             const user = makeUserDoc();
             generateRegistrationOptions.mockResolvedValueOnce({ challenge: 'ch' });
@@ -143,7 +143,7 @@ describe('PasskeyAuthService [UNIT]', () => {
             await svc.generateRegistrationChallenge(makeReq({ hostname: 'wrong.ai' }), user);
 
             const call = generateRegistrationOptions.mock.calls[0][0];
-            expect(call.rpID).toBe('g8e.local');
+            expect(call.rpID).toBe('example.com');
         });
 
         it('falls back to req.hostname when settings is localhost', async () => {
@@ -169,7 +169,7 @@ describe('PasskeyAuthService [UNIT]', () => {
 
     describe('Origin resolution', () => {
         it('uses settings passkey_origin when set (and not localhost)', async () => {
-            const settingsService = makeSettingsService({ passkey_origin: 'https://g8e.local' });
+            const settingsService = makeSettingsService({ passkey_origin: 'https://localhost' });
             const svc = new PasskeyAuthService({ userService, cacheAsideService: services.cacheAsideService, settingsService });
             
             services.cacheAsideService.getDocument.mockResolvedValueOnce({ challenge: 'stored-ch' });
@@ -181,7 +181,7 @@ describe('PasskeyAuthService [UNIT]', () => {
             await svc.verifyRegistration(makeReq(), makeUserDoc(), {});
 
             const call = verifyRegistrationResponse.mock.calls[0][0];
-            expect(call.expectedOrigin).toBe('https://g8e.local');
+            expect(call.expectedOrigin).toBe('https://localhost');
         });
 
         it('builds origin from request when settings is localhost', async () => {

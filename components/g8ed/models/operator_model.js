@@ -139,7 +139,7 @@ export class CertInfo extends G8eBaseModel {
 }
 
 // ---------------------------------------------------------------------------
-// OperatorDocument  (full Operator record stored in g8es document store)
+// OperatorDocument  (full Operator record stored in operator document store)
 // ---------------------------------------------------------------------------
 
 export class OperatorDocument extends G8eIdentifiableModel {

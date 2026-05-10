@@ -20,7 +20,7 @@ git clone https://github.com/<your-username>/g8e.git && cd g8e
 # SSH
 git clone git@github.com:<your-username>/g8e.git && cd g8e
 
-./g8e platform setup
+./g8e platform start
 ```
 
 3. Create a feature branch from `main`:
@@ -31,20 +31,23 @@ git checkout -b feature/your-feature-name
 
 ## Development Environment
 
-g8e runs as a set of Docker containers with source code volume-mounted for hot reload. Only Docker is required on the host—all toolchain operations (Python, Go, Node) run inside dedicated test-runner containers when using `./g8e test`.
+g8e runs host-native platform processes for Operator listen mode, Dashboard (`g8ed`), and Engine (`g8ee`). Runtime state lives under `./.g8e`, including data, SSL material, PID files, and logs. Go, Node.js/npm, Python, and curl must be available on the host.
 
 ```bash
-./g8e platform start        # Start without rebuilding
-./g8e platform rebuild      # Rebuild all services + restart
-./g8e platform stop         # Stop all containers (data preserved)
-./g8e platform wipe         # Wipe data volumes and restart fresh
+./g8e platform start        # Start all platform components
+./g8e platform status       # Show component health and versions
+./g8e platform restart      # Restart all platform components
+./g8e platform stop         # Stop all platform components
+./g8e platform wipe         # Wipe app data, preserve platform settings and SSL
+./g8e platform reset        # Reset application data, preserve SSL
+./g8e platform clean        # Remove all g8e processes and data
 ```
 
-**Note:** You can edit source files directly on your host machine and changes are reflected inside the containers without rebuilding. Rebuild the platform *only* when modifying `package.json`, `requirements.txt`, `go.mod`, or Dockerfiles.
+**Note:** You can edit source files directly on your host machine. Restart the platform when a running process needs to pick up changes.
 
 ## Running Tests
 
-All tests execute inside dedicated test-runner containers to ensure environment parity.
+Tests execute with the host-native component toolchains.
 
 ```bash
 ./g8e test           # Run all test suites
@@ -81,7 +84,7 @@ Ensure that tool_call_id is correctly propagated when parsing the LLM response.
 Fixes #123.
 ```
 
-Valid prefixes: `g8ee:`, `g8ed:`, `g8eo:`, `g8es:`, `docs:`, `ci:`, `scripts:`.
+Valid prefixes: `g8ee:`, `g8ed:`, `g8eo:`, `operator:`, `docs:`, `ci:`, `scripts:`.
 
 ### PR Guidelines
 

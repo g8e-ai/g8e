@@ -18,7 +18,7 @@ import {
     OperatorListUpdatedEvent,
     OperatorStatusUpdatedEvent,
     HeartbeatSSEEnvelope,
-} from '../../../../public/js/models/operator-models.js';
+} from '@g8ed/public/js/models/operator-models.js';
 
 describe('HeartbeatSnapshot [FRONTEND UNIT]', () => {
     it('empty() returns snapshot with all nulls', () => {

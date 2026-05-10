@@ -12,8 +12,8 @@
 // limitations under the License.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { G8esHttpClient, G8esHttpError } from '@g8ed/services/clients/g8es_http_client.js';
-import { G8ES_HTTP_TIMEOUT_MS } from '@g8ed/constants/http_client.js';
+import { OperatorHttpClient, OperatorHttpError } from '@g8ed/services/clients/operator_http_client.js';
+import { OPERATOR_HTTP_TIMEOUT_MS } from '@g8ed/constants/http_client.js';
 import { HTTP_INTERNAL_AUTH_HEADER, HTTP_CONTENT_TYPE_HEADER } from '@g8ed/constants/headers.js';
 import { logger } from '@g8ed/utils/logger.js';
 
@@ -21,15 +21,15 @@ vi.mock('@g8ed/utils/logger.js', () => ({
     logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }
 }));
 
-describe('G8esHttpClient', () => {
-    const listenUrl = 'https://g8es:9000';
+describe('OperatorHttpClient', () => {
+    const listenUrl = 'https://localhost:9000';
     const internalAuthToken = 'test-token';
     let client;
 
     beforeEach(() => {
         vi.stubGlobal('fetch', vi.fn());
         vi.useFakeTimers();
-        client = new G8esHttpClient({ listenUrl, internalAuthToken });
+        client = new OperatorHttpClient({ listenUrl, internalAuthToken });
     });
 
     afterEach(() => {
@@ -39,16 +39,16 @@ describe('G8esHttpClient', () => {
 
     describe('constructor', () => {
         it('should throw if listenUrl is missing', () => {
-            expect(() => new G8esHttpClient({})).toThrow('G8esHttpClient: listenUrl is required');
+            expect(() => new OperatorHttpClient({})).toThrow('OperatorHttpClient: listenUrl is required');
         });
 
         it('should strip trailing slash from listenUrl', () => {
-            const clientWithSlash = new G8esHttpClient({ listenUrl: 'https://g8es:9000/' });
-            expect(clientWithSlash.listenUrl).toBe('https://g8es:9000');
+            const clientWithSlash = new OperatorHttpClient({ listenUrl: 'https://localhost:9000/' });
+            expect(clientWithSlash.listenUrl).toBe('https://localhost:9000');
         });
 
         it('should set default component name', () => {
-            expect(client.component).toBe('G8E-HTTP');
+            expect(client.component).toBe('OPERATOR-HTTP');
         });
     });
 
@@ -78,7 +78,7 @@ describe('G8esHttpClient', () => {
             }));
         });
 
-        it('should throw G8esHttpError on non-JSON response', async () => {
+        it('should throw OperatorHttpError on non-JSON response', async () => {
             vi.mocked(fetch).mockResolvedValueOnce({
                 ok: true,
                 status: 200,
@@ -86,10 +86,10 @@ describe('G8esHttpClient', () => {
             });
 
             await expect(client.request('GET', '/test'))
-                .rejects.toThrow(G8esHttpError);
+                .rejects.toThrow(OperatorHttpError);
         });
 
-        it('should throw G8esHttpError on non-ok response', async () => {
+        it('should throw OperatorHttpError on non-ok response', async () => {
             const errorResponse = { error: 'Not Found' };
             vi.mocked(fetch).mockResolvedValueOnce({
                 ok: false,
@@ -110,7 +110,7 @@ describe('G8esHttpClient', () => {
                             status: 200,
                             text: async () => JSON.stringify({ success: true }),
                         });
-                    }, G8ES_HTTP_TIMEOUT_MS * 2);
+                    }, OPERATOR_HTTP_TIMEOUT_MS * 2);
 
                     options.signal.addEventListener('abort', () => {
                         clearTimeout(timeout);
@@ -123,7 +123,7 @@ describe('G8esHttpClient', () => {
 
             const requestPromise = client.request('GET', '/test');
             
-            vi.advanceTimersByTime(G8ES_HTTP_TIMEOUT_MS + 100);
+            vi.advanceTimersByTime(OPERATOR_HTTP_TIMEOUT_MS + 100);
 
             await expect(requestPromise).rejects.toThrow(/timeout/);
         });
@@ -140,7 +140,7 @@ describe('G8esHttpClient', () => {
                 text: async () => JSON.stringify({ error: 'key not found' }),
             });
 
-            await expect(client.request('GET', '/kv/some-key')).rejects.toThrow(G8esHttpError);
+            await expect(client.request('GET', '/kv/some-key')).rejects.toThrow(OperatorHttpError);
 
             expect(logger.info).toHaveBeenCalledTimes(1);
             expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('key not found'));
@@ -154,7 +154,7 @@ describe('G8esHttpClient', () => {
                 text: async () => JSON.stringify({ error: 'internal error' }),
             });
 
-            await expect(client.request('GET', '/kv/some-key')).rejects.toThrow(G8esHttpError);
+            await expect(client.request('GET', '/kv/some-key')).rejects.toThrow(OperatorHttpError);
 
             expect(logger.error).toHaveBeenCalledTimes(1);
             expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('internal error'));
@@ -175,7 +175,7 @@ describe('G8esHttpClient', () => {
                 text: async () => 'not json',
             });
 
-            await expect(client.request('GET', '/test')).rejects.toThrow(G8esHttpError);
+            await expect(client.request('GET', '/test')).rejects.toThrow(OperatorHttpError);
 
             expect(logger.error).not.toHaveBeenCalled();
         });

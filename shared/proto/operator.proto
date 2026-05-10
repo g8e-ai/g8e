@@ -162,6 +162,20 @@ message AuditMsgRequested {
   string content = 1;
 }
 
+message SignCertificateRequested {
+  string public_key_pem = 1;
+  string common_name = 2;
+  string organizational_unit = 3;
+  int32 validity_days = 4;
+}
+
+message SignCertificateResult {
+  bool success = 1;
+  string certificate_pem = 2;
+  string serial = 3;
+  string error = 4;
+}
+
 message ShutdownRequested {
   string reason = 1;
 }

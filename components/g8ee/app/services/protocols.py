@@ -107,7 +107,7 @@ class SettingsServiceProtocol(Protocol):
     """Protocol for SettingsService ensuring read-only access to platform and user settings."""
 
     async def get_platform_settings(self) -> G8eePlatformSettings:
-        """Retrieve platform-level settings from g8es with cache-aside."""
+        """Retrieve platform-level settings from operator with cache-aside."""
         raise NotImplementedError
 
     async def get_user_settings(self, user_id: str) -> G8eeUserSettings:

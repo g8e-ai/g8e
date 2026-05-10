@@ -14,11 +14,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+import { resolveProjectRoot } from '../utils/path.js';
 
 function loadSharedErrors() {
-    const sharedPath = path.resolve(__dirname, '../../../shared/constants/errors.json');
+    const sharedPath = path.resolve(resolveProjectRoot(), 'shared/constants/errors.json');
     try {
         const data = fs.readFileSync(sharedPath, 'utf8');
         return JSON.parse(data);

@@ -41,6 +41,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/g8e-ai/g8e/components/g8eo/services/system"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -48,12 +49,7 @@ import (
 var g8eoRoot string
 
 func init() {
-	// Resolve g8eo root relative to this test file's package (contracts/)
-	var err error
-	g8eoRoot, err = filepath.Abs(filepath.Join(".."))
-	if err != nil {
-		panic(fmt.Sprintf("failed to resolve g8eo root: %v", err))
-	}
+	g8eoRoot = filepath.Join(system.ResolveProjectRoot(), "components/g8eo")
 }
 
 // scanDirs are the directories to scan for violations (relative to g8eo root)
@@ -69,6 +65,7 @@ var excludePatterns = []string{
 	"/e2e/",
 	"/contracts/",
 	"/constants/",
+	"services/system/path.go",
 }
 
 // constantSourceFiles are the files that define constants (relative to g8eo root).

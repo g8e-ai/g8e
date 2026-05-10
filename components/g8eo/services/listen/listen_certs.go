@@ -37,7 +37,7 @@ const (
 	caValidityDays     = 3650
 	serverValidityDays = 90
 	caCommonName       = "g8e Operator CA"
-	serverCommonName   = "g8e.local"
+	serverCommonName   = "localhost"
 )
 
 // CertStore manages the CA and server certificates for listen mode.
@@ -167,6 +167,60 @@ func (cs *CertStore) SSLDir() string {
 	return cs.sslDir
 }
 
+// SignCertificate signs a CSR-like request (public key + subject) and returns a PEM-encoded certificate.
+func (cs *CertStore) SignCertificate(publicKeyPEM string, commonName, organizationalUnit string, validityDays int) (string, *big.Int, error) {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+
+	if cs.caCert == nil || cs.caKey == nil {
+		return "", nil, fmt.Errorf("CA not loaded")
+	}
+
+	block, _ := pem.Decode([]byte(publicKeyPEM))
+	if block == nil {
+		return "", nil, fmt.Errorf("invalid public key PEM")
+	}
+
+	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to parse public key: %w", err)
+	}
+
+	serial, err := randomSerial()
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to generate serial: %w", err)
+	}
+
+	if validityDays <= 0 {
+		validityDays = 365
+	}
+
+	now := time.Now().UTC()
+	template := &x509.Certificate{
+		SerialNumber: serial,
+		Subject: pkix.Name{
+			CommonName:         commonName,
+			OrganizationalUnit: []string{organizationalUnit},
+			Organization:       []string{"g8e"},
+			Country:            []string{"US"},
+		},
+		NotBefore:             now.Add(-1 * time.Minute),
+		NotAfter:              now.Add(time.Duration(validityDays) * 24 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		BasicConstraintsValid: true,
+		IsCA:                  false,
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, template, cs.caCert, pub, cs.caKey)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to create certificate: %w", err)
+	}
+
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	return string(certPEM), serial, nil
+}
+
 // ─── private helpers ──────────────────────────────────────────────────────────
 
 func (cs *CertStore) loadCA(certPath, keyPath string) error {
@@ -227,7 +281,7 @@ func (cs *CertStore) generateCA(keyPath, certPath string) error {
 		SerialNumber: serial,
 		Subject: pkix.Name{
 			CommonName:   caCommonName,
-			Organization: []string{"g8e.local"},
+			Organization: []string{"g8e"},
 			Country:      []string{"US"},
 		},
 		NotBefore:             now.Add(-1 * time.Minute),
@@ -279,7 +333,7 @@ func (cs *CertStore) generateServerCert(keyPath, certPath string, extraIPs []net
 		return err
 	}
 
-	dnsNames := []string{"g8e.local", "localhost", "g8es", constants.Status.ComponentName.G8EE, constants.Status.ComponentName.G8ED}
+	dnsNames := []string{"localhost", "g8e.local", "operator", constants.Status.ComponentName.G8EE, constants.Status.ComponentName.G8ED}
 	ipAddresses := append([]net.IP{net.ParseIP("127.0.0.1")}, extraIPs...)
 
 	now := time.Now().UTC()
@@ -287,7 +341,7 @@ func (cs *CertStore) generateServerCert(keyPath, certPath string, extraIPs []net
 		SerialNumber: serial,
 		Subject: pkix.Name{
 			CommonName:   serverCommonName,
-			Organization: []string{"g8e.local"},
+			Organization: []string{"g8e"},
 			Country:      []string{"US"},
 		},
 		NotBefore:             now.Add(-1 * time.Minute),

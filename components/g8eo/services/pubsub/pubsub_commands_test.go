@@ -46,7 +46,7 @@ func TestNewPubSubCommandService(t *testing.T) {
 			Logger:       logger,
 			Execution:    execSvc,
 			FileEdit:     fileEditSvc,
-			PubSubClient: NewMockG8esPubSubClient(),
+			PubSubClient: NewMockOperatorPubSubClient(),
 		})
 
 		require.NoError(t, err)
@@ -354,7 +354,7 @@ func TestPubSubCommandService_HeartbeatScheduler(t *testing.T) {
 		execSvc := execution.NewExecutionService(cfg, logger)
 		fileEditSvc := execution.NewFileEditService(cfg, logger)
 
-		db := NewMockG8esPubSubClient()
+		db := NewMockOperatorPubSubClient()
 		defer db.Close()
 
 		svc, err := NewPubSubCommandService(CommandServiceConfig{Config: cfg, Logger: logger, Execution: execSvc, FileEdit: fileEditSvc, PubSubClient: db})
@@ -993,7 +993,7 @@ func TestPubSubCommandService_SendAutomaticHeartbeat(t *testing.T) {
 			Logger:         logger,
 			Execution:      execSvc,
 			FileEdit:       fileEditSvc,
-			PubSubClient:   NewMockG8esPubSubClient(),
+			PubSubClient:   NewMockOperatorPubSubClient(),
 			ResultsService: nil,
 		})
 		require.NoError(t, err)

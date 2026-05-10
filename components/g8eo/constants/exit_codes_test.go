@@ -73,7 +73,7 @@ func TestExitCodeFromError_CertTrustFailure(t *testing.T) {
 		},
 		{
 			name: "x509 certificate generic",
-			err:  errors.New("x509: certificate is valid for example.com, not g8e.local"),
+			err:  errors.New("x509: certificate is valid for example.com, not localhost"),
 		},
 		{
 			name: "cert trust failure marker",

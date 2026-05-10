@@ -115,7 +115,7 @@ class OperatorDocument(G8eIdentifiableModel):
     """g8ee read-side projection of the g8ed OperatorDocument.
 
     Maps to operator_status_info in shared/models/operator_document.json.
-    Populated from g8es KV cache keyed by KVKey.doc(Collections.OPERATORS, id) or
+    Populated from operator KV cache keyed by KVKey.doc(Collections.OPERATORS, id) or
     GET /api/internal/operators/:id/status.
     g8ed is the authority — g8ee only reads this document.
     """
@@ -315,7 +315,7 @@ class HeartbeatSnapshot(G8eBaseModel):
     Storage:
     - Stored in database Operator document (heartbeat_history array, max 10)
     - Sent to g8ed via SSE for real-time UI updates
-    - NOT stored in g8es cache
+    - NOT stored in operator cache
     
     Usage:
     - AI context for understanding Operator system state

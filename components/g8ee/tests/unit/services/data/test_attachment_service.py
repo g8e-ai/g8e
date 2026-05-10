@@ -15,7 +15,7 @@
 AttachmentService tests.
 
 Covers:
-- g8es Blob Store retrieval (get_attachment, get_attachments_by_metadata)
+- operator Blob Store retrieval (get_attachment, get_attachments_by_metadata)
 - Attachment classification and content extraction (process_attachments)
 """
 
@@ -70,7 +70,7 @@ class TestAttachmentServiceRetrieval:
 
     async def test_get_attachment_store_error(self, service, mock_blob_service):
         store_key = "att:inv123/abc123"
-        mock_blob_service.get_blob.side_effect = Exception("g8es connection lost")
+        mock_blob_service.get_blob.side_effect = Exception("operator connection lost")
 
         with pytest.raises(NetworkError):
             await service.get_attachment(store_key)

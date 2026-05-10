@@ -296,7 +296,7 @@ class ServiceFactory:
 
         operator_session_service = OperatorSessionService(cache_aside=cache_aside_service)
 
-        certificate_service = CertificateService()
+        certificate_service = CertificateService(data_service=data_services.operator_data_service)
 
         operator_auth_service = OperatorAuthService(
             api_key_service=api_key_service,

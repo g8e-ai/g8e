@@ -25,6 +25,11 @@ RUN useradd -m -s /bin/bash appuser
 RUN mkdir -p /opt/g8e /var/log/app /etc/app && \
     chown -R appuser:appuser /opt/g8e /var/log/app /etc/app
 
+# Copy operator binary (will be overridden at build time)
+COPY g8e.operator /opt/g8e/g8e.operator
+RUN chmod +x /opt/g8e/g8e.operator && \
+    chown appuser:appuser /opt/g8e/g8e.operator
+
 # Copy entrypoint
 COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
 

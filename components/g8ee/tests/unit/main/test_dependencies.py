@@ -77,7 +77,7 @@ def mock_request():
 class TestGetG8eeAppSettings:
     async def test_returns_settings_from_app_state(self, mock_request):
         # We need a real G8eePlatformSettings object for this test to be meaningful
-        settings = G8eePlatformSettings(port=443)
+        settings = G8eePlatformSettings(port=8443)
         mock_request.app.state.settings = settings
         result = await get_g8ee_platform_settings(mock_request)
         assert result.port == settings.port

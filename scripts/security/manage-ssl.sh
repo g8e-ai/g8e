@@ -2,32 +2,29 @@
 # =============================================================================
 # g8e TLS Certificate Management
 # =============================================================================
-# Manages the platform TLS certificates owned by g8es (g8es).
+# Manages the platform TLS certificates owned by the Operator Listen process.
 #
-# g8es generates the CA and server certificates automatically on first start
-# and stores them in its data volume at /data/ssl/. This script orchestrates
-# certificate lifecycle via docker — it does not call openssl directly.
+# The Operator generates the CA and server certificates automatically on first
+# start and stores them in .g8e/ssl/. This script orchestrates certificate
+# lifecycle directly on the host.
 #
 # Usage:
 #   ./scripts/security/manage-ssl.sh <command> [options]
 #
 # Commands:
-#   generate    Ensure certs exist. If g8es is running and certs are present
-#               this is a no-op. If certs are missing, restarts g8es to
+#   generate    Ensure certs exist. If Operator is running and certs are present
+#               this is a no-op. If certs are missing, restarts Operator to
 #               trigger generation and waits for it to become healthy.
-#   rotate      Force-regenerate all certs. Wipes /data/ssl/ inside the
-#               g8es container, then restarts g8es so it generates
-#               a fresh CA and server cert. Run ./g8e platform rebuild
-#               afterwards to re-embed the new CA into the operator binary.
+#   rotate      Force-regenerate all certs. Wipes .g8e/ssl/, then restarts
+#               Operator so it generates a fresh CA and server cert.
 #   status      Show cert expiry, subject, and SANs for the CA and server
-#               cert currently live in the g8es-data volume.
+#               cert currently live in .g8e/ssl.
 #   trust       Install the platform CA certificate into the host OS trust
-#               store. Streams the CA from the g8es container (which mounts
-#               g8es-data read-only at /ssl) — no file is written to the host.
+#               store. Reads the CA from .g8e/ssl/ca.crt.
 #               Use --ca-file to supply a cert directly (used by the g8e CLI).
 #
 # Options:
-#   --ca-file <path>    Use this CA cert file instead of fetching from docker
+#   --ca-file <path>    Use this CA cert file instead of reading from .g8e/ssl
 #                       (trust command only — used by the g8e CLI)
 #   -h, --help          Show this help
 #
@@ -63,10 +60,9 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PROJECT_TMP="$PROJECT_ROOT/tmp"
 [[ -d "$PROJECT_TMP" ]] || mkdir -p "$PROJECT_TMP"
 
-CONTAINER="g8es"
-CERT_CONTAINER="g8es"
-CERT_SSL_DIR="/ssl"
-COMPOSE_FILE="$PROJECT_ROOT/docker-compose.yml"
+G8E_RUNTIME_DIR="${G8E_RUNTIME_DIR:-$PROJECT_ROOT/.g8e}"
+G8E_SSL_DIR="${G8E_SSL_DIR:-$G8E_RUNTIME_DIR/ssl}"
+OPERATOR_LISTEN_PID_FILE="$G8E_RUNTIME_DIR/pids/operator-listen.pid"
 
 log()  { echo "[certs] $*"; }
 warn() { echo "[certs] WARN: $*" >&2; }
@@ -77,18 +73,24 @@ die()  { echo "[certs] ERROR: $*" >&2; exit 1; }
 # -----------------------------------------------------------------------------
 
 _is_running() {
-    docker ps --filter "name=^${CONTAINER}$" --filter "status=running" \
-        --format "{{.Names}}" 2>/dev/null | grep -q "^${CONTAINER}$"
+    if [ -f "$OPERATOR_LISTEN_PID_FILE" ]; then
+        local pid
+        pid=$(cat "$OPERATOR_LISTEN_PID_FILE")
+        if ps -p "$pid" > /dev/null 2>&1; then
+            return 0
+        fi
+        rm -f "$OPERATOR_LISTEN_PID_FILE"
+    fi
+    return 1
 }
 
 _wait_healthy() {
     local waited=0 timeout_s=60
-    echo -n "  waiting for ${CONTAINER}: "
-    until [ "$(docker inspect --format='{{.State.Health.Status}}' "$CONTAINER" 2>/dev/null)" = "healthy" ]; do
+    echo -n "  waiting for Operator listen mode: "
+    until curl -sfk "https://localhost:9000/health" >/dev/null 2>&1; do
         if (( waited >= timeout_s )); then
             echo "TIMEOUT"
-            docker logs --tail 20 "$CONTAINER" 2>&1 | sed 's/^/    /'
-            die "${CONTAINER} did not become healthy within ${timeout_s}s"
+            die "Operator listen mode did not become healthy within ${timeout_s}s"
         fi
         sleep 1
         (( waited++ )) || true
@@ -97,32 +99,37 @@ _wait_healthy() {
 }
 
 _require_running() {
-    _is_running || die "${CONTAINER} is not running — start the platform first: ./g8e platform start"
+    _is_running || die "Operator listen mode is not running — start it first: ./g8e up"
 }
 
 _cert_info() {
     local label="$1" path="$2"
     echo "  ${label}:"
-    if ! docker exec "$CERT_CONTAINER" sh -c "test -f '$path'" 2>/dev/null; then
+    if [ ! -f "$path" ]; then
         echo "    not found"
         return
     fi
-    docker exec "$CERT_CONTAINER" sh -c "
-        openssl x509 -in '$path' -noout \
-            -subject -issuer -startdate -enddate -ext subjectAltName 2>/dev/null \
-        | sed 's/^/    /'
-        enddate=\$(openssl x509 -in '$path' -noout -enddate 2>/dev/null | cut -d= -f2)
-        end_epoch=\$(date -d \"\$enddate\" +%s 2>/dev/null)
-        now_epoch=\$(date +%s)
-        days=\$(( (end_epoch - now_epoch) / 86400 ))
-        if [ \"\$days\" -lt 0 ]; then
-            echo '    STATUS: EXPIRED'
-        elif [ \"\$days\" -lt 30 ]; then
-            echo \"    STATUS: expiring in \${days} days — run: ./g8e security certs rotate\"
-        else
-            echo \"    STATUS: valid (\${days} days remaining)\"
-        fi
-    " 2>/dev/null || echo "    (openssl not available — is g8ep running?)"
+    
+    openssl x509 -in "$path" -noout \
+        -subject -issuer -startdate -enddate -ext subjectAltName 2>/dev/null \
+    | sed 's/^/    /'
+    
+    local enddate
+    enddate=$(openssl x509 -in "$path" -noout -enddate 2>/dev/null | cut -d= -f2)
+    local end_epoch
+    end_epoch=$(date -d "$enddate" +%s 2>/dev/null || date -j -f "%b %d %T %Y %Z" "$enddate" +%s 2>/dev/null)
+    local now_epoch
+    now_epoch=$(date +%s)
+    local days
+    days=$(( (end_epoch - now_epoch) / 86400 ))
+    
+    if [ "$days" -lt 0 ]; then
+        echo '    STATUS: EXPIRED'
+    elif [ "$days" -lt 30 ]; then
+        echo "    STATUS: expiring in ${days} days — run: ./g8e security certs rotate"
+    else
+        echo "    STATUS: valid (${days} days remaining)"
+    fi
 }
 
 # -----------------------------------------------------------------------------
@@ -131,46 +138,37 @@ _cert_info() {
 
 exec_generate() {
     if _is_running; then
-        if docker exec "$CONTAINER" sh -c \
-            "test -f /data/ssl/ca.crt && test -f /data/ssl/server.crt" 2>/dev/null; then
-            log "Certificates already exist in ${CONTAINER}."
+        if [ -f "$G8E_SSL_DIR/ca.crt" ] && [ -f "$G8E_SSL_DIR/server.crt" ]; then
+            log "Certificates already exist in $G8E_SSL_DIR."
             exec_status
             return
         fi
-        log "Certificates missing — restarting ${CONTAINER} to trigger generation..."
-        docker compose -f "$COMPOSE_FILE" restart g8es
-        _wait_healthy
+        log "Certificates missing — restarting Operator listen mode to trigger generation..."
+        "$PROJECT_ROOT/g8e" restart operator
     else
-        log "Starting ${CONTAINER}..."
-        docker compose -f "$COMPOSE_FILE" up -d g8es
-        _wait_healthy
+        log "Starting Operator listen mode..."
+        "$PROJECT_ROOT/g8e" up operator
     fi
     log "Certificates generated."
     exec_status
 }
 
 exec_rotate() {
-    _require_running
-    log "Rotating certificates — stopping ${CONTAINER}, wiping ssl/, and restarting..."
+    log "Rotating certificates — stopping Operator, wiping $G8E_SSL_DIR, and restarting..."
     log "WARNING: this invalidates all existing operator mTLS client certificates."
-    log "Run './g8e platform rebuild' afterwards to re-embed the new CA in the operator binary."
     echo ""
-    docker compose -f "$COMPOSE_FILE" stop g8es
-    docker compose -f "$COMPOSE_FILE" rm -f g8es
-    docker run --rm -v g8es-ssl:/ssl busybox sh -c "rm -rf /ssl/*" \
-        || die "Failed to wipe g8es-ssl volume"
-    docker compose -f "$COMPOSE_FILE" up -d g8es
-    _wait_healthy
+    "$PROJECT_ROOT/g8e" down operator
+    rm -rf "$G8E_SSL_DIR/"*
+    "$PROJECT_ROOT/g8e" up operator
     log "New certificates generated."
     exec_status
 }
 
 exec_status() {
-    _require_running
     echo ""
-    _cert_info "CA cert     (${CERT_SSL_DIR}/ca.crt)" "${CERT_SSL_DIR}/ca.crt"
+    _cert_info "CA cert     ($G8E_SSL_DIR/ca.crt)" "$G8E_SSL_DIR/ca.crt"
     echo ""
-    _cert_info "Server cert (${CERT_SSL_DIR}/server.crt)" "${CERT_SSL_DIR}/server.crt"
+    _cert_info "Server cert ($G8E_SSL_DIR/server.crt)" "$G8E_SSL_DIR/server.crt"
     echo ""
 }
 
@@ -178,10 +176,10 @@ exec_status() {
 # Trust — install the CA into the host OS certificate store
 # -----------------------------------------------------------------------------
 
-# Stream the CA cert PEM from g8ep to stdout. No files written to the host.
+# Stream the CA cert PEM to stdout.
 _stream_ca_pem() {
-    docker exec "$CERT_CONTAINER" cat "${CERT_SSL_DIR}/ca.crt" 2>/dev/null \
-        || die "Failed to read CA cert from ${CERT_CONTAINER}. Is the platform running? Run: ./g8e security certs generate"
+    cat "$G8E_SSL_DIR/ca.crt" 2>/dev/null \
+        || die "Failed to read CA cert from $G8E_SSL_DIR/ca.crt. Has the platform started and generated certs? Run: ./g8e up"
 }
 
 # Trust the CA on this Linux host. Reads PEM from stdin when ca_path is "-",
@@ -301,7 +299,7 @@ _trust_local_macos() {
 
 _print_remote_instructions() {
     local server_host="$1" ws_os="$2"
-    local fetch_cmd="ssh ${server_host} \"docker exec g8ep cat /g8es/ssl/ca.crt\""
+    local fetch_cmd="ssh ${server_host} \"cat .g8e/ssl/ca.crt\""
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -350,7 +348,7 @@ _print_remote_instructions() {
             echo "    Get-ChildItem Cert:\\LocalMachine\\Root | Where-Object { \$_.Subject -like '*g8e*' } | Remove-Item"
             echo ""
             echo "    # Fetch and save"
-            echo "    ssh ${server_host} \"docker exec g8ep cat /g8es/ssl/ca.crt\" | Out-File -Encoding ascii \$env:USERPROFILE\\Downloads\\g8e-ca.crt"
+            echo "    ssh ${server_host} \"cat .g8e/ssl/ca.crt\" | Out-File -Encoding ascii \$env:USERPROFILE\\Downloads\\g8e-ca.crt"
             echo ""
             echo "    # Import"
             echo "    Import-Certificate -FilePath \"\$env:USERPROFILE\\Downloads\\g8e-ca.crt\" -CertStoreLocation Cert:\\LocalMachine\\Root"
@@ -406,13 +404,8 @@ exec_trust() {
     done
 
     local ca_path="-"
-    if [[ -n "$ca_file_arg" ]]; then
-        [ -f "$ca_file_arg" ] || die "CA cert not found: $ca_file_arg"
-        ca_path="$ca_file_arg"
-    else
-        _require_running
-        docker exec "$CERT_CONTAINER" test -f "${CERT_SSL_DIR}/ca.crt" 2>/dev/null \
-            || die "CA cert not found at ${CERT_SSL_DIR}/ca.crt in ${CERT_CONTAINER}. Has the platform started and generated certs? Run: ./g8e security certs generate"
+    if [[ "$ca_path" == "-" ]]; then
+        [ -f "$G8E_SSL_DIR/ca.crt" ] || die "CA cert not found at $G8E_SSL_DIR/ca.crt. Has the platform started and generated certs? Run: ./g8e up"
     fi
 
     local is_remote=false

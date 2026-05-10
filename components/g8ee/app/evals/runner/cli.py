@@ -11,6 +11,7 @@ package hierarchy without any runtime ``sys.path`` mutation.
 import argparse
 import asyncio
 import json
+import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -73,10 +74,16 @@ def resolve_gold_set_path(gold_set_arg: str | None) -> Path | None:
     return None
 
 
-async def run_dry_run(device_token: str, g8ed_url: str = "https://g8e.local") -> None:
+async def run_dry_run(device_token: str, g8ed_url: str | None = None, g8ee_url: str | None = None) -> None:
+    # Resolve g8ed_url from environment or default
+    if g8ed_url is None:
+        g8ed_url = os.environ.get("G8ED_URL", os.environ.get("G8ED_INTERNAL_URL", "https://localhost"))
+    # Resolve g8ee_url from environment or default
+    if g8ee_url is None:
+        g8ee_url = os.environ.get("G8EE_URL", os.environ.get("G8EE_INTERNAL_URL", "https://localhost:8443"))
     print("[evals] Running canned chat: 'uname -a'")
 
-    async with G8edClient(g8ed_url) as client:
+    async with G8edClient(g8ed_url, g8ee_url) as client:
         investigation = await client.create_investigation(
             operator_session_id=device_token
         )
@@ -99,6 +106,7 @@ async def run_scenario(
     scenario: dict[str, Any],
     device_token: str,
     g8ed_url: str,
+    g8ee_url: str,
     node_id: str,
     judge: EvalJudge,
 ) -> EvalRow:
@@ -107,7 +115,8 @@ async def run_scenario(
     Args:
         scenario: Gold set scenario dict
         device_token: Device link token for operator authentication
-        g8ed_url: g8ed API base URL
+        g8ed_url: g8ed public API base URL
+        g8ee_url: g8ee internal API base URL
         node_id: Container name to use
         judge: EvalJudge instance for accuracy scoring
 
@@ -120,7 +129,7 @@ async def run_scenario(
     dimension = scenario.get("dimension", "accuracy")
 
     try:
-        async with G8edClient(g8ed_url) as client:
+        async with G8edClient(g8ed_url, g8ee_url) as client:
             investigation = await client.create_investigation(
                 operator_session_id=device_token
             )
@@ -222,7 +231,8 @@ async def run_scenario(
 async def run_full_eval(
     device_token: str | None,
     gold_set_path: str,
-    g8ed_url: str = "https://g8e.local",
+    g8ed_url: str | None = None,
+    g8ee_url: str | None = None,
     nodes: int = 3,
     parallel: int = 1,
     judge_model: str = "gemini-2.5-pro",
@@ -238,7 +248,8 @@ async def run_full_eval(
     Args:
         device_token: Device link token for operator authentication (optional if fleet is running)
         gold_set_path: Path to gold set JSON file
-        g8ed_url: g8ed API base URL
+        g8ed_url: g8ed public API base URL (defaults to G8ED_URL env var or https://localhost)
+        g8ee_url: g8ee internal API base URL (defaults to G8EE_URL env var or https://localhost:8443)
         nodes: Number of eval nodes to use
         parallel: Number of scenarios to run in parallel
         judge_model: Eval judge model name
@@ -248,6 +259,13 @@ async def run_full_eval(
         llm_endpoint: LLM provider endpoint URL
         llm_api_key: LLM provider API key
     """
+    # Resolve g8ed_url from environment or default
+    if g8ed_url is None:
+        g8ed_url = os.environ.get("G8ED_URL", os.environ.get("G8ED_INTERNAL_URL", "https://localhost"))
+    # Resolve g8ee_url from environment or default
+    if g8ee_url is None:
+        g8ee_url = os.environ.get("G8EE_URL", os.environ.get("G8EE_INTERNAL_URL", "https://localhost:8443"))
+
     if device_token is None:
         print("[evals] Error: --device-token is required")
         print("[evals] Start a fleet with './g8e evals up --device-token <token>'")
@@ -303,7 +321,7 @@ async def run_full_eval(
         node_id = f"evals-eval-node-{(i % nodes) + 1}"
         print(f"[evals] [{i+1}/{len(operator_bound_scenarios)}] Running {scenario['id']} on {node_id}")
 
-        row = await run_scenario(scenario, device_token, g8ed_url, node_id, judge)
+        row = await run_scenario(scenario, device_token, g8ed_url, g8ee_url, node_id, judge)
         rows.append(row)
 
         if row.passed:
@@ -341,8 +359,13 @@ def main() -> None:
     )
     run_parser.add_argument(
         "--g8ed-url",
-        default="https://g8e.local",
-        help="g8ed API base URL (default: https://g8e.local)",
+        default=None,
+        help="g8ed public API base URL (default: G8ED_URL env var or https://localhost)",
+    )
+    run_parser.add_argument(
+        "--g8ee-url",
+        default=None,
+        help="g8ee internal API base URL (default: G8EE_URL env var or https://localhost:8443)",
     )
     run_parser.add_argument(
         "--dry-run",
@@ -412,7 +435,7 @@ def main() -> None:
             if not args.device_token:
                 print("[evals] Error: --device-token is required for --dry-run")
                 sys.exit(1)
-            asyncio.run(run_dry_run(args.device_token, args.g8ed_url))
+            asyncio.run(run_dry_run(args.device_token, args.g8ed_url, args.g8ee_url))
         else:
             gold_set_path = resolve_gold_set_path(args.gold_set)
             if not gold_set_path:
@@ -425,6 +448,7 @@ def main() -> None:
                 args.device_token,
                 str(gold_set_path),
                 args.g8ed_url,
+                args.g8ee_url,
                 args.nodes,
                 args.parallel,
                 args.judge_model,

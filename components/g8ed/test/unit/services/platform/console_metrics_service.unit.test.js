@@ -149,7 +149,7 @@ describe('ConsoleMetricsService [UNIT]', () => {
             const health = await service.getSystemHealth();
 
             expect(health.overall).toBe(SystemHealth.HEALTHY);
-            expect(health.g8es.status).toBe(SystemHealth.HEALTHY);
+            expect(health.operator.status).toBe(SystemHealth.HEALTHY);
             expect(health.db.status).toBe(SystemHealth.HEALTHY);
         });
 
@@ -160,7 +160,7 @@ describe('ConsoleMetricsService [UNIT]', () => {
             const health = await service.getSystemHealth();
 
             expect(health.overall).toBe(SystemHealth.DEGRADED);
-            expect(health.g8es.status).toBe(SystemHealth.UNHEALTHY);
+            expect(health.operator.status).toBe(SystemHealth.UNHEALTHY);
         });
     });
 
@@ -175,7 +175,7 @@ describe('ConsoleMetricsService [UNIT]', () => {
             const data = await service.getComponentHealth();
 
             expect(data.overall).toBe(SystemHealth.HEALTHY);
-            expect(data.components.g8es_kv.status).toBe(SystemHealth.HEALTHY);
+            expect(data.components.operator_kv.status).toBe(SystemHealth.HEALTHY);
             expect(cacheAside.kvPing).toHaveBeenCalled();
         });
 
@@ -189,7 +189,7 @@ describe('ConsoleMetricsService [UNIT]', () => {
             const data = await service.getComponentHealth();
 
             expect(data.overall).toBe(SystemHealth.UNHEALTHY);
-            expect(data.components.g8es_kv.status).toBe(SystemHealth.UNHEALTHY);
+            expect(data.components.operator_kv.status).toBe(SystemHealth.UNHEALTHY);
         });
     });
 
@@ -197,7 +197,7 @@ describe('ConsoleMetricsService [UNIT]', () => {
         it('returns process and cache metrics', async () => {
             const metrics = await service.getRealTimeMetrics();
             expect(metrics.timestamp).toBeDefined();
-            expect(metrics.g8es.memoryUsed).toBeDefined();
+            expect(metrics.operator.memoryUsed).toBeDefined();
             expect(metrics.cache).toBeDefined();
         });
     });

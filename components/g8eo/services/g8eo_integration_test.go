@@ -88,7 +88,7 @@ func TestG8eoService_SubServices_Initialization(t *testing.T) {
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 
-		client, err := pubsub.NewG8esPubSubClient(testutil.GetTestG8esDirectURL(), "", logger)
+		client, err := pubsub.NewOperatorPubSubClient(testutil.GetTestOperatorDirectURL(), "", logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { client.Close() })
 

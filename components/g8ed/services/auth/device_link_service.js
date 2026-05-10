@@ -370,13 +370,30 @@ class DeviceLinkService {
                 }
                 await new Promise(resolve => setTimeout(resolve, 500));
             }
+            logger.error('[DEVICE-LINK] Device already registered - claim not found after polling', {
+                token_prefix: token.substring(0, 20) + '...',
+                fingerprint_prefix: sanitizedFingerprint.substring(0, 16),
+                poll_attempts: 10
+            });
             return { success: false, error: DeviceLinkError.DEVICE_ALREADY_REGISTERED };
         }
 
         // Atomic usage check before calling g8ee
         const currentUsage = await this._cache_aside.kvScard(fingerprintKey);
+        logger.info('[DEVICE-LINK] Usage check', {
+            token_prefix: token.substring(0, 20) + '...',
+            fingerprint_prefix: sanitizedFingerprint.substring(0, 16),
+            current_usage: currentUsage,
+            max_uses: linkData.max_uses
+        });
         if (currentUsage > linkData.max_uses) {
             await this._cache_aside.kvSrem(fingerprintKey, sanitizedFingerprint);
+            logger.error('[DEVICE-LINK] Link exhausted', {
+                token_prefix: token.substring(0, 20) + '...',
+                fingerprint_prefix: sanitizedFingerprint.substring(0, 16),
+                current_usage: currentUsage,
+                max_uses: linkData.max_uses
+            });
             return { success: false, error: DeviceLinkError.LINK_EXHAUSTED };
         }
 

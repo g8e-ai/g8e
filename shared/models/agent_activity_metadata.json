@@ -1,7 +1,7 @@
 {
-  "_comment": "Canonical AgentActivityMetadata document shape. g8ee is the authority — it creates and owns this document in its SQLite store via g8es. Used for data science analysis and telemetry of AI agent behavior. A field mismatch breaks activity recording and analytics.",
+  "_comment": "Canonical AgentActivityMetadata document shape. g8ee is the authority — it creates and owns this document in its SQLite store via operator. Used for data science analysis and telemetry of AI agent behavior. A field mismatch breaks activity recording and analytics.",
 
-  "_authority": "g8ee (g8es/CacheAside)",
+  "_authority": "g8ee (operator/CacheAside)",
   "_consumers": ["g8ee (Python — creates and queries activity metadata for analytics)"],
 
   "agent_activity_metadata": {

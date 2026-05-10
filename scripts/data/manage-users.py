@@ -18,14 +18,14 @@ Manage platform users via the g8ed internal HTTP API.
 Runs inside g8ep and communicates with g8ed over the internal network.
 
 Usage:
-    python manage-g8es.py users list
-    python manage-g8es.py users get --id USER_ID
-    python manage-g8es.py users get --email user@example.com
-    python manage-g8es.py users search "john"
-    python manage-g8es.py users create --email user@example.com --name "John Doe"
-    python manage-g8es.py users update-role --id USER_ID --role admin
-    python manage-g8es.py users delete --id USER_ID
-    python manage-g8es.py users stats
+    python manage-operator.py users list
+    python manage-operator.py users get --id USER_ID
+    python manage-operator.py users get --email user@example.com
+    python manage-operator.py users search "john"
+    python manage-operator.py users create --email user@example.com --name "John Doe"
+    python manage-operator.py users update-role --id USER_ID --role admin
+    python manage-operator.py users delete --id USER_ID
+    python manage-operator.py users stats
 """
 
 from __future__ import annotations
@@ -268,14 +268,14 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python manage-g8es.py users list
-  python manage-g8es.py users get --email user@example.com
-  python manage-g8es.py users search "john"
-  python manage-g8es.py users create --email new@example.com --name "New User"
-  python manage-g8es.py users update-role --id USER_ID --role admin
-  python manage-g8es.py users update-role --id USER_ID --role admin --action add
-  python manage-g8es.py users delete --id USER_ID
-  python manage-g8es.py users stats
+  python manage-operator.py users list
+  python manage-operator.py users get --email user@example.com
+  python manage-operator.py users search "john"
+  python manage-operator.py users create --email new@example.com --name "New User"
+  python manage-operator.py users update-role --id USER_ID --role admin
+  python manage-operator.py users update-role --id USER_ID --role admin --action add
+  python manage-operator.py users delete --id USER_ID
+  python manage-operator.py users stats
         """
     )
 
@@ -321,7 +321,7 @@ def run(argv: List[str]) -> int:
         parser.print_help()
         return 1
 
-    print_banner('manage-g8es.py users', ' '.join(argv))
+    print_banner('manage-operator.py users', ' '.join(argv))
     manager = UserManager()
 
     try:
@@ -343,7 +343,7 @@ def run(argv: List[str]) -> int:
         elif args.command == 'stats':
             manager.stats()
     except RuntimeError as e:
-        print(f'[manage-g8es users] {e}', file=sys.stderr)
+        print(f'[manage-operator users] {e}', file=sys.stderr)
         return 1
 
     return 0

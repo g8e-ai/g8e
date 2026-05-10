@@ -18,9 +18,9 @@ import (
 	"sync"
 )
 
-// MockG8esPubSubClient is a test double for G8esPubSubClient.
+// MockOperatorPubSubClient is a test double for OperatorPubSubClient.
 // It records published messages and allows tests to inject incoming messages.
-type MockG8esPubSubClient struct {
+type MockOperatorPubSubClient struct {
 	mu          sync.Mutex
 	published   []MockPublishedMsg
 	subscribers map[string][]chan []byte
@@ -33,15 +33,15 @@ type MockPublishedMsg struct {
 	Data    []byte
 }
 
-// NewMockG8esPubSubClient creates a new mock client
-func NewMockG8esPubSubClient() *MockG8esPubSubClient {
-	return &MockG8esPubSubClient{
+// NewMockOperatorPubSubClient creates a new mock client
+func NewMockOperatorPubSubClient() *MockOperatorPubSubClient {
+	return &MockOperatorPubSubClient{
 		subscribers: make(map[string][]chan []byte),
 	}
 }
 
 // Subscribe returns a channel that receives messages injected via InjectMessage
-func (m *MockG8esPubSubClient) Subscribe(_ context.Context, channel string) (<-chan []byte, error) {
+func (m *MockOperatorPubSubClient) Subscribe(_ context.Context, channel string) (<-chan []byte, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	ch := make(chan []byte, 64)
@@ -50,7 +50,7 @@ func (m *MockG8esPubSubClient) Subscribe(_ context.Context, channel string) (<-c
 }
 
 // Publish records the message and fans it out to any subscribers on the same channel
-func (m *MockG8esPubSubClient) Publish(_ context.Context, channel string, data []byte) error {
+func (m *MockOperatorPubSubClient) Publish(_ context.Context, channel string, data []byte) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.published = append(m.published, MockPublishedMsg{Channel: channel, Data: data})
@@ -64,7 +64,7 @@ func (m *MockG8esPubSubClient) Publish(_ context.Context, channel string, data [
 }
 
 // Close is a no-op for the mock
-func (m *MockG8esPubSubClient) Close() {
+func (m *MockOperatorPubSubClient) Close() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.closed = true
@@ -77,7 +77,7 @@ func (m *MockG8esPubSubClient) Close() {
 }
 
 // InjectMessage simulates an incoming message on a subscribed channel
-func (m *MockG8esPubSubClient) InjectMessage(channel string, data []byte) {
+func (m *MockOperatorPubSubClient) InjectMessage(channel string, data []byte) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, ch := range m.subscribers[channel] {
@@ -89,7 +89,7 @@ func (m *MockG8esPubSubClient) InjectMessage(channel string, data []byte) {
 }
 
 // Published returns all messages published via Publish
-func (m *MockG8esPubSubClient) Published() []MockPublishedMsg {
+func (m *MockOperatorPubSubClient) Published() []MockPublishedMsg {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	result := make([]MockPublishedMsg, len(m.published))
@@ -98,14 +98,14 @@ func (m *MockG8esPubSubClient) Published() []MockPublishedMsg {
 }
 
 // PublishedCount returns the number of published messages
-func (m *MockG8esPubSubClient) PublishedCount() int {
+func (m *MockOperatorPubSubClient) PublishedCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return len(m.published)
 }
 
 // LastPublished returns the last published message, or nil if none
-func (m *MockG8esPubSubClient) LastPublished() *MockPublishedMsg {
+func (m *MockOperatorPubSubClient) LastPublished() *MockPublishedMsg {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if len(m.published) == 0 {
@@ -116,7 +116,7 @@ func (m *MockG8esPubSubClient) LastPublished() *MockPublishedMsg {
 }
 
 // Reset clears all recorded publishes
-func (m *MockG8esPubSubClient) Reset() {
+func (m *MockOperatorPubSubClient) Reset() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.published = nil
