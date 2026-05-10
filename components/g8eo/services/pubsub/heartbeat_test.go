@@ -695,7 +695,7 @@ func TestHeartbeatScheduler_PublishesToHeartbeatChannel(t *testing.T) {
 
 	var wg sync.WaitGroup
 	hs := NewHeartbeatService(cfg, logger, &wg)
-	hs.SetResultsPublisher(resultsSvc)
+	hs.results = resultsSvc
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(func() {
@@ -703,7 +703,7 @@ func TestHeartbeatScheduler_PublishesToHeartbeatChannel(t *testing.T) {
 		hs.StopScheduler()
 		wg.Wait()
 	})
-	hs.SetContext(ctx)
+	hs.ctx = ctx
 
 	hs.StartScheduler()
 

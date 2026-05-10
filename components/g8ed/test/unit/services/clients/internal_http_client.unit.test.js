@@ -67,10 +67,10 @@ describe('InternalHttpClient', () => {
         });
 
         it('should resolve component URL from settingsService or default', () => {
-            expect(client._resolveComponentUrl('g8ee')).toBe('https://g8ee');
+            expect(client._resolveComponentUrl('g8ee')).toBe('https://localhost:8443');
 
             const noSettingsClient = new InternalHttpClient({ bootstrapService });
-            expect(noSettingsClient._resolveComponentUrl('g8ee')).toBe('https://g8ee');
+            expect(noSettingsClient._resolveComponentUrl('g8ee')).toBe('https://localhost:8443');
         });
     });
 

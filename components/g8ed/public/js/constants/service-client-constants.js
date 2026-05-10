@@ -71,9 +71,9 @@ export const ComponentName = Object.freeze({
 });
 
 export const ComponentUrl = Object.freeze({
-    G8EE: 'https://g8ee',
-    G8ED: 'https://g8ed',
-    G8ES: process.env.G8E_INTERNAL_HTTP_URL || 'https://g8es',
+    G8EE: 'https://localhost:8443',
+    G8ED: 'https://localhost',
+    G8ES: 'https://localhost:9000',
 });
 
 export const MAX_ATTACHMENT_SIZE              = 10 * 1024 * 1024;
