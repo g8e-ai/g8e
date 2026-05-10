@@ -321,7 +321,7 @@ func httpPortOrDefault(p int) int {
 }
 
 // tlsServerName returns the TLS ServerName override to use when endpoint is a
-// raw IP address. The embedded CA cert is issued to "g8e.local",
+// raw IP address. The embedded CA cert is issued to "localhost",
 // so TLS verification must use that hostname regardless of what IP is dialed.
 // Returns an empty string when endpoint is already a hostname (no override needed).
 func tlsServerName(endpoint string) string {

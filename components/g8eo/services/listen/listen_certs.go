@@ -37,7 +37,7 @@ const (
 	caValidityDays     = 3650
 	serverValidityDays = 90
 	caCommonName       = "g8e Operator CA"
-	serverCommonName   = "g8e.local"
+	serverCommonName   = "localhost"
 )
 
 // CertStore manages the CA and server certificates for listen mode.
@@ -201,7 +201,7 @@ func (cs *CertStore) SignCertificate(publicKeyPEM string, commonName, organizati
 		Subject: pkix.Name{
 			CommonName:         commonName,
 			OrganizationalUnit: []string{organizationalUnit},
-			Organization:       []string{"g8e.local"},
+			Organization:       []string{"g8e"},
 			Country:            []string{"US"},
 		},
 		NotBefore:             now.Add(-1 * time.Minute),
@@ -281,7 +281,7 @@ func (cs *CertStore) generateCA(keyPath, certPath string) error {
 		SerialNumber: serial,
 		Subject: pkix.Name{
 			CommonName:   caCommonName,
-			Organization: []string{"g8e.local"},
+			Organization: []string{"g8e"},
 			Country:      []string{"US"},
 		},
 		NotBefore:             now.Add(-1 * time.Minute),
@@ -333,7 +333,7 @@ func (cs *CertStore) generateServerCert(keyPath, certPath string, extraIPs []net
 		return err
 	}
 
-	dnsNames := []string{"g8e.local", "localhost", "operator", constants.Status.ComponentName.G8EE, constants.Status.ComponentName.G8ED}
+	dnsNames := []string{"localhost", "g8e.local", "operator", constants.Status.ComponentName.G8EE, constants.Status.ComponentName.G8ED}
 	ipAddresses := append([]net.IP{net.ParseIP("127.0.0.1")}, extraIPs...)
 
 	now := time.Now().UTC()
@@ -341,7 +341,7 @@ func (cs *CertStore) generateServerCert(keyPath, certPath string, extraIPs []net
 		SerialNumber: serial,
 		Subject: pkix.Name{
 			CommonName:   serverCommonName,
-			Organization: []string{"g8e.local"},
+			Organization: []string{"g8e"},
 			Country:      []string{"US"},
 		},
 		NotBefore:             now.Add(-1 * time.Minute),

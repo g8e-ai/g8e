@@ -194,23 +194,21 @@ networks:
 x-edge-env: &edge-env
   DEVICE_TOKEN: ${DEVICE_TOKEN:-}
   G8E_DEVICE_TOKEN: ${DEVICE_TOKEN:-}
-  G8E_ENDPOINT: ${G8E_ENDPOINT:-g8e.local}
-  G8E_OPERATOR_ENDPOINT: ${G8E_ENDPOINT:-g8e.local}
+  G8E_ENDPOINT: ${G8E_ENDPOINT:-localhost}
+  G8E_OPERATOR_ENDPOINT: ${G8E_ENDPOINT:-localhost}
 
 x-edge-device: &edge-device
   image: acme-edge-device:latest
   networks:
     - acme-net
-  # Simulate internet connectivity to the g8e platform via public endpoints.
-  # This keeps the "simulated company" isolated on its own network.
+  # Reach the host-resident g8e platform via the docker-bridge gateway.
+  # The "simulated company" stays isolated on its own network.
   extra_hosts:
-    - "g8e.local:host-gateway"
-    - "g8ed:host-gateway"
-    - "operator:host-gateway"
+    - "localhost:host-gateway"
   labels:
     - "demo.service=acme-edge"
   volumes:
-    - operator-ssl:/operator:ro
+    - ../../../ssl/ca/ca.crt:/operator/ca.crt:ro
   restart: unless-stopped
 
 services:
@@ -218,16 +216,10 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# Emit footer to a batch file
+# Emit footer to a batch file (no shared external volumes/networks)
 # ---------------------------------------------------------------------------
 _emit_footer() {
-    local batch_file="$1"
-    cat >> "$batch_file" <<'EOF'
-
-volumes:
-  operator-ssl:
-    external: true
-EOF
+    :
 }
 
 # ---------------------------------------------------------------------------

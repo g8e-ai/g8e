@@ -367,7 +367,7 @@ class G8eePlatformSettings(G8eBaseModel):
 
     app_url: str = Field("https://localhost")
     allowed_origins: str = Field("")
-    passkey_rp_name: str = Field("g8e.local")
+    passkey_rp_name: str = Field("localhost")
     passkey_rp_id: str = Field("localhost")
     passkey_origin: str = Field("https://localhost")
 

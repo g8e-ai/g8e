@@ -44,8 +44,8 @@ async def test_run_scenario_benchmark():
         "expected_payload": [{"field": "cmd", "pattern": "ls"}]
     }
     device_token = "token"
-    g8ed_url = "https://g8e.local"
-    g8ee_url = "https://g8e.local:8443"
+    g8ed_url = "https://localhost"
+    g8ee_url = "https://localhost:8443"
     judge = MagicMock()
     
     with patch('app.evals.runner.cli.G8edClient') as mock_client_cls:

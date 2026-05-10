@@ -38,7 +38,7 @@ The `operator` backbone exposes two primary interfaces for internal component co
 - **Unified Persistence:** Replaces external databases with a single `g8e.db` SQLite file.
 - **Internal PKI:** Acts as the platform's Certificate Authority (CA), auto-generating TLS certificates for all inter-container traffic.
 - **Secret Management:** Provides an encrypted Vault for storing platform secrets (API keys, tokens) without external dependencies.
-- **Blob Storage:** Hosts local binaries (like the Operator itself) for deployment to other air-gapped nodes.
+- **Blob Storage:** Stores binary data such as attachments. Operator binaries are served from the local file system by g8ed.
 
 ---
 

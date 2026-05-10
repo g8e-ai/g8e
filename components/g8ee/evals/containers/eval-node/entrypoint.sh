@@ -5,18 +5,11 @@ set -e
 
 NODE_ID="${EVAL_NODE_ID:-${HOSTNAME:-eval-node}}"
 NODE_PROFILE="${EVAL_PROFILE:-healthy}"
-OPERATOR_ENDPOINT="${G8E_ENDPOINT:-g8e.local}"
+OPERATOR_ENDPOINT="${G8E_ENDPOINT:-localhost}"
 OPERATOR_BINARY="/opt/g8e/g8e.operator"
 OPERATOR_LOG_PREFIX="[$NODE_ID operator]"
 
 echo "[$NODE_ID] Starting eval node (profile: $NODE_PROFILE)"
-
-# Write CA cert from environment if provided
-if [ -n "${G8E_CA_CERT:-}" ]; then
-    mkdir -p /tmp/ssl
-    echo "$G8E_CA_CERT" > /tmp/ssl/ca.crt
-    echo "[$NODE_ID] CA certificate written to /tmp/ssl/ca.crt"
-fi
 
 # DEVICE_TOKEN is optional at startup; operator will wait if it's missing
 if [ -z "${DEVICE_TOKEN:-}" ]; then
@@ -54,6 +47,17 @@ _run_operator() {
         exit 1
     fi
     echo "$OPERATOR_LOG_PREFIX binary ready ($(stat -c%s "$OPERATOR_BINARY" 2>/dev/null || wc -c < "$OPERATOR_BINARY") bytes)"
+
+    # Setup CA cert if it exists in the bind-mount
+    if [ -f /operator/ca.crt ]; then
+        mkdir -p /tmp/ssl
+        cp /operator/ca.crt /tmp/ssl/ca.crt
+        echo "[$NODE_ID] CA certificate copied from /operator/ca.crt to /tmp/ssl/ca.crt"
+    elif [ -n "${G8E_CA_CERT:-}" ]; then
+        mkdir -p /tmp/ssl
+        echo "$G8E_CA_CERT" > /tmp/ssl/ca.crt
+        echo "[$NODE_ID] CA certificate written from environment to /tmp/ssl/ca.crt"
+    fi
 
     # Supervised restart loop
     while true; do

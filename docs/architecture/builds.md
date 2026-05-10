@@ -19,7 +19,7 @@ g8e is designed for speed and reliability. Every component runs host-native and 
 - **Parallel Builds**: All components build in parallel with no build-time dependencies on each other.
 - **Runtime Discovery**: Component dependencies are enforced at runtime via health checks.
 - **Root of Trust**: Operator in `--listen` mode generates the platform CA on first boot, which all other services read from `.g8e/ssl`.
-- **Lean Services**: Runtime processes do not ship with unnecessary compilers. They fetch binary artifacts from the Operator blob store.
+- **Lean Services**: Runtime processes do not ship with unnecessary compilers. Operator binaries are served from the local file system by g8ed.
 
 ---
 

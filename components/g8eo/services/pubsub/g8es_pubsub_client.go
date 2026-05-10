@@ -53,7 +53,7 @@ type PubSubClient interface {
 var pubSubWriteTimeout = 5 * time.Second
 
 type OperatorPubSubClient struct {
-	baseURL    string // e.g. "wss://g8e.local"
+	baseURL    string // e.g. "wss://localhost"
 	logger     *slog.Logger
 	tlsConfig  *tls.Config // embedded CA trust; nil falls back to system CAs (plain ws://)
 	serverName string      // TLS SNI override when endpoint is a raw IP

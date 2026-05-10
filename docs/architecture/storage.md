@@ -116,8 +116,8 @@ This document explains how the g8e platform stores data across its components. I
 
 | Component | Technology | Path/Volume | Role |
 |---|---|---|---|
-| **operator (DB)** | SQLite | `operator-data` -> `/data/g8e.db` | Central platform state (Coordination Store). |
-| **operator (SSL)** | TLS Certs | `operator-ssl` -> `/ssl` | CA, identity, and bootstrap secrets. **Survives reset**. |
+| **operator (DB)** | SQLite | `.g8e/data/g8e.db` | Central platform state (Coordination Store). |
+| **operator (SSL)** | TLS Certs | `.g8e/ssl` | CA, identity, and bootstrap secrets. **Survives reset**. |
 | **g8ee** | None | - | Stateless; uses `DBClient`, `KVService`, `BlobClient`. |
 | **g8ed** | None | - | Stateless; uses `OperatorDocumentClient`, `OperatorKvCacheClient`. |
 | **g8eo (Scrubbed)** | SQLite | `.g8e/local_state.db` | Sentinel-scrubbed AI context. |
@@ -138,8 +138,8 @@ This document explains how the g8e platform stores data across its components. I
 - **SSE Buffer**: A ring buffer for Server-Sent Events, ensuring clients can catch up after disconnects.
 - **PubSub Broker**: Real-time message distribution for coordination.
 
-### The SSL Volume Authority
-The `operator-ssl` volume is the platform's root of trust. It stores:
+### The SSL Directory Authority
+The `.g8e/ssl` directory is the platform's root of trust. It stores:
 1. **CA Certificates**: Root and intermediate certificates for mTLS.
 2. **Bootstrap Secrets**: `internal_auth_token`, `session_encryption_key`, and `auditor_hmac_key`.
 

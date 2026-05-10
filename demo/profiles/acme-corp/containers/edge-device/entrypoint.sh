@@ -36,7 +36,7 @@ _service_pid=$!
 # ---------------------------------------------------------------------------
 # 3. Operator (optional). Reuses the large-fleet pattern.
 # ---------------------------------------------------------------------------
-_operator_endpoint="${G8E_ENDPOINT:-g8e.local}"
+_operator_endpoint="${G8E_ENDPOINT:-localhost}"
 _operator_binary="/home/appuser/g8e.operator"
 _operator_prefix="[$_host operator]"
 

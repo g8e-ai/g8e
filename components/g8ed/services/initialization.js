@@ -288,7 +288,7 @@ async function _doInitialize() {
             internalHttpClient: internalHttpClientInstance,
         });
         
-        operatorDownloadService = new OperatorDownloadService(listenUrl, internalAuthToken);
+        operatorDownloadService = new OperatorDownloadService();
         boundSessionsService = new BoundSessionsService({
             cacheAsideService,
             operatorService: operatorServiceInstance,

@@ -424,11 +424,11 @@ func TestTLSServerName(t *testing.T) {
 	}{
 		{"hostname returns empty", constants.DefaultEndpoint, ""},
 		{"plain hostname returns empty", "example.com", ""},
-		{"IPv4 returns g8e.local", "10.0.0.1", constants.DefaultEndpoint},
-		{"IPv4 loopback returns g8e.local", "127.0.0.1", constants.DefaultEndpoint},
-		{"IPv6 loopback returns g8e.local", "::1", constants.DefaultEndpoint},
-		{"IPv6 full returns g8e.local", "2001:db8::1", constants.DefaultEndpoint},
-		{"IPv4-mapped IPv6 returns g8e.local", "::ffff:192.0.2.1", constants.DefaultEndpoint},
+		{"IPv4 returns localhost", "10.0.0.1", constants.DefaultEndpoint},
+		{"IPv4 loopback returns localhost", "127.0.0.1", constants.DefaultEndpoint},
+		{"IPv6 loopback returns localhost", "::1", constants.DefaultEndpoint},
+		{"IPv6 full returns localhost", "2001:db8::1", constants.DefaultEndpoint},
+		{"IPv4-mapped IPv6 returns localhost", "::ffff:192.0.2.1", constants.DefaultEndpoint},
 	}
 
 	for _, tt := range tests {

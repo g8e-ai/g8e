@@ -51,7 +51,7 @@ export const OPERATOR_HTTP_TIMEOUT_MS = 30000;
 // operator PubSub WebSocket Client (g8ed -> operator)
 // ---------------------------------------------------------------------------
 export const OPERATOR_INTERNAL_PUBSUB_URL = process.env.G8E_INTERNAL_PUBSUB_URL || 'wss://localhost:9001';
-export const OPERATOR_OPERATOR_PUBSUB_URL = 'wss://g8e.local';
+export const OPERATOR_OPERATOR_PUBSUB_URL = 'wss://localhost';
 export const OPERATOR_PUBSUB_PATH = '/ws/pubsub';
 export const OPERATOR_PUBSUB_PUBLISH_PATH = '/publish';
 

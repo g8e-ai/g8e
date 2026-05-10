@@ -13,121 +13,95 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OperatorDownloadService } from '@g8ed/services/operator/operator_download_service.js';
-import { PLATFORMS, OPERATOR_BINARY_BLOB_NAMESPACE } from '@g8ed/constants/service_config.js';
-import { HTTP_INTERNAL_AUTH_HEADER } from '@g8ed/constants/headers.js';
+import { PLATFORMS } from '@g8ed/constants/service_config.js';
+import fs from 'fs';
+import path from 'path';
+
+// Mock fs module
+vi.mock('fs');
 
 describe('OperatorDownloadService', () => {
     let service;
-    const listenUrl = 'https://localhost:9000';
-    const authToken = 'test-internal-token';
 
     beforeEach(() => {
-        service = new OperatorDownloadService(listenUrl, authToken);
-        global.fetch = vi.fn();
+        vi.clearAllMocks();
+        service = new OperatorDownloadService();
     });
 
     describe('constructor', () => {
-        it('should throw if listenUrl is missing', () => {
-            expect(() => new OperatorDownloadService()).toThrow('OperatorDownloadService requires listenUrl');
+        it('should initialize with project root and build directory', () => {
+            expect(service._projectRoot).toBeDefined();
+            expect(service._buildDir).toContain('components');
+            expect(service._buildDir).toContain('g8eo');
+            expect(service._buildDir).toContain('build');
         });
+    });
 
-        it('should strip trailing slash from listenUrl', () => {
-            const svc = new OperatorDownloadService('http://host/');
-            expect(svc._listenUrl).toBe('http://host');
-        });
-
-        it('should store internalAuthToken', () => {
-            const svc = new OperatorDownloadService('http://host', 'tok');
-            expect(svc._internalAuthToken).toBe('tok');
-        });
-
-        it('should default internalAuthToken to null', () => {
-            const svc = new OperatorDownloadService('http://host');
-            expect(svc._internalAuthToken).toBeNull();
+    describe('_binaryPath', () => {
+        it('should construct correct binary path for platform', () => {
+            const binaryPath = service._binaryPath('linux', 'amd64');
+            expect(binaryPath).toContain('linux-amd64');
+            expect(binaryPath).toContain('g8e.operator');
+            expect(binaryPath).toMatch(/components[\/\\]g8eo[\/\\]build[\/\\]linux-amd64[\/\\]g8e\.operator$/);
         });
     });
 
     describe('getBinary', () => {
         it('should return a buffer on success', async () => {
             const mockBuffer = Buffer.from('fake-binary');
-            const mockResponse = {
-                ok: true,
-                arrayBuffer: vi.fn().mockResolvedValue(new Uint8Array(mockBuffer).buffer),
-                status: 200,
-            };
-            vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockResponse));
+            vi.mocked(fs.existsSync).mockReturnValue(true);
+            vi.mocked(fs.readFileSync).mockReturnValue(mockBuffer);
 
             const result = await service.getBinary('linux', 'amd64');
 
             expect(result).toBeInstanceOf(Buffer);
             expect(result.toString()).toBe('fake-binary');
-            expect(global.fetch).toHaveBeenCalledWith(
-                `https://localhost:9000/blob/${OPERATOR_BINARY_BLOB_NAMESPACE}/linux-amd64`,
-                expect.objectContaining({
-                    signal: expect.any(AbortSignal),
-                    headers: expect.objectContaining({ [HTTP_INTERNAL_AUTH_HEADER]: authToken }),
-                })
-            );
+            expect(fs.existsSync).toHaveBeenCalled();
+            expect(fs.readFileSync).toHaveBeenCalled();
         });
 
-        it('should throw a specific error if response is not ok', async () => {
-            global.fetch.mockResolvedValue({ ok: false, status: 404 });
+        it('should throw a specific error if binary does not exist', async () => {
+            vi.mocked(fs.existsSync).mockReturnValue(false);
 
             await expect(service.getBinary('linux', 'amd64')).rejects.toThrow(
                 'Operator binary not available for platform: linux/amd64'
             );
         });
 
-        it('should throw a specific error on fetch failure', async () => {
-            global.fetch.mockRejectedValue(new Error('Network error'));
+        it('should throw a specific error on read failure', async () => {
+            vi.mocked(fs.existsSync).mockReturnValue(true);
+            vi.mocked(fs.readFileSync).mockImplementation(() => {
+                throw new Error('Read error');
+            });
 
             await expect(service.getBinary('linux', 'amd64')).rejects.toThrow(
                 'Operator binary not available for platform: linux/amd64'
             );
-        });
-
-        it('should not include auth header when no token provided', async () => {
-            const noAuthService = new OperatorDownloadService(listenUrl);
-            const mockResponse = {
-                ok: true,
-                arrayBuffer: vi.fn().mockResolvedValue(new Uint8Array(Buffer.from('x')).buffer),
-                status: 200,
-            };
-            vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockResponse));
-
-            await noAuthService.getBinary('linux', 'amd64');
-
-            const headers = global.fetch.mock.calls[0][1].headers;
-            expect(headers).toEqual({});
         });
     });
 
     describe('hasBinary', () => {
-        it('should return true if blob meta request is ok', async () => {
-            global.fetch.mockResolvedValue({ ok: true });
+        it('should return true if binary exists', async () => {
+            vi.mocked(fs.existsSync).mockReturnValue(true);
 
             const result = await service.hasBinary('linux', 'amd64');
 
             expect(result).toBe(true);
-            expect(global.fetch).toHaveBeenCalledWith(
-                `https://localhost:9000/blob/${OPERATOR_BINARY_BLOB_NAMESPACE}/linux-amd64/meta`,
-                expect.objectContaining({
-                    signal: expect.any(AbortSignal),
-                    headers: expect.objectContaining({ [HTTP_INTERNAL_AUTH_HEADER]: authToken }),
-                })
-            );
+            expect(fs.existsSync).toHaveBeenCalled();
         });
 
-        it('should return false if blob meta request is not ok', async () => {
-            global.fetch.mockResolvedValue({ ok: false });
+        it('should return false if binary does not exist', async () => {
+            vi.mocked(fs.existsSync).mockReturnValue(false);
 
             const result = await service.hasBinary('linux', 'amd64');
 
             expect(result).toBe(false);
         });
 
-        it('should return false on fetch failure', async () => {
-            global.fetch.mockRejectedValue(new Error('Abort'));
+        it('should return false on fs error', async () => {
+            vi.mocked(fs.existsSync).mockImplementation(() => {
+                throw new Error('FS error');
+            });
 
             const result = await service.hasBinary('linux', 'amd64');
 
@@ -137,15 +111,24 @@ describe('OperatorDownloadService', () => {
 
     describe('getPlatformAvailability', () => {
         it('should return availability for all defined platforms', async () => {
-            // Mock hasBinary behavior via fetch
-            global.fetch.mockResolvedValue({ ok: true });
+            vi.mocked(fs.existsSync).mockReturnValue(true);
 
             const result = await service.getPlatformAvailability();
 
             for (const { os, arch } of PLATFORMS) {
                 expect(result[`${os}/${arch}`]).toEqual({ available: true });
             }
-            expect(global.fetch).toHaveBeenCalledTimes(PLATFORMS.length);
+            expect(fs.existsSync).toHaveBeenCalledTimes(PLATFORMS.length);
+        });
+
+        it('should return false for missing platforms', async () => {
+            vi.mocked(fs.existsSync).mockReturnValue(false);
+
+            const result = await service.getPlatformAvailability();
+
+            for (const { os, arch } of PLATFORMS) {
+                expect(result[`${os}/${arch}`]).toEqual({ available: false });
+            }
         });
     });
 });

@@ -30,7 +30,7 @@ The platform is composed of specialized components, each with a single responsib
 |-----------|----------|---------|
 | **g8ed** | Node.js | Dashboard & API Gateway. Authentication, session management, SSE relay, operator lifecycle. |
 | **g8ee** | Python | Reasoning Engine. Orchestrates AI agents (Triage, Sage, Dash, Tribunal) and enforces governance. |
-| **Operator** | Go | Platform Persistence & Pub/Sub (listen mode). SQLite-based blob store, KV cache, and event bus. Also provides remote operator binary for target hosts. |
+| **Operator** | Go | Platform Persistence & Pub/Sub (listen mode). SQLite-based blob store, KV cache, and event bus. Operator binaries are served from the local file system by g8ed. |
 
 ### Agent Terminology
 

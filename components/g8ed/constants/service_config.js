@@ -27,7 +27,6 @@ import { _DOCUMENT_IDS } from './shared.js';
 // Operator Binary
 // ---------------------------------------------------------------------------
 export const BINARY_NAME = 'g8e.operator';
-export const OPERATOR_BINARY_BLOB_NAMESPACE = 'operator-binary';
 export const PLATFORMS = [
     { os: 'linux', arch: 'amd64' },
     { os: 'linux', arch: 'arm64' },

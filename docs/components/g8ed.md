@@ -20,7 +20,7 @@ g8ed is the primary entry point, authentication gateway, and orchestration backe
 - **Chat/AI Proxy:** Relays chat requests to g8ee and delivers streaming responses via Server-Sent Events (SSE).
 - **WebSocket Proxy:** Tunnels `/ws/pubsub` upgrade requests directly to operator for platform-wide eventing.
 - **Trust Portal:** Serves workstation CA certificates and automated trust installers over plain HTTP (Port 80).
-- **Binary Distribution:** Distributes the `g8e.operator` binary for multiple architectures.
+- **Binary Distribution:** Serves the `g8e.operator` binary from the local build directory for multiple architectures.
 
 ---
 

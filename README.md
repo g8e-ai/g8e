@@ -268,6 +268,10 @@ curl -fsSL http://<host>/trust | sudo sh
 irm http://<host>/trust | iex
 ```
 
+**Hostname Usage:**
+- If g8e is running on your local workstation: use `localhost`
+- If g8e is running on a remote system: use `g8e.local` (add to /etc/hosts pointing to the server IP)
+
 Open `https://<host>`, register a passkey, generate a device-link token, then on any host you want to manage:
 
 ```bash

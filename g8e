@@ -1187,11 +1187,11 @@ case "$TOP" in
                     export G8ED_INTERNAL_URL="$G8ED_URL"
                     export PYTHONPATH="$SCRIPT_DIR/scripts:$SCRIPT_DIR/shared${PYTHONPATH:+:$PYTHONPATH}"
                     
-                    _user_id="$(python3 "$SCRIPT_DIR/scripts/data/manage-operator.py" users get --email evals@g8e.local 2>/dev/null | grep -E '^  ID:' | awk '{print $2}' || true)"
+                    _user_id="$(python3 "$SCRIPT_DIR/scripts/data/manage-operator.py" users get --email evals@localhost 2>/dev/null | grep -E '^  ID:' | awk '{print $2}' || true)"
                     
                     if [[ -z "$_user_id" ]]; then
-                        echo "  Creating evals user (evals@g8e.local)..."
-                        _user_id="$(python3 "$SCRIPT_DIR/scripts/data/manage-operator.py" users create --email evals@g8e.local --name "Evals User" 2>/dev/null | grep -E '^  ID:' | awk '{print $2}' || true)"
+                        echo "  Creating evals user (evals@localhost)..."
+                        _user_id="$(python3 "$SCRIPT_DIR/scripts/data/manage-operator.py" users create --email evals@localhost --name "Evals User" 2>/dev/null | grep -E '^  ID:' | awk '{print $2}' || true)"
                         if [[ -z "$_user_id" ]]; then
                             echo "[g8e] Failed to create evals user" >&2
                             exit 1
@@ -1224,7 +1224,7 @@ case "$TOP" in
                 if [[ "$_auto_created" == true ]]; then
                     echo ""
                     echo "  Auto-created resources:"
-                    echo "    User: evals@g8e.local"
+                    echo "    User: evals@localhost"
                     echo "    Device Token: $_device_token"
                     echo ""
                     echo "  Run evals with: ./g8e evals run --gold-set benchmark"

@@ -13,21 +13,21 @@ async def test_client_context_manager():
         mock_session.close = AsyncMock()
         mock_session_cls.return_value = mock_session
         
-        async with G8edClient("https://g8e.local", "https://localhost:8443") as client:
+        async with G8edClient("https://localhost", "https://localhost:8443") as client:
             assert client._session is not None
         
         mock_session.close.assert_called_once()
 
 @pytest.mark.asyncio
 async def test_create_investigation():
-    async with G8edClient("https://g8e.local", "https://localhost:8443") as client:
+    async with G8edClient("https://localhost", "https://localhost:8443") as client:
         res = await client.create_investigation("session-123")
         assert "id" in res
         assert isinstance(res["id"], str)
 
 @pytest.mark.asyncio
 async def test_send_chat_message():
-    base_url = "https://g8e.local"
+    base_url = "https://localhost"
     investigation_id = "inv-123"
     message = "hello"
     
@@ -59,7 +59,7 @@ async def test_send_chat_message():
         mock_get_resp.__aexit__ = AsyncMock()
         mock_session.get.return_value = mock_get_resp
         
-        async with G8edClient(base_url, "https://g8e.local:8443") as client:
+        async with G8edClient(base_url, "https://localhost:8443") as client:
             events = []
             async for event in client.send_chat_message(investigation_id, message, operator_session_id="session-123"):
                 events.append(event)
@@ -75,13 +75,13 @@ async def test_send_chat_message():
 
 @pytest.mark.asyncio
 async def test_client_context_manager_no_session():
-    client = G8edClient("https://g8e.local", "https://g8e.local:8443")
+    client = G8edClient("https://localhost", "https://localhost:8443")
     # Should not raise even if __aexit__ is called before __aenter__
     await client.__aexit__(None, None, None)
 
 @pytest.mark.asyncio
 async def test_send_chat_message_bad_json():
-    base_url = "https://g8e.local"
+    base_url = "https://localhost"
     investigation_id = "inv-123"
     message = "hello"
     
@@ -108,7 +108,7 @@ async def test_send_chat_message_bad_json():
         mock_get_resp.__aexit__ = AsyncMock()
         mock_session.get.return_value = mock_get_resp
         
-        async with G8edClient(base_url, "https://g8e.local:8443") as client:
+        async with G8edClient(base_url, "https://localhost:8443") as client:
             events = []
             async for event in client.send_chat_message(investigation_id, message):
                 events.append(event)
@@ -116,7 +116,7 @@ async def test_send_chat_message_bad_json():
 
 @pytest.mark.asyncio
 async def test_approve_request():
-    base_url = "https://g8e.local"
+    base_url = "https://localhost"
     approval_id = "app-123"
     
     with patch('aiohttp.ClientSession') as mock_session_cls:
@@ -131,7 +131,7 @@ async def test_approve_request():
         mock_resp.__aexit__ = AsyncMock()
         mock_session.post.return_value = mock_resp
         
-        async with G8edClient(base_url, "https://g8e.local:8443") as client:
+        async with G8edClient(base_url, "https://localhost:8443") as client:
             res = await client.approve_request(approval_id, operator_session_id="session-123")
             assert res["status"] == "approved"
             mock_session.post.assert_called_once()

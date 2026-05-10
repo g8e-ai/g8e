@@ -18,9 +18,11 @@ services:
     tmpfs:
       - /tmp:mode=1777
     restart: unless-stopped
+    volumes:
+      - ../../../.g8e/ssl/ca/ca.crt:/operator/ca.crt:ro
     environment:
       DEVICE_TOKEN: ${DEVICE_TOKEN:-}
-      G8E_ENDPOINT: ${G8E_ENDPOINT:-g8e.local}
+      G8E_ENDPOINT: ${G8E_ENDPOINT:-localhost}
       EVAL_PROFILE: healthy
     extra_hosts:
-      - "g8e.local:host-gateway"
+      - "localhost:host-gateway"

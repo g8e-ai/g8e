@@ -16,20 +16,20 @@ networks:
     ipam:
       config:
         - subnet: 10.210.0.0/24
-  g8e-network:
-    external: true
 
 # Shared operator env — merged into each node's environment map below.
 x-operator-env: &operator-env
-  G8E_ENDPOINT: ${G8E_ENDPOINT:-g8e.local}
+  G8E_ENDPOINT: ${G8E_ENDPOINT:-localhost}
 
 x-web-node: &web-node
+  image: nginx-web-node:latest
   build:
     context: ./containers/web-node
     dockerfile: Dockerfile
   networks:
     - fleet-net
-    - g8e-network
+  extra_hosts:
+    - "localhost:host-gateway"
   expose:
     - "22"
     - "5000"
@@ -40,8 +40,7 @@ x-web-node: &web-node
   labels:
     - "demo.service=web-node"
   volumes:
-    - operator-ssl:/operator:ro
-    - /var/run/docker.sock:/var/run/docker.sock
+    - ../../../.g8e/ssl/ca/ca.crt:/operator/ca.crt:ro
 
 services:
   node-01:
@@ -155,8 +154,3 @@ services:
       - ./containers/dashboard/public:/app/public
     labels:
       - "demo.service=dashboard"
-
-
-volumes:
-  operator-ssl:
-    external: true

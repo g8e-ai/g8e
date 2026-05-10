@@ -551,8 +551,7 @@ _print_platform_info() {
     echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     echo "  Trusting the certificate adds g8e's self-signed CA to your browser's"
-    echo "  trusted store, allowing your browser to connect to https://localhost"
-    echo "  or https://g8e.local without security warnings."
+    echo "  trusted store, allowing your browser to connect without security warnings."
     echo ""
     echo "  Note: For operator systems, add g8e.local to your DNS or /etc/hosts"
     echo "  file pointing to this server's IP address (192.168.1.62)."
@@ -564,7 +563,8 @@ _print_platform_info() {
     echo "      Visit http://localhost to download and trust the certificate"
     echo ""
     echo "    If g8e is running on a remote system:"
-    echo "      Visit http://$_primary_ip to download and trust the certificate"
+    echo "      Visit http://g8e.local to download and trust the certificate"
+    echo "      (Add g8e.local to your /etc/hosts file pointing to $_primary_ip)"
     echo ""
     echo "    Or run the certificate trust script:"
     echo "      macOS/Linux:  curl -fsSL http://$_primary_ip/trust | sudo sh"
@@ -578,7 +578,7 @@ _print_platform_info() {
     echo "    If g8e is running on your local workstation:"
     echo "      Dashboard: https://localhost"
     echo ""
-    echo "    If g8e is running on a remote system (DNS or hosts file required for https):"
+    echo "    If g8e is running on a remote system:"
     echo "      Dashboard: https://g8e.local"
 }
 

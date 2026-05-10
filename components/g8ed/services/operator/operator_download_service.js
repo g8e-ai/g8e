@@ -12,43 +12,37 @@
 // limitations under the License.
 
 import { logger } from '../../utils/logger.js';
-import { PLATFORMS, OPERATOR_BINARY_BLOB_NAMESPACE } from '../../constants/service_config.js';
-import { OPERATOR_HTTP_TIMEOUT_MS } from '../../constants/http_client.js';
-import { HTTP_INTERNAL_AUTH_HEADER } from '../../constants/headers.js';
+import { PLATFORMS } from '../../constants/service_config.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * OperatorDownloadService
  *
- * Owns all operator binary retrieval from operator's blob store.
- * g8ed is stateless — no local disk cache, no KV store involvement.
+ * Owns all operator binary retrieval from local file system.
+ * The operator binary is built locally and served directly from disk.
  *
  * Architecture:
- *   g8ed → GET  https://operator/blob/{ns}/{os}-{arch}      → operator blob store
- *   g8ed → GET  https://operator/blob/{ns}/{os}-{arch}/meta  → operator blob metadata (availability check)
+ *   g8ed → read  /home/bob/g8e/components/g8eo/build/{os}-{arch}/g8e.operator  → local file system
  */
 class OperatorDownloadService {
-    constructor(listenUrl, internalAuthToken) {
-        if (!listenUrl) {
-            throw new Error('OperatorDownloadService requires listenUrl');
-        }
-        this._listenUrl = listenUrl.replace(/\/$/, '');
-        this._internalAuthToken = internalAuthToken || null;
+    constructor() {
+        // The operator binary is built at: $PROJECT_ROOT/components/g8eo/build/{os}-{arch}/g8e.operator
+        // Derive the project root from the current file location
+        this._projectRoot = path.resolve(__dirname, '../../../..');
+        this._buildDir = path.join(this._projectRoot, 'components', 'g8eo', 'build');
     }
 
-    _blobUrl(os, arch) {
-        return `${this._listenUrl}/blob/${OPERATOR_BINARY_BLOB_NAMESPACE}/${os}-${arch}`;
-    }
-
-    _headers() {
-        const headers = {};
-        if (this._internalAuthToken) {
-            headers[HTTP_INTERNAL_AUTH_HEADER] = this._internalAuthToken;
-        }
-        return headers;
+    _binaryPath(os, arch) {
+        return path.join(this._buildDir, `${os}-${arch}`, 'g8e.operator');
     }
 
     /**
-     * Fetch a binary from operator for the given platform.
+     * Read a binary from local file system for the given platform.
      *
      * @param {string} os
      * @param {string} arch
@@ -57,26 +51,17 @@ class OperatorDownloadService {
      */
     async getBinary(os, arch) {
         const platform = `${os}/${arch}`;
-        const url = this._blobUrl(os, arch);
+        const binaryPath = this._binaryPath(os, arch);
 
         try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), OPERATOR_HTTP_TIMEOUT_MS);
-            let res;
-            try {
-                res = await fetch(url, { signal: controller.signal, headers: this._headers() });
-            } finally {
-                clearTimeout(timeoutId);
-            }
-
-            if (!res.ok) {
-                logger.error(`[OPERATOR-DOWNLOAD-SERVICE] operator blob store returned ${res.status} for platform: ${platform}`, { url });
+            if (!fs.existsSync(binaryPath)) {
+                logger.error(`[OPERATOR-DOWNLOAD-SERVICE] Operator binary not found at ${binaryPath} for platform: ${platform}`);
                 throw new Error(`Operator binary not available for platform: ${platform}`);
             }
 
-            const arrayBuf = await res.arrayBuffer();
-            const buffer = Buffer.from(arrayBuf);
-            logger.info(`[OPERATOR-DOWNLOAD-SERVICE] Fetched ${platform} binary from operator blob store`, {
+            const buffer = fs.readFileSync(binaryPath);
+            logger.info(`[OPERATOR-DOWNLOAD-SERVICE] Read ${platform} binary from local file system`, {
+                path: binaryPath,
                 size_mb: (buffer.length / 1024 / 1024).toFixed(2),
             });
             return buffer;
@@ -84,30 +69,22 @@ class OperatorDownloadService {
             if (error.message.startsWith('Operator binary not available')) {
                 throw error;
             }
-            logger.error(`[OPERATOR-DOWNLOAD-SERVICE] Failed to fetch binary from operator blob store`, { platform, error: error.message });
+            logger.error(`[OPERATOR-DOWNLOAD-SERVICE] Failed to read binary from local file system`, { platform, error: error.message });
             throw new Error(`Operator binary not available for platform: ${platform}`);
         }
     }
 
     /**
-     * Check whether a binary is available for a given platform without downloading it.
+     * Check whether a binary is available for a given platform without reading it.
      *
      * @param {string} os
      * @param {string} arch
      * @returns {Promise<boolean>}
      */
     async hasBinary(os, arch) {
-        const url = `${this._blobUrl(os, arch)}/meta`;
+        const binaryPath = this._binaryPath(os, arch);
         try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), OPERATOR_HTTP_TIMEOUT_MS);
-            let res;
-            try {
-                res = await fetch(url, { signal: controller.signal, headers: this._headers() });
-            } finally {
-                clearTimeout(timeoutId);
-            }
-            return res.ok;
+            return fs.existsSync(binaryPath);
         } catch {
             return false;
         }

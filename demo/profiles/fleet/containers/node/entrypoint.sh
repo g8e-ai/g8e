@@ -16,7 +16,7 @@ if [ -S /var/run/docker.sock ]; then
 fi
 
 # Supervise the g8e operator in-container
-_operator_endpoint="${G8E_ENDPOINT:-g8e.local}"
+_operator_endpoint="${G8E_ENDPOINT:-localhost}"
 _operator_binary="/home/appuser/g8e.operator"
 _operator_log_prefix="[$(hostname) operator]"
 

@@ -10,13 +10,13 @@
     Run this whenever SSL certificates are rotated (e.g. after platform rebuild).
 
 .PARAMETER Server
-    SSH target in the format <user>@<server>. Example: admin@10.0.0.2 or admin@g8e.local
+    SSH target in the format <user>@<server>. Example: admin@10.0.0.2 or admin@localhost
 
 .EXAMPLE
     .\trust-ca.ps1 -Server admin@10.0.0.2
 
 .EXAMPLE
-    .\trust-ca.ps1 -Server admin@g8e.local
+    .\trust-ca.ps1 -Server admin@localhost
 #>
 
 param(

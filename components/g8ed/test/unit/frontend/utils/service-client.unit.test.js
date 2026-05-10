@@ -270,9 +270,9 @@ describe('ServiceClient.getServiceEndpoints [UNIT - jsdom]', () => {
     });
 
     it('reflects window.location.origin change for g8ed', () => {
-        window.location = { origin: 'https://g8e.local' };
+        window.location = { origin: 'https://localhost' };
         const endpoints = client.getServiceEndpoints(ComponentName.G8ED);
-        expect(endpoints).toEqual(['https://g8e.local']);
+        expect(endpoints).toEqual(['https://localhost']);
     });
 
     it('returns ComponentUrl.G8EE for g8ee', () => {

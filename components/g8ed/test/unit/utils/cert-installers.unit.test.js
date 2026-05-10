@@ -15,7 +15,7 @@ import { describe, it, expect } from 'vitest';
 import { windowsTrustScript, macosTrustScript, linuxTrustScript, g8eDeploy, universalTrustScript, windowsPowerShellTrustScript } from '../../../utils/cert-installers.js';
 
 describe('cert-installers', () => {
-    const testHost = 'g8e.local';
+    const testHost = 'localhost';
 
     describe('windowsTrustScript', () => {
         it('should generate a script with the correct host', () => {

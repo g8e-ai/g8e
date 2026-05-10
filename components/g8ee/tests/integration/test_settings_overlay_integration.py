@@ -89,7 +89,7 @@ class TestG8eeSettingsOverlayIntegration:
                 "supervisor_port": 443,
                 "app_url": "https://localhost",
                 "allowed_origins": "",
-                "passkey_rp_name": "g8e.local",
+                "passkey_rp_name": "localhost",
                 "passkey_rp_id": "localhost",
                 "passkey_origin": "https://localhost",
                 "command_validation": {
@@ -172,7 +172,7 @@ class TestG8eeSettingsOverlayIntegration:
                 "supervisor_port": 443,
                 "app_url": "https://localhost",
                 "allowed_origins": "",
-                "passkey_rp_name": "g8e.local",
+                "passkey_rp_name": "localhost",
                 "passkey_rp_id": "localhost",
                 "passkey_origin": "https://localhost",
                 "command_validation": {
@@ -331,7 +331,7 @@ class TestG8eeSettingsOverlayIntegration:
                 "supervisor_port": 443,
                 "app_url": "https://localhost",
                 "allowed_origins": "",
-                "passkey_rp_name": "g8e.local",
+                "passkey_rp_name": "localhost",
                 "passkey_rp_id": "localhost",
                 "passkey_origin": "https://localhost",
                 "command_validation": {

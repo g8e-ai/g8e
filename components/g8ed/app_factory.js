@@ -287,7 +287,7 @@ function mountRoutes(app, {
     const { requirePageAuth, requirePageAdmin, optionalAuth } = authMiddleware;
 
     // Platform Routes
-    app.use(BasePaths.HEALTH, contextMiddleware, createHealthRouter({ 
+    app.use(BasePaths.HEALTH, createHealthRouter({ 
         services,
         authorizationMiddleware 
     }));

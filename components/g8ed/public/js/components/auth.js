@@ -627,7 +627,7 @@ export class AuthManager {
         emailInput.type = 'hidden';
         emailInput.id = 'passkey-login-email';
         emailInput.name = 'passkey-login-email';
-        emailInput.value = 'superadmin@g8e.local';
+        emailInput.value = 'superadmin@localhost';
         form.appendChild(emailInput);
 
         const infoText = document.createElement('p');
@@ -635,7 +635,7 @@ export class AuthManager {
         infoText.style.marginBottom = '20px';
         infoText.style.textAlign = 'center';
         infoText.style.color = 'var(--text-secondary)';
-        infoText.textContent = 'Sign in as superadmin@g8e.local using your passkey.';
+        infoText.textContent = 'Sign in as superadmin@localhost using your passkey.';
         form.appendChild(infoText);
 
         const errorEl = document.createElement('div');
@@ -738,7 +738,7 @@ export class AuthManager {
         emailInput.type = 'hidden';
         emailInput.id = 'passkey-register-email';
         emailInput.name = 'passkey-register-email';
-        emailInput.value = 'superadmin@g8e.local';
+        emailInput.value = 'superadmin@localhost';
         form.appendChild(emailInput);
 
         const infoText = document.createElement('p');
@@ -746,7 +746,7 @@ export class AuthManager {
         infoText.style.marginBottom = '20px';
         infoText.style.textAlign = 'center';
         infoText.style.color = 'var(--text-secondary)';
-        infoText.textContent = 'An administrative account superadmin@g8e.local will be created.';
+        infoText.textContent = 'An administrative account superadmin@localhost will be created.';
         form.appendChild(infoText);
 
         const errorEl = document.createElement('div');
