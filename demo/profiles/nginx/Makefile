@@ -184,9 +184,9 @@ deploy:
 		echo "  Deploying to $$node..."; \
 		docker exec $$node sh -c "\
 			curl -fsSL --cacert /operator/ca.crt -H \"Authorization: Bearer $$TOKEN\" \
-				-o g8e.operator \"https://172.17.0.1:9000/operator/download/linux/amd64\" && \
+				-o g8e.operator \"https://172.17.0.1:443/operator/download/linux/amd64\" && \
 			curl -fsSL --cacert /operator/ca.crt -H \"Authorization: Bearer $$TOKEN\" \
-				-o g8e.operator.sha256 \"https://172.17.0.1:9000/operator/download/linux/amd64/sha256\" && \
+				-o g8e.operator.sha256 \"https://172.17.0.1:443/operator/download/linux/amd64/sha256\" && \
 			sha256sum -c g8e.operator.sha256 && \
 			chmod +x g8e.operator && \
 			nohup sudo ./g8e.operator --endpoint 172.17.0.1:9001 --working-dir /home/appuser --log info -D \"$$TOKEN\" < /dev/null > g8e.operator.log 2>&1 & \

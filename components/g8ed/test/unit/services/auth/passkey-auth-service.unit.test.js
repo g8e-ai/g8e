@@ -135,7 +135,7 @@ describe('PasskeyAuthService [UNIT]', () => {
 
     describe('RP ID resolution', () => {
         it('uses settings passkey_rp_id when set (and not localhost)', async () => {
-            const settingsService = makeSettingsService({ passkey_rp_id: 'localhost' });
+            const settingsService = makeSettingsService({ passkey_rp_id: 'example.com' });
             const svc = new PasskeyAuthService({ userService, cacheAsideService: services.cacheAsideService, settingsService });
             const user = makeUserDoc();
             generateRegistrationOptions.mockResolvedValueOnce({ challenge: 'ch' });
@@ -143,7 +143,7 @@ describe('PasskeyAuthService [UNIT]', () => {
             await svc.generateRegistrationChallenge(makeReq({ hostname: 'wrong.ai' }), user);
 
             const call = generateRegistrationOptions.mock.calls[0][0];
-            expect(call.rpID).toBe('localhost');
+            expect(call.rpID).toBe('example.com');
         });
 
         it('falls back to req.hostname when settings is localhost', async () => {
