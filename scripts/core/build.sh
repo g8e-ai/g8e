@@ -359,6 +359,12 @@ _start_operator_listen() {
 
     _rotate_logs "$OPERATOR_LISTEN_LOG_FILE"
 
+    local auth_token
+    auth_token=$(cat "$OPERATOR_LISTEN_SSL_DIR/internal_auth_token" 2>/dev/null | tr -d ' \n\r' || true)
+
+    export G8E_INTERNAL_AUTH_TOKEN="$auth_token"
+    export G8E_SSL_DIR="$OPERATOR_LISTEN_SSL_DIR"
+
     setsid "$bin" --listen \
         --data-dir "$OPERATOR_LISTEN_DATA_DIR" \
         --ssl-dir "$OPERATOR_LISTEN_SSL_DIR" \
@@ -378,9 +384,13 @@ _start_operator_listen() {
 }
 
 _stop_operator_listen() {
+    local pid=""
+    
     if [ -f "$OPERATOR_LISTEN_PID_FILE" ]; then
-        local pid
         pid=$(cat "$OPERATOR_LISTEN_PID_FILE")
+    fi
+    
+    if [ -n "$pid" ] && ps -p "$pid" > /dev/null 2>&1; then
         echo "  Stopping Operator listen mode (PID: $pid)..."
         kill "$pid" 2>/dev/null || true
         local waited=0
@@ -394,11 +404,22 @@ _stop_operator_listen() {
         fi
         rm -f "$OPERATOR_LISTEN_PID_FILE"
     else
-        if _operator_listen_running; then
-            echo "  Stopping Operator listen mode via pkill..."
-            pkill -f "g8e.operator --listen" || true
-            rm -f "$OPERATOR_LISTEN_PID_FILE"
+        local found_pid
+        found_pid=$(pgrep -f "g8e.operator --listen" | head -1)
+        if [ -n "$found_pid" ]; then
+            echo "  Stopping Operator listen mode (PID: $found_pid, found via pgrep)..."
+            kill "$found_pid" 2>/dev/null || true
+            local waited=0
+            while ps -p "$found_pid" > /dev/null 2>&1 && [ $waited -lt 10 ]; do
+                sleep 1
+                waited=$((waited + 1))
+            done
+            if ps -p "$found_pid" > /dev/null 2>&1; then
+                echo "  Force stopping Operator listen mode..."
+                kill -9 "$found_pid" 2>/dev/null || true
+            fi
         fi
+        rm -f "$OPERATOR_LISTEN_PID_FILE"
     fi
 }
 
