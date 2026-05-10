@@ -32,29 +32,43 @@ def create_mock_request(path: str, headers: dict):
     return request
 
 @pytest.mark.asyncio
-async def test_g8ed_bypass_security_risk_reproduction():
-    """
-    Verify that G8ED CANNOT bypass web_session_id/user_id on non-exempt paths.
-    This test previously passed (vulnerability), now it should raise AuthenticationError.
-    """
-    # A path that SHOULD NOT be exempt (e.g., chat)
-    vulnerable_path = "/api/internal/chat"
+async def test_g8ed_rejected_on_non_exempt_path_without_web_session_id():
+    """G8ED requests to non-exempt paths without web_session_id are rejected."""
+    non_exempt_path = "/api/internal/cases"
     
     headers = {
         G8eHeaders.SOURCE_COMPONENT: ComponentName.G8ED,
         G8eHeaders.CASE_ID: "some-case",
         G8eHeaders.INVESTIGATION_ID: "some-inv",
         G8eHeaders.SYSTEM_FINGERPRINT: "fp-test-123",
-        # web_session_id and user_id are MISSING
     }
     
-    request = create_mock_request(vulnerable_path, headers)
+    request = create_mock_request(non_exempt_path, headers)
     
-    # FIXED BEHAVIOR: This should now raise AuthenticationError
     with pytest.raises(AuthenticationError) as excinfo:
         await G8eHttpContext.from_request(request)
     
-    assert "header is required for all internal requests" in str(excinfo.value)
+    assert "websession-id" in str(excinfo.value).lower()
+
+@pytest.mark.asyncio
+async def test_g8ed_rejected_on_non_exempt_path_without_user_id():
+    """G8ED requests to non-exempt paths without user_id are rejected."""
+    non_exempt_path = "/api/internal/cases"
+    
+    headers = {
+        G8eHeaders.SOURCE_COMPONENT: ComponentName.G8ED,
+        G8eHeaders.WEB_SESSION_ID: "sess-123",
+        G8eHeaders.CASE_ID: "some-case",
+        G8eHeaders.INVESTIGATION_ID: "some-inv",
+        G8eHeaders.SYSTEM_FINGERPRINT: "fp-test-123",
+    }
+    
+    request = create_mock_request(non_exempt_path, headers)
+    
+    with pytest.raises(AuthenticationError) as excinfo:
+        await G8eHttpContext.from_request(request)
+    
+    assert "user-id" in str(excinfo.value).lower()
 
 @pytest.mark.asyncio
 async def test_g8ed_allowed_on_exempt_path():

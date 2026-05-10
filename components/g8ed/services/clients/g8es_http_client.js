@@ -43,7 +43,7 @@ class OperatorHttpClient {
      * @param {string} [config.internalAuthToken] - Shared secret for operator authentication
      * @param {string} [config.caCertPath] - Path to CA certificate for TLS verification
      */
-    constructor({ listenUrl, component = 'G8E-HTTP', internalAuthToken = null, caCertPath = null } = {}) {
+    constructor({ listenUrl, component = 'OPERATOR-HTTP', internalAuthToken = null, caCertPath = null } = {}) {
         if (!listenUrl) {
             throw new Error('OperatorHttpClient: listenUrl is required');
         }

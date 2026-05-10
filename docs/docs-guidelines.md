@@ -57,7 +57,7 @@ docs/
 - Cross-component data flows, protocols, and architectural decisions belong in `docs/architecture/`.
 - External reference material belongs in `docs/reference/` — never modify files under `docs/reference/`.
 - Every new doc file must be added to `docs/README.md`.
-- `developer.md` component `#### Tests` subsections contain only code-quality rules (assertion discipline, model/constant usage, prohibited patterns). All test infrastructure — fixtures, mocks, helpers, cleanup, how to run, CI, test-runner containers — belongs exclusively in `testing.md`. Never duplicate these across the two files.
+- `developer.md` component `#### Tests` subsections contain only code-quality rules (assertion discipline, model/constant usage, prohibited patterns). All test infrastructure — fixtures, mocks, helpers, cleanup, how to run, CI, and host-native runners — belongs exclusively in `testing.md`. Never duplicate these across the two files.
 
 **Authoritative ownership — facts with a single home:**
 

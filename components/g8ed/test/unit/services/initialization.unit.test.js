@@ -12,6 +12,7 @@
 // limitations under the License.
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { execFileSync } from 'child_process';
 import * as initialization from '@g8ed/services/initialization.js';
 
 /**
@@ -33,6 +34,17 @@ describe('Initialization Service', () => {
     });
 
     describe('initializeSettingsService', () => {
+        it('should be importable by the production Node ESM runtime', () => {
+            expect(() => execFileSync(process.execPath, [
+                '--input-type=module',
+                '-e',
+                "await import('./services/initialization.js')"
+            ], {
+                cwd: process.cwd(),
+                stdio: 'pipe'
+            })).not.toThrow();
+        });
+
         it('should initialize settings service and core clients', async () => {
             const settingsService = await initialization.initializeSettingsService();
             

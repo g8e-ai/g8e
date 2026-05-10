@@ -4,8 +4,8 @@ title: g8e CLI
 
 # g8e Platform CLI
 
-Last Updated: 2026-05-07
-Version: v0.2.0
+Last Updated: 2026-05-10
+Version: v0.2.1
 
 The `g8e` command is the unified entry point for the g8e AI governance platform. It orchestrates the full lifecycle of a self-hosted, human-in-the-loop AI operations system.
 
@@ -116,7 +116,7 @@ Manage the local platform lifecycle.
 
 ### operator
 Build and deploy g8eo operators.
-- `init`: Build operator binary in test-runner container
+- `init`: Build operator binary
 - `build`: Build amd64 operator for current host
 - `build-all`: Build and compress binaries for all architectures (amd64, arm64, 386)
 - `deploy <host>`: SCP/SSH deployment and launch with flags for arch, endpoint, ports
@@ -125,7 +125,7 @@ Build and deploy g8eo operators.
 - `ssh-config`: Manage SSH identities for fleet operations
 
 ### test
-Run tests in isolated test-runner containers.
+Run tests through host-native per-component runners.
 - `g8ee [path]`: Python tests (pytest, ruff, pyright) with LLM provider flags
 - `g8ed [path]`: Dashboard and API tests (Vitest)
 - `g8eo [path]`: Go operator tests with race detection

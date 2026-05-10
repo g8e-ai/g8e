@@ -48,7 +48,7 @@ describe('OperatorHttpClient', () => {
         });
 
         it('should set default component name', () => {
-            expect(client.component).toBe('G8E-HTTP');
+            expect(client.component).toBe('OPERATOR-HTTP');
         });
     });
 
