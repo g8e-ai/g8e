@@ -6,24 +6,24 @@ parent: Architecture
 # g8e Scripts
 
 Last Updated: 2026-05-10
-Version: v0.2.2
+Version: v0.2.3
 
-The scripts layer provides the operational interface for the g8e platform. It is being migrated from container orchestration to host-native lifecycle management for Operator, Dashboard, and Engine.
+The scripts layer provides the operational interface for the g8e platform. It has been migrated from container orchestration to host-native lifecycle management for Operator, Dashboard (g8ed), and Engine (g8ee).
 
 ## Architecture Overview
 
-g8e uses a host-native target model. Operator listen mode owns local persistence and pub/sub state under `./.g8e`, while Dashboard and Engine run as first-class platform components.
+g8e uses a host-native target model. Operator listen mode owns local persistence and pub/sub state under `./.g8e`, while Dashboard and Engine run as managed platform services on the host.
 
 ### The `./g8e` CLI Entry Point
 
 The root `./g8e` script is a Bash-based dispatcher. It is the only script an operator should invoke directly on the host.
 
-- **Host Runtime State:** Generated platform runtime state is rooted at `./.g8e`, including `data`, `ssl`, `pids`, and `logs`; managed services receive the SSL path via `G8E_SSL_DIR`.
+- **Host Runtime State:** Generated platform runtime state is rooted at `./.g8e`, including `data`, `ssl`, `pids`, and `logs`. Managed services receive the SSL path via `G8E_SSL_DIR`.
 - **Session Management:** Commands targeting the internal API (`data`, `security`, `mcp`, `operator`) are gated by a local credential store (`~/.g8e/credentials`) which is populated via `./g8e login`.
 
 ### Execution Flow
 1. **Host-Side:** Commands like `platform start` or `operator build` run directly on the host, managing Operator listen mode and component lifecycle.
-2. **Tooling-Side:** Commands like `data users list` or `security validate` run with the platform environment populated, including internal URLs and the host SSL path.
+2. **Tooling-Side:** Commands like `data users list` or `security validate` run with the platform environment populated, including internal URLs and the host SSL path, often delegating to Python or Node.js helpers.
 
 ---
 
@@ -33,12 +33,12 @@ The root `./g8e` script is a Bash-based dispatcher. It is the only script an ope
 Orchestrates platform lifecycle via `scripts/core/build.sh`.
 
 - **`start` / `stop` / `restart`:** Host-native service lifecycle. `start` waits for service health checks.
-- **`build` / `rebuild`:** Creates or recreates images. `rebuild` automatically syncs agent personas before rebuilding the `g8ee` image.
-- **`setup`:** Initial platform configuration and volume initialization.
+- **`rebuild`:** Restarts managed services (g8ee, g8ed). Unlike legacy container models, this does not build images but restarts host processes.
+- **`setup`:** Initial platform configuration and service initialization.
 - **`reset`:** Destructive. Wipes Dashboard/Engine data and Operator listen-mode data, while preserving TLS material in `./.g8e/ssl`.
-- **`wipe`:** Clears application data via the Operator listen-mode API. Preserves platform settings, SSL certs, and authentication state. Useful for demo resets.
-- **`logs`:** Aggregates logs from all managed services into a single, time-ordered stream via `scripts/core/logs.sh`.
-- **`settings`:** Direct access to platform-wide settings (LLM, search, etc.) stored by Operator listen mode.
+- **`wipe`:** Clears application data via the Operator listen-mode API. Preserves platform settings, SSL certs, and authentication state.
+- **`logs`:** Aggregates logs from all managed services into a single stream via `scripts/core/logs.sh`.
+- **`settings`:** Direct access to platform-wide settings stored by Operator listen mode.
 
 ### Data Management (`./g8e data`)
 Unified interface for interacting with platform state, dispatched via `scripts/data/manage-operator.py`.
@@ -52,12 +52,11 @@ Unified interface for interacting with platform state, dispatched via `scripts/d
     - **`audit`**: LFAA audit vault queries (`manage-lfaa.py`).
     - **`mcp`**: MCP client integration configuration (`manage-mcp.py`).
     - **`reputation`**: Reputation state & commitment management (`manage-reputation.py`).
-- **`sync-personas`:** Unidirectional sync from Python persona models (`components/g8ee/app/models/personas/`) to the canonical `agents.json`.
 
 ### Security & Identity (`./g8e security`)
 Manages the platform's root of trust and security invariants.
 
-- **`validate`:** Checks TLS integrity, volume mount permissions, and environment variable consistency.
+- **`validate`:** Checks TLS integrity, permissions, and environment consistency.
 - **`certs`:** Manages the internal ECDSA P-384 CA via `scripts/security/manage-ssl.sh`.
 - **`mtls-test`:** Connectivity test for mTLS between components.
 - **`passkeys`:** Manages FIDO2/WebAuthn credentials via `manage-passkeys.py`.
@@ -66,14 +65,14 @@ Manages the platform's root of trust and security invariants.
 ### Testing (`./g8e test`)
 Runs component-specific test suites using native toolchains via `scripts/testing/run_tests.sh`.
 
-- **Isolation:** Tests for `g8ee` (Python), `g8ed` (Node.js), and `g8eo` (Go) run in isolated environments using native virtualenvs, npm installs, and Go tooling.
+- **Isolation:** Tests for `g8ee` (Python), `g8ed` (Node.js), and `g8eo` (Go) run on the host using native virtualenvs, npm, and Go toolchains.
 
 ### Operator Operations (`./g8e operator`)
-Lifecycle management for the `g8eo` operator binary.
+Lifecycle management for the `g8eo` operator binary and remote deployments.
 
-- **`build` / `build-all`:** Compiles the operator for current or all architectures (amd64, arm64).
+- **`build` / `build-all`:** Compiles the operator for current or all architectures (amd64, arm64, 386).
 - **`deploy`**: Fetches the binary from Operator listen mode and copies it to a remote host via SSH.
-- **`stream`**: Starts an interactive streaming session with one or more remote operators.
+- **`stream`**: Starts an interactive streaming session with remote operators.
 - **`reauth`**: Forces a re-authentication of a running operator process.
 
 ### Interactive Setup Tools
@@ -81,7 +80,6 @@ Located in `scripts/tools/`, these provide guided configuration:
 
 - **`./g8e llm setup`**: Configures LLM providers (Gemini, Anthropic, OpenAI, etc.).
 - **`./g8e search setup`**: Configures Vertex AI Search for web grounding.
-- **`./g8e aws setup`**: Mounts local AWS credentials into the platform.
 - **`./g8e ssh setup`**: Configures SSH multiplexing for operator streaming.
 
 ---
@@ -93,24 +91,23 @@ scripts/
 ├── core/           # Platform lifecycle (Bash)
 │   ├── build.sh    #   Platform lifecycle orchestration
 │   ├── logs.sh     #   Log aggregation
-│   └── setup.sh    #   Environment initialization
+│   └── setup.sh    #   Setup delegation
 ├── data/           # Data operations (Python)
-│   ├── manage-operator.py    # Main dispatcher
-│   ├── manage-store.py   # Document/KV queries
-│   ├── manage-users.py   # User management
-│   ├── manage-lfaa.py    # Audit vault queries
-│   └── sync-personas.py  # Persona synchronization
+│   ├── manage-operator.py    # Main dispatcher (formerly manage-g8es.py)
+│   ├── manage-store.py       # Document/KV queries
+│   ├── manage-users.py       # User management
+│   ├── manage-lfaa.py        # Audit vault queries
+│   └── manage-reputation.py  # Reputation management
 ├── security/       # TLS and Security (Bash/Python)
-│   ├── manage-ssl.sh     # Cert lifecycle
-│   ├── manage-passkeys.py # FIDO2/WebAuthn
-│   ├── mtls-test.sh      # mTLS validation
+│   ├── manage-ssl.sh         # Cert lifecycle
+│   ├── manage-passkeys.py    # FIDO2/WebAuthn
 │   └── validate-platform-security.sh
-├── testing/        # Test runners and parity
-│   └── run_tests.sh      # Main test execution bridge
+├── testing/        # Test runners
+│   └── run_tests.sh          # Main test execution bridge
 └── tools/          # Setup wizards
-    ├── setup-llm.sh      # LLM provider config
-    ├── setup-search.sh   # Vertex Search config
-    └── setup-ssh.sh      # SSH multiplexing config
+    ├── setup-llm.sh          # LLM provider config
+    ├── setup-search.sh       # Vertex Search config
+    └── setup-ssh.sh          # SSH multiplexing config
 ```
 
 ---

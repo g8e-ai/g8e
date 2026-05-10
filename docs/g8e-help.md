@@ -13,72 +13,67 @@ The `g8e` command is the unified entry point for the g8e AI governance platform.
 
 The platform is built on security-first architectural invariants that cannot be bypassed:
 
-- **Authority**: Every action is gated by FIDO2/mTLS. Human judgment is the final, non-bypassable security layer.
-- **Zero Trust**: No standing credentials. Privileges are earned per-action and mathematically bound to sessions.
+- **3-Layer Governance Bedrock**: Every action is gated by a hierarchical validation system: L1 (Technical Bedrock), L2 (Consensus/Tribunal), and L3 (Human Authorization).
+- **Zero Trust**: No standing credentials. Privileges are ephemeral and mathematically bound to sessions via mTLS and internal auth tokens.
 - **Binary Safety**: Security is enforced at the binary and network layers, not via fragile LLM prompts.
 - **Data Sovereignty**: Operational data stays on the remote host; only scrubbed context reaches the AI.
-- **Ephemeral Presence**: Tiny, outbound-only operator binary with no inbound ports. It vanishes when the process ends.
-- **Immutable Audit**: Git-backed ledgers on each operator provide a complete, tamper-evident record of every change.
+- **Immutable Audit**: Git-backed ledgers and Merkle commitments provide a tamper-evident record of every change and agent verdict.
 - **Air-Gap Capable**: Fully self-hosted with no SaaS dependencies or mandatory telemetry.
-- **Provider Agnostic**: Swap LLM providers (Gemini, Anthropic, OpenAI, Ollama, local) at will. Governance is the constant.
+- **Provider Agnostic**: Swap LLM providers (Gemini, Anthropic, OpenAI, Ollama) at will. Governance is the constant.
 
 ## Component Architecture
 
-The platform is composed of specialized components, each with a single responsibility:
+The platform consists of exactly three components running natively on the host:
 
 | Component | Language | Purpose |
 |-----------|----------|---------|
-| **g8ed** | Node.js | Dashboard & API Gateway. Authentication, session management, SSE relay, operator lifecycle. |
-| **g8ee** | Python | Reasoning Engine. Orchestrates AI agents (Triage, Sage, Dash, Tribunal) and enforces governance. |
-| **Operator** | Go | Platform Persistence & Pub/Sub (listen mode). SQLite-based blob store, KV cache, and event bus. Operator binaries are served from the local file system by g8ed. |
+| **g8ed** | Node.js | Dashboard & API Gateway. Authentication, session management, SSE relay, and operator lifecycle. |
+| **g8ee** | Python | Reasoning Engine. Orchestrates AI agents and enforces the 3-Layer Governance Bedrock. |
+| **Operator** | Go | Persistence & Pub/Sub. When running in `--listen` mode, it acts as the platform's storage and event bus. |
 
 ### Agent Terminology
 
 The AI reasoning engine uses specialized agents with distinct roles:
 
-- **Triage**: The initial classifier that reads message complexity, intent, and user posture.
-- **Dash**: Fast-path responder for simple, single-step requests (e.g., status checks, greetings).
+- **Triage**: The initial classifier that determines complexity, intent, and user posture.
+- **Dash**: High-efficiency responder for simple, single-step requests.
 - **Sage**: Senior reasoning agent for complex, multi-step investigations and command orchestration.
-- **Tribunal**: 5-member ensemble (Axiom, Concord, Variance, Pragma, Nemesis) that translates Sage's intent into hardened shell commands through Byzantine consensus.
-- **Warden**: Defensive coordinator that performs pre-execution risk assessment on commands, files, and errors.
-- **Auditor**: Final quality gate that verifies Tribunal output against Sage's intent with dissent awareness.
+- **Tribunal**: 5-member ensemble (Axiom, Concord, Variance, Pragma, Nemesis) that translates Sage's intent into hardened shell commands through consensus.
+- **Warden**: Defensive circuit breaker that performs risk assessment. Triggers a two-strike lockout on repeated high-risk detections.
+- **Auditor**: The final technical gatekeeper that verifies Tribunal output against Sage's intent and manages agent reputation.
 
 ## The Request Lifecycle
 
-A single user message moves through six distinct phases:
+A user request moves through the **3-Layer Governance Bedrock**:
 
-1. **Ingress**: g8ed receives the request via HTTPS, authenticates the session, and relays to g8ee with full context.
-2. **Triage**: g8ee classifies the message as `simple` (Dash, lite model) or `complex` (Sage, primary model).
-3. **Orchestration**: The selected agent runs a ReAct loop, calling tools as needed. Gated tools route through the Tribunal.
-4. **Governance**: Every command passes through Sentinel (scrubbing), Tribunal (translation), Warden (risk analysis), and Auditor (verification).
-5. **Approval**: State-changing operations halt for human approval via the dashboard.
-6. **Execution & Audit**: Approved commands execute on the operator. Results are scrubbed, persisted to local vaults, and committed to the git ledger.
+1. **Ingress**: `g8ed` authenticates the session and relays the request to `g8ee`.
+2. **Triage**: The message is classified as `simple` (Dash) or `complex` (Sage).
+3. **L1: Technical Bedrock**: Initial scrubbing and validation against forbidden patterns (sudo, etc.).
+4. **L2: Consensus (Tribunal)**: Intent is translated into commands by the ensemble. The Warden checks for risk, and the Auditor verifies technical correctness.
+5. **L3: Authorization**: State-changing operations halt for human approval via the dashboard. Benign commands may use auto-approval if configured.
+6. **Execution**: Approved commands execute on the operator. Results are scrubbed and committed to the git ledger.
 
 ## Operational Modes
 
 ### Operator Bound Mode
 When at least one g8eo operator is connected and bound to the session:
-
-- Full tool suite: command execution, file operations, directory listing, port checks, web search
-- Human-in-the-loop: All state-changing operations require explicit approval
-- Multi-operator support: AI selects targets per command; batch operations fan out with unified approval
-- Intent permissions: AWS-type operators use JIT permission escalation via the Intent System
+- Full tool suite: command execution, file operations, web search.
+- Human-in-the-loop: All state-changing operations require explicit approval.
+- Multi-operator support: AI selects targets per command; batch operations fan out with unified approval.
 
 ### Advisory Mode
 When no operator is connected:
-
-- Limited tools: `search_web` only (if Vertex AI Search is configured)
-- No execution: AI provides guidance and suggested commands but cannot act on infrastructure
-- Behavior: The system automatically swaps to no-search prompt variants to prevent hallucinated tool calls
+- Limited tools: `search_web` only.
+- No execution: AI provides guidance and suggested commands but cannot act on infrastructure.
 
 ## Platform Lifecycle
 
 ### Daily Operations
 ```bash
-./g8e platform start    # Start the managed services
-./g8e platform status   # Check service health
+./g8e platform start    # Start g8ed, g8ee, and Operator listen mode
+./g8e platform status   # Check service health and PIDs
 ./g8e platform logs     # Stream aggregated logs
-./g8e platform settings # View or update configuration
+./g8e platform settings # View or update platform configuration
 ```
 
 ### Operator Deployment
@@ -90,113 +85,81 @@ When no operator is connected:
 
 ### Testing & Development
 ```bash
-./g8e test g8ee tests/unit     # Python backend tests
-./g8e test g8ed test/unit      # Dashboard tests
-./g8e test g8eo ./...          # Go operator tests
+./g8e test g8ee      # Python backend tests
+./g8e test g8ed      # Dashboard tests
+./g8e test g8eo      # Go operator tests
 ```
 
 ## Command Reference
 
 ### identity
-Authentication and session management.
 - `login`: Authenticate and save session to `~/.g8e/credentials`
 - `logout`: Clear local session and credentials
 
 ### platform
-Manage the local platform lifecycle.
-- `start`: Start all platform components
+- `start`: Start all platform components (g8ed, g8ee, Operator)
 - `stop`: Stop all platform components
 - `restart`: Restart all platform components
-- `status`: Show component health and versions
+- `status`: Show component health, versions, and PIDs
 - `reset`: Reset application data (preserves SSL)
-- `clean`: Remove all g8e processes and data
-- `logs`: Stream component logs
-- `settings`: Manage the local platform lifecycle.
-- `demo`: Start platform and demo environment together
+- `wipe`: Clear app data while preserving platform settings and SSL
+- `clean`: Nuke all processes and the `.g8e` runtime directory
+- `logs`: Stream logs from all components
+- `settings`: Manage platform configuration (sections: general, llm, etc.)
 
 ### operator
-Build and deploy g8eo operators.
-- `init`: Build operator binary
+- `init`: Build local operator binary
 - `build`: Build amd64 operator for current host
-- `build-all`: Build and compress binaries for all architectures (amd64, arm64, 386)
-- `deploy <host>`: SCP/SSH deployment and launch with flags for arch, endpoint, ports
-- `stream <host...>`: High-concurrency streaming injection across fleet
-- `reauth --user-id|--email`: Request fresh operator session for specific user
+- `build-all`: Build binaries for all architectures
+- `deploy <host>`: SCP/SSH deployment and launch
+- `stream <host...>`: High-concurrency fleet-wide injection
+- `reauth`: Request fresh operator session for a specific user
 - `ssh-config`: Manage SSH identities for fleet operations
 
 ### test
-Run tests through host-native per-component runners.
-- `g8ee [path]`: Python tests (pytest, ruff, pyright) with LLM provider flags
-- `g8ed [path]`: Dashboard and API tests (Vitest)
+- `g8ee [path]`: Python tests with LLM provider support
+- `g8ed [path]`: Vitest dashboard and API tests
 - `g8eo [path]`: Go operator tests with race detection
 
 ### security
-Audit and manage security posture.
-- `validate`: Check TLS integrity and volume mount permissions
-- `certs generate|rotate|status|trust`: Manage platform CA and mTLS certificates
+- `validate`: Check TLS integrity and volume permissions
+- `certs`: Manage platform CA and certificates (generate, rotate, status, trust)
 - `passkeys`: Manage FIDO2/WebAuthn credentials
 - `rotate-internal-token`: Refresh shared secret between components
-- `scan-licenses`: Run compliance scans on dependencies
-- `mtls-test`: Verify mTLS connectivity between g8ep and g8ed
+- `mtls-test`: Verify mTLS connectivity
 
 ### data
-Direct interaction with persistence layer via g8ep.
 - `users|operators`: Query or modify user and operator documents
-- `store <collection> list|get|stats|network|find|kv|wipe|get-setting`: Access blob store
-- `settings`: Manage platform configuration
+- `store <collection> list|get`: Access the SQLite-based blob store
+- `settings`: Low-level platform configuration management
 - `audit`: View LFAA audit logs
 - `device-links`: Manage device link tokens
 
 ### llm
-Configure LLM providers and model selection.
 - `setup`: Interactive provider configuration
-- `show|get|set <key>`: View or update LLM variables
+- `show|get|set`: View or update LLM variables
 - `restart`: Restart inference engine to apply settings
 
 ### demo
-Manage the "broken fleet" simulation for AI operator training and evaluation.
-- `up [-n <count>] [-d <token>]`: Build and start N devices (default: 10). Pass a `DEVICE_TOKEN` to auto-attach operators.
-- `down`: Stop all simulation nodes and dashboards.
-- `status`: View container status, node counts, and dashboard availability.
-- `clean`: Forcefully remove all demo containers, images, and networks.
-- `health`: Run diagnostic checks (e.g., Flask/Nginx status) across the active fleet.
-- `profile [list|switch P=<name>]`: Manage demo scenarios. Profiles include `acme-corp` (1000-node regional fleet), `nginx` (broken web apps), and `fleet`.
-- `shell <node>`: Drop into a specific simulation node's shell for manual verification.
-- `devices`: List all discovered device hostnames in the active profile.
-- `broken`: List devices currently in a non-healthy state (e.g., SSL expired, 502 Bad Upstream).
-- `operators`: Show the status of g8e operator processes across the fleet.
-- `deploy -d <token>`: Push and launch operators to all nodes via pubsub.
-- `stream -d <token>`: Inject operators via SSH streaming (requires `g8ep` access).
-- `vanish`: Zero-trace removal of all operator processes and binaries from the fleet.
-- `dashboard`: Access the standalone, profile-specific status dashboard (e.g., ACME Global Monitor).
+- `up [-n <count>] [-d <token>]`: Start a simulated fleet of N devices
+- `down`: Stop all simulation nodes
+- `status`: View container status and node counts
+- `clean`: Forcefully remove all demo artifacts
+- `profile [list|switch]`: Manage demo scenarios (e.g., acme-corp, nginx)
+- `shell <node>`: Drop into a simulation node's shell
+- `devices|broken`: List discovered or unhealthy devices
+- `operators`: Show status of g8e operator processes in the fleet
 
 ### evals
-Real-operator evaluation fleet management.
-- `run --gold-set <name|path>`: Execute benchmark against a gold set from `g8ee-test-runner`
+- `run --gold-set <path>`: Execute benchmark against a gold set
 - `list`: List available evaluation scenarios
-- `up --nodes <n> --device-token <tok>`: Bring up eval nodes
-- `down`: Tear down eval fleet
-- `status`: View eval node status
-- `logs <node>`: View logs for specific node
+- `up|down|status|logs`: Manage the evaluation fleet
 
-### mcp
-Model Context Protocol integration.
-- `config`: Configure MCP servers
-- `test`: Test MCP connectivity
-- `status`: View MCP connection status
-
-### search
-Vertex AI Search configuration for web search tool.
-- `setup`: Configure search provider
-- `disable`: Disable search integration
-
-### ssh
-SSH credential management for fleet operations.
-- `setup`: Mount host SSH keys into g8ep
-
-### aws
-AWS credential management for AWS-integrated tools.
-- `setup`: Mount AWS credentials into g8ep
+### Integration Tools
+- `mcp`: Model Context Protocol integration (config, test, status)
+- `search`: Vertex AI Search configuration (setup, disable)
+- `ssh`: Manage host SSH key mounts
+- `aws`: Manage AWS credential mounts
 
 ## Detailed Help
 

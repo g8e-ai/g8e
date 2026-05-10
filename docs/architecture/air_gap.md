@@ -8,7 +8,7 @@ parent: Architecture
 Last Updated: 2026-05-10
 Version: v0.2.2
 
-g8e is designed for high-security environments where internet connectivity is strictly prohibited. The platform supports fully air-gapped deployments with **zero runtime internet dependencies**, achieving this through self-hosted core infrastructure, vendored dependencies, and local LLM inference.
+g8e is designed for high-security environments where internet connectivity is strictly prohibited. The platform supports fully air-gapped deployments with **zero runtime internet dependencies**, achieving this through a self-contained three-component architecture, vendored dependencies, and local LLM inference.
 
 ---
 
@@ -17,17 +17,17 @@ g8e is designed for high-security environments where internet connectivity is st
 The air-gap configuration is the "Canonical Truth" of g8e's privacy model. In this mode, the platform operates as a completely sealed unit:
 
 - **No Telemetry:** Zero outbound usage, health, or error data is sent to Lateralus Labs.
-- **Local Assets:** All frontend assets (fonts, icons, JS libraries) are served locally from the `g8ed` container.
-- **Local Persistence:** All platform state is stored in a unified SQLite database managed by the `operator` (Operator listen mode) service.
+- **Local Assets:** All frontend assets (fonts, icons, JS libraries) are served locally from the `g8ed` (Dashboard) component.
+- **Local Persistence:** All platform state, including chat history, settings, and secrets, is stored in a unified SQLite database managed by the `g8eo` (Operator) component in Listen Mode.
 
 ---
 
-## The Platform Backbone: operator (Listen Mode)
+## The Platform Backbone: Operator (Listen Mode)
 
-In an air-gapped deployment, the platform requires a local "Hub" for persistence and messaging. This is provided by running the `g8eo` (Operator) binary in **Listen Mode**, which the platform refers to as `operator`.
+In an air-gapped deployment, the platform requires a local "Hub" for persistence and messaging. This is provided by running the `g8eo` (Operator) binary in **Listen Mode** (`--listen`). In this mode, the Operator acts as the platform's central persistence and messaging backbone rather than an outbound execution agent.
 
 ### Architecture & Ports
-The `operator` backbone exposes two primary interfaces for internal component communication:
+The Operator backbone exposes two primary interfaces for internal component communication (Dashboard and Engine). While the binary defaults to port 443, the standard platform deployment maps these to:
 
 | Port | Protocol | Purpose |
 |---|---|---|
@@ -35,19 +35,21 @@ The `operator` backbone exposes two primary interfaces for internal component co
 | **9001** | **WSS** | **Pub/Sub Broker:** Real-time messaging backbone for all platform events. |
 
 ### Core Responsibilities
-- **Unified Persistence:** Replaces external databases with a single `g8e.db` SQLite file.
-- **Internal PKI:** Acts as the platform's Certificate Authority (CA), auto-generating TLS certificates for all inter-container traffic.
-- **Secret Management:** Provides an encrypted Vault for storing platform secrets (API keys, tokens) without external dependencies.
-- **Blob Storage:** Stores binary data such as attachments. Operator binaries are served from the local file system by g8ed.
+- **Unified Persistence:** Replaces external databases with a single `g8e.db` SQLite file in `.g8e/data`.
+- **Internal PKI:** Acts as the platform's Certificate Authority (CA), auto-generating ECDSA P-384 TLS certificates for all inter-component traffic.
+- **Secret Management:** Provides an encrypted Vault for storing platform secrets (API keys, internal tokens) without external dependencies.
+- **Messaging:** Serves as the central Pub/Sub broker, ensuring state synchronization between the Dashboard and Engine.
 
 ---
 
+## Local LLM Inference
 
+For air-gapped reasoning, g8e integrates a local inference engine within the `g8ee` (Engine) component.
 
-- **Interface:** OpenAI-compatible HTTP API on port `11444`.
-- **Default Model:** `google_gemma-4-E2B-it-Q4_K_M.gguf` (2.6B parameter model).
-- **Thinking Support:** Inherits `LlamaCppProvider` logic, supporting local reasoning models when configured.
-- **Provisioning:** Model files must be pre-staged in `components/g8ee/models/` (mapped to `/models` in the container). If the file is missing, the container will attempt a download, which will fail in a true air-gap.
+- **Engine:** `llama.cpp` integration via `LlamaCppProvider`.
+- **Default Model:** `Gemma 4 E2B` (optimized for local reasoning).
+- **Interface:** OpenAI-compatible internal API.
+- **Provisioning:** Model GGUF files must be pre-staged in `components/g8ee/models/`. If the file is missing, the Engine will attempt a download, which will fail in a true air-gap.
 
 ---
 
@@ -56,32 +58,35 @@ The `operator` backbone exposes two primary interfaces for internal component co
 | Phase | Internet Requirement | Air-Gap Strategy |
 |---|---|---|
 | **Build** | Required (Default) | Use the `setup` workflow on a connected machine to cache all base images and vendor dependencies. |
-| **Runtime** | **None** | All services communicate exclusively over the internal `g8e-network`. |
+| **Runtime** | **None** | All components communicate exclusively over the internal `g8e-network` or localhost. |
 
 ### Vendoring & Dependency Management
-- **Go (`g8eo`):** 100% vendored in `components/g8eo/vendor/`.
-- **Node.js (`g8ed`):** Locked via `package-lock.json`; all assets are bundled during the build.
-- **Python (`g8ee`):** Requirements are frozen. For air-gap builds, use the pre-staged Docker image strategy.
+- **Operator (Go):** 100% vendored in `components/g8eo/vendor/`.
+- **Dashboard (Node.js):** Locked via `package-lock.json`; all assets are bundled during the build.
+- **Engine (Python):** Requirements are frozen. For air-gap builds, use the pre-staged environment or Docker image strategy.
 
 ---
 
 ## Deployment Workflow
 
 ### 1. Preparation (Connected Environment)
-1. Prepare the platform: Run `./g8e platform start` on a connected machine to cache dependencies.
-2. Download the required model file: `google_gemma-4-E2B-it-Q4_K_M.gguf`
+1. **Bootstrap Platform:** Run `./g8e platform setup` on a connected machine to cache dependencies and build binaries.
+2. **Download Model:** Obtain the `Gemma 4 E2B` GGUF model file.
+3. **Export Assets:** Bundle the `.g8e` runtime directory and component binaries.
 
 ### 2. Implementation (Air-Gapped Host)
-1. Load the images: `docker load < g8e-airgap.tar.gz`
-2. Stage the model: Place the `.gguf` file in `components/g8ee/models/`.
-3. Configure the platform:
-   - Ensure `search.enabled` is `false`.
-4. Launch: `./g8e platform start`
+1. **Stage Binaries:** Place the `g8e.operator` binary and component source/images on the host.
+2. **Stage Model:** Place the `.gguf` file in `components/g8ee/models/`.
+3. **Configure:**
+   - Set `vertex_search_enabled` to `false` in Settings.
+   - Ensure `llm_primary_provider` is set to `llamacpp`.
+4. **Launch:** `./g8e platform up`
 
 ---
 
 ## Security Invariants
 
-1. **No External Dialing:** In air-gap mode, components are forbidden from initiating connections to any address outside localhost.
-2. **TLS Mandatory:** All internal traffic between g8ed, g8ee, and Operator listen mode is encrypted using the Operator internal CA.
-3. **Data Sovereignty:** All audit logs, chat history, and telemetry remain strictly on the host's filesystem.
+1. **No Outbound Dialing:** In Listen Mode, the Operator is forbidden from initiating connections to any address outside the local platform.
+2. **Mutual Trust:** All internal traffic between Dashboard, Engine, and Operator is encrypted using the Operator's internal CA.
+3. **Data Sovereignty:** All audit logs, chat history, and telemetry remain strictly on the host's filesystem in the `.g8e` directory.
+4. **Fail-Closed Privacy:** If a component requires an external resource that is unavailable, it must fail with a clear error rather than attempting a fallback to insecure or public endpoints.

@@ -8,103 +8,92 @@ parent: Architecture
 Last Updated: 2026-05-10
 Version: v0.2.2
 
-g8e is a local-only, air-gapped platform designed for high-stakes environments. Security is not an "add-on" but the core constraint: the platform assumes the AI control plane is potentially adversarial or error-prone and enforces safety at the infrastructure level.
+g8e is a local-only, air-gapped platform designed for high-stakes environments. Security is not an "add-on" but the core constraint: the platform assumes the AI control plane is potentially adversarial or error-prone and enforces safety at the infrastructure level through a 3-layer governance hierarchy and a Protobuf-first architecture.
 
 ## Bedrock Principles
 
-1.  **Proof of Human Presence (PHP)**: The AI proposes; the human signs. No state-changing operation executes without an explicit, hardware-bound signature appended to the transaction envelope.
-2.  **Zero Trust**: No component or connection is implicitly trusted. Every request is authenticated, every payload validated, and every data stream scrubbed.
-3.  **Local-First Sovereignty**: Sensitive data stays on the Operator host. Only scrubbed metadata crosses component boundaries.
-4.  **Defense in Depth**: Multiple overlapping layers (Sentinel, Tribunal, mTLS, LFAA) ensure that a failure in one control does not compromise the system.
-
----
+1.  **Proof of Human Presence (PHP)**: The AI proposes; the human signs. No state-changing operation executes without an explicit, hardware-bound signature (Passkey) appended to the transaction envelope.
+2.  **Zero Trust & Protocol-First**: No component or connection is implicitly trusted. Every request is carried by a `UniversalEnvelope` that binds identity, context, and cryptographic governance evidence.
+3.  **Local-First Sovereignty**: Sensitive data stays on the Operator host. The Operator (`g8eo`) is the final arbiter of execution, enforcing hard gates before any command hits the shell.
+4.  **Fail-Closed Invariants**: Malformed envelopes, invalid signatures, or stale state roots result in immediate rejection. The system never "fails open" to a default-allow state.
 
 ## Technical Positioning
 
-- **vs. SSH**: SSH is a secure pipe; g8e is a **governor**. g8e uses the pipe to enforce a governance model (scrubbing, consensus) that SSH cannot.
-- **vs. Teleport / Boundary**: These manage **human** access. g8e manages **AI-powered automation** acting on behalf of humans.
-- **vs. Ansible / Terraform**: These are deterministic. g8e is for **non-deterministic** investigation where the AI reasons about real-time state before proposing actions.
+-   **vs. SSH**: SSH is a secure pipe; g8e is a **governor**. g8e uses the pipe to enforce a governance model (scrubbing, consensus) that SSH cannot.
+-   **vs. Teleport / Boundary**: These manage **human** access. g8e manages **AI-powered automation** acting on behalf of humans.
+-   **vs. Ansible / Terraform**: These are deterministic. g8e is for **non-deterministic** investigation where the AI reasons about real-time state before proposing actions.
 
----
+## 3-Layer Governance Hierarchy
 
-## Platform Flow & Boundaries
+Every transaction must pass through three distinct governance layers before execution.
+
+### L1: Technical Bedrock (Hard Gates)
+L1 provides hardcoded, non-negotiable safety invariants enforced at the Operator (`g8eo`) boundary.
+-   **Forbidden Patterns**: Global rejection of dangerous shell patterns (e.g., `sudo`, `su`, `rm -rf /`).
+-   **Protobuf Reflection**: `g8eo` uses reflection over the `forbidden_patterns` custom option in `operator.proto` to validate typed payloads before dispatch.
+-   **Allowlist/Denylist**: Configurable filters for binary names and substrings.
+
+### L2: Consensus (The Tribunal)
+The Tribunal converts intent into executable commands using an ensemble of five independent agents.
+-   **Tribunal Signature**: `g8ee` signs the `event_type` and `payload_bytes` with the `auditor_hmac_key`.
+-   **Verification**: `g8eo` rejects any command with a missing or invalid L2 signature when L2 verification is enabled.
+-   **Reputation Staking**: Agent performance is tracked and bound to the Merkle-signed reputation scoreboard.
+
+### L3: Authorization (PHP Gate)
+L3 involves human authorization, governed by the **Auditor-User Partition**.
+-   **Proof of Human Presence (PHP)**: Hardware-bound Passkey signatures for the audited command.
+-   **Auto-Approval**: Benign diagnostic commands (e.g., `uptime`, `df`) can be auto-approved, but only *after* passing L1 and L2. Auto-approval **NEVER** bypasses hard gates.
+
+## The Universal Envelope (v0.2.0)
+
+The `UniversalEnvelope` is the canonical BFT transaction container for all cross-component communication.
+
+| Field | Purpose |
+|---|---|
+| `id` | Unique UUID v4 for tracking and correlation. |
+| `state_merkle_root` | Binds the command to a specific fleet state; `g8eo` rejects commands based on stale state. |
+| `governance` | Carries L1 status, L2 Tribunal signatures, and L3 Human signatures. |
+| `payload` | Serialized bytes of the typed Protobuf message (e.g., `CommandRequested`). |
+| `identity` | Binds the `operator_id`, `session_id`, `case_id`, and `task_id`. |
+
+## Platform Architecture
 
 ```mermaid
 graph TD
-    User[User] -- "TLS 1.3 + PHP (FIDO2)" --> g8ed
-    g8ed[g8ed Governance Gateway] -- "X-Internal-Auth" --> g8ee
-    g8ed -- "mTLS (TLS 1.3)" --> g8eo
-    g8ee -- "X-Internal-Auth" --> operator
-    g8eo[g8eo Operator] -- "Pub/Sub (WSS + mTLS)" --> operator
-    g8eo -- "Local Exec" --> Host[Target System]
+    User[User] -- "TLS 1.3 + PHP (Passkey)" --> g8ed
+    g8ed[g8ed Dashboard] -- "mTLS + UniversalEnvelope" --> g8eo
+    g8ee[g8ee Engine] -- "L2 Signing" --> g8ed
+    g8eo[g8eo Operator] -- "L1 + BFT Verification" --> Host[Target System]
 ```
 
-### 1. User to Gateway (g8ed)
-- **Proof of Human Presence (PHP)**: FIDO2/WebAuthn hardware-bound signatures. No passwords.
-- **Sessions**: `HttpOnly`, `Secure`, `SameSite=Lax` cookies. Session state stored in `operator` KV.
-- **Context Binding**: Sessions are tied to IP and User-Agent; 4+ IP changes trigger a security flag.
+### 1. Component Boundaries
+-   **g8ed (Dashboard)**: The Governance Gateway. Handles user auth (Passkeys), session management, and UI.
+-   **g8ee (Engine)**: The Reasoning Plane. Orchestrates the Tribunal, signs L2 commitments, and builds envelopes.
+-   **g8eo (Operator)**: The Execution Plane. Runs on the target host, enforces L1/BFT gates, and scrubs output.
 
-### 2. Internal Services (g8ed, g8ee, Operator)
-- **Shared Secret**: Authenticated via `X-Internal-Auth` using `internal_auth_token`.
-- **Isolation**: Services communicate via localhost HTTPS; only the gateway (443) is exposed to the host.
+### 2. Secrets & Bootstrap
+Authoritative secrets are generated on first boot and stored in `/home/bob/g8e/.g8e/ssl`:
+-   `internal_auth_token`: For component-to-component authentication.
+-   `auditor_hmac_key`: For L2 Tribunal signature generation and verification.
+-   `session_encryption_key`: For AES-256 encryption of sensitive session fields.
 
-### 3. Gateway to Operator (g8eo)
-- **mTLS**: Every Operator presents a per-device client certificate issued during bootstrap.
-- **Outbound-Only**: Operators initiate connections to the gateway; they open no inbound ports.
-- **Fingerprinting**: Operators are bound to a permanent system fingerprint (Machine ID + CPU + Hostname) on first auth.
+Tamper evidence is provided by `bootstrap_digest.json`, which contains SHA-256 hashes of all secrets. Services abort startup if on-disk secrets drift from the manifest.
 
----
+## Sovereignty & Audit
 
-## Protection Layers
+### Encrypted Audit Vault
+Every action is recorded in an encrypted SQLite database on the Operator host. Sensitive fields (stdout/stderr) are encrypted at rest using **AES-256-GCM**.
 
-### Sentinel (Defense & Sovereignty)
-Sentinel is the primary guardian on the Operator host. It operates in two phases:
-1.  **Pre-Execution (Defense)**: Analyzes commands and file edits against a library of 40+ threat patterns (MITRE ATT&CK mapped). Blocks malicious or destructive actions before they hit the shell.
-2.  **Post-Execution (Sovereignty)**: Scrubs terminal output (stdout/stderr) for credentials, PII, and tokens before they leave the host. It preserves operational data (IPs, paths, ARNs) needed for troubleshooting.
+### Git Ledger
+Every file mutation is mirrored into a hidden `.g8e/ledger` Git repository. This provides a verifiable, diffable history of all AI-driven edits, enabling full rollbacks.
 
-### The Tribunal (Governance)
-Before a command reaches an Operator, it must pass through the `g8ee` Tribunal:
-- **Auditor**: Uses `auditor_hmac_key` to sign reputation commitments and ensure consistency.
-- **Warden**: Performs high-level risk assessment and presents the "Warden's Report" for human co-validation and signature.
-- **Consensus**: In high-risk modes, multiple models must agree on the proposed action before it is dispatched.
+### Output Scrubbing (Sentinel)
+`g8eo` scrubs terminal output for credentials, PII, and tokens before it leaves the host. Only "scrubbed" metadata is returned to the Engine and Dashboard.
 
----
+## Network Security
 
-## Bootstrap & Secret Management
+-   **mTLS Everywhere**: All component communication is secured via TLS 1.3 with mutual authentication.
+-   **Private CA**: `g8e` operates its own internal CA (ECDSA P-384) for issuing short-lived certificates.
+-   **Outbound-Only**: Operators initiate connections to the gateway; they do not listen on inbound ports (unless in `--listen` mode for local dev).
+-   **Air-Gapped**: Zero external connectivity required. No phone-home or cloud dependencies.
 
-The platform uses a "Capture and Persist" strategy for its core secrets, managed by the `g8eo` Secret Manager in `--listen` mode.
-
-### Authoritative Secrets (The SSL Volume)
-Three critical secrets are generated on first boot and stored in the `operator-ssl` volume (mounted at `/operator`):
-- `internal_auth_token`: For `X-Internal-Auth` header validation.
-- `session_encryption_key`: For AES-256 encryption of sensitive session fields.
-- `auditor_hmac_key`: For signing Tribunal reputation commitments.
-
-### Tamper Evidence
-To prevent silent drift between the database and the volume:
-1. `g8eo` writes a `bootstrap_digest.json` manifest containing SHA-256 hashes of all secrets.
-2. `g8ed` and `g8ee` read the manifest at startup.
-3. If the on-disk secret does not match the manifest, the service **aborts startup** (BootstrapSecretTamperError).
-
----
-
-## Local-First Audit Architecture (LFAA)
-
-LFAA ensures that every action taken by the AI is recorded in a tamper-evident, append-only log on the Operator host.
-
-### Audit Vault (Events)
-- **Storage**: Encrypted SQLite database (`g8e.db`).
-- **Encryption**: Sensitive fields (command raw, stdout, stderr) are encrypted at rest using **AES-256-GCM**.
-- **Keys**: KEK derived from the Operator's API key via HKDF-SHA256; DEK envelope encryption for every record.
-
-### Git Ledger (Versioning)
-- **Mechanism**: Every file mutation is mirrored into a hidden `.g8e/ledger` Git repository.
-- **Integrity**: Provides a verifiable history of file changes, allowing for diffing and rollback of AI-driven edits.
-
----
-
-## Network & Infrastructure
-
-- **Air-Gapped by Design**: The platform requires zero external connectivity to function.
-- **Port 443 Only**: The only inbound path to the platform is via the Governance Gateway.
-- **CA Management**: `g8e` operates its own private CA (ECDSA P-384). All certificates are generated at runtime and survive `platform reset` via the dedicated SSL volume.

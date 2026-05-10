@@ -6,7 +6,7 @@ parent: Architecture
 # Agent Persona System
 
 Last Updated: 2026-05-10
-Version: v0.2.2
+Version: v0.2.3
 
 ## Overview
 
@@ -93,7 +93,7 @@ Warden is a coordinator (`@/components/g8ee/app/models/personas/warden.py`) that
     - `warden_command_risk`: Classifies command blast radius (LOW/MEDIUM/HIGH).
     - `warden_file_risk`: Evaluates file operation sensitivity and git-reversibility.
     - `warden_error`: Analyzes failures for `AUTO_FIXABLE` or `ESCALATE`.
-- **Stake Reputation**: Sub-agents stake reputation on accuracy. Over-caution or under-caution results in reputational penalties.
+- **Stake Reputation**: Sub-agents and the coordinator stake reputation on accuracy. Over-caution (blocking safe commands) or under-caution (allowing destructive ones) results in reputational penalties and EMA decay.
 
 ### 6. Auditor
 - **Code Reference**: `@/components/g8ee/app/models/personas/auditor.py`

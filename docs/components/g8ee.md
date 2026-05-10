@@ -5,8 +5,8 @@ parent: Components
 
 # g8ee
 
-Last Updated: 2026-05-09
-Version: v0.2.2
+Last Updated: 2026-05-10
+Version: v0.2.3
 
 g8ee is the AI engine for the g8e platform. It provides an agentic, LLM-powered interface for infrastructure operations and troubleshooting, featuring human-in-the-loop safety controls, data sovereignty, and a multi-provider LLM abstraction layer.
 
@@ -18,9 +18,21 @@ g8ee follows a strict "Traceable Pipeline" model for every message. A single use
 
 ### 1. Ingress & Context Assembly
 The `internal_router` receives the request. `ChatPipelineService` triggers `_prepare_chat_context`, performing a 15-step assembly process:
-- **Context Enrichment**: Fetches the investigation state and binds available `g8eo` operators.
-- **Workflow Detection**: Determines if the investigation is `OPERATOR_BOUND` or `OPERATOR_NOT_BOUND`.
-- **System Prompt Assembly**: Builds a modular system prompt based on agent mode, bound operators, and investigation state.
+1. **Context Fetch**: Fetches the investigation context (operators, memory).
+2. **Sentinel Sync**: Syncs `sentinel_mode` to DB if changed.
+3. **Workflow Detection**: Determines `OPERATOR_BOUND` vs `NOT_BOUND`.
+4. **History Fetch**: Retrieves prior conversation for triage.
+5. **Triage**: Classifies message (Main Model vs Lite Model).
+6. **Approval Cleanup**: Marks pending approvals as feedback.
+7. **Persistence**: Saves user message to DB.
+8. **History Re-fetch**: Includes the new user message.
+9. **LFAA Audit**: Dispatches user-message audit to bound operators.
+10. **Memory Retrieval**: Fetches user and case memories.
+11. **System Prompt**: Builds modular system prompt.
+12. **Config Generation**: Builds LLM generation config.
+13. **Attachments**: Formats attachment parts.
+14. **History Formatting**: Builds LLM contents from history.
+15. **Assembly**: Constructs the final `AgentInputs`.
 
 ### 2. Triage (The Gatekeeper)
 Before invoking the primary LLM, the `TriageAgent` classifies the message:
@@ -238,7 +250,7 @@ LLM SDK  →  GeminiProvider  →  stream_response  →  deliver_via_sse
                                                     Browser
 ```
 
-Each `TEXT` chunk produces exactly one HTTP POST to g8ed (`LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` event) when `web_session_id` is present. g8ed relays it to the browser immediately via its SSE connection. `LLM_CHAT_ITERATION_TEXT_COMPLETED` is published once after the loop exits, carrying finish reason, citation metadata, and token usage.
+Each `TEXT` chunk produces exactly one HTTP POST to g8ed (`LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` event) when `web_session_id` is present. g8ed relays it to the browser immediately via its SSE connection. `LLM_CHAT_ITERATION_TEXT_COMPLETED` is published once after the loop exits, carrying finish reason, citation metadata, and aggregate token usage.
 
 **Device Token Flows (evals):** When `web_session_id` is None (device token authentication, e.g., evals runner), SSE publishing is skipped entirely. Stream processing still occurs unconditionally to populate `AgentStreamState.response_text`, enabling agent execution without a browser session. The `has_sse` flag controls SSE publishing while stream state mutation runs in all cases.
 
@@ -419,6 +431,7 @@ The `MODEL_REGISTRY` provides runtime access to model configurations via `get_mo
 | `qwen3.5:2b` | HIGH, OFF | Yes | 32,768 | 8,192 |
 | `gemma4:e4b` | HIGH, OFF | Yes | 32,768 | 8,192 |
 | `gemma4:e2b` | HIGH, OFF | Yes | 32,768 | 8,192 |
+| `gemma4:e2b-g8ea` | HIGH, OFF | Yes | 32,768 | 8,192 |
 
 ### Model Roles
 
@@ -468,31 +481,25 @@ Consumers (auth gate, Tribunal routing, prompt assembly) all derive from this on
 
 ### Active Tools
 
-| Tool | Approval Required | Scope | Purpose |
-|------|-------------------|-------|---------|
-| `run_commands_with_operator` | Yes | Gated | Execute shell commands on target systems (via Tribunal) |
-| `file_create_on_operator` | Yes | Gated | Create new files with content |
-| `file_write_on_operator` | Yes | Gated | Replace entire file contents |
-| `file_update_on_operator` | Yes | Gated | Surgical find-and-replace within files |
-| `file_read_on_operator` | No | Gated | Read file content (with optional line ranges) |
-| `list_files_and_directories_with_detailed_metadata` | No | Gated | Directory listing with metadata |
-| `recursive_grep_search` | No | Gated | Recursive regex search for context gathering |
-| `fetch_file_history` | No | Gated | Retrieve file edit history and commit information |
-| `fetch_file_diff` | No | Gated | Retrieve specific file diffs and change details |
-| `check_port_status` | No | Gated | Check TCP/UDP port reachability |
-| `grant_intent_permission` | Yes (via intent flow) | Gated | Request AWS intent permissions for cloud operators |
-| `revoke_intent_permission` | Yes (via intent flow) | Gated | Revoke AWS intent permissions |
-| `query_investigation_context` | No | Universal | Query investigation data (conversation history, status, history trail, operator actions) on-demand |
-| `get_command_constraints` | No | Universal | Retrieve whitelisted/blacklisted command patterns |
-| `g8e_web_search` | No | Universal | Web search via Vertex AI Search — requires `vertex_search_enabled=true` in `platform_settings` |
-| `list_ssh_inventory` | No | Universal | List the platform's SSH inventory |
-| `stream_operator_to_ssh_fleet` | No | Universal | Stream the operator binary to a fleet of SSH hosts |
+| Tool | Scope | Agent Modes | Purpose |
+|------|-------|-------------|---------|
+| `run_commands` | Gated | Bound | Execute shell commands on target systems (via Tribunal) |
+| `file_read`/`write` | Gated | Bound | Direct file operations on operators |
+| `list_files` | Gated | Bound | Directory listing and exploration |
+| `recursive_grep` | Gated | Bound | Deep search within file contents |
+| `fetch_file_history` | Gated | Bound | Retrieve git-like history of a file |
+| `check_port` | Gated | Bound | Verify network port availability/connectivity |
+| `grant_intent` | Gated | Bound | JIT permission escalation (AWS/Cloud) |
+| `g8e_search_web` | Universal | All | Public web search (requires vertex/search config) |
+| `query_investigation_context` | Universal | All | Retrieve case metadata and conversation history |
+| `ssh_inventory` | Universal | All | Query known SSH target inventory |
+| `stream_operator` | Universal | All | Execute un-voted commands (diagnostic) |
+
+Governance & Safety protocols (Tribunal, Warden, L1/L2 checks) are enforced based on the tool's `scope` and `name`.
 
 Automatic Function Calling (AFC) is always disabled. g8ee uses a custom sequential function-calling loop to preserve thought signatures and ensure accurate tracking of intermediate steps.
 
----
-
-## Operator Execution
+### Operator Execution
 
 ### Operator Service Layer
 

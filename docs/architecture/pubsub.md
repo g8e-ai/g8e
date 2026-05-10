@@ -10,6 +10,8 @@ Version: v0.2.2
 
 The g8e platform utilizes a high-performance, WebSocket-based Pub/Sub system for all real-time inter-component communication. This decoupled architecture allows the central engine (`g8ee`) to orchestrate distributed agents (`g8eo` Operators) across heterogeneous environments without direct network visibility.
 
+As of v0.2.0, the "g8es" component abstraction has been removed. The host listener is now the **Operator binary running in `--listen` mode**, which acts as the WebSocket broker for the platform.
+
 ---
 
 ## The Lifecycle of a Session
@@ -17,21 +19,22 @@ The g8e platform utilizes a high-performance, WebSocket-based Pub/Sub system for
 The lifecycle of an Operator session is entirely governed by its pub/sub interactions.
 
 ### 1. Bootstrap & Authentication
-When an Operator starts, it may not yet have a persistent session. It identifies itself via a **Bootstrap Handshake**:
-- **Request**: Operator publishes to an ephemeral `auth.publish:session:{hash}` channel.
+When an Operator starts, it identifies itself via a **Bootstrap Handshake**:
+- **Request**: Operator publishes a `UniversalEnvelope` to an ephemeral `auth.publish:session:{hash}` channel.
 - **Validation**: `g8ee` (via `SessionAuthListener`) validates the request and responds with a bootstrap configuration (API keys, resource limits, certs) on `auth.response:session:{hash}`.
 - **Finalization**: Once authenticated, the Operator transitions to its dedicated per-session channels.
 
 ### 2. Activity Monitoring (Heartbeats)
 Operators maintain their `AVAILABLE` status by publishing periodic signals to their `heartbeat` channel. 
 - **Efficiency**: `g8ee` uses a single **Pattern Subscription** (`heartbeat:*`) to observe all active Operators simultaneously, avoiding the race conditions and overhead of per-session registration.
-- **Resource Tracking**: Heartbeats contain real-time CPU, Memory, and Disk metrics used for task scheduling.
+- **Resource Tracking**: Heartbeats contain real-time CPU, Memory, and Disk metrics used for task scheduling and fleet monitoring.
 
 ### 3. Command Orchestration
 The primary function of the platform is the delivery and execution of commands:
 - **Dispatch**: `g8ee` publishes serialized `UniversalEnvelope` bytes to the Operator's `cmd` channel.
 - **Tracking**: `g8ee` registers an `asyncio.Future` correlated by `execution_id`.
-- **Completion**: The Operator executes the typed payload and publishes serialized `UniversalEnvelope` result bytes back to the `results` channel. The platform matches the `execution_id`, completes the future, and returns the result to the caller.
+- **Execution**: The Operator executes the typed payload and publishes serialized `UniversalEnvelope` result bytes back to the `results` channel.
+- **Completion**: `g8ee` matches the `execution_id`, completes the future, and returns the result to the caller.
 
 ---
 
@@ -58,36 +61,51 @@ Broadcasting system-wide state changes to all listeners (primarily for the UI).
 
 ---
 
+## Universal Envelope & Protocol
+
+All inter-component communication is governed by the **Universal Envelope** protocol defined in `@/shared/proto/common.proto`.
+
+### Why the Envelope?
+The envelope provides a cryptographic and technical contract that separates routing from logic:
+- **Identity Binding**: Every message is bound to an `operator_id`, `operator_session_id`, and `investigation_id`.
+- **State Integrity**: Includes a `state_merkle_root` for BFT verification, ensuring commands are based on the latest fleet state.
+- **Governance Metadata**: Carries L1/L2/L3 metadata required for compliance and safety.
+- **Type Safety**: Inner payloads are strictly typed `operator.proto` messages, eliminating parsing ambiguity.
+
+---
+
+## Governance & Safety
+
+Pub/Sub is the only way `g8ee` communicates with `g8eo`. This provides a critical security boundary:
+
+### 1. No Inbound TCP
+Operators only require outbound WSS connectivity to the platform. No ports are opened on the target host, significantly reducing the attack surface.
+
+### 2. 3-Layer Validation Hierarchy
+- **L1 Technical Bedrock**: Hard gates (e.g., `sudo`, `su`) enforced by code validators via Protobuf reflection.
+- **L2 Consensus (Tribunal)**: 5-agent plurality verification. Signatures are verified using a shared `auditor_hmac_key`.
+- **L3 Authorization (Approval)**: Human-in-the-loop by default. Auto-approval is authorization metadata and never bypasses L1 or L2.
+
+### 3. Audit & Transparency
+Every command envelope carries correlation fields and governance evidence. This ensures that every action taken on an endpoint is attributable to a specific human intent, AI consensus, and technical gate.
+
+---
+
 ## Technical Invariants
 
 ### 1. Single Source of Truth
 All channel prefixes and segment counts are defined in `@/shared/constants/channels.json`. 
-- **Never hand-roll**: Do not use string interpolation (e.g., `f"{prefix}:{id}"`).
+- **Never hand-roll**: Do not use string interpolation.
 - **Use typed wrappers**: Python uses `OperatorChannel` in `@/components/g8ee/app/constants/channels.py`. Go uses constructors in `components/g8eo/constants/channels.go`.
 
 ### 2. Bounded Parsing
 The `operator_session_id` may contain the separator character (`:`). To prevent data loss, always use a **bounded split** with a maximum of 2 splits when parsing a 3-segment channel.
 ```python
-# Canonical parsing logic
-
-Last Updated: 2026-05-10
-Version: v0.2.2
+# Canonical parsing logic in g8ee
 parts = channel.split(":", 2) # Ensures the session ID remains intact
 ```
 
 ### 3. Resource Management
-- **Refcounted Subscriptions**: The `PubSubClient` (Python) tracks how many services are interested in a channel. A channel is only physically `UNSUBSCRIBE`d from the broker when its local refcount reaches zero.
-- **Auto-Cleanup**: `SessionAuthListener` enforces a 300s TTL on ephemeral auth listeners to prevent memory leaks from abandoned bootstrap attempts.
-
-### 4. Protocol Payloads
-Operator command and result channel payloads carry serialized g8e protocol `UniversalEnvelope` bytes whose inner payloads are typed `operator.proto` messages. Pub/sub channels provide routing only; `UniversalEnvelope` provides the protocol contract by binding `event_type`, payload bytes, operator/session context, state root, and L1/L2/L3 governance metadata. The envelope and governance contract is documented in [Protocol](protocol.md).
-
----
-
-## Safety & Governance
-
-Pub/Sub is the only way `g8ee` communicates with `g8eo`. This provides a critical security boundary:
-- **No Inbound TCP to Operators**: Operators only need outbound WSS to the platform.
-- **Audit Logging**: Every command envelope carries correlation fields and governance evidence for compliance and local LFAA retention.
-- **Type Safety**: Operator command and result payloads are validated against generated Protobuf models before processing.
-- **Governance Binding**: Auto-approval is L3 authorization state only; it never bypasses L1 Technical Bedrock or L2 Consensus.
+- **Refcounted Subscriptions**: The `PubSubClient` tracks how many services are interested in a channel. A channel is only physically `UNSUBSCRIBE`d from the broker when its local refcount reaches zero.
+- **Auto-Cleanup**: `SessionAuthListener` enforces a 300s TTL on ephemeral auth listeners to prevent memory leaks.
+- **Fail-Closed Behavior**: Envelopes missing an ID or carrying malformed payloads are rejected at the dispatcher level before reaching any service handlers.

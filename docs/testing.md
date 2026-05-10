@@ -13,138 +13,117 @@ This document outlines the testing architecture, core principles, and how to wri
 
 ## Core Engineering Principles
 
-- **Hermetic Execution** — Each component runs tests through the `./g8e test` host-native runner, using managed repo-local toolchains and runtime state under `.g8e`.
-- **Real Infrastructure** — All testing must occur against real services and real inter-component communications. This means using a real `CacheAsideService` with a real `operator` backend, real pub/sub over WebSockets, and real network stacks.
-- **The "No Mocks" Policy** — We strictly prohibit mocking internal services, database clients, or LLM providers. Integration tests must use real services. If a scenario is extremely difficult to test without a mock, you must justify its necessity in the PR.
-- **Real LLM Calls** — AI tests use real provider API calls. No `MagicMock`, `AsyncMock`, or HTTP interception on LLM clients. The system handles transient failures via exponential backoff in `EvalJudge`.
+- **Hermetic Execution** — Each component runs tests directly on the host via the `./g8e test` runner, using repo-local toolchains (Python venv, Node npm, Go toolchain) and runtime state managed under the `.g8e` directory.
+- **Real Infrastructure** — All testing occurs against real, live services. A test run typically begins with `./g8e platform start` to ensure a real `operator` (listen mode), `g8ed`, and `g8ee` are active and connected.
+- **The "No Mocks" Policy** — We strictly prohibit mocking internal services, database clients, or cross-component communication. Integration tests must use the real wire paths. If a mock is deemed absolutely necessary, it must be justified and documented.
+- **Real LLM Calls** — AI integration tests use real provider API calls (Gemini, Anthropic, OpenAI, etc.). No `MagicMock` or HTTP interception is permitted for LLM clients. Transient failures are handled via exponential backoff in the reasoning engine.
 
 ## Test Harness Architecture: E2E vs Evals
 
-The platform maintains two distinct "real operator" test harnesses with **strictly separated authentication and lifecycle patterns**. This separation is architectural and must be enforced in code review.
+The platform maintains two distinct test harnesses with strictly separated authentication and lifecycle patterns.
 
 ### 1. E2E Tests (Internal Lifecycle Path)
-**Command:** `./g8e test g8ee --e2e` or `./g8e test g8ed test/integration/setup`
-**Purpose:** Validate the internal operator lifecycle and platform infrastructure.
-- **Pattern:** Provisions operator slots via `g8ed` internal API, uses `X-Internal-Auth`, reads API keys from `operator`.
-- **Rationale:** Validates the platform's own internal mechanisms.
+**Command:** `./g8e test g8ee --e2e`
+**Purpose:** Validates the internal platform infrastructure and operator lifecycle.
+- **Pattern:** Uses `X-Internal-Auth` tokens and internal API paths.
+- **Rationale:** Verifies that the platform can correctly provision, authenticate, and manage operator nodes.
 
 ### 2. Evals (Public Device-Token Path)
-**Command:** `./g8e evals up -d <token>` then `./g8e evals run --gold-set <path>`
-**Purpose:** Evaluate AI agent (Sage) behavior against the product surface that real users experience.
-- **Pattern:** Uses public device-link tokens, hits public `g8ed` HTTPS endpoints, no internal auth.
-- **Rationale:** Exercises the product exactly as users experience it.
+**Command:** `./g8e evals run --gold-set <name|path>`
+**Purpose:** Evaluates AI agent (Sage) reasoning and tool-calling accuracy against the product surface experienced by users.
+- **Pattern:** Uses public device-link tokens and hits public HTTPS endpoints.
+- **Rationale:** Exercises the product exactly as a user would, asserting that the AI translates intent into safe, correct actions.
 
 ## Running Tests
 
-All tests are orchestrated via the `./g8e` CLI, which configures the required host-native environment for each component. **Never call `go test`, `pytest`, or `vitest` directly; use `./g8e test` so bootstrap paths, CA trust, and internal auth are configured consistently.**
+All tests are orchestrated via the `./g8e` CLI, which handles environment configuration, CA certificate injection, and internal authentication. **Never call `pytest`, `vitest`, or `go test` directly.**
 
 | Command | Runner | Framework | Primary Use |
 |---------|--------|-----------|-------------|
-| `./g8e test g8ee` | Host virtualenv | `pytest` | Python logic, AI integration |
-| `./g8e test g8ed` | Host Node.js | `vitest` | Node.js API, Orchestration |
-| `./g8e test g8eo` | Host Go toolchain | `gotestsum` or `go test` | Go Operator, Low-level tools |
+| `./g8e test g8ee` | Host venv | `pytest` | AI reasoning, tool translation, engine logic |
+| `./g8e test g8ed` | Host Node.js | `vitest` | Dashboard, API Gateway, session management |
+| `./g8e test g8eo` | Host Go | `go test` | Operator listen mode, blob store, pub/sub |
 
-### Common Commands
+### Common Workflow
 
 ```bash
-# Start the platform infrastructure first
-
+# 1. Start the platform infrastructure
 ./g8e platform start
 
-# Authenticate once to local store
-
-./g8e login
-
-# Run a specific component
-
-./g8e test g8ee
-
-# Run with coverage
-
-./g8e test g8eo --coverage
-
-# Run g8ee with parallelism and strict type checking
-
-./g8e test g8ee -j auto --pyright --ruff
+# 2. Run component tests
+./g8e test g8ee                     # Run all g8ee unit/integration tests
+./g8e test g8ee --pyright --ruff    # Run with strict type checking and linting
+./g8e test g8eo --coverage          # Run Go tests with race detection and coverage
 ```
+
+### LLM & Search Configuration
+
+When running AI-integrated tests, you can override provider settings via CLI flags:
+
+```bash
+./g8e test g8ee -p anthropic -m claude-3-5-sonnet -k <api-key>
+```
+
+Available flags: `-p` (provider), `-m` (primary model), `-a` (assistant model), `-l` (lite model), `-k` (api-key), `-e` (endpoint).
 
 ## AI Benchmarks & Evaluations (Evals)
 
-Evaluating non-deterministic AI models requires a multi-layered approach using the `evals` subsystem. Evals are **not** pytest-driven and run outside the standard component test runner.
+The `evals` subsystem manages a dedicated fleet of simulated operator nodes to test non-deterministic AI behavior at scale.
 
 ### Eval Workflow
 
 ```bash
-# 1. Start a fleet of real operator nodes linked via a device token
+# 1. Bring up a fleet of eval nodes
+./g8e evals up --nodes 3 --device-token <token>
 
-./g8e evals up --device-token dlk_xxx --nodes 3
+# 2. Run the evaluation against a gold set
+./g8e evals run --gold-set benchmark
 
-# 2. Run the eval runner
-
-./g8e evals run --gold-set components/g8ee/evals/gold_sets/accuracy.json --device-token dlk_xxx
-
-# 3. View status and logs
-
+# 3. View logs or status
 ./g8e evals status
-./g8e evals logs eval-node-01
+./g8e evals logs evals-eval-node-1
 
 # 4. Tear down the fleet
-
 ./g8e evals down
 ```
 
-### Evaluation Types
+### Evaluation Scenarios
 
-- **Deterministic Benchmarks**: Tool-call payloads graded via regex matching in `scorer.py` against `benchmark.json`.
-- **Subjective Evaluations**: `EvalJudge` uses the Primary Model to score the Assistant Model (Sage) against `accuracy.json`.
-- **Privacy Evaluation**: Asserts Sentinel scrubber placeholders (`[PII]`, `[AWS_KEY]`, etc.) are present in egress payloads via `privacy.json`.
+- **Benchmark**: Asserts that the AI generates the exact `expected_payload` for a given query (regex-based).
+- **Accuracy**: Uses an `EvalJudge` (Primary Model) to score the `Assistant Model` behavior against `expected_behavior` and `required_concepts`.
+- **Privacy**: Asserts that Sentinel scrubber placeholders (e.g., `[PII]`) are present in egress payloads.
 
-The `./g8e evals run` wrapper executes the Python eval runner with the repository source tree and active eval fleet configuration. Gold sets may be referenced by short name (`accuracy`) or host repo path (`components/g8ee/evals/gold_sets/accuracy.json`).
-
-## Component Testing Strategies
+## Component Specifics
 
 ### Go (g8eo)
-- **gotestsum**: Used for formatted output and race detection (`-race`).
-- **Loopback**: Uses an in-process `PubSubBroker` over real WebSockets for full wire-path validation without a live `operator`.
-- **Integration**: Tagged with `//go:build integration`. Requires live platform infrastructure.
+- **gotestsum**: Automatically used if installed for formatted output.
+- **Race Detection**: Always enabled via `-race`.
+- **Parallelism**: Runs with `-parallel 4` and a `180s` timeout by default.
 
 ### Node.js (g8ed)
-- **vitest**: Primary test runner for the orchestration layer.
-- **Test Services**: Uses `getTestServices()` singleton to ensure consistent service initialization.
-- **Isolation**: Managed by `TestCleanupHelper` using `_test` collection suffixes.
+- **Vitest**: Runs in `forks` pool for isolation.
+- **Cleanup**: Uses `TestCleanupHelper` to ensure no database pollution between runs.
+- **Coverage**: Uses the `v8` provider; reports generated in `components/g8ed/coverage`.
 
 ### Python (g8ee)
-- **pytest**: Primary test runner for the AI engine.
-- **Type Safety**: `--pyright` runs strict AST-level type checking before tests.
-- **Linting**: `--ruff` (and `--ruff-fix`) enforces code style.
-- **Markers**: `@pytest.mark.ai_integration` and `@pytest.mark.requires_web_search` manage tests requiring external credentials.
+- **Type Safety**: `--pyright` runs strict AST-level type checking using `pyrightconfig.services.json`.
+- **Linting**: `--ruff` (and `--ruff-fix`) enforces the project style guide.
+- **Markers**: Uses markers like `@pytest.mark.ai_integration` and `@pytest.mark.requires_web_search` to manage external dependencies.
 
 ## Security & Audit
 
-The platform includes automated security verification tools.
+The platform includes automated verification of its own security posture:
 
 ```bash
-# Run mTLS and configuration audit
-
-./g8e security mtls-test
-
-# Validate platform security posture
-
-./g8e security validate
-
-# Scan for dependency licenses
-
-./g8e security scan-licenses
+./g8e security validate     # Verifies mTLS integrity and volume permissions
+./g8e security mtls-test    # Tests connectivity between components
+./g8e security scan-licenses # Scans dependencies for compliance
 ```
-
-## Shared Test Fixtures
-
-Shared fixtures in `shared/test-fixtures/` (e.g., `sse-events.json`) are used to enforce cross-component wire compatibility. Contract tests in each component verify that emitted events match these shared structures.
 
 ## Continuous Integration
 
-Our GitHub workflows (`.github/workflows/build-and-test.yml`) enforce:
-- Host-native component test jobs with explicit Go, Python, and Node.js setup.
-- Real platform startup through `./g8e platform start`; CI does not set up Docker for component tests.
-- Component tests through `./g8e test g8ee`, `./g8e test g8ed`, and `./g8e test g8eo`.
-- Diagnostic platform log output on failure so silent runner exits expose root-cause logs.
+GitHub Actions (`.github/workflows/build-and-test.yml`) enforce these standards on every PR:
+- **Host-Native Setup**: CI environments are configured with Go, Python 3.12, and Node 22.
+- **Platform Bootstrap**: Each job starts the platform via `./g8e platform start`.
+- **Strict Gating**: Failures in `pyright`, `ruff`, or any test suite block the merge.
+- **Diagnostic Logging**: Logs from `.g8e/logs/*` are printed on failure to assist in debugging silent exits.
