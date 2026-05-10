@@ -1,5 +1,3 @@
-<div align="center">
-
 # g8e
 
 **AI-powered, human-driven infrastructure.**
