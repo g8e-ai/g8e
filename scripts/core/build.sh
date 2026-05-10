@@ -196,10 +196,6 @@ _g8ed_running() {
         fi
         rm -f "$G8ED_PID_FILE"
     fi
-    # Also check for orphaned node server.js processes
-    if pgrep -f "node server.js" > /dev/null 2>&1; then
-        return 0
-    fi
     return 1
 }
 
@@ -337,14 +333,15 @@ _stop_g8ed() {
         local pid=$(cat "$G8ED_PID_FILE")
         echo "  Stopping g8ed (PID: $pid)..."
         kill "$pid" 2>/dev/null || true
-        rm -f "$G8ED_PID_FILE"
-    else
-        if _g8ed_running; then
-            echo "  Stopping g8ed via pkill..."
-            pkill -f "node server.js" || true
-            rm -f "$G8ED_PID_FILE"
+        sleep 1
+        if ps -p "$pid" > /dev/null 2>&1; then
+            kill -9 "$pid" 2>/dev/null || true
         fi
+        rm -f "$G8ED_PID_FILE"
     fi
+    # Kill any orphaned node server.js processes
+    pkill -9 -f "node server.js" 2>/dev/null || true
+    rm -f "$G8ED_PID_FILE"
 }
 
 _start_operator_listen() {
@@ -481,7 +478,7 @@ _wait_operator_listen_healthy() {
     local url="$1" timeout_s="$2" interval="${3:-1}"
     local waited=0
     echo "  Operator listen mode: waiting for $url..."
-    
+
     until curl -sfk "$url" >/dev/null 2>&1; do
         if (( waited >= timeout_s )); then
             echo -e "  Operator listen mode: \033[0;31mTIMEOUT\033[0m"
@@ -493,6 +490,24 @@ _wait_operator_listen_healthy() {
         waited=$(( waited + interval ))
     done
     echo -e "  Operator listen mode: \033[0;32mready\033[0m (${waited}s)"
+}
+
+_wait_service_healthy() {
+    local service_name="$1" url="$2" timeout_s="$3" interval="${4:-1}" log_file="$5"
+    local waited=0
+    echo "  $service_name: waiting for healthy status..."
+
+    until curl -sfk "$url" >/dev/null 2>&1; do
+        if (( waited >= timeout_s )); then
+            echo -e "  $service_name: \033[0;31mTIMEOUT\033[0m"
+            echo "  $service_name did not become healthy within ${timeout_s}s. See $log_file"
+            tail -n 20 "$log_file"
+            exit 1
+        fi
+        sleep "$interval"
+        waited=$(( waited + interval ))
+    done
+    echo -e "  $service_name: \033[0;32mready\033[0m (${waited}s)"
 }
 
 _load_env() {
@@ -650,18 +665,8 @@ if [[ "$COMMAND" == "restart" ]]; then
     _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_HTTP_PORT/health" 60 1
     _sync_operator_binaries
     
-    # Update health checks to probe host processes directly
-    echo "  g8ee: waiting for healthy status..."
-    until curl -sfk "https://localhost:8443/health" >/dev/null 2>&1; do
-        sleep 1
-    done
-    echo -e "  g8ee: \033[0;32mready\033[0m"
-
-    echo "  g8ed: waiting for healthy status..."
-    until curl -sfk "https://localhost/health" | grep -q '"status"'; do
-        sleep 1
-    done
-    echo -e "  g8ed: \033[0;32mready\033[0m"
+    _wait_service_healthy "g8ee" "https://localhost:8443/health" 10 1 "$G8EE_LOG_FILE"
+    _wait_service_healthy "g8ed" "https://localhost/health" 10 1 "$G8ED_LOG_FILE"
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -700,19 +705,10 @@ if [[ "$COMMAND" == "reset" ]]; then
     echo "Waiting for services..."
     _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_HTTP_PORT/health" 300 2
     _sync_operator_binaries
-    
-    # Update health checks to probe host processes directly
-    echo "  g8ee: waiting for healthy status..."
-    until curl -sfk "https://localhost:8443/health" >/dev/null 2>&1; do
-        sleep 1
-    done
-    echo -e "  g8ee: \033[0;32mready\033[0m"
 
-    echo "  g8ed: waiting for healthy status..."
-    until curl -sfk "https://localhost/health" | grep -q '"status"'; do
-        sleep 1
-    done
-    echo -e "  g8ed: \033[0;32mready\033[0m"
+    # Update health checks to probe host processes directly
+    _wait_service_healthy "g8ee" "https://localhost:8443/health" 10 1 "$G8EE_LOG_FILE"
+    _wait_service_healthy "g8ed" "https://localhost/health" 10 1 "$G8ED_LOG_FILE"
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -752,17 +748,8 @@ if [[ "$COMMAND" == "wipe" ]]; then
     echo ""
     echo "Waiting for services..."
     # Update health checks to probe host processes directly
-    echo "  g8ee: waiting for healthy status..."
-    until curl -sfk "https://localhost:8443/health" >/dev/null 2>&1; do
-        sleep 1
-    done
-    echo -e "  g8ee: \033[0;32mready\033[0m"
-
-    echo "  g8ed: waiting for healthy status..."
-    until curl -sfk "https://localhost/health" | grep -q '"status"'; do
-        sleep 1
-    done
-    echo -e "  g8ed: \033[0;32mready\033[0m"
+    _wait_service_healthy "g8ee" "https://localhost:8443/health" 10 1 "$G8EE_LOG_FILE"
+    _wait_service_healthy "g8ed" "https://localhost/health" 10 1 "$G8ED_LOG_FILE"
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -822,18 +809,10 @@ if [[ "$COMMAND" == "up" ]]; then
     
     # Update health checks to probe host processes directly
     if printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8ee; then
-        echo "  g8ee: waiting for healthy status..."
-        until curl -sfk "https://localhost:8443/health" >/dev/null 2>&1; do
-            sleep 1
-        done
-        echo -e "  g8ee: \033[0;32mready\033[0m"
+        _wait_service_healthy "g8ee" "https://localhost:8443/health" 10 1 "$G8EE_LOG_FILE"
     fi
     if printf '%s\n' "${UP_COMPONENTS[@]}" | grep -qx g8ed; then
-        echo "  g8ed: waiting for healthy status..."
-        until curl -sfk "https://localhost/health" | grep -q '"status"'; do
-            sleep 1
-        done
-        echo -e "  g8ed: \033[0;32mready\033[0m"
+        _wait_service_healthy "g8ed" "https://localhost/health" 10 1 "$G8ED_LOG_FILE"
     fi
     
     echo ""
@@ -864,19 +843,10 @@ if [[ "$COMMAND" == "setup" ]]; then
     echo "Waiting for services..."
     _wait_operator_listen_healthy "https://localhost:$OPERATOR_LISTEN_HTTP_PORT/health" 300 2
     _sync_operator_binaries
-    
-    # Update health checks to probe host processes directly
-    echo "  g8ee: waiting for healthy status..."
-    until curl -sfk "https://localhost:8443/health" >/dev/null 2>&1; do
-        sleep 1
-    done
-    echo -e "  g8ee: \033[0;32mready\033[0m"
 
-    echo "  g8ed: waiting for healthy status..."
-    until curl -sfk "https://localhost/health" | grep -q '"status"'; do
-        sleep 1
-    done
-    echo -e "  g8ed: \033[0;32mready\033[0m"
+    # Update health checks to probe host processes directly
+    _wait_service_healthy "g8ee" "https://localhost:8443/health" 10 1 "$G8EE_LOG_FILE"
+    _wait_service_healthy "g8ed" "https://localhost/health" 10 1 "$G8ED_LOG_FILE"
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -925,18 +895,10 @@ if [[ "$COMMAND" == "rebuild" ]]; then
 
     # Update health checks to probe host processes directly
     if printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8ee; then
-        echo "  g8ee: waiting for healthy status..."
-        until curl -sfk "https://localhost:443/health" >/dev/null 2>&1; do
-            sleep 1
-        done
-        echo -e "  g8ee: \033[0;32mready\033[0m"
+        _wait_service_healthy "g8ee" "https://localhost:8443/health" 10 1 "$G8EE_LOG_FILE"
     fi
     if printf '%s\n' "${REBUILD_COMPONENTS[@]}" | grep -qx g8ed; then
-        echo "  g8ed: waiting for healthy status..."
-        until curl -sfk "https://localhost/health" | grep -q '"status"'; do
-            sleep 1
-        done
-        echo -e "  g8ed: \033[0;32mready\033[0m"
+        _wait_service_healthy "g8ed" "https://localhost/health" 10 1 "$G8ED_LOG_FILE"
     fi
 
     echo ""
