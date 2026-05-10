@@ -201,6 +201,10 @@ _g8ed_running() {
         fi
         rm -f "$G8ED_PID_FILE"
     fi
+    # Also check for orphaned node server.js processes
+    if pgrep -f "node server.js" > /dev/null 2>&1; then
+        return 0
+    fi
     return 1
 }
 

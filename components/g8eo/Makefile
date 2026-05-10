@@ -82,7 +82,6 @@ build:
 	@echo 'Built: build/linux-amd64/g8e.operator'
 	@SIZE=$$(ls -lh build/linux-amd64/g8e.operator | awk '{print $$5}') && \
 		echo "  Size: $$SIZE"
-	@$(MAKE) _upload-blob ARCH=amd64 BIN_PATH=build/linux-amd64/g8e.operator
 
 .PHONY: build-all
 build-all:
@@ -112,18 +111,12 @@ build-all:
 	fi
 	@echo ""
 	@echo "All architectures built successfully."
-	@echo "Uploading binaries to g8es blob store..."
-	@for arch in amd64 arm64 386; do \
-		$(MAKE) _upload-blob ARCH=$$arch BIN_PATH=$(BUILD_DIR)/linux-$$arch/g8e.operator || exit 1; \
-	done
-	@echo "All binaries uploaded to g8es blob store."
 
 # =============================================================================
 # BUILD TARGETS — local Go
 # =============================================================================
 .PHONY: build-local
 build-local: check-certs _build-local-binary
-	@$(MAKE) _upload-blob ARCH=amd64 BIN_PATH=build/linux-amd64/$(BINARY_NAME)
 
 .PHONY: _build-local-binary
 _build-local-binary:
@@ -136,26 +129,6 @@ _build-local-binary:
 		-o build/linux-amd64/$(BINARY_NAME) .
 	@echo "Built: build/linux-amd64/$(BINARY_NAME)"
 
-.PHONY: _upload-blob
-_upload-blob:
-	@if [ -z "$(AUTH_TOKEN)" ]; then \
-		echo "  WARNING: No internal auth token found — skipping blob upload"; \
-	else \
-		SIZE=$$(ls -lh $(BIN_PATH) | awk '{print $$5}'); \
-		HTTP_CODE=$$(curl -sf -o /dev/null -w '%{http_code}' \
-			-X PUT \
-			--cacert $(CA_CERT) \
-			-H 'Content-Type: application/octet-stream' \
-			-H 'X-Internal-Auth: $(AUTH_TOKEN)' \
-			--data-binary @$(BIN_PATH) \
-			'$(G8ES_URL)/blob/$(BLOB_NAMESPACE)/linux-$(ARCH)'); \
-		if [ "$$HTTP_CODE" = "200" ] || [ "$$HTTP_CODE" = "201" ]; then \
-			echo "  Uploaded linux/$(ARCH) to g8es blob store ($$SIZE)"; \
-		else \
-			echo "  ERROR: Upload failed for linux/$(ARCH) (HTTP $$HTTP_CODE)" >&2; \
-			exit 1; \
-		fi; \
-	fi
 
 .PHONY: build-local-all
 build-local-all: check-certs

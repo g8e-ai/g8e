@@ -95,7 +95,7 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 		// so the token can be seeded and services can coordinate.
 		if expected == "" {
 			// Allow access to platform_settings so it can be discovered/seeded.
-			if (r.Method == http.MethodGet || r.Method == http.MethodPut) && r.URL.Path == "/db/settings/platform_settings" {
+			if (r.Method == http.MethodGet || r.Method == http.MethodPut || r.Method == http.MethodPatch) && r.URL.Path == "/db/settings/platform_settings" {
 				next.ServeHTTP(w, r)
 				return
 			}
