@@ -234,7 +234,7 @@ bin/
 .env.*.local
 .local.dev
 .local.dev/**
-/.g8e/
+.g8e/
 
 # Database files
 *.db
@@ -270,3 +270,7 @@ docs/.projects
 
 # models
 components/g8ee/models
+
+# ssl
+ssl/
+.ssl/

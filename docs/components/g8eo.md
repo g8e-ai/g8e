@@ -8,7 +8,7 @@ parent: Components
 Last Updated: 2026-05-10
 Version: v0.2.2
 
-g8eo is the Go-based reference implementation of the Operator for the g8e platform. It provides language-agnostic, secure, real-time command execution and file management for remote system operations.
+g8eo is the Go-based reference implementation of the Operator for the g8e platform. It provides language-agnostic, secure, real-time command execution and file management for remote system operations. In addition to acting as a remote execution agent, it provides the platform's central persistence and messaging backbone when running in Listen Mode.
 
 > For deep-reference security documentation — CA trust bootstrap, mTLS, fingerprint binding, replay protection, operator binding, Sentinel pre-execution threat detection, output scrubbing patterns, LFAA vault encryption, and the Ledger — see [architecture/security.md](../architecture/security.md).
 
@@ -20,7 +20,7 @@ g8eo is the Go-based reference implementation of the Operator for the g8e platfo
 - **Protocol-governed execution**: Every command is carried as a serialized Protobuf `UniversalEnvelope` with typed `operator.proto` payload bytes and L1/L2/L3 governance metadata.
 - **Data sovereignty**: Command output stays local by default; only metadata travels to the cloud.
 - **Defense in depth**: Multiple security layers — mTLS, certificate pinning, and Sentinel platform-wide protection.
-- **Outbound-only connectivity**: g8eo initiates all connections; no inbound ports required in default mode.
+- **Outbound-only connectivity**: In default mode, g8eo initiates all connections; no inbound ports required.
 
 ---
 
@@ -29,10 +29,10 @@ g8eo is the Go-based reference implementation of the Operator for the g8e platfo
 g8eo supports four primary operating modes to balance security, performance, and deployment flexibility:
 
 ### 1. Outbound Mode (Default)
-**The standard deployment.** g8eo acts as a remote Operator that dials into the platform. This enables execution on machines behind strict firewalls without requiring inbound firewall rules.
+**The standard deployment.** g8eo acts as a remote Operator that dials into the platform (g8ed/g8eo listen mode). This enables execution on machines behind strict firewalls without requiring inbound firewall rules.
 
 ### 2. Listen Mode (`--listen`)
-**Operator listen mode.** In this mode, the Operator binary provides persistence, blob storage, and pub/sub for Dashboard and Engine. Runtime state is rooted at `.g8e/` by the host lifecycle scripts.
+**Platform Persistence & Messaging.** In this mode, g8eo replaces the legacy `g8es` component, providing the central document store, KV store, blob storage, and pub/sub broker for the Dashboard (g8ed) and Engine (g8ee). It does **not** execute commands or initiate outbound connections.
 
 ### 3. SSH Stream Mode (`stream` subcommand)
 **Agentless fleet operations.** A Go-native concurrent SSH engine that allows g8e to "stream" itself onto remote hosts. This is used for temporary operations on hosts where a permanent g8eo installation is not desired.
@@ -45,7 +45,7 @@ g8eo supports four primary operating modes to balance security, performance, and
 ## Lifecycle & Pipeline
 
 ### Startup Sequence
-g8eo initialization is a two-phase process to ensure security before any core logic is loaded:
+g8eo initialization ensures security before any core logic is loaded:
 
 1. **Phase 1: Bootstrap (Pre-Auth)**
    - **CA Discovery**: Scans local volume mount paths (`/ssl/ca.crt`, etc.) before falling back to an HTTPS fetch.
@@ -58,46 +58,44 @@ g8eo initialization is a two-phase process to ensure security before any core lo
    - **Connectivity**: Establishes the persistent WebSocket connection to the pub/sub broker.
    - **Sentinel**: Activates pre-execution threat detection and post-execution output scrubbing.
 
-### Command Pipeline
-```mermaid
-graph TD
-    A[User Approval] --> B[g8ee Dispatch]
-    B --> C[Operator Listen-Mode Pub/Sub Broker]
-    C --> D[g8eo Command Loop]
-    D --> E[Sentinel Pre-Execution]
-    E --> F[Local Execution]
-    F --> G[Sentinel Output Scrubbing]
-    G --> H[Vault Persistence]
-    H --> I[Result Publication]
-    I --> J[g8ee Aggregation]
-```
+### Command Pipeline & Governance
+g8eo treats all input as untrusted at the protocol boundary. Commands are processed through a strict 3-layer validation hierarchy carried within the `UniversalEnvelope`:
 
-g8eo treats g8ee as untrusted input at the protocol boundary. The command loop rejects non-envelope command bytes, decodes recognized `UniversalEnvelope.payload` values into typed `operator.proto` request messages, enforces L1 Technical Bedrock gates through reflected `forbidden_patterns` options, verifies the L2 Tribunal signature when configured, and checks `state_merkle_root` when a comparable local root is available. L3 authorization evidence is carried in `governance.l3`; auto-approval is L3 state only and never bypasses L1 or L2.
+1. **L1 Technical Bedrock (Hard Gates)**: Enforced via Protobuf reflection. g8eo inspects the `operator.proto` payload for fields with `forbidden_patterns` (e.g., `sudo`, `su`, `rm -rf /`). Violations result in immediate rejection.
+2. **L2 Consensus (Tribunal)**: Verified via HMAC-SHA256 signature. When an `auditor_hmac_key` is present in the `ssl/` directory, g8eo rejects any envelope without a valid signature from the AI Tribunal.
+3. **L3 Authorization (Approval)**: Human-in-the-loop or auto-approval metadata. Auto-approval is authorization state only and **never** bypasses L1 or L2 gates.
+
+**BFT Verification**: If a `state_merkle_root` is present in the envelope, g8eo verifies it against its local Git-backed Ledger to ensure the command is not based on stale system state.
 
 ---
 
 ## Storage Architecture
 
-g8eo implements the **Local-First Audit Architecture (LFAA)**, maintaining four independent local stores in the `.g8e/` directory.
+### Local-First Audit Architecture (LFAA)
+g8eo maintains four independent local stores in the `.g8e/` directory:
 
 | Store | Purpose | Access |
 |---|---|---|
 | **Scrubbed Vault** | Sentinel-scrubbed command output and file diffs. | AI Engine (g8ee) |
 | **Raw Vault** | Unscrubbed full output for forensics. | Local User Only |
-| **Audit Vault** | Append-only event timeline (LFAA). | Platform / Audit |
+| **Audit Vault** | Append-only event timeline (SQLite). | Platform / Audit |
 | **Ledger** | Git-backed cryptographic version history for all modified files. | Platform / Audit |
 
-The LFAA Audit Vault (`.g8e/data/g8e.db`) can be queried directly using SQLite for forensic analysis and audit review. See [Storage Architecture - Querying the LFAA Audit Vault](../architecture/storage.md#querying-the-lfaa-audit-vault) for raw SQL queries and the Python CLI tool reference.
+### Listen Mode API
+In Listen Mode, g8eo exposes a hardened internal API for platform components:
 
-*Note: The Ledger requires a functional `git` binary and is automatically disabled if git is unavailable or `--no-git` is passed.*
+- **Document Store (`/db/`)**: JSON document storage with collection-based organization and filtering.
+- **KV Store (`/kv/`)**: High-performance key-value storage with TTL support for transient state and locks.
+- **Blob Store (`/blob/`)**: Namespace-isolated storage for large payloads (e.g., file contents, logs).
+- **Pub/Sub (`/ws/pubsub`)**: Real-time message distribution via WebSockets, secured by `x-internal-auth`.
 
 ---
 
 ## Canonical Truths
 
-The g8e protocol is defined in `shared/proto/`; shared constants JSON registries remain the source for event names, status values, and channel prefixes. g8eo mirrors those registries as compile-time Go constants in the `constants/` package:
+The g8e protocol is defined in `shared/proto/`; shared constants JSON registries remain the source for event names, status values, and channel prefixes. g8eo mirrors those registries as compile-time Go constants:
 
-- **Protocol**: generated Go artifacts under `shared/proto/` mirror `shared/proto/common.proto`, `shared/proto/operator.proto`, and `shared/proto/pubsub.proto`.
+- **Protocol**: Generated Go artifacts under `shared/proto/` mirror `shared/proto/common.proto`, `shared/proto/operator.proto`, and `shared/proto/pubsub.proto`.
 - **Events**: `constants/events.go` mirrors `shared/constants/events.json`.
 - **Status**: `constants/status.go` mirrors `shared/constants/status.json`.
 - **Channels**: `constants/channels.go` mirrors `shared/constants/channels.json`.
@@ -117,7 +115,7 @@ Components (Dashboard, Engine, and Operator listen mode) use a shared `internal_
 ## Operational Reference
 
 ### CLI Reference
-g8eo provides a comprehensive set of flags for runtime configuration. Use the `--help` flag to see all available options for the current version:
+g8eo provides a comprehensive set of flags for runtime configuration. Use the `--help` flag to see all available options:
 
 ```bash
 g8e.operator --help

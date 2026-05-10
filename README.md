@@ -4,29 +4,18 @@
 
 **AI-powered, human-driven infrastructure.**
 
-governance architecture for trustless environments
+g8e is a governance-first agentic platform for trustless infrastructure management. Every actor — Engine, Operator, User — operates under a mutual adversarial assumption: verify every intent, sign every state change, and anchor every output to a host-authoritative ledger. 
 
-[Position Paper](docs/architecture/position_paper.md) · [Architecture](docs/architecture/about.md) · [Protocol](docs/architecture/protocol.md) · [Security](docs/architecture/security.md) · [Quick Start](#quick-start) · [Contributing](#contributing)
+The architecture is a host-authoritative substrate: Byzantine consensus with an adversarial co-validator, sovereign execution on customer hardware, and chain-of-custody audit. Its foundation is a Protobuf-first `UniversalEnvelope` contract that binds typed payloads to canonical event names, state roots, and a 3-layer governance hierarchy (L1/L2/L3).
 
-</div>
-
-## What this is
-
-g8e is an agentic AI platform built on mutual adversarial assumption. Every actor — Engine, Operator, User — assumes the others may be compromised and verifies accordingly. No trusted component, no privileged path, no implicit consent.
-
-The architecture is a host-authoritative governance substrate: Byzantine consensus with an adversarial co-validator, sovereign execution on customer hardware, and chain-of-custody audit. Its bedrock is the protocol: a Protobuf-first `UniversalEnvelope` contract that binds typed operator payloads to canonical event names, state roots, operator/session context, and L1/L2/L3 governance metadata. BFT applied to the agentic stack.
-
-Self-hosted. Air-gap capable. Apache 2.0. Built for environments where nominal oversight is a failure state and the owner must own the ledger.
+Self-hosted. Air-gap capable. Apache 2.0. Built for environments where nominal oversight is a failure state.
 
 ### Core Principles
 
-- **Data sovereignty.** The managed host is the authoritative system of record. Every mutation and command output is anchored to a local, git-backed ledger (LFAA) in native SQLite vaults — queryable with standard SQL, mapped to MITRE ATT&CK for SIEM/SOC integration. Raw data never leaves your infrastructure.
-
-- **LLM sovereignty.** A stateless reasoning engine decouples intent from execution. Context is ephemeral per request; providers never retain session state. Swap between Anthropic, Gemini, OpenAI, Ollama, or llama.cpp without losing continuity.
-
-- **Operator sovereignty.** The Operator is a protocol for verifiable execution, not just a binary. Sentinel pre-execution analysis (46 threat detectors), hardware fingerprint binding, outbound-only mTLS, and Protobuf-first command envelopes carrying governance evidence. Legacy or malformed command bytes are rejected rather than translated.
-
-- **Consensus integrity.** The Tribunal generates candidates under tiered information gating — agents cannot see each other's reasoning or downstream plans. An adversarial co-validator (Nemesis) is scored on a proper scoring rule alongside the honest panel. All eight core agent personas (Axiom, Concord, Variance, Pragma, Nemesis, Sage, Auditor, Warden) stake reputation on every turn; malfeasance or incompetence triggers automated slashing across tiered severity bands. Collusion is structurally unprofitable.
+- **Host Sovereignty.** The managed host is the system of record. Every mutation and command output is anchored to a local, git-backed ledger (LFAA) in native SQLite vaults — queryable with standard SQL, mapped to MITRE ATT&CK for SIEM/SOC integration. Raw data never leaves your infrastructure.
+- **LLM Sovereignty.** A stateless reasoning engine decouples intent from execution. Context is ephemeral per request; providers never retain session state. Swap between Anthropic, Gemini, OpenAI, or local providers (Ollama, llama.cpp) without losing continuity.
+- **Operator Integrity.** The Operator is a protocol for verifiable execution. Sentinel pre-execution analysis (46 threat detectors), hardware fingerprint binding, outbound-only mTLS, and Protobuf-first command envelopes ensure that legacy or malformed command bytes are rejected rather than translated.
+- **Consensus-Driven Safety.** The Tribunal generates candidates under tiered information isolation — agents cannot see each other's reasoning or plans. An adversarial co-validator (Nemesis) stress-tests the panel. All core personas stake reputation on every turn; incompetence triggers automated slashing.
 
 ## Why
 
@@ -94,14 +83,14 @@ flowchart TD
     PHP -- "Rejected" --> Sage
 ```
 
-1. **Triage** classifies the request. Trivial questions go to **Dash** (fast-path responder). Anything that may state-change is enriched with operator context and routed to **Sage**.
-2. **Sage** writes an intent document — goals, constraints, success criteria — and hands it to the Tribunal.
-3. **The Tribunal** is five blind validators (Axiom, Concord, Variance, Pragma, Nemesis), each generating a candidate command independently with no visibility into the others. A winner requires ≥2 of 5 supporting votes. If consensus fails or a tie is unresolved by deterministic laddering (Shortest → Non-Nemesis), an anonymized peer-review round runs. If Round 2 also fails to reach consensus, a circuit breaker error is triggered and surfaced back to Sage.
-4. **Warden** (running on the Engine) performs a pre-execution risk assessment. It coordinates specialized sub-agents (`warden_command_risk`, `warden_file_risk`, `warden_error`) to validate the command safety profile for blast radius, destructive idioms, and risk. The **Nemesis** actively tries to trick the Warden into allowing flawed commands.
-5. **The Auditor** performs the final consistency check and Merkle commitment once the Warden has cleared the command. The Auditor is the only persona that cannot be tricked by the Nemesis; if a Nemesis command passes the Warden, the Auditor identifies the "attack," awards the Nemesis, but rejects the command.
-6. **Proof of Human Presence (PHP)**: You review the command and risk assessment via the Governance Gateway and provide a hardware-bound signature using a FIDO2 passkey. When the flow is auto-approved, that is Layer 3 authorization state only; it never bypasses Layer 1 or Layer 2.
-7. **The Operator** receives a serialized `UniversalEnvelope` over the pub/sub WebSocket path, rejects non-envelope command bytes, enforces reflected L1 forbidden-pattern rules, verifies the L2 Tribunal signature when configured, checks the state root when present, runs the typed payload in an isolated process group, captures the result into the local audit vault, and snapshots state into a git-backed ledger.
-8. **Codex** (async) extracts durable user preferences and scrubbed investigation summaries from the conversation history to build long-term memory.
+1. **Triage** classifies the request. Trivial questions go to **Dash** (fast-path responder). Complex or state-changing requests are enriched with operator context and routed to **Sage**.
+2. **Sage** articulates the intent — goals, constraints, and success criteria — and hands it to the Tribunal.
+3. **The Tribunal** (Axiom, Concord, Variance, Pragma, Nemesis) generates five independent candidate commands. A winner is selected via plurality consensus (≥2 of 5). If no consensus is reached, an anonymized peer-review round (Round 2) runs before potentially failing back to Sage.
+4. **The Warden** performs pre-execution risk assessment. It orchestrates specialized sub-agents (`command_risk`, `file_risk`, `error`) to classify the command's blast radius and potential for harm.
+5. **The Auditor** performs the final consistency check and Merkle commitment. It verifies the Tribunal's choice against Sage's intent and judges the Nemesis.
+6. **Proof of Human Presence (PHP)**: The user reviews the command and risk assessment via the Dashboard and provides a hardware-bound signature (FIDO2/WebAuthn). This is **Layer 3** authorization; it never bypasses L1 or L2 gates.
+7. **The Operator** receives the serialized `UniversalEnvelope`, verifies the L2 signature, enforces L1 forbidden-patterns, checks state freshness, and executes the command in an isolated process group. Results are captured in the local LFAA ledger.
+8. **Codex** (async) extracts durable preferences and scrubbed summaries from history to build the system's long-term memory.
 
 The point of steps 1–5 is to minimize what reaches step 6. Your time is the only stake the system can't fake; everything upstream exists to spend it well.
 
@@ -120,12 +109,10 @@ typed operator.proto payload
 
 Protocol-level enforcement is deliberately fail-closed:
 
-- **No legacy fallback** — operator command paths use serialized `UniversalEnvelope` bytes. JSON command payloads are rejected rather than migrated.
-- **Typed payload binding** — `event_type` selects the `operator.proto` payload type. Recognized request events are decoded before dispatch; unknown event types do not dispatch.
-- **Layer 1 bedrock** — hard technical gates are represented in protocol metadata and enforced at the Operator boundary through reflected `forbidden_patterns` options on typed Protobuf fields.
-- **Layer 2 commitment** — command envelopes carry `governance.l2.tribunal_signature`, an HMAC over `event_type || "\n" || payload_bytes`; `g8eo` rejects missing or invalid signatures when L2 verification is configured.
-- **Layer 3 authorization state** — `governance.l3` carries human-signature or auto-approval evidence from the Governance Gateway. Auto-approval is L3 state only and never bypasses L1 or L2.
-- **State freshness** — `state_merkle_root` binds a command to the fleet state observed at generation time; mismatches are rejected when the Operator has a comparable local root.
+- **L1 Technical Bedrock** — Hard technical gates (forbidden patterns) enforced at the Operator boundary via reflected Protobuf options.
+- **L2 Consensus Integrity** — Commands carry a `tribunal_signature` (HMAC over event type and payload); the Operator rejects invalid or missing signatures.
+- **L3 Authorization State** — Evidence of human approval (PHP) or auto-approval. L3 metadata is for authorization only and never bypasses L1 or L2 checks.
+- **State Freshness** — `state_merkle_root` binds commands to the host state at generation time; stale commands are rejected.
 
 Full contract: [protocol.md](docs/architecture/protocol.md).
 
@@ -184,31 +171,35 @@ flowchart LR
 
 | Component | Stack | Role |
 |---|---|---|
-| **g8eo** | Go (~4MB static) | The Operator. Runs on managed hosts, executes commands, owns the audit ledger, and provides listen-mode persistence/pub/sub. |
-| **g8ee** | Python / FastAPI | The Engine. Multi-provider LLM abstraction. Tribunal, Auditor, Warden. |
-| **g8ed** | Node.js | The Dashboard. Governance Gateway: FIDO2 auth, mTLS broker, ledger synchronization. |
+| **Operator (g8eo)** | Go | The sovereign "Satellite Agent". Runs on managed hosts, executes commands, and owns the LFAA ledger. Provides listen-mode persistence for the Control Plane. |
+| **AI Engine (g8ee)** | Python | The reasoning hub. Orchestrates the Tribunal, Warden, and Auditor. Stateless abstraction for multi-provider LLM access. |
+| **Dashboard (g8ed)** | Node.js | The Governance Gateway. FIDO2/WebAuthn auth provider, mTLS broker, and ledger synchronization interface. |
 
 User to `g8ed` over TLS 1.3 with encrypted cookies. Operator to Gateway via outbound-only mTLS WebSocket. No inbound ports on managed hosts. Every connection is mutually authenticated; state-changing workflows pass through the L1/L2/L3 governance hierarchy, with hardware-bound passkey authorization as the default Layer 3 path.
 
 ---
 
+## Governance Hierarchy
+
+g8e uses a 3-layer command validation hierarchy to ensure safety and minimize click fatigue:
+
+1. **L1 (Hard Gates)**: Forbidden patterns (`sudo`, `su`, etc.) and system-level allowlists. Always active.
+2. **L2 (Consensus)**: The Tribunal ensemble must reach consensus on the command. Signature-verified by the Operator.
+3. **L3 (Authorization)**: Human-in-the-loop by default. Benign diagnostic commands may be auto-approved, but only if they have already passed L1 and L2.
+
 ## The Tribunal
 
-Five LLM personas generate candidate commands in parallel, blind to each other:
+Five specialized LLM personas generate candidate commands in parallel, blind to each other:
 
-| Persona | Lens | Pressure |
+| Persona | Lens | Responsibility |
 |---|---|---|
-| **Axiom** | Composition | Clean multi-stage pipelines, resource efficiency |
-| **Concord** | Safety | Defensive flags, read-only discipline |
-| **Variance** | Edge cases | Locales, spaces, nulls, boundary conditions |
-| **Pragma** | Convention | Idiomatic, OS-specific, least-surprise |
-| **Nemesis** | Calibrated adversary | Tries to trick the Warden with flawed-but-plausible commands to stress the system. |
+| **Axiom** | Composition | Clean multi-stage pipelines, resource efficiency. |
+| **Concord** | Safety | Defensive flags, read-only discipline. |
+| **Variance** | Edge cases | Robustness against spaces, locales, and nulls. |
+| **Pragma** | Convention | Idiomatic, OS-specific "best practices". |
+| **Nemesis** | Adversary | Calibrated stress-test; tries to trick the system with flawed commands. |
 
-A winner requires ≥2 of 5 supporting votes (Plurality Consensus). If consensus is not reached, or if a tie cannot be resolved by deterministic laddering (Shortest → Non-Nemesis), anonymized peer review runs and members may converge or hold. If the tie remains unresolved after Round 2, a circuit breaker halts the loop and surfaces the deadlock to Sage.
-
-**The Information Isolation Principle** is the load-bearing safety property: each agent operates in a sealed information environment, believing it is playing a smaller game than it actually is. Triage doesn't know Sage exists. Sage doesn't know the Tribunal exists. The Tribunal doesn't know one of its members is Nemesis or that the Auditor has cross-conversation memory. Only the Auditor has full visibility, and the Auditor is bonded most heavily and peer-reviewed.
-
-The quarantine eliminates collusion strategies that would otherwise be profitable. Collapse any layer and a deviation strategy opens up. It is not a UX choice; it is the safety mechanism.
+**Information Isolation** is the load-bearing safety property: each agent operates in a sealed information environment. Triage doesn't know Sage exists; Sage doesn't know the Tribunal exists; the Tribunal members don't know who is the Nemesis. Collusion is structurally unprofitable.
 
 Reputation staking, slashing tiers, and the full mechanism design: [governance.md](docs/architecture/governance.md).
 
@@ -216,34 +207,28 @@ Reputation staking, slashing tiers, and the full mechanism design: [governance.m
 
 ## The Operator
 
-The **Operator** is a 4MB sovereign "Satellite Agent" designed for global-scale fleet management. It delivers remote execution anywhere in the world using only an outbound connection, managing hundreds or thousands of devices within a single conversation context. A single command installs it on any host:
-
-```bash
-curl -fsSL http://<hub>/g8e | sh -s -- <device-link-token>
-```
-
-What happens on every state change:
+The **Operator** is a sovereign "Satellite Agent" designed for global-scale fleet management. It delivers remote execution anywhere in the world using only an outbound connection, managing hundreds or thousands of devices within a single conversation context.
 
 1. **Context Injection**: Bundles a signed snapshot of host state (OS, shell, hardware, history) into the reasoning loop.
 2. **Receives** the typed `UniversalEnvelope` command via outbound mTLS WebSocket.
-3. **Pre-screens** with the Sentinel — 46 MITRE ATT&CK detectors, 28 scrubbing patterns.
+3. **Pre-screens** with the Sentinel — 46 MITRE ATT&CK detectors and 27 scrubbing patterns.
 4. **Executes** in an isolated process group with closed stdin.
 5. **Captures** output into a Raw Vault (host-only) and a Scrubbed Vault (AI-accessible).
-6. **Snapshots** state into a local git-backed ledger for immutable audit.
+6. **Snapshots** state into a local git-backed ledger (LFAA) for immutable audit.
 
-System fingerprint binding ties the Operator's mTLS cert to the host it was issued on. A stolen API key is useless from a different machine.
+System fingerprint binding ties the Operator's mTLS certificate to the host hardware. A stolen certificate is useless from a different machine.
 
 ---
 
 ## Security
 
 - **Auth** — Proof of Human Presence (PHP) via FIDO2 / WebAuthn passkeys. Hardware-bound approval is the default Layer 3 state for mutations; auto-approval is restricted to benign commands that already passed L1 and L2. Passwords are unsupported by design.
-- **Transport** — TLS 1.3. Platform-generated ECDSA P-384 CA. Per-Operator mTLS client certs issued at claim time.
-- **Sentinel** — On-host defensive analysis: 46 MITRE-mapped detectors, 28 scrubbing patterns, and command allowlist/denylist enforcement.
-- **Warden** — Engine-side defensive coordination: command/error/file risk classifiers applied before human approval.
-- **Sessions** — Encrypted cookies, idle and absolute timeouts, IP tracking, timestamp + nonce replay protection.
-- **Sovereignty** — Raw command output never leaves the host. Only Sentinel-scrubbed metadata reaches model providers. Engine outage does not erase history.
-- **Compliance alignment** — NSA Zero Trust (exceeds requirements in 6 of 7 pillars), HIPAA-ready, FedRAMP-aligned controls.
+- **Transport** — TLS 1.3 for the Control Plane; outbound-only mTLS for Operators. Platform-generated ECDSA P-384 CA.
+- **Sentinel** — On-host defensive analysis: 46 MITRE-mapped detectors, 27 scrubbing patterns, and command allowlist/denylist enforcement.
+- **Warden** — Engine-side defensive coordination: command, error, and file risk classifiers applied before human approval.
+- **Sovereignty** — Raw command output never leaves the host. Only Sentinel-scrubbed metadata reaches model providers. Engine outage does not erase host-local history.
+- **LFAA** — Local-First Audit Architecture. All state changes are committed to a local git ledger and SQLite vaults on the managed host.
+- **Compliance** — NSA Zero Trust (exceeds requirements in 6 of 7 pillars), HIPAA-ready, FedRAMP-aligned controls.
 
 Threat model and full control catalogue: [security.md](docs/architecture/security.md).
 
@@ -251,46 +236,34 @@ Threat model and full control catalogue: [security.md](docs/architecture/securit
 
 ## Quick Start
 
-Prerequisites: Go, Node.js/npm, Python, and curl available on the host.
+Prerequisites: Go, Node.js/npm, Python 3.12+, and curl available on the host.
 
 ```bash
 git clone https://github.com/g8e-ai/g8e.git && cd g8e
 ./g8e platform start
 ```
 
-Trust the platform CA on your workstation:
+1. **Trust the platform CA** on your workstation:
+   - macOS / Linux: `curl -fsSL http://localhost/trust | sudo sh`
+   - Windows: `irm http://localhost/trust | iex`
+2. **Register a passkey** at `https://localhost`.
+3. **Generate a device-link token** via the Dashboard.
+4. **Install the Operator** on any host you want to manage:
+   ```bash
+   curl -fsSL http://<hub>/g8e | sh -s -- <device-link-token>
+   ```
 
-```bash
-# macOS / Linux
-curl -fsSL http://<host>/trust | sudo sh
-
-# Windows (elevated PowerShell)
-irm http://<host>/trust | iex
-```
-
-**Hostname Usage:**
-- If g8e is running on your local workstation: use `localhost`
-- If g8e is running on a remote system: use `g8e.local` (add to /etc/hosts pointing to the server IP)
-
-Open `https://<host>`, register a passkey, generate a device-link token, then on any host you want to manage:
-
-```bash
-curl -fsSL http://<host>/g8e | sh -s -- <device-link-token>
-```
-
-### CLI
+### CLI Reference
 
 ```bash
 ./g8e platform start       # Start all platform components
 ./g8e platform status      # Show component health and versions
-./g8e platform restart     # Restart all platform components
 ./g8e platform stop        # Stop all platform components
-./g8e platform wipe        # Wipe app data, preserve platform settings and SSL
-./g8e platform reset       # Reset application data, preserve SSL
+./g8e platform wipe        # Wipe app data, preserve SSL/settings
 ./g8e platform clean       # Remove all g8e processes and data
 
-./g8e operator build       # Compile Operator for the current host architecture
-./g8e operator build-all   # Compile Operator for all supported architectures
+./g8e operator build       # Compile Operator for current host
+./g8e operator deploy      # Deploy Operator to a remote host via SSH
 ./g8e test <component>     # Run component tests (g8ee, g8ed, g8eo)
 ```
 

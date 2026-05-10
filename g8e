@@ -375,19 +375,26 @@ case "$TOP" in
                 fi
                 [[ -z "$SUB" ]] && exit 1 || exit 0
                 ;;
-            status|start|stop|restart|reset|wipe|clean)
+            status|start|stop|restart|reset|wipe|clean|settings|logs)
                 case "$SUB" in
-                    start)   _banner "platform start";   exec bash "$SCRIPT_DIR/scripts/core/build.sh" $([[ "$DEV_MODE" == true ]] && echo "--dev") up      "${@:3}" ;;
-                    stop)    _banner "platform stop";    exec bash "$SCRIPT_DIR/scripts/core/build.sh" down    "${@:3}" ;;
-                    restart) _banner "platform restart"; exec bash "$SCRIPT_DIR/scripts/core/build.sh" $([[ "$DEV_MODE" == true ]] && echo "--dev") restart "${@:3}" ;;
-                    status)  _banner "platform status";  exec bash "$SCRIPT_DIR/scripts/core/build.sh" status  "${@:3}" ;;
-                    reset)   _banner "platform reset";   exec bash "$SCRIPT_DIR/scripts/core/build.sh" reset   "${@:3}" ;;
-                    wipe)    _banner "platform wipe";    exec bash "$SCRIPT_DIR/scripts/core/build.sh" wipe    "${@:3}" ;;
-                    clean)   _banner "platform clean";   exec bash "$SCRIPT_DIR/scripts/core/build.sh" clean   "${@:3}" ;;
+                    start)    _banner "platform start";    exec bash "$SCRIPT_DIR/scripts/core/build.sh" $([[ "$DEV_MODE" == true ]] && echo "--dev") up      "${@:3}" ;;
+                    stop)     _banner "platform stop";     exec bash "$SCRIPT_DIR/scripts/core/build.sh" down    "${@:3}" ;;
+                    restart)  _banner "platform restart";  exec bash "$SCRIPT_DIR/scripts/core/build.sh" $([[ "$DEV_MODE" == true ]] && echo "--dev") restart "${@:3}" ;;
+                    status)   _banner "platform status";   exec bash "$SCRIPT_DIR/scripts/core/build.sh" status  "${@:3}" ;;
+                    reset)    _banner "platform reset";    exec bash "$SCRIPT_DIR/scripts/core/build.sh" reset   "${@:3}" ;;
+                    wipe)     _banner "platform wipe";     exec bash "$SCRIPT_DIR/scripts/core/build.sh" wipe    "${@:3}" ;;
+                    clean)    _banner "platform clean";    exec bash "$SCRIPT_DIR/scripts/core/build.sh" clean   "${@:3}" ;;
+                    settings)
+                        _banner "platform settings ${@:3}"
+                        _ensure_g8ed
+                        _run_host_script python3 "$SCRIPT_DIR/scripts/data/manage-operator.py" settings "${@:3}" ;;
+                    logs)
+                        _banner "platform logs"
+                        tail -f "$G8E_RUNTIME_DIR/logs/"*.log ;;
                 esac ;;
             *)
                 echo "[g8e] unknown platform subcommand: '$SUB'" >&2
-                echo "  Valid: settings, update, status, start, stop, restart, reset, wipe, clean, logs" >&2
+                echo "  Valid: settings, status, start, stop, restart, reset, wipe, clean, logs" >&2
                 exit 1 ;;
         esac ;;
 

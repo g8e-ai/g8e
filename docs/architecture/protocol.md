@@ -8,198 +8,119 @@ parent: Architecture
 Last Updated: 2026-05-10
 Version: v0.2.2
 
-# Protocol Invariants
+The g8e Protocol is a **Protobuf-first** communication layer designed for secure, auditable, and Byzantine Fault Tolerant (BFT) interaction between the three platform components: **Dashboard (g8ed)**, **Engine (g8ee)**, and **Operator (g8eo)**.
 
-## 1. Protobuf-First
-All cross-component operator traffic (commands, results, status updates) MUST use serialized `UniversalEnvelope` Protobuf messages. JSON fallbacks are forbidden.
+# Core Invariants
+
+1. **Protobuf-Only Wire Format**: All cross-component operator traffic (commands, results, status updates) MUST use serialized `UniversalEnvelope` messages. JSON fallbacks are rejected.
+2. **Identity Persistence**: Every message must carry an `id`, `operator_id`, and `operator_session_id`.
+3. **Immutable Governance**: Governance metadata (L1/L2/L3) is baked into the envelope and verified before any action is taken.
+4. **BFT State Binding**: Commands are bound to a specific fleet state via `state_merkle_root`.
 
 ---
 
-## Core Model
+# Message Models
 
-g8e treats cross-component operator work as typed protocol messages, not ad hoc JSON documents. The canonical schema files live in `shared/proto/`:
+The canonical schema files live in `@/home/bob/g8e/shared/proto/`:
 
 | File | Purpose |
 |------|---------|
-| `shared/proto/common.proto` | Defines `UniversalEnvelope`, component identity, and governance metadata. |
-| `shared/proto/operator.proto` | Defines operator request and result payloads for commands, file operations, filesystem operations, history, logs, ports, audit, shutdown, and heartbeats. |
-| `shared/proto/pubsub.proto` | Defines the low-level pub/sub carrier messages whose `data` fields carry opaque bytes. |
-
-The canonical event registry remains `shared/constants/events.json`. Event strings identify what happened or what is requested; Protobuf messages define the binary payload shape for protocol paths that carry typed operator traffic.
-
----
+| `common.proto` | Defines `UniversalEnvelope`, component identity, and governance metadata. |
+| `operator.proto` | Defines request/result payloads (commands, file ops, heartbeats, etc.). |
+| `pubsub.proto` | Defines the low-level pub/sub carrier messages. |
 
 ## UniversalEnvelope
 
-`UniversalEnvelope` is the root container for Protobuf-first cross-component operator messages.
+The `UniversalEnvelope` is the root container for all protocol traffic. It binds an event name to typed payload bytes and provides the necessary context for governance.
 
 | Field | Role |
 |-------|------|
-| `id` | Unique message identifier. In command flows this commonly matches the execution correlation key. |
-| `timestamp` | Message creation time. |
-| `source_component` | Publishing component enum: `COMPONENT_G8EE`, `COMPONENT_G8EO`, or `COMPONENT_G8ED`. |
+| `id` | Unique UUID v4 for the message. |
+| `timestamp` | UTC creation time. |
+| `source_component` | `COMPONENT_G8EE`, `COMPONENT_G8EO`, or `COMPONENT_G8ED`. |
 | `event_type` | Canonical event string from `shared/constants/events.json`. |
-| `operator_id` | Operator identity associated with the message. |
-| `operator_session_id` | Concrete operator session that receives or produced the message. |
-| `case_id` | Case correlation key for audit and UI grouping. |
-| `investigation_id` | Investigation correlation key for chat and execution history. |
-| `task_id` | Task correlation key for threaded command/result flows. |
-| `web_session_id` | Browser session correlation key when a human-interactive session is known. |
-| `system_fingerprint` | Hardware/system fingerprint reported by `g8eo`. |
-| `state_merkle_root` | Fleet state root used by BFT stale-state checks when populated. |
-| `governance` | L1/L2/L3 metadata attached to the transaction. |
-| `payload` | Serialized bytes of the typed message selected by `event_type`. |
-
-The envelope does not replace event names. It binds a canonical event name to typed payload bytes and the governance evidence required to decide whether the transaction can proceed.
+| `operator_id` | Target or source operator identity. |
+| `state_merkle_root` | Fleet state root for BFT verification. |
+| `governance` | L1/L2/L3 metadata for security enforcement. |
+| `payload` | Serialized bytes of the typed message (e.g., `CommandRequested`). |
 
 ---
 
-## Wire Flow
+# Protocol Lifecycle
 
-The operator command/result path uses the same two-level shape in both directions:
+## 1. Request Phase (Engine -> Operator)
 
-```text
-g8ee or g8eo
-  -> typed operator payload from operator.proto
-  -> serialized payload bytes
-  -> UniversalEnvelope.payload
-  -> serialized UniversalEnvelope bytes
-  -> operator pub/sub data
-```
+1. **Generation**: `g8ee` generates a `G8eMessage` containing a typed payload (e.g., `CommandRequestPayload`).
+2. **Envelope Building**: `@/home/bob/g8e/components/g8ee/app/utils/envelope_builder.py` converts the model to a `UniversalEnvelope`.
+3. **L2 Signing**: The envelope is signed using HMAC-SHA256 over `event_type || "\n" || payload_bytes` using the `auditor_hmac_key`.
+4. **Publication**: The serialized envelope is published to the operator's command channel.
 
-For inbound operator requests, `g8ee` builds a typed payload from a `G8eMessage` payload model, serializes it, wraps it in `UniversalEnvelope`, signs the L2 metadata, and publishes the envelope bytes through operator pub/sub. `g8eo` rejects command bytes that cannot be unmarshaled as `UniversalEnvelope`.
+## 2. Verification Phase (Operator)
 
-For outbound operator results, `g8eo` builds typed result payloads, wraps them in `UniversalEnvelope`, and publishes the envelope bytes through operator pub/sub. Runtime result paths for command completion, cancellation, file operations, filesystem operations, logs/history, status updates, and heartbeats use the Protobuf envelope path.
+Upon receiving an envelope, `g8eo` performs these checks in `@/home/bob/g8e/components/g8eo/services/pubsub/pubsub_commands.go`:
 
-Channel names, subscription lifecycles, and broker behavior are documented in the pub/sub architecture and operator component docs. This page owns the protocol message contract, not the channel taxonomy.
+1. **Parsing**: Rejects any payload that is not a valid `UniversalEnvelope`.
+2. **BFT Check**: If `state_merkle_root` is present, it is compared against the local ledger. Mismatches cause immediate rejection.
+3. **L1 Check**: Uses Protobuf reflection to find fields marked with `forbidden_patterns`. If a regex matches (e.g., `sudo`), the command is rejected.
+4. **L2 Check**: Verifies the Tribunal signature against its local `auditor_hmac_key`.
+5. **Dispatch**: Decodes the inner payload and routes it to the appropriate service handler.
 
----
+## 3. Result Phase (Operator -> Engine)
 
-## Payload Selection
-
-`event_type` determines how the receiver interprets `payload`.
-
-Representative request payloads include:
-
-| Event | Payload message |
-|-------|-----------------|
-| `g8e.v1.operator.command.requested` | `CommandRequested` |
-| `g8e.v1.operator.command.cancel.requested` | `CommandCancelRequested` |
-| `g8e.v1.operator.file.edit.requested` | `FileEditRequested` |
-| `g8e.v1.operator.filesystem.list.requested` | `FsListRequested` |
-| `g8e.v1.operator.filesystem.read.requested` | `FsReadRequested` |
-| `g8e.v1.operator.filesystem.grep.requested` | `FsGrepRequested` |
-| `g8e.v1.operator.network.port.check.requested` | `CheckPortRequested` |
-| `g8e.v1.operator.logs.fetch.requested` | `FetchLogsRequested` |
-| `g8e.v1.operator.history.fetch.requested` | `FetchHistoryRequested` |
-| `g8e.v1.operator.file.history.fetch.requested` | `FetchFileHistoryRequested` |
-| `g8e.v1.operator.file.diff.fetch.requested` | `FetchFileDiffRequested` |
-| `g8e.v1.operator.file.restore.requested` | `RestoreFileRequested` |
-| `g8e.v1.operator.heartbeat.requested` | `HeartbeatRequested` |
-| `g8e.v1.operator.shutdown.requested` | `ShutdownRequested` |
-| `g8e.v1.operator.audit.user.recorded` | `AuditMsgRequested` |
-| `g8e.v1.operator.audit.ai.recorded` | `AuditMsgRequested` |
-| `g8e.v1.operator.audit.direct.command.recorded` | `DirectCommandAuditRequested` |
-| `g8e.v1.operator.audit.direct.command.result.recorded` | `DirectCommandResultAuditRequested` |
-
-Representative result payloads include `CommandResult`, `ExecutionStatusUpdate`, `FileEditResult`, `FsListResult`, `FsReadResult`, `FsGrepResult`, `PortCheckResult`, `FetchLogsResult`, `FetchHistoryResult`, `FetchFileHistoryResult`, `FetchFileDiffResult`, `RestoreFileResult`, and `HeartbeatResult`.
-
-`g8eo` fails closed when the envelope itself cannot be decoded or is missing `id`. For recognized first-class request events, `g8eo` decodes `UniversalEnvelope.payload` into the expected `operator.proto` message before dispatch, enforces reflected L1 gates when decoding succeeds, and each handler rejects payloads that cannot be decoded as its expected message. Unknown event types do not dispatch because no handler is registered.
+1. **Execution**: The handler executes the requested action and captures results.
+2. **Envelope Building**: `g8eo` wraps the result payload (e.g., `CommandResult`) in a `UniversalEnvelope`.
+3. **Publication**: The result envelope is published to the results channel for the Engine/Dashboard.
 
 ---
 
-## Governance Metadata
+# Governance Layers
 
-Governance is part of the protocol envelope. It is not optional side-channel state.
+### L1: Technical Bedrock (Hard Gates)
+Enforced via Protobuf reflection in `@/home/bob/g8e/components/g8eo/services/pubsub/protocol_helpers.go`. 
+- **Mechanism**: Custom field option `forbidden_patterns`.
+- **Scope**: Applied to fields like `CommandRequested.command`.
+- **Default Patterns**: `sudo`, `su`, `rm -rf /`.
 
-### L1: Technical Bedrock
+### L2: Consensus (Tribunal)
+Enforced via HMAC-SHA256 signatures in `@/home/bob/g8e/components/g8eo/services/pubsub/l2_verifier.go`.
+- **Signer**: `g8ee` (Engine).
+- **Verifier**: `g8eo` (Operator).
+- **Material**: `event_type + "\n" + payload_bytes`.
 
-L1 enforcement uses Protobuf reflection over custom field options defined in `common.proto`. `operator.proto` marks safety-sensitive string fields with `g8e.common.v1.forbidden_patterns`.
-
-`CommandRequested.command` currently carries forbidden patterns for `sudo`, `su`, and `rm -rf /`. `g8eo` unmarshals recognized typed payloads and rejects the command before dispatch when a reflected field violates its configured patterns.
-
-### L2: Consensus
-
-`g8ee` signs outbound command envelopes with an HMAC-SHA256 Tribunal signature over this canonical byte sequence:
-
-```text
-event_type || "\n" || payload_bytes
-```
-
-The hex digest is stored in `governance.l2.tribunal_signature`. `g8eo` computes the same digest with the configured auditor HMAC key and rejects commands with missing or invalid signatures when L2 verification is configured.
-
-### L3: Authorization
-
-`common.proto` defines `L3Metadata` with `human_signature`, `public_key`, and `auto_approved`. The current Protobuf schema can carry L3 authorization evidence, but command acceptance is not currently gated by a runtime L3 verifier in `g8eo`.
-
-Auto-approval never bypasses L1 or L2. It only represents L3 authorization state when the surrounding approval flow populates and verifies it.
+### L3: Authorization (Approval)
+Human-in-the-loop authorization via Passkeys.
+- **Mechanism**: Hardware-bound signatures (`human_signature`).
+- **Auto-Approval**: Benign commands (e.g., `uptime`) can be marked `auto_approved` by the Tribunal, but L3 NEVER bypasses L1 or L2.
 
 ---
 
-## State Root Verification
+# Data Conversions
 
-`UniversalEnvelope.state_merkle_root` binds a generated transaction to the fleet state observed at generation time. When an inbound command carries a non-empty state root and `g8eo` has a ledger service available, `g8eo` compares the envelope root to its current ledger root.
+When `g8ee` decodes a result from `g8eo`, it applies shims for compatibility with Python models in `@/home/bob/g8e/components/g8ee/app/utils/envelope_builder.py`:
 
-A mismatch is a hard reject because the command was generated against stale state. If the ledger service is absent or cannot provide a root, `g8eo` logs that BFT root verification cannot be completed for that message.
-
----
-
-## Strict Protocol Compliance
-
-The v0.2.0 operator protocol is Protobuf-first on command and result pub/sub paths.
-
-Current compliance rules:
-
-- `g8ee` command publication builds serialized `UniversalEnvelope` bytes; it does not fall back to JSON when envelope construction fails.
-- `g8eo` inbound command handling rejects payloads that cannot be parsed as `UniversalEnvelope`.
-- Typed operator handlers decode `UniversalEnvelope.payload` as the expected `operator.proto` message.
-- Runtime result publishers emit serialized `UniversalEnvelope` bytes containing typed result payloads.
-
-Protocol changes must update `shared/proto/`, generated language artifacts, event constants when event names change, and every doc that owns the affected behavior.
+| Protobuf Field | Python Model Field | Logic |
+|----------------|--------------------|-------|
+| `CommandResult.output` | `stdout` | Consistent with `ExecutionResultsPayload`. |
+| `CommandResult.exit_code` | `return_code` | Matches `subprocess.CompletedProcess`. |
+| `ExecutionStatus` (Enum) | `ExecutionStatus` (StrEnum) | `2` -> `"completed"`, `3` -> `"failed"`. |
 
 ---
 
-## Field Mappings and Enum Conversions
+# Implementation Map
 
-When `g8ee` decodes a `UniversalEnvelope` from `g8eo`, it performs several transformations to ensure compatibility with internal Pydantic models and Python-idiomatic types.
-
-### 1. Enum Conversions
-Protobuf numeric enums are converted to Python string-based `StrEnum` values:
-
-| Protobuf Enum | Python Enum | Mapping Logic |
-|---------------|-------------|---------------|
-| `g8e.operator.v1.ExecutionStatus` | `app.constants.status.ExecutionStatus` | `EXECUTION_STATUS_COMPLETED` (2) -> `"completed"` |
-| `UniversalEnvelope.event_type` | `app.constants.events.EventType` | Raw string -> `EventType` member |
-
-### 2. Field Boundary Shims
-To maintain compatibility with internal Pydantic models while using standardized Protobuf field names, the following mappings are applied during decoding in `app.utils.envelope_builder.py`:
-
-| Protobuf Field | Python Model Field | Context |
-|----------------|--------------------|---------|
-| `CommandResult.output` | `stdout` | Consistent with `ExecutionResultsPayload` |
-| `CommandResult.exit_code` | `return_code` | Consistent with Python `subprocess.CompletedProcess` |
+| Responsibility | Authoritative File |
+|----------------|--------------------|
+| **Schemas** | `@/home/bob/g8e/shared/proto/` |
+| **Event Registry** | `@/home/bob/g8e/shared/constants/events.json` |
+| **Request Builder (PY)** | `@/home/bob/g8e/components/g8ee/app/utils/envelope_builder.py` |
+| **Inbound Dispatch (GO)** | `@/home/bob/g8e/components/g8eo/services/pubsub/pubsub_commands.go` |
+| **L1 Enforcement (GO)** | `@/home/bob/g8e/components/g8eo/services/pubsub/protocol_helpers.go` |
+| **L2 Verification (GO)** | `@/home/bob/g8e/components/g8eo/services/pubsub/l2_verifier.go` |
+| **Result Publisher (GO)** | `@/home/bob/g8e/components/g8eo/services/pubsub/pubsub_results.go` |
 
 ---
 
-## Implementation Map
-
-| Responsibility | Authoritative implementation |
-|----------------|------------------------------|
-| Envelope schema | `shared/proto/common.proto` |
-| Operator payload schema | `shared/proto/operator.proto` |
-| Pub/sub carrier schema | `shared/proto/pubsub.proto` |
-| Event registry | `shared/constants/events.json` |
-| Python envelope builder and L2 signer | `components/g8ee/app/utils/envelope_builder.py` |
-| Python command publication | `components/g8ee/app/clients/pubsub_client.py` |
-| Go inbound envelope parsing and governance dispatch | `components/g8eo/services/pubsub/pubsub_commands.go` |
-| Go L1 reflection enforcement | `components/g8eo/services/pubsub/protocol_helpers.go` |
-| Go L2 signature verification | `components/g8eo/services/pubsub/l2_verifier.go` |
-| Go result envelope publication | `components/g8eo/services/pubsub/pubsub_results.go` |
-| Generated Protobuf artifacts | `components/g8ee/app/proto/` and `components/g8eo/shared/proto/` |
-
----
-
-## Related Documentation
+# Related Documentation
 
 - [Events](events.md) documents canonical event naming and lifecycle semantics.
 - [Pub/Sub Channels](pubsub.md) documents channel-level routing and subscription behavior.

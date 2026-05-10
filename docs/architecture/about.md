@@ -14,23 +14,23 @@ g8e is the governance layer for AI-powered operations in mission-critical infras
 
 The industry's current trajectory for agentic AI on infrastructure is structurally broken. Relying on a single Large Language Model creates a system vulnerable to auto-regressive collapse. Conversely, traditional "Human-in-the-Loop" setups rapidly degrade into alert fatigue, where human approval becomes a rubber-stamp. 
 
-To solve this, g8e implements a Byzantine Fault Tolerant (BFT) architecture composed of four core mechanisms:
+To solve this, g8e implements a three-tier component architecture (Operator, Dashboard, Engine) composed of four core mechanisms:
 
-### 1. The Reality Portal: Sovereign Execution
-SaaS-based agent architectures pull your authoritative state into their cloud. We inverted this. The execution plane is the **Operator**: a statically compiled 4MB Go binary that runs on your managed host. 
+### 1. The Reality Portal: Sovereign Execution (Operator)
+SaaS-based agent architectures pull your authoritative state into their cloud. We inverted this. The execution plane is the **Operator**: a statically compiled Go binary that runs on your managed host.
 
 The Operator treats upstream AI as inherently untrusted. Command traffic isn't ad hoc JSON; it is serialized `UniversalEnvelope` bytes carrying typed Protobuf payloads. Before a single bit moves on the host OS, the Operator rejects malformed envelopes, applies protocol-level L1 checks, verifies L2 Tribunal signatures, and routes the payload through a Sentinel layer enforcing strict allowlist/denylist controls and 46 MITRE ATT&CK detectors.
 
-### 2. The BFT Control Plane: The Tribunal
-Any state-changing intent is forced through a 5-node LLM consensus panel. Operating under strict information isolation, they evaluate intent in a vacuum. Because they cannot socially engineer each other, they cannot sycophantically agree. 
+### 2. The BFT Control Plane: The Tribunal (Engine)
+Any state-changing intent is forced through a 5-node LLM consensus panel in the **Engine**. Operating under strict information isolation, they evaluate intent in a vacuum. Because they cannot socially engineer each other, they cannot sycophantically agree.
 
 A calibrated adversarial agent (**Nemesis**) continuously attempts to trick the platform's risk-assessment Wardens with flawed-but-plausible commands. We replaced external audits with continuous, mathematically bounded adversarial pressure.
 
-### 3. Execution is a Side-Effect of the Audit Log
+### 3. Execution is a Side-Effect of the Audit Log (LFAA)
 In g8e, auditability is the literal nervous system. Utilizing a Local-First Audit Architecture (LFAA), every intent, Tribunal verdict, risk assessment, and raw command output is anchored to an encrypted, Git-backed SQLite ledger on the host *before and during* execution. The cloud can disappear, and your history doesn't.
 
-### 4. Proof of Human Presence (PHP)
-The machine handles what is machine-checkable. The human handles what is strictly human-checkable: intent fidelity, contextual stakes, and the acceptance of consequences. g8e disables automatic function calling, enforcing friction through a FIDO2-backed Governance Gateway. The protocol explicitly binds this Layer 3 authorization state (`UniversalEnvelope.governance.l3`) into the payload envelope.
+### 4. Proof of Human Presence (Dashboard)
+The machine handles what is machine-checkable. The human handles what is strictly human-checkable: intent fidelity, contextual stakes, and the acceptance of consequences. Facilitated by the **Dashboard**, g8e disables automatic function calling, enforcing friction through a FIDO2-backed Governance Gateway. The protocol explicitly binds this Layer 3 authorization state (`UniversalEnvelope.governance.l3`) into the payload envelope.
 
 ---
 

@@ -12,79 +12,72 @@ The g8e platform utilizes a specialized multi-agent system designed for autonomo
 
 ## Core Principles
 
-- **Structural Safety**: Invariants are enforced by code models (Pydantic/LiteLLM), not just prompts.
-- **Intent-Driven Execution**: Reasoning agents (Sage/Dash) never write shell commands directly; they articulate intent to the Tribunal.
-- **Information Quarantine**: Agents operate in sealed environments with limited visibility into the overall pipeline to prevent collusion and prompt injection spread.
-- **Ensemble Consensus**: The Tribunal uses an independent five-member ensemble to translate intent into commands, verified by an Auditor.
+- **3-Layer Governance Bedrock**: Every action is gated by a hierarchical validation system (L1 Technical Bedrock, L2 Consensus, L3 Authorization).
+- **Intent-Driven Execution**: Reasoning agents (Sage/Dash) never write shell commands directly; they articulate natural language intent to the Tribunal.
+- **Ensemble Consensus**: The Tribunal uses an independent five-member ensemble with unique technical "lenses" to translate intent into commands.
+- **Cryptographic Auditability**: The Auditor binds every verdict to a signed Merkle commitment of the agent reputation scoreboard.
+- **Interrogation Gate**: Agents can pause execution to ask clarifying questions via structured `<interrogation>` blocks, preventing "guessing" when context is missing.
 
 ## The Agent Pipeline
 
-Every user message triggers a structured pipeline that routes the request based on complexity and state.
+Every user message triggers a structured pipeline managed by the `ChatPipelineService`.
 
 ### 1. Triage (The Gatekeeper)
-Incoming messages are first processed by the **Triage Agent** (using a `lite` model tier). It performs three critical classifications:
-- **Complexity**: Routes `simple` requests (status checks, basic lookups) to **Dash** and `complex` requests (fleet operations, multi-step maintenance) to **Sage**.
+Incoming messages are first processed by the **Triage Agent** (`lite` model tier). It emits a `TriageResult` with three classifications:
+- **Complexity**: `simple` requests route to **Dash**; `complex` requests route to **Sage**.
 - **Intent**: Categorizes the goal as `information`, `action`, or `unknown`.
 - **Posture**: Gauges user mindset (`normal`, `escalated`, `adversarial`, `confused`) to calibrate downstream behavior.
 
-**Interrogation Protocol**: If a reasoning agent (**Dash** or **Sage**) requires more information, it emits clarifying questions. Tool execution is deferred until the user responds, and the question-answer pairs are persisted as structured context.
-
-### 2. Context Enrichment
-Before an agent receives the task, the system assembles a comprehensive "world view":
-- **Fleet & Operator Context**: Real-time system metadata extracted from `OperatorDocument` heartbeats and inventory.
-- **Investigation Context**: Conversation history, triage results, and active tool outputs.
-- **Memory (Codex)**: Durable user preferences and technical background extracted asynchronously by **Codex**.
+### 2. Context Assembly
+Before a reasoning agent receives the task, the system assembles a comprehensive world view:
+- **Fleet & Operator Context**: Real-time system metadata from operator heartbeats.
+- **Investigation Context**: Full conversation history and active tool outputs.
+- **Memory (Codex)**: Durable user preferences and investigation summaries extracted asynchronously by the **Codex** agent.
 
 ### 3. Reasoning Agents
-- **Dash (Fast-path)**: A high-efficiency responder for `simple` tasks. It handles surgical tool calls or direct answers with minimal ceremony.
-- **Sage (Primary Reasoner)**: The senior reasoner for `complex` tasks. It operates in a **ReAct loop**, planning operations, proposing intents, and interpreting results.
+- **Dash (Fast-path)**: A high-efficiency responder for simple tasks. Focused on surgical tool calls and direct answers.
+- **Sage (Primary Reasoner)**: The senior reasoner for complex, multi-step investigations. Operates in a **ReAct loop**, planning operations and articulating intent.
 
-## The Tribunal: Command Translation
+## Governance & Safety: The L1/L2/L3 Hierarchy
 
-To prevent hallucinations and ensure safety, agents never write shell commands. Instead, they emit a `SageOperatorRequest` containing an **Operational Intent**.
+To ensure the platform remains a "safe pair of hands," every command passes through three distinct layers of validation.
 
-### L1/L2/L3 Execution Path
-1. **Intent Articulation**: Sage describes the goal, targets, and constraints in natural language.
-2. **Technical Safety Validation (L1 Bedrock)**: Before generation, the system ensures the request doesn't violate hardcoded safety invariants (Forbidden Patterns).
-3. **Tribunal Generation (L2 Consensus)**: Five independent members (Axiom, Concord, Variance, Pragma, Nemesis) produce candidate commands based on their specific lens.
-4. **Consensus & Voting**: Candidates are clustered and voted upon. A winner is selected based on frequency and deterministic tie-breaking.
-5. **Warden Risk Analysis**: The **Warden** performs a pre-execution assessment. If a command is classified as `HIGH` risk, it triggers the **Two-Strike Circuit Breaker**.
-6. **Auditor Verification**: The **Auditor** performs the final check of the winning command against the original intent. It can approve (`ok`), revise, or swap to a superior dissenter.
-7. **Technical Re-validation**: Any revised or swapped command is re-validated against the L1 Bedrock (Forbidden, Blacklist, Whitelist).
-8. **L3 Authorization**: The final command, risk assessment, and justification are presented for user approval by default.
-   - **Auto-Approval**: Benign commands in the `auto_approved.json` list can be marked as L3-authorized without a human prompt only after they have passed all L1 and L2 gates. This minimizes click fatigue for routine operations without bypassing L1 Technical Bedrock or L2 Consensus.
+### Layer 1: Technical Bedrock (Hard Gates)
+The foundation of the safety system, enforced by the `SafetyService`.
+- **Forbidden Patterns**: Global blocks on `sudo`, `su`, and other prohibited shell patterns.
+- **Blacklist**: Denies specific dangerous commands or path substrings.
+- **Whitelist**: Restricts execution to a known-safe set of base commands and arguments.
 
-When a command is dispatched to an Operator, the result of this path is bound into the g8e protocol: a typed `operator.proto` payload is wrapped in serialized Protobuf `UniversalEnvelope` bytes with L1/L2/L3 governance metadata.
+### Layer 2: Consensus (The Tribunal)
+When Sage or Dash articulates an intent, the **Tribunal** ensemble converts it into a command.
+- **Generation**: Five independent members (Axiom, Concord, Variance, Pragma, Nemesis) produce candidates based on their specific lens (Composition, Safety, Edge Cases, Convention, Adversary).
+- **The Warden (Circuit Breaker)**: Performs risk analysis on the consensus winner. If a command is classified as `HIGH` risk twice in a single investigation, the **Two-Strike Circuit Breaker** triggers an `AGENT_CONFLICT` and stops execution.
+- **The Auditor**: The final technical gate. Verifies the winner against Sage's intent. The Auditor can approve (`ok`), `swap` to a superior dissenting candidate, or `revise` the command.
 
-## Reputation & Staking (Phase 3)
+### Layer 3: Authorization (Human-in-the-loop)
+The final layer before execution on the host.
+- **Human Approval**: By default, every command, risk assessment, and justification is presented for user approval.
+- **Auto-Approval**: Benign commands defined in `auto_approved.json` can be marked as L3-authorized automatically *only if* they have passed all L1 and L2 gates.
 
-The system maintains a per-agent reputation scalar `[0.0, 1.0]` as an EMA (Exponential Moving Average) across conversations. All eight core personas participate in reputation staking to ensure technical integrity and safety.
+## Reputation & Staking
 
-### Staking Matrix
+The system maintains a per-agent reputation scalar `[0.0, 1.0]` as an EMA across conversations. Personas participate in **Reputation Staking** to ensure technical integrity.
 
 | Persona | Stake / Lens | Primary Reward Mechanism |
 |---|---|---|
-| **Axiom** | Composition | Successful generation of coherent pipelines |
+| **Axiom** | Composition | Coherent, elegant pipeline generation |
 | **Concord** | Safety | Correct application of defensive flags |
 | **Variance** | Edge Cases | Handling unusual environmental conditions |
 | **Pragma** | Convention | Adherence to system-idiomatic patterns |
-| **Nemesis** | Adversary | Proper Scoring Rule; reward for confirmed attacks |
-| **Sage** | Intent | One-shot sufficiency; penalize consensus failures |
-| **Auditor** | Verification | Verifying winning candidates; swap/revision accuracy |
-| **Warden** | Defense | Accurate risk classification; penalize over-caution |
+| **Nemesis** | Adversary | Reward for confirmed attacks; Proper Scoring Rule |
+| **Auditor** | Verification | Accurate swaps and revisions |
+| **Warden** | Defense | Precise risk classification |
 
-### Slashing Tiers
+### Merkle Commitments
+To prevent tampering with reputation scores, the Auditor writes a signed Merkle commitment of the scoreboard after every verdict. This chain of commitments ensures that the platform's governance history is cryptographically verifiable.
 
-Failures trigger automated stake reductions based on severity:
-
-- **Tier 1 (Catastrophic)**: 50-100% loss. Triggered by the Auditor approving a high-risk command that fails destructively during execution.
-- **Tier 2 (Provable Faults)**: 5-20% loss. Objective failures such as whitelist violations, syntax errors, or Nemesis false alarms.
-- **Tier 3 (Liveness)**: 0.1-1% loss. Minor faults like missed passes, ignored questions, or Warden over-caution (blocking LOW risk).
-
-Reputation is persistent and serves as the influence weight in Phase 2/3 voting and auditing.
-
-### Information Isolation
-Each component is blind to the internal state of others:
-- **Triage** is unaware of downstream reasoning agents.
-- **Tribunal Members** are blind to each other's candidates.
+## Information Isolation
+To prevent collusion and prompt injection spread, agents operate in sealed environments:
+- **Triage** is unaware of downstream reasoning.
+- **Tribunal Members** are blind to each other's candidates (Information Isolation).
 - **Auditor** sees anonymized clusters to ensure unbiased judgement.

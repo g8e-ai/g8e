@@ -8,6 +8,18 @@ A significant portion of this codebase was written with AI assistance. If you ha
 
 PRs that clean up smelly code, fix real bugs, or remove tech debt are explicitly welcome. You do not need a feature gap to contribute. If you see something broken, wrong, or poorly abstracted, fixing it is a highly valued contribution.
 
+### Engineering Invariants
+
+Contributors must adhere to these foundational principles:
+
+1.  **3-Layer Governance Bedrock**: Every state-changing action MUST pass through the hierarchical validation system:
+    -   **L1 (Technical Bedrock)**: Forbidden patterns (sudo, su, etc.), hard whitelists, and blacklists.
+    -   **L2 (Consensus/Tribunal)**: Five independent agents (Axiom, Concord, Variance, Pragma, Nemesis) must generate and verify commands.
+    -   **L3 (Human Authorization)**: Human-in-the-loop by default. Auto-approval is metadata-only and never bypasses L1/L2.
+2.  **No Backwards Compatibility**: We do not maintain compatibility with old or broken data structures. Reject malformed data with actionable error messages; do not attempt silent migrations or backfills.
+3.  **Protobuf First**: All cross-component communication and command/result payloads use serialized `UniversalEnvelope` Protobuf bytes.
+4.  **Host-Native First**: The platform runs natively on the host. Docker is reserved for simulated evaluation fleets, not the core components.
+
 ## Getting Started
 
 1. Fork the repository
@@ -31,16 +43,25 @@ git checkout -b feature/your-feature-name
 
 ## Development Environment
 
-g8e runs host-native platform processes for Operator listen mode, Dashboard (`g8ed`), and Engine (`g8ee`). Runtime state lives under `./.g8e`, including data, SSL material, PID files, and logs. Go, Node.js/npm, Python, and curl must be available on the host.
+g8e consists of exactly three components running host-native:
+
+| Component | Language | Role |
+|-----------|----------|------|
+| **g8ed** | Node.js | Dashboard & API Gateway. Handles Express routes, session management, and SSE relay. |
+| **g8ee** | Python | Reasoning Engine. FastAPI app orchestrating AI agents and enforcing governance layers. |
+| **Operator** | Go | Persistence & Pub/Sub. When running in `listen` mode (port 9000/9001), it handles the event bus and SQLite storage. |
+
+Runtime state lives under `./.g8e`, including data, SSL material, PID files, and logs. Go, Node.js/npm, Python, and curl must be available on the host.
 
 ```bash
-./g8e platform start        # Start all platform components
-./g8e platform status       # Show component health and versions
+./g8e platform start        # Start all platform components (Operator listen, g8ed, g8ee)
+./g8e platform status       # Show component health, versions, and PIDs
 ./g8e platform restart      # Restart all platform components
 ./g8e platform stop         # Stop all platform components
 ./g8e platform wipe         # Wipe app data, preserve platform settings and SSL
 ./g8e platform reset        # Reset application data, preserve SSL
-./g8e platform clean        # Remove all g8e processes and data
+./g8e platform clean        # Remove all g8e processes and the .g8e directory
+./g8e platform logs         # Stream aggregated logs from all components
 ```
 
 **Note:** You can edit source files directly on your host machine. Restart the platform when a running process needs to pick up changes.
@@ -50,10 +71,9 @@ g8e runs host-native platform processes for Operator listen mode, Dashboard (`g8
 Tests execute with the host-native component toolchains.
 
 ```bash
-./g8e test           # Run all test suites
-./g8e test g8ee      # AI engine (Python/pytest)
-./g8e test g8ed      # Dashboard (Node/Vitest)
-./g8e test g8eo      # Operator (Go)
+./g8e test g8ee      # Engine tests (Python/pytest)
+./g8e test g8ed      # Dashboard tests (Node/Vitest)
+./g8e test g8eo      # Operator tests (Go)
 ```
 
 All tests must pass before submitting a Pull Request.
@@ -63,6 +83,7 @@ All tests must pass before submitting a Pull Request.
 - **Python (`g8ee`):** Follow existing patterns. Type hints are mandatory. Use Pydantic models for data structures.
 - **Node.js (`g8ed`):** Follow existing Express patterns. Use JSDoc for complex logic.
 - **Go (`g8eo` / Operator):** Run `gofmt`. Avoid global state. Follow existing package boundaries.
+- **Protobuf (`shared/proto`):** Use Protobuf for all cross-component messages. Run `./scripts/core/gen-proto.sh` after updating `.proto` files.
 - **Shell scripts:** Use `set -euo pipefail`. Must be `shellcheck` clean.
 
 ## Submitting Changes

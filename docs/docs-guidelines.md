@@ -5,7 +5,7 @@ title: Docs Guidelines
 # g8e Documentation Guidelines
 
 Last Updated: 2026-05-10
-Version: v0.2.2
+Version: v0.2.3
 
 Internal authoring standards for g8e documentation. All contributors must follow these guidelines when creating or updating docs.
 
@@ -14,9 +14,11 @@ Internal authoring standards for g8e documentation. All contributors must follow
 ## Principles
 
 - **Docs are code** — documentation is maintained with the same discipline as source code; stale or inaccurate docs are bugs
-- **Authoritative, not aspirational** — document what the system does, not what it should do; never document planned or future behavior as if it exists
-- **No redundancy** — each fact lives in exactly one place; cross-link rather than repeat
-- **Sync on change** — any PR that changes behavior, APIs, constants, models, or configuration must update the relevant docs in the same change
+- **Authoritative, not aspirational** — document what the system does, not what it should do; never document planned or future behavior as if it exists.
+- **No backwards compatibility** — never document or maintain support for old/broken data structures; if a change breaks a previous format, the docs must reflect only the new format and require user recreation.
+- **No redundancy** — each fact lives in exactly one place; cross-link rather than repeat.
+- **Why vs How** — documentation explains *why* the system is designed this way; code and its comments explain *how* it works. Do not duplicate code logic in markdown.
+- **Sync on change** — any PR that changes behavior, APIs, constants, models, or configuration must update the relevant docs in the same change.
 
 ---
 
@@ -63,10 +65,10 @@ docs/
 
 | Fact | Authoritative location | Others cross-reference |
 |------|----------------------|----------------------|
-| Pub/sub channel names and wire format | `docs/components/operator.md` | `g8ed.md`, `g8ee.md`, `g8eo.md`, `testing.md` |
-| KV key namespace and patterns | `docs/components/operator.md` | `g8ed.md`, `g8ee.md` |
+| Pub/sub channel names and wire format | `docs/components/g8eo.md` | `g8ed.md`, `g8ee.md`, `testing.md` |
+| KV key namespace and patterns | `docs/components/g8eo.md` | `g8ed.md`, `g8ee.md` |
 | `G8eHttpContext` internal HTTP header full listing | `docs/components/g8ed.md` | `g8ee.md` cross-references; do not restate in other component docs |
-| `X-Internal-Auth` shared secret (generation and discovery) | `docs/architecture/security.md` | `developer.md`, `operator.md`, `g8ee.md`, `g8ed.md` |
+| `X-Internal-Auth` shared secret (generation and discovery) | `docs/architecture/security.md` | `developer.md`, `g8eo.md`, `g8ee.md`, `g8ed.md` |
 | Heartbeat end-to-end flow | `docs/components/g8ed.md` | `g8eo.md`, `g8ee.md` |
 | Shared constants and models (`shared/`) | `docs/developer.md` | `testing.md` |
 | Universal code quality rules | `docs/developer.md` | do not restate in component docs |
@@ -79,11 +81,11 @@ docs/
 
 Every document must follow this structure:
 
-```
+```markdown
 # Title
 
 Last Updated: 2026-05-10
-Version: v0.2.2
+Version: v0.2.3
 
 One or two sentence summary of what this document covers and who it is for.
 
@@ -99,6 +101,18 @@ One or two sentence summary of what this document covers and who it is for.
 - Separate major sections with `---` horizontal rules.
 - Use `H2` for top-level sections, `H3` for subsections — never skip levels.
 - No table of contents — docs are short enough to not require one.
+
+---
+
+## Documentation Lifecycle (The updatedocs Workflow)
+
+All documentation updates must follow the `updatedocs` process:
+
+1. **Code-First Discovery**: Never trust existing documentation. Before writing, perform a deep dive into the implementation of the components described. Identify canonical truths (constants in `agents.json`, Pydantic models, Protobuf definitions) and map document terminology to actual code symbols.
+2. **High Signal, Low Noise**: Focus on the system lifecycle and request/data progression. Highlight invariants and aggressively prune features or components that no longer exist.
+3. **Why vs. The How**: Adhere to the distinction between documentation levels. Use `.md` files to explain high-level concepts and reasoning, and leave implementation details to the code.
+4. **Structural Consistency**: Organize documents logically: Introduction -> Lifecycle/Pipeline -> Core Subsystems -> Governance & Safety.
+5. **Verification**: Cross-reference the final draft against the current codebase to ensure no legacy features were carried over.
 
 ---
 
