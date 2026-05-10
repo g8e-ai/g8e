@@ -268,7 +268,11 @@ _start_g8ee() {
 
 _start_g8ed() {
     if _g8ed_running; then
-        echo "  g8ed is already running (PID: $(cat "$G8ED_PID_FILE"))."
+        local pid_msg=""
+        if [ -f "$G8ED_PID_FILE" ]; then
+            pid_msg=" (PID: $(cat "$G8ED_PID_FILE"))"
+        fi
+        echo "  g8ed is already running${pid_msg}."
         return 0
     fi
 
