@@ -170,6 +170,14 @@ _verify_operator() {
 }
 
 _prompt_llm_config() {
+    # Check for G8E_ prefixed vars and populate standard ones if found
+    if [[ -n "${G8E_TEST_LLM_PROVIDER:-}" ]]; then
+        export TEST_LLM_PROVIDER="$G8E_TEST_LLM_PROVIDER"
+    fi
+    if [[ -n "${G8E_TEST_LLM_API_KEY:-}" ]]; then
+        export TEST_LLM_API_KEY="$G8E_TEST_LLM_API_KEY"
+    fi
+
     # Skip if already provided via env/flags OR if not interactive
     [[ -n "${TEST_LLM_PROVIDER:-}" ]] && return
     [[ ! -t 0 ]] && return

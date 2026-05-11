@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export G8E_PROJECT_ROOT="$SCRIPT_DIR"
+
 # Check for common dependencies
 _check_deps() {
     local missing=()
@@ -28,8 +31,6 @@ if [[ -f "$SCRIPT_DIR/.g8e/.env" ]]; then
     done < "$SCRIPT_DIR/.g8e/.env"
 fi
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export G8E_PROJECT_ROOT="$SCRIPT_DIR"
 DEV_MODE=false
 
 # Host-native runtime layout — managed by scripts/core/build.sh.
@@ -293,6 +294,90 @@ _help() {
     fi
 }
 
+_ensure_llm_config() {
+    # Check for G8E_ prefixed vars and populate standard ones if found
+    if [[ -n "${G8E_TEST_LLM_PROVIDER:-}" ]]; then
+        export TEST_LLM_PROVIDER="$G8E_TEST_LLM_PROVIDER"
+    fi
+    if [[ -n "${G8E_TEST_LLM_API_KEY:-}" ]]; then
+        export TEST_LLM_API_KEY="$G8E_TEST_LLM_API_KEY"
+    fi
+
+    # Skip if already provided via env/flags OR if not interactive
+    [[ -n "${TEST_LLM_PROVIDER:-}" ]] && return
+    [[ ! -t 0 ]] && return
+
+    echo ""
+    echo -e "\033[0;36mLLM Configuration for ai_integration tests\033[0m"
+    echo -e "You can configure LLM credentials now, or skip to run tests without AI integration."
+    read -p "Configure LLM now? [y/N]: " configure_llm
+    if [[ ! "$configure_llm" =~ ^[Yy]$ ]]; then
+        return
+    fi
+
+    echo -e "\n\033[0;34mSelect a supported provider:\033[0m"
+    echo "1) openai    (requires API key)"
+    echo "2) anthropic (requires API key)"
+    echo "3) gemini    (requires API key)"
+    echo "4) ollama    (requires endpoint)"
+    echo "5) llamacpp  (requires endpoint)"
+    
+    local provider=""
+    while [[ -z "$provider" ]]; do
+        read -p "Selection [1-5]: " p_choice
+        case "$p_choice" in
+            1) provider="openai" ;;
+            2) provider="anthropic" ;;
+            3) provider="gemini" ;;
+            4) provider="ollama" ;;
+            5) provider="llamacpp" ;;
+            *) echo -e "\033[0;31mInvalid selection.\033[0m" ;;
+        esac
+    done
+    export TEST_LLM_PROVIDER="$provider"
+
+    echo -e "\n\033[1;33mNote: Credentials are only stored in memory for the duration of this session.\033[0m"
+    
+    if [[ "$provider" == "openai" || "$provider" == "anthropic" || "$provider" == "gemini" ]]; then
+        read -s -p "Enter ${provider} API Key: " api_key
+        echo ""
+        export TEST_LLM_API_KEY="$api_key"
+    fi
+
+    case "$provider" in
+        openai)
+            read -p "Enter endpoint [https://api.openai.com/v1]: " endpoint
+            [[ -n "$endpoint" ]] && export TEST_LLM_ENDPOINT_URL="$endpoint"
+            ;;
+        anthropic)
+            read -p "Enter endpoint [https://api.anthropic.com]: " endpoint
+            [[ -n "$endpoint" ]] && export TEST_LLM_ENDPOINT_URL="$endpoint"
+            ;;
+        ollama)
+            read -p "Enter endpoint [http://localhost:11434]: " endpoint
+            export TEST_LLM_ENDPOINT_URL="${endpoint:-http://localhost:11434}"
+            ;;
+        llamacpp)
+            read -p "Enter endpoint [http://localhost:11444]: " endpoint
+            export TEST_LLM_ENDPOINT_URL="${endpoint:-http://localhost:11444}"
+            ;;
+    esac
+
+    local default_primary_model=""
+    case "$provider" in
+        openai)    default_primary_model="gpt-5.4" ;;
+        anthropic) default_primary_model="claude-opus-4-6" ;;
+        gemini)    default_primary_model="gemini-3-flash-preview" ;;
+        ollama)    default_primary_model="gemma4:e4b" ;;
+        llamacpp)  default_primary_model="gemma4:e2b" ;;
+    esac
+
+    read -p "Enter primary model (optional, press Enter for $default_primary_model): " model
+    [[ -n "$model" ]] && export TEST_LLM_PRIMARY_MODEL="$model"
+    
+    echo -e "\033[0;32mLLM configuration set.\033[0m\n"
+}
+
 _menu() {
     # Check if we have a TTY
     if [[ ! -t 0 ]]; then
@@ -337,7 +422,13 @@ _menu() {
                 read -p "Select component [1-3]: " tcomp
                 case $tcomp in
                     1) ./g8e test g8eo ;;
-                    2) ./g8e test g8ee ;;
+                    2)
+                        # Detect if LLM env vars are already set for the session
+                        if [[ -z "${TEST_LLM_PROVIDER:-}" ]]; then
+                            # Use the same logic as run_tests.sh but keep it in the current shell
+                            _ensure_llm_config
+                        fi
+                        ./g8e test g8ee ;;
                     3) ./g8e test g8ed ;;
                 esac
                 ;;
