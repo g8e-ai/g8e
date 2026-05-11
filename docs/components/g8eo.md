@@ -5,8 +5,8 @@ parent: Components
 
 # g8eo — g8e Operator
 
-Last Updated: 2026-05-10
-Version: v0.2.2
+Last Updated: 2026-05-11
+Version: v0.2.3
 
 g8eo is the Go-based reference implementation of the Operator for the g8e platform. It provides language-agnostic, secure, real-time command execution and file management for remote system operations. In addition to acting as a remote execution agent, it provides the platform's central persistence and messaging backbone when running in Listen Mode.
 

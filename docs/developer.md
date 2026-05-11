@@ -4,8 +4,8 @@ title: Developer
 
 # g8e Developer Guide
 
-Last Updated: 2026-05-10
-Version: v0.2.2
+Last Updated: 2026-05-11
+Version: v0.2.3
 
 This document defines the deterministic execution constraints for all code generated for the g8e platform. The platform is an open-source, self-hosted AI governance layer designed for offline operation. The architecture consists of three core components: the Operator (g8eo), the Dashboard (g8ed), and the Engine (g8ee).
 
