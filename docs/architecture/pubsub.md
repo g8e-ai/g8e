@@ -5,8 +5,8 @@ parent: Architecture
 
 # g8e Pub/Sub Architecture
 
-Last Updated: 2026-05-10
-Version: v0.2.2
+Last Updated: 2026-05-11
+Version: v0.2.3
 
 The g8e platform utilizes a high-performance, WebSocket-based Pub/Sub system for all real-time inter-component communication. This decoupled architecture allows the central engine (`g8ee`) to orchestrate distributed agents (`g8eo` Operators) across heterogeneous environments without direct network visibility.
 

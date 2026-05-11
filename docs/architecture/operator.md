@@ -5,8 +5,8 @@ parent: Architecture
 
 # g8e Operator
 
-Last Updated: 2026-05-10
-Version: v0.2.2
+Last Updated: 2026-05-11
+Version: v0.2.3
 
 The Operator is the platform's data plane, execution engine, and persistence layer. It is a statically compiled Go binary that provides the substrate for all g8e operations, functioning as both the hub for persistence and the agent for execution.
 

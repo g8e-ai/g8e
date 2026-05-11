@@ -5,8 +5,8 @@ parent: Architecture
 
 # Dashboard & Relay (g8ed)
 
-Last Updated: 2026-05-10
-Version: v0.2.2
+Last Updated: 2026-05-11
+Version: v0.2.3
 
 `g8ed` (the Dashboard) is the central composition root and single external entry point for the g8e platform. It serves the human-interactive Terminal, manages authentication, and acts as a stateless relay between the browser, the Engine (`g8ee`), and the Operator (`g8eo`).
 

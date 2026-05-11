@@ -5,8 +5,8 @@ parent: Architecture
 
 # g8e Protocol
 
-Last Updated: 2026-05-10
-Version: v0.2.2
+Last Updated: 2026-05-11
+Version: v0.2.3
 
 The g8e Protocol is a **Protobuf-first** communication layer designed for secure, auditable, and Byzantine Fault Tolerant (BFT) interaction between the three platform components: **Dashboard (g8ed)**, **Engine (g8ee)**, and **Operator (g8eo)**.
 

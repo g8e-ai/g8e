@@ -5,8 +5,8 @@ parent: Architecture
 
 # Origins & Architecture
 
-Last Updated: 2026-05-10
-Version: v0.2.2
+Last Updated: 2026-05-11
+Version: v0.2.3
 
 For thirty years, my entire world has been managing and protecting data across remote systems... unstructured, structured, blob - nfs, smb, https, s3, ssh - linux, unix, windows - wan, lan... and all bits and pieces of the business side in-between - security reviews/audits, sales cycles, painful conversations with customers, on-site visits, RCAs, mission-critical service design... but one thing I hang my hat on is knowing all the people who I took that particular burden away from, so they can just get on with their other jobs and lives.
 
@@ -14,7 +14,7 @@ I spent so much time on remote calls putting out fires in production with people
 
 My mom would say, 'treat people the way you want to be treated'... I ask myself, how would I want to be helped in this situation? I've been in those folks' shoes - vendor on the call, deadline looming, people arm-grabbing you... your production storage array is down, hours before a major company event, and those who can't do anything about it are panicking.
 
-I want someone to just fix it for me, with receipts, so I can just forward an email to management when we got off the call. So, that's how I operate. If it has an operating system, I get stuff to work on it - applications, network, data, whatever... and show my work - for the humans with real lives and families, who are counting on me to help with some of their biggest challenges at work, and those people usually don't REALLY give a flying fuck about it, they're just doing it to feed their families and pay rent.
+I want someone to just fix it for me, with receipts, so I can just forward an email to management when we got off the call. So, that's how I operate. If it has an operating system, I get stuff to work on it - applications, network, data, whatever... and show my work - for the humans with real lives and families, who are counting on me to help with some of their biggest challenges at work, and those people usually don't REALLY give a shit about it, they're just doing it to feed their families and pay rent.
 
 The best way that I can help people is typically by gathering as much context as I possibly can - directly on their systems, while asking high signal questions, heavily leaning on those meticulous notes for grounding. I would ask if they mind if I drove - 90+% of people were cool with it - most were stoked... I'd be typing away under their credentials while they worked on other things.
 
