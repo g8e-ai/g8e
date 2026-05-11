@@ -13,11 +13,11 @@ The `g8e` demo system provides a modular, sandboxed environment for evaluating A
 The **ACME Corp Global Fleet** is the standard demo profile, simulating a mixed-enterprise environment with realistic failure modes.
 
 ```bash
-# Start the demo with 100 nodes (default)
-./g8e demo up
+# Start and authenticate the demo with 100 nodes (default)
+./g8e demo deploy -d dlk_your_token
 
-# Start with a specific node count and auto-attach operators
-./g8e demo up -n 250 -d dlk_your_token
+# Start with a specific node count
+./g8e demo deploy -n 250 -d dlk_your_token
 ```
 
 ### Fleet Taxonomy (ACME Corp)
@@ -59,12 +59,11 @@ The following commands are available for the active profile:
 
 | Command | Description |
 | :--- | :--- |
-| `up` | Build and start the simulated fleet. |
+| `deploy` | Start the fleet and push/start g8e operators (requires `-d <token>`). |
 | `down` | Stop and remove fleet containers. |
 | `status` | Show health and running state of the fleet. |
 | `devices` | List all discovered device hostnames. |
 | `broken` | List devices currently in a non-healthy state. |
-| `deploy` | Push and start g8e operators on all fleet nodes. |
 | `vanish` | Remove all g8e operators and logs from the fleet (zero trace). |
 | `shell N=<name>` | Drop into a specific device's shell. |
 
@@ -76,5 +75,5 @@ The following commands are available for the active profile:
 
 **Invariants:**
 - Demo nodes are always containers labeled with `demo.service`.
-- The `up` command automatically builds required local images.
-- Use the `-d` flag with `up` or `deploy` to provide a `DEVICE_TOKEN` for operator authentication.
+- The `deploy` command automatically builds and starts the fleet if not already running.
+- Use the `-d` flag with `deploy` to provide a `DEVICE_TOKEN` for operator authentication.

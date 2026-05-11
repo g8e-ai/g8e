@@ -274,10 +274,10 @@ async def test_omitting_callback_preserves_legacy_behavior():
     assert state.response_text == "Final segment."
 
 
-async def test_device_token_flow_populates_response_text_without_sse():
-    """Device token flows (web_session_id=None) must process stream to populate state.response_text.
+async def test_no_session_flow_populates_response_text_without_sse():
+    """No-session flows (web_session_id=None) must process stream to populate state.response_text.
     
-    Regression test for evals runner bug where agent produced empty responses because
+    Regression test for a bug where agent produced empty responses because
     stream was consumed without processing chunks when web_session_id was None.
     
     Note: case_id is provided for test factory compatibility but is not used when web_session_id is None.

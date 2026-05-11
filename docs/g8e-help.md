@@ -9,6 +9,15 @@ Version: v0.2.2
 
 The `g8e` command is the unified entry point for the g8e AI governance platform. It orchestrates the full lifecycle of a self-hosted, human-in-the-loop AI operations system.
 
+## Usage
+
+Running `g8e` without arguments launches the **Interactive Platform Manager**. 
+
+Alternatively, use direct commands for automation and specific tasks:
+```bash
+./g8e <command> [subcommand] [options]
+```
+
 ## Core Principles
 
 The platform is built on security-first architectural invariants that cannot be bypassed:
@@ -96,6 +105,12 @@ When no operator is connected:
 - `login`: Authenticate and save session to `~/.g8e/credentials`
 - `logout`: Clear local session and credentials
 
+### vars
+- `list`, `ls`: List all g8e environment variables and their current values
+- `set <key> <value>`: Set a variable in `.g8e/.env`
+- `get <key>`: Display the value of a specific variable
+- `unset <key>`: Remove a variable from `.g8e/.env`
+
 ### platform
 - `start`: Start all platform components (g8ed, g8ee, Operator)
 - `stop`: Stop all platform components
@@ -141,7 +156,7 @@ When no operator is connected:
 - `restart`: Restart inference engine to apply settings
 
 ### demo
-- `up [-n <count>] [-d <token>]`: Start a simulated fleet of N devices
+- `deploy [-n <count>] -d <token>`: Start and authenticate a simulated fleet of N devices
 - `down`: Stop all simulation nodes
 - `status`: View container status and node counts
 - `clean`: Forcefully remove all demo artifacts
@@ -150,10 +165,20 @@ When no operator is connected:
 - `devices|broken`: List discovered or unhealthy devices
 - `operators`: Show status of g8e operator processes in the fleet
 
+**To start a demo, use `deploy -d <token>`. This will automatically bring up the fleet and authenticate the operators.**
+
 ### evals
-- `run --gold-set <path>`: Execute benchmark against a gold set
+- `deploy -d <token>`: Start and authenticate eval operators with a dashboard-issued device link token
+- `run --gold-set <path>`: Execute benchmark against web-session-bound eval operators
 - `list`: List available evaluation scenarios
-- `up|down|status|logs`: Manage the evaluation fleet
+- `down|status|logs`: Manage the evaluation fleet
+
+**Eval operators must be manually bound to your web session in the dashboard before they can be used for benchmarking. This ensures a human is present during execution.**
+
+#### evals workflow
+1. `./g8e evals deploy -d <token>`
+2. **Open the Dashboard and bind the eval operators to your session**
+3. `./g8e evals run --gold-set <path>`
 
 ### Integration Tools
 - `mcp`: Model Context Protocol integration (config, test, status)

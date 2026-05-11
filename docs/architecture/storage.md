@@ -6,7 +6,7 @@ parent: Architecture
 # Storage Architecture
 
 Last Updated: 2026-05-10
-Version: v0.3.0
+Version: v0.2.2
 
 This document explains the unified storage architecture for the g8e platform. It focuses on the **why** and **what** — the architectural decisions, data flows, and invariants — rather than low-level implementation.
 

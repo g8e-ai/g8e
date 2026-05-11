@@ -14,7 +14,7 @@ Version: v0.2.2
 
 **Core Responsibilities:**
 - **Single Entry Point:** All inbound traffic (HTTPS, WebSocket, SSE) is terminated at `g8ed`.
-- **Authentication Gateway:** Owns the Passkey (WebAuthn), API Key, and Device Link token flows.
+- **Authentication Gateway:** Owns the Passkey (WebAuthn), API Key, and Device Link token flows. Device Link tokens are used for initial operator deployment and authentication, but execution requires subsequent binding to a human web session.
 - **Session Management:** Manages stateful `WebSession` and `OperatorSession` objects using operator-backed persistence.
 - **Operator Orchestration:** Manages operator "slots," handling enrollment, heartbeat monitoring, and manual user-to-operator binding.
 - **Real-time Eventing:** Provides a high-performance SSE (Server-Sent Events) hub for fanning out platform events and AI streaming responses.
