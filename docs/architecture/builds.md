@@ -5,8 +5,8 @@ parent: Architecture
 
 # Builds, Dependencies, and Startup Sequence
 
-Last Updated: 2026-05-10
-Version: v0.2.2
+Last Updated: 2026-05-11
+Version: v0.2.3
 
 This document explains the g8e component dependency chain, the lifecycle of a build, and the host-native startup sequence that establishes the platform's root of trust.
 

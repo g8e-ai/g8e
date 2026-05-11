@@ -5,16 +5,16 @@ parent: Architecture
 
 # Origins & Architecture
 
-Last Updated: 2026-05-10
-Version: v0.2.2
+Last Updated: 2026-05-11
+Version: v0.2.3
 
-For thirty years, my entire world has been managing and protecting data across remote systems... unstructured, structured, blob - nfs, smb, https, s3, ssh - linux, unix, windows - wan, lan... and all bits and pieces of the business side in-between - security reviews/audits, sales cycles, painful conversations with customers, on-site visits, RCAs, mission-criticial service design... but one thing I hang my hat on is knowing all of people who I took that particularly burden away from, so they can just get on with their other jobs and lives.
+For thirty years, my entire world has been managing and protecting data across remote systems... unstructured, structured, blob - nfs, smb, https, s3, ssh - linux, unix, windows - wan, lan... and all bits and pieces of the business side in-between - security reviews/audits, sales cycles, painful conversations with customers, on-site visits, RCAs, mission-critical service design... but one thing I hang my hat on is knowing all the people who I took that particular burden away from, so they can just get on with their other jobs and lives.
 
 I spent so much time on remote calls putting out fires in production with people who were mostly checked out while working on other stuff - people have shit to do and are multi-tasking - "I have the expert on the phone who has that thing under control, let me just work on this other thing with a deadline."
 
 My mom would say, 'treat people the way you want to be treated'... I ask myself, how would I want to be helped in this situation? I've been in those folks' shoes - vendor on the call, deadline looming, people arm-grabbing you... your production storage array is down, hours before a major company event, and those who can't do anything about it are panicking.
 
-I want someone to just fix it for me, with receipts, so I can just forward an email to management when we got off the call. So, that's how I operate. If it has an operating system, I get stuff to work on it - appliations, network, data, whatever... and show my work - for the humans with real lives and families, who are counting on me to help with some of their biggest challenges at work, and those people usually don't REALLY give a flying fuck about it, they're just doing it to feed their families and pay rent.
+I want someone to just fix it for me, with receipts, so I can just forward an email to management when we got off the call. So, that's how I operate. If it has an operating system, I get stuff to work on it - applications, network, data, whatever... and show my work - for the humans with real lives and families, who are counting on me to help with some of their biggest challenges at work, and those people usually don't REALLY give a shit about it, they're just doing it to feed their families and pay rent.
 
 The best way that I can help people is typically by gathering as much context as I possibly can - directly on their systems, while asking high signal questions, heavily leaning on those meticulous notes for grounding. I would ask if they mind if I drove - 90+% of people were cool with it - most were stoked... I'd be typing away under their credentials while they worked on other things.
 
@@ -22,13 +22,13 @@ Why trust me? I was the person that their company policy required them to escala
 
 I wanted folks to have a guy like me in their pocket, powered by safe and reliable AI, not rely on anyone else - ever.
 
-So, I built a soverign and agnostic system of highly incentivized AI agents to safely, securely, and reliably work like me; in a react loop - gathering as much context as possible from remote systems and user, converging over the ideal next steps, proposing (with justification) to the person with the most at stake before state changes. Once that person approves, cleanly execute, proove it's working, and follow-up end-to-end. 
+So, I built a sovereign and agnostic system of highly incentivized AI agents to safely, securely, and reliably work like me; in a react loop - gathering as much context as possible from remote systems and user, converging over the ideal next steps, proposing (with justification) to the person with the most at stake before state changes. Once that person approves, cleanly execute, prove it's working, and follow-up end-to-end.
 
-That's g8e... if you look deeper, g8e is a data sovereign and AI agnostic governance layer between the human, AI, and real world devices. The curent Operator binary is just my reference implementation in Go, but the Operator could be anything that speaks the g8e protocol (soon MCP and ADA via translation).
+That's g8e... if you look deeper, g8e is a data sovereign and AI agnostic governance layer between the human, AI, and real world devices. The current Operator binary is just my reference implementation in Go, but the Operator could be anything that speaks the g8e protocol (soon MCP and ADA via translation).
 
-I know this workflow applies to much more than SRE / infrastructure. 
+I know this workflow applies to much more than SRE / infrastructure.
 
-If you work in an industry that could use a fully self-hosted, data soveriegn, AI-provider agnostic, 'leave only footprints' way to delivery AI into messy production environments, IoT devices, etc - please join me. I would love to see some outside PRs or Discussions.  I want smart people to join me and don't give a flying fuck about formalities... if you care about safe, responsible AI, I want to help you or partner with you. 
+If you work in an industry that could use a fully self-hosted, data sovereign, AI-provider agnostic, 'leave only footprints' way to deliver AI into messy production environments, IoT devices, etc - please join me. I would love to see some outside PRs or Discussions. I want smart people to join me and don't give a flying fuck about formalities... if you care about safe, responsible AI, I want to help you or partner with you.
 
 Hit me up: danny@g8e.ai
 

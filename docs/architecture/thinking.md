@@ -5,8 +5,8 @@ parent: Architecture
 
 # Thinking & Reasoning
 
-Last Updated: 2026-05-10
-Version: v0.2.2
+Last Updated: 2026-05-11
+Version: v0.2.3
 
 "Thinking" in g8e is a dual-layered architecture designed to guarantee that agentic actions are the result of deliberate, cross-validated reasoning rather than reflexive generation. 
 

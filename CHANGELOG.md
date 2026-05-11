@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.3] - 2026-05-11
+
+### Added
+- **Interactive Platform Manager:** New interactive menu for platform management, simplifying setup, environment configuration, and e2e testing.
+
+### Changed
+- **Evals Refactor:** Streamlined evaluation device token management to be runtime-configurable.
+- **Improved Setup:** Enhanced environment variable handling and validation during bootstrap.
+
+### Fixed
+- **Documentation:** Fixed various typos and inconsistencies across architecture documentation.
+
 ## [0.2.2] - 2026-05-10
 
 ### Added
