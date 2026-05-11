@@ -18,6 +18,16 @@ _check_deps() {
 
 _check_deps
 
+# Load environment variables from .g8e/.env if it exists
+if [[ -f "$SCRIPT_DIR/.g8e/.env" ]]; then
+    # Use a safe way to source, ignoring lines that don't start with export
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        if [[ "$line" =~ ^export\ [A-Za-z0-9_]+= ]]; then
+            eval "$line"
+        fi
+    done < "$SCRIPT_DIR/.g8e/.env"
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export G8E_PROJECT_ROOT="$SCRIPT_DIR"
 DEV_MODE=false
@@ -307,11 +317,12 @@ _menu() {
         echo "5) Run Tests"
         echo "6) Demo Fleet"
         echo "7) Evaluation Suite"
-        echo "8) Login / Auth"
-        echo "9) Advanced (Data/Security/Setup)"
+        echo "8) Environment Variables (vars)"
+        echo "9) Login / Auth"
+        echo "10) Advanced (Data/Security/Setup)"
         echo "0) Exit"
         echo ""
-        read -p "Choose an option [0-9]: " choice
+        read -p "Choose an option [0-10]: " choice
         echo ""
 
         case $choice in
@@ -352,7 +363,8 @@ _menu() {
                     3) ./g8e evals status ;;
                 esac
                 ;;
-            8)
+            8) ./g8e vars list ;;
+            9)
                 if _credentials_exist; then
                     echo "Current Session: $OPERATOR_ID"
                     read -p "Logout? [y/N]: " lout
@@ -361,7 +373,7 @@ _menu() {
                     ./g8e login
                 fi
                 ;;
-            9)
+            10)
                 echo "1) Security Status"
                 echo "2) LLM Setup"
                 echo "3) Search Setup"
@@ -486,6 +498,13 @@ if [[ "$TOP" == "platform" && "$SUB" == "settings" ]]; then
 fi
 
 case "$TOP" in
+
+    # ------------------------------------------------------------------
+    # vars — manages environment variables
+    # ------------------------------------------------------------------
+    vars)
+        _banner "vars ${SUB} ${@:3}"
+        exec bash "$SCRIPT_DIR/scripts/core/manage-env.sh" "$SUB" "${@:3}" ;;
 
     # ------------------------------------------------------------------
     # login — authenticate and save session locally

@@ -9,6 +9,15 @@ Version: v0.2.2
 
 The `g8e` command is the unified entry point for the g8e AI governance platform. It orchestrates the full lifecycle of a self-hosted, human-in-the-loop AI operations system.
 
+## Usage
+
+Running `g8e` without arguments launches the **Interactive Platform Manager**. 
+
+Alternatively, use direct commands for automation and specific tasks:
+```bash
+./g8e <command> [subcommand] [options]
+```
+
 ## Core Principles
 
 The platform is built on security-first architectural invariants that cannot be bypassed:
@@ -95,6 +104,12 @@ When no operator is connected:
 ### identity
 - `login`: Authenticate and save session to `~/.g8e/credentials`
 - `logout`: Clear local session and credentials
+
+### vars
+- `list`, `ls`: List all g8e environment variables and their current values
+- `set <key> <value>`: Set a variable in `.g8e/.env`
+- `get <key>`: Display the value of a specific variable
+- `unset <key>`: Remove a variable from `.g8e/.env`
 
 ### platform
 - `start`: Start all platform components (g8ed, g8ee, Operator)
