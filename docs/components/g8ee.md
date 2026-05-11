@@ -126,7 +126,7 @@ g8ee abstracts LLM providers through a unified interface (`app/llm/provider.py`)
 |------|-------|---------------|
 | **Primary** | Complex reasoning (Sage), Auditor, Judge. | `primary_provider` |
 | **Lite** | Triage, Tribunal members, Scribe, Codex, Warden. | `lite_provider` |
-| **Assistant** | (Legacy) Phasing out in favor of Lite tier. | `assistant_provider` |
+| **Assistant** | Fast-path responder (Dash), Scribe, Codex. | `assistant_provider` |
 
 ---
 
@@ -181,8 +181,8 @@ All LLM communication passes through the `LLMProvider` abstract base class (`app
 |--------|---------|----------|
 | `generate_content_stream_primary` | `AsyncGenerator[StreamChunkFromModel]` | Main primary loop — yields chunks as they arrive |
 | `generate_content_primary` | `GenerateContentResponse` | Non-streaming primary model calls |
-| `generate_content_stream_assistant` | `AsyncGenerator[StreamChunkFromModel]` | Streaming assistant model calls (deprecated) |
-| `generate_content_assistant` | `GenerateContentResponse` | Risk analysis, memory, title generation (deprecated) |
+| `generate_content_stream_assistant` | `AsyncGenerator[StreamChunkFromModel]` | Streaming assistant model calls |
+| `generate_content_assistant` | `GenerateContentResponse` | Risk analysis, memory, title generation |
 | `generate_content_stream_lite` | `AsyncGenerator[StreamChunkFromModel]` | Streaming lite model calls |
 | `generate_content_lite` | `GenerateContentResponse` | Triage, Tribunal, eval |
 
@@ -252,7 +252,7 @@ LLM SDK  →  GeminiProvider  →  stream_response  →  deliver_via_sse
 
 Each `TEXT` chunk produces exactly one HTTP POST to g8ed (`LLM_CHAT_ITERATION_TEXT_CHUNK_RECEIVED` event) when `web_session_id` is present. g8ed relays it to the browser immediately via its SSE connection. `LLM_CHAT_ITERATION_TEXT_COMPLETED` is published once after the loop exits, carrying finish reason, citation metadata, and aggregate token usage.
 
-**Device Token Flows (evals):** When `web_session_id` is None (device token authentication, e.g., evals runner), SSE publishing is skipped entirely. Stream processing still occurs unconditionally to populate `AgentStreamState.response_text`, enabling agent execution without a browser session. The `has_sse` flag controls SSE publishing while stream state mutation runs in all cases.
+**Operator-Bound Evals:** When `web_session_id` is None (e.g., if a CLI tool was allowed to run against a bound session without a browser attachment), SSE publishing is skipped entirely. Stream processing still occurs unconditionally to populate `AgentStreamState.response_text`, enabling agent execution without a browser session. The `has_sse` flag controls SSE publishing while stream state mutation runs in all cases. Note that evals now require operators to be bound to a human web session for execution authorization.
 
 `deliver_via_sse` chunk dispatch:
 
@@ -439,7 +439,7 @@ The `MODEL_REGISTRY` provides runtime access to model configurations via `get_mo
 |------|------------------|----------|
 | **Primary** | `primary_provider` | Complex reasoning, Sage (main chat), Auditor (Tribunal verification), Judge (evaluation) |
 | **Lite** | `lite_provider` | Triage, Tribunal members (Axiom, Concord, Variance, Pragma, Nemesis), Dash, Scribe, Codex, Warden |
-| **Assistant** | `assistant_provider` | **Deprecated** - being phased out in favor of Lite tier |
+| **Assistant** | `assistant_provider` | Fast-path responder (Dash), Scribe, Codex |
 
 The lite tier always has thinking disabled regardless of capability. The primary tier supports thinking when the model capability allows it.
 
@@ -1170,21 +1170,12 @@ AI agent evaluation runs through the **host-driven evals framework** at `compone
 
 ```bash
 # Bring up real-operator fleet
-
-Last Updated: 2026-05-10
-Version: v0.2.2
-./g8e evals up -d dlk_xxx
+./g8e evals deploy -d dlk_xxx
 
 # Inspect fleet status
-
-Last Updated: 2026-05-10
-Version: v0.2.2
 ./g8e evals status
 
 # Tear down
-
-Last Updated: 2026-05-10
-Version: v0.2.2
 ./g8e evals down
 ```
 

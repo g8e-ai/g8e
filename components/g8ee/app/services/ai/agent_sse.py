@@ -92,8 +92,9 @@ async def deliver_via_sse(
     user_id: str = inputs.user_id or ""
     agent_mode = inputs.agent_mode
     
-    # Device token flows (evals) don't have web sessions - skip SSE delivery
-    # but still process stream to populate state.response_text
+    # Standard flows have web sessions for SSE delivery.
+    # If web_session_id is None, we still process the stream to populate 
+    # state.response_text but skip EventService publishing.
     has_sse = web_session_id is not None
     
     if has_sse:
@@ -129,7 +130,7 @@ async def deliver_via_sse(
         )
     else:
         logger.info(
-            "[SSE] Starting delivery (device token flow, no SSE): investigation_id=%s user_id=%s workflow=%s sentinel_mode=%s",
+            "[SSE] Starting delivery (no-session flow, no SSE): investigation_id=%s user_id=%s workflow=%s sentinel_mode=%s",
             investigation_id, user_id, agent_mode, inputs.sentinel_mode,
         )
     logger.info("[SSE] Async generator iteration starting")

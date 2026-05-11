@@ -138,18 +138,66 @@ _eval_fleet_device_token() {
     return 1
 }
 
-_eval_device_token_user_id() {
-    local token="$1"
+_eval_bound_operator_session_id() {
     local response
-    local internal_auth_token
-    internal_auth_token="$(cat "$G8E_SSL_DIR_HOST/internal_auth_token" 2>/dev/null | tr -d ' \n\r' || true)"
-    response="$(curl -sk -X GET --cacert "$G8E_SSL_DIR_HOST/ca.crt" \
-        -H "X-Internal-Auth: $internal_auth_token" \
-        -H "Content-Type: application/json" \
-        "$G8ED_URL/api/internal/device-links/$token" 2>/dev/null || true)"
-    if [[ -n "$response" ]]; then
-        echo "$response" | grep -o '"user_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)".*/\1/'
+    response=$(_g8ed_curl GET '/api/internal/operators' 2>/dev/null || true)
+    [[ -z "$response" ]] && return 1
+
+    # Use python for robust JSON parsing
+    local session_id
+    session_id=$(python3 -c '
+import sys, json
+try:
+    data = json.loads(sys.argv[1])
+    if not data.get("success"):
+        sys.exit(1)
+    for op in data.get("data", []):
+        hb = op.get("latest_heartbeat_snapshot") or {}
+        si = hb.get("system_identity") or {}
+        hn = si.get("hostname") or ""
+        if op.get("status") == "BOUND" and hn.startswith("evals-eval-node-"):
+            print(op["operator_session_id"])
+            sys.exit(0)
+except Exception:
+    sys.exit(1)
+sys.exit(1)
+' "$response" 2>/dev/null)
+    
+    if [[ -n "$session_id" ]]; then
+        echo "$session_id"
+        return 0
     fi
+    return 1
+}
+
+_eval_operator_user_id() {
+    local session_id="$1"
+    local response
+    response=$(_g8ed_curl GET '/api/internal/operators' 2>/dev/null || true)
+    [[ -z "$response" ]] && return 1
+
+    # Find the operator with this session_id and extract user_id
+    local user_id
+    user_id=$(python3 -c '
+import sys, json
+try:
+    data = json.loads(sys.argv[2])
+    if not data.get("success"):
+        sys.exit(1)
+    for op in data.get("data", []):
+        if op.get("operator_session_id") == sys.argv[1]:
+            print(op["user_id"])
+            sys.exit(0)
+except Exception:
+    sys.exit(1)
+sys.exit(1)
+' "$session_id" "$response")
+
+    if [[ -n "$user_id" ]]; then
+        echo "$user_id"
+        return 0
+    fi
+    return 1
 }
 
 # Resolve a gold-set path for the evals runner. The runner now executes via
@@ -235,7 +283,111 @@ _help() {
     fi
 }
 
-if [[ $# -eq 0 || "$1" == "--help" || "$1" == "-h" ]]; then
+_menu() {
+    # Check if we have a TTY
+    if [[ ! -t 0 ]]; then
+        _help
+        exit 0
+    fi
+
+    while true; do
+        clear
+        echo -e "\033[1;34m  __ _   ___   ___  \033[0m"
+        echo -e "\033[1;34m / _\` | ( _ ) / _ \\ \033[0m"
+        echo -e "\033[1;34m| (_| | / _ \\|  __/ \033[0m"
+        echo -e "\033[1;34m \\__, | \\___/ \\___| \033[0m"
+        echo -e "\033[1;34m  ___/              \033[0m"
+        echo ""
+        echo -e "\033[1;32m   Interactive g8e Platform Manager\033[0m"
+        echo ""
+        echo "1) Platform Status"
+        echo "2) Start Platform"
+        echo "3) Stop Platform"
+        echo "4) View Logs"
+        echo "5) Run Tests"
+        echo "6) Demo Fleet"
+        echo "7) Evaluation Suite"
+        echo "8) Login / Auth"
+        echo "9) Advanced (Data/Security/Setup)"
+        echo "0) Exit"
+        echo ""
+        read -p "Choose an option [0-9]: " choice
+        echo ""
+
+        case $choice in
+            1) ./g8e platform status ;;
+            2) ./g8e platform start ;;
+            3) ./g8e platform stop ;;
+            4) ./g8e platform logs ;;
+            5)
+                echo "1) g8eo (Go Operator)"
+                echo "2) g8ee (Python Engine)"
+                echo "3) g8ed (Node Dashboard)"
+                read -p "Select component [1-3]: " tcomp
+                case $tcomp in
+                    1) ./g8e test g8eo ;;
+                    2) ./g8e test g8ee ;;
+                    3) ./g8e test g8ed ;;
+                esac
+                ;;
+            6)
+                echo "1) Up"
+                echo "2) Status"
+                echo "3) Down"
+                read -p "Select demo action [1-3]: " dact
+                case $dact in
+                    1) ./g8e demo up ;;
+                    2) ./g8e demo status ;;
+                    3) ./g8e demo down ;;
+                esac
+                ;;
+            7)
+                echo "1) Run benchmark"
+                echo "2) List evals"
+                echo "3) Status"
+                read -p "Select eval action [1-3]: " eact
+                case $eact in
+                    1) ./g8e evals run --gold-set benchmark ;;
+                    2) ./g8e evals list ;;
+                    3) ./g8e evals status ;;
+                esac
+                ;;
+            8)
+                if _credentials_exist; then
+                    echo "Current Session: $OPERATOR_ID"
+                    read -p "Logout? [y/N]: " lout
+                    [[ "$lout" == "y" ]] && ./g8e logout
+                else
+                    ./g8e login
+                fi
+                ;;
+            9)
+                echo "1) Security Status"
+                echo "2) LLM Setup"
+                echo "3) Search Setup"
+                echo "4) SSH Setup"
+                read -p "Select advanced option [1-4]: " adv
+                case $adv in
+                    1) ./g8e security validate ;;
+                    2) ./g8e llm show ;;
+                    3) ./g8e search setup ;;
+                    4) ./g8e ssh setup ;;
+                esac
+                ;;
+            0) exit 0 ;;
+            *) echo "Invalid option." ;;
+        esac
+        echo ""
+        read -p "Press Enter to continue..."
+    done
+}
+
+if [[ $# -eq 0 ]]; then
+    _menu
+    exit 0
+fi
+
+if [[ "$1" == "--help" || "$1" == "-h" ]]; then
     _help
     exit 0
 fi
@@ -866,9 +1018,21 @@ case "$TOP" in
                 fi
                 [[ -z "$SUB" ]] && exit 1 || exit 0
                 ;;
-            up|down|status|clean|health|nginx-check|operators|logs|deploy|discover-hosts|stream|vanish|dashboard|devices|broken)
+            up|down|status|clean|health|nginx-check|operators|logs|discover-hosts|stream|vanish|dashboard|devices|broken)
                 _banner "demo $SUB"
                 exec make -C "$DEMO_DIR" "$SUB" "${demo_args[@]}" ;;
+            deploy)
+                _banner "demo deploy"
+                # Consolidate 'up' and 'deploy' for demos
+                # If not running, start it first with the token
+                if ! make -C "$DEMO_DIR" status | grep -q "devices running: [1-9]"; then
+                    echo "[g8e] Demo fleet not running. Starting it now..."
+                    make -C "$DEMO_DIR" up "${demo_args[@]}"
+                else
+                    # Already running, just do the deploy (authentication)
+                    exec make -C "$DEMO_DIR" deploy "${demo_args[@]}"
+                fi
+                exit 0 ;;
             shell)
                 _banner "demo shell"
                 exec make -C "$DEMO_DIR" shell "${demo_args[@]}" ;;
@@ -1062,13 +1226,18 @@ case "$TOP" in
                 
                 run_args=("${eval_llm_args[@]}")
                 gold_set=""
-                device_token=""
+                operator_session_id=""
                 set -- "${_args[@]}"
                 while [[ "$#" -gt 0 ]]; do
                     case "$1" in
                         -d|--device-token)
-                            device_token="$2"
-                            run_args+=("--device-token" "$device_token")
+                            echo "[g8e] evals run no longer accepts device tokens" >&2
+                            echo "  Required workflow: ./g8e evals deploy -d <token>, bind the eval operators in the web UI, then ./g8e evals run --gold-set <path>" >&2
+                            exit 1
+                            ;;
+                        --operator-session-id)
+                            operator_session_id="$2"
+                            run_args+=("--operator-session-id" "$operator_session_id")
                             shift 2
                             ;;
                         --gold-set)
@@ -1083,30 +1252,46 @@ case "$TOP" in
 
                 if ! _eval_fleet_running; then
                     echo "[g8e] eval fleet is not running" >&2
-                    echo "  Start it first: ./g8e evals up --device-token <token>" >&2
+                    echo "  Start it first: ./g8e evals deploy -d <token>" >&2
                     exit 1
                 fi
 
-                if [[ -n "$device_token" ]]; then
-                    # Ensure the fleet is running with this token
-                    _nodes=$(docker ps --filter "label=io.g8e.evals=true" --format '{{.Names}}' | wc -l)
-                    [[ $_nodes -eq 0 ]] && _nodes=3
-                    echo "[g8e] Ensuring eval fleet is running with provided DEVICE_TOKEN..."
-                    DEVICE_TOKEN="$device_token" COMPOSE_PROJECT_NAME=evals docker compose -f "$EVALS_COMPOSE" up -d --scale eval-node="$_nodes" >/dev/null 2>&1
-                elif device_token="$(_eval_fleet_device_token)"; then
-                    run_args+=("--device-token" "$device_token")
-                else
-                    echo "[g8e] Error: No DEVICE_TOKEN provided and none found in running fleet" >&2
-                    echo "  Usage: ./g8e evals run --device-token <token> --gold-set <path>" >&2
-                    echo "     or: ./g8e evals up --device-token <token> && ./g8e evals run --gold-set <path>" >&2
+                if [[ -z "$operator_session_id" ]] && operator_session_id="$(_eval_bound_operator_session_id)"; then
+                    run_args+=("--operator-session-id" "$operator_session_id")
+                fi
+
+                if [[ -z "$operator_session_id" ]]; then
+                    echo "[g8e] Error: No bound eval operator session found" >&2
+                    echo "  Required workflow:" >&2
+                    echo "    1. ./g8e evals deploy -d <token>" >&2
+                    echo "    2. Bind the eval operators to your web session in the dashboard" >&2
+                    echo "    3. ./g8e evals run --gold-set <path>" >&2
                     exit 1
+                fi
+
+                if [[ "$operator_session_id" == dlk_* ]]; then
+                    echo "[g8e] Error: evals run requires a bound operator session id, not a device link token" >&2
+                    exit 1
+                fi
+
+                if ! _validate_session "$operator_session_id"; then
+                    echo "[g8e] Error: eval operator session is not valid or not bound to a web session" >&2
+                    echo "  Bind the eval operators in the dashboard, then run evals again." >&2
+                    exit 1
+                fi
+
+                device_token="$(_eval_fleet_device_token || true)"
+                if [[ -n "$device_token" ]]; then
+                    :
+                else
+                    device_token=""
                 fi
 
                 # Configure USER LLM settings from CLI arguments
                 if [[ ${#eval_llm_args[@]} -gt 0 ]]; then
-                    user_id="$(_eval_device_token_user_id "$device_token")"
+                    user_id="$(_eval_operator_user_id "$operator_session_id")"
                     if [[ -z "$user_id" ]]; then
-                        echo "[g8e] Error: Could not resolve user_id from device token - device link may not exist or is corrupted" >&2
+                        echo "[g8e] Error: Could not resolve user_id from operator session - operator may not be bound" >&2
                         exit 1
                     fi
                     echo "[g8e] Configuring USER LLM settings for user: $user_id"
@@ -1170,12 +1355,10 @@ case "$TOP" in
                     "$_venv/bin/python" -m app.evals.runner.cli run "${run_args[@]}"
                 )
                 ;;
-            up)
-                _banner "evals up"
+            deploy)
+                _banner "evals deploy"
                 _nodes=3
                 _device_token=""
-                _auto_created=false
-                _args=("${@:3}")
                 while [[ $# -gt 2 ]]; do
                     case "${3:-}" in
                         --nodes) _nodes="${4:-3}"; shift 2 ;;
@@ -1183,60 +1366,17 @@ case "$TOP" in
                         *) echo "[g8e] unknown option: '${3}'"; exit 1 ;;
                     esac
                 done
-                
-                # Auto-create user and device link if no token provided
                 if [[ -z "$_device_token" ]]; then
-                    _ensure_g8ed
-                    echo "  No device token provided, checking for evals user..."
-                    
-                    # Check if evals user exists
-                    export G8E_SSL_DIR="$G8E_SSL_DIR_HOST"
-                    export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTP_URL"
-                    export G8ED_INTERNAL_URL="$G8ED_URL"
-                    export PYTHONPATH="$SCRIPT_DIR/scripts:$SCRIPT_DIR/shared${PYTHONPATH:+:$PYTHONPATH}"
-                    
-                    _user_id="$(python3 "$SCRIPT_DIR/scripts/data/manage-operator.py" users get --email evals@localhost 2>/dev/null | grep -E '^  ID:' | awk '{print $2}' || true)"
-                    
-                    if [[ -z "$_user_id" ]]; then
-                        echo "  Creating evals user (evals@localhost)..."
-                        _user_id="$(python3 "$SCRIPT_DIR/scripts/data/manage-operator.py" users create --email evals@localhost --name "Evals User" 2>/dev/null | grep -E '^  ID:' | awk '{print $2}' || true)"
-                        if [[ -z "$_user_id" ]]; then
-                            echo "[g8e] Failed to create evals user" >&2
-                            exit 1
-                        fi
-                        echo "  Created user with ID: $_user_id"
-                    else
-                        echo "  Found existing evals user: $_user_id"
-                    fi
-                    
-                    # Create device link for the user
-                    echo "  Creating device link for evals user..."
-                    _device_token="$(python3 "$SCRIPT_DIR/scripts/data/manage-operator.py" device-links create --user-id "$_user_id" --name "evals-fleet" --max-uses 100 2>/dev/null | grep -E '^  Token:' | awk '{print $2}' || true)"
-                    if [[ -z "$_device_token" ]]; then
-                        echo "[g8e] Failed to create device link" >&2
-                        exit 1
-                    fi
-                    echo "  Created device link: $_device_token"
-                    _auto_created=true
-                fi
-                
-                if [[ -n "$_device_token" ]]; then
-                    echo "  Bringing up $_nodes eval nodes with device token..."
-                else
-                    echo "  Bringing up $_nodes eval nodes (no device token)..."
+                    echo "[g8e] evals deploy requires a device link token" >&2
+                    echo "  Usage: ./g8e evals deploy -d <token>" >&2
+                    exit 1
                 fi
                 _ca_cert="$(cat "$G8E_SSL_DIR_HOST/ca.crt" 2>/dev/null || true)"
                 DEVICE_TOKEN="$_device_token" G8E_CA_CERT="$_ca_cert" COMPOSE_PROJECT_NAME=evals docker compose -f "$EVALS_COMPOSE" up -d --build --scale eval-node="$_nodes"
                 echo ""
-                echo "  Eval fleet is up. Check status with: ./g8e evals status"
-                if [[ "$_auto_created" == true ]]; then
-                    echo ""
-                    echo "  Auto-created resources:"
-                    echo "    User: evals@localhost"
-                    echo "    Device Token: $_device_token"
-                    echo ""
-                    echo "  Run evals with: ./g8e evals run --gold-set benchmark"
-                fi
+                echo "  Eval operators are deployed."
+                echo "  Bind the eval operators to your web session in the dashboard before running evals."
+                echo "  Then run: ./g8e evals run --gold-set benchmark"
                 exit 0 ;;
             down)
                 _banner "evals down"
@@ -1273,7 +1413,7 @@ case "$TOP" in
                 ;;
             *)
                 echo "[g8e] unknown evals subcommand: '$SUB'" >&2
-                echo "  Valid: run, list, up, down, status, logs" >&2
+                echo "  Valid: run, list, deploy, down, status, logs" >&2
                 exit 1 ;;
         esac ;;
 

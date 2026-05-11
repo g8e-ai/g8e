@@ -75,7 +75,7 @@ The default mode for execution on target hosts. The operator initiates an outbou
 **Lifecycle:**
 1. **Discovery**: Resolves environment and local CA certificates from `.g8e/ssl`.
 2. **Fingerprinting**: Generates a hardware-bound machine ID (CPU, OS, MachineID).
-3. **Auth**: Authenticates via `POST /api/auth/operator` using an API key or Device Token.
+3. **Auth**: Authenticates via `POST /api/auth/operator` using an API key or Device Token. Device tokens are typically used for automated evaluation fleet deployment.
 4. **Vault Unlock**: API key unlocks the local **Encryption Vault** to retrieve the Data Encryption Key (DEK).
 5. **Upgrade**: Receives an mTLS certificate and upgrades the transport to WSS.
 6. **Steady State**: Subscribes to `cmd:{operator_id}` for serialized `UniversalEnvelope` commands.
