@@ -73,8 +73,8 @@ The `evals` subsystem manages a dedicated fleet of simulated operator nodes to t
 ### Eval Workflow
 
 ```bash
-# 1. Bring up a fleet of eval nodes
-./g8e evals up --nodes 3 --device-token <token>
+# 1. Bring up and authenticate a fleet of eval nodes
+./g8e evals deploy --nodes 3 --device-token <token>
 
 # 2. Run the evaluation against a gold set
 ./g8e evals run --gold-set benchmark

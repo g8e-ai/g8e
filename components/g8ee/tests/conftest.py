@@ -66,6 +66,8 @@ def _has_llm_credentials(llm: LLMSettings | None) -> bool:
         return bool(llm.openai_api_key and llm.openai_endpoint)
     if provider == LLMProvider.OLLAMA:
         return bool(llm.ollama_endpoint)
+    if provider == LLMProvider.LLAMACPP:
+        return bool(llm.llamacpp_endpoint)
     return False
 
 
@@ -112,6 +114,30 @@ def _llm_settings_from_env() -> LLMSettings | None:
     primary = os.environ.get("TEST_LLM_PRIMARY_MODEL", "").strip() or None
     assistant = os.environ.get("TEST_LLM_ASSISTANT_MODEL", "").strip() or None
     lite = os.environ.get("TEST_LLM_LITE_MODEL", "").strip() or None
+
+    # Fallback to defaults if not provided but provider is set
+    if not primary:
+        from app.constants.settings import (
+            ANTHROPIC_DEFAULT_MODEL,
+            GEMINI_DEFAULT_MODEL,
+            LLAMACPP_DEFAULT_MODEL,
+            OLLAMA_DEFAULT_MODEL,
+            OPENAI_DEFAULT_MODEL,
+        )
+        _DEFAULT_MODELS = {
+            LLMProvider.GEMINI: GEMINI_DEFAULT_MODEL,
+            LLMProvider.OPENAI: OPENAI_DEFAULT_MODEL,
+            LLMProvider.ANTHROPIC: ANTHROPIC_DEFAULT_MODEL,
+            LLMProvider.OLLAMA: OLLAMA_DEFAULT_MODEL,
+            LLMProvider.LLAMACPP: LLAMACPP_DEFAULT_MODEL,
+        }
+        primary = _DEFAULT_MODELS.get(provider)
+
+    if not assistant:
+        assistant = primary
+
+    if not lite:
+        lite = assistant
     max_tokens_str = os.environ.get("TEST_LLM_MAX_TOKENS", "").strip() or None
 
     kwargs: dict = {"primary_provider": provider, "assistant_provider": assistant_provider, "lite_provider": lite_provider}
@@ -132,11 +158,13 @@ def _llm_settings_from_env() -> LLMSettings | None:
         LLMProvider.OPENAI: "openai_api_key",
         LLMProvider.ANTHROPIC: "anthropic_api_key",
         LLMProvider.OLLAMA: "ollama_api_key",
+        LLMProvider.LLAMACPP: "llamacpp_api_key",
     }
     _PROVIDER_ENDPOINT_FIELD = {
         LLMProvider.OPENAI: "openai_endpoint",
         LLMProvider.ANTHROPIC: "anthropic_endpoint",
         LLMProvider.OLLAMA: "ollama_endpoint",
+        LLMProvider.LLAMACPP: "llamacpp_endpoint",
     }
 
     if api_key:

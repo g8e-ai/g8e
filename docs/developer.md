@@ -5,7 +5,7 @@ title: Developer
 # g8e Developer Guide
 
 Last Updated: 2026-05-10
-Version: v0.3.0
+Version: v0.2.2
 
 This document defines the deterministic execution constraints for all code generated for the g8e platform. The platform is an open-source, self-hosted AI governance layer designed for offline operation. The architecture consists of three core components: the Operator (g8eo), the Dashboard (g8ed), and the Engine (g8ee).
 
@@ -30,6 +30,7 @@ The platform runs host-natively. Do not use Docker for primary component develop
    - Python 3.12+ (for g8ee)
 
 2. Commands:
+   - `./g8e`: Launches the Interactive Platform Manager (Menu).
    - `./g8e platform start`: Boots the platform (Operator listen mode, Engine, Dashboard).
    - `./g8e platform status`: Checks health of all host processes.
    - `./g8e login`: Authenticates the local CLI to the running platform.

@@ -74,7 +74,7 @@ def resolve_gold_set_path(gold_set_arg: str | None) -> Path | None:
     return None
 
 
-async def run_dry_run(device_token: str, g8ed_url: str | None = None, g8ee_url: str | None = None) -> None:
+async def run_dry_run(operator_session_id: str, g8ed_url: str | None = None, g8ee_url: str | None = None) -> None:
     # Resolve g8ed_url from environment or default
     if g8ed_url is None:
         g8ed_url = os.environ.get("G8ED_URL", os.environ.get("G8ED_INTERNAL_URL", "https://localhost"))
@@ -85,7 +85,7 @@ async def run_dry_run(device_token: str, g8ed_url: str | None = None, g8ee_url: 
 
     async with G8edClient(g8ed_url, g8ee_url) as client:
         investigation = await client.create_investigation(
-            operator_session_id=device_token
+            operator_session_id=operator_session_id
         )
         print(f"[evals] Created investigation: {investigation['id']}")
 
@@ -93,7 +93,7 @@ async def run_dry_run(device_token: str, g8ed_url: str | None = None, g8ee_url: 
         async for event in client.send_chat_message(
             investigation_id=investigation["id"],
             message="run `uname -a`",
-            operator_session_id=device_token,
+            operator_session_id=operator_session_id,
         ):
             if event.get("type") == "text_chunk":
                 response_text += event.get("data", "")
@@ -104,7 +104,7 @@ async def run_dry_run(device_token: str, g8ed_url: str | None = None, g8ee_url: 
 
 async def run_scenario(
     scenario: dict[str, Any],
-    device_token: str,
+    operator_session_id: str,
     g8ed_url: str,
     g8ee_url: str,
     node_id: str,
@@ -114,7 +114,7 @@ async def run_scenario(
 
     Args:
         scenario: Gold set scenario dict
-        device_token: Device link token for operator authentication
+        operator_session_id: Bound operator session id from web-session binding
         g8ed_url: g8ed public API base URL
         g8ee_url: g8ee internal API base URL
         node_id: Container name to use
@@ -131,7 +131,7 @@ async def run_scenario(
     try:
         async with G8edClient(g8ed_url, g8ee_url) as client:
             investigation = await client.create_investigation(
-                operator_session_id=device_token
+                operator_session_id=operator_session_id
             )
 
             response_text = ""
@@ -141,7 +141,7 @@ async def run_scenario(
             async for event in client.send_chat_message(
                 investigation_id=investigation["id"],
                 message=user_query,
-                operator_session_id=device_token,
+                operator_session_id=operator_session_id,
             ):
                 if event.get("type") == "text_chunk":
                     response_text += event.get("data", "")
@@ -154,7 +154,7 @@ async def run_scenario(
                     approval_events.append(event)
                     approval_id = event.get("approval_id")
                     if approval_id:
-                        await client.approve_request(approval_id, device_token)
+                        await client.approve_request(approval_id, operator_session_id)
 
         latency_ms = (datetime.now(UTC) - start_time).total_seconds() * 1000
 
@@ -229,7 +229,7 @@ async def run_scenario(
 
 
 async def run_full_eval(
-    device_token: str | None,
+    operator_session_id: str | None,
     gold_set_path: str,
     g8ed_url: str | None = None,
     g8ee_url: str | None = None,
@@ -246,7 +246,7 @@ async def run_full_eval(
     """Run full eval suite against gold set.
 
     Args:
-        device_token: Device link token for operator authentication (optional if fleet is running)
+        operator_session_id: Bound operator session id from web-session binding
         gold_set_path: Path to gold set JSON file
         g8ed_url: g8ed public API base URL (defaults to G8ED_URL env var or https://localhost)
         g8ee_url: g8ee internal API base URL (defaults to G8EE_URL env var or https://localhost:8443)
@@ -266,9 +266,13 @@ async def run_full_eval(
     if g8ee_url is None:
         g8ee_url = os.environ.get("G8EE_URL", os.environ.get("G8EE_INTERNAL_URL", "https://localhost:8443"))
 
-    if device_token is None:
-        print("[evals] Error: --device-token is required")
-        print("[evals] Start a fleet with './g8e evals up --device-token <token>'")
+    if operator_session_id is None:
+        print("[evals] Error: --operator-session-id is required")
+        print("[evals] Required workflow: './g8e evals deploy -d <token>', bind in the web UI, then './g8e evals run'")
+        sys.exit(1)
+    if operator_session_id.startswith("dlk_"):
+        print("[evals] Error: device link tokens are not accepted for eval runs")
+        print("[evals] Bind the deployed eval operators to your web session and use the resulting operator session id")
         sys.exit(1)
 
     with open(gold_set_path) as f:
@@ -321,7 +325,7 @@ async def run_full_eval(
         node_id = f"evals-eval-node-{(i % nodes) + 1}"
         print(f"[evals] [{i+1}/{len(operator_bound_scenarios)}] Running {scenario['id']} on {node_id}")
 
-        row = await run_scenario(scenario, device_token, g8ed_url, g8ee_url, node_id, judge)
+        row = await run_scenario(scenario, operator_session_id, g8ed_url, g8ee_url, node_id, judge)
         rows.append(row)
 
         if row.passed:
@@ -353,9 +357,9 @@ def main() -> None:
     # 'run' subcommand
     run_parser = subparsers.add_parser("run", help="Run evals against a gold set")
     run_parser.add_argument(
-        "--device-token",
+        "--operator-session-id",
         required=False,
-        help="Device link token for operator authentication (optional if fleet is running)",
+        help="Bound operator session id from web-session binding",
     )
     run_parser.add_argument(
         "--g8ed-url",
@@ -432,10 +436,10 @@ def main() -> None:
 
     if args.command == "run":
         if args.dry_run:
-            if not args.device_token:
-                print("[evals] Error: --device-token is required for --dry-run")
+            if not args.operator_session_id:
+                print("[evals] Error: --operator-session-id is required for --dry-run")
                 sys.exit(1)
-            asyncio.run(run_dry_run(args.device_token, args.g8ed_url, args.g8ee_url))
+            asyncio.run(run_dry_run(args.operator_session_id, args.g8ed_url, args.g8ee_url))
         else:
             gold_set_path = resolve_gold_set_path(args.gold_set)
             if not gold_set_path:
@@ -445,7 +449,7 @@ def main() -> None:
                     print(f"  {name}: {path}")
                 sys.exit(1)
             asyncio.run(run_full_eval(
-                args.device_token,
+                args.operator_session_id,
                 str(gold_set_path),
                 args.g8ed_url,
                 args.g8ee_url,

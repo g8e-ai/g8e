@@ -32,15 +32,13 @@ The Python package responsible for orchestrating the evaluation:
 
 A full evaluation run follows a strict lifecycle to ensure reliability and isolation:
 
-### 1. Fleet Startup
-The `FleetManager` brings up 3 `eval-node` containers. Each node:
+### 1. Fleet Startup and Operator Deployment
+`./g8e evals deploy -d <token>` brings up 3 `eval-node` containers and authenticates them with the platform using a dashboard-issued device link token. Each node:
 - Downloads the latest `g8e.operator` binary from the platform.
-- Authenticates using a provided Device Link Token.
 - Initializes a realistic filesystem state (e.g., `/var/log/app/app.log`).
-- Enters a supervised loop waiting for tasks.
+- Starts the operator with the provided device token.
 
-### 2. Readiness Polling
-The runner polls `https://localhost/health` until the platform reports a healthy status, indicating that the operators have successfully bound to their respective slots.
+Before `./g8e evals run` can execute scenarios, those operators must be bound to the human's active web session in the dashboard. This web-session binding is required proof of human presence.
 
 ### 3. Scenario Execution
 Scenarios are executed sequentially across the fleet:
@@ -73,31 +71,34 @@ Results are aggregated into a `FullReport` and persisted to `reports/evals/` in 
    ```
 2. **Authentication**
    - Generate a device link token from the g8e dashboard.
-   - Login locally: `./g8e login --device-token dlk_xxx`
+   - Keep the dashboard open so you can bind the eval operators to your web session.
 
 ### Quick Start
-1. **Bring up the fleet**
+1. **Deploy and authenticate eval operators**
    ```bash
-   ./g8e evals up --device-token dlk_xxx
+   ./g8e evals deploy -d dlk_xxx
    ```
-2. **Check fleet status**
+2. **Bind the eval operators in the dashboard**
+   Select the newly connected eval operators in the web UI and bind them to your active web session.
+3. **Check fleet status**
    ```bash
    ./g8e evals status
    ```
-3. **View logs for a specific node**
+4. **View logs for a specific node**
    ```bash
    ./g8e evals logs evals-eval-node-1
    ```
-4. **Run a gold set**
+5. **Run a gold set**
    ```bash
-   ./g8e evals run --device-token dlk_xxx --gold-set components/g8ee/evals/gold_sets/benchmark.json
+   ./g8e evals run --gold-set components/g8ee/evals/gold_sets/benchmark.json
    ```
-5. **Tear down**
+6. **Tear down**
    ```bash
    ./g8e evals down
    ```
 
 ## Invariants
 - **Real Binaries**: Evals always run the actual `g8e.operator` binary, never a mock.
+- **Human Presence**: Evals cannot run from a device link token. `evals run` requires operators that have been bound to a human web session.
 - **Isolation**: Nodes are restarted between scenarios to prevent state bleed.
 - **Runner Container**: The runner executes in `g8ee-test-runner` with Docker socket access, orchestrating eval containers through Docker Compose.

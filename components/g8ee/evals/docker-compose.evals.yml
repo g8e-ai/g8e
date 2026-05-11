@@ -26,3 +26,4 @@ services:
       EVAL_PROFILE: healthy
     extra_hosts:
       - "localhost:host-gateway"
+    hostname: "evals-eval-node"

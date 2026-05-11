@@ -1,7 +1,7 @@
 # Governance & Mechanism Design
 
 Last Updated: 2026-05-10
-Version: v0.2.3
+Version: v0.2.2
 
 Agentic AI safety in g8e is framed as a **consensus problem**: given a population of LLM-instantiated personas with different lenses, a calibrated adversary among them, and a human user with finite attention, how do we converge on an executable command that is safe, audited, and minimally costly?
 

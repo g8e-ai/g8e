@@ -73,6 +73,16 @@ export function createAuthMiddleware({ webSessionService, setupService, userServ
                     req.operatorSessionId = operatorSessionId;
                     req.operatorId = result.operator_id;
                     req.userId = result.user_id;
+
+                    // If the operator is bound to a web session, resolve it.
+                    // This enables SSE delivery and human-presence validation in g8ee.
+                    if (bindingService) {
+                        const webSessionId = await bindingService.getWebSessionForOperator(operatorSessionId);
+                        if (webSessionId) {
+                            req.webSessionId = webSessionId;
+                        }
+                    }
+
                     // For operator sessions, we don't have a full WebSession object, 
                     // but we can mock enough for downstream usage if needed.
                     req.session = {
@@ -85,33 +95,6 @@ export function createAuthMiddleware({ webSessionService, setupService, userServ
             } catch (error) {
                 logger.warn('[AUTH-MIDDLEWARE] Operator session validation failed', {
                     operatorSessionId: redactWebSessionId(operatorSessionId),
-                    error: error.message
-                });
-            }
-        }
-
-        // Check for Device Link Token (evals use this)
-        const deviceToken = req.headers['x-g8e-device-token'] || req.headers['X-G8E-Device-Token'];
-        if (deviceToken && deviceLinkService) {
-            try {
-                const linkResult = await deviceLinkService.getLink(deviceToken);
-                if (linkResult.success) {
-                    const linkData = linkResult.data;
-                    req.userId = linkData.user_id;
-                    req.organizationId = linkData.organization_id;
-                    req.deviceToken = deviceToken;
-                    // For device link auth, we mock a session
-                    req.session = {
-                        user_id: linkData.user_id,
-                        organization_id: linkData.organization_id,
-                        is_active: true,
-                        session_type: 'DEVICE_LINK'
-                    };
-                    return next();
-                }
-            } catch (error) {
-                logger.warn('[AUTH-MIDDLEWARE] Device link validation failed', {
-                    deviceToken: redactWebSessionId(deviceToken),
                     error: error.message
                 });
             }
@@ -450,20 +433,6 @@ export function createAuthMiddleware({ webSessionService, setupService, userServ
                     operator_id: req.operatorId,
                     operator_session_id: req.operatorSessionId
                 }];
-            } else if (req.deviceToken && deviceLinkService && operatorService) {
-                // Use operators associated with the device link (evals flow)
-                const linkResult = await deviceLinkService.getLink(req.deviceToken);
-                if (linkResult.success && linkResult.data.claims) {
-                    boundOperators = await Promise.all(linkResult.data.claims.map(async claim => {
-                        const operator = await operatorService.getOperator(claim.operator_id);
-                        return {
-                            operator_id: claim.operator_id,
-                            operator_session_id: operator?.operator_session_id
-                        };
-                    }));
-                    // Filter out any where we couldn't find an operator session
-                    boundOperators = boundOperators.filter(o => o.operator_session_id);
-                }
             } else if (req.userId && typeof req.userId === 'string' && req.userId.length > 0) {
                 // OAuth Client ID auth (no web session)
                 boundOperators = await bindingService.resolveBoundOperatorsForUser(req.userId);

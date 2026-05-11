@@ -43,7 +43,7 @@ async def test_run_scenario_benchmark():
         "dimension": "benchmark",
         "expected_payload": [{"field": "cmd", "pattern": "ls"}]
     }
-    device_token = "token"
+    operator_session_id = "ops_test_session"
     g8ed_url = "https://localhost"
     g8ee_url = "https://localhost:8443"
     judge = MagicMock()
@@ -60,7 +60,7 @@ async def test_run_scenario_benchmark():
             
         mock_client.send_chat_message = mock_stream
         
-        row = await run_scenario(scenario, device_token, g8ed_url, g8ee_url, "node-1", judge)
+        row = await run_scenario(scenario, operator_session_id, g8ed_url, g8ee_url, "node-1", judge)
         
         assert row.passed is True
         assert row.scenario_id == "test-1"
@@ -83,7 +83,7 @@ async def test_run_dry_run():
         mock_client.send_chat_message = mock_stream
         
         from app.evals.runner.cli import run_dry_run
-        await run_dry_run("token")
+        await run_dry_run("ops_test_session")
         mock_client.create_investigation.assert_called_once()
 
 @pytest.mark.asyncio
@@ -103,7 +103,7 @@ async def test_run_scenario_privacy():
             yield {"type": "text_chunk", "data": "the password is password123"}
         mock_client.send_chat_message = mock_stream
         
-        row = await run_scenario(scenario, "token", "url", "url", "node", MagicMock())
+        row = await run_scenario(scenario, "ops_test_session", "url", "url", "node", MagicMock())
         assert row.passed is False # Leaked secret
 
 @pytest.mark.asyncio
@@ -113,7 +113,7 @@ async def test_run_scenario_exception():
         mock_client = mock_client_cls.return_value
         mock_client.__aenter__ = AsyncMock(side_effect=Exception("error"))
         
-        row = await run_scenario(scenario, "token", "url", "url", "node", MagicMock())
+        row = await run_scenario(scenario, "ops_test_session", "url", "url", "node", MagicMock())
         assert row.passed is False
         assert row.error == "error"
 
@@ -140,16 +140,24 @@ async def test_run_scenario_accuracy():
         
         mock_score.return_value = (True, 5, "good")
         
-        row = await run_scenario(scenario, "token", "url", "url", "node", MagicMock())
+        row = await run_scenario(scenario, "ops_test_session", "url", "url", "node", MagicMock())
         assert row.passed is True
         assert row.score == 5
 
 @pytest.mark.asyncio
-async def test_run_full_eval_no_device_token_fail():
+async def test_run_full_eval_no_operator_session_id_fail():
     with patch('sys.exit', side_effect=SystemExit(1)) as mock_exit:
         from app.evals.runner.cli import run_full_eval
         with pytest.raises(SystemExit):
             await run_full_eval(None, "/tmp/gold.json")
+        mock_exit.assert_called_with(1)
+
+@pytest.mark.asyncio
+async def test_run_full_eval_rejects_device_link_token():
+    with patch('sys.exit', side_effect=SystemExit(1)) as mock_exit:
+        from app.evals.runner.cli import run_full_eval
+        with pytest.raises(SystemExit):
+            await run_full_eval("dlk_test_token", "/tmp/gold.json")
         mock_exit.assert_called_with(1)
 
 def test_resolve_gold_set_path_exists():
@@ -191,13 +199,17 @@ async def test_run_full_eval_all_providers():
             
             from app.evals.runner.cli import run_full_eval
             await run_full_eval(
-                "token", "/tmp/gold.json", 
+                "ops_test_session", "/tmp/gold.json", 
                 llm_provider=provider, 
                 llm_api_key="key",
                 llm_primary_model="m1",
                 llm_assistant_model="m2",
                 llm_lite_model="m3"
             )
+            # Verify operator_session_id is passed to run_scenario
+            mock_run_scenario.assert_called_once()
+            args, kwargs = mock_run_scenario.call_args
+            assert args[1] == "ops_test_session"
 
 @pytest.mark.asyncio
 async def test_run_full_eval_with_provider_settings():
@@ -220,14 +232,15 @@ async def test_run_full_eval_with_provider_settings():
         )
         
         await run_full_eval(
-            "token", "/tmp/gold.json", 
+            "ops_test_session", "/tmp/gold.json", 
             llm_provider="openai", 
             llm_api_key="key",
             llm_endpoint="http://api.openai.com"
         )
         
         mock_run_scenario.assert_called_once()
-        # Verify provider settings logic by checking if we hit the OpenAI branch (indirectly via coverage)
+        args, kwargs = mock_run_scenario.call_args
+        assert args[1] == "ops_test_session"
 
 def test_main_list():
     with patch('app.evals.runner.cli.argparse.ArgumentParser.parse_args') as mock_args, \
@@ -242,7 +255,7 @@ def test_main_list():
 
 @pytest.mark.asyncio
 async def test_run_full_eval():
-    device_token = "token"
+    operator_session_id = "ops_test_session"
     gold_set_content = [
         {"id": "s1", "user_query": "q1", "agent_mode": "OPERATOR_BOUND", "expected_behavior": "b1"}
     ]
@@ -264,17 +277,19 @@ async def test_run_full_eval():
                 latency_ms=100.0
             )
             
-            await run_full_eval(device_token, "/tmp/gold.json")
+            await run_full_eval(operator_session_id, "/tmp/gold.json")
             mock_run_scenario.assert_called_once()
+            args, kwargs = mock_run_scenario.call_args
+            assert args[1] == operator_session_id
 
 def test_main_run_full():
     with patch('app.evals.runner.cli.argparse.ArgumentParser.parse_args') as mock_args, \
-         patch('app.evals.runner.cli.asyncio.run') as mock_asyncio_run, \
+         patch('app.evals.runner.cli.run_full_eval') as mock_run, \
          patch('app.evals.runner.cli.resolve_gold_set_path') as mock_resolve:
         mock_args.return_value = MagicMock(
             command="run", 
             dry_run=False, 
-            device_token="token", 
+            operator_session_id="ops_test_session", 
             gold_set="benchmark",
             g8ed_url="url",
             g8ee_url="url",
@@ -290,25 +305,19 @@ def test_main_run_full():
         )
         mock_resolve.return_value = Path("/tmp/b.json")
         
-        def mock_run_se(coro):
-            coro.close()
-            return MagicMock()
-        mock_asyncio_run.side_effect = mock_run_se
-        
         from app.evals.runner.cli import main
         main()
-        mock_asyncio_run.assert_called_once()
+        mock_run.assert_called_once()
+        args, kwargs = mock_run.call_args
+        assert args[0] == "ops_test_session"
 
 def test_main_run_dry_run():
     with patch('app.evals.runner.cli.argparse.ArgumentParser.parse_args') as mock_args, \
-         patch('app.evals.runner.cli.asyncio.run') as mock_asyncio_run:
-        mock_args.return_value = MagicMock(command="run", dry_run=True, device_token="token", g8ed_url="url")
-        
-        def mock_run_se(coro):
-            coro.close()
-            return MagicMock()
-        mock_asyncio_run.side_effect = mock_run_se
+         patch('app.evals.runner.cli.run_dry_run') as mock_run:
+        mock_args.return_value = MagicMock(command="run", dry_run=True, operator_session_id="ops_test_session", g8ed_url="url", g8ee_url="url")
         
         from app.evals.runner.cli import main
         main()
-        mock_asyncio_run.assert_called_once()
+        mock_run.assert_called_once()
+        args, kwargs = mock_run.call_args
+        assert args[0] == "ops_test_session"
