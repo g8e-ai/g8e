@@ -5,16 +5,16 @@ parent: Architecture
 
 # Storage Architecture
 
-Last Updated: 2026-05-11
+Last Updated: 2026-05-12
 Version: v0.2.3
 
 This document explains the unified storage architecture for the g8e platform. It focuses on the **why** and **what** — the architectural decisions, data flows, and invariants — rather than low-level implementation.
 
 ## Core Principles
 
-- **Operator-Hub Persistence**: The Operator (`g8eo`) running in `--listen` mode is the authoritative system of record for the entire platform. Components like the Dashboard (`g8ed`) and Engine (`g8ee`) are completely stateless and rely on the Operator for persistence via the Coordination Store API.
-- **Local-First Audit Architecture (LFAA)**: Every file mutation and command execution on a managed host is recorded locally in the Operator's Audit Vault and Ledger. The platform receives only Sentinel-scrubbed metadata; raw data never leaves the host unless explicitly retrieved.
-- **Unified Coordination Store**: A single SQLite database on the platform hub provides Document, KV, SSE, and Blob storage services to stateless clients.
+- **Operator-Hub Persistence**: The Operator (`g8eo`) running in `--listen` mode is the authoritative system of record and the primary **Substrate**. It provides the Coordination Store API for all clients. Optional application-layer adapters like the Dashboard (`g8ed`) and Engine (`g8ee`) are completely stateless and rely on the Operator for persistence.
+- **Local-First Audit Architecture (LFAA)**: Every file mutation and command execution on a managed host is recorded locally in the Operator's Audit Vault and Ledger. The platform substrate receives only Sentinel-scrubbed metadata; raw data never leaves the host unless explicitly retrieved.
+- **Unified Coordination Store**: A single SQLite database on the platform hub (provided by `g8eo --listen`) provides Document, KV, SSE, and Blob storage services to stateless clients.
 - **Data Sovereignty**: Raw operational data (passwords, secrets, PII) is quarantined on the managed host. The platform only ever receives Sentinel-scrubbed summaries and metadata in the Scrubbed Vault.
 
 ## Storage Tiers
@@ -31,9 +31,9 @@ This document explains the unified storage architecture for the g8e platform. It
 ## Storage Architecture at a Glance
 
 ### Platform Hub (g8eo --listen)
-- **Component**: `g8eo` (the "Platform Hub")
+- **Component**: `g8eo` (the "Platform Hub" and "Substrate")
 - **Persistence**: Single SQLite database at `.g8e/data/g8e.db` (The "Coordination Store").
-- **Stateless Clients**: `g8ed` (Node.js) and `g8ee` (Python) read/write via HTTPS/WSS.
+- **Stateless Clients**: Bundled apps (`g8ed`, `g8ee`) and BYO clients read/write via public HTTPS/WSS APIs.
 - **Subsystems**:
     - **Document Store**: JSON document CRUD using a Collection/ID pattern with `json_extract` query support.
     - **KV Store**: High-speed ephemeral data with TTL support and read cache.
@@ -114,10 +114,9 @@ This document explains the unified storage architecture for the g8e platform. It
 
 | Component | Technology | Path/Volume | Role |
 |---|---|---|---|
-| **Platform Hub (DB)** | SQLite | `.g8e/data/g8e.db` | Central platform state (Coordination Store). |
+| **Platform Hub (Substrate)** | SQLite | `.g8e/data/g8e.db` | Central platform state (Coordination Store). |
 | **Platform Hub (SSL)** | TLS Certs | `.g8e/ssl` | CA, identity, and bootstrap secrets. **Root of Trust**. |
-| **Engine (g8ee)** | None | - | Stateless; uses `DBClient` and `KVCacheClient`. |
-| **Dashboard (g8ed)** | None | - | Stateless; uses `OperatorDocumentClient` and `KVCacheClient`. |
+| **Optional Adapters** | None | - | Stateless clients; use `DBClient` and `KVCacheClient`. |
 | **Operator (Scrubbed)** | SQLite | `.g8e/local_state.db` | Sentinel-scrubbed AI context. |
 | **Operator (Raw)** | SQLite | `.g8e/raw_vault.db` | Customer-only unscrubbed forensic record. |
 | **Operator (Audit)** | SQLite (Enc) | `.g8e/data/g8e.db` | LFAA encrypted append-only event log. |

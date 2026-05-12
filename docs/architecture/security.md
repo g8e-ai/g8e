@@ -5,15 +5,15 @@ parent: Architecture
 
 # Security Architecture
 
-Last Updated: 2026-05-11
+Last Updated: 2026-05-12
 Version: v0.2.3
 
-g8e is a local-only, air-gapped platform designed for high-stakes environments. Security is not an "add-on" but the core constraint: the platform assumes the AI control plane is potentially adversarial or error-prone and enforces safety at the infrastructure level through a 3-layer governance hierarchy and a Protobuf-first architecture.
+g8e is a Zero-Trust Operator/protocol substrate for secure infrastructure operations. Security is not an "add-on" but the core constraint: the platform assumes the AI control plane is potentially adversarial or error-prone and enforces safety at the infrastructure level through a 3-layer governance hierarchy and a Protobuf-first architecture.
 
 ## Bedrock Principles
 
-1.  **Proof of Human Presence (PHP)**: The AI proposes; the human signs. No state-changing operation executes without an explicit, hardware-bound signature (Passkey) appended to the transaction envelope.
-2.  **Zero Trust & Protocol-First**: No component or connection is implicitly trusted. Every request is carried by a `UniversalEnvelope` that binds identity, context, and cryptographic governance evidence.
+1.  **Proof of Human Presence (PHP)**: The AI proposes; the human signs. No state-changing operation executes without an explicit, hardware-bound signature (Passkey) or verifiable approval proof appended to the transaction envelope.
+2.  **Zero Trust & Protocol-First**: No component or connection is implicitly trusted. Every request is carried by a `UniversalEnvelope` that binds identity, context, and cryptographic governance evidence. There are no "internal" channels for bundled apps.
 3.  **Local-First Sovereignty**: Sensitive data stays on the Operator host. The Operator (`g8eo`) is the final arbiter of execution, enforcing hard gates before any command hits the shell.
 4.  **Fail-Closed Invariants**: Malformed envelopes, invalid signatures, or stale state roots result in immediate rejection. The system never "fails open" to a default-allow state.
 
@@ -33,9 +33,9 @@ L1 provides hardcoded, non-negotiable safety invariants enforced at the Operator
 -   **Protobuf Reflection**: `g8eo` uses reflection over the `forbidden_patterns` custom option in `operator.proto` to validate typed payloads before dispatch.
 -   **Allowlist/Denylist**: Configurable filters for binary names and substrings.
 
-### L2: Consensus (The Tribunal)
-The Tribunal converts intent into executable commands using an ensemble of five independent agents.
--   **Tribunal Signature**: `g8ee` signs the `event_type` and `payload_bytes` with the `auditor_hmac_key`.
+### L2: Consensus (Consensus)
+The Consensus layer converts intent into executable commands using a verifiable proof of consensus (e.g., from an ensemble of independent agents).
+-   **Consensus Signature**: The signer (e.g., bundled `g8ee` or a BYO agent) signs the `event_type` and `payload_bytes`.
 -   **Verification**: `g8eo` rejects any command with a missing or invalid L2 signature when L2 verification is enabled.
 -   **Reputation Staking**: Agent performance is tracked and bound to the Merkle-signed reputation scoreboard.
 
@@ -60,16 +60,14 @@ The `UniversalEnvelope` is the canonical BFT transaction container for all cross
 
 ```mermaid
 graph TD
-    User[User] -- "TLS 1.3 + PHP (Passkey)" --> g8ed
-    g8ed[g8ed Dashboard] -- "mTLS + UniversalEnvelope" --> g8eo
-    g8ee[g8ee Engine] -- "L2 Signing" --> g8ed
-    g8eo[g8eo Operator] -- "L1 + BFT Verification" --> Host[Target System]
+    User[User] -- "PHP (Passkey)" --> Client[Public Protocol Client]
+    Client -- "UniversalEnvelope" --> g8eo[g8eo Operator]
+    g8eo -- "L1 + BFT Verification" --> Host[Target System]
 ```
 
 ### 1. Component Boundaries
--   **g8ed (Dashboard)**: The Governance Gateway. Handles user auth (Passkeys), session management, and UI.
--   **g8ee (Engine)**: The Reasoning Plane. Orchestrates the Tribunal, signs L2 commitments, and builds envelopes.
--   **g8eo (Operator)**: The Execution Plane. Runs on the target host, enforces L1/BFT gates, and scrubs output.
+-   **Public Protocol Client**: Any frontend (bundled `g8ed`) or agent system (bundled `g8ee`) that builds and signs protocol transactions.
+-   **g8eo (Operator)**: The Execution Plane and Substrate. Runs on the target host, enforces L1/L2/L3 gates, and scrubs output.
 
 ### 2. Secrets & Bootstrap
 Authoritative secrets are generated on first boot and stored in `/home/bob/g8e/.g8e/ssl`:

@@ -38,6 +38,7 @@ type ListenService struct {
 	pubsub    *PubSubBroker
 	auth      *AuthService
 	certs     *CertStore
+	reg       *RegistrationService
 	server    *http.Server
 	wssServer *http.Server
 
@@ -100,6 +101,8 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 		tlsConfig = certs.TLSConfig()
 	}
 
+	reg := NewRegistrationService(db, certs, logger)
+
 	ls := &ListenService{
 		cfg:    cfg,
 		logger: logger,
@@ -107,9 +110,10 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 		pubsub: pubsub,
 		auth:   auth,
 		certs:  certs,
+		reg:    reg,
 	}
 
-	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, certs, ls.IsReady)
+	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, certs, reg, ls.IsReady)
 	ls.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.HTTPPort),
 		Handler:           ls.handler,
@@ -133,15 +137,17 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 // Used in tests where the DB and pub/sub broker are constructed independently.
 func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker) *ListenService {
 	auth := NewAuthService(db, logger, cfg.Listen.SSLDir)
+	reg := NewRegistrationService(db, nil, logger)
 	ls := &ListenService{
 		cfg:    cfg,
 		logger: logger,
 		db:     db,
 		pubsub: pubsub,
 		auth:   auth,
+		reg:    reg,
 	}
 
-	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, nil, ls.IsReady)
+	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, nil, reg, ls.IsReady)
 	ls.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.HTTPPort),
 		Handler:           ls.handler,

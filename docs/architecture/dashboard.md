@@ -39,10 +39,12 @@ To solve the "Initial Trust" problem for local HTTPS, `g8ed` runs a plain HTTP s
 - **Trust Scripts**: OS-specific scripts (sh/bat) to automate certificate installation.
 - **Deployment Script**: A curl-pipe-bash target for remote operator installation.
 
-### Internal Authentication
-Communication between `g8ed` and other components is guarded by:
-- **`X-Internal-Auth`**: A shared secret token required for all cross-component HTTP requests.
-- **`requireInternalOrigin`**: Middleware that rejects any request not originating from the trusted platform network.
+### [Legacy] Internal Authentication
+Communication between `g8ed` and other components was previously guarded by:
+- **`X-Internal-Auth`**: A shared secret token (Removed in Phase 4 of the Protocol Pivot).
+- **`requireInternalOrigin`**: Middleware that rejected any request not originating from the trusted platform network (Removed in Phase 4).
+
+As of the **Protocol Pivot**, the Dashboard is a standard protocol client. It authenticates to the Operator using the same public registration and session primitives available to BYO clients.
 
 ---
 
@@ -81,7 +83,7 @@ Operators are managed via a "Slot-Based" model. `g8ed` handles the binding/unbin
 
 ### Chat Request Flow
 1. **Submit**: Browser POSTs message to `/api/chat/send`.
-2. **Relay**: `g8ed` adds the `X-Internal-Auth` token and relays the request to `g8ee`.
+2. **Relay**: `g8ed` relays the request to `g8ee` (Engine) or submits it directly to the Operator as a protocol transaction.
 3. **Stream**: `g8ee` processes the prompt and POSTs response chunks back to `g8ed`'s internal endpoint.
 4. **Push**: `g8ed` identifies the target `web_session_id` and pushes the chunk to the browser via SSE.
 

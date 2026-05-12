@@ -5,10 +5,10 @@ parent: Architecture
 
 # Prompt Architecture
 
-Last Updated: 2026-05-11
+Last Updated: 2026-05-12
 Version: v0.2.3
 
-The g8e prompt system is a modular architecture designed for **prefix-cache reuse** and **strict structural enforcement**. It composes system prompts from shared fragments, canonical persona definitions, and dynamic turn-specific context.
+The g8e prompt system is a modular architecture implemented in the **optional Engine (`g8ee`) adapter**. It is designed for **prefix-cache reuse** and **strict structural enforcement**. It composes system prompts from shared fragments, canonical persona definitions, and dynamic turn-specific context.
 
 The system is optimized for high-reasoning models (llama.cpp, vLLM) by placing static content at the beginning of the prompt to maximize KV-cache hits across agent turns.
 

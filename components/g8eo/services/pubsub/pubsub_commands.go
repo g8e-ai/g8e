@@ -15,6 +15,8 @@ package pubsub
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -82,6 +84,10 @@ type PubSubCommandService struct {
 	// bootstrap phase). When present, all inbound envelopes are
 	// strictly verified and rejected on signature mismatch.
 	auditorHMACKey string
+
+	// trustedSigners holds ED25519 public keys for external L2 signers.
+	// Loaded from <SSLDir>/trusted_signers/*.pub
+	trustedSigners map[string]ed25519.PublicKey
 }
 
 // CommandServiceConfig holds all dependencies for PubSubCommandService.
@@ -157,6 +163,9 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 
 	rs.buildHandlers()
 
+	// Initialize trusted signers map
+	rs.trustedSigners = make(map[string]ed25519.PublicKey)
+
 	// Load L2 Tribunal HMAC key for governance verification
 	auditorHMACKeyPath := filepath.Join(c.Config.SSLDir, "auditor_hmac_key")
 	keyBytes, err := os.ReadFile(auditorHMACKeyPath)
@@ -176,6 +185,24 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 		rs.auditorHMACKey = strings.TrimSpace(string(keyBytes))
 		c.Logger.Info("L2 Tribunal HMAC key loaded - L2 governance enforcement enabled",
 			"path", auditorHMACKeyPath)
+	}
+
+	// Load ED25519 trusted signers from <SSLDir>/trusted_signers/*.pub
+	signersDir := filepath.Join(c.Config.SSLDir, "trusted_signers")
+	if entries, err := os.ReadDir(signersDir); err == nil {
+		for _, entry := range entries {
+			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".pub") {
+				pubPath := filepath.Join(signersDir, entry.Name())
+				if pubHex, err := os.ReadFile(pubPath); err == nil {
+					pubBytes, err := hex.DecodeString(strings.TrimSpace(string(pubHex)))
+					if err == nil && len(pubBytes) == ed25519.PublicKeySize {
+						name := strings.TrimSuffix(entry.Name(), ".pub")
+						rs.trustedSigners[name] = ed25519.PublicKey(pubBytes)
+						c.Logger.Info("Loaded trusted L2 signer", "name", name, "path", pubPath)
+					}
+				}
+			}
+		}
 	}
 
 	c.Logger.Info("g8e connectivity initialized",
@@ -458,9 +485,9 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 		rs.logger.Warn("Skipping L1 Governance validation: failed to unmarshal payload", "error", err)
 	}
 
-	// L2 Governance: Verify Tribunal signature
-	if rs.auditorHMACKey != "" {
-		if err := VerifyL2Governance(&env, rs.auditorHMACKey); err != nil {
+	// L2 Governance: Verify Tribunal signature (HMAC or ED25519)
+	if rs.auditorHMACKey != "" || len(rs.trustedSigners) > 0 {
+		if err := VerifyL2Governance(&env, rs.auditorHMACKey, rs.trustedSigners); err != nil {
 			rs.logger.Error("L2 Governance verification failed: command rejected",
 				"event_type", env.EventType,
 				"error", err,
@@ -469,7 +496,7 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 		}
 		rs.logger.Info("L2 Governance verification passed", "event_type", env.EventType)
 	} else {
-		rs.logger.Debug("L2 Governance verification skipped: auditor HMAC key not configured", "event_type", env.EventType)
+		rs.logger.Debug("L2 Governance verification skipped: no HMAC key or trusted signers configured", "event_type", env.EventType)
 	}
 
 	rs.dispatchCommand(cmdMsg)

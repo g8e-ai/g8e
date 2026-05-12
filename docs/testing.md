@@ -4,7 +4,7 @@ title: Testing
 
 # Testing g8e
 
-Last Updated: 2026-05-11
+Last Updated: 2026-05-12
 Version: v0.2.3
 
 g8e is designed to be a **testing environment and production environment at the same time**. We do not believe in mocking the world just to get tests to pass. If it doesn't work in the test environment, it won't work in production.
@@ -13,22 +13,28 @@ This document outlines the testing architecture, core principles, and how to wri
 
 ## Core Engineering Principles
 
-- **Hermetic Execution** — Each component runs tests directly on the host via the `./g8e test` runner, using repo-local toolchains (Python venv, Node npm, Go toolchain) and runtime state managed under the `.g8e` directory.
-- **Real Infrastructure** — All testing occurs against real, live services. A test run typically begins with `./g8e platform start` to ensure a real `operator` (listen mode), `g8ed`, and `g8ee` are active and connected.
+- **Hermetic Execution** — Tests run directly on the host via the `./g8e test` runner, using the Go toolchain for the substrate and repo-local Python/Node toolchains only for explicit app-layer targets.
+- **Real Infrastructure** — All testing occurs against real, live services. A substrate test run begins with `./g8e platform start`, which starts Operator listen mode only. App-layer tests require explicit app startup through `./g8e apps start ...` or `./g8e platform start --with-apps`.
 - **The "No Mocks" Policy** — We strictly prohibit mocking internal services, database clients, or cross-component communication. Integration tests must use the real wire paths. If a mock is deemed absolutely necessary, it must be justified and documented.
 - **Real LLM Calls** — AI integration tests use real provider API calls (Gemini, Anthropic, OpenAI, etc.). No `MagicMock` or HTTP interception is permitted for LLM clients. Transient failures are handled via exponential backoff in the reasoning engine.
 
-## Test Harness Architecture: E2E vs Evals
+## Test Harness Architecture: Substrate, App Adapters, and Evals
 
-The platform maintains two distinct test harnesses with strictly separated authentication and lifecycle patterns.
+The platform maintains distinct test harnesses with strictly separated lifecycle patterns.
 
-### 1. E2E Tests (Internal Lifecycle Path)
+### 1. Substrate Tests (Operator/Protocol Path)
+**Command:** `./g8e test` or `./g8e test g8eo`
+**Purpose:** Validates the Operator/protocol substrate without requiring Node, Python, g8ed, or g8ee.
+- **Pattern:** Uses Operator listen mode and Protobuf-first command/result paths.
+- **Rationale:** Keeps the required platform boundary small and independently verifiable.
+
+### 2. App Adapter Tests (Explicit Opt-In)
 **Command:** `./g8e test g8ee --e2e`
-**Purpose:** Validates the internal platform infrastructure and operator lifecycle.
-- **Pattern:** Uses `X-Internal-Auth` tokens and internal API paths.
-- **Rationale:** Verifies that the platform can correctly provision, authenticate, and manage operator nodes.
+**Purpose:** Validates optional bundled adapter behavior.
+- **Pattern:** Requires the relevant app adapter to be started explicitly.
+- **Rationale:** Verifies bundled clients without making them substrate dependencies.
 
-### 2. Evals (Public Device-Token Path)
+### 3. Evals (Application-Layer Benchmark Path)
 **Command:** `./g8e evals run --gold-set <name|path>`
 **Purpose:** Evaluates AI agent (Sage) reasoning and tool-calling accuracy against the product surface experienced by users.
 - **Pattern:** Uses public device-link tokens and hits public HTTPS endpoints.
@@ -40,20 +46,24 @@ All tests are orchestrated via the `./g8e` CLI, which handles environment config
 
 | Command | Runner | Framework | Primary Use |
 |---------|--------|-----------|-------------|
-| `./g8e test g8ee` | Host venv | `pytest` | AI reasoning, tool translation, engine logic |
-| `./g8e test g8ed` | Host Node.js | `vitest` | Dashboard, API Gateway, session management |
+| `./g8e test` | Host Go | `go test` | Default substrate test run |
 | `./g8e test g8eo` | Host Go | `go test` | Operator listen mode, blob store, pub/sub |
+| `./g8e test g8ee` | Host venv | `pytest` | Optional Engine adapter, AI reasoning, tool translation |
+| `./g8e test g8ed` | Host Node.js | `vitest` | Optional Dashboard adapter, UI/API behavior |
 
 ### Common Workflow
 
 ```bash
-# 1. Start the platform infrastructure
+# 1. Start the Operator/protocol substrate
 ./g8e platform start
 
-# 2. Run component tests
-./g8e test g8ee                     # Run all g8ee unit/integration tests
-./g8e test g8ee --pyright --ruff    # Run with strict type checking and linting
-./g8e test g8eo --coverage          # Run Go tests with race detection and coverage
+# 2. Run substrate tests
+./g8e test
+./g8e test g8eo --coverage
+
+# 3. Start optional apps only when testing app-layer adapters
+./g8e apps start g8ee
+./g8e test g8ee --pyright --ruff
 ```
 
 ### LLM & Search Configuration
@@ -123,7 +133,6 @@ The platform includes automated verification of its own security posture:
 ## Continuous Integration
 
 GitHub Actions (`.github/workflows/build-and-test.yml`) enforce these standards on every PR:
-- **Host-Native Setup**: CI environments are configured with Go, Python 3.12, and Node 22.
-- **Platform Bootstrap**: Each job starts the platform via `./g8e platform start`.
-- **Strict Gating**: Failures in `pyright`, `ruff`, or any test suite block the merge.
-- **Diagnostic Logging**: Logs from `.g8e/logs/*` are printed on failure to assist in debugging silent exits.
+- **Substrate Job**: The blocking `test-g8eo` job installs Go only, starts `./g8e platform start`, and runs `./g8e test`.
+- **Application Jobs**: `apps-g8ed` and `apps-g8ee` install their own Node/Python toolchains, start only the relevant optional adapter, and are non-blocking.
+- **Diagnostic Logging**: Operator logs are printed for substrate failures; app jobs also print their adapter logs.

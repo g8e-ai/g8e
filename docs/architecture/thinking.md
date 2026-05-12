@@ -5,17 +5,19 @@ parent: Architecture
 
 # Thinking & Reasoning
 
-Last Updated: 2026-05-11
+Last Updated: 2026-05-12
 Version: v0.2.3
 
 "Thinking" in g8e is a dual-layered architecture designed to guarantee that agentic actions are the result of deliberate, cross-validated reasoning rather than reflexive generation. 
 
-1.  **Structural Reasoning (L2 Consensus)**: A multi-agent ensemble (The Tribunal) that provides structural integrity through voting and auditing.
+1.  **Structural Reasoning (L2 Consensus)**: A verifiable proof that an action was generated through deliberate consensus (e.g., via the bundled **Tribunal** in the application layer).
 2.  **Provider Reasoning (LLM Thinking)**: The native reasoning capabilities of LLM providers (e.g., Gemini's `thinking_config`, Anthropic's `thinking_budget`) abstracted into a canonical vocabulary.
 
-## 1. Structural Reasoning: The Tribunal
+## 1. Structural Reasoning: Consensus
 
-The core "brain" of g8e is not a single model, but a **Tribunal** of five heterogeneous agents. This structural reasoning layer ensures that every shell command is debated before execution.
+g8e enforces structural reasoning at the **Substrate** level by requiring an L2 Consensus proof in the `UniversalEnvelope` for state-changing operations. 
+
+The bundled **Engine** (`g8ee`) adapter implements this via a **Tribunal** of five heterogeneous agents. This ensures that every shell command is debated before execution.
 
 - **Information Isolation**: Members generate candidates in parallel, sealed environments.
 - **Heterogeneous Lenses**: Personas like **Axiom** (composition), **Variance** (edge cases), and **Nemesis** (adversary) ensure the problem is viewed from multiple angles.

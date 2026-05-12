@@ -5,7 +5,7 @@ parent: Architecture
 
 # g8e Operator
 
-Last Updated: 2026-05-11
+Last Updated: 2026-05-12
 Version: v0.2.3
 
 The Operator is the platform's data plane, execution engine, and persistence layer. It is a statically compiled Go binary that provides the substrate for all g8e operations, functioning as both the hub for persistence and the agent for execution.
@@ -20,18 +20,16 @@ The Operator is the platform's data plane, execution engine, and persistence lay
 
 ## Architecture Overview
 
-g8e has exactly three components: the **Dashboard (g8ed)**, the **Engine (g8ee)**, and the **Operator (g8eo)**. The Operator in **Listen Mode** serves as the platform's backend, replacing the legacy `g8es` component.
+g8e now separates the mandatory **Operator/protocol substrate** from optional application-layer adapters. 
+
+- **Substrate (Mandatory)**: `g8eo` in **Listen Mode** is the platform's backbone. It is the protocol hub, persistence layer, pub/sub broker, policy enforcer, and audit authority. It must be sufficient on its own to receive, verify, and execute protocol-governed transactions.
+- **Application Layer (Optional)**: Optional adapters like the Dashboard (`g8ed`) and Engine (`g8ee`) consume the public Operator protocol surface. They have no substrate responsibilities and no private access channels.
 
 ```mermaid
 flowchart TD
-    subgraph Hub ["Hub (Control & Persistence)"]
+    subgraph Hub ["Operator/Protocol Substrate"]
         direction TB
-        subgraph App ["Application Tier"]
-            g8ed["g8ed Dashboard"]
-            g8ee["g8ee Engine"]
-        end
-
-        subgraph Persistence ["Data Tier"]
+        subgraph Persistence ["Required Runtime"]
             listen["Operator (Listen Mode)"]
             db[("SQLite / KV")]
             ps[["Pub/Sub Broker"]]
@@ -41,10 +39,15 @@ flowchart TD
             listen --- ps
             listen --- ca
         end
-
-        g8ed <--> listen
-        g8ee <--> listen
     end
+
+    subgraph Apps ["Optional Application Layer"]
+        g8ed["g8ed Dashboard Adapter"]
+        g8ee["g8ee Engine Adapter"]
+    end
+
+    g8ed -. "public protocol" .-> listen
+    g8ee -. "public protocol" .-> listen
 
     subgraph EP_A ["Managed Host A"]
         OPA["Operator (Standard)"] --- LFAA_A["LFAA Ledger & Vault"]
@@ -67,7 +70,7 @@ Transforms the operator into the platform's backbone. It is started with the `--
 - **Messaging**: A high-performance WebSocket Pub/Sub broker for all internal and external events.
 - **Identity (CA)**: Acts as the platform's root Certificate Authority, issuing mTLS certificates to components and targets.
 - **Security**: Manages the platform's Encryption Vault and secret rotation.
-- **Gateway**: Provides authenticated HTTP/WSS proxies for the Dashboard and Engine.
+- **Gateway**: Provides the public Operator HTTP/WSS protocol surface for bundled and BYO clients.
 
 ### 2. Standard Mode (Target)
 The default mode for execution on target hosts. The operator initiates an outbound connection and waits for protocol-governed envelopes.
@@ -115,7 +118,7 @@ When local storage is enabled (`-s`), the Operator maintains a **Local-First Aud
 | `-e`, `--endpoint` | Hub endpoint address (IP or hostname). |
 | `--listen` | Start in Listen Mode (Hub). |
 | `--wss-listen-port` | Port for Pub/Sub connections (default: 443). |
-| `--http-listen-port` | Port for internal Dashboard/Engine traffic (default: 443). |
+| `--http-listen-port` | Port for Operator HTTP protocol traffic (default: 443). |
 | `--data-dir` | Directory for persistence (default: `.g8e/data`). |
 | `--ssl-dir` | Directory for TLS certs (default: `.g8e/ssl`). |
 | `-s`, `--local-storage` | Enable local LFAA auditing (default: on). |

@@ -5,7 +5,7 @@
 
 _ensure_g8ed() {
     if ! _g8ed_running; then
-        echo "[g8e] g8ed is not running — start the platform: ./g8e platform start" >&2
+        echo "[g8e] g8ed is not running — start the optional dashboard adapter: ./g8e apps start g8ed" >&2
         exit 1
     fi
 }

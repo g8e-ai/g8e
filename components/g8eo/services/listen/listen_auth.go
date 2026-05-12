@@ -93,34 +93,28 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 			token = r.URL.Query().Get("token")
 		}
 
+		// [PIVOT] Native Registration Path (Phase 4)
+		// This endpoint is the new sovereign entry point for enrolling binaries.
+		// It MUST be accessible without an internal token as it is the first step
+		// of the trust bootstrap.
+		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/auth/link/") && strings.HasSuffix(r.URL.Path, "/register") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		expected := s.GetInternalAuthToken()
 
-		// During bootstrap (no token yet), we MUST allow certain paths to proceed
-		// so the token can be seeded and services can coordinate.
+		// [PIVOT] Remove substrate privilege bypass (Phase 4)
+		// The following bypasses for uninitialized tokens are being removed
+		// to enforce zero-trust substrate.
 		if expected == "" {
-			// Allow access to platform_settings so it can be discovered/seeded.
-			if (r.Method == http.MethodGet || r.Method == http.MethodPut || r.Method == http.MethodPatch) && r.URL.Path == "/db/settings/platform_settings" {
-				next.ServeHTTP(w, r)
-				return
-			}
-			// Allow KV operations during bootstrap for caching and coordination
-			if strings.HasPrefix(r.URL.Path, "/kv/") {
-				next.ServeHTTP(w, r)
-				return
-			}
-			// Allow g8ed to connect via WebSocket during bootstrap
-			if strings.HasPrefix(r.URL.Path, "/ws/") {
-				next.ServeHTTP(w, r)
-				return
-			}
-			// Allow CA certificate fetching for bootstrap (Operators need this to establish TLS)
-			if r.Method == http.MethodGet && r.URL.Path == "/ssl/ca.crt" {
-				next.ServeHTTP(w, r)
-				return
-			}
+			// [REMOVED] Allow access to platform_settings...
+			// [REMOVED] Allow KV operations...
+			// [REMOVED] Allow g8ed to connect via WebSocket...
+			// [REMOVED] Allow CA certificate fetching...
 
-			s.logger.Warn("Unauthorized internal API access attempt (token not initialized)", "path", r.URL.Path, "method", r.Method)
-			s.jsonError(w, http.StatusUnauthorized, "internal auth token not initialized")
+			s.logger.Warn("Unauthorized internal API access attempt (token not initialized or bypass removed)", "path", r.URL.Path, "method", r.Method)
+			s.jsonError(w, http.StatusUnauthorized, "internal auth token not initialized or privileged bypass disabled")
 			return
 		}
 

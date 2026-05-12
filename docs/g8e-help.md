@@ -4,10 +4,10 @@ title: g8e CLI
 
 # g8e Platform CLI
 
-Last Updated: 2026-05-11
+Last Updated: 2026-05-12
 Version: v0.2.3
 
-The `g8e` command is the unified entry point for the g8e AI governance platform. It orchestrates the full lifecycle of a self-hosted, human-in-the-loop AI operations system.
+The `g8e` command is the unified entry point for the g8e Operator/protocol substrate. It manages the mandatory Operator runtime by default and exposes bundled Dashboard and Engine apps only as optional application-layer adapters.
 
 ## Usage
 
@@ -23,22 +23,23 @@ Alternatively, use direct commands for automation and specific tasks:
 The platform is built on security-first architectural invariants that cannot be bypassed:
 
 - **3-Layer Governance Bedrock**: Every action is gated by a hierarchical validation system: L1 (Technical Bedrock), L2 (Consensus/Tribunal), and L3 (Human Authorization).
-- **Zero Trust**: No standing credentials. Privileges are ephemeral and mathematically bound to sessions via mTLS and internal auth tokens.
+- **Zero Trust**: No standing credentials. Privileges are ephemeral and mathematically bound to locally verifiable protocol proofs.
 - **Binary Safety**: Security is enforced at the binary and network layers, not via fragile LLM prompts.
 - **Data Sovereignty**: Operational data stays on the remote host; only scrubbed context reaches the AI.
 - **Immutable Audit**: Git-backed ledgers and Merkle commitments provide a tamper-evident record of every change and agent verdict.
 - **Air-Gap Capable**: Fully self-hosted with no SaaS dependencies or mandatory telemetry.
 - **Provider Agnostic**: Swap LLM providers (Gemini, Anthropic, OpenAI, Ollama) at will. Governance is the constant.
 
-## Component Architecture
+## Substrate and Application Layer
 
-The platform consists of exactly three components running natively on the host:
+The default substrate is the Operator plus the shared protocol. Bundled apps remain in-tree as opt-in reference adapters and must use the same public protocol surface as BYO clients.
 
-| Component | Language | Purpose |
-|-----------|----------|---------|
-| **g8ed** | Node.js | Dashboard & API Gateway. Authentication, session management, SSE relay, and operator lifecycle. |
-| **g8ee** | Python | Reasoning Engine. Orchestrates AI agents and enforces the 3-Layer Governance Bedrock. |
-| **Operator** | Go | Persistence & Pub/Sub. When running in `--listen` mode, it acts as the platform's storage and event bus. |
+| Layer | Component | Language | Purpose |
+|-----------|-----------|----------|---------|
+| **Substrate** | **Operator (g8eo)** | Go | Protocol hub, policy enforcement, execution, audit, receipts, persistence, and pub/sub in listen mode. |
+| **Protocol** | **shared/proto** | Protobuf | Canonical transaction schemas, typed payloads, and envelope contracts. |
+| **Application Layer** | **g8ed** | Node.js | Optional reference Dashboard adapter for UI and approval workflows. |
+| **Application Layer** | **g8ee** | Python | Optional reference Engine adapter for agentic proposal and L2 proof generation. |
 
 ### Agent Terminology
 
@@ -55,12 +56,12 @@ The AI reasoning engine uses specialized agents with distinct roles:
 
 A user request moves through the **3-Layer Governance Bedrock**:
 
-1. **Ingress**: `g8ed` authenticates the session and relays the request to `g8ee`.
+1. **Ingress**: A bundled or BYO client builds a typed transaction proposal for the Operator protocol.
 2. **Triage**: The message is classified as `simple` (Dash) or `complex` (Sage).
 3. **L1: Technical Bedrock**: Initial scrubbing and validation against forbidden patterns (sudo, etc.).
 4. **L2: Consensus (Tribunal)**: Intent is translated into commands by the ensemble. The Warden checks for risk, and the Auditor verifies technical correctness.
 5. **L3: Authorization**: State-changing operations halt for human approval via the dashboard. Benign commands may use auto-approval if configured.
-6. **Execution**: Approved commands execute on the operator. Results are scrubbed and committed to the git ledger.
+6. **Execution**: The Operator verifies protocol proofs locally, executes accepted work, and commits receipts to the host-authoritative audit ledger.
 
 ## Operational Modes
 
@@ -79,10 +80,11 @@ When no operator is connected:
 
 ### Daily Operations
 ```bash
-./g8e platform start    # Start g8ed, g8ee, and Operator listen mode
+./g8e platform start    # Start Operator listen mode only
 ./g8e platform status   # Check service health and PIDs
 ./g8e platform logs     # Stream aggregated logs
 ./g8e platform settings # View or update platform configuration
+./g8e apps start all    # Start optional bundled Dashboard and Engine adapters
 ```
 
 ### Operator Deployment
@@ -94,9 +96,10 @@ When no operator is connected:
 
 ### Testing & Development
 ```bash
-./g8e test g8ee      # Python backend tests
-./g8e test g8ed      # Dashboard tests
-./g8e test g8eo      # Go operator tests
+./g8e test           # Go Operator substrate tests
+./g8e test g8eo      # Go Operator substrate tests
+./g8e test g8ee      # Optional Python Engine adapter tests
+./g8e test g8ed      # Optional Dashboard adapter tests
 ```
 
 ## Command Reference
@@ -112,15 +115,22 @@ When no operator is connected:
 - `unset <key>`: Remove a variable from `.g8e/.env`
 
 ### platform
-- `start`: Start all platform components (g8ed, g8ee, Operator)
-- `stop`: Stop all platform components
-- `restart`: Restart all platform components
-- `status`: Show component health, versions, and PIDs
+- `start [--with-apps|--with-g8ed|--with-g8ee]`: Start Operator listen mode by default; optional apps require explicit opt-in
+- `stop`: Stop Operator listen mode and any optional app processes
+- `restart [--with-apps|--with-g8ed|--with-g8ee]`: Restart Operator listen mode by default; optional apps require explicit opt-in
+- `status`: Show substrate health first and optional application-layer status separately
 - `reset`: Reset application data (preserves SSL)
 - `wipe`: Clear app data while preserving platform settings and SSL
 - `clean`: Nuke all processes and the `.g8e` runtime directory
 - `logs`: Stream logs from all components
 - `settings`: Manage platform configuration (sections: general, llm, etc.)
+
+### apps
+- `start [g8ed|g8ee|all]`: Start optional bundled app adapters
+- `stop [g8ed|g8ee|all]`: Stop optional bundled app adapters
+- `restart [g8ed|g8ee|all]`: Restart optional bundled app adapters
+- `status`: Show optional app status alongside substrate status
+- `build [g8ed|g8ee|all]`: Install optional app dependencies
 
 ### operator
 - `init`: Build local operator binary
@@ -132,9 +142,9 @@ When no operator is connected:
 - `ssh-config`: Manage SSH identities for fleet operations
 
 ### test
-- `g8ee [path]`: Python tests with LLM provider support
-- `g8ed [path]`: Vitest dashboard and API tests
-- `g8eo [path]`: Go operator tests with race detection
+- `g8eo [path]`: Go Operator substrate tests with race detection. This is the default when no component is provided.
+- `g8ee [path]`: Optional Python Engine adapter tests with LLM provider support.
+- `g8ed [path]`: Optional Dashboard adapter and API tests.
 
 ### security
 - `validate`: Check TLS integrity and volume permissions

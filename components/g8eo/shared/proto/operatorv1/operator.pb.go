@@ -1308,6 +1308,142 @@ func (x *AuditMsgRequested) GetContent() string {
 	return ""
 }
 
+type SignCertificateRequested struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	PublicKeyPem       string                 `protobuf:"bytes,1,opt,name=public_key_pem,json=publicKeyPem,proto3" json:"public_key_pem,omitempty"`
+	CommonName         string                 `protobuf:"bytes,2,opt,name=common_name,json=commonName,proto3" json:"common_name,omitempty"`
+	OrganizationalUnit string                 `protobuf:"bytes,3,opt,name=organizational_unit,json=organizationalUnit,proto3" json:"organizational_unit,omitempty"`
+	ValidityDays       int32                  `protobuf:"varint,4,opt,name=validity_days,json=validityDays,proto3" json:"validity_days,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *SignCertificateRequested) Reset() {
+	*x = SignCertificateRequested{}
+	mi := &file_operator_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SignCertificateRequested) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SignCertificateRequested) ProtoMessage() {}
+
+func (x *SignCertificateRequested) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SignCertificateRequested.ProtoReflect.Descriptor instead.
+func (*SignCertificateRequested) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *SignCertificateRequested) GetPublicKeyPem() string {
+	if x != nil {
+		return x.PublicKeyPem
+	}
+	return ""
+}
+
+func (x *SignCertificateRequested) GetCommonName() string {
+	if x != nil {
+		return x.CommonName
+	}
+	return ""
+}
+
+func (x *SignCertificateRequested) GetOrganizationalUnit() string {
+	if x != nil {
+		return x.OrganizationalUnit
+	}
+	return ""
+}
+
+func (x *SignCertificateRequested) GetValidityDays() int32 {
+	if x != nil {
+		return x.ValidityDays
+	}
+	return 0
+}
+
+type SignCertificateResult struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Success        bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	CertificatePem string                 `protobuf:"bytes,2,opt,name=certificate_pem,json=certificatePem,proto3" json:"certificate_pem,omitempty"`
+	Serial         string                 `protobuf:"bytes,3,opt,name=serial,proto3" json:"serial,omitempty"`
+	Error          string                 `protobuf:"bytes,4,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *SignCertificateResult) Reset() {
+	*x = SignCertificateResult{}
+	mi := &file_operator_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SignCertificateResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SignCertificateResult) ProtoMessage() {}
+
+func (x *SignCertificateResult) ProtoReflect() protoreflect.Message {
+	mi := &file_operator_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SignCertificateResult.ProtoReflect.Descriptor instead.
+func (*SignCertificateResult) Descriptor() ([]byte, []int) {
+	return file_operator_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *SignCertificateResult) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *SignCertificateResult) GetCertificatePem() string {
+	if x != nil {
+		return x.CertificatePem
+	}
+	return ""
+}
+
+func (x *SignCertificateResult) GetSerial() string {
+	if x != nil {
+		return x.Serial
+	}
+	return ""
+}
+
+func (x *SignCertificateResult) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
 type ShutdownRequested struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Reason        string                 `protobuf:"bytes,1,opt,name=reason,proto3" json:"reason,omitempty"`
@@ -1317,7 +1453,7 @@ type ShutdownRequested struct {
 
 func (x *ShutdownRequested) Reset() {
 	*x = ShutdownRequested{}
-	mi := &file_operator_proto_msgTypes[16]
+	mi := &file_operator_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1329,7 +1465,7 @@ func (x *ShutdownRequested) String() string {
 func (*ShutdownRequested) ProtoMessage() {}
 
 func (x *ShutdownRequested) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[16]
+	mi := &file_operator_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1342,7 +1478,7 @@ func (x *ShutdownRequested) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShutdownRequested.ProtoReflect.Descriptor instead.
 func (*ShutdownRequested) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{16}
+	return file_operator_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ShutdownRequested) GetReason() string {
@@ -1372,7 +1508,7 @@ type CommandResult struct {
 
 func (x *CommandResult) Reset() {
 	*x = CommandResult{}
-	mi := &file_operator_proto_msgTypes[17]
+	mi := &file_operator_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1384,7 +1520,7 @@ func (x *CommandResult) String() string {
 func (*CommandResult) ProtoMessage() {}
 
 func (x *CommandResult) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[17]
+	mi := &file_operator_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1397,7 +1533,7 @@ func (x *CommandResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandResult.ProtoReflect.Descriptor instead.
 func (*CommandResult) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{17}
+	return file_operator_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *CommandResult) GetExecutionId() string {
@@ -1476,7 +1612,7 @@ type FsEntry struct {
 
 func (x *FsEntry) Reset() {
 	*x = FsEntry{}
-	mi := &file_operator_proto_msgTypes[18]
+	mi := &file_operator_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1488,7 +1624,7 @@ func (x *FsEntry) String() string {
 func (*FsEntry) ProtoMessage() {}
 
 func (x *FsEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[18]
+	mi := &file_operator_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1501,7 +1637,7 @@ func (x *FsEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FsEntry.ProtoReflect.Descriptor instead.
 func (*FsEntry) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{18}
+	return file_operator_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *FsEntry) GetName() string {
@@ -1556,7 +1692,7 @@ type FsListResult struct {
 
 func (x *FsListResult) Reset() {
 	*x = FsListResult{}
-	mi := &file_operator_proto_msgTypes[19]
+	mi := &file_operator_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1568,7 +1704,7 @@ func (x *FsListResult) String() string {
 func (*FsListResult) ProtoMessage() {}
 
 func (x *FsListResult) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[19]
+	mi := &file_operator_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1581,7 +1717,7 @@ func (x *FsListResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FsListResult.ProtoReflect.Descriptor instead.
 func (*FsListResult) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{19}
+	return file_operator_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *FsListResult) GetExecutionId() string {
@@ -1664,7 +1800,7 @@ type FsReadResult struct {
 
 func (x *FsReadResult) Reset() {
 	*x = FsReadResult{}
-	mi := &file_operator_proto_msgTypes[20]
+	mi := &file_operator_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1676,7 +1812,7 @@ func (x *FsReadResult) String() string {
 func (*FsReadResult) ProtoMessage() {}
 
 func (x *FsReadResult) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[20]
+	mi := &file_operator_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1689,7 +1825,7 @@ func (x *FsReadResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FsReadResult.ProtoReflect.Descriptor instead.
 func (*FsReadResult) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{20}
+	return file_operator_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *FsReadResult) GetExecutionId() string {
@@ -1768,7 +1904,7 @@ type FsGrepMatch struct {
 
 func (x *FsGrepMatch) Reset() {
 	*x = FsGrepMatch{}
-	mi := &file_operator_proto_msgTypes[21]
+	mi := &file_operator_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1780,7 +1916,7 @@ func (x *FsGrepMatch) String() string {
 func (*FsGrepMatch) ProtoMessage() {}
 
 func (x *FsGrepMatch) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[21]
+	mi := &file_operator_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1793,7 +1929,7 @@ func (x *FsGrepMatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FsGrepMatch.ProtoReflect.Descriptor instead.
 func (*FsGrepMatch) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{21}
+	return file_operator_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *FsGrepMatch) GetPath() string {
@@ -1848,7 +1984,7 @@ type FsGrepResult struct {
 
 func (x *FsGrepResult) Reset() {
 	*x = FsGrepResult{}
-	mi := &file_operator_proto_msgTypes[22]
+	mi := &file_operator_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1860,7 +1996,7 @@ func (x *FsGrepResult) String() string {
 func (*FsGrepResult) ProtoMessage() {}
 
 func (x *FsGrepResult) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[22]
+	mi := &file_operator_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1873,7 +2009,7 @@ func (x *FsGrepResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FsGrepResult.ProtoReflect.Descriptor instead.
 func (*FsGrepResult) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{22}
+	return file_operator_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *FsGrepResult) GetExecutionId() string {
@@ -1960,7 +2096,7 @@ type FileEditResult struct {
 
 func (x *FileEditResult) Reset() {
 	*x = FileEditResult{}
-	mi := &file_operator_proto_msgTypes[23]
+	mi := &file_operator_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1972,7 +2108,7 @@ func (x *FileEditResult) String() string {
 func (*FileEditResult) ProtoMessage() {}
 
 func (x *FileEditResult) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[23]
+	mi := &file_operator_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1985,7 +2121,7 @@ func (x *FileEditResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FileEditResult.ProtoReflect.Descriptor instead.
 func (*FileEditResult) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{23}
+	return file_operator_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *FileEditResult) GetExecutionId() string {
@@ -2095,7 +2231,7 @@ type ExecutionStatusUpdate struct {
 
 func (x *ExecutionStatusUpdate) Reset() {
 	*x = ExecutionStatusUpdate{}
-	mi := &file_operator_proto_msgTypes[24]
+	mi := &file_operator_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2107,7 +2243,7 @@ func (x *ExecutionStatusUpdate) String() string {
 func (*ExecutionStatusUpdate) ProtoMessage() {}
 
 func (x *ExecutionStatusUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[24]
+	mi := &file_operator_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2120,7 +2256,7 @@ func (x *ExecutionStatusUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecutionStatusUpdate.ProtoReflect.Descriptor instead.
 func (*ExecutionStatusUpdate) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{24}
+	return file_operator_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ExecutionStatusUpdate) GetExecutionId() string {
@@ -2192,7 +2328,7 @@ type PortCheckEntry struct {
 
 func (x *PortCheckEntry) Reset() {
 	*x = PortCheckEntry{}
-	mi := &file_operator_proto_msgTypes[25]
+	mi := &file_operator_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2204,7 +2340,7 @@ func (x *PortCheckEntry) String() string {
 func (*PortCheckEntry) ProtoMessage() {}
 
 func (x *PortCheckEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[25]
+	mi := &file_operator_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2217,7 +2353,7 @@ func (x *PortCheckEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PortCheckEntry.ProtoReflect.Descriptor instead.
 func (*PortCheckEntry) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{25}
+	return file_operator_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *PortCheckEntry) GetHost() string {
@@ -2268,7 +2404,7 @@ type PortCheckResult struct {
 
 func (x *PortCheckResult) Reset() {
 	*x = PortCheckResult{}
-	mi := &file_operator_proto_msgTypes[26]
+	mi := &file_operator_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2280,7 +2416,7 @@ func (x *PortCheckResult) String() string {
 func (*PortCheckResult) ProtoMessage() {}
 
 func (x *PortCheckResult) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[26]
+	mi := &file_operator_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2293,7 +2429,7 @@ func (x *PortCheckResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PortCheckResult.ProtoReflect.Descriptor instead.
 func (*PortCheckResult) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{26}
+	return file_operator_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *PortCheckResult) GetExecutionId() string {
@@ -2350,7 +2486,7 @@ type FetchLogsResult struct {
 
 func (x *FetchLogsResult) Reset() {
 	*x = FetchLogsResult{}
-	mi := &file_operator_proto_msgTypes[27]
+	mi := &file_operator_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2362,7 +2498,7 @@ func (x *FetchLogsResult) String() string {
 func (*FetchLogsResult) ProtoMessage() {}
 
 func (x *FetchLogsResult) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[27]
+	mi := &file_operator_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2375,7 +2511,7 @@ func (x *FetchLogsResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FetchLogsResult.ProtoReflect.Descriptor instead.
 func (*FetchLogsResult) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{27}
+	return file_operator_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *FetchLogsResult) GetExecutionId() string {
@@ -2467,7 +2603,7 @@ type AuditWebSession struct {
 
 func (x *AuditWebSession) Reset() {
 	*x = AuditWebSession{}
-	mi := &file_operator_proto_msgTypes[28]
+	mi := &file_operator_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2479,7 +2615,7 @@ func (x *AuditWebSession) String() string {
 func (*AuditWebSession) ProtoMessage() {}
 
 func (x *AuditWebSession) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[28]
+	mi := &file_operator_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2492,7 +2628,7 @@ func (x *AuditWebSession) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuditWebSession.ProtoReflect.Descriptor instead.
 func (*AuditWebSession) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{28}
+	return file_operator_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *AuditWebSession) GetId() string {
@@ -2537,7 +2673,7 @@ type AuditFileMutation struct {
 
 func (x *AuditFileMutation) Reset() {
 	*x = AuditFileMutation{}
-	mi := &file_operator_proto_msgTypes[29]
+	mi := &file_operator_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2549,7 +2685,7 @@ func (x *AuditFileMutation) String() string {
 func (*AuditFileMutation) ProtoMessage() {}
 
 func (x *AuditFileMutation) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[29]
+	mi := &file_operator_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2562,7 +2698,7 @@ func (x *AuditFileMutation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuditFileMutation.ProtoReflect.Descriptor instead.
 func (*AuditFileMutation) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{29}
+	return file_operator_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *AuditFileMutation) GetId() int64 {
@@ -2629,7 +2765,7 @@ type AuditEvent struct {
 
 func (x *AuditEvent) Reset() {
 	*x = AuditEvent{}
-	mi := &file_operator_proto_msgTypes[30]
+	mi := &file_operator_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2641,7 +2777,7 @@ func (x *AuditEvent) String() string {
 func (*AuditEvent) ProtoMessage() {}
 
 func (x *AuditEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[30]
+	mi := &file_operator_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2654,7 +2790,7 @@ func (x *AuditEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuditEvent.ProtoReflect.Descriptor instead.
 func (*AuditEvent) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{30}
+	return file_operator_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *AuditEvent) GetId() int64 {
@@ -2772,7 +2908,7 @@ type FetchHistoryResult struct {
 
 func (x *FetchHistoryResult) Reset() {
 	*x = FetchHistoryResult{}
-	mi := &file_operator_proto_msgTypes[31]
+	mi := &file_operator_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2784,7 +2920,7 @@ func (x *FetchHistoryResult) String() string {
 func (*FetchHistoryResult) ProtoMessage() {}
 
 func (x *FetchHistoryResult) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[31]
+	mi := &file_operator_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2797,7 +2933,7 @@ func (x *FetchHistoryResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FetchHistoryResult.ProtoReflect.Descriptor instead.
 func (*FetchHistoryResult) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{31}
+	return file_operator_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *FetchHistoryResult) GetSuccess() bool {
@@ -2874,7 +3010,7 @@ type FileHistoryEntry struct {
 
 func (x *FileHistoryEntry) Reset() {
 	*x = FileHistoryEntry{}
-	mi := &file_operator_proto_msgTypes[32]
+	mi := &file_operator_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2886,7 +3022,7 @@ func (x *FileHistoryEntry) String() string {
 func (*FileHistoryEntry) ProtoMessage() {}
 
 func (x *FileHistoryEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[32]
+	mi := &file_operator_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2899,7 +3035,7 @@ func (x *FileHistoryEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FileHistoryEntry.ProtoReflect.Descriptor instead.
 func (*FileHistoryEntry) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{32}
+	return file_operator_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *FileHistoryEntry) GetCommitHash() string {
@@ -2936,7 +3072,7 @@ type FetchFileHistoryResult struct {
 
 func (x *FetchFileHistoryResult) Reset() {
 	*x = FetchFileHistoryResult{}
-	mi := &file_operator_proto_msgTypes[33]
+	mi := &file_operator_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2948,7 +3084,7 @@ func (x *FetchFileHistoryResult) String() string {
 func (*FetchFileHistoryResult) ProtoMessage() {}
 
 func (x *FetchFileHistoryResult) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[33]
+	mi := &file_operator_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2961,7 +3097,7 @@ func (x *FetchFileHistoryResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FetchFileHistoryResult.ProtoReflect.Descriptor instead.
 func (*FetchFileHistoryResult) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{33}
+	return file_operator_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *FetchFileHistoryResult) GetSuccess() bool {
@@ -3012,7 +3148,7 @@ type RestoreFileResult struct {
 
 func (x *RestoreFileResult) Reset() {
 	*x = RestoreFileResult{}
-	mi := &file_operator_proto_msgTypes[34]
+	mi := &file_operator_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3024,7 +3160,7 @@ func (x *RestoreFileResult) String() string {
 func (*RestoreFileResult) ProtoMessage() {}
 
 func (x *RestoreFileResult) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[34]
+	mi := &file_operator_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3037,7 +3173,7 @@ func (x *RestoreFileResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestoreFileResult.ProtoReflect.Descriptor instead.
 func (*RestoreFileResult) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{34}
+	return file_operator_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *RestoreFileResult) GetSuccess() bool {
@@ -3093,7 +3229,7 @@ type FileDiffEntry struct {
 
 func (x *FileDiffEntry) Reset() {
 	*x = FileDiffEntry{}
-	mi := &file_operator_proto_msgTypes[35]
+	mi := &file_operator_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3105,7 +3241,7 @@ func (x *FileDiffEntry) String() string {
 func (*FileDiffEntry) ProtoMessage() {}
 
 func (x *FileDiffEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[35]
+	mi := &file_operator_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3118,7 +3254,7 @@ func (x *FileDiffEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FileDiffEntry.ProtoReflect.Descriptor instead.
 func (*FileDiffEntry) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{35}
+	return file_operator_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *FileDiffEntry) GetId() string {
@@ -3206,7 +3342,7 @@ type FetchFileDiffResult struct {
 
 func (x *FetchFileDiffResult) Reset() {
 	*x = FetchFileDiffResult{}
-	mi := &file_operator_proto_msgTypes[36]
+	mi := &file_operator_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3218,7 +3354,7 @@ func (x *FetchFileDiffResult) String() string {
 func (*FetchFileDiffResult) ProtoMessage() {}
 
 func (x *FetchFileDiffResult) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[36]
+	mi := &file_operator_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3231,7 +3367,7 @@ func (x *FetchFileDiffResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FetchFileDiffResult.ProtoReflect.Descriptor instead.
 func (*FetchFileDiffResult) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{36}
+	return file_operator_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *FetchFileDiffResult) GetSuccess() bool {
@@ -3313,7 +3449,7 @@ type HeartbeatResult struct {
 
 func (x *HeartbeatResult) Reset() {
 	*x = HeartbeatResult{}
-	mi := &file_operator_proto_msgTypes[37]
+	mi := &file_operator_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3325,7 +3461,7 @@ func (x *HeartbeatResult) String() string {
 func (*HeartbeatResult) ProtoMessage() {}
 
 func (x *HeartbeatResult) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[37]
+	mi := &file_operator_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3338,7 +3474,7 @@ func (x *HeartbeatResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeartbeatResult.ProtoReflect.Descriptor instead.
 func (*HeartbeatResult) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{37}
+	return file_operator_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *HeartbeatResult) GetOperatorId() string {
@@ -3510,7 +3646,7 @@ type SystemIdentity struct {
 
 func (x *SystemIdentity) Reset() {
 	*x = SystemIdentity{}
-	mi := &file_operator_proto_msgTypes[38]
+	mi := &file_operator_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3522,7 +3658,7 @@ func (x *SystemIdentity) String() string {
 func (*SystemIdentity) ProtoMessage() {}
 
 func (x *SystemIdentity) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[38]
+	mi := &file_operator_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3535,7 +3671,7 @@ func (x *SystemIdentity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SystemIdentity.ProtoReflect.Descriptor instead.
 func (*SystemIdentity) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{38}
+	return file_operator_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *SystemIdentity) GetHostname() string {
@@ -3598,7 +3734,7 @@ type NetworkInterface struct {
 
 func (x *NetworkInterface) Reset() {
 	*x = NetworkInterface{}
-	mi := &file_operator_proto_msgTypes[39]
+	mi := &file_operator_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3610,7 +3746,7 @@ func (x *NetworkInterface) String() string {
 func (*NetworkInterface) ProtoMessage() {}
 
 func (x *NetworkInterface) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[39]
+	mi := &file_operator_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3623,7 +3759,7 @@ func (x *NetworkInterface) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NetworkInterface.ProtoReflect.Descriptor instead.
 func (*NetworkInterface) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{39}
+	return file_operator_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *NetworkInterface) GetName() string {
@@ -3659,7 +3795,7 @@ type NetworkInfo struct {
 
 func (x *NetworkInfo) Reset() {
 	*x = NetworkInfo{}
-	mi := &file_operator_proto_msgTypes[40]
+	mi := &file_operator_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3671,7 +3807,7 @@ func (x *NetworkInfo) String() string {
 func (*NetworkInfo) ProtoMessage() {}
 
 func (x *NetworkInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[40]
+	mi := &file_operator_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3684,7 +3820,7 @@ func (x *NetworkInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NetworkInfo.ProtoReflect.Descriptor instead.
 func (*NetworkInfo) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{40}
+	return file_operator_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *NetworkInfo) GetPublicIp() string {
@@ -3726,7 +3862,7 @@ type CapabilityFlags struct {
 
 func (x *CapabilityFlags) Reset() {
 	*x = CapabilityFlags{}
-	mi := &file_operator_proto_msgTypes[41]
+	mi := &file_operator_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3738,7 +3874,7 @@ func (x *CapabilityFlags) String() string {
 func (*CapabilityFlags) ProtoMessage() {}
 
 func (x *CapabilityFlags) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[41]
+	mi := &file_operator_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3751,7 +3887,7 @@ func (x *CapabilityFlags) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CapabilityFlags.ProtoReflect.Descriptor instead.
 func (*CapabilityFlags) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{41}
+	return file_operator_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *CapabilityFlags) GetLocalStorageEnabled() bool {
@@ -3785,7 +3921,7 @@ type VersionInfo struct {
 
 func (x *VersionInfo) Reset() {
 	*x = VersionInfo{}
-	mi := &file_operator_proto_msgTypes[42]
+	mi := &file_operator_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3797,7 +3933,7 @@ func (x *VersionInfo) String() string {
 func (*VersionInfo) ProtoMessage() {}
 
 func (x *VersionInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[42]
+	mi := &file_operator_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3810,7 +3946,7 @@ func (x *VersionInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VersionInfo.ProtoReflect.Descriptor instead.
 func (*VersionInfo) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{42}
+	return file_operator_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *VersionInfo) GetOperatorVersion() string {
@@ -3837,7 +3973,7 @@ type UptimeInfo struct {
 
 func (x *UptimeInfo) Reset() {
 	*x = UptimeInfo{}
-	mi := &file_operator_proto_msgTypes[43]
+	mi := &file_operator_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3849,7 +3985,7 @@ func (x *UptimeInfo) String() string {
 func (*UptimeInfo) ProtoMessage() {}
 
 func (x *UptimeInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[43]
+	mi := &file_operator_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3862,7 +3998,7 @@ func (x *UptimeInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UptimeInfo.ProtoReflect.Descriptor instead.
 func (*UptimeInfo) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{43}
+	return file_operator_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *UptimeInfo) GetUptime() string {
@@ -3895,7 +4031,7 @@ type PerformanceMetrics struct {
 
 func (x *PerformanceMetrics) Reset() {
 	*x = PerformanceMetrics{}
-	mi := &file_operator_proto_msgTypes[44]
+	mi := &file_operator_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3907,7 +4043,7 @@ func (x *PerformanceMetrics) String() string {
 func (*PerformanceMetrics) ProtoMessage() {}
 
 func (x *PerformanceMetrics) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[44]
+	mi := &file_operator_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3920,7 +4056,7 @@ func (x *PerformanceMetrics) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PerformanceMetrics.ProtoReflect.Descriptor instead.
 func (*PerformanceMetrics) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{44}
+	return file_operator_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *PerformanceMetrics) GetCpuPercent() float64 {
@@ -3990,7 +4126,7 @@ type OSDetails struct {
 
 func (x *OSDetails) Reset() {
 	*x = OSDetails{}
-	mi := &file_operator_proto_msgTypes[45]
+	mi := &file_operator_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4002,7 +4138,7 @@ func (x *OSDetails) String() string {
 func (*OSDetails) ProtoMessage() {}
 
 func (x *OSDetails) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[45]
+	mi := &file_operator_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4015,7 +4151,7 @@ func (x *OSDetails) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OSDetails.ProtoReflect.Descriptor instead.
 func (*OSDetails) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{45}
+	return file_operator_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *OSDetails) GetKernel() string {
@@ -4053,7 +4189,7 @@ type UserDetails struct {
 
 func (x *UserDetails) Reset() {
 	*x = UserDetails{}
-	mi := &file_operator_proto_msgTypes[46]
+	mi := &file_operator_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4065,7 +4201,7 @@ func (x *UserDetails) String() string {
 func (*UserDetails) ProtoMessage() {}
 
 func (x *UserDetails) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[46]
+	mi := &file_operator_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4078,7 +4214,7 @@ func (x *UserDetails) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UserDetails.ProtoReflect.Descriptor instead.
 func (*UserDetails) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{46}
+	return file_operator_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *UserDetails) GetUsername() string {
@@ -4135,7 +4271,7 @@ type DiskDetails struct {
 
 func (x *DiskDetails) Reset() {
 	*x = DiskDetails{}
-	mi := &file_operator_proto_msgTypes[47]
+	mi := &file_operator_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4147,7 +4283,7 @@ func (x *DiskDetails) String() string {
 func (*DiskDetails) ProtoMessage() {}
 
 func (x *DiskDetails) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[47]
+	mi := &file_operator_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4160,7 +4296,7 @@ func (x *DiskDetails) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiskDetails.ProtoReflect.Descriptor instead.
 func (*DiskDetails) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{47}
+	return file_operator_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *DiskDetails) GetTotalGb() float64 {
@@ -4203,7 +4339,7 @@ type MemoryDetails struct {
 
 func (x *MemoryDetails) Reset() {
 	*x = MemoryDetails{}
-	mi := &file_operator_proto_msgTypes[48]
+	mi := &file_operator_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4215,7 +4351,7 @@ func (x *MemoryDetails) String() string {
 func (*MemoryDetails) ProtoMessage() {}
 
 func (x *MemoryDetails) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[48]
+	mi := &file_operator_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4228,7 +4364,7 @@ func (x *MemoryDetails) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MemoryDetails.ProtoReflect.Descriptor instead.
 func (*MemoryDetails) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{48}
+	return file_operator_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *MemoryDetails) GetTotalMb() int64 {
@@ -4275,7 +4411,7 @@ type EnvironmentDetails struct {
 
 func (x *EnvironmentDetails) Reset() {
 	*x = EnvironmentDetails{}
-	mi := &file_operator_proto_msgTypes[49]
+	mi := &file_operator_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4287,7 +4423,7 @@ func (x *EnvironmentDetails) String() string {
 func (*EnvironmentDetails) ProtoMessage() {}
 
 func (x *EnvironmentDetails) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[49]
+	mi := &file_operator_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4300,7 +4436,7 @@ func (x *EnvironmentDetails) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnvironmentDetails.ProtoReflect.Descriptor instead.
 func (*EnvironmentDetails) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{49}
+	return file_operator_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *EnvironmentDetails) GetPwd() string {
@@ -4371,7 +4507,7 @@ type FingerprintDetails struct {
 
 func (x *FingerprintDetails) Reset() {
 	*x = FingerprintDetails{}
-	mi := &file_operator_proto_msgTypes[50]
+	mi := &file_operator_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4383,7 +4519,7 @@ func (x *FingerprintDetails) String() string {
 func (*FingerprintDetails) ProtoMessage() {}
 
 func (x *FingerprintDetails) ProtoReflect() protoreflect.Message {
-	mi := &file_operator_proto_msgTypes[50]
+	mi := &file_operator_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4396,7 +4532,7 @@ func (x *FingerprintDetails) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FingerprintDetails.ProtoReflect.Descriptor instead.
 func (*FingerprintDetails) Descriptor() ([]byte, []int) {
-	return file_operator_proto_rawDescGZIP(), []int{50}
+	return file_operator_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *FingerprintDetails) GetOs() string {
@@ -4531,7 +4667,18 @@ const file_operator_proto_rawDesc = "" +
 	"\texit_code\x18\x05 \x01(\x05R\bexitCode\x124\n" +
 	"\x16execution_time_seconds\x18\x06 \x01(\x02R\x14executionTimeSeconds\"-\n" +
 	"\x11AuditMsgRequested\x12\x18\n" +
-	"\acontent\x18\x01 \x01(\tR\acontent\"+\n" +
+	"\acontent\x18\x01 \x01(\tR\acontent\"\xb7\x01\n" +
+	"\x18SignCertificateRequested\x12$\n" +
+	"\x0epublic_key_pem\x18\x01 \x01(\tR\fpublicKeyPem\x12\x1f\n" +
+	"\vcommon_name\x18\x02 \x01(\tR\n" +
+	"commonName\x12/\n" +
+	"\x13organizational_unit\x18\x03 \x01(\tR\x12organizationalUnit\x12#\n" +
+	"\rvalidity_days\x18\x04 \x01(\x05R\fvalidityDays\"\x88\x01\n" +
+	"\x15SignCertificateResult\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12'\n" +
+	"\x0fcertificate_pem\x18\x02 \x01(\tR\x0ecertificatePem\x12\x16\n" +
+	"\x06serial\x18\x03 \x01(\tR\x06serial\x12\x14\n" +
+	"\x05error\x18\x04 \x01(\tR\x05error\"+\n" +
 	"\x11ShutdownRequested\x12\x16\n" +
 	"\x06reason\x18\x01 \x01(\tR\x06reason\"\xdb\x02\n" +
 	"\rCommandResult\x12!\n" +
@@ -4870,7 +5017,7 @@ func file_operator_proto_rawDescGZIP() []byte {
 }
 
 var file_operator_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_operator_proto_msgTypes = make([]protoimpl.MessageInfo, 52)
+var file_operator_proto_msgTypes = make([]protoimpl.MessageInfo, 54)
 var file_operator_proto_goTypes = []any{
 	(ExecutionStatus)(0),                      // 0: g8e.operator.v1.ExecutionStatus
 	(HeartbeatType)(0),                        // 1: g8e.operator.v1.HeartbeatType
@@ -4890,84 +5037,86 @@ var file_operator_proto_goTypes = []any{
 	(*DirectCommandAuditRequested)(nil),       // 15: g8e.operator.v1.DirectCommandAuditRequested
 	(*DirectCommandResultAuditRequested)(nil), // 16: g8e.operator.v1.DirectCommandResultAuditRequested
 	(*AuditMsgRequested)(nil),                 // 17: g8e.operator.v1.AuditMsgRequested
-	(*ShutdownRequested)(nil),                 // 18: g8e.operator.v1.ShutdownRequested
-	(*CommandResult)(nil),                     // 19: g8e.operator.v1.CommandResult
-	(*FsEntry)(nil),                           // 20: g8e.operator.v1.FsEntry
-	(*FsListResult)(nil),                      // 21: g8e.operator.v1.FsListResult
-	(*FsReadResult)(nil),                      // 22: g8e.operator.v1.FsReadResult
-	(*FsGrepMatch)(nil),                       // 23: g8e.operator.v1.FsGrepMatch
-	(*FsGrepResult)(nil),                      // 24: g8e.operator.v1.FsGrepResult
-	(*FileEditResult)(nil),                    // 25: g8e.operator.v1.FileEditResult
-	(*ExecutionStatusUpdate)(nil),             // 26: g8e.operator.v1.ExecutionStatusUpdate
-	(*PortCheckEntry)(nil),                    // 27: g8e.operator.v1.PortCheckEntry
-	(*PortCheckResult)(nil),                   // 28: g8e.operator.v1.PortCheckResult
-	(*FetchLogsResult)(nil),                   // 29: g8e.operator.v1.FetchLogsResult
-	(*AuditWebSession)(nil),                   // 30: g8e.operator.v1.AuditWebSession
-	(*AuditFileMutation)(nil),                 // 31: g8e.operator.v1.AuditFileMutation
-	(*AuditEvent)(nil),                        // 32: g8e.operator.v1.AuditEvent
-	(*FetchHistoryResult)(nil),                // 33: g8e.operator.v1.FetchHistoryResult
-	(*FileHistoryEntry)(nil),                  // 34: g8e.operator.v1.FileHistoryEntry
-	(*FetchFileHistoryResult)(nil),            // 35: g8e.operator.v1.FetchFileHistoryResult
-	(*RestoreFileResult)(nil),                 // 36: g8e.operator.v1.RestoreFileResult
-	(*FileDiffEntry)(nil),                     // 37: g8e.operator.v1.FileDiffEntry
-	(*FetchFileDiffResult)(nil),               // 38: g8e.operator.v1.FetchFileDiffResult
-	(*HeartbeatResult)(nil),                   // 39: g8e.operator.v1.HeartbeatResult
-	(*SystemIdentity)(nil),                    // 40: g8e.operator.v1.SystemIdentity
-	(*NetworkInterface)(nil),                  // 41: g8e.operator.v1.NetworkInterface
-	(*NetworkInfo)(nil),                       // 42: g8e.operator.v1.NetworkInfo
-	(*CapabilityFlags)(nil),                   // 43: g8e.operator.v1.CapabilityFlags
-	(*VersionInfo)(nil),                       // 44: g8e.operator.v1.VersionInfo
-	(*UptimeInfo)(nil),                        // 45: g8e.operator.v1.UptimeInfo
-	(*PerformanceMetrics)(nil),                // 46: g8e.operator.v1.PerformanceMetrics
-	(*OSDetails)(nil),                         // 47: g8e.operator.v1.OSDetails
-	(*UserDetails)(nil),                       // 48: g8e.operator.v1.UserDetails
-	(*DiskDetails)(nil),                       // 49: g8e.operator.v1.DiskDetails
-	(*MemoryDetails)(nil),                     // 50: g8e.operator.v1.MemoryDetails
-	(*EnvironmentDetails)(nil),                // 51: g8e.operator.v1.EnvironmentDetails
-	(*FingerprintDetails)(nil),                // 52: g8e.operator.v1.FingerprintDetails
-	nil,                                       // 53: g8e.operator.v1.CommandRequested.EnvironmentEntry
+	(*SignCertificateRequested)(nil),          // 18: g8e.operator.v1.SignCertificateRequested
+	(*SignCertificateResult)(nil),             // 19: g8e.operator.v1.SignCertificateResult
+	(*ShutdownRequested)(nil),                 // 20: g8e.operator.v1.ShutdownRequested
+	(*CommandResult)(nil),                     // 21: g8e.operator.v1.CommandResult
+	(*FsEntry)(nil),                           // 22: g8e.operator.v1.FsEntry
+	(*FsListResult)(nil),                      // 23: g8e.operator.v1.FsListResult
+	(*FsReadResult)(nil),                      // 24: g8e.operator.v1.FsReadResult
+	(*FsGrepMatch)(nil),                       // 25: g8e.operator.v1.FsGrepMatch
+	(*FsGrepResult)(nil),                      // 26: g8e.operator.v1.FsGrepResult
+	(*FileEditResult)(nil),                    // 27: g8e.operator.v1.FileEditResult
+	(*ExecutionStatusUpdate)(nil),             // 28: g8e.operator.v1.ExecutionStatusUpdate
+	(*PortCheckEntry)(nil),                    // 29: g8e.operator.v1.PortCheckEntry
+	(*PortCheckResult)(nil),                   // 30: g8e.operator.v1.PortCheckResult
+	(*FetchLogsResult)(nil),                   // 31: g8e.operator.v1.FetchLogsResult
+	(*AuditWebSession)(nil),                   // 32: g8e.operator.v1.AuditWebSession
+	(*AuditFileMutation)(nil),                 // 33: g8e.operator.v1.AuditFileMutation
+	(*AuditEvent)(nil),                        // 34: g8e.operator.v1.AuditEvent
+	(*FetchHistoryResult)(nil),                // 35: g8e.operator.v1.FetchHistoryResult
+	(*FileHistoryEntry)(nil),                  // 36: g8e.operator.v1.FileHistoryEntry
+	(*FetchFileHistoryResult)(nil),            // 37: g8e.operator.v1.FetchFileHistoryResult
+	(*RestoreFileResult)(nil),                 // 38: g8e.operator.v1.RestoreFileResult
+	(*FileDiffEntry)(nil),                     // 39: g8e.operator.v1.FileDiffEntry
+	(*FetchFileDiffResult)(nil),               // 40: g8e.operator.v1.FetchFileDiffResult
+	(*HeartbeatResult)(nil),                   // 41: g8e.operator.v1.HeartbeatResult
+	(*SystemIdentity)(nil),                    // 42: g8e.operator.v1.SystemIdentity
+	(*NetworkInterface)(nil),                  // 43: g8e.operator.v1.NetworkInterface
+	(*NetworkInfo)(nil),                       // 44: g8e.operator.v1.NetworkInfo
+	(*CapabilityFlags)(nil),                   // 45: g8e.operator.v1.CapabilityFlags
+	(*VersionInfo)(nil),                       // 46: g8e.operator.v1.VersionInfo
+	(*UptimeInfo)(nil),                        // 47: g8e.operator.v1.UptimeInfo
+	(*PerformanceMetrics)(nil),                // 48: g8e.operator.v1.PerformanceMetrics
+	(*OSDetails)(nil),                         // 49: g8e.operator.v1.OSDetails
+	(*UserDetails)(nil),                       // 50: g8e.operator.v1.UserDetails
+	(*DiskDetails)(nil),                       // 51: g8e.operator.v1.DiskDetails
+	(*MemoryDetails)(nil),                     // 52: g8e.operator.v1.MemoryDetails
+	(*EnvironmentDetails)(nil),                // 53: g8e.operator.v1.EnvironmentDetails
+	(*FingerprintDetails)(nil),                // 54: g8e.operator.v1.FingerprintDetails
+	nil,                                       // 55: g8e.operator.v1.CommandRequested.EnvironmentEntry
 }
 var file_operator_proto_depIdxs = []int32{
-	53, // 0: g8e.operator.v1.CommandRequested.environment:type_name -> g8e.operator.v1.CommandRequested.EnvironmentEntry
+	55, // 0: g8e.operator.v1.CommandRequested.environment:type_name -> g8e.operator.v1.CommandRequested.EnvironmentEntry
 	0,  // 1: g8e.operator.v1.CommandResult.status:type_name -> g8e.operator.v1.ExecutionStatus
 	0,  // 2: g8e.operator.v1.FsListResult.status:type_name -> g8e.operator.v1.ExecutionStatus
-	20, // 3: g8e.operator.v1.FsListResult.entries:type_name -> g8e.operator.v1.FsEntry
+	22, // 3: g8e.operator.v1.FsListResult.entries:type_name -> g8e.operator.v1.FsEntry
 	0,  // 4: g8e.operator.v1.FsReadResult.status:type_name -> g8e.operator.v1.ExecutionStatus
 	0,  // 5: g8e.operator.v1.FsGrepResult.status:type_name -> g8e.operator.v1.ExecutionStatus
-	23, // 6: g8e.operator.v1.FsGrepResult.matches:type_name -> g8e.operator.v1.FsGrepMatch
+	25, // 6: g8e.operator.v1.FsGrepResult.matches:type_name -> g8e.operator.v1.FsGrepMatch
 	0,  // 7: g8e.operator.v1.FileEditResult.status:type_name -> g8e.operator.v1.ExecutionStatus
 	0,  // 8: g8e.operator.v1.ExecutionStatusUpdate.status:type_name -> g8e.operator.v1.ExecutionStatus
 	0,  // 9: g8e.operator.v1.PortCheckResult.status:type_name -> g8e.operator.v1.ExecutionStatus
-	27, // 10: g8e.operator.v1.PortCheckResult.results:type_name -> g8e.operator.v1.PortCheckEntry
-	31, // 11: g8e.operator.v1.AuditEvent.file_mutations:type_name -> g8e.operator.v1.AuditFileMutation
-	30, // 12: g8e.operator.v1.FetchHistoryResult.web_session:type_name -> g8e.operator.v1.AuditWebSession
-	32, // 13: g8e.operator.v1.FetchHistoryResult.events:type_name -> g8e.operator.v1.AuditEvent
-	34, // 14: g8e.operator.v1.FetchFileHistoryResult.history:type_name -> g8e.operator.v1.FileHistoryEntry
-	37, // 15: g8e.operator.v1.FetchFileDiffResult.diffs:type_name -> g8e.operator.v1.FileDiffEntry
-	37, // 16: g8e.operator.v1.FetchFileDiffResult.diff:type_name -> g8e.operator.v1.FileDiffEntry
-	40, // 17: g8e.operator.v1.HeartbeatResult.system_identity:type_name -> g8e.operator.v1.SystemIdentity
-	42, // 18: g8e.operator.v1.HeartbeatResult.network_info:type_name -> g8e.operator.v1.NetworkInfo
-	44, // 19: g8e.operator.v1.HeartbeatResult.version_info:type_name -> g8e.operator.v1.VersionInfo
-	45, // 20: g8e.operator.v1.HeartbeatResult.uptime_info:type_name -> g8e.operator.v1.UptimeInfo
-	46, // 21: g8e.operator.v1.HeartbeatResult.performance_metrics:type_name -> g8e.operator.v1.PerformanceMetrics
-	47, // 22: g8e.operator.v1.HeartbeatResult.os_details:type_name -> g8e.operator.v1.OSDetails
-	48, // 23: g8e.operator.v1.HeartbeatResult.user_details:type_name -> g8e.operator.v1.UserDetails
-	49, // 24: g8e.operator.v1.HeartbeatResult.disk_details:type_name -> g8e.operator.v1.DiskDetails
-	50, // 25: g8e.operator.v1.HeartbeatResult.memory_details:type_name -> g8e.operator.v1.MemoryDetails
-	51, // 26: g8e.operator.v1.HeartbeatResult.environment:type_name -> g8e.operator.v1.EnvironmentDetails
-	43, // 27: g8e.operator.v1.HeartbeatResult.capability_flags:type_name -> g8e.operator.v1.CapabilityFlags
-	52, // 28: g8e.operator.v1.HeartbeatResult.fingerprint_details:type_name -> g8e.operator.v1.FingerprintDetails
-	41, // 29: g8e.operator.v1.NetworkInfo.connectivity_status:type_name -> g8e.operator.v1.NetworkInterface
+	29, // 10: g8e.operator.v1.PortCheckResult.results:type_name -> g8e.operator.v1.PortCheckEntry
+	33, // 11: g8e.operator.v1.AuditEvent.file_mutations:type_name -> g8e.operator.v1.AuditFileMutation
+	32, // 12: g8e.operator.v1.FetchHistoryResult.web_session:type_name -> g8e.operator.v1.AuditWebSession
+	34, // 13: g8e.operator.v1.FetchHistoryResult.events:type_name -> g8e.operator.v1.AuditEvent
+	36, // 14: g8e.operator.v1.FetchFileHistoryResult.history:type_name -> g8e.operator.v1.FileHistoryEntry
+	39, // 15: g8e.operator.v1.FetchFileDiffResult.diffs:type_name -> g8e.operator.v1.FileDiffEntry
+	39, // 16: g8e.operator.v1.FetchFileDiffResult.diff:type_name -> g8e.operator.v1.FileDiffEntry
+	42, // 17: g8e.operator.v1.HeartbeatResult.system_identity:type_name -> g8e.operator.v1.SystemIdentity
+	44, // 18: g8e.operator.v1.HeartbeatResult.network_info:type_name -> g8e.operator.v1.NetworkInfo
+	46, // 19: g8e.operator.v1.HeartbeatResult.version_info:type_name -> g8e.operator.v1.VersionInfo
+	47, // 20: g8e.operator.v1.HeartbeatResult.uptime_info:type_name -> g8e.operator.v1.UptimeInfo
+	48, // 21: g8e.operator.v1.HeartbeatResult.performance_metrics:type_name -> g8e.operator.v1.PerformanceMetrics
+	49, // 22: g8e.operator.v1.HeartbeatResult.os_details:type_name -> g8e.operator.v1.OSDetails
+	50, // 23: g8e.operator.v1.HeartbeatResult.user_details:type_name -> g8e.operator.v1.UserDetails
+	51, // 24: g8e.operator.v1.HeartbeatResult.disk_details:type_name -> g8e.operator.v1.DiskDetails
+	52, // 25: g8e.operator.v1.HeartbeatResult.memory_details:type_name -> g8e.operator.v1.MemoryDetails
+	53, // 26: g8e.operator.v1.HeartbeatResult.environment:type_name -> g8e.operator.v1.EnvironmentDetails
+	45, // 27: g8e.operator.v1.HeartbeatResult.capability_flags:type_name -> g8e.operator.v1.CapabilityFlags
+	54, // 28: g8e.operator.v1.HeartbeatResult.fingerprint_details:type_name -> g8e.operator.v1.FingerprintDetails
+	43, // 29: g8e.operator.v1.NetworkInfo.connectivity_status:type_name -> g8e.operator.v1.NetworkInterface
 	2,  // 30: g8e.operator.v1.OperatorService.ExecuteCommand:input_type -> g8e.operator.v1.CommandRequested
 	3,  // 31: g8e.operator.v1.OperatorService.CancelCommand:input_type -> g8e.operator.v1.CommandCancelRequested
 	4,  // 32: g8e.operator.v1.OperatorService.EditFile:input_type -> g8e.operator.v1.FileEditRequested
 	5,  // 33: g8e.operator.v1.OperatorService.ListFileSystem:input_type -> g8e.operator.v1.FsListRequested
 	6,  // 34: g8e.operator.v1.OperatorService.ReadFileSystem:input_type -> g8e.operator.v1.FsReadRequested
-	19, // 35: g8e.operator.v1.OperatorService.ExecuteCommand:output_type -> g8e.operator.v1.CommandResult
-	19, // 36: g8e.operator.v1.OperatorService.CancelCommand:output_type -> g8e.operator.v1.CommandResult
-	19, // 37: g8e.operator.v1.OperatorService.EditFile:output_type -> g8e.operator.v1.CommandResult
-	19, // 38: g8e.operator.v1.OperatorService.ListFileSystem:output_type -> g8e.operator.v1.CommandResult
-	19, // 39: g8e.operator.v1.OperatorService.ReadFileSystem:output_type -> g8e.operator.v1.CommandResult
+	21, // 35: g8e.operator.v1.OperatorService.ExecuteCommand:output_type -> g8e.operator.v1.CommandResult
+	21, // 36: g8e.operator.v1.OperatorService.CancelCommand:output_type -> g8e.operator.v1.CommandResult
+	21, // 37: g8e.operator.v1.OperatorService.EditFile:output_type -> g8e.operator.v1.CommandResult
+	21, // 38: g8e.operator.v1.OperatorService.ListFileSystem:output_type -> g8e.operator.v1.CommandResult
+	21, // 39: g8e.operator.v1.OperatorService.ReadFileSystem:output_type -> g8e.operator.v1.CommandResult
 	35, // [35:40] is the sub-list for method output_type
 	30, // [30:35] is the sub-list for method input_type
 	30, // [30:30] is the sub-list for extension type_name
@@ -4986,7 +5135,7 @@ func file_operator_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_operator_proto_rawDesc), len(file_operator_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   52,
+			NumMessages:   54,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

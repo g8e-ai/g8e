@@ -114,8 +114,8 @@ scripts/
 
 ## Technical Invariants
 
-### 1. Internal Authentication
-Internal scripts authenticate to Operator listen mode and Dashboard using a shared `X-Internal-Auth` token. This token is stored under `./.g8e/ssl/internal_auth_token` and is rotated via `./g8e security rotate-internal-token`.
+### [DEPRECATED] Internal Authentication
+Internal scripts previously authenticated to Operator listen mode and Dashboard using a shared `X-Internal-Auth` token. This token is being removed in favor of the **Protocol Pivot** model, where every caller authenticates via public enrollment or session primitives.
 
 ### 2. Path Resolution
 All scripts must resolve `PROJECT_ROOT` relative to their own location to ensure they work regardless of the user's current working directory.

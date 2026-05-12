@@ -61,7 +61,8 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config) {
 
 	auth := NewAuthService(db, logger, sslDir)
 	certs := newCertStore(dbDir, sslDir, logger)
-	h := newHTTPHandler(cfg, logger, db, pubsub, auth, certs, func() bool { return true })
+	reg := NewRegistrationService(db, certs, logger)
+	h := newHTTPHandler(cfg, logger, db, pubsub, auth, certs, reg, func() bool { return true })
 	return h, cfg
 }
 
@@ -275,35 +276,40 @@ func TestAuthMiddlewareDeep(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	t.Run("Uninitialized token - allow platform_settings GET", func(t *testing.T) {
+	t.Run("Uninitialized token - Native Registration Path - allow without token", func(t *testing.T) {
 		os.Unsetenv(string(constants.EnvVar.InternalAuthToken))
 		h.db.DocDelete("settings", "platform_settings")
 
-		req := httptest.NewRequest(http.MethodGet, "/db/settings/platform_settings", nil)
+		req := httptest.NewRequest(http.MethodPost, "/auth/link/some-token/register", nil)
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
+		// We expect OK here because our mock handler just returns 200 if it passes middleware.
+		// RegistrationService logic is not called because we are testing the middleware layer.
 		assert.Equal(t, http.StatusOK, rr.Code)
 	})
 
-	t.Run("Uninitialized token - allow platform_settings PUT", func(t *testing.T) {
+	t.Run("Uninitialized token - deny legacy bypasses", func(t *testing.T) {
 		os.Unsetenv(string(constants.EnvVar.InternalAuthToken))
 		h.db.DocDelete("settings", "platform_settings")
 
-		req := httptest.NewRequest(http.MethodPut, "/db/settings/platform_settings", nil)
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
-		assert.Equal(t, http.StatusOK, rr.Code)
-	})
+		paths := []string{
+			"/db/settings/platform_settings",
+			"/kv/some-key",
+			"/ws/pubsub",
+			"/ssl/ca.crt",
+		}
 
-	t.Run("Uninitialized token - deny other paths", func(t *testing.T) {
-		os.Unsetenv(string(constants.EnvVar.InternalAuthToken))
-		h.db.DocDelete("settings", "platform_settings")
-
-		req := httptest.NewRequest(http.MethodGet, "/db/users/u1", nil)
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
-		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.Contains(t, rr.Body.String(), "internal auth token not initialized")
+		for _, path := range paths {
+			method := http.MethodGet
+			if path == "/db/settings/platform_settings" {
+				method = http.MethodPut
+			}
+			req := httptest.NewRequest(method, path, nil)
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+			assert.Equal(t, http.StatusUnauthorized, rr.Code, "Path %s should be denied without token", path)
+			assert.Contains(t, rr.Body.String(), "bypass disabled", "Path %s should have bypass disabled error", path)
+		}
 	})
 
 	t.Run("Initialized token - Valid", func(t *testing.T) {
@@ -791,15 +797,17 @@ func TestWebSocketAuthIntegration(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	})
 
-	t.Run("Bootstrap bypass", func(t *testing.T) {
+	t.Run("Bootstrap bypass removed", func(t *testing.T) {
 		// Remove token from DB and Env
 		h.db.DocDelete("settings", "platform_settings")
 		os.Unsetenv(string(constants.EnvVar.InternalAuthToken))
 
 		ws, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
-		require.NoError(t, err)
-		defer ws.Close()
-		assert.Equal(t, http.StatusSwitchingProtocols, resp.StatusCode)
+		assert.Error(t, err)
+		if ws != nil {
+			ws.Close()
+		}
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	})
 }
 

@@ -15,7 +15,10 @@
  * g8ed Express App Factory
  * 
  * Creates and configures the Express app with all middleware and routes.
- * This allows both production server and integration tests to use the exact same middleware stack.
+ * 
+ * NOTE: g8ed is an optional application-layer adapter. 
+ * Any substrate logic (auth, identity, etc.) must be ported to g8eo (Phase 4).
+ * Internal-origin trust (X-Internal-Auth) is scheduled for removal.
  */
 
 import express from 'express';

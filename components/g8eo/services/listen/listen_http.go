@@ -40,10 +40,11 @@ type HTTPHandler struct {
 	pubsub  *PubSubBroker
 	auth    *AuthService
 	certs   *CertStore
+	reg     *RegistrationService
 	isReady func() bool
 }
 
-func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker, auth *AuthService, certs *CertStore, isReady func() bool) *HTTPHandler {
+func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker, auth *AuthService, certs *CertStore, reg *RegistrationService, isReady func() bool) *HTTPHandler {
 	return &HTTPHandler{
 		cfg:     cfg,
 		logger:  logger,
@@ -51,6 +52,7 @@ func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *ListenDBService
 		pubsub:  pubsub,
 		auth:    auth,
 		certs:   certs,
+		reg:     reg,
 		isReady: isReady,
 	}
 }
@@ -65,6 +67,7 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux.Handle("/ws/pubsub", h.auth.WebSocketAuth(http.HandlerFunc(h.pubsub.HandleWebSocket)))
 	mux.HandleFunc("/blob/", h.handleBlob)
 	mux.HandleFunc("/ssl/sign-certificate", h.handleSignCertificate)
+	mux.HandleFunc("/auth/link/", h.handleDeviceLink)
 
 	// authMiddleware must be inside pathTraversalGuard to ensure ".." is caught
 	// before any other processing, but pathTraversalGuard itself doesn't need auth.
@@ -683,6 +686,53 @@ func (h *HTTPHandler) handlePubSubPublish(w http.ResponseWriter, r *http.Request
 
 	receivers := h.pubsub.Publish(req.Channel, dataJSON)
 	jsonResponse(w, http.StatusOK, models.PubSubPublishResponse{Receivers: receivers})
+}
+
+// =============================================================================
+// /auth/link/{token}/register — Device Registration
+// =============================================================================
+
+func (h *HTTPHandler) handleDeviceLink(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/auth/link/")
+	parts := strings.Split(path, "/")
+	if len(parts) < 2 {
+		jsonError(w, http.StatusBadRequest, "invalid device link path")
+		return
+	}
+
+	token := parts[0]
+	action := parts[1]
+
+	if action != "register" {
+		jsonError(w, http.StatusNotFound, "not found")
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	body, err := readBody(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	var req models.OperatorRegistrationRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	resp, err := h.reg.RegisterDevice(token, req)
+	if err != nil {
+		h.logger.Error("Device registration failed", "error", err, "token", token)
+		jsonError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, resp)
 }
 
 func (h *HTTPHandler) handleSignCertificate(w http.ResponseWriter, r *http.Request) {

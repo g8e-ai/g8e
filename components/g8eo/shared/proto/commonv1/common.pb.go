@@ -356,7 +356,9 @@ type L2Metadata struct {
 	// The L2 Tribunal signature (5-agent plurality)
 	TribunalSignature string `protobuf:"bytes,1,opt,name=tribunal_signature,json=tribunalSignature,proto3" json:"tribunal_signature,omitempty"`
 	// List of agent IDs that participated in consensus
-	AgentIds      []string `protobuf:"bytes,2,rep,name=agent_ids,json=agentIds,proto3" json:"agent_ids,omitempty"`
+	AgentIds []string `protobuf:"bytes,2,rep,name=agent_ids,json=agentIds,proto3" json:"agent_ids,omitempty"`
+	// The key identifier used for the signature
+	KeyId         string `protobuf:"bytes,3,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -403,6 +405,13 @@ func (x *L2Metadata) GetAgentIds() []string {
 		return x.AgentIds
 	}
 	return nil
+}
+
+func (x *L2Metadata) GetKeyId() string {
+	if x != nil {
+		return x.KeyId
+	}
+	return ""
 }
 
 type L3Metadata struct {
@@ -521,11 +530,12 @@ const file_common_proto_rawDesc = "" +
 	"\tvalidated\x18\x01 \x01(\bR\tvalidated\x12\x1e\n" +
 	"\n" +
 	"violations\x18\x02 \x03(\tR\n" +
-	"violations\"X\n" +
+	"violations\"o\n" +
 	"\n" +
 	"L2Metadata\x12-\n" +
 	"\x12tribunal_signature\x18\x01 \x01(\tR\x11tribunalSignature\x12\x1b\n" +
-	"\tagent_ids\x18\x02 \x03(\tR\bagentIds\"y\n" +
+	"\tagent_ids\x18\x02 \x03(\tR\bagentIds\x12\x15\n" +
+	"\x06key_id\x18\x03 \x01(\tR\x05keyId\"y\n" +
 	"\n" +
 	"L3Metadata\x12'\n" +
 	"\x0fhuman_signature\x18\x01 \x01(\tR\x0ehumanSignature\x12\x1d\n" +

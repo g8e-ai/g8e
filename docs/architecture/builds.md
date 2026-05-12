@@ -5,7 +5,7 @@ parent: Architecture
 
 # Builds, Dependencies, and Startup Sequence
 
-Last Updated: 2026-05-11
+Last Updated: 2026-05-12
 Version: v0.2.3
 
 This document explains the g8e component dependency chain, the lifecycle of a build, and the host-native startup sequence that establishes the platform's root of trust.
@@ -14,12 +14,12 @@ This document explains the g8e component dependency chain, the lifecycle of a bu
 
 ## Architecture Philosophy
 
-g8e is designed for speed, security, and low-overhead local development. The core platform runs host-native, avoiding the complexity of container orchestration for the primary services.
+g8e is architected as a clean split between a mandatory **Substrate** and an optional **Application Layer**.
 
-- **Host-Native Execution**: All core components (`g8eo`, `g8ee`, `g8ed`) run as native processes on the host.
-- **Root of Trust**: The Operator in `--listen` mode is the foundational service. It generates the platform CA and internal auth tokens upon which all other services depend.
+- **Substrate (Mandatory)**: The Operator (`g8eo`) in `--listen` mode is the foundational service. It generates the platform CA and internal auth tokens and provides the protocol API.
+- **Application Layer (Optional)**: Optional adapters like the Dashboard (`g8ed`) and Engine (`g8ee`) consume the substrate's protocol surface.
+- **Host-Native Execution**: Core components run as native processes on the host.
 - **Zero-Config Discovery**: Services use a standardized local runtime directory (`.g8e/`) for discovery and configuration sharing.
-- **Parallel Convergence**: While services are started in order, they converge asynchronously via health-check polling.
 
 ---
 
@@ -27,9 +27,9 @@ g8e is designed for speed, security, and low-overhead local development. The cor
 
 | Component | Role | Runtime Environment | Build Strategy |
 | :--- | :--- | :--- | :--- |
-| **Operator (g8eo)** | Persistence, Pub/Sub, Root of Trust | Host Go binary | Native Go build via `Makefile` |
-| **Engine (g8ee)** | AI Backend & Workflow Orchestration | Python 3.12 Venv | `pip install` into local `.venv` |
-| **Dashboard (g8ed)** | Web Gateway & GUI | Node 22 | `npm install` for local `node_modules` |
+| **Operator (g8eo)** | **Substrate**: Persistence, Pub/Sub, Root of Trust | Host Go binary | Native Go build via `Makefile` |
+| **Engine (g8ee)** | **Optional Adapter**: AI Backend & Workflow Orchestration | Python 3.12 Venv | `pip install` into local `.venv` |
+| **Dashboard (g8ed)** | **Optional Adapter**: Web Gateway & GUI | Node 22 | `npm install` for local `node_modules` |
 
 ---
 
@@ -53,9 +53,9 @@ On the first boot (or after a `clean`), the Operator in listen mode generates:
 - **Internal Auth Token**: A cryptographically secure token (`internal_auth_token`) used for service-to-service authentication.
 - **Server Certificates**: Leaf certificates for the API and Dashboard.
 
-### 2. Service Initialization
+### 2. Service Initialization (Optional)
 - **Engine (g8ee)**: Starts using its local Python virtual environment. It reads the `internal_auth_token` and trusts the `ca.crt` to communicate with the Operator's internal HTTPS API.
-- **Dashboard (g8ed)**: Starts using Node.js. It requires `cap_net_bind_service` on the `node` binary to bind to privileged ports (80/443). Port 80 serves the **Trust Portal**, while port 443 serves the HTTPS dashboard.
+- **Dashboard (g8ed)**: Starts using Node.js. It requires `cap_net_bind_service` on the `node` binary to bind to privileged ports (80/443).
 
 ### 3. Asynchronous Convergence
 Services do not hard-fail if dependencies are missing at launch. Instead, they poll the internal health-check endpoints:

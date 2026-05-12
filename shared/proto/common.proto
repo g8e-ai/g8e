@@ -79,6 +79,8 @@ message L2Metadata {
   string tribunal_signature = 1;
   // List of agent IDs that participated in consensus
   repeated string agent_ids = 2;
+  // The key identifier used for the signature
+  string key_id = 3;
 }
 
 message L3Metadata {
