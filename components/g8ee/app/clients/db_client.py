@@ -34,7 +34,7 @@ import aiohttp
 
 from app.models.settings import ListenSettings
 from app.services.infra.settings_service import SettingsService
-from app.constants import BatchWriteOpType, INTERNAL_AUTH_HEADER
+from app.constants import BatchWriteOpType, INTERNAL_AUTH_HEADER, OPERATOR_SESSION_ID_HEADER, OPERATOR_API_KEY_HEADER
 from app.errors import (
     DatabaseError,
     ErrorCode,
@@ -55,6 +55,8 @@ class DBClient:
         self,
         ca_cert_path: str,
         internal_auth_token: str | None = None,
+        operator_session_id: str | None = None,
+        operator_api_key: str | None = None,
         listen_settings: ListenSettings | None = None,
     ) -> None:
         if internal_auth_token is None:
@@ -69,6 +71,8 @@ class DBClient:
         self._base_url = listen_settings.http_url
         self._ca_cert_path = ca_cert_path
         self._internal_auth_token = internal_auth_token
+        self._operator_session_id = operator_session_id
+        self._operator_api_key = operator_api_key
         self._session: aiohttp.ClientSession | None = None
 
     async def connect(self) -> bool:
@@ -88,8 +92,11 @@ class DBClient:
 
     async def _get_http_session(self) -> aiohttp.ClientSession:
         headers = {}
-        if self._internal_auth_token:
-            headers[INTERNAL_AUTH_HEADER] = self._internal_auth_token
+        # Priority: operator_session_id > operator_api_key
+        if self._operator_session_id:
+            headers[OPERATOR_SESSION_ID_HEADER] = self._operator_session_id
+        elif self._operator_api_key:
+            headers[OPERATOR_API_KEY_HEADER] = self._operator_api_key
 
         if not hasattr(self, "_session") or self._session is None:
             self._session = new_component_http_session(

@@ -23,15 +23,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/gorilla/websocket"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/g8e-ai/g8e/components/g8eo/config"
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/models"
-	pubsubv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/pubsubv1"
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -141,38 +138,8 @@ func TestAuthMiddleware(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	t.Run("Valid token", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/db/users/u1", nil)
-		req.Header.Set(constants.HeaderInternalAuth, token)
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
-		assert.Equal(t, http.StatusOK, rr.Code)
-	})
-
-	t.Run("Invalid token", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/db/users/u1", nil)
-		req.Header.Set(constants.HeaderInternalAuth, "wrong")
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
-		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-	})
-
-	t.Run("Missing token", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/db/users/u1", nil)
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
-		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-	})
-
 	t.Run("Health bypass", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
-		assert.Equal(t, http.StatusOK, rr.Code)
-	})
-
-	t.Run("WebSocket token in query", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/ws/pubsub?token="+token, nil)
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
@@ -181,32 +148,10 @@ func TestAuthMiddleware(t *testing.T) {
 
 func TestAuthWebSocket(t *testing.T) {
 	h, _ := setupTestHTTPHandler(t)
-	token := "ws-token"
-
-	h.db.DocDelete("settings", "platform_settings")
-	err := h.db.DocSet("settings", "platform_settings", mustDocJSON(t, map[string]interface{}{
-		"internal_auth_token": token,
-	}))
-	require.NoError(t, err)
 
 	handler := h.auth.WebSocketAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-
-	t.Run("Token in header", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/ws/pubsub", nil)
-		req.Header.Set(constants.HeaderInternalAuth, token)
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
-		assert.Equal(t, http.StatusOK, rr.Code)
-	})
-
-	t.Run("Token in query", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/ws/pubsub?token="+token, nil)
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
-		assert.Equal(t, http.StatusOK, rr.Code)
-	})
 
 	t.Run("Unauthorized", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/ws/pubsub", nil)
@@ -308,7 +253,12 @@ func TestAuthMiddlewareDeep(t *testing.T) {
 			rr := httptest.NewRecorder()
 			handler.ServeHTTP(rr, req)
 			assert.Equal(t, http.StatusUnauthorized, rr.Code, "Path %s should be denied without token", path)
-			assert.Contains(t, rr.Body.String(), "bypass disabled", "Path %s should have bypass disabled error", path)
+
+			if strings.HasPrefix(path, "/ws/") {
+				assert.Contains(t, rr.Body.String(), "Unauthorized", "Path %s should have plaintext Unauthorized error", path)
+			} else {
+				assert.Contains(t, rr.Body.String(), "protocol authentication required", "Path %s should have protocol auth error", path)
+			}
 		}
 	})
 
@@ -317,10 +267,10 @@ func TestAuthMiddlewareDeep(t *testing.T) {
 		defer os.Unsetenv(string(constants.EnvVar.InternalAuthToken))
 
 		req := httptest.NewRequest(http.MethodGet, "/db/users/u1", nil)
-		req.Header.Set(constants.HeaderInternalAuth, token)
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
-		assert.Equal(t, http.StatusOK, rr.Code)
+		// Now returns 401 because X-Internal-Auth is ignored
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
 	})
 
 	t.Run("Initialized token - Invalid", func(t *testing.T) {
@@ -328,11 +278,10 @@ func TestAuthMiddlewareDeep(t *testing.T) {
 		defer os.Unsetenv(string(constants.EnvVar.InternalAuthToken))
 
 		req := httptest.NewRequest(http.MethodGet, "/db/users/u1", nil)
-		req.Header.Set(constants.HeaderInternalAuth, "wrong-token")
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.Contains(t, rr.Body.String(), "invalid internal auth token")
+		assert.Contains(t, rr.Body.String(), "protocol authentication required")
 	})
 }
 
@@ -731,77 +680,13 @@ func TestHandleBlob(t *testing.T) {
 
 func TestWebSocketAuthIntegration(t *testing.T) {
 	h, _ := setupTestHTTPHandler(t)
-	token := "ws-auth-token"
-
-	// Seed token in DB (clear auto-generated first)
-	h.db.DocDelete("settings", "platform_settings")
-	err := h.db.DocSet("settings", "platform_settings", mustDocJSON(t, map[string]interface{}{
-		"internal_auth_token": token,
-	}))
-	require.NoError(t, err)
 
 	server := httptest.NewServer(h.buildRouter())
 	defer server.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws/pubsub"
 
-	t.Run("Valid token in query", func(t *testing.T) {
-		urlWithToken := wsURL + "?token=" + token
-		ws, resp, err := websocket.DefaultDialer.Dial(urlWithToken, nil)
-		require.NoError(t, err)
-		defer ws.Close()
-		assert.Equal(t, http.StatusSwitchingProtocols, resp.StatusCode)
-
-		// Verify we can send/receive
-		subMsg := &pubsubv1.PubSubMessage{Action: constants.PubSubActionSubscribe, Channel: "test-chan"}
-		data, err := proto.Marshal(subMsg)
-		require.NoError(t, err)
-		err = ws.WriteMessage(websocket.BinaryMessage, data)
-		require.NoError(t, err)
-
-		err = ws.SetReadDeadline(time.Now().Add(2 * time.Second))
-		require.NoError(t, err)
-		_, respData, err := ws.ReadMessage()
-		require.NoError(t, err)
-		var ack pubsubv1.PubSubEvent
-		err = proto.Unmarshal(respData, &ack)
-		require.NoError(t, err)
-		assert.Equal(t, constants.PubSubEventSubscribed, ack.Type)
-	})
-
-	t.Run("Valid token in header", func(t *testing.T) {
-		header := http.Header{}
-		header.Set(constants.HeaderInternalAuth, token)
-		ws, resp, err := websocket.DefaultDialer.Dial(wsURL, header)
-		require.NoError(t, err)
-		defer ws.Close()
-		assert.Equal(t, http.StatusSwitchingProtocols, resp.StatusCode)
-	})
-
-	t.Run("Invalid token", func(t *testing.T) {
-		urlWithToken := wsURL + "?token=wrong"
-		ws, resp, err := websocket.DefaultDialer.Dial(urlWithToken, nil)
-		assert.Error(t, err)
-		if ws != nil {
-			ws.Close()
-		}
-		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-	})
-
 	t.Run("Missing token", func(t *testing.T) {
-		ws, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
-		assert.Error(t, err)
-		if ws != nil {
-			ws.Close()
-		}
-		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-	})
-
-	t.Run("Bootstrap bypass removed", func(t *testing.T) {
-		// Remove token from DB and Env
-		h.db.DocDelete("settings", "platform_settings")
-		os.Unsetenv(string(constants.EnvVar.InternalAuthToken))
-
 		ws, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
 		assert.Error(t, err)
 		if ws != nil {

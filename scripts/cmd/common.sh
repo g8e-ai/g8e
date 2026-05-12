@@ -50,10 +50,19 @@ _moved_to_operator_protocol() {
 
 _operator_curl() {
     local method="$1" path="$2" body="${3:-}"
-    local token
-    token=$(cat "$G8E_SSL_DIR_HOST/internal_auth_token" 2>/dev/null | tr -d ' \n\r' || true)
     local args=(-sk -X "$method" --cacert "$G8E_SSL_DIR_HOST/ca.crt")
-    [[ -n "$token" ]] && args+=(-H "X-Internal-Auth: $token")
+    
+    if [[ -n "$OPERATOR_SESSION_ID" ]]; then
+        args+=(-H "X-G8E-Operator-Session-ID: $OPERATOR_SESSION_ID")
+    elif [[ -n "$OPERATOR_API_KEY" ]]; then
+        args+=(-H "X-G8E-Operator-API-Key: $OPERATOR_API_KEY")
+    else
+        # Fallback to internal token if no session/key (bootstrap phase)
+        local token
+        token=$(cat "$G8E_SSL_DIR_HOST/internal_auth_token" 2>/dev/null | tr -d ' \n\r' || true)
+        [[ -n "$token" ]] && args+=(-H "X-Internal-Auth: $token")
+    fi
+
     args+=(-H "Content-Type: application/json")
     [[ -n "$body" ]] && args+=(-d "$body")
     curl "${args[@]}" "$OPERATOR_HTTP_URL$path"

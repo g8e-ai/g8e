@@ -25,7 +25,7 @@
 
 import { logger } from '../../utils/logger.js';
 import { OPERATOR_HTTP_TIMEOUT_MS } from '../../constants/http_client.js';
-import { HTTP_INTERNAL_AUTH_HEADER, HTTP_CONTENT_TYPE_HEADER } from '../../constants/headers.js';
+import { HTTP_INTERNAL_AUTH_HEADER, HTTP_OPERATOR_SESSION_ID_HEADER, HTTP_OPERATOR_API_KEY_HEADER, HTTP_CONTENT_TYPE_HEADER } from '../../constants/headers.js';
 
 class OperatorHttpError extends Error {
     constructor(message, status) {
@@ -40,23 +40,32 @@ class OperatorHttpClient {
      * @param {object} config
      * @param {string} config.listenUrl - Base URL of operator (e.g. $G8E_INTERNAL_HTTP_URL)
      * @param {string} [config.component] - Client component name for log prefixes
-     * @param {string} [config.internalAuthToken] - Shared secret for operator authentication
+     * @param {string} [config.internalAuthToken] - Shared secret for operator authentication (fallback)
+     * @param {string} [config.operatorSessionId] - Operator session ID for protocol auth
+     * @param {string} [config.operatorApiKey] - Operator API key for protocol auth
      * @param {string} [config.caCertPath] - Path to CA certificate for TLS verification
      */
-    constructor({ listenUrl, component = 'OPERATOR-HTTP', internalAuthToken = null, caCertPath = null } = {}) {
+    constructor({ listenUrl, component = 'OPERATOR-HTTP', internalAuthToken = null, operatorSessionId = null, operatorApiKey = null, caCertPath = null } = {}) {
         if (!listenUrl) {
             throw new Error('OperatorHttpClient: listenUrl is required');
         }
         this.listenUrl = listenUrl.replace(/\/$/, '');
         this.component = component;
         this.internalAuthToken = internalAuthToken;
+        this.operatorSessionId = operatorSessionId;
+        this.operatorApiKey = operatorApiKey;
         this.caCertPath = caCertPath;
         this._terminated = false;
     }
 
     _headers() {
         const headers = { [HTTP_CONTENT_TYPE_HEADER]: 'application/json' };
-        if (this.internalAuthToken) {
+        // Priority: operatorSessionId > operatorApiKey > internalAuthToken (fallback)
+        if (this.operatorSessionId) {
+            headers[HTTP_OPERATOR_SESSION_ID_HEADER] = this.operatorSessionId;
+        } else if (this.operatorApiKey) {
+            headers[HTTP_OPERATOR_API_KEY_HEADER] = this.operatorApiKey;
+        } else if (this.internalAuthToken) {
             headers[HTTP_INTERNAL_AUTH_HEADER] = this.internalAuthToken;
         }
         return headers;

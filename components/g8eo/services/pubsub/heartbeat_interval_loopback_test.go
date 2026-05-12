@@ -59,7 +59,7 @@ func drainUntilQuiet(ch <-chan []byte, quietWindow time.Duration) {
 	}
 }
 
-func mustUnmarshalHeartbeatResult(t *testing.T, raw []byte) (*commonv1.UniversalEnvelope, *pb.HeartbeatResult) {
+func mustUnmarshalHeartbeatResult(t *testing.T, raw []byte) (*commonv1.GovernanceEnvelope, *pb.HeartbeatResult) {
 	t.Helper()
 	env := testutil.MustUnmarshalUniversalEnvelope(t, raw)
 	var hb pb.HeartbeatResult

@@ -15,6 +15,7 @@ package listen
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -22,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
+	"github.com/g8e-ai/g8e/components/g8eo/models"
 )
 
 // AuthService handles internal authentication for the Listen service.
@@ -79,6 +81,73 @@ func (s *AuthService) GetInternalAuthToken() string {
 	return s.tokenProvider()
 }
 
+// ValidateOperatorSession checks if a session ID is valid and returns the operator document.
+func (s *AuthService) ValidateOperatorSession(sessionID string) (*models.OperatorDocumentGo, error) {
+	if sessionID == "" {
+		return nil, fmt.Errorf("missing session id")
+	}
+
+	filters := []models.DocFilter{
+		{Field: "operator_session_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", sessionID))},
+		{Field: "status", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", constants.Status.OperatorStatus.Active))},
+	}
+
+	docs, err := s.db.DocQuery("operators", filters, "", 1)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(docs) == 0 {
+		return nil, fmt.Errorf("invalid or expired operator session")
+	}
+
+	// Convert Document to OperatorDocumentGo
+	b, err := json.Marshal(docs[0].ForWire())
+	if err != nil {
+		return nil, err
+	}
+
+	var op models.OperatorDocumentGo
+	if err := json.Unmarshal(b, &op); err != nil {
+		return nil, err
+	}
+
+	return &op, nil
+}
+
+// ValidateAPIKey checks if an API key is valid and returns the operator document.
+func (s *AuthService) ValidateAPIKey(apiKey string) (*models.OperatorDocumentGo, error) {
+	if apiKey == "" {
+		return nil, fmt.Errorf("missing api key")
+	}
+
+	filters := []models.DocFilter{
+		{Field: "operator_api_key", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", apiKey))},
+	}
+
+	docs, err := s.db.DocQuery("operators", filters, "", 1)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(docs) == 0 {
+		return nil, fmt.Errorf("invalid api key")
+	}
+
+	// Convert Document to OperatorDocumentGo
+	b, err := json.Marshal(docs[0].ForWire())
+	if err != nil {
+		return nil, err
+	}
+
+	var op models.OperatorDocumentGo
+	if err := json.Unmarshal(b, &op); err != nil {
+		return nil, err
+	}
+
+	return &op, nil
+}
+
 // Middleware returns an http.Handler that authenticates requests.
 func (s *AuthService) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -88,9 +157,25 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		token := r.Header.Get(constants.HeaderInternalAuth)
-		if token == "" && strings.HasPrefix(r.URL.Path, "/ws/") {
-			token = r.URL.Query().Get("token")
+		// [PIVOT] Support public protocol auth surface (Phase 4)
+		// We prioritize session/key auth.
+		sessionID := r.Header.Get(constants.HeaderOperatorSessionID)
+		apiKey := r.Header.Get(constants.HeaderOperatorAPIKey)
+
+		if sessionID != "" {
+			if _, err := s.ValidateOperatorSession(sessionID); err == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+			s.logger.Warn("Invalid operator session attempt", "session_id", sessionID[:8]+"...")
+		}
+
+		if apiKey != "" {
+			if _, err := s.ValidateAPIKey(apiKey); err == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+			s.logger.Warn("Invalid API key attempt", "api_key", apiKey[:8]+"...")
 		}
 
 		// [PIVOT] Native Registration Path (Phase 4)
@@ -102,42 +187,16 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		expected := s.GetInternalAuthToken()
+		s.logger.Warn("Unauthorized internal API access attempt (protocol auth required)", "path", r.URL.Path, "method", r.Method)
 
-		// [PIVOT] Remove substrate privilege bypass (Phase 4)
-		// The following bypasses for uninitialized tokens are being removed
-		// to enforce zero-trust substrate.
-		if expected == "" {
-			// [REMOVED] Allow access to platform_settings...
-			// [REMOVED] Allow KV operations...
-			// [REMOVED] Allow g8ed to connect via WebSocket...
-			// [REMOVED] Allow CA certificate fetching...
-
-			s.logger.Warn("Unauthorized internal API access attempt (token not initialized or bypass removed)", "path", r.URL.Path, "method", r.Method)
-			s.jsonError(w, http.StatusUnauthorized, "internal auth token not initialized or privileged bypass disabled")
+		// For WebSockets, return a plain text error for 401.
+		// Handshake fails if a JSON body is returned instead of just the 401 status.
+		if strings.HasPrefix(r.URL.Path, "/ws/") {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
-		if token != expected {
-			s.logger.Warn("Unauthorized internal API access attempt",
-				"path", r.URL.Path,
-				"method", r.Method,
-				"ip", r.RemoteAddr,
-				"token_len", len(token),
-				"expected_len", len(expected))
-
-			// For WebSockets, return a plain text error for 401.
-			// Handshake fails if a JSON body is returned instead of just the 401 status.
-			if strings.HasPrefix(r.URL.Path, "/ws/") {
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
-				return
-			}
-
-			s.jsonError(w, http.StatusUnauthorized, "invalid internal auth token")
-			return
-		}
-
-		next.ServeHTTP(w, r)
+		s.jsonError(w, http.StatusUnauthorized, "protocol authentication required")
 	})
 }
 

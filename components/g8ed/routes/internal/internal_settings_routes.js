@@ -33,7 +33,7 @@ import { ErrorResponse, InternalSettingsResponse, SettingsUpdateResponse } from 
  */
 export function createInternalSettingsRouter({ services, authorizationMiddleware }) {
     const { settingsService } = services;
-    const { requireInternalOrigin, requireInternalOrUserAuth } = authorizationMiddleware;
+    const { requireInternalOrUserAuth } = authorizationMiddleware;
     const router = express.Router();
 
     /**

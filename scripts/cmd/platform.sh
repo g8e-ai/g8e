@@ -28,7 +28,7 @@ case "$SUB" in
             settings)
                 _banner "platform settings ${@:2}"
                 _ensure_operator
-                _requires_operator_route "/api/settings" ;;
+                _operator_curl GET "/api/settings" ;;
             logs)
                 _banner "platform logs"
                 tail -f "$G8E_RUNTIME_DIR/logs/"*.log ;;

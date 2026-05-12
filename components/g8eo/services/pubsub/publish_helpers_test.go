@@ -150,7 +150,7 @@ func TestSetExecutionIDOnPayload_RestoreFileResult(t *testing.T) {
 }
 
 // The LFAA publish path (file reads, port checks, fetch logs/history, restore)
-// must use UniversalEnvelope for cross-component consistency.
+// must use GovernanceEnvelope for cross-component consistency.
 func TestPublishLFAA_EnvelopeStructure(t *testing.T) {
 	ctx := context.Background()
 	logger := testutil.NewTestLogger()
@@ -163,7 +163,7 @@ func TestPublishLFAA_EnvelopeStructure(t *testing.T) {
 		OperatorSessionID: "opsess-lfaa",
 	}
 
-	t.Run("typed response uses UniversalEnvelope", func(t *testing.T) {
+	t.Run("typed response uses GovernanceEnvelope", func(t *testing.T) {
 		client := NewMockOperatorPubSubClient()
 		defer client.Close()
 		cfg := testutil.NewTestConfig(t)
@@ -183,7 +183,7 @@ func TestPublishLFAA_EnvelopeStructure(t *testing.T) {
 		assert.Equal(t, "opsess-lfaa", env.OperatorSessionId)
 	})
 
-	t.Run("error response uses UniversalEnvelope", func(t *testing.T) {
+	t.Run("error response uses GovernanceEnvelope", func(t *testing.T) {
 		client := NewMockOperatorPubSubClient()
 		defer client.Close()
 		cfg := testutil.NewTestConfig(t)

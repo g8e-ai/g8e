@@ -6,7 +6,7 @@ parent: Architecture
 # g8e Event Specification
 
 Last Updated: 2026-05-12
-Version: v0.2.3
+Version: v0.2.4
 
 The g8e platform uses a unified, hierarchical event system to drive state transitions and lifecycle signals. All cross-component traffic is governed by the **Universal Envelope**, a Protobuf-first transport wrapper that carries governance metadata, state roots, and typed payloads.
 
@@ -41,7 +41,7 @@ Events in g8e are the heartbeat of the system's reactivity. The architecture fol
 
 ## The Universal Envelope
 
-The `UniversalEnvelope` (defined in `shared/proto/common.proto`) is the canonical wrapper for all platform transactions.
+The `GovernanceEnvelope` (defined in `shared/proto/common.proto`) is the canonical wrapper for all platform transactions.
 
 | Field | Description |
 |-------|-------------|

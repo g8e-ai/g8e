@@ -30,8 +30,6 @@ export function createSSERouter({
 }) {
     const { sseService } = services;
     const { requireAuth } = authMiddleware;
-    const { requireInternalOrigin } = authorizationMiddleware;
-    const { sseRateLimiter } = rateLimiters;
     const router = express.Router();
 
     // Use a factory function to get OperatorService to avoid circular dependencies
@@ -216,7 +214,7 @@ export function createSSERouter({
     });
 
 
-    router.get(SSEPaths.HEALTH, requireInternalOrigin, async (req, res) => {
+    router.get(SSEPaths.HEALTH, async (req, res) => {
         const stats = sseService.getStats();
         
         res.json(new SSEHealthResponse({

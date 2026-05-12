@@ -165,7 +165,7 @@ func (m *MockResultsPublisher) PublishFsGrepResult(ctx context.Context, result p
 func (m *MockResultsPublisher) PublishExecutionStatus(ctx context.Context, status proto.Message) error {
 	return nil
 }
-func (m *MockResultsPublisher) PublishResult(ctx context.Context, env *commonv1.UniversalEnvelope) error {
+func (m *MockResultsPublisher) PublishResult(ctx context.Context, env *commonv1.GovernanceEnvelope) error {
 	return nil
 }
 func (m *MockResultsPublisher) PublishHeartbeat(ctx context.Context, heartbeat proto.Message) error {

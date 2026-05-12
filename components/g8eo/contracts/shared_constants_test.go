@@ -398,26 +398,28 @@ type sharedPubSubJSON struct {
 // ---------------------------------------------------------------------------
 
 type sharedHeadersJSON struct {
-	G8eSessionID       string `json:"x-g8e.session-id"`
-	G8eUserID          string `json:"x-g8e.user-id"`
-	G8eOrganizationID  string `json:"x-g8e.organization-id"`
-	G8eCaseID          string `json:"x-g8e.case-id"`
-	G8eInvestigationID string `json:"x-g8e.investigation-id"`
-	G8eTaskID          string `json:"x-g8e.task-id"`
-	G8eSourceComponent string `json:"x-g8e.source-component"`
-	G8eBoundOperators  string `json:"x-g8e.bound-operators"`
-	G8eRequestID       string `json:"x-g8e.execution-id"`
-	G8eService         string `json:"x-g8e.service"`
-	G8eClient          string `json:"x-g8e.client"`
-	G8eOperatorStatus  string `json:"x-g8e.operator-status"`
-	Authorization      string `json:"http.authorization"`
-	UserAgent          string `json:"http.user-agent"`
-	ContentType        string `json:"http.content-type"`
-	ContentDisposition string `json:"http.content-disposition"`
-	ContentLength      string `json:"http.content-length"`
-	XForwardedProto    string `json:"http.x-forwarded-proto"`
-	XForwardedHost     string `json:"http.x-forwarded-host"`
-	XRequestTimestamp  string `json:"http.x-request-timestamp"`
+	G8eSessionID         string `json:"x-g8e.session-id"`
+	G8eOperatorSessionID string `json:"x-g8e.operator-session-id"`
+	G8eOperatorAPIKey    string `json:"x-g8e.operator-api-key"`
+	G8eUserID            string `json:"x-g8e.user-id"`
+	G8eOrganizationID    string `json:"x-g8e.organization-id"`
+	G8eCaseID            string `json:"x-g8e.case-id"`
+	G8eInvestigationID   string `json:"x-g8e.investigation-id"`
+	G8eTaskID            string `json:"x-g8e.task-id"`
+	G8eSourceComponent   string `json:"x-g8e.source-component"`
+	G8eBoundOperators    string `json:"x-g8e.bound-operators"`
+	G8eRequestID         string `json:"x-g8e.execution-id"`
+	G8eService           string `json:"x-g8e.service"`
+	G8eClient            string `json:"x-g8e.client"`
+	G8eOperatorStatus    string `json:"x-g8e.operator-status"`
+	Authorization        string `json:"http.authorization"`
+	UserAgent            string `json:"http.user-agent"`
+	ContentType          string `json:"http.content-type"`
+	ContentDisposition   string `json:"http.content-disposition"`
+	ContentLength        string `json:"http.content-length"`
+	XForwardedProto      string `json:"http.x-forwarded-proto"`
+	XForwardedHost       string `json:"http.x-forwarded-host"`
+	XRequestTimestamp    string `json:"http.x-request-timestamp"`
 }
 
 func loadEventsJSON(t *testing.T) sharedEventsJSON {
@@ -668,6 +670,8 @@ func TestSharedHeadersMatchGoConstants(t *testing.T) {
 
 	t.Run("x-g8e headers", func(t *testing.T) {
 		assert.Equal(t, h.G8eSessionID, constants.HeaderG8eWebSessionID)
+		assert.Equal(t, h.G8eOperatorSessionID, constants.HeaderOperatorSessionID)
+		assert.Equal(t, h.G8eOperatorAPIKey, constants.HeaderOperatorAPIKey)
 		assert.Equal(t, h.G8eUserID, constants.HeaderG8eUserID)
 		assert.Equal(t, h.G8eOrganizationID, constants.HeaderG8eOrganizationID)
 		assert.Equal(t, h.G8eCaseID, constants.HeaderG8eCaseID)

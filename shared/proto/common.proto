@@ -22,7 +22,7 @@ enum Component {
 }
 
 // Universal Envelope for all BFT transactions
-message UniversalEnvelope {
+message GovernanceEnvelope {
   // Unique per-message identifier (UUID v4)
   string id = 1;
   
@@ -49,6 +49,12 @@ message UniversalEnvelope {
   // Merkle root of the fleet state at time of generation
   string state_merkle_root = 12;
   
+  // Transaction expiry timestamp (UTC)
+  google.protobuf.Timestamp expires_at = 15;
+
+  // Replay protection (random salt or monotonic counter)
+  string nonce = 16;
+
   // Governance Metadata (L1/L2/L3)
   GovernanceMetadata governance = 13;
   

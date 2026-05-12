@@ -35,7 +35,7 @@ func BuildUniversalEnvelope(
 	eventType string,
 	payload proto.Message,
 	originalID string, // Optional: for correlation if needed, but normally use payload.execution_id
-) (*commonv1.UniversalEnvelope, error) {
+) (*commonv1.GovernanceEnvelope, error) {
 	payloadBytes, err := proto.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %w", err)
@@ -47,7 +47,7 @@ func BuildUniversalEnvelope(
 		id = uuid.NewString()
 	}
 
-	env := &commonv1.UniversalEnvelope{
+	env := &commonv1.GovernanceEnvelope{
 		Id:                id,
 		Timestamp:         timestamppb.Now(),
 		SourceComponent:   commonv1.Component_COMPONENT_G8EO,
@@ -116,8 +116,14 @@ func validateL1Governance(msg proto.Message) []string {
 	return violations
 }
 
+// MaxPayloadSize is the maximum allowed size for a protobuf payload (5MB).
+const MaxPayloadSize = 5 * 1024 * 1024
+
 // unmarshalPayload converts the raw bytes into a typed proto.Message for the given event type.
 func unmarshalPayload(eventType string, payload []byte) (proto.Message, error) {
+	if len(payload) > MaxPayloadSize {
+		return nil, fmt.Errorf("payload exceeds maximum size limit (%d bytes)", MaxPayloadSize)
+	}
 	var m proto.Message
 	switch eventType {
 	case constants.Event.Operator.HeartbeatRequested:

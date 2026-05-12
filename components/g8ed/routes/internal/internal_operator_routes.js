@@ -26,13 +26,13 @@ import { ErrorResponse, OperatorListResponse, OperatorSlotsResponse } from '../.
  */
 export function createInternalOperatorRouter({ services, authorizationMiddleware }) {
     const { operatorService } = services;
-    const { requireInternalOrigin, requireInternalOrUserAuth } = authorizationMiddleware;
+    const { requireInternalOrUserAuth } = authorizationMiddleware;
     const router = express.Router();
 
     /**
      * GET /api/internal/operators
      */
-    router.get('/', requireInternalOrigin, async (req, res, next) => {
+    router.get('/', requireInternalOrUserAuth, async (req, res, next) => {
         try {
             const allStatuses = req.query.all === 'true';
             logger.info('[INTERNAL-HTTP] Listing all operators', { allStatuses });
@@ -64,7 +64,7 @@ export function createInternalOperatorRouter({ services, authorizationMiddleware
     /**
      * POST /api/internal/operators/:operatorId/refresh-key
      */
-    router.post('/:operatorId/refresh-key', requireInternalOrigin, async (req, res, next) => {
+    router.post('/:operatorId/refresh-key', requireInternalOrUserAuth, async (req, res, next) => {
         try {
             const { operatorId } = req.params;
             const { user_id } = req.body || {};
@@ -121,7 +121,7 @@ export function createInternalOperatorRouter({ services, authorizationMiddleware
     /**
      * POST /api/internal/operators/:operatorId/reset-cache
      */
-    router.post('/:operatorId/reset-cache', requireInternalOrigin, async (req, res, next) => {
+    router.post('/:operatorId/reset-cache', requireInternalOrUserAuth, async (req, res, next) => {
         try {
             const { operatorId: operator_id } = req.params;
 
@@ -172,7 +172,7 @@ export function createInternalOperatorRouter({ services, authorizationMiddleware
      * Dedicated E2E cleanup endpoint. Deletes the operator document via CacheAside
      * without recreating it. Does not change API keys or platform_settings.
      */
-    router.post('/:operatorId/terminate', requireInternalOrigin, async (req, res, next) => {
+    router.post('/:operatorId/terminate', requireInternalOrUserAuth, async (req, res, next) => {
         try {
             const { operatorId: operator_id } = req.params;
 
@@ -217,7 +217,7 @@ export function createInternalOperatorRouter({ services, authorizationMiddleware
     /**
      * GET /api/internal/operators/user/:userId
      */
-    router.get('/user/:userId', requireInternalOrigin, async (req, res, next) => {
+    router.get('/user/:userId', requireInternalOrUserAuth, async (req, res, next) => {
         try {
             const { userId } = req.params;
             const allStatuses = req.query.all === 'true';
@@ -253,7 +253,7 @@ export function createInternalOperatorRouter({ services, authorizationMiddleware
     /**
      * POST /api/internal/operators/user/:userId/initialize-slots
      */
-    router.post('/user/:userId/initialize-slots', requireInternalOrigin, async (req, res, next) => {
+    router.post('/user/:userId/initialize-slots', requireInternalOrUserAuth, async (req, res, next) => {
         try {
             const { userId } = req.params;
             const { organization_id } = req.body;
@@ -288,7 +288,7 @@ export function createInternalOperatorRouter({ services, authorizationMiddleware
     /**
      * GET /api/internal/operators/:operatorId/status
      */
-    router.get('/:operatorId/status', requireInternalOrigin, async (req, res, next) => {
+    router.get('/:operatorId/status', requireInternalOrUserAuth, async (req, res, next) => {
         try {
             const { operatorId } = req.params;
 
@@ -323,7 +323,7 @@ export function createInternalOperatorRouter({ services, authorizationMiddleware
     /**
      * GET /api/internal/operators/:operatorId
      */
-    router.get('/:operatorId', requireInternalOrigin, async (req, res, next) => {
+    router.get('/:operatorId', requireInternalOrUserAuth, async (req, res, next) => {
         try {
             const { operatorId } = req.params;
 
@@ -350,7 +350,7 @@ export function createInternalOperatorRouter({ services, authorizationMiddleware
     /**
      * GET /api/internal/operators/:operatorId/with-session-context
      */
-    router.get('/:operatorId/with-session-context', requireInternalOrigin, async (req, res, next) => {
+    router.get('/:operatorId/with-session-context', requireInternalOrUserAuth, async (req, res, next) => {
         try {
             const { operatorId } = req.params;
 
@@ -380,7 +380,7 @@ export function createInternalOperatorRouter({ services, authorizationMiddleware
      * POST /api/internal/operators/:operatorId/grant-intent
      */
     const grantIntentPath = InternalApiPaths.g8ed.grant_intent.replace('{operator_id}', ':operatorId').split('/').pop();
-    router.post(`/:operatorId/${grantIntentPath}`, requireInternalOrigin, async (req, res, next) => {
+    router.post(`/:operatorId/${grantIntentPath}`, requireInternalOrUserAuth, async (req, res, next) => {
         try {
             const { operatorId } = req.params;
             const { intent } = IntentRequest.parse(req.body);
@@ -419,7 +419,7 @@ export function createInternalOperatorRouter({ services, authorizationMiddleware
      * POST /api/internal/operators/:operatorId/revoke-intent
      */
     const revokeIntentPath = InternalApiPaths.g8ed.revoke_intent.replace('{operator_id}', ':operatorId').split('/').pop();
-    router.post(`/:operatorId/${revokeIntentPath}`, requireInternalOrigin, async (req, res, next) => {
+    router.post(`/:operatorId/${revokeIntentPath}`, requireInternalOrUserAuth, async (req, res, next) => {
         try {
             const { operatorId } = req.params;
             const { intent } = IntentRequest.parse(req.body);

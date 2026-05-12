@@ -61,6 +61,8 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/health", h.handleHealth)
+	mux.HandleFunc("/api/settings", h.handleSettings)
+	mux.HandleFunc("/api/operators/reauth", h.handleReauth)
 	mux.HandleFunc("/db/", h.handleDB)
 	mux.HandleFunc("/kv/", h.handleKV)
 	mux.HandleFunc("/pubsub/publish", h.handlePubSubPublish)
@@ -150,6 +152,63 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 // DELETE /db/{collection}/{id}       → delete document
 // POST   /db/{collection}/_query     → query documents
 // =============================================================================
+
+func (h *HTTPHandler) handleSettings(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		doc, err := h.db.DocGet("settings", "platform_settings")
+		if err != nil {
+			jsonError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if doc == nil {
+			jsonError(w, http.StatusNotFound, "settings not found")
+			return
+		}
+		jsonResponse(w, http.StatusOK, doc.ForWire())
+	case http.MethodPut, http.MethodPatch:
+		body, err := readBody(r)
+		if err != nil {
+			jsonError(w, http.StatusBadRequest, "invalid body")
+			return
+		}
+		var err2 error
+		if r.Method == http.MethodPut {
+			err2 = h.db.DocSet("settings", "platform_settings", json.RawMessage(body))
+		} else {
+			_, err2 = h.db.DocUpdate("settings", "platform_settings", json.RawMessage(body))
+		}
+		if err2 != nil {
+			jsonError(w, http.StatusInternalServerError, err2.Error())
+			return
+		}
+		jsonResponse(w, http.StatusOK, models.StatusResponse{Status: "ok"})
+	default:
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
+func (h *HTTPHandler) handleReauth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	// Reauth is basically a session refresh. For now, we validate the current session.
+	sessionID := r.Header.Get(constants.HeaderOperatorSessionID)
+	if sessionID == "" {
+		jsonError(w, http.StatusUnauthorized, "missing session id")
+		return
+	}
+	op, err := h.auth.ValidateOperatorSession(sessionID)
+	if err != nil {
+		jsonError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"success":  true,
+		"operator": op,
+	})
+}
 
 func (h *HTTPHandler) handleDB(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/db/")

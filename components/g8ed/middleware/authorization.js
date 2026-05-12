@@ -146,58 +146,16 @@ export function createAuthorizationMiddleware({ operatorService, settingsService
     };
 
     /**
-     * Restrict to internal Docker container calls only (g8ee, g8ep)
-     * 
-     * All containers share INTERNAL_AUTH_TOKEN via the Docker network.
-     * Localhost health checks are allowed without a token (Docker healthcheck runs inside the container).
-     */
-    const requireInternalOrigin = (req, res, next) => {
-        const internalAuthToken = req.headers[INTERNAL_AUTH_HEADER];
-        const expectedToken = settingsService?.getInternalAuthToken() || null;
-
-        if (internalAuthToken && expectedToken) {
-            const tokenBuffer = Buffer.from(internalAuthToken);
-            const expectedBuffer = Buffer.from(expectedToken);
-            if (tokenBuffer.length === expectedBuffer.length &&
-                crypto.timingSafeEqual(tokenBuffer, expectedBuffer)) {
-                return next();
-            }
-        }
-
-        const ip = req.ip?.replace(/^::ffff:/, '') || req.ip;
-        if (process.env.NODE_ENV !== 'production' && (ip === '127.0.0.1' || ip === '::1') && req.originalUrl.startsWith('/health')) {
-            return next();
-        }
-
-        logger.warn('[AUTH] Internal endpoint access denied', {
-            endpoint: req.path,
-            method: req.method,
-            ip: req.ip
-        });
-
-        throw new AuthorizationError(AuthError.FORBIDDEN_INTERNAL);
-    };
-
-    /**
-     * Restrict to internal Docker container calls OR CLI-authenticated calls
-     * 
-     * Accepts either INTERNAL_AUTH_TOKEN (for platform-to-platform calls)
-     * or X-Operator-Session-Id (for CLI scripts authenticated via login).
+     * Restrict to CLI-authenticated calls or protocol API calls.
+     *
+     * Accepts either X-Operator-Session-Id (for CLI scripts authenticated via login)
+     * or X-Operator-API-Key (for protocol-based authentication).
+     *
+     * This completes the migration from requireInternalOrigin to public protocol auth.
      */
     const requireInternalOrUserAuth = async (req, res, next) => {
-        const internalAuthToken = req.headers[INTERNAL_AUTH_HEADER];
-        const expectedToken = settingsService?.getInternalAuthToken() || null;
         const operatorSessionId = req.headers['x-operator-session-id'];
-
-        // Try internal auth token first (platform-to-platform)
-        if (internalAuthToken && expectedToken) {
-            const tokenBuffer = Buffer.from(internalAuthToken);
-            const expectedBuffer = Buffer.from(expectedToken);
-            if (tokenBuffer.length === expectedBuffer.length &&
-                crypto.timingSafeEqual(tokenBuffer, expectedBuffer)) {
-                return next();
-            }
-        }
+        const operatorApiKey = req.headers['x-operator-api-key'];
 
         // Try operator session ID (CLI scripts authenticated via login)
         if (operatorSessionId) {
@@ -213,6 +171,24 @@ export function createAuthorizationMiddleware({ operatorService, settingsService
             } catch (error) {
                 logger.warn('[AUTH] Operator session validation failed', {
                     operatorSessionId,
+                    endpoint: req.path,
+                    error: error.message
+                });
+            }
+        }
+
+        // Try operator API key
+        if (operatorApiKey) {
+            try {
+                // Validate the API key against operator
+                const operator = await operatorService.validateApiKey(operatorApiKey);
+                if (operator) {
+                    req.userId = operator.user_id;
+                    req.operatorId = operator.id;
+                    return next();
+                }
+            } catch (error) {
+                logger.warn('[AUTH] Operator API key validation failed', {
                     endpoint: req.path,
                     error: error.message
                 });
@@ -237,7 +213,6 @@ export function createAuthorizationMiddleware({ operatorService, settingsService
     return {
         requireOwnership,
         requireOperatorOwnership,
-        requireInternalOrigin,
         requireInternalOrUserAuth
     };
 }

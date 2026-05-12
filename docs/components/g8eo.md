@@ -6,7 +6,7 @@ parent: Components
 # g8eo — g8e Operator
 
 Last Updated: 2026-05-11
-Version: v0.2.3
+Version: v0.2.4
 
 g8eo is the Go-based reference implementation of the Operator for the g8e platform. It provides language-agnostic, secure, real-time command execution and file management for remote system operations. In addition to acting as a remote execution agent, it provides the platform's central persistence and messaging backbone when running in Listen Mode.
 
@@ -17,7 +17,7 @@ g8eo is the Go-based reference implementation of the Operator for the g8e platfo
 ## Core Principles
 
 - **Zero-trust security**: Every operation requires authentication; nothing is implicitly trusted.
-- **Protocol-governed execution**: Every command is carried as a serialized Protobuf `UniversalEnvelope` with typed `operator.proto` payload bytes and L1/L2/L3 governance metadata.
+- **Protocol-governed execution**: Every command is carried as a serialized Protobuf `GovernanceEnvelope` with typed `operator.proto` payload bytes and L1/L2/L3 governance metadata.
 - **Data sovereignty**: Command output stays local by default; only metadata travels to the cloud.
 - **Defense in depth**: Multiple security layers — mTLS, certificate pinning, and Sentinel platform-wide protection.
 - **Outbound-only connectivity**: In default mode, g8eo initiates all connections; no inbound ports required.
@@ -59,7 +59,7 @@ g8eo initialization ensures security before any core logic is loaded:
    - **Sentinel**: Activates pre-execution threat detection and post-execution output scrubbing.
 
 ### Command Pipeline & Governance
-g8eo treats all input as untrusted at the protocol boundary. Commands are processed through a strict 3-layer validation hierarchy carried within the `UniversalEnvelope`:
+g8eo treats all input as untrusted at the protocol boundary. Commands are processed through a strict 3-layer validation hierarchy carried within the `GovernanceEnvelope`:
 
 1. **L1 Technical Bedrock (Hard Gates)**: Enforced via Protobuf reflection. g8eo inspects the `operator.proto` payload for fields with `forbidden_patterns` (e.g., `sudo`, `su`, `rm -rf /`). Violations result in immediate rejection.
 2. **L2 Consensus (Tribunal)**: Verified via HMAC-SHA256 signature. When an `auditor_hmac_key` is present in the `ssl/` directory, g8eo rejects any envelope without a valid signature from the AI Tribunal.

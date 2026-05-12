@@ -31,6 +31,6 @@ type ResultsPublisher interface {
 	PublishFsListResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error
 	PublishFsGrepResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error
 	PublishExecutionStatus(ctx context.Context, status proto.Message) error
-	PublishResult(ctx context.Context, env *commonv1.UniversalEnvelope) error
+	PublishResult(ctx context.Context, env *commonv1.GovernanceEnvelope) error
 	PublishHeartbeat(ctx context.Context, heartbeat proto.Message) error
 }

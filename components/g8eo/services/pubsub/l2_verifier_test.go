@@ -39,7 +39,7 @@ func TestVerifyL2Governance(t *testing.T) {
 
 	t.Run("HMAC - Success", func(t *testing.T) {
 		sig := computeL2HMAC(eventType, payload, hmacKey)
-		env := &commonv1.UniversalEnvelope{
+		env := &commonv1.GovernanceEnvelope{
 			EventType: eventType,
 			Payload:   payload,
 			Governance: &commonv1.GovernanceMetadata{
@@ -55,7 +55,7 @@ func TestVerifyL2Governance(t *testing.T) {
 
 	t.Run("HMAC - Failure (Wrong Key)", func(t *testing.T) {
 		sig := computeL2HMAC(eventType, payload, "wrong-key")
-		env := &commonv1.UniversalEnvelope{
+		env := &commonv1.GovernanceEnvelope{
 			EventType: eventType,
 			Payload:   payload,
 			Governance: &commonv1.GovernanceMetadata{
@@ -70,61 +70,57 @@ func TestVerifyL2Governance(t *testing.T) {
 	})
 
 	t.Run("ED25519 - Success with KeyId", func(t *testing.T) {
-		signingPayload := computeL2SigningPayload(eventType, payload)
-		sigBytes := ed25519.Sign(priv, signingPayload)
-		sig := hex.EncodeToString(sigBytes)
-
-		env := &commonv1.UniversalEnvelope{
+		env := &commonv1.GovernanceEnvelope{
+			Id:        "test-id",
 			EventType: eventType,
 			Payload:   payload,
 			Governance: &commonv1.GovernanceMetadata{
 				L2: &commonv1.L2Metadata{
-					TribunalSignature: sig,
-					KeyId:             "agent-1",
+					KeyId: "agent-1",
 				},
 			},
 		}
+		signingPayload := computeL2SigningPayload(env)
+		sigBytes := ed25519.Sign(priv, signingPayload)
+		env.Governance.L2.TribunalSignature = hex.EncodeToString(sigBytes)
 
 		err := VerifyL2Governance(env, hmacKey, trustedKeys)
 		assert.NoError(t, err)
 	})
 
 	t.Run("ED25519 - Failure (Wrong KeyId)", func(t *testing.T) {
-		signingPayload := computeL2SigningPayload(eventType, payload)
-		sigBytes := ed25519.Sign(priv, signingPayload)
-		sig := hex.EncodeToString(sigBytes)
-
-		env := &commonv1.UniversalEnvelope{
+		env := &commonv1.GovernanceEnvelope{
+			Id:        "test-id",
 			EventType: eventType,
 			Payload:   payload,
 			Governance: &commonv1.GovernanceMetadata{
 				L2: &commonv1.L2Metadata{
-					TribunalSignature: sig,
-					KeyId:             "non-existent-agent",
+					KeyId: "agent-1", // Sign with agent-1 but call it non-existent in env
 				},
 			},
 		}
+		signingPayload := computeL2SigningPayload(env)
+		sigBytes := ed25519.Sign(priv, signingPayload)
+		env.Governance.L2.TribunalSignature = hex.EncodeToString(sigBytes)
+		env.Governance.L2.KeyId = "non-existent-agent"
 
-		// Since KeyId is provided but not found, it should fall back to legacy loop
-		// which also fails because the signature is for agent-1's key.
+		// Since KeyId is provided but not found, it should fail fast
 		err := VerifyL2Governance(env, hmacKey, trustedKeys)
 		assert.ErrorIs(t, err, ErrL2AsymmetricInvalid)
 	})
 
 	t.Run("ED25519 - Success (Legacy Fallback - No KeyId)", func(t *testing.T) {
-		signingPayload := computeL2SigningPayload(eventType, payload)
-		sigBytes := ed25519.Sign(priv, signingPayload)
-		sig := hex.EncodeToString(sigBytes)
-
-		env := &commonv1.UniversalEnvelope{
+		env := &commonv1.GovernanceEnvelope{
+			Id:        "test-id",
 			EventType: eventType,
 			Payload:   payload,
 			Governance: &commonv1.GovernanceMetadata{
-				L2: &commonv1.L2Metadata{
-					TribunalSignature: sig,
-				},
+				L2: &commonv1.L2Metadata{},
 			},
 		}
+		signingPayload := computeL2SigningPayload(env)
+		sigBytes := ed25519.Sign(priv, signingPayload)
+		env.Governance.L2.TribunalSignature = hex.EncodeToString(sigBytes)
 
 		err := VerifyL2Governance(env, hmacKey, trustedKeys)
 		assert.NoError(t, err)
@@ -132,26 +128,24 @@ func TestVerifyL2Governance(t *testing.T) {
 
 	t.Run("ED25519 - Failure (Wrong Key)", func(t *testing.T) {
 		_, priv2, _ := ed25519.GenerateKey(rand.Reader)
-		signingPayload := computeL2SigningPayload(eventType, payload)
-		sigBytes := ed25519.Sign(priv2, signingPayload)
-		sig := hex.EncodeToString(sigBytes)
-
-		env := &commonv1.UniversalEnvelope{
+		env := &commonv1.GovernanceEnvelope{
+			Id:        "test-id",
 			EventType: eventType,
 			Payload:   payload,
 			Governance: &commonv1.GovernanceMetadata{
-				L2: &commonv1.L2Metadata{
-					TribunalSignature: sig,
-				},
+				L2: &commonv1.L2Metadata{},
 			},
 		}
+		signingPayload := computeL2SigningPayload(env)
+		sigBytes := ed25519.Sign(priv2, signingPayload)
+		env.Governance.L2.TribunalSignature = hex.EncodeToString(sigBytes)
 
 		err := VerifyL2Governance(env, hmacKey, trustedKeys)
 		assert.ErrorIs(t, err, ErrL2AsymmetricInvalid)
 	})
 
 	t.Run("Missing Governance", func(t *testing.T) {
-		env := &commonv1.UniversalEnvelope{
+		env := &commonv1.GovernanceEnvelope{
 			EventType: eventType,
 			Payload:   payload,
 		}
@@ -161,7 +155,7 @@ func TestVerifyL2Governance(t *testing.T) {
 	})
 
 	t.Run("Missing L2", func(t *testing.T) {
-		env := &commonv1.UniversalEnvelope{
+		env := &commonv1.GovernanceEnvelope{
 			EventType:  eventType,
 			Payload:    payload,
 			Governance: &commonv1.GovernanceMetadata{},
@@ -172,7 +166,7 @@ func TestVerifyL2Governance(t *testing.T) {
 	})
 
 	t.Run("Empty Signature", func(t *testing.T) {
-		env := &commonv1.UniversalEnvelope{
+		env := &commonv1.GovernanceEnvelope{
 			EventType: eventType,
 			Payload:   payload,
 			Governance: &commonv1.GovernanceMetadata{

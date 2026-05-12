@@ -32,6 +32,10 @@ var (
 	ErrL2SignatureMissing  = errors.New("L2: tribunal_signature missing from envelope")
 	ErrL2SignatureInvalid  = errors.New("L2: tribunal_signature does not match computed HMAC")
 	ErrL2AsymmetricInvalid = errors.New("L2: tribunal_signature failed ED25519 verification")
+	ErrL3SignatureMissing  = errors.New("L3: human_signature missing from envelope")
+	ErrL3SignatureInvalid  = errors.New("L3: human_signature failed verification")
+	ErrTransactionExpired  = errors.New("Protocol: transaction has expired")
+	ErrTransactionReplay   = errors.New("Protocol: transaction replay detected")
 )
 
 // computeL2HMAC produces the canonical HMAC-SHA256 over
@@ -46,19 +50,39 @@ func computeL2HMAC(eventType string, payload []byte, stringKey string) string {
 }
 
 // computeL2SigningPayload produces the canonical bytes for asymmetric signing.
-func computeL2SigningPayload(eventType string, payload []byte) []byte {
+// The payload is structured as:
+// ID | Timestamp | EventType | OperatorID | SessionID | StateRoot | Expiry | Nonce | Payload
+func computeL2SigningPayload(env *commonv1.GovernanceEnvelope) []byte {
 	var b []byte
-	b = append(b, []byte(eventType)...)
-	b = append(b, '\n')
-	b = append(b, payload...)
+	b = append(b, []byte(env.Id)...)
+	b = append(b, '|')
+	if env.Timestamp != nil {
+		b = append(b, []byte(fmt.Sprintf("%d", env.Timestamp.Seconds))...)
+	}
+	b = append(b, '|')
+	b = append(b, []byte(env.EventType)...)
+	b = append(b, '|')
+	b = append(b, []byte(env.OperatorId)...)
+	b = append(b, '|')
+	b = append(b, []byte(env.OperatorSessionId)...)
+	b = append(b, '|')
+	b = append(b, []byte(env.StateMerkleRoot)...)
+	b = append(b, '|')
+	if env.ExpiresAt != nil {
+		b = append(b, []byte(fmt.Sprintf("%d", env.ExpiresAt.Seconds))...)
+	}
+	b = append(b, '|')
+	b = append(b, []byte(env.Nonce)...)
+	b = append(b, '|')
+	b = append(b, env.Payload...)
 	return b
 }
 
 // VerifyL2Governance enforces the L2 Tribunal signature on an inbound
-// UniversalEnvelope. Returns nil when the signature is present and
+// GovernanceEnvelope. Returns nil when the signature is present and
 // matches. The caller is expected to reject the command on any
 // non-nil return.
-func VerifyL2Governance(env *commonv1.UniversalEnvelope, stringKey string, trustedKeys map[string]ed25519.PublicKey) error {
+func VerifyL2Governance(env *commonv1.GovernanceEnvelope, stringKey string, trustedKeys map[string]ed25519.PublicKey) error {
 	if env == nil || env.Governance == nil || env.Governance.L2 == nil {
 		return ErrL2SignatureMissing
 	}
@@ -77,7 +101,7 @@ func VerifyL2Governance(env *commonv1.UniversalEnvelope, stringKey string, trust
 					return ErrL2AsymmetricInvalid
 				}
 
-				signingPayload := computeL2SigningPayload(env.EventType, env.Payload)
+				signingPayload := computeL2SigningPayload(env)
 				if ed25519.Verify(pub, signingPayload, sigBytes) {
 					return nil
 				}
@@ -93,7 +117,7 @@ func VerifyL2Governance(env *commonv1.UniversalEnvelope, stringKey string, trust
 		if len(got) == 128 {
 			sigBytes, err := hex.DecodeString(got)
 			if err == nil && len(sigBytes) == ed25519.SignatureSize {
-				signingPayload := computeL2SigningPayload(env.EventType, env.Payload)
+				signingPayload := computeL2SigningPayload(env)
 				for _, pub := range trustedKeys {
 					if ed25519.Verify(pub, signingPayload, sigBytes) {
 						return nil
@@ -113,4 +137,56 @@ func VerifyL2Governance(env *commonv1.UniversalEnvelope, stringKey string, trust
 		return fmt.Errorf("%w: event_type=%s", ErrL2SignatureInvalid, env.EventType)
 	}
 	return nil
+}
+
+// VerifyL3Governance enforces the L3 (Human Approval) proof on an inbound
+// GovernanceEnvelope for mutation requests.
+func VerifyL3Governance(env *commonv1.GovernanceEnvelope, trustedL3Keys map[string]ed25519.PublicKey) error {
+	if env == nil || env.Governance == nil || env.Governance.L3 == nil {
+		return ErrL3SignatureMissing
+	}
+
+	// If auto-approved, we still require local policy check (handled by caller/dispatcher)
+	if env.Governance.L3.AutoApproved {
+		return nil
+	}
+
+	got := env.Governance.L3.HumanSignature
+	if got == "" {
+		return ErrL3SignatureMissing
+	}
+
+	// Verification logic for L3 (hardware-bound signatures / passkeys)
+	// For now, we expect an ED25519 signature if a public key is provided or trusted.
+	pubKey := env.Governance.L3.PublicKey
+	var pub ed25519.PublicKey
+
+	if pubKey != "" {
+		pubBytes, err := hex.DecodeString(pubKey)
+		if err == nil && len(pubBytes) == ed25519.PublicKeySize {
+			pub = ed25519.PublicKey(pubBytes)
+		}
+	}
+
+	// Fallback to trusted keys if no public key provided in envelope
+	if pub == nil && len(trustedL3Keys) > 0 {
+		// In a real system, we'd lookup by web_session_id or operator_session_id
+		// For Phase 3, we'll require the public key to be in the envelope or known.
+	}
+
+	if pub == nil {
+		return ErrL3SignatureInvalid
+	}
+
+	sigBytes, err := hex.DecodeString(got)
+	if err != nil || len(sigBytes) != ed25519.SignatureSize {
+		return ErrL3SignatureInvalid
+	}
+
+	signingPayload := computeL2SigningPayload(env)
+	if ed25519.Verify(pub, signingPayload, sigBytes) {
+		return nil
+	}
+
+	return ErrL3SignatureInvalid
 }

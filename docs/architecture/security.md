@@ -6,14 +6,14 @@ parent: Architecture
 # Security Architecture
 
 Last Updated: 2026-05-12
-Version: v0.2.3
+Version: v0.2.4
 
 g8e is a Zero-Trust Operator/protocol substrate for secure infrastructure operations. Security is not an "add-on" but the core constraint: the platform assumes the AI control plane is potentially adversarial or error-prone and enforces safety at the infrastructure level through a 3-layer governance hierarchy and a Protobuf-first architecture.
 
 ## Bedrock Principles
 
 1.  **Proof of Human Presence (PHP)**: The AI proposes; the human signs. No state-changing operation executes without an explicit, hardware-bound signature (Passkey) or verifiable approval proof appended to the transaction envelope.
-2.  **Zero Trust & Protocol-First**: No component or connection is implicitly trusted. Every request is carried by a `UniversalEnvelope` that binds identity, context, and cryptographic governance evidence. There are no "internal" channels for bundled apps.
+2.  **Zero Trust & Protocol-First**: No component or connection is implicitly trusted. Every request is carried by a `GovernanceEnvelope` that binds identity, context, and cryptographic governance evidence. There are no "internal" channels for bundled apps.
 3.  **Local-First Sovereignty**: Sensitive data stays on the Operator host. The Operator (`g8eo`) is the final arbiter of execution, enforcing hard gates before any command hits the shell.
 4.  **Fail-Closed Invariants**: Malformed envelopes, invalid signatures, or stale state roots result in immediate rejection. The system never "fails open" to a default-allow state.
 
@@ -46,7 +46,7 @@ L3 involves human authorization, governed by the **Auditor-User Partition**.
 
 ## The Universal Envelope (v0.2.0)
 
-The `UniversalEnvelope` is the canonical BFT transaction container for all cross-component communication.
+The `GovernanceEnvelope` is the canonical BFT transaction container for all cross-component communication.
 
 | Field | Purpose |
 |---|---|
@@ -61,7 +61,7 @@ The `UniversalEnvelope` is the canonical BFT transaction container for all cross
 ```mermaid
 graph TD
     User[User] -- "PHP (Passkey)" --> Client[Public Protocol Client]
-    Client -- "UniversalEnvelope" --> g8eo[g8eo Operator]
+    Client -- "GovernanceEnvelope" --> g8eo[g8eo Operator]
     g8eo -- "L1 + BFT Verification" --> Host[Target System]
 ```
 

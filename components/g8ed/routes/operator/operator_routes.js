@@ -33,15 +33,14 @@ import { ErrorResponse, OperatorBinaryAvailabilityResponse } from '../../models/
  */
 export function createOperatorRouter({ services, authorizationMiddleware }) {
     const { operatorDownloadService, downloadAuthService } = services;
-    const { requireInternalOrigin } = authorizationMiddleware;
     const router = express.Router();
 
     /**
      * Get Operator health status
      * Includes binary availability for each platform
-     * SECURITY: Internal only - for load balancer health probes
+     * SECURITY: Public health endpoint for load balancer health probes
      */
-    router.get(OperatorPaths.HEALTH, requireInternalOrigin, async (req, res, next) => {
+    router.get(OperatorPaths.HEALTH, async (req, res, next) => {
         try {
             const binaryStatus = await operatorDownloadService.getPlatformAvailability();
             const availablePlatforms = Object.keys(binaryStatus).filter(p => binaryStatus[p].available);

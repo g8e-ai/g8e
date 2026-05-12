@@ -88,7 +88,7 @@ func newLoopbackService(t *testing.T, f *loopbackFixture) (*PubSubCommandService
 	return svc, resultsSvc
 }
 
-// injectCmdProtobuf publishes a protobuf UniversalEnvelope on the cmd channel.
+// injectCmdProtobuf publishes a protobuf GovernanceEnvelope on the cmd channel.
 func injectCmdProtobuf(t *testing.T, f *loopbackFixture, svc *PubSubCommandService, envelopeBytes []byte) {
 	t.Helper()
 	cmdCh := constants.CmdChannel(svc.config.OperatorID, svc.config.OperatorSessionId)
@@ -135,7 +135,7 @@ func startService(t *testing.T, svc *PubSubCommandService) {
 	})
 }
 
-func assertLoopbackEnvelope(t *testing.T, data []byte, eventType string) *commonv1.UniversalEnvelope {
+func assertLoopbackEnvelope(t *testing.T, data []byte, eventType string) *commonv1.GovernanceEnvelope {
 	t.Helper()
 	env := testutil.MustUnmarshalUniversalEnvelope(t, data)
 	assert.Equal(t, eventType, env.EventType)

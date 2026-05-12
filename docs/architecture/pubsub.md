@@ -6,7 +6,7 @@ parent: Architecture
 # g8e Pub/Sub Architecture
 
 Last Updated: 2026-05-12
-Version: v0.2.3
+Version: v0.2.4
 
 The g8e platform utilizes a high-performance, WebSocket-based Pub/Sub system for all real-time inter-component communication. This decoupled architecture allows a central engine (bundled `g8ee` or BYO agent) to orchestrate distributed agents (`g8eo` Operators) across heterogeneous environments without direct network visibility.
 
@@ -20,7 +20,7 @@ The lifecycle of an Operator session is entirely governed by its pub/sub interac
 
 ### 1. Bootstrap & Authentication
 When an Operator starts, it identifies itself via a **Bootstrap Handshake**:
-- **Request**: Operator publishes a `UniversalEnvelope` to an ephemeral `auth.publish:session:{hash}` channel.
+- **Request**: Operator publishes a `GovernanceEnvelope` to an ephemeral `auth.publish:session:{hash}` channel.
 - **Validation**: The authentication authority (bundled `g8ee` or a substrate-native service) validates the request and responds with a bootstrap configuration (API keys, resource limits, certs) on `auth.response:session:{hash}`.
 - **Finalization**: Once authenticated, the Operator transitions to its dedicated per-session channels.
 
@@ -31,8 +31,8 @@ Operators maintain their `AVAILABLE` status by publishing periodic signals to th
 
 ### 3. Command Orchestration
 The primary function of the platform is the delivery and execution of commands:
-- **Dispatch**: A client publishes serialized `UniversalEnvelope` bytes to the Operator's `cmd` channel.
-- **Execution**: The Operator executes the typed payload and publishes serialized `UniversalEnvelope` result bytes back to the `results` channel.
+- **Dispatch**: A client publishes serialized `GovernanceEnvelope` bytes to the Operator's `cmd` channel.
+- **Execution**: The Operator executes the typed payload and publishes serialized `GovernanceEnvelope` result bytes back to the `results` channel.
 - **Completion**: The client matches the `execution_id` and processes the result.
 
 ---

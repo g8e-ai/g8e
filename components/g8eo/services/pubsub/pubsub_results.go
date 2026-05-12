@@ -50,7 +50,7 @@ func NewPubSubResultsService(cfg *config.Config, logger *slog.Logger, client Pub
 	}, nil
 }
 
-// publishResultEnvelope builds a UniversalEnvelope for a typed result payload,
+// publishResultEnvelope builds a GovernanceEnvelope for a typed result payload,
 // stamps the envelope metadata copied from the originating command, and
 // publishes it on the results channel. All result-publishing paths that carry
 // an originalMsg (command-completed, command-cancelled, file-edit, fs-list)
@@ -265,7 +265,7 @@ func (rr *PubSubResultsService) PublishExecutionStatus(ctx context.Context, stat
 }
 
 // PublishHeartbeat publishes heartbeat to dedicated operator pub/sub heartbeat channel.
-// It wraps the heartbeat in a UniversalEnvelope for consistency with other results.
+// It wraps the heartbeat in a GovernanceEnvelope for consistency with other results.
 func (rr *PubSubResultsService) PublishHeartbeat(ctx context.Context, heartbeat proto.Message) error {
 	rr.logger.Info("[HEARTBEAT] Publishing heartbeat to operator pub/sub (Protocol-First)")
 
@@ -296,8 +296,8 @@ func (rr *PubSubResultsService) PublishHeartbeat(ctx context.Context, heartbeat 
 	return nil
 }
 
-// PublishResult publishes a pre-built UniversalEnvelope to the operator pub/sub results channel.
-func (rr *PubSubResultsService) PublishResult(ctx context.Context, env *commonv1.UniversalEnvelope) error {
+// PublishResult publishes a pre-built GovernanceEnvelope to the operator pub/sub results channel.
+func (rr *PubSubResultsService) PublishResult(ctx context.Context, env *commonv1.GovernanceEnvelope) error {
 	if env.OperatorSessionId == "" {
 		env.OperatorSessionId = rr.config.OperatorSessionId
 	}
@@ -307,8 +307,8 @@ func (rr *PubSubResultsService) PublishResult(ctx context.Context, env *commonv1
 	return rr.publish(ctx, env)
 }
 
-// publish marshals a UniversalEnvelope and publishes it to the results channel.
-func (rr *PubSubResultsService) publish(ctx context.Context, env *commonv1.UniversalEnvelope) error {
+// publish marshals a GovernanceEnvelope and publishes it to the results channel.
+func (rr *PubSubResultsService) publish(ctx context.Context, env *commonv1.GovernanceEnvelope) error {
 	data, err := proto.Marshal(env)
 	if err != nil {
 		return fmt.Errorf("failed to marshal result envelope: %w", err)

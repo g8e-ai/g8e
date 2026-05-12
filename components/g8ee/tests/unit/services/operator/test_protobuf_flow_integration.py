@@ -43,7 +43,7 @@ async def test_protobuf_envelope_flow_integration(pubsub_service):
     # 1. Register a future for the execution
     future = pubsub_service.register_future(execution_id)
     
-    # 3. Simulate g8eo publishing a protobuf UniversalEnvelope
+    # 3. Simulate g8eo publishing a protobuf GovernanceEnvelope
     # Build the payload (CommandResult)
     command_result = operator_pb2.CommandResult()
     command_result.execution_id = execution_id
@@ -52,7 +52,7 @@ async def test_protobuf_envelope_flow_integration(pubsub_service):
     command_result.exit_code = 0
     
     # Build the envelope
-    envelope = common_pb2.UniversalEnvelope()
+    envelope = common_pb2.GovernanceEnvelope()
     envelope.id = execution_id
     envelope.event_type = EventType.OPERATOR_COMMAND_COMPLETED
     envelope.operator_id = operator_id
@@ -96,7 +96,7 @@ async def test_protobuf_envelope_flow_status_update(pubsub_service):
     status_update.process_alive = True
     status_update.elapsed_seconds = 10.5
     
-    envelope = common_pb2.UniversalEnvelope()
+    envelope = common_pb2.GovernanceEnvelope()
     envelope.id = execution_id
     envelope.event_type = EventType.OPERATOR_COMMAND_STATUS_UPDATED_RUNNING
     envelope.operator_id = operator_id

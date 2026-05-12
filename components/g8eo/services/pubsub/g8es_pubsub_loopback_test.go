@@ -161,15 +161,15 @@ func TestLoopback_SubscriberReceivesBrokerPublish(t *testing.T) {
 	// Wait for the subscription to be registered before publishing.
 	f.subscribeAndWait(t, ch)
 
-	// In Phase 3, we publish binary Protobuf UniversalEnvelope
+	// In Phase 3, we publish binary Protobuf GovernanceEnvelope
 	payload := testutil.MustMarshalProtobufCommandRequested(t, "echo hello", "exec-1", "test", "", 0)
 	envelopeBytes := testutil.MustMarshalUniversalEnvelope(t, "env-1", constants.Event.Operator.Command.Completed, payload, "", "op1", "case-1", "", "sess1")
 
 	f.broker.Publish(ch, envelopeBytes)
 
 	msg := drainOne(t, sub)
-	// The subscriber receives the raw Data field of the PubSubEvent, which is the UniversalEnvelope bytes
-	var env commonv1.UniversalEnvelope
+	// The subscriber receives the raw Data field of the PubSubEvent, which is the GovernanceEnvelope bytes
+	var env commonv1.GovernanceEnvelope
 	err = proto.Unmarshal(msg, &env)
 	require.NoError(t, err)
 	assert.Equal(t, constants.Event.Operator.Command.Completed, env.EventType)
@@ -214,7 +214,7 @@ func TestLoopback_ClientPublishFansOutToSubscriber(t *testing.T) {
 	require.NoError(t, publisher.Publish(context.Background(), ch, envelopeBytes))
 
 	msg := drainOne(t, sub)
-	var env commonv1.UniversalEnvelope
+	var env commonv1.GovernanceEnvelope
 	require.NoError(t, proto.Unmarshal(msg, &env))
 	assert.Equal(t, "cmd-1", env.Id)
 }
@@ -252,7 +252,7 @@ func TestLoopback_ClientPublishFansOutToMultipleSubscribers(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			msg := drainOne(t, sub)
-			var env commonv1.UniversalEnvelope
+			var env commonv1.GovernanceEnvelope
 			require.NoError(t, proto.Unmarshal(msg, &env))
 			assert.Equal(t, constants.Event.Operator.Heartbeat, env.EventType, "subscriber %d missed message", i)
 		}()
@@ -285,7 +285,7 @@ func TestLoopback_SameClientPublishesAndSubscribes(t *testing.T) {
 	require.NoError(t, pubClient.Publish(context.Background(), ch, envelopeBytes))
 
 	msg := drainOne(t, sub)
-	var env commonv1.UniversalEnvelope
+	var env commonv1.GovernanceEnvelope
 	require.NoError(t, proto.Unmarshal(msg, &env))
 	assert.Equal(t, "test.event", env.EventType)
 	assert.Contains(t, string(env.Payload), `"self"`)

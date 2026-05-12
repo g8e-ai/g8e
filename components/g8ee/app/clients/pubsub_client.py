@@ -533,15 +533,15 @@ class PubSubClient:
             }
         )
 
-        # Use Protobuf UniversalEnvelope for all commands (v0.2.0 Protocol-First)
+        # Use Protobuf GovernanceEnvelope for all commands (v0.2.0 Protocol-First)
         try:
             payload_bytes = build_universal_envelope_bytes(
                 command_data,
                 auditor_hmac_key=self._auditor_hmac_key or "",
             )
-            logger.debug("[PUBSUB-CLIENT] Publishing Protobuf UniversalEnvelope")
+            logger.debug("[PUBSUB-CLIENT] Publishing Protobuf GovernanceEnvelope")
         except Exception as e:
-            logger.error("[PUBSUB-CLIENT] Failed to build UniversalEnvelope: %s", e)
+            logger.error("[PUBSUB-CLIENT] Failed to build GovernanceEnvelope: %s", e)
             # In v0.2.0 we do NOT fall back to JSON. If the envelope fails, the command fails.
             return 0
 
@@ -700,15 +700,15 @@ class PubSubClient:
                 payload=HeartbeatRequestPayload(),
             )
 
-            # Use Protobuf UniversalEnvelope for all pings (v0.2.0 Protocol-First)
+            # Use Protobuf GovernanceEnvelope for all pings (v0.2.0 Protocol-First)
             try:
                 payload_bytes = build_universal_envelope_bytes(
                     ping,
                     auditor_hmac_key=self._auditor_hmac_key or "",
                 )
-                logger.debug("[PUBSUB-CLIENT] Publishing Protobuf UniversalEnvelope for ping")
+                logger.debug("[PUBSUB-CLIENT] Publishing Protobuf GovernanceEnvelope for ping")
             except Exception as e:
-                logger.error("[PUBSUB-CLIENT] Failed to build UniversalEnvelope for ping: %s", e)
+                logger.error("[PUBSUB-CLIENT] Failed to build GovernanceEnvelope for ping: %s", e)
                 # In v0.2.0 we do NOT fall back to JSON. If the envelope fails, the ping fails.
                 return False
 

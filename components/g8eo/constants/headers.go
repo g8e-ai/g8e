@@ -24,7 +24,8 @@ const (
 	HeaderXRequestTimestamp  = "X-Request-Timestamp"
 	HeaderXForwardedProto    = "X-Forwarded-Proto"
 	HeaderXForwardedHost     = "X-Forwarded-Host"
-	HeaderInternalAuth       = "X-Internal-Auth"
+	HeaderOperatorSessionID  = "X-G8E-Operator-Session-ID"
+	HeaderOperatorAPIKey     = "X-G8E-Operator-API-Key"
 
 	HeaderG8eWebSessionID      = "X-G8E-WebSession-ID"
 	HeaderG8eUserID            = "X-G8E-User-ID"

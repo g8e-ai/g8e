@@ -64,10 +64,10 @@ func MustMarshalProtobufCommandCancelRequested(t *testing.T, execID string) []by
 	return b
 }
 
-// MustMarshalUniversalEnvelope creates a UniversalEnvelope protobuf with the given payload.
+// MustMarshalUniversalEnvelope creates a GovernanceEnvelope protobuf with the given payload.
 func MustMarshalUniversalEnvelope(t *testing.T, id string, eventType string, payload []byte, taskID string, operatorID string, caseID string, investigationID string, operatorSessionId string) []byte {
 	t.Helper()
-	env := &commonv1.UniversalEnvelope{
+	env := &commonv1.GovernanceEnvelope{
 		Id:                id,
 		Timestamp:         timestamppb.Now(),
 		EventType:         eventType,
@@ -81,17 +81,38 @@ func MustMarshalUniversalEnvelope(t *testing.T, id string, eventType string, pay
 	}
 	b, err := proto.Marshal(env)
 	if err != nil {
-		t.Fatalf("failed to marshal protobuf UniversalEnvelope: %v", err)
+		t.Fatalf("failed to marshal protobuf GovernanceEnvelope: %v", err)
 	}
 	return b
 }
 
-// MustUnmarshalUniversalEnvelope unmarshals bytes to a UniversalEnvelope protobuf, fatally failing the test on error.
-func MustUnmarshalUniversalEnvelope(t *testing.T, data []byte) *commonv1.UniversalEnvelope {
+// MustMarshalUniversalEnvelopeWithNonce creates a GovernanceEnvelope protobuf with the given payload and nonce.
+func MustMarshalUniversalEnvelopeWithNonce(t *testing.T, id string, eventType string, payload []byte, taskID string, operatorID string, caseID string, investigationID string, operatorSessionId string, nonce string) []byte {
 	t.Helper()
-	env := &commonv1.UniversalEnvelope{}
+	env := &commonv1.GovernanceEnvelope{
+		Id:                id,
+		Timestamp:         timestamppb.Now(),
+		EventType:         eventType,
+		SourceComponent:   commonv1.Component_COMPONENT_G8EE,
+		OperatorId:        operatorID,
+		OperatorSessionId: operatorSessionId,
+		CaseId:            caseID,
+		InvestigationId:   investigationID,
+		TaskId:            taskID,
+		Payload:           payload,
+		Nonce:             nonce,
+	}
+	b, err := proto.Marshal(env)
+	if err != nil {
+		t.Fatalf("failed to marshal protobuf GovernanceEnvelope with nonce: %v", err)
+	}
+	return b
+}
+func MustUnmarshalUniversalEnvelope(t *testing.T, data []byte) *commonv1.GovernanceEnvelope {
+	t.Helper()
+	env := &commonv1.GovernanceEnvelope{}
 	if err := proto.Unmarshal(data, env); err != nil {
-		t.Fatalf("failed to unmarshal UniversalEnvelope: %v", err)
+		t.Fatalf("failed to unmarshal GovernanceEnvelope: %v", err)
 	}
 	return env
 }

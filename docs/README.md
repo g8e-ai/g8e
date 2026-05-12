@@ -7,7 +7,7 @@ permalink: /docs/
 # g8e Documentation Index
 
 Last Updated: 2026-05-12
-Version: v0.2.3
+Version: v0.2.4
 
 g8e is a Zero-Trust Operator/protocol substrate for secure infrastructure operations. This index maps high-level concepts to the mandatory substrate (Operator plus shared protocol) and the optional bundled application-layer adapters (Dashboard and Engine).
 
@@ -59,6 +59,6 @@ Technical deep-dives into the required Operator substrate and optional bundled a
 
 | Document | Description |
 |----------|-------------|
-| [architecture/protocol.md](architecture/protocol.md) | **g8e Protocol**: Protobuf `UniversalEnvelope`, typed operator payloads, and governance metadata. |
+| [architecture/protocol.md](architecture/protocol.md) | **g8e Protocol**: Protobuf `GovernanceEnvelope`, typed operator payloads, and governance metadata. |
 | [reference/events.md](reference/events.md) | **Wire Protocol**: Registry of all internal pub/sub and SSE events. |
 | [architecture/scripts.md](architecture/scripts.md) | **Management CLI**: Architecture of the core platform orchestration scripts. |

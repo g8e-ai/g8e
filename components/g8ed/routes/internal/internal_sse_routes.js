@@ -33,7 +33,7 @@ import { getOperatorService } from '../../services/initialization.js';
  */
 export function createInternalSSERouter({ services, authorizationMiddleware }) {
     const { sseService } = services;
-    const { requireInternalOrigin } = authorizationMiddleware;
+    const { requireInternalOrUserAuth } = authorizationMiddleware;
     const router = express.Router();
 
     /**
@@ -46,7 +46,7 @@ export function createInternalSSERouter({ services, authorizationMiddleware }) {
      * fields (current_hostname, heartbeat_history) that g8ee maintains.
      */
     const pushPath = '/' + InternalApiPaths.g8ed.sse_push.split('/').pop();
-    router.post(pushPath, requireInternalOrigin, async (req, res, next) => {
+    router.post(pushPath, requireInternalOrUserAuth, async (req, res, next) => {
         try {
             const pushReq = SSEPushRequest.parse(req.body);
 

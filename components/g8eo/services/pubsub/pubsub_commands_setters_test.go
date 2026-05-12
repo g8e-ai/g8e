@@ -213,7 +213,7 @@ func TestPubSubCommandService_DispatchCommand_UnknownType_NoOp(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// handleCommandPayload — round-trip from raw UniversalEnvelope bytes
+// handleCommandPayload — round-trip from raw GovernanceEnvelope bytes
 // ---------------------------------------------------------------------------
 
 func TestPubSubCommandService_HandleCommandPayload_ValidUniversalEnvelope(t *testing.T) {

@@ -17,7 +17,7 @@ Contributors must adhere to these foundational principles:
     -   **L2 (Consensus/Tribunal)**: Five independent agents (Axiom, Concord, Variance, Pragma, Nemesis) must generate and verify commands.
     -   **L3 (Human Authorization)**: Human-in-the-loop by default. Auto-approval is metadata-only and never bypasses L1/L2.
 2.  **No Backwards Compatibility**: We do not maintain compatibility with old or broken data structures. Reject malformed data with actionable error messages; do not attempt silent migrations or backfills.
-3.  **Protobuf First**: All cross-component communication and command/result payloads use serialized `UniversalEnvelope` Protobuf bytes.
+3.  **Protobuf First**: All cross-component communication and command/result payloads use serialized `GovernanceEnvelope` Protobuf bytes.
 4.  **Host-Native First**: The platform runs natively on the host. Docker is reserved for simulated evaluation fleets, not the core components.
 
 ## Getting Started

@@ -18,7 +18,7 @@ case "$SUB" in
     reauth)
         _banner "operator reauth"
         _ensure_operator
-        _requires_operator_route "/api/operators/reauth" ;;
+        _operator_curl POST "/api/operators/reauth" ;;
 
     init)
         _banner "operator init"

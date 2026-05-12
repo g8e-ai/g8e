@@ -40,7 +40,7 @@ import { DEVICE_LINK_TTL_SECONDS, DeviceLinkError, DeviceLinkSuccess } from '../
  */
 export function createInternalDeviceLinkRouter({ services, authorizationMiddleware }) {
     const { deviceLinkService } = services;
-    const { requireInternalOrigin, requireInternalOrUserAuth } = authorizationMiddleware;
+    const { requireInternalOrUserAuth } = authorizationMiddleware;
     const router = express.Router();
 
     /**

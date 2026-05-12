@@ -67,12 +67,12 @@ class TestProtobufExecutionStatusToPython:
 
 
 class TestDecodeUniversalEnvelope:
-    """Test UniversalEnvelope decoding."""
+    """Test GovernanceEnvelope decoding."""
 
     def test_decode_valid_envelope(self):
         """Valid envelope bytes decode successfully."""
         # Build a minimal envelope
-        envelope = common_pb2.UniversalEnvelope()
+        envelope = common_pb2.GovernanceEnvelope()
         envelope.id = "test-id"
         envelope.event_type = "test.event"
         envelope.payload = b"test-payload"
@@ -86,7 +86,7 @@ class TestDecodeUniversalEnvelope:
 
     def test_decode_missing_id_raises(self):
         """Envelope without id field raises ValueError."""
-        envelope = common_pb2.UniversalEnvelope()
+        envelope = common_pb2.GovernanceEnvelope()
         envelope.event_type = "test.event"
         envelope.payload = b"test-payload"
 
@@ -106,7 +106,7 @@ class TestDecodeG8eoResultEnvelope:
     def test_decode_command_result_completed(self):
         """CommandResult with COMPLETED status decodes correctly."""
         # Build envelope with CommandResult payload
-        envelope = common_pb2.UniversalEnvelope()
+        envelope = common_pb2.GovernanceEnvelope()
         envelope.id = "test-exec-id"
         envelope.event_type = "g8e.v1.operator.command.completed"
         envelope.operator_id = "op-1"
@@ -142,7 +142,7 @@ class TestDecodeG8eoResultEnvelope:
 
     def test_decode_command_result_failed(self):
         """CommandResult with FAILED status decodes correctly."""
-        envelope = common_pb2.UniversalEnvelope()
+        envelope = common_pb2.GovernanceEnvelope()
         envelope.id = "test-exec-id"
         envelope.event_type = "g8e.v1.operator.command.failed"
         envelope.operator_id = "op-1"
@@ -167,7 +167,7 @@ class TestDecodeG8eoResultEnvelope:
 
     def test_decode_execution_status_update(self):
         """ExecutionStatusUpdate decodes correctly."""
-        envelope = common_pb2.UniversalEnvelope()
+        envelope = common_pb2.GovernanceEnvelope()
         envelope.id = "test-id"
         envelope.event_type = "g8e.v1.operator.command.status.updated"
         envelope.operator_id = "op-1"
@@ -193,7 +193,7 @@ class TestDecodeG8eoResultEnvelope:
 
     def test_decode_file_edit_result(self):
         """FileEditResult decodes correctly."""
-        envelope = common_pb2.UniversalEnvelope()
+        envelope = common_pb2.GovernanceEnvelope()
         envelope.id = "test-id"
         envelope.event_type = "g8e.v1.operator.file.edit.completed"
         envelope.operator_id = "op-1"
@@ -219,7 +219,7 @@ class TestDecodeG8eoResultEnvelope:
 
     def test_decode_fs_list_result(self):
         """FsListResult decodes correctly."""
-        envelope = common_pb2.UniversalEnvelope()
+        envelope = common_pb2.GovernanceEnvelope()
         envelope.id = "test-id"
         envelope.event_type = "g8e.v1.operator.fs.list.completed"
         envelope.operator_id = "op-1"
@@ -247,7 +247,7 @@ class TestDecodeG8eoResultEnvelope:
 
     def test_decode_fs_grep_result(self):
         """FsGrepResult decodes correctly."""
-        envelope = common_pb2.UniversalEnvelope()
+        envelope = common_pb2.GovernanceEnvelope()
         envelope.id = "test-id"
         envelope.event_type = "g8e.v1.operator.fs.grep.completed"
         envelope.operator_id = "op-1"
@@ -274,7 +274,7 @@ class TestDecodeG8eoResultEnvelope:
 
     def test_decode_fs_read_result(self):
         """FsReadResult decodes correctly."""
-        envelope = common_pb2.UniversalEnvelope()
+        envelope = common_pb2.GovernanceEnvelope()
         envelope.id = "test-id"
         envelope.event_type = "g8e.v1.operator.fs.read.completed"
         envelope.operator_id = "op-1"
@@ -302,7 +302,7 @@ class TestDecodeG8eoResultEnvelope:
 
     def test_decode_port_check_result(self):
         """PortCheckResult decodes correctly."""
-        envelope = common_pb2.UniversalEnvelope()
+        envelope = common_pb2.GovernanceEnvelope()
         envelope.id = "test-id"
         envelope.event_type = "g8e.v1.operator.port.check.completed"
         envelope.operator_id = "op-1"
@@ -324,7 +324,7 @@ class TestDecodeG8eoResultEnvelope:
 
     def test_decode_unknown_event_type(self):
         """Unknown event type returns unknown payload type."""
-        envelope = common_pb2.UniversalEnvelope()
+        envelope = common_pb2.GovernanceEnvelope()
         envelope.id = "test-id"
         envelope.event_type = "unknown.event.type"
         envelope.operator_id = "op-1"
@@ -338,7 +338,7 @@ class TestDecodeG8eoResultEnvelope:
 
     def test_decode_command_cancelled(self):
         """Command cancelled event decodes correctly."""
-        envelope = common_pb2.UniversalEnvelope()
+        envelope = common_pb2.GovernanceEnvelope()
         envelope.id = "test-id"
         envelope.event_type = "g8e.v1.operator.command.cancelled"
         envelope.operator_id = "op-1"

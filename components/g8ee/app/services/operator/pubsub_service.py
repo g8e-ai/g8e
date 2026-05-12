@@ -186,11 +186,11 @@ class OperatorPubSubService:
             return
 
         # Enforce Protobuf-First Protocol
-        # We only accept bytes which are decoded as UniversalEnvelope protobufs.
+        # We only accept bytes which are decoded as GovernanceEnvelope protobufs.
         if isinstance(data, bytes):
             try:
                 raw = decode_g8eo_result_envelope(data)
-                logger.debug("[PUBSUB] Decoded protobuf UniversalEnvelope from g8eo")
+                logger.debug("[PUBSUB] Decoded protobuf GovernanceEnvelope from g8eo")
             except ValueError as e:
                 logger.warning("[PUBSUB] Failed to decode protobuf envelope: %s", e)
                 return
@@ -199,7 +199,7 @@ class OperatorPubSubService:
             try:
                 data_bytes = data.encode('utf-8')
                 raw = decode_g8eo_result_envelope(data_bytes)
-                logger.debug("[PUBSUB] Decoded protobuf UniversalEnvelope from string data")
+                logger.debug("[PUBSUB] Decoded protobuf GovernanceEnvelope from string data")
             except (ValueError, UnicodeDecodeError) as e:
                 logger.warning("[PUBSUB] Received string data that is not a valid protobuf envelope: %s", e)
                 return

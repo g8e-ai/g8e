@@ -1,13 +1,13 @@
 # **AI-Powered, Human-Driven Infrastructure**
 
 Last Updated: 2026-05-12
-Version: v0.2.3
+Version: v0.2.4
 
 **A Byzantine Fault Tolerant Architecture for Agentic Automation**
 
 *Danny Barbour · [github.com/g8e-ai/g8e](https://github.com/g8e-ai/g8e)*
 
-**Abstract:** We propose a distributed governance architecture for agentic infrastructure built on mutual adversarial assumption. We treat LLM-driven automation as a Byzantine Fault Tolerance (BFT) problem. The platform is composed of a mandatory **Operator Substrate** (`g8eo`) providing execution, audit, and protocol services, and an optional **Application Layer** consisting of bundled reference adapters—**Engine** (`g8ee`) and **Dashboard** (`g8ed`)—or any Bring-Your-Own (BYO) client. Governance evidence travels with execution intent in a typed Protobuf `UniversalEnvelope`, binding event names, operator payloads, state roots, and L1/L2/L3 metadata into a single transaction. The AI is structurally prevented from auto-regressive collapse, and the human operator is elevated from a rubber-stamp supervisor to a first-class co-validator whose explicit stake is time.
+**Abstract:** We propose a distributed governance architecture for agentic infrastructure built on mutual adversarial assumption. We treat LLM-driven automation as a Byzantine Fault Tolerance (BFT) problem. The platform is composed of a mandatory **Operator Substrate** (`g8eo`) providing execution, audit, and protocol services, and an optional **Application Layer** consisting of bundled reference adapters—**Engine** (`g8ee`) and **Dashboard** (`g8ed`)—or any Bring-Your-Own (BYO) client. Governance evidence travels with execution intent in a typed Protobuf `GovernanceEnvelope`, binding event names, operator payloads, state roots, and L1/L2/L3 metadata into a single transaction. The AI is structurally prevented from auto-regressive collapse, and the human operator is elevated from a rubber-stamp supervisor to a first-class co-validator whose explicit stake is time.
 
 ## **1. The Fallacy of the Single Agent**
 
@@ -23,7 +23,7 @@ Trusting a single agent to mutate state is gross negligence. Trusting a fatigued
 
 SaaS-based agent architectures pull your authoritative state into their cloud. We inverted this. The execution plane is the **Operator Substrate**: a single, statically compiled Go binary (`g8eo`) that runs on the managed host.
 
-In g8e, the Operator is the reality portal. It treats all upstream clients as inherently untrusted and actively expects adversarial inputs. Command and result traffic is not ad hoc JSON; it is serialized `UniversalEnvelope` bytes carrying typed `operator.proto` payloads through a pub/sub transport.
+In g8e, the Operator is the reality portal. It treats all upstream clients as inherently untrusted and actively expects adversarial inputs. Command and result traffic is not ad hoc JSON; it is serialized `GovernanceEnvelope` bytes carrying typed `operator.proto` payloads through a pub/sub transport.
 
 Before a single bit moves on the host OS, the Operator rejects malformed envelopes, applies protocol-level **L1 Technical Bedrock** checks (forbidden patterns, allowlists), and verifies **L2 Consensus** signatures. It executes commands in an isolated process group with a closed stdin, protected by 46 discrete MITRE ATT&CK detectors.
 
@@ -65,7 +65,7 @@ $$
 \text{Safe}(a) \iff \sigma_{\text{machine}}(a) \land \sigma_{\text{human}}(a)
 $$
 
-Neither signature is sufficient alone. We enforce explicit friction through **Proof of Human Presence (PHP)**. The **Governance Gateway** is the only path to the human, enforced by FIDO2 passkeys or verifiable approval proofs. At the protocol layer, `UniversalEnvelope.governance.l3` carries the human signature, or an `auto_approved` flag for benign diagnostic commands that have already passed L1 and L2.
+Neither signature is sufficient alone. We enforce explicit friction through **Proof of Human Presence (PHP)**. The **Governance Gateway** is the only path to the human, enforced by FIDO2 passkeys or verifiable approval proofs. At the protocol layer, `GovernanceEnvelope.governance.l3` carries the human signature, or an `auto_approved` flag for benign diagnostic commands that have already passed L1 and L2.
 
 To ensure seamless onboarding, the Dashboard serves a **Trust Portal** on Port 80, providing the platform CA and automated trust scripts to bootstrap the secure mTLS environment.
 

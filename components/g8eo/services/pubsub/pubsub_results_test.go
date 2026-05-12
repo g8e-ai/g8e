@@ -309,7 +309,7 @@ func TestPubSubResultsService_MessageFormatting(t *testing.T) {
 		data, err := proto.Marshal(env)
 		require.NoError(t, err)
 
-		var env2 commonv1.UniversalEnvelope
+		var env2 commonv1.GovernanceEnvelope
 		err = proto.Unmarshal(data, &env2)
 		require.NoError(t, err)
 		assert.Equal(t, constants.Event.Operator.Command.Completed, env2.EventType)
@@ -330,7 +330,7 @@ func TestPubSubResultsService_MessageFormatting(t *testing.T) {
 		data, err := proto.Marshal(env)
 		require.NoError(t, err)
 
-		var env2 commonv1.UniversalEnvelope
+		var env2 commonv1.GovernanceEnvelope
 		err = proto.Unmarshal(data, &env2)
 		require.NoError(t, err)
 		assert.Equal(t, constants.Event.Operator.FileEdit.Completed, env2.EventType)
@@ -720,7 +720,7 @@ func TestPubSubResultsService_PublishResult(t *testing.T) {
 		svc, err := NewPubSubResultsService(cfg, logger, db, nil)
 		require.NoError(t, err)
 
-		result := &commonv1.UniversalEnvelope{
+		result := &commonv1.GovernanceEnvelope{
 			EventType: "test.auto.populate",
 			CaseId:    "test-case",
 			Payload:   testutil.MustMarshalProtobufHeartbeatRequested(t),
@@ -829,7 +829,7 @@ func TestResultMessage_APIKeyPropagation(t *testing.T) {
 
 		env := testutil.MustUnmarshalUniversalEnvelope(t, published.Data)
 		assert.Equal(t, cfg.OperatorID, env.OperatorId,
-			"UniversalEnvelope must carry operator_id from config")
+			"GovernanceEnvelope must carry operator_id from config")
 	})
 
 	t.Run("cancellation result carries api_key from config", func(t *testing.T) {

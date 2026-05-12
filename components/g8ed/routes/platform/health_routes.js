@@ -24,7 +24,6 @@ import { HealthPaths } from '../../constants/api_paths.js';
  */
 export function createHealthRouter({ services, authorizationMiddleware }) {
     const { healthCheckService } = services;
-    const { requireInternalOrigin } = authorizationMiddleware;
     const router = express.Router();
 
     router.get(HealthPaths.ROOT, async (req, res) => {
@@ -37,7 +36,7 @@ export function createHealthRouter({ services, authorizationMiddleware }) {
         res.json(new SimpleStatusResponse(livenessData).forClient());
     });
 
-    router.get(HealthPaths.STORE, requireInternalOrigin, async (req, res) => {
+    router.get(HealthPaths.STORE, async (req, res) => {
         try {
             const readinessData = await healthCheckService.getReadinessStatus();
             const statusCode = readinessData.success ? 200 : 503;
@@ -53,7 +52,7 @@ export function createHealthRouter({ services, authorizationMiddleware }) {
         }
     });
 
-    router.get(HealthPaths.DETAILS, requireInternalOrigin, async (req, res, next) => {
+    router.get(HealthPaths.DETAILS, async (req, res, next) => {
         try {
             const healthStatus = await healthCheckService.getDetailedHealthStatus();
             const statusCode = healthStatus.status === SystemHealth.HEALTHY ? 200 : 503;
@@ -69,7 +68,7 @@ export function createHealthRouter({ services, authorizationMiddleware }) {
         }
     });
 
-    router.get(HealthPaths.CACHE_STATS, requireInternalOrigin, async (req, res) => {
+    router.get(HealthPaths.CACHE_STATS, async (req, res) => {
         try {
             const stats = healthCheckService.getCacheStats();
             res.json(new CacheStatsResponse(stats).forClient());

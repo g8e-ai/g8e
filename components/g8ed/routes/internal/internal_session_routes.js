@@ -33,7 +33,7 @@ import { ErrorResponse, InternalSessionValidationResponse } from '../../models/r
  */
 export function createInternalSessionRouter({ services, authorizationMiddleware }) {
     const { webSessionService, userService } = services;
-    const { requireInternalOrigin } = authorizationMiddleware;
+    const { requireInternalOrUserAuth } = authorizationMiddleware;
     const router = express.Router();
 
     /**
@@ -41,7 +41,7 @@ export function createInternalSessionRouter({ services, authorizationMiddleware 
      * 
      * Validate a web session and return session data.
      */
-    router.get('/:sessionId', requireInternalOrigin, async (req, res, next) => {
+    router.get('/:sessionId', requireInternalOrUserAuth, async (req, res, next) => {
         try {
             const { sessionId } = req.params;
             const callingService = req.headers[HTTP_G8E_SERVICE_HEADER.toLowerCase()] || 'unknown';

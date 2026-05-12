@@ -61,5 +61,7 @@ export const HTTP_CONTENT_TYPE_HEADER          = _HEADERS['http.content-type'];
 export const HTTP_API_KEY_HEADER               = _HEADERS['http.api-key'];
 export const WEB_SESSION_ID_HEADER             = _HEADERS['x-g8e.session-id'];
 export const HTTP_INTERNAL_AUTH_HEADER          = _HEADERS['http.x-internal-auth'];
+export const HTTP_OPERATOR_SESSION_ID_HEADER    = 'X-Operator-Session-ID';
+export const HTTP_OPERATOR_API_KEY_HEADER       = 'X-Operator-API-Key';
 export const HTTP_X_FORWARDED_HOST_HEADER      = _HEADERS['http.x-forwarded-host'];
 export const HTTP_X_FORWARDED_PROTO_HEADER     = _HEADERS['http.x-forwarded-proto'];

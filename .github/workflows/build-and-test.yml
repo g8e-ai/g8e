@@ -11,6 +11,24 @@ permissions:
   contents: read
 
 jobs:
+  verify-proto:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Generate Proto
+        run: ./scripts/core/gen-proto.sh
+
+      - name: Check for drift
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "Error: Generated proto files are out of sync with shared/proto/*.proto"
+            git status --porcelain
+            git diff
+            exit 1
+          fi
+
   test-g8eo:
     runs-on: ubuntu-latest
     timeout-minutes: 30

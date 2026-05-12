@@ -109,6 +109,10 @@ func (cs *CommandService) SetSentinel(s *sentinel.Sentinel) {
 
 // HandleExecutionRequest processes an inbound command execution request.
 func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSubCommandMessage) {
+	if len(msg.Payload) > 1024*1024 {
+		cs.logger.Error("Command payload exceeds size limit", "size", len(msg.Payload), "limit", 1024*1024)
+		return
+	}
 	var protoCmd operatorv1.CommandRequested
 	if err := proto.Unmarshal(msg.Payload, &protoCmd); err != nil {
 		cs.logger.Error("Failed to decode command payload as protobuf CommandRequested", "error", err)
@@ -405,6 +409,10 @@ func (cs *CommandService) runStatusTicker(
 
 // HandleCancelRequest processes an inbound command cancellation request.
 func (cs *CommandService) HandleCancelRequest(ctx context.Context, msg PubSubCommandMessage) {
+	if len(msg.Payload) > 64*1024 {
+		cs.logger.Error("Cancel payload exceeds size limit", "size", len(msg.Payload), "limit", 64*1024)
+		return
+	}
 	var protoCancel operatorv1.CommandCancelRequested
 	if err := proto.Unmarshal(msg.Payload, &protoCancel); err != nil {
 		cs.logger.Error("Failed to decode cancel payload as protobuf CommandCancelRequested", "error", err)

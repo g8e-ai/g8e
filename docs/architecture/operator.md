@@ -6,7 +6,7 @@ parent: Architecture
 # g8e Operator
 
 Last Updated: 2026-05-12
-Version: v0.2.3
+Version: v0.2.4
 
 The Operator is the platform's data plane, execution engine, and persistence layer. It is a statically compiled Go binary that provides the substrate for all g8e operations, functioning as both the hub for persistence and the agent for execution.
 
@@ -15,7 +15,7 @@ The Operator is the platform's data plane, execution engine, and persistence lay
 - **Single Binary, Multi-Mode**: The same binary runs as the Hub (Listen Mode), Target (Standard Mode), and Fleet Utility (Stream Mode).
 - **Outbound-Only**: Target operators initiate all connections via mTLS; no inbound ports are required.
 - **Local-First Audit (LFAA)**: The host is the single source of truth for command history and file mutations, stored in a tamper-evident ledger.
-- **Protocol-First**: Every action is governed by serialized Protobuf `UniversalEnvelope` bytes carrying typed `operator.proto` payloads.
+- **Protocol-First**: Every action is governed by serialized Protobuf `GovernanceEnvelope` bytes carrying typed `operator.proto` payloads.
 - **3-Layer Governance**: Hard gates at the bedrock, consensus in the middle, and human authorization at the top.
 
 ## Architecture Overview
@@ -81,7 +81,7 @@ The default mode for execution on target hosts. The operator initiates an outbou
 3. **Auth**: Authenticates via `POST /api/auth/operator` using an API key or Device Token. Device tokens are typically used for automated evaluation fleet deployment.
 4. **Vault Unlock**: API key unlocks the local **Encryption Vault** to retrieve the Data Encryption Key (DEK).
 5. **Upgrade**: Receives an mTLS certificate and upgrades the transport to WSS.
-6. **Steady State**: Subscribes to `cmd:{operator_id}` for serialized `UniversalEnvelope` commands.
+6. **Steady State**: Subscribes to `cmd:{operator_id}` for serialized `GovernanceEnvelope` commands.
 
 ### 3. Stream Mode (Fleet)
 A utility for concurrent deployment over SSH. It streams itself into memory on remote hosts, injects a temporary binary, and manages the remote lifecycle via SSH.

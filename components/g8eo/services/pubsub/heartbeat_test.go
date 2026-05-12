@@ -239,7 +239,7 @@ func TestHandleHeartbeatRequest_UsesHeartbeatTypeRequested(t *testing.T) {
 	last := db.LastPublished()
 	require.NotNil(t, last)
 
-	// Unmarshal the UniversalEnvelope
+	// Unmarshal the GovernanceEnvelope
 	env := testutil.MustUnmarshalUniversalEnvelope(t, last.Data)
 
 	// Unmarshal the payload as protobuf HeartbeatResult
@@ -264,7 +264,7 @@ func TestHandleHeartbeatRequest_PropagatesCaseID(t *testing.T) {
 	last := db.LastPublished()
 	require.NotNil(t, last)
 
-	// Unmarshal the UniversalEnvelope
+	// Unmarshal the GovernanceEnvelope
 	env := testutil.MustUnmarshalUniversalEnvelope(t, last.Data)
 
 	// Unmarshal the payload as protobuf HeartbeatResult
@@ -290,7 +290,7 @@ func TestHandleHeartbeatRequest_PropagatesInvestigationID(t *testing.T) {
 	last := db.LastPublished()
 	require.NotNil(t, last)
 
-	// Unmarshal the UniversalEnvelope
+	// Unmarshal the GovernanceEnvelope
 	env := testutil.MustUnmarshalUniversalEnvelope(t, last.Data)
 
 	// Unmarshal the payload as protobuf HeartbeatResult
@@ -361,7 +361,7 @@ func TestHandleHeartbeatRequest_PublishesToCorrectChannel(t *testing.T) {
 	last := db.LastPublished()
 	require.NotNil(t, last)
 
-	// Unmarshal the UniversalEnvelope
+	// Unmarshal the GovernanceEnvelope
 	env := testutil.MustUnmarshalUniversalEnvelope(t, last.Data)
 
 	expectedChannel := constants.HeartbeatChannel(cfg.OperatorID, cfg.OperatorSessionId)
@@ -381,7 +381,7 @@ func TestSendAutomaticHeartbeat_PublishesAutomaticType(t *testing.T) {
 	last := db.LastPublished()
 	require.NotNil(t, last)
 
-	// Unmarshal the UniversalEnvelope
+	// Unmarshal the GovernanceEnvelope
 	env := testutil.MustUnmarshalUniversalEnvelope(t, last.Data)
 
 	// Unmarshal the payload as protobuf HeartbeatResult
@@ -410,7 +410,7 @@ func TestSendAutomaticHeartbeat_UsesVersionFromConfig(t *testing.T) {
 	last := db.LastPublished()
 	require.NotNil(t, last)
 
-	// Unmarshal the UniversalEnvelope
+	// Unmarshal the GovernanceEnvelope
 	env := testutil.MustUnmarshalUniversalEnvelope(t, last.Data)
 
 	// Unmarshal the payload as protobuf HeartbeatResult
@@ -608,7 +608,7 @@ func TestHeartbeatScheduler_ShortIntervalFiresAndPublishes(t *testing.T) {
 	last := db.LastPublished()
 	require.NotNil(t, last)
 
-	// Unmarshal the UniversalEnvelope
+	// Unmarshal the GovernanceEnvelope
 	env := testutil.MustUnmarshalUniversalEnvelope(t, last.Data)
 
 	// Unmarshal the payload as protobuf HeartbeatResult
@@ -642,7 +642,7 @@ func TestHeartbeatScheduler_PayloadCarriesConfigFields(t *testing.T) {
 	last := db.LastPublished()
 	require.NotNil(t, last)
 
-	// Unmarshal the UniversalEnvelope
+	// Unmarshal the GovernanceEnvelope
 	env := testutil.MustUnmarshalUniversalEnvelope(t, last.Data)
 
 	// Unmarshal the payload as protobuf HeartbeatResult
@@ -669,7 +669,7 @@ func TestHeartbeatScheduler_PayloadSystemIdentityPopulated(t *testing.T) {
 	last := db.LastPublished()
 	require.NotNil(t, last)
 
-	// Unmarshal the UniversalEnvelope
+	// Unmarshal the GovernanceEnvelope
 	env := testutil.MustUnmarshalUniversalEnvelope(t, last.Data)
 
 	// Unmarshal the payload as protobuf HeartbeatResult

@@ -6,7 +6,7 @@ parent: Architecture
 # g8e Protocol
 
 Last Updated: 2026-05-12
-Version: v0.2.3
+Version: v0.2.4
 
 The g8e Protocol is a **Protobuf-first** communication layer designed for secure, auditable, and Byzantine Fault Tolerant (BFT) interaction between any g8e client and a host-local **Operator (g8eo)**.
 
@@ -14,7 +14,7 @@ While g8e includes bundled application-layer adapters—**Dashboard (g8ed)** and
 
 # Core Invariants
 
-1. **Protobuf-Only Wire Format**: All cross-component operator traffic (commands, results, status updates) MUST use serialized `UniversalEnvelope` messages. JSON fallbacks are rejected.
+1. **Protobuf-Only Wire Format**: All cross-component operator traffic (commands, results, status updates) MUST use serialized `GovernanceEnvelope` messages. JSON fallbacks are rejected.
 2. **Identity Persistence**: Every message must carry an `id`, `operator_id`, and `operator_session_id`.
 3. **Immutable Governance**: Governance metadata (L1/L2/L3) is baked into the envelope and verified by the Operator before any action is taken.
 4. **BFT State Binding**: Commands are bound to a specific fleet state via `state_merkle_root`.
@@ -28,13 +28,13 @@ The canonical schema files live in `@/home/bob/g8e/shared/proto/`:
 
 | File | Purpose |
 |------|---------|
-| `common.proto` | Defines `UniversalEnvelope`, component identity, and governance metadata. |
+| `common.proto` | Defines `GovernanceEnvelope`, component identity, and governance metadata. |
 | `operator.proto` | Defines request/result payloads (commands, file ops, heartbeats, etc.). |
 | `pubsub.proto` | Defines the low-level pub/sub carrier messages. |
 
-## UniversalEnvelope
+## GovernanceEnvelope
 
-The `UniversalEnvelope` is the root container for all protocol traffic. It binds an event name to typed payload bytes and provides the necessary context for governance.
+The `GovernanceEnvelope` is the root container for all protocol traffic. It binds an event name to typed payload bytes and provides the necessary context for governance.
 
 | Field | Role |
 |-------|------|
@@ -44,6 +44,8 @@ The `UniversalEnvelope` is the root container for all protocol traffic. It binds
 | `event_type` | Canonical event string from `shared/constants/events.json`. |
 | `operator_id` | Target or source operator identity. |
 | `state_merkle_root` | Fleet state root for BFT verification. |
+| `expires_at` | UTC timestamp after which the transaction is invalid. |
+| `nonce` | Random salt or monotonic counter for replay protection. |
 | `governance` | L1/L2/L3 metadata for security enforcement. |
 | `payload` | Serialized bytes of the typed message (e.g., `CommandRequested`). |
 
@@ -54,24 +56,27 @@ The `UniversalEnvelope` is the root container for all protocol traffic. It binds
 ## 1. Request Phase (Client -> Operator)
 
 1. **Generation**: A client (e.g., `g8ee` or a BYO agent) generates a typed payload (e.g., `CommandRequestPayload`).
-2. **Envelope Building**: The payload is wrapped in a `UniversalEnvelope`.
-3. **L2 Signing**: The envelope is signed using the configured L2 mechanism (e.g., HMAC-SHA256 or asymmetric signature) over `event_type || "\n" || payload_bytes`.
+2. **Envelope Building**: The payload is wrapped in a `GovernanceEnvelope`.
+3. **L2 Signing**: The envelope is signed using the configured L2 mechanism (e.g., HMAC-SHA256 or asymmetric signature). For asymmetric signatures, the material is a pipe-delimited canonical string: `ID | Timestamp | EventType | OperatorID | SessionID | StateRoot | Expiry | Nonce | Payload`.
 4. **Publication**: The serialized envelope is published to the Operator's command channel (WSS) or submitted via HTTPS.
 
 ## 2. Verification Phase (Operator)
 
 Upon receiving an envelope, `g8eo` performs these checks in `@/home/bob/g8e/components/g8eo/services/pubsub/pubsub_commands.go`:
 
-1. **Parsing**: Rejects any payload that is not a valid `UniversalEnvelope`.
-2. **BFT Check**: If `state_merkle_root` is present, it is compared against the local ledger. Mismatches cause immediate rejection.
-3. **L1 Check**: Uses Protobuf reflection to find fields marked with `forbidden_patterns`. If a regex matches (e.g., `sudo`), the command is rejected.
-4. **L2 Check**: Verifies the signature against its local trust store (e.g., `auditor_hmac_key` or trusted public keys).
-5. **Dispatch**: Decodes the inner payload and routes it to the appropriate service handler.
+1. **Parsing**: Rejects any payload that is not a valid `GovernanceEnvelope`.
+2. **Expiry Check**: Rejects any transaction if `expires_at` is in the past.
+3. **Replay Protection**: Rejects the `nonce` if it has already been processed (tracked in the persistent KV store).
+4. **BFT Check**: If `state_merkle_root` is present, it is compared against the local ledger. Mismatches cause immediate rejection.
+5. **L1 Check**: Uses Protobuf reflection to find fields marked with `forbidden_patterns`. If a regex matches (e.g., `sudo`), the command is rejected.
+6. **L2 Check**: Verifies the signature against its local trust store (e.g., `auditor_hmac_key` or trusted public keys) using the canonical signing payload.
+7. **L3 Check**: For mutation requests, verifies the human signature or auto-approval status.
+8. **Dispatch**: Decodes the inner payload and routes it to the appropriate service handler.
 
 ## 3. Result Phase (Operator -> Client)
 
 1. **Execution**: The handler executes the requested action and captures results.
-2. **Envelope Building**: `g8eo` wraps the result payload (e.g., `CommandResult`) in a `UniversalEnvelope`.
+2. **Envelope Building**: `g8eo` wraps the result payload (e.g., `CommandResult`) in a `GovernanceEnvelope`.
 3. **Publication**: The result envelope is published to the results channel for the subscribed client(s).
 
 ---
@@ -90,7 +95,7 @@ Enforced via signatures in `@/home/bob/g8e/components/g8eo/services/pubsub/l2_ve
 - **Verifier**: `g8eo` (Operator).
 - **Mechanism**: ED25519 asymmetric signatures (Legacy HMAC fallback).
 - **Attribution**: Uses `key_id` in `GovernanceMetadata` for O(1) public key lookup.
-- **Material**: `event_type + "\n" + payload_bytes`.
+- **Material**: Pipe-delimited string: `ID | Timestamp | EventType | OperatorID | SessionID | StateRoot | Expiry | Nonce | Payload`.
 
 ### L3: Authorization (Approval)
 Human-in-the-loop authorization via Passkeys or BYO approval systems.

@@ -207,7 +207,7 @@ class TestDispatchResultsMessage:
         """Test dispatches parsed protobuf message to _handle_pubsub_result_message."""
         with patch.object(command_service._pubsub_service, "_handle_pubsub_result_message", new=AsyncMock()) as mock_handle:  # noqa: SLF001
             # Build a valid protobuf envelope
-            envelope = common_pb2.UniversalEnvelope()
+            envelope = common_pb2.GovernanceEnvelope()
             envelope.id = "test-id"
             envelope.event_type = EventType.OPERATOR_COMMAND_COMPLETED
             
@@ -251,7 +251,7 @@ class TestDispatchResultsMessage:
         )
         
         # Build a valid protobuf envelope to reach the handler
-        envelope = common_pb2.UniversalEnvelope()
+        envelope = common_pb2.GovernanceEnvelope()
         envelope.id = "test-id"
         envelope.event_type = "test-event"
         data = envelope.SerializeToString()

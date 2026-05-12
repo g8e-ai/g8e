@@ -5,7 +5,7 @@ title: Developer
 # g8e Developer Guide
 
 Last Updated: 2026-05-12
-Version: v0.2.3
+Version: v0.2.4
 
 This document defines the deterministic execution constraints for all code generated for the g8e platform. The platform is an open-source, self-hosted AI governance layer designed for offline operation. The mandatory substrate is the Operator (g8eo) plus the shared Protobuf protocol; the Dashboard (g8ed) and Engine (g8ee) are optional application-layer adapters.
 
@@ -58,7 +58,7 @@ IV. Application Boundary and State Management
 
 2. Strict Typing: Inside the application boundary, data lives exclusively as typed model instances. Raw dicts, untyped maps, and ad-hoc JSON are prohibited. Models are only flattened to plain objects when crossing a wire boundary (database, KV cache, HTTP, pub-sub).
 
-3. Protobuf First: `shared/proto/*.proto` defines the canonical wire format. All inter-component communication uses the `UniversalEnvelope` carrying typed Protobuf payloads.
+3. Protobuf First: `shared/proto/*.proto` defines the canonical wire format. All inter-component communication uses the `GovernanceEnvelope` carrying typed Protobuf payloads.
 
 4. Data Access Layering: All document operations must use the `CacheAsideService`. The database is the authoritative source of truth for writes. The KV store is the primary read path. Writes must explicitly invalidate or update the cache to ensure consistency.
 

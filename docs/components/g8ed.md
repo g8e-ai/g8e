@@ -6,7 +6,7 @@ parent: Components
 # g8ed — g8e Dashboard
 
 Last Updated: 2026-05-11
-Version: v0.2.3
+Version: v0.2.4
 
 ## Overview
 

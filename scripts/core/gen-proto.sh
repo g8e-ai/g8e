@@ -29,34 +29,22 @@ echo "Generating Protobuf code..."
 # We will use docker compose run to execute the protoc commands.
 
 # Go generation
-docker compose run --rm -u root -v "$PROTO_SRC_DIR:/proto_src" -v "$GO_OUT_DIR:/go_out" g8eo-test-runner sh -c "\
-  protoc -I=/proto_src -I=/usr/include \
-  --go_out=/go_out --go_opt=module=github.com/g8e-ai/g8e/components/g8eo/shared/proto \
-  --go-grpc_out=/go_out --go-grpc_opt=module=github.com/g8e-ai/g8e/components/g8eo/shared/proto \
-  /proto_src/*.proto"
+docker run --rm -u $(id -u):$(id -g) -v "$PROJECT_ROOT:/workspace" -w /workspace namely/protoc-all \
+    -i shared/proto \
+    -d shared/proto \
+    -l go \
+    -o components/g8eo \
+    --go-module-prefix github.com/g8e-ai/g8e/components/g8eo \
+    --go-opt=module=github.com/g8e-ai/g8e/components/g8eo
 
 # Python generation
-docker compose run --rm -u root -v "$PROTO_SRC_DIR:/proto_src" -v "$PY_OUT_DIR:/py_out" g8eo-test-runner sh -c "\
-  python3 -m grpc_tools.protoc -I=/proto_src -I=/usr/include \
-  --python_out=/py_out \
-  --grpc_python_out=/py_out \
-  /proto_src/*.proto"
+docker run --rm -u $(id -u):$(id -g) -v "$PROTO_SRC_DIR:/proto_src" -v "$PY_OUT_DIR:/py_out" namely/protoc-all -i /proto_src -d /proto_src -l python -o /py_out
 
 # Post-process Python files to fix imports for package structure
-docker compose run --rm -u root -v "$PY_OUT_DIR:/py_out" g8eo-test-runner sh -c "\
-  touch /py_out/__init__.py && \
-  sed -i 's/^import \(.*_pb2\)/from . import \1/' /py_out/*_pb2*.py"
+touch "$PY_OUT_DIR/__init__.py"
+sed -i 's/^import \(.*_pb2\)/from . import \1/' "$PY_OUT_DIR"/*_pb2*.py
 
 # JS generation
-docker compose run --rm -u root -v "$PROTO_SRC_DIR:/proto_src" -v "$JS_OUT_DIR:/js_out" g8eo-test-runner sh -c "\
-  grpc_tools_node_protoc -I=/proto_src -I=/usr/include \
-  --js_out=import_style=commonjs,binary:/js_out \
-  --grpc-web_out=import_style=commonjs,mode=grpcwebtext:/js_out \
-  /proto_src/*.proto"
+docker run --rm -u $(id -u):$(id -g) -v "$PROTO_SRC_DIR:/proto_src" -v "$JS_OUT_DIR:/js_out" namely/protoc-all -i /proto_src -d /proto_src -l node -o /js_out --grpc-web-out "import_style=commonjs,mode=grpcwebtext"
 
-# Fix ownership (since we ran as root in the container)
-docker compose run --rm -u root -v "$GO_OUT_DIR:/go_out" -v "$PY_OUT_DIR:/py_out" -v "$JS_OUT_DIR:/js_out" g8eo-test-runner sh -c "\
-  chown -R $(id -u):$(id -g) /go_out /py_out /js_out"
-
-echo "Protobuf generation complete (placeholder)."
-echo "NOTE: Ensure protoc and plugins are installed in the build environment."
+echo "Protobuf generation complete."

@@ -407,19 +407,25 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 		"payload_size", len(payload))
 
 	var cmdMsg PubSubCommandMessage
+	if len(payload) > MaxPayloadSize {
+		rs.logger.Error("Command payload exceeds maximum size limit",
+			"size", len(payload),
+			"limit", MaxPayloadSize)
+		return
+	}
 
-	// Parse as UniversalEnvelope (protobuf) - protocol-first architecture
-	var env commonv1.UniversalEnvelope
+	// Parse as GovernanceEnvelope (protobuf) - protocol-first architecture
+	var env commonv1.GovernanceEnvelope
 	if err := proto.Unmarshal(payload, &env); err != nil {
-		rs.logger.Error("Failed to parse command message as protobuf UniversalEnvelope", "error", err)
+		rs.logger.Error("Failed to parse command message as protobuf GovernanceEnvelope", "error", err)
 		return
 	}
 	if env.Id == "" {
-		rs.logger.Error("Invalid UniversalEnvelope: missing id field")
+		rs.logger.Error("Invalid GovernanceEnvelope: missing id field")
 		return
 	}
 
-	rs.logger.Info("Parsed request via Protobuf (UniversalEnvelope)",
+	rs.logger.Info("Parsed request via Protobuf (GovernanceEnvelope)",
 		"state_merkle_root", env.StateMerkleRoot)
 	taskID := env.TaskId
 	operatorID := env.OperatorId
@@ -436,7 +442,30 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 		Timestamp:         env.Timestamp.AsTime(),
 	}
 
-	// BFT Verification: Verify state merkle root if present
+	// 1. Basic Protocol Gates: Expiry and Replay Protection
+	if env.ExpiresAt != nil {
+		if time.Now().UTC().After(env.ExpiresAt.AsTime()) {
+			rs.logger.Error("Transaction expired: command rejected",
+				"expiry", env.ExpiresAt.AsTime(),
+				"execution_id", env.Id)
+			return
+		}
+	}
+
+	if env.Nonce != "" {
+		// Replay protection check
+		nonceKey := "g8e:nonce:" + env.Nonce
+		if _, found := rs.commands.localStore.KVGet(nonceKey); found {
+			rs.logger.Error("Replay detected: command rejected",
+				"nonce", env.Nonce,
+				"execution_id", env.Id)
+			return
+		}
+		// Record nonce with a 24h TTL
+		rs.commands.localStore.KVSet(nonceKey, "used", 86400)
+	}
+
+	// 2. BFT Verification: Verify state merkle root if present
 	if env.StateMerkleRoot != "" {
 		if rs.commands.ledger != nil {
 			currentRoot, err := rs.commands.ledger.GetStateMerkleRoot()
@@ -497,6 +526,27 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 		rs.logger.Info("L2 Governance verification passed", "event_type", env.EventType)
 	} else {
 		rs.logger.Debug("L2 Governance verification skipped: no HMAC key or trusted signers configured", "event_type", env.EventType)
+	}
+
+	// L3 Governance: Verify Human Approval signature for mutation requests
+	// Note: In a production system, we'd lookup trusted L3 keys for the user.
+	// For now, we enforce that mutation requests (Command, FileEdit) must have L3 or be auto-approved.
+	isMutation := env.EventType == constants.Event.Operator.Command.Requested ||
+		env.EventType == constants.Event.Operator.FileEdit.Requested ||
+		env.EventType == constants.Event.Operator.RestoreFile.Requested ||
+		env.EventType == constants.Event.Operator.ShutdownRequested
+
+	if isMutation {
+		// For Phase 3, we require L3Metadata to be present.
+		// If AutoApproved=true, we still allow it (policy check is L1).
+		if err := VerifyL3Governance(&env, nil); err != nil {
+			rs.logger.Error("L3 Governance verification failed: mutation rejected",
+				"event_type", env.EventType,
+				"error", err,
+				"execution_id", env.Id)
+			return
+		}
+		rs.logger.Info("L3 Governance verification passed", "event_type", env.EventType)
 	}
 
 	rs.dispatchCommand(cmdMsg)

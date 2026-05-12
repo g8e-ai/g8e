@@ -19,7 +19,7 @@ The core product invariant is that a typed, signed, state-bound transaction reac
 # Origins & Architecture
 
 Last Updated: 2026-05-12
-Version: v0.2.3
+Version: v0.2.4
 
 For thirty years, my entire world has been managing and protecting data across remote systems... unstructured, structured, blob - nfs, smb, https, s3, ssh - linux, unix, windows - wan, lan... and all bits and pieces of the business side in-between - security reviews/audits, sales cycles, painful conversations with customers, on-site visits, RCAs, mission-critical service design... but one thing I hang my hat on is knowing all the people who I took that particular burden away from, so they can just get on with their other jobs and lives.
 
@@ -55,7 +55,7 @@ To solve this, g8e centers the product boundary on an Operator/protocol substrat
 ### 1. The Reality Portal: Sovereign Execution (Substrate)
 SaaS-based agent architectures pull your authoritative state into their cloud. We inverted this. The execution plane is the **Operator**: a statically compiled Go binary that runs on your managed host and provides the **mandatory substrate** for the platform.
 
-The Operator treats all upstream inputs as inherently untrusted. Command traffic isn't ad hoc JSON; it is serialized `UniversalEnvelope` bytes carrying typed Protobuf payloads. Before a single bit moves on the host OS, the Operator rejects malformed envelopes, applies protocol-level L1 checks, verifies L2 Consensus signatures, and routes the payload through a Sentinel layer enforcing strict allowlist/denylist controls and 46 MITRE ATT&CK detectors.
+The Operator treats all upstream inputs as inherently untrusted. Command traffic isn't ad hoc JSON; it is serialized `GovernanceEnvelope` bytes carrying typed Protobuf payloads. Before a single bit moves on the host OS, the Operator rejects malformed envelopes, applies protocol-level L1 checks, verifies L2 Consensus signatures, and routes the payload through a Sentinel layer enforcing strict allowlist/denylist controls and 46 MITRE ATT&CK detectors.
 
 ### 2. The BFT Control Plane: Governance (Application Layer)
 Any state-changing intent can be evaluated by a consensus panel (e.g., the bundled 5-node **Engine** adapter). Operating under strict information isolation, they evaluate intent in a vacuum. Because they cannot socially engineer each other, they cannot sycophantically agree.
@@ -66,7 +66,7 @@ A calibrated adversarial agent (**Nemesis**) continuously attempts to trick the 
 In g8e, auditability is the literal nervous system. Utilizing a Local-First Audit Architecture (LFAA), every intent, Tribunal verdict, risk assessment, and raw command output is anchored to an encrypted, Git-backed SQLite ledger on the host *before and during* execution. The cloud can disappear, and your history doesn't.
 
 ### 4. Proof of Human Presence (Application-Layer Approval)
-The machine handles what is machine-checkable. The human handles what is strictly human-checkable: intent fidelity, contextual stakes, and the acceptance of consequences. A bundled Dashboard or BYO frontend can collect approval UX, but the protocol explicitly binds this Layer 3 authorization state (`UniversalEnvelope.governance.l3`) into the payload envelope for Operator-side verification. No "internal" trust shortcuts exist for bundled components.
+The machine handles what is machine-checkable. The human handles what is strictly human-checkable: intent fidelity, contextual stakes, and the acceptance of consequences. A bundled Dashboard or BYO frontend can collect approval UX, but the protocol explicitly binds this Layer 3 authorization state (`GovernanceEnvelope.governance.l3`) into the payload envelope for Operator-side verification. No "internal" trust shortcuts exist for bundled components.
 
 ---
 

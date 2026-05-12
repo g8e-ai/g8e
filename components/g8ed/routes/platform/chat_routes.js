@@ -37,8 +37,6 @@ export function createChatRouter({
 }) {
     const { internalHttpClient, bindingService } = services;
     const { requireAuth, requireOperatorBinding } = authMiddleware;
-    const { requireInternalOrigin } = authorizationMiddleware;
-    const { chatRateLimiter, apiRateLimiter } = rateLimiters;
     const router = express.Router();
 
     router.post(ChatPaths.SEND, requireAuth, requireOperatorBinding, chatRateLimiter, async (req, res, next) => {

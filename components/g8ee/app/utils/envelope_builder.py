@@ -12,7 +12,7 @@
 # limitations under the License.
 
 """
-UniversalEnvelope construction and L2 Tribunal signing for outbound
+GovernanceEnvelope construction and L2 Tribunal signing for outbound
 g8ee -> g8eo command messages.
 
 This is the single Protobuf-first construction point that replaces
@@ -83,7 +83,7 @@ def build_universal_envelope_bytes(
     state_merkle_root: str = "",
     system_fingerprint: str = "",
 ) -> bytes:
-    """Build a Protobuf ``UniversalEnvelope`` with signed L2 metadata.
+    """Build a Protobuf ``GovernanceEnvelope`` with signed L2 metadata.
 
     The inner payload MUST implement ``to_protobuf()`` returning a
     Protobuf message. The resulting bytes are published directly to
@@ -95,12 +95,12 @@ def build_universal_envelope_bytes(
     here only as a hint and do not short-circuit any enforcement.
     """
     if message.payload is None:
-        raise ValueError("G8eMessage.payload is required to build UniversalEnvelope")
+        raise ValueError("G8eMessage.payload is required to build GovernanceEnvelope")
 
     proto_payload = message.payload.to_protobuf()
     payload_bytes = proto_payload.SerializeToString()
 
-    envelope = common_pb2.UniversalEnvelope()
+    envelope = common_pb2.GovernanceEnvelope()
     envelope.id = message.id
     ts = Timestamp()
     ts.FromDatetime(message.timestamp)
@@ -160,26 +160,26 @@ def protobuf_execution_status_to_python(status_int: int) -> ExecutionStatus:
     return _PROTOBUF_EXECUTION_STATUS_TO_PYTHON[status_int]
 
 
-def decode_universal_envelope(envelope_bytes: bytes) -> common_pb2.UniversalEnvelope:
-    """Decode protobuf UniversalEnvelope bytes from g8eo.
+def decode_universal_envelope(envelope_bytes: bytes) -> common_pb2.GovernanceEnvelope:
+    """Decode protobuf GovernanceEnvelope bytes from g8eo.
 
     Args:
-        envelope_bytes: Raw protobuf UniversalEnvelope bytes from operator pub/sub
+        envelope_bytes: Raw protobuf GovernanceEnvelope bytes from operator pub/sub
 
     Returns:
-        Decoded UniversalEnvelope protobuf message
+        Decoded GovernanceEnvelope protobuf message
 
     Raises:
-        ValueError: If the bytes cannot be decoded as a valid UniversalEnvelope
+        ValueError: If the bytes cannot be decoded as a valid GovernanceEnvelope
     """
     try:
-        envelope = common_pb2.UniversalEnvelope()
+        envelope = common_pb2.GovernanceEnvelope()
         envelope.ParseFromString(envelope_bytes)
         if not envelope.id:
-            raise ValueError("Invalid UniversalEnvelope: missing id field")
+            raise ValueError("Invalid GovernanceEnvelope: missing id field")
         return envelope
     except DecodeError as e:
-        raise ValueError(f"Failed to decode UniversalEnvelope: {e}") from e
+        raise ValueError(f"Failed to decode GovernanceEnvelope: {e}") from e
 
 
 def _protobuf_message_to_dict(message) -> dict[str, object]:
@@ -245,16 +245,16 @@ def _protobuf_message_to_dict(message) -> dict[str, object]:
 
 
 def decode_g8eo_result_envelope(envelope_bytes: bytes) -> dict[str, object]:
-    """Decode a g8eo result UniversalEnvelope and convert to Pydantic-compatible dict.
+    """Decode a g8eo result GovernanceEnvelope and convert to Pydantic-compatible dict.
 
     This function:
-    1. Decodes the protobuf UniversalEnvelope
+    1. Decodes the protobuf GovernanceEnvelope
     2. Extracts the inner protobuf payload based on event_type
     3. Converts protobuf enum fields to Python strings
     4. Returns a dict compatible with G8eoResultEnvelope Pydantic model
 
     Args:
-        envelope_bytes: Raw protobuf UniversalEnvelope bytes from operator pub/sub
+        envelope_bytes: Raw protobuf GovernanceEnvelope bytes from operator pub/sub
 
     Returns:
         Dict with envelope metadata and converted payload dict

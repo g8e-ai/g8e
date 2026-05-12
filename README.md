@@ -4,7 +4,7 @@
 
 g8e is a governance-first agentic platform for trustless infrastructure management. Every actor — Engine, Operator, User — operates under a mutual adversarial assumption: verify every intent, sign every state change, and anchor every output to a host-authoritative ledger. 
 
-The architecture is a host-authoritative substrate: Byzantine consensus with an adversarial co-validator, sovereign execution on customer hardware, and chain-of-custody audit. Its foundation is a Protobuf-first `UniversalEnvelope` contract that binds typed payloads to canonical event names, state roots, and a 3-layer governance hierarchy (L1/L2/L3).
+The architecture is a host-authoritative substrate: Byzantine consensus with an adversarial co-validator, sovereign execution on customer hardware, and chain-of-custody audit. Its foundation is a Protobuf-first `GovernanceEnvelope` contract that binds typed payloads to canonical event names, state roots, and a 3-layer governance hierarchy (L1/L2/L3).
 
 Self-hosted. Air-gap capable. Apache 2.0. Built for environments where nominal oversight is a failure state.
 
@@ -87,7 +87,7 @@ flowchart TD
 4. **The Warden** performs pre-execution risk assessment. It orchestrates specialized sub-agents (`command_risk`, `file_risk`, `error`) to classify the command's blast radius and potential for harm.
 5. **The Auditor** performs the final consistency check and Merkle commitment. It verifies the Tribunal's choice against Sage's intent and judges the Nemesis.
 6. **Proof of Human Presence (PHP)**: The user reviews the command and risk assessment via the Dashboard and provides a hardware-bound signature (FIDO2/WebAuthn). This is **Layer 3** authorization; it never bypasses L1 or L2 gates.
-7. **The Operator** receives the serialized `UniversalEnvelope`, verifies the L2 signature, enforces L1 forbidden-patterns, checks state freshness, and executes the command in an isolated process group. Results are captured in the local LFAA ledger.
+7. **The Operator** receives the serialized `GovernanceEnvelope`, verifies the L2 signature, enforces L1 forbidden-patterns, checks state freshness, and executes the command in an isolated process group. Results are captured in the local LFAA ledger.
 8. **Codex** (async) extracts durable preferences and scrubbed summaries from history to build the system's long-term memory.
 
 The point of steps 1–5 is to minimize what reaches step 6. Your time is the only stake the system can't fake; everything upstream exists to spend it well.
@@ -100,8 +100,8 @@ The protocol is the foundation layer of g8e. UI flows, agent workflows, and stor
 
 ```text
 typed operator.proto payload
-  -> UniversalEnvelope.payload
-  -> serialized UniversalEnvelope bytes
+  -> GovernanceEnvelope.payload
+  -> serialized GovernanceEnvelope bytes
   -> operator pub/sub data
 ```
 
@@ -142,8 +142,8 @@ flowchart LR
 
     subgraph Hub [Control & Persistence Plane / Self-Hosted Hub]
         direction TB
-        g8ed[g8ed<br>Governance Gateway<br>Node.js]
-        g8ee[g8ee<br>AI Engine & Scrubber<br>Python]
+        g8ed[g8ed<br>Optional Dashboard Adapter<br>Node.js]
+        g8ee[g8ee<br>Optional Engine Adapter<br>Python]
 
         subgraph Operator_Listen [Operator Listen Mode]
             direction LR
@@ -155,9 +155,9 @@ flowchart LR
             Listen --- DS & KS & PS
         end
 
-        g8ed -- "Internal" --> g8ee
-        g8ed -- "Internal" --> Listen
-        g8ee -- "Internal" --> Listen
+        g8ed -- "Public Protocol" --> g8ee
+        g8ed -- "Public Protocol" --> Listen
+        g8ee -- "Public Protocol" --> Listen
     end
 
     LLM((External LLM<br>Providers))
@@ -169,9 +169,9 @@ flowchart LR
 
 | Component | Stack | Role |
 |---|---|---|
-| **Operator (g8eo)** | Go | The sovereign "Satellite Agent". Runs on managed hosts, executes commands, and owns the LFAA ledger. Provides listen-mode persistence for the Control Plane. |
-| **AI Engine (g8ee)** | Python | The reasoning hub. Orchestrates the Tribunal, Warden, and Auditor. Stateless abstraction for multi-provider LLM access. |
-| **Dashboard (g8ed)** | Node.js | The Governance Gateway. FIDO2/WebAuthn auth provider, mTLS broker, and ledger synchronization interface. |
+| **Operator (g8eo)** | Go | The sovereign "Satellite Agent" and mandatory substrate. Runs on managed hosts, executes commands, and owns the LFAA ledger. Provides listen-mode persistence, policy enforcement, and pub/sub runtime. |
+| **AI Engine (g8ee)** | Python | Optional application-layer adapter. Orchestrates the Tribunal, Warden, and Auditor. Stateless abstraction for multi-provider LLM access. |
+| **Dashboard (g8ed)** | Node.js | Optional application-layer adapter. FIDO2/WebAuthn auth provider, mTLS broker, and ledger synchronization interface. |
 
 User to `g8ed` over TLS 1.3 with encrypted cookies. Operator to Gateway via outbound-only mTLS WebSocket. No inbound ports on managed hosts. Every connection is mutually authenticated; state-changing workflows pass through the L1/L2/L3 governance hierarchy, with hardware-bound passkey authorization as the default Layer 3 path.
 
@@ -208,7 +208,7 @@ Reputation staking, slashing tiers, and the full mechanism design: [governance.m
 The **Operator** is a sovereign "Satellite Agent" designed for global-scale fleet management. It delivers remote execution anywhere in the world using only an outbound connection, managing hundreds or thousands of devices within a single conversation context.
 
 1. **Context Injection**: Bundles a signed snapshot of host state (OS, shell, hardware, history) into the reasoning loop.
-2. **Receives** the typed `UniversalEnvelope` command via outbound mTLS WebSocket.
+2. **Receives** the typed `GovernanceEnvelope` command via outbound mTLS WebSocket.
 3. **Pre-screens** with the Sentinel — 46 MITRE ATT&CK detectors and 27 scrubbing patterns.
 4. **Executes** in an isolated process group with closed stdin.
 5. **Captures** output into a Raw Vault (host-only) and a Scrubbed Vault (AI-accessible).
@@ -234,7 +234,7 @@ Threat model and full control catalogue: [security.md](docs/architecture/securit
 
 ## Quick Start
 
-Prerequisites: Go, Node.js/npm, Python 3.12+, and curl available on the host.
+Prerequisites: Go and curl available on the host. Node.js/npm and Python 3.12+ are only required for the optional Dashboard and Engine adapters.
 
 ```bash
 git clone https://github.com/g8e-ai/g8e.git && cd g8e
@@ -254,15 +254,21 @@ git clone https://github.com/g8e-ai/g8e.git && cd g8e
 ### CLI Reference
 
 ```bash
-./g8e platform start       # Start all platform components
-./g8e platform status      # Show component health and versions
-./g8e platform stop        # Stop all platform components
+./g8e platform start       # Start Operator substrate only
+./g8e platform start --with-apps  # Start Operator plus optional Dashboard and Engine
+./g8e apps start g8ed     # Start optional Dashboard adapter
+./g8e apps start g8ee     # Start optional Engine adapter
+./g8e platform status      # Show substrate health and optional app status
+./g8e platform stop        # Stop Operator and optional apps
 ./g8e platform wipe        # Wipe app data, preserve SSL/settings
 ./g8e platform clean       # Remove all g8e processes and data
 
 ./g8e operator build       # Compile Operator for current host
 ./g8e operator deploy      # Deploy Operator to a remote host via SSH
-./g8e test <component>     # Run component tests (g8ee, g8ed, g8eo)
+./g8e test                 # Run Operator substrate tests
+./g8e test g8eo            # Run Operator substrate tests
+./g8e test g8ed            # Run optional Dashboard adapter tests
+./g8e test g8ee            # Run optional Engine adapter tests
 ```
 
 ---
@@ -298,7 +304,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 |---|---|
 | [Position Paper](docs/architecture/position_paper.md) | The thesis: AI-Powered, Human-Driven Infrastructure |
 | [Architecture](docs/architecture/about.md) | Origins, governance philosophy, core principles |
-| [Protocol](docs/architecture/protocol.md) | Bedrock Protobuf `UniversalEnvelope` contract, typed operator payloads, and protocol-level governance enforcement |
+| [Protocol](docs/architecture/protocol.md) | Bedrock Protobuf `GovernanceEnvelope` contract, typed operator payloads, and protocol-level governance enforcement |
 | [Governance](docs/architecture/governance.md) | L1/L2/L3 validation hierarchy, Tribunal mechanics, and protocol binding |
 | [Security](docs/architecture/security.md) | Authentication, Sentinel, LFAA, threat model |
 | [AI Control Plane](docs/architecture/ai_control_plane.md) | ReAct loop, Tribunal, prompts, tools, providers |

@@ -174,6 +174,18 @@ var localStoreMigrations = []sqliteutil.Migration{
 		CREATE INDEX IF NOT EXISTS idx_file_diff_session ON file_diff_log(operator_session_id);
 		`,
 	},
+	{
+		Version:     2,
+		Description: "Add kv table for generic persistence and replay protection",
+		SQL: `
+		CREATE TABLE IF NOT EXISTS kv (
+			key TEXT PRIMARY KEY,
+			value TEXT NOT NULL,
+			expires_at TEXT
+		);
+		CREATE INDEX IF NOT EXISTS idx_kv_expiry ON kv(expires_at);
+		`,
+	},
 }
 
 // StoreExecution stores a command execution result locally.
@@ -364,6 +376,11 @@ func localStorePrune(config *LocalStoreConfig) sqliteutil.PruneFunc {
 			}
 		}
 
+		_, err = db.Exec("DELETE FROM kv WHERE expires_at < ?", sqliteutil.FormatTimestamp(time.Now()))
+		if err != nil {
+			logger.Error("Failed to prune expired kv records", "error", err)
+		}
+
 		dbSizeBytes, err := db.GetSizeBytes()
 		if err != nil {
 			logger.Warn("Failed to get database size", "error", err)
@@ -424,6 +441,47 @@ func (ls *LocalStoreService) Close() error {
 // IsEnabled returns whether local storage is enabled.
 func (ls *LocalStoreService) IsEnabled() bool {
 	return ls != nil && ls.db != nil
+}
+
+// KVSet sets a key-value pair with an optional TTL (in seconds).
+func (ls *LocalStoreService) KVSet(key, value string, ttlSeconds int) error {
+	if ls == nil || ls.db == nil {
+		return nil
+	}
+
+	var expiresAt *string
+	if ttlSeconds > 0 {
+		ts := sqliteutil.FormatTimestamp(time.Now().Add(time.Duration(ttlSeconds) * time.Second))
+		expiresAt = &ts
+	}
+
+	query := `
+	INSERT INTO kv (key, value, expires_at) VALUES (?, ?, ?)
+	ON CONFLICT(key) DO UPDATE SET
+		value = excluded.value,
+		expires_at = excluded.expires_at
+	`
+	_, err := ls.db.Exec(query, key, value, expiresAt)
+	return err
+}
+
+// KVGet retrieves a value by key, honoring TTL.
+func (ls *LocalStoreService) KVGet(key string) (string, bool) {
+	if ls == nil || ls.db == nil {
+		return "", false
+	}
+
+	query := `
+	SELECT value FROM kv 
+	WHERE key = ? AND (expires_at IS NULL OR expires_at > ?)
+	`
+	now := sqliteutil.FormatTimestamp(time.Now())
+	var value string
+	err := ls.db.QueryRow(query, key, now).Scan(&value)
+	if err != nil {
+		return "", false
+	}
+	return value, true
 }
 
 // StoreFileDiff stores a Sentinel-scrubbed file diff in the scrubbed vault.

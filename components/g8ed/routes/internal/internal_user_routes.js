@@ -46,13 +46,13 @@ import {
  */
 export function createInternalUserRouter({ services, authorizationMiddleware }) {
     const { userService, webSessionService, passkeyAuthService } = services;
-    const { requireInternalOrigin, requireInternalOrUserAuth } = authorizationMiddleware;
+    const { requireInternalOrUserAuth } = authorizationMiddleware;
     const router = express.Router();
 
     /**
      * GET /api/internal/users/stats
      */
-    router.get('/stats', requireInternalOrigin, async (req, res, next) => {
+    router.get('/stats', requireInternalOrUserAuth, async (req, res, next) => {
         try {
             logger.info('[INTERNAL-HTTP] Getting user stats');
 

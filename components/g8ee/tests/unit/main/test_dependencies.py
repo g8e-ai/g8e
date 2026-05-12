@@ -43,7 +43,6 @@ from app.dependencies import (
     get_g8ee_platform_settings,
     get_g8ee_pubsub_client,
     health_check_dependencies,
-    require_internal_origin,
     require_proxy_auth,
 )
 from app.errors import (

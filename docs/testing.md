@@ -5,7 +5,7 @@ title: Testing
 # Testing g8e
 
 Last Updated: 2026-05-12
-Version: v0.2.3
+Version: v0.2.4
 
 g8e is designed to be a **testing environment and production environment at the same time**. We do not believe in mocking the world just to get tests to pass. If it doesn't work in the test environment, it won't work in production.
 

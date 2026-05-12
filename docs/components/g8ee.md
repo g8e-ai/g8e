@@ -6,7 +6,7 @@ parent: Components
 # g8ee
 
 Last Updated: 2026-05-11
-Version: v0.2.3
+Version: v0.2.4
 
 g8ee is the AI engine for the g8e platform. It provides an agentic, LLM-powered interface for infrastructure operations and troubleshooting, featuring human-in-the-loop safety controls, data sovereignty, and a multi-provider LLM abstraction layer.
 
@@ -542,7 +542,7 @@ g8ee also owns heartbeat status decay: `HeartbeatStaleMonitorService` (`app/serv
 
 ### Defensive Safety
 
-Before dispatching any state-changing operation, g8ee runs the L1/L2/L3 governance path: L1 technical bedrock checks, L2 Tribunal consensus and Auditor commitment, and L3 authorization state from the Governance Gateway. Command risk classification (LOW / MEDIUM / HIGH, fails closed to HIGH), file operation safety, and error analysis with auto-fix all feed that path. Dispatch to g8eo is a g8e protocol operation: a typed `operator.proto` payload is wrapped in a serialized Protobuf `UniversalEnvelope` with governance metadata and published through operator pub/sub. See [architecture/protocol.md](../architecture/protocol.md) and [architecture/security.md — Operator Commands via Sentinel](../architecture/security.md#operator-commands-via-sentinel-g8eo) for full details.
+Before dispatching any state-changing operation, g8ee runs the L1/L2/L3 governance path: L1 technical bedrock checks, L2 Tribunal consensus and Auditor commitment, and L3 authorization state from the Governance Gateway. Command risk classification (LOW / MEDIUM / HIGH, fails closed to HIGH), file operation safety, and error analysis with auto-fix all feed that path. Dispatch to g8eo is a g8e protocol operation: a typed `operator.proto` payload is wrapped in a serialized Protobuf `GovernanceEnvelope` with governance metadata and published through operator pub/sub. See [architecture/protocol.md](../architecture/protocol.md) and [architecture/security.md — Operator Commands via Sentinel](../architecture/security.md#operator-commands-via-sentinel-g8eo) for full details.
 
 ### MCP Adapter
 
@@ -577,7 +577,7 @@ g8ee implements an **MCP Client Adapter** that translates outbound tool calls in
 
 ### Command Validation Policies (L1/L2/L3 Governance)
 
-g8e enforces the L1/L2/L3 validation hierarchy described in the README and protocol docs. This hierarchy ensures that every command is technically sound, aligned with intent, and approved by the appropriate authority. On operator command paths, the hierarchy is carried in `UniversalEnvelope.governance` beside the typed `operator.proto` payload.
+g8e enforces the L1/L2/L3 validation hierarchy described in the README and protocol docs. This hierarchy ensures that every command is technically sound, aligned with intent, and approved by the appropriate authority. On operator command paths, the hierarchy is carried in `GovernanceEnvelope.governance` beside the typed `operator.proto` payload.
 
 #### L1: Technical Bedrock (Hard Gates)
 The technical bedrock is the foundation of g8e safety. It is enforced by validators before dispatch and by g8eo at the protocol boundary through Protobuf reflection over `forbidden_patterns` field options. L1 is **always** active, regardless of agent consensus or auto-approval settings.

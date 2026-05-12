@@ -28,10 +28,9 @@ export function createMetricsRouter({
     authorizationMiddleware
 }) {
     const { cacheAsideService } = services;
-    const { requireInternalOrigin } = authorizationMiddleware;
     const router = express.Router();
 
-    router.get(MetricsPaths.HEALTH, requireInternalOrigin, async (req, res, next) => {
+    router.get(MetricsPaths.HEALTH, async (req, res, next) => {
         try {
             // Check operator KV health via cache-aside
             let kvHealthy = false;
