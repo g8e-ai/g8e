@@ -11,106 +11,6 @@ permissions:
   contents: read
 
 jobs:
-  test-g8ee:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: components/g8eo/go.mod
-          cache-dependency-path: components/g8eo/go.sum
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: components/g8ed/package-lock.json
-
-      - name: Install g8ed dependencies
-        run: npm ci --prefix components/g8ed
-
-      - name: Start platform
-        run: ./g8e platform start
-
-      - name: Test g8ee
-        run: >-
-          ./g8e test g8ee
-          -p gemini
-          -k "$GEMINI_API_KEY"
-          -m gemini-3.1-pro-preview-customtools
-          -a gemini-3-flash-preview
-          -l gemini-3.1-flash-lite-preview
-          -j auto
-          -- tests
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-
-      - name: Show platform logs
-        if: failure()
-        run: |
-          tail -n 200 .g8e/logs/operator-listen.log || true
-          tail -n 200 .g8e/logs/g8ee.log || true
-          tail -n 200 .g8e/logs/g8ed.log || true
-
-      - name: Stop platform
-        if: always()
-        run: ./g8e platform stop
-
-  test-g8ed:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: components/g8eo/go.mod
-          cache-dependency-path: components/g8eo/go.sum
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: components/g8ed/package-lock.json
-
-      - name: Install g8ed dependencies
-        run: npm ci --prefix components/g8ed
-
-      - name: Start platform
-        run: ./g8e platform start
-
-      - name: Test g8ed
-        run: ./g8e test g8ed
-
-      - name: Show platform logs
-        if: failure()
-        run: |
-          tail -n 200 .g8e/logs/operator-listen.log || true
-          tail -n 200 .g8e/logs/g8ee.log || true
-          tail -n 200 .g8e/logs/g8ed.log || true
-
-      - name: Stop platform
-        if: always()
-        run: ./g8e platform stop
-
   test-g8eo:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -124,10 +24,33 @@ jobs:
           go-version-file: components/g8eo/go.mod
           cache-dependency-path: components/g8eo/go.sum
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - name: Start Operator substrate
+        run: ./g8e platform start
+
+      - name: Test Operator substrate
+        run: ./g8e test
+
+      - name: Show Operator logs
+        if: failure()
+        run: tail -n 200 .g8e/logs/operator-listen.log || true
+
+      - name: Stop platform
+        if: always()
+        run: ./g8e platform stop
+
+  apps-g8ed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
         with:
-          python-version: '3.12'
+          go-version-file: components/g8eo/go.mod
+          cache-dependency-path: components/g8eo/go.sum
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -139,31 +62,64 @@ jobs:
       - name: Install g8ed dependencies
         run: npm ci --prefix components/g8ed
 
-      - name: Start platform
-        run: ./g8e platform start
+      - name: Start g8ed adapter
+        run: ./g8e apps start g8ed
 
-      - name: Test g8eo
-        run: ./g8e test g8eo
+      - name: Test g8ed adapter
+        run: ./g8e test g8ed
 
-      - name: Show platform logs
+      - name: Show app logs
         if: failure()
         run: |
           tail -n 200 .g8e/logs/operator-listen.log || true
-          tail -n 200 .g8e/logs/g8ee.log || true
           tail -n 200 .g8e/logs/g8ed.log || true
 
       - name: Stop platform
         if: always()
         run: ./g8e platform stop
 
-  check-model-parity:
+  apps-g8ee:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: components/g8eo/go.mod
+          cache-dependency-path: components/g8eo/go.sum
 
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: '3.12'
+
+      - name: Start g8ee adapter
+        run: ./g8e apps start g8ee
+
+      - name: Test g8ee adapter
+        run: >-
+          ./g8e test g8ee
+          -p gemini
+          -k "$GEMINI_API_KEY"
+          -m gemini-3.1-pro-preview-customtools
+          -a gemini-3-flash-preview
+          -l gemini-3.1-flash-lite-preview
+          -j auto
+          -- tests
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+      - name: Show app logs
+        if: failure()
+        run: |
+          tail -n 200 .g8e/logs/operator-listen.log || true
+          tail -n 200 .g8e/logs/g8ee.log || true
+
+      - name: Stop platform
+        if: always()
+        run: ./g8e platform stop
 

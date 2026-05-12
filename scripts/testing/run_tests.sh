@@ -1,8 +1,8 @@
 #!/bin/bash
 # g8e Test Runner
 #
-# Runs tests for g8ee, g8ed, and g8eo components directly on the host.
-# Supports virtualenvs for Python, npm for Node, and native Go toolchain.
+# Runs substrate tests by default and optional app tests only when requested.
+# Supports native Go toolchain for the substrate plus virtualenvs/npm for app targets.
 
 set -e
 
@@ -56,9 +56,9 @@ EXTRA_ARGS=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --help|-h)
-            echo "Usage: run_tests.sh <COMPONENT> [OPTIONS] [-- EXTRA_ARGS]"
+            echo "Usage: run_tests.sh [COMPONENT] [OPTIONS] [-- EXTRA_ARGS]"
             echo ""
-            echo "Components: g8ee, g8ed, g8eo"
+            echo "Components: g8eo (default substrate), g8ed, g8ee"
             echo ""
             echo "Options:"
             echo "  --coverage                Generate coverage reports"
@@ -69,6 +69,8 @@ while [[ $# -gt 0 ]]; do
             echo "  -j, --parallel <N|auto>   Run pytest in parallel via pytest-xdist (g8ee only)"
             echo ""
             echo "Examples (via ./g8e CLI):"
+            echo "  ./g8e test"
+            echo "  ./g8e test g8eo services/pubsub"
             echo "  ./g8e test g8ee tests/unit"
             echo "  ./g8e test g8ee --coverage"
             echo "  ./g8e test g8ee --pyright --ruff"
@@ -117,8 +119,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$COMPONENT" ]]; then
-    log_err "No component specified. Usage: run_tests.sh <g8ee|g8ed|g8eo> [OPTIONS]"
-    exit 1
+    COMPONENT="g8eo"
 fi
 
 # =============================================================================

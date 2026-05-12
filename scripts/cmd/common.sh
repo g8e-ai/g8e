@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+
+# Common helpers and environment for g8e CLI commands.
+# This file is intended to be sourced by specific command scripts.
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+export G8E_PROJECT_ROOT="$SCRIPT_DIR"
+
+# Host-native runtime layout
+G8E_RUNTIME_DIR="${G8E_RUNTIME_DIR:-$SCRIPT_DIR/.g8e}"
+G8E_SSL_DIR_HOST="${G8E_SSL_DIR:-$G8E_RUNTIME_DIR/ssl}"
+OPERATOR_HTTP_URL="${G8E_INTERNAL_HTTP_URL:-https://localhost:9000}"
+_OPERATOR_PID_FILE="$G8E_RUNTIME_DIR/pids/operator-listen.pid"
+_G8ED_PID_FILE="$G8E_RUNTIME_DIR/pids/g8ed.pid"
+_G8EE_PID_FILE="$G8E_RUNTIME_DIR/pids/g8ee.pid"
+
+# Local credential store
+G8E_CREDENTIALS_DIR="$HOME/.g8e"
+G8E_CREDENTIALS_FILE="$G8E_CREDENTIALS_DIR/credentials"
+
+_banner() {
+    echo -e "\033[1;34m[g8e]\033[0m $*"
+}
+
+_pid_alive() {
+    local pid_file="$1"
+    [ -f "$pid_file" ] && ps -p "$(cat "$pid_file")" > /dev/null 2>&1
+}
+
+_g8ed_running()    { _pid_alive "$_G8ED_PID_FILE"; }
+_g8ee_running()    { _pid_alive "$_G8EE_PID_FILE"; }
+_operator_running() { _pid_alive "$_OPERATOR_PID_FILE"; }
+
+_ensure_operator() {
+    if ! _operator_running; then
+        echo "[g8e] Operator listen mode is not running — start the platform: ./g8e platform start" >&2
+        exit 1
+    fi
+}
+
+_requires_operator_route() {
+    echo "[g8e] command requires Operator-side route not yet implemented: $1" >&2
+    exit 1
+}
+
+_moved_to_operator_protocol() {
+    echo "[g8e] command moved to Operator protocol API and not yet implemented: $1" >&2
+    exit 1
+}
+
+_operator_curl() {
+    local method="$1" path="$2" body="${3:-}"
+    local token
+    token=$(cat "$G8E_SSL_DIR_HOST/internal_auth_token" 2>/dev/null | tr -d ' \n\r' || true)
+    local args=(-sk -X "$method" --cacert "$G8E_SSL_DIR_HOST/ca.crt")
+    [[ -n "$token" ]] && args+=(-H "X-Internal-Auth: $token")
+    args+=(-H "Content-Type: application/json")
+    [[ -n "$body" ]] && args+=(-d "$body")
+    curl "${args[@]}" "$OPERATOR_HTTP_URL$path"
+}
+
+_run_host_script() {
+    export G8E_SSL_DIR="$G8E_SSL_DIR_HOST"
+    export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTP_URL"
+    export G8ED_INTERNAL_URL="${G8ED_INTERNAL_URL:-https://localhost}"
+    export PYTHONPATH="$SCRIPT_DIR/scripts:$SCRIPT_DIR/shared${PYTHONPATH:+:$PYTHONPATH}"
+    [[ -n "${OPERATOR_SESSION_ID:-}" ]] && export OPERATOR_SESSION_ID
+    exec "$@"
+}
+
+_operator_bin() {
+    local bin="${G8E_OPERATOR_BIN:-$SCRIPT_DIR/components/g8eo/build/linux-amd64/g8e.operator}"
+    if [ ! -x "$bin" ]; then
+        echo "[g8e] Operator binary missing at $bin — building..." >&2
+        (cd "$SCRIPT_DIR/components/g8eo" && make build-local) >&2
+    fi
+    printf '%s' "$bin"
+}
+
+_load_credentials() {
+    if [[ -f "$G8E_CREDENTIALS_FILE" ]]; then
+        source "$G8E_CREDENTIALS_FILE"
+        if _g8ed_running && [[ -n "$OPERATOR_SESSION_ID" ]]; then
+            # Validation moved to app_helpers if needed by specific commands
+            :
+        fi
+        return 0
+    fi
+    return 1
+}
+
+_save_credentials() {
+    local operator_session_id="$1"
+    local user_id="$2"
+    local operator_id="$3"
+    mkdir -p "$G8E_CREDENTIALS_DIR"
+    cat > "$G8E_CREDENTIALS_FILE" <<EOF
+export OPERATOR_SESSION_ID="$operator_session_id"
+export USER_ID="$user_id"
+export OPERATOR_ID="$operator_id"
+export G8E_AUTH_TIMESTAMP="$(date +%s)"
+EOF
+    chmod 600 "$G8E_CREDENTIALS_FILE"
+}
+
+_clear_credentials() {
+    if [[ -f "$G8E_CREDENTIALS_FILE" ]]; then
+        rm -f "$G8E_CREDENTIALS_FILE"
+    fi
+    unset OPERATOR_SESSION_ID USER_ID OPERATOR_ID G8E_AUTH_TIMESTAMP
+}
+
+_credentials_exist() {
+    [[ -f "$G8E_CREDENTIALS_FILE" ]]
+}
+
+_ensure_authenticated() {
+    if _load_credentials; then
+        export OPERATOR_SESSION_ID USER_ID OPERATOR_ID
+        return 0
+    fi
+    export OPERATOR_SESSION_ID="default-session-id"
+    export USER_ID="default-user-id"
+    export OPERATOR_ID="default-operator-id"
+    return 0
+}
+
+_help() {
+    local help_file="$SCRIPT_DIR/docs/g8e-help.md"
+    if [[ -f "$help_file" ]]; then
+        cat "$help_file"
+    else
+        echo "[g8e] Help file not found: $help_file" >&2
+        exit 1
+    fi
+}
