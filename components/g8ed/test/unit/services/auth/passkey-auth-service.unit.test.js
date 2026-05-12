@@ -17,6 +17,7 @@ import { Collections } from '@g8ed/constants/collections.js';
 import { HTTP_X_FORWARDED_HOST_HEADER, HTTP_X_FORWARDED_PROTO_HEADER } from '@g8ed/constants/headers.js';
 import { AuthProvider } from '@g8ed/constants/auth.js';
 import { getTestServices } from '@test/helpers/test-services.js';
+import { createMockInternalHttpClient } from '@test/mocks/internal-http-client.mock.js';
 import { TestCleanupHelper } from '@test/helpers/test-cleanup.js';
 import { makeUserDoc, makePasskeyCredential } from '@test/fixtures/users.fixture.js';
 
@@ -78,12 +79,14 @@ describe('PasskeyAuthService [UNIT]', () => {
     let userService;
     let service;
     let cleanup;
+    let mockInternalHttpClient;
 
     beforeEach(async () => {
         vi.clearAllMocks();
         try {
             services = await getTestServices();
             userService = services.userService;
+            mockInternalHttpClient = createMockInternalHttpClient();
             
             cleanup = new TestCleanupHelper(services.kvClient, services.cacheAsideService, {
                 operatorsCollection: services.operatorService.collectionName
@@ -98,11 +101,13 @@ describe('PasskeyAuthService [UNIT]', () => {
             vi.spyOn(services.cacheAsideService, 'createDocument');
             vi.spyOn(services.cacheAsideService, 'getDocument');
             vi.spyOn(services.cacheAsideService, 'deleteDocument');
+            vi.spyOn(services.cacheAsideService, 'evictDocument');
 
             service = new PasskeyAuthService({
                 userService,
                 cacheAsideService: services.cacheAsideService,
-                settingsService: makeSettingsService()
+                settingsService: makeSettingsService(),
+                internalHttpClient: mockInternalHttpClient
             });
         } catch (error) {
             console.error('Failed to initialize test services:', error);
@@ -118,305 +123,191 @@ describe('PasskeyAuthService [UNIT]', () => {
 
     describe('constructor', () => {
         it('throws when userService is missing', () => {
-            expect(() => new PasskeyAuthService({ cacheAsideService: services.cacheAsideService, settingsService: makeSettingsService() }))
+            expect(() => new PasskeyAuthService({ cacheAsideService: services.cacheAsideService, settingsService: makeSettingsService(), internalHttpClient: mockInternalHttpClient }))
                 .toThrow(/requires userService/);
         });
 
         it('throws when cacheAsideService is missing', () => {
-            expect(() => new PasskeyAuthService({ userService, settingsService: makeSettingsService() }))
+            expect(() => new PasskeyAuthService({ userService, settingsService: makeSettingsService(), internalHttpClient: mockInternalHttpClient }))
                 .toThrow(/requires cacheAsideService/);
         });
 
         it('throws when settingsService is missing', () => {
-            expect(() => new PasskeyAuthService({ userService, cacheAsideService: services.cacheAsideService }))
+            expect(() => new PasskeyAuthService({ userService, cacheAsideService: services.cacheAsideService, internalHttpClient: mockInternalHttpClient }))
                 .toThrow(/requires settingsService/);
         });
-    });
 
-    describe('RP ID resolution', () => {
-        it('uses settings passkey_rp_id when set (and not localhost)', async () => {
-            const settingsService = makeSettingsService({ passkey_rp_id: 'example.com' });
-            const svc = new PasskeyAuthService({ userService, cacheAsideService: services.cacheAsideService, settingsService });
-            const user = makeUserDoc();
-            generateRegistrationOptions.mockResolvedValueOnce({ challenge: 'ch' });
-
-            await svc.generateRegistrationChallenge(makeReq({ hostname: 'wrong.ai' }), user);
-
-            const call = generateRegistrationOptions.mock.calls[0][0];
-            expect(call.rpID).toBe('example.com');
-        });
-
-        it('falls back to req.hostname when settings is localhost', async () => {
-            const req = makeReq({ hostname: 'req-host.local' });
-            generateRegistrationOptions.mockResolvedValueOnce({ challenge: 'ch' });
-
-            await service.generateRegistrationChallenge(req, makeUserDoc());
-
-            const call = generateRegistrationOptions.mock.calls[0][0];
-            expect(call.rpID).toBe('req-host.local');
-        });
-
-        it('falls back to req.hostname when settings is localhost and no header', async () => {
-            const req = makeReq({ hostname: 'req-host.local' });
-            generateRegistrationOptions.mockResolvedValueOnce({ challenge: 'ch' });
-
-            await service.generateRegistrationChallenge(req, makeUserDoc());
-
-            const call = generateRegistrationOptions.mock.calls[0][0];
-            expect(call.rpID).toBe('req-host.local');
-        });
-    });
-
-    describe('Origin resolution', () => {
-        it('uses settings passkey_origin when set (and not localhost)', async () => {
-            const settingsService = makeSettingsService({ passkey_origin: 'https://localhost' });
-            const svc = new PasskeyAuthService({ userService, cacheAsideService: services.cacheAsideService, settingsService });
-            
-            services.cacheAsideService.getDocument.mockResolvedValueOnce({ challenge: 'stored-ch' });
-            verifyRegistrationResponse.mockResolvedValueOnce({
-                verified: true,
-                registrationInfo: { credential: { id: 'id', publicKey: new Uint8Array([1]), counter: 0 } }
-            });
-
-            await svc.verifyRegistration(makeReq(), makeUserDoc(), {});
-
-            const call = verifyRegistrationResponse.mock.calls[0][0];
-            expect(call.expectedOrigin).toBe('https://localhost');
-        });
-
-        it('builds origin from request when settings is localhost', async () => {
-            const req = makeReq({
-                protocol: 'https',
-                get: vi.fn((h) => {
-                    if (h === HTTP_X_FORWARDED_PROTO_HEADER) return 'https';
-                    if (h === HTTP_X_FORWARDED_HOST_HEADER) return 'forwarded.ai';
-                    return null;
-                })
-            });
-            services.cacheAsideService.getDocument.mockResolvedValueOnce({ challenge: 'stored-ch' });
-            verifyRegistrationResponse.mockResolvedValueOnce({
-                verified: true,
-                registrationInfo: { credential: { id: 'id', publicKey: new Uint8Array([1]), counter: 0 } }
-            });
-
-            await service.verifyRegistration(req, makeUserDoc(), {});
-
-            const call = verifyRegistrationResponse.mock.calls[0][0];
-            expect(call.expectedOrigin).toBe('https://forwarded.ai');
+        it('throws when internalHttpClient is missing', () => {
+            expect(() => new PasskeyAuthService({ userService, cacheAsideService: services.cacheAsideService, settingsService: makeSettingsService() }))
+                .toThrow(/requires internalHttpClient/);
         });
     });
 
     describe('generateRegistrationChallenge', () => {
-        it('calls generateRegistrationOptions with correct user data and Buffer userID', async () => {
+        it('calls substrate passkeyRegisterChallenge with correct user data', async () => {
             const user = makeUserDoc();
-            generateRegistrationOptions.mockResolvedValueOnce({ challenge: 'reg-ch' });
+            mockInternalHttpClient.passkeyRegisterChallenge.mockResolvedValue({
+                success: true,
+                challenge: 'reg-ch'
+            });
 
-            await service.generateRegistrationChallenge(makeReq(), user);
+            const result = await service.generateRegistrationChallenge(makeReq(), user);
 
-            expect(generateRegistrationOptions).toHaveBeenCalledWith(expect.objectContaining({
-                userName: user.email,
-                userDisplayName: user.name,
-                userID: expect.any(Buffer)
+            expect(result.challenge).toBe('reg-ch');
+            expect(mockInternalHttpClient.passkeyRegisterChallenge).toHaveBeenCalledWith(expect.objectContaining({
+                user_id: user.id,
+                email: user.email
             }));
-        });
-
-        it('stores challenge in PASSKEY_CHALLENGES collection with correct TTL', async () => {
-            const user = makeUserDoc();
-            generateRegistrationOptions.mockResolvedValueOnce({ challenge: 'stored-ch' });
-
-            await service.generateRegistrationChallenge(makeReq(), user);
-
-            expect(services.cacheAsideService.createDocument).toHaveBeenCalledWith(
-                Collections.PASSKEY_CHALLENGES,
-                user.id,
-                { challenge: 'stored-ch' },
-                PASSKEY_CHALLENGE_TTL_SECONDS
-            );
-        });
-
-        it('excludes existing credentials', async () => {
-            const cred = makePasskeyCredential();
-            const user = makeUserDoc({ passkey_credentials: [cred] });
-            generateRegistrationOptions.mockResolvedValueOnce({ challenge: 'ch' });
-
-            await service.generateRegistrationChallenge(makeReq(), user);
-
-            const call = generateRegistrationOptions.mock.calls[0][0];
-            expect(call.excludeCredentials).toHaveLength(1);
-            expect(call.excludeCredentials[0].id).toBeDefined();
         });
     });
 
     describe('verifyRegistration', () => {
-        it('returns verified: false if challenge is missing', async () => {
-            services.cacheAsideService.getDocument.mockResolvedValueOnce(null);
-            const result = await service.verifyRegistration(makeReq(), makeUserDoc(), {});
-            expect(result.verified).toBe(false);
-            expect(result.error).toMatch(/expired/);
-        });
-
-        it('deletes challenge even when verification fails (consume-on-read)', async () => {
+        it('returns verified: true and evicts user cache on success', async () => {
             const user = makeUserDoc();
-            services.cacheAsideService.getDocument.mockResolvedValueOnce({ challenge: 'valid-ch' });
-            verifyRegistrationResponse.mockResolvedValueOnce({
-                verified: false,
-                registrationInfo: null,
+            mockInternalHttpClient.passkeyRegisterVerify.mockResolvedValue({
+                success: true,
+                credential: { id: 'new-id' }
             });
 
-            const result = await service.verifyRegistration(makeReq(), user, {});
-
-            expect(result.verified).toBe(false);
-            // Challenge row must be purged even though verification failed,
-            // otherwise the row leaks until overwritten by a subsequent
-            // register-challenge call.
-            expect(services.cacheAsideService.deleteDocument).toHaveBeenCalledWith(
-                Collections.PASSKEY_CHALLENGES, user.id
-            );
-        });
-
-        it('deletes challenge even when verifyRegistrationResponse throws', async () => {
-            const user = makeUserDoc();
-            services.cacheAsideService.getDocument.mockResolvedValueOnce({ challenge: 'valid-ch' });
-            verifyRegistrationResponse.mockRejectedValueOnce(new Error('bad attestation'));
-
-            const result = await service.verifyRegistration(makeReq(), user, {});
-
-            expect(result.verified).toBe(false);
-            expect(services.cacheAsideService.deleteDocument).toHaveBeenCalledWith(
-                Collections.PASSKEY_CHALLENGES, user.id
-            );
-        });
-
-        it('saves new credential and marks user as PASSKEY provider on success', async () => {
-            const user = makeUserDoc();
-            services.cacheAsideService.getDocument.mockResolvedValueOnce({ challenge: 'valid-ch' });
-            verifyRegistrationResponse.mockResolvedValueOnce({
-                verified: true,
-                registrationInfo: {
-                    credential: { id: 'new-id', publicKey: new Uint8Array([1, 2, 3]), counter: 0 }
+            const attestationResponse = {
+                id: 'id',
+                rawId: 'rawId',
+                response: {
+                    clientDataJSON: 'cdj',
+                    attestationObject: 'ao',
+                    transports: ['usb']
                 }
-            });
+            };
 
-            const result = await service.verifyRegistration(makeReq(), user, { response: { transports: ['usb'] } });
+            const result = await service.verifyRegistration(makeReq(), user, attestationResponse);
 
             expect(result.verified).toBe(true);
-            expect(services.cacheAsideService.deleteDocument).toHaveBeenCalledWith(Collections.PASSKEY_CHALLENGES, user.id);
-            expect(userService.updateUser).toHaveBeenCalledWith(user.id, expect.objectContaining({
-                provider: AuthProvider.PASSKEY,
-                passkey_credentials: expect.arrayContaining([
-                    expect.objectContaining({ id: 'new-id', transports: ['usb'] })
-                ])
+            expect(mockInternalHttpClient.passkeyRegisterVerify).toHaveBeenCalledWith(expect.objectContaining({
+                user_id: user.id,
+                attestation_response: expect.objectContaining({
+                    id: 'id'
+                })
             }));
+            expect(services.cacheAsideService.evictDocument).toHaveBeenCalledWith(Collections.USERS, user.id);
+        });
+
+        it('returns verified: false if substrate fails', async () => {
+            const user = makeUserDoc();
+            mockInternalHttpClient.passkeyRegisterVerify.mockResolvedValue({
+                success: false,
+                error: 'Substrate error'
+            });
+
+            const result = await service.verifyRegistration(makeReq(), user, { response: {} });
+
+            expect(result.verified).toBe(false);
+            expect(result.error).toBe('Substrate error');
         });
     });
 
     describe('generateAuthenticationChallenge', () => {
-        it('returns null if user has no passkeys', async () => {
-            const result = await service.generateAuthenticationChallenge(makeReq(), makeUserDoc({ passkey_credentials: [] }));
-            expect(result).toBeNull();
-        });
-
-        it('calls generateAuthenticationOptions and stores challenge in PASSKEY_CHALLENGES collection', async () => {
-            const user = makeUserDoc({ passkey_credentials: [makePasskeyCredential()] });
-            generateAuthenticationOptions.mockResolvedValueOnce({ challenge: 'auth-ch' });
+        it('calls substrate passkeyAuthChallenge and returns response', async () => {
+            const user = makeUserDoc();
+            mockInternalHttpClient.passkeyAuthChallenge.mockResolvedValue({
+                success: true,
+                challenge: 'auth-ch'
+            });
 
             const result = await service.generateAuthenticationChallenge(makeReq(), user);
 
             expect(result.challenge).toBe('auth-ch');
-            expect(services.cacheAsideService.createDocument).toHaveBeenCalledWith(
-                Collections.PASSKEY_CHALLENGES,
-                user.id,
-                { challenge: 'auth-ch' },
-                PASSKEY_CHALLENGE_TTL_SECONDS
-            );
+            expect(mockInternalHttpClient.passkeyAuthChallenge).toHaveBeenCalledWith(expect.objectContaining({
+                user_id: user.id,
+                email: user.email
+            }));
+        });
+
+        it('returns null if user has no passkeys (needs_setup)', async () => {
+            const user = makeUserDoc();
+            mockInternalHttpClient.passkeyAuthChallenge.mockResolvedValue({
+                success: false,
+                needs_setup: true
+            });
+
+            const result = await service.generateAuthenticationChallenge(makeReq(), user);
+
+            expect(result).toBeNull();
         });
     });
 
     describe('verifyAuthentication', () => {
-        it('returns verified: false if challenge missing', async () => {
-            services.cacheAsideService.getDocument.mockResolvedValueOnce(null);
-            const result = await service.verifyAuthentication(makeReq(), makeUserDoc(), { id: 'some-id' });
-            expect(result.verified).toBe(false);
-        });
+        it('returns verified: true and evicts user cache on success', async () => {
+            const user = makeUserDoc();
+            const assertionResponse = {
+                id: 'cred-id',
+                rawId: 'rawId',
+                response: {
+                    clientDataJSON: 'cdj',
+                    authenticatorData: 'ad',
+                    signature: 'sig',
+                    userHandle: 'uh'
+                }
+            };
 
-        it('returns verified: false if credential not found on user', async () => {
-            services.cacheAsideService.getDocument.mockResolvedValueOnce({ challenge: 'ch' });
-            const result = await service.verifyAuthentication(makeReq(), makeUserDoc({ passkey_credentials: [] }), { id: 'unknown' });
-            expect(result.verified).toBe(false);
-            expect(result.error).toMatch(/not recognized/);
-        });
-
-        it('deletes challenge even when verification fails (consume-on-read)', async () => {
-            const cred = makePasskeyCredential({ id: 'my-id' });
-            const user = makeUserDoc({ passkey_credentials: [cred] });
-            services.cacheAsideService.getDocument.mockResolvedValueOnce({ challenge: 'ch' });
-            verifyAuthenticationResponse.mockResolvedValueOnce({ verified: false });
-
-            const result = await service.verifyAuthentication(makeReq(), user, { id: 'my-id' });
-
-            expect(result.verified).toBe(false);
-            expect(services.cacheAsideService.deleteDocument).toHaveBeenCalledWith(
-                Collections.PASSKEY_CHALLENGES, user.id
-            );
-        });
-
-        it('deletes challenge even when verifyAuthenticationResponse throws', async () => {
-            const cred = makePasskeyCredential({ id: 'my-id' });
-            const user = makeUserDoc({ passkey_credentials: [cred] });
-            services.cacheAsideService.getDocument.mockResolvedValueOnce({ challenge: 'ch' });
-            verifyAuthenticationResponse.mockRejectedValueOnce(new Error('bad assertion'));
-
-            const result = await service.verifyAuthentication(makeReq(), user, { id: 'my-id' });
-
-            expect(result.verified).toBe(false);
-            expect(services.cacheAsideService.deleteDocument).toHaveBeenCalledWith(
-                Collections.PASSKEY_CHALLENGES, user.id
-            );
-        });
-
-        it('updates counter and last_used_at on success', async () => {
-            const cred = makePasskeyCredential({ id: 'my-id', counter: 10 });
-            const user = makeUserDoc({ passkey_credentials: [cred] });
-            services.cacheAsideService.getDocument.mockResolvedValueOnce({ challenge: 'ch' });
-            verifyAuthenticationResponse.mockResolvedValueOnce({
-                verified: true,
-                authenticationInfo: { newCounter: 11 }
+            mockInternalHttpClient.passkeyAuthVerify.mockResolvedValue({
+                success: true,
+                session_id: 'new-web-sess'
             });
 
-            const result = await service.verifyAuthentication(makeReq(), user, { id: 'my-id' });
+            const result = await service.verifyAuthentication(makeReq(), user, assertionResponse);
 
             expect(result.verified).toBe(true);
-            expect(services.cacheAsideService.deleteDocument).toHaveBeenCalledWith(Collections.PASSKEY_CHALLENGES, user.id);
-            const update = userService.updateUser.mock.calls[0][1];
-            expect(update.passkey_credentials[0].counter).toBe(11);
-            expect(update.passkey_credentials[0].last_used_at).toBeInstanceOf(Date);
-            expect(userService.updateLastLogin).toHaveBeenCalledWith(user.id);
+            expect(result.session_id).toBe('new-web-sess');
+            expect(mockInternalHttpClient.passkeyAuthVerify).toHaveBeenCalledWith(expect.objectContaining({
+                user_id: user.id,
+                assertion_response: expect.objectContaining({
+                    id: 'cred-id'
+                })
+            }));
+            expect(services.cacheAsideService.evictDocument).toHaveBeenCalledWith(Collections.USERS, user.id);
+        });
+
+        it('returns verified: false if substrate fails', async () => {
+            const user = makeUserDoc();
+            mockInternalHttpClient.passkeyAuthVerify.mockResolvedValue({
+                success: false,
+                error: 'Invalid signature'
+            });
+
+            const result = await service.verifyAuthentication(makeReq(), user, { id: 'id', response: {} });
+
+            expect(result.verified).toBe(false);
+            expect(result.error).toBe('Invalid signature');
         });
     });
 
     describe('Credential Management', () => {
-        it('listCredentials returns public info only', async () => {
-            const cred = makePasskeyCredential({ id: 'id1', public_key: 'secret' });
-            userService.getUser.mockResolvedValueOnce(makeUserDoc({ passkey_credentials: [cred] }));
+        it('listCredentials returns credentials from substrate', async () => {
+            const mockCredentials = [{ id: 'id1' }, { id: 'id2' }];
+            mockInternalHttpClient.passkeyCredentials.mockResolvedValue({
+                success: true,
+                credentials: mockCredentials
+            });
 
             const list = await service.listCredentials('uid');
-            expect(list[0].id).toBe('id1');
-            expect(list[0].public_key).toBeUndefined();
+            expect(list).toEqual(mockCredentials);
+            expect(mockInternalHttpClient.passkeyCredentials).toHaveBeenCalledWith('uid');
         });
 
-        it('revokeCredential removes one', async () => {
-            const cred1 = makePasskeyCredential({ id: 'id1' });
-            const cred2 = makePasskeyCredential({ id: 'id2' });
-            userService.getUser.mockResolvedValueOnce(makeUserDoc({ id: 'uid', passkey_credentials: [cred1, cred2] }));
+        it('revokeCredential calls substrate and evicts user cache', async () => {
+            mockInternalHttpClient.passkeyRevokeCredential.mockResolvedValue({
+                success: true,
+                found: true,
+                remaining: 1
+            });
 
             const res = await service.revokeCredential('uid', 'id1');
             expect(res.remaining).toBe(1);
-            expect(userService.updateUser).toHaveBeenCalledWith('uid', {
-                passkey_credentials: [expect.objectContaining({ id: 'id2' })]
-            });
+            expect(mockInternalHttpClient.passkeyRevokeCredential).toHaveBeenCalledWith('id1', 'uid');
+            expect(services.cacheAsideService.evictDocument).toHaveBeenCalledWith(Collections.USERS, 'uid');
         });
 
-        it('revokeAllCredentials clears array', async () => {
+        it('revokeAllCredentials still uses direct userService (app-layer responsibility)', async () => {
             userService.getUser.mockResolvedValueOnce(makeUserDoc({ 
                 id: 'uid', 
                 passkey_credentials: [makePasskeyCredential(), makePasskeyCredential()] 

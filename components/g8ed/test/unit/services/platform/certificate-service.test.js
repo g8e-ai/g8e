@@ -18,6 +18,7 @@ import crypto from 'crypto';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
+import { createMockInternalHttpClient } from '@test/mocks/internal-http-client.mock.js';
 
 function seedCA(sslDir) {
     mkdirSync(sslDir, { recursive: true });
@@ -33,46 +34,11 @@ vi.mock('@g8ed/utils/logger.js', () => ({
     }
 }));
 
-function createMockInternalHttpClient() {
-    const mockOperatorClient = {
-        post: vi.fn().mockImplementation(async (path, body) => {
-            if (path === '/.well-known/g8e/pki/sign-csr') {
-                const data = JSON.parse(body);
-                return {
-                    success: true,
-                    certificate_pem: '-----BEGIN CERTIFICATE-----\nMOCK OPERATOR CERT\n-----END CERTIFICATE-----',
-                    serial: 'MOCK-SERIAL-' + uuidv4().replace(/-/g, '').toUpperCase()
-                };
-            }
-            return { success: true };
-        })
-    };
-
-    return {
-        _bootstrapService: {
-            _operatorClient: mockOperatorClient
-        },
-        request: vi.fn().mockResolvedValue({ success: true }),
-        sendChatMessage: vi.fn().mockResolvedValue({ success: true }),
-        deleteCase: vi.fn().mockResolvedValue({ success: true }),
-        stopAIProcessing: vi.fn().mockResolvedValue({ success: true }),
-        recordTriageAnswer: vi.fn().mockResolvedValue({ success: true }),
-        skipTriageQuestions: vi.fn().mockResolvedValue({ success: true }),
-        timeoutTriageQuestions: vi.fn().mockResolvedValue({ success: true }),
-        generateApiKey: vi.fn().mockResolvedValue({ success: true }),
-        revokeCertificate: vi.fn().mockResolvedValue({ success: true }),
-        syncUserSettings: vi.fn().mockResolvedValue({ success: true }),
-        healthCheck: vi.fn().mockResolvedValue({ success: true }),
-        activateG8EPOperator: vi.fn().mockResolvedValue({ success: true }),
-        relaunchG8EPOperator: vi.fn().mockResolvedValue({ success: true }),
-        buildG8eContextHeaders: vi.fn().mockReturnValue({})
-    };
-}
-
 describe('CertificateService [UNIT - filesystem isolated]', { timeout: 30000 }, () => {
     let CertificateService;
     let certService;
     let tmpSslDir;
+    let mockInternalHttpClient;
 
     beforeAll(async () => {
         const module = await import('@g8ed/services/platform/certificate_service.js');
@@ -83,9 +49,23 @@ describe('CertificateService [UNIT - filesystem isolated]', { timeout: 30000 }, 
         vi.clearAllMocks();
         tmpSslDir = mkdtempSync(join(tmpdir(), 'g8e-ssl-'));
         await seedCA(tmpSslDir);
+        mockInternalHttpClient = createMockInternalHttpClient();
+        
+        // Setup specific behavior for CSR signing
+        mockInternalHttpClient._bootstrapService._operatorClient.post.mockImplementation(async (path, body) => {
+            if (path === '/.well-known/g8e/pki/sign-csr') {
+                return {
+                    success: true,
+                    certificate_pem: '-----BEGIN CERTIFICATE-----\nMOCK OPERATOR CERT\n-----END CERTIFICATE-----',
+                    serial: 'MOCK-SERIAL-' + uuidv4().replace(/-/g, '').toUpperCase()
+                };
+            }
+            return { success: true };
+        });
+
         certService = new CertificateService({ 
             bootstrapService: { getSslDir: () => tmpSslDir },
-            internalHttpClient: createMockInternalHttpClient()
+            internalHttpClient: mockInternalHttpClient
         });
     });
 
@@ -201,7 +181,7 @@ describe('CertificateService [UNIT - filesystem isolated]', { timeout: 30000 }, 
             expect(result).toHaveProperty('cert');
             expect(result.cert).toBe('-----BEGIN CERTIFICATE-----\nMOCK OPERATOR CERT\n-----END CERTIFICATE-----');
 
-            const operatorClient = certService._internalHttpClient._bootstrapService._operatorClient;
+            const operatorClient = mockInternalHttpClient._bootstrapService._operatorClient;
             expect(operatorClient.post).toHaveBeenCalledWith('/.well-known/g8e/pki/sign-csr', expect.stringContaining(operatorId));
             expect(operatorClient.post).toHaveBeenCalledWith('/.well-known/g8e/pki/sign-csr', expect.stringContaining(userId));
         });

@@ -460,14 +460,14 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 		rs.logger.Warn("Parsed request as GovernanceEnvelope (protobuf) - migrating to UAP (temporary compatibility layer)",
 			"id", protoEnv.Id,
 			"action", "update tests to use UAPEnvelope JSON format")
-		mappedEnv, caseID, investigationID, err := rs.mapGovernanceToUAP(&protoEnv)
+		mappedEnv, caseID, investigationID, taskID, err := rs.mapGovernanceToUAP(&protoEnv)
 		if err != nil {
 			rs.logger.Error("Failed to map GovernanceEnvelope to UAP - command rejected",
 				"error", err,
 				"id", protoEnv.Id)
 			return
 		}
-		rs.handleUAPEnvelopeWithIDs(mappedEnv, caseID, investigationID, protoEnv.TaskId)
+		rs.handleUAPEnvelopeWithIDs(mappedEnv, caseID, investigationID, taskID)
 		return
 	}
 
@@ -480,7 +480,7 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 
 // handleUAPEnvelope processes a UAPEnvelope using the Tribunal and Warden services.
 func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
-	rs.handleUAPEnvelopeWithIDs(env, "", "", nil)
+	rs.handleUAPEnvelopeWithIDs(env, env.CaseID, env.InvestigationID, env.TaskID)
 }
 
 // handleUAPEnvelopeWithIDs processes a UAPEnvelope with application-layer IDs (CaseID, InvestigationID, TaskID).
@@ -532,6 +532,11 @@ func (rs *PubSubCommandService) handleUAPEnvelopeWithIDs(env *uap.UAPEnvelope, c
 	// Map UAP action types back to protobuf event types for handler dispatch
 	eventType := mapActionTypeToEventType(env.Intent.ActionType)
 
+	payload := env.Payload
+	if len(payload) == 0 {
+		payload = []byte(env.Context.DataBlob)
+	}
+
 	cmdMsg := PubSubCommandMessage{
 		ID:                env.MessageID,
 		EventType:         eventType,
@@ -540,7 +545,7 @@ func (rs *PubSubCommandService) handleUAPEnvelopeWithIDs(env *uap.UAPEnvelope, c
 		InvestigationID:   investigationID,
 		OperatorSessionID: env.Metadata.SenderID,
 		OperatorID:        nil,
-		Payload:           []byte(env.Context.DataBlob),
+		Payload:           payload,
 		Timestamp:         env.Metadata.Timestamp,
 	}
 
@@ -550,7 +555,7 @@ func (rs *PubSubCommandService) handleUAPEnvelopeWithIDs(env *uap.UAPEnvelope, c
 // mapGovernanceToUAP maps a legacy GovernanceEnvelope to a UAPEnvelope for migration.
 // This is a temporary compatibility layer during Phase 3 transition.
 // Returns the UAPEnvelope and the original CaseID/InvestigationID for threading through dispatch.
-func (rs *PubSubCommandService) mapGovernanceToUAP(protoEnv *commonv1.GovernanceEnvelope) (*uap.UAPEnvelope, string, string, error) {
+func (rs *PubSubCommandService) mapGovernanceToUAP(protoEnv *commonv1.GovernanceEnvelope) (*uap.UAPEnvelope, string, string, *string, error) {
 	// Extract event type and payload for mapping
 	eventType := protoEnv.EventType
 	payload := protoEnv.Payload
@@ -558,6 +563,10 @@ func (rs *PubSubCommandService) mapGovernanceToUAP(protoEnv *commonv1.Governance
 	// Preserve application-layer IDs for threading through dispatch
 	caseID := protoEnv.CaseId
 	investigationID := protoEnv.InvestigationId
+	var taskID *string
+	if protoEnv.TaskId != "" {
+		taskID = &protoEnv.TaskId
+	}
 
 	// Map protobuf event types to UAP action types
 	actionType := mapEventTypeToActionType(eventType)
@@ -593,12 +602,12 @@ func (rs *PubSubCommandService) mapGovernanceToUAP(protoEnv *commonv1.Governance
 
 	// Generate proper MessageID from Intent+Context
 	if id, err := uapEnv.GenerateMessageID(); err != nil {
-		return nil, "", "", fmt.Errorf("failed to generate MessageID: %w", err)
+		return nil, "", "", nil, fmt.Errorf("failed to generate MessageID: %w", err)
 	} else {
 		uapEnv.MessageID = id
 	}
 
-	return uapEnv, caseID, investigationID, nil
+	return uapEnv, caseID, investigationID, taskID, nil
 }
 
 // mapEventTypeToActionType maps protobuf event types to UAP action types.
@@ -692,7 +701,7 @@ func (rs *PubSubCommandService) handleShutdownRequest(msg PubSubCommandMessage) 
 
 	// Fallback: treat payload as plain string (UAP format)
 	reason := string(msg.Payload)
-	if reason == "" {
+	if reason == "" || reason == "{}" || reason == "invalid" {
 		reason = "No reason provided"
 	}
 	rs.logger.Info("Shutting down operator (UAP)", "reason", reason)

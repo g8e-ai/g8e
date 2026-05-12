@@ -13,6 +13,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BindOperatorsService } from '@g8ed/services/operator/operator_bind_service.js';
+import { createMockInternalHttpClient } from '@test/mocks/internal-http-client.mock.js';
 import { OperatorStatus } from '@g8ed/constants/operator.js';
 import { DeviceLinkError } from '@g8ed/constants/auth.js';
 import { BindOperatorsRequest, UnbindOperatorsRequest, G8eHttpContext } from '@g8ed/models/request_models.js';
@@ -27,8 +28,10 @@ import { HttpStatusMessage } from '@g8ed/constants/errors.js';
 describe('BindOperatorsService', () => {
     let service;
     let mocks;
+    let mockInternalHttpClient;
 
     beforeEach(() => {
+        mockInternalHttpClient = createMockInternalHttpClient();
         mocks = {
             operatorService: {
                 getOperator: vi.fn(),
@@ -49,6 +52,7 @@ describe('BindOperatorsService', () => {
                 bindOperatorToWebSession: vi.fn().mockResolvedValue(),
                 unbindOperatorFromWebSession: vi.fn().mockResolvedValue(),
             },
+            internalHttpClient: mockInternalHttpClient
         };
 
         service = new BindOperatorsService(mocks);
@@ -87,7 +91,7 @@ describe('BindOperatorsService', () => {
             expect(result.errors[0].error).toBe(DeviceLinkError.OPERATOR_WRONG_USER);
         });
 
-        it('should successfully bind and relay to g8ee', async () => {
+        it('should successfully bind and relay to g8ee and substrate', async () => {
             const operator = new OperatorDocument({
                 id: 'op-123',
                 user_id: 'u-123',
@@ -100,6 +104,7 @@ describe('BindOperatorsService', () => {
             const g8eContextWrapper = OperatorWithSessionContext.create(operator, { id: 'os-123' }, { id: 'ws-123' });
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(g8eContextWrapper);
             mocks.operatorService.relayRegisterOperatorSessionToG8ee.mockResolvedValue({ success: true });
+            mockInternalHttpClient.bindOperators.mockResolvedValue({ success: true });
 
             const bindReq = new BindOperatorsRequest({
                 operator_ids: ['op-123'],
@@ -111,16 +116,15 @@ describe('BindOperatorsService', () => {
             expect(result).toBeInstanceOf(BindOperatorsResponse);
             expect(result.success).toBe(true);
             expect(result.bound_count).toBe(1);
-            expect(mocks.operatorService.relayBindOperatorsToG8ee).toHaveBeenCalledWith(
-                { operator_ids: ['op-123'], web_session_id: 'ws-123', user_id: 'u-123' },
-                expect.any(Object)
+            expect(mockInternalHttpClient.bindOperators).toHaveBeenCalledWith(
+                ['op-123'], 'u-123', 'ws-123'
             );
             expect(mocks.bindingService.bind).toHaveBeenCalledWith('os-123', 'ws-123', 'u-123', 'op-123');
         });
     });
 
     describe('unbindOperators', () => {
-        it('should unbind and relay to g8ee', async () => {
+        it('should unbind and relay to g8ee and substrate', async () => {
             const operator = new OperatorDocument({
                 id: 'op-123',
                 user_id: 'u-123',
@@ -134,6 +138,7 @@ describe('BindOperatorsService', () => {
             const g8eContextWrapper = OperatorWithSessionContext.create(operator, { id: 'os-123' }, { id: 'ws-123' });
             mocks.operatorService.getOperatorWithSessionContext.mockResolvedValue(g8eContextWrapper);
             mocks.operatorService.relayRegisterOperatorSessionToG8ee.mockResolvedValue({ success: true });
+            mockInternalHttpClient.unbindOperators.mockResolvedValue({ success: true });
 
             const unbindReq = new UnbindOperatorsRequest({
                 operator_ids: ['op-123'],
@@ -145,9 +150,8 @@ describe('BindOperatorsService', () => {
             expect(result).toBeInstanceOf(UnbindOperatorsResponse);
             expect(result.success).toBe(true);
             expect(result.unbound_count).toBe(1);
-            expect(mocks.operatorService.relayUnbindOperatorsToG8ee).toHaveBeenCalledWith(
-                { operator_ids: ['op-123'], web_session_id: 'ws-123', user_id: 'u-123' },
-                expect.any(Object)
+            expect(mockInternalHttpClient.unbindOperators).toHaveBeenCalledWith(
+                ['op-123'], 'u-123', 'ws-123'
             );
             expect(mocks.bindingService.unbind).toHaveBeenCalledWith('os-123', 'ws-123', 'op-123');
         });

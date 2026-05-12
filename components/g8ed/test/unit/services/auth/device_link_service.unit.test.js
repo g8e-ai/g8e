@@ -15,6 +15,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import crypto from 'crypto';
 import { DeviceLinkService } from '@g8ed/services/auth/device_link_service.js';
 import { createMockCacheAside } from '@test/mocks/cache-aside.mock.js';
+import { createMockInternalHttpClient } from '@test/mocks/internal-http-client.mock.js';
 import { DeviceLinkData } from '@g8ed/models/auth_models.js';
 import { DeviceLinkStatus, DeviceLinkError, DEVICE_LINK_TTL_SECONDS, DEVICE_LINK_TTL_MIN_SECONDS, DEVICE_LINK_TTL_MAX_SECONDS, LOCK_TTL_MS, LOCK_RETRY_DELAY_MS, LOCK_MAX_RETRIES } from '@g8ed/constants/auth.js';
 import { OperatorStatus, OperatorType } from '@g8ed/constants/operator.js';
@@ -28,6 +29,7 @@ describe('DeviceLinkService', () => {
     let mockOperatorService;
     let mockWebSessionService;
     let mockDeviceRegistration;
+    let mockInternalHttpClient;
 
     const mockG8eContext = {
         user_id: 'user-123',
@@ -63,12 +65,14 @@ describe('DeviceLinkService', () => {
         mockDeviceRegistration = {
             registerDevice: vi.fn()
         };
+        mockInternalHttpClient = createMockInternalHttpClient();
 
         service = new DeviceLinkService({
             cacheAsideService: mockCache,
             operatorService: mockOperatorService,
             webSessionService: mockWebSessionService,
-            deviceRegistrationService: mockDeviceRegistration
+            deviceRegistrationService: mockDeviceRegistration,
+            internalHttpClient: mockInternalHttpClient
         });
     });
 
@@ -129,15 +133,16 @@ describe('DeviceLinkService', () => {
     });
 
     describe('createLink', () => {
-        it('should successfully create a multi-use active link', async () => {
-            mockOperatorService.queryOperators.mockResolvedValue([
-                { id: 'op-1', status: OperatorStatus.OFFLINE },
-                { id: 'op-2', status: OperatorStatus.OFFLINE },
-                { id: 'op-3', status: OperatorStatus.OFFLINE },
-                { id: 'op-4', status: OperatorStatus.OFFLINE },
-                { id: 'op-5', status: OperatorStatus.OFFLINE }
-            ]);
-            mockOperatorService.createOperatorSlot.mockResolvedValue({ success: true, operator_id: 'new-op' });
+        it('should successfully create a multi-use active link via substrate', async () => {
+            const mockResponse = {
+                success: true,
+                token: 'dlk_mock_123',
+                name: 'Test Link',
+                max_uses: 5,
+                operator_command: 'g8e.operator --device-token dlk_mock_123',
+                expires_at: toISOString(addSeconds(now(), DEVICE_LINK_TTL_SECONDS))
+            };
+            mockInternalHttpClient.createDeviceLink.mockResolvedValue(mockResponse);
 
             const result = await service.createLink({
                 user_id: mockG8eContext.user_id,
@@ -148,30 +153,12 @@ describe('DeviceLinkService', () => {
             });
 
             expect(result.success).toBe(true);
-            expect(result.token).toMatch(/^dlk_/);
-            expect(result.name).toBe('Test Link');
-            expect(result.max_uses).toBe(5);
-            expect(result.operator_command).toContain(result.token);
-            expect(result.expires_at).toBeDefined();
-        });
-
-        it('should create link without name', async () => {
-            mockOperatorService.queryOperators.mockResolvedValue(
-                Array.from({ length: 5 }, (_, i) => ({
-                    id: `op-${i}`,
-                    status: OperatorStatus.OFFLINE
-                }))
-            );
-            mockOperatorService.createOperatorSlot.mockResolvedValue({ success: true, operator_id: 'new-op' });
-
-            const result = await service.createLink({
+            expect(result.token).toBe('dlk_mock_123');
+            expect(mockInternalHttpClient.createDeviceLink).toHaveBeenCalledWith(expect.objectContaining({
                 user_id: mockG8eContext.user_id,
-                organization_id: mockG8eContext.organization_id,
+                name: 'Test Link',
                 max_uses: 5
-            });
-
-            expect(result.success).toBe(true);
-            expect(result.name).toBeNull();
+            }));
         });
 
         it('should fail if max_uses is below minimum', async () => {
@@ -814,133 +801,30 @@ describe('DeviceLinkService', () => {
     });
 
     describe('listLinks', () => {
-        it('should successfully list all links for a user', async () => {
-            const token1 = 'dlk_' + 'a'.repeat(32);
-            const token2 = 'dlk_' + 'b'.repeat(32);
-
-            const linkData1 = new DeviceLinkData({
-                token: token1,
-                user_id: mockG8eContext.user_id,
-                name: 'Link 1',
-                max_uses: 5,
-                uses: 2,
-                status: DeviceLinkStatus.ACTIVE,
-                created_at: addSeconds(now(), -7200),
-                expires_at: addSeconds(now(), 3600),
-                claims: []
+        it('should successfully list links via substrate', async () => {
+            const mockLinks = [{ token: 'dlk_1' }, { token: 'dlk_2' }];
+            mockInternalHttpClient.listDeviceLinks.mockResolvedValue({
+                success: true,
+                links: mockLinks
             });
-
-            const linkData2 = new DeviceLinkData({
-                token: token2,
-                user_id: mockG8eContext.user_id,
-                name: 'Link 2',
-                max_uses: 3,
-                uses: 1,
-                status: DeviceLinkStatus.ACTIVE,
-                created_at: addSeconds(now(), -3600),
-                expires_at: addSeconds(now(), 7200),
-                claims: []
-            });
-
-            mockCache.kvSmembers.mockResolvedValue([token1, token2]);
-            mockCache.kvGetJson
-                .mockResolvedValueOnce(linkData1.forKV())
-                .mockResolvedValueOnce(linkData2.forKV());
 
             const result = await service.listLinks(mockG8eContext.user_id);
 
             expect(result.success).toBe(true);
-            expect(result.links).toHaveLength(2);
-            expect(result.links[0].token).toBe(token2);
-            expect(result.links[1].token).toBe(token1);
-            expect(result.links[0].name).toBe('Link 2');
-            expect(result.links[1].name).toBe('Link 1');
+            expect(result.links).toEqual(mockLinks);
+            expect(mockInternalHttpClient.listDeviceLinks).toHaveBeenCalledWith(mockG8eContext.user_id);
         });
 
-        it('should mark expired links as EXPIRED', async () => {
-            const token = validToken;
-            const linkData = new DeviceLinkData({
-                token,
-                user_id: mockG8eContext.user_id,
-                status: DeviceLinkStatus.ACTIVE,
-                expires_at: addSeconds(now(), -3600),
-                claims: []
+        it('should handle substrate failure', async () => {
+            mockInternalHttpClient.listDeviceLinks.mockResolvedValue({
+                success: false,
+                error: 'Substrate error'
             });
-
-            mockCache.kvSmembers.mockResolvedValue([token]);
-            mockCache.kvGetJson.mockResolvedValue(linkData.forKV());
 
             const result = await service.listLinks(mockG8eContext.user_id);
 
-            expect(result.success).toBe(true);
-            expect(result.links[0].status).toBe(DeviceLinkStatus.EXPIRED);
-        });
-
-        it('should remove expired tokens from the list', async () => {
-            const token1 = validToken;
-            const token2 = 'dlk_' + 'b'.repeat(32);
-
-            const linkData = new DeviceLinkData({
-                token: token1,
-                user_id: mockG8eContext.user_id,
-                status: DeviceLinkStatus.ACTIVE,
-                expires_at: addSeconds(now(), 3600),
-                claims: []
-            });
-
-            mockCache.kvSmembers.mockResolvedValue([token1, token2]);
-            mockCache.kvGetJson
-                .mockResolvedValueOnce(linkData.forKV())
-                .mockResolvedValueOnce(null);
-
-            const result = await service.listLinks(mockG8eContext.user_id);
-
-            expect(result.success).toBe(true);
-            expect(result.links).toHaveLength(1);
-            expect(mockCache.kvSrem).toHaveBeenCalledWith(KVKey.deviceLinkList(mockG8eContext.user_id), token2);
-        });
-
-        it('should return empty list if user has no links', async () => {
-            mockCache.kvSmembers.mockResolvedValue([]);
-
-            const result = await service.listLinks(mockG8eContext.user_id);
-
-            expect(result.success).toBe(true);
-            expect(result.links).toHaveLength(0);
-        });
-
-        it('should sort links by created_at descending', async () => {
-            const token1 = 'dlk_' + 'a'.repeat(32);
-            const token2 = 'dlk_' + 'b'.repeat(32);
-
-            const linkData1 = new DeviceLinkData({
-                token: token1,
-                user_id: mockG8eContext.user_id,
-                status: DeviceLinkStatus.ACTIVE,
-                created_at: addSeconds(now(), -7200),
-                expires_at: addSeconds(now(), 3600),
-                claims: []
-            });
-
-            const linkData2 = new DeviceLinkData({
-                token: token2,
-                user_id: mockG8eContext.user_id,
-                status: DeviceLinkStatus.ACTIVE,
-                created_at: addSeconds(now(), -3600),
-                expires_at: addSeconds(now(), 7200),
-                claims: []
-            });
-
-            mockCache.kvSmembers.mockResolvedValue([token1, token2]);
-            mockCache.kvGetJson
-                .mockResolvedValueOnce(linkData1.forKV())
-                .mockResolvedValueOnce(linkData2.forKV());
-
-            const result = await service.listLinks(mockG8eContext.user_id);
-
-            expect(result.success).toBe(true);
-            expect(result.links[0].token).toBe(token2);
-            expect(result.links[1].token).toBe(token1);
+            expect(result.success).toBe(false);
+            expect(result.error).toBe('Substrate error');
         });
     });
 
@@ -1007,73 +891,22 @@ describe('DeviceLinkService', () => {
     });
 
     describe('revokeLink', () => {
-        it('should successfully revoke a link', async () => {
-            const linkData = new DeviceLinkData({
-                token: validToken,
-                user_id: mockG8eContext.user_id,
-                status: DeviceLinkStatus.ACTIVE,
-                expires_at: addSeconds(now(), 3600),
-                uses: 1,
-                max_uses: 5,
-                claims: []
-            });
+        it('should successfully revoke a link via substrate', async () => {
+            mockInternalHttpClient.deleteDeviceLink.mockResolvedValue({ success: true });
 
-            mockCache._seedKV(KVKey.deviceLink(validToken), linkData.forKV());
-
-            const result = await service.revokeLink(validToken, mockG8eContext.user_id);
+            const result = await service.revokeLink('dlk_token', mockG8eContext.user_id);
 
             expect(result.success).toBe(true);
-            expect(mockCache.kvSetJson).toHaveBeenCalledWith(
-                KVKey.deviceLink(validToken),
-                expect.objectContaining({
-                    status: 'revoked',
-                    revoked_at: expect.any(String)
-                }),
-                DEVICE_LINK_TTL_MIN_SECONDS
-            );
-            expect(mockCache.kvSrem).toHaveBeenCalledWith(KVKey.deviceLinkList(mockG8eContext.user_id), validToken);
+            expect(mockInternalHttpClient.deleteDeviceLink).toHaveBeenCalledWith('dlk_token', mockG8eContext.user_id);
         });
 
-        it('should fail if link is not found', async () => {
-            const getLinkResult = { success: false, error: DeviceLinkError.LINK_NOT_FOUND };
-            vi.spyOn(service, 'getLink').mockResolvedValue(getLinkResult);
+        it('should handle substrate failure', async () => {
+            mockInternalHttpClient.deleteDeviceLink.mockRejectedValue(new Error('Network error'));
 
-            const result = await service.revokeLink(validToken, mockG8eContext.user_id);
-
-            expect(result.success).toBe(false);
-            expect(result.error).toBe(DeviceLinkError.LINK_NOT_FOUND);
-        });
-
-        it('should fail if user does not own the link', async () => {
-            const linkData = new DeviceLinkData({
-                token: validToken,
-                user_id: 'other-user',
-                status: DeviceLinkStatus.ACTIVE,
-                expires_at: addSeconds(now(), 3600)
-            });
-
-            mockCache._seedKV(KVKey.deviceLink(validToken), linkData.forKV());
-
-            const result = await service.revokeLink(validToken, mockG8eContext.user_id);
+            const result = await service.revokeLink('dlk_token', mockG8eContext.user_id);
 
             expect(result.success).toBe(false);
-            expect(result.error).toBe(DeviceLinkError.UNAUTHORIZED);
-        });
-
-        it('should fail if link is expired', async () => {
-            const linkData = new DeviceLinkData({
-                token: validToken,
-                user_id: mockG8eContext.user_id,
-                status: DeviceLinkStatus.ACTIVE,
-                expires_at: addSeconds(now(), -3600)
-            });
-
-            mockCache._seedKV(KVKey.deviceLink(validToken), linkData.forKV());
-
-            const result = await service.revokeLink(validToken, mockG8eContext.user_id);
-
-            expect(result.success).toBe(false);
-            expect(result.error).toBe(DeviceLinkError.LINK_EXPIRED);
+            expect(result.error).toBe('Network error');
         });
     });
 

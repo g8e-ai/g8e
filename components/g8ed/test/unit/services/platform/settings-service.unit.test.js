@@ -13,6 +13,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createMockCacheAside } from '@test/mocks/cache-aside.mock.js';
+import { createMockInternalHttpClient } from '@test/mocks/internal-http-client.mock.js';
 import { SettingsService } from '@g8ed/services/platform/settings_service.js';
 import { USER_SETTINGS, validateUserSettings } from '@g8ed/models/settings_model.js';
 import { Collections } from '@g8ed/constants/collections.js';
@@ -22,12 +23,17 @@ import { LLMProvider } from '@g8ed/constants/ai.js';
 describe('SettingsService [UNIT]', () => {
     let cacheAside;
     let service;
+    let mockInternalHttpClient;
 
     beforeEach(async () => {
         vi.resetModules();
         vi.clearAllMocks();
         cacheAside = createMockCacheAside();
-        service = new SettingsService({ cacheAsideService: cacheAside });
+        mockInternalHttpClient = createMockInternalHttpClient();
+        service = new SettingsService({ 
+            cacheAsideService: cacheAside,
+            internalHttpClient: mockInternalHttpClient
+        });
     });
 
     describe('constructor', () => {
@@ -156,6 +162,19 @@ describe('SettingsService [UNIT]', () => {
     describe('updateUserSettings', () => {
         it('throws if userId is missing', async () => {
             await expect(service.updateUserSettings(null, { llm_primary_provider: LLMProvider.OPENAI })).rejects.toThrow('userId is required');
+        });
+
+        it('syncs user settings to g8ee via internalHttpClient', async () => {
+            const userId = 'user-1';
+            const settings = { llm_model: 'gpt-4o' };
+            const g8eContext = { user_id: userId };
+
+            await service.updateUserSettings(userId, settings, g8eContext);
+
+            expect(mockInternalHttpClient.syncUserSettings).toHaveBeenCalledWith(
+                expect.objectContaining({ llm_model: 'gpt-4o' }),
+                g8eContext
+            );
         });
 
         it('merges with existing user settings in nested structure', async () => {

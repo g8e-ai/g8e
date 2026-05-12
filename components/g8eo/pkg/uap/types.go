@@ -15,6 +15,14 @@ type UAPEnvelope struct {
 	Intent          Intent         `json:"intent"`
 	Context         Context        `json:"context"`
 	Consensus       ConsensusState `json:"consensus_state"`
+
+	// Application-layer identifiers
+	CaseID          string  `json:"case_id,omitempty"`
+	InvestigationID string  `json:"investigation_id,omitempty"`
+	TaskID          *string `json:"task_id,omitempty"`
+
+	// Payload is an alias for Context.DataBlob in some contexts, or raw bytes
+	Payload []byte `json:"payload,omitempty"`
 }
 
 type Metadata struct {
@@ -34,9 +42,9 @@ type Context struct {
 }
 
 type ConsensusState struct {
-	RequiredVotes int      `json:"required_votes"`
-	CurrentVotes  []Vote   `json:"current_votes"`
-	Status        string   `json:"status"` // "PENDING", "APPROVED", "REJECTED"
+	RequiredVotes int    `json:"required_votes"`
+	CurrentVotes  []Vote `json:"current_votes"`
+	Status        string `json:"status"` // "PENDING", "APPROVED", "REJECTED"
 }
 
 type Vote struct {

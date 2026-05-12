@@ -15,6 +15,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { SSEService } from '@g8ed/services/platform/sse_service.js';
 import { G8eBaseModel } from '@g8ed/models/base.js';
 import { LLMProvider } from '@g8ed/constants/ai.js';
+import { createMockInternalHttpClient } from '@test/mocks/internal-http-client.mock.js';
 
 class MockEvent extends G8eBaseModel {
     static fields = {
@@ -374,9 +375,7 @@ describe('SSEService [UNIT]', () => {
                 getPlatformSettings: vi.fn().mockResolvedValue({ llm_primary_provider: LLMProvider.OPENAI, llm_model: 'gpt-4' }),
                 getUserSettings: vi.fn().mockResolvedValue({})
             };
-            mockInternalHttpClient = {
-                queryInvestigations: vi.fn().mockResolvedValue([{ id: 'inv_1', case_title: 'Test Case' }])
-            };
+            mockInternalHttpClient = createMockInternalHttpClient();
             mockBoundSessionsService = {
                 resolveBoundOperators: vi.fn().mockResolvedValue([])
             };

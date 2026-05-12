@@ -40,7 +40,6 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/models"
 	"github.com/g8e-ai/g8e/components/g8eo/services/execution"
 	"github.com/g8e-ai/g8e/components/g8eo/services/listen"
-	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
 	pb "github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
 	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/pubsubv1"
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
@@ -168,10 +167,8 @@ func TestLoopback_SubscriberReceivesBrokerPublish(t *testing.T) {
 	f.broker.Publish(ch, envelopeBytes)
 
 	msg := drainOne(t, sub)
-	// The subscriber receives the raw Data field of the PubSubEvent, which is the GovernanceEnvelope bytes
-	var env commonv1.GovernanceEnvelope
-	err = proto.Unmarshal(msg, &env)
-	require.NoError(t, err)
+	// The subscriber receives the raw Data field of the PubSubEvent, which is the GovernanceEnvelope bytes (or UAP JSON)
+	env := assertLoopbackEnvelope(t, msg, constants.Event.Operator.Command.Completed)
 	assert.Equal(t, constants.Event.Operator.Command.Completed, env.EventType)
 }
 
@@ -214,8 +211,7 @@ func TestLoopback_ClientPublishFansOutToSubscriber(t *testing.T) {
 	require.NoError(t, publisher.Publish(context.Background(), ch, envelopeBytes))
 
 	msg := drainOne(t, sub)
-	var env commonv1.GovernanceEnvelope
-	require.NoError(t, proto.Unmarshal(msg, &env))
+	env := assertLoopbackEnvelope(t, msg, "")
 	assert.Equal(t, "cmd-1", env.Id)
 }
 
@@ -252,8 +248,7 @@ func TestLoopback_ClientPublishFansOutToMultipleSubscribers(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			msg := drainOne(t, sub)
-			var env commonv1.GovernanceEnvelope
-			require.NoError(t, proto.Unmarshal(msg, &env))
+			env := assertLoopbackEnvelope(t, msg, constants.Event.Operator.Heartbeat)
 			assert.Equal(t, constants.Event.Operator.Heartbeat, env.EventType, "subscriber %d missed message", i)
 		}()
 	}
@@ -285,8 +280,7 @@ func TestLoopback_SameClientPublishesAndSubscribes(t *testing.T) {
 	require.NoError(t, pubClient.Publish(context.Background(), ch, envelopeBytes))
 
 	msg := drainOne(t, sub)
-	var env commonv1.GovernanceEnvelope
-	require.NoError(t, proto.Unmarshal(msg, &env))
+	env := assertLoopbackEnvelope(t, msg, "test.event")
 	assert.Equal(t, "test.event", env.EventType)
 	assert.Contains(t, string(env.Payload), `"self"`)
 }

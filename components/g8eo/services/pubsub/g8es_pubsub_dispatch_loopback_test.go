@@ -42,7 +42,6 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/models"
 	execution "github.com/g8e-ai/g8e/components/g8eo/services/execution"
 	sentinelpkg "github.com/g8e-ai/g8e/components/g8eo/services/sentinel"
-	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
 	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 	"github.com/stretchr/testify/assert"
@@ -125,22 +124,6 @@ func watchHeartbeat(t *testing.T, f *loopbackFixture, svc *PubSubCommandService)
 }
 
 // startService starts svc and registers a cleanup to stop it.
-func startService(t *testing.T, svc *PubSubCommandService) {
-	t.Helper()
-	ctx, cancel := context.WithCancel(context.Background())
-	require.NoError(t, svc.Start(ctx))
-	t.Cleanup(func() {
-		cancel()
-		svc.Stop() //nolint:errcheck
-	})
-}
-
-func assertLoopbackEnvelope(t *testing.T, data []byte, eventType string) *commonv1.GovernanceEnvelope {
-	t.Helper()
-	env := testutil.MustUnmarshalUniversalEnvelope(t, data)
-	assert.Equal(t, eventType, env.EventType)
-	return env
-}
 
 // =============================================================================
 // CommandService — HandleExecutionRequest end-to-end
@@ -269,7 +252,7 @@ func TestLoopback_CommandDispatch_CancelRequest_RunningCommand(t *testing.T) {
 
 	// Expect either a cancellation result or a completed result (race window).
 	msg := drainOne(t, resultsSub)
-	env := testutil.MustUnmarshalUniversalEnvelope(t, msg)
+	env := assertLoopbackEnvelope(t, msg, "")
 	validEvents := []string{
 		constants.Event.Operator.Command.Cancelled,
 		constants.Event.Operator.Command.Completed,
@@ -434,7 +417,7 @@ func TestLoopback_CommandDispatch_FileEdit_NilResultNoPanic(t *testing.T) {
 
 	msg := drainOne(t, resultsSub)
 	// Must receive either a completed or failed result — never a panic or silence.
-	env := testutil.MustUnmarshalUniversalEnvelope(t, msg)
+	env := assertLoopbackEnvelope(t, msg, "")
 	hasResult := env.EventType == constants.Event.Operator.FileEdit.Completed ||
 		env.EventType == constants.Event.Operator.FileEdit.Failed
 	assert.True(t, hasResult, "expected a file edit result event, got: %s", env.EventType)
@@ -568,7 +551,7 @@ func TestLoopback_CommandDispatch_FanOut_MultipleResultSubscribers(t *testing.T)
 
 	for i, sub := range subs {
 		msg := drainOne(t, sub)
-		env := testutil.MustUnmarshalUniversalEnvelope(t, msg)
+		env := assertLoopbackEnvelope(t, msg, constants.Event.Operator.Command.Completed)
 		assert.Equal(t, constants.Event.Operator.Command.Completed, env.EventType,
 			"subscriber %d did not receive the result", i)
 	}

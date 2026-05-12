@@ -87,7 +87,7 @@ func TestLoopback_CommandDispatch_HistoryAndAudit(t *testing.T) {
 			injectCmdProtobuf(t, f, svc, envelopeBytes)
 
 			msg := drainOne(t, resultsSub)
-			envelope := testutil.MustUnmarshalUniversalEnvelope(t, msg)
+			envelope := assertLoopbackEnvelope(t, msg, tt.expected)
 			assert.Equal(t, tt.expected, envelope.EventType)
 		})
 	}

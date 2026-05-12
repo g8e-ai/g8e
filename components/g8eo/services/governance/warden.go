@@ -32,7 +32,7 @@ func (w *Warden) AuthorizeExecution(env *uap.UAPEnvelope) error {
 	// 2. Count Valid Signatures (Byzantine Check)
 	validApproveVotes := 0
 	for _, vote := range env.Consensus.CurrentVotes {
-		if vote.Decision == true && w.VerifySignature(vote.NodeID, vote.Signature, env.MessageID) {
+		if vote.Decision == true && w.VerifySignature(vote.NodeID, vote.Signature, env.MessageID, vote.Decision) {
 			validApproveVotes++
 		}
 	}
@@ -52,8 +52,8 @@ func (w *Warden) AuthorizeExecution(env *uap.UAPEnvelope) error {
 	return nil
 }
 
-// VerifySignature checks a node's signature on the message ID.
-func (w *Warden) VerifySignature(nodeID, signature, messageID string) bool {
+// VerifySignature checks a node's signature on the message ID and decision.
+func (w *Warden) VerifySignature(nodeID, signature, messageID string, decision bool) bool {
 	pub, ok := w.TrustedNodes[nodeID]
 	if !ok {
 		return false
@@ -62,8 +62,8 @@ func (w *Warden) VerifySignature(nodeID, signature, messageID string) bool {
 	if err != nil {
 		return false
 	}
-	// Verify that the node signed (messageID | true)
-	payload := fmt.Sprintf("%s|true", messageID)
+	// Verify that the node signed (messageID | decision)
+	payload := fmt.Sprintf("%s|%v", messageID, decision)
 	return ed25519.Verify(pub, []byte(payload), sigBytes)
 }
 

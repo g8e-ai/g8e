@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -24,6 +25,7 @@ import (
 
 	"github.com/g8e-ai/g8e/components/g8eo/config"
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
+	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
 	commonv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
 	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
 	"github.com/google/uuid"
@@ -73,6 +75,89 @@ func BuildUniversalEnvelope(
 	}
 
 	return env, nil
+}
+
+// BuildUAPResultEnvelope constructs a UAPEnvelope for result publishing.
+// It preserves the original command's MessageID for correlation.
+func BuildUAPResultEnvelope(
+	cfg *config.Config,
+	actionType string,
+	payload proto.Message,
+	originalMessageID string,
+	senderID string,
+	caseID string,
+	investigationID string,
+	taskID *string,
+) (*uap.UAPEnvelope, error) {
+	payloadBytes, err := proto.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	env := &uap.UAPEnvelope{
+		ProtocolVersion: "1.0",
+		MessageID:       originalMessageID, // Will be regenerated if empty
+		Metadata: uap.Metadata{
+			SenderID:  senderID,
+			Timestamp: time.Now(),
+			Signature: "", // Operator signature would be added here in production
+		},
+		Intent: uap.Intent{
+			ActionType:     actionType,
+			TargetResource: "localhost", // Results are typically local
+		},
+		Context: uap.Context{
+			DataFormat: "protobuf",
+			DataBlob:   string(payloadBytes),
+		},
+		Consensus: uap.ConsensusState{
+			RequiredVotes: 0, // Results don't require consensus
+			CurrentVotes:  []uap.Vote{},
+			Status:        "COMPLETED",
+		},
+		CaseID:          caseID,
+		InvestigationID: investigationID,
+		TaskID:          taskID,
+		Payload:         payloadBytes,
+	}
+
+	// Generate MessageID if not provided (for correlation with command)
+	if originalMessageID == "" {
+		if id, err := env.GenerateMessageID(); err != nil {
+			return nil, fmt.Errorf("failed to generate MessageID: %w", err)
+		} else {
+			env.MessageID = id
+		}
+	}
+
+	return env, nil
+}
+
+// mapEventTypeToResultActionType maps protobuf event types to UAP result action types.
+func mapEventTypeToResultActionType(eventType string) string {
+	switch eventType {
+	case constants.Event.Operator.Command.Completed, constants.Event.Operator.Command.Failed:
+		return "EXECUTE_BASH_RESULT"
+	case constants.Event.Operator.Command.Cancelled:
+		return "EXECUTE_BASH_CANCELLED"
+	case constants.Event.Operator.FileEdit.Completed, constants.Event.Operator.FileEdit.Failed:
+		return "FILE_EDIT_RESULT"
+	case constants.Event.Operator.FsList.Completed, constants.Event.Operator.FsList.Failed:
+		return "FS_LIST_RESULT"
+	case constants.Event.Operator.FsGrep.Completed, constants.Event.Operator.FsGrep.Failed:
+		return "FS_GREP_RESULT"
+	case constants.Event.Operator.Command.StatusUpdated.Running,
+		constants.Event.Operator.Command.StatusUpdated.Queued,
+		constants.Event.Operator.Command.StatusUpdated.Completed,
+		constants.Event.Operator.Command.StatusUpdated.Failed,
+		constants.Event.Operator.Command.StatusUpdated.Cancelled:
+		return "EXECUTE_STATUS_UPDATE"
+	case constants.Event.Operator.Heartbeat:
+		return "HEARTBEAT_RESULT"
+	default:
+		// For unknown event types, use the event type itself as action type
+		return eventType + "_RESULT"
+	}
 }
 
 // validateL1Governance uses Protobuf reflection to find and enforce fields with the
