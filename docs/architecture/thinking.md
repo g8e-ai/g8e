@@ -15,7 +15,7 @@ Version: v0.2.4
 
 ## 1. Structural Reasoning: Consensus
 
-g8e enforces structural reasoning at the **Substrate** level by requiring an L2 Consensus proof in the `GovernanceEnvelope` for state-changing operations. 
+g8e enforces structural reasoning at the **Substrate** level by requiring an L2 Consensus proof in the UAP JSON envelope for state-changing operations. 
 
 The bundled **Engine** (`g8ee`) adapter implements this via a **Tribunal** of five heterogeneous agents. This ensures that every shell command is debated before execution.
 
@@ -61,7 +61,7 @@ The `ThinkingLevel` enum (defined in `@/home/bob/g8e/components/g8ee/app/constan
 
 ## Thinking in the Data Stream
 
-The model's internal thinking process is treated as a first-class component of the Protobuf `GovernanceEnvelope`.
+The model's internal thinking process is treated as a first-class component of the UAP JSON envelope.
 
 ### The Thinking State Machine
 `@/home/bob/g8e/components/g8ee/app/services/ai/agent_turn.py` implements a state machine to handle interleaved thought and output tokens. When a `thought` chunk is received, the Engine accumulates it and emits a `THINKING_START` signal. When non-thought tokens arrive, it flushes the thoughts and signals `THINKING_END`.
@@ -75,7 +75,7 @@ Reasoning intensity **never** compromises the **Local-First Audit Architecture (
 
 1.  **Scrubbing Protocol**: Sensitive PII and secrets are redacted by the Operator *before* the context reaches the Engine. Models only "think" over scrubbed data.
 2.  **Audit Vault**: The model's "thought process" is returned to the host, encrypted, and stored in the local Audit Vault.
-3.  **Governance Persistence**: Reasoning results (votes, rationales) are bound to the `GovernanceEnvelope` in the `governance` block, providing a tamper-evident chain of reasoning for every action.
+3.  **Governance Persistence**: Reasoning results (votes, rationales) are bound to the UAP JSON envelope in the `governance` block, providing a tamper-evident chain of reasoning for every action.
 
 ## Testing Discipline
 

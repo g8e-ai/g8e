@@ -20,7 +20,7 @@ The lifecycle of an Operator session is entirely governed by its pub/sub interac
 
 ### 1. Bootstrap & Authentication
 When an Operator starts, it identifies itself via a **Bootstrap Handshake**:
-- **Request**: Operator publishes a `GovernanceEnvelope` to an ephemeral `auth.publish:session:{hash}` channel.
+- **Request**: Operator publishes a UAP JSON envelope to an ephemeral `auth.publish:session:{hash}` channel.
 - **Validation**: The authentication authority (bundled `g8ee` or a substrate-native service) validates the request and responds with a bootstrap configuration (API keys, resource limits, certs) on `auth.response:session:{hash}`.
 - **Finalization**: Once authenticated, the Operator transitions to its dedicated per-session channels.
 
@@ -31,8 +31,8 @@ Operators maintain their `AVAILABLE` status by publishing periodic signals to th
 
 ### 3. Command Orchestration
 The primary function of the platform is the delivery and execution of commands:
-- **Dispatch**: A client publishes serialized `GovernanceEnvelope` bytes to the Operator's `cmd` channel.
-- **Execution**: The Operator executes the typed payload and publishes serialized `GovernanceEnvelope` result bytes back to the `results` channel.
+- **Dispatch**: A client publishes UAP JSON envelope bytes to the Operator's `cmd` channel.
+- **Execution**: The Operator executes the typed payload and publishes UAP JSON result bytes back to the `results` channel.
 - **Completion**: The client matches the `execution_id` and processes the result.
 
 ---

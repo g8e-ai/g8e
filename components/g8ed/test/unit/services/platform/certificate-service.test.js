@@ -20,9 +20,9 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { createMockInternalHttpClient } from '@test/mocks/internal-http-client.mock.js';
 
-function seedCA(sslDir) {
-    mkdirSync(sslDir, { recursive: true });
-    writeFileSync(join(sslDir, 'ca.crt'), '-----BEGIN CERTIFICATE-----\nMOCK CA CERT\n-----END CERTIFICATE-----');
+function seedCA(pkiDir) {
+    mkdirSync(pkiDir, { recursive: true });
+    writeFileSync(join(pkiDir, 'ca.crt'), '-----BEGIN CERTIFICATE-----\nMOCK CA CERT\n-----END CERTIFICATE-----');
 }
 
 vi.mock('@g8ed/utils/logger.js', () => ({
@@ -37,7 +37,7 @@ vi.mock('@g8ed/utils/logger.js', () => ({
 describe('CertificateService [UNIT - filesystem isolated]', { timeout: 30000 }, () => {
     let CertificateService;
     let certService;
-    let tmpSslDir;
+    let tmpPkiDir;
     let mockInternalHttpClient;
 
     beforeAll(async () => {
@@ -47,8 +47,8 @@ describe('CertificateService [UNIT - filesystem isolated]', { timeout: 30000 }, 
 
     beforeEach(async () => {
         vi.clearAllMocks();
-        tmpSslDir = mkdtempSync(join(tmpdir(), 'g8e-ssl-'));
-        await seedCA(tmpSslDir);
+        tmpPkiDir = mkdtempSync(join(tmpdir(), 'g8e-pki-'));
+        await seedCA(tmpPkiDir);
         mockInternalHttpClient = createMockInternalHttpClient();
         
         // Setup specific behavior for CSR signing
@@ -64,25 +64,25 @@ describe('CertificateService [UNIT - filesystem isolated]', { timeout: 30000 }, 
         });
 
         certService = new CertificateService({ 
-            bootstrapService: { getSslDir: () => tmpSslDir },
+            bootstrapService: { getPkiDir: () => tmpPkiDir },
             internalHttpClient: mockInternalHttpClient
         });
     });
 
     afterEach(() => {
-        rmSync(tmpSslDir, { recursive: true, force: true });
+        rmSync(tmpPkiDir, { recursive: true, force: true });
     });
 
     describe('initialize', () => {
-        it('should load CA from SSL_DIR/ca.crt and set caCert', async () => {
+        it('should load CA from PKI_DIR/ca.crt and set caCert', async () => {
             await certService.initialize();
 
             expect(certService.initialized).toBe(true);
             expect(certService.caCert).toContain('-----BEGIN CERTIFICATE-----');
         });
 
-        it('should throw if CA is not found in ssl_dir', async () => {
-            rmSync(join(tmpSslDir, 'ca.crt'), { force: true });
+        it('should throw if CA is not found in pki_dir', async () => {
+            rmSync(join(tmpPkiDir, 'ca.crt'), { force: true });
             await expect(certService.initialize()).rejects.toThrow('CA certificate not found');
         });
 
@@ -188,7 +188,7 @@ describe('CertificateService [UNIT - filesystem isolated]', { timeout: 30000 }, 
 
         it('should auto-initialize if not already initialized', async () => {
             const uninitializedService = new CertificateService({ 
-                bootstrapService: { getSslDir: () => tmpSslDir },
+                bootstrapService: { getPkiDir: () => tmpPkiDir },
                 internalHttpClient: createMockInternalHttpClient()
             });
 

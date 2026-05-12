@@ -5,7 +5,7 @@ parent: Architecture
 
 # g8e: The Governed Transaction Layer
 
-g8e is a **Protobuf-first** transaction runtime for agentic systems. It provides a data-sovereign, AI-agnostic governance substrate between humans, AI agents, and production infrastructure.
+g8e is a governed transaction runtime for agentic systems. It provides a data-sovereign, AI-agnostic governance substrate between humans, AI agents, and production infrastructure.
 
 The platform is split into two distinct tiers:
 

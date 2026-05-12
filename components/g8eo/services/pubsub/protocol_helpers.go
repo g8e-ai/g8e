@@ -20,28 +20,89 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/components/g8eo/config"
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
-	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
+	"github.com/g8e-ai/g8e/components/g8eo/internal/mappings"
 	commonv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
 	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
 )
 
-// BuildUAPResultEnvelope constructs a UAPEnvelope for result publishing.
+// mapProtoToPayloadType maps a protobuf message to its canonical g8e payload type string.
+// This ensures synchronization with g8ee Pydantic models (components/g8ee/app/models/pubsub_messages.py).
+func mapProtoToPayloadType(msg proto.Message) string {
+	switch msg.(type) {
+	case *operatorv1.CommandResult:
+		return "execution_result"
+	case *operatorv1.ExecutionStatusUpdate:
+		return "execution_status"
+	case *operatorv1.FileEditResult:
+		return "file_edit_result"
+	case *operatorv1.FsListResult:
+		return "fs_list_result"
+	case *operatorv1.FsGrepResult:
+		return "fs_grep_result"
+	case *operatorv1.FsReadResult:
+		return "fs_read_result"
+	case *operatorv1.PortCheckResult:
+		return "port_check_result"
+	case *operatorv1.FetchLogsResult:
+		res := msg.(*operatorv1.FetchLogsResult)
+		if res.Error != "" {
+			return "fetch_logs_error"
+		}
+		return "fetch_logs_result"
+	case *operatorv1.FetchHistoryResult:
+		res := msg.(*operatorv1.FetchHistoryResult)
+		if !res.Success {
+			return "fetch_history_error"
+		}
+		return "fetch_history_success"
+	case *operatorv1.FetchFileHistoryResult:
+		res := msg.(*operatorv1.FetchFileHistoryResult)
+		if !res.Success {
+			return "fetch_file_history_error"
+		}
+		return "fetch_file_history_success"
+	case *operatorv1.RestoreFileResult:
+		res := msg.(*operatorv1.RestoreFileResult)
+		if !res.Success {
+			return "restore_file_error"
+		}
+		return "restore_file_success"
+	case *operatorv1.FetchFileDiffResult:
+		res := msg.(*operatorv1.FetchFileDiffResult)
+		if !res.Success {
+			return "fetch_file_diff_error"
+		}
+		if res.Diff != nil {
+			return "fetch_file_diff_by_id_success"
+		}
+		return "fetch_file_diff_by_session_success"
+	case *operatorv1.HeartbeatResult:
+		return "heartbeat"
+	default:
+		return "unknown"
+	}
+}
+
+// BuildUniversalResultEnvelope constructs a UniversalEnvelope for result publishing.
 // It preserves the original command's MessageID for correlation.
-func BuildUAPResultEnvelope(
+func BuildUniversalResultEnvelope(
 	cfg *config.Config,
-	actionType string,
+	eventType string,
 	payload proto.Message,
 	originalMessageID string,
 	senderID string,
 	caseID string,
 	investigationID string,
 	taskID *string,
-) (*uap.UAPEnvelope, error) {
+) (*commonv1.UniversalEnvelope, error) {
 	payloadBytes, err := proto.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal payload: %w", err)
@@ -54,72 +115,48 @@ func BuildUAPResultEnvelope(
 		_ = json.Unmarshal(jsonBytes, &intentData)
 	}
 
-	env := &uap.UAPEnvelope{
-		ProtocolVersion: "1.0",
-		MessageID:       originalMessageID, // Will be regenerated if empty
-		Metadata: uap.Metadata{
-			SenderID:  senderID,
-			Timestamp: time.Now(),
-			Signature: "", // Operator signature would be added here in production
-		},
-		Intent: uap.Intent{
-			ActionType:     actionType,
-			TargetResource: "localhost", // Results are typically local
-		},
-		Context: uap.Context{
-			DataFormat: "json",
-			IntentData: intentData,
-			DataBlob:   string(payloadBytes),
-		},
-		IntentData: intentData,
-		Consensus: uap.ConsensusState{
-			RequiredVotes: 0, // Results don't require consensus
-			CurrentVotes:  []uap.Vote{},
-			Status:        "COMPLETED",
-		},
-		CaseID:          caseID,
-		InvestigationID: investigationID,
-		TaskID:          taskID,
-		Payload:         payloadBytes,
-	}
-
-	// Generate MessageID if not provided (for correlation with command)
-	if originalMessageID == "" {
-		if id, err := env.GenerateMessageID(); err != nil {
-			return nil, fmt.Errorf("failed to generate MessageID: %w", err)
-		} else {
-			env.MessageID = id
+	// Inject canonical payload_type for consumer discriminator-based parsing (e.g., g8ee Pydantic)
+	if intentData != nil {
+		if _, ok := intentData["payload_type"]; !ok {
+			intentData["payload_type"] = mapProtoToPayloadType(payload)
 		}
 	}
 
-	return env, nil
-}
-
-// mapEventTypeToResultActionType maps protobuf event types to UAP result action types.
-func mapEventTypeToResultActionType(eventType string) string {
-	switch eventType {
-	case constants.Event.Operator.Command.Completed, constants.Event.Operator.Command.Failed:
-		return "EXECUTE_BASH_RESULT"
-	case constants.Event.Operator.Command.Cancelled:
-		return "EXECUTE_BASH_CANCELLED"
-	case constants.Event.Operator.FileEdit.Completed, constants.Event.Operator.FileEdit.Failed:
-		return "FILE_EDIT_RESULT"
-	case constants.Event.Operator.FsList.Completed, constants.Event.Operator.FsList.Failed:
-		return "FS_LIST_RESULT"
-	case constants.Event.Operator.FsGrep.Completed, constants.Event.Operator.FsGrep.Failed:
-		return "FS_GREP_RESULT"
-	case constants.Event.Operator.Command.StatusUpdated.Running,
-		constants.Event.Operator.Command.StatusUpdated.Queued,
-		constants.Event.Operator.Command.StatusUpdated.Completed,
-		constants.Event.Operator.Command.StatusUpdated.Failed,
-		constants.Event.Operator.Command.StatusUpdated.Cancelled:
-		return "EXECUTE_STATUS_UPDATE"
-	case constants.Event.Operator.Heartbeat:
-		return "HEARTBEAT_RESULT"
-	default:
-		// For unknown event types, use the event type itself as action type
-		return eventType + "_RESULT"
+	// Convert map to structpb.Struct for UniversalEnvelope
+	var intentDataStruct *structpb.Struct
+	if intentData != nil {
+		if structBytes, err := json.Marshal(intentData); err == nil {
+			intentDataStruct = &structpb.Struct{}
+			_ = protojson.Unmarshal(structBytes, intentDataStruct)
+		}
 	}
+
+	env := &commonv1.UniversalEnvelope{
+		Id:                originalMessageID, // Will be regenerated if empty
+		Timestamp:         timestamppb.Now(),
+		ExpiresAt:         timestamppb.New(time.Now().Add(5 * time.Minute)),
+		SourceComponent:   commonv1.Component_COMPONENT_G8EO,
+		OperatorId:        senderID,
+		OperatorSessionId: cfg.OperatorSessionId,
+		EventType:         eventType,
+		ActionType:        mappings.MapEventTypeToResultActionType(eventType),
+		Payload:           payloadBytes,
+		IntentData:        intentDataStruct,
+		CaseId:            caseID,
+		InvestigationId:   investigationID,
+	}
+
+	if taskID != nil {
+		env.TaskId = *taskID
+	}
+
+	// Generate ID if not provided (for correlation with command)
+	if env.Id == "" {
+		// For now using simple UUID during transition, but eventually should be hash-based
+		env.Id = fmt.Sprintf("res_%d", time.Now().UnixNano())
+	}
+
+	return env, nil
 }
 
 // validateL1Governance uses Protobuf reflection to find and enforce fields with the

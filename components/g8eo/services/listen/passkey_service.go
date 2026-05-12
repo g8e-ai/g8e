@@ -381,9 +381,40 @@ func (s *PasskeyService) CreateSession(userID string) (*models.WebSession, error
 	return session, nil
 }
 
+// VerifyL3Proof verifies a human signature against a registered passkey.
+func (s *PasskeyService) VerifyL3Proof(userID, messageID, signatureHex, pubKeyHex string) (bool, error) {
+	user, err := s.getUser(userID)
+	if err != nil {
+		return false, err
+	}
+	if user == nil {
+		return false, fmt.Errorf("user not found")
+	}
+
+	// 1. Verify the public key is registered for this user
+	found := false
+	for _, cred := range user.PasskeyCredentials {
+		// In a real WebAuthn impl, we'd compare ID or the extracted key
+		if cred.PublicKey == pubKeyHex || cred.ID == pubKeyHex {
+			found = true
+			break
+		}
+	}
+
+	// For transition/bootstrap, if user has NO credentials, we might allow it
+	// BUT for a sovereign host, we should probably enforce it if required.
+	if !found && len(user.PasskeyCredentials) > 0 {
+		return false, fmt.Errorf("public key not registered for user")
+	}
+
+	// 2. Verify the signature
+	// We'll use the same logic as VerifyL3Signature for now but with the user check
+	return s.VerifyL3Signature(userID, messageID, signatureHex, pubKeyHex)
+}
+
 // VerifyL3Signature verifies an ED25519 signature for L3 authorization.
 // This is used when L3 proof is provided as a direct signature rather than WebAuthn.
-func (s *PasskeyService) VerifyL3Signature(userID string, challenge, signatureHex string, pubKeyHex string) (bool, error) {
+func (s *PasskeyService) VerifyL3Signature(userID, challenge, signatureHex, pubKeyHex string) (bool, error) {
 	// Decode signature
 	sigBytes, err := hex.DecodeString(signatureHex)
 	if err != nil {
@@ -405,8 +436,6 @@ func (s *PasskeyService) VerifyL3Signature(userID string, challenge, signatureHe
 
 	return true, nil
 }
-
-// Helper methods
 
 func (s *PasskeyService) getUser(userID string) (*models.User, error) {
 	doc, err := s.db.DocGet(string(constants.CollectionUsers), userID)

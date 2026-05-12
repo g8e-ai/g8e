@@ -59,7 +59,7 @@ IV. Application Boundary and State Management
 
 2. Strict Typing: Inside the application boundary, data lives exclusively as typed model instances. Raw dicts, untyped maps, and ad-hoc JSON are prohibited. Models are only flattened to plain objects when crossing a wire boundary (database, KV cache, HTTP, pub-sub).
 
-3. Protobuf First: `shared/proto/*.proto` defines the canonical wire format. All inter-component communication uses the `GovernanceEnvelope` carrying typed Protobuf payloads.
+3. UAP JSON First: The canonical mutation envelope is UAP JSON (`components/g8eo/pkg/uap/types.go`). All mutation commands use UAPEnvelope carrying structured intent_data. Protobuf in `shared/proto/*.proto` defines typed request/result payloads (e.g., CommandRequested, HeartbeatResult) but not the mutation envelope itself.
 
 4. Data Access Layering: All document operations must use the `CacheAsideService`. The database is the authoritative source of truth for writes. The KV store is the primary read path. Writes must explicitly invalidate or update the cache to ensure consistency.
 

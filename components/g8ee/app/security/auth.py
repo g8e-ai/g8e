@@ -70,65 +70,6 @@ def is_infrastructure_health_check_ip(ip: str) -> bool:
     return False
 
 
-async def validate_internal_origin(request: Request, settings: G8eePlatformSettings | None = None) -> bool:
-    """Validate that the request originates from an internal source or health checker."""
-    client_ip = request.client.host if request.client else None
-    forwarded_for = request.headers.get(HTTP_FORWARDED_FOR_HEADER)
-    user_agent = request.headers.get(HTTP_USER_AGENT_HEADER)
-
-    normalized_ip = client_ip.replace("::ffff:", "") if client_ip and client_ip.startswith("::ffff:") else client_ip
-
-    if not settings and hasattr(request.app.state, "settings"):
-        state = cast(G8eeAppState, request.app.state)
-        settings = state.settings
-
-    if settings and verify_internal_auth_token(request, settings):
-        logger.info(
-            "[AUTH] Internal endpoint access granted via auth token",
-            extra={
-                "endpoint": request.url.path,
-                "ip": client_ip
-            }
-        )
-        return True
-
-    if is_infrastructure_health_check_ip(normalized_ip):
-        logger.info(
-            "[AUTH] Health check from GKE load balancer",
-            extra={
-                "endpoint": request.url.path,
-                "ip": normalized_ip
-            }
-        )
-        return True
-
-    if normalized_ip == "127.0.0.1" and request.url.path.startswith("/health"):
-        logger.info(
-            "[AUTH] Health check from localhost (container internal)",
-            extra={"endpoint": request.url.path}
-        )
-        return True
-
-    logger.warning(
-        "[AUTH] INTERNAL ENDPOINT ACCESS DENIED - missing or invalid auth token",
-        extra={
-            "endpoint": request.url.path,
-            "method": request.method,
-            "ip": client_ip,
-            "normalized_ip": normalized_ip if normalized_ip != client_ip else None,
-            "forwarded_for": forwarded_for,
-            "has_auth_token": bool(request.headers.get(INTERNAL_AUTH_HEADER)),
-            "has_expected_token": bool(settings and settings.auth.internal_auth_token),
-            "user_agent": user_agent
-        }
-    )
-
-    raise AuthorizationError(
-        "Forbidden - Internal endpoint requires authentication",
-        component=ComponentName.G8EE,
-    )
-
-
 async def authenticate_proxy_or_internal(request: Request, settings: G8eePlatformSettings) -> AuthenticatedUser:
     """Authenticate the user via proxy headers or internal auth token."""
     proxy_user_id = request.headers.get(PROXY_USER_ID_HEADER)

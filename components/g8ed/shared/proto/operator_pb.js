@@ -11944,10 +11944,10 @@ proto.g8e.operator.v1.CommandResult.toObject = function(includeInstance, msg) {
   var f, obj = {
     executionId: jspb.Message.getFieldWithDefault(msg, 1, ""),
     status: jspb.Message.getFieldWithDefault(msg, 2, 0),
-    output: jspb.Message.getFieldWithDefault(msg, 3, ""),
+    stdout: jspb.Message.getFieldWithDefault(msg, 3, ""),
     error: jspb.Message.getFieldWithDefault(msg, 4, ""),
     stderr: jspb.Message.getFieldWithDefault(msg, 5, ""),
-    exitCode: jspb.Message.getFieldWithDefault(msg, 6, 0),
+    returnCode: jspb.Message.getFieldWithDefault(msg, 6, 0),
     executionTimeSeconds: jspb.Message.getFloatingPointFieldWithDefault(msg, 7, 0.0),
     startTimeUnixMs: jspb.Message.getFieldWithDefault(msg, 8, 0),
     endTimeUnixMs: jspb.Message.getFieldWithDefault(msg, 9, 0)
@@ -11997,7 +11997,7 @@ proto.g8e.operator.v1.CommandResult.deserializeBinaryFromReader = function(msg, 
       break;
     case 3:
       var value = /** @type {string} */ (reader.readString());
-      msg.setOutput(value);
+      msg.setStdout(value);
       break;
     case 4:
       var value = /** @type {string} */ (reader.readString());
@@ -12009,7 +12009,7 @@ proto.g8e.operator.v1.CommandResult.deserializeBinaryFromReader = function(msg, 
       break;
     case 6:
       var value = /** @type {number} */ (reader.readInt32());
-      msg.setExitCode(value);
+      msg.setReturnCode(value);
       break;
     case 7:
       var value = /** @type {number} */ (reader.readFloat());
@@ -12066,7 +12066,7 @@ proto.g8e.operator.v1.CommandResult.serializeBinaryToWriter = function(message, 
       f
     );
   }
-  f = message.getOutput();
+  f = message.getStdout();
   if (f.length > 0) {
     writer.writeString(
       3,
@@ -12087,7 +12087,7 @@ proto.g8e.operator.v1.CommandResult.serializeBinaryToWriter = function(message, 
       f
     );
   }
-  f = message.getExitCode();
+  f = message.getReturnCode();
   if (f !== 0) {
     writer.writeInt32(
       6,
@@ -12155,10 +12155,10 @@ proto.g8e.operator.v1.CommandResult.prototype.setStatus = function(value) {
 
 
 /**
- * optional string output = 3;
+ * optional string stdout = 3;
  * @return {string}
  */
-proto.g8e.operator.v1.CommandResult.prototype.getOutput = function() {
+proto.g8e.operator.v1.CommandResult.prototype.getStdout = function() {
   return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 3, ""));
 };
 
@@ -12167,7 +12167,7 @@ proto.g8e.operator.v1.CommandResult.prototype.getOutput = function() {
  * @param {string} value
  * @return {!proto.g8e.operator.v1.CommandResult} returns this
  */
-proto.g8e.operator.v1.CommandResult.prototype.setOutput = function(value) {
+proto.g8e.operator.v1.CommandResult.prototype.setStdout = function(value) {
   return jspb.Message.setProto3StringField(this, 3, value);
 };
 
@@ -12209,10 +12209,10 @@ proto.g8e.operator.v1.CommandResult.prototype.setStderr = function(value) {
 
 
 /**
- * optional int32 exit_code = 6;
+ * optional int32 return_code = 6;
  * @return {number}
  */
-proto.g8e.operator.v1.CommandResult.prototype.getExitCode = function() {
+proto.g8e.operator.v1.CommandResult.prototype.getReturnCode = function() {
   return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 6, 0));
 };
 
@@ -12221,7 +12221,7 @@ proto.g8e.operator.v1.CommandResult.prototype.getExitCode = function() {
  * @param {number} value
  * @return {!proto.g8e.operator.v1.CommandResult} returns this
  */
-proto.g8e.operator.v1.CommandResult.prototype.setExitCode = function(value) {
+proto.g8e.operator.v1.CommandResult.prototype.setReturnCode = function(value) {
   return jspb.Message.setProto3IntField(this, 6, value);
 };
 
@@ -15389,7 +15389,7 @@ proto.g8e.operator.v1.FetchLogsResult.toObject = function(includeInstance, msg) 
   var f, obj = {
     executionId: jspb.Message.getFieldWithDefault(msg, 1, ""),
     command: jspb.Message.getFieldWithDefault(msg, 2, ""),
-    exitCode: jspb.Message.getFieldWithDefault(msg, 3, 0),
+    returnCode: jspb.Message.getFieldWithDefault(msg, 3, 0),
     durationMs: jspb.Message.getFieldWithDefault(msg, 4, 0),
     stdout: jspb.Message.getFieldWithDefault(msg, 5, ""),
     stderr: jspb.Message.getFieldWithDefault(msg, 6, ""),
@@ -15444,7 +15444,7 @@ proto.g8e.operator.v1.FetchLogsResult.deserializeBinaryFromReader = function(msg
       break;
     case 3:
       var value = /** @type {number} */ (reader.readInt32());
-      msg.setExitCode(value);
+      msg.setReturnCode(value);
       break;
     case 4:
       var value = /** @type {number} */ (reader.readInt64());
@@ -15521,7 +15521,7 @@ proto.g8e.operator.v1.FetchLogsResult.serializeBinaryToWriter = function(message
       f
     );
   }
-  f = message.getExitCode();
+  f = message.getReturnCode();
   if (f !== 0) {
     writer.writeInt32(
       3,
@@ -15624,10 +15624,10 @@ proto.g8e.operator.v1.FetchLogsResult.prototype.setCommand = function(value) {
 
 
 /**
- * optional int32 exit_code = 3;
+ * optional int32 return_code = 3;
  * @return {number}
  */
-proto.g8e.operator.v1.FetchLogsResult.prototype.getExitCode = function() {
+proto.g8e.operator.v1.FetchLogsResult.prototype.getReturnCode = function() {
   return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 3, 0));
 };
 
@@ -15636,7 +15636,7 @@ proto.g8e.operator.v1.FetchLogsResult.prototype.getExitCode = function() {
  * @param {number} value
  * @return {!proto.g8e.operator.v1.FetchLogsResult} returns this
  */
-proto.g8e.operator.v1.FetchLogsResult.prototype.setExitCode = function(value) {
+proto.g8e.operator.v1.FetchLogsResult.prototype.setReturnCode = function(value) {
   return jspb.Message.setProto3IntField(this, 3, value);
 };
 

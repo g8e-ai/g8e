@@ -42,56 +42,13 @@ G8E_CREDENTIALS_FILE="$G8E_CREDENTIALS_DIR/credentials"
 source "$SCRIPT_DIR/scripts/cmd/common.sh"
 
 _ensure_llm_config() {
+    # Check for G8E_ prefixed vars and populate standard ones if found
     if [[ -n "${G8E_TEST_LLM_PROVIDER:-}" ]]; then
         export TEST_LLM_PROVIDER="$G8E_TEST_LLM_PROVIDER"
     fi
     if [[ -n "${G8E_TEST_LLM_API_KEY:-}" ]]; then
         export TEST_LLM_API_KEY="$G8E_TEST_LLM_API_KEY"
     fi
-    [[ -n "${TEST_LLM_PROVIDER:-}" ]] && return
-    [[ ! -t 0 ]] && return
-
-    echo ""
-    echo -e "\033[0;36mLLM Configuration for ai_integration tests\033[0m"
-    echo -e "You can configure LLM credentials now, or skip to run tests without AI integration."
-    read -p "Configure LLM now? [y/N]: " configure_llm
-    if [[ ! "$configure_llm" =~ ^[Yy]$ ]]; then return; fi
-
-    echo -e "\n\033[0;34mSelect a supported provider:\033[0m"
-    echo "1) openai"; echo "2) anthropic"; echo "3) gemini"; echo "4) ollama"; echo "5) llamacpp"
-    local provider=""
-    while [[ -z "$provider" ]]; do
-        read -p "Selection [1-5]: " p_choice
-        case "$p_choice" in
-            1) provider="openai" ;;
-            2) provider="anthropic" ;;
-            3) provider="gemini" ;;
-            4) provider="ollama" ;;
-            5) provider="llamacpp" ;;
-            *) echo -e "\033[0;31mInvalid selection.\033[0m" ;;
-        esac
-    done
-    export TEST_LLM_PROVIDER="$provider"
-    if [[ "$provider" == "openai" || "$provider" == "anthropic" || "$provider" == "gemini" ]]; then
-        read -s -p "Enter ${provider} API Key: " api_key; echo ""; export TEST_LLM_API_KEY="$api_key"
-    fi
-    case "$provider" in
-        openai)    read -p "Enter endpoint [https://api.openai.com/v1]: " endpoint; [[ -n "$endpoint" ]] && export TEST_LLM_ENDPOINT_URL="$endpoint" ;;
-        anthropic) read -p "Enter endpoint [https://api.anthropic.com]: " endpoint; [[ -n "$endpoint" ]] && export TEST_LLM_ENDPOINT_URL="$endpoint" ;;
-        ollama)    read -p "Enter endpoint [http://localhost:11434]: " endpoint; export TEST_LLM_ENDPOINT_URL="${endpoint:-http://localhost:11434}" ;;
-        llamacpp)  read -p "Enter endpoint [http://localhost:11444]: " endpoint; export TEST_LLM_ENDPOINT_URL="${endpoint:-http://localhost:11444}" ;;
-    esac
-    local default_primary_model=""
-    case "$provider" in
-        openai)    default_primary_model="gpt-5.4" ;;
-        anthropic) default_primary_model="claude-opus-4-6" ;;
-        gemini)    default_primary_model="gemini-3-flash-preview" ;;
-        ollama)    default_primary_model="gemma4:e4b" ;;
-        llamacpp)  default_primary_model="gemma4:e2b" ;;
-    esac
-    read -p "Enter primary model (optional, press Enter for $default_primary_model): " model
-    [[ -n "$model" ]] && export TEST_LLM_PRIMARY_MODEL="$model"
-    echo -e "\033[0;32mLLM configuration set.\033[0m\n"
 }
 
 _menu() {

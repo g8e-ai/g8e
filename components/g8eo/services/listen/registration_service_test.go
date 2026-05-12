@@ -56,12 +56,12 @@ func generateTestCSR(t *testing.T) string {
 func TestRegistrationService_RegisterDevice(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
-	sslDir := t.TempDir()
-	db, err := NewListenDBService(dbDir, sslDir, logger)
+	secretsDir := t.TempDir()
+	db, err := NewListenDBService(dbDir, secretsDir, logger)
 	require.NoError(t, err)
 	defer db.Close()
 
-	pki := newPKIAuthority(dbDir, sslDir, db, logger)
+	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
 	err = pki.EnsurePKI(nil)
 	require.NoError(t, err)
 
@@ -461,12 +461,12 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 func TestRegistrationService_DeviceLinks(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
-	sslDir := t.TempDir()
-	db, err := NewListenDBService(dbDir, sslDir, logger)
+	secretsDir := t.TempDir()
+	db, err := NewListenDBService(dbDir, secretsDir, logger)
 	require.NoError(t, err)
 	defer db.Close()
 
-	pki := newPKIAuthority(dbDir, sslDir, db, logger)
+	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
 	reg := NewRegistrationService(db, pki, logger)
 
 	resp, err := reg.CreateDeviceLink(models.CreateDeviceLinkRequest{
@@ -500,12 +500,12 @@ func TestRegistrationService_DeviceLinks(t *testing.T) {
 func TestRegistrationService_CreateDeviceLinkRejectsWrongOperatorOwner(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
-	sslDir := t.TempDir()
-	db, err := NewListenDBService(dbDir, sslDir, logger)
+	secretsDir := t.TempDir()
+	db, err := NewListenDBService(dbDir, secretsDir, logger)
 	require.NoError(t, err)
 	defer db.Close()
 
-	pki := newPKIAuthority(dbDir, sslDir, db, logger)
+	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
 	reg := NewRegistrationService(db, pki, logger)
 	op := &models.OperatorDocumentGo{
 		ID:        "op-1",
@@ -545,12 +545,12 @@ func docFieldString(t *testing.T, doc *models.Document, field string) string {
 func TestRegistrationService_RotateOperatorAPIKey(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
-	sslDir := t.TempDir()
-	db, err := NewListenDBService(dbDir, sslDir, logger)
+	secretsDir := t.TempDir()
+	db, err := NewListenDBService(dbDir, secretsDir, logger)
 	require.NoError(t, err)
 	defer db.Close()
 
-	pki := newPKIAuthority(dbDir, sslDir, db, logger)
+	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
 	reg := NewRegistrationService(db, pki, logger)
 
 	userID := "user-1"
@@ -600,12 +600,12 @@ func TestRegistrationService_RotateOperatorAPIKey(t *testing.T) {
 func TestRegistrationService_ListOperatorSlots(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
-	sslDir := t.TempDir()
-	db, err := NewListenDBService(dbDir, sslDir, logger)
+	secretsDir := t.TempDir()
+	db, err := NewListenDBService(dbDir, secretsDir, logger)
 	require.NoError(t, err)
 	defer db.Close()
 
-	pki := newPKIAuthority(dbDir, sslDir, db, logger)
+	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
 	reg := NewRegistrationService(db, pki, logger)
 
 	userID := "user-1"
@@ -645,12 +645,12 @@ func TestRegistrationService_ListOperatorSlots(t *testing.T) {
 func TestRegistrationService_TerminateOperator(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
-	sslDir := t.TempDir()
-	db, err := NewListenDBService(dbDir, sslDir, logger)
+	secretsDir := t.TempDir()
+	db, err := NewListenDBService(dbDir, secretsDir, logger)
 	require.NoError(t, err)
 	defer db.Close()
 
-	pki := newPKIAuthority(dbDir, sslDir, db, logger)
+	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
 	reg := NewRegistrationService(db, pki, logger)
 
 	userID := "user-1"
@@ -725,12 +725,12 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 func TestRegistrationService_Binding(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
-	sslDir := t.TempDir()
-	db, err := NewListenDBService(dbDir, sslDir, logger)
+	secretsDir := t.TempDir()
+	db, err := NewListenDBService(dbDir, secretsDir, logger)
 	require.NoError(t, err)
 	defer db.Close()
 
-	pki := newPKIAuthority(dbDir, sslDir, db, logger)
+	pki := newPKIAuthority(dbDir, secretsDir, db, logger)
 	reg := NewRegistrationService(db, pki, logger)
 
 	userID := "user-1"

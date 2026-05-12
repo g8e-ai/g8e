@@ -167,6 +167,25 @@ func (pki *PKIAuthority) TLSConfig() *tls.Config {
 	}
 }
 
+// TLSConfigPlain returns a TLS config for the bootstrap listener.
+// This listener does not require client certificates for unauthenticated routes
+// (/.well-known/, /api/auth/device-link/register).
+func (pki *PKIAuthority) TLSConfigPlain() *tls.Config {
+	pki.mu.RLock()
+	defer pki.mu.RUnlock()
+
+	return &tls.Config{
+		GetCertificate: func(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			pki.mu.RLock()
+			defer pki.mu.RUnlock()
+			c := pki.serviceCert
+			return &c, nil
+		},
+		ClientAuth: tls.NoClientCert,
+		MinVersion: tls.VersionTLS13,
+	}
+}
+
 // TrustBundlePath returns the path to the hub trust bundle.
 func (pki *PKIAuthority) TrustBundlePath() string {
 	return filepath.Join(pki.pkiDir, "trust", "hub-bundle.pem")
@@ -453,11 +472,6 @@ func (pki *PKIAuthority) signData(data []byte, key *ecdsa.PrivateKey) (string, e
 
 	sig := append(r.Bytes(), s.Bytes()...)
 	return base64.RawURLEncoding.EncodeToString(sig), nil
-}
-
-func (pki *PKIAuthority) signData_OLD(data []byte, key *ecdsa.PrivateKey) (string, error) {
-	// Not used anymore
-	return "", nil
 }
 
 // SignCSR signs a certificate signing request using the operator intermediate CA.

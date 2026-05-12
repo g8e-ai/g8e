@@ -15,11 +15,11 @@ package testutil
 
 import (
 	"encoding/json"
-	"fmt"
 	"testing"
 	"time"
 
 	"google.golang.org/protobuf/proto"
+
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
@@ -65,59 +65,6 @@ func MustBuildCommandCancelRequestedPayload(t *testing.T, execID string) []byte 
 		t.Fatalf("failed to marshal protobuf CommandCancelRequested: %v", err)
 	}
 	return b
-}
-
-// MustMarshalUniversalEnvelope creates a GovernanceEnvelope protobuf with the given payload.
-func MustMarshalUniversalEnvelope(t *testing.T, id string, eventType string, payload []byte, taskID string, operatorID string, caseID string, investigationID string, operatorSessionId string) []byte {
-	t.Helper()
-	env := &commonv1.GovernanceEnvelope{
-		Id:                id,
-		Timestamp:         timestamppb.Now(),
-		EventType:         eventType,
-		SourceComponent:   commonv1.Component_COMPONENT_G8EE,
-		OperatorId:        operatorID,
-		OperatorSessionId: operatorSessionId,
-		CaseId:            caseID,
-		InvestigationId:   investigationID,
-		TaskId:            taskID,
-		Payload:           payload,
-	}
-	b, err := proto.Marshal(env)
-	if err != nil {
-		t.Fatalf("failed to marshal protobuf GovernanceEnvelope: %v", err)
-	}
-	return b
-}
-
-// MustMarshalUniversalEnvelopeWithNonce creates a GovernanceEnvelope protobuf with the given payload and nonce.
-func MustMarshalUniversalEnvelopeWithNonce(t *testing.T, id string, eventType string, payload []byte, taskID string, operatorID string, caseID string, investigationID string, operatorSessionId string, nonce string) []byte {
-	t.Helper()
-	env := &commonv1.GovernanceEnvelope{
-		Id:                id,
-		Timestamp:         timestamppb.Now(),
-		EventType:         eventType,
-		SourceComponent:   commonv1.Component_COMPONENT_G8EE,
-		OperatorId:        operatorID,
-		OperatorSessionId: operatorSessionId,
-		CaseId:            caseID,
-		InvestigationId:   investigationID,
-		TaskId:            taskID,
-		Payload:           payload,
-		Nonce:             nonce,
-	}
-	b, err := proto.Marshal(env)
-	if err != nil {
-		t.Fatalf("failed to marshal protobuf GovernanceEnvelope with nonce: %v", err)
-	}
-	return b
-}
-func MustUnmarshalUniversalEnvelope(t *testing.T, data []byte) *commonv1.GovernanceEnvelope {
-	t.Helper()
-	env := &commonv1.GovernanceEnvelope{}
-	if err := proto.Unmarshal(data, env); err != nil {
-		t.Fatalf("failed to unmarshal GovernanceEnvelope: %v", err)
-	}
-	return env
 }
 
 // MustUnmarshalPayload unmarshals bytes to a specific proto.Message, fatally failing the test on error.
@@ -373,29 +320,19 @@ func MustMarshalUAPEnvelope(t *testing.T, messageID string, protocolVersion stri
 	t.Helper()
 	env := &uap.UAPEnvelope{
 		ProtocolVersion: protocolVersion,
-		MessageID:       messageID,
-		Metadata: uap.Metadata{
-			SenderID:  senderID,
-			Timestamp: time.Now(),
-			Signature: "",
-		},
-		Intent: uap.Intent{
-			ActionType:     actionType,
-			TargetResource: targetResource,
-		},
-		Context: uap.Context{
-			DataFormat: dataFormat,
-			DataBlob:   dataBlob,
-		},
-		Consensus: uap.ConsensusState{
-			RequiredVotes: requiredVotes,
-			CurrentVotes:  []uap.Vote{},
-			Status:        "PENDING",
-		},
-		CaseID:          caseID,
-		InvestigationID: investigationID,
-		TaskID:          taskID,
+		Id:              messageID,
+		OperatorId:      senderID,
+		Timestamp:       timestamppb.Now(),
+		ActionType:      actionType,
+		TargetResource:  targetResource,
+		Payload:         []byte(dataBlob),
+		CaseId:          caseID,
+		InvestigationId: investigationID,
 	}
+	if taskID != nil {
+		env.TaskId = *taskID
+	}
+
 	b, err := json.Marshal(env)
 	if err != nil {
 		t.Fatalf("failed to marshal UAPEnvelope JSON: %v", err)
@@ -404,28 +341,21 @@ func MustMarshalUAPEnvelope(t *testing.T, messageID string, protocolVersion stri
 }
 
 // MustMarshalUAPEnvelopeWithVotes creates a UAPEnvelope JSON with pre-populated votes.
-func MustMarshalUAPEnvelopeWithVotes(t *testing.T, messageID string, protocolVersion string, senderID string, actionType string, targetResource string, dataFormat string, dataBlob string, requiredVotes int, votes []uap.Vote, status string) []byte {
+func MustMarshalUAPEnvelopeWithVotes(t *testing.T, messageID string, protocolVersion string, senderID string, actionType string, targetResource string, dataFormat string, dataBlob string, requiredVotes int, agentIDs []string, tribunalSig string) []byte {
 	t.Helper()
 	env := &uap.UAPEnvelope{
 		ProtocolVersion: protocolVersion,
-		MessageID:       messageID,
-		Metadata: uap.Metadata{
-			SenderID:  senderID,
-			Timestamp: time.Now(),
-			Signature: "",
-		},
-		Intent: uap.Intent{
-			ActionType:     actionType,
-			TargetResource: targetResource,
-		},
-		Context: uap.Context{
-			DataFormat: dataFormat,
-			DataBlob:   dataBlob,
-		},
-		Consensus: uap.ConsensusState{
-			RequiredVotes: requiredVotes,
-			CurrentVotes:  votes,
-			Status:        status,
+		Id:              messageID,
+		OperatorId:      senderID,
+		Timestamp:       timestamppb.Now(),
+		ActionType:      actionType,
+		TargetResource:  targetResource,
+		Payload:         []byte(dataBlob),
+		Governance: &commonv1.GovernanceMetadata{
+			L2: &commonv1.L2Metadata{
+				AgentIds:          agentIDs,
+				TribunalSignature: tribunalSig,
+			},
 		},
 	}
 	b, err := json.Marshal(env)
@@ -449,16 +379,12 @@ func MustUnmarshalUAPEnvelope(t *testing.T, data []byte) *uap.UAPEnvelope {
 func MustGenerateUAPMessageID(t *testing.T, actionType string, targetResource string, dataFormat string, dataBlob string) string {
 	t.Helper()
 	env := &uap.UAPEnvelope{
-		Intent: uap.Intent{
-			ActionType:     actionType,
-			TargetResource: targetResource,
-		},
-		Context: uap.Context{
-			DataFormat: dataFormat,
-			DataBlob:   dataBlob,
-		},
+		ActionType:     actionType,
+		TargetResource: targetResource,
+		Payload:        []byte(dataBlob),
+		ExpiresAt:      timestamppb.New(time.Now().Add(5 * time.Minute)),
 	}
-	id, err := env.GenerateMessageID()
+	id, err := uap.GenerateMessageID(env)
 	if err != nil {
 		t.Fatalf("failed to generate UAP MessageID: %v", err)
 	}
@@ -470,38 +396,18 @@ func MustMarshalUAPEnvelopeWithNonce(t *testing.T, messageID string, protocolVer
 	t.Helper()
 	env := &uap.UAPEnvelope{
 		ProtocolVersion: protocolVersion,
-		MessageID:       messageID,
-		Metadata: uap.Metadata{
-			SenderID:  senderID,
-			Timestamp: time.Now(),
-			Signature: "",
-		},
-		Intent: uap.Intent{
-			ActionType:     actionType,
-			TargetResource: targetResource,
-		},
-		Context: uap.Context{
-			DataFormat: dataFormat,
-			DataBlob:   dataBlob,
-		},
-		Consensus: uap.ConsensusState{
-			RequiredVotes: requiredVotes,
-			CurrentVotes:  []uap.Vote{},
-			Status:        "PENDING",
-		},
-		CaseID:          caseID,
-		InvestigationID: investigationID,
-		TaskID:          taskID,
+		Id:              messageID,
+		OperatorId:      senderID,
+		Timestamp:       timestamppb.Now(),
+		ActionType:      actionType,
+		TargetResource:  targetResource,
+		Payload:         []byte(dataBlob),
+		CaseId:          caseID,
+		InvestigationId: investigationID,
+		Nonce:           nonce,
 	}
-
-	// For replay protection tests, we need to pass the nonce somehow.
-	// Since UAP doesn't have a nonce field yet, we'll encode it in the DataBlob for now
-	// to allow tests to pass while maintaining UAP structure.
-	if nonce != "" {
-		env.Context.DataBlob = fmt.Sprintf("%s:%s", nonce, dataBlob)
-		// Regenerate MessageID since we changed DataBlob
-		id, _ := env.GenerateMessageID()
-		env.MessageID = id
+	if taskID != nil {
+		env.TaskId = *taskID
 	}
 
 	b, err := json.Marshal(env)
@@ -511,12 +417,8 @@ func MustMarshalUAPEnvelopeWithNonce(t *testing.T, messageID string, protocolVer
 	return b
 }
 
-// MustCreateUAPVote creates a Vote struct for testing.
-func MustCreateUAPVote(t *testing.T, nodeID string, signature string, decision bool) uap.Vote {
+// MustCreateUAPVote creates a slice of agent IDs for testing.
+func MustCreateUAPVote(t *testing.T, nodeID string, signature string, decision bool) []string {
 	t.Helper()
-	return uap.Vote{
-		NodeID:    nodeID,
-		Signature: signature,
-		Decision:  decision,
-	}
+	return []string{nodeID}
 }

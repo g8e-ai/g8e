@@ -207,7 +207,7 @@ Each method accepts a role-specific settings dataclass (`PrimaryLLMSettings`, `A
 **Ollama Provider:** The `OllamaProvider` is a dedicated provider for Ollama endpoints, using the official `ollama` Python SDK's AsyncClient:
 - **Endpoint Handling:** Strips `/v1` suffix if present to match Ollama's native API format
 - **Thinking Support:** Enables `think=true` parameter for primary model calls to support Ollama's thinking feature; extracts `thinking` field from responses and streams it as `thought=True` chunks
-- **SSL Verification:** Uses the Ollama SDK's default SSL verification behavior
+- **TLS Verification:** Uses the Ollama SDK's default TLS verification behavior
 - **Tool Calling:** Converts tool declarations to Ollama's function calling format; falls back to non-streaming when tools are present to avoid hanging
 
 ### AI Streaming Loop
@@ -869,7 +869,7 @@ g8ee communicates with other components via direct HTTP using `X-Internal-Auth` 
 | `/api/internal/operators/register-operator-session` | POST | Subscribes g8ee to heartbeat/result channels for a new session |
 
 #### Authentication Discovery
-g8ee discovers the authoritative `internal_auth_token` by reading `/operator/ssl/internal_auth_token` at startup (or via `INTERNAL_AUTH_TOKEN` env var). This is the absolute source of truth for service-to-service authentication.
+g8ee discovers the authoritative `internal_auth_token` by reading from `G8E_SECRETS_DIR` (default `.g8e/secrets/internal_auth_token`) at startup (or via `INTERNAL_AUTH_TOKEN` env var). This is the absolute source of truth for service-to-service authentication.
 
 #### Context Propagation
 The canonical header list and ownership rules are in [components/g8ed.md — Internal HTTP Communication](g8ed.md#internal-http-communication-g8ed--g8ee).

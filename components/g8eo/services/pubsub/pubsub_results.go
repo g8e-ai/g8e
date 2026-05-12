@@ -24,7 +24,6 @@ import (
 
 	"github.com/g8e-ai/g8e/components/g8eo/config"
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
-	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
 	storage "github.com/g8e-ai/g8e/components/g8eo/services/storage"
 	commonv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
 	operatorv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/operatorv1"
@@ -96,12 +95,12 @@ func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, resu
 	taskID := originalMsg.TaskID
 	investigationID := originalMsg.InvestigationID
 
-	rr.logger.Info("Publishing result via UAP", "original_message_id", originalMsg.ID)
-	if err := rr.publishResultEnvelopeUAP(ctx, eventType, caseID, taskID, investigationID, originalMsg, result); err != nil {
-		return fmt.Errorf("failed to publish UAP result: %w", err)
+	rr.logger.Info("Publishing result via Universal", "original_message_id", originalMsg.ID)
+	if err := rr.publishResultEnvelopeUniversal(ctx, eventType, caseID, taskID, investigationID, originalMsg, result); err != nil {
+		return fmt.Errorf("failed to publish Universal result: %w", err)
 	}
 
-	rr.logger.Info("Result transmitted to g8e (UAP)",
+	rr.logger.Info("Result transmitted to g8e (Universal)",
 		"operator_session_id", rr.config.OperatorSessionId,
 		"event_type", eventType)
 	return nil
@@ -111,11 +110,11 @@ func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, resu
 func (rr *PubSubResultsService) PublishCancellationResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error {
 	eventType := constants.Event.Operator.Command.Cancelled
 
-	if err := rr.publishResultEnvelopeUAP(ctx, eventType, originalMsg.CaseID, originalMsg.TaskID, originalMsg.InvestigationID, originalMsg, result); err != nil {
-		return fmt.Errorf("failed to publish UAP cancellation result: %w", err)
+	if err := rr.publishResultEnvelopeUniversal(ctx, eventType, originalMsg.CaseID, originalMsg.TaskID, originalMsg.InvestigationID, originalMsg, result); err != nil {
+		return fmt.Errorf("failed to publish Universal cancellation result: %w", err)
 	}
 
-	rr.logger.Info("Cancellation result transmitted to g8e (UAP)",
+	rr.logger.Info("Cancellation result transmitted to g8e (Universal)",
 		"operator_session_id", rr.config.OperatorSessionId)
 	return nil
 }
@@ -133,11 +132,11 @@ func (rr *PubSubResultsService) PublishFileEditResult(ctx context.Context, resul
 		}
 	}
 
-	if err := rr.publishResultEnvelopeUAP(ctx, eventType, originalMsg.CaseID, originalMsg.TaskID, originalMsg.InvestigationID, originalMsg, result); err != nil {
-		return fmt.Errorf("failed to publish UAP file edit result: %w", err)
+	if err := rr.publishResultEnvelopeUniversal(ctx, eventType, originalMsg.CaseID, originalMsg.TaskID, originalMsg.InvestigationID, originalMsg, result); err != nil {
+		return fmt.Errorf("failed to publish Universal file edit result: %w", err)
 	}
 
-	rr.logger.Info("File operation result transmitted (UAP)", "operator_session_id", rr.config.OperatorSessionId)
+	rr.logger.Info("File operation result transmitted (Universal)", "operator_session_id", rr.config.OperatorSessionId)
 	return nil
 }
 
@@ -154,11 +153,11 @@ func (rr *PubSubResultsService) PublishFsListResult(ctx context.Context, result 
 		}
 	}
 
-	if err := rr.publishResultEnvelopeUAP(ctx, eventType, originalMsg.CaseID, originalMsg.TaskID, originalMsg.InvestigationID, originalMsg, result); err != nil {
-		return fmt.Errorf("failed to publish UAP fs list result: %w", err)
+	if err := rr.publishResultEnvelopeUniversal(ctx, eventType, originalMsg.CaseID, originalMsg.TaskID, originalMsg.InvestigationID, originalMsg, result); err != nil {
+		return fmt.Errorf("failed to publish Universal fs list result: %w", err)
 	}
 
-	rr.logger.Info("FS list result transmitted (UAP)", "operator_session_id", rr.config.OperatorSessionId)
+	rr.logger.Info("FS list result transmitted (Universal)", "operator_session_id", rr.config.OperatorSessionId)
 	return nil
 }
 
@@ -175,39 +174,22 @@ func (rr *PubSubResultsService) PublishFsGrepResult(ctx context.Context, result 
 		}
 	}
 
-	if err := rr.publishResultEnvelopeUAP(ctx, eventType, originalMsg.CaseID, originalMsg.TaskID, originalMsg.InvestigationID, originalMsg, result); err != nil {
-		return fmt.Errorf("failed to publish UAP fs grep result: %w", err)
+	if err := rr.publishResultEnvelopeUniversal(ctx, eventType, originalMsg.CaseID, originalMsg.TaskID, originalMsg.InvestigationID, originalMsg, result); err != nil {
+		return fmt.Errorf("failed to publish Universal fs grep result: %w", err)
 	}
 
-	rr.logger.Info("FS grep result transmitted (UAP)", "operator_session_id", rr.config.OperatorSessionId)
+	rr.logger.Info("FS grep result transmitted (Universal)", "operator_session_id", rr.config.OperatorSessionId)
 	return nil
 }
 
 // PublishExecutionStatus publishes periodic status updates during command execution.
-func (rr *PubSubResultsService) PublishExecutionStatus(ctx context.Context, status proto.Message) error {
+func (rr *PubSubResultsService) PublishExecutionStatus(ctx context.Context, status proto.Message, originalMsg PubSubCommandMessage) error {
 	reflectMsg := status.ProtoReflect()
 
-	// Extract fields via reflection for envelope routing
-	var caseID string
-	var taskID *string
-	var investigationID string
-	var operatorSessionID string
+	// Extract execution status and execution ID via reflection (payload-specific)
 	var executionStatus protoreflect.EnumNumber
 	var executionID string
 
-	if fd := reflectMsg.Descriptor().Fields().ByName("case_id"); fd != nil {
-		caseID = reflectMsg.Get(fd).String()
-	}
-	if fd := reflectMsg.Descriptor().Fields().ByName("task_id"); fd != nil {
-		val := reflectMsg.Get(fd).String()
-		taskID = &val
-	}
-	if fd := reflectMsg.Descriptor().Fields().ByName("investigation_id"); fd != nil {
-		investigationID = reflectMsg.Get(fd).String()
-	}
-	if fd := reflectMsg.Descriptor().Fields().ByName("operator_session_id"); fd != nil {
-		operatorSessionID = reflectMsg.Get(fd).String()
-	}
 	if fd := reflectMsg.Descriptor().Fields().ByName("status"); fd != nil {
 		executionStatus = reflectMsg.Get(fd).Enum()
 	}
@@ -227,18 +209,17 @@ func (rr *PubSubResultsService) PublishExecutionStatus(ctx context.Context, stat
 		eventType = constants.Event.Operator.Command.StatusUpdated.Cancelled
 	}
 
-	// Use executionID for UAP MessageID correlation if available
-	actionType := mapEventTypeToResultActionType(eventType)
-	env, err := BuildUAPResultEnvelope(rr.config, actionType, status, executionID, rr.config.OperatorID, caseID, investigationID, taskID)
+	// Use original message ID for correlation and context from originalMsg
+	env, err := BuildUniversalResultEnvelope(rr.config, eventType, status, originalMsg.ID, rr.config.OperatorID, originalMsg.CaseID, originalMsg.InvestigationID, originalMsg.TaskID)
 	if err != nil {
-		return fmt.Errorf("failed to build UAP status envelope: %w", err)
+		return fmt.Errorf("failed to build Universal status envelope: %w", err)
 	}
 
-	if err := rr.publishUAP(ctx, env, operatorSessionID); err != nil {
-		return fmt.Errorf("failed to publish UAP status update: %w", err)
+	if err := rr.publishUniversal(ctx, env, originalMsg.OperatorSessionID); err != nil {
+		return fmt.Errorf("failed to publish Universal status update: %w", err)
 	}
 
-	rr.logger.Info("Execution status update transmitted (UAP)", "event_type", eventType)
+	rr.logger.Info("Execution status update transmitted (UAP)", "event_type", eventType, "execution_id", executionID)
 	return nil
 }
 
@@ -248,23 +229,16 @@ func (rr *PubSubResultsService) PublishHeartbeat(ctx context.Context, heartbeat 
 	rr.logger.Info("[HEARTBEAT] Publishing heartbeat to operator pub/sub (UAP)")
 
 	// Build the UAP envelope
-	reflectMsg := heartbeat.ProtoReflect()
 	operatorSessionID := rr.config.OperatorSessionId
-	if fd := reflectMsg.Descriptor().Fields().ByName("operator_session_id"); fd != nil {
-		val := reflectMsg.Get(fd).String()
-		if val != "" {
-			operatorSessionID = val
-		}
-	}
 
-	env, err := BuildUAPResultEnvelope(rr.config, "HEARTBEAT_RESULT", heartbeat, "", rr.config.OperatorID, "", "", nil)
+	env, err := BuildUniversalResultEnvelope(rr.config, "HEARTBEAT_RESULT", heartbeat, "", rr.config.OperatorID, "", "", nil)
 	if err != nil {
-		return fmt.Errorf("failed to build UAP heartbeat envelope: %w", err)
+		return fmt.Errorf("failed to build Universal heartbeat envelope: %w", err)
 	}
 
 	data, err := json.Marshal(env)
 	if err != nil {
-		return fmt.Errorf("failed to marshal UAP heartbeat envelope: %w", err)
+		return fmt.Errorf("failed to marshal Universal heartbeat envelope: %w", err)
 	}
 
 	channelName := constants.HeartbeatChannel(rr.config.OperatorID, operatorSessionID)
@@ -274,35 +248,22 @@ func (rr *PubSubResultsService) PublishHeartbeat(ctx context.Context, heartbeat 
 	return nil
 }
 
-// PublishResult publishes a pre-built GovernanceEnvelope to the operator pub/sub results channel.
-// This is DEPRECATED and now REJECTS legacy envelopes.
-func (rr *PubSubResultsService) PublishResult(ctx context.Context, env *commonv1.GovernanceEnvelope) error {
-	return fmt.Errorf("PublishResult(GovernanceEnvelope) is deprecated and no longer supported")
-}
-
-// publish marshals a GovernanceEnvelope and publishes it to the results channel.
-// This is DEPRECATED and now REJECTS legacy envelopes.
-func (rr *PubSubResultsService) publish(ctx context.Context, env *commonv1.GovernanceEnvelope) error {
-	return fmt.Errorf("publish(GovernanceEnvelope) is deprecated and no longer supported")
-}
-
-// publishUAP marshals a UAPEnvelope as JSON and publishes it to the results channel.
-func (rr *PubSubResultsService) publishUAP(ctx context.Context, env *uap.UAPEnvelope, operatorSessionID string) error {
+// publishUniversal marshals a UniversalEnvelope as JSON and publishes it to the results channel.
+func (rr *PubSubResultsService) publishUniversal(ctx context.Context, env *commonv1.UniversalEnvelope, operatorSessionID string) error {
 	data, err := json.Marshal(env)
 	if err != nil {
-		return fmt.Errorf("failed to marshal UAP envelope: %w", err)
+		return fmt.Errorf("failed to marshal Universal envelope: %w", err)
 	}
 	channel := rr.resultsChannel(operatorSessionID)
-	rr.logger.Info("Publishing result (UAP)",
+	rr.logger.Info("Publishing result (Universal)",
 		"channel", channel,
-		"action_type", env.Intent.ActionType,
-		"message_id", env.MessageID)
+		"event_type", env.EventType,
+		"id", env.Id)
 	return rr.client.Publish(ctx, channel, data)
 }
 
-// publishResultEnvelopeUAP builds a UAPEnvelope for result publishing.
-// This is the Phase 3.2 UAP migration path for result publishing.
-func (rr *PubSubResultsService) publishResultEnvelopeUAP(
+// publishResultEnvelopeUniversal builds a UniversalEnvelope for result publishing.
+func (rr *PubSubResultsService) publishResultEnvelopeUniversal(
 	ctx context.Context,
 	eventType, caseID string,
 	taskID *string,
@@ -310,20 +271,17 @@ func (rr *PubSubResultsService) publishResultEnvelopeUAP(
 	originalMsg PubSubCommandMessage,
 	payload proto.Message,
 ) error {
-	// Map event type to UAP action type
-	actionType := mapEventTypeToResultActionType(eventType)
-
-	// Use original message ID for correlation (if it looks like a UAP MessageID)
+	// Use original message ID for correlation
 	originalMessageID := originalMsg.ID
 	senderID := rr.config.OperatorID
 	if originalMsg.OperatorID != nil {
 		senderID = *originalMsg.OperatorID
 	}
 
-	env, err := BuildUAPResultEnvelope(rr.config, actionType, payload, originalMessageID, senderID, caseID, investigationID, taskID)
+	env, err := BuildUniversalResultEnvelope(rr.config, eventType, payload, originalMessageID, senderID, caseID, investigationID, taskID)
 	if err != nil {
-		return fmt.Errorf("failed to build UAP envelope: %w", err)
+		return fmt.Errorf("failed to build Universal envelope: %w", err)
 	}
 
-	return rr.publishUAP(ctx, env, originalMsg.OperatorSessionID)
+	return rr.publishUniversal(ctx, env, originalMsg.OperatorSessionID)
 }

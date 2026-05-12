@@ -8,7 +8,7 @@ parent: Architecture
 Last Updated: 2026-05-12
 Version: v0.2.4
 
-The g8e platform uses a unified, hierarchical event system to drive state transitions and lifecycle signals. All cross-component traffic is governed by the **Universal Envelope**, a Protobuf-first transport wrapper that carries governance metadata, state roots, and typed payloads.
+The g8e platform uses a unified, hierarchical event system to drive state transitions and lifecycle signals. All cross-component traffic is governed by the **Universal Envelope**, a transport wrapper that carries governance metadata, state roots, and typed payloads.
 
 ---
 

@@ -31,7 +31,7 @@
 import { logger } from '../../utils/logger.js';
 import { now, addSeconds } from '../../models/base.js';
 import { GeneratedCertificate } from '../../models/operator_model.js';
-import { CLIENT_CERT_VALIDITY_DAYS, DEFAULT_SSL_DIR, CERT_SUBJECT_ORG, CERT_SUBJECT_COUNTRY, CRL_ISSUER } from '../../constants/service_config.js';
+import { CLIENT_CERT_VALIDITY_DAYS, DEFAULT_PKI_DIR, CERT_SUBJECT_ORG, CERT_SUBJECT_COUNTRY, CRL_ISSUER } from '../../constants/service_config.js';
 import { G8eHttpContext } from '../../models/request_models.js';
 import * as x509 from '@peculiar/x509';
 import crypto from 'crypto';
@@ -43,7 +43,7 @@ x509.cryptoProvider.set(crypto.webcrypto);
 class CertificateService {
     /**
      * @param {Object} options
-     * @param {Object} options.bootstrapService - BootstrapService instance (for ssl_dir)
+     * @param {Object} options.bootstrapService - BootstrapService instance (for pki_dir)
      * @param {Object} options.internalHttpClient - InternalHttpClient instance (optional)
      */
     constructor({ bootstrapService, internalHttpClient } = {}) {
@@ -51,7 +51,7 @@ class CertificateService {
         this.initialized = false;
         this.caCert = null;
         this.caKey = null;
-        this.pkiDir = bootstrapService.getPkiDir() || DEFAULT_SSL_DIR;
+        this.pkiDir = bootstrapService.getPkiDir() || DEFAULT_PKI_DIR;
         this._revokedSerials = new Set();
         this._internalHttpClient = internalHttpClient;
     }

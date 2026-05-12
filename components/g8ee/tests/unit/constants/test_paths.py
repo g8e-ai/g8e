@@ -33,7 +33,7 @@ def _configure_shared_paths(monkeypatch: pytest.MonkeyPatch, tmp_path):
                 "infra": {
                     "db_path": ".g8e/data/g8e.db",
                     "ca_cert_path": ".g8e/pki/ca.crt",
-                    "ssl_dir": ".g8e/pki",
+                    "pki_dir": ".g8e/pki",
                     "docs_dir": "/docs",
                     "shared_dir": "/app/shared",
                     "shared_constants_dir": "/app/shared/constants",
@@ -49,19 +49,19 @@ def _configure_shared_paths(monkeypatch: pytest.MonkeyPatch, tmp_path):
     return shared_dir
 
 
-def test_load_paths_prefers_explicit_host_ssl_dir(monkeypatch: pytest.MonkeyPatch, tmp_path):
+def test_load_paths_prefers_explicit_host_pki_dir(monkeypatch: pytest.MonkeyPatch, tmp_path):
     _configure_shared_paths(monkeypatch, tmp_path)
-    ssl_dir = tmp_path / "runner" / "work" / "g8e" / "g8e" / ".g8e" / "pki"
-    monkeypatch.setenv("G8E_PKI_DIR", str(ssl_dir))
+    pki_dir = tmp_path / "runner" / "work" / "g8e" / "g8e" / ".g8e" / "pki"
+    monkeypatch.setenv("G8E_PKI_DIR", str(pki_dir))
     monkeypatch.delenv("G8E_RUNTIME_DIR", raising=False)
 
     paths = load_paths()
 
-    assert paths["infra"]["ssl_dir"] == str(ssl_dir)
-    assert paths["infra"]["ca_cert_path"] == str(ssl_dir / "ca.crt")
+    assert paths["infra"]["pki_dir"] == str(pki_dir)
+    assert paths["infra"]["ca_cert_path"] == str(pki_dir / "ca.crt")
 
 
-def test_load_paths_uses_host_runtime_dir_when_ssl_dir_unset(monkeypatch: pytest.MonkeyPatch, tmp_path):
+def test_load_paths_uses_host_runtime_dir_when_pki_dir_unset(monkeypatch: pytest.MonkeyPatch, tmp_path):
     _configure_shared_paths(monkeypatch, tmp_path)
     runtime_dir = tmp_path / "runner" / "work" / "g8e" / "g8e" / ".g8e"
     monkeypatch.delenv("G8E_PKI_DIR", raising=False)
@@ -69,5 +69,5 @@ def test_load_paths_uses_host_runtime_dir_when_ssl_dir_unset(monkeypatch: pytest
 
     paths = load_paths()
 
-    assert paths["infra"]["ssl_dir"] == str(runtime_dir / "pki")
+    assert paths["infra"]["pki_dir"] == str(runtime_dir / "pki")
     assert paths["infra"]["ca_cert_path"] == str(runtime_dir / "pki" / "ca.crt")

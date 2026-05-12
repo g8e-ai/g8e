@@ -73,7 +73,7 @@ describe('BootstrapService [UNIT - filesystem isolated]', () => {
         it('should use custom volume path when provided', () => {
             const customPath = '/custom/operator';
             const service = new BootstrapService(customPath);
-            expect(service.volumePath).toBe(customPath);
+            expect(service.secretsDir).toBe(customPath);
         });
 
         it('should initialize with null cached values', () => {
@@ -285,17 +285,18 @@ describe('BootstrapService [UNIT - filesystem isolated]', () => {
         });
     });
 
-    describe('getSslDir', () => {
-        it('should return the volume path', () => {
-            const customPath = '/custom/ssl/dir';
-            const service = new BootstrapService(customPath);
+    describe('getPkiDir', () => {
+        it('should return the PKI directory path', () => {
+            const customSecretsPath = '/custom/secrets';
+            const customPkiPath = '/custom/pki';
+            const service = new BootstrapService(customSecretsPath, customPkiPath);
 
-            expect(service.getSslDir()).toBe(customPath);
+            expect(service.getPkiDir()).toBe(customPkiPath);
         });
 
-        it('should return default volume path when no custom path set', () => {
+        it('should return default PKI path when no custom path set', () => {
             const service = new BootstrapService();
-            expect(service.getSslDir()).toBe(service.volumePath);
+            expect(service.getPkiDir()).toBe(service.pkiDir);
         });
     });
 

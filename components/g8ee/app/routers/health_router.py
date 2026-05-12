@@ -20,10 +20,9 @@ Provides health check endpoints following the standard g8e pattern.
 import logging
 from typing import cast
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request
 
 from app.utils.timestamp import now_iso
-from app.dependencies import require_internal_origin
 from app.models.state import G8eeAppState
 
 router = APIRouter(tags=["health"])
@@ -42,7 +41,7 @@ async def health_check():
 
 
 @router.get("/health/live")
-async def liveness_check(_: bool = Depends(require_internal_origin)):
+async def liveness_check():
     """
     Liveness probe.
     
@@ -59,7 +58,6 @@ async def liveness_check(_: bool = Depends(require_internal_origin)):
 @router.get("/health/details")
 async def detailed_health_check(
     request: Request,
-    _: bool = Depends(require_internal_origin),
 ):
     """Detailed health check endpoint that verifies all services are available."""
     state = cast(G8eeAppState, request.app.state)

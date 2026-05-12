@@ -533,16 +533,16 @@ class PubSubClient:
             }
         )
 
-        # Use Protobuf GovernanceEnvelope for all commands (v0.2.0 Protocol-First)
+        # Use UAP JSON for all commands (v0.3.0 UAP-First)
         try:
             payload_bytes = build_universal_envelope_bytes(
                 command_data,
                 auditor_hmac_key=self._auditor_hmac_key or "",
             )
-            logger.debug("[PUBSUB-CLIENT] Publishing Protobuf GovernanceEnvelope")
+            logger.debug("[PUBSUB-CLIENT] Publishing UAP JSON Envelope")
         except Exception as e:
-            logger.error("[PUBSUB-CLIENT] Failed to build GovernanceEnvelope: %s", e)
-            # In v0.2.0 we do NOT fall back to JSON. If the envelope fails, the command fails.
+            logger.error("[PUBSUB-CLIENT] Failed to build UAPEnvelope: %s", e)
+            # If the envelope fails, the command fails.
             return 0
 
         result = await self.publish(channel, payload_bytes)
@@ -700,16 +700,16 @@ class PubSubClient:
                 payload=HeartbeatRequestPayload(),
             )
 
-            # Use Protobuf GovernanceEnvelope for all pings (v0.2.0 Protocol-First)
+            # Use UAP JSON for all pings (v0.3.0 UAP-First)
             try:
                 payload_bytes = build_universal_envelope_bytes(
                     ping,
                     auditor_hmac_key=self._auditor_hmac_key or "",
                 )
-                logger.debug("[PUBSUB-CLIENT] Publishing Protobuf GovernanceEnvelope for ping")
+                logger.debug("[PUBSUB-CLIENT] Publishing UAP JSON Envelope for ping")
             except Exception as e:
-                logger.error("[PUBSUB-CLIENT] Failed to build GovernanceEnvelope for ping: %s", e)
-                # In v0.2.0 we do NOT fall back to JSON. If the envelope fails, the ping fails.
+                logger.error("[PUBSUB-CLIENT] Failed to build UAPEnvelope for ping: %s", e)
+                # If the envelope fails, the ping fails.
                 return False
 
             receivers = await self.publish(channel, payload_bytes)

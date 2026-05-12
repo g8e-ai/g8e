@@ -530,7 +530,7 @@ func runListenMode(wssPort, httpPort int, dataDir, pkiDir, secretsDir string, lo
 
 	logger.Info("g8e Operator — Listen Mode (operator)", "version", version, "build", buildID)
 
-	cfg, err := config.LoadListen(wssPort, httpPort, dataDir, pkiDir, secretsDir)
+	cfg, err := config.LoadListen(wssPort, httpPort, 0, dataDir, pkiDir, secretsDir)
 	if err != nil {
 		logger.Error("Failed to load listen configuration", "error", err)
 		os.Exit(constants.ExitConfigError)

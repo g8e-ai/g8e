@@ -8,14 +8,14 @@ parent: Architecture
 Last Updated: 2026-05-12
 Version: v0.2.4
 
-The g8e Protocol is a **Protobuf-first** communication layer designed for secure, auditable, and Byzantine Fault Tolerant (BFT) interaction between any g8e client and a host-local **Operator (g8eo)**.
+The g8e Protocol is a **UAP JSON-first** communication layer designed for secure, auditable, and Byzantine Fault Tolerant (BFT) interaction between any g8e client and a host-local **Operator (g8eo)**.
 
 While g8e includes bundled application-layer adapters—**Dashboard (g8ed)** and **Engine (g8ee)**—the protocol is designed for any Bring-Your-Own (BYO) frontend or agent system.
 
 # Core Invariants
 
-1. **Protobuf-Only Wire Format**: All cross-component operator traffic (commands, results, status updates) MUST use serialized `GovernanceEnvelope` messages. JSON fallbacks are rejected.
-2. **Identity Persistence**: Every message must carry an `id`, `operator_id`, and `operator_session_id`.
+1. **UAP JSON Mutation Envelope**: All mutation commands MUST use the UAP JSON envelope (`components/g8eo/pkg/uap/types.go`). Other envelope formats are rejected.
+2. **Identity Persistence**: Every message must carry a `message_id`, `operator_id`, and `operator_session_id`.
 3. **Immutable Governance**: Governance metadata (L1/L2/L3) is baked into the envelope and verified by the Operator before any action is taken.
 4. **BFT State Binding**: Commands are bound to a specific fleet state via `state_merkle_root`.
 5. **No Private Channels**: Bundled apps use the same public protocol surface as BYO clients. There is no internal "trust" shortcut for bundled components.
@@ -28,26 +28,28 @@ The canonical schema files live in `@/home/bob/g8e/shared/proto/`:
 
 | File | Purpose |
 |------|---------|
-| `common.proto` | Defines `GovernanceEnvelope`, component identity, and governance metadata. |
-| `operator.proto` | Defines request/result payloads (commands, file ops, heartbeats, etc.). |
-| `pubsub.proto` | Defines the low-level pub/sub carrier messages. |
+| `common.proto` | Defines component identity enums and custom protobuf options (forbidden_patterns). |
+| `operator.proto` | Defines typed request/result payloads (commands, file ops, heartbeats, PKI, device-links, passkeys). |
 
-## GovernanceEnvelope
+## UAP JSON Mutation Envelope
 
-The `GovernanceEnvelope` is the root container for all protocol traffic. It binds an event name to typed payload bytes and provides the necessary context for governance.
+The UAPEnvelope is the canonical mutation envelope for all substrate commands. It binds an action to structured intent_data and provides the necessary context for governance.
 
 | Field | Role |
 |-------|------|
-| `id` | Unique UUID v4 for the message. |
+| `protocol_version` | Protocol version string. |
+| `message_id` | SHA-256 hash of critical intent/context fields (transaction binding). |
 | `timestamp` | UTC creation time. |
-| `source_component` | Identifies the source (e.g., `COMPONENT_G8EE`, `COMPONENT_G8EO`, `COMPONENT_G8ED`, or BYO client). |
-| `event_type` | Canonical event string from `shared/constants/events.json`. |
-| `operator_id` | Target or source operator identity. |
-| `state_merkle_root` | Fleet state root for BFT verification. |
 | `expires_at` | UTC timestamp after which the transaction is invalid. |
 | `nonce` | Random salt or monotonic counter for replay protection. |
+| `metadata.sender_id` | Operator identity (mTLS cert signature or equivalent). |
+| `intent.action_type` | Action type (e.g., "EXECUTE_BASH", "QUERY_DB"). |
+| `intent.target_resource` | Target resource identifier. |
+| `context.data_format` | Data format (e.g., "markdown", "raw", "json"). |
+| `context.intent_data` | Structured intent parameters (replaces deprecated data_blob). |
 | `governance` | L1/L2/L3 metadata for security enforcement. |
-| `payload` | Serialized bytes of the typed message (e.g., `CommandRequested`). |
+| `state_merkle_root` | Fleet state root for BFT verification. |
+| `case_id`, `investigation_id`, `task_id` | Application-layer identifiers for tracking. |
 
 ---
 

@@ -16,7 +16,7 @@
 Orchestrates the Phase 4 'stream' operation:
 1. Mints a dlk_ token via g8ed (internal API)
 2. Requests human approval via OperatorApprovalService
-3. Executes 'docker exec g8ep ... stream' command
+3. Executes 'docker exec g8eo ... stream' command
 """
 
 import logging
@@ -110,11 +110,11 @@ class OperatorStreamExecutor:
                 execution_id=execution_id
             )
 
-        # 3. Execute 'docker exec g8ep ... stream'
+        # 3. Execute 'docker exec g8eo ... stream'
         # Construct the command
         hosts_str = ",".join(args.hosts)
         cmd = [
-            "docker", "exec", "g8ep",
+            "docker", "exec", "g8eo",
             "/app/g8e", "operator", "stream",
             "--hosts", hosts_str,
             "--arch", args.arch,

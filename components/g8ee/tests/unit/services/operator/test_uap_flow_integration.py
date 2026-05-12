@@ -11,15 +11,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Integration test for g8ee-g8eo protobuf envelope flow."""
+"""Integration test for g8ee-g8eo UAP JSON envelope flow."""
 
 import asyncio
+import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.constants import EventType, ExecutionStatus, PubSubChannel
-from app.proto import common_pb2, operator_pb2
+from app.proto import operator_pb2
 from app.services.operator.pubsub_service import OperatorPubSubService
 
 pytestmark = [pytest.mark.unit, pytest.mark.asyncio(loop_scope="session")]
@@ -34,8 +35,8 @@ def pubsub_service():
     svc.set_pubsub_client(client)
     return svc
 
-async def test_protobuf_envelope_flow_integration(pubsub_service):
-    """Verify full flow from raw protobuf bytes to completed Future with converted enums."""
+async def test_uap_envelope_flow_integration(pubsub_service):
+    """Verify full flow from Protobuf UniversalEnvelope bytes to completed Future with converted enums."""
     operator_id = "op-test-1"
     session_id = "sess-test-1"
     execution_id = "exec-test-1"
@@ -43,23 +44,24 @@ async def test_protobuf_envelope_flow_integration(pubsub_service):
     # 1. Register a future for the execution
     future = pubsub_service.register_future(execution_id)
     
-    # 3. Simulate g8eo publishing a protobuf GovernanceEnvelope
-    # Build the payload (CommandResult)
-    command_result = operator_pb2.CommandResult()
-    command_result.execution_id = execution_id
-    command_result.status = operator_pb2.EXECUTION_STATUS_COMPLETED
-    command_result.output = "hello from g8eo"
-    command_result.exit_code = 0
+    # 2. Simulate g8eo publishing a Protobuf UniversalEnvelope JSON format
+    envelope_data = {
+        "id": execution_id,
+        "event_type": EventType.OPERATOR_COMMAND_RESULT,
+        "action_type": "EXECUTE_BASH_RESULT",
+        "operator_id": operator_id,
+        "operator_session_id": session_id,
+        "case_id": "case-test-1",
+        "intent_data": {
+            "payload_type": "execution_result",
+            "execution_id": execution_id,
+            "status": ExecutionStatus.COMPLETED.value,
+            "stdout": "hello from g8eo",
+            "return_code": 0
+        }
+    }
     
-    # Build the envelope
-    envelope = common_pb2.GovernanceEnvelope()
-    envelope.id = execution_id
-    envelope.event_type = EventType.OPERATOR_COMMAND_COMPLETED
-    envelope.operator_id = operator_id
-    envelope.operator_session_id = session_id
-    envelope.payload = command_result.SerializeToString()
-    
-    raw_bytes = envelope.SerializeToString()
+    raw_bytes = json.dumps(envelope_data).encode("utf-8")
     
     # 3. Dispatch the message through the pubsub service
     channel = PubSubChannel.results(operator_id, session_id)
@@ -72,38 +74,40 @@ async def test_protobuf_envelope_flow_integration(pubsub_service):
     # Verify envelope fields
     assert result_envelope.operator_id == operator_id
     assert result_envelope.operator_session_id == session_id
-    assert result_envelope.event_type == EventType.OPERATOR_COMMAND_COMPLETED
+    assert result_envelope.event_type == EventType.OPERATOR_COMMAND_RESULT
     
     # Verify payload fields and enum conversion
     payload = result_envelope.payload
     assert payload.execution_id == execution_id
-    assert payload.status == ExecutionStatus.COMPLETED # Protobuf enum 2 -> "completed"
+    assert payload.status == ExecutionStatus.COMPLETED
     assert payload.stdout == "hello from g8eo"
     assert payload.return_code == 0
 
-async def test_protobuf_envelope_flow_status_update(pubsub_service):
-    """Verify flow for ExecutionStatusUpdate protobuf messages."""
+async def test_uap_envelope_flow_status_update(pubsub_service):
+    """Verify flow for EXECUTE_STATUS_UPDATE Protobuf UniversalEnvelope messages."""
     operator_id = "op-test-2"
     session_id = "sess-test-2"
     execution_id = "exec-test-2"
     
     future = pubsub_service.register_future(execution_id)
     
-    # Build status update payload
-    status_update = operator_pb2.ExecutionStatusUpdate()
-    status_update.execution_id = execution_id
-    status_update.status = operator_pb2.EXECUTION_STATUS_EXECUTING
-    status_update.process_alive = True
-    status_update.elapsed_seconds = 10.5
+    # Build status update Protobuf UniversalEnvelope
+    envelope_data = {
+        "id": "msg-status-1",
+        "event_type": EventType.OPERATOR_COMMAND_STATUS_UPDATED,
+        "action_type": "EXECUTE_STATUS_UPDATE",
+        "operator_id": operator_id,
+        "operator_session_id": session_id,
+        "intent_data": {
+            "payload_type": "execution_status",
+            "execution_id": execution_id,
+            "status": ExecutionStatus.EXECUTING.value,
+            "process_alive": True,
+            "elapsed_seconds": 10.5
+        }
+    }
     
-    envelope = common_pb2.GovernanceEnvelope()
-    envelope.id = execution_id
-    envelope.event_type = EventType.OPERATOR_COMMAND_STATUS_UPDATED_RUNNING
-    envelope.operator_id = operator_id
-    envelope.operator_session_id = session_id
-    envelope.payload = status_update.SerializeToString()
-    
-    raw_bytes = envelope.SerializeToString()
+    raw_bytes = json.dumps(envelope_data).encode("utf-8")
     
     channel = PubSubChannel.results(operator_id, session_id)
     await pubsub_service._dispatch_results_message(channel, raw_bytes)
@@ -111,8 +115,10 @@ async def test_protobuf_envelope_flow_status_update(pubsub_service):
     assert future.done()
     result_envelope = future.result()
     
+    assert result_envelope.event_type == EventType.OPERATOR_COMMAND_STATUS_UPDATED
+    
     payload = result_envelope.payload
     assert payload.payload_type == "execution_status"
-    assert payload.status == ExecutionStatus.EXECUTING # Protobuf enum 1 -> "executing"
+    assert payload.status == ExecutionStatus.EXECUTING
     assert payload.process_alive is True
     assert payload.elapsed_seconds == 10.5

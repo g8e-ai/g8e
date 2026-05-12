@@ -129,7 +129,7 @@ func (hs *HistoryService) publishFetchLogsResultFromRaw(ctx context.Context, msg
 		&operatorv1.FetchLogsResult{
 			ExecutionId:  record.ID,
 			Command:      record.Command,
-			ExitCode:     int32(*record.ExitCode),
+			ReturnCode:   int32(*record.ExitCode),
 			DurationMs:   record.DurationMs,
 			Stdout:       string(record.StdoutCompressed),
 			Stderr:       string(record.StderrCompressed),
@@ -149,7 +149,7 @@ func (hs *HistoryService) publishFetchLogsResult(ctx context.Context, msg PubSub
 		&operatorv1.FetchLogsResult{
 			ExecutionId:  record.ID,
 			Command:      record.Command,
-			ExitCode:     int32(*record.ExitCode),
+			ReturnCode:   int32(*record.ExitCode),
 			DurationMs:   record.DurationMs,
 			Stdout:       string(record.StdoutCompressed),
 			Stderr:       string(record.StderrCompressed),

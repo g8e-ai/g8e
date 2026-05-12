@@ -310,11 +310,11 @@ class G8edServer {
         // Fallback for certificate download over HTTPS (if already partially trusted or ignored warning)
         this.app.get('/ca.crt', (req, res) => {
             const bootstrapService = this.services.settingsService.getBootstrapService();
-            const sslDir = bootstrapService.getSslDir();
-            if (!sslDir) {
-                return res.status(404).send('SSL directory not available.');
+            const pkiDir = bootstrapService.getPkiDir();
+            if (!pkiDir) {
+                return res.status(404).send('PKI directory not available.');
             }
-            const caPath = path.join(sslDir, 'ca.crt');
+            const caPath = path.join(pkiDir, 'ca.crt');
             if (!fs.existsSync(caPath)) {
                 return res.status(404).send('CA certificate not yet available.');
             }
@@ -355,13 +355,13 @@ class G8edServer {
         const httpPort = parseInt(bootstrapService.loadHttpPort?.()) || 80;
         const internalPort = parseInt(bootstrapService.loadInternalPort?.()) || 9090;
         
-        // Simple TLS check - look for certs in standard operator SSL location
-        const sslDir = bootstrapService.getSslDir();
+        // Simple TLS check - look for certs in standard operator PKI location
+        const pkiDir = bootstrapService.getPkiDir();
         let tlsOptions = null;
         
-        if (sslDir) {
-            const certPath = path.join(sslDir, 'server.crt');
-            const keyPath = path.join(sslDir, 'server.key');
+        if (pkiDir) {
+            const certPath = path.join(pkiDir, 'server.crt');
+            const keyPath = path.join(pkiDir, 'server.key');
             
             if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
                 tlsOptions = {
@@ -409,13 +409,13 @@ class G8edServer {
 
     _createHttpServer(httpPort, httpsPort) {
         const bootstrapService = this.services.settingsService.getBootstrapService();
-        const sslDir = bootstrapService.getSslDir();
-        if (!sslDir) {
-            logger.warn('[g8ed] SSL directory not available, HTTP server disabled');
+        const pkiDir = bootstrapService.getPkiDir();
+        if (!pkiDir) {
+            logger.warn('[g8ed] PKI directory not available, HTTP server disabled');
             return;
         }
         
-        const caPath = path.join(sslDir, 'ca.crt');
+        const caPath = path.join(pkiDir, 'ca.crt');
         
         const securityHeaders = {
             'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self';",

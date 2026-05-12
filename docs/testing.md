@@ -25,7 +25,7 @@ The platform maintains distinct test harnesses with strictly separated lifecycle
 ### 1. Substrate Tests (Operator/Protocol Path)
 **Command:** `./g8e test` or `./g8e test g8eo`
 **Purpose:** Validates the Operator/protocol substrate without requiring Node, Python, g8ed, or g8ee.
-- **Pattern:** Uses Operator listen mode and Protobuf-first command/result paths.
+- **Pattern:** Uses Operator listen mode and unified command/result paths.
 - **Rationale:** Keeps the required platform boundary small and independently verifiable.
 
 ### 2. App Adapter Tests (Explicit Opt-In)

@@ -32,7 +32,7 @@ function makeMockBootstrapService() {
         loadSessionEncryptionKey: vi.fn().mockReturnValue(TEST_ENCRYPTION_KEY),
         loadInternalAuthToken: vi.fn().mockReturnValue('test-token'),
         loadCaCertPath: vi.fn().mockReturnValue('/test/ca.crt'),
-        getSslDir: vi.fn().mockReturnValue('/test/ssl'),
+        getPkiDir: vi.fn().mockReturnValue('/test/pki'),
         volumePath: '/test/volume'
     };
 }

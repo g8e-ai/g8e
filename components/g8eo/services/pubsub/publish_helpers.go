@@ -93,26 +93,25 @@ func publishLFAATypedResponseTo(
 	executionID := executionIDFromMessage(msg)
 	setExecutionIDOnPayload(payload, executionID)
 
-	actionType := mapEventTypeToResultActionType(eventType)
-	env, err := BuildUAPResultEnvelope(cfg, actionType, payload, msg.ID, cfg.OperatorID, msg.CaseID, msg.InvestigationID, msg.TaskID)
+	env, err := BuildUniversalResultEnvelope(cfg, eventType, payload, msg.ID, cfg.OperatorID, msg.CaseID, msg.InvestigationID, msg.TaskID)
 	if err != nil {
-		logger.Error("Failed to build LFAA typed response UAP envelope", "error", err)
+		logger.Error("Failed to build LFAA typed response Universal envelope", "error", err)
 		return
 	}
 
 	data, err := json.Marshal(env)
 	if err != nil {
-		logger.Error("Failed to marshal LFAA typed response UAP envelope", "error", err)
+		logger.Error("Failed to marshal LFAA typed response Universal envelope", "error", err)
 		return
 	}
 
 	channelName := constants.ResultsChannel(cfg.OperatorID, msg.OperatorSessionID)
 	if err := client.Publish(ctx, channelName, data); err != nil {
-		logger.Error("Failed to publish LFAA typed response UAP", "error", err)
+		logger.Error("Failed to publish LFAA typed response Universal", "error", err)
 		return
 	}
 
-	logger.Info("LFAA typed response published (UAP)", "event_type", eventType)
+	logger.Info("LFAA typed response published (Universal)", "event_type", eventType)
 }
 
 // publishLFAAErrorTo builds an error UAPEnvelope and publishes it to the results channel.
@@ -133,21 +132,20 @@ func publishLFAAErrorTo(
 		Error:       errorMsg,
 	}
 
-	actionType := mapEventTypeToResultActionType(eventType)
-	env, err := BuildUAPResultEnvelope(cfg, actionType, payload, msg.ID, cfg.OperatorID, msg.CaseID, msg.InvestigationID, msg.TaskID)
+	env, err := BuildUniversalResultEnvelope(cfg, eventType, payload, msg.ID, cfg.OperatorID, msg.CaseID, msg.InvestigationID, msg.TaskID)
 	if err != nil {
-		logger.Error("Failed to build LFAA error UAP envelope", "error", err)
+		logger.Error("Failed to build LFAA error Universal envelope", "error", err)
 		return
 	}
 
 	data, err := json.Marshal(env)
 	if err != nil {
-		logger.Error("Failed to marshal LFAA error UAP envelope", "error", err)
+		logger.Error("Failed to marshal LFAA error Universal envelope", "error", err)
 		return
 	}
 
 	channelName := constants.ResultsChannel(cfg.OperatorID, msg.OperatorSessionID)
 	if err := client.Publish(ctx, channelName, data); err != nil {
-		logger.Error("Failed to publish LFAA error UAP", "error", err)
+		logger.Error("Failed to publish LFAA error Universal", "error", err)
 	}
 }

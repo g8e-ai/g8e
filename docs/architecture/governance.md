@@ -5,7 +5,7 @@ Version: v0.2.4
 
 Agentic AI safety in g8e is framed as a **consensus problem**: given a population of LLM-instantiated personas with different lenses, a calibrated adversary among them, and a human user with finite attention, how do we converge on an executable command that is safe, audited, and minimally costly?
 
-The mechanism operates through a strictly ordered L1/L2/L3 validation hierarchy where each layer provides a unique type of safety guarantee. On operator pub/sub paths, this hierarchy is carried in the Protobuf `GovernanceEnvelope` as governance metadata beside the typed `operator.proto` payload.
+The mechanism operates through a strictly ordered L1/L2/L3 validation hierarchy where each layer provides a unique type of safety guarantee. On operator pub/sub paths, this hierarchy is carried in the UAP JSON envelope as governance metadata beside the structured intent_data.
 
 g8e defines a mandatory **Substrate** (Operator + Protocol) that enforces these layers, and an optional **Application Layer** (bundled or BYO) that produces the proofs required to pass them.
 
@@ -102,4 +102,4 @@ Agent performance is tracked via an EMA scalar `[0.0, 1.0]` in the `reputation_s
 
 1.  **Fail Closed**: Any inconclusive risk analysis defaults to `HIGH` risk.
 2.  **Auditor-User Partition**: The machine handles correctness; the human handles intent. Neither is sufficient alone.
-3.  **Universal Envelope Integrity**: Every command is wrapped in a `GovernanceEnvelope` that carries immutable evidence of its journey through the L1/L2/L3 hierarchy.
+3.  **UAP Envelope Integrity**: Every mutation command is wrapped in a UAPEnvelope that carries immutable evidence of its journey through the L1/L2/L3 hierarchy.

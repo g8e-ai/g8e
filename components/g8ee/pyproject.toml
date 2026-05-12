@@ -38,7 +38,8 @@ markers = [
     "requires_api: Tests requiring a live external API (e.g. Google Search API)",
     "thinking: Tests requiring LLM thinking/reasoning capability",
     "tools: Tests requiring LLM tool calling/function calling capability",
-    "operator_wire: Integration tests that publish tool-call events directly to a live g8ep operator via PubSub (no AI, no approval gate)",
+    "operator_wire: Integration tests that publish tool-call events directly to a live Operator via PubSub (no AI, no approval gate)",
+    "requires_operator: Integration tests that require a live Operator on port 9000 (e.g. for DB or KV access)",
 ]
 
 # Output and logging

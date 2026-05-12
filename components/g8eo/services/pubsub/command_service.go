@@ -159,7 +159,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 				Status:      protoExecutionStatus(verdict.blockedResult.Status),
 				Error:       *verdict.blockedResult.ErrorMessage,
 				Stderr:      verdict.blockedResult.Stderr,
-				ExitCode:    int32(*verdict.blockedResult.ReturnCode),
+				ReturnCode:  int32(*verdict.blockedResult.ReturnCode),
 			}
 			if err := cs.results.PublishExecutionResult(ctx, protoResult, msg); err != nil {
 				cs.logger.Error("Failed to publish blocked result", "error", err)
@@ -276,12 +276,12 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg PubSub
 		protoResult := &operatorv1.CommandResult{
 			ExecutionId:          result.ExecutionID,
 			Status:               protoExecutionStatus(result.Status),
-			Output:               result.Stdout,
+			Stdout:               result.Stdout,
 			Stderr:               result.Stderr,
 			ExecutionTimeSeconds: float32(result.DurationSeconds),
 		}
 		if result.ReturnCode != nil {
-			protoResult.ExitCode = int32(*result.ReturnCode)
+			protoResult.ReturnCode = int32(*result.ReturnCode)
 		}
 		if result.ErrorMessage != nil {
 			protoResult.Error = *result.ErrorMessage
@@ -390,7 +390,7 @@ func (cs *CommandService) runStatusTicker(
 					ElapsedSeconds: float32(elapsed),
 					Message:        fmt.Sprintf("Command still executing (%.0fs elapsed)", elapsed),
 				}
-				if err := cs.results.PublishExecutionStatus(ctx, statusUpdate); err != nil {
+				if err := cs.results.PublishExecutionStatus(ctx, statusUpdate, msg); err != nil {
 					cs.logger.Warn("Failed to publish status update", "error", err)
 				} else {
 					cs.logger.Info("Execution status update sent",

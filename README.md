@@ -4,7 +4,7 @@
 
 g8e is a governance-first agentic platform for trustless infrastructure management. Every actor — Engine, Operator, User — operates under a mutual adversarial assumption: verify every intent, sign every state change, and anchor every output to a host-authoritative ledger. 
 
-The architecture is a host-authoritative substrate: Byzantine consensus with an adversarial co-validator, sovereign execution on customer hardware, and chain-of-custody audit. Its foundation is a Protobuf-first `GovernanceEnvelope` contract that binds typed payloads to canonical event names, state roots, and a 3-layer governance hierarchy (L1/L2/L3).
+The architecture is a host-authoritative substrate: Byzantine consensus with an adversarial co-validator, sovereign execution on customer hardware, and chain-of-custody audit. Its foundation is a unified `GovernanceEnvelope` contract that binds typed payloads to canonical event names, state roots, and a 3-layer governance hierarchy (L1/L2/L3).
 
 Self-hosted. Air-gap capable. Apache 2.0. Built for environments where nominal oversight is a failure state.
 
@@ -12,7 +12,7 @@ Self-hosted. Air-gap capable. Apache 2.0. Built for environments where nominal o
 
 - **Host Sovereignty.** The managed host is the system of record. Every mutation and command output is anchored to a local, git-backed ledger (LFAA) in native SQLite vaults — queryable with standard SQL, mapped to MITRE ATT&CK for SIEM/SOC integration. Raw data never leaves your infrastructure.
 - **LLM Sovereignty.** A stateless reasoning engine decouples intent from execution. Context is ephemeral per request; providers never retain session state. Swap between Anthropic, Gemini, OpenAI, or local providers (Ollama, llama.cpp) without losing continuity.
-- **Operator Integrity.** The Operator is a protocol for verifiable execution. Sentinel pre-execution analysis (46 threat detectors), hardware fingerprint binding, outbound-only mTLS, and Protobuf-first command envelopes ensure that legacy or malformed command bytes are rejected rather than translated.
+- **Operator Integrity.** The Operator is a protocol for verifiable execution. Sentinel pre-execution analysis (46 threat detectors), hardware fingerprint binding, outbound-only mTLS, and unified command envelopes ensure that legacy or malformed command bytes are rejected rather than translated.
 - **Consensus-Driven Safety.** The Tribunal generates candidates under tiered information isolation — agents cannot see each other's reasoning or plans. An adversarial co-validator (Nemesis) stress-tests the panel. All core personas stake reputation on every turn; incompetence triggers automated slashing.
 
 ## Why

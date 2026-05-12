@@ -124,6 +124,12 @@ func NewLocalStoreService(config *LocalStoreConfig, logger *slog.Logger) (*Local
 	return ls, nil
 }
 
+// GetDB returns the underlying SQLite database connection.
+// This allows other services (e.g., replay store, state root provider) to share the same database.
+func (ls *LocalStoreService) GetDB() *sqliteutil.DB {
+	return ls.db
+}
+
 var localStoreMigrations = []sqliteutil.Migration{
 	{
 		Version:     1,

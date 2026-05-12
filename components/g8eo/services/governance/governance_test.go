@@ -3,9 +3,10 @@ package governance
 import (
 	"crypto/ed25519"
 	"testing"
-	"time"
 
 	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
+	commonv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func TestGovernanceFlow(t *testing.T) {
@@ -25,27 +26,16 @@ func TestGovernanceFlow(t *testing.T) {
 
 	env := &uap.UAPEnvelope{
 		ProtocolVersion: "1.0",
-		Metadata: uap.Metadata{
-			SenderID:  "agent-1",
-			Timestamp: time.Now(),
-		},
-		Intent: uap.Intent{
-			ActionType:     "EXECUTE_BASH",
-			TargetResource: "localhost",
-		},
-		Context: uap.Context{
-			DataFormat: "raw",
-			DataBlob:   "echo 'hello'",
-		},
-		Consensus: uap.ConsensusState{
-			RequiredVotes: 1,
-			Status:        "PENDING",
-		},
+		OperatorId:      "agent-1",
+		Timestamp:       timestamppb.Now(),
+		ActionType:      "FETCH_LOGS",
+		TargetResource:  "localhost",
+		Payload:         []byte("fetch logs"),
 	}
 
 	// 1. Generate Message ID
-	id, _ := env.GenerateMessageID()
-	env.MessageID = id
+	id, _ := uap.GenerateMessageID(env)
+	env.Id = id
 
 	// 2. Tribunal Evaluation
 	err := tribunal.EvaluatePayload(env)
@@ -53,19 +43,13 @@ func TestGovernanceFlow(t *testing.T) {
 		t.Fatalf("Tribunal evaluation failed: %v", err)
 	}
 
-	if len(env.Consensus.CurrentVotes) != 1 {
-		t.Errorf("Expected 1 vote, got %d", len(env.Consensus.CurrentVotes))
+	if env.Governance == nil || len(env.Governance.L2.AgentIds) != 1 {
+		t.Errorf("Expected 1 agent ID in L2, got %v", env.Governance)
 	}
 
-	// Ensure status is PENDING or APPROVED for Warden (tribunal sets to REJECTED if unsafe)
-	// In this test, Sentinel is nil, so tribunal.RunMITREChecks returns false (fail-closed).
-	// We need to bypass this for the happy path test of Warden.
-	env.Consensus.Status = "PENDING"
-	for i := range env.Consensus.CurrentVotes {
-		env.Consensus.CurrentVotes[i].Decision = true
-		// Re-sign with Decision=true
-		env.Consensus.CurrentVotes[i].Signature = tribunal.SignDecision(env.MessageID, true)
-	}
+	// Ensure status is validated for Warden
+	env.Governance.L1.Validated = true
+	env.Governance.L2.TribunalSignature = tribunal.SignDecision(env.Id, true)
 
 	// 3. Warden Authorization
 	err = warden.AuthorizeExecution(env)
@@ -74,17 +58,16 @@ func TestGovernanceFlow(t *testing.T) {
 	}
 
 	// 4. Test Hash Mismatch
-	env.MessageID = "wrong-hash"
+	env.Id = "wrong-hash"
 	err = tribunal.EvaluatePayload(env)
 	if err == nil {
 		t.Error("Expected error on hash mismatch, got nil")
 	}
 
 	// 5. Test Insufficient Quorum
-	env.MessageID = id // Reset
-	env.Consensus.RequiredVotes = 2
-	env.Consensus.CurrentVotes = env.Consensus.CurrentVotes[:0] // Clear votes
-	tribunal.EvaluatePayload(env)                               // Only 1 vote
+	env.Id = id // Reset
+	env.Governance.L2.AgentIds = nil
+	env.Governance.L2.TribunalSignature = ""
 	err = warden.AuthorizeExecution(env)
 	if err == nil {
 		t.Error("Expected error on insufficient quorum, got nil")
@@ -112,17 +95,17 @@ func TestGovernanceFailClosed(t *testing.T) {
 			TrustedNodes: map[string]ed25519.PublicKey{nodeID: pub},
 		}
 		env := &uap.UAPEnvelope{
-			MessageID: "test-id",
-			Consensus: uap.ConsensusState{
-				RequiredVotes: 1,
-				CurrentVotes: []uap.Vote{
-					{NodeID: nodeID, Signature: "UNSIGNED", Decision: true},
+			Id: "test-id",
+			Governance: &commonv1.GovernanceMetadata{
+				L2: &commonv1.L2Metadata{
+					AgentIds:          []string{nodeID},
+					TribunalSignature: "", // Missing signature
 				},
 			},
 		}
 		err := warden.AuthorizeExecution(env)
-		if err == nil || err.Error() != "execution blocked: required votes not met" {
-			t.Errorf("Expected UNSIGNED vote to be blocked, got: %v", err)
+		if err == nil || err.Error() != "execution blocked: required consensus votes not met" {
+			t.Errorf("Expected unsigned vote to be blocked, got: %v", err)
 		}
 	})
 
@@ -131,16 +114,16 @@ func TestGovernanceFailClosed(t *testing.T) {
 			TrustedNodes: map[string]ed25519.PublicKey{nodeID: pub},
 		}
 		env := &uap.UAPEnvelope{
-			MessageID: "test-id",
-			Consensus: uap.ConsensusState{
-				RequiredVotes: 1,
-				CurrentVotes: []uap.Vote{
-					{NodeID: nodeID, Signature: "deadbeef", Decision: true},
+			Id: "test-id",
+			Governance: &commonv1.GovernanceMetadata{
+				L2: &commonv1.L2Metadata{
+					AgentIds:          []string{nodeID},
+					TribunalSignature: "deadbeef",
 				},
 			},
 		}
 		err := warden.AuthorizeExecution(env)
-		if err == nil || err.Error() != "execution blocked: required votes not met" {
+		if err == nil || err.Error() != "execution blocked: required consensus votes not met" {
 			t.Errorf("Expected invalid signature to be blocked, got: %v", err)
 		}
 	})

@@ -51,8 +51,8 @@ func mustDocJSON(t *testing.T, v interface{}) json.RawMessage {
 func newTestDB(t *testing.T) *ListenDBService {
 	t.Helper()
 	dir := t.TempDir()
-	sslDir := t.TempDir()
-	db, err := NewListenDBService(dir, sslDir, testutil.NewTestLogger())
+	secretsDir := t.TempDir()
+	db, err := NewListenDBService(dir, secretsDir, testutil.NewTestLogger())
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	return db
@@ -370,15 +370,15 @@ func TestKVExpire(t *testing.T) {
 
 func TestSchemaIdempotent(t *testing.T) {
 	dir := t.TempDir()
-	sslDir := t.TempDir()
+	secretsDir := t.TempDir()
 
-	db1, err := NewListenDBService(dir, sslDir, testutil.NewTestLogger())
+	db1, err := NewListenDBService(dir, secretsDir, testutil.NewTestLogger())
 	require.NoError(t, err)
 	require.NoError(t, db1.DocSet("test", "1", mustDocJSON(t, map[string]string{"val": "first"})))
 	db1.Close()
 
 	// Re-open same database — schema init should not fail or lose data
-	db2, err := NewListenDBService(dir, sslDir, testutil.NewTestLogger())
+	db2, err := NewListenDBService(dir, secretsDir, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer db2.Close()
 
@@ -394,9 +394,9 @@ func TestSchemaIdempotent(t *testing.T) {
 
 func TestCreateDataDir(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "nested", "deep", "data")
-	sslDir := t.TempDir()
+	secretsDir := t.TempDir()
 
-	db, err := NewListenDBService(dir, sslDir, testutil.NewTestLogger())
+	db, err := NewListenDBService(dir, secretsDir, testutil.NewTestLogger())
 	require.NoError(t, err)
 	defer db.Close()
 

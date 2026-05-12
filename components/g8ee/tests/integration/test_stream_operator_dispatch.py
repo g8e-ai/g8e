@@ -55,7 +55,7 @@ async def test_stream_operator_dispatch_integration(
         success=True,
         output="Stream started on 2 hosts",
         execution_id="exec-stream-123",
-        command_executed="docker exec g8ep ..."
+        command_executed="docker exec g8eo ..."
     )
 
     # We need to mock the executor that was wired into the service

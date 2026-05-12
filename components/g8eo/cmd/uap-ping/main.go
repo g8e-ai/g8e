@@ -16,7 +16,10 @@ import (
 	"net/http"
 	"time"
 
+	"google.golang.org/protobuf/types/known/timestamppb"
+
 	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
+	commonv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
 )
 
 func main() {
@@ -69,10 +72,10 @@ func main() {
 			}
 
 			fmt.Println("\n--- Warden Received UAP Envelope ---")
-			fmt.Printf("ID:      %s\n", env.MessageID)
-			fmt.Printf("Sender:  %s\n", env.Metadata.SenderID)
-			fmt.Printf("Action:  %s\n", env.Intent.ActionType)
-			fmt.Printf("Payload: %s\n", env.Context.DataBlob)
+			fmt.Printf("ID:      %s\n", env.Id)
+			fmt.Printf("Sender:  %s\n", env.OperatorId)
+			fmt.Printf("Action:  %s\n", env.ActionType)
+			fmt.Printf("Payload: %s\n", string(env.Payload))
 			fmt.Println("-----------------------------------")
 
 			w.WriteHeader(http.StatusOK)
@@ -91,26 +94,20 @@ func main() {
 	// 3. Sage Client sends Ping
 	env := &uap.UAPEnvelope{
 		ProtocolVersion: "1.0",
-		Metadata: uap.Metadata{
-			SenderID:  "sage-agent-alpha",
-			Timestamp: time.Now(),
-		},
-		Intent: uap.Intent{
-			ActionType:     "EXECUTE_BASH",
-			TargetResource: "localhost",
-		},
-		Context: uap.Context{
-			DataFormat: "raw",
-			DataBlob:   "echo 'UAP mTLS Ping Success'",
-		},
-		Consensus: uap.ConsensusState{
-			RequiredVotes: 1,
-			Status:        "PENDING",
+		OperatorId:      "sage-agent-alpha",
+		Timestamp:       timestamppb.Now(),
+		ActionType:      "EXECUTE_BASH",
+		TargetResource:  "localhost",
+		Payload:         []byte("echo 'UAP mTLS Ping Success'"),
+		Governance: &commonv1.GovernanceMetadata{
+			L2: &commonv1.L2Metadata{
+				KeyId: "demo-key",
+			},
 		},
 	}
 
-	id, _ := env.GenerateMessageID()
-	env.MessageID = id
+	id, _ := uap.GenerateMessageID(env)
+	env.Id = id
 
 	payload, _ := json.Marshal(env)
 

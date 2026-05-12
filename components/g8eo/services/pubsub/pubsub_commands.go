@@ -28,6 +28,7 @@ import (
 
 	"github.com/g8e-ai/g8e/components/g8eo/config"
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
+	"github.com/g8e-ai/g8e/components/g8eo/internal/mappings"
 	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
 	execution "github.com/g8e-ai/g8e/components/g8eo/services/execution"
 	"github.com/g8e-ai/g8e/components/g8eo/services/governance"
@@ -90,24 +91,28 @@ type PubSubCommandService struct {
 	trustedSigners map[string]ed25519.PublicKey
 
 	// UAP governance services for Phase 3 integration
-	tribunal *governance.Tribunal
-	warden   *governance.Warden
+	tribunal            *governance.Tribunal
+	warden              *governance.Warden
+	transactionVerifier *governance.TransactionVerifier
 }
 
 // CommandServiceConfig holds all dependencies for PubSubCommandService.
 type CommandServiceConfig struct {
-	Config         *config.Config
-	Logger         *slog.Logger
-	Execution      *execution.ExecutionService
-	FileEdit       *execution.FileEditService
-	PubSubClient   PubSubClient
-	ResultsService ResultsPublisher
-	LocalStore     *storage.LocalStoreService
-	RawVault       *storage.RawVaultService
-	AuditVault     *storage.AuditVaultService
-	Ledger         *storage.LedgerService
-	HistoryHandler *storage.HistoryHandler
-	Sentinel       *sentinel.Sentinel
+	Config            *config.Config
+	Logger            *slog.Logger
+	Execution         *execution.ExecutionService
+	FileEdit          *execution.FileEditService
+	PubSubClient      PubSubClient
+	ResultsService    ResultsPublisher
+	LocalStore        *storage.LocalStoreService
+	RawVault          *storage.RawVaultService
+	AuditVault        *storage.AuditVaultService
+	Ledger            *storage.LedgerService
+	HistoryHandler    *storage.HistoryHandler
+	Sentinel          *sentinel.Sentinel
+	L3Verifier        governance.L3Verifier
+	ReplayStore       governance.ReplayStore
+	StateRootProvider governance.StateRootProvider
 }
 
 // NewPubSubCommandService creates the dispatcher and all first-class sub-services using the provided config.
@@ -210,7 +215,7 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 	}
 
 	// Initialize UAP governance services after trusted signers are loaded
-	rs.initializeUAPGovernance(c)
+	rs.initializeUAPGovernance(c, serviceCtx)
 
 	c.Logger.Info("g8e connectivity initialized",
 		"config_operator_id", c.Config.OperatorID,
@@ -219,7 +224,7 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 }
 
 // initializeUAPGovernance sets up the Tribunal and Warden services for UAP Phase 3 integration.
-func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig) {
+func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig, serviceCtx context.Context) {
 	// Initialize Tribunal with Sentinel for MITRE checks
 	rs.tribunal = &governance.Tribunal{
 		NodeID:   c.Config.OperatorID,
@@ -229,15 +234,40 @@ func (rs *PubSubCommandService) initializeUAPGovernance(c CommandServiceConfig) 
 
 	// Initialize Warden with trusted nodes and audit vault
 	rs.warden = &governance.Warden{
-		Logger:       c.Logger,
-		TrustedNodes: rs.trustedSigners,
-		Execution:    c.Execution,
-		AuditVault:   c.AuditVault,
+		Logger:           c.Logger,
+		TrustedNodes:     rs.trustedSigners,
+		Execution:        c.Execution,
+		AuditVault:       c.AuditVault,
+		L3Verifier:       c.L3Verifier,
+		Ctx:              serviceCtx,
+		ExecutionHandler: rs, // PubSubCommandService implements ExecutionHandler
 	}
+
+	// Initialize TransactionVerifier for strict pre-dispatch verification
+	knownActionTypes := []string{
+		"EXECUTE_BASH",
+		"FILE_EDIT",
+		"RESTORE_FILE",
+		"SHUTDOWN",
+		"FS_LIST",
+		"FS_READ",
+		"FS_GREP",
+		"PORT_CHECK",
+		"FETCH_LOGS",
+	}
+	rs.transactionVerifier = governance.NewTransactionVerifier(
+		c.Logger,
+		c.ReplayStore,
+		c.StateRootProvider,
+		rs.trustedSigners,
+		c.L3Verifier,
+		knownActionTypes,
+	)
 
 	c.Logger.Info("UAP governance services initialized",
 		"tribunal_node_id", c.Config.OperatorID,
-		"trusted_signers_count", len(rs.trustedSigners))
+		"trusted_signers_count", len(rs.trustedSigners),
+		"transaction_verifier_enabled", rs.transactionVerifier != nil)
 }
 
 func (rs *PubSubCommandService) buildHandlers() {
@@ -442,59 +472,70 @@ func (rs *PubSubCommandService) handleCommandPayload(payload []byte) {
 		return
 	}
 
-	// Phase 3: Try to parse as UAPEnvelope (JSON) first
-	var uapEnv uap.UAPEnvelope
-	if err := json.Unmarshal(payload, &uapEnv); err == nil {
-		rs.logger.Info("Parsed request as UAPEnvelope (JSON)",
-			"message_id", uapEnv.MessageID,
-			"protocol_version", uapEnv.ProtocolVersion)
-		rs.handleUAPEnvelope(&uapEnv)
+	// Decode as Protobuf UniversalEnvelope - this is the only canonical mutation envelope
+	envelope := &commonv1.UniversalEnvelope{}
+	if err := proto.Unmarshal(payload, envelope); err != nil {
+		rs.logger.Error("Failed to decode as Protobuf UniversalEnvelope - unknown format rejected",
+			"error", err,
+			"action", "use Protobuf UniversalEnvelope bytes")
 		return
 	}
 
-	// Reject legacy GovernanceEnvelope (protobuf)
-	var protoEnv commonv1.GovernanceEnvelope
-	if err := proto.Unmarshal(payload, &protoEnv); err == nil {
-		rs.logger.Error("Rejected request as legacy GovernanceEnvelope (protobuf) - no backwards compatibility",
-			"id", protoEnv.Id,
-			"action", "update client to use UAPEnvelope JSON format")
-		return
-	}
-
-	// Reject unknown envelope formats
-	rs.logger.Error("Failed to parse as UAPEnvelope - unknown format rejected",
-		"error", "envelope_format_unknown",
-		"action", "use UAPEnvelope JSON format")
-	return
+	rs.logger.Info("Decoded request as Protobuf UniversalEnvelope",
+		"message_id", envelope.Id,
+		"protocol_version", envelope.ProtocolVersion)
+	rs.handleUAPEnvelope((*uap.UAPEnvelope)(envelope))
 }
 
-// handleUAPEnvelope processes a UAPEnvelope using the Tribunal and Warden services.
+// handleUAPEnvelope processes a UAPEnvelope using the TransactionVerifier, Tribunal and Warden services.
 func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
+	// Strict transaction verification (P0: fail-closed gate before any dispatch)
+	if rs.transactionVerifier != nil {
+		// Re-serialize to Protobuf bytes for verification
+		envelopeProto := (*commonv1.UniversalEnvelope)(env)
+		envelopeBytes, err := proto.Marshal(envelopeProto)
+		if err != nil {
+			rs.logger.Error("Failed to serialize envelope for verification", "error", err, "message_id", env.Id)
+			return
+		}
+
+		verified, err := rs.transactionVerifier.VerifyTransaction(envelopeBytes)
+		if err != nil {
+			rs.logger.Error("Transaction verification failed - command rejected",
+				"error", err,
+				"message_id", env.Id)
+			return
+		}
+		rs.logger.Info("Transaction verification passed", "message_id", verified.Envelope.Id)
+	} else {
+		rs.logger.Warn("TransactionVerifier not configured - skipping strict verification", "message_id", env.Id)
+	}
+
 	// Generate and verify MessageID (Tribunal hash verification)
-	expectedID, err := env.GenerateMessageID()
+	expectedID, err := uap.GenerateMessageID(env)
 	if err != nil {
 		rs.logger.Error("Failed to generate MessageID for verification", "error", err)
 		return
 	}
-	if env.MessageID != expectedID {
+	if env.Id != expectedID {
 		rs.logger.Error("UAPEnvelope MessageID mismatch - payload hash verification failed",
 			"expected_id", expectedID,
-			"received_id", env.MessageID)
+			"received_id", env.Id)
 		return
 	}
-	rs.logger.Info("UAPEnvelope MessageID verified", "message_id", env.MessageID)
+	rs.logger.Info("UAPEnvelope MessageID verified", "message_id", env.Id)
 
 	// Tribunal evaluation (L1/L2 governance: hash verification + MITRE checks + voting)
 	if rs.tribunal != nil {
 		if err := rs.tribunal.EvaluatePayload(env); err != nil {
 			rs.logger.Error("Tribunal evaluation failed - command rejected",
 				"error", err,
-				"message_id", env.MessageID)
+				"message_id", env.Id)
 			return
 		}
-		rs.logger.Info("Tribunal evaluation passed", "message_id", env.MessageID)
+		rs.logger.Info("Tribunal evaluation passed", "message_id", env.Id)
 	} else {
-		rs.logger.Error("FATAL: Tribunal service missing - command rejected", "message_id", env.MessageID)
+		rs.logger.Error("FATAL: Tribunal service missing - command rejected", "message_id", env.Id)
 		return
 	}
 
@@ -503,112 +544,63 @@ func (rs *PubSubCommandService) handleUAPEnvelope(env *uap.UAPEnvelope) {
 		if err := rs.warden.AuthorizeExecution(env); err != nil {
 			rs.logger.Error("Warden authorization failed - command rejected",
 				"error", err,
-				"message_id", env.MessageID)
+				"message_id", env.Id)
 			return
 		}
-		rs.logger.Info("Warden authorization passed", "message_id", env.MessageID)
+		rs.logger.Info("Warden authorization passed", "message_id", env.Id)
 	} else {
-		rs.logger.Error("FATAL: Warden service missing - command rejected", "message_id", env.MessageID)
+		rs.logger.Error("FATAL: Warden service missing - command rejected", "message_id", env.Id)
 		return
 	}
 
-	// Convert UAPEnvelope to PubSubCommandMessage for dispatch
+	// Convert UAPEnvelope to PubSubCommandMessage for execution through Warden
 	// Map UAP action types back to protobuf event types for handler dispatch
-	eventType := mapActionTypeToEventType(env.Intent.ActionType)
+	eventType := mappings.MapActionTypeToEventType(env.ActionType)
 
 	payload := env.Payload
 	if len(payload) == 0 {
 		// If IntentData is present (JSON-first), use it as the payload
-		if len(env.IntentData) > 0 {
+		if env.IntentData != nil && len(env.IntentData.Fields) > 0 {
 			var err error
-			payload, err = json.Marshal(env.IntentData)
+			jsonBytes, err := env.IntentData.MarshalJSON()
 			if err != nil {
 				rs.logger.Error("Failed to marshal IntentData for dispatch", "error", err)
 				return
 			}
+			payload = jsonBytes
 		} else {
-			payload = []byte(env.Context.DataBlob)
+			// DataBlob is gone, if no IntentData and no Payload, we are stuck
+			rs.logger.Error("No payload or IntentData in UAPEnvelope", "message_id", env.Id)
+			return
 		}
 	}
 
 	cmdMsg := PubSubCommandMessage{
-		ID:                env.MessageID,
+		ID:                env.Id,
 		EventType:         eventType,
-		CaseID:            env.CaseID,
-		TaskID:            env.TaskID,
-		InvestigationID:   env.InvestigationID,
-		OperatorSessionID: env.Metadata.SenderID,
-		OperatorID:        nil,
+		CaseID:            env.CaseId,
+		TaskID:            &env.TaskId,
+		InvestigationID:   env.InvestigationId,
+		OperatorSessionID: env.OperatorSessionId,
+		OperatorID:        &env.OperatorId,
 		Payload:           payload,
-		Timestamp:         env.Metadata.Timestamp,
+		Timestamp:         env.Timestamp.AsTime(),
 	}
 
-	rs.dispatchCommand(cmdMsg)
-}
-
-// mapEventTypeToActionType maps protobuf event types to UAP action types.
-func mapEventTypeToActionType(eventType string) string {
-	switch eventType {
-	case constants.Event.Operator.Command.Requested:
-		return "EXECUTE_BASH"
-	case constants.Event.Operator.FileEdit.Requested:
-		return "FILE_EDIT"
-	case constants.Event.Operator.FsList.Requested:
-		return "FS_LIST"
-	case constants.Event.Operator.FsRead.Requested:
-		return "FS_READ"
-	case constants.Event.Operator.FsGrep.Requested:
-		return "FS_GREP"
-	case constants.Event.Operator.PortCheck.Requested:
-		return "PORT_CHECK"
-	case constants.Event.Operator.FetchLogs.Requested:
-		return "FETCH_LOGS"
-	case constants.Event.Operator.FetchHistory.Requested:
-		return "FETCH_HISTORY"
-	case constants.Event.Operator.FetchFileHistory.Requested:
-		return "FETCH_FILE_HISTORY"
-	case constants.Event.Operator.RestoreFile.Requested:
-		return "RESTORE_FILE"
-	case constants.Event.Operator.ShutdownRequested:
-		return "SHUTDOWN"
-	case constants.Event.Operator.HeartbeatRequested:
-		return "HEARTBEAT"
-	default:
-		// For unknown event types, use the event type itself as action type
-		return eventType
-	}
-}
-
-// mapActionTypeToEventType maps UAP action types back to protobuf event types for handler dispatch.
-func mapActionTypeToEventType(actionType string) string {
-	switch actionType {
-	case "EXECUTE_BASH":
-		return constants.Event.Operator.Command.Requested
-	case "FILE_EDIT":
-		return constants.Event.Operator.FileEdit.Requested
-	case "FS_LIST":
-		return constants.Event.Operator.FsList.Requested
-	case "FS_READ":
-		return constants.Event.Operator.FsRead.Requested
-	case "FS_GREP":
-		return constants.Event.Operator.FsGrep.Requested
-	case "PORT_CHECK":
-		return constants.Event.Operator.PortCheck.Requested
-	case "FETCH_LOGS":
-		return constants.Event.Operator.FetchLogs.Requested
-	case "FETCH_HISTORY":
-		return constants.Event.Operator.FetchHistory.Requested
-	case "FETCH_FILE_HISTORY":
-		return constants.Event.Operator.FetchFileHistory.Requested
-	case "RESTORE_FILE":
-		return constants.Event.Operator.RestoreFile.Requested
-	case "SHUTDOWN":
-		return constants.Event.Operator.ShutdownRequested
-	case "HEARTBEAT":
-		return constants.Event.Operator.HeartbeatRequested
-	default:
-		// For unknown action types, use the action type itself as event type
-		return actionType
+	// Execute through Warden (execution boundary)
+	if rs.warden != nil {
+		if err := rs.warden.ExecuteVerifiedTransaction(&governance.VerifiedTransaction{
+			Envelope:   env,
+			ActionType: env.ActionType,
+			Payload:    payload,
+		}, cmdMsg); err != nil {
+			rs.logger.Error("Warden execution failed", "error", err, "message_id", env.Id)
+			return
+		}
+		rs.logger.Info("Warden execution succeeded", "message_id", env.Id)
+	} else {
+		rs.logger.Error("FATAL: Warden service missing - cannot execute", "message_id", env.Id)
+		return
 	}
 }
 
@@ -619,6 +611,27 @@ func (rs *PubSubCommandService) dispatchCommand(cmdMsg PubSubCommandMessage) {
 		return
 	}
 	handler(rs.ctx, cmdMsg)
+}
+
+// ExecuteVerifiedTransaction implements governance.ExecutionHandler.
+// This is called by Warden to execute verified transactions, making Warden the execution boundary.
+func (rs *PubSubCommandService) ExecuteVerifiedTransaction(ctx context.Context, eventType string, cmdMsg interface{}) error {
+	handler, ok := rs.handlers[eventType]
+	if !ok {
+		rs.logger.Error("No handler registered for event type", "event_type", eventType)
+		return fmt.Errorf("no handler for event type: %s", eventType)
+	}
+
+	// Type assert to PubSubCommandMessage
+	pubsubMsg, ok := cmdMsg.(PubSubCommandMessage)
+	if !ok {
+		rs.logger.Error("Invalid cmdMsg type", "expected", "PubSubCommandMessage", "got", fmt.Sprintf("%T", cmdMsg))
+		return fmt.Errorf("invalid cmdMsg type: %T", cmdMsg)
+	}
+
+	rs.logger.Info("Executing verified transaction through Warden", "event_type", eventType)
+	handler(ctx, pubsubMsg)
+	return nil
 }
 
 func (rs *PubSubCommandService) handleShutdownRequest(msg PubSubCommandMessage) {

@@ -246,11 +246,11 @@ export function createG8edApp({
     if (!isTest) {
         app.get('/ca.crt', (req, res) => {
             const bootstrapService = services.settingsService.getBootstrapService();
-            const sslDir = bootstrapService.getSslDir();
-            if (!sslDir) {
-                return res.status(404).send('SSL directory not available.');
+            const pkiDir = bootstrapService.getPkiDir();
+            if (!pkiDir) {
+                return res.status(404).send('PKI directory not available.');
             }
-            const caPath = path.join(sslDir, 'ca.crt');
+            const caPath = path.join(pkiDir, 'ca.crt');
             if (!fs.existsSync(caPath)) {
                 return res.status(404).send('CA certificate not yet available.');
             }

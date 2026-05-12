@@ -17,8 +17,6 @@ import (
 	"context"
 
 	"google.golang.org/protobuf/proto"
-
-	"github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
 )
 
 // ResultsPublisher is the transport-agnostic interface for publishing results
@@ -30,7 +28,6 @@ type ResultsPublisher interface {
 	PublishFileEditResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error
 	PublishFsListResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error
 	PublishFsGrepResult(ctx context.Context, result proto.Message, originalMsg PubSubCommandMessage) error
-	PublishExecutionStatus(ctx context.Context, status proto.Message) error
-	PublishResult(ctx context.Context, env *commonv1.GovernanceEnvelope) error
+	PublishExecutionStatus(ctx context.Context, status proto.Message, originalMsg PubSubCommandMessage) error
 	PublishHeartbeat(ctx context.Context, heartbeat proto.Message) error
 }

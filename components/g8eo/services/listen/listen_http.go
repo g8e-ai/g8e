@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -63,13 +64,31 @@ func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *ListenDBService
 	}
 }
 
-func (h *HTTPHandler) buildRouter() http.Handler {
+func (h *HTTPHandler) buildBootstrapRouter() http.Handler {
 	mux := http.NewServeMux()
 
+	// Bootstrap routes that do not require client certificates
 	mux.HandleFunc("/health", h.handleHealth)
 	mux.HandleFunc("/.well-known/g8e/pki/root.pem", h.handlePKIRoot)
 	mux.HandleFunc("/.well-known/g8e/pki/hub-bundle.pem", h.handlePKIHubBundle)
 	mux.HandleFunc("/.well-known/g8e/pki/fingerprint", h.handlePKIFingerprint)
+	mux.HandleFunc("/api/auth/device-link/register", h.handleDeviceLinkRegister)
+
+	// Trust Portal
+	mux.HandleFunc("/ca.crt", h.handlePKIRoot)
+	mux.HandleFunc("/trust", h.handleTrustScript)
+	mux.HandleFunc("/trust.sh", h.handleTrustScript)
+	mux.HandleFunc("/trust.ps1", h.handleTrustScriptPS1)
+	mux.HandleFunc("/trust.bat", h.handleTrustScriptBat)
+	mux.HandleFunc("/g8e", h.handleG8eDeploy)
+
+	return pathTraversalGuard(mux)
+}
+
+func (h *HTTPHandler) buildRouter() http.Handler {
+	mux := http.NewServeMux()
+
+	// Authenticated routes (require mTLS)
 	mux.HandleFunc("/api/settings", h.handleSettings)
 	mux.HandleFunc("/api/device-links", h.handleDeviceLinks)
 	mux.HandleFunc("/api/device-links/", h.handleDeviceLinkByToken)
@@ -86,15 +105,12 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux.Handle("/ws/pubsub", h.auth.WebSocketAuth(http.HandlerFunc(h.pubsub.HandleWebSocket)))
 	mux.HandleFunc("/blob/", h.handleBlob)
 
-	// authMiddleware must be inside pathTraversalGuard to ensure ".." is caught
-	// before any other processing, but pathTraversalGuard itself doesn't need auth.
-	// Actually, pathTraversalGuard should be outermost to catch normalization attempts.
+	// PKI management routes (require mTLS)
 	mux.HandleFunc("/api/pki/sign-csr", h.handlePKISignCSR)
 	mux.HandleFunc("/api/pki/revoke", h.handlePKIRevoke)
 	mux.HandleFunc("/api/pki/revocation-bundle", h.handlePKIRevocationBundle)
-	mux.HandleFunc("/api/auth/device-link/register", h.handleDeviceLinkRegister)
 
-	// Passkey / L3 Brokerage Routes
+	// Passkey / L3 Brokerage Routes (require mTLS)
 	mux.HandleFunc("/api/auth/passkey/register-challenge", h.handlePasskeyRegisterChallenge)
 	mux.HandleFunc("/api/auth/passkey/register-verify", h.handlePasskeyRegisterVerify)
 	mux.HandleFunc("/api/auth/passkey/auth-challenge", h.handlePasskeyAuthChallenge)
@@ -463,6 +479,90 @@ func (h *HTTPHandler) handleOperators(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonResponse(w, http.StatusOK, models.OperatorSlotResponse{Success: true, Operators: slots})
+}
+
+func (h *HTTPHandler) handleG8eDeploy(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	host := r.Host
+	if h := r.Header.Get("X-Forwarded-Host"); h != "" {
+		host = h
+	}
+	if strings.Contains(host, ":") {
+		host, _, _ = net.SplitHostPort(host)
+	}
+	if host == "" {
+		host = "localhost"
+	}
+	script := G8eDeployScript(host, h.cfg.Listen.WSSPort, h.cfg.Listen.BootstrapPort)
+	w.Header().Set("Content-Type", "text/x-shellscript")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(script))
+}
+
+func (h *HTTPHandler) handleTrustScript(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	host := r.Host
+	if h := r.Header.Get("X-Forwarded-Host"); h != "" {
+		host = h
+	}
+	if strings.Contains(host, ":") {
+		host, _, _ = net.SplitHostPort(host)
+	}
+	if host == "" {
+		host = "localhost"
+	}
+	script := UniversalTrustScript(host, h.cfg.Listen.BootstrapPort)
+	w.Header().Set("Content-Type", "text/x-shellscript")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(script))
+}
+
+func (h *HTTPHandler) handleTrustScriptPS1(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	host := r.Host
+	if h := r.Header.Get("X-Forwarded-Host"); h != "" {
+		host = h
+	}
+	if strings.Contains(host, ":") {
+		host, _, _ = net.SplitHostPort(host)
+	}
+	if host == "" {
+		host = "localhost"
+	}
+	script := WindowsPowerShellTrustScript(host, h.cfg.Listen.BootstrapPort)
+	w.Header().Set("Content-Type", "text/plain") // PowerShell scripts often served as text or application/powershell
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(script))
+}
+
+func (h *HTTPHandler) handleTrustScriptBat(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	host := r.Host
+	if h := r.Header.Get("X-Forwarded-Host"); h != "" {
+		host = h
+	}
+	if strings.Contains(host, ":") {
+		host, _, _ = net.SplitHostPort(host)
+	}
+	if host == "" {
+		host = "localhost"
+	}
+	script := WindowsTrustScript(host, h.cfg.Listen.BootstrapPort)
+	w.Header().Set("Content-Type", "text/plain") // Batch scripts often served as text
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(script))
 }
 
 func (h *HTTPHandler) handleRotateAPIKey(w http.ResponseWriter, r *http.Request) {

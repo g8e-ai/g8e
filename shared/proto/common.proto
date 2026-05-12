@@ -4,8 +4,8 @@ package g8e.common.v1;
 
 option go_package = "github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1";
 
-import "google/protobuf/timestamp.proto";
 import "google/protobuf/descriptor.proto";
+import "google/protobuf/timestamp.proto";
 import "google/protobuf/struct.proto";
 
 // Custom options for governance
@@ -22,82 +22,65 @@ enum Component {
   COMPONENT_G8ED = 3;
 }
 
-// Universal Envelope for all BFT transactions
-message GovernanceEnvelope {
-  // Unique per-message identifier (UUID v4)
-  string id = 1;
-  
-  // Creation timestamp
-  google.protobuf.Timestamp timestamp = 2;
-  
-  // Component that published this message
-  Component source_component = 3;
-  
-  // Event type string (canonical from events.json)
-  string event_type = 4;
-  
-  // Identity and Context
-  string operator_id = 5;
-  string operator_session_id = 6;
-  string case_id = 7;
-  string investigation_id = 8;
-  string task_id = 9;
-  string web_session_id = 10;
-  
-  // Hardware-bound fingerprint (g8eo only)
-  string system_fingerprint = 11;
-  
-  // Merkle root of the fleet state at time of generation
-  string state_merkle_root = 12;
-  
-  // Transaction expiry timestamp (UTC)
-  google.protobuf.Timestamp expires_at = 15;
-
-  // Replay protection (random salt or monotonic counter)
-  string nonce = 16;
-
-  // Governance Metadata (L1/L2/L3)
-  GovernanceMetadata governance = 13;
-  
-  // Structured intent parameters for JSON-first protocol
-  google.protobuf.Struct intent_data = 17;
-
-  // The actual payload (serialized bytes) - DEPRECATED in favor of intent_data
-  bytes payload = 14;
-}
-
-message GovernanceMetadata {
-  // L1: Technical Bedrock (Hard Gates)
-  L1Metadata l1 = 1;
-  
-  // L2: Consensus (Tribunal)
-  L2Metadata l2 = 2;
-  
-  // L3: Authorization (Human Approval)
-  L3Metadata l3 = 3;
-}
-
+// L1 Governance: Technical Bedrock (Hard Gates)
 message L1Metadata {
-  // Boolean indicating if it passed technical gates (sudo, su, etc.)
   bool validated = 1;
-  // List of violated patterns if any
   repeated string violations = 2;
 }
 
+// L2 Governance: Consensus (Tribunal)
 message L2Metadata {
-  // The L2 Tribunal signature (5-agent plurality)
-  string tribunal_signature = 1;
-  // List of agent IDs that participated in consensus
-  repeated string agent_ids = 2;
-  // The key identifier used for the signature
-  string key_id = 3;
+  string tribunal_signature = 1; // HMAC-SHA256 signature
+  repeated string agent_ids = 2; // IDs of agents that voted
+  string key_id = 3;             // ID of the key used for signature
 }
 
+// L3 Governance: Authorization (Human-in-the-loop)
 message L3Metadata {
-  // Hardware-bound signature (Passkey)
-  string human_signature = 1;
-  // The public key used for verification
-  string public_key = 2;
-  // Auto-approval flag if it was a benign command
-  bool auto_approved = 3;
+  string human_signature = 1;    // Signature from passkey/WebAuthn
+  string public_key = 2;         // Public key used for verification
+  bool auto_approved = 3;        // True if skipped via auto-approval policy
 }
+
+// Unified Governance Metadata
+message GovernanceMetadata {
+  L1Metadata l1 = 1;
+  L2Metadata l2 = 2;
+  L3Metadata l3 = 3;
+}
+
+// UniversalEnvelope is the single canonical container for all g8e mutations.
+// It binds identity, intent, state, and governance proofs into one transaction.
+message UniversalEnvelope {
+  // Identity & Metadata
+  string id = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  google.protobuf.Timestamp expires_at = 3;
+  Component source_component = 4;
+  string operator_id = 5;
+  string operator_session_id = 6;
+  string web_session_id = 7;
+
+  // Intent & Payload
+  string event_type = 8;
+  bytes payload = 9;                       // Raw protobuf payload
+  google.protobuf.Struct intent_data = 10; // Structured JSON-first view
+  string action_type = 19;                 // UAP-compatible action type (e.g., EXECUTE_BASH)
+  string target_resource = 20;             // UAP-compatible target resource
+
+  // State & Replay Protection
+  string state_merkle_root = 11;
+  string nonce = 12;
+  string transaction_hash = 13;
+  string protocol_version = 21;            // UAP-compatible protocol version (e.g., "1.0")
+
+  // Governance Proofs
+  GovernanceMetadata governance = 14;
+
+  // Application Context
+  string case_id = 15;
+  string investigation_id = 16;
+  string task_id = 17;
+  string system_fingerprint = 18;
+}
+

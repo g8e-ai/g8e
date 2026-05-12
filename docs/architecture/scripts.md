@@ -57,7 +57,7 @@ Unified interface for interacting with platform state, dispatched via `scripts/d
 Manages the platform's root of trust and security invariants.
 
 - **`validate`:** Checks TLS integrity, permissions, and environment consistency.
-- **`certs`:** Legacy certificate-management entry point pending replacement by first-class PKI commands.
+- **`pki`:** Operator-owned PKI management and trust bundle operations.
 - **`mtls-test`:** Connectivity test for mTLS between components.
 - **`passkeys`:** Manages FIDO2/WebAuthn credentials via `manage-passkeys.py`.
 - **`rotate-internal-token`:** Rotates the `X-Internal-Auth` token used for service-to-service communication.

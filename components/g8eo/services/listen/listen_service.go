@@ -34,14 +34,15 @@ type ListenService struct {
 	cfg    *config.Config
 	logger *slog.Logger
 
-	db        *ListenDBService
-	pubsub    *PubSubBroker
-	auth      *AuthService
-	pki       *PKIAuthority
-	reg       *RegistrationService
-	passkey   *PasskeyService
-	server    *http.Server
-	wssServer *http.Server
+	db              *ListenDBService
+	pubsub          *PubSubBroker
+	auth            *AuthService
+	pki             *PKIAuthority
+	reg             *RegistrationService
+	passkey         *PasskeyService
+	server          *http.Server
+	wssServer       *http.Server
+	bootstrapServer *http.Server
 
 	handler *HTTPHandler
 
@@ -86,6 +87,7 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 		return nil, fmt.Errorf("failed to ensure PKI hierarchy: %w", err)
 	}
 	tlsConfig = pki.TLSConfig()
+	tlsConfigPlain := pki.TLSConfigPlain()
 
 	reg := NewRegistrationService(db, pki, logger)
 
@@ -120,6 +122,14 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.WSSPort),
 		Handler:           ls.handler,
 		TLSConfig:         tlsConfig,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+
+	ls.bootstrapServer = &http.Server{
+		Addr:              fmt.Sprintf(":%d", cfg.Listen.BootstrapPort),
+		Handler:           ls.handler.buildBootstrapRouter(),
+		TLSConfig:         tlsConfigPlain,
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
@@ -167,6 +177,13 @@ func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db 
 		IdleTimeout:       120 * time.Second,
 	}
 
+	ls.bootstrapServer = &http.Server{
+		Addr:              fmt.Sprintf(":%d", cfg.Listen.BootstrapPort),
+		Handler:           ls.handler.buildBootstrapRouter(),
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+
 	return ls
 }
 
@@ -199,12 +216,13 @@ func (ls *ListenService) Start(ctx context.Context) error {
 	ls.logger.Info("operator Listen Mode ready",
 		"http_port", ls.cfg.Listen.HTTPPort,
 		"wss_port", ls.cfg.Listen.WSSPort,
+		"bootstrap_port", ls.cfg.Listen.BootstrapPort,
 		"data_dir", ls.cfg.Listen.DataDir)
 
-	ls.logger.Info("Listen TLS servers starting", "http_port", ls.cfg.Listen.HTTPPort, "wss_port", ls.cfg.Listen.WSSPort)
+	ls.logger.Info("Listen TLS servers starting", "http_port", ls.cfg.Listen.HTTPPort, "wss_port", ls.cfg.Listen.WSSPort, "bootstrap_port", ls.cfg.Listen.BootstrapPort)
 
-	errChan := make(chan error, 2)
-	readyChan := make(chan struct{}, 2)
+	errChan := make(chan error, 3)
+	readyChan := make(chan struct{}, 3)
 
 	startServer := func(s *http.Server, name string) {
 		ls.logger.Info("Starting TLS listener", "server", name, "addr", s.Addr)
@@ -228,10 +246,11 @@ func (ls *ListenService) Start(ctx context.Context) error {
 
 	go startServer(ls.server, "HTTP")
 	go startServer(ls.wssServer, "WSS")
+	go startServer(ls.bootstrapServer, "Bootstrap")
 
-	// Wait for both to be ready before marking service as ready
+	// Wait for all three to be ready before marking service as ready
 	go func() {
-		for i := 0; i < 2; i++ {
+		for i := 0; i < 3; i++ {
 			select {
 			case <-readyChan:
 			case <-ctx.Done():
@@ -267,6 +286,9 @@ func (ls *ListenService) Stop(ctx context.Context) error {
 	}
 	if err := ls.wssServer.Shutdown(ctx); err != nil {
 		ls.logger.Error("WSS server shutdown error", "error", err)
+	}
+	if err := ls.bootstrapServer.Shutdown(ctx); err != nil {
+		ls.logger.Error("Bootstrap server shutdown error", "error", err)
 	}
 
 	// Close pub/sub broker (disconnects all WebSocket clients)

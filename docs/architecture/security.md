@@ -8,7 +8,7 @@ parent: Architecture
 Last Updated: 2026-05-12
 Version: v0.2.4
 
-g8e is a Zero-Trust Operator/protocol substrate for secure infrastructure operations. Security is not an "add-on" but the core constraint: the platform assumes the AI control plane is potentially adversarial or error-prone and enforces safety at the infrastructure level through a 3-layer governance hierarchy and a Protobuf-first architecture.
+g8e is a Zero-Trust Operator/protocol substrate for secure infrastructure operations. Security is not an "add-on" but the core constraint: the platform assumes the AI control plane is potentially adversarial or error-prone and enforces safety at the infrastructure level through a 3-layer governance hierarchy and a unified protocol architecture.
 
 ## Bedrock Principles
 

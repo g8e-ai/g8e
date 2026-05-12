@@ -31,7 +31,7 @@ from app.db.kv_service import KVService
 from app.services.cache.cache_aside import CacheAsideService
 from app.services.infra.settings_service import SettingsService
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.requires_operator]
 
 
 @pytest.fixture

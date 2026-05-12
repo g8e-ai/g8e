@@ -59,6 +59,6 @@ Technical deep-dives into the required Operator substrate and optional bundled a
 
 | Document | Description |
 |----------|-------------|
-| [architecture/protocol.md](architecture/protocol.md) | **g8e Protocol**: Protobuf `GovernanceEnvelope`, typed operator payloads, and governance metadata. |
+| [architecture/protocol.md](architecture/protocol.md) | **g8e Protocol**: UAP JSON mutation envelope, typed operator payloads, and governance metadata. |
 | [reference/events.md](reference/events.md) | **Wire Protocol**: Registry of all internal pub/sub and SSE events. |
 | [architecture/scripts.md](architecture/scripts.md) | **Management CLI**: Architecture of the core platform orchestration scripts. |

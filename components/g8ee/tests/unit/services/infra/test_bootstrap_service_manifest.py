@@ -56,7 +56,7 @@ def volume(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def bootstrap(volume: Path) -> BootstrapService:
-    return BootstrapService(volume_path=str(volume))
+    return BootstrapService(secrets_dir=str(volume), pki_dir=str(volume))
 
 
 def test_verify_passes_when_digest_matches(volume: Path, bootstrap: BootstrapService) -> None:

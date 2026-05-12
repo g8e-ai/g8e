@@ -133,77 +133,11 @@ _prompt_llm_config() {
 
     # Skip if already provided via env/flags OR if not interactive
     [[ -n "${TEST_LLM_PROVIDER:-}" ]] && return
-    [[ ! -t 0 ]] && return
-
+    
     echo ""
-    echo -e "${CYAN}LLM Configuration for ai_integration tests${NC}"
-    echo -e "You can configure LLM credentials now, or skip to run tests without AI integration."
-    read -p "Configure LLM now? [y/N]: " configure_llm
-    if [[ ! "$configure_llm" =~ ^[Yy]$ ]]; then
-        return
-    fi
-
-    echo -e "\n${BLUE}Select a supported provider:${NC}"
-    echo "1) openai    (requires API key)"
-    echo "2) anthropic (requires API key)"
-    echo "3) gemini    (requires API key)"
-    echo "4) ollama    (requires endpoint)"
-    echo "5) llamacpp  (requires endpoint)"
-    
-    local provider=""
-    while [[ -z "$provider" ]]; do
-        read -p "Selection [1-5]: " p_choice
-        case "$p_choice" in
-            1) provider="openai" ;;
-            2) provider="anthropic" ;;
-            3) provider="gemini" ;;
-            4) provider="ollama" ;;
-            5) provider="llamacpp" ;;
-            *) echo -e "${RED}Invalid selection.${NC}" ;;
-        esac
-    done
-    export TEST_LLM_PROVIDER="$provider"
-
-    echo -e "\n${YELLOW}Note: Credentials are only stored in memory for the duration of this test run.${NC}"
-    
-    if [[ "$provider" == "openai" || "$provider" == "anthropic" || "$provider" == "gemini" ]]; then
-        read -s -p "Enter ${provider} API Key: " api_key
-        echo ""
-        export TEST_LLM_API_KEY="$api_key"
-    fi
-
-    case "$provider" in
-        openai)
-            read -p "Enter endpoint [https://api.openai.com/v1]: " endpoint
-            [[ -n "$endpoint" ]] && export TEST_LLM_ENDPOINT_URL="$endpoint"
-            ;;
-        anthropic)
-            read -p "Enter endpoint [https://api.anthropic.com]: " endpoint
-            [[ -n "$endpoint" ]] && export TEST_LLM_ENDPOINT_URL="$endpoint"
-            ;;
-        ollama)
-            read -p "Enter endpoint [http://localhost:11434]: " endpoint
-            export TEST_LLM_ENDPOINT_URL="${endpoint:-http://localhost:11434}"
-            ;;
-        llamacpp)
-            read -p "Enter endpoint [http://localhost:11444]: " endpoint
-            export TEST_LLM_ENDPOINT_URL="${endpoint:-http://localhost:11444}"
-            ;;
-    esac
-
-    local default_primary_model=""
-    case "$provider" in
-        openai)    default_primary_model="gpt-5.4" ;;
-        anthropic) default_primary_model="claude-opus-4-6" ;;
-        gemini)    default_primary_model="gemini-3-flash-preview" ;;
-        ollama)    default_primary_model="gemma4:e4b" ;;
-        llamacpp)  default_primary_model="gemma4:e2b" ;;
-    esac
-
-    read -p "Enter primary model (optional, press Enter for $default_primary_model): " model
-    [[ -n "$model" ]] && export TEST_LLM_PRIMARY_MODEL="$model"
-    
-    echo -e "${GREEN}LLM configuration set.${NC}\n"
+    log_warn "LLM credentials not set. AI integration tests will be skipped."
+    log_warn "To enable them, set G8E_TEST_LLM_PROVIDER and G8E_TEST_LLM_API_KEY."
+    echo ""
 }
 
 _show_llm_config() {

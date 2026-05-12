@@ -190,15 +190,26 @@ class EventType(StrEnum):
     OPERATOR_FILE_RESTORE_FAILED = "g8e.v1.operator.file.restore.failed"
 
     # g8e.fs (v0.2.0 Protocol-First)
+    OPERATOR_FS_LIST_REQUESTED = "g8e.v1.operator.filesystem.list.requested"
     OPERATOR_FS_LIST_COMPLETED = "g8e.v1.operator.fs.list.completed"
     OPERATOR_FS_LIST_FAILED = "g8e.v1.operator.fs.list.failed"
+
+    OPERATOR_FS_GREP_REQUESTED = "g8e.v1.operator.filesystem.grep.requested"
     OPERATOR_FS_GREP_COMPLETED = "g8e.v1.operator.fs.grep.completed"
     OPERATOR_FS_GREP_FAILED = "g8e.v1.operator.fs.grep.failed"
+
+    OPERATOR_FS_READ_REQUESTED = "g8e.v1.operator.filesystem.read.requested"
     OPERATOR_FS_READ_COMPLETED = "g8e.v1.operator.fs.read.completed"
     OPERATOR_FS_READ_FAILED = "g8e.v1.operator.fs.read.failed"
 
+    OPERATOR_PORT_CHECK_REQUESTED = "g8e.v1.operator.network.port.check.requested"
     OPERATOR_PORT_CHECK_COMPLETED = "g8e.v1.operator.port.check.completed"
     OPERATOR_PORT_CHECK_FAILED = "g8e.v1.operator.port.check.failed"
+
+    OPERATOR_FETCH_LOGS_REQUESTED = "g8e.v1.operator.logs.fetch.requested"
+    OPERATOR_FETCH_HISTORY_REQUESTED = "g8e.v1.operator.history.fetch.requested"
+    OPERATOR_FETCH_FILE_HISTORY_REQUESTED = "g8e.v1.operator.file.history.fetch.requested"
+    OPERATOR_RESTORE_FILE_REQUESTED = "g8e.v1.operator.file.restore.requested"
 
     # g8e.filesystem
     OPERATOR_FILESYSTEM_LIST_STARTED = "g8e.v1.operator.filesystem.list.started"

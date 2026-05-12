@@ -23,7 +23,7 @@ Trusting a single agent to mutate state is gross negligence. Trusting a fatigued
 
 SaaS-based agent architectures pull your authoritative state into their cloud. We inverted this. The execution plane is the **Operator Substrate**: a single, statically compiled Go binary (`g8eo`) that runs on the managed host.
 
-In g8e, the Operator is the reality portal. It treats all upstream clients as inherently untrusted and actively expects adversarial inputs. Command and result traffic is not ad hoc JSON; it is serialized `GovernanceEnvelope` bytes carrying typed `operator.proto` payloads through a pub/sub transport.
+In g8e, the Operator is the reality portal. It treats all upstream clients as inherently untrusted and actively expects adversarial inputs. Mutation commands use the canonical UAP JSON envelope carrying structured intent_data. Result payloads use typed Protobuf messages from `operator.proto` through a pub/sub transport.
 
 Before a single bit moves on the host OS, the Operator rejects malformed envelopes, applies protocol-level **L1 Technical Bedrock** checks (forbidden patterns, allowlists), and verifies **L2 Consensus** signatures. It executes commands in an isolated process group with a closed stdin, protected by 46 discrete MITRE ATT&CK detectors.
 
@@ -65,7 +65,7 @@ $$
 \text{Safe}(a) \iff \sigma_{\text{machine}}(a) \land \sigma_{\text{human}}(a)
 $$
 
-Neither signature is sufficient alone. We enforce explicit friction through **Proof of Human Presence (PHP)**. The **Governance Gateway** is the only path to the human, enforced by FIDO2 passkeys or verifiable approval proofs. At the protocol layer, `GovernanceEnvelope.governance.l3` carries the human signature, or an `auto_approved` flag for benign diagnostic commands that have already passed L1 and L2.
+Neither signature is sufficient alone. We enforce explicit friction through **Proof of Human Presence (PHP)**. The **Governance Gateway** is the only path to the human, enforced by FIDO2 passkeys or verifiable approval proofs. At the protocol layer, `UAPEnvelope.governance.l3` carries the human signature, or an `auto_approved` flag for benign diagnostic commands that have already passed L1 and L2.
 
 To ensure seamless onboarding, the Dashboard serves a **Trust Portal** on Port 80, providing the platform CA and automated trust scripts to bootstrap the secure mTLS environment.
 

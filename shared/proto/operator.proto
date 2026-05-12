@@ -348,10 +348,10 @@ message ShutdownRequested {
 message CommandResult {
   string execution_id = 1;
   ExecutionStatus status = 2;
-  string output = 3;
+  string stdout = 3;
   string error = 4;
   string stderr = 5;
-  int32 exit_code = 6;
+  int32 return_code = 6;
   float execution_time_seconds = 7;
   
   // Timestamp when execution started
@@ -478,7 +478,7 @@ message PortCheckResult {
 message FetchLogsResult {
   string execution_id = 1;
   string command = 2;
-  int32 exit_code = 3;
+  int32 return_code = 3;
   int64 duration_ms = 4;
   string stdout = 5;
   string stderr = 6;

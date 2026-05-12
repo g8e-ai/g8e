@@ -8,6 +8,7 @@ import (
 
 	"github.com/g8e-ai/g8e/components/g8eo/pkg/uap"
 	"github.com/g8e-ai/g8e/components/g8eo/services/sentinel"
+	commonv1 "github.com/g8e-ai/g8e/components/g8eo/shared/proto/commonv1"
 )
 
 // Tribunal is the internal consensus engine's evaluator.
@@ -21,28 +22,41 @@ type Tribunal struct {
 // EvaluatePayload represents the Tribunal's core loop.
 func (t *Tribunal) EvaluatePayload(env *uap.UAPEnvelope) error {
 	// 1. Verify Sender Hash
-	expectedHash, err := env.GenerateMessageID()
+	expectedHash, err := uap.GenerateMessageID(env)
 	if err != nil {
 		return fmt.Errorf("failed to generate message ID: %w", err)
 	}
-	if env.MessageID != expectedHash {
+	if env.Id != expectedHash {
 		return errors.New("FATAL: Payload hash mismatch. Dropping request.")
 	}
 
 	// 2. Run Deterministic SRE Rules (e.g., MITRE checks)
-	isSafe := t.RunMITREChecks(env.Intent.TargetResource, env.Context.DataBlob)
+	// For proto-first, we use IntentData or Payload
+	var cmdData string
+	if env.IntentData != nil && len(env.IntentData.Fields) > 0 {
+		jsonBytes, _ := env.IntentData.MarshalJSON()
+		cmdData = string(jsonBytes)
+	} else {
+		cmdData = string(env.Payload)
+	}
+	isSafe := t.RunMITREChecks(env.TargetResource, cmdData)
 
 	// 3. Append Vote
-	vote := uap.Vote{
-		NodeID:    t.NodeID,
-		Signature: t.SignDecision(env.MessageID, isSafe), // Cryptographic signature
-		Decision:  isSafe,
+	// Note: We are using GovernanceMetadata instead of ConsensusState
+	if env.Governance == nil {
+		env.Governance = &commonv1.GovernanceMetadata{
+			L1: &commonv1.L1Metadata{},
+			L2: &commonv1.L2Metadata{},
+			L3: &commonv1.L3Metadata{},
+		}
 	}
 
-	env.Consensus.CurrentVotes = append(env.Consensus.CurrentVotes, vote)
+	env.Governance.L2.AgentIds = append(env.Governance.L2.AgentIds, t.NodeID)
+	env.Governance.L2.TribunalSignature = t.SignDecision(env.Id, isSafe)
 
 	if !isSafe {
-		env.Consensus.Status = "REJECTED"
+		env.Governance.L1.Validated = false
+		env.Governance.L1.Violations = append(env.Governance.L1.Violations, "MITRE_CHECK_FAILED")
 	}
 
 	return nil
