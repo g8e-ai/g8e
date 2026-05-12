@@ -107,14 +107,9 @@ case "$TOP" in
                 _banner "security validate"
                 _run_host_script bash "$SCRIPT_DIR/scripts/security/validate-platform-security.sh" "${@:3}" ;;
             certs)
-                CERT_SUB="${3:-status}"
-                case "$CERT_SUB" in
-                    generate|rotate|status|trust)
-                        _banner "security certs $CERT_SUB"
-                        exec bash "$SCRIPT_DIR/scripts/security/manage-ssl.sh" "$CERT_SUB" "${@:4}" ;;
-                    *)
-                        echo "[g8e] unknown certs subcommand: '$CERT_SUB'" >&2; exit 1 ;;
-                esac ;;
+                echo "[g8e] ERROR: the legacy certificate command has been removed. Certificate management is owned by the Operator PKI subsystem." >&2
+                echo "[g8e] Use './g8e pki' commands for PKI operations." >&2
+                exit 1 ;;
             mtls-test)
                 _banner "security mtls-test"
                 _run_host_script bash "$SCRIPT_DIR/scripts/security/mtls-test.sh" "${@:3}" ;;
@@ -125,10 +120,6 @@ case "$TOP" in
                 _banner "security passkeys ${@:3}"; _ensure_operator; _requires_operator_route "/api/security/passkeys" ;;
             rotate-internal-token)
                 _banner "security rotate-internal-token"; _ensure_operator; _requires_operator_route "/api/security/internal-token/rotate" ;;
-            certs)
-                echo "[g8e] ERROR: 'security certs' is deprecated. Certificate management is now handled by the Operator PKI subsystem." >&2
-                echo "[g8e] Use './g8e pki' commands for PKI operations (first-class PKI commands coming soon)." >&2
-                exit 1 ;;
             *)
                 echo "[g8e] unknown security subcommand: '$SUB'" >&2; exit 1 ;;
         esac ;;

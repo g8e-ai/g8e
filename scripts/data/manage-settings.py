@@ -225,9 +225,9 @@ def exec_rotate_token(_args: argparse.Namespace) -> None:
 
     _operator_put_platform_settings(doc)
 
-    # 2. Update token file in SSL directory
-    ssl_dir = Path(os.environ.get('G8E_SSL_DIR', '.g8e/ssl'))
-    token_path = ssl_dir / 'internal_auth_token'
+    # 2. Update token file in secrets directory
+    secrets_dir = Path(os.environ.get('G8E_SECRETS_DIR', '.g8e/secrets'))
+    token_path = secrets_dir / 'internal_auth_token'
     if token_path.parent.exists():
         try:
             token_path.write_text(new_token)

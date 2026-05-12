@@ -42,23 +42,6 @@ func TestNewListenService(t *testing.T) {
 		err = ls.db.Close()
 		require.NoError(t, err)
 	})
-
-	t.Run("External TLS certificates", func(t *testing.T) {
-		certDir := t.TempDir()
-		certPath := certDir + "/cert.pem"
-		keyPath := certDir + "/key.pem"
-
-		// Note: We're not actually creating valid cert files here,
-		// just testing that it attempts to load them.
-		// Since tls.LoadX509KeyPair will fail with empty files,
-		// we expect an error if they don't exist.
-		cfg.Listen.TLSCertPath = certPath
-		cfg.Listen.TLSKeyPath = keyPath
-
-		ls, err := NewListenService(cfg, logger)
-		assert.Error(t, err)
-		assert.Nil(t, ls)
-	})
 }
 
 func TestListenService_StateManagement(t *testing.T) {

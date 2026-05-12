@@ -32,21 +32,23 @@ func TestAuthenticateWithDeviceTokenUsingClient(t *testing.T) {
 	t.Run("successful authentication", func(t *testing.T) {
 		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			assert.Equal(t, http.MethodPost, r.Method)
-			assert.Contains(t, r.URL.Path, "/auth/link/"+token+"/register")
+			assert.Equal(t, "/api/auth/device-link/register", r.URL.Path)
+			assert.Equal(t, token, r.Header.Get("X-G8E-Device-Token"))
 
 			var info DeviceInfo
 			err := json.NewDecoder(r.Body).Decode(&info)
 			require.NoError(t, err)
 			assert.NotEmpty(t, info.SystemFingerprint)
 			assert.NotEmpty(t, info.Hostname)
+			assert.NotEmpty(t, info.CSR)
 
 			resp := deviceRegisterResponse{
 				Success:           true,
 				OperatorSessionID: "sess-123",
 				OperatorID:        "op-456",
-				APIKey:            "new-api-key",
 				OperatorCert:      "cert-pem",
-				OperatorCertKey:   "key-pem",
+				OperatorCertChain: "chain-pem",
+				HubTrustBundle:    "trust-bundle-pem",
 				Config: &BootstrapConfig{
 					MaxConcurrentTasks: 5,
 				},
@@ -62,9 +64,10 @@ func TestAuthenticateWithDeviceTokenUsingClient(t *testing.T) {
 		require.NotNil(t, result)
 		assert.Equal(t, "sess-123", result.OperatorSessionID)
 		assert.Equal(t, "op-456", result.OperatorID)
-		assert.Equal(t, "new-api-key", result.APIKey)
 		assert.Equal(t, "cert-pem", result.OperatorCert)
-		assert.Equal(t, "key-pem", result.OperatorCertKey)
+		assert.NotEmpty(t, result.OperatorCertKey)
+		assert.Equal(t, "chain-pem", result.OperatorCertChain)
+		assert.Equal(t, "trust-bundle-pem", result.HubTrustBundle)
 		require.NotNil(t, result.Config)
 		assert.Equal(t, 5, result.Config.MaxConcurrentTasks)
 	})

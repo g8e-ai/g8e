@@ -82,8 +82,6 @@ func main() {
 	var listenDataDir string
 	var listenPKIDir string
 	var listenSecretsDir string
-	var listenTLSCert string
-	var listenTLSKey string
 	var openclawMode bool
 	var openclawURL string
 	var openclawToken string
@@ -125,8 +123,6 @@ func main() {
 	flag.StringVar(&listenDataDir, "data-dir", "", "Data directory for SQLite database (default: .g8e/data in working directory)")
 	flag.StringVar(&listenPKIDir, "pki-dir", "", "Directory for TLS certificates (default: .g8e/pki)")
 	flag.StringVar(&listenSecretsDir, "secrets-dir", "", "Directory for platform secrets (default: .g8e/secrets)")
-	flag.StringVar(&listenTLSCert, "tls-cert", "", "Path to TLS certificate file (optional; auto-generated when empty)")
-	flag.StringVar(&listenTLSKey, "tls-key", "", "Path to TLS private key file (optional; auto-generated when empty)")
 	flag.BoolVar(&rekeyVault, "rekey-vault", false, "Re-encrypt vault with new API key (requires --old-key)")
 	flag.StringVar(&oldAPIKey, "old-key", "", "Old API key for vault re-keying")
 	flag.BoolVar(&verifyVault, "verify-vault", false, "Verify vault integrity")
@@ -167,8 +163,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  --data-dir <dir>            Data directory for SQLite (default: .g8e/data in working directory)\n")
 		fmt.Fprintf(os.Stderr, "  --pki-dir <dir>             Directory for TLS certificates (default: .g8e/pki)\n")
 		fmt.Fprintf(os.Stderr, "  --secrets-dir <dir>         Directory for platform secrets (default: .g8e/secrets)\n")
-		fmt.Fprintf(os.Stderr, "  --tls-cert <path>           Path to TLS certificate (optional; auto-generated when empty)\n")
-		fmt.Fprintf(os.Stderr, "  --tls-key <path>            Path to TLS private key (optional; auto-generated when empty)\n")
 		fmt.Fprintf(os.Stderr, "\nVault Management:\n")
 		fmt.Fprintf(os.Stderr, "  --rekey-vault           Re-encrypt vault with new API key\n")
 		fmt.Fprintf(os.Stderr, "  --old-key <key>         Old API key (required for --rekey-vault)\n")
@@ -199,7 +193,7 @@ func main() {
 	}
 
 	if listenMode {
-		runListenMode(listenWSSPort, listenHTTPPort, listenDataDir, listenPKIDir, listenSecretsDir, listenTLSCert, listenTLSKey, logLevel)
+		runListenMode(listenWSSPort, listenHTTPPort, listenDataDir, listenPKIDir, listenSecretsDir, logLevel)
 		return
 	}
 
@@ -266,22 +260,12 @@ func main() {
 		}
 		logger.Info("Device authentication successful", "operator_id", deviceResult.OperatorID)
 
-		// Consume API key from device link response if provided
-		if deviceResult.APIKey != "" {
-			apiKey = deviceResult.APIKey
-			logger.Info("API key received from device link registration")
-		}
-
 		// Store device result for later bootstrap config application
 		deviceAuthResult = deviceResult
 	}
 
 	if deviceAuthResult != nil && deviceAuthResult.Config != nil {
 		logger.Info("Applying bootstrap config from device-link registration")
-		// Apply it to our local variables which will then be used to construct the real 'cfg'
-		if deviceAuthResult.Config.APIKey != "" {
-			apiKey = deviceAuthResult.Config.APIKey
-		}
 		// We still need to apply other config fields (like certs) once 'cfg' is created
 	}
 
@@ -537,7 +521,7 @@ func (h *operatorHandler) WithGroup(name string) slog.Handler {
 // NOT execute commands, initiate outbound connections, or perform
 // authentication against a remote hub. It is strictly an inbound service
 // for g8ee, g8ed, and Outbound Operators.
-func runListenMode(wssPort, httpPort int, dataDir, pkiDir, secretsDir, tlsCertPath, tlsKeyPath string, logLevel string) {
+func runListenMode(wssPort, httpPort int, dataDir, pkiDir, secretsDir string, logLevel string) {
 	logger, err := configureLogger(logLevel)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "invalid log level '%s': %v\n", logLevel, err)
@@ -546,7 +530,7 @@ func runListenMode(wssPort, httpPort int, dataDir, pkiDir, secretsDir, tlsCertPa
 
 	logger.Info("g8e Operator — Listen Mode (operator)", "version", version, "build", buildID)
 
-	cfg, err := config.LoadListen(wssPort, httpPort, dataDir, pkiDir, secretsDir, tlsCertPath, tlsKeyPath)
+	cfg, err := config.LoadListen(wssPort, httpPort, dataDir, pkiDir, secretsDir)
 	if err != nil {
 		logger.Error("Failed to load listen configuration", "error", err)
 		os.Exit(constants.ExitConfigError)

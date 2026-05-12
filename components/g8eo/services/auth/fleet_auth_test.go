@@ -13,7 +13,7 @@
 
 // Tests for device link authentication covering multi-use (mass deployment) scenarios.
 // Fleet device links have been unified into the device link model: all tokens use
-// the dlk_ prefix and register at /auth/link/:token/register regardless of max_uses.
+// the dlk_ prefix and register through the Operator device-link API regardless of max_uses.
 
 package auth
 
@@ -64,7 +64,8 @@ func TestAuthenticateWithDeviceToken_MultiUse_Success(t *testing.T) {
 
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method)
-		assert.Equal(t, fmt.Sprintf("/auth/link/%s/register", validToken), r.URL.Path)
+		assert.Equal(t, "/api/auth/device-link/register", r.URL.Path)
+		assert.Equal(t, validToken, r.Header.Get("X-G8E-Device-Token"))
 		assert.Equal(t, "application/json", r.Header.Get(constants.HeaderContentType))
 
 		var body DeviceInfo
@@ -73,6 +74,7 @@ func TestAuthenticateWithDeviceToken_MultiUse_Success(t *testing.T) {
 		assert.NotEmpty(t, body.Hostname)
 		assert.NotEmpty(t, body.OS)
 		assert.NotEmpty(t, body.Arch)
+		assert.NotEmpty(t, body.CSR)
 
 		resp := deviceRegisterResponse{
 			Success:           true,
@@ -180,9 +182,15 @@ func TestAuthenticateWithDeviceToken_MultiUse_InvalidJSON(t *testing.T) {
 func TestAuthenticateWithDeviceToken_MultiUse_RegistersAtLinkEndpoint(t *testing.T) {
 	const validToken = "dlk_MultiUseLinkAbCdEfGhIjKlMnOpQrSt"
 	var capturedPath string
+	var capturedToken string
+	var capturedCSR string
 
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedPath = r.URL.Path
+		capturedToken = r.Header.Get("X-G8E-Device-Token")
+		var body DeviceInfo
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		capturedCSR = body.CSR
 		resp := deviceRegisterResponse{
 			Success:           true,
 			OperatorSessionID: "sess-multi-789",
@@ -199,6 +207,8 @@ func TestAuthenticateWithDeviceToken_MultiUse_RegistersAtLinkEndpoint(t *testing
 	_, err := authenticateWithDeviceTokenUsingClient(validToken, endpoint, logger, httpClient, "")
 
 	require.NoError(t, err)
-	assert.Equal(t, fmt.Sprintf("/auth/link/%s/register", validToken), capturedPath,
-		"multi-use device links must register at /auth/link/:token/register")
+	assert.Equal(t, "/api/auth/device-link/register", capturedPath,
+		"multi-use device links must register at the Operator device-link API")
+	assert.Equal(t, validToken, capturedToken)
+	assert.NotEmpty(t, capturedCSR)
 }

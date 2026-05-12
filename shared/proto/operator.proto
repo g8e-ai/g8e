@@ -176,6 +176,26 @@ message SignCertificateResult {
   string error = 4;
 }
 
+message RevokeCertificateRequested {
+  string serial = 1;
+  string reason = 2;
+}
+
+message RevokeCertificateResult {
+  bool success = 1;
+  string error = 2;
+}
+
+message GetRevocationBundleRequested {
+}
+
+message GetRevocationBundleResult {
+  bool success = 1;
+  string bundle_json = 2;
+  string signature = 3;
+  string error = 4;
+}
+
 message CreateDeviceLinkRequested {
   string user_id = 1;
   string organization_id = 2;

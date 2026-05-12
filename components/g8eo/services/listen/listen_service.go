@@ -58,49 +58,34 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 	}
 
 	pubsub := NewPubSubBroker(logger)
-	auth := NewAuthService(db, logger, cfg.Listen.SecretsDir)
+	pki := newPKIAuthority(cfg.Listen.DataDir, cfg.Listen.PKIDir, db, logger)
+	auth := NewAuthService(db, pki, logger, cfg.Listen.SecretsDir)
 
-	var pki *PKIAuthority
 	var tlsConfig *tls.Config
 
-	if cfg.Listen.TLSCertPath != "" && cfg.Listen.TLSKeyPath != "" {
-		logger.Info("[PKI] Using externally-managed TLS certificate",
-			"cert", cfg.Listen.TLSCertPath, "key", cfg.Listen.TLSKeyPath)
-		extCert, err := tls.LoadX509KeyPair(cfg.Listen.TLSCertPath, cfg.Listen.TLSKeyPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load TLS certificate: %w", err)
-		}
-		tlsConfig = &tls.Config{
-			Certificates: []tls.Certificate{extCert},
-			MinVersion:   tls.VersionTLS13,
-		}
-	} else {
-		pki = newPKIAuthority(cfg.Listen.DataDir, cfg.Listen.PKIDir, logger)
-
-		var extraIPs []net.IP
-		if ifaces, err := net.Interfaces(); err == nil {
-			for _, iface := range ifaces {
-				addrs, _ := iface.Addrs()
-				for _, addr := range addrs {
-					var ip net.IP
-					switch v := addr.(type) {
-					case *net.IPNet:
-						ip = v.IP
-					case *net.IPAddr:
-						ip = v.IP
-					}
-					if ip != nil && !ip.IsLoopback() && ip.To4() != nil {
-						extraIPs = append(extraIPs, ip)
-					}
+	var extraIPs []net.IP
+	if ifaces, err := net.Interfaces(); err == nil {
+		for _, iface := range ifaces {
+			addrs, _ := iface.Addrs()
+			for _, addr := range addrs {
+				var ip net.IP
+				switch v := addr.(type) {
+				case *net.IPNet:
+					ip = v.IP
+				case *net.IPAddr:
+					ip = v.IP
+				}
+				if ip != nil && !ip.IsLoopback() && ip.To4() != nil {
+					extraIPs = append(extraIPs, ip)
 				}
 			}
 		}
-
-		if err := pki.EnsurePKI(extraIPs); err != nil {
-			return nil, fmt.Errorf("failed to ensure PKI hierarchy: %w", err)
-		}
-		tlsConfig = pki.TLSConfig()
 	}
+
+	if err := pki.EnsurePKI(extraIPs); err != nil {
+		return nil, fmt.Errorf("failed to ensure PKI hierarchy: %w", err)
+	}
+	tlsConfig = pki.TLSConfig()
 
 	reg := NewRegistrationService(db, pki, logger)
 
@@ -145,8 +130,9 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 // newListenServiceFromComponents assembles a ListenService from pre-built components.
 // Used in tests where the DB and pub/sub broker are constructed independently.
 func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker) *ListenService {
-	auth := NewAuthService(db, logger, cfg.Listen.SecretsDir)
-	reg := NewRegistrationService(db, nil, logger)
+	pki := newPKIAuthority(cfg.Listen.DataDir, cfg.Listen.PKIDir, db, logger)
+	auth := NewAuthService(db, pki, logger, cfg.Listen.SecretsDir)
+	reg := NewRegistrationService(db, pki, logger)
 
 	// Initialize passkey service for L3 brokerage (test configuration)
 	passkeyCfg := &PasskeyConfig{
@@ -161,11 +147,12 @@ func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db 
 		db:      db,
 		pubsub:  pubsub,
 		auth:    auth,
+		pki:     pki,
 		reg:     reg,
 		passkey: passkey,
 	}
 
-	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, nil, reg, passkey, ls.IsReady)
+	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, ls.IsReady)
 	ls.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.HTTPPort),
 		Handler:           ls.handler,

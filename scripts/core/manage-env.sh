@@ -35,7 +35,9 @@ _list() {
     local known_vars=(
         "G8E_PROJECT_ROOT"
         "G8E_RUNTIME_DIR"
-        "G8E_SSL_DIR"
+        "G8E_PKI_DIR"
+        "G8E_SECRETS_DIR"
+        "G8E_TRUST_BUNDLE"
         "G8E_DATA_DIR"
         "G8E_INTERNAL_AUTH_TOKEN"
         "G8E_SESSION_ENCRYPTION_KEY"

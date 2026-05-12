@@ -85,12 +85,13 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux.HandleFunc("/pubsub/publish", h.handlePubSubPublish)
 	mux.Handle("/ws/pubsub", h.auth.WebSocketAuth(http.HandlerFunc(h.pubsub.HandleWebSocket)))
 	mux.HandleFunc("/blob/", h.handleBlob)
-	mux.HandleFunc("/auth/link/", h.handleDeviceLink)
 
 	// authMiddleware must be inside pathTraversalGuard to ensure ".." is caught
 	// before any other processing, but pathTraversalGuard itself doesn't need auth.
 	// Actually, pathTraversalGuard should be outermost to catch normalization attempts.
 	mux.HandleFunc("/api/pki/sign-csr", h.handlePKISignCSR)
+	mux.HandleFunc("/api/pki/revoke", h.handlePKIRevoke)
+	mux.HandleFunc("/api/pki/revocation-bundle", h.handlePKIRevocationBundle)
 	mux.HandleFunc("/api/auth/device-link/register", h.handleDeviceLinkRegister)
 
 	// Passkey / L3 Brokerage Routes
@@ -259,6 +260,58 @@ func (h *HTTPHandler) handlePKISignCSR(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, http.StatusOK, map[string]string{
 		"certificate_pem":       certPEM,
 		"certificate_chain_pem": chainPEM,
+	})
+}
+
+func (h *HTTPHandler) handlePKIRevoke(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	body, err := readBody(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "failed to read body")
+		return
+	}
+
+	var req struct {
+		Serial string `json:"serial"`
+		Reason string `json:"reason"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	if req.Serial == "" {
+		jsonError(w, http.StatusBadRequest, "serial required")
+		return
+	}
+
+	if err := h.pki.RevokeCertificate(req.Serial, req.Reason); err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, models.StatusResponse{Status: constants.Status.ListenMode.StatusOK})
+}
+
+func (h *HTTPHandler) handlePKIRevocationBundle(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	bundleJSON, signature, err := h.pki.GenerateRevocationBundle()
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]string{
+		"bundle_json": bundleJSON,
+		"signature":   signature,
 	})
 }
 
@@ -1120,53 +1173,6 @@ func (h *HTTPHandler) handlePubSubPublish(w http.ResponseWriter, r *http.Request
 
 	receivers := h.pubsub.Publish(req.Channel, dataJSON)
 	jsonResponse(w, http.StatusOK, models.PubSubPublishResponse{Receivers: receivers})
-}
-
-// =============================================================================
-// /auth/link/{token}/register — Device Registration
-// =============================================================================
-
-func (h *HTTPHandler) handleDeviceLink(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/auth/link/")
-	parts := strings.Split(path, "/")
-	if len(parts) < 2 {
-		jsonError(w, http.StatusBadRequest, "invalid device link path")
-		return
-	}
-
-	token := parts[0]
-	action := parts[1]
-
-	if action != "register" {
-		jsonError(w, http.StatusNotFound, "not found")
-		return
-	}
-
-	if r.Method != http.MethodPost {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	body, err := readBody(r)
-	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON body")
-		return
-	}
-
-	var req models.OperatorRegistrationRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON body")
-		return
-	}
-
-	resp, err := h.reg.RegisterDevice(token, req)
-	if err != nil {
-		h.logger.Error("Device registration failed", "error", err, "token", token)
-		jsonError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	jsonResponse(w, http.StatusOK, resp)
 }
 
 // =============================================================================

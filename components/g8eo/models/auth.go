@@ -89,7 +89,7 @@ type DeviceLinkClaim struct {
 	ClaimedAt         time.Time `json:"claimed_at"`
 }
 
-// OperatorRegistrationRequest is the inbound body for /auth/link/:token/register
+// OperatorRegistrationRequest is the inbound body for /api/auth/device-link/register.
 type OperatorRegistrationRequest struct {
 	CSR               string `json:"csr_pem"`
 	SystemFingerprint string `json:"system_fingerprint"`
@@ -100,15 +100,14 @@ type OperatorRegistrationRequest struct {
 	IPAddress         string `json:"ip_address,omitempty"`
 }
 
-// OperatorRegistrationResponse is the response for /auth/link/:token/register
+// OperatorRegistrationResponse is the response for /api/auth/device-link/register.
 type OperatorRegistrationResponse struct {
 	Success           bool            `json:"success"`
 	OperatorSessionID string          `json:"operator_session_id,omitempty"`
 	OperatorID        string          `json:"operator_id,omitempty"`
-	APIKey            string          `json:"api_key,omitempty"`
-	OperatorCert      string          `json:"operator_cert_pem,omitempty"`
-	OperatorCertChain string          `json:"operator_cert_chain_pem,omitempty"`
-	HubTrustBundle    string          `json:"hub_trust_bundle_pem,omitempty"`
+	OperatorCert      string          `json:"operator_cert,omitempty"`
+	OperatorCertChain string          `json:"operator_cert_chain,omitempty"`
+	HubTrustBundle    string          `json:"hub_trust_bundle,omitempty"`
 	Session           *SessionSummary `json:"session,omitempty"`
 	Config            json.RawMessage `json:"config,omitempty"`
 	Error             string          `json:"error,omitempty"`

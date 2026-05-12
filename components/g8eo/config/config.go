@@ -68,14 +68,12 @@ type LoadOptions struct {
 // backbone for the entire g8e platform, replacing external databases.
 // No outbound authentication is required — the Operator simply starts and listens.
 type ListenConfig struct {
-	Enabled     bool
-	WSSPort     int    // WSS/TLS port for operator pub/sub connections (default: 443)
-	HTTPPort    int    // TLS/HTTPS port for internal g8ee/g8ed traffic (default: 443)
-	DataDir     string // Root directory for SQLite database (default: .g8e/data in working directory)
-	PKIDir      string // Directory for TLS certificates (default: .g8e/pki)
-	SecretsDir  string // Directory for platform secrets (default: .g8e/secrets)
-	TLSCertPath string // Path to an externally-managed TLS certificate (optional; auto-generated when empty)
-	TLSKeyPath  string // Path to an externally-managed TLS private key (optional; auto-generated when empty)
+	Enabled    bool
+	WSSPort    int    // WSS/TLS port for operator pub/sub connections (default: 443)
+	HTTPPort   int    // TLS/HTTPS port for internal g8ee/g8ed traffic (default: 443)
+	DataDir    string // Root directory for SQLite database (default: .g8e/data in working directory)
+	PKIDir     string // Directory for TLS certificates (default: .g8e/pki)
+	SecretsDir string // Directory for platform secrets (default: .g8e/secrets)
 }
 
 // OpenClawConfig holds configuration for --openclaw mode.
@@ -184,7 +182,7 @@ type Config struct {
 // LoadListen creates configuration for --listen mode.
 // Listen mode skips all operator-mode validation — no API key, no endpoint,
 // no outbound connections. The Operator simply starts and listens locally.
-func LoadListen(wssPort, httpPort int, dataDir, pkiDir, secretsDir, tlsCertPath, tlsKeyPath string) (*Config, error) {
+func LoadListen(wssPort, httpPort int, dataDir, pkiDir, secretsDir string) (*Config, error) {
 	if dataDir == "" {
 		cwd, err := os.Getwd()
 		if err != nil {
@@ -216,14 +214,12 @@ func LoadListen(wssPort, httpPort int, dataDir, pkiDir, secretsDir, tlsCertPath,
 	return &Config{
 		ComponentName: "g8eo-listen",
 		Listen: ListenConfig{
-			Enabled:     true,
-			WSSPort:     wssPort,
-			HTTPPort:    httpPort,
-			DataDir:     dataDir,
-			PKIDir:      pkiDir,
-			SecretsDir:  secretsDir,
-			TLSCertPath: tlsCertPath,
-			TLSKeyPath:  tlsKeyPath,
+			Enabled:    true,
+			WSSPort:    wssPort,
+			HTTPPort:   httpPort,
+			DataDir:    dataDir,
+			PKIDir:     pkiDir,
+			SecretsDir: secretsDir,
 		},
 	}, nil
 }

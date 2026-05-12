@@ -15,7 +15,13 @@ package auth
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"log/slog"
@@ -32,9 +38,10 @@ import (
 type DeviceAuthResult struct {
 	OperatorSessionID string
 	OperatorID        string
-	APIKey            string
 	OperatorCert      string
 	OperatorCertKey   string
+	OperatorCertChain string
+	HubTrustBundle    string
 	Config            *BootstrapConfig
 }
 
@@ -45,19 +52,17 @@ type DeviceInfo struct {
 	OS                string `json:"os"`
 	Arch              string `json:"arch"`
 	Username          string `json:"username"`
+	CSR               string `json:"csr_pem"`
 }
 
 // deviceRegisterResponse is the API response from device link registration.
-// The error field is a json.RawMessage because the server may return either a
-// plain string (legacy / success=false envelope) or the standard g8ed error
-// object shape: { code, message, category, ... }.
 type deviceRegisterResponse struct {
 	Success           bool             `json:"success"`
 	OperatorSessionID string           `json:"operator_session_id"`
 	OperatorID        string           `json:"operator_id"`
-	APIKey            string           `json:"api_key,omitempty"`
 	OperatorCert      string           `json:"operator_cert,omitempty"`
-	OperatorCertKey   string           `json:"operator_cert_key,omitempty"`
+	OperatorCertChain string           `json:"operator_cert_chain,omitempty"`
+	HubTrustBundle    string           `json:"hub_trust_bundle,omitempty"`
 	Config            *BootstrapConfig `json:"config,omitempty"`
 	Error             json.RawMessage  `json:"error,omitempty"`
 }
@@ -122,33 +127,54 @@ func authenticateWithDeviceTokenUsingClient(token string, endpoint string, logge
 		username = "unknown"
 	}
 
+	// Generate a private key for this operator session.
+	// This key never leaves the host.
+	priv, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate operator private key: %w", err)
+	}
+
+	csrTemplate := &x509.CertificateRequest{
+		Subject: pkix.Name{
+			CommonName:   hostname,
+			Organization: []string{"g8e"},
+		},
+		DNSNames: []string{hostname},
+	}
+
+	csrDER, err := x509.CreateCertificateRequest(rand.Reader, csrTemplate, priv)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create CSR: %w", err)
+	}
+
+	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
+
 	deviceInfo := DeviceInfo{
 		SystemFingerprint: fingerprint.Fingerprint,
 		Hostname:          hostname,
 		OS:                fingerprint.OS,
 		Arch:              fingerprint.Architecture,
 		Username:          username,
+		CSR:               string(csrPEM),
 	}
-
-	logger.Info("Device info collected",
-		"hostname", hostname,
-		"os", fingerprint.OS,
-		"arch", fingerprint.Architecture)
-
-	registerURL := fmt.Sprintf("https://%s/auth/link/%s/register", endpoint, token)
-	logger.Info("Registering with device link", "url", registerURL)
 
 	bodyBytes, err := json.Marshal(deviceInfo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal device info: %w", err)
 	}
 
+	logger.Info("Device info collected and CSR generated",
+		"hostname", hostname,
+		"os", fingerprint.OS,
+		"arch", fingerprint.Architecture)
+
+	registerURL := fmt.Sprintf("https://%s/api/auth/device-link/register", endpoint)
 	req, err := http.NewRequest("POST", registerURL, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set(constants.HeaderContentType, "application/json")
-
+	req.Header.Set("X-G8E-Device-Token", token)
 	req.Header.Set(constants.HeaderUserAgent, "g8e operator")
 
 	resp, err := client.Do(req)
@@ -184,12 +210,17 @@ func authenticateWithDeviceTokenUsingClient(token string, endpoint string, logge
 	logger.Info("Device link authentication successful",
 		"operator_id", result.OperatorID)
 
+	// Encode private key to PEM for storage (caller is responsible for writing it)
+	keyDER, _ := x509.MarshalECPrivateKey(priv)
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
+
 	return &DeviceAuthResult{
 		OperatorSessionID: result.OperatorSessionID,
 		OperatorID:        result.OperatorID,
-		APIKey:            result.APIKey,
 		OperatorCert:      result.OperatorCert,
-		OperatorCertKey:   result.OperatorCertKey,
+		OperatorCertKey:   string(keyPEM),
+		OperatorCertChain: result.OperatorCertChain,
+		HubTrustBundle:    result.HubTrustBundle,
 		Config:            result.Config,
 	}, nil
 }

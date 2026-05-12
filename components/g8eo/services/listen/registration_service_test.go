@@ -61,7 +61,7 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	pki := newPKIAuthority(dbDir, sslDir, logger)
+	pki := newPKIAuthority(dbDir, sslDir, db, logger)
 	err = pki.EnsurePKI(nil)
 	require.NoError(t, err)
 
@@ -100,7 +100,6 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 		assert.True(t, resp.Success)
 		assert.NotEmpty(t, resp.OperatorID)
 		assert.NotEmpty(t, resp.OperatorSessionID)
-		assert.NotEmpty(t, resp.APIKey)
 
 		// Verify operator doc was created
 		doc, err := db.DocGet("operators", resp.OperatorID)
@@ -467,7 +466,7 @@ func TestRegistrationService_DeviceLinks(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	pki := newPKIAuthority(dbDir, sslDir, logger)
+	pki := newPKIAuthority(dbDir, sslDir, db, logger)
 	reg := NewRegistrationService(db, pki, logger)
 
 	resp, err := reg.CreateDeviceLink(models.CreateDeviceLinkRequest{
@@ -506,7 +505,7 @@ func TestRegistrationService_CreateDeviceLinkRejectsWrongOperatorOwner(t *testin
 	require.NoError(t, err)
 	defer db.Close()
 
-	pki := newPKIAuthority(dbDir, sslDir, logger)
+	pki := newPKIAuthority(dbDir, sslDir, db, logger)
 	reg := NewRegistrationService(db, pki, logger)
 	op := &models.OperatorDocumentGo{
 		ID:        "op-1",
@@ -551,7 +550,7 @@ func TestRegistrationService_RotateOperatorAPIKey(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	pki := newPKIAuthority(dbDir, sslDir, logger)
+	pki := newPKIAuthority(dbDir, sslDir, db, logger)
 	reg := NewRegistrationService(db, pki, logger)
 
 	userID := "user-1"
@@ -606,7 +605,7 @@ func TestRegistrationService_ListOperatorSlots(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	pki := newPKIAuthority(dbDir, sslDir, logger)
+	pki := newPKIAuthority(dbDir, sslDir, db, logger)
 	reg := NewRegistrationService(db, pki, logger)
 
 	userID := "user-1"
@@ -651,7 +650,7 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	pki := newPKIAuthority(dbDir, sslDir, logger)
+	pki := newPKIAuthority(dbDir, sslDir, db, logger)
 	reg := NewRegistrationService(db, pki, logger)
 
 	userID := "user-1"
@@ -731,7 +730,7 @@ func TestRegistrationService_Binding(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	pki := newPKIAuthority(dbDir, sslDir, logger)
+	pki := newPKIAuthority(dbDir, sslDir, db, logger)
 	reg := NewRegistrationService(db, pki, logger)
 
 	userID := "user-1"

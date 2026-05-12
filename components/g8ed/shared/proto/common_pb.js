@@ -25,6 +25,8 @@ var google_protobuf_timestamp_pb = require('google-protobuf/google/protobuf/time
 goog.object.extend(proto, google_protobuf_timestamp_pb);
 var google_protobuf_descriptor_pb = require('google-protobuf/google/protobuf/descriptor_pb.js');
 goog.object.extend(proto, google_protobuf_descriptor_pb);
+var google_protobuf_struct_pb = require('google-protobuf/google/protobuf/struct_pb.js');
+goog.object.extend(proto, google_protobuf_struct_pb);
 goog.exportSymbol('proto.g8e.common.v1.Component', null, global);
 goog.exportSymbol('proto.g8e.common.v1.GovernanceEnvelope', null, global);
 goog.exportSymbol('proto.g8e.common.v1.GovernanceMetadata', null, global);
@@ -184,6 +186,7 @@ proto.g8e.common.v1.GovernanceEnvelope.toObject = function(includeInstance, msg)
     expiresAt: (f = msg.getExpiresAt()) && google_protobuf_timestamp_pb.Timestamp.toObject(includeInstance, f),
     nonce: jspb.Message.getFieldWithDefault(msg, 16, ""),
     governance: (f = msg.getGovernance()) && proto.g8e.common.v1.GovernanceMetadata.toObject(includeInstance, f),
+    intentData: (f = msg.getIntentData()) && google_protobuf_struct_pb.Struct.toObject(includeInstance, f),
     payload: msg.getPayload_asB64()
   };
 
@@ -283,6 +286,11 @@ proto.g8e.common.v1.GovernanceEnvelope.deserializeBinaryFromReader = function(ms
       var value = new proto.g8e.common.v1.GovernanceMetadata;
       reader.readMessage(value,proto.g8e.common.v1.GovernanceMetadata.deserializeBinaryFromReader);
       msg.setGovernance(value);
+      break;
+    case 17:
+      var value = new google_protobuf_struct_pb.Struct;
+      reader.readMessage(value,google_protobuf_struct_pb.Struct.deserializeBinaryFromReader);
+      msg.setIntentData(value);
       break;
     case 14:
       var value = /** @type {!Uint8Array} */ (reader.readBytes());
@@ -423,6 +431,14 @@ proto.g8e.common.v1.GovernanceEnvelope.serializeBinaryToWriter = function(messag
       13,
       f,
       proto.g8e.common.v1.GovernanceMetadata.serializeBinaryToWriter
+    );
+  }
+  f = message.getIntentData();
+  if (f != null) {
+    writer.writeMessage(
+      17,
+      f,
+      google_protobuf_struct_pb.Struct.serializeBinaryToWriter
     );
   }
   f = message.getPayload_asU8();
@@ -759,6 +775,43 @@ proto.g8e.common.v1.GovernanceEnvelope.prototype.clearGovernance = function() {
  */
 proto.g8e.common.v1.GovernanceEnvelope.prototype.hasGovernance = function() {
   return jspb.Message.getField(this, 13) != null;
+};
+
+
+/**
+ * optional google.protobuf.Struct intent_data = 17;
+ * @return {?proto.google.protobuf.Struct}
+ */
+proto.g8e.common.v1.GovernanceEnvelope.prototype.getIntentData = function() {
+  return /** @type{?proto.google.protobuf.Struct} */ (
+    jspb.Message.getWrapperField(this, google_protobuf_struct_pb.Struct, 17));
+};
+
+
+/**
+ * @param {?proto.google.protobuf.Struct|undefined} value
+ * @return {!proto.g8e.common.v1.GovernanceEnvelope} returns this
+*/
+proto.g8e.common.v1.GovernanceEnvelope.prototype.setIntentData = function(value) {
+  return jspb.Message.setWrapperField(this, 17, value);
+};
+
+
+/**
+ * Clears the message field making it undefined.
+ * @return {!proto.g8e.common.v1.GovernanceEnvelope} returns this
+ */
+proto.g8e.common.v1.GovernanceEnvelope.prototype.clearIntentData = function() {
+  return this.setIntentData(undefined);
+};
+
+
+/**
+ * Returns whether this field is set.
+ * @return {boolean}
+ */
+proto.g8e.common.v1.GovernanceEnvelope.prototype.hasIntentData = function() {
+  return jspb.Message.getField(this, 17) != null;
 };
 
 

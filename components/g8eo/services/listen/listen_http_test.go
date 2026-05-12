@@ -44,20 +44,21 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config) {
 	os.Unsetenv(tokenEnv)
 
 	dbDir := t.TempDir()
-	sslDir := t.TempDir()
-	db, err := NewListenDBService(dbDir, sslDir, logger)
+	pkiDir := t.TempDir()
+	secretsDir := t.TempDir()
+	db, err := NewListenDBService(dbDir, secretsDir, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	// Remove the SSL file written by InitPlatformSettings so tests can control
+	// Remove the secrets file written by InitPlatformSettings so tests can control
 	// token via DB without file precedence interfering
-	os.Remove(filepath.Join(sslDir, "internal_auth_token"))
+	os.Remove(filepath.Join(secretsDir, "internal_auth_token"))
 
 	pubsub := NewPubSubBroker(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
-	auth := NewAuthService(db, logger, sslDir)
-	pki := newPKIAuthority(dbDir, sslDir, logger)
+	pki := newPKIAuthority(dbDir, pkiDir, db, logger)
+	auth := NewAuthService(db, pki, logger, secretsDir)
 	reg := NewRegistrationService(db, pki, logger)
 	passkey := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 	h := newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, func() bool { return true })
@@ -74,14 +75,14 @@ func setupTestListenService(t *testing.T) (*ListenService, *config.Config) {
 
 	// Create a real DB service for the tests to use
 	dbDir := t.TempDir()
-	sslDir := t.TempDir()
-	db, err := NewListenDBService(dbDir, sslDir, logger)
+	secretsDir := t.TempDir()
+	db, err := NewListenDBService(dbDir, secretsDir, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	// Remove the SSL file written by InitPlatformSettings so tests can control
+	// Remove the secrets file written by InitPlatformSettings so tests can control
 	// token via DB without file precedence interfering
-	os.Remove(filepath.Join(sslDir, "internal_auth_token"))
+	os.Remove(filepath.Join(secretsDir, "internal_auth_token"))
 
 	pubsub := NewPubSubBroker(logger)
 	t.Cleanup(func() { pubsub.Close() })
@@ -226,7 +227,7 @@ func TestAuthMiddlewareDeep(t *testing.T) {
 		os.Unsetenv(string(constants.EnvVar.InternalAuthToken))
 		h.db.DocDelete("settings", "platform_settings")
 
-		req := httptest.NewRequest(http.MethodPost, "/auth/link/some-token/register", nil)
+		req := httptest.NewRequest(http.MethodPost, "/api/auth/device-link/register", nil)
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 		// We expect OK here because our mock handler just returns 200 if it passes middleware.
@@ -254,11 +255,7 @@ func TestAuthMiddlewareDeep(t *testing.T) {
 			handler.ServeHTTP(rr, req)
 			assert.Equal(t, http.StatusUnauthorized, rr.Code, "Path %s should be denied without token", path)
 
-			if strings.HasPrefix(path, "/ws/") {
-				assert.Contains(t, rr.Body.String(), "Unauthorized", "Path %s should have plaintext Unauthorized error", path)
-			} else {
-				assert.Contains(t, rr.Body.String(), "protocol authentication required", "Path %s should have protocol auth error", path)
-			}
+			assert.Contains(t, rr.Body.String(), "mTLS client certificate required", "Path %s should require mTLS", path)
 		}
 	})
 
@@ -281,7 +278,7 @@ func TestAuthMiddlewareDeep(t *testing.T) {
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.Contains(t, rr.Body.String(), "protocol authentication required")
+		assert.Contains(t, rr.Body.String(), "mTLS client certificate required")
 	})
 }
 

@@ -99,7 +99,7 @@ scripts/
 │   ├── manage-lfaa.py        # Audit vault queries
 │   └── manage-reputation.py  # Reputation management
 ├── security/       # TLS and Security (Bash/Python)
-│   ├── manage-ssl.sh         # Legacy cert lifecycle pending PKI replacement
+│   ├── manage-pki.sh         # Operator PKI validation and lifecycle helpers
 │   ├── manage-passkeys.py    # FIDO2/WebAuthn
 │   └── validate-platform-security.sh
 ├── testing/        # Test runners

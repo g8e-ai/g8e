@@ -29,15 +29,17 @@ import (
 // AuthService handles internal authentication for the Listen service.
 type AuthService struct {
 	db            *ListenDBService
+	pki           *PKIAuthority
 	logger        *slog.Logger
 	secretsDir    string
 	tokenProvider func() string
 }
 
 // NewAuthService creates a new AuthService.
-func NewAuthService(db *ListenDBService, logger *slog.Logger, secretsDir string) *AuthService {
+func NewAuthService(db *ListenDBService, pki *PKIAuthority, logger *slog.Logger, secretsDir string) *AuthService {
 	s := &AuthService{
 		db:         db,
+		pki:        pki,
 		logger:     logger,
 		secretsDir: secretsDir,
 	}
@@ -165,41 +167,73 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 		}
 
 		// These routes are new protocol entry points.
-		if r.URL.Path == "/api/pki/sign-csr" || r.URL.Path == "/api/auth/device-link/register" {
+		// Native Registration Path (Phase 4)
+		// This endpoint is the new sovereign entry point for enrolling binaries.
+		// It MUST be accessible without an internal token as it is the first step
+		// of the trust bootstrap.
+		if r.URL.Path == "/api/pki/sign-csr" ||
+			r.URL.Path == "/api/auth/device-link/register" {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		// We prioritize session/key auth.
+		// [PIVOT] Enforce mTLS for all other routes (Phase 6)
+		// Client certificates must be present and verified by the hub/root CA.
+		// tls.VerifyClientCertIfGiven ensures the chain is already verified if present.
+		if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
+			s.logger.Warn("mTLS required but no client certificate provided", "path", r.URL.Path)
+			s.jsonError(w, http.StatusUnauthorized, "mTLS client certificate required")
+			return
+		}
+
+		// [PIVOT] Verify certificate revocation status (Phase 6)
+		if s.pki != nil {
+			if err := s.pki.VerifyCertificate(r.TLS.PeerCertificates[0]); err != nil {
+				s.logger.Warn("mTLS client certificate revoked or invalid", "path", r.URL.Path, "error", err)
+				s.jsonError(w, http.StatusUnauthorized, "mTLS client certificate revoked or invalid")
+				return
+			}
+		}
+
+		// We prioritize session auth.
 		sessionID := r.Header.Get(constants.HeaderOperatorSessionID)
-		apiKey := r.Header.Get(constants.HeaderOperatorAPIKey)
 
 		if sessionID != "" {
-			if _, err := s.ValidateOperatorSession(sessionID); err == nil {
+			op, err := s.ValidateOperatorSession(sessionID)
+			if err == nil {
+				// [PIVOT] Verify URI SAN identity (Phase 6)
+				// The client cert must bind to the same operator session.
+				if len(r.TLS.PeerCertificates) > 0 {
+					cert := r.TLS.PeerCertificates[0]
+					match := false
+					for _, uri := range cert.URIs {
+						// spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>
+						if strings.Contains(uri.String(), "/"+op.ID+"/"+sessionID) {
+							match = true
+							break
+						}
+						// Reference apps use spiffe://g8e.local/app/<app_id>
+						if strings.Contains(uri.String(), "/app/"+constants.Status.ComponentName.G8ED) ||
+							strings.Contains(uri.String(), "/app/"+constants.Status.ComponentName.G8EE) {
+							match = true
+							break
+						}
+					}
+					if !match {
+						s.logger.Warn("mTLS URI SAN mismatch", "path", r.URL.Path, "operator_id", op.ID, "session_id", sessionID)
+						s.jsonError(w, http.StatusForbidden, "mTLS identity mismatch")
+						return
+					}
+				}
+
 				next.ServeHTTP(w, r)
 				return
 			}
 			s.logger.Warn("Invalid operator session attempt", "session_id", sessionID[:8]+"...")
 		}
 
-		if apiKey != "" {
-			if _, err := s.ValidateAPIKey(apiKey); err == nil {
-				next.ServeHTTP(w, r)
-				return
-			}
-			s.logger.Warn("Invalid API key attempt", "api_key", apiKey[:8]+"...")
-		}
-
-		// [PIVOT] Native Registration Path (Phase 4)
-		// This endpoint is the new sovereign entry point for enrolling binaries.
-		// It MUST be accessible without an internal token as it is the first step
-		// of the trust bootstrap.
-		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/auth/link/") && strings.HasSuffix(r.URL.Path, "/register") {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		s.logger.Warn("Unauthorized internal API access attempt (protocol auth required)", "path", r.URL.Path, "method", r.Method)
+		// API keys are no longer a valid mutation authority.
+		// They are only used for registration, which is handled in the bypass above.
 
 		// For WebSockets, return a plain text error for 401.
 		// Handshake fails if a JSON body is returned instead of just the 401 status.

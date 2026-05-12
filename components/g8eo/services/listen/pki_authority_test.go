@@ -32,8 +32,9 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, "pki")
 		logger := testutil.NewTestLogger()
+		db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
 
-		pki := newPKIAuthority(dataDir, pkiDir, logger)
+		pki := newPKIAuthority(dataDir, pkiDir, db, logger)
 		err := pki.EnsurePKI(nil)
 		require.NoError(t, err)
 
@@ -57,8 +58,9 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, "pki")
 		logger := testutil.NewTestLogger()
+		db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
 
-		pki := newPKIAuthority(dataDir, pkiDir, logger)
+		pki := newPKIAuthority(dataDir, pkiDir, db, logger)
 		err := pki.EnsurePKI(nil)
 		require.NoError(t, err)
 
@@ -88,8 +90,9 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, "pki")
 		logger := testutil.NewTestLogger()
+		db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
 
-		pki := newPKIAuthority(dataDir, pkiDir, logger)
+		pki := newPKIAuthority(dataDir, pkiDir, db, logger)
 		err := pki.EnsurePKI(nil)
 		require.NoError(t, err)
 
@@ -111,8 +114,9 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, "pki")
 		logger := testutil.NewTestLogger()
+		db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
 
-		pki := newPKIAuthority(dataDir, pkiDir, logger)
+		pki := newPKIAuthority(dataDir, pkiDir, db, logger)
 		err := pki.EnsurePKI(nil)
 		require.NoError(t, err)
 
@@ -135,8 +139,9 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, "pki")
 		logger := testutil.NewTestLogger()
+		db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
 
-		pki := newPKIAuthority(dataDir, pkiDir, logger)
+		pki := newPKIAuthority(dataDir, pkiDir, db, logger)
 		err := pki.EnsurePKI(nil)
 		require.NoError(t, err)
 
@@ -158,8 +163,9 @@ func TestPKIAuthority_EnsurePKI(t *testing.T) {
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, "pki")
 		logger := testutil.NewTestLogger()
+		db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
 
-		pki := newPKIAuthority(dataDir, pkiDir, logger)
+		pki := newPKIAuthority(dataDir, pkiDir, db, logger)
 		err := pki.EnsurePKI(nil)
 		require.NoError(t, err)
 
@@ -174,8 +180,9 @@ func TestPKIAuthority_ChainValidity(t *testing.T) {
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()
+	db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
 
-	pki := newPKIAuthority(dataDir, pkiDir, logger)
+	pki := newPKIAuthority(dataDir, pkiDir, db, logger)
 	err := pki.EnsurePKI(nil)
 	require.NoError(t, err)
 
@@ -232,8 +239,9 @@ func TestPKIAuthority_IssuerSeparation(t *testing.T) {
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()
+	db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
 
-	pki := newPKIAuthority(dataDir, pkiDir, logger)
+	pki := newPKIAuthority(dataDir, pkiDir, db, logger)
 	err := pki.EnsurePKI(nil)
 	require.NoError(t, err)
 
@@ -270,8 +278,9 @@ func TestPKIAuthority_URISAN(t *testing.T) {
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()
+	db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
 
-	pki := newPKIAuthority(dataDir, pkiDir, logger)
+	pki := newPKIAuthority(dataDir, pkiDir, db, logger)
 	err := pki.EnsurePKI(nil)
 	require.NoError(t, err)
 
@@ -300,8 +309,9 @@ func TestPKIAuthority_ValidityPeriods(t *testing.T) {
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()
+	db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
 
-	pki := newPKIAuthority(dataDir, pkiDir, logger)
+	pki := newPKIAuthority(dataDir, pkiDir, db, logger)
 	err := pki.EnsurePKI(nil)
 	require.NoError(t, err)
 
@@ -344,8 +354,9 @@ func TestPKIAuthority_EKU(t *testing.T) {
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()
+	db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
 
-	pki := newPKIAuthority(dataDir, pkiDir, logger)
+	pki := newPKIAuthority(dataDir, pkiDir, db, logger)
 	err := pki.EnsurePKI(nil)
 	require.NoError(t, err)
 
@@ -373,8 +384,9 @@ func TestPKIAuthority_TLSConfig(t *testing.T) {
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()
+	db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
 
-	pki := newPKIAuthority(dataDir, pkiDir, logger)
+	pki := newPKIAuthority(dataDir, pkiDir, db, logger)
 	err := pki.EnsurePKI(nil)
 	require.NoError(t, err)
 
@@ -396,8 +408,9 @@ func TestPKIAuthority_TrustBundlePath(t *testing.T) {
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()
+	db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
 
-	pki := newPKIAuthority(dataDir, pkiDir, logger)
+	pki := newPKIAuthority(dataDir, pkiDir, db, logger)
 	err := pki.EnsurePKI(nil)
 	require.NoError(t, err)
 
@@ -414,8 +427,9 @@ func TestPKIAuthority_PKIDir(t *testing.T) {
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()
+	db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
 
-	pki := newPKIAuthority(dataDir, pkiDir, logger)
+	pki := newPKIAuthority(dataDir, pkiDir, db, logger)
 	assert.Equal(t, pkiDir, pki.PKIDir())
 }
 
@@ -423,9 +437,10 @@ func TestPKIAuthority_ReuseExisting(t *testing.T) {
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
 	logger := testutil.NewTestLogger()
+	db, _ := NewListenDBService(dataDir, t.TempDir(), logger)
 
 	// First initialization
-	pki1 := newPKIAuthority(dataDir, pkiDir, logger)
+	pki1 := newPKIAuthority(dataDir, pkiDir, db, logger)
 	err := pki1.EnsurePKI(nil)
 	require.NoError(t, err)
 
@@ -436,7 +451,7 @@ func TestPKIAuthority_ReuseExisting(t *testing.T) {
 	serial1 := cert1.SerialNumber
 
 	// Second initialization should reuse existing
-	pki2 := newPKIAuthority(dataDir, pkiDir, logger)
+	pki2 := newPKIAuthority(dataDir, pkiDir, db, logger)
 	err = pki2.EnsurePKI(nil)
 	require.NoError(t, err)
 

@@ -36,30 +36,25 @@ _SHARED_CONSTANTS = PROJECT_ROOT / 'shared' / 'constants'
 with open(_SHARED_CONSTANTS / 'collections.json') as _f:
     _COLLECTIONS_DATA = json.load(_f)
 
-_DEFAULT_SSL_DIR = str(PROJECT_ROOT / '.g8e' / 'ssl')
+_DEFAULT_PKI_DIR = str(PROJECT_ROOT / '.g8e' / 'pki')
+_DEFAULT_SECRETS_DIR = str(PROJECT_ROOT / '.g8e' / 'secrets')
 
 OPERATOR_BASE_URL = os.environ.get('G8E_INTERNAL_HTTP_URL', 'https://localhost:9000')
 G8ED_BASE_URL = os.environ.get('G8ED_INTERNAL_URL', 'https://localhost')
 COLLECTIONS: List[str] = sorted(set(_COLLECTIONS_DATA['collections'].values()))
 PRESERVE_COLLECTIONS = {'settings'}
 
-SSL_DIR = Path(os.environ.get('G8E_SSL_DIR', _DEFAULT_SSL_DIR))
-CA_CERT_PATH = SSL_DIR / 'ca.crt'
-INTERNAL_AUTH_TOKEN_PATHS = (
-    SSL_DIR / 'internal_auth_token',
-    SSL_DIR / 'ssl' / 'internal_auth_token',
-)
+PKI_DIR = Path(os.environ.get('G8E_PKI_DIR', _DEFAULT_PKI_DIR))
+SECRETS_DIR = Path(os.environ.get('G8E_SECRETS_DIR', _DEFAULT_SECRETS_DIR))
+TRUST_BUNDLE_PATH = PKI_DIR / 'trust' / 'hub-bundle.pem'
+INTERNAL_AUTH_TOKEN_PATH = SECRETS_DIR / 'internal_auth_token'
 
 
 def _create_ssl_context() -> ssl.SSLContext | None:
     """Create SSL context that trusts the platform CA."""
     ctx = ssl.create_default_context()
-    if CA_CERT_PATH.exists():
-        ctx.load_verify_locations(str(CA_CERT_PATH))
-    else:
-        alt_path = SSL_DIR / 'ssl' / 'ca.crt'
-        if alt_path.exists():
-            ctx.load_verify_locations(str(alt_path))
+    if TRUST_BUNDLE_PATH.exists():
+        ctx.load_verify_locations(str(TRUST_BUNDLE_PATH))
     return ctx
 
 
@@ -83,17 +78,16 @@ def get_internal_auth_token() -> str:
 
     The Operator (listen mode) authenticates every internal request with
     `X-Internal-Auth`. The token is written by the Operator on first start to
-    $G8E_SSL_DIR/internal_auth_token (default: $PROJECT_ROOT/.g8e/ssl/). Falls
-    back to the G8E_INTERNAL_AUTH_TOKEN env var for test-runner contexts.
+    $G8E_SECRETS_DIR/internal_auth_token (default: $PROJECT_ROOT/.g8e/secrets/).
+    Falls back to the G8E_INTERNAL_AUTH_TOKEN env var for test-runner contexts.
     """
-    for p in INTERNAL_AUTH_TOKEN_PATHS:
-        try:
-            if p.exists():
-                token = p.read_text().strip()
-                if token:
-                    return token
-        except OSError:
-            continue
+    try:
+        if INTERNAL_AUTH_TOKEN_PATH.exists():
+            token = INTERNAL_AUTH_TOKEN_PATH.read_text().strip()
+            if token:
+                return token
+    except OSError:
+        pass
     return os.environ.get('G8E_INTERNAL_AUTH_TOKEN', '')
 
 
@@ -101,9 +95,9 @@ def get_auditor_hmac_key() -> str:
     """Return the Tribunal auditor HMAC-SHA256 signing key.
 
     The key is written by the Operator on first start to
-    $G8E_SSL_DIR/auditor_hmac_key (default: $PROJECT_ROOT/.g8e/ssl/).
+    $G8E_SECRETS_DIR/auditor_hmac_key (default: $PROJECT_ROOT/.g8e/secrets/).
     """
-    p = SSL_DIR / 'auditor_hmac_key'
+    p = SECRETS_DIR / 'auditor_hmac_key'
     try:
         if p.exists():
             key = p.read_text().strip()
@@ -126,7 +120,7 @@ def operator_request(method: str, path: str, body: Dict | None = None) -> Any:
     # The Operator listen-mode HTTP API requires X-Internal-Auth on all
     # non-health endpoints. The operator session from `g8e login` gates the
     # wrapper; the script reads the internal auth token written by the
-    # Operator at $G8E_SSL_DIR/internal_auth_token, the same way g8ed and
+    # Operator at $G8E_SECRETS_DIR/internal_auth_token, the same way g8ed and
     # g8ee do.
     internal_token = get_internal_auth_token()
     if internal_token:

@@ -744,17 +744,10 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 		return nil, fmt.Errorf("failed to update operator status: %w", err)
 	}
 
-	// Generate credentials
-	apiKey := operator.OperatorAPIKey
-	if apiKey == "" {
-		apiKey = fmt.Sprintf("g8e_%s_%s", operator.ID[:8], uuid.NewString())
-		s.db.DocUpdate(string(constants.CollectionOperators), operator.ID, json.RawMessage(fmt.Sprintf(`{"operator_api_key": %q}`, apiKey)))
-	}
-
 	// Fetch trust bundle
 	hubBundle, _ := s.pki.HubTrustBundle()
 
-	// Fetch operator cert and chain from updated doc
+	// Resolve operator cert and chain from updated doc
 	finalCertPEM := update["operator_cert"].(string)
 	finalChainPEM := update["operator_cert_chain"].(string)
 
@@ -762,7 +755,6 @@ func (s *RegistrationService) completeRegistration(operator *models.OperatorDocu
 		Success:           true,
 		OperatorID:        operator.ID,
 		OperatorSessionID: sessionID,
-		APIKey:            apiKey,
 		OperatorCert:      finalCertPEM,
 		OperatorCertChain: finalChainPEM,
 		HubTrustBundle:    string(hubBundle),

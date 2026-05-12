@@ -17,9 +17,11 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -59,6 +61,7 @@ const (
 type PKIAuthority struct {
 	mu     sync.RWMutex
 	logger *slog.Logger
+	db     *ListenDBService
 
 	pkiDir string
 
@@ -78,12 +81,13 @@ type PKIAuthority struct {
 	serviceCert tls.Certificate
 }
 
-func newPKIAuthority(dataDir, pkiDir string, logger *slog.Logger) *PKIAuthority {
+func newPKIAuthority(dataDir, pkiDir string, db *ListenDBService, logger *slog.Logger) *PKIAuthority {
 	if pkiDir == "" {
 		pkiDir = filepath.Join(dataDir, "pki")
 	}
 	return &PKIAuthority{
 		pkiDir: pkiDir,
+		db:     db,
 		logger: logger,
 	}
 }
@@ -133,7 +137,23 @@ func (pki *PKIAuthority) EnsurePKI(extraIPs []net.IP) error {
 }
 
 // TLSConfig returns a tls.Config that serves the managed server certificate.
+// It also configures the client CA pool to enable mTLS verification.
 func (pki *PKIAuthority) TLSConfig() *tls.Config {
+	pki.mu.RLock()
+	defer pki.mu.RUnlock()
+
+	// Create client CA pool from our root and hub authorities
+	pool := x509.NewCertPool()
+	if pki.rootCert != nil {
+		pool.AddCert(pki.rootCert)
+	}
+	if pki.hubCert != nil {
+		pool.AddCert(pki.hubCert)
+	}
+	if pki.operatorCert != nil {
+		pool.AddCert(pki.operatorCert)
+	}
+
 	return &tls.Config{
 		GetCertificate: func(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			pki.mu.RLock()
@@ -141,6 +161,8 @@ func (pki *PKIAuthority) TLSConfig() *tls.Config {
 			c := pki.serviceCert
 			return &c, nil
 		},
+		ClientAuth: tls.VerifyClientCertIfGiven,
+		ClientCAs:  pool,
 		MinVersion: tls.VersionTLS13,
 	}
 }
@@ -330,6 +352,112 @@ func (pki *PKIAuthority) HubTrustBundle() ([]byte, error) {
 	pki.mu.RLock()
 	defer pki.mu.RUnlock()
 	return os.ReadFile(filepath.Join(pki.pkiDir, "trust", "hub-bundle.pem"))
+}
+
+// RevokeCertificate adds a certificate serial to the revocation list.
+func (pki *PKIAuthority) RevokeCertificate(serial string, reason string) error {
+	pki.mu.Lock()
+	defer pki.mu.Unlock()
+
+	if pki.db == nil {
+		return fmt.Errorf("database not available")
+	}
+
+	doc := map[string]interface{}{
+		"serial":     serial,
+		"reason":     reason,
+		"revoked_at": time.Now().UTC(),
+	}
+	body, _ := json.Marshal(doc)
+
+	return pki.db.DocSet(string(constants.CollectionRevokedCertificates), serial, body)
+}
+
+// GenerateRevocationBundle creates a signed JSON bundle of all revoked certificate serials.
+func (pki *PKIAuthority) GenerateRevocationBundle() (bundleJSON string, signature string, err error) {
+	pki.mu.RLock()
+	defer pki.mu.RUnlock()
+
+	if pki.db == nil {
+		return "", "", fmt.Errorf("database not available")
+	}
+
+	docs, err := pki.db.DocQuery(string(constants.CollectionRevokedCertificates), nil, "revoked_at", 0)
+	if err != nil {
+		return "", "", err
+	}
+
+	revoked := make([]string, 0, len(docs))
+	for _, doc := range docs {
+		revoked = append(revoked, doc.ID)
+	}
+
+	bundle := map[string]interface{}{
+		"revoked_serials": revoked,
+		"generated_at":    time.Now().UTC(),
+		"trust_domain":    trustDomain,
+	}
+
+	bundleBytes, err := json.Marshal(bundle)
+	if err != nil {
+		return "", "", err
+	}
+
+	// Sign the bundle with the hub intermediate key
+	sig, err := pki.signData(bundleBytes, pki.hubKey)
+	if err != nil {
+		return "", "", err
+	}
+
+	return string(bundleBytes), sig, nil
+}
+
+// IsRevoked checks if a certificate serial is in the revocation list.
+func (pki *PKIAuthority) IsRevoked(serial string) (bool, error) {
+	if pki.db == nil {
+		return false, fmt.Errorf("database not available")
+	}
+
+	doc, err := pki.db.DocGet(string(constants.CollectionRevokedCertificates), serial)
+	if err != nil {
+		return false, err
+	}
+
+	return doc != nil, nil
+}
+
+// VerifyCertificate checks if a certificate is valid and not revoked.
+func (pki *PKIAuthority) VerifyCertificate(cert *x509.Certificate) error {
+	if cert == nil {
+		return fmt.Errorf("no certificate provided")
+	}
+
+	revoked, err := pki.IsRevoked(cert.SerialNumber.String())
+	if err != nil {
+		return fmt.Errorf("failed to check revocation status: %w", err)
+	}
+
+	if revoked {
+		return fmt.Errorf("certificate is revoked")
+	}
+
+	return nil
+}
+
+func (pki *PKIAuthority) signData(data []byte, key *ecdsa.PrivateKey) (string, error) {
+	hash := sha256.Sum256(data)
+	r, s, err := ecdsa.Sign(rand.Reader, key, hash[:])
+	if err != nil {
+		return "", err
+	}
+
+	sig := append(r.Bytes(), s.Bytes()...)
+	return base64.RawURLEncoding.EncodeToString(sig), nil
+}
+
+func (pki *PKIAuthority) signData_OLD(data []byte, key *ecdsa.PrivateKey) (string, error) {
+	// Not used anymore
+	return "", nil
 }
 
 // SignCSR signs a certificate signing request using the operator intermediate CA.

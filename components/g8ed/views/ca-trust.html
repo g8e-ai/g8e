@@ -412,7 +412,7 @@ function updateButton() {
     var trustNotice = document.getElementById('trust-notice');
 
     if (currentOs === 'mac') {
-        trustNotice.innerHTML = 'macOS users can also run <code>./g8e security certs trust</code> at the root of the repo. Otherwise, restart your browser after trusting.';
+        trustNotice.innerHTML = 'macOS users can use the Operator PKI trust workflow at the root of the repo. Otherwise, restart your browser after trusting.';
     } else {
         trustNotice.innerHTML = 'After trusting, restart your browser. All connections — browser and operators — are mTLS over this CA.';
     }
