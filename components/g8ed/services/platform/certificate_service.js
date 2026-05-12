@@ -14,8 +14,8 @@
 /**
  * Certificate Service - Per-Operator mTLS Certificate Management
  *
- * CA cert and key are read from $G8E_SSL_DIR/ca/ (default: /operator/ssl/ca/).
- * Per-operator client certificates are signed by the CA using Node.js crypto.
+ * CA cert is read from $G8E_PKI_DIR/ca.crt (default: /operator/pki/ca.crt).
+ * Per-operator client certificates are signed by the Operator PKI subsystem via CSR-based enrollment.
  * CRL is maintained in-memory; revoked serials are tracked in Operator documents.
  *
  * Certificate Trust Model:
@@ -24,9 +24,8 @@
  *       +-- Used by: Individual g8eo Operator instances
  *       +-- CN contains operator_id for identification
  *
- * TODO: Move CA private key operations behind a single host-side authority.
- * App services should call a signing endpoint or consume pre-issued certificates
- * rather than reading ca/ca.key directly. See operator-host-transition-finalization.md.
+ * Certificate issuance uses CSR-based enrollment through Operator-owned PKI endpoints.
+ * App services consume the public Operator protocol for certificate operations.
  */
 
 import { logger } from '../../utils/logger.js';
@@ -52,7 +51,7 @@ class CertificateService {
         this.initialized = false;
         this.caCert = null;
         this.caKey = null;
-        this.sslDir = bootstrapService.getSslDir() || DEFAULT_SSL_DIR;
+        this.pkiDir = bootstrapService.getPkiDir() || DEFAULT_SSL_DIR;
         this._revokedSerials = new Set();
         this._internalHttpClient = internalHttpClient;
     }
@@ -63,27 +62,23 @@ class CertificateService {
         }
 
         // Authority: operator (Operator --listen mode)
-        // We no longer read ca.key directly. We only load the CA certificate for local reference (e.g. CSR building context)
-        // while the private key operations are behind the /ssl/sign-certificate API.
-        const caCertPath = join(this.sslDir, 'ca.crt');
-        const altCaCertPath = join(this.sslDir, 'ca', 'ca.crt');
+        // We load the CA certificate for local reference (e.g. CSR building context).
+        // Certificate signing uses CSR-based enrollment through Operator PKI endpoints.
+        const caCertPath = join(this.pkiDir, 'ca.crt');
 
         if (existsSync(caCertPath)) {
             this.caCert = readFileSync(caCertPath, 'utf8');
             logger.info('[CERT-SERVICE] CA certificate loaded', { path: caCertPath });
-        } else if (existsSync(altCaCertPath)) {
-            this.caCert = readFileSync(altCaCertPath, 'utf8');
-            logger.info('[CERT-SERVICE] CA certificate loaded', { path: altCaCertPath });
         } else {
             logger.error('[CERT-SERVICE] CA certificate not found', {
-                sslDir: this.sslDir,
-                checked_paths: [caCertPath, altCaCertPath]
+                pkiDir: this.pkiDir,
+                checked_path: caCertPath
             });
-            throw new Error('CA certificate not found. Run scripts/security/manage-ssl.sh generate to generate certificates.');
+            throw new Error('CA certificate not found. Ensure Operator PKI is initialized.');
         }
 
         this.initialized = true;
-        logger.info('[CERT-SERVICE] Certificate service initialized (Native Signing API enabled)', {
+        logger.info('[CERT-SERVICE] Certificate service initialized (CSR-based enrollment via Operator PKI)', {
             ca_loaded: !!this.caCert
         });
     }
@@ -105,13 +100,13 @@ class CertificateService {
                 privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
             });
 
-            // Authority: g8eo (/ssl/sign-certificate)
+            // Authority: g8eo (/.well-known/g8e/pki/sign-csr)
             const operatorClient = this._internalHttpClient?._bootstrapService?._operatorClient;
             if (!operatorClient) {
                 throw new Error('CertificateService: operatorClient is not available via internalHttpClient');
             }
 
-            const response = await operatorClient.post('/ssl/sign-certificate', JSON.stringify({
+            const response = await operatorClient.post('/.well-known/g8e/pki/sign-csr', JSON.stringify({
                 public_key_pem: publicKey,
                 common_name: operatorId,
                 organizational_unit: userId,

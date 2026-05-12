@@ -10,7 +10,7 @@ Version: v0.2.4
 
 The g8e platform utilizes a high-performance, WebSocket-based Pub/Sub system for all real-time inter-component communication. This decoupled architecture allows a central engine (bundled `g8ee` or BYO agent) to orchestrate distributed agents (`g8eo` Operators) across heterogeneous environments without direct network visibility.
 
-As of v0.2.0, the "g8es" component abstraction has been removed. The host listener is now the **Operator binary running in `--listen` mode**, which acts as the WebSocket broker for the platform.
+The host listener is the **Operator binary running in `--listen` mode**, which acts as the WebSocket broker for the platform.
 
 ---
 

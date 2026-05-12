@@ -70,12 +70,12 @@ graph TD
 -   **g8eo (Operator)**: The Execution Plane and Substrate. Runs on the target host, enforces L1/L2/L3 gates, and scrubs output.
 
 ### 2. Secrets & Bootstrap
-Authoritative secrets are generated on first boot and stored in `/home/bob/g8e/.g8e/ssl`:
+Authoritative secrets are generated on first boot and stored separately from PKI material in `.g8e/secrets`:
 -   `internal_auth_token`: For component-to-component authentication.
 -   `auditor_hmac_key`: For L2 Tribunal signature generation and verification.
 -   `session_encryption_key`: For AES-256 encryption of sensitive session fields.
 
-Tamper evidence is provided by `bootstrap_digest.json`, which contains SHA-256 hashes of all secrets. Services abort startup if on-disk secrets drift from the manifest.
+Tamper evidence is provided by `.g8e/secrets/bootstrap_digest.json`, which contains SHA-256 hashes of all secrets. Operator startup aborts if a required secret is missing, if the manifest is missing or malformed, or if on-disk secrets drift from the manifest or `platform_settings`.
 
 ## Sovereignty & Audit
 

@@ -14,7 +14,13 @@
 package listen
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
+	"encoding/pem"
 	"testing"
 	"time"
 
@@ -26,6 +32,26 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/testutil"
 )
 
+func generateTestCSR(t *testing.T) string {
+	key, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	require.NoError(t, err)
+
+	template := &x509.CertificateRequest{
+		Subject: pkix.Name{
+			CommonName: "test-operator",
+		},
+	}
+
+	csrDER, err := x509.CreateCertificateRequest(rand.Reader, template, key)
+	require.NoError(t, err)
+
+	csrPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE REQUEST",
+		Bytes: csrDER,
+	})
+	return string(csrPEM)
+}
+
 func TestRegistrationService_RegisterDevice(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
@@ -34,8 +60,11 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	certs := newCertStore(dbDir, sslDir, logger)
-	reg := NewRegistrationService(db, certs, logger)
+	pki := newPKIAuthority(dbDir, sslDir, logger)
+	err = pki.EnsurePKI(nil)
+	require.NoError(t, err)
+
+	reg := NewRegistrationService(db, pki, logger)
 
 	token := "dlk_test_token_12345678901234567890"
 	userID := "user-1"
@@ -57,6 +86,7 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 		require.NoError(t, err)
 
 		req := models.OperatorRegistrationRequest{
+			CSR:               generateTestCSR(t),
 			SystemFingerprint: "fingerprint-1",
 			Hostname:          "host-1",
 			OS:                "linux",
@@ -111,6 +141,7 @@ func TestRegistrationService_RegisterDevice(t *testing.T) {
 		require.NoError(t, err)
 
 		req := models.OperatorRegistrationRequest{
+			CSR:               generateTestCSR(t),
 			SystemFingerprint: "fingerprint-2",
 			Hostname:          "host-2",
 		}

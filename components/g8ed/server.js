@@ -353,7 +353,7 @@ class G8edServer {
         const bootstrapService = this.services.settingsService.getBootstrapService();
         const httpsPort = parseInt(bootstrapService.loadHttpsPort?.()) || 443;
         const httpPort = parseInt(bootstrapService.loadHttpPort?.()) || 80;
-        const internalPort = parseInt(bootstrapService.loadInternalPort?.()) || 9000;
+        const internalPort = parseInt(bootstrapService.loadInternalPort?.()) || 9090;
         
         // Simple TLS check - look for certs in standard operator SSL location
         const sslDir = bootstrapService.getSslDir();
@@ -383,10 +383,9 @@ class G8edServer {
             this._createHttpServer(httpPort, httpsPort);
 
         } else {
-            // No TLS certs: plain HTTP only on internal port
-            this.server = this.app.listen(internalPort, () => {
-                logger.info(`g8ed server running on port ${internalPort} (HTTP - no TLS certs found)`);
-            });
+            // No TLS certs: refuse to start (fail-closed)
+            logger.error('[g8ed] No TLS certificates found. Refusing to start for security.');
+            process.exit(1);
         }
 
         // Unlimited request timeout for SSE connections

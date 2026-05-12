@@ -6,7 +6,8 @@
 #   Optional application layer: g8ee, g8ed (explicit opt-in only)
 #   Data volumes:
 #     .g8e/data     (Operator listen mode -- SQLite DB, users, settings; wiped by reset)
-#     .g8e/ssl      (Operator listen mode -- TLS certs; NEVER wiped by reset or wipe)
+#     .g8e/pki      (Operator listen mode -- TLS/PKI material; preserved by reset and wipe)
+#     .g8e/secrets  (Operator listen mode -- bootstrap secrets; wiped by reset, preserved by wipe)
 #     g8ee-data    (g8ee   -- app data; wiped by reset)
 #     g8ed-data (g8ed  -- app data; wiped by reset)
 #   Excluded from reset: core data services only
@@ -52,7 +53,8 @@ PROJECT_ROOT="$G8E_PROJECT_ROOT"
 
 G8E_RUNTIME_DIR="${G8E_RUNTIME_DIR:-$PROJECT_ROOT/.g8e}"
 OPERATOR_LISTEN_DATA_DIR="${OPERATOR_LISTEN_DATA_DIR:-$G8E_RUNTIME_DIR/data}"
-OPERATOR_LISTEN_SSL_DIR="${OPERATOR_LISTEN_SSL_DIR:-$G8E_RUNTIME_DIR/ssl}"
+OPERATOR_LISTEN_PKI_DIR="${OPERATOR_LISTEN_PKI_DIR:-$G8E_RUNTIME_DIR/pki}"
+OPERATOR_LISTEN_SECRETS_DIR="${OPERATOR_LISTEN_SECRETS_DIR:-$G8E_RUNTIME_DIR/secrets}"
 OPERATOR_LISTEN_PID_DIR="${OPERATOR_LISTEN_PID_DIR:-$G8E_RUNTIME_DIR/pids}"
 OPERATOR_LISTEN_LOG_DIR="${OPERATOR_LISTEN_LOG_DIR:-$G8E_RUNTIME_DIR/logs}"
 OPERATOR_LISTEN_PID_FILE="$OPERATOR_LISTEN_PID_DIR/operator-listen.pid"
@@ -140,8 +142,9 @@ _wait_optional_app_healthy() {
     esac
 }
 
-# SSL volume is never wiped — preserved across reset, wipe, and rebuild.
-SSL_VOLUME="$OPERATOR_LISTEN_SSL_DIR"
+# PKI volume is never wiped — preserved across reset, wipe, and rebuild.
+PKI_VOLUME="$OPERATOR_LISTEN_PKI_DIR"
+SECRETS_VOLUME="$OPERATOR_LISTEN_SECRETS_DIR"
 
 usage() {
     cat <<EOF
@@ -158,9 +161,9 @@ Commands:
                                   Default (no components): operator
                                   Valid: operator g8ee g8ed
                                   Optional apps require --with-apps, --with-g8ed, or --with-g8ee
-  reset                           Wipe Operator listen-mode data. SSL certs are preserved.
+  reset                           Wipe Operator listen-mode data. PKI certs and secrets are preserved.
   wipe                            Clear app data from the Operator database
-                                  Operator listen mode stays up; preserves: platform settings, SSL certs, auth token
+                                  Operator listen mode stays up; preserves: platform settings, PKI certs, secrets, auth token
   clean                           Nuke runtime processes and data.
   operator-build                  Build linux/amd64 operator binary natively
   operator-build-all              Build all operator architectures natively
@@ -320,11 +323,12 @@ _start_g8ee() {
     
     # g8ee requires internal auth token and session encryption key from bootstrap
     local auth_token
-    auth_token=$(cat "$OPERATOR_LISTEN_SSL_DIR/internal_auth_token" 2>/dev/null | tr -d ' \n\r' || true)
+    auth_token=$(cat "$OPERATOR_LISTEN_SECRETS_DIR/internal_auth_token" 2>/dev/null | tr -d ' \n\r' || true)
     
     (
         cd "$PROJECT_ROOT/components/g8ee"
-        export G8E_SSL_DIR="$OPERATOR_LISTEN_SSL_DIR"
+        export G8E_PKI_DIR="$OPERATOR_LISTEN_PKI_DIR"
+        export G8E_SECRETS_DIR="$OPERATOR_LISTEN_SECRETS_DIR"
         export G8E_INTERNAL_AUTH_TOKEN="$auth_token"
         export PYTHONPATH="$PROJECT_ROOT/components/g8ee:$PROJECT_ROOT/shared"
         export G8E_SHARED_DIR="$PROJECT_ROOT/shared"
@@ -332,8 +336,8 @@ _start_g8ee() {
         export G8E_INTERNAL_PUBSUB_URL="wss://localhost:9001"
         
         setsid "$venv_dir/bin/uvicorn" app.main:app --host 127.0.0.1 --port 8443 \
-            --ssl-keyfile "$OPERATOR_LISTEN_SSL_DIR/server.key" \
-            --ssl-certfile "$OPERATOR_LISTEN_SSL_DIR/server.crt" \
+            --ssl-keyfile "$OPERATOR_LISTEN_PKI_DIR/server.key" \
+            --ssl-certfile "$OPERATOR_LISTEN_PKI_DIR/server.crt" \
             > "$G8EE_LOG_FILE" 2>&1 &
         echo $! > "$G8EE_PID_FILE"
     )
@@ -390,8 +394,9 @@ _start_g8ed() {
 
     (
         cd "$PROJECT_ROOT/components/g8ed"
-        export G8E_SSL_DIR="$OPERATOR_LISTEN_SSL_DIR"
-        export NODE_EXTRA_CA_CERTS="$OPERATOR_LISTEN_SSL_DIR/ca.crt"
+        export G8E_PKI_DIR="$OPERATOR_LISTEN_PKI_DIR"
+        export G8E_SECRETS_DIR="$OPERATOR_LISTEN_SECRETS_DIR"
+        export NODE_EXTRA_CA_CERTS="$OPERATOR_LISTEN_PKI_DIR/ca.crt"
         export G8E_INTERNAL_HTTP_URL="https://localhost:9000"
         export G8E_INTERNAL_PUBSUB_URL="wss://localhost:9001"
         export G8EE_INTERNAL_URL="https://localhost:8443"
@@ -428,9 +433,6 @@ _stop_g8ed() {
         fi
         rm -f "$G8ED_PID_FILE"
     fi
-    # Kill any orphaned node server.js processes
-    pkill -9 -f "node server.js" 2>/dev/null || true
-    rm -f "$G8ED_PID_FILE"
 }
 
 _start_operator_listen() {
@@ -464,19 +466,21 @@ _start_operator_listen() {
     fi
 
     echo "  Starting Operator listen mode on port $OPERATOR_LISTEN_HTTP_PORT..."
-    mkdir -p "$OPERATOR_LISTEN_DATA_DIR" "$OPERATOR_LISTEN_SSL_DIR" "$OPERATOR_LISTEN_PID_DIR" "$OPERATOR_LISTEN_LOG_DIR"
+    mkdir -p "$OPERATOR_LISTEN_DATA_DIR" "$OPERATOR_LISTEN_PKI_DIR" "$OPERATOR_LISTEN_SECRETS_DIR" "$OPERATOR_LISTEN_PID_DIR" "$OPERATOR_LISTEN_LOG_DIR"
 
     _rotate_logs "$OPERATOR_LISTEN_LOG_FILE"
 
     local auth_token
-    auth_token=$(cat "$OPERATOR_LISTEN_SSL_DIR/internal_auth_token" 2>/dev/null | tr -d ' \n\r' || true)
+    auth_token=$(cat "$OPERATOR_LISTEN_SECRETS_DIR/internal_auth_token" 2>/dev/null | tr -d ' \n\r' || true)
 
     export G8E_INTERNAL_AUTH_TOKEN="$auth_token"
-    export G8E_SSL_DIR="$OPERATOR_LISTEN_SSL_DIR"
+    export G8E_PKI_DIR="$OPERATOR_LISTEN_PKI_DIR"
+    export G8E_SECRETS_DIR="$OPERATOR_LISTEN_SECRETS_DIR"
 
     setsid "$bin" --listen \
         --data-dir "$OPERATOR_LISTEN_DATA_DIR" \
-        --ssl-dir "$OPERATOR_LISTEN_SSL_DIR" \
+        --pki-dir "$OPERATOR_LISTEN_PKI_DIR" \
+        --secrets-dir "$OPERATOR_LISTEN_SECRETS_DIR" \
         --http-listen-port "$OPERATOR_LISTEN_HTTP_PORT" \
         --wss-listen-port "$OPERATOR_LISTEN_WSS_PORT" \
         > "$OPERATOR_LISTEN_LOG_FILE" 2>&1 &
@@ -535,7 +539,7 @@ _stop_operator_listen() {
 _sync_operator_binaries() {
     echo "  Syncing operator binaries to blob store..."
     local auth_token
-    auth_token=$(cat "$OPERATOR_LISTEN_SSL_DIR/internal_auth_token" 2>/dev/null | tr -d ' \n\r' || true)
+    auth_token=$(cat "$OPERATOR_LISTEN_SECRETS_DIR/internal_auth_token" 2>/dev/null | tr -d ' \n\r' || true)
 
     if [ -z "$auth_token" ]; then
         echo "  Warning: No internal auth token found, skipping binary sync."
@@ -547,6 +551,11 @@ _sync_operator_binaries() {
         echo "  No operator binaries found at $bin_dir, skipping sync."
         return 0
     fi
+    local trust_bundle="${G8E_TRUST_BUNDLE:-$OPERATOR_LISTEN_PKI_DIR/trust/hub-bundle.pem}"
+    if [ ! -f "$trust_bundle" ]; then
+        echo "  Warning: Operator trust bundle missing at $trust_bundle, skipping binary sync."
+        return 0
+    fi
 
     for arch in amd64 arm64 386; do
         local bin_path="$bin_dir/linux-$arch/g8e.operator"
@@ -554,7 +563,7 @@ _sync_operator_binaries() {
             echo "    Uploading linux/$arch..."
             curl -sf -o /dev/null \
                 -X PUT \
-                --cacert "$OPERATOR_LISTEN_SSL_DIR/ca.crt" \
+                --cacert "$trust_bundle" \
                 -H 'Content-Type: application/octet-stream' \
                 -H "X-Internal-Auth: $auth_token" \
                 --data-binary "@$bin_path" \
@@ -566,9 +575,10 @@ _sync_operator_binaries() {
 _wait_operator_listen_healthy() {
     local url="$1" timeout_s="$2" interval="${3:-1}"
     local waited=0
+    local trust_bundle="${G8E_TRUST_BUNDLE:-$OPERATOR_LISTEN_PKI_DIR/trust/hub-bundle.pem}"
     echo "  Operator listen mode: waiting for $url..."
 
-    until curl -sfk "$url" >/dev/null 2>&1; do
+    until [[ -f "$trust_bundle" ]] && curl -sf --cacert "$trust_bundle" "$url" >/dev/null 2>&1; do
         if (( waited >= timeout_s )); then
             echo -e "  Operator listen mode: \033[0;31mTIMEOUT\033[0m"
             echo "  Operator listen mode did not become healthy within ${timeout_s}s. See $OPERATOR_LISTEN_LOG_FILE"
@@ -729,19 +739,20 @@ if [[ "$COMMAND" == "restart" ]]; then
 fi
 
 # ─── reset ───────────────────────────────────────────────────────────────────
-# Wipes DB data volumes and Operator listen-mode data. SSL certs are preserved.
-# Use 'clean' to remove everything including SSL.
+# Wipes DB data volumes and bootstrap secrets. PKI certs are preserved.
+# Use 'clean' to remove everything including PKI.
 
 if [[ "$COMMAND" == "reset" ]]; then
     mapfile -t RESET_COMPONENTS < <(_expand_components true "${REBUILD_COMPONENTS[@]}")
 
-    echo "Wiping Operator listen-mode data — SSL certs preserved..."
+    echo "Wiping Operator listen-mode data and secrets — PKI certs preserved..."
     _stop_g8ee
     _stop_g8ed
     _stop_operator_listen
     
     # Wipe host data
     rm -rf "$OPERATOR_LISTEN_DATA_DIR/"* 2>/dev/null || true
+    rm -rf "$OPERATOR_LISTEN_SECRETS_DIR/"* 2>/dev/null || true
     rm -rf "$PROJECT_ROOT/components/g8ee/data/"* 2>/dev/null || true
     rm -rf "$PROJECT_ROOT/components/g8ed/data/"* 2>/dev/null || true
 
@@ -767,7 +778,7 @@ if [[ "$COMMAND" == "reset" ]]; then
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Reset complete. SSL certs preserved — no need to re-trust."
+    echo "Reset complete. PKI certs preserved; bootstrap secrets were recreated."
     echo ""
     _print_platform_info
     exit 0
@@ -775,9 +786,9 @@ fi
 
 # ─── wipe ─────────────────────────────────────────────────────────────────────
 # Clears all app data from the Operator listen-mode database via the HTTP API.
-# Preserves: platform settings (components collection), SSL certs, auth token, LLM data.
+# Preserves: platform settings (components collection), PKI certs, secrets, auth token, LLM data.
 # Operator listen mode is restarted to flush in-memory state; no volume wipe, no rebuild.
-# Use 'reset' to wipe DB data volumes and rebuild from scratch (SSL still preserved).
+# Use 'reset' to wipe DB data volumes and rebuild from scratch (PKI still preserved).
 
 if [[ "$COMMAND" == "wipe" ]]; then
     _preflight
@@ -799,7 +810,8 @@ if [[ "$COMMAND" == "wipe" ]]; then
     _sync_operator_binaries
 
     echo "Clearing app data from Operator listen mode..."
-    curl -sfk -X POST -H "X-Internal-Auth: $(cat "$OPERATOR_LISTEN_SSL_DIR/internal_auth_token" 2>/dev/null | tr -d ' \n\r')" \
+    _wipe_trust_bundle="${G8E_TRUST_BUNDLE:-$OPERATOR_LISTEN_PKI_DIR/trust/hub-bundle.pem}"
+    curl -sf --cacert "$_wipe_trust_bundle" -X POST -H "X-Internal-Auth: $(cat "$OPERATOR_LISTEN_SECRETS_DIR/internal_auth_token" 2>/dev/null | tr -d ' \n\r')" \
         "https://localhost:$OPERATOR_LISTEN_HTTP_PORT/api/internal/store/wipe" || echo "  Warning: wipe endpoint failed"
     echo ""
 
@@ -816,7 +828,7 @@ if [[ "$COMMAND" == "wipe" ]]; then
 
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Wipe complete. Platform settings, SSL certs, and auth token preserved."
+    echo "Wipe complete. Platform settings, PKI certs, secrets, and auth token preserved."
     echo ""
     _print_platform_info
     exit 0

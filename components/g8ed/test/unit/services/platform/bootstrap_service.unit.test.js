@@ -64,8 +64,10 @@ describe('BootstrapService [UNIT - filesystem isolated]', () => {
         it('should use default volume path when not provided', () => {
             const service = new BootstrapService();
             // The default depends on G8E_PROJECT_ROOT or process.cwd(), so we just verify it's set
-            expect(service.volumePath).toBeDefined();
-            expect(service.volumePath).toContain('.g8e/ssl');
+            expect(service.secretsDir).toBeDefined();
+            expect(service.secretsDir).toContain('.g8e/secrets');
+            expect(service.pkiDir).toBeDefined();
+            expect(service.pkiDir).toContain('.g8e/pki');
         });
 
         it('should use custom volume path when provided', () => {

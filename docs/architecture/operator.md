@@ -76,7 +76,7 @@ Transforms the operator into the platform's backbone. It is started with the `--
 The default mode for execution on target hosts. The operator initiates an outbound connection and waits for protocol-governed envelopes.
 
 **Lifecycle:**
-1. **Discovery**: Resolves environment and local CA certificates from `.g8e/ssl`.
+1. **Discovery**: Resolves environment and local CA certificates from `.g8e/pki`.
 2. **Fingerprinting**: Generates a hardware-bound machine ID (CPU, OS, MachineID).
 3. **Auth**: Authenticates via `POST /api/auth/operator` using an API key or Device Token. Device tokens are typically used for automated evaluation fleet deployment.
 4. **Vault Unlock**: API key unlocks the local **Encryption Vault** to retrieve the Data Encryption Key (DEK).
@@ -120,7 +120,8 @@ When local storage is enabled (`-s`), the Operator maintains a **Local-First Aud
 | `--wss-listen-port` | Port for Pub/Sub connections (default: 443). |
 | `--http-listen-port` | Port for Operator HTTP protocol traffic (default: 443). |
 | `--data-dir` | Directory for persistence (default: `.g8e/data`). |
-| `--ssl-dir` | Directory for TLS certs (default: `.g8e/ssl`). |
+| `--pki-dir` | Directory for PKI hierarchy (default: `.g8e/pki`). |
+| `--secrets-dir` | Directory for bootstrap secrets (default: `.g8e/secrets`). |
 | `-s`, `--local-storage` | Enable local LFAA auditing (default: on). |
 | `-G`, `--no-git` | Disable the file ledger (git-backed versioning). |
 

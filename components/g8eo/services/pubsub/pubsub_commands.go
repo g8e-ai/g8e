@@ -79,14 +79,14 @@ type PubSubCommandService struct {
 
 	// auditorHMACKey is the shared Tribunal signing key used for L2
 	// governance verification. Loaded once at startup from
-	// <SSLDir>/auditor_hmac_key. When absent the dispatcher logs a
+	// <SecretsDir>/auditor_hmac_key. When absent the dispatcher logs a
 	// warning and accepts envelopes without L2 enforcement (deployment
 	// bootstrap phase). When present, all inbound envelopes are
 	// strictly verified and rejected on signature mismatch.
 	auditorHMACKey string
 
 	// trustedSigners holds ED25519 public keys for external L2 signers.
-	// Loaded from <SSLDir>/trusted_signers/*.pub
+	// Loaded from <PKIDir>/trusted_signers/*.pub
 	trustedSigners map[string]ed25519.PublicKey
 }
 
@@ -167,7 +167,7 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 	rs.trustedSigners = make(map[string]ed25519.PublicKey)
 
 	// Load L2 Tribunal HMAC key for governance verification
-	auditorHMACKeyPath := filepath.Join(c.Config.SSLDir, "auditor_hmac_key")
+	auditorHMACKeyPath := filepath.Join(c.Config.SecretsDir, "auditor_hmac_key")
 	keyBytes, err := os.ReadFile(auditorHMACKeyPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -187,8 +187,8 @@ func NewPubSubCommandService(c CommandServiceConfig) (*PubSubCommandService, err
 			"path", auditorHMACKeyPath)
 	}
 
-	// Load ED25519 trusted signers from <SSLDir>/trusted_signers/*.pub
-	signersDir := filepath.Join(c.Config.SSLDir, "trusted_signers")
+	// Load ED25519 trusted signers from <PKIDir>/trusted_signers/*.pub
+	signersDir := filepath.Join(c.Config.PKIDir, "trusted_signers")
 	if entries, err := os.ReadDir(signersDir); err == nil {
 		for _, entry := range entries {
 			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".pub") {

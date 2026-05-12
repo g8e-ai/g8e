@@ -46,7 +46,7 @@ type ListenDBService struct {
 }
 
 // NewListenDBService opens (or creates) the unified SQLite database.
-func NewListenDBService(dataDir string, sslDir string, logger *slog.Logger) (*ListenDBService, error) {
+func NewListenDBService(dataDir string, secretsDir string, logger *slog.Logger) (*ListenDBService, error) {
 	dbPath := filepath.Join(dataDir, "g8e.db")
 	cfg := sqliteutil.DefaultDBConfig(dbPath)
 
@@ -57,7 +57,7 @@ func NewListenDBService(dataDir string, sslDir string, logger *slog.Logger) (*Li
 
 	svc := &ListenDBService{db: db, logger: logger}
 
-	if err := svc.initSchema(sslDir); err != nil {
+	if err := svc.initSchema(secretsDir); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
@@ -66,12 +66,12 @@ func NewListenDBService(dataDir string, sslDir string, logger *slog.Logger) (*Li
 	return svc, nil
 }
 
-func (s *ListenDBService) initSchema(sslDir string) error {
+func (s *ListenDBService) initSchema(secretsDir string) error {
 	_, err := s.db.Exec(listenSchema)
 	if err != nil {
 		return err
 	}
-	sm := NewSecretManager(s.db, sslDir, s.logger)
+	sm := NewSecretManager(s.db, secretsDir, s.logger)
 	return sm.InitPlatformSettings()
 }
 

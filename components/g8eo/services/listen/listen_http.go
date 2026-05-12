@@ -14,11 +14,15 @@
 package listen
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -39,19 +43,19 @@ type HTTPHandler struct {
 	db      *ListenDBService
 	pubsub  *PubSubBroker
 	auth    *AuthService
-	certs   *CertStore
+	pki     *PKIAuthority
 	reg     *RegistrationService
 	isReady func() bool
 }
 
-func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker, auth *AuthService, certs *CertStore, reg *RegistrationService, isReady func() bool) *HTTPHandler {
+func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker, auth *AuthService, pki *PKIAuthority, reg *RegistrationService, isReady func() bool) *HTTPHandler {
 	return &HTTPHandler{
 		cfg:     cfg,
 		logger:  logger,
 		db:      db,
 		pubsub:  pubsub,
 		auth:    auth,
-		certs:   certs,
+		pki:     pki,
 		reg:     reg,
 		isReady: isReady,
 	}
@@ -61,6 +65,9 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/health", h.handleHealth)
+	mux.HandleFunc("/.well-known/g8e/pki/root.pem", h.handlePKIRoot)
+	mux.HandleFunc("/.well-known/g8e/pki/hub-bundle.pem", h.handlePKIHubBundle)
+	mux.HandleFunc("/.well-known/g8e/pki/fingerprint", h.handlePKIFingerprint)
 	mux.HandleFunc("/api/settings", h.handleSettings)
 	mux.HandleFunc("/api/operators/reauth", h.handleReauth)
 	mux.HandleFunc("/db/", h.handleDB)
@@ -68,12 +75,13 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux.HandleFunc("/pubsub/publish", h.handlePubSubPublish)
 	mux.Handle("/ws/pubsub", h.auth.WebSocketAuth(http.HandlerFunc(h.pubsub.HandleWebSocket)))
 	mux.HandleFunc("/blob/", h.handleBlob)
-	mux.HandleFunc("/ssl/sign-certificate", h.handleSignCertificate)
 	mux.HandleFunc("/auth/link/", h.handleDeviceLink)
 
 	// authMiddleware must be inside pathTraversalGuard to ensure ".." is caught
 	// before any other processing, but pathTraversalGuard itself doesn't need auth.
 	// Actually, pathTraversalGuard should be outermost to catch normalization attempts.
+	mux.HandleFunc("/api/pki/sign-csr", h.handlePKISignCSR)
+	mux.HandleFunc("/api/auth/device-link/register", h.handleDeviceLinkRegister)
 	return pathTraversalGuard(h.auth.Middleware(mux))
 }
 
@@ -141,6 +149,135 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 		Mode:    constants.Status.ListenMode.Mode,
 		Version: h.cfg.Version,
 	})
+}
+
+func (h *HTTPHandler) handlePKIRoot(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	pem, err := os.ReadFile(filepath.Join(h.pki.PKIDir(), "root", "root_ca.crt"))
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, "failed to read root CA")
+		return
+	}
+	w.Header().Set("Content-Type", "application/x-pem-file")
+	w.WriteHeader(http.StatusOK)
+	w.Write(pem)
+}
+
+func (h *HTTPHandler) handlePKIHubBundle(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	pem, err := h.pki.HubTrustBundle()
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, "failed to read hub bundle")
+		return
+	}
+	w.Header().Set("Content-Type", "application/x-pem-file")
+	w.WriteHeader(http.StatusOK)
+	w.Write(pem)
+}
+
+func (h *HTTPHandler) handlePKIFingerprint(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	// Return the SHA-256 fingerprint of the root CA
+	pemData, err := os.ReadFile(filepath.Join(h.pki.PKIDir(), "root", "root_ca.crt"))
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, "failed to read root CA")
+		return
+	}
+
+	block, _ := pem.Decode(pemData)
+	if block == nil {
+		jsonError(w, http.StatusInternalServerError, "invalid root CA PEM")
+		return
+	}
+
+	hash := sha256.Sum256(block.Bytes)
+	fingerprint := hex.EncodeToString(hash[:])
+
+	jsonResponse(w, http.StatusOK, map[string]string{
+		"root_ca": "sha256:" + fingerprint,
+	})
+}
+
+func (h *HTTPHandler) handlePKISignCSR(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	body, err := readBody(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "failed to read body")
+		return
+	}
+
+	var req struct {
+		CSR            string `json:"csr_pem"`
+		LeafType       string `json:"leaf_type"`
+		OrganizationID string `json:"organization_id"`
+		OperatorID     string `json:"operator_id"`
+		SessionID      string `json:"session_id"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	certPEM, chainPEM, err := h.pki.SignCSR(req.CSR, req.LeafType, req.OrganizationID, req.OperatorID, req.SessionID)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]string{
+		"certificate_pem":       certPEM,
+		"certificate_chain_pem": chainPEM,
+	})
+}
+
+func (h *HTTPHandler) handleDeviceLinkRegister(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	body, err := readBody(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "failed to read body")
+		return
+	}
+
+	// We'll reuse the existing RegisterDevice logic but expose it via this new route
+	// The token usually comes from the URL in handleDeviceLink, but here we might
+	// want it in the body or header for the new protocol.
+	// For now, let's just forward to handleDeviceLink style if we have a token.
+	token := r.Header.Get("X-G8E-Device-Token")
+	if token == "" {
+		jsonError(w, http.StatusBadRequest, "missing X-G8E-Device-Token")
+		return
+	}
+
+	var req models.OperatorRegistrationRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	resp, err := h.reg.RegisterDevice(token, req)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, resp)
 }
 
 // =============================================================================
@@ -792,49 +929,4 @@ func (h *HTTPHandler) handleDeviceLink(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonResponse(w, http.StatusOK, resp)
-}
-
-func (h *HTTPHandler) handleSignCertificate(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	body, err := readBody(r)
-	if err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON body")
-		return
-	}
-
-	var req struct {
-		PublicKeyPEM       string `json:"public_key_pem"`
-		CommonName         string `json:"common_name"`
-		OrganizationalUnit string `json:"organizational_unit"`
-		ValidityDays       int    `json:"validity_days"`
-	}
-	if err := json.Unmarshal(body, &req); err != nil {
-		jsonError(w, http.StatusBadRequest, "invalid JSON body")
-		return
-	}
-
-	if h.certs == nil {
-		jsonError(w, http.StatusNotImplemented, "CA signing not enabled on this instance")
-		return
-	}
-
-	certPEM, serial, err := h.certs.SignCertificate(req.PublicKeyPEM, req.CommonName, req.OrganizationalUnit, req.ValidityDays)
-	if err != nil {
-		h.logger.Error("Failed to sign certificate", "error", err)
-		jsonResponse(w, http.StatusInternalServerError, map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
-		return
-	}
-
-	jsonResponse(w, http.StatusOK, map[string]interface{}{
-		"success":         true,
-		"certificate_pem": certPEM,
-		"serial":          serial.String(),
-	})
 }

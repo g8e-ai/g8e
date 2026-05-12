@@ -36,7 +36,7 @@ vi.mock('@g8ed/utils/logger.js', () => ({
 function createMockInternalHttpClient() {
     const mockOperatorClient = {
         post: vi.fn().mockImplementation(async (path, body) => {
-            if (path === '/ssl/sign-certificate') {
+            if (path === '/.well-known/g8e/pki/sign-csr') {
                 const data = JSON.parse(body);
                 return {
                     success: true,
@@ -200,10 +200,10 @@ describe('CertificateService [UNIT - filesystem isolated]', { timeout: 30000 }, 
 
             expect(result).toHaveProperty('cert');
             expect(result.cert).toBe('-----BEGIN CERTIFICATE-----\nMOCK OPERATOR CERT\n-----END CERTIFICATE-----');
-            
+
             const operatorClient = certService._internalHttpClient._bootstrapService._operatorClient;
-            expect(operatorClient.post).toHaveBeenCalledWith('/ssl/sign-certificate', expect.stringContaining(operatorId));
-            expect(operatorClient.post).toHaveBeenCalledWith('/ssl/sign-certificate', expect.stringContaining(userId));
+            expect(operatorClient.post).toHaveBeenCalledWith('/.well-known/g8e/pki/sign-csr', expect.stringContaining(operatorId));
+            expect(operatorClient.post).toHaveBeenCalledWith('/.well-known/g8e/pki/sign-csr', expect.stringContaining(userId));
         });
 
         it('should auto-initialize if not already initialized', async () => {

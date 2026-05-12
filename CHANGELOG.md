@@ -28,7 +28,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Removed Docker:** Eliminated Docker containerization across the platform. Components now run directly on the host with the Operator binary in listen mode.
-- **g8es Component Removal:** Removed the g8es component abstraction. The platform now consists of exactly three components: Operator, Dashboard (g8ed), and Engine (g8ee).
 - **Platform Architecture:** Migrated to host-native execution model with platform runtime state in repo-local `.g8e` directory.
 - **Build System:** Comprehensive updates to `build.sh` for host-native bootstrapping, improved auth token handling, and better signal handling.
 - **Documentation:** Updated all documentation to reflect the removal of Docker and the new host-native architecture.
@@ -48,7 +47,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - **Dockerfiles:** Removed all Dockerfile configurations (Dockerfile, Dockerfile.test) from components.
 - **docker-compose.yml:** Removed Docker Compose configuration for platform components.
-- **g8es References:** Removed all references to the g8es component from code, tests, and documentation.
 
 ---
 

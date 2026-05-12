@@ -29,15 +29,15 @@ import (
 // Ported from g8ed/DeviceLinkService and g8ee/OperatorAuthService.
 type RegistrationService struct {
 	db     *ListenDBService
-	certs  *CertStore
+	pki    *PKIAuthority
 	logger *slog.Logger
 }
 
 // NewRegistrationService creates a new RegistrationService.
-func NewRegistrationService(db *ListenDBService, certs *CertStore, logger *slog.Logger) *RegistrationService {
+func NewRegistrationService(db *ListenDBService, pki *PKIAuthority, logger *slog.Logger) *RegistrationService {
 	return &RegistrationService{
 		db:     db,
-		certs:  certs,
+		pki:    pki,
 		logger: logger,
 	}
 }
@@ -136,13 +136,28 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 		"claimed":             true,
 		"claimed_at":          time.Now().UTC(),
 	}
+
+	// 6. CSR-based enrollment (Phase 5)
+	if req.CSR != "" {
+		certPEM, chainPEM, err := s.pki.SignCSR(req.CSR, "operator", linkData.OrganizationID, operator.ID, sessionID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to sign operator CSR: %w", err)
+		}
+		update["operator_cert"] = certPEM
+		update["operator_cert_chain"] = chainPEM
+		update["operator_cert_serial"] = "" // TODO: Extract from cert if needed
+	} else {
+		// Mandatory CSR check per improve_ssl.md
+		return nil, fmt.Errorf("CSR required for device registration")
+	}
+
 	updateBytes, _ := json.Marshal(update)
 	_, err := s.db.DocUpdate("operators", operator.ID, updateBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update operator status: %w", err)
 	}
 
-	// 6. Generate credentials
+	// 7. Generate credentials
 	// In the substrate, we'll return the same api_key the operator already has
 	// or generate a new one if it's missing.
 	apiKey := operator.OperatorAPIKey
@@ -152,12 +167,22 @@ func (s *RegistrationService) RegisterDevice(token string, req models.OperatorRe
 		s.db.DocUpdate("operators", operator.ID, json.RawMessage(fmt.Sprintf(`{"operator_api_key": %q}`, apiKey)))
 	}
 
-	// 7. Return response
+	// 8. Fetch trust bundle
+	hubBundle, _ := s.pki.HubTrustBundle()
+
+	// 9. Fetch operator cert and chain from updated doc or variables
+	finalCertPEM := update["operator_cert"].(string)
+	finalChainPEM := update["operator_cert_chain"].(string)
+
+	// 10. Return response
 	return &models.OperatorRegistrationResponse{
 		Success:           true,
 		OperatorID:        operator.ID,
 		OperatorSessionID: sessionID,
 		APIKey:            apiKey,
+		OperatorCert:      finalCertPEM,
+		OperatorCertChain: finalChainPEM,
+		HubTrustBundle:    string(hubBundle),
 		Session:           session,
 	}, nil
 }

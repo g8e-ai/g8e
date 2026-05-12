@@ -59,24 +59,24 @@ func readSecretFromDB(t *testing.T, db *sqliteutil.DB, name string) string {
 
 func TestSecretManager_InitPlatformSettings_CreatesSecretsAndFiles(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	sslDir := t.TempDir()
-	sm := NewSecretManager(db, sslDir, testutil.NewTestLogger())
+	secretsDir := t.TempDir()
+	sm := NewSecretManager(db, secretsDir, testutil.NewTestLogger())
 
 	require.NoError(t, sm.InitPlatformSettings())
 
-	tokenBytes, err := os.ReadFile(filepath.Join(sslDir, "internal_auth_token"))
+	tokenBytes, err := os.ReadFile(filepath.Join(secretsDir, "internal_auth_token"))
 	require.NoError(t, err)
 	token := strings.TrimSpace(string(tokenBytes))
 	assert.NotEmpty(t, token)
 	assert.Equal(t, token, readSecretFromDB(t, db, "internal_auth_token"))
 
-	keyBytes, err := os.ReadFile(filepath.Join(sslDir, "session_encryption_key"))
+	keyBytes, err := os.ReadFile(filepath.Join(secretsDir, "session_encryption_key"))
 	require.NoError(t, err)
 	key := strings.TrimSpace(string(keyBytes))
 	assert.NotEmpty(t, key)
 	assert.Equal(t, key, readSecretFromDB(t, db, "session_encryption_key"))
 
-	hmacBytes, err := os.ReadFile(filepath.Join(sslDir, "auditor_hmac_key"))
+	hmacBytes, err := os.ReadFile(filepath.Join(secretsDir, "auditor_hmac_key"))
 	require.NoError(t, err)
 	hmacKey := strings.TrimSpace(string(hmacBytes))
 	assert.NotEmpty(t, hmacKey)
@@ -85,12 +85,11 @@ func TestSecretManager_InitPlatformSettings_CreatesSecretsAndFiles(t *testing.T)
 
 func TestSecretManager_InitPlatformSettings_FailsWhenFileWriteFails(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	// Create an sslDir that is read-only so os.WriteFile fails.
-	sslDir := t.TempDir()
-	require.NoError(t, os.Chmod(sslDir, 0500))
-	t.Cleanup(func() { _ = os.Chmod(sslDir, 0700) })
+	secretsDir := t.TempDir()
+	require.NoError(t, os.Chmod(secretsDir, 0500))
+	t.Cleanup(func() { _ = os.Chmod(secretsDir, 0700) })
 
-	sm := NewSecretManager(db, sslDir, testutil.NewTestLogger())
+	sm := NewSecretManager(db, secretsDir, testutil.NewTestLogger())
 	err := sm.InitPlatformSettings()
 	require.Error(t, err, "InitPlatformSettings must surface file write failures as hard errors")
 	assert.Contains(t, err.Error(), "write bootstrap secret")
@@ -98,15 +97,11 @@ func TestSecretManager_InitPlatformSettings_FailsWhenFileWriteFails(t *testing.T
 
 func TestSecretManager_InitPlatformSettings_DetectsDBFileDivergence(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	sslDir := t.TempDir()
+	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
 
-	// First run: create both DB doc and volume files.
-	require.NoError(t, NewSecretManager(db, sslDir, logger).InitPlatformSettings())
+	require.NoError(t, NewSecretManager(db, secretsDir, logger).InitPlatformSettings())
 
-	// Simulate a divergent DB update (hot-swap) that does not touch the volume
-	// file. The next InitPlatformSettings call must detect this and refuse to
-	// continue, since two sources of truth would otherwise silently disagree.
 	var dataJSON string
 	require.NoError(t, db.QueryRow(
 		"SELECT data FROM documents WHERE collection = 'settings' AND id = 'platform_settings'",
@@ -122,26 +117,19 @@ func TestSecretManager_InitPlatformSettings_DetectsDBFileDivergence(t *testing.T
 	)
 	require.NoError(t, err)
 
-	// Clear the on-disk file to force InitPlatformSettings to skip the
-	// file-authoritative sync branch, leaving DB != file.
-	tokenPath := filepath.Join(sslDir, "internal_auth_token")
-	require.NoError(t, os.WriteFile(tokenPath, []byte("stale-file-value"), 0600))
-
-	sm := NewSecretManager(db, sslDir, logger)
+	sm := NewSecretManager(db, secretsDir, logger)
 	err = sm.InitPlatformSettings()
-	// File is non-empty, so file wins and DB is rewritten. Post-sync the two
-	// should agree again. Verify that and confirm no error.
-	require.NoError(t, err)
-	assert.Equal(t, "stale-file-value", readSecretFromDB(t, db, "internal_auth_token"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "differs between secrets directory and platform_settings DB")
 }
 
 func TestSecretManager_InitPlatformSettings_WritesDigestManifest(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	sslDir := t.TempDir()
-	sm := NewSecretManager(db, sslDir, testutil.NewTestLogger())
+	secretsDir := t.TempDir()
+	sm := NewSecretManager(db, secretsDir, testutil.NewTestLogger())
 	require.NoError(t, sm.InitPlatformSettings())
 
-	manifestPath := filepath.Join(sslDir, BootstrapDigestManifestFile)
+	manifestPath := filepath.Join(secretsDir, BootstrapDigestManifestFile)
 	data, err := os.ReadFile(manifestPath)
 	require.NoError(t, err, "bootstrap digest manifest must be written")
 
@@ -163,127 +151,106 @@ func TestSecretManager_InitPlatformSettings_WritesDigestManifest(t *testing.T) {
 
 func TestSecretManager_InitPlatformSettings_ManifestPermissions(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	sslDir := t.TempDir()
-	sm := NewSecretManager(db, sslDir, testutil.NewTestLogger())
+	secretsDir := t.TempDir()
+	sm := NewSecretManager(db, secretsDir, testutil.NewTestLogger())
 	require.NoError(t, sm.InitPlatformSettings())
 
-	info, err := os.Stat(filepath.Join(sslDir, BootstrapDigestManifestFile))
+	info, err := os.Stat(filepath.Join(secretsDir, BootstrapDigestManifestFile))
 	require.NoError(t, err)
-	// Manifest carries only digests but is restricted to 0600 for defense in
-	// depth; the digests are not sensitive, but loose perms would be
-	// out-of-pattern with the sibling secret files.
 	assert.Equal(t, os.FileMode(0600), info.Mode().Perm())
 }
 
-func TestSecretManager_InitPlatformSettings_RewritesManifestOnSecretRotation(t *testing.T) {
+func TestSecretManager_InitPlatformSettings_RejectsUncoordinatedSecretRotation(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	sslDir := t.TempDir()
+	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
 
-	require.NoError(t, NewSecretManager(db, sslDir, logger).InitPlatformSettings())
+	require.NoError(t, NewSecretManager(db, secretsDir, logger).InitPlatformSettings())
 
-	// Simulate a rotation by changing the on-disk token and rerunning init.
-	// File-wins semantics update the DB; the manifest must then reflect the
-	// new digest, not the old one.
 	rotated := strings.Repeat("a", 64)
-	require.NoError(t, os.WriteFile(filepath.Join(sslDir, "internal_auth_token"), []byte(rotated), 0600))
-	require.NoError(t, NewSecretManager(db, sslDir, logger).InitPlatformSettings())
+	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "internal_auth_token"), []byte(rotated), 0600))
 
-	data, err := os.ReadFile(filepath.Join(sslDir, BootstrapDigestManifestFile))
+	err := NewSecretManager(db, secretsDir, logger).InitPlatformSettings()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "differs between secrets directory and platform_settings DB")
+}
+
+func TestSecretManager_InitPlatformSettings_RejectsPreexistingSecretWithoutPlatformSettings(t *testing.T) {
+	db := newSecretManagerTestDB(t)
+	secretsDir := t.TempDir()
+	logger := testutil.NewTestLogger()
+
+	preSeeded := strings.Repeat("c", 64)
+	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "auditor_hmac_key"), []byte(preSeeded), 0600))
+
+	err := NewSecretManager(db, secretsDir, logger).InitPlatformSettings()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "found preexisting bootstrap secret auditor_hmac_key without platform_settings")
+}
+
+func TestSecretManager_InitPlatformSettings_FailsWhenRequiredSecretFileMissing(t *testing.T) {
+	db := newSecretManagerTestDB(t)
+	secretsDir := t.TempDir()
+	logger := testutil.NewTestLogger()
+
+	require.NoError(t, NewSecretManager(db, secretsDir, logger).InitPlatformSettings())
+	require.NoError(t, os.Remove(filepath.Join(secretsDir, "auditor_hmac_key")))
+
+	err := NewSecretManager(db, secretsDir, logger).InitPlatformSettings()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "bootstrap secret auditor_hmac_key is required")
+}
+
+func TestSecretManager_InitPlatformSettings_FailsWhenDigestManifestMissing(t *testing.T) {
+	db := newSecretManagerTestDB(t)
+	secretsDir := t.TempDir()
+	logger := testutil.NewTestLogger()
+
+	require.NoError(t, NewSecretManager(db, secretsDir, logger).InitPlatformSettings())
+	require.NoError(t, os.Remove(filepath.Join(secretsDir, BootstrapDigestManifestFile)))
+
+	err := NewSecretManager(db, secretsDir, logger).InitPlatformSettings()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "bootstrap digest manifest")
+	assert.Contains(t, err.Error(), "is required")
+}
+
+func TestSecretManager_InitPlatformSettings_FailsWhenDigestManifestEntryMissing(t *testing.T) {
+	db := newSecretManagerTestDB(t)
+	secretsDir := t.TempDir()
+	logger := testutil.NewTestLogger()
+
+	require.NoError(t, NewSecretManager(db, secretsDir, logger).InitPlatformSettings())
+	manifestPath := filepath.Join(secretsDir, BootstrapDigestManifestFile)
+	data, err := os.ReadFile(manifestPath)
 	require.NoError(t, err)
 	var manifest bootstrapDigestManifest
 	require.NoError(t, json.Unmarshal(data, &manifest))
-
-	expected := sha256.Sum256([]byte(rotated))
-	assert.Equal(t, hex.EncodeToString(expected[:]),
-		manifest.Secrets["internal_auth_token"].SHA256,
-		"manifest must be rewritten to reflect rotated secret")
-}
-
-func TestSecretManager_InitPlatformSettings_SyncsAuditorHmacKeyFromFile(t *testing.T) {
-	db := newSecretManagerTestDB(t)
-	sslDir := t.TempDir()
-	logger := testutil.NewTestLogger()
-
-	// Pre-seed the on-disk file before any DB row exists. File-wins semantics
-	// (mirroring internal_auth_token/session_encryption_key) must copy the
-	// provided value into the DB rather than generate a fresh one.
-	preSeeded := strings.Repeat("c", 64)
-	require.NoError(t, os.WriteFile(filepath.Join(sslDir, "auditor_hmac_key"), []byte(preSeeded), 0600))
-
-	require.NoError(t, NewSecretManager(db, sslDir, logger).InitPlatformSettings())
-
-	assert.Equal(t, preSeeded, readSecretFromDB(t, db, "auditor_hmac_key"))
-}
-
-func TestSecretManager_InitPlatformSettings_SyncsAuditorHmacKeyFromDB(t *testing.T) {
-	db := newSecretManagerTestDB(t)
-	sslDir := t.TempDir()
-	logger := testutil.NewTestLogger()
-
-	// First run creates the secret. Remove the on-disk file to simulate a
-	// volume that was wiped but whose DB still carries the authoritative
-	// value; the next init must recreate the file from the DB.
-	require.NoError(t, NewSecretManager(db, sslDir, logger).InitPlatformSettings())
-	dbValue := readSecretFromDB(t, db, "auditor_hmac_key")
-	require.NotEmpty(t, dbValue)
-	require.NoError(t, os.Remove(filepath.Join(sslDir, "auditor_hmac_key")))
-
-	require.NoError(t, NewSecretManager(db, sslDir, logger).InitPlatformSettings())
-
-	restored, err := os.ReadFile(filepath.Join(sslDir, "auditor_hmac_key"))
+	delete(manifest.Secrets, "auditor_hmac_key")
+	mutated, err := json.Marshal(manifest)
 	require.NoError(t, err)
-	assert.Equal(t, dbValue, strings.TrimSpace(string(restored)))
-}
+	require.NoError(t, os.WriteFile(manifestPath, mutated, 0600))
 
-func TestSecretManager_verifyDBMatchesFile_DetectsAuditorHmacKeyDivergence(t *testing.T) {
-	db := newSecretManagerTestDB(t)
-	sslDir := t.TempDir()
-	sm := NewSecretManager(db, sslDir, testutil.NewTestLogger())
-	require.NoError(t, sm.InitPlatformSettings())
-
-	hmacPath := filepath.Join(sslDir, "auditor_hmac_key")
-	require.NoError(t, os.WriteFile(hmacPath, []byte("tampered-hmac"), 0600))
-
-	err := sm.verifyDBMatchesFile(hmacPath, "auditor_hmac_key")
+	err = NewSecretManager(db, secretsDir, logger).InitPlatformSettings()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "differs between volume file and platform_settings DB")
-}
-
-func TestSecretManager_verifyDBMatchesFile_ReturnsErrorOnMismatch(t *testing.T) {
-	db := newSecretManagerTestDB(t)
-	sslDir := t.TempDir()
-	sm := NewSecretManager(db, sslDir, testutil.NewTestLogger())
-	require.NoError(t, sm.InitPlatformSettings())
-
-	// Corrupt only the on-disk file after a successful init. The direct
-	// verifier call must detect the divergence.
-	tokenPath := filepath.Join(sslDir, "internal_auth_token")
-	require.NoError(t, os.WriteFile(tokenPath, []byte("tampered"), 0600))
-
-	err := sm.verifyDBMatchesFile(tokenPath, "internal_auth_token")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "differs between volume file and platform_settings DB")
+	assert.Contains(t, err.Error(), "bootstrap digest manifest missing required entry auditor_hmac_key")
 }
 
 func TestSecretManager_InitPlatformSettings_ReturnsErrorOnMalformedPlatformSettings(t *testing.T) {
 	db := newSecretManagerTestDB(t)
-	sslDir := t.TempDir()
+	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
 
-	// First run: create a valid platform_settings document.
-	require.NoError(t, NewSecretManager(db, sslDir, logger).InitPlatformSettings())
+	require.NoError(t, NewSecretManager(db, secretsDir, logger).InitPlatformSettings())
 
-	// Corrupt the platform_settings document with malformed JSON.
 	_, err := db.Exec(
 		"UPDATE documents SET data = ? WHERE collection = 'settings' AND id = 'platform_settings'",
 		"{invalid json",
 	)
 	require.NoError(t, err)
 
-	// Second run: should fail with a clear error instead of silently skipping the upgrade path.
-	sm := NewSecretManager(db, sslDir, logger)
+	sm := NewSecretManager(db, secretsDir, logger)
 	err = sm.InitPlatformSettings()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to unmarshal platform_settings document for upgrade")
+	assert.Contains(t, err.Error(), "failed to unmarshal platform_settings document")
 }

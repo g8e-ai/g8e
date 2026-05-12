@@ -115,7 +115,8 @@ This document explains the unified storage architecture for the g8e platform. It
 | Component | Technology | Path/Volume | Role |
 |---|---|---|---|
 | **Platform Hub (Substrate)** | SQLite | `.g8e/data/g8e.db` | Central platform state (Coordination Store). |
-| **Platform Hub (SSL)** | TLS Certs | `.g8e/ssl` | CA, identity, and bootstrap secrets. **Root of Trust**. |
+| **Platform Hub (PKI)** | TLS Certs | `.g8e/pki` | CA hierarchy, intermediate CAs, trust bundles. **Root of Trust**. |
+| **Platform Hub (Secrets)** | Bootstrap Secrets | `.g8e/secrets` | Internal auth token, session encryption key with tamper-evidence manifest. |
 | **Optional Adapters** | None | - | Stateless clients; use `DBClient` and `KVCacheClient`. |
 | **Operator (Scrubbed)** | SQLite | `.g8e/local_state.db` | Sentinel-scrubbed AI context. |
 | **Operator (Raw)** | SQLite | `.g8e/raw_vault.db` | Customer-only unscrubbed forensic record. |
@@ -135,12 +136,18 @@ The Coordination Store is the platform's central coordination point. It is imple
 - **SSE Buffer**: A ring buffer for Server-Sent Events, ensuring clients can catch up after disconnects.
 - **PubSub Broker**: Real-time message distribution for coordination between the Engine and Dashboard.
 
-### The SSL Directory (Root of Trust)
-The `.g8e/ssl` directory is the platform's root of trust. It stores:
-1. **CA Certificates**: Root and intermediate certificates for mTLS.
-2. **Bootstrap Secrets**: `internal_auth_token`, `session_encryption_key`, and `auditor_hmac_key`.
+### The PKI and Secrets Directories (Root of Trust)
+The `.g8e/pki` and `.g8e/secrets` directories form the platform's root of trust.
 
-On startup, `g8eo` synchronizes these secrets into its database. If a conflict occurs, the SSL directory is the authoritative source.
+**PKI Directory (`.g8e/pki/`)** stores:
+1. **CA Hierarchy**: Root CA, intermediate CAs (hub, operator, bootstrap), and trust bundles.
+2. **Issued Certificates**: Server and workload certificates signed by intermediate CAs.
+
+**Secrets Directory (`.g8e/secrets/`)** stores:
+1. **Bootstrap Secrets**: `internal_auth_token`, `session_encryption_key`.
+2. **Tamper-Evidence Manifest**: `bootstrap_digest.json` with SHA-256 digests of each secret.
+
+On startup, `g8eo` SecretManager validates that secrets match the bootstrap digest manifest. If a conflict occurs, startup fails hard with actionable error messages.
 
 ### Cache-Aside Consistency
 `g8ee` and `g8ed` implement a cache-aside pattern for performance:

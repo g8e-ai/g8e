@@ -22,13 +22,13 @@ import (
 	"time"
 )
 
-// FetchAndSetCA fetches the hub CA certificate from the given URL
-// (e.g. https://host/ssl/ca.crt), validates it is a non-empty PEM block,
+// FetchAndSetCA fetches the hub trust bundle from the given URL
+// (e.g. https://host/.well-known/g8e/pki/hub-bundle.pem), validates it is a non-empty PEM block,
 // and stores it via SetCA for use by all subsequent TLS connections.
 //
-// This is the bootstrap step that establishes trust. The CA endpoint is
+// This is the bootstrap step that establishes trust. The trust bundle endpoint is
 // unauthenticated by design — it is equivalent to a certificate pinning
-// fetch. All subsequent connections are verified against this CA.
+// fetch. All subsequent connections are verified against this trust bundle.
 func FetchAndSetCA(ctx context.Context, caURL string) error {
 	client := &http.Client{Timeout: 15 * time.Second}
 

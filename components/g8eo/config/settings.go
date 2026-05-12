@@ -28,7 +28,8 @@ type Settings struct {
 	OperatorEndpoint  string
 	OperatorSessionID string
 	InternalAuthToken string
-	SSLDir            string
+	PKIDir            string
+	SecretsDir        string
 	PubSubCACert      string
 	DeviceToken       string
 	LogLevel          string
@@ -69,7 +70,8 @@ func LoadSettings() Settings {
 		OperatorEndpoint:     readVar(constants.EnvVar.OperatorEndpoint),
 		OperatorSessionID:    readVar(constants.EnvVar.OperatorSessionID),
 		InternalAuthToken:    readVar(constants.EnvVar.InternalAuthToken),
-		SSLDir:               readVar(constants.EnvVar.SSLDir),
+		PKIDir:               readVar(constants.EnvVar.PKIDir),
+		SecretsDir:           readVar(constants.EnvVar.SecretsDir),
 		PubSubCACert:         readVar(constants.EnvVar.PubSubCACert),
 		DeviceToken:          readVar(constants.EnvVar.DeviceToken),
 		LogLevel:             readVar(constants.EnvVar.LogLevel),

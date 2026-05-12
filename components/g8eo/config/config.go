@@ -44,8 +44,9 @@ type LoadOptions struct {
 	// Working directory
 	WorkDir string // Absolute path of the directory the operator was launched from (--working-dir or os.Getwd())
 
-	// SSL directory
-	SSLDir string // Directory for TLS certificates and auditor_hmac_key (default: .g8e/ssl in working directory)
+	// PKI and Secrets directories
+	PKIDir     string
+	SecretsDir string
 
 	// Monitoring
 	HeartbeatInterval time.Duration // --heartbeat-interval: overrides the 30s default when non-zero
@@ -71,7 +72,8 @@ type ListenConfig struct {
 	WSSPort     int    // WSS/TLS port for operator pub/sub connections (default: 443)
 	HTTPPort    int    // TLS/HTTPS port for internal g8ee/g8ed traffic (default: 443)
 	DataDir     string // Root directory for SQLite database (default: .g8e/data in working directory)
-	SSLDir      string // Directory for TLS certificates (default: DataDir/ssl; override with --ssl-dir)
+	PKIDir      string // Directory for TLS certificates (default: .g8e/pki)
+	SecretsDir  string // Directory for platform secrets (default: .g8e/secrets)
 	TLSCertPath string // Path to an externally-managed TLS certificate (optional; auto-generated when empty)
 	TLSKeyPath  string // Path to an externally-managed TLS private key (optional; auto-generated when empty)
 }
@@ -152,8 +154,9 @@ type Config struct {
 	// All data storage and command execution is anchored here unless explicitly overridden.
 	WorkDir string
 
-	// SSL directory for TLS certificates and auditor_hmac_key
-	SSLDir string
+	// PKI and Secrets directories
+	PKIDir     string
+	SecretsDir string
 
 	// Local storage configuration. All paths are relative to WorkDir — the directory the operator was launched from.
 	LocalStoreEnabled       bool
@@ -181,7 +184,7 @@ type Config struct {
 // LoadListen creates configuration for --listen mode.
 // Listen mode skips all operator-mode validation — no API key, no endpoint,
 // no outbound connections. The Operator simply starts and listens locally.
-func LoadListen(wssPort, httpPort int, dataDir, sslDir, tlsCertPath, tlsKeyPath string) (*Config, error) {
+func LoadListen(wssPort, httpPort int, dataDir, pkiDir, secretsDir, tlsCertPath, tlsKeyPath string) (*Config, error) {
 	if dataDir == "" {
 		cwd, err := os.Getwd()
 		if err != nil {
@@ -189,11 +192,25 @@ func LoadListen(wssPort, httpPort int, dataDir, sslDir, tlsCertPath, tlsKeyPath 
 		}
 		dataDir = filepath.Join(cwd, ".g8e", "data")
 	}
+	if pkiDir == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return nil, fmt.Errorf("failed to determine working directory: %w", err)
+		}
+		pkiDir = filepath.Join(cwd, ".g8e", "pki")
+	}
+	if secretsDir == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return nil, fmt.Errorf("failed to determine working directory: %w", err)
+		}
+		secretsDir = filepath.Join(cwd, ".g8e", "secrets")
+	}
 	if wssPort == 0 {
-		wssPort = 443
+		wssPort = 9001
 	}
 	if httpPort == 0 {
-		httpPort = 443
+		httpPort = 9000
 	}
 
 	return &Config{
@@ -203,7 +220,8 @@ func LoadListen(wssPort, httpPort int, dataDir, sslDir, tlsCertPath, tlsKeyPath 
 			WSSPort:     wssPort,
 			HTTPPort:    httpPort,
 			DataDir:     dataDir,
-			SSLDir:      sslDir,
+			PKIDir:      pkiDir,
+			SecretsDir:  secretsDir,
 			TLSCertPath: tlsCertPath,
 			TLSKeyPath:  tlsKeyPath,
 		},
@@ -244,7 +262,8 @@ func Load(opts LoadOptions) (*Config, error) {
 		CloudProvider:     opts.CloudProvider,
 		LocalStoreEnabled: opts.LocalStorageEnabled,
 		WorkDir:           workDir,
-		SSLDir:            opts.SSLDir,
+		PKIDir:            opts.PKIDir,
+		SecretsDir:        opts.SecretsDir,
 
 		// Derived values — ports default to 443
 		Endpoint:      opts.OperatorEndpoint,
@@ -278,9 +297,14 @@ func Load(opts LoadOptions) (*Config, error) {
 		IPResolver: opts.IPResolver,
 	}
 
-	// Default SSLDir to .g8e/ssl if not explicitly set
-	if cfg.SSLDir == "" {
-		cfg.SSLDir = filepath.Join(workDir, ".g8e", "ssl")
+	// Default PKIDir to .g8e/pki if not explicitly set
+	if cfg.PKIDir == "" {
+		cfg.PKIDir = filepath.Join(workDir, ".g8e", "pki")
+	}
+
+	// Default SecretsDir to .g8e/secrets if not explicitly set
+	if cfg.SecretsDir == "" {
+		cfg.SecretsDir = filepath.Join(workDir, ".g8e", "secrets")
 	}
 
 	return cfg, nil

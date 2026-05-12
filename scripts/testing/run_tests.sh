@@ -127,38 +127,37 @@ fi
 # =============================================================================
 
 _install_ca_cert() {
-    local ssl_dir="${G8E_SSL_DIR:-$PROJECT_ROOT/.g8e/ssl}"
-    local ca_cert="$ssl_dir/ca.crt"
-    [[ ! -f "$ca_cert" ]] && ca_cert="$ssl_dir/ca/ca.crt"
+    local pki_dir="${G8E_PKI_DIR:-$PROJECT_ROOT/.g8e/pki}"
+    local ca_cert="${G8E_TRUST_BUNDLE:-$pki_dir/trust/hub-bundle.pem}"
     if [[ ! -f "$ca_cert" ]]; then
-        log_warn "Platform CA cert not found at $ca_cert"
+        log_warn "Platform trust bundle not found at $ca_cert"
         return
     fi
     export G8E_SSL_CERT_FILE="$ca_cert"
     export NODE_EXTRA_CA_CERTS="$ca_cert"
-    log_ok "Platform CA cert set (G8E_SSL_CERT_FILE=$ca_cert)"
+    log_ok "Platform trust bundle set (G8E_SSL_CERT_FILE=$ca_cert)"
 }
 
 _load_platform_secrets() {
-    local ssl_dir="${G8E_SSL_DIR:-$PROJECT_ROOT/.g8e/ssl}"
-    local auth_token_file="$ssl_dir/internal_auth_token"
-    local session_key_file="$ssl_dir/session_encryption_key"
+    local secrets_dir="${G8E_SECRETS_DIR:-$PROJECT_ROOT/.g8e/secrets}"
+    local auth_token_file="$secrets_dir/internal_auth_token"
+    local session_key_file="$secrets_dir/session_encryption_key"
     if [[ -f "$auth_token_file" ]]; then
         export G8E_INTERNAL_AUTH_TOKEN=$(cat "$auth_token_file" | tr -d ' \n\r')
-        log_ok "G8E_INTERNAL_AUTH_TOKEN loaded from $ssl_dir"
+        log_ok "G8E_INTERNAL_AUTH_TOKEN loaded from $secrets_dir"
     fi
     if [[ -f "$session_key_file" ]]; then
         export G8E_SESSION_ENCRYPTION_KEY=$(cat "$session_key_file" | tr -d ' \n\r')
-        log_ok "G8E_SESSION_ENCRYPTION_KEY loaded from $ssl_dir"
+        log_ok "G8E_SESSION_ENCRYPTION_KEY loaded from $secrets_dir"
     fi
 }
 
 _verify_operator() {
-    local ssl_dir="${G8E_SSL_DIR:-$PROJECT_ROOT/.g8e/ssl}"
-    local ca_cert="$ssl_dir/ca.crt"
-    [[ ! -f "$ca_cert" ]] && ca_cert="$ssl_dir/ca/ca.crt"
+    local pki_dir="${G8E_PKI_DIR:-$PROJECT_ROOT/.g8e/pki}"
+    local ca_cert="${G8E_TRUST_BUNDLE:-$pki_dir/trust/hub-bundle.pem}"
+
     if [[ ! -f "$ca_cert" ]]; then
-        log_err "Platform CA cert not found at $ca_cert"
+        log_err "Platform trust bundle not found at $ca_cert"
         exit 1
     fi
     local operator_url="${G8E_INTERNAL_HTTP_URL:-https://localhost:9000}"

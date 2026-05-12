@@ -28,23 +28,26 @@ export const BOOTSTRAP_DIGEST_MANIFEST_FILE = 'bootstrap_digest.json';
 
 /**
  * Bootstrap Service for g8ed
- * 
- * This service is ONLY responsible for loading values from the host bootstrap directory (.g8e/ssl).
+ *
+ * This service is ONLY responsible for loading values from the host bootstrap directory (.g8e/secrets and .g8e/pki).
  * It does not perform any settings management or configuration logic.
  */
 class BootstrapService {
     /**
-     * @param {string} volumePath - Path to bootstrap secrets directory (default: from G8E_SSL_DIR env var or .g8e/ssl)
+     * @param {string} secretsDir - Path to bootstrap secrets directory (default: from G8E_SECRETS_DIR env var or .g8e/secrets)
+     * @param {string} pkiDir - Path to PKI directory (default: from G8E_PKI_DIR env var or .g8e/pki)
      */
-    constructor(volumePath = process.env.G8E_SSL_DIR || path.join(resolveProjectRoot(), '.g8e', 'ssl')) {
-        this.volumePath = volumePath;
+    constructor(secretsDir = process.env.G8E_SECRETS_DIR || path.join(resolveProjectRoot(), '.g8e', 'secrets'),
+                pkiDir = process.env.G8E_PKI_DIR || path.join(resolveProjectRoot(), '.g8e', 'pki')) {
+        this.secretsDir = secretsDir;
+        this.pkiDir = pkiDir;
         this._cachedToken = null;
         this._cachedKey = null;
         this._cachedCaPath = null;
     }
 
     /**
-     * Load internal auth token from bootstrap directory.
+     * Load internal auth token from secrets directory.
      * @returns {string|null}
      */
     loadInternalAuthToken() {
@@ -52,14 +55,14 @@ class BootstrapService {
             return this._cachedToken;
         }
 
-        const tokenPath = path.join(this.volumePath, 'internal_auth_token');
+        const tokenPath = path.join(this.secretsDir, 'internal_auth_token');
         try {
             if (fs.existsSync(tokenPath)) {
                 this._cachedToken = fs.readFileSync(tokenPath, 'utf8').trim();
-                logger.info('[BOOTSTRAP-SERVICE] Loaded internal auth token from bootstrap directory');
+                logger.info('[BOOTSTRAP-SERVICE] Loaded internal auth token from secrets directory');
                 return this._cachedToken;
             } else {
-                logger.info('[BOOTSTRAP-SERVICE] Internal auth token not found in bootstrap directory');
+                logger.info('[BOOTSTRAP-SERVICE] Internal auth token not found in secrets directory');
                 return null;
             }
         } catch (err) {
@@ -71,35 +74,32 @@ class BootstrapService {
     }
 
     /**
-     * Load session encryption key from bootstrap directory.
+     * Load session encryption key from secrets directory.
      * @returns {string|null}
      */
     loadSessionEncryptionKey() {
         if (this._cachedKey !== null) return this._cachedKey;
 
-        const keyPath = path.join(this.volumePath, 'session_encryption_key');
+        const keyPath = path.join(this.secretsDir, 'session_encryption_key');
         logger.info('[BOOTSTRAP-SERVICE] Checking for session encryption key', { 
             path: keyPath, 
             exists: fs.existsSync(keyPath),
-            volumePath: this.volumePath,
-            volumeExists: fs.existsSync(this.volumePath)
+            secretsDir: this.secretsDir
         });
         
         try {
             if (fs.existsSync(keyPath)) {
                 this._cachedKey = fs.readFileSync(keyPath, 'utf8').trim();
-                logger.info('[BOOTSTRAP-SERVICE] Loaded session encryption key from bootstrap directory', { 
+                logger.info('[BOOTSTRAP-SERVICE] Loaded session encryption key from secrets directory', {
                     path: keyPath,
-                    keyLength: this._cachedKey.length,
-                    volumePath: this.volumePath
+                    keyLength: this._cachedKey.length
                 });
                 return this._cachedKey;
             } else {
-                logger.info('[BOOTSTRAP-SERVICE] Session encryption key not found in bootstrap directory', { 
+                logger.info('[BOOTSTRAP-SERVICE] Session encryption key not found in secrets directory', {
                     path: keyPath,
-                    volumePath: this.volumePath,
-                    volumeExists: fs.existsSync(this.volumePath),
-                    volumeContents: this._safeListVolume(this.volumePath)
+                    secretsDir: this.secretsDir,
+                    volumeContents: this._safeListVolume(this.secretsDir)
                 });
                 return null;
             }
@@ -107,15 +107,14 @@ class BootstrapService {
             logger.warn('[BOOTSTRAP-SERVICE] Failed to read session encryption key', { 
                 path: keyPath,
                 error: err.message,
-                volumePath: this.volumePath,
-                volumeExists: fs.existsSync(this.volumePath)
+                secretsDir: this.secretsDir
             });
             return null;
         }
     }
 
     /**
-     * Load CA certificate path from bootstrap directory.
+     * Load CA certificate path from PKI directory.
      * @returns {string|null}
      */
     loadCaCertPath() {
@@ -123,39 +122,40 @@ class BootstrapService {
             return this._cachedCaPath;
         }
 
-        // Check both possible locations
-        const caPaths = [
-            path.join(this.volumePath, 'ca.crt'),
-            path.join(this.volumePath, 'ca', 'ca.crt')
-        ];
-
-        for (const caPath of caPaths) {
-            try {
-                if (fs.existsSync(caPath)) {
-                    this._cachedCaPath = caPath;
-                    logger.info('[BOOTSTRAP-SERVICE] Loaded CA cert path from bootstrap directory', { 
-                        path: this._cachedCaPath 
-                    });
-                    return this._cachedCaPath;
-                }
-            } catch (err) {
-                logger.warn('[BOOTSTRAP-SERVICE] Failed to read CA cert', { 
-                    path: caPath,
-                    error: err.message 
+        const caPath = path.join(this.pkiDir, 'ca.crt');
+        try {
+            if (fs.existsSync(caPath)) {
+                this._cachedCaPath = caPath;
+                logger.info('[BOOTSTRAP-SERVICE] Loaded CA cert path from PKI directory', {
+                    path: this._cachedCaPath
                 });
+                return this._cachedCaPath;
             }
+        } catch (err) {
+            logger.warn('[BOOTSTRAP-SERVICE] Failed to read CA cert', {
+                path: caPath,
+                error: err.message
+            });
         }
 
-        logger.info('[BOOTSTRAP-SERVICE] CA certificate not found in bootstrap directory');
+        logger.info('[BOOTSTRAP-SERVICE] CA certificate not found in PKI directory');
         return null;
     }
 
     /**
-     * Get SSL directory path.
+     * Get Secrets directory path.
      * @returns {string}
      */
-    getSslDir() {
-        return this.volumePath;
+    getSecretsDir() {
+        return this.secretsDir;
+    }
+
+    /**
+     * Get PKI directory path.
+     * @returns {string}
+     */
+    getPkiDir() {
+        return this.pkiDir;
     }
 
     /**
@@ -163,14 +163,11 @@ class BootstrapService {
      * @returns {boolean}
      */
     isAvailable() {
-        if (!fs.existsSync(this.volumePath)) {
-            return false;
-        }
-
         return (
-            this.loadInternalAuthToken() !== null ||
-            this.loadSessionEncryptionKey() !== null ||
-            this.loadCaCertPath() !== null
+            fs.existsSync(this.secretsDir) &&
+            (this.loadInternalAuthToken() !== null ||
+             this.loadSessionEncryptionKey() !== null ||
+             this.loadCaCertPath() !== null)
         );
     }
 
@@ -211,7 +208,7 @@ class BootstrapService {
     verifyAgainstManifest(secretName, value) {
         if (!value) return;
 
-        const manifestPath = path.join(this.volumePath, BOOTSTRAP_DIGEST_MANIFEST_FILE);
+        const manifestPath = path.join(this.secretsDir, BOOTSTRAP_DIGEST_MANIFEST_FILE);
         if (!fs.existsSync(manifestPath)) {
             logger.warn('[BOOTSTRAP-SERVICE] Bootstrap digest manifest missing; skipping verification', {
                 path: manifestPath,

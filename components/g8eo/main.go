@@ -63,7 +63,7 @@ func main() {
 	var apiKey string
 	var deviceToken string
 	var endpointURL string
-	var caURL string
+	var trustBundlePath string
 	var workingDir string
 	var cloudMode bool
 	var cloudProvider string
@@ -80,7 +80,8 @@ func main() {
 	var listenWSSPort int
 	var listenHTTPPort int
 	var listenDataDir string
-	var listenSSLDir string
+	var listenPKIDir string
+	var listenSecretsDir string
 	var listenTLSCert string
 	var listenTLSKey string
 	var openclawMode bool
@@ -109,7 +110,7 @@ func main() {
 	flag.StringVar(&apiKey, "key", "", "API key")
 	flag.StringVar(&deviceToken, "device-token", "", "Device link token for operator deployment")
 	flag.StringVar(&endpointURL, "endpoint", "", "Endpoint (hostname or IP)")
-	flag.StringVar(&caURL, "ca-url", "", "Override URL for hub CA certificate fetch (default: http://<endpoint>/ca.crt)")
+	flag.StringVar(&trustBundlePath, "trust-bundle", "", "Path to trust bundle PEM file (default: .g8e/pki/hub-bundle.pem or fetch from /.well-known/g8e/pki/hub-bundle.pem)")
 	flag.StringVar(&workingDir, "working-dir", "", "Working directory (default: directory operator was launched from)")
 	flag.BoolVar(&cloudMode, constants.Status.OperatorType.Cloud, true, "Cloud mode")
 	flag.StringVar(&cloudProvider, "provider", "", "Cloud provider")
@@ -119,10 +120,11 @@ func main() {
 	flag.BoolVar(&showVersion, "version", false, "Version")
 
 	flag.BoolVar(&listenMode, "listen", false, "Listen mode: platform persistence + pub/sub broker")
-	flag.IntVar(&listenWSSPort, "wss-listen-port", 443, "WSS/TLS port for operator pub/sub connections (default: 443)")
-	flag.IntVar(&listenHTTPPort, "http-listen-port", 443, "HTTPS port for internal g8ee/g8ed service traffic (default: 443)")
+	flag.IntVar(&listenWSSPort, "wss-listen-port", 9001, "WSS/TLS port for operator pub/sub connections (default: 9001)")
+	flag.IntVar(&listenHTTPPort, "http-listen-port", 9000, "HTTPS port for internal g8ee/g8ed service traffic (default: 9000)")
 	flag.StringVar(&listenDataDir, "data-dir", "", "Data directory for SQLite database (default: .g8e/data in working directory)")
-	flag.StringVar(&listenSSLDir, "ssl-dir", "", "Directory for TLS certificates (default: data-dir/ssl)")
+	flag.StringVar(&listenPKIDir, "pki-dir", "", "Directory for TLS certificates (default: .g8e/pki)")
+	flag.StringVar(&listenSecretsDir, "secrets-dir", "", "Directory for platform secrets (default: .g8e/secrets)")
 	flag.StringVar(&listenTLSCert, "tls-cert", "", "Path to TLS certificate file (optional; auto-generated when empty)")
 	flag.StringVar(&listenTLSKey, "tls-key", "", "Path to TLS private key file (optional; auto-generated when empty)")
 	flag.BoolVar(&rekeyVault, "rekey-vault", false, "Re-encrypt vault with new API key (requires --old-key)")
@@ -145,7 +147,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  -k, --key <key>         API key (or set G8E_OPERATOR_API_KEY)\n")
 		fmt.Fprintf(os.Stderr, "  -D, --device-token <tok> Device link token for operator deployment\n")
 		fmt.Fprintf(os.Stderr, "  -e, --endpoint <host>     Operator endpoint: IP address of the Docker host running operator\n")
-		fmt.Fprintf(os.Stderr, "      --ca-url <url>        Override URL for hub CA certificate fetch (default: http://<endpoint>/ca.crt)\n")
+		fmt.Fprintf(os.Stderr, "      --trust-bundle <path> Path to trust bundle PEM file (default: .g8e/pki/hub-bundle.pem or fetch from /.well-known/g8e/pki/hub-bundle.pem)\n")
 		fmt.Fprintf(os.Stderr, "      --working-dir <dir>   Working directory (default: directory operator was launched from)\n")
 		fmt.Fprintf(os.Stderr, "                            All commands and data storage are anchored to this directory\n")
 		fmt.Fprintf(os.Stderr, "      --wss-port <port>     WSS port to dial on operator for pub/sub (default: 443)\n")
@@ -160,10 +162,11 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  -v, --version           Show version\n")
 		fmt.Fprintf(os.Stderr, "\nListen Mode (platform persistence + pub/sub broker):\n")
 		fmt.Fprintf(os.Stderr, "  --listen                    Listen mode: local persistence + pub/sub broker\n")
-		fmt.Fprintf(os.Stderr, "  --wss-listen-port <port>    WSS/TLS port for operator pub/sub connections (default: 443)\n")
-		fmt.Fprintf(os.Stderr, "  --http-listen-port <port>   HTTPS port for internal g8ee/g8ed traffic (default: 443)\n")
+		fmt.Fprintf(os.Stderr, "  --wss-listen-port <port>    WSS/TLS port for operator pub/sub connections (default: 9001)\n")
+		fmt.Fprintf(os.Stderr, "  --http-listen-port <port>   HTTPS port for internal g8ee/g8ed traffic (default: 9000)\n")
 		fmt.Fprintf(os.Stderr, "  --data-dir <dir>            Data directory for SQLite (default: .g8e/data in working directory)\n")
-		fmt.Fprintf(os.Stderr, "  --ssl-dir <dir>             Directory for TLS certificates (default: data-dir/ssl)\n")
+		fmt.Fprintf(os.Stderr, "  --pki-dir <dir>             Directory for TLS certificates (default: .g8e/pki)\n")
+		fmt.Fprintf(os.Stderr, "  --secrets-dir <dir>         Directory for platform secrets (default: .g8e/secrets)\n")
 		fmt.Fprintf(os.Stderr, "  --tls-cert <path>           Path to TLS certificate (optional; auto-generated when empty)\n")
 		fmt.Fprintf(os.Stderr, "  --tls-key <path>            Path to TLS private key (optional; auto-generated when empty)\n")
 		fmt.Fprintf(os.Stderr, "\nVault Management:\n")
@@ -196,7 +199,7 @@ func main() {
 	}
 
 	if listenMode {
-		runListenMode(listenWSSPort, listenHTTPPort, listenDataDir, listenSSLDir, listenTLSCert, listenTLSKey, logLevel)
+		runListenMode(listenWSSPort, listenHTTPPort, listenDataDir, listenPKIDir, listenSecretsDir, listenTLSCert, listenTLSKey, logLevel)
 		return
 	}
 
@@ -225,23 +228,28 @@ func main() {
 	logger.Info("g8e Operator", "version", version, "build", buildID)
 	logger.Info("Using Operator endpoint", "endpoint", operatorEndpoint)
 
-	// When no explicit --ca-url was provided, try common local SSL volume
-	// mount points first. Fall back to an HTTP fetch from the operator
-	// endpoint (or from the explicit --ca-url).
-	caLoaded := caURL == "" && loadCAFromLocalVolume(logger)
-	if !caLoaded {
-		if caURL == "" {
-			caURL = fmt.Sprintf("http://%s/ca.crt", operatorEndpoint)
-		}
-		logger.Info("Fetching hub CA certificate", "url", caURL)
-		if err := certs.FetchAndSetCA(context.Background(), caURL); err != nil {
-			logger.Error("Failed to fetch hub CA certificate", "url", caURL, "error", err)
-			fmt.Fprintf(os.Stderr, "Failed to fetch CA certificate from hub: %v\n", err)
-			fmt.Fprintf(os.Stderr, "  Ensure the platform is running: ./g8e platform start\n")
+	// Load trust bundle for TLS verification. Priority:
+	// 1. Explicit --trust-bundle path
+	// 2. Local PKI directory (.g8e/pki/hub-bundle.pem)
+	// 3. Fetch from Operator /.well-known/g8e/pki/hub-bundle.pem endpoint
+	trustLoaded := loadTrustBundle(logger, trustBundlePath, workingDir)
+	if !trustLoaded {
+		if endpointURL != "" {
+			trustURL := fmt.Sprintf("https://%s/.well-known/g8e/pki/hub-bundle.pem", endpointURL)
+			logger.Info("Fetching trust bundle from Operator PKI endpoint", "url", trustURL)
+			if err := certs.FetchAndSetCA(context.Background(), trustURL); err != nil {
+				logger.Error("Failed to fetch trust bundle from Operator", "url", trustURL, "error", err)
+				fmt.Fprintf(os.Stderr, "Failed to fetch trust bundle from Operator: %v\n", err)
+				fmt.Fprintf(os.Stderr, "  Ensure the platform is running: ./g8e platform start\n")
+				os.Exit(constants.ExitConfigError)
+			}
+		} else {
+			logger.Error("No trust bundle available and no endpoint specified")
+			fmt.Fprintf(os.Stderr, "Error: No trust bundle available. Provide --trust-bundle or --endpoint\n")
 			os.Exit(constants.ExitConfigError)
 		}
 	}
-	logger.Info("Hub CA certificate loaded")
+	logger.Info("Trust bundle loaded")
 
 	var deviceAuthResult *auth.DeviceAuthResult
 
@@ -316,7 +324,8 @@ func main() {
 		NoGit:               noGit,
 		LogLevel:            logLevel,
 		WorkDir:             effectiveWorkDir,
-		SSLDir:              settings.SSLDir,
+		PKIDir:              settings.PKIDir,
+		SecretsDir:          settings.SecretsDir,
 		HeartbeatInterval:   heartbeatInterval,
 		Shell:               settings.Shell,
 		Lang:                settings.Lang,
@@ -394,19 +403,29 @@ func printVersion() {
 	fmt.Printf("g8e Operator\n  Version:  %s\n  Build ID: %s\n  Platform: %s\n", version, buildID, platform)
 }
 
-// loadCAFromLocalVolume attempts to read a platform CA certificate from common
-// SSL volume mount points (used when the Operator runs in a container alongside
-// operator). Returns true on the first valid PEM found, which is installed via
-// certs.SetCA. Returns false if no valid CA is found, in which case the caller
-// should fall back to an HTTPS fetch.
-func loadCAFromLocalVolume(logger *slog.Logger) bool {
-	sslPaths := []string{"/ssl/ca.crt", "/operator/ca.crt", "/operator/ssl/ca.crt", "/data/ssl/ca.crt"}
-	for _, path := range sslPaths {
+// loadTrustBundle attempts to read a trust bundle from:
+// 1. Explicit path provided via --trust-bundle
+// 2. Working directory PKI path (.g8e/pki/hub-bundle.pem)
+// Returns true on the first valid PEM found, which is installed via
+// certs.SetCA. Returns false if no valid trust bundle is found.
+func loadTrustBundle(logger *slog.Logger, explicitPath, workingDir string) bool {
+	pathsToCheck := []string{}
+
+	if explicitPath != "" {
+		pathsToCheck = append(pathsToCheck, explicitPath)
+	}
+
+	if workingDir != "" {
+		pkiPath := filepath.Join(workingDir, ".g8e", "pki", "hub-bundle.pem")
+		pathsToCheck = append(pathsToCheck, pkiPath)
+	}
+
+	for _, path := range pathsToCheck {
 		pemData, err := os.ReadFile(path)
 		if err != nil {
 			continue
 		}
-		logger.Info("Loading CA certificate from local SSL volume", "path", path)
+		logger.Info("Loading trust bundle from local path", "path", path)
 		pool := x509.NewCertPool()
 		if !pool.AppendCertsFromPEM(pemData) {
 			logger.Warn("CA file exists but contains invalid certificate", "path", path)
@@ -518,7 +537,7 @@ func (h *operatorHandler) WithGroup(name string) slog.Handler {
 // NOT execute commands, initiate outbound connections, or perform
 // authentication against a remote hub. It is strictly an inbound service
 // for g8ee, g8ed, and Outbound Operators.
-func runListenMode(wssPort, httpPort int, dataDir, sslDir, tlsCertPath, tlsKeyPath string, logLevel string) {
+func runListenMode(wssPort, httpPort int, dataDir, pkiDir, secretsDir, tlsCertPath, tlsKeyPath string, logLevel string) {
 	logger, err := configureLogger(logLevel)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "invalid log level '%s': %v\n", logLevel, err)
@@ -527,7 +546,7 @@ func runListenMode(wssPort, httpPort int, dataDir, sslDir, tlsCertPath, tlsKeyPa
 
 	logger.Info("g8e Operator — Listen Mode (operator)", "version", version, "build", buildID)
 
-	cfg, err := config.LoadListen(wssPort, httpPort, dataDir, sslDir, tlsCertPath, tlsKeyPath)
+	cfg, err := config.LoadListen(wssPort, httpPort, dataDir, pkiDir, secretsDir, tlsCertPath, tlsKeyPath)
 	if err != nil {
 		logger.Error("Failed to load listen configuration", "error", err)
 		os.Exit(constants.ExitConfigError)

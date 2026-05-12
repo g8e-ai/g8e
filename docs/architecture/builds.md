@@ -41,7 +41,7 @@ The `./g8e platform start` command (invoked via `scripts/core/build.sh`) manages
 graph TD
     A[./g8e platform start] --> B[Operator binary check/build]
     B --> C[Operator starts in --listen mode]
-    C -->|Generates .g8e/ssl/ca.crt| D[Engine & Dashboard start]
+    C -->|Generates .g8e/pki/hierarchy| D[Engine & Dashboard start]
     D --> E[Engine waits for Operator API]
     D --> F[Dashboard waits for Operator & Engine]
     E & F --> G[Platform Live]
@@ -49,7 +49,7 @@ graph TD
 
 ### 1. Root of Trust Generation
 On the first boot (or after a `clean`), the Operator in listen mode generates:
-- **ECDSA P-384 CA**: A unique, self-signed Certificate Authority stored in `.g8e/ssl/ca.crt`.
+- **ECDSA P-384 CA Hierarchy**: A root CA, intermediate CAs, and trust bundles stored in `.g8e/pki/`.
 - **Internal Auth Token**: A cryptographically secure token (`internal_auth_token`) used for service-to-service authentication.
 - **Server Certificates**: Leaf certificates for the API and Dashboard.
 
@@ -81,12 +81,13 @@ Data is organized within the `.g8e/` directory to balance persistence with the a
 
 | Path | Purpose | Wipe Policy |
 | :--- | :--- | :--- |
-| **`.g8e/ssl/`** | CA cert, server keys, internal auth token | **Preserved** by `reset` and `wipe`. |
+| **`.g8e/pki/`** | PKI hierarchy (CA, intermediates, trust bundles) | **Preserved** by `reset` and `wipe`. |
+| **`.g8e/secrets/`** | Bootstrap secrets (internal auth token, session key) with tamper-evidence manifest | Wiped by `reset`, preserved by `wipe`. |
 | **`.g8e/data/`** | SQLite DB (`g8e.db`) and blob storage | Wiped by `reset`. |
 | **`.g8e/logs/`** | Service logs (rotated automatically) | Cleared by `clean`. |
 | **`.g8e/pids/`** | Process ID files for lifecycle management | Cleared on `stop`. |
 
-- **`./g8e platform wipe`**: Clears application data (cases, users, operators) via the API but preserves platform settings and SSL state.
+- **`./g8e platform wipe`**: Clears application data (cases, users, operators) via the API but preserves platform settings, PKI, and secrets.
 - **`./g8e platform reset`**: Deletes the database and data directory, but keeps the CA cert so client trust is maintained.
 - **`./g8e platform clean`**: Destructive removal of the entire `.g8e/` directory and all running processes.
 

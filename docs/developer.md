@@ -41,7 +41,8 @@ The platform runs host-natively. Do not use Docker for primary component develop
 3. State & Logs:
    - `.g8e/logs/`: Component stdout/stderr.
    - `.g8e/pids/`: Process IDs for running components.
-   - `.g8e/ssl/`: Operator TLS material and bootstrap secrets.
+   - `.g8e/pki/`: Operator PKI hierarchy (CA, intermediate, workload certs).
+   - `.g8e/secrets/`: Bootstrap secrets (internal auth token, session encryption key) with tamper-evidence manifest.
    - `.g8e/data/`: SQLite databases and KV storage.
 
 III. Anti-Tech-Debt Directives

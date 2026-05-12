@@ -25,7 +25,8 @@ type envVarKeys struct {
 	OperatorSessionID       EnvVarKey
 	OperatorEndpoint        EnvVarKey
 	InternalAuthToken       EnvVarKey
-	SSLDir                  EnvVarKey
+	PKIDir                  EnvVarKey
+	SecretsDir              EnvVarKey
 	PubSubCACert            EnvVarKey
 	DeviceToken             EnvVarKey
 	LogLevel                EnvVarKey
@@ -64,7 +65,8 @@ var EnvVar = envVarKeys{
 	OperatorSessionID:       "G8E_OPERATOR_SESSION_ID",
 	OperatorEndpoint:        "G8E_OPERATOR_ENDPOINT",
 	InternalAuthToken:       "G8E_INTERNAL_AUTH_TOKEN",
-	SSLDir:                  "G8E_SSL_DIR",
+	PKIDir:                  "G8E_PKI_DIR",
+	SecretsDir:              "G8E_SECRETS_DIR",
 	PubSubCACert:            "G8E_PUBSUB_CA_CERT",
 	DeviceToken:             "G8E_DEVICE_TOKEN",
 	LogLevel:                "G8E_LOG_LEVEL",

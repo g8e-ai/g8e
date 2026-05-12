@@ -230,7 +230,8 @@ case "$TOP" in
                     if [[ ${#settings_args[@]} -gt 0 ]]; then
                         _ensure_g8ed
                         (
-                            export G8E_SSL_DIR="$G8E_SSL_DIR_HOST"; export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTP_URL"
+                            export G8E_PKI_DIR="$G8E_PKI_DIR_HOST"; export G8E_SECRETS_DIR="$G8E_SECRETS_DIR_HOST"
+                            export G8E_TRUST_BUNDLE="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"; export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTP_URL"
                             export G8ED_INTERNAL_URL="$G8ED_URL"; export PYTHONPATH="$SCRIPT_DIR/scripts:$SCRIPT_DIR/shared${PYTHONPATH:+:$PYTHONPATH}"
                             python3 "$SCRIPT_DIR/scripts/data/manage-operator.py" settings set --user-id "$user_id" "${settings_args[@]}"
                         )
@@ -241,7 +242,8 @@ case "$TOP" in
                 [ ! -x "$_venv/bin/python" ] && { echo "[g8e] g8ee virtualenv missing" >&2; exit 1; }
                 (
                     cd "$SCRIPT_DIR/components/g8ee"; export PYTHONPATH="$SCRIPT_DIR/components/g8ee:$SCRIPT_DIR/shared${PYTHONPATH:+:$PYTHONPATH}"
-                    export G8E_SHARED_DIR="$SCRIPT_DIR/shared"; export G8E_SSL_DIR="$G8E_SSL_DIR_HOST"
+                    export G8E_SHARED_DIR="$SCRIPT_DIR/shared"; export G8E_PKI_DIR="$G8E_PKI_DIR_HOST"; export G8E_SECRETS_DIR="$G8E_SECRETS_DIR_HOST"
+                    export G8E_TRUST_BUNDLE="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
                     export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTP_URL"; export G8ED_URL="$G8ED_URL"; export G8EE_URL="$G8EE_URL"
                     "$_venv/bin/python" -m app.evals.runner.cli run "${run_args[@]}"
                 )
@@ -256,7 +258,9 @@ case "$TOP" in
                     esac
                 done
                 [[ -z "$_device_token" ]] && { echo "[g8e] evals deploy requires a device link token" >&2; exit 1; }
-                _ca_cert="$(cat "$G8E_SSL_DIR_HOST/ca.crt" 2>/dev/null || true)"
+                _trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
+                [[ ! -f "$_trust_bundle" ]] && { echo "[g8e] trust bundle missing at $_trust_bundle" >&2; exit 1; }
+                _ca_cert="$(cat "$_trust_bundle" 2>/dev/null || true)"
                 DEVICE_TOKEN="$_device_token" G8E_CA_CERT="$_ca_cert" COMPOSE_PROJECT_NAME=evals docker compose -f "$EVALS_COMPOSE" up -d --build --scale eval-node="$_nodes"
                 exit 0 ;;
             down)   _banner "evals down"; COMPOSE_PROJECT_NAME=evals docker compose -f "$EVALS_COMPOSE" down; exit 0 ;;

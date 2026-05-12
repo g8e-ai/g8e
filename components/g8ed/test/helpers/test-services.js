@@ -63,7 +63,7 @@ export async function initializeTestServices() {
             const initModule = await import('../../services/initialization.js');
             
             // 2. When running against real g8eo (operator listen mode), use the real token from environment
-            // The test runner sets G8E_INTERNAL_AUTH_TOKEN from .g8e/ssl/internal_auth_token
+            // The test runner sets G8E_INTERNAL_AUTH_TOKEN from .g8e/secrets/internal_auth_token
             // We should NOT provide a fallback mock token when running against a real operator
             const { BootstrapService } = await import('../../services/platform/bootstrap_service.js');
             const originalLoadKey = BootstrapService.prototype.loadSessionEncryptionKey;
@@ -76,7 +76,7 @@ export async function initializeTestServices() {
                 return '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
             };
             
-            // DO NOT mock internal auth token - use the real one from .g8e/ssl
+            // DO NOT mock internal auth token - use the real one from .g8e/secrets
             // The test runner sets G8E_INTERNAL_AUTH_TOKEN env var, and BootstrapService reads it
             // If the token is missing, initialization will fail (which is correct for real operator tests)
             

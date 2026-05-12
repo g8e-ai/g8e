@@ -57,6 +57,7 @@ type DeviceLinkClaim struct {
 
 // OperatorRegistrationRequest is the inbound body for /auth/link/:token/register
 type OperatorRegistrationRequest struct {
+	CSR               string `json:"csr_pem"`
 	SystemFingerprint string `json:"system_fingerprint"`
 	Hostname          string `json:"hostname"`
 	OS                string `json:"os"`
@@ -71,8 +72,9 @@ type OperatorRegistrationResponse struct {
 	OperatorSessionID string          `json:"operator_session_id,omitempty"`
 	OperatorID        string          `json:"operator_id,omitempty"`
 	APIKey            string          `json:"api_key,omitempty"`
-	OperatorCert      string          `json:"operator_cert,omitempty"`
-	OperatorCertKey   string          `json:"operator_cert_key,omitempty"`
+	OperatorCert      string          `json:"operator_cert_pem,omitempty"`
+	OperatorCertChain string          `json:"operator_cert_chain_pem,omitempty"`
+	HubTrustBundle    string          `json:"hub_trust_bundle_pem,omitempty"`
 	Session           *SessionSummary `json:"session,omitempty"`
 	Config            json.RawMessage `json:"config,omitempty"`
 	Error             string          `json:"error,omitempty"`
@@ -88,29 +90,29 @@ type SessionSummary struct {
 // OperatorDocumentGo is a Go representation of the canonical OperatorDocument.
 // Authority: shared/models/operator_document.json
 type OperatorDocumentGo struct {
-	ID                     string                 `json:"id"`
-	UserID                 string                 `json:"user_id"`
-	OrganizationID         string                 `json:"organization_id,omitempty"`
-	Component              string                 `json:"component"`
-	Name                   string                 `json:"name,omitempty"`
-	Status                 string                 `json:"status"`
-	OperatorSessionID      string                 `json:"operator_session_id,omitempty"`
-	BoundWebSessionID      string                 `json:"bound_web_session_id,omitempty"`
-	APIKey                 string                 `json:"api_key,omitempty"`
-	OperatorAPIKey         string                 `json:"operator_api_key,omitempty"`
-	OperatorCert           string                 `json:"operator_cert,omitempty"`
-	OperatorCertSerial     string                 `json:"operator_cert_serial,omitempty"`
-	SlotNumber             int                    `json:"slot_number,omitempty"`
-	IsSlot                 bool                   `json:"is_slot"`
-	Claimed                bool                   `json:"claimed"`
-	OperatorType           string                 `json:"operator_type"`
-	CloudSubtype           string                 `json:"cloud_subtype,omitempty"`
-	SystemFingerprint      string                 `json:"system_fingerprint,omitempty"`
-	CreatedAt              time.Time              `json:"created_at"`
-	UpdatedAt              time.Time              `json:"updated_at"`
-	StartedAt              *time.Time             `json:"started_at,omitempty"`
-	ClaimedAt              *time.Time             `json:"claimed_at,omitempty"`
-	LatestHeartbeat        json.RawMessage        `json:"latest_heartbeat_snapshot,omitempty"`
-	RuntimeConfig          *RuntimeConfig         `json:"runtime_config,omitempty"`
-	ConsumedByOperatorID   string                 `json:"consumed_by_operator_id,omitempty"`
+	ID                   string          `json:"id"`
+	UserID               string          `json:"user_id"`
+	OrganizationID       string          `json:"organization_id,omitempty"`
+	Component            string          `json:"component"`
+	Name                 string          `json:"name,omitempty"`
+	Status               string          `json:"status"`
+	OperatorSessionID    string          `json:"operator_session_id,omitempty"`
+	BoundWebSessionID    string          `json:"bound_web_session_id,omitempty"`
+	APIKey               string          `json:"api_key,omitempty"`
+	OperatorAPIKey       string          `json:"operator_api_key,omitempty"`
+	OperatorCert         string          `json:"operator_cert,omitempty"`
+	OperatorCertSerial   string          `json:"operator_cert_serial,omitempty"`
+	SlotNumber           int             `json:"slot_number,omitempty"`
+	IsSlot               bool            `json:"is_slot"`
+	Claimed              bool            `json:"claimed"`
+	OperatorType         string          `json:"operator_type"`
+	CloudSubtype         string          `json:"cloud_subtype,omitempty"`
+	SystemFingerprint    string          `json:"system_fingerprint,omitempty"`
+	CreatedAt            time.Time       `json:"created_at"`
+	UpdatedAt            time.Time       `json:"updated_at"`
+	StartedAt            *time.Time      `json:"started_at,omitempty"`
+	ClaimedAt            *time.Time      `json:"claimed_at,omitempty"`
+	LatestHeartbeat      json.RawMessage `json:"latest_heartbeat_snapshot,omitempty"`
+	RuntimeConfig        *RuntimeConfig  `json:"runtime_config,omitempty"`
+	ConsumedByOperatorID string          `json:"consumed_by_operator_id,omitempty"`
 }

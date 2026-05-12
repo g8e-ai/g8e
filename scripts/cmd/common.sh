@@ -8,7 +8,8 @@ export G8E_PROJECT_ROOT="$SCRIPT_DIR"
 
 # Host-native runtime layout
 G8E_RUNTIME_DIR="${G8E_RUNTIME_DIR:-$SCRIPT_DIR/.g8e}"
-G8E_SSL_DIR_HOST="${G8E_SSL_DIR:-$G8E_RUNTIME_DIR/ssl}"
+G8E_PKI_DIR_HOST="${G8E_PKI_DIR:-$G8E_RUNTIME_DIR/pki}"
+G8E_SECRETS_DIR_HOST="${G8E_SECRETS_DIR:-$G8E_RUNTIME_DIR/secrets}"
 OPERATOR_HTTP_URL="${G8E_INTERNAL_HTTP_URL:-https://localhost:9000}"
 _OPERATOR_PID_FILE="$G8E_RUNTIME_DIR/pids/operator-listen.pid"
 _G8ED_PID_FILE="$G8E_RUNTIME_DIR/pids/g8ed.pid"
@@ -50,7 +51,12 @@ _moved_to_operator_protocol() {
 
 _operator_curl() {
     local method="$1" path="$2" body="${3:-}"
-    local args=(-sk -X "$method" --cacert "$G8E_SSL_DIR_HOST/ca.crt")
+    local trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
+    if [[ ! -f "$trust_bundle" ]]; then
+        echo "[g8e] Operator trust bundle not found at $trust_bundle — recreate runtime PKI with ./g8e platform clean && ./g8e platform start" >&2
+        return 1
+    fi
+    local args=(-sS --cacert "$trust_bundle" -X "$method")
     
     if [[ -n "$OPERATOR_SESSION_ID" ]]; then
         args+=(-H "X-G8E-Operator-Session-ID: $OPERATOR_SESSION_ID")
@@ -59,7 +65,7 @@ _operator_curl() {
     else
         # Fallback to internal token if no session/key (bootstrap phase)
         local token
-        token=$(cat "$G8E_SSL_DIR_HOST/internal_auth_token" 2>/dev/null | tr -d ' \n\r' || true)
+        token=$(cat "$G8E_SECRETS_DIR_HOST/internal_auth_token" 2>/dev/null | tr -d ' \n\r' || true)
         [[ -n "$token" ]] && args+=(-H "X-Internal-Auth: $token")
     fi
 
@@ -69,7 +75,8 @@ _operator_curl() {
 }
 
 _run_host_script() {
-    export G8E_SSL_DIR="$G8E_SSL_DIR_HOST"
+    export G8E_PKI_DIR="$G8E_PKI_DIR_HOST"
+    export G8E_SECRETS_DIR="$G8E_SECRETS_DIR_HOST"
     export G8E_INTERNAL_HTTP_URL="$OPERATOR_HTTP_URL"
     export G8ED_INTERNAL_URL="${G8ED_INTERNAL_URL:-https://localhost}"
     export PYTHONPATH="$SCRIPT_DIR/scripts:$SCRIPT_DIR/shared${PYTHONPATH:+:$PYTHONPATH}"

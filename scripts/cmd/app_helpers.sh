@@ -13,7 +13,12 @@ _ensure_g8ed() {
 _g8ed_curl() {
     local method="$1" path="$2" body="${3:-}"
     local g8ed_url="${G8ED_INTERNAL_URL:-https://localhost}"
-    local args=(-sk -X "$method" --cacert "$G8E_SSL_DIR_HOST/ca.crt")
+    local trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
+    if [[ ! -f "$trust_bundle" ]]; then
+        echo "[g8e] g8ed trust bundle not found at $trust_bundle — recreate runtime PKI with ./g8e platform clean && ./g8e platform start" >&2
+        return 1
+    fi
+    local args=(-sS -X "$method" --cacert "$trust_bundle")
     [[ -n "$OPERATOR_SESSION_ID" ]] && args+=(-H "x-operator-session-id: $OPERATOR_SESSION_ID")
     args+=(-H "Content-Type: application/json")
     [[ -n "$body" ]] && args+=(-d "$body")

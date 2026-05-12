@@ -77,10 +77,15 @@ case "$SUB" in
         fi
         _REMOTE_EXEC="${_DEPLOY_DEST}"
         [[ "$(basename "${_DEPLOY_DEST}")" != "g8e.operator" ]] && _REMOTE_EXEC="${_DEPLOY_DEST%/}/g8e.operator"
+        trust_bundle="${G8E_TRUST_BUNDLE:-$G8E_PKI_DIR_HOST/trust/hub-bundle.pem}"
+        if [[ ! -f "$trust_bundle" ]]; then
+            echo "[g8e] Operator trust bundle not found at $trust_bundle — recreate runtime PKI with ./g8e platform clean && ./g8e platform start" >&2
+            exit 1
+        fi
         echo "Fetching linux/${_DEPLOY_ARCH} operator from host Operator blob store and copying to ${_DEPLOY_TARGET}:${_DEPLOY_DEST}..."
-        curl -sfk \
+        curl -sf \
             -H "X-Operator-Session-Id: ${OPERATOR_SESSION_ID}" \
-            --cacert "$G8E_SSL_DIR_HOST/ca.crt" \
+            --cacert "$trust_bundle" \
             "$OPERATOR_HTTP_URL/blob/operator-binary/linux-${_DEPLOY_ARCH}" \
             | ssh "${_DEPLOY_TARGET}" "cat > ${_DEPLOY_DEST} && chmod +x ${_DEPLOY_DEST}"
         echo "  Done."

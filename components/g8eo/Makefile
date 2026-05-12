@@ -18,12 +18,12 @@ VERSION := $(shell cat ../../VERSION 2>/dev/null | tr -d '[:space:]' || echo 'v0
 # =============================================================================
 BINARY_NAME := g8e.operator
 CERTS_DIR := certs
-G8ED_SSL_CA_CERT := ../../.g8e/ssl/ca.crt
+G8ED_PKI_CA_CERT := ../../.g8e/pki/ca.crt
 BUILD_DIR := build
 BLOB_NAMESPACE := operator-binary
 OPERATOR_URL := https://localhost:9000
-CA_CERT := ../../.g8e/ssl/ca.crt
-AUTH_TOKEN := $(shell cat ../../.g8e/ssl/internal_auth_token 2>/dev/null | tr -d ' \n\r')
+CA_CERT := ../../.g8e/pki/ca.crt
+AUTH_TOKEN := $(shell cat ../../.g8e/secrets/internal_auth_token 2>/dev/null | tr -d ' \n\r')
 
 # =============================================================================
 # ARCHITECTURES
@@ -73,7 +73,7 @@ help:
 build:
 	@echo "Building Operator (linux/amd64)..."
 	@mkdir -p certs
-	@[ -f ../../.g8e/ssl/ca.crt ] && cp ../../.g8e/ssl/ca.crt certs/server_ca.crt || true
+	@[ -f ../../.g8e/pki/ca.crt ] && cp ../../.g8e/pki/ca.crt certs/server_ca.crt || true
 	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
 		-trimpath \
 		-buildvcs=false \
@@ -87,7 +87,7 @@ build:
 build-all:
 	@echo "Building Operator (all architectures)..."
 	@mkdir -p certs
-	@[ -f ../../.g8e/ssl/ca.crt ] && cp ../../.g8e/ssl/ca.crt certs/server_ca.crt || true
+	@[ -f ../../.g8e/pki/ca.crt ] && cp ../../.g8e/pki/ca.crt certs/server_ca.crt || true
 	@for arch in amd64 arm64 386; do \
 		echo "Building linux/$$arch..."; \
 		mkdir -p $(BUILD_DIR)/linux-$$arch && \
@@ -174,19 +174,19 @@ _build-release:
 # =============================================================================
 .PHONY: check-certs
 check-certs:
-	@if [ ! -f "$(G8ED_SSL_CA_CERT)" ]; then \
-		echo "WARNING: g8ed server CA not found at $(G8ED_SSL_CA_CERT)"; \
+	@if [ ! -f "$(G8ED_PKI_CA_CERT)" ]; then \
+		echo "WARNING: g8ed server CA not found at $(G8ED_PKI_CA_CERT)"; \
 		echo "  This is normal during first-time setup. The Operator will generate certs when started."; \
 	else \
 		mkdir -p $(CERTS_DIR); \
-		cp $(G8ED_SSL_CA_CERT) $(CERTS_DIR)/server_ca.crt; \
+		cp $(G8ED_PKI_CA_CERT) $(CERTS_DIR)/server_ca.crt; \
 		echo "Synced g8ed server CA to $(CERTS_DIR)/server_ca.crt"; \
 	fi
 
 .PHONY: clean-certs
 clean-certs:
 	@rm -f $(CERTS_DIR)/server_ca.crt
-	@echo "Removed $(CERTS_DIR)/server_ca.crt (source at $(G8ED_SSL_CA_CERT) is unchanged)"
+	@echo "Removed $(CERTS_DIR)/server_ca.crt (source at $(G8ED_PKI_CA_CERT) is unchanged)"
 
 # =============================================================================
 # CODE QUALITY

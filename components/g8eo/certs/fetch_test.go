@@ -35,7 +35,7 @@ func TestFetchAndSetCA_Success(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := FetchAndSetCA(context.Background(), srv.URL+"/ssl/ca.crt")
+	err := FetchAndSetCA(context.Background(), srv.URL+"/.well-known/g8e/pki/hub-bundle.pem")
 	require.NoError(t, err)
 	assert.Equal(t, caBytes, GetRawCA())
 }
@@ -49,7 +49,7 @@ func TestFetchAndSetCA_Non200Status(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := FetchAndSetCA(context.Background(), srv.URL+"/ssl/ca.crt")
+	err := FetchAndSetCA(context.Background(), srv.URL+"/.well-known/g8e/pki/hub-bundle.pem")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "404")
 	assert.Nil(t, GetRawCA())
@@ -64,7 +64,7 @@ func TestFetchAndSetCA_EmptyBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := FetchAndSetCA(context.Background(), srv.URL+"/ssl/ca.crt")
+	err := FetchAndSetCA(context.Background(), srv.URL+"/.well-known/g8e/pki/hub-bundle.pem")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "is empty")
 	assert.Nil(t, GetRawCA())
@@ -80,7 +80,7 @@ func TestFetchAndSetCA_InvalidPEM(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := FetchAndSetCA(context.Background(), srv.URL+"/ssl/ca.crt")
+	err := FetchAndSetCA(context.Background(), srv.URL+"/.well-known/g8e/pki/hub-bundle.pem")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not a valid PEM-encoded certificate")
 	assert.Nil(t, GetRawCA())
@@ -90,7 +90,7 @@ func TestFetchAndSetCA_UnreachableURL(t *testing.T) {
 	saveAndRestoreCA(t)
 	SetCA(nil)
 
-	err := FetchAndSetCA(context.Background(), "https://127.0.0.1:19999/ssl/ca.crt")
+	err := FetchAndSetCA(context.Background(), "https://127.0.0.1:19999/.well-known/g8e/pki/hub-bundle.pem")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to fetch CA certificate")
 	assert.Nil(t, GetRawCA())

@@ -23,7 +23,7 @@ from typing import Any, Protocol, cast, runtime_checkable
 from app.utils.path import resolve_project_root
 
 # Filename of the tamper-evidence manifest written by g8eo SecretManager
-# alongside bootstrap secrets on the host bootstrap directory (.g8e/ssl). Must stay in sync with
+# alongside bootstrap secrets on the host bootstrap directory (.g8e/secrets). Must stay in sync with
 # components/g8eo/services/listen/secret_manager.go::BootstrapDigestManifestFile.
 BOOTSTRAP_DIGEST_MANIFEST_FILE = "bootstrap_digest.json"
 
@@ -69,19 +69,27 @@ class BootstrapServiceProtocol(Protocol):
 
 
 class BootstrapService:
-    """Service responsible for loading bootstrap data from host bootstrap directory (.g8e/ssl).
+    """Service responsible for loading bootstrap data from host volumes.
 
-    This service is ONLY responsible for loading values from the host bootstrap directory.
+    This service is ONLY responsible for loading values from host dot directories.
     It does not perform any settings management or configuration logic.
     """
 
-    def __init__(self, volume_path: str | None = None) -> None:
-        if volume_path is None:
-            volume_path = os.environ.get("G8E_SSL_DIR")
-            if volume_path is None:
-                # Fallback to .g8e/ssl relative to project root
-                volume_path = str(resolve_project_root() / ".g8e" / "ssl")
-        self._volume_path = Path(volume_path)
+    def __init__(self, secrets_dir: str | None = None, pki_dir: str | None = None) -> None:
+        if secrets_dir is None:
+            secrets_dir = os.environ.get("G8E_SECRETS_DIR")
+            if secrets_dir is None:
+                # Fallback to .g8e/secrets relative to project root
+                secrets_dir = str(resolve_project_root() / ".g8e" / "secrets")
+        self._secrets_dir = Path(secrets_dir)
+
+        if pki_dir is None:
+            pki_dir = os.environ.get("G8E_PKI_DIR")
+            if pki_dir is None:
+                # Fallback to .g8e/pki relative to project root
+                pki_dir = str(resolve_project_root() / ".g8e" / "pki")
+        self._pki_dir = Path(pki_dir)
+
         self._logger = logging.getLogger(__name__)
         self._cached_token: str | None = None
         self._cached_key: str | None = None
@@ -89,41 +97,41 @@ class BootstrapService:
         self._cached_ca_path: str | None = None
 
     def load_internal_auth_token(self) -> str | None:
-        """Load internal auth token from host bootstrap directory."""
+        """Load internal auth token from host secrets directory."""
         if self._cached_token is not None:
             return self._cached_token
 
-        token_path = self._volume_path / "internal_auth_token"
+        token_path = self._secrets_dir / "internal_auth_token"
         try:
             if token_path.exists():
                 self._cached_token = token_path.read_text().strip()
-                self._logger.info("Loaded internal auth token from host bootstrap directory")
+                self._logger.info("Loaded internal auth token from host secrets directory")
                 return self._cached_token
-            self._logger.info("Internal auth token not found in host bootstrap directory")
+            self._logger.info("Internal auth token not found in host secrets directory")
             return None
         except Exception as e:
             self._logger.warning("Failed to read internal auth token: %s", e)
             return None
 
     def load_session_encryption_key(self) -> str | None:
-        """Load session encryption key from host bootstrap directory."""
+        """Load session encryption key from host secrets directory."""
         if self._cached_key is not None:
             return self._cached_key
 
-        key_path = self._volume_path / "session_encryption_key"
+        key_path = self._secrets_dir / "session_encryption_key"
         try:
             if key_path.exists():
                 self._cached_key = key_path.read_text().strip()
-                self._logger.info("Loaded session encryption key from host bootstrap directory")
+                self._logger.info("Loaded session encryption key from host secrets directory")
                 return self._cached_key
-            self._logger.info("Session encryption key not found in host bootstrap directory")
+            self._logger.info("Session encryption key not found in host secrets directory")
             return None
         except Exception as e:
             self._logger.warning("Failed to read session encryption key: %s", e)
             return None
 
     def load_auditor_hmac_key(self) -> str | None:
-        """Load Tribunal auditor HMAC-SHA256 signing key from host bootstrap directory.
+        """Load Tribunal auditor HMAC-SHA256 signing key from host secrets directory.
 
         Paired with ``internal_auth_token`` / ``session_encryption_key``:
         the same SecretManager pattern on the g8eo side generates and
@@ -133,45 +141,40 @@ class BootstrapService:
         if self._cached_auditor_hmac_key is not None:
             return self._cached_auditor_hmac_key
 
-        key_path = self._volume_path / "auditor_hmac_key"
+        key_path = self._secrets_dir / "auditor_hmac_key"
         try:
             if key_path.exists():
                 self._cached_auditor_hmac_key = key_path.read_text().strip()
-                self._logger.info("Loaded auditor HMAC key from host bootstrap directory")
+                self._logger.info("Loaded auditor HMAC key from host secrets directory")
                 return self._cached_auditor_hmac_key
-            self._logger.info("Auditor HMAC key not found in host bootstrap directory")
+            self._logger.info("Auditor HMAC key not found in host secrets directory")
             return None
         except Exception as e:
             self._logger.warning("Failed to read auditor HMAC key: %s", e)
             return None
 
     def load_ca_cert_path(self) -> str | None:
-        """Load CA certificate path from host bootstrap directory."""
+        """Load CA certificate path from host PKI directory."""
         if self._cached_ca_path is not None:
             return self._cached_ca_path
 
-        # Check both possible locations
-        ca_paths = [
-            self._volume_path / "ca.crt",
-            self._volume_path / "ca" / "ca.crt"
-        ]
+        # Check the canonical location in the PKI directory
+        ca_path = self._pki_dir / "ca.crt"
+        try:
+            if ca_path.exists():
+                self._cached_ca_path = str(ca_path)
+                self._logger.info("Loaded CA cert path from host PKI directory: %s", self._cached_ca_path)
+                return self._cached_ca_path
+        except Exception as e:
+            self._logger.warning("Failed to read CA cert at %s: %s", ca_path, e)
 
-        for ca_path in ca_paths:
-            try:
-                if ca_path.exists():
-                    self._cached_ca_path = str(ca_path)
-                    self._logger.info("Loaded CA cert path from host bootstrap directory: %s", self._cached_ca_path)
-                    return self._cached_ca_path
-            except Exception as e:
-                self._logger.warning("Failed to read CA cert at %s: %s", ca_path, e)
-
-        self._logger.info("CA certificate not found in host bootstrap directory")
+        self._logger.info("CA certificate not found in host PKI directory")
         return None
 
     def is_available(self) -> bool:
         """Check if bootstrap data is available."""
         return (
-            self._volume_path.exists() and
+            self._secrets_dir.exists() and
             (self.load_internal_auth_token() is not None or
              self.load_session_encryption_key() is not None or
              self.load_auditor_hmac_key() is not None or
@@ -213,7 +216,7 @@ class BootstrapService:
         if not value:
             return
 
-        manifest_path = Path(self._volume_path) / BOOTSTRAP_DIGEST_MANIFEST_FILE
+        manifest_path = self._secrets_dir / BOOTSTRAP_DIGEST_MANIFEST_FILE
         if not manifest_path.exists():
             self._logger.warning(
                 "Bootstrap digest manifest missing; skipping verification for %s (path=%s)",

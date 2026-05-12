@@ -36,18 +36,21 @@ def _load_paths() -> dict:
             paths = json.load(f)
     except FileNotFoundError:
         # Emergency fallbacks for when shared volume isn't ready
-        # On host, default to .g8e/ssl (Operator listen mode SSL directory)
-        # In container, default to /operator for backwards compatibility
+        # On host, default to .g8e/pki (Operator listen mode PKI directory)
+        # In container, default to /pki for backwards compatibility
         if _SHARED_DIR != "/app/shared":
             default_runtime_dir = os.environ.get("G8E_RUNTIME_DIR", str(Path(_SHARED_DIR).parent / ".g8e"))
-            default_ssl_dir = os.environ.get("G8E_SSL_DIR", str(Path(default_runtime_dir) / "ssl"))
+            default_pki_dir = os.environ.get("G8E_PKI_DIR", str(Path(default_runtime_dir) / "pki"))
+            default_secrets_dir = os.environ.get("G8E_SECRETS_DIR", str(Path(default_runtime_dir) / "secrets"))
         else:
-            default_ssl_dir = os.environ.get("G8E_SSL_DIR", "/operator")
+            default_pki_dir = os.environ.get("G8E_PKI_DIR", "/pki")
+            default_secrets_dir = os.environ.get("G8E_SECRETS_DIR", "/secrets")
         paths = {
             "infra": {
                 "db_path": "/data/g8e.db",
-                "ca_cert_path": str(Path(default_ssl_dir) / "ca.crt"),
-                "ssl_dir": os.environ.get("G8E_SSL_DIR", default_ssl_dir),
+                "ca_cert_path": str(Path(default_pki_dir) / "ca.crt"),
+                "pki_dir": os.environ.get("G8E_PKI_DIR", default_pki_dir),
+                "secrets_dir": os.environ.get("G8E_SECRETS_DIR", default_secrets_dir),
                 "docs_dir": "/docs",
                 "shared_dir": _SHARED_DIR,
                 "shared_constants_dir": _SHARED_DIR + "/constants",
@@ -64,11 +67,13 @@ def _load_paths() -> dict:
         paths["infra"]["shared_dir"] = _SHARED_DIR
         paths["infra"]["shared_constants_dir"] = _SHARED_DIR + "/constants"
         paths["infra"]["shared_models_dir"] = _SHARED_DIR + "/models"
-        # Override SSL paths to use host runtime directory when running on host
+        # Override PKI/secrets paths to use host runtime directory when running on host
         host_runtime_dir = os.environ.get("G8E_RUNTIME_DIR", str(Path(_SHARED_DIR).parent / ".g8e"))
-        host_ssl_dir = os.environ.get("G8E_SSL_DIR", str(Path(host_runtime_dir) / "ssl"))
-        paths["infra"]["ssl_dir"] = host_ssl_dir
-        paths["infra"]["ca_cert_path"] = str(Path(host_ssl_dir) / "ca.crt")
+        host_pki_dir = os.environ.get("G8E_PKI_DIR", str(Path(host_runtime_dir) / "pki"))
+        host_secrets_dir = os.environ.get("G8E_SECRETS_DIR", str(Path(host_runtime_dir) / "secrets"))
+        paths["infra"]["pki_dir"] = host_pki_dir
+        paths["infra"]["secrets_dir"] = host_secrets_dir
+        paths["infra"]["ca_cert_path"] = str(Path(host_pki_dir) / "ca.crt")
 
     return paths
 

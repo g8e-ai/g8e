@@ -159,7 +159,7 @@ async def test_generate_operator_certificate(setup_ca_files, mock_data_service):
     mock_data_service.cache.db.client._request_json.assert_called_once()
     call_args = mock_data_service.cache.db.client._request_json.call_args
     assert call_args[0][0] == "POST"
-    assert call_args[0][1] == "/ssl/sign-certificate"
+    assert call_args[0][1] == "/.well-known/g8e/pki/sign-csr"
     payload = call_args[1]["json"]
     assert payload["common_name"] == "test-op"
     assert payload["organizational_unit"] == "test-user"

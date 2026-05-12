@@ -30,16 +30,16 @@ import (
 type AuthService struct {
 	db            *ListenDBService
 	logger        *slog.Logger
-	sslDir        string
+	secretsDir    string
 	tokenProvider func() string
 }
 
 // NewAuthService creates a new AuthService.
-func NewAuthService(db *ListenDBService, logger *slog.Logger, sslDir string) *AuthService {
+func NewAuthService(db *ListenDBService, logger *slog.Logger, secretsDir string) *AuthService {
 	s := &AuthService{
-		db:     db,
-		logger: logger,
-		sslDir: sslDir,
+		db:         db,
+		logger:     logger,
+		secretsDir: secretsDir,
 	}
 	s.tokenProvider = s.defaultTokenProvider
 	return s
@@ -52,8 +52,8 @@ func (s *AuthService) defaultTokenProvider() string {
 		return token
 	}
 
-	// 2. Try SSL volume file (authoritative source for bootstrap secrets)
-	tokenPath := filepath.Join(s.sslDir, "internal_auth_token")
+	// 2. Try secrets volume file (authoritative source for bootstrap secrets)
+	tokenPath := filepath.Join(s.secretsDir, "internal_auth_token")
 	if tokenBytes, err := os.ReadFile(tokenPath); err == nil {
 		if token := strings.TrimSpace(string(tokenBytes)); token != "" {
 			return token
@@ -158,6 +158,18 @@ func (s *AuthService) Middleware(next http.Handler) http.Handler {
 		}
 
 		// [PIVOT] Support public protocol auth surface (Phase 4)
+		// These unauthenticated PKI routes return only public material and fingerprints.
+		if strings.HasPrefix(r.URL.Path, "/.well-known/g8e/pki/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// These routes are new protocol entry points.
+		if r.URL.Path == "/api/pki/sign-csr" || r.URL.Path == "/api/auth/device-link/register" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		// We prioritize session/key auth.
 		sessionID := r.Header.Get(constants.HeaderOperatorSessionID)
 		apiKey := r.Header.Get(constants.HeaderOperatorAPIKey)

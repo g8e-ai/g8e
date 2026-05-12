@@ -119,8 +119,8 @@ When no operator is connected:
 - `stop`: Stop Operator listen mode and any optional app processes
 - `restart [--with-apps|--with-g8ed|--with-g8ee]`: Restart Operator listen mode by default; optional apps require explicit opt-in
 - `status`: Show substrate health first and optional application-layer status separately
-- `reset`: Reset application data (preserves SSL)
-- `wipe`: Clear app data while preserving platform settings and SSL
+- `reset`: Destructive. Wipes Dashboard/Engine data, Operator listen-mode data, and bootstrap secrets while preserving PKI material in `.g8e/pki`
+- `wipe`: Clears application data via the Operator listen-mode API. Preserves platform settings, PKI material, secrets, and authentication state
 - `clean`: Nuke all processes and the `.g8e` runtime directory
 - `logs`: Stream logs from all components
 - `settings`: Manage platform configuration (sections: general, llm, etc.)

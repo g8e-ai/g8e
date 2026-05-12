@@ -29,42 +29,29 @@ import (
 	"github.com/g8e-ai/g8e/components/g8eo/services/sqliteutil"
 )
 
-// SecretManager handles generation and synchronization of platform security secrets.
+var requiredBootstrapSecrets = []string{
+	"internal_auth_token",
+	"session_encryption_key",
+	"auditor_hmac_key",
+}
+
+// SecretManager handles generation and validation of platform security secrets.
 type SecretManager struct {
-	db     *sqliteutil.DB
-	logger *slog.Logger
-	sslDir string
+	db         *sqliteutil.DB
+	logger     *slog.Logger
+	secretsDir string
 }
 
-func NewSecretManager(db *sqliteutil.DB, sslDir string, logger *slog.Logger) *SecretManager {
+func NewSecretManager(db *sqliteutil.DB, secretsDir string, logger *slog.Logger) *SecretManager {
 	return &SecretManager{
-		db:     db,
-		sslDir: sslDir,
-		logger: logger,
+		db:         db,
+		secretsDir: secretsDir,
+		logger:     logger,
 	}
 }
 
-// InitPlatformSettings ensures platform secrets exist in both the DB and on disk.
+// InitPlatformSettings creates secrets on first boot and validates them on later boots.
 func (m *SecretManager) InitPlatformSettings() error {
-	tokenPath := filepath.Join(m.sslDir, "internal_auth_token")
-	sessionKeyPath := filepath.Join(m.sslDir, "session_encryption_key")
-	auditorHmacKeyPath := filepath.Join(m.sslDir, "auditor_hmac_key")
-
-	var internalAuthToken string
-	if data, err := os.ReadFile(tokenPath); err == nil {
-		internalAuthToken = strings.TrimSpace(string(data))
-	}
-
-	var sessionEncryptionKey string
-	if data, err := os.ReadFile(sessionKeyPath); err == nil {
-		sessionEncryptionKey = strings.TrimSpace(string(data))
-	}
-
-	var auditorHmacKey string
-	if data, err := os.ReadFile(auditorHmacKeyPath); err == nil {
-		auditorHmacKey = strings.TrimSpace(string(data))
-	}
-
 	var exists bool
 	err := m.db.QueryRow(
 		"SELECT EXISTS(SELECT 1 FROM documents WHERE collection = 'settings' AND id = 'platform_settings')",
@@ -76,181 +63,138 @@ func (m *SecretManager) InitPlatformSettings() error {
 	now := time.Now().UTC()
 
 	if !exists {
-		if internalAuthToken == "" {
-			internalAuthToken = m.generateSecureToken(32)
-		}
-		if sessionEncryptionKey == "" {
-			sessionEncryptionKey = m.generateSecureToken(32)
-		}
-		if auditorHmacKey == "" {
-			auditorHmacKey = m.generateSecureToken(32)
-		}
-
-		platformSettings := models.SettingsDocument{}
-		platformSettings.Settings = map[string]interface{}{
-			"internal_auth_token":    internalAuthToken,
-			"session_encryption_key": sessionEncryptionKey,
-			"auditor_hmac_key":       auditorHmacKey,
-		}
-		platformSettings.CreatedAt = now
-		platformSettings.UpdatedAt = now
-
-		dataJSON, err := json.Marshal(platformSettings)
-		if err != nil {
-			return fmt.Errorf("failed to marshal platform_settings: %w", err)
-		}
-
-		nowStr := sqliteutil.FormatTimestamp(now)
-		_, err = m.db.Exec(
-			`INSERT INTO documents (collection, id, data, created_at, updated_at)
-			 VALUES (?, ?, ?, ?, ?)`,
-			"settings", "platform_settings", string(dataJSON), nowStr, nowStr,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to create platform_settings document: %w", err)
-		}
-		m.logger.Info("[SecretManager] platform_settings document created with security secrets")
-
-		cacheKey := "g8e:cache:doc:settings:platform_settings"
-		cacheTTL := 3600
-		_, err = m.db.Exec(
-			`INSERT INTO kv_store (key, value, created_at, expires_at)
-			 VALUES (?, ?, ?, ?)`,
-			cacheKey, string(dataJSON), nowStr, sqliteutil.FormatTimestamp(now.Add(time.Duration(cacheTTL)*time.Second)),
-		)
-		if err != nil {
-			m.logger.Warn("[SecretManager] Failed to warm cache for platform_settings", "error", err)
-		} else {
-			m.logger.Info("[SecretManager] platform_settings cache warmed", "key", cacheKey, "ttl", cacheTTL)
-		}
-	} else {
-		var dataJSON string
-		err := m.db.QueryRow(
-			"SELECT data FROM documents WHERE collection = 'settings' AND id = 'platform_settings'",
-		).Scan(&dataJSON)
-
-		if err != nil {
-			return fmt.Errorf("failed to query platform_settings document for upgrade: %w", err)
-		}
-
-		var settings models.SettingsDocument
-		if err := json.Unmarshal([]byte(dataJSON), &settings); err != nil {
-			return fmt.Errorf("failed to unmarshal platform_settings document for upgrade: %w", err)
-		}
-
-		changed := false
-		if internalAuthToken != "" {
-			if val, ok := settings.Settings["internal_auth_token"].(string); !ok || val != internalAuthToken {
-				settings.Settings["internal_auth_token"] = internalAuthToken
-				changed = true
-				m.logger.Info("[SecretManager] Synchronized internal_auth_token from file to DB")
-			}
-		}
-		if sessionEncryptionKey != "" {
-			if val, ok := settings.Settings["session_encryption_key"].(string); !ok || val != sessionEncryptionKey {
-				settings.Settings["session_encryption_key"] = sessionEncryptionKey
-				changed = true
-				m.logger.Info("[SecretManager] Synchronized session_encryption_key from file to DB")
-			}
-		}
-		if auditorHmacKey != "" {
-			if val, ok := settings.Settings["auditor_hmac_key"].(string); !ok || val != auditorHmacKey {
-				settings.Settings["auditor_hmac_key"] = auditorHmacKey
-				changed = true
-				m.logger.Info("[SecretManager] Synchronized auditor_hmac_key from file to DB")
-			}
-		} else {
-			// First-time upgrade path: DB predates auditor_hmac_key. Generate
-			// lazily on the existing platform_settings row so Phase 2 can boot
-			// without requiring a fresh install.
-			if _, ok := settings.Settings["auditor_hmac_key"].(string); !ok {
-				auditorHmacKey = m.generateSecureToken(32)
-				settings.Settings["auditor_hmac_key"] = auditorHmacKey
-				changed = true
-				m.logger.Info("[SecretManager] Generated auditor_hmac_key for existing platform_settings")
-			}
-		}
-
-		if changed {
-			settings.UpdatedAt = now
-			updatedJSON, _ := json.Marshal(settings)
-			nowStr := sqliteutil.FormatTimestamp(now)
-			m.db.Exec("UPDATE documents SET data = ?, updated_at = ? WHERE collection = ? AND id = ?",
-				string(updatedJSON), nowStr, "settings", "platform_settings")
-
-			cacheKey := "g8e:cache:doc:settings:platform_settings"
-			cacheTTL := 3600
-			_, err = m.db.Exec(
-				`INSERT INTO kv_store (key, value, created_at, expires_at)
-				 VALUES (?, ?, ?, ?)
-				 ON CONFLICT(key) DO UPDATE SET value = excluded.value, expires_at = excluded.expires_at`,
-				cacheKey, string(updatedJSON), nowStr, sqliteutil.FormatTimestamp(now.Add(time.Duration(cacheTTL)*time.Second)),
-			)
-			if err != nil {
-				m.logger.Warn("[SecretManager] Failed to warm cache for platform_settings after update", "error", err)
-			} else {
-				m.logger.Info("[SecretManager] platform_settings cache warmed after update", "key", cacheKey, "ttl", cacheTTL)
-			}
-		}
-
-		if internalAuthToken == "" {
-			if val, ok := settings.Settings["internal_auth_token"].(string); ok {
-				internalAuthToken = val
-			}
-		}
-		if sessionEncryptionKey == "" {
-			if val, ok := settings.Settings["session_encryption_key"].(string); ok {
-				sessionEncryptionKey = val
-			}
-		}
-		if auditorHmacKey == "" {
-			if val, ok := settings.Settings["auditor_hmac_key"].(string); ok {
-				auditorHmacKey = val
-			}
-		}
+		return m.createPlatformSettings(now)
 	}
 
-	if internalAuthToken != "" {
-		if err := m.writeSecretFile(tokenPath, internalAuthToken, "internal_auth_token"); err != nil {
-			return err
-		}
+	return m.validatePlatformSettings()
+}
+
+func (m *SecretManager) createPlatformSettings(now time.Time) error {
+	if err := m.rejectPreexistingBootstrapState(); err != nil {
+		return err
 	}
-	if sessionEncryptionKey != "" {
-		if err := m.writeSecretFile(sessionKeyPath, sessionEncryptionKey, "session_encryption_key"); err != nil {
-			return err
-		}
+	if err := os.MkdirAll(m.secretsDir, 0700); err != nil {
+		return fmt.Errorf("create bootstrap secrets directory %s: %w", m.secretsDir, err)
 	}
-	if auditorHmacKey != "" {
-		if err := m.writeSecretFile(auditorHmacKeyPath, auditorHmacKey, "auditor_hmac_key"); err != nil {
+
+	secrets := map[string]string{
+		"internal_auth_token":    m.generateSecureToken(32),
+		"session_encryption_key": m.generateSecureToken(32),
+		"auditor_hmac_key":       m.generateSecureToken(32),
+	}
+
+	platformSettings := models.SettingsDocument{}
+	platformSettings.Settings = map[string]interface{}{
+		"internal_auth_token":    secrets["internal_auth_token"],
+		"session_encryption_key": secrets["session_encryption_key"],
+		"auditor_hmac_key":       secrets["auditor_hmac_key"],
+	}
+	platformSettings.CreatedAt = now
+	platformSettings.UpdatedAt = now
+
+	dataJSON, err := json.Marshal(platformSettings)
+	if err != nil {
+		return fmt.Errorf("failed to marshal platform_settings: %w", err)
+	}
+
+	nowStr := sqliteutil.FormatTimestamp(now)
+	_, err = m.db.Exec(
+		`INSERT INTO documents (collection, id, data, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?)`,
+		"settings", "platform_settings", string(dataJSON), nowStr, nowStr,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create platform_settings document: %w", err)
+	}
+	m.logger.Info("[SecretManager] platform_settings document created with security secrets")
+
+	m.warmPlatformSettingsCache(string(dataJSON), now)
+
+	for _, name := range requiredBootstrapSecrets {
+		if err := m.writeSecretFile(m.secretPath(name), secrets[name], name); err != nil {
 			return err
 		}
 	}
 
-	if err := m.verifyDBMatchesFile(tokenPath, "internal_auth_token"); err != nil {
-		return err
-	}
-	if err := m.verifyDBMatchesFile(sessionKeyPath, "session_encryption_key"); err != nil {
-		return err
-	}
-	if err := m.verifyDBMatchesFile(auditorHmacKeyPath, "auditor_hmac_key"); err != nil {
+	if err := m.writeDigestManifest(secrets, now); err != nil {
 		return err
 	}
 
-	if err := m.writeDigestManifest(map[string]string{
-		"internal_auth_token":    internalAuthToken,
-		"session_encryption_key": sessionEncryptionKey,
-		"auditor_hmac_key":       auditorHmacKey,
-	}, now); err != nil {
+	return m.validatePlatformSettings()
+}
+
+func (m *SecretManager) validatePlatformSettings() error {
+	if info, err := os.Stat(m.secretsDir); err != nil {
+		return fmt.Errorf("bootstrap secrets directory %s is required after platform_settings exists: %w; delete and recreate runtime state", m.secretsDir, err)
+	} else if !info.IsDir() {
+		return fmt.Errorf("bootstrap secrets path %s is not a directory; delete and recreate runtime state", m.secretsDir)
+	}
+
+	dbSecrets, err := m.loadRequiredDBSecrets()
+	if err != nil {
 		return err
+	}
+	manifest, err := m.readDigestManifest()
+	if err != nil {
+		return err
+	}
+
+	for _, name := range requiredBootstrapSecrets {
+		fileValue, err := m.readRequiredSecretFile(name)
+		if err != nil {
+			return err
+		}
+		if fileValue != dbSecrets[name] {
+			fileDigest := sha256.Sum256([]byte(fileValue))
+			dbDigest := sha256.Sum256([]byte(dbSecrets[name]))
+			m.logger.Error("[SecretManager] Bootstrap secret divergence between file and DB",
+				"name", name,
+				"file_sha256", hex.EncodeToString(fileDigest[:]),
+				"db_sha256", hex.EncodeToString(dbDigest[:]))
+			return fmt.Errorf("bootstrap secret %s differs between secrets directory and platform_settings DB; delete and recreate runtime state", name)
+		}
+		entry, ok := manifest.Secrets[name]
+		if !ok || entry.SHA256 == "" {
+			return fmt.Errorf("bootstrap digest manifest missing required entry %s; delete and recreate runtime state", name)
+		}
+		fileDigest := sha256.Sum256([]byte(fileValue))
+		if actual := hex.EncodeToString(fileDigest[:]); actual != entry.SHA256 {
+			return fmt.Errorf("bootstrap secret %s digest %s does not match manifest digest %s; delete and recreate runtime state", name, actual, entry.SHA256)
+		}
 	}
 
 	return nil
 }
 
+func (m *SecretManager) loadRequiredDBSecrets() (map[string]string, error) {
+	var dataJSON string
+	if err := m.db.QueryRow(
+		"SELECT data FROM documents WHERE collection = 'settings' AND id = 'platform_settings'",
+	).Scan(&dataJSON); err != nil {
+		return nil, fmt.Errorf("failed to query platform_settings document: %w", err)
+	}
+
+	var settings models.SettingsDocument
+	if err := json.Unmarshal([]byte(dataJSON), &settings); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal platform_settings document: %w", err)
+	}
+	if settings.Settings == nil {
+		return nil, fmt.Errorf("platform_settings missing settings map; delete and recreate runtime state")
+	}
+
+	secrets := make(map[string]string, len(requiredBootstrapSecrets))
+	for _, name := range requiredBootstrapSecrets {
+		value, ok := settings.Settings[name].(string)
+		if !ok || strings.TrimSpace(value) == "" {
+			return nil, fmt.Errorf("platform_settings missing required bootstrap secret %s; delete and recreate runtime state", name)
+		}
+		secrets[name] = strings.TrimSpace(value)
+	}
+	return secrets, nil
+}
+
 // BootstrapDigestManifestFile is the filename of the tamper-evidence manifest
-// written alongside bootstrap secrets on the SSL volume. Consumers
-// (g8ed/g8ee BootstrapService) verify the SHA-256 of each secret they read
-// from the volume matches the digest recorded here by g8eo at write time.
+// written alongside bootstrap secrets.
 const BootstrapDigestManifestFile = "bootstrap_digest.json"
 
 // bootstrapDigestManifest is the on-disk schema for bootstrap_digest.json.
@@ -293,7 +237,7 @@ func (m *SecretManager) writeDigestManifest(secrets map[string]string, now time.
 		return fmt.Errorf("marshal bootstrap digest manifest: %w", err)
 	}
 
-	finalPath := filepath.Join(m.sslDir, BootstrapDigestManifestFile)
+	finalPath := filepath.Join(m.secretsDir, BootstrapDigestManifestFile)
 	tmpPath := finalPath + ".tmp"
 	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
 		m.logger.Error("[SecretManager] Failed to write bootstrap digest manifest",
@@ -311,51 +255,81 @@ func (m *SecretManager) writeDigestManifest(secrets map[string]string, now time.
 	return nil
 }
 
-// writeSecretFile atomically persists a bootstrap secret to the SSL volume and fails
-// hard on any I/O error. The file is the source of truth read by g8ed and g8ee
-// BootstrapService on startup; a silent write failure would leave the DB and volume
-// out of sync and cause confusing auth failures on the next restart.
-func (m *SecretManager) writeSecretFile(path, value, name string) error {
-	if err := os.WriteFile(path, []byte(value), 0600); err != nil {
-		m.logger.Error("[SecretManager] Failed to write bootstrap secret to volume",
-			"name", name, "path", path, "error", err)
-		return fmt.Errorf("write bootstrap secret %s to %s: %w", name, path, err)
+func (m *SecretManager) readDigestManifest() (*bootstrapDigestManifest, error) {
+	manifestPath := filepath.Join(m.secretsDir, BootstrapDigestManifestFile)
+	data, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return nil, fmt.Errorf("bootstrap digest manifest %s is required: %w; delete and recreate runtime state", manifestPath, err)
+	}
+
+	var manifest bootstrapDigestManifest
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		return nil, fmt.Errorf("bootstrap digest manifest %s is malformed: %w; delete and recreate runtime state", manifestPath, err)
+	}
+	if manifest.Version != 1 {
+		return nil, fmt.Errorf("bootstrap digest manifest version %d is unsupported; delete and recreate runtime state", manifest.Version)
+	}
+	if manifest.Secrets == nil {
+		return nil, fmt.Errorf("bootstrap digest manifest missing secrets map; delete and recreate runtime state")
+	}
+	return &manifest, nil
+}
+
+func (m *SecretManager) rejectPreexistingBootstrapState() error {
+	for _, name := range requiredBootstrapSecrets {
+		if _, err := os.Stat(m.secretPath(name)); err == nil {
+			return fmt.Errorf("found preexisting bootstrap secret %s without platform_settings; delete and recreate runtime state", name)
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("inspect bootstrap secret %s: %w", name, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(m.secretsDir, BootstrapDigestManifestFile)); err == nil {
+		return fmt.Errorf("found preexisting bootstrap digest manifest without platform_settings; delete and recreate runtime state")
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("inspect bootstrap digest manifest: %w", err)
 	}
 	return nil
 }
 
-// verifyDBMatchesFile re-reads the on-disk secret and compares it (via SHA-256 digest
-// for log safety) to the value stored in the platform_settings document. Divergence
-// indicates a coding error in InitPlatformSettings or a concurrent writer and must
-// abort startup rather than let the two authorities drift.
-func (m *SecretManager) verifyDBMatchesFile(path, name string) error {
-	fileBytes, err := os.ReadFile(path)
+func (m *SecretManager) warmPlatformSettingsCache(dataJSON string, now time.Time) {
+	cacheKey := "g8e:cache:doc:settings:platform_settings"
+	cacheTTL := 3600
+	nowStr := sqliteutil.FormatTimestamp(now)
+	_, err := m.db.Exec(
+		`INSERT INTO kv_store (key, value, created_at, expires_at)
+		 VALUES (?, ?, ?, ?)`,
+		cacheKey, dataJSON, nowStr, sqliteutil.FormatTimestamp(now.Add(time.Duration(cacheTTL)*time.Second)),
+	)
 	if err != nil {
-		return fmt.Errorf("read bootstrap secret %s from %s for verification: %w", name, path, err)
+		m.logger.Warn("[SecretManager] Failed to warm cache for platform_settings", "error", err)
+	} else {
+		m.logger.Info("[SecretManager] platform_settings cache warmed", "key", cacheKey, "ttl", cacheTTL)
 	}
-	fileValue := strings.TrimSpace(string(fileBytes))
+}
 
-	var dataJSON string
-	err = m.db.QueryRow(
-		"SELECT data FROM documents WHERE collection = 'settings' AND id = 'platform_settings'",
-	).Scan(&dataJSON)
+func (m *SecretManager) secretPath(name string) string {
+	return filepath.Join(m.secretsDir, name)
+}
+
+func (m *SecretManager) readRequiredSecretFile(name string) (string, error) {
+	path := m.secretPath(name)
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("read platform_settings for %s verification: %w", name, err)
+		return "", fmt.Errorf("bootstrap secret %s is required at %s: %w; delete and recreate runtime state", name, path, err)
 	}
-	var settings models.SettingsDocument
-	if err := json.Unmarshal([]byte(dataJSON), &settings); err != nil {
-		return fmt.Errorf("unmarshal platform_settings for %s verification: %w", name, err)
+	value := strings.TrimSpace(string(data))
+	if value == "" {
+		return "", fmt.Errorf("bootstrap secret %s is empty at %s; delete and recreate runtime state", name, path)
 	}
-	dbValue, _ := settings.Settings[name].(string)
+	return value, nil
+}
 
-	if fileValue != dbValue {
-		fileDigest := sha256.Sum256([]byte(fileValue))
-		dbDigest := sha256.Sum256([]byte(dbValue))
-		m.logger.Error("[SecretManager] Bootstrap secret divergence between volume and DB",
-			"name", name,
-			"file_sha256", hex.EncodeToString(fileDigest[:]),
-			"db_sha256", hex.EncodeToString(dbDigest[:]))
-		return fmt.Errorf("bootstrap secret %s differs between volume file and platform_settings DB", name)
+// writeSecretFile atomically persists a bootstrap secret and fails hard on any I/O error.
+func (m *SecretManager) writeSecretFile(path, value, name string) error {
+	if err := os.WriteFile(path, []byte(value), 0600); err != nil {
+		m.logger.Error("[SecretManager] Failed to write bootstrap secret",
+			"name", name, "path", path, "error", err)
+		return fmt.Errorf("write bootstrap secret %s to %s: %w", name, path, err)
 	}
 	return nil
 }

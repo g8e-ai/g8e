@@ -57,9 +57,9 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config) {
 	t.Cleanup(func() { pubsub.Close() })
 
 	auth := NewAuthService(db, logger, sslDir)
-	certs := newCertStore(dbDir, sslDir, logger)
-	reg := NewRegistrationService(db, certs, logger)
-	h := newHTTPHandler(cfg, logger, db, pubsub, auth, certs, reg, func() bool { return true })
+	pki := newPKIAuthority(dbDir, sslDir, logger)
+	reg := NewRegistrationService(db, pki, logger)
+	h := newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, func() bool { return true })
 	return h, cfg
 }
 
@@ -241,7 +241,6 @@ func TestAuthMiddlewareDeep(t *testing.T) {
 			"/db/settings/platform_settings",
 			"/kv/some-key",
 			"/ws/pubsub",
-			"/ssl/ca.crt",
 		}
 
 		for _, path := range paths {

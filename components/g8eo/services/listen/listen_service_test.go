@@ -28,14 +28,15 @@ func TestNewListenService(t *testing.T) {
 
 	// Ensure directories are set for tests to avoid SQLITE_CANTOPEN
 	cfg.Listen.DataDir = t.TempDir()
-	cfg.Listen.SSLDir = t.TempDir()
+	cfg.Listen.PKIDir = t.TempDir()
+	cfg.Listen.SecretsDir = t.TempDir()
 
 	t.Run("Default configuration with self-signed certs", func(t *testing.T) {
 		ls, err := NewListenService(cfg, logger)
 		require.NoError(t, err)
 		assert.NotNil(t, ls)
 		assert.NotNil(t, ls.server)
-		assert.NotNil(t, ls.certs)
+		assert.NotNil(t, ls.pki)
 		assert.False(t, ls.running)
 
 		err = ls.db.Close()
@@ -65,7 +66,8 @@ func TestListenService_StateManagement(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	cfg.Listen.DataDir = t.TempDir()
-	cfg.Listen.SSLDir = t.TempDir()
+	cfg.Listen.PKIDir = t.TempDir()
+	cfg.Listen.SecretsDir = t.TempDir()
 
 	ls, err := NewListenService(cfg, logger)
 	require.NoError(t, err)
@@ -103,13 +105,17 @@ func TestNewListenServiceFromComponents(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	dbDir := t.TempDir()
-	sslDir := t.TempDir()
-	db, err := NewListenDBService(dbDir, sslDir, logger)
+	pkiDir := t.TempDir()
+	secretsDir := t.TempDir()
+	db, err := NewListenDBService(dbDir, secretsDir, logger)
 	require.NoError(t, err)
 	defer db.Close()
 
 	pubsub := NewPubSubBroker(logger)
 	defer pubsub.Close()
+
+	cfg.Listen.PKIDir = pkiDir
+	cfg.Listen.SecretsDir = secretsDir
 
 	ls := newListenServiceFromComponents(cfg, logger, db, pubsub)
 	assert.NotNil(t, ls)

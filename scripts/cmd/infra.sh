@@ -125,6 +125,10 @@ case "$TOP" in
                 _banner "security passkeys ${@:3}"; _ensure_operator; _requires_operator_route "/api/security/passkeys" ;;
             rotate-internal-token)
                 _banner "security rotate-internal-token"; _ensure_operator; _requires_operator_route "/api/security/internal-token/rotate" ;;
+            certs)
+                echo "[g8e] ERROR: 'security certs' is deprecated. Certificate management is now handled by the Operator PKI subsystem." >&2
+                echo "[g8e] Use './g8e pki' commands for PKI operations (first-class PKI commands coming soon)." >&2
+                exit 1 ;;
             *)
                 echo "[g8e] unknown security subcommand: '$SUB'" >&2; exit 1 ;;
         esac ;;

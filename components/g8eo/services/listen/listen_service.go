@@ -37,7 +37,7 @@ type ListenService struct {
 	db        *ListenDBService
 	pubsub    *PubSubBroker
 	auth      *AuthService
-	certs     *CertStore
+	pki       *PKIAuthority
 	reg       *RegistrationService
 	server    *http.Server
 	wssServer *http.Server
@@ -51,19 +51,19 @@ type ListenService struct {
 
 // NewListenService creates a new listen mode service.
 func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, error) {
-	db, err := NewListenDBService(cfg.Listen.DataDir, cfg.Listen.SSLDir, logger)
+	db, err := NewListenDBService(cfg.Listen.DataDir, cfg.Listen.SecretsDir, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
 
 	pubsub := NewPubSubBroker(logger)
-	auth := NewAuthService(db, logger, cfg.Listen.SSLDir)
+	auth := NewAuthService(db, logger, cfg.Listen.SecretsDir)
 
-	var certs *CertStore
+	var pki *PKIAuthority
 	var tlsConfig *tls.Config
 
 	if cfg.Listen.TLSCertPath != "" && cfg.Listen.TLSKeyPath != "" {
-		logger.Info("[CERTS] Using externally-managed TLS certificate",
+		logger.Info("[PKI] Using externally-managed TLS certificate",
 			"cert", cfg.Listen.TLSCertPath, "key", cfg.Listen.TLSKeyPath)
 		extCert, err := tls.LoadX509KeyPair(cfg.Listen.TLSCertPath, cfg.Listen.TLSKeyPath)
 		if err != nil {
@@ -71,10 +71,10 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 		}
 		tlsConfig = &tls.Config{
 			Certificates: []tls.Certificate{extCert},
-			MinVersion:   tls.VersionTLS12,
+			MinVersion:   tls.VersionTLS13,
 		}
 	} else {
-		certs = newCertStore(cfg.Listen.DataDir, cfg.Listen.SSLDir, logger)
+		pki = newPKIAuthority(cfg.Listen.DataDir, cfg.Listen.PKIDir, logger)
 
 		var extraIPs []net.IP
 		if ifaces, err := net.Interfaces(); err == nil {
@@ -95,13 +95,13 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 			}
 		}
 
-		if err := certs.EnsureCerts(extraIPs); err != nil {
-			return nil, fmt.Errorf("failed to ensure TLS certificates: %w", err)
+		if err := pki.EnsurePKI(extraIPs); err != nil {
+			return nil, fmt.Errorf("failed to ensure PKI hierarchy: %w", err)
 		}
-		tlsConfig = certs.TLSConfig()
+		tlsConfig = pki.TLSConfig()
 	}
 
-	reg := NewRegistrationService(db, certs, logger)
+	reg := NewRegistrationService(db, pki, logger)
 
 	ls := &ListenService{
 		cfg:    cfg,
@@ -109,11 +109,11 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 		db:     db,
 		pubsub: pubsub,
 		auth:   auth,
-		certs:  certs,
+		pki:    pki,
 		reg:    reg,
 	}
 
-	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, certs, reg, ls.IsReady)
+	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, ls.IsReady)
 	ls.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.HTTPPort),
 		Handler:           ls.handler,
@@ -136,7 +136,7 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 // newListenServiceFromComponents assembles a ListenService from pre-built components.
 // Used in tests where the DB and pub/sub broker are constructed independently.
 func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker) *ListenService {
-	auth := NewAuthService(db, logger, cfg.Listen.SSLDir)
+	auth := NewAuthService(db, logger, cfg.Listen.SecretsDir)
 	reg := NewRegistrationService(db, nil, logger)
 	ls := &ListenService{
 		cfg:    cfg,

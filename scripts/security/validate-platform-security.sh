@@ -51,13 +51,14 @@ check_env_var() {
 # 2. Host security checks
 echo -e "\n${YELLOW}2. Checking host security files...${NC}"
 FAILED=0
-G8E_SSL_DIR="${G8E_SSL_DIR:-$PROJECT_ROOT/.g8e/ssl}"
+G8E_PKI_DIR="${G8E_PKI_DIR:-$PROJECT_ROOT/.g8e/pki}"
+G8E_SECRETS_DIR="${G8E_SECRETS_DIR:-$PROJECT_ROOT/.g8e/secrets}"
 
-if [ ! -f "$G8E_SSL_DIR/ca.crt" ]; then echo -e "${RED}FAILED: $G8E_SSL_DIR/ca.crt missing${NC}"; FAILED=1; fi
-if [ ! -f "$G8E_SSL_DIR/server.crt" ]; then echo -e "${RED}FAILED: $G8E_SSL_DIR/server.crt missing${NC}"; FAILED=1; fi
-if [ ! -f "$G8E_SSL_DIR/server.key" ]; then echo -e "${RED}FAILED: $G8E_SSL_DIR/server.key missing${NC}"; FAILED=1; fi
-if [ ! -f "$G8E_SSL_DIR/internal_auth_token" ]; then echo -e "${RED}FAILED: $G8E_SSL_DIR/internal_auth_token missing${NC}"; FAILED=1; fi
-if [ ! -f "$G8E_SSL_DIR/session_encryption_key" ]; then echo -e "${RED}FAILED: $G8E_SSL_DIR/session_encryption_key missing${NC}"; FAILED=1; fi
+if [ ! -f "$G8E_PKI_DIR/ca.crt" ]; then echo -e "${RED}FAILED: $G8E_PKI_DIR/ca.crt missing${NC}"; FAILED=1; fi
+if [ ! -f "$G8E_PKI_DIR/hub-bundle.pem" ]; then echo -e "${RED}FAILED: $G8E_PKI_DIR/hub-bundle.pem missing${NC}"; FAILED=1; fi
+if [ ! -f "$G8E_SECRETS_DIR/internal_auth_token" ]; then echo -e "${RED}FAILED: $G8E_SECRETS_DIR/internal_auth_token missing${NC}"; FAILED=1; fi
+if [ ! -f "$G8E_SECRETS_DIR/session_encryption_key" ]; then echo -e "${RED}FAILED: $G8E_SECRETS_DIR/session_encryption_key missing${NC}"; FAILED=1; fi
+if [ ! -f "$G8E_SECRETS_DIR/bootstrap_digest.json" ]; then echo -e "${RED}FAILED: $G8E_SECRETS_DIR/bootstrap_digest.json missing${NC}"; FAILED=1; fi
 
 # 3. Process and Port checks
 echo -e "\n${YELLOW}3. Checking host processes and ports...${NC}"
