@@ -40,9 +40,13 @@ type ListenService struct {
 	pki             *PKIAuthority
 	reg             *RegistrationService
 	passkey         *PasskeyService
+	userSvc         *UserService
+	setupSvc        *SetupService
+	apiKeySvc       *ApiKeyService
 	server          *http.Server
 	wssServer       *http.Server
 	bootstrapServer *http.Server
+	publicServer    *http.Server
 
 	handler *HTTPHandler
 
@@ -96,20 +100,31 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 		RpID:   "localhost",
 		RpName: "g8e",
 	}
-	passkey := NewPasskeyService(db, logger, passkeyCfg)
-
-	ls := &ListenService{
-		cfg:     cfg,
-		logger:  logger,
-		db:      db,
-		pubsub:  pubsub,
-		auth:    auth,
-		pki:     pki,
-		reg:     reg,
-		passkey: passkey,
+	passkey, err := NewPasskeyService(db, logger, passkeyCfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize passkey service: %w", err)
 	}
 
-	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, ls.IsReady)
+	// Initialize user and setup services
+	userSvc := NewUserService(db, logger)
+	setupSvc := NewSetupService(db, userSvc, logger)
+	apiKeySvc := NewApiKeyService(db, logger)
+
+	ls := &ListenService{
+		cfg:       cfg,
+		logger:    logger,
+		db:        db,
+		pubsub:    pubsub,
+		auth:      auth,
+		pki:       pki,
+		reg:       reg,
+		passkey:   passkey,
+		userSvc:   userSvc,
+		setupSvc:  setupSvc,
+		apiKeySvc: apiKeySvc,
+	}
+
+	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, userSvc, setupSvc, apiKeySvc, ls.IsReady)
 	ls.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.HTTPPort),
 		Handler:           ls.handler,
@@ -134,6 +149,14 @@ func NewListenService(cfg *config.Config, logger *slog.Logger) (*ListenService, 
 		IdleTimeout:       120 * time.Second,
 	}
 
+	ls.publicServer = &http.Server{
+		Addr:              fmt.Sprintf(":%d", cfg.Listen.PublicPort),
+		Handler:           ls.handler.buildPublicRouter(),
+		TLSConfig:         tlsConfigPlain, // No mTLS for browser BYO frontend
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+
 	return ls, nil
 }
 
@@ -149,20 +172,28 @@ func newListenServiceFromComponents(cfg *config.Config, logger *slog.Logger, db 
 		RpID:   "localhost",
 		RpName: "g8e",
 	}
-	passkey := NewPasskeyService(db, logger, passkeyCfg)
+	passkey, _ := NewPasskeyService(db, logger, passkeyCfg)
+
+	// Initialize user and setup services
+	userSvc := NewUserService(db, logger)
+	setupSvc := NewSetupService(db, userSvc, logger)
+	apiKeySvc := NewApiKeyService(db, logger)
 
 	ls := &ListenService{
-		cfg:     cfg,
-		logger:  logger,
-		db:      db,
-		pubsub:  pubsub,
-		auth:    auth,
-		pki:     pki,
-		reg:     reg,
-		passkey: passkey,
+		cfg:       cfg,
+		logger:    logger,
+		db:        db,
+		pubsub:    pubsub,
+		auth:      auth,
+		pki:       pki,
+		reg:       reg,
+		passkey:   passkey,
+		userSvc:   userSvc,
+		setupSvc:  setupSvc,
+		apiKeySvc: apiKeySvc,
 	}
 
-	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, ls.IsReady)
+	ls.handler = newHTTPHandler(cfg, logger, db, pubsub, auth, pki, reg, passkey, userSvc, setupSvc, apiKeySvc, ls.IsReady)
 	ls.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Listen.HTTPPort),
 		Handler:           ls.handler,
@@ -221,8 +252,8 @@ func (ls *ListenService) Start(ctx context.Context) error {
 
 	ls.logger.Info("Listen TLS servers starting", "http_port", ls.cfg.Listen.HTTPPort, "wss_port", ls.cfg.Listen.WSSPort, "bootstrap_port", ls.cfg.Listen.BootstrapPort)
 
-	errChan := make(chan error, 3)
-	readyChan := make(chan struct{}, 3)
+	errChan := make(chan error, 4)
+	readyChan := make(chan struct{}, 4)
 
 	startServer := func(s *http.Server, name string) {
 		ls.logger.Info("Starting TLS listener", "server", name, "addr", s.Addr)
@@ -247,10 +278,11 @@ func (ls *ListenService) Start(ctx context.Context) error {
 	go startServer(ls.server, "HTTP")
 	go startServer(ls.wssServer, "WSS")
 	go startServer(ls.bootstrapServer, "Bootstrap")
+	go startServer(ls.publicServer, "Public")
 
-	// Wait for all three to be ready before marking service as ready
+	// Wait for all four to be ready before marking service as ready
 	go func() {
-		for i := 0; i < 3; i++ {
+		for i := 0; i < 4; i++ {
 			select {
 			case <-readyChan:
 			case <-ctx.Done():
@@ -289,6 +321,9 @@ func (ls *ListenService) Stop(ctx context.Context) error {
 	}
 	if err := ls.bootstrapServer.Shutdown(ctx); err != nil {
 		ls.logger.Error("Bootstrap server shutdown error", "error", err)
+	}
+	if err := ls.publicServer.Shutdown(ctx); err != nil {
+		ls.logger.Error("Public server shutdown error", "error", err)
 	}
 
 	// Close pub/sub broker (disconnects all WebSocket clients)

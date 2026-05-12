@@ -15,14 +15,16 @@ package listen
 
 import (
 	"crypto/ed25519"
-	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"time"
 
+	"github.com/go-webauthn/webauthn/protocol"
+	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/google/uuid"
 
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
@@ -41,10 +43,11 @@ const (
 // NOTE: This is a simplified ED25519-based implementation. Full WebAuthn/FIDO2
 // support will be added in a future iteration using the go-webauthn library.
 type PasskeyService struct {
-	db     *ListenDBService
-	logger *slog.Logger
-	rpID   string
-	rpName string
+	db       *ListenDBService
+	logger   *slog.Logger
+	rpID     string
+	rpName   string
+	webauthn *webauthn.WebAuthn
 }
 
 // PasskeyConfig holds configuration for passkey operations.
@@ -54,17 +57,28 @@ type PasskeyConfig struct {
 }
 
 // NewPasskeyService creates a new PasskeyService with the given configuration.
-func NewPasskeyService(db *ListenDBService, logger *slog.Logger, cfg *PasskeyConfig) *PasskeyService {
+func NewPasskeyService(db *ListenDBService, logger *slog.Logger, cfg *PasskeyConfig) (*PasskeyService, error) {
 	rpName := cfg.RpName
 	if rpName == "" {
 		rpName = "g8e"
 	}
-	return &PasskeyService{
-		db:     db,
-		logger: logger,
-		rpID:   cfg.RpID,
-		rpName: rpName,
+
+	w, err := webauthn.New(&webauthn.Config{
+		RPID:          cfg.RpID,
+		RPDisplayName: rpName,
+		RPOrigins:     []string{cfg.RpID},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize webauthn: %w", err)
 	}
+
+	return &PasskeyService{
+		db:       db,
+		logger:   logger,
+		rpID:     cfg.RpID,
+		rpName:   rpName,
+		webauthn: w,
+	}, nil
 }
 
 // ChallengeData stores a pending challenge for registration or authentication.
@@ -75,8 +89,7 @@ type ChallengeData struct {
 }
 
 // GenerateRegistrationChallenge creates a registration challenge for a user.
-// Returns WebAuthn-compatible options structure.
-func (s *PasskeyService) GenerateRegistrationChallenge(userID, email, userName string) (map[string]interface{}, error) {
+func (s *PasskeyService) GenerateRegistrationChallenge(userID, email, userName string) (*protocol.CredentialCreation, error) {
 	user, err := s.getUser(userID)
 	if err != nil {
 		return nil, err
@@ -85,60 +98,16 @@ func (s *PasskeyService) GenerateRegistrationChallenge(userID, email, userName s
 		return nil, fmt.Errorf("user not found")
 	}
 
-	// Generate random challenge
-	challenge := make([]byte, challengeBytes)
-	if _, err := rand.Read(challenge); err != nil {
-		return nil, fmt.Errorf("failed to generate challenge: %w", err)
-	}
-	challengeStr := base64.RawURLEncoding.EncodeToString(challenge)
-
-	// Store challenge
-	challengeData := ChallengeData{
-		Challenge: challengeStr,
-		CreatedAt: time.Now().UnixMilli(),
-		Purpose:   constants.PasskeyPurposeRegister,
-	}
-	if err := s.storeChallenge(userID, challengeData); err != nil {
-		s.logger.Error("Failed to store challenge", "error", err, "userID", userID)
-		return nil, fmt.Errorf("failed to store challenge: %w", err)
+	options, session, err := s.webauthn.BeginRegistration(user)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin registration: %w", err)
 	}
 
-	// Build exclude list from existing credentials
-	var excludeCredentials []map[string]interface{}
-	for _, cred := range user.PasskeyCredentials {
-		excludeCredentials = append(excludeCredentials, map[string]interface{}{
-			"id":         cred.ID,
-			"type":       constants.WebAuthnTypePublicKey,
-			"transports": cred.Transports,
-		})
+	// Store session data
+	if err := s.storeWebAuthnSession(userID, session); err != nil {
+		return nil, err
 	}
 
-	// Build WebAuthn-compatible options
-	options := map[string]interface{}{
-		"rp": map[string]interface{}{
-			"name": s.rpName,
-			"id":   s.rpID,
-		},
-		"user": map[string]interface{}{
-			"id":          base64.RawURLEncoding.EncodeToString([]byte(userID)),
-			"name":        email,
-			"displayName": userName,
-		},
-		"challenge": challengeStr,
-		"pubKeyCredParams": []map[string]interface{}{
-			{"type": constants.WebAuthnTypePublicKey, "alg": constants.WebAuthnAlgES256}, // ES256
-			{"type": constants.WebAuthnTypePublicKey, "alg": constants.WebAuthnAlgRS256}, // RS256
-		},
-		"timeout":            60000,
-		"attestation":        constants.WebAuthnAttestationNone,
-		"excludeCredentials": excludeCredentials,
-		"authenticatorSelection": map[string]interface{}{
-			"residentKey":      constants.WebAuthnResidentKeyRequired,
-			"userVerification": constants.WebAuthnUserVerificationRequired,
-		},
-	}
-
-	s.logger.Info("Registration challenge generated", "userID", userID)
 	return options, nil
 }
 
@@ -152,17 +121,7 @@ type AttestationResponse struct {
 }
 
 // VerifyRegistration verifies a registration response.
-func (s *PasskeyService) VerifyRegistration(userID string, resp *AttestationResponse) (*models.PasskeyCredential, error) {
-	// Consume the challenge
-	challengeData, err := s.consumeChallenge(userID)
-	if err != nil {
-		s.logger.Warn("Registration verify: challenge expired or missing", "userID", userID, "error", err)
-		return nil, fmt.Errorf("challenge expired or missing")
-	}
-	if challengeData.Purpose != constants.PasskeyPurposeRegister {
-		return nil, fmt.Errorf("invalid challenge purpose")
-	}
-
+func (s *PasskeyService) VerifyRegistration(userID string, r *http.Request) (*models.PasskeyCredential, error) {
 	user, err := s.getUser(userID)
 	if err != nil {
 		return nil, err
@@ -171,33 +130,38 @@ func (s *PasskeyService) VerifyRegistration(userID string, resp *AttestationResp
 		return nil, fmt.Errorf("user not found")
 	}
 
-	// For now, we accept the credential ID and store a placeholder.
-	// Full WebAuthn verification will validate the attestation object.
-	// In a complete implementation, this would:
-	// 1. Decode and verify the attestation object
-	// 2. Extract the public key from the authenticator data
-	// 3. Verify the challenge matches
-	// 4. Verify origin and RP ID
+	session, err := s.getWebAuthnSession(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	credential, err := s.webauthn.FinishRegistration(user, *session, r)
+	if err != nil {
+		return nil, fmt.Errorf("failed to finish registration: %w", err)
+	}
 
 	newCred := models.PasskeyCredential{
-		ID:              resp.ID,
-		PublicKey:       "", // Would be extracted from attestation in full impl
-		Counter:         0,
-		Transports:      resp.Transports,
+		ID:              credential.ID,
+		PublicKey:       credential.PublicKey,
+		AttestationType: credential.AttestationType,
+		Transport:       credential.Transport,
+		Authenticator: models.Authenticator{
+			AAGUID:       credential.Authenticator.AAGUID,
+			SignCount:    credential.Authenticator.SignCount,
+			CloneWarning: credential.Authenticator.CloneWarning,
+		},
 		CreatedAtUnixMs: time.Now().UnixMilli(),
 	}
 
 	if err := s.addCredential(userID, newCred); err != nil {
-		s.logger.Error("Failed to store credential", "error", err, "userID", userID)
-		return nil, fmt.Errorf("failed to store credential: %w", err)
+		return nil, err
 	}
 
-	s.logger.Info("Credential registered", "userID", userID, "credentialID", resp.ID[:12])
 	return &newCred, nil
 }
 
 // GenerateAuthenticationChallenge creates an authentication challenge.
-func (s *PasskeyService) GenerateAuthenticationChallenge(userID string) (map[string]interface{}, error) {
+func (s *PasskeyService) GenerateAuthenticationChallenge(userID string) (*protocol.CredentialAssertion, error) {
 	user, err := s.getUser(userID)
 	if err != nil {
 		return nil, err
@@ -206,48 +170,15 @@ func (s *PasskeyService) GenerateAuthenticationChallenge(userID string) (map[str
 		return nil, fmt.Errorf("user not found")
 	}
 
-	if len(user.PasskeyCredentials) == 0 {
-		s.logger.Warn("Auth challenge: user has no registered passkeys", "userID", userID)
-		return nil, fmt.Errorf("no passkeys registered")
+	options, session, err := s.webauthn.BeginLogin(user)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin login: %w", err)
 	}
 
-	// Generate random challenge
-	challenge := make([]byte, challengeBytes)
-	if _, err := rand.Read(challenge); err != nil {
-		return nil, fmt.Errorf("failed to generate challenge: %w", err)
-	}
-	challengeStr := base64.RawURLEncoding.EncodeToString(challenge)
-
-	// Store challenge
-	challengeData := ChallengeData{
-		Challenge: challengeStr,
-		CreatedAt: time.Now().UnixMilli(),
-		Purpose:   constants.PasskeyPurposeAuth,
-	}
-	if err := s.storeChallenge(userID, challengeData); err != nil {
-		s.logger.Error("Failed to store challenge", "error", err, "userID", userID)
-		return nil, fmt.Errorf("failed to store challenge: %w", err)
+	if err := s.storeWebAuthnSession(userID, session); err != nil {
+		return nil, err
 	}
 
-	// Build allow list from existing credentials
-	var allowCredentials []map[string]interface{}
-	for _, cred := range user.PasskeyCredentials {
-		allowCredentials = append(allowCredentials, map[string]interface{}{
-			"id":         cred.ID,
-			"type":       constants.WebAuthnTypePublicKey,
-			"transports": cred.Transports,
-		})
-	}
-
-	options := map[string]interface{}{
-		"challenge":        challengeStr,
-		"timeout":          60000,
-		"rpId":             s.rpID,
-		"allowCredentials": allowCredentials,
-		"userVerification": constants.WebAuthnUserVerificationRequired,
-	}
-
-	s.logger.Info("Authentication challenge generated", "userID", userID)
 	return options, nil
 }
 
@@ -262,17 +193,7 @@ type AssertionResponse struct {
 }
 
 // VerifyAuthentication verifies an authentication assertion.
-func (s *PasskeyService) VerifyAuthentication(userID string, resp *AssertionResponse) (*models.PasskeyCredential, error) {
-	// Consume the challenge
-	challengeData, err := s.consumeChallenge(userID)
-	if err != nil {
-		s.logger.Warn("Auth verify: challenge expired or missing", "userID", userID, "error", err)
-		return nil, fmt.Errorf("challenge expired or missing")
-	}
-	if challengeData.Purpose != constants.PasskeyPurposeAuth {
-		return nil, fmt.Errorf("invalid challenge purpose")
-	}
-
+func (s *PasskeyService) VerifyAuthentication(userID string, r *http.Request) (*models.PasskeyCredential, error) {
 	user, err := s.getUser(userID)
 	if err != nil {
 		return nil, err
@@ -281,33 +202,31 @@ func (s *PasskeyService) VerifyAuthentication(userID string, resp *AssertionResp
 		return nil, fmt.Errorf("user not found")
 	}
 
-	// Find the credential being used
+	session, err := s.getWebAuthnSession(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	credential, err := s.webauthn.FinishLogin(user, *session, r)
+	if err != nil {
+		return nil, fmt.Errorf("failed to finish login: %w", err)
+	}
+
+	// Update credential counter and last used
 	var storedCred *models.PasskeyCredential
 	for i := range user.PasskeyCredentials {
-		if user.PasskeyCredentials[i].ID == resp.ID {
+		if string(user.PasskeyCredentials[i].ID) == string(credential.ID) {
+			user.PasskeyCredentials[i].Authenticator.SignCount = credential.Authenticator.SignCount
+			user.PasskeyCredentials[i].LastUsedAtUnixMs = time.Now().UnixMilli()
 			storedCred = &user.PasskeyCredentials[i]
 			break
 		}
 	}
-	if storedCred == nil {
-		s.logger.Warn("Auth verify: credential not found", "userID", userID, "credentialID", resp.ID[:12])
-		return nil, fmt.Errorf("credential not found")
+
+	if err := s.updateUser(userID, user); err != nil {
+		return nil, err
 	}
 
-	// In a full implementation, this would:
-	// 1. Decode the authenticator data and verify RP ID hash
-	// 2. Decode clientDataJSON and verify challenge, origin, type
-	// 3. Decode the signature and verify against public key
-	// 4. Verify counter increased to prevent replay
-
-	// For now, update last used timestamp
-	storedCred.LastUsedAtUnixMs = time.Now().UnixMilli()
-	if err := s.updateCredential(userID, *storedCred); err != nil {
-		s.logger.Error("Failed to update credential", "error", err, "userID", userID)
-		return nil, fmt.Errorf("failed to update credential: %w", err)
-	}
-
-	s.logger.Info("Authentication verified", "userID", userID, "credentialID", resp.ID[:12])
 	return storedCred, nil
 }
 
@@ -336,7 +255,7 @@ func (s *PasskeyService) RevokeCredential(userID, credentialID string) (found bo
 	var newCreds []models.PasskeyCredential
 	found = false
 	for _, c := range user.PasskeyCredentials {
-		if c.ID != credentialID {
+		if base64.RawURLEncoding.EncodeToString(c.ID) != credentialID {
 			newCreds = append(newCreds, c)
 		} else {
 			found = true
@@ -395,7 +314,7 @@ func (s *PasskeyService) VerifyL3Proof(userID, messageID, signatureHex, pubKeyHe
 	found := false
 	for _, cred := range user.PasskeyCredentials {
 		// In a real WebAuthn impl, we'd compare ID or the extracted key
-		if cred.PublicKey == pubKeyHex || cred.ID == pubKeyHex {
+		if hex.EncodeToString(cred.PublicKey) == pubKeyHex || hex.EncodeToString(cred.ID) == pubKeyHex {
 			found = true
 			break
 		}
@@ -484,7 +403,7 @@ func (s *PasskeyService) updateCredential(userID string, cred models.PasskeyCred
 	}
 
 	for i := range user.PasskeyCredentials {
-		if user.PasskeyCredentials[i].ID == cred.ID {
+		if string(user.PasskeyCredentials[i].ID) == string(cred.ID) {
 			user.PasskeyCredentials[i] = cred
 			break
 		}
@@ -515,41 +434,31 @@ func (s *PasskeyService) updateUser(userID string, user *models.User) error {
 	return err
 }
 
-func (s *PasskeyService) storeChallenge(userID string, challenge ChallengeData) error {
-	data, err := json.Marshal(challenge)
+func (s *PasskeyService) storeWebAuthnSession(userID string, session *webauthn.SessionData) error {
+	data, err := json.Marshal(session)
 	if err != nil {
-		return fmt.Errorf("failed to marshal challenge: %w", err)
+		return err
 	}
 	return s.db.DocSet(string(constants.CollectionPasskeyChallenges), userID, data)
 }
 
-func (s *PasskeyService) consumeChallenge(userID string) (*ChallengeData, error) {
+func (s *PasskeyService) getWebAuthnSession(userID string) (*webauthn.SessionData, error) {
 	doc, err := s.db.DocGet(string(constants.CollectionPasskeyChallenges), userID)
 	if err != nil {
 		return nil, err
 	}
 	if doc == nil {
-		return nil, fmt.Errorf("challenge not found")
+		return nil, fmt.Errorf("webauthn session not found")
 	}
 
-	// Delete immediately (best effort)
-	_, _ = s.db.DocDelete(string(constants.CollectionPasskeyChallenges), userID)
-
-	// Re-serialize the document data map to JSON for unmarshaling into struct
-	data, err := json.Marshal(doc.Data)
+	var session webauthn.SessionData
+	b, err := json.Marshal(doc.Data)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal doc data: %w", err)
+		return nil, err
+	}
+	if err := json.Unmarshal(b, &session); err != nil {
+		return nil, err
 	}
 
-	var challenge ChallengeData
-	if err := json.Unmarshal(data, &challenge); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal challenge: %w", err)
-	}
-
-	// Check TTL
-	if time.Now().UnixMilli()-challenge.CreatedAt > int64(passkeyChallengeTTL.Milliseconds()) {
-		return nil, fmt.Errorf("challenge expired")
-	}
-
-	return &challenge, nil
+	return &session, nil
 }

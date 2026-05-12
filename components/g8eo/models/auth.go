@@ -16,6 +16,9 @@ package models
 import (
 	"encoding/json"
 	"time"
+
+	"github.com/go-webauthn/webauthn/protocol"
+	"github.com/go-webauthn/webauthn/webauthn"
 )
 
 // DeviceLinkData represents a device link for operator enrollment.
@@ -242,12 +245,55 @@ type BoundSessionsDocumentGo struct {
 
 // PasskeyCredential represents a stored WebAuthn credential for a user.
 type PasskeyCredential struct {
-	ID               string   `json:"id"`
-	PublicKey        string   `json:"public_key"`
-	Counter          int64    `json:"counter"`
-	Transports       []string `json:"transports,omitempty"`
-	CreatedAtUnixMs  int64    `json:"created_at_unix_ms"`
-	LastUsedAtUnixMs int64    `json:"last_used_at_unix_ms,omitempty"`
+	ID               []byte                            `json:"id"`
+	PublicKey        []byte                            `json:"public_key"`
+	AttestationType  string                            `json:"attestation_type"`
+	Transport        []protocol.AuthenticatorTransport `json:"transport,omitempty"`
+	Authenticator    Authenticator                     `json:"authenticator"`
+	CreatedAtUnixMs  int64                             `json:"created_at_unix_ms"`
+	LastUsedAtUnixMs int64                             `json:"last_used_at_unix_ms,omitempty"`
+}
+
+// Authenticator represents the internal WebAuthn authenticator state.
+type Authenticator struct {
+	AAGUID       []byte `json:"aaguid"`
+	SignCount    uint32 `json:"sign_count"`
+	CloneWarning bool   `json:"clone_warning"`
+}
+
+// WebAuthnUser implements webauthn.User interface.
+func (u *User) WebAuthnID() []byte {
+	return []byte(u.ID)
+}
+
+func (u *User) WebAuthnName() string {
+	return u.Email
+}
+
+func (u *User) WebAuthnDisplayName() string {
+	return u.Name
+}
+
+func (u *User) WebAuthnIcon() string {
+	return ""
+}
+
+func (u *User) WebAuthnCredentials() []webauthn.Credential {
+	res := make([]webauthn.Credential, len(u.PasskeyCredentials))
+	for i, c := range u.PasskeyCredentials {
+		res[i] = webauthn.Credential{
+			ID:              c.ID,
+			PublicKey:       c.PublicKey,
+			AttestationType: c.AttestationType,
+			Transport:       c.Transport,
+			Authenticator: webauthn.Authenticator{
+				AAGUID:       c.Authenticator.AAGUID,
+				SignCount:    c.Authenticator.SignCount,
+				CloneWarning: c.Authenticator.CloneWarning,
+			},
+		}
+	}
+	return res
 }
 
 // WebSession represents an authenticated web session after passkey verification.

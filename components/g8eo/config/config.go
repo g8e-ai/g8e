@@ -72,6 +72,7 @@ type ListenConfig struct {
 	WSSPort       int    // WSS/TLS port for operator pub/sub connections (default: 443)
 	HTTPPort      int    // TLS/HTTPS port for internal g8ee/g8ed traffic (default: 443)
 	BootstrapPort int    // Plain-TLS port for bootstrap routes (/.well-known/, /api/auth/device-link/register) (default: 8080)
+	PublicPort    int    // Plain-TLS port for browser-based auth and setup (default: 8081)
 	DataDir       string // Root directory for SQLite database (default: .g8e/data in working directory)
 	PKIDir        string // Directory for TLS certificates (default: .g8e/pki)
 	SecretsDir    string // Directory for platform secrets (default: .g8e/secrets)
@@ -214,6 +215,7 @@ func LoadListen(wssPort, httpPort, bootstrapPort int, dataDir, pkiDir, secretsDi
 	if bootstrapPort == 0 {
 		bootstrapPort = 8080
 	}
+	publicPort := 8081
 
 	return &Config{
 		ComponentName: "g8eo-listen",
@@ -222,6 +224,7 @@ func LoadListen(wssPort, httpPort, bootstrapPort int, dataDir, pkiDir, secretsDi
 			WSSPort:       wssPort,
 			HTTPPort:      httpPort,
 			BootstrapPort: bootstrapPort,
+			PublicPort:    publicPort,
 			DataDir:       dataDir,
 			PKIDir:        pkiDir,
 			SecretsDir:    secretsDir,

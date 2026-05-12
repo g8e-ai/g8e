@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/g8e-ai/g8e/components/g8eo/config"
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
@@ -39,28 +40,34 @@ func readBody(r *http.Request) ([]byte, error) {
 
 // HTTPHandler manages the web API for the listen service.
 type HTTPHandler struct {
-	cfg     *config.Config
-	logger  *slog.Logger
-	db      *ListenDBService
-	pubsub  *PubSubBroker
-	auth    *AuthService
-	pki     *PKIAuthority
-	reg     *RegistrationService
-	passkey *PasskeyService
-	isReady func() bool
+	cfg      *config.Config
+	logger   *slog.Logger
+	db       *ListenDBService
+	pubsub   *PubSubBroker
+	auth     *AuthService
+	pki      *PKIAuthority
+	reg      *RegistrationService
+	passkey  *PasskeyService
+	userSvc  *UserService
+	setupSvc *SetupService
+	apiKey   *ApiKeyService
+	isReady  func() bool
 }
 
-func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker, auth *AuthService, pki *PKIAuthority, reg *RegistrationService, passkey *PasskeyService, isReady func() bool) *HTTPHandler {
+func newHTTPHandler(cfg *config.Config, logger *slog.Logger, db *ListenDBService, pubsub *PubSubBroker, auth *AuthService, pki *PKIAuthority, reg *RegistrationService, passkey *PasskeyService, userSvc *UserService, setupSvc *SetupService, apiKey *ApiKeyService, isReady func() bool) *HTTPHandler {
 	return &HTTPHandler{
-		cfg:     cfg,
-		logger:  logger,
-		db:      db,
-		pubsub:  pubsub,
-		auth:    auth,
-		pki:     pki,
-		reg:     reg,
-		passkey: passkey,
-		isReady: isReady,
+		cfg:      cfg,
+		logger:   logger,
+		db:       db,
+		pubsub:   pubsub,
+		auth:     auth,
+		pki:      pki,
+		reg:      reg,
+		passkey:  passkey,
+		userSvc:  userSvc,
+		setupSvc: setupSvc,
+		apiKey:   apiKey,
+		isReady:  isReady,
 	}
 }
 
@@ -119,6 +126,27 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux.HandleFunc("/api/auth/passkey/credentials/", h.handlePasskeyRevokeCredential)
 
 	return pathTraversalGuard(h.auth.Middleware(mux))
+}
+
+func (h *HTTPHandler) buildPublicRouter() http.Handler {
+	mux := http.NewServeMux()
+
+	// Public auth routes (browser-reachable, no mTLS, uses session cookies)
+	mux.HandleFunc("/api/auth/register", h.handleAuthRegister)
+	mux.HandleFunc("/api/auth/login/challenge", h.handleAuthLoginChallenge)
+	mux.HandleFunc("/api/auth/login/verify", h.handleAuthLoginVerify)
+	mux.HandleFunc("/api/auth/logout", h.handleAuthLogout)
+
+	// Browser-facing data routes (require session cookie)
+	authedMux := http.NewServeMux()
+	authedMux.HandleFunc("/api/user/me", h.handleUserMe)
+	authedMux.HandleFunc("/api/auth/web-session", h.handleWebSession)
+
+	// Wrap authed routes in WebSessionAuth middleware
+	mux.Handle("/api/user/", h.auth.WebSessionAuth(authedMux, h.db))
+	mux.Handle("/api/auth/web-session", h.auth.WebSessionAuth(authedMux, h.db))
+
+	return pathTraversalGuard(mux)
 }
 
 func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -1337,7 +1365,7 @@ func (h *HTTPHandler) handlePasskeyRegisterVerify(w http.ResponseWriter, r *http
 		return
 	}
 
-	cred, err := h.passkey.VerifyRegistration(req.UserID, req.AttestationResponse)
+	cred, err := h.passkey.VerifyRegistration(req.UserID, r)
 	if err != nil {
 		h.logger.Warn("Passkey register verify failed", "error", err, "userID", req.UserID)
 		jsonResponse(w, http.StatusOK, map[string]interface{}{
@@ -1427,7 +1455,7 @@ func (h *HTTPHandler) handlePasskeyAuthVerify(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	cred, err := h.passkey.VerifyAuthentication(userID, req.AssertionResponse)
+	cred, err := h.passkey.VerifyAuthentication(userID, r)
 	if err != nil {
 		h.logger.Warn("Passkey auth verify failed", "error", err, "userID", userID)
 		jsonResponse(w, http.StatusOK, map[string]interface{}{
@@ -1514,5 +1542,221 @@ func (h *HTTPHandler) handlePasskeyRevokeCredential(w http.ResponseWriter, r *ht
 		"success":   true,
 		"found":     found,
 		"remaining": remaining,
+	})
+}
+
+// =============================================================================
+// Browser Auth Handlers (Public Router)
+// =============================================================================
+
+// handleAuthRegister handles first-run setup and admin user creation.
+func (h *HTTPHandler) handleAuthRegister(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	isFirstRun, err := h.setupSvc.IsFirstRun()
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, "failed to check setup status")
+		return
+	}
+	if !isFirstRun {
+		jsonError(w, http.StatusForbidden, "setup already complete")
+		return
+	}
+
+	body, err := readBody(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "failed to read body")
+		return
+	}
+
+	var req struct {
+		Email string `json:"email"`
+		Name  string `json:"name"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	user, err := h.setupSvc.PerformFirstRunSetup(req.Email, req.Name, r)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Mark setup as complete after creating first user
+	if err := h.setupSvc.CompleteSetup(); err != nil {
+		h.logger.Error("Failed to mark setup complete", "error", err)
+	}
+
+	jsonResponse(w, http.StatusCreated, map[string]interface{}{
+		"success": true,
+		"user":    user,
+	})
+}
+
+// handleAuthLoginChallenge generates an auth challenge for a user email.
+func (h *HTTPHandler) handleAuthLoginChallenge(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	body, err := readBody(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "failed to read body")
+		return
+	}
+
+	var req struct {
+		Email string `json:"email"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	user, err := h.userSvc.FindByEmail(req.Email)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, "failed to find user")
+		return
+	}
+	if user == nil {
+		jsonError(w, http.StatusNotFound, "user not found")
+		return
+	}
+
+	options, err := h.passkey.GenerateAuthenticationChallenge(user.ID)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"user_id": user.ID,
+		"options": options,
+	})
+}
+
+// handleAuthLoginVerify verifies an auth assertion and sets a session cookie.
+func (h *HTTPHandler) handleAuthLoginVerify(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	body, err := readBody(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "failed to read body")
+		return
+	}
+
+	var req struct {
+		UserID            string             `json:"user_id"`
+		AssertionResponse *AssertionResponse `json:"assertion_response"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	_, err = h.passkey.VerifyAuthentication(req.UserID, r)
+	if err != nil {
+		jsonError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	session, err := h.passkey.CreateSession(req.UserID)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, "failed to create session")
+		return
+	}
+
+	// Set HttpOnly Secure SameSite=Lax cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "g8e_session",
+		Value:    session.ID,
+		Path:     "/",
+		Expires:  time.Unix(session.ExpiresAtUnixMs/1000, 0),
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"user_id": req.UserID,
+		"session": session,
+	})
+}
+
+// handleAuthLogout clears the session cookie and deletes the session.
+func (h *HTTPHandler) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie("g8e_session")
+	if err == nil {
+		// Best effort delete session from DB
+		_, _ = h.db.DocDelete(string(constants.CollectionWebSessions), cookie.Value)
+	}
+
+	// Clear cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "g8e_session",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{"success": true})
+}
+
+// handleUserMe returns the current authenticated user.
+func (h *HTTPHandler) handleUserMe(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value("user_id").(string)
+	if !ok {
+		jsonError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	user, err := h.userSvc.GetByID(userID)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, "failed to get user")
+		return
+	}
+	if user == nil {
+		jsonError(w, http.StatusNotFound, "user not found")
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"user":    user,
+	})
+}
+
+// handleWebSession returns current session info.
+func (h *HTTPHandler) handleWebSession(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value("user_id").(string)
+	if !ok {
+		jsonError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	cookie, _ := r.Cookie("g8e_session")
+	sessionID := ""
+	if cookie != nil {
+		sessionID = cookie.Value
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"success":    true,
+		"user_id":    userID,
+		"session_id": sessionID,
 	})
 }

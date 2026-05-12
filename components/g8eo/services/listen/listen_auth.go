@@ -14,6 +14,7 @@
 package listen
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -21,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/g8e-ai/g8e/components/g8eo/constants"
 	"github.com/g8e-ai/g8e/components/g8eo/models"
@@ -259,4 +261,54 @@ func (s *AuthService) jsonError(w http.ResponseWriter, status int, msg string) {
 	json.NewEncoder(w).Encode(struct {
 		Error string `json:"error"`
 	}{Error: msg})
+}
+
+// WebSessionAuth validates web session cookies and stamps context with user_id.
+// This is for browser-based authentication on the public listener.
+func (s *AuthService) WebSessionAuth(next http.Handler, db *ListenDBService) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie("g8e_session")
+		if err != nil || cookie == nil {
+			s.jsonError(w, http.StatusUnauthorized, "session cookie required")
+			return
+		}
+
+		sessionID := cookie.Value
+		if sessionID == "" {
+			s.jsonError(w, http.StatusUnauthorized, "invalid session cookie")
+			return
+		}
+
+		// Validate web session
+		doc, err := db.DocGet(string(constants.CollectionWebSessions), sessionID)
+		if err != nil {
+			s.jsonError(w, http.StatusUnauthorized, "session validation failed")
+			return
+		}
+		if doc == nil {
+			s.jsonError(w, http.StatusUnauthorized, "session not found")
+			return
+		}
+
+		// Check expiry
+		var session models.WebSession
+		data, err := json.Marshal(doc.Data)
+		if err != nil {
+			s.jsonError(w, http.StatusUnauthorized, "session parse failed")
+			return
+		}
+		if err := json.Unmarshal(data, &session); err != nil {
+			s.jsonError(w, http.StatusUnauthorized, "session parse failed")
+			return
+		}
+
+		if time.Now().UnixMilli() > session.ExpiresAtUnixMs {
+			s.jsonError(w, http.StatusUnauthorized, "session expired")
+			return
+		}
+
+		// Stamp context with user_id
+		ctx := context.WithValue(r.Context(), "user_id", session.UserID)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
