@@ -69,6 +69,11 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux.HandleFunc("/.well-known/g8e/pki/hub-bundle.pem", h.handlePKIHubBundle)
 	mux.HandleFunc("/.well-known/g8e/pki/fingerprint", h.handlePKIFingerprint)
 	mux.HandleFunc("/api/settings", h.handleSettings)
+	mux.HandleFunc("/api/device-links", h.handleDeviceLinks)
+	mux.HandleFunc("/api/device-links/", h.handleDeviceLinkByToken)
+	mux.HandleFunc("/api/operators", h.handleOperators)
+	mux.HandleFunc("/api/operators/rotate-api-key", h.handleRotateAPIKey)
+	mux.HandleFunc("/api/operators/terminate", h.handleTerminateOperator)
 	mux.HandleFunc("/api/operators/reauth", h.handleReauth)
 	mux.HandleFunc("/db/", h.handleDB)
 	mux.HandleFunc("/kv/", h.handleKV)
@@ -323,6 +328,132 @@ func (h *HTTPHandler) handleSettings(w http.ResponseWriter, r *http.Request) {
 	default:
 		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
+}
+
+func (h *HTTPHandler) handleDeviceLinks(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPost:
+		body, err := readBody(r)
+		if err != nil {
+			jsonError(w, http.StatusBadRequest, "invalid JSON body")
+			return
+		}
+		var req models.CreateDeviceLinkRequest
+		if err := json.Unmarshal(body, &req); err != nil {
+			jsonError(w, http.StatusBadRequest, "invalid JSON body")
+			return
+		}
+		resp, err := h.reg.CreateDeviceLink(req)
+		if err != nil {
+			jsonError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		jsonResponse(w, http.StatusCreated, resp)
+	case http.MethodGet:
+		userID := r.URL.Query().Get("user_id")
+		links, err := h.reg.ListDeviceLinks(userID)
+		if err != nil {
+			jsonError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		jsonResponse(w, http.StatusOK, models.DeviceLinkListResponse{Success: true, Links: links})
+	default:
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
+func (h *HTTPHandler) handleDeviceLinkByToken(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	token := strings.TrimPrefix(r.URL.Path, "/api/device-links/")
+	if token == "" || strings.Contains(token, "/") {
+		jsonError(w, http.StatusBadRequest, "token required")
+		return
+	}
+	userID := r.URL.Query().Get("user_id")
+	if err := h.reg.DeleteDeviceLink(token, userID); err != nil {
+		jsonError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, models.StatusResponse{Status: constants.Status.ListenMode.StatusOK})
+}
+
+func (h *HTTPHandler) handleOperators(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	userID := r.URL.Query().Get("user_id")
+	if userID == "" {
+		jsonError(w, http.StatusBadRequest, "user_id required")
+		return
+	}
+	slots, err := h.reg.ListOperatorSlots(userID)
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, models.OperatorSlotResponse{Success: true, Operators: slots})
+}
+
+func (h *HTTPHandler) handleRotateAPIKey(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	body, err := readBody(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	var req models.RotateAPIKeyRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	userID := r.URL.Query().Get("user_id")
+	if userID == "" {
+		jsonError(w, http.StatusBadRequest, "user_id required")
+		return
+	}
+	newKey, err := h.reg.RotateOperatorAPIKey(req.OperatorID, userID)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, models.RotateAPIKeyResponse{Success: true, APIKey: newKey})
+}
+
+func (h *HTTPHandler) handleTerminateOperator(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	body, err := readBody(r)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	var req models.TerminateOperatorRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if req.OperatorID == "" {
+		jsonError(w, http.StatusBadRequest, "operator_id required")
+		return
+	}
+	if req.UserID == "" {
+		jsonError(w, http.StatusBadRequest, "user_id required")
+		return
+	}
+	if err := h.reg.TerminateOperator(req.OperatorID, req.UserID, req.Reason); err != nil {
+		jsonError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, models.TerminateOperatorResponse{Success: true, Message: "Operator terminated"})
 }
 
 func (h *HTTPHandler) handleReauth(w http.ResponseWriter, r *http.Request) {

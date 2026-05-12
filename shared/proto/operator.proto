@@ -176,6 +176,108 @@ message SignCertificateResult {
   string error = 4;
 }
 
+message CreateDeviceLinkRequested {
+  string user_id = 1;
+  string organization_id = 2;
+  string operator_id = 3;
+  string web_session_id = 4;
+  string name = 5;
+  int32 max_uses = 6;
+  int32 ttl_seconds = 7;
+}
+
+message DeviceLink {
+  string token = 1;
+  string user_id = 2;
+  string organization_id = 3;
+  string operator_id = 4;
+  string web_session_id = 5;
+  string name = 6;
+  int32 max_uses = 7;
+  int32 uses = 8;
+  string status = 9;
+  int64 created_at_unix_ms = 10;
+  int64 expires_at_unix_ms = 11;
+}
+
+message DeviceLinkResult {
+  bool success = 1;
+  DeviceLink link = 2;
+  string operator_command = 3;
+  string error = 4;
+}
+
+message ListDeviceLinksRequested {
+  string user_id = 1;
+}
+
+message ListDeviceLinksResult {
+  bool success = 1;
+  repeated DeviceLink links = 2;
+  string error = 3;
+}
+
+message DeleteDeviceLinkRequested {
+  string token = 1;
+  string user_id = 2;
+}
+
+message TerminateOperatorRequested {
+  string operator_id = 1;
+  string user_id = 2;
+  string reason = 3;
+}
+
+message TerminateOperatorResult {
+  bool success = 1;
+  string message = 2;
+  string error = 3;
+}
+
+message RotateAPIKeyRequested {
+  string operator_id = 1;
+  string user_id = 2;
+}
+
+message RotateAPIKeyResult {
+  bool success = 1;
+  string api_key = 2;
+  string error = 3;
+}
+
+message ListOperatorSlotsRequested {
+  string user_id = 1;
+}
+
+message ListOperatorSlotsResult {
+  bool success = 1;
+  repeated OperatorDocument operators = 2;
+  string error = 3;
+}
+
+message OperatorDocument {
+  string id = 1;
+  string user_id = 2;
+  string organization_id = 3;
+  string component = 4;
+  string name = 5;
+  string status = 6;
+  string operator_session_id = 7;
+  string bound_web_session_id = 8;
+  string api_key = 9;
+  string operator_api_key = 10;
+  string operator_cert = 11;
+  string operator_cert_serial = 12;
+  int32 slot_number = 13;
+  bool is_slot = 14;
+  bool claimed = 15;
+  string operator_type = 16;
+  string cloud_subtype = 17;
+  string system_fingerprint = 18;
+  int64 created_at_unix_ms = 19;
+  int64 updated_at_unix_ms = 20;
+}
+
 message ShutdownRequested {
   string reason = 1;
 }

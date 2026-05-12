@@ -38,6 +38,40 @@ type DeviceLinkData struct {
 	Claims         []DeviceLinkClaim `json:"claims,omitempty"`
 }
 
+type CreateDeviceLinkRequest struct {
+	UserID         string `json:"user_id"`
+	OrganizationID string `json:"organization_id,omitempty"`
+	OperatorID     string `json:"operator_id,omitempty"`
+	WebSessionID   string `json:"web_session_id,omitempty"`
+	Name           string `json:"name,omitempty"`
+	MaxUses        int    `json:"max_uses,omitempty"`
+	TTLSeconds     int    `json:"ttl_seconds,omitempty"`
+}
+
+type DeviceLinkResponse struct {
+	Success         bool      `json:"success"`
+	Token           string    `json:"token"`
+	OperatorCommand string    `json:"operator_command"`
+	Name            string    `json:"name,omitempty"`
+	MaxUses         int       `json:"max_uses,omitempty"`
+	ExpiresAt       time.Time `json:"expires_at"`
+}
+
+type DeviceLinkListItem struct {
+	Token     string    `json:"token"`
+	Name      string    `json:"name,omitempty"`
+	MaxUses   int       `json:"max_uses"`
+	Uses      int       `json:"uses"`
+	Status    string    `json:"status"`
+	CreatedAt time.Time `json:"created_at"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+type DeviceLinkListResponse struct {
+	Success bool                 `json:"success"`
+	Links   []DeviceLinkListItem `json:"links"`
+}
+
 // DeviceLinkInfo captures the device details of the first user of a link.
 type DeviceLinkInfo struct {
 	SystemFingerprint string `json:"system_fingerprint"`
@@ -115,4 +149,29 @@ type OperatorDocumentGo struct {
 	LatestHeartbeat      json.RawMessage `json:"latest_heartbeat_snapshot,omitempty"`
 	RuntimeConfig        *RuntimeConfig  `json:"runtime_config,omitempty"`
 	ConsumedByOperatorID string          `json:"consumed_by_operator_id,omitempty"`
+}
+
+type OperatorSlotResponse struct {
+	Success   bool                 `json:"success"`
+	Operators []OperatorDocumentGo `json:"operators"`
+}
+
+type RotateAPIKeyRequest struct {
+	OperatorID string `json:"operator_id"`
+}
+
+type RotateAPIKeyResponse struct {
+	Success bool   `json:"success"`
+	APIKey  string `json:"api_key"`
+}
+
+type TerminateOperatorRequest struct {
+	OperatorID string `json:"operator_id"`
+	UserID     string `json:"user_id"`
+	Reason     string `json:"reason,omitempty"`
+}
+
+type TerminateOperatorResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message,omitempty"`
 }
